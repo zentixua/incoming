@@ -267,18 +267,18 @@ class FireStormTest {
         double[] far = centre(g, g.index()[g.index().length / 4]);
         BurstWater w = new BurstWater();
         w.set(1, 0);
-        for (int i = 0; i < sweep; i++) s.survey(unknown, w, GROUND.burst(), 0);
+        for (int i = 0; i < sweep; i++) s.survey(unknown, w, GROUND.burst());
         assertEquals(1, s.fuelAt(GROUND.burst().x + far[0], GROUND.burst().z + far[1]), 0, "an unresolved guess decides nothing");
         w.set(0, 0);
         w.settle(NukeWater.Source.TILES);
-        for (int i = 0; i < sweep; i++) s.survey(unknown, w, GROUND.burst(), 0);
+        for (int i = 0; i < sweep; i++) s.survey(unknown, w, GROUND.burst());
         assertTrue(s.refresh(20 * 180));
         double before = s.burning();
         assertTrue(before > 0);
         // the crater at ground zero now reads as water: the resolved burst water stays, the storm keeps burning
         w.set(1, 1);
         assertEquals(0, w.under(), 0, "burst water is fixed once settled");
-        for (int i = 0; i < 3 * sweep; i++) s.survey(unknown, w, GROUND.burst(), 0);
+        for (int i = 0; i < 3 * sweep; i++) s.survey(unknown, w, GROUND.burst());
         assertEquals(1, s.fuelAt(GROUND.burst().x + far[0], GROUND.burst().z + far[1]), 0);
         s.refresh(20 * 181 + FireStorm.FILL_SLOW);
         assertEquals(before, s.burning(), before * 0.05, "the unseen storm does not go out");
@@ -286,8 +286,8 @@ class FireStormTest {
 
     /**
      * 19.11 complaint: a mass fire over green meadows. The storm burns only ground the client knows as fuel (cured grass, dry fuel,
-     * buildings) before the wave reaches it; rubble seen after the wave and map-tile land take the fueled share of what was
-     * classified block by block; a cell classified before its wave keeps its fraction when its ruins later read as bare ground.
+     * buildings); map-tile land takes the fueled share of what was classified block by block; a classified cell keeps its first
+     * fraction when its ruins later read as bare ground.
      */
     @Test
     void onlyKnownFuelBurnsAndRuinsDoNotUnfuelACity() throws InterruptedException {
@@ -299,17 +299,45 @@ class FireStormTest {
         // west: green meadow; east: a city; far north (beyond the chunks): map-tile land
         FireStorm.Surface before = (x, z) -> z - AIR.burst().z > 600 ? FireStorm.Surface.LAND
                 : x < AIR.burst().x ? FireStorm.Surface.NONE : FireStorm.Surface.FUEL;
-        for (int i = 0; i < sweep; i++) s.survey(before, water(0), AIR.burst(), 0);
+        for (int i = 0; i < sweep; i++) s.survey(before, water(0), AIR.burst());
         assertEquals(0, s.fuelAt(AIR.burst().x - 500, AIR.burst().z), 0, "green meadow holds no fuel");
         assertEquals(1, s.fuelAt(AIR.burst().x + 500, AIR.burst().z), 0, "the city burns");
         double share = s.landFuel();
         assertTrue(share > 0.3 && share < 0.7, "half the classified land is fuel: " + share);
         assertEquals(share, s.fuelAt(AIR.burst().x, AIR.burst().z + 700), 0.02, "map-tile land takes the classified share (as it stood when the cell was surveyed)");
-        // after every wave the city reads as rubble (bare ground): its cells keep their fuel
+        // later the city reads as bare ground (rubble swept away): its cells keep their first reading
         FireStorm.Surface after = (x, z) -> FireStorm.Surface.NONE;
-        for (int i = 0; i < 2 * sweep; i++) s.survey(after, water(0), AIR.burst(), 1e9);
+        for (int i = 0; i < 2 * sweep; i++) s.survey(after, water(0), AIR.burst());
         assertEquals(1, s.fuelAt(AIR.burst().x + 500, AIR.burst().z), 0, "ruins do not put out the city");
         assertEquals(0, s.fuelAt(AIR.burst().x - 500, AIR.burst().z), 0);
+    }
+
+    /**
+     * Review of #676: a client that joins after the wave over green countryside has no pre-wave readings. The wave strips turf to
+     * soil, which still reads as no fuel, so it must see no storm, exactly like a client present before the wave — not a storm
+     * over all land because nothing was classified.
+     */
+    @Test
+    void lateClientSeesTheSameFuel() throws InterruptedException {
+        FireStorm early = new FireStorm(AIR, new PallField(AIR)), late = new FireStorm(AIR, new PallField(AIR)), city = new FireStorm(AIR, new PallField(AIR));
+        for (int i = 0; i < 600 && (early.grid() == null || late.grid() == null || city.grid() == null); i++) Thread.sleep(10);
+        FireStorm.Grid g = early.grid();
+        assertNotNull(g);
+        assertNotNull(late.grid());
+        int sweep = g.index().length / FireStorm.SURVEY_CELLS + 1;
+        FireStorm.Surface meadow = (x, z) -> FireStorm.Surface.NONE;
+        for (int i = 0; i < sweep; i++) early.survey(meadow, water(0), AIR.burst());
+        for (int i = 0; i < sweep; i++) late.survey(meadow, water(0), AIR.burst());
+        double t = g.lastBlow() + FireStorm.FILL_SLOW;
+        assertTrue(early.refresh(t));
+        assertTrue(late.refresh(t));
+        assertEquals(0, late.landFuel(), 0, "stripped green turf is no fuel");
+        assertEquals(0, early.burning(), 0);
+        assertEquals(early.burning(), late.burning(), 0, "a late client sees the storm a present one sees");
+        // the same late survey over a city (building piles read as built) burns
+        for (int i = 0; i < sweep; i++) city.survey((x, z) -> FireStorm.Surface.FUEL, water(0), AIR.burst());
+        assertTrue(city.refresh(t));
+        assertTrue(city.burning() > 0, "a city still burns after the wave");
     }
 
     @Test
@@ -320,17 +348,17 @@ class FireStormTest {
         assertNotNull(g);
         // to the west of the epicenter - the sea, at the very epicenter - we don’t know, to the east - land
         FireStorm.Surface surface = (x, z) -> Math.abs(x - AIR.burst().x) < 100 ? FireStorm.Surface.UNKNOWN : x < AIR.burst().x ? FireStorm.Surface.WET : FireStorm.Surface.FUEL;
-        for (int i = 0; i <= g.index().length / FireStorm.SURVEY_CELLS; i++) s.survey(surface, water(0), AIR.burst(), 0);
+        for (int i = 0; i <= g.index().length / FireStorm.SURVEY_CELLS; i++) s.survey(surface, water(0), AIR.burst());
         assertEquals(0, s.fuelAt(AIR.burst().x - 500, AIR.burst().z), 0);
         assertEquals(1, s.fuelAt(AIR.burst().x + 500, AIR.burst().z), 0);
         assertEquals(1, s.fuelAt(AIR.burst().x + 5, AIR.burst().z), 0, "we don’t know, there is land under the epicenter - it burns, as in the model");
         // the player left, the chunks were unloaded: the sea seen remains the sea
-        for (int i = 0; i <= g.index().length / FireStorm.SURVEY_CELLS; i++) s.survey((x, z) -> -1, water(0), AIR.burst(), 0);
+        for (int i = 0; i <= g.index().length / FireStorm.SURVEY_CELLS; i++) s.survey((x, z) -> -1, water(0), AIR.burst());
         assertEquals(0, s.fuelAt(AIR.burst().x - 500, AIR.burst().z), 0, "saw the sea - it doesn’t burn and then");
         // there is a sea under the epicenter: where we don’t know anything, it doesn’t burn (an explosion over the sea in the distance)
         FireStorm sea = new FireStorm(AIR, new PallField(AIR));
         for (int i = 0; i < 600 && sea.grid() == null; i++) Thread.sleep(10);
-        for (int i = 0; i <= g.index().length / FireStorm.SURVEY_CELLS; i++) sea.survey(surface, water(1), AIR.burst(), 0);
+        for (int i = 0; i <= g.index().length / FireStorm.SURVEY_CELLS; i++) sea.survey(surface, water(1), AIR.burst());
         assertEquals(0, sea.fuelAt(AIR.burst().x + 5, AIR.burst().z), 0, "we don’t know, the sea is under the epicenter - it doesn’t burn");
         assertEquals(1, sea.fuelAt(AIR.burst().x + 500, AIR.burst().z), 0, "the land we know is burning");
         // map at the 3rd minute

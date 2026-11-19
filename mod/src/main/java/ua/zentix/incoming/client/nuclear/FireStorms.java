@@ -87,7 +87,7 @@ final class FireStorms {
         for (ClientNuclear.Active a : all) {
             double was = a.storm.gate();
             a.storm.gate(was + GATE_RATE * (a.storm.trust() - was));
-            if (level != null) a.storm.survey(surface(level), a.water, Minecraft.getInstance().gameRenderer.getMainCamera().getPosition(), a.ticks(0));
+            if (level != null) a.storm.survey(surface(level), a.water, Minecraft.getInstance().gameRenderer.getMainCamera().getPosition());
         }
     }
 

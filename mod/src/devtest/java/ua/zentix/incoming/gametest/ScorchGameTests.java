@@ -979,7 +979,7 @@ public final class ScorchGameTests {
      * 19.11 complaint: the flash set a fire block on nearly every turf column 3–5 km from 1 Mt. One law ({@code RuinPlanner.kindling},
      * {@code Kindling}): the flash ignites only dry fuel, with {@code PulseIgnition.share}. Light ~30 cal/cm² at the far chunks (15 kt:
      * every fuel's median is below it): green plains turf — burned, no fire; hay bales — fire on them; wool behind a glass roof — fire
-     * indoors; wool in a closed stone box — none; a plank-roofed house — none (thick wood does not sustain); a savanna chunk (cured
+     * indoors; wool in a closed stone box or under tinted glass — none; a plank-roofed house — none (thick wood does not sustain); a savanna chunk (cured
      * grass, downfall 0) — fire on most turf columns. Flash layer only (no wave).
      */
     @GameTest(template = "range", timeoutTicks = 40, batch = "nuke_flash_kindling", skyAccess = true)
@@ -1006,6 +1006,10 @@ public final class ScorchGameTests {
         box(level, fx + 9, fz + 3, ground, Blocks.GLASS, Blocks.GLASS, Blocks.WHITE_WOOL);
         box(level, fx + 3, fz + 3, ground, Blocks.STONE_BRICKS, Blocks.STONE_BRICKS, Blocks.WHITE_WOOL);
         box(level, fx + 3, fz + 9, ground, Blocks.OAK_PLANKS, Blocks.OAK_PLANKS, null);
+        // tinted glass blocks light (review of #676): it shatters like glass, yet stops the pulse like a wall; own chunk, no shade
+        LevelChunk tinted = inside.get(inside.size() - 3);
+        int tx = tinted.getPos().getMinBlockX() + 5, tz = tinted.getPos().getMinBlockZ() + 5;
+        box(level, tx, tz, ground, Blocks.TINTED_GLASS, Blocks.TINTED_GLASS, Blocks.WHITE_WOOL);
         Detonation d = NuclearGameTests.detonation(h, zero, Yield.optimalBurstHeight(15) * scaleFor(g, far, 30), 15, (float) scaleFor(g, far, 30));
         for (LevelChunk c : inside) {
             for (int dx = -RuinPlanner.REACH; dx <= RuinPlanner.REACH; dx++) {
@@ -1038,6 +1042,7 @@ public final class ScorchGameTests {
             h.assertTrue(firesIn(level, fx + 9, fz + 3, ground) > 0, "no fire behind the glass; " + setup);
             h.assertTrue(firesIn(level, fx + 3, fz + 3, ground) == 0, "fire in a closed stone box; " + setup);
             h.assertTrue(firesIn(level, fx + 3, fz + 9, ground) == 0, "fire in or on a plank house; " + setup);
+            h.assertTrue(firesIn(level, tx, tz, ground) == 0, "fire behind tinted glass; " + setup);
             int savannaFires = surface(h, dry)[1];
             h.assertTrue(savannaFires > 64, "cured grass: " + savannaFires + " fires of 256 columns; " + setup);
             Incoming.LOG.info("Flash kindling: {}, green turf 0 fires over {} burned columns, hay {} of 4, savanna {} fires", setup, burned, bales, savannaFires);

@@ -674,13 +674,11 @@ public final class RuinPlanner {
 
     /**
      * Fire at {@code x, y, z} the flash ignites with {@code chance}; the wave leaves {@link Blowout#keep} of it at ground
-     * pressure {@code psi}. {@code flash} means flash layer: candidate by ignition chance, the share the wave keeps separate
-     * (same position roll as ruins); ruins place the product.
+     * pressure {@code psi}. {@code flash} means flash layer: it places fire by ignition chance and lists what the wave blows out
+     * (same position roll as ruins); ruins place the kept share ({@link Sections#finish}).
      */
     private static void fire(Sections s, int x, int y, int z, double chance, double psi, boolean flash) {
-        double keep = Blowout.keep(psi);
-        if (flash) s.fire(x, y, z, chance, keep);
-        else s.fire(x, y, z, chance * keep, 1);
+        s.fire(x, y, z, chance, Blowout.keep(psi), flash);
     }
 
     /** Window glass passes this share of the pulse (est.: soda-lime glass transmits 0.85–0.9 from 0.35 to 2.7 µm, where a ~6000 K fireball emits nearly all its light). */
@@ -824,8 +822,8 @@ public final class RuinPlanner {
         /** Changes: section index {@code << 12} | position in section. */
         private final Int2ObjectOpenHashMap<BlockState> changes = new Int2ObjectOpenHashMap<>();
         /**
-         * Fire candidates: position, probability and wave-surviving fraction (flash layer; ruins use 1,
-         * their probability already post-wave).
+         * Fire candidates: position, ignition probability and wave-surviving fraction ({@link Blowout#keep}); several fuels
+         * lighting one cell combine their ignition first, the cell's blowout applies once.
          */
         final LongArrayList fires = new LongArrayList();
         final it.unimi.dsi.fastutil.doubles.DoubleArrayList fireChance = new it.unimi.dsi.fastutil.doubles.DoubleArrayList(),
@@ -876,9 +874,12 @@ public final class RuinPlanner {
 
         /** Fire candidate index by position: several fuels lighting one cell ignite it if any does. */
         private final it.unimi.dsi.fastutil.longs.Long2IntOpenHashMap fireAt = new it.unimi.dsi.fastutil.longs.Long2IntOpenHashMap();
+        /** Flash layer: fires by ignition chance, the wave-blown listed; otherwise ruins: fires the wave keeps. */
+        private boolean flashLayer;
 
-        void fire(int x, int y, int z, double chance, double keep) {
+        void fire(int x, int y, int z, double chance, double keep, boolean flash) {
             if (chance <= 0) return;
+            flashLayer = flash;
             long at = BlockPos.asLong(x, y, z);
             int k = fireAt.getOrDefault(at, -1);
             if (k >= 0) {
@@ -937,8 +938,8 @@ public final class RuinPlanner {
             for (int k = 0; k < fires.size(); k++) {
                 long f = fires.getLong(k);
                 int fx = BlockPos.getX(f), fy = BlockPos.getY(f), fz = BlockPos.getZ(f);
-                double roll = hash(fx, fy, fz, 29), chance = fireChance.getDouble(k);
-                if (roll >= chance) continue;
+                double roll = hash(fx, fy, fz, 29), chance = fireChance.getDouble(k), kept = chance * fireKeep.getDouble(k);
+                if (roll >= (flashLayer ? chance : kept)) continue;
                 int i = (fy - minY) >> 4;
                 if (i < 0 || i >= sections) continue;
                 BlockState fire = fireAt(fx, fy, fz);
@@ -947,7 +948,7 @@ public final class RuinPlanner {
                 fireCells.add(cell);
                 fireStates.add(fire);
                 // same roll as ruins (their probability chance · keep): wave extinguishes what ruins would not ignite
-                if (roll >= chance * fireKeep.getDouble(k)) blown.add(cell);
+                if (roll >= kept) blown.add(cell);
             }
             ChunkPos pos = new ChunkPos(chunkX, chunkZ);
             if (n == 0 && fireCells.isEmpty() && outside.isEmpty() && fluidTicks.length == 0) return RuinPlan.nothing(ctx, biomes);
