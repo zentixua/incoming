@@ -30,9 +30,10 @@ public final class Homing {
     }
 
     /**
-     * Where a missile leaving {@code from} at {@code speed} meets a target now at {@code at} flying straight on at
-     * {@code velocity} (both per tick): the predicted intercept point that a SAM's fire control steers its missile
-     * to, recomputed every tick. A missile not faster than the target cannot meet it: the target itself.
+     * Where a missile leaving {@code from} at {@code speed} meets a target at {@code at} at the same instant, flying
+     * straight on at {@code velocity} (both per tick): the predicted intercept point that a SAM's fire control steers
+     * its missile to, recomputed every tick. A missile not faster than the target aims at the target itself
+     * (fallback: a meeting point need not exist, e.g. receding).
      * <p>
      * Pure pursuit (always at the target) needs an ever sharper turn at the end when the missile is much faster
      * than a crossing target; at real speeds (50 blocks/tick against 12.5) it passed cruise missiles 10–40 blocks

@@ -175,7 +175,9 @@ public final class Interceptor {
     Vec3 steer(Vec3 targetNow, Vec3 targetVelocity) {
         age++;
         if (age > spec.railTicks()) {
-            Vec3 to = Homing.lead(pos, speed, targetNow, targetVelocity).subtract(pos);
+            // lead from the target's tick-start position: the same instant as this missile's position (the fuze compares
+            // this tick's segments of both; aiming from the end-of-tick position led one target step too far)
+            Vec3 to = Homing.lead(pos, speed, targetNow.subtract(targetVelocity), targetVelocity).subtract(pos);
             if (to.lengthSqr() > 1.0e-6) dir = Homing.turn(dir, to.normalize(), spec.turnLimit(speed));
         }
         speed = spec.speed(speed, age, dir.y);

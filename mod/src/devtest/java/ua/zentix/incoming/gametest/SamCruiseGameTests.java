@@ -167,7 +167,11 @@ public final class SamCruiseGameTests {
         h.assertTrue(sam.load(new ItemStack(ModItems.INTERCEPTOR.get(), 8)).isEmpty(), "missiles not stocked");
         Vec3 antenna = Vec3.atCenterOf(samPos).add(0, 1, 0);
         double aimX = samPos.getX() + 0.5, aimZ = samPos.getZ() + 0.5 + aside;
+        // the aim may lie beyond the held chunks: generate its chunk so the aim is on the surface (the missile's own
+        // target-area tickets load it in flight)
+        level.getChunk(Mth.floor(aimX) >> 4, Mth.floor(aimZ) >> 4);
         Vec3 aim = new Vec3(aimX, Terrain.height(level, Heightmap.Types.MOTION_BLOCKING, Mth.floor(aimX), Mth.floor(aimZ)) + 0.5, aimZ);
+        h.assertTrue(aim.y > level.getMinBuildHeight() + 1, "aim not on the surface: " + aim);
 
         StrikeProjectile[] missile = {null};
         Vec3[] missileAt = {null};
@@ -216,9 +220,10 @@ public final class SamCruiseGameTests {
             }
             for (Interceptor f : order) {
                 Shot s = shots.get(f);
-                if (f.done() && s.pos == null) continue;
+                if (s.pos == null) continue;
                 Vec3 next = f.position();
-                if (mPrev != null && mNow != null) {
+                // sampled at tick ends while both fly (a burst ends the flight before its last segment): approximate
+                if (!f.done() && m != null && mPrev != null) {
                     double k = Homing.closest(s.pos, next, mPrev, mNow);
                     s.closest = Math.min(s.closest, Homing.distanceAt(s.pos, next, mPrev, mNow, k));
                 }
@@ -235,7 +240,7 @@ public final class SamCruiseGameTests {
             for (Interceptor f : order) {
                 Shot s = shots.get(f);
                 kill |= f.end() == Interceptor.End.KILL;
-                lines.add(String.format(Locale.ROOT, "SAMCRUISE %s shot at tick %d, range %.0f: %s at %s, %.0f blocks above the SAM ground, top %.0f, closest %.1f",
+                lines.add(String.format(Locale.ROOT, "SAMCRUISE %s shot at tick %d, range %.0f: %s at %s, %.0f blocks above the SAM ground, top %.0f, closest sampled %.1f",
                         name, s.launched - launchedAt[0], s.range, f.end(), BlockPos.containing(f.position()), f.position().y - groundY, s.top, s.closest));
             }
             lines.add(String.format(Locale.ROOT, "SAMCRUISE %s: radar saw it at tick %d, %.0f blocks; %d interceptors; missile ended at %s (%s)", name,

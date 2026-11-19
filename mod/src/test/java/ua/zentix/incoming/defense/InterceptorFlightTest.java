@@ -137,6 +137,38 @@ class InterceptorFlightTest {
     }
 
     /**
+     * Lead is taken at the same instant as the missile's own position (the target's tick start): against a target
+     * flying straight, the missile meets it where the fuze bursts, at a fraction of a block. Leading from the
+     * target's end-of-tick position aimed one target step ahead: at real speeds a cruise missile 12.5 blocks per
+     * tick ahead, beyond the fuze radius (review of PR #683).
+     */
+    @Test
+    void leadMeetsAStraightTargetAtTheBurst() {
+        for (WeaponType w : interceptable()) {
+            WeaponSpec.Airframe a = w.spec().airframe();
+            double d = Math.min(engageFrom(a), 1200);
+            for (int bearing = 0; bearing < 360; bearing += 45) {
+                double b = Math.toRadians(bearing);
+                Vec3 start = RAIL.add(Math.sin(b) * d, ALTITUDE, -Math.cos(b) * d);
+                Vec3 v = RAIL.add(0, ALTITUDE, 0).subtract(start).normalize().scale(a.cruiseSpeed());
+                Vec3 aside = start.add(new Vec3(-v.z, 0, v.x).normalize().scale(300));
+                Interceptor f = new Interceptor(SPEC, UUID.randomUUID(), null, "test", RAIL, Interceptor.railDirection(RAIL, aside, SPEC));
+                Vec3 t = aside;
+                double miss = Double.NaN;
+                for (int tick = 1; tick <= SPEC.fuelTicks() && Double.isNaN(miss); tick++) {
+                    Vec3 prev = t;
+                    t = t.add(v);
+                    Vec3 next = f.steer(t, v);
+                    double s = f.fuze(next, prev, t, a.noseLength());
+                    if (s >= 0) miss = ua.zentix.incoming.guidance.Homing.distanceAt(f.position(), next, prev, t, s);
+                    else f.moveTo(next);
+                }
+                assertTrue(miss < 1, w + " bearing " + bearing + ": burst " + miss + " blocks from the target");
+            }
+        }
+    }
+
+    /**
       * From a vertical launch to a target far and low on the horizon, the rocket lies in an arc: each tick turn is no
       * steeper than the lateral acceleration spec at the speed of this tick (immediately after the rail - ~20°/tick),
       * and 10° above the horizon the course passes beyond 5–10 tick (0,25–0,5 s) after it.

@@ -77,7 +77,7 @@ How often it shoots targets down follows from the game model; nothing is tuned. 
 target over flat ground, with the target point up to 600 blocks from the SAM, every interceptor it fired hit:
 all Shaheds, cruise missiles and Lancets were shot down, and 78 % of B-2s. The other B-2s never came within the 450
 blocks at which the radar sees them. With real flight speeds (`REAL`) the same raids bring down all Shaheds and Lancets
-and 98.5 % of cruise missiles; the B-2 then flies at 12 km, out of the radar's sight. In a real game targets get
+and 99.5 % of cruise missiles; the B-2 then flies at 12 km, out of the radar's sight. In a real game targets get
 through behind hills, in salvos larger than its four rails while it reloads, and when it runs out of missiles.
 
 A cruise missile flies 12 blocks above the treetops (40 with `REAL`). From a SAM among trees or in hills the radar
