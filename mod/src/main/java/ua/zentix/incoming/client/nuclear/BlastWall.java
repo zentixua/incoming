@@ -52,6 +52,20 @@ public final class BlastWall {
      * coefficient 1 for weak distant waves; closer to ground zero decay is steeper and displacement smaller — upper estimate).
      */
     static final double CARRY = Math.exp(-1);
+    /**
+     * Eddy turn of the head's dust layer per block of wind path behind the front, per eddy diameter: eddies of the layer's size ({@link #TILE})
+     * spin at the turbulent velocity σ_u ≈ 2.5 u* (Panofsky &amp; Dutton 1984, neutral surface layer) on their radius, u* ≈ 0.04 U
+     * (Schlichting rough plate a few hundred metres behind the front, {@code DustModel.friction}): Ω = 5 u* / D, angle = 0.2 · (wind path)/D.
+     * Sense from the shear: wind faster aloft than at the ground — the top rolls outward while the wave's wind blows outward, back toward ground
+     * zero when it reverses ({@link #carriedShare}).
+     */
+    static final double EDDY = 0.2;
+    /**
+     * presentation: the eddies turn this many times faster than {@link #EDDY} — at the physical rate a 1 Mt head 5 km out turns 0.1 rad in its
+     * seconds of life, which no one sees from kilometres; at this gain about a quarter turn out and back. Where dust is, its amount and its
+     * height are unchanged: only the billow pattern turns.
+     */
+    static final double ROLL_GAIN = 8;
     /** Head hands over to pall from the wedge end (fraction of its length) to this fraction ({@link #handoff}). */
     static final double HANDOFF_FROM = 1, HANDOFF_TO = 1.5;
     /** No head when its extinction is below this, 1/m (visibility 4 km). */
@@ -254,6 +268,35 @@ public final class BlastWall {
         double x = carried * carriedShare(u) * Math.pow(zr, 1.0 / 7);
         double len = Math.max(Math.hypot(rx, rz), 1e-3);
         return new double[] {rx - rx / len * x, z - x * (0.02 + 0.06 * zr), rz - rz / len * x};
+    }
+
+    /**
+     * Eddy turn of head dust (radians, positive — top outward) at phase fraction {@code phase} since the front: {@link #EDDY} × {@link #ROLL_GAIN} ×
+     * wind path so far ({@code carried} × {@link #carriedShare}) / eddy diameter {@code size} (blocks). Copy {@code pallWallRollAngle}.
+     */
+    static double rollAngle(double phase, double carried, double size) {
+        return ROLL_GAIN * EDDY * carried * carriedShare(phase) / Math.max(size, 1);
+    }
+
+    /**
+     * Dust-coordinate point (x, height, z: {@link #origin}) turned within its eddy, into {@code into}: eddies of diameter {@code size} side by side
+     * along the ground outward ({@code outX}, {@code outZ} — unit), resting on it; the turn {@code angle} is full at an eddy's centre and falls to
+     * zero at its rim (squared), so neighbouring eddies meet without a seam and dust outside them stays. Copy {@code pallWallRoll}.
+     */
+    static void roll(double x, double y, double z, double outX, double outZ, double size, double angle, double[] into) {
+        double along = x * outX + z * outZ, half = 0.5 * size;
+        double centre = size * (Math.floor(along / size) + 0.5), dx = along - centre, dy = y - half;
+        double r = Math.sqrt(dx * dx + dy * dy) / half;
+        into[0] = x;
+        into[1] = y;
+        into[2] = z;
+        if (r >= 1) return;
+        double a = angle * (1 - r) * (1 - r), c = Math.cos(a), sn = Math.sin(a);
+        // the pattern turns by a (top outward); the point samples where its dust came from: turned back
+        double ex = c * dx - sn * dy, ey = sn * dx + c * dy;
+        into[0] = x + outX * (ex - dx);
+        into[1] = half + ey;
+        into[2] = z + outZ * (ex - dx);
     }
 
     /** Wind immediately behind the front along the ground at ground distance {@code groundM} from ground zero, m/s. */

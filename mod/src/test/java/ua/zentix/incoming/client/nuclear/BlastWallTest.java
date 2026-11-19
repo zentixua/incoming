@@ -488,6 +488,43 @@ class BlastWallTest {
         assertTrue(puffs.pallLight(MushroomModel.shape(t, 15, 0, true, GROUND.metres(w.wall(t).head())), fire, glow));
     }
 
+    /**
+     * The head's dust rolls in eddies of the layer's size (18.11, Artem: the lofted dust curls in successive rolls): the billow pattern turns about
+     * horizontal axes on concentric rings of eddies, by the eddies' turn over the wind's path (σ_u ≈ 2.5 u*, u* ≈ 0.04 U; × the presentation
+     * gain), top outward while the wave's wind blows outward, back toward ground zero as it reverses. Only the pattern turns: an eddy's rim
+     * and everything outside it stay put (no seams between eddies), a point never leaves its eddy, and the turn is zero at the front.
+     */
+    @Test
+    void headDustRollsInItsEddies() {
+        double size = 40, carried = 30;
+        assertEquals(0, BlastWall.rollAngle(0, carried, size), 0, "no turn at the front");
+        double peak = BlastWall.rollAngle(1, carried, size);
+        assertEquals(BlastWall.ROLL_GAIN * BlastWall.EDDY * carried / size, peak, 1e-12, "full wind path at phase end");
+        assertTrue(peak > 1 && peak < Math.PI / 2, "about a quarter turn at phase end: " + peak);
+        assertTrue(BlastWall.rollAngle(2, carried, size) < peak, "rolls back as the wind reverses");
+        double[] q = new double[3];
+        // outward along +x; an eddy spans [0, 40) along, 0..40 high, centre (20, 20)
+        BlastWall.roll(20, 20, 0, 1, 0, size, peak, q);
+        assertEquals(20, q[0], 1e-9, "centre stays");
+        assertEquals(20, q[1], 1e-9, "centre stays");
+        BlastWall.roll(20, 39.9, 0, 1, 0, size, peak, q);
+        assertEquals(20, q[0], 0.01, "rim stays");
+        BlastWall.roll(20, 60, 0, 1, 0, size, peak, q);
+        assertEquals(60, q[1], 0, "above the eddies — unchanged");
+        // the top of the eddy samples dust from further in: the pattern turns top outward
+        BlastWall.roll(20, 30, 0, 1, 0, size, peak, q);
+        assertTrue(q[0] < 20, "top outward: sample from inside " + q[0]);
+        assertTrue(Math.hypot(q[0] - 20, q[1] - 20) <= 10 + 1e-9, "stays in its eddy");
+        BlastWall.roll(20, 30, 0, 1, 0, size, -peak, q);
+        assertTrue(q[0] > 20, "rolling back: sample from outside " + q[0]);
+        // continuous across neighbouring eddies
+        double[] a = new double[3], b = new double[3];
+        BlastWall.roll(39.999, 20, 0, 1, 0, size, peak, a);
+        BlastWall.roll(40.001, 20, 0, 1, 0, size, peak, b);
+        assertEquals(a[0], b[0], 0.01);
+        assertEquals(a[1], b[1], 0.01);
+    }
+
     /** The vertical thickness of the head ({@link BlastWall#tau}) is the integral of its weakening along the height. */
     @Test
     void verticalDepthIsTheIntegral() {

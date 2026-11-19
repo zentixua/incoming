@@ -349,7 +349,14 @@ class PallGlslTest {
             assertTrue(origin.contains(law), "head dust place - not like in Java: no \"" + law + "»");
         }
         String wall = body(read("include/fx_pall.glsl"), "float wallAt(");
-        assertTrue(wall.contains("wallNoise(pallWallOrigin(h.rel, h.z, u * V[2].x, h.P.y, V[1].x) / max(V[2].w, 1.0)"), "head noise - not in dust coordinates");
+        String flat = wall.replaceAll("\\s+", " ");
+        assertTrue(flat.contains("float u = s / max(h.P.x, 0.001), ph = u * V[2].x, tile = max(V[2].w, 1.0);")
+                && flat.contains("vec3 o = pallWallRoll(pallWallOrigin(h.rel, h.z, ph, h.P.y, V[1].x), h.rel / max(length(h.rel), 1e-3), tile, "
+                + "pallWallRollAngle(ph, V[1].x, tile));") && flat.contains("vec3 n = wallNoise(o / tile + "), "head noise - not in dust coordinates, turning in its eddies");
+        // where the layer is thinner than its billows (the toe right behind the front), billows give way to their mean: no holes in a sheet
+        // metres thick (18.11: a translucent textured band at the front)
+        assertTrue(flat.contains("float resolved = smoothstep(0.125, 0.375, local / tile);")
+                && flat.contains("return h.P.w * m * mix(1.0, pallShape(n.xy, fill), resolved) * mix(1.0, n.z, resolved);"), "toe billows - not their mean");
     }
 
     /**
@@ -527,6 +534,23 @@ class PallGlslTest {
                     }
                 }
             }
+        }
+    }
+
+    /** The head's eddy turn and roll ({@code pallWallRollAngle}, {@code pallWallRoll}) are {@link BlastWall#rollAngle}, {@link BlastWall#roll}. */
+    @Test
+    void headRollIsTheJavaLaw() {
+        assertEquals(BlastWall.ROLL_GAIN * BlastWall.EDDY, scalar(GLSL, "PALL_WALL_ROLL"), 1e-7);
+        GlslFunction angle = GlslFunction.parse(GLSL, "pallWallRollAngle");
+        for (double ph : new double[]{0, 0.3, 1, 1.4, 3}) {
+            assertEquals(BlastWall.rollAngle(ph, 30, 40), angle.call(Map.of("ph", ph, "carried", 30.0, "size", 40.0,
+                    "PALL_WALL_ROLL", BlastWall.ROLL_GAIN * BlastWall.EDDY)), 1e-9, ph + " phase");
+        }
+        String roll = body(GLSL, "vec3 pallWallRoll(").replaceAll("\\s+", " ");
+        for (String law : new String[]{"float dx = along - size * (floor(along / size) + 0.5), dy = q.y - rim;",
+                "float a = angle * (1.0 - r) * (1.0 - r), c = cos(a), sn = sin(a);", "float ex = c * dx - sn * dy, ey = sn * dx + c * dy;",
+                "return vec3(q.x + out1.x * (ex - dx), rim + ey, q.z + out1.y * (ex - dx));"}) {
+            assertTrue(roll.contains(law), "pallWallRoll - not BlastWall.roll: no " + law);
         }
     }
 

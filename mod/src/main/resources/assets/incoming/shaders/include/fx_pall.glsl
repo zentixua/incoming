@@ -366,10 +366,19 @@ float wallAt(mat4 V, WallAt h, float fine, float dense) {
     float s = h.s - h.P.z;
     float m = pallWallMean(s, h.z, h.P.x, h.P.y);
     if (m <= 0.0 || h.P.w <= 0.0) return 0.0;
-    float u = s / max(h.P.x, 0.001);
-    vec3 n = wallNoise(pallWallOrigin(h.rel, h.z, u * V[2].x, h.P.y, V[1].x) / max(V[2].w, 1.0) + vec3(0.618034, 0.414214, 0.732051), fine);
-    float fill = clamp(h.P.w * m / max(dense, 1e-6) * 3.0, 0.0, 1.0) * (1.0 - smoothstep(0.4, 1.0, h.z / max(h.P.y * pallWallTop(u), 0.001)));
-    return h.P.w * m * pallShape(n.xy, fill) * n.z;
+    float u = s / max(h.P.x, 0.001), ph = u * V[2].x, tile = max(V[2].w, 1.0);
+    // billows where the dust was lofted, turning in the layer's eddies (pallWallRoll)
+    vec3 o = pallWallRoll(pallWallOrigin(h.rel, h.z, ph, h.P.y, V[1].x), h.rel / max(length(h.rel), 1e-3), tile,
+            pallWallRollAngle(ph, V[1].x, tile));
+    vec3 n = wallNoise(o / tile + vec3(0.618034, 0.414214, 0.732051), fine);
+    float local = h.P.y * pallWallTop(u);
+    float fill = clamp(h.P.w * m / max(dense, 1e-6) * 3.0, 0.0, 1.0) * (1.0 - smoothstep(0.4, 1.0, h.z / max(local, 0.001)));
+    // eddies are the layer's size: where the layer is thinner than a billow (a quarter tile; the toe behind the front, a few metres
+    // high), its eddies are finer than the tile's billows — their mean: from under half a billow (tile/8) to one and a half (3·tile/8)
+    // the pattern fades in. An even sheet of fresh dust thickening behind the front, not tile-sized patches with holes in a layer metres
+    // thick (the "shell" at the front edge, 18.11)
+    float resolved = smoothstep(0.125, 0.375, local / tile);
+    return h.P.w * m * mix(1.0, pallShape(n.xy, fill), resolved) * mix(1.0, n.z, resolved);
 }
 
 // point h shifted by v (blocks): same underlying water/terrain/hard ground, own extinction (edge to wedge end, 0 outside bounds),

@@ -658,6 +658,26 @@ vec3 pallWallOrigin(vec2 rel, float z, float u, float top, float carried) {
     return vec3(rel.x - out1.x * x, z - x * (0.02 + 0.06 * zr), rel.y - out1.y * x);
 }
 
+// Eddy turn of head dust, rad (BlastWall.rollAngle): positive — the top rolls outward; eddies of diameter size spin at σ_u ≈ 2.5 u*,
+// u* ≈ 0.04 U (BlastWall.EDDY), over the wind path so far (carried × pallWallCarried: out with the wave's wind, back as it reverses).
+// presentation: ×8 the physical rate (BlastWall.ROLL_GAIN) — only the billow pattern turns, not where dust is or how much
+const float PALL_WALL_ROLL = 1.6;
+float pallWallRollAngle(float ph, float carried, float size) {
+    return PALL_WALL_ROLL * carried * pallWallCarried(ph) / max(size, 1.0);
+}
+
+// Dust-coordinate point q (pallWallOrigin: x, height, z) turned within its eddy (BlastWall.roll): eddies of diameter size side by side
+// along the ground outward (out1), resting on it; the turn is full at the centre and zero at the rim — no seams between eddies
+vec3 pallWallRoll(vec3 q, vec2 out1, float size, float angle) {
+    float along = dot(q.xz, out1), rim = 0.5 * size;
+    float dx = along - size * (floor(along / size) + 0.5), dy = q.y - rim;
+    float r = length(vec2(dx, dy)) / rim;
+    if (r >= 1.0) return q;
+    float a = angle * (1.0 - r) * (1.0 - r), c = cos(a), sn = sin(a);
+    float ex = c * dx - sn * dy, ey = sn * dx + c * dy;
+    return vec3(q.x + out1.x * (ex - dx), rim + ey, q.z + out1.y * (ex - dx));
+}
+
 // Density at the ground by the share u of the wedge against its density at its end (BlastWall.shape): the lifted part in the layer of the top pallWallTop
 float pallWallShape(float u) {
     if (u <= 0.0) return 0.0;
