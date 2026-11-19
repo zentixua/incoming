@@ -48,14 +48,14 @@ strikes where you stand.
 or from a knocked-out substation's oil, and stops by itself when it burns out: about 2.5 minutes after a Shahed, about
 a quarter of an hour after a cruise missile ([burning craters](weapons.md#what-a-blast-looks-like)).
 
-**The crater fire won't go out.** It is the fuel left in the crater, and it burns until the fuel is gone: about
-2.5 minutes after a Shahed, about a quarter of an hour after a cruise missile. Punching it out or rain does not help:
+**The crater fire won't go out.** It is the fuel left in the crater; it burns out by itself in the time given
+above. Neither rain nor punching it out helps:
 burning fuel lights again. Pour water over it or place a block on it, and that part goes out for good. `/incoming clear`
 does not put it out. Flammable blocks it has set alight burn as ordinary fire
 ([burning craters](weapons.md#what-a-blast-looks-like)).
 
 **Why do blasts break so little?** Each weapon carries the charge of the real one, and a block is a metre. A Shahed
-(50 kg of TNT) leaves a crater about 2.4 m across and breaks brick walls within about 3 m; a cruise missile (about
+(50 kg of TNT) leaves a crater in soil about 2.4 m across and breaks brick walls within about 3 m; a cruise missile (about
 150 kg) within about 7 m; a Grad rocket (6.4 kg) within about 1 m, so trees next to it can stay standing. Smoke and
 dust reach much farther than the damage, as in real footage. There is no setting to make conventional weapons
 stronger ([the real weapons](weapons.md#the-real-weapons), [what a blast does](weapons.md#what-a-blast-does)). The
@@ -65,5 +65,5 @@ default 15 kt nuke brings down brick buildings out to about 700 m and wooden one
 (100 kt by default). The world owner can raise the limit up to 1 Mt with `nuclear.max_yield` (at most 1000), or
 shrink every nuclear distance: set `scale.scale_preset` to `CUSTOM` and lower `nuclear.effects_scale` (1.0 is true to
 life; at 0.1 a 15 kt blast brings down brick out to about 70 m). Settings open with the Settings button on the console
-or under Mods → Incoming → Config; world settings can be changed there in a single-player world, on a server in
-its `incoming-server.toml` ([world settings](settings.md#world-settings)).
+or under Mods → Incoming → Config; world settings can be changed there in a single-player world
+not opened to LAN, otherwise in `incoming-server.toml` ([world settings](settings.md#world-settings)).

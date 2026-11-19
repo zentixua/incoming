@@ -73,6 +73,16 @@ class HobBlastTest {
         assertEquals(metres, HobBlast.rangeFor(psi, 0, yieldKt), metres * 0.1, () -> yieldKt + " kt, " + psi + " psi");
     }
 
+    /**
+     * Player FAQ (docs/guide/faq.md, store pages): the default 15 kt ground burst brings down brick (masonry, 12 psi in
+     * {@code BlockResponse}) out to about 700 m and planks (4 psi) out to about 1.3 km.
+     */
+    @ParameterizedTest
+    @CsvSource({"12, 700", "4, 1300"})
+    void faqDefaultNukeRadii(double psi, double metres) {
+        assertEquals(metres, HobBlast.rangeFor(psi, 0, 15), metres * 0.05, () -> psi + " psi");
+    }
+
     /** The pressure drops with range at any detonation height, and Broad’s junction with the DNA standard is without a step. */
     @Test
     void fallsWithRangeAtEveryHeight() {
