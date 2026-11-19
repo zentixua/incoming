@@ -171,6 +171,46 @@ class ClientNuclearTest {
         assertEquals(30 + 210, clock.shown(), 0.5, "own ticks from the anchor once past it");
     }
 
+    /**
+     * A recording made before per-tick anchors (3.13 and older) has the live detonation packet alone: the age runs on own ticks instead
+     * of easing to a stop {@link ClientNuclear.AgeClock#LEAD} past it (review of #678: the fresh burst froze at 3 ticks until a seek).
+     */
+    @Test
+    void liveWithoutPerTickAnchorsRunsOnOwnTicks() {
+        ClientNuclear.AgeClock clock = new ClientNuclear.AgeClock(0, true);
+        for (int c = 0; c < ClientNuclear.AgeClock.PROBE; c++) clock.tick();
+        assertTrue(clock.shown() <= ClientNuclear.AgeClock.LEAD + 1e-9, "a live burst waits for its server's first anchors");
+        double last = clock.shown();
+        for (int c = 0; c < 100; c++) {
+            clock.tick();
+            assertTrue(clock.shown() > last, "no per-tick anchors: an old recording runs on");
+            last = clock.shown();
+        }
+        assertEquals(120, clock.shown(), 0.5, "and catches up with its own ticks");
+    }
+
+    /**
+     * Tick-time callers ask the clock for the tick's own age (partial 0): a query a whole tick ahead (partial 1) advances the clock past
+     * every frame of the tick, which then all draw the same age (review of #678: firestorm tracking held the wave in 20 Hz steps).
+     */
+    @Test
+    void tickTimeQueriesDoNotRunAheadOfFrames() throws java.io.IOException {
+        String src = java.nio.file.Files.readString(java.nio.file.Path.of("src/main/java/ua/zentix/incoming/client/nuclear/ClientNuclear.java"));
+        assertTrue(!src.matches("(?s).*\\.ticks\\(1[fF]?\\).*"), "a tick-time query of the next tick's age");
+        ClientNuclear.AgeClock clock = new ClientNuclear.AgeClock(0, true);
+        double last = -1;
+        for (int t = 1; t <= 40; t++) {
+            clock.anchor(t);
+            clock.tick();
+            clock.at(0);
+            for (double f : new double[]{0.1, 0.35, 0.6, 0.9}) {
+                double a = clock.at(f);
+                if (t > 25) assertTrue(a > last, "tick " + t + " frame " + f + ": held at " + a);
+                last = a;
+            }
+        }
+    }
+
     /** A past detonation (world entry, replay seek) starts from the level clock's estimate and takes the server's first anchor whole. */
     @Test
     void pastDetonationTakesTheFirstAnchor() {

@@ -135,7 +135,7 @@ faster-rising cap. The gap is expected; in the first seconds, dust near the grou
 A ground burst leaves a crater and radioactive fallout downwind. Over water, spray takes the place of the dust wall.
 Right behind the wave its wind tears dust off the ground and throws it up fast, so the wall stands tall and thick at the
 wave; the dust then slows and hangs while the wave runs on, so the wall leans back over the ground behind it. The throw is
-shown twice as fast as the measured rate, within what test films show, so that the front reads from afar. Bare earth, fields and forests
+shown twice as fast as the lofting law gives, still within the heights measured in nuclear tests, so that the front reads from afar. Bare earth, fields and forests
 throw up thick dust; rock, roads, roofs and snow give only the dust of broken buildings, so there the wall is lower and
 thinner and the dust left behind is lighter.
 For the first seconds a thin white condensation shell stands over the wave: the air behind it expands and cools below its dew

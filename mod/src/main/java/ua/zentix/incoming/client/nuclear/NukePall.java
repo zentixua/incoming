@@ -603,7 +603,7 @@ public final class NukePall {
     static void dustLight(float[] wall, float[] glow, Sky sky, double wind, double gx, double gy, double gz, double up, double smoke, double sand,
                           float[] into) {
         double rx = gx, rz = gz, len = Math.hypot(rx, rz);
-        double top = wall[2], reach = BlastWall.HANDOFF_TO * wall[1] + top, s = wall[0] - len, toTop = Math.max(top - up, 0);
+        double top = wall[2], reach = BlastWall.HANDOFF_TO * wall[1] + top, s = wall[0] - len, toTop = Math.max(BlastWall.ceiling(wall) - up, 0);
         double ox = len > 1e-3 ? rx / len : 1, oz = len > 1e-3 ? rz / len : 0;
         // above point, to local wedge top; toward edge, until wedge falls below point; toward light, no higher than head top (fx_pall: wall)
         double above = chord(wall, rx, rz, up, 0, 1, 0, Math.max(BlastWall.local(wall, s, 0) - up, 0), 4);

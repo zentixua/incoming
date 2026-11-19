@@ -443,8 +443,8 @@ public final class BlastWall {
      * x·e^(1 − x) = y by two Newton steps from a guess (error below 10⁻³ of the phase).
      */
     static double face(double zr, double ph) {
-        double p = loft(ph), y = Math.pow(Mth.clamp(zr, 0, 1) * DustModel.loftTop(p), 1 / DustModel.LOFT_EXP);
-        double x = y < 0.7 ? y / Math.E * (1 + 0.6 * y) : 1 - Math.sqrt(2 * (1 - y));
+        double p = loft(ph), y = Math.min(Math.pow(Mth.clamp(zr, 0, 1) * DustModel.loftTop(p), 1 / DustModel.LOFT_EXP), 1);
+        double x = y < 0.7 ? y / Math.E * (1 + 0.6 * y) : 1 - Math.sqrt(Math.max(2 * (1 - y), 0));
         for (int i = 0; i < 2; i++) {
             double e = Math.exp(1 - x);
             x = Mth.clamp(x - (x * e - y) / Math.max((1 - x) * e, 1e-3), 0, 1);

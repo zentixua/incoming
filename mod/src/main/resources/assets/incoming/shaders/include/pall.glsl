@@ -656,8 +656,8 @@ float pallWallTop(float u, float ph) {
 // Share of the wedge where the layer top reaches the share zr of the top at the end (BlastWall.face): inverse of pallWallTop, x·e^(1 − x) = y
 // by two Newton steps from a guess
 float pallWallFace(float zr, float ph) {
-    float p = PALL_WALL_LOFT_GAIN * max(ph, 0.001), y = pow(clamp(zr, 0.0, 1.0) * pallLoftTop(p), 1.0 / 0.88);
-    float x0 = mix(y / 2.7182818 * (1.0 + 0.6 * y), 1.0 - sqrt(2.0 * (1.0 - y)), step(0.7, y)), e0 = exp(1.0 - x0);
+    float p = PALL_WALL_LOFT_GAIN * max(ph, 0.001), y = min(pow(clamp(zr, 0.0, 1.0) * pallLoftTop(p), 1.0 / 0.88), 1.0);
+    float x0 = mix(y / 2.7182818 * (1.0 + 0.6 * y), 1.0 - sqrt(max(2.0 * (1.0 - y), 0.0)), step(0.7, y)), e0 = exp(1.0 - x0);
     float x1 = clamp(x0 - (x0 * e0 - y) / max((1.0 - x0) * e0, 0.001), 0.0, 1.0), e1 = exp(1.0 - x1);
     float x2 = clamp(x1 - (x1 * e1 - y) / max((1.0 - x1) * e1, 0.001), 0.0, 1.0);
     return min(x2 / p, 1.0);

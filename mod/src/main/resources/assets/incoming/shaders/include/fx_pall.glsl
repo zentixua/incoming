@@ -405,10 +405,14 @@ float wallAt(mat4 V, WallAt h, float fine, float dense, vec3 lobes, float t) {
     float local = h.P.y * pallWallTop(u, V[2].x) * pallWallHeated(ph, V[2].w);
     vec3 o = pallWallOrigin(h.rel, h.z, ph, local, V[1].x);
     float fill = clamp(h.P.w * m / max(dense, 1e-6) * 3.0, 0.0, 1.0) * (1.0 - smoothstep(0.4, 1.0, o.y));
-    vec3 n = lobes.z < 1.0 ? wallNoise(o, lobes.x, fine, t, vec3(0.618034, 0.414214, 0.732051)) : vec3(0.5, 0.5, 1.0);
+    // each octave keeps its own noise offset by its parity: a tile is the larger of one pair and the smaller of the next, so the offset
+    // must follow the tile, not its place in the pair (swapping at the boundary replaced every billow at once)
+    float odd = mod(floor(log2(lobes.x) + 0.5), 2.0);
+    vec3 even = vec3(0.618034, 0.414214, 0.732051), other = vec3(0.381966, 0.585786, 0.267949);
+    vec3 n = lobes.z < 1.0 ? wallNoise(o, lobes.x, fine, t, mix(even, other, odd)) : vec3(0.5, 0.5, 1.0);
     float shape = lobes.z < 1.0 ? pallShape(n.xy, fill) * n.z : 0.0;
     if (lobes.z > 0.0) {
-        vec3 n2 = wallNoise(o, lobes.y, fine, t, vec3(0.381966, 0.585786, 0.267949));
+        vec3 n2 = wallNoise(o, lobes.y, fine, t, mix(other, even, odd));
         shape = mix(shape, pallShape(n2.xy, fill) * n2.z, lobes.z);
     }
     return h.P.w * m * shape;
@@ -480,7 +484,7 @@ void wall(mat4 V, WallAt h, vec3 keyDir, vec3 sunDir, vec3 lightDir, float smoke
     // mean head depth above point (to local wedge top), toward leading edge (where wedge stays above point), below point
     // to terrain (ground/fires there; head below map only a coarse-map margin); toward light through whole head but no
     // higher than its top: long low wedge, full-length steps would pass above it (same as NukePall.dustLight)
-    float reach = PALL_WALL_HANDOFF_TO * h.P.x + h.P.y, s0 = h.s - h.P.z, toTop = max(h.P.y - h.z, 0.0);
+    float reach = PALL_WALL_HANDOFF_TO * h.P.x + h.P.y, s0 = h.s - h.P.z, toTop = max(pallWallCeiling(h.P.y, V[2].x, V[2].w) - h.z, 0.0);
     vec2 out1 = h.rel / max(length(h.rel), 1e-3);
     float u0 = s0 / max(h.P.x, 0.001);
     float up = wallChord(V, h, vec3(0.0, 1.0, 0.0), max(h.P.y * pallWallTop(u0, V[2].x) * pallWallHeated(u0 * V[2].x, V[2].w) - h.z, 0.0), 4);

@@ -376,6 +376,9 @@ class PallGlslTest {
                 && flat.contains("vec3 o = pallWallOrigin(h.rel, h.z, ph, local, V[1].x);"), "head noise - not at the dust parcel");
         String noise = body(read("include/fx_pall.glsl"), "vec3 wallNoise(").replaceAll("\\s+", " ");
         assertTrue(noise.contains("vec3 n3 = vec3(q.x / size, q.y * WALL_ROW, q.z / size) + offset;"), "head noise - not the parcel's coordinates");
+        String at = body(read("include/fx_pall.glsl"), "float wallAt(").replaceAll("\\s+", " ");
+        assertTrue(at.contains("wallNoise(o, lobes.x, fine, t, mix(even, other, odd))") && at.contains("wallNoise(o, lobes.y, fine, t, mix(other, even, odd))"),
+                "a tile's noise offset - by its place in the octave pair, not its parity: every billow pops at the boundary (review of #678)");
         assertTrue(!read("include/fx_pall.glsl").contains("pallWallRoll") && !GLSL.contains("pallWallRoll"), "the head pattern turns in place");
     }
 
