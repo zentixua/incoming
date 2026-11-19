@@ -164,6 +164,15 @@ heal or are repaired. A game hour is an hour of the world's day:
 An effect never comes before its cause: fallout lands as the cloud passes over, and black rain starts only once the
 firestorm has formed, at least 20 real minutes after the burst.
 
+### Ending the aftermath
+
+The host or an operator can end everything nuclear at once with `/incoming clear`. Besides aborting strikes in flight,
+it makes the world forget past nuclear blasts: for every player the mushroom cloud, the pall of dust and smoke, the
+firestorm and black rain disappear, and fallout stops irradiating. What the blast already did stays: ruins and
+scorched ground, blocks that are burning (ordinary fire, burning out as usual) and the dose players have taken
+(`/incoming radiation clear` removes it). The ruin zone stops growing, so chunks it had not reached yet stay as they
+were. An ordinary player's `/incoming clear` only recalls their own conventional strikes.
+
 ### Saved ruins beyond view distance
 
 After the wave has crossed the ruin zone, the server gradually applies ruins and ground traces to existing chunks

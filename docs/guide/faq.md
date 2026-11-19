@@ -41,3 +41,12 @@ a player nearby; it does not shoot down its own side's projectiles, ICBMs or Gra
 
 **A strike hit your own base.** A blast hurts everyone: check the target on the console before firing. "Around me"
 strikes where you stand.
+
+**How do I get rid of the smoke?** After a nuclear blast the host or an operator runs `/incoming clear`
+([what it ends](nuke.md#ending-the-aftermath)). The smoke of an ordinary strike comes from fuel burning in the crater
+or from a knocked-out substation's oil, and stops by itself when it burns out: about 2.5 minutes after a Shahed, about
+a quarter of an hour after a cruise missile ([burning craters](weapons.md#what-a-blast-looks-like)).
+
+**Can nukes be bigger?** Up to 1 Mt. The world owner raises the limit with `nuclear.max_yield` (100 kt by default,
+at most 1000) in the [world settings](settings.md#world-settings), then picks the yield on the console. Conventional
+weapons carry the charges of the real weapons, so there is no setting to make them stronger.
