@@ -72,6 +72,9 @@ public class RemoteScreen extends Screen {
     private UUID aircraft;
     private int page;
     private boolean validYield = true;
+    /** Fire (or Mission) button: inactive while the order is incomplete ({@link #missing}). */
+    @Nullable
+    private Button fireButton;
     private final List<Choice> choices = new ArrayList<>();
     /** Weapon description lines and window height: computed in {@link #init()} from font. */
     private int descLines = 1, h = BASE_H + (1 + HINT_LINES) * LINE;
@@ -142,6 +145,7 @@ public class RemoteScreen extends Screen {
                 validYield = value.isPresent();
                 yield.setTextColor(validYield ? 0xFFFFFF : 0xFF6060);
                 if (validYield) commit(loadout.withNuke(loadout.nuke().withYield(value.getAsInt())));
+                readiness();
             });
             validYield = n.yieldKt() <= cap;
             nuke.add(new Cell(yield, List.of(Component.literal("1000 kt"))));
@@ -224,9 +228,10 @@ public class RemoteScreen extends Screen {
         Component fireLabel = linked > 0 ? Component.translatable("incoming.remote.assign", linked) : Component.translatable("incoming.remote.fire");
         // Map route and launch site apply to On the map target, as when firing from map itself.
         boolean map = loadout.mode() == TargetMode.MAP;
-        addRenderableWidget(Button.builder(fireLabel.copy().withStyle(ChatFormatting.RED, ChatFormatting.BOLD),
+        fireButton = addRenderableWidget(Button.builder(fireLabel.copy().withStyle(ChatFormatting.RED, ChatFormatting.BOLD),
                 b -> fire(map ? MapTarget.waypoints(minecraft.level) : Waypoints.NONE, map ? launchFrom() : Optional.empty()))
                 .bounds(x0 + 4, by, 128, 22).build());
+        readiness();
         addRenderableWidget(Button.builder(Component.translatable("incoming.remote.clear"), b -> {
             PacketDistributor.sendToServer(new C2S.Clear());
             onClose();
@@ -374,9 +379,7 @@ public class RemoteScreen extends Screen {
      * here rather than the screen field.
      */
     void fire(Waypoints via, Optional<Vec3> from) {
-        if (loadout.nuclear() && !validYield) return;
-        if (loadout.mode() == TargetMode.AIRCRAFT && aircraft == null) return;
-        if (loadout.mode() == TargetMode.PLAYER && loadout.player().isEmpty()) return;
+        if (missing() != null) return;
         if (!loadout.weapon().spec().route().waypoints()) via = Waypoints.NONE;
         Optional<C2S.AimHint> aim;
         if (loadout.mode() == TargetMode.MAP) {
@@ -417,6 +420,26 @@ public class RemoteScreen extends Screen {
             case AROUND_ME -> Optional.of(new C2S.AimHint(C2S.AimHint.POINT, p.position(), 0, Vec3.ZERO));
             default -> Optional.empty();
         };
+    }
+
+    /**
+     * What the order still lacks before Fire can send it (yield, a picked aircraft or player), or null: Fire stays
+     * inactive and its tooltip names the missing part, instead of a click that does nothing.
+     */
+    @Nullable
+    private Component missing() {
+        if (loadout.nuclear() && !validYield) return Component.translatable("incoming.remote.fire.no_yield", IncomingConfig.SERVER.nukeMaxYield.get());
+        if (loadout.mode() == TargetMode.AIRCRAFT && aircraft == null) return Component.translatable("incoming.remote.fire.no_aircraft");
+        if (loadout.mode() == TargetMode.PLAYER && loadout.player().isEmpty()) return Component.translatable("incoming.remote.fire.no_player");
+        return null;
+    }
+
+    /** Fire's state follows {@link #missing}: also on typing the yield, which does not rebuild the screen. */
+    private void readiness() {
+        if (fireButton == null) return;
+        Component why = missing();
+        fireButton.active = why == null;
+        fireButton.setTooltip(why == null ? null : Tooltip.create(why));
     }
 
     private void openConfig() {

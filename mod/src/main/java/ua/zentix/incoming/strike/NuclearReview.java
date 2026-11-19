@@ -55,7 +55,7 @@ public final class NuclearReview {
             var problem = ServerActions.routeProblem(p.serverLevel(), p, true, order.loadout().weapon(),
                     order.from().map(LaunchOrigin.Place::new).orElse(null), order.via(),
                     order.aim().map(C2S.AimHint::point).orElse(p.position()));
-            if (problem != null) { p.sendSystemMessage(problem); return; }
+            if (problem != null) { ServerActions.refuse(p, problem); return; }
         }
         ServerActions.Aim aim = ServerActions.reviewAim(p, order);
         if (aim == null || (aim = ServerActions.ruled(p, aim)) == null) return;
@@ -75,20 +75,30 @@ public final class NuclearReview {
 
     private static boolean allowed(ServerPlayer p, C2S.Fire order) {
         if (!ua.zentix.incoming.launcher.LauncherLinks.of(ServerActions.designator(p)).isEmpty()) {
-            p.sendSystemMessage(Component.translatable("incoming.fixed_launcher.no_nuke"));
+            ServerActions.refuse(p, Component.translatable("incoming.fixed_launcher.no_nuke"));
             return false;
         }
-        if (!order.loadout().nuclear() || !ServerActions.mayUse(p) || !ServerActions.mayUseNuke(p)) {
-            p.sendSystemMessage(Component.translatable("incoming.no_permission"));
-            return false;
-        }
-        if (order.loadout().nuke().yieldKt() > IncomingConfig.SERVER.nukeMaxYield.get()
-                || order.loadout().nuke().onCarrier() && !order.loadout().weapon().spec().warhead().always()
-                && !IncomingConfig.SERVER.carrierNukes.get()) {
-            p.sendSystemMessage(Component.translatable("incoming.nuke.review.cap", IncomingConfig.SERVER.nukeMaxYield.get()));
-            return false;
-        }
-        return true;
+        if (!order.loadout().nuclear()) return false;
+        var c = IncomingConfig.SERVER;
+        Component reason = refusal(order.loadout(), ServerActions.mayUse(p), c.nukeEnabled.get(), c.nukeOpsOnly.get() && !p.hasPermissions(2),
+                c.carrierNukes.get(), c.nukeMaxYield.get());
+        if (reason != null) ServerActions.refuse(p, reason);
+        return reason == null;
+    }
+
+    /**
+     * Why a nuclear order {@code l} is refused, the first reason in the order the player can act on: the designator
+     * itself, nuclear weapons in this world, operator rights, a warhead on a carrier, the yield limit; null if allowed.
+     * The same reasons as {@link ServerActions#strike} gives, so the review and the launch never disagree.
+     */
+    @Nullable
+    static Component refusal(Loadout l, boolean mayUse, boolean enabled, boolean needsOperator, boolean carrierNukes, int cap) {
+        if (!mayUse) return Component.translatable("incoming.no_permission");
+        if (!enabled) return Component.translatable("incoming.nuke.disabled");
+        if (needsOperator) return Component.translatable("incoming.nuke.ops_only");
+        if (l.nuke().onCarrier() && !l.weapon().spec().warhead().always() && !carrierNukes) return Component.translatable("incoming.nuke.carrier_off");
+        if (l.nuke().yieldKt() > cap) return Component.translatable("incoming.nuke.over_cap", l.nuke().yieldKt(), cap);
+        return null;
     }
 
     /** Current weather estimate, using the same clear/rain/thunder visibility anchors as the event. */
@@ -142,7 +152,7 @@ public final class NuclearReview {
                 || e.opsOnly != c.nukeOpsOnly.get() || e.keyWindow != c.nukeSecondKeyWindow.get() || e.keyDistance != c.nukeSecondKeyDistance.get()
                 || e.scale != (float) c.effectsScale() || e.visibility != visibility(p)) {
             state.entry = null;
-            p.sendSystemMessage(Component.translatable("incoming.nuke.review.changed"));
+            ServerActions.refuse(p, Component.translatable("incoming.nuke.review.changed"));
             finish(p, e);
             return false;
         }
@@ -154,7 +164,7 @@ public final class NuclearReview {
         state.entry = null; // consume before dispatch: duplicates cannot pay or launch twice
         Vec3 current = e.aim.target().subject().resolve(p.serverLevel()).orElse(null);
         if (current == null || current.distanceToSqr(e.aim.point()) > 1 || ServerActions.ruled(p, e.aim) == null) {
-            p.sendSystemMessage(Component.translatable("incoming.nuke.review.changed"));
+            ServerActions.refuse(p, Component.translatable("incoming.nuke.review.changed"));
             finish(p, e);
             return false;
         }

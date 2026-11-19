@@ -1,0 +1,107 @@
+{
+  "neoforge:conditions": [
+    {
+      "type": "neoforge:not",
+      "value": {
+        "type": "neoforge:mod_loaded",
+        "modid": "create"
+      }
+    }
+  ],
+  "parent": "minecraft:recipes/root",
+  "criteria": {
+    "has_the_recipe": {
+      "trigger": "minecraft:recipe_unlocked",
+      "conditions": {
+        "recipe": "incoming:lancet_vanilla"
+      }
+    },
+    "has_strike_designator": {
+      "trigger": "minecraft:inventory_changed",
+      "conditions": {
+        "items": [
+          {
+            "items": "incoming:strike_designator"
+          }
+        ]
+      }
+    },
+    "has_clock": {
+      "trigger": "minecraft:inventory_changed",
+      "conditions": {
+        "items": [
+          {
+            "items": "minecraft:clock"
+          }
+        ]
+      }
+    },
+    "has_copper_ingot": {
+      "trigger": "minecraft:inventory_changed",
+      "conditions": {
+        "items": [
+          {
+            "items": "minecraft:copper_ingot"
+          }
+        ]
+      }
+    },
+    "has_gunpowder": {
+      "trigger": "minecraft:inventory_changed",
+      "conditions": {
+        "items": [
+          {
+            "items": "minecraft:gunpowder"
+          }
+        ]
+      }
+    },
+    "has_iron_ingot": {
+      "trigger": "minecraft:inventory_changed",
+      "conditions": {
+        "items": [
+          {
+            "items": "minecraft:iron_ingot"
+          }
+        ]
+      }
+    },
+    "has_iron_trapdoor": {
+      "trigger": "minecraft:inventory_changed",
+      "conditions": {
+        "items": [
+          {
+            "items": "minecraft:iron_trapdoor"
+          }
+        ]
+      }
+    },
+    "has_redstone": {
+      "trigger": "minecraft:inventory_changed",
+      "conditions": {
+        "items": [
+          {
+            "items": "minecraft:redstone"
+          }
+        ]
+      }
+    }
+  },
+  "requirements": [
+    [
+      "has_the_recipe",
+      "has_strike_designator",
+      "has_clock",
+      "has_copper_ingot",
+      "has_gunpowder",
+      "has_iron_ingot",
+      "has_iron_trapdoor",
+      "has_redstone"
+    ]
+  ],
+  "rewards": {
+    "recipes": [
+      "incoming:lancet_vanilla"
+    ]
+  }
+}
