@@ -117,8 +117,12 @@ paths:
   `RuinPlan.sameBlocks`: section fingerprints, then positions in differing sections, allowing darkened lamps; the mod
   does not listen for chunk changes — rescan all columns with plan positions in one pass from their highest plan
   position; AT), `checkBlock` at each column's highest changed point and below its surviving top, one light-engine task
-  per chunk (AT); section packets to players in the same tick (plus up to 24 removed positions with their blocks as
-  client debris, `ScarQueue.thrown`, `RuinPlan.thrown`, to players already holding the chunk); Distant Horizons LODs:
+  per chunk (AT); to players already holding the chunk (`RuinDelivery`: viewers from the holder's player provider, as
+  vanilla's broadcast): fewer than `RuinDelivery.WHOLE_FROM` changed positions go as section packets in the same tick,
+  more as one whole-chunk packet once the light engine has finished the chunk's checks (light fence through the
+  chunk cache's main-thread queue, like `BlockLighting`), so it carries the ruins' own light (plus up to 24 removed
+  positions with their blocks as client debris, `ScarQueue.thrown`, `RuinPlan.thrown`, to players already holding the
+  chunk); Distant Horizons LODs:
   `compat/DhChunks` (`overwriteChunkDataAsync`); block entities and POIs go through the world after replacement;
   mismatching old-state hash at plan positions means replan; lamp and blackout twin hash identically), `NuclearPrep`
   (prebuilt ruins during ICBM flight: in-memory chunks in ruin radius (plus chunks loaded during flight, every 40 ticks)
@@ -408,6 +412,16 @@ paths:
   toward the lane: `WorkClock.overdue`, `spent`); `INCOMING_JFR=1 tools/client_scenario.sh nuke` writes JFR to
   `mod/run/scenario/logs/scenario.jfr`, GC pauses to `logs/gc.log`; for the rig server,
   `INCOMING_JFR=1 tools/stress.sh` → `mod/run/stress/server/stress.jfr`.
+- Section deltas cost the client per position on its render thread: `ClientLevel.setBlock` (in the host pack 55–63 % of
+  it is Voxy re-snapshotting the whole section per block, `VoxelIngestService.rawIngest`) and the client's own light
+  propagation for every changed block, though the server sends the computed light. A 15 kt wave sends ~247 thousand
+  positions in 10 s around a viewer at 1.5 km: one 2.2 s frame of packets, then a 1.8 s light frame (wave-hitch run
+  19.11.2026). A whole chunk costs ~0.55 ms (`RuinDelivery.CHUNK_NANOS`, `POSITION_NANOS`). It goes after the light
+  fence: built on the write tick it shows new blocks in old light until light updates arrive (GameTest
+  `heavyRuinsGoWholeAfterTheirLight`: stale sky light without the fence; `heavyRuinsAsDeltasGiveTheSameChunk`: the
+  same ruins through deltas, both client chunks equal the server's). Measuring stalls: `jstack -l` and
+  `ThreadMXBean.dumpAllThreads(true, true)` walk the heap at a safepoint, 115–250 ms each on the full-pack client:
+  probes every 0.5 s turned a 4 s stall into 13 s; subtract `-Xlog:safepoint` ThreadDump/PrintThreads time.
 - `ChunkMap.getPlayers(pos, false)` (`isChunkTracked`) excludes players whose chunk is still queued for sending;
   `ChunkSendGate` holds unruined chunks there, so the ruin queue checks “player sees chunk” with
   `getChunkTrackingView().contains` (`ScarQueue.watched`). Otherwise chunks awaited after teleport queue behind unseen
