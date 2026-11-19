@@ -459,6 +459,169 @@ public final class ScorchGameTests {
     }
 
     /**
+     * Flash layer on a busy nuclear lane (Artem 18.11: flash fires near ground zero came with the wave). 15 kt at 592 m over
+     * the middle of 3 × 3 chunks at real scale, server wave 0.35: light ignites at tick 2, ruins come about 22 ticks later.
+     * The chunks are in a player's view. A deterministic lane clock (manual time, no per-tick decay — as the production
+     * nuclear clock): each tick 2 ms of seen ruins first, then craters and unseen ruins take what is left of a 6 ms lane
+     * (DIAG, full host pack: "stopped: budget" every tick). In the old order (layer after them) the layer gets no unit at all.
+     * Through the production order ({@link NuclearWorld#afterFront}), after one 5 ms layer unit (an outlier snapshot; the
+     * layer's own units here take no time) every chunk still has its layer before its deadline ({@link FlashScorch#deadline}):
+     * a kind refused by one slow unit's estimate recovers ({@code WorkClock.STARVED_DECAY}; review of #663: 0 admissions in
+     * 120 ticks before).
+     */
+    @GameTest(template = "range", timeoutTicks = 40, batch = "nuke_flash_busy", skyAccess = true)
+    public static void flashLayerBeatsABusyLane(GameTestHelper h) {
+        ServerLevel level = h.getLevel();
+        fillBiome(h, 0, 63, Biomes.PLAINS);
+        plants(h);
+        BlockPos lo = h.absolutePos(BlockPos.ZERO), hi = h.absolutePos(new BlockPos(63, 0, 63));
+        int[] sx = gridSide(Math.min(lo.getX(), hi.getX()), Math.max(lo.getX(), hi.getX()));
+        int[] sz = gridSide(Math.min(lo.getZ(), hi.getZ()), Math.max(lo.getZ(), hi.getZ()));
+        int ground = h.absolutePos(new BlockPos(0, 11, 0)).getY();
+        List<LevelChunk> inside = new ArrayList<>();
+        for (int cx = sx[0]; cx < sx[0] + 3; cx++) {
+            for (int cz = sz[0]; cz < sz[0] + 3; cz++) inside.add(level.getChunk(cx, cz));
+        }
+        // ruin windows in memory now: beyond the platform edge chunks load in the background
+        for (LevelChunk c : inside) {
+            for (int dx = -RuinPlanner.REACH; dx <= RuinPlanner.REACH; dx++) {
+                for (int dz = -RuinPlanner.REACH; dz <= RuinPlanner.REACH; dz++) level.getChunk(c.getPos().x + dx, c.getPos().z + dz);
+            }
+        }
+        ChunkPos mid = new ChunkPos(sx[0] + 1, sz[0] + 1);
+        Detonation d = new Detonation(NuclearGameTests.IDS.incrementAndGet(), new Vec3(mid.getMiddleBlockX() + 0.5, ground + 1 + 592, mid.getMiddleBlockZ() + 0.5),
+                ground + 1, 15, false, level.getGameTime(), 0, 0, 20_000, 7, 1f, false, 0.35f);
+        long[] keys = inside.stream().mapToLong(c -> c.getPos().toLong()).toArray();
+        long first = Long.MAX_VALUE;
+        for (LevelChunk c : inside) first = Math.min(first, FlashScorch.deadline(d, c.getPos()));
+        String setup = String.format(Locale.ROOT, "ignition at ground zero %.1f ticks, earliest deadline %d", d.flashTicks(d.fluence(new Vec3(mid.getMiddleBlockX(), ground + 1,
+                mid.getMiddleBlockZ())), ThermalModel.ignite(15)), first - d.gameTime());
+        java.util.Set<Long> view = java.util.Arrays.stream(keys).boxed().collect(java.util.stream.Collectors.toSet());
+        ScarQueue.seenForTest(view::contains);
+        FlashScorch flash = FlashScorch.forTest(d, keys, new ColumnScar.Budget(true));
+        long[] time = {0};
+        WorkClock clock = WorkClock.decaying(() -> time[0], 1);
+        try {
+            long now = d.gameTime() + 1;
+            // old order: ruins and craters first, the layer after them
+            for (; now <= d.gameTime() + 5; now++) {
+                lane(clock, time);
+                busy(clock, time);
+                h.assertTrue(!flash.work(level, now, clock), "the layer finished on a full lane; " + setup);
+                RuinWorkers.awaitForTest(RuinWorkers.Priority.NEAR, 60_000);
+            }
+            h.assertTrue(flash.appliedChunks() == 0, "the layer got lane time after a full lane: " + flash.appliedChunks() + " chunks; " + setup);
+            // one slow layer unit (5 ms): its estimate alone would refuse every later unit in the 4 ms left after seen ruins
+            long b = clock.begin();
+            time[0] += 5_000_000L;
+            clock.end(b, 1);
+            // production order
+            long doneAt = -1;
+            for (; now <= first; now++) {
+                lane(clock, time);
+                final long tick = now;
+                NuclearWorld.afterFront(() -> {
+                }, () -> flash.workUrgent(level, tick, clock), () -> busy(clock, time), () -> busy(clock, time), () -> flash.work(level, tick, clock));
+                RuinWorkers.awaitForTest(RuinWorkers.Priority.NEAR, 60_000);
+                if (flash.appliedChunks() == keys.length) {
+                    doneAt = now;
+                    break;
+                }
+            }
+            h.assertTrue(doneAt >= 0, "by the earliest deadline only " + flash.appliedChunks() + " of " + keys.length + " chunks have the layer; " + setup);
+            int lit = 0;
+            for (LevelChunk c : inside) lit += surface(h, c)[1];
+            h.assertTrue(lit > 0, "the layer lit no fire; " + setup);
+            Incoming.LOG.info("Flash layer on a busy lane: all {} chunks by tick {} ({}), {} fires", keys.length, doneAt - d.gameTime(), setup, lit);
+        } finally {
+            ScarQueue.seenForTest(null);
+            unfire(level, inside, ground, 4);
+        }
+        h.succeed();
+    }
+
+    /**
+     * Review of #663, round 2: the urgent pass writes ready layers earliest deadline first, not in the regular pass's
+     * submission order. 15 kt at 592 m, ground zero 200 blocks east of 3 × 3 chunks in view: the east column's wave comes
+     * first. The chunks are submitted with the earliest deadline last (as nearest-player order can leave it); all build before
+     * ignition; then one urgent pass on a lane with room for one write must write that chunk, not the first submitted.
+     * Through {@link FlashScorch#workUrgent}, so through its write loop; counting clock.
+     */
+    @GameTest(template = "range", timeoutTicks = 40, batch = "nuke_flash_order", skyAccess = true)
+    public static void urgentWritesEarliestDeadlineFirst(GameTestHelper h) {
+        ServerLevel level = h.getLevel();
+        fillBiome(h, 0, 63, Biomes.PLAINS);
+        plants(h);
+        BlockPos lo = h.absolutePos(BlockPos.ZERO), hi = h.absolutePos(new BlockPos(63, 0, 63));
+        int[] sx = gridSide(Math.min(lo.getX(), hi.getX()), Math.max(lo.getX(), hi.getX()));
+        int[] sz = gridSide(Math.min(lo.getZ(), hi.getZ()), Math.max(lo.getZ(), hi.getZ()));
+        int ground = h.absolutePos(new BlockPos(0, 11, 0)).getY();
+        List<LevelChunk> inside = new ArrayList<>();
+        for (int cx = sx[0]; cx < sx[0] + 3; cx++) {
+            for (int cz = sz[0]; cz < sz[0] + 3; cz++) inside.add(level.getChunk(cx, cz));
+        }
+        for (LevelChunk c : inside) {
+            for (int dx = -RuinPlanner.REACH; dx <= RuinPlanner.REACH; dx++) {
+                for (int dz = -RuinPlanner.REACH; dz <= RuinPlanner.REACH; dz++) level.getChunk(c.getPos().x + dx, c.getPos().z + dz);
+            }
+        }
+        ChunkPos mid = new ChunkPos(sx[0] + 1, sz[0] + 1);
+        Detonation d = new Detonation(NuclearGameTests.IDS.incrementAndGet(), new Vec3(mid.getMiddleBlockX() + 200.5, ground + 1 + 592, mid.getMiddleBlockZ() + 0.5),
+                ground + 1, 15, false, level.getGameTime(), 0, 0, 20_000, 7, 1f, false, 0.35f);
+        // earliest deadline last in the input order
+        inside.sort(Comparator.comparingLong((LevelChunk c) -> FlashScorch.deadline(d, c.getPos())).reversed());
+        long firstDeadline = FlashScorch.deadline(d, inside.get(inside.size() - 1).getPos()), lastDeadline = FlashScorch.deadline(d, inside.get(0).getPos());
+        h.assertTrue(firstDeadline < lastDeadline, "deadlines do not differ: " + firstDeadline + ", " + lastDeadline);
+        long[] keys = inside.stream().mapToLong(c -> c.getPos().toLong()).toArray();
+        java.util.Set<Long> view = java.util.Arrays.stream(keys).boxed().collect(java.util.stream.Collectors.toSet());
+        ScarQueue.seenForTest(view::contains);
+        FlashScorch flash = FlashScorch.forTest(d, keys, new ColumnScar.Budget(true));
+        try {
+            // regular pass before ignition: collect and submit all, write none
+            WorkClock big = WorkClock.counting(1_000_000L);
+            big.start(1_000_000_000L);
+            h.assertTrue(!flash.work(level, d.gameTime(), big), "the layer finished before ignition");
+            RuinWorkers.awaitForTest(RuinWorkers.Priority.NEAR, 60_000);
+            h.assertTrue(flash.appliedChunks() == 0, "written before ignition");
+            // urgent pass: room for one write (first unit always runs; the next does not fit 1 + 1 < 1.5 ms)
+            long now = firstDeadline - 5;
+            WorkClock clock = WorkClock.counting(1_000_000L);
+            clock.start(1_500_000L);
+            flash.workUrgent(level, now, clock);
+            h.assertTrue(flash.appliedChunks() == 1, "urgent writes in one unit: " + flash.appliedChunks());
+            // the one written chunk has the earliest deadline (several may share it)
+            List<Long> written = new ArrayList<>();
+            for (LevelChunk c : inside) {
+                int[] n = surface(h, c);
+                if (n[0] + n[1] > 0) written.add(FlashScorch.deadline(d, c.getPos()) - d.gameTime());
+            }
+            h.assertTrue(written.size() == 1 && written.get(0) == firstDeadline - d.gameTime(), "written chunks' deadlines " + written + ", earliest "
+                    + (firstDeadline - d.gameTime()) + ", latest " + (lastDeadline - d.gameTime()));
+        } finally {
+            ScarQueue.seenForTest(null);
+            unfire(level, inside, ground, 4);
+        }
+        h.succeed();
+    }
+
+    /** New lane tick (6 ms, server has time) and 2 ms of seen ruins before the flash layer (pulse, front, seen ruins). */
+    private static void lane(WorkClock clock, long[] time) {
+        clock.start(6_000_000L, () -> true, 2_000_000L);
+        long b = clock.begin();
+        time[0] += 2_000_000L;
+        clock.end(b);
+    }
+
+    /** Craters and ruins take the rest of the tick ("stopped: budget"): 1 ms default-kind units until the deadline passes. */
+    private static void busy(WorkClock clock, long[] time) {
+        for (int i = 0; i < 1000 && !clock.overdue(); i++) {
+            long b = clock.begin();
+            time[0] += 1_000_000L;
+            clock.end(b);
+        }
+    }
+
+    /**
      * Ruins on top of the flash layer, when the ruins of the explosion no longer have pictures before the flash (displaced, taken again): window shots -
      *  over the world with a layer that editing the image returns to the world before the flash ({@code RuinPlan.unflash}: fire - air,
      *  layer places - old, column height maps - from a copy). A field of grass and wooden houses (fire flashes on the roofs; at the

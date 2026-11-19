@@ -406,6 +406,37 @@ public final class NuclearWorld {
 
     // ---------------------------------------------------------------- tick
 
+    /**
+     * Nuclear lane after pulse, shadows and front, earliest deadline first; the one place this order lives ({@link #tick},
+     * GameTest {@code flashLayerBeatsABusyLane}). Returns {@link System#nanoTime} at each stage start and at the end.
+     * <ol>
+     * <li>{@code seenRuins} — ruins a player sees, due this tick, before the crater: its columns would take the whole lane
+     * for seconds after a large ground burst, and the wave would pass intact chunks in view ({@link ScarQueue#workSeen});</li>
+     * <li>{@code urgentFlash} — flash layers players see whose deadline is near ({@link FlashScorch#workUrgent}): ahead of
+     * seen ruins due now, glass in view stayed whole 3 ticks after the wave (GameTest seenRuinsKeepUpWithCrater); after
+     * craters and unseen ruins the layer got nothing until the wave (15 kt, full host pack: 904 of 915 chunks late);</li>
+     * <li>{@code craters}, then {@code ruins} — unseen ruins;</li>
+     * <li>{@code flash} — the rest of each flash layer on what wave-reached ruins leave: when the front crosses many chunks
+     * per tick, distant layers ahead delayed front ruins for ticks (25 tick units to layers, none to ruins). A wave-reached
+     * layer is unnecessary: ruins apply everything (built from the pre-flash world). Detonations progress independently.</li>
+     * </ol>
+     */
+    public static long[] afterFront(Runnable seenRuins, Runnable urgentFlash, Runnable craters, Runnable ruins, Runnable flash) {
+        long[] at = new long[6];
+        at[0] = System.nanoTime();
+        seenRuins.run();
+        at[1] = System.nanoTime();
+        urgentFlash.run();
+        at[2] = System.nanoTime();
+        craters.run();
+        at[3] = System.nanoTime();
+        ruins.run();
+        at[4] = System.nanoTime();
+        flash.run();
+        at[5] = System.nanoTime();
+        return at;
+    }
+
     /** Let forgotten detonations' flash-layer fire burn (chunks no longer fully loaded wait for next tick). */
     private void burnOut(ServerLevel level) {
         for (var it = unburnt.longIterator(); it.hasNext(); ) {
@@ -470,36 +501,33 @@ public final class NuclearWorld {
         }
         lastFrontNanos = System.nanoTime() - frontStart;
         if (now % 1200 == 0) scars.retainBudgets(events.detonations().stream().map(Detonation::id).collect(java.util.stream.Collectors.toSet()));
-        // ruins a player sees before the crater: its columns would take the whole lane for seconds after a large
-        // ground burst, and the wave would pass intact chunks in view (ScarQueue.workSeen); unseen ruins after it
-        long seenStart = System.nanoTime();
-        scars.workSeen(level, now, clock);
-        long craterStart = System.nanoTime();
-        digCraters(level, events, clock);
-        long scarStart = System.nanoTime();
-        lastCraterNanos = scarStart - craterStart;
-        scars.work(level, now, clock);
-        long scorchStart = System.nanoTime();
-        lastScarNanos = scorchStart - scarStart + (craterStart - seenStart);
-        // ground light after wave-reached ruins using their remaining budget: when front crosses
-        // many chunks per tick, distant flash layers prioritized ahead delayed front ruins for ticks (25 tick units
-        // to layers, none to ruins). Wave-reached layer unnecessary: ruins apply everything
-        // (built from pre-flash world). Detonations progress independently: second layer does not await first
-        // detonation's background plans
-        for (java.util.Iterator<FlashScorch> it = scorches.iterator(); it.hasNext(); ) {
-            FlashScorch job = it.next();
-            try {
-                if (job.work(level, now, clock)) it.remove();
-            } catch (RuntimeException e) {
-                Incoming.LOG.error("Flash scorch of detonation #{} failed with an exception; dropped (the wave brings it with the ruins)",
-                        job.detonation().id(), e);
-                job.cancel();
-                it.remove();
+        long[] at = afterFront(() -> scars.workSeen(level, now, clock), () -> {
+            for (FlashScorch job : scorches) {
+                try {
+                    job.workUrgent(level, now, clock);
+                } catch (RuntimeException e) {
+                    Incoming.LOG.error("Flash scorch of detonation #{} failed with an exception (urgent pass)", job.detonation().id(), e);
+                }
             }
-        }
+        }, () -> digCraters(level, events, clock), () -> scars.work(level, now, clock), () -> {
+            for (java.util.Iterator<FlashScorch> it = scorches.iterator(); it.hasNext(); ) {
+                FlashScorch job = it.next();
+                try {
+                    if (job.work(level, now, clock)) it.remove();
+                } catch (RuntimeException e) {
+                    Incoming.LOG.error("Flash scorch of detonation #{} failed with an exception; dropped (the wave brings it with the ruins)",
+                            job.detonation().id(), e);
+                    job.cancel();
+                    it.remove();
+                }
+            }
+        });
+        lastCraterNanos = at[3] - at[2];
+        lastScarNanos = at[1] - at[0] + at[4] - at[3];
+        long urgentNanos = at[2] - at[1];
         if (!unburnt.isEmpty()) burnOut(level);
         long prepStart = System.nanoTime();
-        lastScorchNanos = prepStart - scorchStart;
+        lastScorchNanos = prepStart - at[4] + urgentNanos;
         // prebuilt ruins use remaining budget: already traveling wave matters more
         try {
             prep.tick(level, events, scars, clock);
