@@ -175,6 +175,7 @@ public final class ClientScenario {
         if (scenario == null) return;
         ua.zentix.incoming.gametest.TestScale.realWaveOnStart();
         FrameTimes.startIfRequested();
+        HitchProbe.startIfRequested();
         // script lines, sandbox and samples write the layer time on the GPU in parts: the sample is always running
         ua.zentix.incoming.client.fx.layer.LayerTimes.always();
         if ("release-check".equals(scenario)) {
@@ -202,6 +203,10 @@ public final class ClientScenario {
             return;
         }
         NeoForge.EVENT_BUS.addListener(this::onScreen);
+        if ("waverig".equals(scenario)) {
+            new WaveRig(); // wave-proposal measurement (not for merge)
+            return;
+        }
         if ("trailer".equals(scenario)) {
             new ua.zentix.incoming.scenario.trailer.Trailer(); // your script and recording (tools/trailer)
             return;
