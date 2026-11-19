@@ -134,4 +134,36 @@ class SightTest {
             prev = g;
         }
     }
+
+    /**
+     * Sunlight through the air (18.11: evening dust lit by a nearly white sun at 19°): Beer–Lambert along the Kasten–Young air mass through
+     * the clear-day air of {@link Sight#Air} — Rayleigh 0.093 and haze 0.22 vertical optical depth at 550 nm, λ^−4.08 and λ^−1.3.
+     * Overhead it is the frame's white daylight; at air mass 3 (sun 19.3° up) red over blue is ×1.85 in absolute terms (×1.5 relative
+     * to noon) and green is half as bright; one law at every elevation — redder and dimmer as the sun sinks, without a threshold.
+     */
+    @Test
+    void sunReddensAlongTheAirMass() {
+        assertEquals(1, Sight.airMass(1), 2e-3, "overhead");
+        assertEquals(3, Sight.airMass(Math.sin(Math.toRadians(19.3))), 0.03, "19.3 degrees");
+        assertTrue(Sight.airMass(0) > 35 && Sight.airMass(0) < 40, "horizon " + Sight.airMass(0));
+        assertEquals(0.093, Sight.verticalDepth(550) - (Sight.KOSCHMIEDER / Sight.CLEAR - Sight.RAYLEIGH) * Sight.HAZE_HEIGHT, 1e-3, "Rayleigh at 550 nm");
+        assertEquals(0.22, (Sight.KOSCHMIEDER / Sight.CLEAR - Sight.RAYLEIGH) * Sight.HAZE_HEIGHT, 0.005, "clear-day haze at 550 nm");
+        double[] noon = new double[3], low = new double[3];
+        Sight.sunThroughAir(1, noon);
+        for (double v : noon) assertEquals(1, v, 1e-3, "white at noon");
+        double sin3 = Math.sin(Math.toRadians(19.3));
+        Sight.sunThroughAir(sin3, low);
+        double relative = low[0] / low[2], absolute = relative * Math.exp(Sight.verticalDepth(465) - Sight.verticalDepth(610));
+        assertEquals(1.85, absolute, 0.1, "air mass 3: red over blue through the whole air");
+        assertEquals(1.5, relative, 0.08, "air mass 3: red over blue relative to the noon sun");
+        assertEquals(0.53, low[1], 0.04, "air mass 3: green");
+        double prevRatio = 1, prevGreen = 1;
+        for (double deg = 89; deg >= 1; deg -= 4) {
+            Sight.sunThroughAir(Math.sin(Math.toRadians(deg)), low);
+            double ratio = low[0] / low[2];
+            assertTrue(ratio >= prevRatio && low[1] <= prevGreen, deg + " degrees: redder and dimmer as it sinks");
+            prevRatio = ratio;
+            prevGreen = low[1];
+        }
+    }
 }

@@ -659,7 +659,10 @@ paths:
   black.
   The frame's light (`NukePall.light`): a white horizontal wall at noon — 1, like the top of a white block by day; the
   sky as Minecraft draws it, in linear × 0.5 (`PallLight.SKY`: at noon about a fifth of the daylight); the sun — the rest
-  up to white (the blue of the sky is taken from its beam). The light of the ball and of fires on dust follows the same
+  up to white (the blue of the sky is taken from its beam), times the air along its path (`Sight.sunThroughAir`: Beer–Lambert
+  over the Kasten–Young air mass through the clear-day air of `Sight.Air`, Rayleigh λ^−4.08 + haze λ^−1.3, relative to the
+  overhead sun; at 19° red/blue ×1.5 against noon and half as bright, one law at every elevation — the former `low` ramp only
+  below 20° left a 19° sun white; our lighting input only, vanilla/shaderpack sun untouched). The light of the ball and of fires on dust follows the same
   laws for the pall, the wall's head, Wilson clouds and dust near the camera (the slot's numbers — `CloudPuffs.pallLight`;
   dust near the camera — `NukePall.dustColor`). The ball is the same source as the mushroom's body
   (`MushroomModel.light`): a Lambertian ball of the cap's radius with the brightness of a black body at its visible

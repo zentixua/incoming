@@ -50,6 +50,8 @@ public final class NukePall {
     /** Dust asymmetry after delta-Eddington and per-channel dust and smoke albedos ({@code PALL_DUST_G}, {@code PALL_DUST_W}, {@code PALL_SMOKE_W}). */
     private static final double DUST_G = PallLight.truncated(PallLight.DUST_G);
     private static final double[] DUST_W = albedo(DUST), SMOKE_W = albedo(SMOKE);
+    /** Sun through the air for {@link #sky} (client thread). */
+    private static final double[] THROUGH_AIR = new double[3];
     /** Frame light and wall for camera dust ({@link #dustColor}). */
     private static final Sky SKY = new Sky();
     private static final float[] DUST_WALL = new float[BlastWall.SLOT], DUST_GLOW = new float[8];
@@ -501,11 +503,10 @@ public final class NukePall {
         into.sky[0] = skyLight(skyColor.x, floor);
         into.sky[1] = skyLight(skyColor.y, floor);
         into.sky[2] = skyLight(skyColor.z, floor);
-        // low sun is redder (long path through air): screen 1, 0.63, 0.42 relative to noon
-        float low = Mth.clamp(into.sy / 0.35f, 0, 1);
-        into.sun[0] = sunLight(1, into.sky[0], day);
-        into.sun[1] = sunLight((0.62 + 0.36 * low) / 0.98, into.sky[1], day);
-        into.sun[2] = sunLight((0.38 + 0.52 * low) / 0.9, into.sky[2], day);
+        // direct sunlight through the air along its air mass (Sight.sunThroughAir: Rayleigh + clear-day haze, every elevation), relative to
+        // the overhead sun: white at noon, redder and dimmer as it sinks
+        Sight.sunThroughAir(into.sy, THROUGH_AIR);
+        for (int c = 0; c < 3; c++) into.sun[c] = (float) (THROUGH_AIR[c] * sunLight(1, into.sky[c], day));
         // wall reflection and fire glow (on screen) add to on-screen sky light — this value
         into.base = ambient;
         // mushroom glow is a black body at real brightness (noon white wall = 1): into frame with eye adaptation to sky
@@ -669,7 +670,10 @@ public final class NukePall {
         return Math.max((float) (PallLight.SKY * PallLight.linear(display)), floor);
     }
 
-    /** Channel sun light: remainder up to white after sky sky, reddening red (on screen), daylight strength day. */
+    /**
+     * Channel sun light: remainder up to white after sky light {@code sky}, colour factor {@code red} (on screen), daylight strength
+     * day; {@link #sky} scales it by the air ({@link Sight#sunThroughAir}).
+     */
     static float sunLight(double red, float sky, float day) {
         return day * (float) (PallLight.linear(red) * Math.max(1 - sky, 0));
     }
