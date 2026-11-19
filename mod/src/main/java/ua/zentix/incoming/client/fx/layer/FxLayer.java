@@ -243,6 +243,11 @@ public final class FxLayer {
         }
     }
 
+    /** The frame's fog colour (on screen, rgba), captured at {@code AFTER_ENTITIES}: vanilla's sky fog colour, the pall's airlight ({@code NukePall}). */
+    public static float[] fogColor() {
+        return FOG.color;
+    }
+
     /**
      * World fog as set by the frame (water, lava, Nether, blindness, nuke ash); vanilla clears it by the frame's end.
      */

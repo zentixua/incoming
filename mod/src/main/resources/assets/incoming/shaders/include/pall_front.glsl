@@ -36,8 +36,7 @@ float pallOpenHere(vec3 p) {
     return pallOpen(PallOpen, PallOpenAt, PallOpenWrap, Sampler10, PallSlot1, PallGround1, p);
 }
 
-// Slot wall head before point on [t0, t1]: transmitted share per ray span
-// (pallWallSpans), in air haze at span midpoint (pallAir)
+// Slot wall head before point on [t0, t1]: transmitted share per ray span (pallWallSpans)
 float pallWallThrough(sampler2D ground, mat4 S, mat4 V, vec4 G, vec4 W, vec3 dir, float t0, float t1) {
     vec4 spans = pallWallSpans(S, V, G, dir, t0, t1);
     float through = 1.0;
@@ -46,20 +45,20 @@ float pallWallThrough(sampler2D ground, mat4 S, mat4 V, vec4 G, vec4 W, vec3 dir
         if (sp.y <= sp.x) continue;
         // wall head is also outdoor-air matter (as in pall ray, fx_pall: pallStep)
         float tau = pallWallTau(ground, S, V, G, W, dir, sp.x, sp.y, 4) * pallOpenHere(dir * (0.5 * (sp.x + sp.y)));
-        through *= 1.0 - pallAir(PallAir, 0.5 * (sp.x + sp.y), dir.y) * (1.0 - exp(-tau));
+        through *= exp(-tau);
     }
     return through;
 }
 
-// Slot Wilson cloud before point (up to end): transmittance of both ray crossings, each in local haze
+// Slot Wilson cloud before point (up to end): transmittance of both ray crossings
 float pallWilsonThrough(mat4 S, vec4 L, vec3 dir, float end) {
     vec4 w = pallWilson(S, L, dir, end);
-    return (1.0 - pallAir(PallAir, w.x, dir.y) * (1.0 - exp(-w.y))) * (1.0 - pallAir(PallAir, w.z, dir.y) * (1.0 - exp(-w.w)));
+    return exp(-w.y - w.w);
 }
 
 // Pall transmittance between eye and point dir·len (without mushrooms): six noiseless-field steps (noise mean
-// equals field); wall head/Wilson cloud over own ray spans. Distant pall fades into air haze like mushroom (pallAir):
-// opacity share consumed by haze does not occlude point, as in pall pass (fx_pall: passMatter).
+// equals field); wall head/Wilson cloud over own ray spans. Real transmittance: haze in front of pall shows the air's own
+// light in the pall frame (fx_pall: passMatter), it never makes the pall transparent to what lies behind it.
 float pallThrough(vec3 dir, float len) {
     if (PallAmbient.w < 0.5) return 1.0;
     vec2 span = pallBox(dir, PallMin, PallMax);
@@ -78,7 +77,7 @@ float pallThrough(vec3 dir, float len) {
             PallAt f = pallField(Sampler5, Sampler10, PallSlot1, PallGround1, PallWater1, q, pallRelief(Sampler10, PallSlot1, PallGround1, q.xz), 1.0);
             tau += (f.sigma.x + f.sigma.y + f.sigma.z) * ds;
         }
-        through *= 1.0 - pallAir(PallAir, t, dir.y) * (1.0 - exp(-tau * pallOpenHere(q)));
+        through *= exp(-tau * pallOpenHere(q));
     }
     return through * pallWallThrough(Sampler9, PallSlot0, PallWall0, PallGround0, PallWater0, dir, t0, t1)
             * pallWallThrough(Sampler10, PallSlot1, PallWall1, PallGround1, PallWater1, dir, t0, t1)

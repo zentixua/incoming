@@ -14,6 +14,7 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 
+import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -202,6 +203,12 @@ class NukeExposureTest {
     private record Block(String name, String from, String to, String text) {}
 
     private static final List<Block> BLOCKS = List.of(
+            new Block("pallAirLight", "vec3 pallAirLight(vec3 dir) {", "// Add matter of opacity", """
+                    vec3 pallAirLight(vec3 dir) { float across = length(dir.xz);
+                    if (dir.y <= 0.0 || across * 16.0 >= 512.0 * dir.y) return PallAirFog.rgb;
+                    float d = 16.0 + (512.0 - 16.0) * (16.0 * across / dir.y) / 512.0;
+                    return mix(PallAirSky, PallAirFog.rgb, d < PallAirFog.w ? smoothstep(0.0, PallAirFog.w, d) : 1.0); }
+                    """),
             new Block("pallShown", "vec3 pallShown(vec3 light, float cover)", "// Inverse of shoulder", """
                     vec3 pallShown(vec3 light, float cover) { float shownCover = cover; vec3 medium = light / max(cover, 1e-4);
                     float lum = dot(medium, PALL_LUMA); if (lum > 1.0 && cover > 1e-4) { shownCover = min(cover * lum, 1.0);
@@ -229,15 +236,17 @@ class NukeExposureTest {
                     """),
             new Block("main (ray accumulation)", "vec4 r = mushStep(tm, cone, gap, hot, glowing, film);", "tm += ds;", """
                     vec4 r = mushStep(tm, cone, gap, hot, glowing, film); float ds = clamp(gap + jitter * dsMin, dsMin, dsMax);
-                    if (r.w > 1e-7) { ds = clamp(0.5 / r.w, dsMin, dsMax); ds = min(ds, m1 - tm); passesBefore(tm, light, transmit, lost);
+                    if (r.w > 1e-7) { ds = clamp(0.5 / r.w, dsMin, dsMax); ds = min(ds, m1 - tm); passesBefore(tm, light, transmit, haze);
                     float tr = exp(-r.w * ds), air = pallAir(PallAir, tm, dir.y); light += transmit * air * r.rgb * (1.0 - tr) / r.w;
-                    float part = transmit * air * (1.0 - tr) / r.w; heat += part * hot; emitted += part * glowing; filmed += part * film;
-                    lost += transmit * (1.0 - air) * (1.0 - tr); transmit *= tr; tauEye += r.w * ds; }
+                    haze += transmit * (1.0 - air) * (1.0 - tr); float part = transmit * air * (1.0 - tr) / r.w; heat += part * hot; emitted += part * glowing; filmed += part * film;
+                    transmit *= tr; tauEye += r.w * ds; }
                     """),
-            new Block("main (pixel assembly)", "float cover = 1.0 - transmit - lost;", "vec4 res = vec4(shown, min(transmit + lost, 1.0));", """
-                    float cover = 1.0 - transmit - lost; vec3 shown = pallShown(light + heat, cover);
+            new Block("main (pixel assembly)", "float cover = max(1.0 - transmit - haze, 0.0);", "vec4 res = vec4(shown, min(transmit, 1.0));", """
+                    float cover = max(1.0 - transmit - haze, 0.0);
+                    vec3 airlight = haze * pallAirLight(dir);
+                    vec3 shown = pallShown(light + heat, cover) + airlight;
                     float film = clamp(filmed / max(dot(heat, LUMA), 1e-30), 0.0, 1.0); if (film > 0.0) {
-                    vec3 lin = pallLinear3(pallShown(light, cover)) + mushFilm3(emitted);
+                    vec3 lin = pallLinear3(pallShown(light, cover) + airlight) + mushFilm3(emitted);
                     shown = mix(shown, min(vec3(pallDisplay(lin.r), pallDisplay(lin.g), pallDisplay(lin.b)), vec3(1.0)), film); }
                     """));
 
@@ -286,15 +295,114 @@ class NukeExposureTest {
         String fx = fxPall();
         String[][] mutations = {
                 {"filmed += part * film;", "filmed += part * 0.0;", "main (ray accumulation)"},
-                {"vec3 shown = pallShown(light + heat, cover);", "vec3 shown = pallShown(light, cover);", "main (pixel assembly)"},
+                {"vec3 shown = pallShown(light + heat, cover) + airlight;", "vec3 shown = pallShown(light, cover) + airlight;", "main (pixel assembly)"},
+                {"vec3 airlight = haze * pallAirLight(dir);", "vec3 airlight = vec3(0.0);", "main (pixel assembly)"},
+                {"smoothstep(0.0, PallAirFog.w, d)", "smoothstep(0.0, PallAirFog.w, 2.0 * d)", "pallAirLight"},
                 {"film = dot(hot, LUMA) * mushFilmShareLit(roll, key / max(PallBodyExposure, 1e-9));", "film = dot(hot, LUMA) * mushFilmShare(roll);", "mushAt (glow)"},
                 {"vec3(1.0)), film);", "vec3(1.0)), 1.0 - film);", "main (pixel assembly)"},
                 {"heat += partHeat;", "heat += partGlow;", "mushStep"},
+                {"haze += transmit * (1.0 - air) * (1.0 - tr);\n                float part", "float part", "main (ray accumulation)"},
                 {"medium += vec3(PALL_CROSS * max(dot(medium, PALL_LUMA) - 1.0, 0.0));", "", "pallShown"}};
         for (String[] m : mutations) {
             assertEquals(1, fx.split(java.util.regex.Pattern.quote(m[0]), -1).length - 1, "fx_pall contains this line once: " + m[0]);
             assertTrue(mismatches(fx.replace(m[0], m[1])).contains(m[2]), "mutation “" + m[0] + "» → «" + m[1] + "” passed the comparison");
         }
+    }
+
+    /**
+     * Sun through the cap at 240 s (release 3.13.0 check: the sun quad shone through a 15 kt cap 10 km away, cap optical depth
+     * 11–130): through air haze, an opaque cap passes at most its own transmittance of what lies behind, for every haze share,
+     * and the haze share shows the airlight. The previous law let 1 − air through: 86 % at air 0.14 (10 km of clear-day haze).
+     */
+    @Test
+    void hazeNeverShowsWhatLiesBehindTheCap() {
+        double[] perDepth = {0.06, 0.06, 0.06}, airLight = {0.7, 0.8, 1.0};
+        for (double air : new double[]{1, 0.6, 0.14, 0.01}) {
+            double[] light = new double[3], ray = {1, 0};
+            // cap optical depth 30 in 60 steps of 0.5
+            for (int i = 0; i < 60; i++) NukeExposure.airStep(light, ray, perDepth, Math.exp(-0.5), air);
+            assertTrue(ray[0] <= Math.exp(-30) * 1.0001, "air " + air + ": the frame behind passes " + ray[0]);
+            assertEquals((1 - air) * (1 - ray[0]), ray[1], 1e-9, "air " + air + ": haze share");
+            double[] px = new double[3], cap = new double[3];
+            NukeExposure.pixel(light, new double[3], new double[3], 0, 1 - ray[0] - ray[1], ray[1], airLight, px);
+            NukeExposure.shown(light, 1 - ray[0] - ray[1], cap);
+            for (int c = 0; c < 3; c++) {
+                assertEquals(cap[c] + ray[1] * airLight[c], px[c], 1e-9, "air " + air + ", channel " + c + ": cap and airlight");
+            }
+        }
+    }
+
+    /**
+     * The airlight is vanilla's drawn sky along the pixel (LevelRenderer sky disc 16 above the eye, radius 512, FogRenderer
+     * FOG_SKY: start 0, end = render distance, cylinder distance, fog.glsl smoothstep), independently recomputed here: the
+     * zenith is almost the sky colour, the horizon the fog colour, below the horizon and past the disc's rim the clear colour.
+     */
+    @Test
+    void airlightIsVanillasSkyAlongThePixel() {
+        double[] sky = {0.47, 0.65, 1.0}, fog = {0.75, 0.85, 1.0};
+        double r = 192;
+        for (double deg : new double[]{90, 60, 30, 10, 3, 1.5, 0, -10}) {
+            double e = Math.toRadians(deg);
+            double[] a = NukeExposure.airLight(Math.cos(e), Math.sin(e), 0, sky, fog, r);
+            // vertex distance on the disc: 16 at the centre, 512 at the rim (horizontal 512), linear between
+            double h = deg > 0 ? 16 / Math.tan(e) : Double.POSITIVE_INFINITY, d = 16 + 496 * h / 512;
+            double x = Math.min(d / r, 1), t = h >= 512 ? 1 : x * x * (3 - 2 * x);
+            for (int c = 0; c < 3; c++) assertEquals(sky[c] + (fog[c] - sky[c]) * t, a[c], 1e-12, deg + "°, channel " + c);
+        }
+        assertEquals(0.47 + 0.28 * 0.0197, NukeExposure.airLight(0, 1, 0, sky, fog, r)[0], 1e-3, "zenith: the sky colour");
+        assertArrayEquals(fog, NukeExposure.airLight(1, 0.01, 0, sky, fog, r), 1e-12, "horizon: the fog colour");
+    }
+
+    /**
+     * Review #671: an opaque cap never shows the sun, wherever the sun and cap stand on screen — at the centre, 40° off axis,
+     * at the screen's corner and through ×4 binoculars — and nothing drawn beside the cap (a dark wall 6° away) enters it.
+     * The airlight takes the pixel's own direction and the frame's sky and fog colours only; the shader reads no texture for it.
+     */
+    @Test
+    void opaqueCapNeverShowsTheSunNorItsNeighbours() throws IOException {
+        double[] sky = {0.47, 0.65, 1.0}, fog = {0.75, 0.85, 1.0};
+        double r = 192, fovY = Math.toRadians(70), aspect = 16.0 / 9;
+        for (double zoom : new double[]{1, 4}) {
+            double ty = Math.tan(fovY / zoom / 2), tx = ty * aspect;
+            // pixel directions across the screen, view pitched 20° up toward a cap with the sun behind it
+            for (double sx : new double[]{0, 0.5, 0.95}) {
+                for (double sy : new double[]{0, 0.5, 0.95}) {
+                    double vx = sx * tx, vy = sy * ty, pitch = Math.toRadians(20);
+                    double y = vy * Math.cos(pitch) + Math.sin(pitch), z = Math.cos(pitch) - vy * Math.sin(pitch);
+                    double n = Math.sqrt(vx * vx + y * y + z * z);
+                    double[] air = NukeExposure.airLight(vx / n, y / n, z / n, sky, fog, r);
+                    // cap of optical depth 30 seen through haze share 0.86, white sun (1, 1, 1) behind it
+                    double[] light = new double[3], ray = {1, 0};
+                    for (int i = 0; i < 60; i++) NukeExposure.airStep(light, ray, new double[]{0.06, 0.06, 0.06}, Math.exp(-0.5), 0.14);
+                    double[] px = new double[3];
+                    NukeExposure.pixel(light, new double[3], new double[3], 0, 1 - ray[0] - ray[1], ray[1], air, px);
+                    for (int c = 0; c < 3; c++) {
+                        double withSun = px[c] + ray[0] * 1.0;
+                        assertTrue(air[c] <= Math.max(sky[c], fog[c]) + 1e-12, "zoom " + zoom + " at " + sx + ", " + sy + ": airlight above the sky");
+                        assertTrue(withSun - px[c] < 1e-12, "zoom " + zoom + " at " + sx + ", " + sy + ": the sun shows through the cap");
+                    }
+                }
+            }
+        }
+        String body = fxPall();
+        body = body.substring(body.indexOf("vec3 pallAirLight(vec3 dir) {"), body.indexOf("// Add matter of opacity"));
+        assertTrue(!body.contains("texture(") && !body.contains("texelFetch("), "pallAirLight samples nothing drawn: " + body);
+    }
+
+    /** Without haze (air 1) the step is the old one: matter light only; a far cap (air → 0) is all airlight, no matter light. */
+    @Test
+    void airlightOnlyReplacesWhatHazeHides() {
+        double[] perDepth = {0.3, 0.4, 0.5};
+        double[] clear = new double[3], ray = {1, 0};
+        NukeExposure.airStep(clear, ray, perDepth, 0.25, 1);
+        assertEquals(0.25, ray[0], 1e-12);
+        assertEquals(0, ray[1], 1e-12);
+        for (int c = 0; c < 3; c++) assertEquals(perDepth[c] * 0.75, clear[c], 1e-12);
+        double[] far = new double[3], farRay = {1, 0};
+        NukeExposure.airStep(far, farRay, perDepth, 0.25, 0);
+        assertEquals(0.25, farRay[0], 1e-12);
+        assertEquals(0.75, farRay[1], 1e-12);
+        for (int c = 0; c < 3; c++) assertEquals(0, far[c], 1e-12);
     }
 
     /** Helper: pattern visibility at the frame position ({@code mushBallContrast}); it emerges before front breakaway. */

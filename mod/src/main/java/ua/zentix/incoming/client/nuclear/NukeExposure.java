@@ -135,23 +135,67 @@ public final class NukeExposure {
     /**
      * On-screen pall pixel — copy of the end of {@code main} in {@code fx_pall}: {@code light} is scattered light (linear, sum
      * along the ray with attenuation); {@code heat} is raw mushroom glow; {@code emitted} is the same at ball exposure (with the same
-     * attenuation); {@code film} is the film-curve share ({@link #filmShare}); {@code cover} is pixel coverage by
-     * matter (not haze); {@code out} receives screen color premultiplied by coverage (rgb). Previous path — glow with light
-     * ({@link #shown}); curve — glow at film-curve exposure over light, in linear space; between them — blend
-     * the finished images.
+     * attenuation); {@code film} is the film-curve share ({@link #filmShare}); {@code cover} is the matter's pixel coverage,
+     * 1 − transmittance − haze; {@code haze} is the share air haze shows in the matter's place ({@link #airStep}), as airlight on
+     * screen ({@code airLight}: vanilla's sky without the sun along the pixel, {@link #airLight}); {@code out} receives screen color premultiplied by
+     * coverage (rgb). Previous path — glow with light ({@link #shown}); curve — glow at film-curve exposure over light, in linear
+     * space; between them — blend the finished images.
      */
-    static void pixel(double[] light, double[] heat, double[] emitted, double film, double cover, double[] out) {
+    static void pixel(double[] light, double[] heat, double[] emitted, double film, double cover, double haze, double[] airLight,
+            double[] out) {
         double[] sum = new double[3];
         for (int c = 0; c < 3; c++) sum[c] = light[c] + heat[c];
         shown(sum, cover, out);
+        for (int c = 0; c < 3; c++) out[c] += haze * airLight[c];
         if (film <= 0) return;
         double[] base = new double[3], f = new double[3];
         shown(light, cover, base);
         screen(emitted[0], emitted[1], emitted[2], 1, f);
         for (int c = 0; c < 3; c++) {
-            double curve = Math.min(PallLight.display(PallLight.linear(base[c]) + f[c]), 1);
+            double curve = Math.min(PallLight.display(PallLight.linear(base[c] + haze * airLight[c]) + f[c]), 1);
             out[c] += (curve - out[c]) * film;
         }
+    }
+
+    /** {@link #pixel} without air haze. */
+    static void pixel(double[] light, double[] heat, double[] emitted, double film, double cover, double[] out) {
+        pixel(light, heat, emitted, film, cover, 0, new double[3], out);
+    }
+
+    /**
+     * Airlight along view direction (x, y, z; y up, unit length) — copy of {@code pallAirLight} in {@code fx_pall}: the sky vanilla
+     * draws there without its sun, moon and stars, from the frame's sky colour {@code sky} and fog colour {@code fog} (on screen)
+     * and render distance {@code renderDistance} (sky fog end, blocks). Vanilla's sky disc 16 above the eye (radius 512) fogged
+     * by its interpolated cylinder distance, smoothstep 0 → render distance; past the rim and below the horizon, the fog colour.
+     * Depends on the pixel's own direction only: no sun, nothing drawn beside the pixel.
+     */
+    static double[] airLight(double x, double y, double z, double[] sky, double[] fog, double renderDistance) {
+        double across = Math.hypot(x, z);
+        if (y <= 0 || across * 16 >= 512 * y) return fog.clone();
+        double d = 16 + (512 - 16) * (16 * across / y) / 512;
+        double t = d < renderDistance ? smoothstep(0, renderDistance, d) : 1;
+        double[] out = new double[3];
+        for (int c = 0; c < 3; c++) out[c] = sky[c] + (fog[c] - sky[c]) * t;
+        return out;
+    }
+
+    private static double smoothstep(double a, double b, double v) {
+        double t = Math.min(Math.max((v - a) / (b - a), 0), 1);
+        return t * t * (3 - 2 * t);
+    }
+
+    /**
+     * One matter step of the {@code fx_pall} ray in air haze — copy of the mushroom accumulation: matter of transmittance
+     * {@code tr} and light {@code perDepth} per unit depth (rgb), seen through air transmitting {@code air} of its light.
+     * {@code ray} is {transmittance, haze}: the haze takes 1 − air of the matter's opacity (shown as airlight, {@link #pixel}),
+     * the matter's light the rest; the matter's opacity stays whole. The previous law let the haze's share through to what lies
+     * behind (the sun quad behind a 15 kt cap at 240 s, release 3.13.0 check, cap optical depth 11–130).
+     */
+    static void airStep(double[] light, double[] ray, double[] perDepth, double tr, double air) {
+        double transmit = ray[0];
+        for (int c = 0; c < 3; c++) light[c] += transmit * air * perDepth[c] * (1 - tr);
+        ray[1] += transmit * (1 - air) * (1 - tr);
+        ray[0] = transmit * tr;
     }
 
     /**

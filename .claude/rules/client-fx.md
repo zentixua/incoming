@@ -853,8 +853,10 @@ paths:
   and one more power per step (exit sideways) and the top of the wedge above the point — the head's ALU is about 10–20 %
   more than the former wall envelope, with the same number of samples. The pall with the head and the Wilson cloud far
   away fades in the air haze like a mushroom (`pallAir`, the frame's air `PallAir` — `Sight.Air` in the model's blocks):
-  the share of their opacity that the haze ate up to the place is in `lost` (`passMatter` in `fx_pall`; the same in the
-  layer's quads, `fx.vsh`): in rain the wall at 8 km does not stand as a dark ring on the horizon.
+  the share of their opacity that the haze took up to the place (`haze`, `passMatter` in `fx_pall`) shows airlight
+  (`pallAirLight`: vanilla's sky along the pixel from the sky/fog colours, added after `pallShown`), their opacity stays whole; quads and probes behind them take the real transmittance
+  (`pall_front`, `fx_probe`, `mushTransmit` in `fx.vsh`): in rain the wall at 8 km does not stand as a dark ring on
+  the horizon, and the sun quad never shows through it.
 - The nuke's fire storm is in the same pall passes (`client/nuclear/FireStorm`, `FireStorms`): at the blast slot the
   fire map is RGBA16F by cells of 32 blocks (R — flame, G — smoke presentation, B — it × column rise), with mip levels.
   The levels are themselves clusters of sources (instead of the list of lamps `FxLights` or clusters per frame): glow at

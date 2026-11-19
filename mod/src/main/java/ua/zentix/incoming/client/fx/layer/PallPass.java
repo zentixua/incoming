@@ -436,6 +436,13 @@ public final class PallPass {
          */
         public final Vector4f air = new Vector4f();
         /**
+         * Airlight ({@code pallAirLight} in fx_pall): vanilla's drawn sky without sun, moon and stars, on screen — its sky colour
+         * ({@code airSky}) on the disc 16 above the eye, fogged into the fog colour ({@code airFog.xyz}) by the sky fog;
+         * {@code airFog.w} = the render distance (sky fog end, blocks).
+         */
+        public final Vector3f airSky = new Vector3f();
+        public final Vector4f airFog = new Vector4f();
+        /**
          * Slot water ({@code pall.glsl}): base surge radius and top (blocks), extinction at its densest part
          * (1/block; zeroes — no surge); 1 — water beneath pall (shader reads its map), 0 — none.
          */
@@ -804,6 +811,8 @@ public final class PallPass {
             m.safeGetUniform("InvViewProj").set(INVERSE);
             m.safeGetUniform("PallForward").set(FORWARD.x, FORWARD.y, FORWARD.z);
             m.safeGetUniform("PallAir").set(f.air.x, f.air.y, f.air.z, f.air.w);
+            m.safeGetUniform("PallAirSky").set(f.airSky.x, f.airSky.y, f.airSky.z);
+            m.safeGetUniform("PallAirFog").set(f.airFog.x, f.airFog.y, f.airFog.z, f.airFog.w);
             m.safeGetUniform("PallSlot0").set(f.slot0);
             m.safeGetUniform("PallSlot1").set(f.slot1);
             m.safeGetUniform("PallMin").set(f.min.x, f.min.y, f.min.z);
@@ -867,6 +876,8 @@ public final class PallPass {
                 fs.safeGetUniform("InvViewProj").set(INVERSE);
                 fs.safeGetUniform("PallForward").set(FORWARD.x, FORWARD.y, FORWARD.z);
                 fs.safeGetUniform("PallAir").set(f.air.x, f.air.y, f.air.z, f.air.w);
+                fs.safeGetUniform("PallAirSky").set(f.airSky.x, f.airSky.y, f.airSky.z);
+                fs.safeGetUniform("PallAirFog").set(f.airFog.x, f.airFog.y, f.airFog.z, f.airFog.w);
                 fs.safeGetUniform("PallFroxel").set(f.quality.tile, VOLUME_NEAR, VOLUME_FAR, 0f);
                 fs.safeGetUniform("PallFroxelFrame").set(w, h, VOLUME_CURRENT, 0f);
                 quad(fs, false);

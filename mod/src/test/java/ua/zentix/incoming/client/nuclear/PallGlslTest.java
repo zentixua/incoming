@@ -713,13 +713,13 @@ class PallGlslTest {
         String shown = body(GLSL, "vec3 pallShown(");
         assertEquals(3, occurrences(shown, "pallDisplay("), "light pall into the screen - once per channel");
         assertEquals(3, occurrences(march, "pallDisplay("), "glow of mushrooms on top - again per channel");
-        assertTrue(march.contains("vec3 lin = pallLinear3(pallShown(light, cover)) + mushFilm3(emitted);"), "glow of the ball - film curve on top of the pall");
-        assertTrue(march.contains("vec3 shown = pallShown(light + heat, cover);"), "glow of the curled cap - in the same way, with pall");
+        assertTrue(march.contains("vec3 lin = pallLinear3(pallShown(light, cover) + airlight) + mushFilm3(emitted);"), "glow of the ball - film curve on top of the pall");
+        assertTrue(march.contains("vec3 shown = pallShown(light + heat, cover) + airlight;"), "glow of the curled cap - in the same way, with pall");
         assertTrue(shown.contains("shoulder(vec3(pallDisplay(medium.r), pallDisplay(medium.g), pallDisplay(medium.b))) * shownCover"),
                 "at the output - a screen with a shoulder");
         assertTrue(shown.contains("shownCover = min(cover * lum, 1.0);"), "overexposure - a fraction of a pixel, not more than the entire pixel");
-        assertTrue(march.contains("vec4 res = vec4(shown, min(transmit + lost, 1.0));"),
-                "frame transmission - real and in overexposure");
+        assertTrue(march.contains("vec4 res = vec4(shown, min(transmit, 1.0));") && !march.contains("transmit + lost"),
+                "frame transmission - real: haze shows airlight in place of matter, never what lies behind it (sun through the cap)");
         assertEquals(4, occurrences(composite, "pallDisplay("), "shadow on the world in the screen - once, world in the light of the balls - once per channel");
         assertTrue(composite.contains("float kept = mix(1.0, pallDisplay(shade(p, over)), seen * open);")
                         && composite.contains("float open = pallOpenHere(air);") && composite.contains("vec3 air = p - 0.5 * dir;"),
