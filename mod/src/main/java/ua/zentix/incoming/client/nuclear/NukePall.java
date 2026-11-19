@@ -594,8 +594,9 @@ public final class NukePall {
         double top = wall[2], reach = BlastWall.HANDOFF_TO * wall[1] + top, s = wall[0] - len, toTop = Math.max(top - up, 0);
         double ox = len > 1e-3 ? rx / len : 1, oz = len > 1e-3 ? rz / len : 0;
         // above point, to local wedge top; toward edge, until wedge falls below point; toward light, no higher than head top (fx_pall: wall)
-        double above = chord(wall, rx, rz, up, 0, 1, 0, Math.max(top * BlastWall.top(s / Math.max(wall[1], 1e-3)) - up, 0), 4);
-        double side = chord(wall, rx, rz, up, ox, 0, oz, Math.max(s - wall[1] * Math.pow(Mth.clamp(up / Math.max(top, 1e-3), 0, 1), 1.2), 0), 4);
+        double above = chord(wall, rx, rz, up, 0, 1, 0, Math.max(BlastWall.local(wall, s, 0) - up, 0), 4);
+        double face = BlastWall.face(up / Math.max(top, 1e-3), wall[8]);
+        double side = chord(wall, rx, rz, up, ox, 0, oz, Math.max(s - wall[1] * face, 0), 4);
         double below = chord(wall, rx, rz, up, 0, -1, 0, Math.max(up, 0), 2);
         double depth = Math.min(above, side), slab = depth + below;
         double toSun = chordNear(wall, rx, rz, up, sky.sx, sky.sy, 0, toLight(sky.sy, toTop, reach), 4);

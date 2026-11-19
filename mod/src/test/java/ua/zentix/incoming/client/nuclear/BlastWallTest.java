@@ -87,9 +87,9 @@ class BlastWallTest {
     }
 
     /**
-     * The head top is the dusty boundary layer behind the fresh front (Kuhl et al. 1992, eq. 17; Mirels):
-     * at the wedge end h = c·R^(1/6)·x^(5/6), where x is the model front path along its normal behind this point
-     * at the local dust age, no older than its phase (Kuhl and Mirels have constant front speed, x = U_s·τ).
+     * The head top is the dusty boundary layer behind the fresh front (Kuhl et al. 1992, eq. 17; Mirels) at the phase end,
+     * h = c·R^(1/6)·x^(5/6), where x is the model front path along its normal behind this point over the local phase (Kuhl and Mirels
+     * have constant front speed, x = U_s·τ), reached by the lofting burst at the dust age at the wedge end ({@link DustModel#loftTop}).
      * Under an airburst with regular reflection, this is the slant-range increment, not the front ground-trace
      * path (infinitely fast at the epicentre); in the Mach region it is the stem path. Behind a fresh front,
      * the layer starts at zero thickness and grows with path: metres at the epicentre, not kilometres.
@@ -122,7 +122,10 @@ class BlastWallTest {
                 // age of dust at the end of the wedge: from the arrival of the model front and from the arrival of the front in the game (by slant distance)
                 double model = Math.min(t - HobBlast.arrivalSeconds(back, hob, yield), positive);
                 double game = Math.min(t - d.arrivalTicks(d.slantOf(d.blocks(back))) / (20 * d.scale()), positive);
-                double law = law(back, hob, yield, model), inGame = law(back, hob, yield, game);
+                // Kuhl's top at the phase end, reached by the lofting burst (DustModel.loftTop, with its gain) at the dust age
+                double first = law(back, hob, yield, positive);
+                double law = first * DustModel.loftTop(BlastWall.LOFT_GAIN * model / positive);
+                double inGame = first * DustModel.loftTop(BlastWall.LOFT_GAIN * game / positive);
                 assertTrue(top <= 1.02 * law + 0.01, burst + t + " s: top " + top + " m above the boundary layer (" + law + " m)");
                 assertEquals(inGame, top, 0.02 * inGame + 0.01, burst + t + " s: top is not the boundary layer at the dust age");
                 if (w.backAge(t) >= 1) ends++;
@@ -194,28 +197,34 @@ class BlastWallTest {
     }
 
     /**
-     * Wedge - laws of the dust layer behind the front: top u^(5/6) (Kuhl), raised - velocity impulse
-     * ({@link DustModel#lifted}); the column above the ground - density near the ground × top - grows back as if raised, and the density at the ground
-     *  is greatest at the edge (at u ≈ 0,1 - 2,6 times thicker than at the end of the wedge). Behind the wedge, the place for half a length goes to the pall.
+     * Wedge - laws of the dust layer behind the front: lofted mass ({@link DustModel#loftMass}) and top ({@link DustModel#loftTop}) by the dust
+     * age, with the burst gain; the column above the ground (density near the ground × top) grows back as it is lofted, whatever the top's
+     * shape; {@link BlastWall#face} is the top's inverse. Behind the phase the heated layer rises ({@link BlastWall#heated}: h² = h₁² + b²·x).
+     * Behind the wedge, the place for half a length goes to the pall.
      */
     @Test
     void wedgeLaws() {
-        assertEquals(0, BlastWall.top(0));
-        assertEquals(1, BlastWall.top(1), 1e-12);
-        assertEquals(1, BlastWall.top(3), 1e-12);
-        assertEquals(0, BlastWall.shape(0));
-        assertEquals(1, BlastWall.shape(1), 1e-12);
-        assertEquals(1, BlastWall.shape(2), 1e-12);
-        double peak = 0, at = 0;
-        for (double u = 0.001; u <= 1; u += 0.001) {
-            assertEquals(DustModel.lifted(u), BlastWall.shape(u) * BlastWall.top(u), 1e-9, "pole not raised, u = " + u);
-            if (BlastWall.shape(u) > peak) {
-                peak = BlastWall.shape(u);
-                at = u;
+        for (double ph : new double[]{0.02, 0.3, 0.7, 1}) {
+            double p = BlastWall.LOFT_GAIN * ph;
+            assertEquals(0, BlastWall.top(0, ph));
+            assertEquals(1, BlastWall.top(1, ph), 1e-12);
+            assertEquals(1, BlastWall.top(3, ph), 1e-12);
+            assertEquals(0, BlastWall.shape(0, ph));
+            assertEquals(1, BlastWall.shape(1, ph), 1e-12);
+            assertEquals(1, BlastWall.shape(2, ph), 1e-12);
+            double prev = 0;
+            for (double u = 0.001; u <= 1; u += 0.001) {
+                String at = "phase " + ph + ", u = " + u;
+                assertEquals(DustModel.loftMass(u * p) / DustModel.loftMass(p), BlastWall.shape(u, ph) * BlastWall.top(u, ph), 1e-9, "column not lofted, " + at);
+                double z = BlastWall.top(u, ph);
+                assertTrue(z >= prev, "the top never sinks toward the back, " + at);
+                prev = z;
+                if (u * p < 0.999) assertEquals(u, BlastWall.face(z, ph), 1e-3 / p, "face is the top's inverse, " + at);
             }
+            assertEquals(Math.min(1, 1 / p), BlastWall.face(1, ph), 2e-3, "the top stands from where the burst has stopped");
         }
-        assertEquals(2.6, peak, 0.15, "thickest at the edge");
-        assertTrue(at > 0.05 && at < 0.2, "the thickest on " + at);
+        assertEquals(1, BlastWall.heated(0.5, 3), 0, "no rise before the phase ends");
+        assertEquals(Math.sqrt(1 + 3 * 0.5), BlastWall.heated(1.5, 3), 1e-12);
         assertEquals(1, BlastWall.handoff(1), 1e-12);
         assertEquals(0, BlastWall.handoff(BlastWall.HANDOFF_TO), 1e-12);
         assertEquals(0.5, BlastWall.handoff(0.5 * (BlastWall.HANDOFF_FROM + BlastWall.HANDOFF_TO)), 1e-12);
@@ -255,7 +264,7 @@ class BlastWallTest {
      *  dust itself ({@link BlastWall#origin}, phase fraction - wedge fraction × {@code slot[8]}): at a place on the ground, while the head passes it
      *  (from the edge to the end of the transition to the pall), the billows place in the noise shifts less than half the path of the front during this time;
      *  across ring noise does not add up and is compressed no more than 1 + U/V times (U is the wind behind the front, V is the front in the game: at
-     *  slow wave 0,2 - up to ~2,6); there is only one noise tile for the entire blast (growing headlong would move the billows along the ground).
+     *  slow wave 0,2 - up to ~2,6).
      * The previous noise (in the tile at the front) traveled with the front - the shift would be along its entire path. Air 15 kt on 592 m on
      *  real and slow wave, ground 15 kt and 1 kt.
      */
@@ -269,24 +278,22 @@ class BlastWallTest {
             BlastWall w = new BlastWall(d, false);
             String burst = d.yieldKt() + " kt on " + d.hobMetres() + " m, wave " + d.wave() + ": ";
             float[] slot = new float[BlastWall.SLOT];
-            double tile = -1, squeeze = 0;
+            double squeeze = 0;
             int places = 0;
             for (double place : new double[] {300, 800, 1400, 2500}) {
                 double first = Double.NaN, last = Double.NaN, minO = Double.MAX_VALUE, maxO = -Double.MAX_VALUE;
                 for (double t = 0.01; t < 120; t += 0.01) {
                     if (!w.slot(t, slot) || slot[3] <= 0) continue;
-                    if (tile < 0) tile = slot[11];
-                    assertEquals(tile, slot[11], 0, burst + t + " s: head noise tile changes");
                     double s = slot[0] - place;
                     if (s < 0 || s > BlastWall.HANDOFF_TO * slot[1]) continue;
                     if (Double.isNaN(first)) first = slot[0];
                     last = slot[0];
                     for (double z : new double[] {0, 0.5 * slot[2], slot[2]}) {
-                        double o = BlastWall.origin(place, 0, z, s / slot[1] * slot[8], slot[2], slot[4])[0];
+                        double o = BlastWall.origin(place, 0, z, s / slot[1] * slot[8], BlastWall.local(slot, s, 0), slot[4])[0];
                         minO = Math.min(minO, o);
                         maxO = Math.max(maxO, o);
                         // the neighboring place is a meter closer to the epicenter: the noise does not add up, it is compressed to the extent of the wind against the front
-                        double near = BlastWall.origin(place - 1, 0, z, (s + 1) / slot[1] * slot[8], slot[2], slot[4])[0];
+                        double near = BlastWall.origin(place - 1, 0, z, (s + 1) / slot[1] * slot[8], BlastWall.local(slot, s + 1, 0), slot[4])[0];
                         assertTrue(o - near > 0, burst + place + " blocks, " + t + " s: noise collapsed");
                         squeeze = Math.max(squeeze, o - near);
                     }
@@ -333,9 +340,8 @@ class BlastWallTest {
         assertEquals(sigmas[1] / ref, s[15], 1e-6);
         assertEquals(sigmas[2] / GROUND.scale(), s[7], 1e-6);
         assertEquals(1, Math.max(Math.max(s[14], s[15]), s[7] / s[3]), 1e-6, "scale - largest");
-        // tile - at the largest top of the layer by the end of the phase: no smaller than at the top of the wedge now (constant -
-        // headCloudsStayWhereTheDustWasLifted)
-        assertTrue(s[11] >= BlastWall.TILE * s[2] - 1e-3, "tile " + s[11] + " smaller than a wedge " + s[2]);
+        // the heated layer lifts the head behind the phase, never lowers it
+        assertTrue(s[11] >= 0 && BlastWall.ceiling(s) >= s[2], "heated layer " + s[11]);
         // the top of the wedge is tens of meters, like the dust layer at the end of the wave phase (Kuhl, GRABLE)
         assertTrue(GROUND.metres(s[2]) > 25 && GROUND.metres(s[2]) < 80, "top of the wedge " + GROUND.metres(s[2]) + " m");
         assertEquals(0, s[18], "wilson cloud in dry air");
@@ -363,10 +369,16 @@ class BlastWallTest {
         double head = s[0], len = s[1], top = s[2], k = s[3];
         assertEquals(0, BlastWall.sigma(s, head + 2, 0, 0.1, 0));
         assertEquals(0, BlastWall.sigma(s, head - len, 0, 1.01 * top, 0));
-        assertEquals(0, BlastWall.sigma(s, head - 0.1 * len, 0, 0.3 * top, 0), "at the edge above the wedge");
-        // densest at the ground in the front part of the wedge (lifted in a thin layer), not at the very edge: dust there is still rising
-        // (saltation develops behind the front, BlastWall.develop)
-        double peak = 0, at = 0, end = BlastWall.sigma(s, head - len, 0, 0.02 * top, 0);
+        assertEquals(0, BlastWall.sigma(s, head - 1e-3 * len, 0, 0.3 * top, 0), "dust high up at the very edge");
+        // the lofting burst (DustModel.loftTop, loftMass): a tenth of the wedge behind its edge the layer stands at half its top or more and
+        // holds most of its dust — a tall, dense front, not a ramp to the wedge end (Kuhl's u^(5/6) alone: 15 % of the top, 38 % of the dust)
+        double tenth = 0.1 * len;
+        assertTrue(BlastWall.local(s, tenth, 0) > 0.45 * top, "the front is a ramp: " + BlastWall.local(s, tenth, 0) + " of " + top);
+        assertTrue(BlastWall.sigma(s, head - tenth, 0, 0.4 * top, 0) > 0, "no dust high up a tenth behind the edge");
+        double end = BlastWall.tau(s, head - len, 0, 0, Double.POSITIVE_INFINITY, 0);
+        assertTrue(BlastWall.tau(s, head - tenth, 0, 0, Double.POSITIVE_INFINITY, 0) > 0.5 * end, "the front holds little of the dust");
+        // not at full density right at the edge: dust there is still rising (saltation develops behind the front, BlastWall.develop)
+        double peak = 0, at = 0;
         for (double u = 0.002; u <= 1; u += 0.002) {
             double v = BlastWall.sigma(s, head - u * len, 0, 0.02 * top, 0);
             if (v > peak) {
@@ -374,8 +386,6 @@ class BlastWallTest {
                 at = u;
             }
         }
-        // 15 kt at 4 s: 1.4 times the end at a third of the wedge (without development — 2.6 times at a tenth)
-        assertTrue(peak > 1.25 * end && at < 0.5, "it’s not thicker near the edge: " + peak / end + " at " + at);
         assertTrue(at > 0.01 && BlastWall.sigma(s, head - 0.002 * len, 0, 0.02 * top, 0) < 0.8 * peak,
                 "full density right at the edge (a perfect ring at the foot): peak at " + at);
         assertEquals(0, BlastWall.sigma(s, head - 1.6 * len, 0, 0.1 * top, 0));
@@ -443,7 +453,7 @@ class BlastWallTest {
         assertTrue(flame < 1e-3, "fires the flash lit " + t + " s ago have not grown: " + flame);
         double bottom = Double.MAX_VALUE;
         for (double u : new double[]{0.03, 0.1, 0.3}) {
-            double here = h * BlastWall.top(u);
+            double here = BlastWall.local(s, u * len, 0);
             for (double up : new double[]{0.005, 0.01}) {
                 NukePall.dustLight(s, glow, sky(false), GROUND.windDir(), head - u * len, up * here, 0, up * here, 0, 0, c);
                 assertTrue(luminance(c) > 0.2, u + " wedge, " + up + " top: at night the bottom of the head over burning fires is dark, " + luminance(c));
@@ -459,7 +469,7 @@ class BlastWallTest {
             }
         }
         // deeper than the young front part, which is still rising (BlastWall.develop) and thinner
-        NukePall.dustLight(s, glow, sky(false), GROUND.windDir(), head - 0.5 * len, 0.2 * h * BlastWall.top(0.5), 0, 0.2 * h * BlastWall.top(0.5), 0, 0, c);
+        NukePall.dustLight(s, glow, sky(false), GROUND.windDir(), head - 0.5 * len, 0.2 * BlastWall.local(s, 0.5 * len, 0), 0, 0.2 * BlastWall.local(s, 0.5 * len, 0), 0, 0, c);
         assertTrue(luminance(c) < 0.2 * bottom, "at night there is no shadow in the depths of the head above the fires: " + luminance(c) + ", bottom " + bottom);
         NukePall.dustLight(s, glow, sky(true), GROUND.windDir(), head - len, 0.9 * h, 0, 0.9 * h, 0, 0, top);
         assertTrue(top[0] > top[1] && top[1] > top[2], "during the day, the top of the head is not brown: " + Arrays.toString(top));
@@ -512,7 +522,7 @@ class BlastWallTest {
         assertTrue(soot < 0.01, t + " s: soot share in fresh dust " + soot);
         assertEquals(0, pall.smoke(outside, ticks), 0, "no soot outside the fire zone");
         for (double z : new double[]{0.9, 0.5}) {
-            double up = z * s[2] * BlastWall.top(0.5);
+            double up = z * BlastWall.local(s, 0.5 * s[1], 0);
             NukePall.dustLight(s, glow, sky(true), d.windDir(), inside, up, 0, up, soot, 0, in);
             // the same wedge point, as if it lay beyond the zone edge (same wall, no soot, no fire light)
             float[] dark = glow.clone();
@@ -521,7 +531,7 @@ class BlastWallTest {
             assertEquals(luminance(out), luminance(in), (z > 0.7 ? 0.03 : 0.1) * luminance(out),
                     z + " top: fire zone " + Arrays.toString(in) + " vs dust " + Arrays.toString(out));
         }
-        NukePall.dustLight(s, glow, sky(true), d.windDir(), inside, 0.5 * s[2] * BlastWall.top(0.5), 0, 0.5 * s[2] * BlastWall.top(0.5), soot, 0, in);
+        NukePall.dustLight(s, glow, sky(true), d.windDir(), inside, 0.5 * BlastWall.local(s, 0.5 * s[1], 0), 0, 0.5 * BlastWall.local(s, 0.5 * s[1], 0), soot, 0, in);
         assertTrue(in[0] > in[2], "brown dust, not grey: " + Arrays.toString(in));
     }
 
@@ -572,40 +582,70 @@ class BlastWallTest {
     }
 
     /**
-     * The head's dust rolls in eddies of the layer's size (18.11, Artem: the lofted dust curls in successive rolls): the billow pattern turns about
-     * horizontal axes on concentric rings of eddies, by the eddies' turn over the wind's path (σ_u ≈ 2.5 u*, u* ≈ 0.04 U; × the presentation
-     * gain), top outward while the wave's wind blows outward, back toward ground zero as it reverses. Only the pattern turns: an eddy's rim
-     * and everything outside it stay put (no seams between eddies), a point never leaves its eddy, and the turn is zero at the front.
+     * The roll-up (Artem 19.11, lead's formulation): dust parcels, not eddies. A parcel lofted at a place rides its share of the layer top there
+     * ({@link BlastWall#origin}): thrown up as the front arrives — more than half of its rise in the lofting burst, the first 0.15 of the wedge, a third
+     * of a second — then ever slower until it stands, then the heated layer lifts it a little; the wind behind the front carries it outward far less than the front runs. Seen from the
+     * front it goes up and back, which is the curl. Its billow coordinates stay its own all the way (noise rides the parcel): the dust
+     * coordinate of the parcel's position moves by a small share of the front's travel. 1 Mt surface burst at the real wave (at a slowed game
+     * wave the wind right behind the front outruns the front for its first metres), a parcel 3 km out at half the layer height.
      */
     @Test
-    void headDustRollsInItsEddies() {
-        double size = 40, carried = 30;
-        assertEquals(0, BlastWall.rollAngle(0, carried, size), 0, "no turn at the front");
-        double peak = BlastWall.rollAngle(1, carried, size);
-        assertEquals(BlastWall.ROLL_GAIN * BlastWall.EDDY * carried / size, peak, 1e-12, "full wind path at phase end");
-        assertTrue(peak > 1 && peak < Math.PI / 2, "about a quarter turn at phase end: " + peak);
-        assertTrue(BlastWall.rollAngle(2, carried, size) < peak, "rolls back as the wind reverses");
-        double[] q = new double[3];
-        // outward along +x; an eddy spans [0, 40) along, 0..40 high, centre (20, 20)
-        BlastWall.roll(20, 20, 0, 1, 0, size, peak, q);
-        assertEquals(20, q[0], 1e-9, "centre stays");
-        assertEquals(20, q[1], 1e-9, "centre stays");
-        BlastWall.roll(20, 39.9, 0, 1, 0, size, peak, q);
-        assertEquals(20, q[0], 0.01, "rim stays");
-        BlastWall.roll(20, 60, 0, 1, 0, size, peak, q);
-        assertEquals(60, q[1], 0, "above the eddies — unchanged");
-        // the top of the eddy samples dust from further in: the pattern turns top outward
-        BlastWall.roll(20, 30, 0, 1, 0, size, peak, q);
-        assertTrue(q[0] < 20, "top outward: sample from inside " + q[0]);
-        assertTrue(Math.hypot(q[0] - 20, q[1] - 20) <= 10 + 1e-9, "stays in its eddy");
-        BlastWall.roll(20, 30, 0, 1, 0, size, -peak, q);
-        assertTrue(q[0] > 20, "rolling back: sample from outside " + q[0]);
-        // continuous across neighbouring eddies
-        double[] a = new double[3], b = new double[3];
-        BlastWall.roll(39.999, 20, 0, 1, 0, size, peak, a);
-        BlastWall.roll(40.001, 20, 0, 1, 0, size, peak, b);
-        assertEquals(a[0], b[0], 0.01);
-        assertEquals(a[1], b[1], 0.01);
+    void parcelsGoUpAndBackFromTheFront() {
+        Detonation d = new Detonation(1, new Vec3(0, 64, 0), 64, 1000, true, 0, 0, 0, 20_000, 7, 1f, false, 1f);
+        BlastWall w = new BlastWall(d, false);
+        float[] s = new float[BlastWall.SLOT];
+        double place = d.blocks(3000), share = 0.5;
+        double prevZ = -1, prevBehind = -1, firstZ = Double.NaN, faceZ = Double.NaN, faceT = Double.NaN, startT = Double.NaN, endZ = 0;
+        double wedgeZ = Double.NaN;
+        double minO = Double.MAX_VALUE, maxO = -Double.MAX_VALUE, front0 = Double.NaN, front1 = 0;
+        double fastest = 0, lateFastest = 0;
+        for (double t = 0.5; t < 200; t += 0.005) {
+            if (!w.slot(t, s) || s[3] <= 0) continue;
+            double sBehind = s[0] - place;
+            if (sBehind < 0) continue;
+            if (sBehind > BlastWall.HANDOFF_TO * s[1]) break;
+            // the parcel's place now: lofted at place, carried out by the wind behind the front (1/7 law at its share of the height)
+            double lo = place, hi = s[0];
+            for (int k = 0; k < 60; k++) {
+                double x = 0.5 * (lo + hi), u = (s[0] - x) / s[1] * s[8];
+                if (x - place < s[4] * BlastWall.carriedShare(u) * Math.pow(share, 1.0 / 7)) lo = x;
+                else hi = x;
+            }
+            double x = lo;
+            double behind = s[0] - x, z = share * BlastWall.local(s, behind, 0);
+            double[] o = BlastWall.origin(x, 0, z, behind / s[1] * s[8], BlastWall.local(s, behind, 0), s[4]);
+            assertEquals(share, o[1], 1e-9, t + " s: the parcel left its share of the layer");
+            minO = Math.min(minO, o[0]);
+            maxO = Math.max(maxO, o[0]);
+            if (Double.isNaN(front0)) {
+                front0 = s[0];
+                startT = t;
+                firstZ = z;
+            }
+            front1 = s[0];
+            if (prevZ >= 0) {
+                assertTrue(z >= prevZ - 1e-6, t + " s: the parcel sinks " + prevZ + " -> " + z);
+                assertTrue(behind > prevBehind, t + " s: the parcel keeps up with the front");
+                double v = (z - prevZ) / 0.005;
+                if (behind <= 0.15 * s[1]) fastest = Math.max(fastest, v);
+                else if (behind > s[1] / BlastWall.LOFT_GAIN) lateFastest = Math.max(lateFastest, v);
+            }
+            if (Double.isNaN(faceZ) && behind > 0.15 * s[1]) {
+                faceZ = z;
+                faceT = t;
+            }
+            if (Double.isNaN(wedgeZ) && behind > s[1]) wedgeZ = z;
+            prevZ = z;
+            prevBehind = behind;
+            endZ = z;
+        }
+        assertTrue(!Double.isNaN(faceZ), "the head never passed the parcel");
+        assertTrue(firstZ < 0.4 * endZ, "lofted from near the ground: " + firstZ + " of " + endZ);
+        assertTrue(faceZ - firstZ > 0.5 * (wedgeZ - firstZ), "most of the rise is not at the front: " + faceZ + " of " + wedgeZ);
+        assertTrue(endZ > wedgeZ, "the heated layer does not lift the parcel: " + endZ + " after " + wedgeZ);
+        assertTrue(faceT - startT < 0.4, "the burst at the front takes " + (faceT - startT) + " s");
+        assertTrue(fastest > 5 * lateFastest, "the rise does not slow: " + fastest + " then " + lateFastest + " blocks/s");
+        assertTrue(maxO - minO < 0.1 * (front1 - front0), "billows leave the parcel: " + (maxO - minO) + " for the front's " + (front1 - front0));
     }
 
     /** The vertical thickness of the head ({@link BlastWall#tau}) is the integral of its weakening along the height. */
@@ -616,10 +656,10 @@ class BlastWallTest {
         assertTrue(w.slot(6, s) && s[3] > 0);
         double head = s[0], len = s[1], top = s[2];
         for (double back : new double[]{0.08, 0.3, 0.7, 1.2}) {
-            double r = head - back * len, here = top * BlastWall.top(back);
+            double r = head - back * len, here = BlastWall.local(s, back * len, 0), ceiling = BlastWall.ceiling(s);
             for (double eye : new double[]{-0.3 * top, 0, 0.4 * here}) {
-                double up = 0, down = 0, ds = top / 20000;
-                for (double z = eye + ds / 2; z < top; z += ds) up += BlastWall.sigma(s, r, 0, z, 0) * ds;
+                double up = 0, down = 0, ds = ceiling / 20000;
+                for (double z = eye + ds / 2; z < ceiling; z += ds) up += BlastWall.sigma(s, r, 0, z, 0) * ds;
                 for (double z = ds / 2 + Math.min(eye, 0); z < eye; z += ds) down += BlastWall.sigma(s, r, 0, z, 0) * ds;
                 assertEquals(up, BlastWall.tau(s, r, 0, eye, Double.POSITIVE_INFINITY, 0), 0.02 * up + 1e-9, back + ", " + eye);
                 if (eye > 0) assertEquals(down, BlastWall.tau(s, r, 0, 0, eye, 0), 0.02 * down + 1e-9, back + ", " + eye);

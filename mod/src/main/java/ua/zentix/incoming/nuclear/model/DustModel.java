@@ -263,12 +263,42 @@ public final class DustModel {
      * follows wind squared), divided by full phase impulse. Zero just behind the front, 1 at phase end; near the front grows
      * as 4.6·s. Estimate: this is the impulse shape, not the entrainment law used by {@link #soil} for total mass
      * (saltation ∝ u*³, suspension ∝ U^1.24, zero below threshold): that law decays faster at phase end, so actual lofted mass
-     * near the wedge edge is greater. One shape for every range (head is a {@code BlastWall} wedge); the entrainment law
-     * would give a different shape at each range.
+     * near the wedge edge is greater. Conventional blast dust and litter release; the nuclear dust layer lofts by {@link #loftMass}.
      */
     public static double lifted(double s) {
         double x = Math.max(0, Math.min(1, s)), y = 1 - x;
         return (0.25 - Math.exp(-2 * x) * (y * y / 2 - y / 2 + 0.25)) / ((1 - Math.exp(-2)) / 4);
+    }
+
+    /**
+     * Lofting-burst top exponent ({@link #loftTop}): the layer top rises at the vertical turbulent velocity of the ground layer,
+     * σ_w ≈ 1.25 u* (Panofsky &amp; Dutton 1984, neutral surface layer), so h ∝ ∫u* dτ. Behind the front u* = U(τ)/√2·B^(−1.25)
+     * ({@link #friction}), U decays as (1 − x)e^(−x) over the phase and B grows as lg of the front's path (B^(−1.25) ≈ τ^(−0.12) from 1 m to
+     * 1 km behind the front), so ∫u* ≈ (x·e^(1 − x))^0.88 of its phase total: within 3 % for 3–11 psi (DustModelTest).
+     */
+    public static final double LOFT_EXP = 0.88;
+    /**
+     * Lofted-mass exponent ({@link #loftMass}): the entrainment law of {@link #soil} (suspension ∝ U^1.24·B^(−2.8), saltation ∝ u*³, none
+     * once u* falls below the threshold) lofts most of the phase's mass in its first tenth: 47 % at 11 psi (1 Mt 3 km), 72 % at 3.3 psi
+     * (1 Mt 6 km); 1 − (1 − x)^8 gives 57 % (est.: one shape for every range, between them; DustModelTest).
+     */
+    public static final double LOFT_MASS = 8;
+
+    /**
+     * Layer top at phase fraction x of the local positive phase, share of the top at phase end: the lofting burst — dust thrown up fastest
+     * right behind the front where the ground friction velocity peaks, then ever slower as the wind decays, standing still by the phase end
+     * (vertical speed ∝ u*, {@link #LOFT_EXP}): (x·e^(1 − x))^0.88; 1 after the phase. Kuhl's law ({@link #waveTop}) still sets how high the
+     * layer is at phase end; this sets how it gets there (Kuhl's x^(5/6) keeps rising at half its initial rate until the phase ends).
+     */
+    public static double loftTop(double x) {
+        double c = Math.max(0, Math.min(1, x));
+        return Math.pow(c * Math.exp(1 - c), LOFT_EXP);
+    }
+
+    /** Lofted mass by phase fraction x, share of the phase total ({@link #LOFT_MASS}): 1 − (1 − x)^8; 1 after the phase. */
+    public static double loftMass(double x) {
+        double c = Math.max(0, Math.min(1, x));
+        return 1 - Math.pow(1 - c, LOFT_MASS);
     }
 
     /**
@@ -312,10 +342,16 @@ public final class DustModel {
      * ⚠ Estimate: e-folding in a quarter second. For charges of tens of kg, blast phase is milliseconds and saltation barely
      * develops (without this, the dust layer at 0.5 s was an opaque floor hundreds of meters across); suspension near the
      * charge (post-shock injection, Mirels) has no delay. Nuclear total mass stays steady-state (its calibration absorbs the
-     * difference), but the dust-wall head rises with this development behind the front ({@link #prompt}, {@code BlastWall}):
-     * without it, the head jumped to full density right at the front, and its foot was a perfect ring.
+     * difference); behind a nuclear front the winds are tens of times stronger and saltation develops over {@link #SATURATION_M}.
      */
     public static final double SALTATION_S = 0.25;
+    /**
+     * Saltation saturation length behind a nuclear front, m: the grains reach the steady flux over metres of their own path (Andreotti et al.
+     * 2010: L_sat ≈ 2.2·(ρ_p/ρ_a)·d, 0.5–2 m for 100–400 µm sand; Gaj &amp; Small 1991: saltation starts within metres of the shock), so the
+     * dust-wall head is dense at its foot right behind the front, thickening over the first metres ({@link #prompt} rises at once,
+     * {@code BlastWall.develop}) rather than standing at full density on an exact circle. ⚠ Estimate within that range.
+     */
+    public static final double SATURATION_M = 2;
 
     /**
      * Dust layer by position and burst: {@code heat} — flash fluence on ground, J/m²; {@code ball} — ball radius, m. Total lofted mass
@@ -518,7 +554,7 @@ public final class DustModel {
 
         /** Mass of bin i above ground at {@code age}, kg/m². */
         double bin(int i, double age, double settled, double left) {
-            return SHARE[i] * mass() * DustModel.lifted(age / positive) * Math.exp(-SETTLE[i] * settled) * left;
+            return SHARE[i] * mass() * loftMass(age / positive) * Math.exp(-SETTLE[i] * settled) * left;
         }
 
         /** Layer optical depth above ground (vertical) at {@code age}: Σ k·m. */

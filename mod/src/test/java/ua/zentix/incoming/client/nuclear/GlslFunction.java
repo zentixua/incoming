@@ -56,7 +56,7 @@ public record GlslFunction(List<String> tokens, List<String> params, String sour
     }
 
     private static final class Run {
-        private static final Set<String> BUILTIN = Set.of("smoothstep", "clamp", "mix", "min", "max", "exp", "log2", "pow", "abs", "sqrt", "sign", "floor", "fract", "sin", "cos");
+        private static final Set<String> BUILTIN = Set.of("smoothstep", "step", "clamp", "mix", "min", "max", "exp", "log2", "pow", "abs", "sqrt", "sign", "floor", "fract", "sin", "cos");
         private final List<String> t;
         private final Map<String, Double> vars;
         private final String source;
@@ -174,6 +174,7 @@ public record GlslFunction(List<String> tokens, List<String> params, String sour
                     double f = Math.max(0, Math.min(1, (a.get(2) - a.get(0)) / (a.get(1) - a.get(0))));
                     yield f * f * (3 - 2 * f);
                 }
+                case "step" -> a.get(1) < a.get(0) ? 0.0 : 1.0;
                 case "clamp" -> Math.max(a.get(1), Math.min(a.get(2), a.get(0)));
                 case "mix" -> a.get(0) * (1 - a.get(2)) + a.get(1) * a.get(2);
                 case "min" -> Math.min(a.get(0), a.get(1));

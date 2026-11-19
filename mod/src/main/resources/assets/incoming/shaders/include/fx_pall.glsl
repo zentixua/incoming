@@ -350,47 +350,56 @@ Sample emptySample() {
 
 // ---------------------------------------------------------------- dust-layer head (pall.glsl: pallWall*)
 
-// Head billows at q in tile V[2].w, in dust coordinates (pallWallOrigin): (x, y) tile channels 0..1 (billows, fine edges,
-// uniform as tile), z fine billows (multiplier, mean 1; fine is their share, as pall). Coarse-noise warp as pall (warpAt):
-// on a kilometers-wide ring, repetition from above appears as a grid
-vec3 wallNoise(vec3 q, float fine) {
-    vec2 w = texture(PallNoise, q * 0.07 + vec3(0.31, 0.5, 0.67)).rg - 0.5;
-    q += vec3(w.x, 0.0, w.y) * 0.3;
-    vec2 n = textureLod(PallNoise, q, 0.0).rg;
-    float detail = fine > 0.0 ? fineAt(q) : 1.0;
+// presentation: head lobes this many end tops wide (Silo S3E09 01:00:33–37: crests 1.5–2 times as wide as their band is high); noise
+// billows are a quarter of the noise tile, so the tile is four lobes. Tiles step by octaves (powers of two in blocks): a parcel keeps its
+// billow while the wall moves on, and only when the head's top has grown by a whole octave do the lobes cross-fade, over a few seconds, to
+// the next one
+const float WALL_LOBE = 1.75;
+// presentation: the head's billows churn, deforming by about a fifth of a lobe width per second (footage: 0.15–0.3 lobe widths/s; eddies
+// of the layer's size turn over at σ_u/h ≈ 0.1·U/h, 0.03–0.12 per second for 1 Mt 3–6 km out); the warp of the noise moves through its
+// third axis at this rate, noise units per second
+const float WALL_CHURN = 0.08;
+// presentation: vertical noise extent of the whole layer height, noise units (a quarter is one lobe): one row of lobes, crests on top
+const float WALL_ROW = 0.3;
+
+// Head lobe tiles: (smaller tile of the two octaves, larger, share of the larger), blocks, at least a block
+vec3 wallLobes(mat4 V) {
+    float k = log2(max(4.0 * WALL_LOBE * V[0].z, 1.0)), k0 = floor(k);
+    float size = exp2(k0);
+    return vec3(size, 2.0 * size, smoothstep(0.45, 0.55, k - k0));
+}
+
+// Head noise at parcel q (pallWallOrigin: x, share of the layer top, z) in a tile of size blocks: (x, y) tile channels 0..1 (billows, fine
+// edges), z fine billows (multiplier, mean 1; fine is their share). The warp is at a scale incommensurate with the tile (0.43: no
+// repetition grid from above on a kilometres-wide ring) and moves with time (WALL_CHURN): the billows churn
+vec3 wallNoise(vec3 q, float size, float fine, float t, vec3 offset) {
+    vec3 n3 = vec3(q.x / size, q.y * WALL_ROW, q.z / size) + offset;
+    vec2 w = texture(PallNoise, n3 * 0.43 + vec3(0.31, 0.5, 0.67 + t * WALL_CHURN)).rg - 0.5;
+    n3 += vec3(w.x, 0.0, w.y) * 0.3;
+    vec2 n = textureLod(PallNoise, n3, 0.0).rg;
+    float detail = fine > 0.0 ? fineAt(n3) : 1.0;
     return vec3(n, mix(1.0, detail, fine));
 }
 
-// Head billows at one eddy scale: noise in dust coordinates (pallWallOrigin), turned in eddies of diameter size (pallWallRoll),
-// density multiplier (pallShape × fine billows, mean 1)
-float wallBillows(mat4 V, WallAt h, float ph, float size, float fine, float fill, vec3 offset) {
-    vec3 o = pallWallRoll(pallWallOrigin(h.rel, h.z, ph, h.P.y, V[1].x), h.rel / max(length(h.rel), 1e-3), size,
-            pallWallRollAngle(ph, V[1].x, size));
-    vec3 n = wallNoise(o / size + offset, fine);
-    return pallShape(n.xy, fill) * n.z;
-}
-
-// Head at h (pallWallAt) with billows: extinction, 1/block. Billows as pall (pallShape: mean 1, dense dust more continuous —
-// fill by density relative to dense, thinner toward wedge top), fine billows within while resolved (fine; 0 for shadow
-// billows). Noise at dust origin (pallWallOrigin): billows form behind front where dust was lifted and stay there, turning in the
-// layer's eddies. Eddies are the size of the layer here (Kuhl §3), not of the thickest layer near ground zero (the tile V[2].w:
-// 79 m for 15 kt, where the layer 1 km out is 16–29 m): the noise octave tile/2^k with k = log2(tile / local top), fixed scales so
-// billows stay where they were lofted and only their mix changes as the layer deepens; two octaves near a boundary. Thinner than
-// tile/11 (the toe right behind the front, a few metres): eddies finer than any octave — their mean, an even sheet of fresh dust
-// (18.11: tile-sized holes in a layer metres thick read as a translucent shell)
-float wallAt(mat4 V, WallAt h, float fine, float dense) {
+// Head at h (pallWallAt) with billows: extinction, 1/block. Billows as pall (pallShape: mean 1, dense dust more continuous — fill by density
+// relative to dense, thinner toward the top: the top is a row of rounded crests), fine billows within while resolved (fine; 0 for shadow
+// billows). Noise rides the dust parcels (pallWallOrigin): thrown up at the front, lagging behind it, rising slower; lobes of the layer's
+// size (wallLobes: lobes; t — seconds since the detonation, the churn)
+float wallAt(mat4 V, WallAt h, float fine, float dense, vec3 lobes, float t) {
     float s = h.s - h.P.z;
-    float m = pallWallMean(s, h.z, h.P.x, h.P.y);
+    float m = pallWallMean(s, h.z, h.P.x, h.P.y, V[2].x, V[2].w);
     if (m <= 0.0 || h.P.w <= 0.0) return 0.0;
-    float u = s / max(h.P.x, 0.001), ph = u * V[2].x, tile = max(V[2].w, 1.0);
-    float local = h.P.y * pallWallTop(u);
-    float fill = clamp(h.P.w * m / max(dense, 1e-6) * 3.0, 0.0, 1.0) * (1.0 - smoothstep(0.4, 1.0, h.z / max(local, 0.001)));
-    float k = log2(tile / max(local, 1e-3)), resolved = 1.0 - smoothstep(3.5, 4.0, k);
-    if (resolved <= 0.0) return h.P.w * m;
-    float k0 = floor(clamp(k, 0.0, 3.0)), b = k >= 3.0 ? 0.0 : smoothstep(0.35, 0.65, max(k, 0.0) - k0), size = tile * exp2(-k0);
-    float shape = b < 1.0 ? wallBillows(V, h, ph, size, fine, fill, vec3(0.618034, 0.414214, 0.732051)) : 0.0;
-    if (b > 0.0) shape = mix(shape, wallBillows(V, h, ph, 0.5 * size, fine, fill, vec3(0.381966, 0.585786, 0.267949)), b);
-    return h.P.w * m * mix(1.0, shape, resolved);
+    float u = s / max(h.P.x, 0.001), ph = u * V[2].x;
+    float local = h.P.y * pallWallTop(u, V[2].x) * pallWallHeated(ph, V[2].w);
+    vec3 o = pallWallOrigin(h.rel, h.z, ph, local, V[1].x);
+    float fill = clamp(h.P.w * m / max(dense, 1e-6) * 3.0, 0.0, 1.0) * (1.0 - smoothstep(0.4, 1.0, o.y));
+    vec3 n = lobes.z < 1.0 ? wallNoise(o, lobes.x, fine, t, vec3(0.618034, 0.414214, 0.732051)) : vec3(0.5, 0.5, 1.0);
+    float shape = lobes.z < 1.0 ? pallShape(n.xy, fill) * n.z : 0.0;
+    if (lobes.z > 0.0) {
+        vec3 n2 = wallNoise(o, lobes.y, fine, t, vec3(0.381966, 0.585786, 0.267949));
+        shape = mix(shape, pallShape(n2.xy, fill) * n2.z, lobes.z);
+    }
+    return h.P.w * m * shape;
 }
 
 // point h shifted by v (blocks): same underlying water/terrain/hard ground, own extinction (edge to wedge end, 0 outside bounds),
@@ -400,8 +409,8 @@ WallAt wallMove(mat4 V, WallAt h, vec3 v) {
     m.rel = h.rel + v.xz;
     m.s = V[0].x - length(m.rel);
     m.z = h.z + v.y;
-    m.P.w = pallWallInside(m.s, m.z, V[0].y, V[0].z, V[1].y) * pallWallDensity(m.s - m.P.z, V[0].y, V[0].w, V[3].z, V[3].w, V[1].w, m.wet,
-            V[2].y, V[2].z, V[3].x, V[3].y, m.hard);
+    m.P.w = pallWallInside(m.s, m.z, V[0].y, V[0].z, pallWallCeiling(V[0].z, V[2].x, V[2].w), V[1].y) * pallWallDensity(m.s - m.P.z, V[0].y, V[0].w, V[3].z,
+            V[3].w, V[1].w, m.wet, V[2].y, V[2].z, V[3].x, V[3].y, m.hard);
     return m;
 }
 
@@ -410,7 +419,7 @@ float wallChord(mat4 V, WallAt h, vec3 v, float len, int n) {
     float sum = 0.0, ds = len / float(n);
     for (int i = 0; i < n; i++) {
         WallAt m = wallMove(V, h, v * ((float(i) + 0.5) * ds));
-        sum += m.P.w * pallWallMean(m.s - m.P.z, m.z, m.P.x, m.P.y);
+        sum += m.P.w * pallWallMean(m.s - m.P.z, m.z, m.P.x, m.P.y, V[2].x, V[2].w);
     }
     return sum * ds;
 }
@@ -422,7 +431,7 @@ float wallChordNear(mat4 V, WallAt h, vec3 v, float len, int n) {
     for (int i = 0; i < n; i++) {
         float a = float(i * i) / nn, b = float((i + 1) * (i + 1)) / nn;
         WallAt m = wallMove(V, h, v * (0.5 * (a + b) * len));
-        sum += m.P.w * pallWallMean(m.s - m.P.z, m.z, m.P.x, m.P.y) * (b - a);
+        sum += m.P.w * pallWallMean(m.s - m.P.z, m.z, m.P.x, m.P.y, V[2].x, V[2].w) * (b - a);
     }
     return sum * len;
 }
@@ -437,19 +446,20 @@ float wallChordNear(mat4 V, WallAt h, vec3 v, float len, int n) {
 // billows: neighbor-billow shadow toward keyDir, otherwise flat head), not the column above point.
 // smoke is the soot share in the dust there, as in the pall (pallField: fire zone × fire growth): dust lofted seconds after the
 // flash carries next to no soot
-void wall(mat4 V, WallAt h, vec3 keyDir, vec3 sunDir, vec3 lightDir, float smoke, float cone, bool pall, float dense, inout Sample s) {
-    float tile = max(V[2].w, 1.0), fine = 1.0 - smoothstep(0.5, 1.0, cone * 32.0 / tile);
-    float hd = wallAt(V, h, fine, dense);
+void wall(mat4 V, WallAt h, vec3 keyDir, vec3 sunDir, vec3 lightDir, float smoke, float cone, bool pall, float dense, float t, inout Sample s) {
+    vec3 lobes = wallLobes(V);
+    float tile = mix(lobes.x, lobes.y, lobes.z), fine = 1.0 - smoothstep(0.5, 1.0, cone * 32.0 / tile);
+    float hd = wallAt(V, h, fine, dense, lobes, t);
     // neither head nor slot pall here — no light needed
     if (hd <= 0.0 && !pall) return;
-    float hm = h.P.w * pallWallMean(h.s - h.P.z, h.z, h.P.x, h.P.y);
+    float hm = h.P.w * pallWallMean(h.s - h.P.z, h.z, h.P.x, h.P.y, V[2].x, V[2].w);
     // billow shadow: two samples toward key light (0.06 and 0.2 tile) plus local point, relative to local mean
     float dev = 0.0;
     if (hd > 0.0) {
         WallAt h1 = wallMove(V, h, keyDir * (0.06 * tile)), h2 = wallMove(V, h, keyDir * (0.2 * tile));
-        float m1 = h1.P.w * pallWallMean(h1.s - h1.P.z, h1.z, h1.P.x, h1.P.y);
-        float m2 = h2.P.w * pallWallMean(h2.s - h2.P.z, h2.z, h2.P.x, h2.P.y);
-        dev = ((hd - hm) * 0.03 + (wallAt(V, h1, 0.0, dense) - m1) * 0.1 + (wallAt(V, h2, 0.0, dense) - m2) * 0.17) * tile;
+        float m1 = h1.P.w * pallWallMean(h1.s - h1.P.z, h1.z, h1.P.x, h1.P.y, V[2].x, V[2].w);
+        float m2 = h2.P.w * pallWallMean(h2.s - h2.P.z, h2.z, h2.P.x, h2.P.y, V[2].x, V[2].w);
+        dev = ((hd - hm) * 0.03 + (wallAt(V, h1, 0.0, dense, lobes, t) - m1) * 0.1 + (wallAt(V, h2, 0.0, dense, lobes, t) - m2) * 0.17) * tile;
         dev = clamp(dev, -3.0, 6.0);
     }
     // mean head depth above point (to local wedge top), toward leading edge (where wedge stays above point), below point
@@ -457,8 +467,9 @@ void wall(mat4 V, WallAt h, vec3 keyDir, vec3 sunDir, vec3 lightDir, float smoke
     // higher than its top: long low wedge, full-length steps would pass above it (same as NukePall.dustLight)
     float reach = PALL_WALL_HANDOFF_TO * h.P.x + h.P.y, s0 = h.s - h.P.z, toTop = max(h.P.y - h.z, 0.0);
     vec2 out1 = h.rel / max(length(h.rel), 1e-3);
-    float up = wallChord(V, h, vec3(0.0, 1.0, 0.0), max(h.P.y * pallWallTop(s0 / max(h.P.x, 0.001)) - h.z, 0.0), 4);
-    float side = wallChord(V, h, vec3(out1.x, 0.0, out1.y), max(s0 - h.P.x * pow(clamp(h.z / max(h.P.y, 0.001), 0.0, 1.0), 1.2), 0.0), 4);
+    float u0 = s0 / max(h.P.x, 0.001);
+    float up = wallChord(V, h, vec3(0.0, 1.0, 0.0), max(h.P.y * pallWallTop(u0, V[2].x) * pallWallHeated(u0 * V[2].x, V[2].w) - h.z, 0.0), 4);
+    float side = wallChord(V, h, vec3(out1.x, 0.0, out1.y), max(s0 - h.P.x * pallWallFace(h.z / max(h.P.y, 0.001), V[2].x), 0.0), 4);
     float down = wallChord(V, h, vec3(0.0, -1.0, 0.0), max(h.z, 0.0), 2);
     float depth = min(up, side);
     float sunLen = sunDir.y > 0.05 ? min(reach, toTop / sunDir.y) : reach;
@@ -568,7 +579,7 @@ void slot(mat4 S, mat4 V, sampler2D ground, vec4 R, vec4 W, vec4 G, vec4 H, vec3
     vec3 keyDir = mix(sunDir, keyLight, key);
     keyDir /= max(length(keyDir), 1e-3);
     bool pall = f.sigma.x + f.sigma.y + f.sigma.z > 1e-7;
-    if (head.P.w > 0.0) wall(V, head, keyDir, sunDir, lightDir, f.smoke, cone, pall, S[3].x, s);
+    if (head.P.w > 0.0) wall(V, head, keyDir, sunDir, lightDir, f.smoke, cone, pall, S[3].x, S[3].z, s);
     if (!pall) return;
     float fill = clamp(f.dense * 3.0, 0.0, 1.0) * (1.0 - smoothstep(0.4, 1.0, f.height.x));
     vec3 warp = warpAt(S, p);

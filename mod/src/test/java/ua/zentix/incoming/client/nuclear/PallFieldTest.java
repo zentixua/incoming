@@ -220,8 +220,12 @@ class PallFieldTest {
                 double head = BlastWall.tau(s, r, 0, 0, Double.POSITIVE_INFINITY, 0);
                 // dust only: fire haze grows from the flash on its own clock (FireStorm.growth), not part of the wave layer
                 double pall = p.dustTau(r, 0, ticks, PallField.Water.DRY);
-                // the head rises with saltation development behind the front (BlastWall.develop): the layer as it develops
-                double layer = p.layer(i).depth(t - arrival / 20) * BlastWall.develop(u, s[9], s[10]);
+                // the head rises with saltation development behind the front (BlastWall.develop): the layer as it develops; within the phase
+                // lofted by the burst with its gain (presentation, BlastWall.LOFT_GAIN)
+                DustModel.Column c = p.layer(i);
+                double age = t - arrival / 20;
+                double lofted = age < c.positive() ? c.lifted() * DustModel.loftMass(BlastWall.LOFT_GAIN * age / c.positive()) : c.depth(age);
+                double layer = lofted * BlastWall.develop(u, s[9], s[10]);
                 assertEquals(layer, head + pall, 0.2 * layer, metres + " m, u = " + u + ": head " + head + " + pall " + pall);
                 if (u > 0.9 && metres > 2000) assertEquals(layer, head + pall, 0.06 * layer, metres + " m, u = " + u + ": joint");
                 if (u < 0.9) assertEquals(0, pall, 1e-12, "pall in the wedge of the head");

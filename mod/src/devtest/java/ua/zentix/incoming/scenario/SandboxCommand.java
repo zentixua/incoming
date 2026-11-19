@@ -51,6 +51,8 @@ import java.util.Locale;
  *       from the point (0 — south, 90 — west, as the player's turn), height of the look point above the ground;</li>
  *   <li>{@code stance stand|fly} — a standing player (body sway) or a flying observer (by default);</li>
  *   <li>{@code weather clear|rain} — weather for checking condensation in humid air;</li>
+ *   <li>{@code wave <speed>} — the world's nuclear wave speed (preset {@code CUSTOM}, share of sound speed 0.05–1; the sandbox starts at
+ *       1, a server like the host's plays 0.35): the next detonation takes it;</li>
  *   <li>{@code time day|night|<tick>}, {@code hud on|off}, {@code overlay on|off} — light, interface, model numbers;</li>
  *   <li>{@code track on|off} — the view keeps the effect's projectile ({@code launch}/{@code flight}) in the middle of the frame (as a player
  *       who follows it with zoom);</li>
@@ -74,7 +76,7 @@ record SandboxCommand(Verb verb, List<String> args) {
     /** {@code blast … water}: side and depth of the pond, blocks (the pond is wider than the Shahed's column and spray ring). */
     static final int POND = 64, POND_DEPTH = 4;
 
-    enum Verb { ICBM, ARRIVAL, BLAST, REAL, NUKE, AIRBURST, LAUNCH, FLIGHT, FIRE, SPENT, CAM, STANCE, WEATHER, TIME, HUD, OVERLAY, ZOOM, TRACK, SHOTS, AGAIN, CLEAR, RELOAD, WAIT, RAID, SAM, HOUSE, SCENERY, SURFACE, TURN, UI }
+    enum Verb { ICBM, ARRIVAL, BLAST, REAL, NUKE, AIRBURST, LAUNCH, FLIGHT, FIRE, SPENT, CAM, STANCE, WEATHER, WAVE, TIME, HUD, OVERLAY, ZOOM, TRACK, SHOTS, AGAIN, CLEAR, RELOAD, WAIT, RAID, SAM, HOUSE, SCENERY, SURFACE, TURN, UI }
 
     /** An effect (repeated by {@code again} and captured by {@code shots}). */
     boolean effect() {
@@ -198,6 +200,10 @@ record SandboxCommand(Verb verb, List<String> args) {
             case STANCE -> {
                 need(1, 1);
                 if (!List.of("stand", "fly").contains(args.getFirst())) throw new IllegalArgumentException("stand or fly");
+            }
+            case WAVE -> {
+                need(1, 1);
+                if (number(0) < 0.05 || number(0) > 1) throw new IllegalArgumentException("wave 0.05–1");
             }
             case WEATHER -> {
                 need(1, 1);
