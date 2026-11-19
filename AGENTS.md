@@ -98,42 +98,32 @@ defense, `launcher/`, `grid/` blackout, `sound/`, `client/`, `work/` tick budget
 - New `/incoming` commands/syntax (`command/IncomingCommand`) also update Almighty's AI notes
   `data/incoming/almighty/notes/strikes.md`. Munition recipes use Create with vanilla fallback via `neoforge:mod_loaded`.
 
-## Principles: physics and settings
-The mod must be the most physically accurate in its niche and spectacular like good cinema. Applies to every edit:
-- **The minimum that achieves the effect** (Artem, 25.10, “toy car”: real outside, small motor and a few wires inside),
-  for look, sound, flight, destruction, code and tools:
-  1. Goal: what players see, hear and feel; reference is reality (video, photos, measurements) beside game frames/audio.
-  2. First understand real causes, order and quantities.
-  3. Implement the minimum giving the same picture/behavior in every game case (day/night, field/city, wind, one strike
-     or a hundred). Visible causes, place, time, order and quantities must also be correct in data: nothing appears
-     finished; it originates where/when its cause acts, then follows shared world laws (wind, time, gravity). Do not
-     simulate the unseen/inaudible.
-  4. Simplest working solution: community tools, then simple rule, then own model. More complexity only when simpler
-     fails, demonstrated by a frame or number.
-  5. One error is “childish”: finished objects appear at wrong place/time, eyeballed numbers. The other is “excess”:
-     complexity/hardware cost invisible in-game.
+## Principles: picture, physics and settings
+**Concept** (Artem, 19.11, permanent; governs every edit from now on):
+1. **The picture is the judge.** The goal is what players see and hear, beside the best real footage of the
+   phenomenon (real test film, then high-end film VFX that stays physically plausible; nuclear blast wave and the
+   haze behind it: Silo S3E09, 01:00:26–01:00:37). Spectacle and cinema are the main measure: mesmerizing, never an
+   invented Hollywood fire show.
+2. **Physics is the frame, not the goal.** It sets what keeps the world believable and consistent everywhere: cause,
+   order, place, time, scale, what burns and what breaks, the same in every chunk and every case (day/night,
+   field/city, wind, one strike or a hundred). Nothing appears finished: it originates where/when its cause acts, then
+   follows shared world laws (wind, time, gravity).
+3. **Model no deeper than the screen shows.** If a simple rule gives the same picture, take it and simplify the deep
+   model; precision that never reaches the screen is not a goal. Order: community tools, then a simple rule, then our
+   own model; more only when the simpler one fails, shown by a frame or number. Two errors: "childish" (finished
+   objects at the wrong place/time, eyeballed numbers) and "excess" (complexity or cost invisible in game).
+4. **Presentation is free within plausibility.** Light, colour, contrast, billows, detail, movement, sound and camera
+   are strengthened toward the reference footage, marked `presentation:` in code, without changing facts. A real size
+   or shape changes only by Artem's word, as a marked deviation. Never add what reality lacks (fire on every block,
+   smoke from nowhere, impossible colour, impossible flight, 200 m craters, "space" effects).
 - **Game launch, physical effects at the target.** Craft, press launch; target charge, blast, fragments, destruction
   and damage follow real specs/laws. Each number from `WeaponSpec` or law with nearby source; missing-data values
   marked `(est.)`, approximate laws identified.
-- **Look: physics sets events, presentation shows them** (Artem, 23.10). Spectacular, cinematic, mesmerizing, with no
-  impossible real-world phenomena.
-  - **Balance** (Artem, 19.11): the goal is a mesmerizing, cinematic picture inside real physics, never an invented
-    Hollywood fire show. The visual target is the best realistic footage of the phenomenon: real test film first, then
-    high-end film VFX that stays physically plausible (nuclear blast wave and the haze behind it: Silo S3E09,
-    01:00:26–01:00:37). Build what the law gives; where the law gives too little on screen, strengthen it as marked
-    presentation toward that target; a real size or shape changes only by Artem's word as a marked deviation.
-    Spectacle never adds what physics lacks (fire on every block, smoke from nowhere, impossible colour).
-  - Physics sets order, sizes, time, speed, trajectory, destruction. Never alter for beauty: no impossible flight,
-    200 m craters or “space” effects.
-  - Presentation sets light, color, contrast, billows, detail, movement, sound, camera. Strengthen like good cinema in
-    Minecraft style; mark boosts `presentation:` in code, without changing facts.
-  - Measure is “wow”: frames/movement like good real-strike footage. Player's eye beside previous version decides
-    (author compares sandbox frame with same `main` frame during work); numbers inform, never decide. Performance
-    balance (Artem, 25.10): each effect has a frame-cost limit, held at any strike count. 3.7.0 is no hard floor:
-    simplify/redesign effects that cannot perform well without contortions/hacks; discard costly, barely visible
-    detail. Physics still sets events, rendering changes. Leave the nuke alone. Author judges “wow”; before/after
-    frames go to Artem.
-  - Prefer community particle/effect libraries, post-effects, shaderpacks; custom only where none exists.
+- **Judging the look:** sandbox frame beside the same `main` frame and the reference footage; the player's eye
+  decides, numbers inform. Before/after frames go to Artem. Performance balance (Artem, 25.10): each effect has a
+  frame-cost limit, held at any strike count; simplify/redesign effects that cannot perform well without hacks;
+  discard costly, barely visible detail. Prefer community particle/effect libraries, post-effects, shaderpacks;
+  custom only where none exists.
 - **Flight/air defense use our own game model** (Artem, 21.10): plausible/serious, not 1:1 real flight specs, guidance,
   radar or damage models. Shared class laws (inertia/bank, altitude-speed trade, gravity/drag/wind for unpowered,
   `guidance/`); game numbers in `WeaponSpec.Handling`, `Ballistic`, marked “not physical”.
