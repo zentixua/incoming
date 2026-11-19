@@ -420,7 +420,10 @@ paths:
   positions in 10 s around a viewer at 1.5 km: one 2.2 s frame of packets, then a 1.8 s light frame (wave-hitch run
   19.11.2026). A whole chunk costs ~0.55 ms (`RuinDelivery.CHUNK_NANOS`, `POSITION_NANOS`). It goes after the light
   fence: built on the write tick it shows new blocks in old light until light updates arrive (GameTest
-  `heavyRuinsGoWholeAfterTheirLight`: stale sky light without the fence; `heavyRuinsAsDeltasGiveTheSameChunk`: the
+  `heavyRuinsGoWholeAfterTheirLight`: stale sky light without the fence; the client's light is rebuilt from its
+  pre-wave light and every payload's data/empty masks in order, unmentioned sections kept, and must equal the ruins'
+  light right after the whole chunk: comparing payload and server while skipping absent sections passed a packet with
+  no light at all, review of #673; `heavyRuinsAsDeltasGiveTheSameChunk`: the
   same ruins through deltas, both client chunks equal the server's; `lightWaitsForTheWholeChunk`: light thread held,
   a light mark on the waiting chunk reaches the client without the hold). Measuring stalls: `jstack -l` and
   `ThreadMXBean.dumpAllThreads(true, true)` walk the heap at a safepoint, 115–250 ms each on the full-pack client:
