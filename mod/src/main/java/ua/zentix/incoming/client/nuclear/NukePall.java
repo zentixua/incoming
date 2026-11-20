@@ -121,8 +121,8 @@ public final class NukePall {
             if (a.wall.slot(a.seconds(0), WALL_TICK) && WALL_TICK[3] > 0) {
                 wetHere = a.ground.hasWater() ? a.ground.water(cam.x, cam.z) : 0;
                 WallLobes.Ground lobeGround = WallLobes.Ground.of(a.ground, d.burst().x, d.burst().z);
-                head = WallLobes.sigma(WALL_TICK, lobeGround, dx, eye, dz);
-                double[] column = WallLobes.vertical(WALL_TICK, lobeGround, dx, eye, dz);
+                head = WallLobes.sigma(WALL_TICK, lobeGround, a.seconds(0), dx, eye, dz);
+                double[] column = WallLobes.vertical(WALL_TICK, lobeGround, a.seconds(0), dx, eye, dz);
                 up += column[0];
                 down += column[1];
                 if (head > headMax) {
@@ -259,6 +259,7 @@ public final class NukePall {
         f.water1.zero();
         f.wall0.zero();
         f.wall1.zero();
+        f.lobes.clear();
         f.wilson0.zero();
         f.wilson1.zero();
         // frame world — chunks within render distance (chunk-edge margin): a ray into empty space crossed them without hitting anything
@@ -294,8 +295,8 @@ public final class NukePall {
             double eye = camera.y - d.groundY(), floor = active.ground.at(camera.x, camera.z);
             if (active.wall.slot(active.seconds(partial), WALL) && WALL[3] > 0) {
                 WallLobes.Ground lobeGround = WallLobes.Ground.of(active.ground, d.burst().x, d.burst().z);
-                extinction += WallLobes.sigma(WALL, lobeGround, dx, eye, dz);
-                double[] column = WallLobes.vertical(WALL, lobeGround, dx, eye, dz);
+                extinction += WallLobes.sigma(WALL, lobeGround, active.seconds(partial), dx, eye, dz);
+                double[] column = WallLobes.vertical(WALL, lobeGround, active.seconds(partial), dx, eye, dz);
                 up += column[0];
                 down += column[1];
             }
@@ -324,6 +325,7 @@ public final class NukePall {
         openSky(level, f.openSky, f.faceShade);
         java.util.Arrays.fill(f.mushrooms, 0f);
         f.mushroomCount = 0;
+        f.lobes.clear();
         f.balls.zero();
         f.ballLight.zero();
         f.ballsLit = false;
@@ -341,6 +343,7 @@ public final class NukePall {
         f.water1.zero();
         f.wall0.zero();
         f.wall1.zero();
+        f.lobes.clear();
         f.wilson0.zero();
         f.wilson1.zero();
         f.fire0.clear();
@@ -448,6 +451,9 @@ public final class NukePall {
         (k == 0 ? f.hot0 : f.hot1).set(GLOW[4], GLOW[5], GLOW[6], GLOW[7]);
         a.ground.frame(k == 0 ? f.ground0 : f.ground1);
         (k == 0 ? f.wall0 : f.wall1).set(WALL);
+        // the head's lobes, built once per frame (WallLobeTable: every reader of the head reads them)
+        if (WALL[3] > 0) f.lobes.build(k, WALL, WallLobes.Ground.of(a.ground, d.burst().x, d.burst().z), eye.x - d.burst().x, eye.y - d.groundY(),
+                eye.z - d.burst().z, seconds);
         (k == 0 ? f.wilson0 : f.wilson1).set(WALL[16], WALL[17], WALL[18], WALL[19]);
         f.min.min(LO);
         f.max.max(HI);

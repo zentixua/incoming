@@ -349,7 +349,7 @@ public final class NukeDust {
         if (k <= 0) return 0;
         Detonation d = a.d;
         WallLobes.Ground ground = WallLobes.Ground.of(a.ground, d.burst().x, d.burst().z);
-        return Math.min(1, WallLobes.sigma(slot, ground, p.x - d.burst().x, p.y - d.groundY(), p.z - d.burst().z) / k);
+        return Math.min(1, WallLobes.sigma(slot, ground, a.seconds(0), p.x - d.burst().x, p.y - d.groundY(), p.z - d.burst().z) / k);
     }
 
     /** Wall smoke: its color halfway toward gray of equal brightness ({@link #SMOKE_GREY}), darkened by factor {@code k}. */

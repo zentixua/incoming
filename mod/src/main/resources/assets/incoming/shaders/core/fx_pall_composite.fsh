@@ -196,12 +196,13 @@ float pallTau(vec3 dir, float ta, float tb) {
     // dust-wall head over its ray spans (like pall before layer quads, pall_front.glsl: pallWallThrough)
     for (int k = 0; k < 2; k++) {
         mat4 S = k == 0 ? PallSlot0 : PallSlot1, V = k == 0 ? PallWall0 : PallWall1;
-        vec4 G = k == 0 ? PallGround0 : PallGround1, W = k == 0 ? PallWater0 : PallWater1;
+        vec4 G = k == 0 ? PallGround0 : PallGround1;
         vec4 spans = pallWallSpans(S, V, G, dir, ta, tb);
         for (int j = 0; j < 2; j++) {
             vec2 sp = j == 0 ? spans.xy : spans.zw;
             if (sp.y <= sp.x) continue;
-            float wall = k == 0 ? pallWallTau(Sampler5, S, V, G, W, dir, sp.x, sp.y, 4) : pallWallTau(Sampler6, S, V, G, W, dir, sp.x, sp.y, 4);
+            // its lobes in the mushroom table (Sampler7: WallLobeTable rows)
+            float wall = pallLobeWalk(Sampler7, k, S, V, vec3(0.0), dir, sp.x, sp.y);
             tau += wall * pallOpenHere(dir * (0.5 * (sp.x + sp.y)));
         }
     }

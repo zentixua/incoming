@@ -33,6 +33,7 @@ import org.lwjgl.system.MemoryUtil;
 import ua.zentix.incoming.Incoming;
 import ua.zentix.incoming.client.fx.smoke.SmokeGrid;
 import ua.zentix.incoming.client.nuclear.MushroomField;
+import ua.zentix.incoming.client.nuclear.WallLobeTable;
 import ua.zentix.incoming.compat.FlashbackReplay;
 
 import java.nio.ByteBuffer;
@@ -452,6 +453,8 @@ public final class PallPass {
          * and Wilson cloud (z = 0 — no cloud).
          */
         public final Matrix4f wall0 = new Matrix4f().zero(), wall1 = new Matrix4f().zero();
+        /** Dust-wall head lobes of the frame's slots ({@link ua.zentix.incoming.client.nuclear.WallLobeTable}), rows of the mushroom table. */
+        public final ua.zentix.incoming.client.nuclear.WallLobeTable lobes = new ua.zentix.incoming.client.nuclear.WallLobeTable();
         public final Vector4f wilson0 = new Vector4f(), wilson1 = new Vector4f();
         /**
          * Frame world extends at least this many horizontal blocks from the eye (render distance): a ray into the void passed through it
@@ -732,6 +735,7 @@ public final class PallPass {
 
         VIEW_PROJECTION.set(projection).mul(view);
         VIEW_PROJECTION.invert(INVERSE);
+        lobes(f, w, h);
         view.positiveZ(FORWARD).negate();
         if (previousEye == null || previousEye.distanceToSqr(eye) > JUMP * JUMP) history = false;
         float dx = (float) (previousEye == null ? 0 : eye.x - previousEye.x), dy = (float) (previousEye == null ? 0 : eye.y - previousEye.y),
@@ -1180,11 +1184,12 @@ public final class PallPass {
             GlStateManager._texParameter(GlConst.GL_TEXTURE_2D, GlConst.GL_TEXTURE_MAG_FILTER, GlConst.GL_LINEAR);
             GlStateManager._texParameter(GlConst.GL_TEXTURE_2D, GlConst.GL_TEXTURE_WRAP_S, GlConst.GL_CLAMP_TO_EDGE);
             GlStateManager._texParameter(GlConst.GL_TEXTURE_2D, GlConst.GL_TEXTURE_WRAP_T, GlConst.GL_CLAMP_TO_EDGE);
-            float[] start = new float[MushroomField.WIDTH * MushroomField.ROWS * 4];
+            // mushroom rows, then the dust-wall head's lobes, their directory and screen tiles (WallLobeTable)
+            float[] start = new float[MushroomField.WIDTH * WallLobeTable.TABLE_ROWS * 4];
             MushroomField.blackBodyRow(start);
             mushroomBuffer = MemoryUtil.memAllocFloat(start.length);
             mushroomBuffer.put(start).flip();
-            GL11.glTexImage2D(GL11.GL_TEXTURE_2D, 0, GL30.GL_RGBA32F, MushroomField.WIDTH, MushroomField.ROWS, 0, GL11.GL_RGBA, GL11.GL_FLOAT, mushroomBuffer);
+            GL11.glTexImage2D(GL11.GL_TEXTURE_2D, 0, GL30.GL_RGBA32F, MushroomField.WIDTH, WallLobeTable.TABLE_ROWS, 0, GL11.GL_RGBA, GL11.GL_FLOAT, mushroomBuffer);
             shadowMap();
             footMap();
             tauMap();
@@ -1511,6 +1516,38 @@ public final class PallPass {
         gpuFrames = drawn = 0;
     }
 
+    /**
+     * The frame's dust-wall head lobes ({@link WallLobeTable}): screen tiles by this frame's matrices, light factors, and the rows after the
+     * mushrooms in the mushroom table — the records used, the directory and the tiles.
+     */
+    private static void lobes(Frame f, int w, int h) {
+        WallLobeTable t = f.lobes;
+        LOBE_CENTRES[0] = f.slot0.m00();
+        LOBE_CENTRES[1] = f.slot0.m01();
+        LOBE_CENTRES[2] = f.slot1.m00();
+        LOBE_CENTRES[3] = f.slot1.m01();
+        long start = System.nanoTime();
+        t.bin(VIEW_PROJECTION, w, h, f.sun.x, f.sun.y, f.sun.z, LOBE_CENTRES);
+        lobeNanos = System.nanoTime() - start;
+        lobeCount = t.count;
+        lobeDropped = t.truncated;
+        GlStateManager._bindTexture(mushrooms);
+        int rows = (t.count + WallLobeTable.PER_ROW - 1) / WallLobeTable.PER_ROW;
+        if (rows > 0) upload(t.records, WallLobeTable.ROW, rows);
+        upload(t.directory, WallLobeTable.DIR_ROW, 1);
+        upload(t.tiles, WallLobeTable.TILE_ROW, WallLobeTable.TILE_ROWS);
+    }
+
+    private static final float[] LOBE_CENTRES = new float[4];
+    private static int lobeCount, lobeDropped;
+    private static long lobeNanos;
+
+    private static void upload(float[] data, int row, int rows) {
+        mushroomBuffer.clear();
+        mushroomBuffer.put(data, 0, rows * MushroomField.WIDTH * 4).flip();
+        GL11.glTexSubImage2D(GL11.GL_TEXTURE_2D, 0, 0, row, MushroomField.WIDTH, rows, GL11.GL_RGBA, GL11.GL_FLOAT, mushroomBuffer);
+    }
+
     /** Scenario line: pall frames per second, resolution, detail rung, GPU time. */
     public static String describe() {
         if (lastDrawn == 0) return failed ? "failed" : gpuOff() ? "off by the GPU watchdog" : "off";
@@ -1519,9 +1556,10 @@ public final class PallPass {
         String gpu = timer < 0 ? "gpu n/a" : String.format(Locale.ROOT,
                 "gpu %.2f ms (longest %.2f, budget %.1f; preparation %.2f, near volume %.2f + sums %.2f, rays %.2f, accumulation %.2f, composite %.2f)",
                 lastGpuMean, lastGpuMax, DETAIL.budget, LAST_PART[0], LAST_PART[1], LAST_PART[2], LAST_PART[3], LAST_PART[4], LAST_PART[5]);
-        return String.format(Locale.ROOT, "%d frames, %d×%d, near volume %d×%d×%d to %.0f blocks, detail %s (step %d of %d, setting %s, %s, %d changes), %s; %s",
+        return String.format(Locale.ROOT, "%d frames, %d×%d, near volume %d×%d×%d to %.0f blocks, detail %s (step %d of %d, setting %s, %s, %d changes), %s; "
+                        + "head lobes %d (dropped from full tiles %d, CPU %.2f ms tiles+light); %s",
                 lastDrawn, lowW, lowH, volumeW / VOLUME_COLUMNS, volumeH / (VOLUME_SLICES / VOLUME_COLUMNS), VOLUME_SLICES, VOLUME_FAR, step.describe(), DETAIL.level, LADDER.length - 1, top.describe(),
-                DETAIL.pinned ? "pinned" : "by GPU budget", DETAIL.changes, gpu, OpenAir.describe());
+                DETAIL.pinned ? "pinned" : "by GPU budget", DETAIL.changes, gpu, lobeCount, lobeDropped, lobeNanos / 1e6, OpenAir.describe());
     }
 
     /**

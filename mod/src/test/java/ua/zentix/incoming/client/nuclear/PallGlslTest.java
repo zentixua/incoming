@@ -342,30 +342,24 @@ class PallGlslTest {
                 "return vec3(rel.x - out1.x * x, zr, rel.y - out1.y * x);"}) {
             assertTrue(origin.contains(law), "head dust place - not like in Java: no \"" + law + "»");
         }
-        // a lobe is the parcel lofted at its cell: carried by that law at its height share (where it is now), riding its share of the local top
-        String lobe = body(GLSL, "WallLobe pallLobe(").replaceAll("\\s+", " ");
-        assertTrue(lobe.contains("float len = max(V[0].y, 0.001), carry = V[1].x * pow(zr, 0.1428571), r = ro;")
-                && lobe.contains("for (int k = 0; k < 3; k++) r = ro + carry * pallWallCarried((V[0].x - r) / len * V[2].x);"), "a lobe - not where its parcel is carried");
-        assertTrue(lobe.contains("float local = max(top * rise * pallWallHeated(ph, V[2].w), 0.5);") && lobe.contains("float zc = zr * local;"),
-                "a lobe - not at its share of the local top");
-        // its mass: the law's column above the ground over its cell's area now (copy of WallLobes.lobe)
-        assertTrue(lobe.contains("* pallWallShape(u, V[2].x) * pallWallFade(u) * top * rise * pallColumn(0.0);")
-                && lobe.contains("float mass = column * area * weight / max(pallLobeAbove(-zc / L.R.w), 0.05);")
-                && lobe.contains("L.A = mass / (0.4787189 * L.R.z * L.R.w * (L.R.x + L.R.y));"), "a lobe's mass - not the law's head over its cell");
-        assertEquals(WallLobes.HALF, 0.4787189, 1e-7, "16π/105");
-        // the presentation numbers are Java's
+        // the lobes are built once per frame in Java (WallLobes, WallLobeTable: their laws, mass and motion are tested in WallLobesTest); the
+        // shaders read the same table: its layout, and the numbers that bound the head, are Java's
+        for (String[] c : new String[][]{{"PALL_LOBE_WIDTH", "" + WallLobeTable.WIDTH}, {"PALL_LOBE_ROW", "" + WallLobeTable.ROW},
+                {"PALL_LOBE_PER_ROW", "" + WallLobeTable.PER_ROW}, {"PALL_LOBE_DIR_ROW", "" + WallLobeTable.DIR_ROW}, {"PALL_LOBE_ENTRY", "" + WallLobeTable.ENTRY},
+                {"PALL_LOBE_TILE_ROW", "" + WallLobeTable.TILE_ROW}, {"PALL_LOBE_TILE_CAP", "" + WallLobeTable.TILE_CAP},
+                {"PALL_LOBE_PER_CELL", "" + WallLobes.PER_CELL}, {"PALL_LOBE_WALK", "" + WallLobes.WALK}}) {
+            assertTrue(GLSL.contains("const int " + c[0] + " = " + c[1] + ";"), c[0] + " - not Java's " + c[1]);
+        }
+        assertEquals(4, WallLobeTable.RECORD);
         for (String[] c : new String[][]{{"PALL_LOBE", "" + WallLobes.LOBE}, {"PALL_LOBE_WIDE", "" + WallLobes.WIDE}, {"PALL_LOBE_TALL", "" + WallLobes.TALL},
-                {"PALL_LOBE_JITTER", "" + WallLobes.JITTER}, {"PALL_LOBE_LOW", "" + WallLobes.LOW}, {"PALL_LOBE_RISE", "" + WallLobes.RISE},
-                {"PALL_LOBE_SIZE", "" + WallLobes.SIZE}, {"PALL_LOBE_OPAQUE", "" + WallLobes.OPAQUE}}) {
+                {"PALL_LOBE_LOW", "" + WallLobes.LOW}, {"PALL_LOBE_RISE", "" + WallLobes.RISE}, {"PALL_LOBE_SIZE", "" + WallLobes.SIZE},
+                {"PALL_LOBE_CHILD_OUT", "" + WallLobes.CHILD_OUT}, {"PALL_LOBE_CHILD_SIZE", "" + WallLobes.CHILD_SIZE}, {"PALL_LOBE_OPAQUE", "" + WallLobes.OPAQUE}}) {
             assertEquals(Double.parseDouble(c[1]), scalar(GLSL, c[0]), 1e-7, c[0]);
         }
-        assertTrue(GLSL.contains("const int PALL_LOBE_WALK = " + WallLobes.WALK + ";"), "walk samples - not Java's");
-        GlslFunction above = GlslFunction.parse(GLSL, "pallLobeAbove");
-        for (double z = -1.5; z <= 1.5; z += 0.01) assertEquals(WallLobes.above(z), above.call(Map.of("zeta", z)), 1e-6, "ζ = " + z);
-        // the same hash (pcg4d) in both: the same lobes
-        String hash = body(GLSL, "vec4 pallLobeHash(").replaceAll("\\s+", " ");
-        assertTrue(hash.contains("uvec4 v = uvec4(uint(i), uint(j), uint(level), uint(i) ^ (uint(j) << 12u)) * 1664525u + 1013904223u;")
-                && hash.contains("v ^= v >> 16u;") && hash.contains("return vec4(v >> 8u) / 16777216.0;"), "lobe hash - not Java's");
+        // the walk's lattice cell is the parcel's (the carry at a lobe's middle height share), as WallLobes.walk
+        String walk = body(GLSL, "float pallLobeWalk(").replaceAll("\\s+", " ");
+        assertTrue(walk.contains("float carry = V[1].x * pow(PALL_LOBE_LOW + 0.5 * PALL_LOBE_RISE, 0.1428571);")
+                && walk.contains("float ro = r - carry * pallWallCarried((V[0].x - r) / len * V[2].x);"), "the walk's cell - not the parcel's");
         // no noise multiplier, no dents: the head is its lobes
         assertTrue(!read("include/fx_pall.glsl").contains("wallDomes") && !read("include/fx_pall.glsl").contains("WALL_DOME"), "the dented head is back");
         assertTrue(!read("include/fx_pall.glsl").contains("pallWallRoll") && !GLSL.contains("pallWallRoll"), "the head pattern turns in place");
@@ -580,15 +574,15 @@ class PallGlslTest {
         assertTrue(body(fx, "vec3 hapkeH(").replaceAll("\\s+", " ").contains("return (1.0 + 2.0 * x) / (1.0 + 2.0 * gamma * x);"), "H - not Hapke's");
         assertTrue(light.contains("vec3 star = w * (1.0 - g) / (1.0 - w * g), gamma = sqrt(max(1.0 - star, vec3(0.0)));"), "γ - not of the similar albedo");
         // beams: single scattering with the dust's phase plus multiple, ω/4·μ0/(μ0 + μ)·(p + H(μ0)H(μ) − 1), through the pall and the other lobes
-        assertTrue(light.contains("lit += beam * (0.25 * w * mu0 / (mu0 + mu)) * (hg(g, dot(dir, sunDir)) + hapkeH(gamma, mu0) * hMu - 1.0);")
-                && light.contains("vec3 beam = sun * exp(-s.tau / max(sunDir.y, 0.12) - others);")
-                && light.contains("float others = max(pallLobeWalk(-1, ground, S, V, R, W, p, sunDir, 0.0, reach) - pallLobeTau(L, p, sunDir, 0.0, reach), 0.0);"),
-                "the sun - not a beam on the dust's surface shadowed by the other lobes");
-        assertTrue(light.contains("lit += beam * (0.25 * w * muC / (muC + mu)) * (hg(g, dot(dir, lightDir)) + hapkeH(gamma, muC) * hMu - 1.0);"), "the ball - not a beam");
+        assertTrue(light.contains("lit += sunBeam * (0.25 * w * mu0 / (mu0 + mu)) * (hg(g, dot(dir, sunDir)) + hapkeH(gamma, mu0) * hMu - 1.0);")
+                && light.contains("vec3 sunBeam = sun * exp(-s.tau / max(sunDir.y, 0.12) - L.sun);"), "the sun - not a beam on the dust's surface shadowed by the other lobes");
+        assertTrue(light.contains("if (muC > 0.0) lit += beam * (0.25 * w * muC / (muC + mu)) * (hg(g, dot(dir, lightDir)) + hapkeH(gamma, muC) * hMu - 1.0);"), "the ball - not a beam");
+        // a grazed rim is thin dust: single scattering, not the dense surface
+        assertTrue(light.contains("lit = mix(thin, lit, clamp(0.5 * tau, 0.0, 1.0));"), "a lobe's thin rim - lit as a dense surface");
         // diffuse: the dome over the upper half (whiter toward the horizon), the lit ground under the lower half, by (1 − γ)/(1 + 2γμ)
         assertTrue(light.contains("diffuse = (1.0 - gamma) / (1.0 + 2.0 * gamma * mu);")
                 && light.contains("lit += diffuse * (dome * up + ground0 * (1.0 - up));")
-                && light.contains("vec3 dome = mix(above, vec3(dot(above, LUMA)), WALL_HORIZON_WHITE * (1.0 - max(n.y, 0.0)));")
+                && light.contains("vec3 dome = mix(above, vec3(dot(above, LUMA)), WALL_HORIZON_WHITE * (1.0 - max(n.y, 0.0))) * exp(-kd * L.up);")
                 && light.contains("vec3 ground0 = mix(PALL_LAND, PALL_SEA, L.wet) * (sun * max(sunDir.y, 0.0) * exp(-s.tau / max(sunDir.y, 0.12)) + above);"),
                 "the sky dome and the lit ground");
         assertTrue(light.contains("vec3 rInf = (1.0 - gamma) / (1.0 + gamma);") && light.contains("vec3(WALL_OCHRE - 1.0)"), "the head's colour - not a thick layer's toward ochre");

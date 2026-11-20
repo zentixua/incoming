@@ -36,15 +36,16 @@ float pallOpenHere(vec3 p) {
     return pallOpen(PallOpen, PallOpenAt, PallOpenWrap, Sampler10, PallSlot1, PallGround1, p);
 }
 
-// Slot wall head before point on [t0, t1]: transmitted share per ray span (pallWallSpans)
-float pallWallThrough(sampler2D ground, mat4 S, mat4 V, vec4 G, vec4 W, vec3 dir, float t0, float t1) {
+// Slot k's wall head before point on [t0, t1]: transmitted share per ray span (pallWallSpans), its lobes in the mushroom table
+// (Sampler11: WallLobeTable rows)
+float pallWallThrough(int k, mat4 S, mat4 V, vec4 G, vec3 dir, float t0, float t1) {
     vec4 spans = pallWallSpans(S, V, G, dir, t0, t1);
     float through = 1.0;
-    for (int k = 0; k < 2; k++) {
-        vec2 sp = k == 0 ? spans.xy : spans.zw;
+    for (int j = 0; j < 2; j++) {
+        vec2 sp = j == 0 ? spans.xy : spans.zw;
         if (sp.y <= sp.x) continue;
-        // wall head is also outdoor-air matter (as in pall ray, fx_pall: pallStep)
-        float tau = pallWallTau(ground, S, V, G, W, dir, sp.x, sp.y, 4) * pallOpenHere(dir * (0.5 * (sp.x + sp.y)));
+        // wall head is also outdoor-air matter (as in pall ray, fx_pall: lobesBefore)
+        float tau = pallLobeWalk(Sampler11, k, S, V, vec3(0.0), dir, sp.x, sp.y) * pallOpenHere(dir * (0.5 * (sp.x + sp.y)));
         through *= exp(-tau);
     }
     return through;
@@ -79,7 +80,6 @@ float pallThrough(vec3 dir, float len) {
         }
         through *= exp(-tau * pallOpenHere(q));
     }
-    return through * pallWallThrough(Sampler9, PallSlot0, PallWall0, PallGround0, PallWater0, dir, t0, t1)
-            * pallWallThrough(Sampler10, PallSlot1, PallWall1, PallGround1, PallWater1, dir, t0, t1)
+    return through * pallWallThrough(0, PallSlot0, PallWall0, PallGround0, dir, t0, t1) * pallWallThrough(1, PallSlot1, PallWall1, PallGround1, dir, t0, t1)
             * pallWilsonThrough(PallSlot0, PallWilson0, dir, t1) * pallWilsonThrough(PallSlot1, PallWilson1, dir, t1);
 }
