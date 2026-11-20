@@ -204,9 +204,26 @@ class SightTest {
     }
 
     /**
+     * Noon and night are those of the ground at every height: an overhead sun's beam is white wherever the point stands (the law
+     * is relative to the overhead sun at the point's height), and a sun below the horizon of the highest lit matter lights nothing
+     * (the shader's frame gate and the column's earth shadow), so the per-point law changes only the low-sun frames.
+     */
+    @Test
+    void noonAndNightAreTheGroundsAtEveryHeight() {
+        double[] beam = new double[3];
+        for (double z = 0; z <= Sight.SUN_TOP; z += 500) {
+            Sight.sunThroughAir(1, z, beam);
+            for (int c = 0; c < 3; c++) assertEquals(1, beam[c], 1e-9, "overhead sun at " + z + " m, channel " + c);
+            Sight.sunThroughAir(-1, z, beam);
+            for (int c = 0; c < 3; c++) assertEquals(0, beam[c], 1e-12, "midnight sun at " + z + " m, channel " + c);
+            assertFalse(Sight.sunAbove(-1, z), "the midnight sun is under the horizon of " + z + " m");
+        }
+    }
+
+    /**
      * A cap lit only by the ground's sun at dusk (dayTime 12600–12900) loses it with the eye's sunset and draws flat
      * blue-grey in vanilla's sky light. A cap kilometres up stands above the haze and keeps the sun: at a 3° sun
-     * the ground gets 2 % of noon green, a cap 10 km up over 60 %, golden (red over blue); at −2° (the ground long in the earth's
+     * sea-level ground gets 0.6 % of noon green, a cap 10 km up over 60 %, golden (red over blue); at −2° (the ground long in the earth's
      * shadow) a cap 15 km up still has a red beam, while the shadow's top √(2z/R) sits at 2.5° for 6 km and 3.9° for 15 km.
      * One law over the whole dusk: no step between neighbouring ticks of the world clock at any height.
      */

@@ -872,6 +872,56 @@ float along(float u, float t0, float t1) {
     return t0 + (t1 - t0) * u * u;
 }
 
+// The sunbeam's air over a round earth (Sight.EARTH_R, AIR_HEIGHT, HAZE_HEIGHT, SHADOWED; vertical optical depths of clean air and
+// clear-day haze at the display channels 610/550/465 nm, Sight.cleanDepth/hazeDepth): SightTest holds them equal to Java
+const float SUN_EARTH_R = 6371000.0;
+const float SUN_AIR_H = 8000.0;
+const float SUN_HAZE_H = 1200.0;
+const float SUN_SHADOWED = 10000.0;
+const vec3 SUN_CLEAN = vec3(0.060825, 0.0928, 0.184086);
+const vec3 SUN_HAZE = vec3(0.192993, 0.2208, 0.274651);
+
+// Chapman function above the horizon, x = (R + z)/H, mu the sine of elevation ≥ 0 (Sight.chapman: erfcx bound, A&S 7.1.13)
+float sunChapman(float x, float mu) {
+    float y = sqrt(0.5 * x) * mu;
+    return sqrt(2.0 * x) / (y + sqrt(y * y + 1.2732395));
+}
+
+// Air column along the sunbeam from height z (m) toward elevation sine s, scale height h, relative to the vertical column above
+// the ground (Sight.column): Chapman function over a round earth; below the point's horizon the beam's lowest point passed twice,
+// SUN_SHADOWED in the earth's shadow
+float sunColumn(float z, float s, float h) {
+    float zz = max(z, 0.0), e = clamp(s, -1.0, 1.0), x = (SUN_EARTH_R + zz) / h;
+    if (e >= 0.0) return exp(-zz / h) * sunChapman(x, e);
+    float c = sqrt(1.0 - e * e), low = zz * c - SUN_EARTH_R * e * e / (1.0 + c);
+    if (low <= 0.0) return SUN_SHADOWED;
+    return min(2.0 * exp(-low / h) * sqrt(3.14159265 * (SUN_EARTH_R + low) / (2.0 * h)) - exp(-zz / h) * sunChapman(x, -e), SUN_SHADOWED);
+}
+
+// Share of the beam above the air at which the cap's sun-axis depths fully enter its emission escape (mushAt), linear below it.
+// Not physical: a bookkeeping ramp in place of an on/off cut; at a 3 degree sun the cap aloft holds 0.3-0.7 of it, the ground 0.01
+const float MUSH_SUN_ESCAPE = 0.05;
+
+// Sun light on matter z blocks (= m) above sea level (NukePall.Sky.sunAt, Sight.sunThroughAir): the beam above the air through the
+// slant column of clean air and haze, relative to the overhead sun at that height (white at noon at every height). At a low sun a
+// cap kilometres up keeps a golden beam the ground has lost; after ground sunset a red one, until the earth's shadow climbs past it
+vec3 pallSunBeam(float z) {
+    float clean = sunColumn(z, PallSun.y, SUN_AIR_H) - sunColumn(z, 1.0, SUN_AIR_H);
+    float haze = sunColumn(z, PallSun.y, SUN_HAZE_H) - sunColumn(z, 1.0, SUN_HAZE_H);
+    return PallSunTop.rgb * exp(-(clean * SUN_CLEAN + haze * SUN_HAZE));
+}
+
+// The sun lights some height this frame (PallPass.Frame.sunUp): sun branches and the shadow map exist
+bool pallSunUp() {
+    return PallSunTop.r + PallSunTop.g + PallSunTop.b > 0.0;
+}
+
+// Altitude of eye-relative p above sea level, blocks: the sun's height for cap, stem, pall and wall alike (one reference for every
+// detonation: slot order or ground zero never moves it; NukePall.Sky.sunAt)
+float pallSunHeight(vec3 p) {
+    return p.y + PallSunTop.w;
+}
+
 // Slot Wilson cloud (S, L — pallWilson), eye ray dir crossing at t with depth tau: light (rgb), transmittance (a).
 // Post-front condensation fog uses mist droplets (MIST): sky, sun, ball (pallBallLight — cloud forms while ball
 // brightest), with droplet phase; depth billows by burst-relative direction (shell breaks into bands and patches).
@@ -891,7 +941,10 @@ vec4 wilsonLight(mat4 S, vec4 G, vec4 H, vec4 L, vec3 dir, vec3 sunDir, float t,
     vec3 surface = H.rgb * PallExposure;
     vec3 cap = min(surface, mushBallCap(H.rgb * PallBodyExposure, PallBodyExposure)) * pallBallShare(G.x, ballLen);
     float sinBall = min(G.x / max(ballLen, 1e-3), 1.0);
-    vec3 l = PALL_MIST_W * (0.5 * PallSkyLight + PallSunLight * (0.25 * hg(PALL_MIST_G, dot(dir, sunDir)))
+    // the sun at the crossing's own altitude (pallSunBeam), as for the mushroom and dust beside it: a shell kilometres up keeps
+    // the sun the ground has lost
+    vec3 sun = pallSunUp() ? pallSunBeam(pallSunHeight(q)) : vec3(0.0);
+    vec3 l = PALL_MIST_W * (0.5 * PallSkyLight + sun * (0.25 * hg(PALL_MIST_G, dot(dir, sunDir)))
             + cap * (0.25 * hgDisc(PALL_MIST_G, dot(dir, toBall / max(ballLen, 1e-3)), sqrt(1.0 - sinBall * sinBall))));
     float tr = exp(-tau);
     return vec4(l * (1.0 - tr), tr);
@@ -973,55 +1026,6 @@ vec3 pallLampsAt(vec3 p) {
 float pallOpenHere(vec3 p) {
     if (PallSlot0[1].w > 0.5) return pallOpen(PallOpen, PallOpenAt, PallOpenWrap, Sampler5, PallSlot0, PallGround0, p);
     return pallOpen(PallOpen, PallOpenAt, PallOpenWrap, Sampler6, PallSlot1, PallGround1, p);
-}
-// The sunbeam's air over a round earth (Sight.EARTH_R, AIR_HEIGHT, HAZE_HEIGHT, SHADOWED; vertical optical depths of clean air and
-// clear-day haze at the display channels 610/550/465 nm, Sight.cleanDepth/hazeDepth): SightTest holds them equal to Java
-const float SUN_EARTH_R = 6371000.0;
-const float SUN_AIR_H = 8000.0;
-const float SUN_HAZE_H = 1200.0;
-const float SUN_SHADOWED = 10000.0;
-const vec3 SUN_CLEAN = vec3(0.060825, 0.0928, 0.184086);
-const vec3 SUN_HAZE = vec3(0.192993, 0.2208, 0.274651);
-
-// Chapman function above the horizon, x = (R + z)/H, mu the sine of elevation ≥ 0 (Sight.chapman: erfcx bound, A&S 7.1.13)
-float sunChapman(float x, float mu) {
-    float y = sqrt(0.5 * x) * mu;
-    return sqrt(2.0 * x) / (y + sqrt(y * y + 1.2732395));
-}
-
-// Air column along the sunbeam from height z (m) toward elevation sine s, scale height h, relative to the vertical column above
-// the ground (Sight.column): Chapman function over a round earth; below the point's horizon the beam's lowest point passed twice,
-// SUN_SHADOWED in the earth's shadow
-float sunColumn(float z, float s, float h) {
-    float zz = max(z, 0.0), e = clamp(s, -1.0, 1.0), x = (SUN_EARTH_R + zz) / h;
-    if (e >= 0.0) return exp(-zz / h) * sunChapman(x, e);
-    float c = sqrt(1.0 - e * e), low = zz * c - SUN_EARTH_R * e * e / (1.0 + c);
-    if (low <= 0.0) return SUN_SHADOWED;
-    return min(2.0 * exp(-low / h) * sqrt(3.14159265 * (SUN_EARTH_R + low) / (2.0 * h)) - exp(-zz / h) * sunChapman(x, -e), SUN_SHADOWED);
-}
-
-// Share of the beam above the air at which the cap's sun-axis depths fully enter its emission escape (mushAt), linear below it.
-// Not physical: a bookkeeping ramp in place of an on/off cut; at a 3 degree sun the cap aloft holds 0.3-0.7 of it, the ground 0.01
-const float MUSH_SUN_ESCAPE = 0.05;
-
-// Sun light on matter z blocks (= m) above sea level (NukePall.Sky.sunAt, Sight.sunThroughAir): the beam above the air through the
-// slant column of clean air and haze, relative to the overhead sun at that height (white at noon at every height). At a low sun a
-// cap kilometres up keeps a golden beam the ground has lost; after ground sunset a red one, until the earth's shadow climbs past it
-vec3 pallSunBeam(float z) {
-    float clean = sunColumn(z, PallSun.y, SUN_AIR_H) - sunColumn(z, 1.0, SUN_AIR_H);
-    float haze = sunColumn(z, PallSun.y, SUN_HAZE_H) - sunColumn(z, 1.0, SUN_HAZE_H);
-    return PallSunTop.rgb * exp(-(clean * SUN_CLEAN + haze * SUN_HAZE));
-}
-
-// The sun lights some height this frame (PallPass.Frame.sunUp): sun branches and the shadow map exist
-bool pallSunUp() {
-    return PallSunTop.r + PallSunTop.g + PallSunTop.b > 0.0;
-}
-
-// Altitude of eye-relative p above sea level, blocks: the sun's height for cap, stem, pall and wall alike (one reference for every
-// detonation: slot order or ground zero never moves it; NukePall.Sky.sunAt)
-float pallSunHeight(vec3 p) {
-    return p.y + PallSunTop.w;
 }
 
 // Sun above eye-relative pall point p (at its altitude, pallSunBeam) through mushrooms on its ray: shadow map as world

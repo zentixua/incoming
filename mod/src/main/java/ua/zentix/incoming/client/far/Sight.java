@@ -180,7 +180,7 @@ public final class Sight {
      * Overhead — 1, 1, 1: the frame's daylight is white at noon at every height (the eye is adapted to it; the brighter beam aloft
      * and the thinner sky above it offset, est.). Toward the horizon the long path removes blue first — on the ground at 19.3°
      * (column 3) red over blue ×1.5 relative to noon, green half as bright. Above the haze the path stays short: a cap 10 km up
-     * at a 3° sun keeps 0.7 of its light, golden, while the ground gets 2 %; after ground sunset it keeps a red beam until its own
+     * at a 3° sun keeps 0.7 of its light, golden, while sea-level ground gets 0.6 % of its green; after ground sunset it keeps a red beam until its own
      * horizon (earth's shadow rising up the cloud), then none. One law at every elevation and height, no threshold.
      */
     public static void sunThroughAir(double sinElevation, double height, double[] into) {

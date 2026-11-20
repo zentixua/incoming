@@ -523,7 +523,7 @@ public final class NukePall {
     }
 
     /**
-     * Altitude above sea level ({@link WaterDecal#SEA_LEVEL}) of the highest matter of all detonations, blocks: the mushroom's top,
+     * Altitude above sea level ({@link WaterDecal#SEA_LEVEL}) of the highest matter of all detonations, blocks: the mushroom's top with its billows ({@link MushroomField#top}),
      * or {@link Sight#SUN_TOP} while one has no mushroom (pall and wall only; their sun branches cost per sample, no shadow map).
      * The frame computes sunlight while the sun stands above this height's horizon.
      */
@@ -532,7 +532,7 @@ public final class NukePall {
         for (ClientNuclear.Active a : ClientNuclear.detonations()) {
             ua.zentix.incoming.nuclear.model.MushroomModel.Shape s = MushroomField.shape(a, partial);
             if (s == null) return Sight.SUN_TOP;
-            top = Math.max(top, a.d.groundY() - WaterDecal.SEA_LEVEL + a.d.blocks(s.top()));
+            top = Math.max(top, a.d.groundY() - WaterDecal.SEA_LEVEL + a.d.blocks(MushroomField.top(s)));
         }
         return Math.min(top, Sight.SUN_TOP);
     }
@@ -805,7 +805,7 @@ public final class NukePall {
             ua.zentix.incoming.nuclear.model.MushroomModel.Shape shape = MushroomField.shape(last, 0);
             if (shape != null) {
                 double up = last.d.groundY() - WaterDecal.SEA_LEVEL + last.d.blocks(shape.capY());
-                double top = last.d.groundY() - WaterDecal.SEA_LEVEL + last.d.blocks(shape.top());
+                double top = last.d.groundY() - WaterDecal.SEA_LEVEL + last.d.blocks(MushroomField.top(shape));
                 double[] atCap = new double[3], atTop = new double[3];
                 SKY.sunAt(up, atCap);
                 SKY.sunAt(top, atTop);

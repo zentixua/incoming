@@ -421,17 +421,8 @@ class BlastWallTest {
     }
 
     /**
-     * Dust near the camera - the color of the head there, as the frame shines on it ({@link NukePall#dustLight}). The head is a thick layer (visible at
-     *  meters): light enters it thickly to the top of the wedge, to its front edge and from below. Fires light its bottom with their own flame
-     *  ({@link PallField#fireLight}): under a burning city (flame 1) the bottom of the head at night is not dark and has the colour of fire, but in the
-     *  depth of the layer there is a shadow of its thickness; under fires the flash lit seconds before the wave (flame ≈ 0) the bottom is as dark as with
-     *  no fires at all — no orange under a fresh wall (18.11). During the day, the top of the wedge is brown (red, followed by green, blue) in the light of
-     *  the sun and sky, in depth there is a shadow; at night, too, as soon as the ball on the head stops blinding the eye accustomed to the dark (its light
-     *  is about of a white wall; before, everything that it illuminates is overexposed).
-     */
-    /**
      * The wall's dust takes the sun of its own altitude (as {@code fx_pall}'s {@code pallSunAt}): at a 3° sun the ground lies under
-     * a long path of haze (2 % of noon green), while the same dust 6 km up keeps a golden beam. The point's altitude reaches the sun
+     * a long path of haze (0.6 % of noon green at sea level), while the same dust 6 km up keeps a golden beam. The point's altitude reaches the sun
      * term ({@link NukePall.Sky#sunAt}); the ball's light is left out so that the sun decides.
      */
     @Test
@@ -452,6 +443,15 @@ class BlastWallTest {
         assertTrue(high[0] - low[0] > 3 * (high[2] - low[2]), "the beam aloft is golden, it adds red: " + Arrays.toString(high) + " vs " + Arrays.toString(low));
     }
 
+    /**
+     * Dust near the camera - the color of the head there, as the frame shines on it ({@link NukePall#dustLight}). The head is a thick layer (visible at
+     *  meters): light enters it thickly to the top of the wedge, to its front edge and from below. Fires light its bottom with their own flame
+     *  ({@link PallField#fireLight}): under a burning city (flame 1) the bottom of the head at night is not dark and has the colour of fire, but in the
+     *  depth of the layer there is a shadow of its thickness; under fires the flash lit seconds before the wave (flame ≈ 0) the bottom is as dark as with
+     *  no fires at all — no orange under a fresh wall (18.11). During the day, the top of the wedge is brown (red, followed by green, blue) in the light of
+     *  the sun and sky, in depth there is a shadow; at night, too, as soon as the ball on the head stops blinding the eye accustomed to the dark (its light
+     *  is about of a white wall; before, everything that it illuminates is overexposed).
+     */
     @Test
     void nearDustTakesWallLight() {
         CloudPuffs puffs = new CloudPuffs(GROUND);
