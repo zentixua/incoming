@@ -88,6 +88,9 @@ if [ "${1:-}" = --in-unit ]; then
   exit $code
 fi
 
+# a path as one systemd command-line word: double-quoted, \ and " escaped (a transient property expands no $ or %)
+_sd_quote() { local p=${1//\\/\\\\}; p=${p//\"/\\\"}; printf '"%s"' "$p"; }
+
 mode=heavy wait=
 case "${1:-}" in --gpu) mode=gpu; shift ;; --light) mode=light; shift ;; --soft) mode=soft; shift ;; esac
 [ "$mode" = gpu ] && [ "${1:-}" = --wait ] && { wait=--wait; shift; }
@@ -96,7 +99,6 @@ name=$1; shift 2
 
 # GPU lease belongs to session: foreign holder refuses (or waits with --wait); before service for immediate refusal
 if [ "$mode" = gpu ]; then
-  gpu_cool
   export INCOMING_GPU_OWNER="${INCOMING_GPU_OWNER:-$(lease_owner)}"
   # without --wait, immediate refusal; with --wait, lease queue waits for running client (lease_take)
   if [ -z "$wait" ] && who=$(gpu_client_busy); then echo "$who" >&2; echo "laptop_job $name: exit 75"; exit 75; fi
@@ -134,7 +136,7 @@ code=0
 "${inhibit[@]}" \
   systemd-run --user --wait --pipe --collect --quiet --same-dir --unit="incoming-job-$name-$$" \
     --description="incoming job $name (task ${DELEGATE_TASK:--})" -E INCOMING_JOB_START="$(date +%s)" \
-    -p ExecStopPost="$(readlink -f "$0") --account" \
+    -p ExecStopPost="$(_sd_quote "$(readlink -f "$0")") --account" \
     "${props[@]}" "${envs[@]}" -- "$(readlink -f "$0")" --in-unit "$mode" "$name" $$ -- "$@" 0<&0 198>&- &
 run=$!
 # stopping this script (Ctrl+C, TERM from a caller's timeout) stops its service: the client does not outlive the command

@@ -67,13 +67,12 @@ Prism: `~/.var/app/org.prismlauncher.PrismLauncher/data/PrismLauncher/` (`tools/
                                            task load: at stop (ExecStopPost `laptop_job.sh --account`) the unit's CPU from its cgroup
                                            goes to the load log (`cpu` row, task = DELEGATE_TASK set by `delegate`; job and task
                                            names only, never the command's arguments); laptop-agents mission-load sums it;
-                                           --gpu waits for a hot GPU (≥ 80 °C) to cool to 70 °C first (gpu_cool, at most 180 s);
                                            A caller still waiting in the GPU queue dies with the agent's session cgroup at turn end
                                            (even setsid/nohup): start the wait in its own unit, `systemd-run --user
                                            --unit=incoming-wait-<name> --collect -p WorkingDirectory=$PWD --setenv=PATH="$PATH"
                                            --setenv=HOME="$HOME" --setenv=XDG_RUNTIME_DIR="$XDG_RUNTIME_DIR"
                                            --setenv=DELEGATE_TASK="${DELEGATE_TASK:-}"
-                                           -p ExecStopPost="$PWD/tools/laptop_job.sh --account" bash -c '…'` (its own CPU, such as
+                                           -p ExecStopPost="\"$PWD/tools/laptop_job.sh\" --account" bash -c '…'` (its own CPU, such as
                                            Gradle preparation in the wrapper, then counts to the task), and
                                            name that unit in a mission's WAITING. After the job the lease stays with the launching
                                            tree for 10 min: run `tools/gpu_lease.sh release` from that tree
@@ -85,10 +84,12 @@ Prism: `~/.var/app/org.prismlauncher.PrismLauncher/data/PrismLauncher/` (`tools/
                                            an honest queue (FIFO): a free GPU goes to the first waiter; status: who holds it and
                                            who waits; at most INCOMING_GPU_QUEUE_MAX (2) other sessions wait, a newcomer beyond is refused (75);
                                            a nested KWin on a wayland-incoming-soft-… socket is a CPU session, not a GPU client;
-                                           a new GPU client (nested_kwin.sh, sandbox.sh, laptop_job --gpu) waits before taking the
-                                           lease while the GPU is ≥ 80 °C until 70 °C, at most 180 s (gpu_cool; INCOMING_GPU_COOL*);
-                                           while a client holds the lock, each renewal appends a `gpu` row (owner, utilization,
-                                           temperature) to the load log (DELEGATE_LOAD_LOG, default ~/.local/state/delegate/load.tsv);
+                                           at the handoff to a new GPU client (gpu_client_hold: lease and client lock already its own)
+                                           it waits while the GPU is ≥ 80 °C until 70 °C, at most 180 s of wall time (gpu_cool;
+                                           INCOMING_GPU_COOL*); sandbox.sh also cools before its startup deadline starts; while a
+                                           client holds the lock, each renewal appends a `gpu` row (utilization, temperature) billed to
+                                           the client's DELEGATE_TASK to the load log (DELEGATE_LOAD_LOG, default
+                                           ~/.local/state/delegate/load.tsv), only while that client still holds the lock;
                                            test: test_gpu_lease.sh
     logtime.py                           ← time of Minecraft log lines for digests of laptop tasks
     free_port.py                         ← a free port on 127.0.0.1 for check servers (stress.sh, mp_scenario.sh)

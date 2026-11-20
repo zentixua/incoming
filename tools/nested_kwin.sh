@@ -55,7 +55,6 @@ owner="${INCOMING_GPU_OWNER:-$(lease_owner "$ROOT")}"
 # (with INCOMING_GPU_WAIT, lease queue waits for running client: lease_take)
 if [ -z "${INCOMING_GPU_WAIT:-}" ] && who=$(gpu_client_busy); then echo "$who" >&2; exit 75; fi
 if socket_busy; then echo "socket $SOCKET is occupied by another KWin" >&2; exit 75; fi
-gpu_cool
 lease_take "$owner" "$ROOT" ${INCOMING_GPU_WAIT:+--wait} || exit 75
 # own lease but own session client still running: INCOMING_GPU_WAIT waits for it
 while [ -n "${INCOMING_GPU_WAIT:-}" ] && gpu_client_busy >/dev/null; do sleep 10; done

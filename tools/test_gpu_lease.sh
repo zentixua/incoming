@@ -46,7 +46,8 @@ out=$(PATH="$tmp/smi:$PATH" INCOMING_GPU_COOL_POLL=0 INCOMING_GPU_COOL_MAX=900 g
 [ "$(cat "$tmp/smi/n")" = 4 ] && [ -z "$out" ] && ok "cool GPU: no wait" || bad "cool GPU waited: $out"
 echo 0 > "$tmp/smi/n"
 out=$(PATH="$tmp/smi:$PATH" INCOMING_GPU_COOL_POLL=1 INCOMING_GPU_COOL_MAX=1 gpu_cool 2>&1); rc=$?
-[ $rc = 0 ] && [ "$(cat "$tmp/smi/n")" = 1 ] && ok "cool-down gives up after its maximum" || bad "cool-down max: $rc $(cat "$tmp/smi/n")"
+[ $rc = 0 ] && [ "$(cat "$tmp/smi/n")" -le 2 ] && ok "cool-down gives up after its maximum (wall time)" || bad "cool-down max: $rc $(cat "$tmp/smi/n")"
+echo 1 > "$tmp/smi/n"
 out=$(PATH="$tmp/smi:$PATH" INCOMING_GPU_COOL_MAX=0 gpu_cool 2>&1)
 [ "$(cat "$tmp/smi/n")" = 1 ] && ok "cool-down with no time left reads no sensor" || bad "cool-down MAX=0 read the sensor"
 
@@ -279,10 +280,18 @@ fi
 
 # a running client's GPU samples go to the load log under its owner, one per renewal; a job's CPU goes there at its stop
 lease_take wave /x/wt-wave >/dev/null 2>&1
-( PATH="$tmp/smi:$PATH" INCOMING_GPU_RENEW=0.2 gpu_client_hold wave /x/wt-wave "sample test" && sleep 1.2 )
+( PATH="$tmp/smi:$PATH" INCOMING_GPU_RENEW=0.2 DELEGATE_TASK=mission-wave gpu_client_hold wave /x/wt-wave "sample test" && sleep 1.2 )
 sleep 0.5; lease_release wave
-grep -qP '^gpu\t[0-9]+\twave\t0.2\t97\t88.5$' "$tmp/load.tsv" && ok "client GPU samples in the load log: $(grep -c '^gpu' "$tmp/load.tsv")" \
+grep -qP '^gpu\t[0-9]+\tmission-wave\t0.2\t97\t88.5$' "$tmp/load.tsv" && ! grep -qP '^gpu\t[0-9]+\twave\t' "$tmp/load.tsv" \
+  && ok "client GPU samples billed to the client's task, not the lease name: $(grep -c '^gpu' "$tmp/load.tsv")" \
   || bad "GPU samples: $(cat "$tmp/load.tsv" 2>/dev/null)"
+# handoff: once another client's pid is in the holder file, the old renewal writes nothing more
+lease_take wave /x/wt-wave >/dev/null 2>&1
+( PATH="$tmp/smi:$PATH" INCOMING_GPU_RENEW=0.2 DELEGATE_TASK=old-task gpu_client_hold wave /x/wt-wave "handoff test" \
+    && echo "1 2" > "$GPU_CLIENT.pid" && sleep 1.2 )
+sleep 0.5; lease_release wave
+! grep -q 'old-task' "$tmp/load.tsv" && ok "a renewal stops sampling when another client holds the lock" \
+  || bad "samples after handoff: $(grep -c old-task "$tmp/load.tsv")"
 if systemctl --user show-environment >/dev/null 2>&1; then
   DELEGATE_TASK=wave timeout 60 "$ROOT/tools/laptop_job.sh" acct -- bash -c 'exit 3' >/dev/null 2>&1; rc=$?
   sleep 0.5

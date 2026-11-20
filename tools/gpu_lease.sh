@@ -10,8 +10,7 @@
 #   source tools/gpu_lease.sh               functions lease_owner, lease_take, lease_renew, lease_release, lease_status
 #
 # Owner is the session: INCOMING_GPU_OWNER, else the delegated task (DELEGATE_TASK, set by the laptop-agents `delegate`
-# for everything an agent starts: all worktrees of one task share the lease, and gpu-log attributes GPU time and
-# temperature to the task for its budget), else the worktree name (mod/run/wt-<S>[-anything] → <S>, otherwise directory
+# for everything an agent starts: all worktrees of one task share the lease), else the worktree name (mod/run/wt-<S>[-anything] → <S>, otherwise directory
 # name), so worktrees of one session (wt-N3 and wt-N3-main) share an owner. Each GPU client acquires it itself:
 # `tools/nested_kwin.sh` (all clients use it: sandbox, scenarios, prod_client, look gate, trailer), as do
 # `tools/laptop_job.sh --gpu` jobs (Blender); sandbox and --gpu jobs also check before building for immediate refusal.
@@ -255,36 +254,42 @@ gpu_client_hold() {
   printf '%s (%s), since %s: %s\n' "$1" "$(readlink -m "$2")" "$(date +%H:%M)" "$3" > "$GPU_CLIENT.who"
   local me=$BASHPID
   echo "$me $(_proc_start "$me")" > "$GPU_CLIENT.pid"
+  gpu_cool
   # renew while lock held; renewal needs neither lock (would hold it itself) nor foreign fds (caller pipe,
   # tee, ssh would wait for it to finish)
   (
     set +e
     for f in /proc/$BASHPID/fd/*; do n=${f##*/}; [ "$n" -gt 2 ] 2>/dev/null && eval "exec $n>&-" 2>/dev/null; done
     exec </dev/null >/dev/null 2>&1
-    # renew only while lock busy (code 1); free or file missing (code 0, open error) ends renewal. Each renewal also
-    # appends one GPU sample of the running client to the delegated task's load log (laptop-agents mission-load):
-    #   gpu <epoch> <owner> <interval s> <utilization %> <temperature °C>
-    local log=${DELEGATE_LOAD_LOG:-${XDG_STATE_HOME:-$HOME/.local/state}/delegate/load.tsv} s
-    while sleep "${INCOMING_GPU_RENEW:-30}"; do flock -n -s "$GPU_CLIENT" true 2>/dev/null; [ $? = 1 ] || exit 0; lease_renew "$1" "$2" || true
+    # renew only while lock busy (code 1) by this client (its pid file); free, missing or a new holder ends renewal. Each
+    # renewal also appends one GPU sample of this client to its delegated task's load log (laptop-agents mission-load),
+    # billed to the task that runs the client (DELEGATE_TASK), not to the lease's name, and only when this client held
+    # the lock on both sides of the sensor read:
+    #   gpu <epoch> <task> <interval s> <utilization %> <temperature °C>
+    local log=${DELEGATE_LOAD_LOG:-${XDG_STATE_HOME:-$HOME/.local/state}/delegate/load.tsv} s mine="$me $(_proc_start "$me")"
+    held() { flock -n -s "$GPU_CLIENT" true 2>/dev/null; [ $? = 1 ] && [ "$(cat "$GPU_CLIENT.pid" 2>/dev/null)" = "$mine" ]; }
+    while sleep "${INCOMING_GPU_RENEW:-30}"; do held || exit 0; lease_renew "$1" "$2" || true
       s=$(timeout 5 nvidia-smi --query-gpu=utilization.gpu,temperature.gpu --format=csv,noheader,nounits 2>/dev/null | head -n 1)
+      held || exit 0
       [[ $s =~ ^([0-9]+),\ *([0-9.]+)$ ]] && mkdir -p "$(dirname "$log")" \
-        && printf 'gpu\t%s\t%s\t%s\t%s\t%s\n' "$(date +%s)" "$1" "${INCOMING_GPU_RENEW:-30}" "${BASH_REMATCH[1]}" "${BASH_REMATCH[2]}" >> "$log"
+        && printf 'gpu\t%s\t%s\t%s\t%s\t%s\n' "$(date +%s)" "${DELEGATE_TASK:-$1}" "${INCOMING_GPU_RENEW:-30}" "${BASH_REMATCH[1]}" "${BASH_REMATCH[2]}" >> "$log"
     done
   ) &
 }
 
-# Cool-down before a new GPU client, called before the lease is taken (a cooling caller holds no lease that could
-# expire): while the GPU is at or above INCOMING_GPU_COOL °C (80), wait (poll INCOMING_GPU_COOL_POLL s, 15) until it is
-# INCOMING_GPU_COOL_TO °C (70) or below, at most INCOMING_GPU_COOL_MAX s (180: inside sandbox startup's deadline).
-# The laptop GPU under shader-pack frames at 2560×1440 runs 97 % busy at 86 °C median, 92 °C max, above its slowdown
-# point (87 °C). No nvidia-smi or a sensor that does not answer in 5 s: no wait.
+# Cool-down at the handoff to a new GPU client (gpu_client_hold, after the lease and the client lock are ours, so no one
+# else starts meanwhile and the just-renewed lease cannot expire): while the GPU is at or above INCOMING_GPU_COOL °C (80),
+# wait (poll INCOMING_GPU_COOL_POLL s, 15) until it is INCOMING_GPU_COOL_TO °C (70) or below, at most
+# INCOMING_GPU_COOL_MAX s (180) of wall time. The laptop GPU under shader-pack frames at 2560×1440 runs 97 % busy at
+# 86 °C median, 92 °C max, above its slowdown point (87 °C). No nvidia-smi or a sensor that does not answer in 5 s: no
+# wait. sandbox.sh also cools before its startup deadline starts.
 gpu_temp() { timeout 5 nvidia-smi --query-gpu=temperature.gpu --format=csv,noheader,nounits 2>/dev/null | head -n 1; }
 gpu_cool() {
-  local t waited=0 said=
-  while [ "$waited" -lt "${INCOMING_GPU_COOL_MAX:-180}" ] && t=$(gpu_temp) && t=${t%%.*} && [[ $t =~ ^[0-9]+$ ]] \
+  local t said= end=$((SECONDS + ${INCOMING_GPU_COOL_MAX:-180}))
+  while [ "$SECONDS" -lt "$end" ] && t=$(gpu_temp) && t=${t%%.*} && [[ $t =~ ^[0-9]+$ ]] \
       && { [ -n "$said" ] && [ "$t" -gt "${INCOMING_GPU_COOL_TO:-70}" ] || [ "$t" -ge "${INCOMING_GPU_COOL:-80}" ]; }; do
     [ -z "$said" ] && { echo "$(date +%T) GPU at $t °C: cooling to ${INCOMING_GPU_COOL_TO:-70} °C before the next client" >&2; said=1; }
-    sleep "${INCOMING_GPU_COOL_POLL:-15}"; waited=$((waited + ${INCOMING_GPU_COOL_POLL:-15}))
+    sleep "${INCOMING_GPU_COOL_POLL:-15}"
   done
   return 0
 }
