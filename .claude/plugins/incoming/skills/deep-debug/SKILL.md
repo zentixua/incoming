@@ -88,6 +88,30 @@ Traps: Dynamic FPS caps to 15 FPS exactly after 300 s (`dynamic_fps.json` `{"idl
 quality ladder step, compare only equal steps; in the `mushroom` scenario the firestorm sometimes dies out (check
 `burning` in SCENARIO lines before comparing); GPU clocks jump.
 
+## Checklist: look defect (our picture against the reference)
+
+A look task converges only when the target is fixed, measured the same way on both sides, and drawn by a representation
+that can produce it. Tuning constants inside a representation that cannot is the slow failure: no number moves.
+
+- **Target, frozen.** In the plan, before code: the reference frames (real footage, then film VFX; never another
+  renderer's look, such as a shader pack's clouds, as the reference), Artem's decisions, the judge's views and the done
+  numbers. Judge in vanilla (AGENTS.md "Vanilla first"); a shader pack gets one "not broken" check.
+- **Gate script proven on the reference.** The script that gates our frames (crop, mask, luma, hue/saturation, contrast
+  p90/p10, feature size, churn per second) first runs on the reference: it must pass the reference and fail the current
+  `main` frame on the reported defect. Otherwise it does not measure the defect.
+- **Existing system first.** Name the mod system that already draws the nearest phenomenon and show one frame of it at the
+  target's scale: billows, dust rings and smoke are lit puffs (`far/SmokePuffs`, six-way light maps; sources
+  `FrontDust`, `BlastDust`); seeing inside dust is distance fog; thin haze is the pall march. A new renderer only when
+  that frame shows why the existing one fails.
+- **Picture apart from physics.** The drawing takes where, when and how much from the law; probes, sound and gameplay
+  read the law, never the drawing, so a look change cannot move a physical quantity or break its tests.
+- **Prototype before integration** (about 2 h): CPU vanilla frames of the chosen representation at the judge's views,
+  beside the reference and `main`, before any law, probe or budget work.
+- **Rounds.** One short CPU job per question (minutes), read as soon as it ends; each round changes the cause the last
+  one named by number. Three rounds or the timebox without a measured shift: stop for the root cause (AGENTS.md).
+- **Judge.** A fresh Claude session gets `main`|PR pairs, the reference frames, the law's numbers for the scene and the
+  done numbers; never the author's notes. Codex reviews the code only.
+
 ## Checklist: bug from Artem's game
 
 - His whole log: `latest.log` and rotated `logs/*.log.gz` for the session, `crash-reports/`, the server log for the
