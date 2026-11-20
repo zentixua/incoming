@@ -87,6 +87,9 @@ final class NewbieWalk {
     private boolean started;
     private String lang = "en";
     private Vec3 ground;
+    /** Platform the player stands on, and the bearing (degrees off north) with open sight to every target. */
+    private volatile BlockPos platform;
+    private double bearing;
 
     private interface Step {
         boolean done(int t);
@@ -140,16 +143,18 @@ final class NewbieWalk {
         run(() -> onServer(server -> {
             ServerPlayer p = player(server);
             server.overworld().setDayTime(5000);
-            // A glass platform 30 blocks above the ground: open sight to every target, out of every blast.
+            // A stone platform 30 blocks above the ground, out of every blast; the targets lie where the sight is open.
             int x = p.getBlockX(), z = p.getBlockZ();
             int y = server.overworld().getHeight(Heightmap.Types.MOTION_BLOCKING, x, z) + 30;
             for (int dx = -2; dx <= 2; dx++) for (int dz = -2; dz <= 2; dz++)
-                server.overworld().setBlockAndUpdate(new BlockPos(x + dx, y - 1, z + dz), Blocks.GLASS.defaultBlockState());
+                server.overworld().setBlockAndUpdate(new BlockPos(x + dx, y - 1, z + dz), Blocks.STONE.defaultBlockState());
             p.teleportTo(server.overworld(), x + 0.5, y, z + 0.5, 180, 0);
+            platform = new BlockPos(x, y, z);
             Incoming.LOG.info("NEWBIE start: operator {}, game mode {}, platform {} {} {}", p.hasPermissions(2), p.gameMode.getGameModeForPlayer(), x, y, z);
         }));
         await(100);
         until("chunks drawn", 3600, () -> mc.levelRenderer.hasRenderedAllSections() && mc.levelRenderer.countRenderedSections() > 200);
+        run(this::findBearing);
         pass();
         run(() -> {
             lang = "ru";
@@ -170,6 +175,13 @@ final class NewbieWalk {
 
     /** One language: a non-operator's path, every weapon's first strike, every refusal we can cause alone, the operator's nuke. */
     private void pass() {
+        // back on the platform, healthy, whatever the previous pass left
+        run(() -> onServer(server -> {
+            ServerPlayer p = player(server);
+            p.setHealth(p.getMaxHealth());
+            p.teleportTo(server.overworld(), platform.getX() + 0.5, platform.getY(), platform.getZ() + 0.5, (float) bearing + 180, 0);
+        }));
+        await(20);
         basics();
         firstStrikes();
         refusals();
@@ -523,9 +535,32 @@ final class NewbieWalk {
 
     private boolean targetLoaded(double distance, double yaw) {
         Vec3 eye = mc.player.getEyePosition();
-        double a = Math.toRadians(yaw);
+        double a = Math.toRadians(bearing + yaw);
         int x = (int) Math.floor(eye.x + Math.sin(a) * distance), z = (int) Math.floor(eye.z - Math.cos(a) * distance);
         return mc.level.getChunkSource().getChunk(x >> 4, z >> 4, false) != null;
+    }
+
+    /** The bearing whose five strike targets (280 blocks out, 25° apart) the eye sees unobstructed: hills in between would take the strikes. */
+    private void findBearing() {
+        Vec3 eye = mc.player.getEyePosition();
+        int best = -1;
+        for (int b = 0; b < 360; b += 5) {
+            int clear = 0;
+            for (int i = -2; i <= 2; i++) {
+                double a = Math.toRadians(b + i * 25);
+                int x = (int) Math.floor(eye.x + Math.sin(a) * 280), z = (int) Math.floor(eye.z - Math.cos(a) * 280);
+                if (mc.level.getChunkSource().getChunk(x >> 4, z >> 4, false) == null) continue;
+                Vec3 t = new Vec3(x + 0.5, mc.level.getHeight(Heightmap.Types.MOTION_BLOCKING, x, z) + 0.5, z + 0.5);
+                var hit = mc.level.clip(new net.minecraft.world.level.ClipContext(eye, t, net.minecraft.world.level.ClipContext.Block.OUTLINE,
+                        net.minecraft.world.level.ClipContext.Fluid.NONE, mc.player));
+                if (hit.getType() == net.minecraft.world.phys.HitResult.Type.MISS || hit.getLocation().distanceTo(t) < 6) clear++;
+            }
+            if (clear > best) {
+                best = clear;
+                bearing = b;
+            }
+        }
+        Incoming.LOG.info("NEWBIE bearing {}°: {} of 5 targets in open sight", bearing, best);
     }
 
     private EditBox editBox() {
@@ -537,7 +572,7 @@ final class NewbieWalk {
     /** Look from the platform at the ground {@code distance} blocks away, {@code yaw} degrees off north. */
     private void aimAt(double distance, double yaw) {
         Vec3 eye = mc.player.getEyePosition();
-        double a = Math.toRadians(yaw);
+        double a = Math.toRadians(bearing + yaw);
         int x = (int) Math.floor(eye.x + Math.sin(a) * distance), z = (int) Math.floor(eye.z - Math.cos(a) * distance);
         if (mc.level.getChunkSource().getChunk(x >> 4, z >> 4, false) == null) Incoming.LOG.warn("NEWBIE target chunk {} {} not loaded", x, z);
         ground = new Vec3(x + 0.5, mc.level.getHeight(Heightmap.Types.MOTION_BLOCKING, x, z), z + 0.5);
