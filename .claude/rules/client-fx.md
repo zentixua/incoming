@@ -1110,12 +1110,17 @@ paths:
   48-Gaussian cap. A frozen 0.5° yaw changed finer counts from 50 to 48 and previously removed an entire merge pass
   (24 -> 48 final Gaussians), causing a transmittance jump despite stable quad detail and place spacing.
   Budget/world reset and an empty veil frame clear this history.
-  At a vertex — softness toward the world (`Veil.soft`): the vertex fades toward the world by the same `fx.fsh` as the
-  soft edge of a quad, and half of the veil the world takes where half its opacity accumulates along the ray
-  (`Veil.half`: the matter — a segment by the mean and spread over the thickness, `sightMoments`, a truncated Gaussian;
-  for a dense one — nearer the start): a house in front of a distant cloud in the veil does not sink into it, and in
-  dense smoke around the eye a wall a few metres away is already almost hidden (⚠ linear descent —
-  approximation of the optical depth in front of the scene; formerly veil hid everything beyond 2 blocks).
+  At a vertex — where its matter lies along the ray (`Veil.from`, `Veil.scale`; `fx.fsh` `veilBefore`, vertex mode
+  `FxQuads.VEIL`): a Gaussian along the ray cut at the eye, so the world at distance x takes the Beer–Lambert share
+  (1 − e^(−τ(x)))/(1 − e^(−τ)) of the vertex's opacity. The eye inside the matter: the middle at the eye and the width
+  that makes the slope there the matter's extinction at the eye (`eyeSigma` × share; τ as the shader reads it from the
+  byte alpha, at most −ln 0.001, `Veil.shaderTau`: with the true τ the slope came out 4.7× too low along a SAM trail);
+  the matter ahead: its middle and spread along the ray (`sightMoments`). A house in front of a distant cloud keeps its
+  colour; inside dust a block keeps e^(−σd) of its contrast. A linear ramp from the mesh (2 m) lays the whole veil on
+  everything past ~3 m, a flat screen (B-2 ×12 at 10 s, marker at 4.7 m: T 0.014 against the law's 0.127), and puts a
+  fresh cloud's matter behind a crisp street (3 s: T ≈ 1 against ≈ 0). `SmokePuffsTest.veilFadesToTheWorld…`
+  holds the share within 0.2 and the world's transmittance within 20 % where it exceeds 0.05 (trail, distant clump,
+  thin haze, the eye off the middle of a dense dust cloud).
   The mesh remains near the eye, but it blends at its matter's half-opacity depth (`Veil.depth`, alpha-weighted mean
   over all nodes), one key for every cell. In the projection-matched CPU trace, the old 2 m key put veil matter at
   96–109 m over textured clumps starting at 16–17 m, erasing their detail. Reordering preserves T, so a
