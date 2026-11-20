@@ -224,6 +224,12 @@ final class Sandbox {
     private double closest = Double.MAX_VALUE;
     /** Nuke near the camera: how many runs there were (site — {@link #nearSite}). */
     private int nearRuns;
+    /**
+     * What the take's second 0 is, written into capture.json ({@code clock}) and every {@code SANDBOX shot} line: the
+     * effect's start, or for {@code nuke … near} the front's arrival at the houses, the burst that many seconds earlier.
+     * A frame time read as seconds after the burst misled a review (20.11: "stale puffs" that were the burst's own dust).
+     */
+    private String clock = "effect start";
 
     /** Effect snapshot: frames at the seconds {@code times}, sound {@code wavSeconds}. */
     private static final class Capture {
@@ -926,6 +932,7 @@ final class Sandbox {
     /** Effect starts at tick {@code at} (not before it): frame and sound clocks from it. */
     private void begin(int at) {
         pending = null;
+        clock = "effect start";
         effectTick = at;
         Incoming.LOG.info("SANDBOX effect {} at {} tick {} (now {}) audio {}", pendingCmd, xyz(site), at, tick, audioBytes());
         capture = armed;
