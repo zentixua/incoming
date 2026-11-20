@@ -194,11 +194,9 @@ times and the pall's budget are not frame costs: frame cost belongs to the GPU a
 - Measured 20.11 (flat sandbox, 1280×720, `blast drone`): laptop (16 threads, `LP_NUM_THREADS` 8) start 240 s cold,
   shot 18 s for frames alone, 36 s with the sound take; unit memory peak 3.0 GB at `-Xmx3g`. netcup (12 vCPU beside
   three game servers) start 138 s cold, shot 40–45 s, peak 3.0 GB at `INCOMING_SOFT_HEAP=1536m`.
-- netcup: a clone in `~/incoming-soft`, Java 21 in `~/jdk-21*`, mods from `tools/fetch_runtime_mods.py`; Gradle with
-  `ORG_GRADLE_PROJECT_noRecompile=1 ORG_GRADLE_PROJECT_mcModsDir=run/ci-mods GRADLE_OPTS="-Dorg.gradle.daemon=false
-  -Xmx1200m"` (`-PnoRecompile`: binary Minecraft; Vineflower's decompile was OOM-killed under a 3.5 GB ceiling),
-  `INCOMING_SOFT_HEAP=1536m` (ceiling 3 GB leaves the host's 4 GB floor beside its servers). One client there at a time;
-  copy frames back with `scp`.
+- A host with little free memory (a server beside game servers): Gradle with `-PnoRecompile` (binary Minecraft:
+  Vineflower's decompile needs ~4 GB and was OOM-killed under a 3.5 GB ceiling), mods from `tools/fetch_runtime_mods.py`
+  (`-PmcModsDir=run/ci-mods`), no Gradle daemon, `INCOMING_SOFT_HEAP=1536m` (ceiling 3 GB); one client at a time.
 
 ## Pitfalls
 - Server may lag client ticks during world generation: client-scenario frames anchor to events, not a counter.
