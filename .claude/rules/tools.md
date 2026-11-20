@@ -40,31 +40,35 @@ Prism: `~/.var/app/org.prismlauncher.PrismLauncher/data/PrismLauncher/` (`tools/
                                            files only, safe on a live server's world): share of built blocks still in place by
                                            kind and distance ring, one-block spikes left standing, block columns at --spot=x,z
     client_scenario.sh <scenario> [shaders] [dh] [voxy] [lss] [gpu] ← client without a window (KWin virtual + Xwayland), frames and sound in WAV;
-                                           on the CPU unless shaders/dh/voxy/lss/vista/gpu (run it bare: Gradle writes the launch
+                                           vanilla (shared GPU slot or CPU) unless shaders/dh/voxy/lss/vista/gpu (run it bare: Gradle writes the launch
                                            script, then the client goes into its own laptop_job.sh --soft unit);
                                            its Gradle step and another Gradle run in the same tree (GameTest) collide on
                                            downloadAssets: start the second after the client's launch script exists;
                                            scenarios and what each captures: in the script header
-    sandbox.sh start|fx|swap|shot|restart|stop|jbr ← effects sandbox (on the CPU unless shaders/dh/gpu): a client with only the mod (+ Iris with a shaderpack, DH) in a
+    sandbox.sh start|fx|swap|shot|restart|stop|jbr ← effects sandbox (vanilla: shared GPU slot or CPU, unless shaders/dh/gpu): a client with only the mod (+ Iris with a shaderpack, DH) in a
                                            flat world, an effect by the /fx command in seconds, hot code swap and
-                                           resource reload without a new client, frames and WAV in one command (`shot`);
+                                           resource reload without a new client, frames and WAV in one command (`shot`; `--at none`
+                                           sound only, its take in a 160×90 window at 20 fps);
                                            a nuke at the camera: `nuke 15 near`; how to work: client-scenario.md,
                                            “Effects sandbox”; check without a client: test_sandbox.sh (CI)
     nested_kwin.sh                       ← nested KWin for the client: no window and no host sound, its own D-Bus bus without starting services
                                            (nested_kwin_bus.conf) and XDG directories; takes the GPU lease and the client lock
                                            (gpu_lease.sh); exit 75 means whoever holds the GPU; with INCOMING_SOFT=1 a CPU session
-                                           (soft_gl.sh): no lease or lock, socket wayland-incoming-soft-…
-    soft_gl.sh                           ← CPU rendering (Mesa llvmpipe) for no-shader clients, sourced: GL vendor/thread/heap
+                                           (soft_gl.sh): no lease or lock, socket wayland-incoming-soft-…; with INCOMING_GPU_SHARED=1
+                                           a vanilla client on a shared GPU slot (its caller's slot lock, socket wayland-incoming-shared-…)
+    soft_gl.sh                           ← vanilla clients, sourced: vanilla_display (shared GPU slot, else CPU at once), CPU rendering (Mesa llvmpipe): GL vendor/thread/heap
                                            environment, memory ceiling and admission, CPU display (nested KWin on a
-                                           wayland-incoming-soft-<name> socket, else xvfb-run); details: client-scenario.md, “CPU rendering”
-    laptop_job.sh [--gpu|--light|--soft] <name> -- <command> ← heavy job on the host's laptop: its own temporary systemd service
+                                           wayland-incoming-soft-<name> socket, else xvfb-run); details: client-scenario.md, “Vanilla rendering”
+    laptop_job.sh [--gpu|--light|--soft] [--full] <name> -- <command> ← heavy job on the host's laptop: its own temporary systemd service
                                            (not in the Claude group), the laptop does not sleep, everything of it is stopped on exit; no queue;
                                            --gpu [--wait] takes the GPU lease of its session (another session's: refusal 75; with
                                            --wait, in the lease queue) and waits until Artem's game is closed; his game started during the
                                            job (polled every second) stops it: “Artem's game started at T: job stopped”, exit 75;
                                            at the end, “laptop_job <name>: exit N”; --status: what runs and who holds the GPU;
-                                           --soft: a CPU-rendered client, no lease, CPUWeight=idle, MemoryMax from soft_gl.sh, no swap,
-                                           not stopped by Artem's game; without a sleep inhibitor where none is allowed (a server);
+                                           --soft: a vanilla client (shared GPU slot or CPU), no lease, CPUWeight=idle, MemoryMax from soft_gl.sh, no swap;
+                                           every job has a memory ceiling (--ceiling <mode>): 10 GB + 4 GB swap, --full (whole pack) 20 GB,
+                                           from measured unit peaks; past it the unit stops itself and the output says “memory ceiling …
+                                           reached”; INCOMING_JOB_MEM/INCOMING_JOB_SWAP for one job; without a sleep inhibitor where none is allowed (a server);
                                            TERM/Ctrl+C on laptop_job.sh stops its service (the client never outlives the command)
                                            task load: at stop (ExecStopPost `laptop_job.sh --account`) the unit's CPU from its cgroup
                                            goes to the load log (`cpu` row, task = DELEGATE_TASK set by `delegate`; job and task
@@ -86,6 +90,10 @@ Prism: `~/.var/app/org.prismlauncher.PrismLauncher/data/PrismLauncher/` (`tools/
                                            an honest queue (FIFO): a free GPU goes to the first waiter; status: who holds it and
                                            who waits; at most INCOMING_GPU_QUEUE_MAX (2) other sessions wait, a newcomer beyond is refused (75);
                                            a nested KWin on a wayland-incoming-soft-… socket is a CPU session, not a GPU client;
+                                           shared slots (gpu_slot_take, INCOMING_GPU_SLOTS 3, `$LEASE.slot<N>` locks plus a shared hold of the
+                                           client lock, so any exclusive client, also an older script's, is refused by the kernel): vanilla
+                                           clients on the GPU beside each other, never while the lease is held or queued for, never waiting
+                                           (busy admission is a CPU fallback); the lease side sees them as busy;
                                            while a client holds the lock, each renewal appends a `gpu` row (utilization) billed to
                                            the client's DELEGATE_TASK to the load log (DELEGATE_LOAD_LOG, default
                                            ~/.local/state/delegate/load.tsv), only while that client still holds the lock;
@@ -93,6 +101,7 @@ Prism: `~/.var/app/org.prismlauncher.PrismLauncher/data/PrismLauncher/` (`tools/
     logtime.py                           ← time of Minecraft log lines for digests of laptop tasks
     free_port.py                         ← a free port on 127.0.0.1 for check servers (stress.sh, mp_scenario.sh)
     rig_procs.sh                         ← processes of checks in their own sessions (source from stress.sh, mp_scenario.sh): the script's exit kills them with the JVM
+    probes/                              ← review probes kept as regression tests (run by test_gpu_lease.sh, test_sandbox.sh)
     test_rig_procs.sh                    ← check of rig_procs.sh (CI): Ctrl+C, TERM, end of script, a foreign session, fd, RIG_GRACE timeout: no orphans
     look_gate/run.sh <name> <tree> [scenes] ← picture-and-sound gate: ProbeScenario scenes under Iris with the whole build (README.md
                                            there): only a one-off comparison with 3.4.1, then to be removed; hearing always without deafening, sampling in the order of the reference and in the air of its game time;

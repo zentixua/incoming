@@ -2,7 +2,7 @@
 # Effects sandbox check without a client (CI, "Остановка проверок"): `shot` sets time before the effect, not after
 # (23.10: 0,1 and 0,5 s "night" frames were daytime), separately for each shot (without --time, day); `shaders` and `dh`
 # without their mods in the sandbox directory refuse with a message, rather than capturing without Iris or DH (23.10: FX captured "under Iris" without Iris);
-# on a CPU renderer `shot` records sound in its own unslowed take; CPU client memory ceiling, admission, GL environment
+# on a CPU renderer `shot` records sound in its own unslowed take, `--at none` only that take; CPU client memory ceiling, admission, GL environment
 # and socket naming (tools/soft_gl.sh).
 set -uo pipefail
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
@@ -88,16 +88,27 @@ real_cut_wav "$tmp/nosound.json" "$tmp/nosound.wav" 2>/dev/null && bad "cut_wav 
 : > "$tmp/limit.log"
 ( shot n6 'blast drone' --at 1,600, --wav 0 --no-swap ) >/dev/null 2>&1
 grep -qx '15600 blast drone' "$tmp/limit.log" && ok "CPU shot deadline from the last frame, trailing comma too" || bad "CPU deadline: $(tr '\n' ';' < "$tmp/limit.log")"
+# sound only (--at none) on a CPU renderer: no frame take, one sound take (its quiet window is Sandbox.quiet, in the
+# client), WAV and capture.json in the shot's directory on a fresh tree (no fx/out yet)
+rm -rf "$FX/out"; : > "$tmp/fx.log"
+( shot n7 'real missile' --at none --wav 2 --no-swap ) >/dev/null 2>&1; rc=$?
+[ $rc = 0 ] && [ "$(grep -c '^shots' "$tmp/fx.log")" = 1 ] && grep -qE '^shots \.wav-n7-[A-Za-z0-9]+ none@0 2$' "$tmp/fx.log" \
+  && [ "$(grep -cx 'real missile' "$tmp/fx.log")" = 1 ] && ok "CPU sound-only shot: one sound take, no frame take" || bad "CPU sound-only shot: rc $rc $(tr '\n' ';' < "$tmp/fx.log")"
+python3 -c 'import json,sys,wave; w=wave.open(sys.argv[1]); a=json.load(open(sys.argv[2])); sys.exit(0 if abs(w.getnframes()/w.getframerate()-2)<0.01 and a["frames"]==[] and a["audio"]["seconds"]==2 else 1)' \
+  "$FX/out/n7/n7.wav" "$FX/out/n7/capture.json" 2>/dev/null && ok "CPU sound-only shot: WAV and capture.json" || bad "CPU sound-only shot output: $(ls "$FX/out" "$FX/out/n7" 2>&1 | tr '\n' ' ')"
 : > "$tmp/fx.log"; echo gpu > "$FX/renderer"
 ( shot n4 'blast drone' --at 0.5 --wav 2 --no-swap ) >/dev/null 2>&1
 [ "$(grep -c '^shots' "$tmp/fx.log")" = 1 ] && grep -qx 'shots n4 0.5 2' "$tmp/fx.log" && ok "GPU shot: one take with sound" || bad "GPU shot: $(tr '\n' ';' < "$tmp/fx.log")"
+
+# review probe: an empty shot name never replaces fx/out, and any valid effect text keeps capture.json valid
+out=$(bash "$ROOT/tools/probes/sound-only-output.sh" "$ROOT" 2>&1) && ok "probe sound-only-output" || bad "probe sound-only-output: $out"
 
 source "$ROOT/tools/soft_gl.sh"
 long=$(printf 'x%.0s' $(seq 80))
 [ "$(tree_id /a/wt-main)" != "$(tree_id /b/wt-main)" ] && [[ $(tree_id /a/wt-main) == wt-main-* ]] && [ ${#long} = 80 ] && [ "$(tree_id "/a/$long" | wc -c)" -le 48 ] && ok "tree id: alike names in different places differ" || bad "tree_id"
 [ "$(printf 'MemoryCurrent=1048576000\nMemoryMax=4831838208\n\nMemoryCurrent=5890895872\nMemoryMax=infinity\n\nMemoryMax=3221225472\nMemoryCurrent=[not set]\n' | soft_mem_headroom)" = 6680 ] \
   && ok "promised memory: unused ceilings of CPU clients only, in either property order" || bad "soft_mem_headroom"
-[ "$(INCOMING_SOFT_HEAP=3g soft_mem_cap)" = 4608 ] && [ "$(INCOMING_SOFT_HEAP=1536m soft_mem_cap)" = 3072 ] && ok "CPU client ceiling: heap + 1.5 GB" || bad "soft_mem_cap"
+[ "$(INCOMING_SOFT_HEAP=3g soft_mem_cap)" = 5120 ] && [ "$(INCOMING_SOFT_HEAP=1536m soft_mem_cap)" = 3584 ] && ok "vanilla client ceiling: heap + 2 GB" || bad "soft_mem_cap"
 out=$(INCOMING_SOFT_RESERVE_MB=100000000 soft_mem_ok 2>&1); rc=$?
 [ $rc = 75 ] && [[ $out == *"soft client refused"* ]] && ok "CPU client refused when memory is short" || bad "soft_mem_ok: $rc $out"
 ( soft_gl_env; [ "$__GLX_VENDOR_LIBRARY_NAME" = mesa ] && [ "$LIBGL_ALWAYS_SOFTWARE" = 1 ] && [ -n "$INCOMING_CLIENT_HEAP" ] && [ "$LP_NUM_THREADS" -ge 1 ] ) \
