@@ -4,6 +4,7 @@
 #moj_import <incoming:mushroom.glsl>
 #moj_import <incoming:scene.glsl>
 #moj_import <incoming:heat.glsl>
+#moj_import <incoming:see.glsl>
 
 // Conventional flash/fire light on the world and heat haze above fire (client/fx/layer/HeatPass): fullscreen pass after
 // pall, before layer quads, using a frame copy (Sampler0); writes the whole pixel.
@@ -33,6 +34,9 @@ uniform sampler2D Sampler1;
 // direct source visibility from half-resolution pass (fx_heat_shadow): ball codes (r), jet codes (g),
 // sample world distance along view (b)
 uniform sampler2D Sampler2;
+// a see-through surface in front of the world (SceneDepth: Sampler1 g, its distance): the frame copy holds the window over
+// what lies behind it, so the bend reaches only as far as the window (as without see-through)
+uniform float FxSee;
 
 uniform mat4 InvViewProj;
 uniform vec3 PallForward;
@@ -346,6 +350,9 @@ void main() {
     vec3 dir0 = normalize(far0.xyz / far0.w);
     float depth0 = pallScene(texelFetch(Sampler1, ivec2(here), 0).r);
     float dist0 = depth0 >= 1e8 ? 1e8 : depth0 / max(dot(dir0, PallForward), 1e-3);
+    // refraction bends the frame copy, whose pixel holds a see-through surface over the world behind it: only air in front
+    // of the surface may move it
+    if (FxSee > 0.5) dist0 = min(dist0, texelFetch(Sampler1, ivec2(here), 0).g / max(dot(dir0, PallForward), 1e-3));
     vec2 shift = HeatFrame.w > 0.0 ? heatShift(dir0, dist0) : vec2(0.0);
     vec2 front = vec2(0.0);
     if (HeatFrame.x > 0.0) {

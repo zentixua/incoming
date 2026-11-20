@@ -1,7 +1,7 @@
 #version 150
 
 // Water decal (client/fx/layer/WaterDecal): dark nuclear-wave front ring, post-front wind ripples, and whitecap foam
-// near epicenter. Pixel position from view-axis world distance (Sampler0, SceneDepth) and frame
+// near epicenter. Pixel position from view-axis distance to the nearest surface, the water's own top (Sampler0, SceneDepth: g) and frame
 // matrices; water means horizontal surface with neighboring pixels at same height (walls, trunks,
 // grass, mobs, slopes and object edges against sky at same within-block height are not water), at standing-water top,
 // 8/9 block (lower under shaderpack, for its waves); beyond render distance (DH LOD), sea-level surface or below-sea
@@ -52,7 +52,7 @@ vec3 unproject(vec2 ndc, float z) {
 
 // world position behind pixel relative to camera (sky: far ray point, allowing numeric differences); o is ray origin
 vec3 scene(ivec2 px, ivec2 size, out vec3 o) {
-    float dist = texelFetch(Sampler0, px, 0).r;
+    float dist = texelFetch(Sampler0, px, 0).g;
     vec2 ndc = (vec2(px) + 0.5) / vec2(size) * 2.0 - 1.0;
     // ray point at view-axis distance dist, then relative to camera position
     vec3 n = unproject(ndc, -1.0);
@@ -133,7 +133,7 @@ const float SURFACE = 8.0 / 9.0;
 void main() {
     ivec2 size = textureSize(Sampler0, 0);
     ivec2 px = ivec2(gl_FragCoord.xy);
-    if (texelFetch(Sampler0, px, 0).r > 1e8) discard;
+    if (texelFetch(Sampler0, px, 0).g > 1e8) discard;
     vec3 o;
     vec3 p = scene(px, size, o);
     vec3 ray = p - o;

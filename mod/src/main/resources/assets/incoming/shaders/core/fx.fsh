@@ -3,6 +3,7 @@
 #moj_import <incoming:pall.glsl>
 #moj_import <incoming:fx_balls.glsl>
 #moj_import <incoming:bloom.glsl>
+#moj_import <incoming:see.glsl>
 
 // Effects layer (client/fx/layer). Blending ONE, ONE_MINUS_SRC_ALPHA: colour — light already multiplied by
 // opacity, alpha — how much of what lies behind the particle is covered (sparks and halos: 0 — light adds up).
@@ -39,6 +40,10 @@ uniform float FxHalf;
 uniform vec4 FxHalfSplit;
 uniform sampler2D HalfCut;
 flat in float quadPlace;
+// see-through surfaces in front of the world (see.glsl): their own light and transmittance (SceneDepth.bindSee: own texture
+// unit), their distance in the world distance texture (g); FxSee 1 — present this frame
+uniform sampler2D FxGlass;
+uniform float FxSee;
 
 in vec2 texCoord0;
 in vec4 vertexColor;
@@ -315,6 +320,18 @@ void main() {
     // colour at the draw edge would cover the bands of plume trails and the distant picture of explosions, which particles replace there
     seen *= 1.0 - fog * FxFogColor.a;
     fragColor = color * seen * ColorModulator;
+    // a see-through surface between the eye and this fragment (glass, ice, a portal, water seen from below): the fragment
+    // reaches the eye as the world behind the surface does, under the surface's own light (see.glsl); a halo behind it
+    // glows by the share it lets through
+    float through = 1.0;
+    if (FxSee > 0.5) {
+        vec2 at = frag / ScreenSize;
+        if (seeBehind(viewDistance, texture(Sampler1, at).g)) {
+            vec4 g = texture(FxGlass, at);
+            through = g.a;
+            if (FxGlowPass.x < 0.5) fragColor.rgb = seeThrough(fragColor.rgb, fragColor.a, g);
+        }
+    }
     // the half-resolution target is float: clamp as the 8-bit frame does before blending (NaN — nothing)
     if (FxHalf > 0.5) fragColor = any(isnan(fragColor)) ? vec4(0.0) : clamp(fragColor, 0.0, 1.0);
     // 8-bit frame: the smooth veil of matter at the eye (the ray grid, SmokePuffs.Veil) and the faint edges of puffs without mixed-in
@@ -330,6 +347,6 @@ void main() {
         if (emitGain > 0.0 && emitSpot < 0.5) emits = 1.0;
         float covers = bloomCovers(fragColor.a, max(fragColor.r, max(fragColor.g, fragColor.b)), emits);
         fragCover = vec4(covers, 0.0, 0.0, fragColor.a);
-        fragColor = vec4(glow * seen * ColorModulator.rgb, fragColor.a);
+        fragColor = vec4(glow * seen * through * ColorModulator.rgb, fragColor.a);
     }
 }

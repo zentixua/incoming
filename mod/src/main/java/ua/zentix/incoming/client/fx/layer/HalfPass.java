@@ -195,7 +195,8 @@ final class HalfPass {
                 for (int i = 0; i < rects.length; i++) rects[i] = GlStateManager._genTexture();
             }
             texture(accum, GL30.GL_RGBA16F, GL11.GL_RGBA, hw, hh);
-            texture(depth, GL30.GL_R32F, GL11.GL_RED, hw, hh);
+            // r: world distance (the soft edge), g: to the nearest surface, see-through or not (the composite's key)
+            texture(depth, GL30.GL_RG32F, GL30.GL_RG, hw, hh);
             boolean ok = attach(accumFbo, accum) && attach(depthFbo, depth);
             GlStateManager._glBindFramebuffer(GL30.GL_DRAW_FRAMEBUFFER, draw);
             if (!ok) {
