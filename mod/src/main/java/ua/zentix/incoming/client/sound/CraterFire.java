@@ -47,7 +47,7 @@ final class CraterFire {
      * relevel of the file (at the ceiling, 8.1 dB louder, a 2 MW fire went silent at 790 m instead of 1630 m — review R11).
      */
     static float volume(Sources.Source source, double watts, Vec3 pos, Vec3 ear, Propagation.Weather weather) {
-        Sources.Source s = source.power(Sources.flame(watts, source.spectrum()));
+        Sources.Source s = source.power(Sources.poolFlame(watts, source.spectrum()));
         double gain = Sources.gain(s, pos, ear, weather);
         return gain > 0 ? Loudness.volume(gain, s.fileLufs()) : 0;
     }

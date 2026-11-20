@@ -529,7 +529,7 @@ SPECTRA_GOT = {}
 SOURCES_AT = {"siren", "nuke.alarm", "nuke.launch", "grid.fail", "grid.spark", "grid.hum", "grid.power_down",
               "grid.power_up", "nuke.collapse", "debris.fall", "blast.fire", "nuke.glass", "nuke.fire"}
 LUFS_GOT = {}
-# Loops whose source law gives mean power (fire roar: Sources.flame is a fraction of flame heat release) use
+# Loops whose source law gives mean power (fire roar: Sources.poolFlame is a fraction of flame heat release) use
 # mean loop loudness rather than maximum momentary: a crackling recording's loudest 400 ms exceeds its mean by 3–7 dB,
 # so normalizing to the law by that window would play equally far below it (former steady 483304: 1.7 dB). Other
 # source sounds use maximum momentary: each has its own maximum-to-mean gap (sirens 7.6 and 4.9 dB, but their
@@ -891,7 +891,7 @@ FIRE_LOOP_S, FIRE_XF_S = 12.0, 1.0
 # varies by 0.9–1.5 dB (standard deviation), 483304 by 1.0
 FIRE_CUTS = (5.0, 18.0, 46.0, 59.5)
 # Loop spectrum matches the accepted 483304 roar (the former loop segment, 0.2–14.2 s): client computes fire A-level
-# from it (Sources.flame, Spectra.BLAST_FIRE); with its own darker spectrum, A correction −5.6 dB versus −0.2, 483323 would play
+# from it (Sources.poolFlame, Spectra.BLAST_FIRE); with its own darker spectrum, A correction −5.6 dB versus −0.2, 483323 would play
 # 3.5–5 dB quieter at the same power. Correction applies between these frequencies (spec octaves 63 Hz – 8 kHz), flat beyond:
 # previews contain almost nothing above, so nothing can be raised there
 FIRE_EQ_LO, FIRE_EQ_HI = 30, 14000

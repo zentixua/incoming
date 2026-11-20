@@ -7,7 +7,7 @@ import java.util.Arrays;
 
 /**
  * Fire roar at the ear from source law, without Minecraft (covered by a unit test): each fire has heat release,
- * W; fraction {@link Sources#FLAME_EFFICIENCY} becomes sound (turbulent flame noise, {@link Sources#flame}); fires
+ * W; fraction {@link Sources#FLAME_EFFICIENCY} becomes sound (turbulent flame noise); fires
  * at different sites are incoherent, so powers add. Path to ear is ISO 9613 ({@link Propagation}), volume is
  * {@link Loudness}.
  * <p>

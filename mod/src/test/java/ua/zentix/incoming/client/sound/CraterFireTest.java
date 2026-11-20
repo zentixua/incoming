@@ -40,9 +40,32 @@ class CraterFireTest {
         assertEquals(0, CraterFire.heat(ua.zentix.incoming.client.fx.FuelBurn.at(m.pool, net.minecraft.core.BlockPos.ZERO), m.poolSeconds + 2, distance));
     }
 
+    /**
+     * A missile crater pool's roar at 20 and 100 m (open meadow path at night, ear 1.62 m) from the measured pool-flame
+     * efficiency ({@link Sources#POOL_FLAME_EFFICIENCY}): the level a player hears beside the crater. The estimated 10⁻⁶
+     * gave 8.2 dB more at every distance.
+     */
+    @Test
+    void missilePoolRoarsAtItsMeasuredLevel() {
+        CloudModel m = model(WeaponType.MISSILE);
+        Vec3 ear = new Vec3(0, 65.62, 0);
+        double lwA = Sources.poolFlame(m.poolWatts, Spectra.BLAST_FIRE);
+        double[] at = new double[2];
+        int i = 0;
+        for (double d : new double[]{20, 100}) {
+            Vec3 pos = new Vec3(d, 64, 0);
+            Propagation.Path path = Propagation.Path.over(pos.distanceTo(ear), ua.zentix.incoming.strike.Hearing.height(pos, ear), Propagation.Weather.NIGHT);
+            at[i++] = Propagation.level(lwA - Spectra.BLAST_FIRE.aWeighting(), Spectra.BLAST_FIRE, path, null);
+        }
+        System.out.printf(java.util.Locale.ROOT, "missile pool %.2f MW: LwA %.1f dBA, %.1f dBA at 20 m, %.1f dBA at 100 m%n", m.poolWatts / 1e6, lwA, at[0], at[1]);
+        assertEquals(116.5, lwA, 0.3, "missile pool sound power, dBA");
+        assertEquals(78.8, at[0], 0.3, "missile pool at 20 m, dBA");
+        assertEquals(63.7, at[1], 0.3, "missile pool at 100 m, dBA");
+    }
+
     /** Fire volume {@code watts} W in {@code d} m on an open path at night - as in {@link CraterFire#tick} (without an obstacle). */
     private static float volume(double watts, double d, Sources.Source source) {
-        return Sources.volume(source.power(Sources.flame(watts, source.spectrum())), new Vec3(d, 64, 0), new Vec3(0, 65.62, 0), Propagation.Weather.NIGHT);
+        return Sources.volume(source.power(Sources.poolFlame(watts, source.spectrum())), new Vec3(d, 64, 0), new Vec3(0, 65.62, 0), Propagation.Weather.NIGHT);
     }
 
     /**
@@ -115,7 +138,7 @@ class CraterFireTest {
                 assertEquals(now, plays(CraterFire.volume(quiet, watts, at, ear, Propagation.Weather.NIGHT)), watts + " W in " + d + " m: the file is quieter - the solution is the same");
                 boolean wasPlaying = volume(watts, d, then) >= VoiceBudget.AUDIBLE;
                 assertTrue(!wasPlaying || now, watts + " W in " + d + " m: in 6763a1c8 it sounded - it still sounds");
-                double gain = Sources.gain(Sources.BLAST_FIRE.power(Sources.flame(watts, Spectra.BLAST_FIRE)), at, ear, Propagation.Weather.NIGHT);
+                double gain = Sources.gain(Sources.BLAST_FIRE.power(Sources.poolFlame(watts, Spectra.BLAST_FIRE)), at, ear, Propagation.Weather.NIGHT);
                 assertEquals(gain > 0, now, watts + " W in " + d + " m: sounds until it drowns in the background");
                 if (now) last = d;
                 if (wasPlaying) lastThen = d;
