@@ -3326,20 +3326,27 @@ public final class SmokePuffs {
     /**
      * The same summed through at most {@code blockers} puffs of the source: those of the largest attenuation (by its
      * smoke share, as the puff's own opacity: a clump that is still the fire body, share → 0, fades in as a shadow as
-     * it fades in as smoke).
+     * it fades in as smoke). The light is taken where the puff is seen lit, its skin one σ toward the sun: the puff's
+     * own shadow inside it is its maps' (the baked billow), and its middle under a neighbour that shares its volume is
+     * not what shows. Through scattering matter the light goes on as diffuse light: two streams attenuate it as
+     * e^(−kτ), k = √(3(1 − ω')(1 − ω'g')) of the blocker's mix ({@link #shade}, the closure of {@link #thick}); never
+     * faster than the beam itself, e^(−τ) (soot: k ≈ 1.4). Pale dust (k ≈ 0.5) and droplets (k → 0) let most light
+     * through and stay pale in their own shadow; black smoke keeps a near-black core.
      */
     static void sunThrough(double[] held, int from, int to, boolean[] merged, float x, float y, float z, float key, int blockers) {
         int n = 0;
         int[] idx = new int[to - from];
-        double[] ext = new double[to - from];
+        double[] ext = new double[to - from], diffuse = new double[to - from];
         for (int j = from; j < to; j++) {
             if (merged[j]) continue;
             int q = j * FIELDS;
-            double e = (SmokeGrid.SOOT_K * held[q + 5] + SmokeGrid.dustK((float) held[q + 8], (float) held[q + 9], (float) held[q + 10]) * held[q + 6]
-                    + SmokeGrid.DROP_K * held[q + 7]) * held[q + 13];
+            double ks = SmokeGrid.SOOT_K * held[q + 5], kd = SmokeGrid.dustK((float) held[q + 8], (float) held[q + 9], (float) held[q + 10]) * held[q + 6],
+                    kw = SmokeGrid.DROP_K * held[q + 7];
+            double e = (ks + kd + kw) * held[q + 13];
             if (e > 0) {
                 idx[n] = j;
-                ext[n++] = e;
+                ext[n] = e;
+                diffuse[n++] = Math.min(1, shade(ks, kd, kw, (float) held[q + 9]));
             }
         }
         // the most attenuating first, when not all of them are summed
@@ -3350,13 +3357,15 @@ public final class SmokePuffs {
             final double[] e = ext;
             java.util.Arrays.sort(order, (a, b) -> Double.compare(e[b], e[a]));
             int[] i2 = new int[n];
-            double[] e2 = new double[n];
+            double[] e2 = new double[n], d2 = new double[n];
             for (int k = 0; k < n; k++) {
                 i2[k] = idx[order[k]];
                 e2[k] = ext[order[k]];
+                d2[k] = diffuse[order[k]];
             }
             idx = i2;
             ext = e2;
+            diffuse = d2;
             count = Math.max(0, blockers);
         }
         for (int i = from; i < to; i++) {
@@ -3366,6 +3375,9 @@ public final class SmokePuffs {
                 held[o + 17] = 1;
                 continue;
             }
+            // the puff's lit skin: one σ toward the sun (σ along the sun of its horizontal and vertical σ)
+            double skin = Math.sqrt(held[o + 3] * held[o + 3] * (1 - y * y) + held[o + 4] * held[o + 4] * y * y);
+            double sx = held[o] + x * skin, sy = held[o + 1] + y * skin, sz = held[o + 2] + z * skin;
             double tau = 0;
             // a puff among the blockers takes the next one instead of itself
             int taken = 0;
@@ -3374,7 +3386,7 @@ public final class SmokePuffs {
                 if (j == i) continue;
                 taken++;
                 int q = j * FIELDS;
-                tau += sightDepth(held[q] - held[o], held[q + 1] - held[o + 1], held[q + 2] - held[o + 2], held[q + 3], held[q + 4], ext[k], x, y, z);
+                tau += diffuse[k] * sightDepth(held[q] - sx, held[q + 1] - sy, held[q + 2] - sz, held[q + 3], held[q + 4], ext[k], x, y, z);
             }
             held[o + 17] = Math.exp(-tau);
         }

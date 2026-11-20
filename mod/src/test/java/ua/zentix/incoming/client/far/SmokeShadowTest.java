@@ -41,11 +41,11 @@ class SmokeShadowTest {
         assertTrue(through(held, 1) < 0.3, "middle " + through(held, 1));
         assertTrue(through(held, 0) < through(held, 1), "bottom " + through(held, 0));
         double overhead = through(held, 1);
-        // the same column with a low sun from the side: only the neighbours' edges (2σ off the ray) are in front,
-        // τ = 3·e^(−2)/2 from each
+        // the same column with a low sun from the side: from the puff's sunlit skin (1σ toward the sun) only the
+        // neighbours' edges (2σ off the ray) are in front, less than half of their τ = 3·e^(−2)/2 each
         for (int i = 0; i < 3; i++) puff(held, i, 0, 10 * i, 0, 5, soot);
         SmokePuffs.sunThrough(held, 0, 3, new boolean[3], 1, 0, 0, 0.8f);
-        assertEquals(Math.exp(-2 * 1.5 * Math.exp(-2)), through(held, 1), 0.03);
+        assertTrue(through(held, 1) > Math.exp(-2 * 1.5 * Math.exp(-2)) && through(held, 1) < 1, "side " + through(held, 1));
         assertTrue(through(held, 1) > 2 * overhead, "side " + through(held, 1) + " overhead " + overhead);
     }
 
@@ -92,6 +92,35 @@ class SmokeShadowTest {
             assertTrue(t <= previous, "share " + share);
             previous = t;
         }
+    }
+
+    /**
+     * Through pale dust the sunlight goes on as diffuse light (two streams, e^(−kτ), k ≈ 0.5): a dust column's lower puff
+     * stays far brighter than a soot column's of the same thickness (the beam, e^(−τ)), and the dust cloud stays pale in
+     * its own shadow, as in footage of explosion dust.
+     */
+    @Test
+    void dustLetsTheLightThroughSootDoesNot() {
+        double[] soot = new double[2 * SmokePuffs.FIELDS], dust = new double[2 * SmokePuffs.FIELDS];
+        double tau = 3 * 2 * Math.PI * 25;
+        puff(soot, 0, 0, 0, 0, 5, tau / SmokeGrid.SOOT_K);
+        puff(soot, 1, 0, 10, 0, 5, tau / SmokeGrid.SOOT_K);
+        float pale = SmokeGrid.dustAlbedo(0.6f);
+        double kd = SmokeGrid.dustK(pale, pale, pale);
+        puff(dust, 0, 0, 0, 0, 5, 0);
+        puff(dust, 1, 0, 10, 0, 5, 0);
+        for (int i = 0; i < 2; i++) {
+            int o = i * SmokePuffs.FIELDS;
+            dust[o + 6] = tau / kd;
+            dust[o + 8] = dust[o + 9] = dust[o + 10] = pale;
+        }
+        SmokePuffs.sunThrough(soot, 0, 2, new boolean[2], 0, 1, 0, 0.8f);
+        SmokePuffs.sunThrough(dust, 0, 2, new boolean[2], 0, 1, 0, 0.8f);
+        double k = SmokePuffs.shade(0, kd, 0, pale);
+        assertTrue(k > 0.3 && k < 0.8, "dust k " + k);
+        // the same blocker thickness: dust passes its power k of what soot passes
+        assertEquals(Math.pow(through(soot, 0), k), through(dust, 0), 1e-6);
+        assertTrue(through(dust, 0) > 2 * through(soot, 0), "dust " + through(dust, 0) + " soot " + through(soot, 0));
     }
 
     /**

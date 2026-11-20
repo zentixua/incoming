@@ -1140,8 +1140,11 @@ paths:
   of ground, Liu–Jordan view factors; uniform light keeps the six-side mean, `SkyDomeGlslTest`; up in map axes is
   `sixUpDir` from `fx.vsh`): a plain six-side mean lights the underside of black smoke as brightly as the top. The
   cloud's own shadow (`SmokePuffs.sunThrough`, held
-  field 17, merged by attenuation): per held puff of one source, e^(−Στ) of the direct beam through its other puffs
-  (`sightDepth`, delta-Eddington attenuation × the clump's smoke share, so the fire-body handoff fades in). Computed on
+  field 17, merged by attenuation): per held puff of one source, the sunlight that reaches its lit skin (1σ toward the
+  sun; inside the puff its maps shade it) through its other puffs, e^(−Σ k·τ) with τ by `sightDepth` (delta-Eddington
+  attenuation × the clump's smoke share, so the fire-body handoff fades in) and k = min(1, two-stream k of the blocker's
+  mix, `shade`): pale dust (k ≈ 0.6) passes diffuse light and stays pale in its own shadow, soot keeps the beam's e^(−τ)
+  (`SmokeShadowTest`); the beam alone from the puff's middle draws a dust cloud dark brown. Computed on
   the planner (`Draw.shadows`, before `thin`), never on the fill thread, within a strict pair budget (`SHADOW_PAIRS`
   32768; `SHADOW_PAIRS_INLINE` 4096 for a plan on the render thread: secondary views, inline mode): sources whose records
   changed or whose sun moved > 0.5° (share 0.02), the one renewed longest ago first (no starvation), each against at
