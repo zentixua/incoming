@@ -9,7 +9,7 @@ final class GlassPath {
     /** Window glass passes this share of the pulse (est.: soda-lime glass transmits 0.85–0.9 from 0.35 to 2.7 µm, where a ~6000 K fireball emits nearly all its light). */
     static final double GLASS = 0.8;
     /** Ray length below which a crossed cell only touches the ray, in cell sizes. */
-    private static final double TOUCH = 1e-9;
+    static final double TOUCH = 1e-9;
 
     /** Share of the pulse passed so far. */
     double pass = 1;

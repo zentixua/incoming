@@ -735,8 +735,8 @@ public final class RuinPlanner {
     /**
      * Pulse path from fuel at {@code x, y, z} toward {@code ball} ({@link #kindling}): fire position or {@link #NO_FIRE};
      * {@code seen[0]} — share of the free pulse arriving (visible ball share × glass). The flame stands on the fuel that burns:
-     * in the air cell above it, else in its air face neighbor toward the ball (the walk's first cell), in this chunk; fuel
-     * with neither burns no flame. Voxel walk (Amanatides–Woo) through pre-wave snapshots, at most {@link #RAY_CELLS} cells.
+     * in the air cell above it, else in its air face neighbor toward the ball (the first cell the walk crosses, if it shares a
+     * face with the fuel), in this chunk; fuel with neither burns no flame. Voxel walk (Amanatides–Woo) through pre-wave snapshots, at most {@link #RAY_CELLS} cells.
      */
     static long expose(RuinContext.Grid g, ChunkShot shot, Blast.PropsView view, int x, int y, int z, Vec3 ball, double[] seen) {
         Vec3 from = new Vec3(x + 0.5, y + 0.5, z + 0.5);
@@ -761,6 +761,7 @@ public final class RuinPlanner {
         int cx = x, cy = y, cz = z;
         long fire = airAbove ? BlockPos.asLong(x, y + 1, z) : NO_FIRE;
         GlassPath glass = new GlassPath();
+        boolean first = true;
         for (int k = 0; k < RAY_CELLS; k++) {
             double t;
             if (tx <= ty && tx <= tz) {
@@ -776,13 +777,18 @@ public final class RuinPlanner {
                 cz += sz;
                 tz += uz;
             }
+            // a cell the ray only touches at a tie (its edge or corner) is not crossed: it neither blocks, lights nor ends the path
+            if (Math.min(tx, Math.min(ty, tz)) - t <= GlassPath.TOUCH) continue;
             if (cy < shot.minY || cy >= shot.maxY()) return NO_FIRE;
             ChunkShot c = g.at((cx >> 4) - shot.x, (cz >> 4) - shot.z);
             if (c == null) return NO_FIRE;
             Blast.Props p = view.get(c.get(cx & 15, cy, cz & 15));
             if (!p.is(Blast.Props.TRANSMITS)) return NO_FIRE;
             glass.enter(t, p.is(Blast.Props.GLAZING));
-            if (k == 0 && fire == NO_FIRE && p.air() && cx >> 4 == shot.x && cz >> 4 == shot.z) fire = BlockPos.asLong(cx, cy, cz);
+            // the flame's side cell: the first cell crossed, if it shares a face with the fuel
+            if (first && fire == NO_FIRE && p.air() && Math.abs(cx - x) + Math.abs(cy - y) + Math.abs(cz - z) == 1 && cx >> 4 == shot.x
+                    && cz >> 4 == shot.z) fire = BlockPos.asLong(cx, cy, cz);
+            first = false;
             // outdoors: no column covers this cell, the window's terrain line decides the rest
             if (g.shadowHeight(cx, cz) <= cy + 1) {
                 if (fire == NO_FIRE) return NO_FIRE;
