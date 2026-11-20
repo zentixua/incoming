@@ -115,3 +115,7 @@ paths:
   in the session. Requests are deduplicated and drained at the existing server rate. Overflow evicts old hints, so
   recovery remains best effort, not a durable freshness record. A later Incoming submission cannot cancel a
   crossing foreign-delivery hint. Logout/reset clears the previous world and both collections immediately.
+- Client crash `IllegalStateException: Geometry OOM` in Voxy `AsyncNodeManager.addWork` is Voxy's LOD geometry
+  buffer filling up (sized from free VRAM at join, ~1.8–2.1 GB on an 8 GB card), not Incoming; the player's remedy is
+  a lower Voxy render distance.
+

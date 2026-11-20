@@ -322,3 +322,6 @@ file changes.
   recordings, not a single near-hit track) is not a mix measure and is not explained entirely by deafness: compare
   mixes at equal hearing, `nuke_tinnitus = false` for both or an isolated hit after the same dose; decompose using a
   run at equal hearing.
+- Vanilla `LINEAR` attenuation fixes the distance at `play()` from the volume (max(volume, 1) × 16): a sound whose
+  volume ramps up from 0 uses `Attenuation.NONE` and its own distance law.
+

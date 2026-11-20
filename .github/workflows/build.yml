@@ -126,6 +126,19 @@ jobs:
         # An API failure only costs the full checks, not the run.
         run: python3 tools/ci_reuse.py find "$(git rev-parse 'HEAD^{tree}')" >> "$GITHUB_OUTPUT" || echo 'run=' >> "$GITHUB_OUTPUT"
 
+  # Agent knowledge base (AGENTS.md, .claude/rules, the incoming plugin): seconds, on every run, because a rename
+  # anywhere can leave an area rule's paths pointing at nothing.
+  knowledge:
+    name: Знания
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v5
+      - name: Knowledge base layout
+        run: python3 tools/check_knowledge.py
+      - name: Gate and hook tests
+        run: python3 -m unittest tools/test_check_knowledge.py
+
   build:
     name: Сборка
     needs: changes
@@ -496,7 +509,7 @@ jobs:
   # One status per commit: everything required passed; unnecessary checks skipped.
   ci:
     name: Итог
-    needs: [changes, build, unit, gametest, lss_gametest, clean_install, reuse, store, rig, replayscan, lookgate, stand]
+    needs: [changes, knowledge, build, unit, gametest, lss_gametest, clean_install, reuse, store, rig, replayscan, lookgate, stand]
     # Runs after failed/skipped/canceled jobs too: skipped jobs count as success, so “Итог” skipped
     # in a canceled run would be green without build/GameTest — instead it runs and fails in canceled runs.
     if: always()
@@ -505,11 +518,11 @@ jobs:
     steps:
       - name: Required checks passed
         run: |
-          echo 'changes: ${{ needs.changes.result }}; build: ${{ needs.build.result }}; unit tests: ${{ needs.unit.result }}; GameTest: ${{ needs.gametest.result }}; LSS integration: ${{ needs.lss_gametest.result }}; clean install: ${{ needs.clean_install.result }}; reused checked run: ${{ needs.reuse.result }}; store pages: ${{ needs.store.result }}; rig shutdown: ${{ needs.rig.result }}; replay analysis: ${{ needs.replayscan.result }}; look gate: ${{ needs.lookgate.result }}; scene bench: ${{ needs.stand.result }}'
+          echo 'changes: ${{ needs.changes.result }}; knowledge: ${{ needs.knowledge.result }}; build: ${{ needs.build.result }}; unit tests: ${{ needs.unit.result }}; GameTest: ${{ needs.gametest.result }}; LSS integration: ${{ needs.lss_gametest.result }}; clean install: ${{ needs.clean_install.result }}; reused checked run: ${{ needs.reuse.result }}; store pages: ${{ needs.store.result }}; rig shutdown: ${{ needs.rig.result }}; replay analysis: ${{ needs.replayscan.result }}; look gate: ${{ needs.lookgate.result }}; scene bench: ${{ needs.stand.result }}'
           [ '${{ contains(needs.*.result, 'failure') || contains(needs.*.result, 'cancelled') }}' = false ]
           # Release: every check ran here, except mod checks reused from the run that passed them on this very tree.
           if [ '${{ github.event_name == 'workflow_dispatch' && inputs.release }}' = true ]; then
-            for result in '${{ needs.store.result }}' '${{ needs.rig.result }}' '${{ needs.replayscan.result }}' '${{ needs.lookgate.result }}' '${{ needs.stand.result }}'; do
+            for result in '${{ needs.knowledge.result }}' '${{ needs.store.result }}' '${{ needs.rig.result }}' '${{ needs.replayscan.result }}' '${{ needs.lookgate.result }}' '${{ needs.stand.result }}'; do
               [ "$result" != skipped ]
             done
             [ '${{ needs.reuse.result }}' = success ] || \

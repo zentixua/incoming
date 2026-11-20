@@ -55,3 +55,7 @@ paths:
   vectors, and a source's `visible` state that ticks change is saved at `begin` (`Source.visibility`). No Level, chunk
   or BlockState access in planning; emits (terrain) stay on the client thread. `SmokePipelineTest`: the planned frame
   k + 1 draws exactly the inline frame k on the 100-strike raid, also on a real thread, and world exit mid-plan drains it.
+
+## Look reference
+- Conventional strike (Artem, 25.10, real strike footage): flash → fireball → debris → a light, see-through dust haze
+  over the site that settles soon; a smallish beige dust mushroom; tall black columns only later, from fires.

@@ -155,3 +155,10 @@ paths:
   Disk-light fixtures give vanilla a bounded spare-time unload pass before checking `pendingUnloads`: GameTest
   pacing may otherwise consume the entire tick deadline. Do not pass unconditional true when generation holders
   could be revived; their unload callbacks can reenqueue until server tasks get a turn.
+- A GameTest red in one CI shard only usually depends on order, neighbours or a cold JVM; adding or removing a batch
+  reshuffles the shards, so order-dependent tests fail on unrelated PRs. Reproduce locally with the same
+  `-PgametestShard=i/6` after rebasing on `origin/main` (the split is deterministic), run the batch alone a few times,
+  name the shared state by number; never skip the test.
+- `FakePlayer.die()` is a no-op: test death with a real `ServerPlayer`. After a blast, fire as well as rubble may fill
+  a broken block's spot: assert the block is gone, not that the spot is air.
+

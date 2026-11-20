@@ -13,7 +13,7 @@ takes minutes.
 Use it for: server lag, freezes, stutter, FPS drops, graphical artifacts, a bug from Artem's or friends' game, a crash,
 "ruins in the wrong place / at the wrong time", any behavior that does not match expectations.
 Do not use it for: an approved change without a problem. That has its own CI and merge; extra runs are not needed
-(memory `no-extra-checks`).
+(AGENTS.md workflow: no repeated verification).
 
 ## Main rules
 
@@ -28,15 +28,15 @@ Do not use it for: an approved change without a problem. That has its own CI and
    or GPU. Each share with its own number.
 5. **Truth from outside, not only our counters.** Check world state directly (chunk status via `getChunkNow`, NBT of a
    world copy, bot packets), not only our "done" counters.
-6. **Each term separately.** The first "cause" is often false (dust: "chunk edges" turned out to be samples below
-   ground, found only by a per-term probe). Measure each term, not the total.
+6. **Each term separately.** The first "cause" is often false (a "chunk edges" defect can be samples below ground,
+   visible only to a per-term probe). Measure each term, not the total.
 7. **Root, not symptom.** Fix the cause found by a number. Then a test that catches a recurrence, and a repeat of the
    same run on the same rig: before and after numbers in one table.
 
 ## Checklist: server (ticks, freezes, stutter)
 
 Where: netcup (Crafty test server 25571 or `./gradlew runServer`), not the cloud: JFR `ExecutionSample` barely works
-in the cloud VM. Do not touch 25565/25566 without Artem's word.
+in the cloud VM. Never touch the play servers (25565–25567) or their worlds without Artem's word.
 
 - **JFR for the whole run** (`-XX:StartFlightRecording=settings=profile,filename=…,dumponexit=true`):
   `ExecutionSample` on Server thread, GC and safepoint pauses, `ThreadPark`/`JavaMonitorEnter`/`ThreadSleep` > 10 ms,
@@ -48,11 +48,14 @@ in the cloud VM. Do not touch 25565/25566 without Artem's word.
   (tick, mod lanes, "the rest", unload debt), "Server thread stalled" (StallWatch, stacks), "Can't keep up",
   "Ruin settlement #", "DIAG", "Ruins for detonation", autosaves, RuinWorkers count changes.
 - **Stacks**: a series of jstack at event moments (detonation, wave arrival, player jump) plus a short JFR window
-  around them.
+  around them. Never `jstack -l` or `dumpAllThreads(true, true)` as a periodic probe: finding ownable synchronizers
+  walks the heap at a safepoint, 115–250 ms per call on an 8 GB JVM; use plain `jstack`, log `-Xlog:safepoint` and
+  subtract thread-dump time from stall windows.
 - **Host**: vCPU, load, who else uses CPU (second server, Artem's Docker services), RAM and swap, disk
   (`vmstat 1`, `pidstat 1`, `iostat 1` to a file for the whole run).
 - **Players and world**: Almighty bots stand where the player stood; positions and mode every 20 ticks. Almighty rules
-  as the truth log: `ChunkWatchEvent.Watch/UnWatch` (what was sent to the player and in which state),
+  as the truth log: `ChunkWatchEvent.Watch/UnWatch` (what was queued for the player and in which state; `Watch` fires at
+  queueing, before `PlayerChunkSenderMixin` may withhold the send: never count it as "sent intact"),
   `ChunkEvent.Load/Unload`, `ChunkDataEvent.Load`. Own `state` keys per rule, raised `budget_ms`; after start check
   that no rule is `off`.
 - **Queue state**: a dump through `script` at event moments (+1 s, +5 s, +20 s): queue sizes, the state of each
@@ -70,7 +73,8 @@ many long ticks coincided with GC. Server ms per loaded chunk. Distribution in 5
 Where: Artem's laptop, only when he is not playing (`tools/gpu_lease.sh --wait`), only world copies.
 
 - **GPU time per pass**: `LayerTimes` (`-Dincoming.fx.drain=true` or F3), the bench line.
-- **RenderDoc**: frame capture in `mod/run/renderdoc/`, cost per draw call, overdraw, analysis with its Python.
+- **RenderDoc**: frame capture in `mod/run/renderdoc/`, cost per draw call, overdraw, analysis with its Python
+  (`renderdoccmd` needs `-d "$PWD"`; run the qrenderdoc Python analysis outside nested KWin).
 - **Client CPU**: spark on the client, render thread time, frame p50/p95.
 - **GPU clocks**: `nvidia-smi` log once a second; 45 s warm-up; the clock is written beside each view.
 - **Frames**: the same spot, the same moment after the strike, against `main` (`tools/sandbox.sh shot`); the scene
@@ -115,4 +119,17 @@ One brief holds everything at once:
 
 In Russian, briefly: the cause in one sentence with a number, what we fix, when the check happens. Tables and raw data
 go in run files and the PR, not in chat. New knowledge (a gauge trap, a new probe, the path to analysis scripts) goes
-into memory or that area's `.claude/rules` in the same thread.
+into that area's `.claude/rules` or this skill by PR in the same thread; status and numbers go into the report.
+
+## Gauges that lie
+- `MinecraftServer.getTickTimesNanos` misses work done in `ServerTickEvent.Post`: take tick cost from spark
+  tickmonitor or tick-start intervals. GC-log "Reaching safepoint" lines inside ZGC concurrent phases are not game
+  stops: game threads keep running.
+- When the data looks clean but the player still sees the defect, probe the exact drawn output first (the per-frame
+  value of the string or pixel he sees).
+- A bug from Artem's game: his Flashback replay (instance `flashback/replays`, copy first) is a data source: the login
+  packet gives the game mode, snapshots `set_time`, `move_entities` positions; read where he stood and when.
+- Shader probes: the hold rig ages the cloud once (dust off, render distance 2), then the client polls command files
+  (`tp <up> <pitch>`, `prop <key> <value>`, `reload`, `shot <name>`, `quit`); copy edited shaders into
+  `mod/build/resources/main` and `reload` (~50 s); after toggling a mode wait ~80 ticks (temporal history); a probe
+  channel writes one term's value as the pall output with alpha 0 (channel 39 = linear calibration ramp).
