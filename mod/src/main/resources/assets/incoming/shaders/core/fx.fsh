@@ -56,6 +56,7 @@ in float pallFront;
 in float sixKey;
 in vec3 sixBall;
 in vec3 sixKeyDir;
+in vec3 sixUpDir;
 in vec3 sixBallDir;
 in vec3 worldPos;
 // glow (FxBloom): how many times brighter than shown the light is; 0 — does not glow
@@ -92,6 +93,17 @@ float sixLight(vec3 a, vec3 b, vec3 l) {
     float vertical = l.y > 0.0 ? a.g : b.g;
     float depth = l.z < 0.0 ? a.b : b.b;
     return side * q.x + vertical * q.y + depth * q.z;
+}
+
+// Diffuse light of the puff's six maps (sum — of all six, tilt — the top-minus-bottom difference along world up in map
+// axes): an isotropic sky over the upper hemisphere and the ground's reflection under it (Liu & Jordan 1963: a face
+// tilted by θ sees (1 + cos θ)/2 of the sky and (1 − cos θ)/2 of the ground). On a map axis e with cos c to the
+// vertical the squared-cosine weight is (1 + c)/6 from the sky and (1 − c)/6·albedo from the ground (exact at c = 0, ±1),
+// normalised to the six-side mean for uniform light. Ground reflectance — PALL_LAND (pall.glsl), the land albedo of the
+// nuclear pall's light from below. The plain six-side mean lights the underside of black smoke as
+// brightly as the sky lights its top
+float skyDome(float sum, float tilt) {
+    return (sum + (1.0 - PALL_LAND) / (1.0 + PALL_LAND) * tilt) / 6.0;
 }
 
 // Downscaled copies of the sheet (FxAtlas.MIPS)
@@ -178,18 +190,47 @@ vec4 fireFrames(vec2 uv, vec2 dx, vec2 dy, float m) {
     return mix(textureGrad(Sampler0, uv0, dx, dy), textureGrad(Sampler0, uv1, dx, dy), m);
 }
 
+// Smoke and dust particles (FxQuads.softTexels): a texel larger than a screen pixel is sampled smoothly — from one pixel
+// per texel (level 0) to two (level −1). Sampled by the nearest texel, a 64-pixel billow beside the eye draws flat texel
+// squares 40–60 pixels wide with staircase edges. The smooth read is clamped into the sprite's atlas cell (SOFT_CELL =
+// FxAtlas.CELL), so a resource-pack sprite without a transparent border never takes a neighbour's texels
+const float SOFT_CELL = 64.0;
+float softTexels(float level) {
+    return clamp(-level, 0.0, 1.0);
+}
+
+// A particle up close fainter than 0.1 is not drawn (vanilla particle shader). For smoothly sampled smoke the cut is a ramp
+// over the same threshold: a hard cut on bilinear alpha draws a contour line across the billow
+float particleCut(float a, float lod, float soft) {
+    float threshold = 0.1 * clamp(2.0 - lod, 0.0, 1.0);
+    if (threshold <= 0.0) return 1.0;
+    if (soft > 0.5) return smoothstep(0.5 * threshold, 1.5 * threshold, a);
+    if (a < threshold) return 0.0;
+    return 1.0;
+}
+
 // Particle up close — as from the Minecraft atlas (NEAREST_MIPMAP_LINEAR): the nearest pixel of the picture and its copy half
 // the size, mixed between them; smoothed, it would come out soapy. Copies half that size or smaller (a puff of 32 pixels and less) —
 // smooth, like everything distant: the steps only shimmer there. The copy level — as in OpenGL, by derivatives.
-vec4 particle(vec2 uv, vec2 dx, vec2 dy, out float lod) {
+vec4 particle(vec2 uv, vec2 dx, vec2 dy, float soft, out float lod) {
     vec2 size = vec2(textureSize(Sampler0, 0));
     vec2 px = dx * size, py = dy * size;
-    lod = max(0.5 * log2(max(max(dot(px, px), dot(py, py)), 1e-12)), 0.0);
+    float level = 0.5 * log2(max(max(dot(px, px), dot(py, py)), 1e-12));
+    lod = max(level, 0.0);
     if (lod >= 1.0) return textureGrad(Sampler0, uv, dx, dy);
-    vec2 size1 = size * 0.5;
+    float blend = softTexels(level) * soft;
+    // the smooth read stays within the sprite's own atlas cell: half a texel inside its edge (smoke slots are whole cells)
+    vec2 cell = floor(uv * size / SOFT_CELL) * SOFT_CELL;
+    vec4 fine = blend > 0.0 ? textureLod(Sampler0, clamp(uv * size, cell + 0.5, cell + SOFT_CELL - 0.5) / size, 0.0)
+            : vec4(0.0);
+    if (blend >= 1.0) return fine;
     vec4 a = textureLod(Sampler0, (floor(uv * size) + 0.5) / size, 0.0);
-    vec4 b = textureLod(Sampler0, (floor(uv * size1) + 0.5) / size1, 1.0);
-    return mix(a, b, lod);
+    vec4 near = a;
+    if (lod > 0.0) {
+        vec2 size1 = size * 0.5;
+        near = mix(a, textureLod(Sampler0, (floor(uv * size1) + 0.5) / size1, 1.0), lod);
+    }
+    return blend > 0.0 ? mix(near, fine, blend) : near;
 }
 
 // Halo far/glow (tools/gen_particles.py, far_glow) at distance r from the middle in fractions of the half-size: exp(−(r/0.42)²),
@@ -219,7 +260,7 @@ void main() {
         bool behind = quadPlace <= texelFetch(HalfCut, ivec2(gl_FragCoord.xy * FxGlowPass.y / FxHalfSplit.z), 0).r;
         if (behind != (FxHalfSplit.x < 1.5)) discard;
     }
-    float lod = 0.0;
+    float lod = 0.0, soft = 0.0;
     vec4 tex;
     bool six = nearest < -0.1 && nearest > -0.4;
     vec3 sixLit = vec3(1.0);
@@ -228,14 +269,15 @@ void main() {
         vec2 local = ((texCoord0 - FxGlow.xy) / (FxGlow.zw - FxGlow.xy) * 2.0 - 1.0) * (64.0 / 63.0);
         tex = vec4(glowAlpha(length(local)));
     } else if (nearest > 0.75) {
-        tex = particle(texCoord0, dx, dy, lod);
+        soft = nearest < 0.95 ? 1.0 : 0.0;
+        tex = particle(texCoord0, dx, dy, soft, lod);
     } else if (six && FxGlowPass.x > 0.5) {
         tex = vec4(sixAlpha(texCoord0, dx, dy, opacity));
     } else if (six) {
         vec4 a;
         vec3 b;
         sixFrames(texCoord0, dx, dy, opacity, a, b);
-        // sky light: direct (sun, moon) — by sides, diffuse — the average over six; both — against the average over six
+        // sky light: direct (sun, moon) — by sides, diffuse — sky above and ground reflection below (skyDome); both — against the average over six
         // sides per puff (the vertex colour — a thick layer of matter in diffuse sky light, R∞): towards the sun the translucent
         // edge is brighter, on the sun's side the dense puff is darker (forward scattering). Fireballs — by sides, in fractions of light
         // at the eye, and not brighter than the fire on screen (FxLights). The sum — in linear, to the screen — exponent 1/2.2
@@ -244,7 +286,8 @@ void main() {
         // exponent not below 0.001 and the base not zero: pow(0, 0) is undefined in GLSL (NaN — a black pixel in blending)
         float shade = max((-nearest * 127.0 - 13.0) / 37.0 * 1.5, 0.001);
         float key = pow(max(sixLight(a.rgb, b, sixKeyDir) / FxSixLight.z, 1e-6), shade);
-        float diffuse = pow(max((a.r + a.g + a.b + b.r + b.g + b.b) / 6.0 / FxSixLight.z, 1e-6), shade);
+        vec3 tilt = vec3(a.r - b.r, a.g - b.g, b.b - a.b);
+        float diffuse = pow(max(skyDome(a.r + a.g + a.b + b.r + b.g + b.b, dot(sixUpDir, tilt)) / FxSixLight.z, 1e-6), shade);
         float sky = sixKey * key + (1.0 - sixKey) * diffuse;
         vec3 fire = sixBall * pow(max(sixLight(a.rgb, b, sixBallDir) / FxSixLight.z, 1e-6), shade);
         // a puff lying on the horizontal (shadow exponent 0 — the top of the layer lit from above): the balls' light — in this pixel
@@ -274,8 +317,9 @@ void main() {
     }
     // a particle up close fainter than 0.1 is not drawn, as in the vanilla particle shader: otherwise the faint halos of puffs add up
     // into a murky haze around the cloud. Far away (a puff smaller than 16 pixels) — without the cut: distant smoke is faint anyway
-    if (nearest > 0.75 && tex.a * opacity < 0.1 * clamp(2.0 - lod, 0.0, 1.0)) discard;
-    vec4 color = vec4(vertexColor.rgb * tex.rgb * sixLit, vertexColor.a * tex.a);
+    float cut = nearest > 0.75 ? particleCut(tex.a * opacity, lod, soft) : 1.0;
+    if (cut <= 0.0) discard;
+    vec4 color = vec4(vertexColor.rgb * tex.rgb * sixLit, vertexColor.a * tex.a) * cut;
     // frame pixel (for the glow pass — larger)
     vec2 frag = gl_FragCoord.xy * FxGlowPass.y;
     vec3 glow = vec3(0.0);

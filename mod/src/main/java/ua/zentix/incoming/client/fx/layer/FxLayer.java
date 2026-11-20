@@ -461,16 +461,19 @@ public final class FxLayer {
         }
     }
 
+    /** Share of direct sunlight in a clear day's light ({@link #sun}). */
+    static final float DAY_DIRECT = 0.8f;
+
     /**
      * Direct light on the baked puffs ({@code FxSun}): the direction to the sun by day or the moon by night in the
-     * world, and the share of direct light in sky light — 0.75 on a clear day (direct against diffuse sky on a
-     * horizontal patch with the sun high, ⚠ order-of-magnitude estimate; less toward the horizon), at night from the
-     * moon — 0.5 (⚠ estimate), in rain — a fifth (clouds scatter).
+     * world, and the share of direct light in sky light — 0.8 on a clear day (direct against diffuse sky on a
+     * horizontal patch: hourly diffuse fraction 0.17–0.2 at clearness index 0.75–0.8, Erbs, Klein & Duffie 1982; less
+     * toward the horizon), at night from the moon — 0.5 (⚠ estimate), in rain — a fifth (clouds scatter).
      */
     private static void sun(ShaderInstance s, ClientLevel level, float partial) {
         float a = level.getTimeOfDay(partial) * net.minecraft.util.Mth.TWO_PI;
         float x = -net.minecraft.util.Mth.sin(a), y = net.minecraft.util.Mth.cos(a);
-        float key = y >= 0 ? 0.75f : 0.5f;
+        float key = y >= 0 ? DAY_DIRECT : 0.5f;
         if (y < 0) {
             x = -x;
             y = -y;

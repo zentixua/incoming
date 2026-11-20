@@ -150,7 +150,9 @@ paths:
   hundred blocks away would vanish entirely (scenario `occlusion`). A particle up close is drawn as from the Minecraft
   atlas: the nearest pixel of the picture and copies half as small, and anything fainter than 0.1 alpha is not drawn (as in
   the vanilla particle shader; without this the puffs come out soft, and faint halos add up into a murky haze around the
-  cloud). A puff under 32 pixels is smooth, without a cut-off. A glow (arc flash, halo) that is blocks in size up close uses
+  cloud). A puff under 32 pixels is smooth, without a cut-off. Smoke and dust particles (`FxQuads.softTexels`) are smooth when a texel is larger than a
+  screen pixel, read only inside their 64-pixel atlas cell (`SOFT_CELL`), and fade over the 0.1 cut instead of cutting
+  (`SoftTexelsGlslTest`); pixel-art pieces keep the nearest texel. A glow (arc flash, halo) that is blocks in size up close uses
   `Spec.smooth()`: with the nearest pixel, a 64-pixel flash picture covering half the screen falls apart into rotated
   squares of its own pixels with a hard cut edge at 0.1 (frames of a substation arc knocked out by a nuclear strike,
   scenario `flash`). The halo `far/glow` (glare, veil, fire glow, trail ribbons, `FxQuads.glowShape`) larger than a quarter
@@ -1168,7 +1170,8 @@ paths:
   (est.)) uses squared-cosine weights (sum 1; plain cosines would make 45° sunlight √2 brighter). Directions follow
   the actual plane and clump UV axes. Two `UV2` shorts carry the basis instead of constant `FULL_BRIGHT`
   (`PuffGeometry.faceLight/flatLight`); `fx.vsh` restores light and transforms directions at vertices, retaining the
-  36-byte format. No fragment basis derivatives/normalization. Ambient averages all six sides; frame fireballs
+  36-byte format. No fragment basis derivatives/normalization. Ambient is a hemisphere dome (`fx.fsh` `skyDome`: sky over the upper half, ground reflection `PALL_LAND` under it,
+  equal to the six-side mean in uniform light, `SkyDomeGlslTest`); frame fireballs
   (`FxLights`) use the maps and cannot exceed on-screen fire in the same
   to the same extent as for `balls` (illuminance × the sky's light `FxAmbient`: otherwise at night the fire would barely
   light the smoke); the shadow in the maps — of the bake's matter (`bake.py`: ω 0.55, g 0.55), of the puff's mixture —

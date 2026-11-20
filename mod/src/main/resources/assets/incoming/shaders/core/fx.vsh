@@ -18,7 +18,8 @@ in vec4 Color;
 in ivec2 UV1;
 // World lightmap; baked puffs store their geometry basis (puffBasis) here and use FULL_BRIGHT lighting.
 in ivec2 UV2;
-// x: Minecraft fog 0..1; y: 1 — particle (by the nearest pixel, as from the Minecraft atlas), −1 — a far-model atlas
+// x: Minecraft fog 0..1; y: 1 — particle (by the nearest pixel, as from the Minecraft atlas; 112/127 — a smoke particle,
+// smooth when magnified, FxQuads.softTexels), −1 — a far-model atlas
 // tile
 // (the light is already in it), ½ — halo far/glow (large — by formula, fx.fsh), −¼ — a baked puff with
 // six-sided light (FxAtlas.puff6), ⅝ — fire frames; z: opacity of a particle without texture, for a puff or fire — a
@@ -69,6 +70,8 @@ out float pallFront;
 out float sixKey;
 out vec3 sixBall;
 out vec3 sixKeyDir;
+// world up in the puff's map axes: sky light comes from above, the ground's reflection from below (fx.fsh: skyDome)
+out vec3 sixUpDir;
 out vec3 sixBallDir;
 // the vertex's place from the camera (true, without moving nearer): light of the balls on a lying puff — in each pixel
 // (fx.fsh)
@@ -194,6 +197,7 @@ void main() {
     sixKey = 0.0;
     sixBall = vec3(0.0);
     sixKeyDir = vec3(0.0, 1.0, 0.0);
+    sixUpDir = vec3(0.0, 1.0, 0.0);
     sixBallDir = vec3(0.0, 1.0, 0.0);
     if (six) {
         // Puff vertex color is material under open sky (SmokePuffs, FarView.sky); frame maps distribute its directional light (fx.fsh).
@@ -204,6 +208,7 @@ void main() {
         sixKey = FxSun.w;
         sixKeyDir = puffDirection(normalize(FxSun.xyz), axes, UV2.y < 0);
         sixBallDir = puffDirection(bd, axes, UV2.y < 0);
+        sixUpDir = puffDirection(vec3(0.0, 1.0, 0.0), axes, UV2.y < 0);
         if (dot(sixBallDir, sixBallDir) > 1e-8) sixBallDir = normalize(sixBallDir);
     }
     // true distance along the view axis — the point moved nearer is taken back

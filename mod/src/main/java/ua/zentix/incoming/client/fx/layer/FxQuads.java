@@ -18,7 +18,8 @@ import java.util.Arrays;
  * position, atlas coordinates, premultiplied color, terrain softness or source probe ({@link #seenBy}) and near-fold
  * factor ({@code UV1}), world light ({@code UV2}; baked puffs store their lighting basis instead, {@link
  * PuffGeometry#faceLight}), Minecraft fog ({@code Normal.x}), texture mode ({@code Normal.y}: 1 for nearest-texel
- * particles, {@link #nearestTexels}; −1 for distant-model atlas tiles, {@link #modelTiles}; ½ for analytic glow, {@link
+ * particles, {@link #nearestTexels}; 112/127 for smoke particles smooth when magnified, {@link #softTexels}; −1 for
+ * distant-model atlas tiles, {@link #modelTiles}; ½ for analytic glow, {@link
  * #glowShape}; −¼ for baked puffs with six-way lighting, {@link #sixWay}; ⅝ for blended fire frames, {@link
  * #fireballMix}; 0 for smooth effects-atlas sampling), and particle opacity before texturing or puff-frame blend
  * ({@code Normal.z}, {@link #opacity}), plus emission ({@code Emit}, {@link #emission}).
@@ -119,6 +120,24 @@ public final class FxQuads {
         nearest = (byte) (on ? 127 : 0);
         opacity = 0;
     }
+
+    /**
+     * The next quads are smoke and dust particles: as {@link #nearestTexels}, but a texel larger than a screen pixel is
+     * sampled smoothly and the faint edge fades over the same 0.1 threshold ({@code fx.fsh}: {@code softTexels},
+     * {@code particleCut}): a billow beside the eye is smooth, without texel squares.
+     */
+    public void softTexels() {
+        nearest = SOFT_TEXELS;
+        opacity = 0;
+    }
+
+    /** Texture-mode byte ({@code Normal.y}) of the next quads. */
+    public byte textureMode() {
+        return nearest;
+    }
+
+    /** {@code Normal.y} of {@link #softTexels}: above the particle threshold 0.75, below the nearest-texel 0.95. */
+    static final byte SOFT_TEXELS = 112;
 
     /**
      * The next quads are tiles of the atlas of distant models ({@code FarModels}): the texture is its own, the light is
