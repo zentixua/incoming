@@ -219,11 +219,13 @@ times and the pall's budget are not frame costs: frame cost belongs to the GPU a
   its timing into the frames' `capture.json` (`audio.take`); the effect's deadline grows by 20 s per game second.
 - Frame comparisons between takes: a plain `nuke` detonates at the take's game time and the world wind is a function of it
   (`Wind.at`), so main and branch takes in different orders drift the cloud by pixels; equality claims (noon/night) need
-  the law shown equal by a test, not pixel identity. `fx` returns before the PNG is written (`Util.ioPool`): copy frames
-  after the take's next command or check them, an immediate copy can be truncated. A sky-only frame for masks (same camera
+  the law shown equal by a test, not pixel identity. A frame's PNG is written on the render thread before the take moves
+  on, so the files are whole when `shot`/`fx` returns. A sky-only frame for masks (same camera
   and time, `blast drone`) differs from the nuke frame beyond render distance (the pall's terrain floor draws ground there)
   and wherever vanilla clouds drift (their offset follows client ticks): set `renderClouds:"false"` in the sandbox
-  `options.txt` and cut the mask at the frame's own horizon. A CPU sandbox at `-Xmx3g` is OOM-killed at its ceiling after
+  `options.txt` (every start makes sure the line exists, `client_options`) and cut the mask at the frame's own horizon.
+  Every take states its second 0: `capture.json` `clock` and each `SANDBOX shot` line ("t = 0 at effect start", or for
+  `nuke … near` "front at the houses (burst N s earlier)"); read frame times against it. A CPU sandbox at `-Xmx3g` is OOM-killed at its ceiling after
   about ten nuclear takes (server ruins and pall state accumulate): restart it every few nuclear takes.
 - Mesa caches compiled shaders in `~/.cache/incoming-mesa-shaders`, shared by every tree: a cold llvmpipe compiles the
   nuclear volume shaders for 140 s (laptop) or 74 s (netcup) before `ready`; a cold blast's first frame takes seconds.
