@@ -145,6 +145,12 @@ paths:
   movement. Keep ordinary launch resolution separate from review disclosure. Packet-level regressions:
   `nuclear_review_disclosure`, `nuclear_review_last_seen`.
 
+- Nuclear permission (Artem): `nuclear.ops_only` means operators and the world host (`NuclearKeys.trusted`: the
+  single-player or LAN host, cheats on or off). Review and launch take the refusal from one function,
+  `ServerActions.nuclearRefusal` (designator, enabled, operator/host, carrier, yield cap, in that order;
+  `NuclearRefusalTest`). Every refused order speaks through `ServerActions.refuse` (red action bar,
+  `RefusalChannelTest`); every key named in code exists in both lang files (`LangTest`).
+
 - `world.early_warning` controls automatic sirens and nuclear launch/target notices (default true). `ServerConfigMigration`
   decorates the registered server `IConfigSpec`: copy legacy `world.siren` before spec correction removes it; an explicit
   new key wins. `IncomingConfigScreen` passes the underlying `ModConfigSpec` to NeoForge section widgets. Warning
