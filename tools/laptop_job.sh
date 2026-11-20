@@ -32,6 +32,20 @@ if [ "${1:-}" = --status ]; then
   exit 0
 fi
 
+# ExecStopPost of every job unit: one row for the delegated task's laptop load (laptop-agents mission-load reads it):
+#   cpu <epoch> <task> <unit> <wall s> <cpu s>   — CPU from the unit's own cgroup (cpu.stat), still there at stop-post
+if [ "${1:-}" = --account ]; then
+  set +e
+  cg=$(cut -d: -f3 /proc/self/cgroup 2>/dev/null | head -n 1)
+  us=$(awk '$1 == "usage_usec" { print $2 }' "/sys/fs/cgroup$cg/cpu.stat" 2>/dev/null)
+  [ -n "$us" ] || exit 0
+  log=${DELEGATE_LOAD_LOG:-${XDG_STATE_HOME:-$HOME/.local/state}/delegate/load.tsv}
+  mkdir -p "$(dirname "$log")" 2>/dev/null
+  printf 'cpu\t%s\t%s\t%s\t%s\t%s\n' "$(date +%s)" "${DELEGATE_TASK:--}" "${cg##*/}" \
+    "$(( $(date +%s) - ${INCOMING_JOB_START:-$(date +%s)} ))" "$(awk -v u="$us" 'BEGIN { printf "%.1f", u / 1e6 }')" >> "$log" 2>/dev/null
+  exit 0
+fi
+
 # inside service: --gpu job waits for Artem's game to close. Output without set -e: caller may have exited, and writing to its
 # closed pipe must not fail the job
 if [ "${1:-}" = --in-unit ]; then
@@ -74,6 +88,9 @@ if [ "${1:-}" = --in-unit ]; then
   exit $code
 fi
 
+# a path as one systemd command-line word: double-quoted, \ and " escaped (a transient property expands no $ or %)
+_sd_quote() { local p=${1//\\/\\\\}; p=${p//\"/\\\"}; printf '"%s"' "$p"; }
+
 mode=heavy wait=
 case "${1:-}" in --gpu) mode=gpu; shift ;; --light) mode=light; shift ;; --soft) mode=soft; shift ;; esac
 [ "$mode" = gpu ] && [ "${1:-}" = --wait ] && { wait=--wait; shift; }
@@ -96,7 +113,7 @@ fi
 
 # service environment contains only what the job needs (service does not inherit shell environment)
 envs=()
-while IFS= read -r line; do envs+=(-E "$line"); done < <(env | grep -E '^(JAVA_HOME|MC_DIR|MODS|INCOMING_[A-Z_]+|PYTHON_CPU_COUNT|XDG_RUNTIME_DIR)=' || true)
+while IFS= read -r line; do envs+=(-E "$line"); done < <(env | grep -E '^(JAVA_HOME|MC_DIR|MODS|INCOMING_[A-Z_]+|DELEGATE_[A-Z_]+|PYTHON_CPU_COUNT|XDG_RUNTIME_DIR|XDG_STATE_HOME)=' || true)
 
 props=(-p OOMScoreAdjust=500)
 if [ "$mode" = soft ]; then
@@ -113,9 +130,13 @@ fi
 # keep the laptop awake; a server without a session seat (netcup: "Access denied") has no sleep to inhibit
 inhibit=(systemd-inhibit --what=sleep:idle --who="Incoming: $name" --why="mod check (tools/laptop_job.sh)")
 "${inhibit[@]}" true 2>/dev/null || inhibit=()
+# the delegated task's load: the unit's CPU goes to the load log at stop (--account); only names, never the command's
+# arguments, reach the description and the log
 code=0
 "${inhibit[@]}" \
   systemd-run --user --wait --pipe --collect --quiet --same-dir --unit="incoming-job-$name-$$" \
+    --description="incoming job $name (task ${DELEGATE_TASK:--})" -E INCOMING_JOB_START="$(date +%s)" \
+    -p ExecStopPost="$(_sd_quote "$(readlink -f "$0")") --account" \
     "${props[@]}" "${envs[@]}" -- "$(readlink -f "$0")" --in-unit "$mode" "$name" $$ -- "$@" 0<&0 198>&- &
 run=$!
 # stopping this script (Ctrl+C, TERM from a caller's timeout) stops its service: the client does not outlive the command

@@ -49,9 +49,10 @@ RIG="$ROOT/mod/build/rig"
 if [ -f "$RUN/run-id" ]; then
   keep="$RUN/logs/$(cat "$RUN/run-id")"
   mkdir -p "$keep"
-  # everything the run writes: logs, JVM output (*.out), each JVM's GC log and JFR ring, crash reports
+  # everything the run writes: logs, JVM output (*.out), each JVM's GC log and JFR ring, fatal-error logs and recordings
+  # (hs_err_pid*: an OutOfMemoryError crashes the JVM, build.gradle), crash reports
   [ -d "$RUN/server/logs" ] && mv "$RUN/server/logs" "$keep/server"
-  for f in "$RUN"/*.out "$RUN"/server/gc.log* "$RUN"/server/run.jfr; do
+  for f in "$RUN"/*.out "$RUN"/server/gc.log* "$RUN"/server/run.jfr "$RUN"/server/hs_err_pid*; do
     [ -e "$f" ] && mv "$f" "$keep/"
   done
   [ -d "$RUN/server/crash-reports" ] && mv "$RUN/server/crash-reports" "$keep/server-crash-reports"
@@ -59,7 +60,7 @@ if [ -f "$RUN/run-id" ]; then
     name=${c%% *}
     [ -d "$RUN/$name/logs" ] && mv "$RUN/$name/logs" "$keep/$name"
     [ -d "$RUN/$name/crash-reports" ] && mv "$RUN/$name/crash-reports" "$keep/$name-crash-reports"
-    for f in "$RUN/$name"/gc.log* "$RUN/$name/run.jfr"; do [ -e "$f" ] && mkdir -p "$keep/$name" && mv "$f" "$keep/$name/"; done
+    for f in "$RUN/$name"/gc.log* "$RUN/$name/run.jfr" "$RUN/$name"/hs_err_pid*; do [ -e "$f" ] && mkdir -p "$keep/$name" && mv "$f" "$keep/$name/"; done
   done
   echo "previous run logs: $keep"
 fi

@@ -4,7 +4,8 @@
 # renew or release it; owner comes from the tree; laptop_job.sh --gpu and sandbox.sh start from another session refuse before
 # starting anything; jobs without GPU take no lease; a client without a lock (pre-lease script) also means a busy
 # GPU, not a free one; a CPU session (soft socket) is not; waiters form a fair FIFO queue capped at two other sessions; Artem's game is detected by its instance directory, not its
-# command-line path, and stops a --gpu job it starts during.
+# command-line path, and stops a --gpu job it starts during; a delegated task owns the lease across its trees; a new GPU
+# client waits for a hot GPU to cool; a running client's GPU samples and a job's CPU go to the load log.
 set -uo pipefail
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 tmp=$(mktemp -d); trap 'rm -rf "$tmp"' EXIT
@@ -13,7 +14,9 @@ export INCOMING_GPU_LEASE=$tmp/lease INCOMING_GPU_LEASE_IDLE=600
 # refused; JAVA_HOME=/nonexistent keeps a regression from building and launching a real client
 export INCOMING_GPU_KWIN=$tmp/kwin_wayland
 printf '#!/bin/bash\ntrap "kill \\$c; exit" TERM\nsleep 60 & c=$!\nwait\n' > "$INCOMING_GPU_KWIN"; chmod +x "$INCOMING_GPU_KWIN"
-unset INCOMING_GPU_OWNER
+unset INCOMING_GPU_OWNER DELEGATE_TASK
+# the laptop's real GPU temperature must not hold the checks below; gpu_cool has its own checks with a stub nvidia-smi
+export INCOMING_GPU_COOL_MAX=0 DELEGATE_LOAD_LOG=$tmp/load.tsv
 source "$ROOT/tools/gpu_lease.sh"
 fail=0
 ok() { echo "ok: $1"; }
@@ -22,6 +25,31 @@ bad() { echo "FAIL: $1"; fail=1; }
 [ "$(lease_owner /x/mod/run/wt-FZC)" = FZC ] && [ "$(lease_owner /x/mod/run/wt-N3-main)" = N3 ] && [ "$(lease_owner /x/incoming)" = incoming ] \
   && ok "owner is the session from its tree (wt-N3-main → N3)" || bad "owner from tree"
 [ "$(INCOMING_GPU_OWNER=SH lease_owner /x/mod/run/wt-FZC)" = SH ] && ok "explicit owner" || bad "INCOMING_GPU_OWNER"
+[ "$(DELEGATE_TASK=wave lease_owner /x/mod/run/wt-FZC)" = wave ] && [ "$(DELEGATE_TASK=wave lease_owner /x/incoming-wt-headmain)" = wave ] \
+  && [ "$(DELEGATE_TASK=wave INCOMING_GPU_OWNER=SH lease_owner /x/mod/run/wt-FZC)" = SH ] \
+  && ok "a delegated task owns the lease across its trees; an explicit owner still wins" || bad "DELEGATE_TASK owner"
+
+# cool-down: a stub nvidia-smi reports 90, 85, 75, 65 °C on successive calls
+mkdir -p "$tmp/smi"; echo 0 > "$tmp/smi/n"
+cat > "$tmp/smi/nvidia-smi" <<STUB
+#!/bin/bash
+[[ \$* == *utilization* ]] && { echo "97, 88.5"; exit; }
+n=\$(cat "$tmp/smi/n"); echo \$((n + 1)) > "$tmp/smi/n"
+t=(90.5 85 75 65); echo "\${t[\$n]:-65}"
+STUB
+chmod +x "$tmp/smi/nvidia-smi"
+out=$(PATH="$tmp/smi:$PATH" INCOMING_GPU_COOL_POLL=0 INCOMING_GPU_COOL_MAX=900 gpu_cool 2>&1)
+[ "$(cat "$tmp/smi/n")" = 4 ] && [[ $out == *"GPU at 90 °C: cooling to 70 °C"* ]] \
+  && ok "hot GPU: the next client waits until 70 °C ($out)" || bad "cool-down: $(cat "$tmp/smi/n") calls, $out"
+echo 3 > "$tmp/smi/n"
+out=$(PATH="$tmp/smi:$PATH" INCOMING_GPU_COOL_POLL=0 INCOMING_GPU_COOL_MAX=900 gpu_cool 2>&1)
+[ "$(cat "$tmp/smi/n")" = 4 ] && [ -z "$out" ] && ok "cool GPU: no wait" || bad "cool GPU waited: $out"
+echo 0 > "$tmp/smi/n"
+out=$(PATH="$tmp/smi:$PATH" INCOMING_GPU_COOL_POLL=1 INCOMING_GPU_COOL_MAX=1 gpu_cool 2>&1); rc=$?
+[ $rc = 0 ] && [ "$(cat "$tmp/smi/n")" -le 2 ] && ok "cool-down gives up after its maximum (wall time)" || bad "cool-down max: $rc $(cat "$tmp/smi/n")"
+echo 1 > "$tmp/smi/n"
+out=$(PATH="$tmp/smi:$PATH" INCOMING_GPU_COOL_MAX=0 gpu_cool 2>&1)
+[ "$(cat "$tmp/smi/n")" = 1 ] && ok "cool-down with no time left reads no sensor" || bad "cool-down MAX=0 read the sensor"
 
 lease_status >/dev/null && bad "empty lease is busy" || ok "GPU free without a lease"
 lease_take FZD /x/wt-FZD && ok "FZD acquired" || bad "FZD did not acquire a free GPU"
@@ -248,5 +276,26 @@ else
   kill $j 2>/dev/null; wait $j 2>/dev/null
   out=$(PRISM_DIR=$tmp/prism INCOMING_GPU_OWNER=SH "$ROOT/tools/laptop_job.sh" --in-unit gpu quick $$ -- bash -c 'exit 3' 2>&1); rc=$?
   [ $rc = 3 ] && [[ $out != *"Artem's game"* ]] && ok "job without his game keeps its own exit code" || bad "plain job: code $rc $out"
+fi
+
+# a running client's GPU samples go to the load log under its owner, one per renewal; a job's CPU goes there at its stop
+lease_take wave /x/wt-wave >/dev/null 2>&1
+( PATH="$tmp/smi:$PATH" INCOMING_GPU_RENEW=0.2 DELEGATE_TASK=mission-wave gpu_client_hold wave /x/wt-wave "sample test" && sleep 1.2 )
+sleep 0.5; lease_release wave
+grep -qP '^gpu\t[0-9]+\tmission-wave\t0.2\t97\t88.5$' "$tmp/load.tsv" && ! grep -qP '^gpu\t[0-9]+\twave\t' "$tmp/load.tsv" \
+  && ok "client GPU samples billed to the client's task, not the lease name: $(grep -c '^gpu' "$tmp/load.tsv")" \
+  || bad "GPU samples: $(cat "$tmp/load.tsv" 2>/dev/null)"
+# handoff: once another client's pid is in the holder file, the old renewal writes nothing more
+lease_take wave /x/wt-wave >/dev/null 2>&1
+( PATH="$tmp/smi:$PATH" INCOMING_GPU_RENEW=0.2 DELEGATE_TASK=old-task gpu_client_hold wave /x/wt-wave "handoff test" \
+    && echo "1 2" > "$GPU_CLIENT.pid" && sleep 1.2 )
+sleep 0.5; lease_release wave
+! grep -q 'old-task' "$tmp/load.tsv" && ok "a renewal stops sampling when another client holds the lock" \
+  || bad "samples after handoff: $(grep -c old-task "$tmp/load.tsv")"
+if systemctl --user show-environment >/dev/null 2>&1; then
+  DELEGATE_TASK=wave timeout 60 "$ROOT/tools/laptop_job.sh" acct -- bash -c 'exit 3' >/dev/null 2>&1; rc=$?
+  sleep 0.5
+  [ $rc = 3 ] && grep -qP '^cpu\t[0-9]+\twave\tincoming-job-acct-[0-9]+\.service\t[0-9]+\t[0-9.]+$' "$tmp/load.tsv" \
+    && ok "job CPU in the load log at its stop, exit code kept" || bad "job accounting: $rc $(grep '^cpu' "$tmp/load.tsv")"
 fi
 exit $fail

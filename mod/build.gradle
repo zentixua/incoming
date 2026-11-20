@@ -246,6 +246,12 @@ neoForge {
             def jfr = System.getenv('INCOMING_JFR') == 'profile' ? 'profile' : 'default'
             jvmArgument "-XX:StartFlightRecording=name=incoming,settings=${jfr},disk=true,maxage=30m,maxsize=256m,dumponexit=true,filename=run.jfr"
             jvmArgument '-Xlog:gc*,safepoint:file=gc.log:time,uptime'
+            // A run dies at its first JVM-raised OutOfMemoryError instead of hanging with its other threads alive (an OOM'd
+            // scenario sweep otherwise sits for hours with no exit for a waiting job to see). Crash, not Exit: the crash path
+            // keeps the recording as hs_err_pid*.jfr beside hs_err_pid*.log (the JDK 21 runtime leaves run.jfr empty then),
+            // ExitOnOutOfMemoryError loses it entirely; no core dump
+            jvmArgument '-XX:+CrashOnOutOfMemoryError'
+            jvmArgument '-XX:-CreateCoredumpOnCrash'
         }
     }
     mods {

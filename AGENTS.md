@@ -200,20 +200,23 @@ Project threads do not read `.claude/skills/` or `.claude/settings.json`).
 
 Agent workflow: task → branch → code → build/tests → PR → CI → one review round → merge. Extra checks only for
 visuals/sound/FPS, since tests cannot judge beauty or lag. First principles throughout: derive from how the thing
-actually works, fix the real cause.
+actually works, fix the real cause. **Sustainable pace** (Artem, 20.11): routine delivery, short lead time, no
+queues, little rework; each mission's budget is checked against its measured load (laptop-agents `mission`).
 - **One owner per task:** the owner implements, validates, handles review and merges; overlapping edits are
   coordinated; unfinished work is handed over with branch/PR, checked commit, measurements, risks and next action.
   The owner chooses the implementation and records a substantial decision (context, alternatives, choice,
   consequences) in the PR or a design document; disagreements are settled with code, tests or measurements. A
   concrete correctness, data-loss or budget defect blocks; preference alone does not.
 - **Ready-made first** (Artem, 22.10): search mods/addons/libraries/tools before custom code (Modrinth, CurseForge,
-  GitHub; Fabric via Roxy/Sinytra Connector). Custom only if no ready-made solution, reason in one PR line. Our ban
+  GitHub; Fabric via Roxy/Sinytra Connector) and the mod's own systems (a new renderer only with a frame or measurement
+  showing the existing one fails). Custom only if no ready-made solution, reason in one PR line. Our ban
   on vanilla/other-mod mixins concerns our code, not an argument against other mods. A new mod or library that
   clearly helps is welcome: try briefly, tell Artem what it gives and costs; a new required pack mod needs his word.
 - **License** (Artem, 22.10): Incoming is GPL-3.0-only; copy code only under compatible licenses (GPL-3.0, MIT, CC0),
   from All-Rights-Reserved or closed mods take ideas only (the license is in the jar's `mods.toml`).
 - **Plan only large changes:** before coding, a few PR-description lines of what players see/hear and the law
-  (existing mod law, new laws sourced). Small edits directly.
+  (existing mod law, new laws sourced). Small edits directly. A brief gives goal, decisions, references, done numbers,
+  not the implementation. The player outcome stays fixed: fixing evidence stays in, new outcomes go to a follow-up PR.
 - **Validation:** code changes need build and touched-area GameTest (`./gradlew build`; GameTest through `tools/laptop_job.sh … --
   ./gradlew runGameTestServer -PgametestOnly=…`). Numeric claims get unit tests/GameTest; comment/guide promises held
   by tests. Documentation-only changes use the applicable CI checks, without a game run. Open draft immediately
@@ -236,9 +239,8 @@ actually works, fix the real cause.
   frame-judge or review rounds) or the timebox without a measured shift toward the goal → stop, find the root cause from
   the recorded data (deep-debug skill), write it with its number in the PR or the executor's report, then act on it: fix that cause,
   change the approach, or correct the test or reference. A new approach is one possible outcome, not the automatic one.
-- **One GPU session at a time** (`tools/gpu_lease.sh`: other sessions' GPU clients/`--gpu` jobs refuse, naming holder;
-  at most two sessions queue, a third is refused); finish with `tools/sandbox.sh stop`, then `tools/gpu_lease.sh
-  release`. CPU clients need no lease, limited only by memory (`soft_gl.sh` admission).
+- **One GPU session at a time** (`tools/gpu_lease.sh`, queue and cool-down in `tools.md`); finish with
+  `tools/sandbox.sh stop`, then `tools/gpu_lease.sh release`. CPU clients need no lease (`soft_gl.sh` admission).
 - **Independent review** by the other vendor (if unavailable, a fresh session of the same vendor), effort high (Artem,
   20.11). The reviewer reads the diff and surrounding code, not the PR description or the author's conclusions, and
   leaves its reproducing probe as a file, which becomes the regression test. Each agent only where it is strong

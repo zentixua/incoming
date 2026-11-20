@@ -15,8 +15,9 @@ set -uo pipefail
 HERE=$(cd "$(dirname "$0")" && pwd); ROOT=$(cd "$HERE/../.." && pwd)
 NAME=$1 SPEC=$2; shift 2
 export JAVA_HOME=${JAVA_HOME:-$HOME/.var/app/org.prismlauncher.PrismLauncher/data/PrismLauncher/java/java-runtime-delta}
-# GPU lease owner is the bench (a Claude tree would otherwise name it after its session)
-export INCOMING_GPU_OWNER=${INCOMING_GPU_OWNER:-stand}
+# GPU lease owner: the delegated task running the bench (its load counts to the task), else the bench (a Claude tree would
+# otherwise name it after its session)
+export INCOMING_GPU_OWNER=${INCOMING_GPU_OWNER:-${DELEGATE_TASK:-stand}}
 # play does not receive its own --label/--spec from CLI: label and path come from prepare
 args=() label= against= against_label= play_only=()
 while [ $# -gt 0 ]; do
