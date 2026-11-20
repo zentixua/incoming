@@ -162,8 +162,9 @@ paths:
   freed once, also when a queued solve is cancelled before it runs), snapshots every chunk within `Collapse.C` of a removal and its neighbors in
   5 ms portions (unready or plot-grid chunks are missing — support mass, no loads; a removal the snapshot shows filled
   again is no loss; a datapack reload between portions abandons), and starts the solve on the game's background workers
-  (not `RuinWorkers`: a nuke's ruin queue would hold it for minutes; inline on a GameTest server, whose unpaused ticks
-  would race a worker; the salvo bench sets `incoming.collapse.worker` to measure the game's path). The solve orders the fall (non-load-bearing first, load-bearing bottom-up) and picks the rubble
+  (not `RuinWorkers`: a nuke's ruin queue would hold it for minutes; also on a GameTest server: an inline solve took up to ~1 s
+  of one CI tick and put the world clock ahead of game time for later batches, `grid_nuke_destroyed` failed; collapse
+  tests have long timeouts instead). The solve orders the fall (non-load-bearing first, load-bearing bottom-up) and picks the rubble
   share (`Debris.SOLID_SHARE`, same hash as the nuclear landing). The fall is a second job queued when the solve starts
   (`Fall`): `UnitQueue` cancels a job unready `GIVE_UP_TICKS` after it was queued, and one queued at the strike can wait
   long behind a salvo. It abandons the plan if a removal holds a load-bearing block again; one zero-radius

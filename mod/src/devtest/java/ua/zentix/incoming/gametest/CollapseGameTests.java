@@ -156,12 +156,12 @@ public final class CollapseGameTests {
      * The missile takes out more wall than the storeys above can span, and they come down; the drone's hole stays spanned.
      * The far end of the block stands; what stays up is held by the law (nothing left that the law would drop).
      */
-    @GameTest(template = "range", batch = "collapse", timeoutTicks = 900, skyAccess = true)
+    @GameTest(template = "range", batch = "collapse", timeoutTicks = 2400, skyAccess = true)
     public static void droneInFlatLeavesNothingHanging(GameTestHelper h) {
         inFlat(h, WeaponType.DRONE);
     }
 
-    @GameTest(template = "range", batch = "collapse", timeoutTicks = 900, skyAccess = true)
+    @GameTest(template = "range", batch = "collapse", timeoutTicks = 2400, skyAccess = true)
     public static void missileInFlatBringsDownStoreysAbove(GameTestHelper h) {
         inFlat(h, WeaponType.MISSILE);
     }
@@ -213,7 +213,7 @@ public final class CollapseGameTests {
      * Drone into a roof corner of a one-storey house: the hole and what it held go, the house stands; what stays up is
      * held by the law.
      */
-    @GameTest(template = "range", batch = "collapse", timeoutTicks = 900, skyAccess = true)
+    @GameTest(template = "range", batch = "collapse", timeoutTicks = 2400, skyAccess = true)
     public static void roofCornerKeepsTheHouse(GameTestHelper h) {
         quiet(h);
         ground(h);
@@ -246,7 +246,7 @@ public final class CollapseGameTests {
      * that advances 1 ms per block, every portion stops at the 5 ms deadline, so a whole storey does not come down in one
      * tick's work. Removals made by the test: the ground-floor walls of half the block.
      */
-    @GameTest(template = "range", batch = "collapse", timeoutTicks = 600, skyAccess = true)
+    @GameTest(template = "range", batch = "collapse", timeoutTicks = 2400, skyAccess = true)
     public static void fallPortionsByTime(GameTestHelper h) {
         quiet(h);
         ground(h);
@@ -286,7 +286,7 @@ public final class CollapseGameTests {
      * The hole was filled again (walls rebuilt) before the collapse looked: no support was lost, nothing falls (review
      * of #688: a repaired support must not count as a removal).
      */
-    @GameTest(template = "range", batch = "collapse", timeoutTicks = 600, skyAccess = true)
+    @GameTest(template = "range", batch = "collapse", timeoutTicks = 2400, skyAccess = true)
     public static void rebuiltSupportHolds(GameTestHelper h) {
         quiet(h);
         ground(h);
@@ -306,7 +306,7 @@ public final class CollapseGameTests {
     }
 
     /** A chest on a floor that falls: its contents come out (review of #688: nothing lost with the block). */
-    @GameTest(template = "range", batch = "collapse", timeoutTicks = 600, skyAccess = true)
+    @GameTest(template = "range", batch = "collapse", timeoutTicks = 2400, skyAccess = true)
     public static void chestContentsSurvive(GameTestHelper h) {
         quiet(h);
         ground(h);
@@ -358,13 +358,10 @@ public final class CollapseGameTests {
         quiet(h);
         boolean was = IncomingConfig.SERVER.collapse.get();
         IncomingConfig.SERVER.collapse.set(collapse);
-        // solves on the background workers, as in the game: the impact lane is what the server thread pays
-        System.setProperty("incoming.collapse.worker", "true");
         ServerLevel level = h.getLevel();
         java.util.List<net.minecraft.world.level.ChunkPos> forced = new java.util.ArrayList<>();
         StrikeGameTests.afterTest(h, () -> {
             IncomingConfig.SERVER.collapse.set(was);
-            System.clearProperty("incoming.collapse.worker");
             for (var c : forced) level.setChunkForced(c.x, c.z, false);
         });
         BlockPos o = h.absolutePos(new BlockPos(0, 0, 0));

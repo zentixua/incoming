@@ -211,17 +211,11 @@ public final class StrikeSupport {
                 Collapse.releaseBuffers();
             }
         };
-        // a GameTest server ticks without pauses: a worker's wall time would race the test's tick deadline (a bench measuring
-        // the server thread as in the game sets incoming.collapse.worker)
-        if (level.getServer() instanceof net.minecraft.gametest.framework.GameTestServer && !Boolean.getBoolean("incoming.collapse.worker")) {
-            solving = CompletableFuture.completedFuture(task.get());
-        } else {
-            try {
-                solving = CompletableFuture.supplyAsync(task, net.minecraft.Util.backgroundExecutor());
-            } catch (java.util.concurrent.RejectedExecutionException e) {
-                // workers shut down (server stopping)
-                solving = CompletableFuture.failedFuture(e);
-            }
+        try {
+            solving = CompletableFuture.supplyAsync(task, net.minecraft.Util.backgroundExecutor());
+        } catch (java.util.concurrent.RejectedExecutionException e) {
+            // workers shut down (server stopping)
+            solving = CompletableFuture.failedFuture(e);
         }
     }
 
