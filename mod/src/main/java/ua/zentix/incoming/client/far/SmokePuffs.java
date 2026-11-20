@@ -55,9 +55,10 @@ public final class SmokePuffs {
      * Numbers per waiting puff: place, σh, σv, soot, dust, droplets, dust albedo (3), number, source, smoke share
      * (opacity of the puff that is not the fire body, {@link #smokeShare}), whether this is a segment puff (1 — its own
      * frame, reflection and wander, as with tube puffs), the puff's look ({@link SmokeGrid.Look}, number) and its frame
-     * (for a look that is not {@code SMOKE}).
+     * (for a look that is not {@code SMOKE}), the share of direct sunlight that reaches it through the rest of its cloud
+     * ({@link #sunThrough}).
      */
-    static final int FIELDS = 17;
+    static final int FIELDS = 18;
     /**
      * Puffs of one source whose centers are closer than this share of the smaller σ (horizontally and vertically) — one
      * Gaussian with the same mass and moments: their sum from one Gaussian barely differs (for two equal ones at
@@ -129,6 +130,7 @@ public final class SmokePuffs {
         double fa = wa / w, fb = wb / w;
         // smoke share — average by what is visible (attenuation)
         held[a + 13] = fa * held[a + 13] + fb * held[b + 13];
+        held[a + 17] = fa * held[a + 17] + fb * held[b + 17];
         // source look (puff frame, grain, visibility, frame of its own look) — that of the one with more substance
         if (wb > wa) {
             held[a + 11] = held[b + 11];
@@ -1185,6 +1187,10 @@ public final class SmokePuffs {
             this.view = view;
             this.out = out;
             this.source = source;
+            sunX = SUN[0];
+            sunY = SUN[1];
+            sunZ = SUN[2];
+            sunKey = SUN[3];
             double growth = source.puffGrowth(seconds);
             this.age = FxAtlas.puffFrame(growth);
             this.sprayAge = FxAtlas.sprayFrame(growth);
@@ -1421,6 +1427,7 @@ public final class SmokePuffs {
             held[o + 14] = vary ? 1 : 0;
             held[o + 15] = look.ordinal();
             held[o + 16] = lookFrame;
+            held[o + 17] = 1;
         }
 
         /**
@@ -1433,7 +1440,12 @@ public final class SmokePuffs {
             boolean[] gone = new boolean[0];
             int count;
             long frame;
+            /** Sun (direction, direct share) the cached shadow ({@link #sunThrough}) was computed for. */
+            float sunX = Float.NaN, sunY, sunZ, sunKey;
         }
+
+        /** Sun of the frame ({@link SmokePuffs#sun}), captured on the client thread at {@link #begin}. */
+        private float sunX, sunY = 1, sunZ, sunKey;
 
         private final java.util.IdentityHashMap<SmokeGrid.Source, Merged> merges = new java.util.IdentityHashMap<>();
         private long frame;
@@ -1466,10 +1478,20 @@ public final class SmokePuffs {
                 java.util.Arrays.fill(merged, from, holding, false);
                 merge(held, from, holding, merged, CloudModel.SOOT_K, SmokeGrid.DROP_K);
                 System.arraycopy(held, start, m.out, 0, length);
+                m.sunX = Float.NaN;
                 System.arraycopy(merged, from, m.gone, 0, n);
                 m.count = n;
             }
             m.frame = frame;
+            // the cloud's own shadow: recomputed with the merge, or when the sun has moved since
+            if (m.sunX != sunX || m.sunY != sunY || m.sunZ != sunZ || m.sunKey != sunKey) {
+                sunThrough(held, from, holding, merged, sunX, sunY, sunZ, sunKey);
+                System.arraycopy(held, start, m.out, 0, length);
+                m.sunX = sunX;
+                m.sunY = sunY;
+                m.sunZ = sunZ;
+                m.sunKey = sunKey;
+            }
             for (int o = start + 12; o < end; o += FIELDS) held[o] = context;
             from = holding;
         }
@@ -2326,6 +2348,7 @@ public final class SmokePuffs {
             sprays = ctxSprays[c];
             look = LOOKS[(int) held[o + 15]];
             lookFrame = held[o + 16];
+            sunLit = sunLight(sunKey, held[o + 17]);
             current = i;
             blob(held[o], held[o + 1], held[o + 2], held[o + 3], held[o + 4], held[o + 5], held[o + 6], held[o + 7], (float) held[o + 8],
                     (float) held[o + 9], (float) held[o + 10], (int) held[o + 11], held[o + 13], held[o + 14] > 0.5);
@@ -2772,6 +2795,9 @@ public final class SmokePuffs {
             veils[a + 9] = Math.min(1, w / ext);
         }
 
+        /** Light of the puff being drawn against an unshadowed one ({@link #sunLight}). */
+        private double sunLit = 1;
+
         /**
          * Puff: in the plan pass ({@link #planning}) — only how many screens the cluster will close at share
          * {@link #share}; otherwise — squares and veil. vary — a segment's puff: its own frame, reflection and wander
@@ -2825,7 +2851,8 @@ public final class SmokePuffs {
             // ({@link #fit})
             double whole = planning ? 0 : veilShare();
             if (!planning && (veiled > 0 || whole > 0))
-                veil(this, px, py, pz, sh, sv, ks + kd + kw, ks, kd, kw, dr, dg, db, (veiled + (1 - veiled) * whole) * vis * air * smoke);
+                veil(this, px, py, pz, sh, sv, ks + kd + kw, ks, kd, kw, dr, dg, db, (veiled + (1 - veiled) * whole) * vis * air * smoke,
+                        (float) Math.pow(sunLit, 1 / 2.2));
             if (outside <= 0 || whole >= 1) return 0;
             // out of frame — not needed: the ball of the whole puff square (a puff — up to 1.2 radius, its spot — up to
             // ~0.9 from the middle)
@@ -2835,7 +2862,9 @@ public final class SmokePuffs {
             // sky light — brightness of what the lightmap lights blocks and particles with under open sky
             // (FarView.sky), with the puff's scatter; its tint (at night — lilac) — in the shader only for sky light,
             // not for fire (FxSkyTint)
-            float lit = (float) ((0.88 + 0.24 * unit(h)) * view.skyLight());
+            // the cloud's own shadow takes the direct part of the sun's light ({@link #sunThrough}); the colour is the
+            // thick-layer colour in display units, so the linear light factor goes with power 1/2.2
+            float lit = (float) ((0.88 + 0.24 * unit(h)) * view.skyLight() * Math.pow(sunLit, 1 / 2.2));
             float cr = thick(ks, kd, kw, dr) * lit, cg = thick(ks, kd, kw, dg) * lit, cb = thick(ks, kd, kw, db) * lit;
             double light = shade(ks, kd, kw, dg);
             float shade = (float) (light / BAKED_K), sprayShade = (float) (light / SPRAY_K);
@@ -3145,6 +3174,60 @@ public final class SmokePuffs {
      */
     static final double NEAR_FROM = 0.3, NEAR_FADE = 1.2;
 
+    /**
+     * Sun of the frame for the clouds' own shadow ({@link #sunThrough}): direction to the sun or moon (x, y, z) and the
+     * share of direct light in its light, as {@code FxLayer.sun} gives the layer ({@code FxSun}); set on the client thread,
+     * read by {@link Draw#begin}. Share 0 (no frame yet, tests) — no shadow.
+     */
+    private static final float[] SUN = {0, 1, 0, 0};
+
+    /** {@link #SUN} for the next frames (client thread). */
+    public static void sun(float x, float y, float z, float key) {
+        SUN[0] = x;
+        SUN[1] = y;
+        SUN[2] = z;
+        SUN[3] = key;
+    }
+
+    /**
+     * Light of a puff that a share {@code through} of the direct light reaches, against an unshadowed puff: the direct
+     * part {@code key} of the light is taken by the cloud in front of the sun, the sky's part stays.
+     */
+    static double sunLight(double key, double through) {
+        return 1 - key * (1 - Math.clamp(through, 0, 1));
+    }
+
+    /**
+     * The cloud's own shadow: for each puff of one source (records {@code from}…{@code to} of {@code held}, merged ones
+     * skipped), the share of the direct beam toward the sun (unit direction x, y, z) that passes the source's other
+     * puffs, e^(−Στ), τ — the thickness along the ray from the puff's middle through each Gaussian ({@link #sightDepth},
+     * attenuation after delta-Eddington, as the puffs are drawn). A puff's own shadow is in its maps (the baked billow);
+     * the shadow of the whole cloud was not anywhere: every puff of a black cloud was lit as if alone in the sky, and the
+     * cloud's underside and core came out as bright as its top (sandbox missile cloud, side sun: flanks 67 and 89 of 255,
+     * underside 81 against the top 90; daylight footage of fuel-fire smoke: near-black core under lit lobes). Share 0 —
+     * no direct light, nothing to compute.
+     */
+    static void sunThrough(double[] held, int from, int to, boolean[] merged, float x, float y, float z, float key) {
+        for (int i = from; i < to; i++) {
+            if (merged[i]) continue;
+            int o = i * FIELDS;
+            if (!(key > 0)) {
+                held[o + 17] = 1;
+                continue;
+            }
+            double tau = 0;
+            for (int j = from; j < to; j++) {
+                if (j == i || merged[j]) continue;
+                int q = j * FIELDS;
+                double ext = SmokeGrid.SOOT_K * held[q + 5] + SmokeGrid.dustK((float) held[q + 8], (float) held[q + 9], (float) held[q + 10]) * held[q + 6]
+                        + SmokeGrid.DROP_K * held[q + 7];
+                if (!(ext > 0)) continue;
+                tau += sightDepth(held[q] - held[o], held[q + 1] - held[o + 1], held[q + 2] - held[o + 2], held[q + 3], held[q + 4], ext, x, y, z);
+            }
+            held[o + 17] = Math.exp(-tau);
+        }
+    }
+
     /** World light under open sky without block light (packed, for the lightmap). */
     private static final int OPEN_SKY = LightTexture.pack(0, 15);
 
@@ -3369,8 +3452,8 @@ public final class SmokePuffs {
      * melted.
      */
     private static void veil(Draw d, double px, double py, double pz, double sh, double sv, double ext, double ks, double kd, double kw, float dr,
-                             float dg, float db, double share) {
-        float cr = thick(ks, kd, kw, dr), cg = thick(ks, kd, kw, dg), cb = thick(ks, kd, kw, db);
+                             float dg, float db, double share, float lit) {
+        float cr = thick(ks, kd, kw, dr) * lit, cg = thick(ks, kd, kw, dg) * lit, cb = thick(ks, kd, kw, db) * lit;
         d.veilAdd(d.out, d.view, px, py, pz, sh, sv, ext, cr, cg, cb, share);
     }
 

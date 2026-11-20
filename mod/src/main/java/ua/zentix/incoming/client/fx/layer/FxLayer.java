@@ -467,6 +467,8 @@ public final class FxLayer {
         }
         key *= net.minecraft.util.Mth.clamp(y / 0.1f, 0, 1) * (1 - 0.8f * level.getRainLevel(partial));
         s.safeGetUniform("FxSun").set(x, y, 0f, key);
+        // the same sun for the clouds' own shadow (SmokePuffs.sunThrough)
+        ua.zentix.incoming.client.far.SmokePuffs.sun(x, y, 0f, key);
     }
 
     /**
