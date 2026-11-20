@@ -238,13 +238,14 @@ neoForge {
             systemProperty 'forge.logging.markers', 'REGISTRIES'
             logLevel = org.slf4j.event.Level.INFO
             // Always-on telemetry in every run (AGENTS.md, "One run answers everything"; deep-debug skill): a JFR ring of
-            // the last 30 minutes, dumped on exit to <run>/logs/run.jfr (default settings, about 1 % CPU;
-            // INCOMING_JFR=profile records with the profile settings), and the GC and safepoint log <run>/logs/gc.log
+            // the last 30 minutes, dumped on exit to <run>/run.jfr (default settings, about 1 % CPU; INCOMING_JFR=profile
+            // records with the profile settings), and the GC and safepoint log <run>/gc.log. Relative to the run's working
+            // directory (its game directory, which ModDevGradle creates for Gradle and IDE launches alike): no logs/ to
+            // create first, and no ':' or ',' of an absolute path inside the option values. Outside logs/, so CI's public
+            // failure artifacts (logs/) never carry a recording, whose JVM events include the environment
             def jfr = System.getenv('INCOMING_JFR') == 'profile' ? 'profile' : 'default'
-            jvmArguments.add(gameDirectory.map { d ->
-                "-XX:StartFlightRecording=name=incoming,settings=${jfr},disk=true,maxage=30m,maxsize=256m,dumponexit=true,filename=${new File(d.asFile, 'logs/run.jfr').absolutePath}".toString()
-            })
-            jvmArguments.add(gameDirectory.map { d -> "-Xlog:gc*,safepoint:file=${new File(d.asFile, 'logs/gc.log').absolutePath}:time,uptime".toString() })
+            jvmArgument "-XX:StartFlightRecording=name=incoming,settings=${jfr},disk=true,maxage=30m,maxsize=256m,dumponexit=true,filename=run.jfr"
+            jvmArgument '-Xlog:gc*,safepoint:file=gc.log:time,uptime'
         }
     }
     mods {
@@ -253,11 +254,6 @@ neoForge {
             sourceSet(sourceSets.devtest)
         }
     }
-}
-// -Xlog:gc writes to logs/ of the run directory, and the JVM does not create that directory itself nor start without it
-// (fresh clone, cloud); rigLaunch scripts create it themselves
-tasks.matching { it.name.startsWith('run') && it.hasProperty('gameDirectory') }.configureEach { task ->
-    task.doFirst { new File(task.gameDirectory.get().asFile, 'logs').mkdirs() }
 }
 neoForge.addModdingDependenciesTo(sourceSets.devtest)
 // unit tests of code that holds data in Minecraft classes (Vec3, NBT), without starting the game

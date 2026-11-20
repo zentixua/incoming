@@ -228,8 +228,8 @@ actually works, fix the real cause.
 - **One run answers everything** (Artem, 18.11): before any run that observes the system (test, measurement,
   reproduction), decide every question it must answer and record everything that could bear on them, so one run is
   enough to name the cause by number. A guess is not a result; a rerun only to add a forgotten probe is waste. Every
-  run records by default (Artem, 20.11): JFR ring and GC log (`build.gradle`, all runs), spark in dev clients, mod
-  timing markers, full logs; read them before any rerun.
+  run records by default (Artem, 20.11): JFR ring and GC log (`build.gradle`, all runs), spark in hand-run clients,
+  servers and scenarios, mod timing markers, full logs; read them before any rerun.
   Tooling for the mod: the `deep-debug` skill. **Study before coding** (Artem, 20.11): for a look or performance
   defect, one such run on our frame and on the reference footage, then the design from those numbers. **No guess-tuning** (Artem, 20.11): a defect that survives three rounds
   of tweaks means the model is wrong; stop tweaking and change the model.
