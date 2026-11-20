@@ -72,7 +72,9 @@ soft_mem_ok() {
 
 tree_id() {
   local root; root=$(readlink -m "${1:-$(dirname "${BASH_SOURCE[0]}")/..}")
-  echo "$(basename "$root")-$(printf %s "$root" | md5sum | cut -c1-6)"
+  # name cut to 40 bytes: wayland-incoming-soft-sandbox-<id> stays inside the 107-byte socket path limit
+  local base; base=$(basename "$root"); base=${base:0:40}
+  echo "$base-$(printf %s "$root" | md5sum | cut -c1-6)"
 }
 
 soft_display() {

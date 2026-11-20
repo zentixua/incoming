@@ -60,6 +60,7 @@ PY
 AUDIO=$tmp/audio.wav
 fx() {
   echo "$1" >> "$tmp/fx.log"
+  echo "${FX_LIMIT:-} $1" >> "$tmp/limit.log"
   if [[ $1 == "shots "* ]]; then
     local a=($1); mkdir -p "$FX/out/${a[1]}"
     printf '{"name": "%s", "audio": {"file": "%s", "start": 44, "from": 0, "seconds": %s}, "frames": []}\n' "${a[1]}" "$AUDIO" "${a[3]:-0}" > "$FX/out/${a[1]}/capture.json"
@@ -67,7 +68,7 @@ fx() {
 }
 : > "$tmp/fx.log"; mkdir -p "$FX/out/n3-wav"; echo soft > "$FX/renderer"; touch "$FX/out/n3-wav/keep.png"
 ( shot n3 'nuke 15 near' --at -0.5,1 --wav 2 --no-swap ) >/dev/null 2>&1; rc=$?
-take=$(sed -n 's/^shots \(\.wav-n3-[0-9]*\) none@-0.50 2$/\1/p' "$tmp/fx.log")
+take=$(sed -n 's/^shots \(\.wav-n3-[A-Za-z0-9]*\) none@-0.5 2$/\1/p' "$tmp/fx.log")
 [ $rc = 0 ] && grep -qx 'shots n3 -0.5,1 0' "$tmp/fx.log" && [ -n "$take" ] && [ "$(grep -cx 'nuke 15 near' "$tmp/fx.log")" = 2 ] \
   && [ "$(grep -n -x 'clear' "$tmp/fx.log" | tail -1 | cut -d: -f1)" -lt "$(grep -n "shots $take" "$tmp/fx.log" | cut -d: -f1)" ] \
   && ok "CPU shot: frames take without sound, cleared, then a sound take from -0.5 s ($take)" || bad "CPU shot: rc $rc $(tr '\n' ';' < "$tmp/fx.log")"
@@ -80,12 +81,20 @@ AUDIO=$tmp/missing.wav
 ( shot n5 'blast drone' --at 0.5 --wav 2 --no-swap ) >/dev/null 2>&1; rc=$?
 [ $rc != 0 ] && ok "CPU shot without a readable sound take fails" || bad "CPU shot with a broken sound take returned 0"
 AUDIO=$tmp/audio.wav
+# a client that recorded no sound (audio.start -1) fails the shot instead of a silent success
+python3 -c 'import json,sys; json.dump({"audio": {"file": sys.argv[1], "start": -1, "from": 0, "seconds": 2}}, open(sys.argv[2], "w"))' "$AUDIO" "$tmp/nosound.json"
+real_cut_wav "$tmp/nosound.json" "$tmp/nosound.wav" 2>/dev/null && bad "cut_wav without recorded sound returned 0" || ok "cut_wav fails when the client recorded no sound"
+# the deadline reads the same last frame as Java ("600," is "600"): 20 wall s per game s on a CPU renderer
+: > "$tmp/limit.log"
+( shot n6 'blast drone' --at 1,600, --wav 0 --no-swap ) >/dev/null 2>&1
+grep -qx '15600 blast drone' "$tmp/limit.log" && ok "CPU shot deadline from the last frame, trailing comma too" || bad "CPU deadline: $(tr '\n' ';' < "$tmp/limit.log")"
 : > "$tmp/fx.log"; echo gpu > "$FX/renderer"
 ( shot n4 'blast drone' --at 0.5 --wav 2 --no-swap ) >/dev/null 2>&1
 [ "$(grep -c '^shots' "$tmp/fx.log")" = 1 ] && grep -qx 'shots n4 0.5 2' "$tmp/fx.log" && ok "GPU shot: one take with sound" || bad "GPU shot: $(tr '\n' ';' < "$tmp/fx.log")"
 
 source "$ROOT/tools/soft_gl.sh"
-[ "$(tree_id /a/wt-main)" != "$(tree_id /b/wt-main)" ] && [[ $(tree_id /a/wt-main) == wt-main-* ]] && ok "tree id: alike names in different places differ" || bad "tree_id"
+long=$(printf 'x%.0s' $(seq 80))
+[ "$(tree_id /a/wt-main)" != "$(tree_id /b/wt-main)" ] && [[ $(tree_id /a/wt-main) == wt-main-* ]] && [ ${#long} = 80 ] && [ "$(tree_id "/a/$long" | wc -c)" -le 48 ] && ok "tree id: alike names in different places differ" || bad "tree_id"
 [ "$(printf 'MemoryCurrent=1048576000\nMemoryMax=4831838208\n\nMemoryCurrent=5890895872\nMemoryMax=infinity\n\nMemoryMax=3221225472\nMemoryCurrent=[not set]\n' | soft_mem_headroom)" = 6680 ] \
   && ok "promised memory: unused ceilings of CPU clients only, in either property order" || bad "soft_mem_headroom"
 [ "$(INCOMING_SOFT_HEAP=3g soft_mem_cap)" = 4608 ] && [ "$(INCOMING_SOFT_HEAP=1536m soft_mem_cap)" = 3072 ] && ok "CPU client ceiling: heap + 1.5 GB" || bad "soft_mem_cap"

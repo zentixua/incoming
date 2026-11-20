@@ -116,11 +116,13 @@ inhibit=(systemd-inhibit --what=sleep:idle --who="Incoming: $name" --why="mod ch
 code=0
 "${inhibit[@]}" \
   systemd-run --user --wait --pipe --collect --quiet --same-dir --unit="incoming-job-$name-$$" \
-    "${props[@]}" "${envs[@]}" -- "$(readlink -f "$0")" --in-unit "$mode" "$name" $$ -- "$@" 198>&- &
+    "${props[@]}" "${envs[@]}" -- "$(readlink -f "$0")" --in-unit "$mode" "$name" $$ -- "$@" 0<&0 198>&- &
 run=$!
+# stopping this script (Ctrl+C, TERM from a caller's timeout) stops its service: the client does not outlive the command
+trap 'systemctl --user stop "incoming-job-$name-$$" 2>/dev/null; wait $run; echo "laptop_job $name: stopped"; exit 143' TERM INT
 if [ "$mode" = soft ]; then
-  # hold the admission lock until the unit (and its MemoryMax) exists
-  for _ in $(seq 100); do systemctl --user is-active -q "incoming-job-$name-$$" && break; kill -0 $run 2>/dev/null || break; sleep 0.1; done
+  # hold the admission lock until the unit (and its MemoryMax) exists or the start failed: never while it is pending
+  until systemctl --user is-active -q "incoming-job-$name-$$" || ! kill -0 $run 2>/dev/null; do sleep 0.1; done
   exec 198>&-
 fi
 wait $run || code=$?

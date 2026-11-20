@@ -131,7 +131,8 @@ if [ -z "$GPU" ]; then
   # laptop_job --soft unit (idle CPU, ceiling, everything stopped with it). Inside such a unit already (someone wrapped
   # this script), the preparation shares its ceiling.
   source "$ROOT/tools/soft_gl.sh"
-  soft_mem_ok || exit 75
+  # inside a --soft unit its admission already counted this client
+  [ -n "${INCOMING_SOFT_UNIT:-}" ] || soft_mem_ok || exit 75
   soft_gl_env
   mkdir -p "$RUN/logs"
   "$ROOT/mod/gradlew" --no-daemon rigLaunch -PrigRun=runClientScenario -PrigOut=scenario -PscenarioDir=run/scenario -q --console=plain || exit 1

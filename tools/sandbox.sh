@@ -127,8 +127,10 @@ cut_wav() {
 import json, struct, sys, wave
 cap = json.load(open(sys.argv[1]))
 a = cap["audio"]
-if a["seconds"] <= 0 or a["start"] < 0:
+if a["seconds"] <= 0:
     sys.exit(0)
+if a["start"] < 0:
+    sys.exit("sound requested, but the client recorded none (audio.start -1: no audio.wav from OpenAL)")
 with open(a["file"], "rb") as f:
     data = f.read()
 pos, fmt, start = 12, None, None
@@ -328,6 +330,8 @@ shot() {
   fx "time $time" || exit 1
   fx "overlay $overlay" || exit 1
   local out="$FX/out/$name" limit=${FX_LIMIT:-3600}
+  # Java's split drops trailing empty fields: "600," is "600", so the deadline below must read the same last frame
+  while [[ $at == *, ]]; do at=${at%,}; done
   if [ "$(cat "$FX/renderer" 2>/dev/null)" = soft ]; then
     # a paced take runs down to 1 tick/s: the last frame's second may take 20 wall seconds per game second
     limit=$(awk -v l="${at##*,}" -v b="$limit" 'BEGIN { printf "%d", b + (l > 0 ? l : 0) * 20 }')
@@ -336,8 +340,11 @@ shot() {
     # CPU renderer: the frame take slows the world (Sandbox.paceFrame), so its sound is not real-time; sound comes from a
     # second take of the same effect at 20 ticks/s without frames, from the same second (frames before a front included),
     # in a staging directory of its own; its timing replaces the frame take's empty audio block in capture.json
-    local take=".wav-$name-$$" from
-    from=$(awk -v f="${at%%,*}" 'BEGIN { printf "%.2f", f < 0 ? f : 0 }')
+    # staging created here, atomically and fresh: never an existing shot's directory; the first frame's second passed as
+    # given, so both takes round it to the same tick
+    local take from=0
+    take=$(basename "$(mktemp -d "$FX/out/.wav-$name-XXXXXX")") || exit 1
+    awk -v f="${at%%,*}" 'BEGIN { exit !(f < 0) }' && from=${at%%,*}
     fx "shots $name $at 0" || exit 1
     FX_LIMIT=$limit fx "$effect" || exit 1
     fx clear || exit 1

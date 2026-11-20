@@ -40,7 +40,8 @@ Prism: `~/.var/app/org.prismlauncher.PrismLauncher/data/PrismLauncher/` (`tools/
                                            files only, safe on a live server's world): share of built blocks still in place by
                                            kind and distance ring, one-block spikes left standing, block columns at --spot=x,z
     client_scenario.sh <scenario> [shaders] [dh] [voxy] [lss] [gpu] ← client without a window (KWin virtual + Xwayland), frames and sound in WAV;
-                                           on the CPU unless shaders/dh/voxy/lss/vista/gpu (run it as laptop_job.sh --soft);
+                                           on the CPU unless shaders/dh/voxy/lss/vista/gpu (run it bare: Gradle writes the launch
+                                           script, then the client goes into its own laptop_job.sh --soft unit);
                                            scenarios and what each captures: in the script header
     sandbox.sh start|fx|swap|shot|restart|stop|jbr ← effects sandbox (on the CPU unless shaders/dh/gpu): a client with only the mod (+ Iris with a shaderpack, DH) in a
                                            flat world, an effect by the /fx command in seconds, hot code swap and
@@ -61,7 +62,8 @@ Prism: `~/.var/app/org.prismlauncher.PrismLauncher/data/PrismLauncher/` (`tools/
                                            job (polled every second) stops it: “Artem's game started at T: job stopped”, exit 75;
                                            at the end, “laptop_job <name>: exit N”; --status: what runs and who holds the GPU;
                                            --soft: a CPU-rendered client, no lease, CPUWeight=idle, MemoryMax from soft_gl.sh, no swap,
-                                           not stopped by Artem's game; without a sleep inhibitor where none is allowed (netcup)
+                                           not stopped by Artem's game; without a sleep inhibitor where none is allowed (a server);
+                                           TERM/Ctrl+C on laptop_job.sh stops its service (the client never outlives the command)
                                            A caller still waiting in the GPU queue dies with the agent's session cgroup at turn end
                                            (even setsid/nohup): start the wait in its own unit, `systemd-run --user
                                            --unit=incoming-wait-<name> --collect -p WorkingDirectory=$PWD --setenv=PATH="$PATH"

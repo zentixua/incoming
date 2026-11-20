@@ -173,8 +173,9 @@ default to it, `gpu` forces the GPU. No lease, no GPU queue; the client runs in 
 class, memory ceiling heap + 1.5 GB without swap, not stopped by Artem's game); `client_scenario.sh` puts it there
 itself after Gradle writes the launch script (`rigLaunch`, outside the ceiling). Refused (75) when available memory,
 less the unused ceilings of running CPU clients, cannot hold this ceiling plus a 4 GB reserve; `laptop_job.sh` checks
-under a lock until the unit exists, so simultaneous starts cannot both pass. Units and sockets carry `tree_id` (tree
-name and path hash). The picture is the GPU's (same GL core pipeline; the client logs `GL info: llvmpipe`); fps, layer GPU
+under a lock until the unit exists, so simultaneous starts cannot both pass. Gradle preparation (`rigLaunch`, `swap`)
+is ordinary build work outside the ceiling, like any build or GameTest. Units and sockets carry `tree_id` (tree name
+cut to 40 bytes and a path hash). The picture is the GPU's (same GL core pipeline; the client logs `GL info: llvmpipe`); fps, layer GPU
 times and the pall's budget are not frame costs: frame cost belongs to the GPU and `tools/stand`.
 - Laptop: nested KWin composes with QPainter (`KWIN_COMPOSE=Q`), Xwayland without glamor (`XWAYLAND_NO_GLAMOR=1`),
   the client takes Mesa's GLX (`__GLX_VENDOR_LIBRARY_NAME=mesa`): GLVND otherwise hands it the NVIDIA vendor that
@@ -187,7 +188,7 @@ times and the pall's budget are not frame costs: frame cost belongs to the GPU a
   ages 0.102, 0.521, 1.005, 3.009 s; unpaced 0.163, 0.524, 1.292, 3.061 s). Pacing follows the armed take, not the
   current rate: effects that `clear` first (`nuke … near`) and fast stretches that raised the rate keep it. A slowed
   take's sound is not real-time: `shot` records sound in a second take of the same effect at 20 ticks/s from the first
-  frame's second (`shots .wav-<name>-<pid> none@<s> <wav>`, its own staging directory), cuts the WAV from it and writes
+  frame's second (`shots .wav-<name>-XXXXXX none@<s> <wav>`, a fresh `mktemp` staging directory), cuts the WAV from it and writes
   its timing into the frames' `capture.json` (`audio.take`); the effect's deadline grows by 20 s per game second.
 - Mesa caches compiled shaders in `~/.cache/incoming-mesa-shaders`, shared by every tree: a cold llvmpipe compiles the
   nuclear volume shaders for 140 s (laptop) or 74 s (netcup) before `ready`; a cold blast's first frame takes seconds.
