@@ -6,11 +6,14 @@ changes what agents know. Checks:
   - CLAUDE.md is exactly `@AGENTS.md` (Claude Code reads AGENTS.md through it; Codex reads AGENTS.md directly).
   - AGENTS.md <= AGENTS_MAX bytes: Codex stops reading project AGENTS.md files at 32 KiB (project_doc_max_bytes;
     its global ~/.codex/AGENTS.md is not counted, measured 20.11), and every line costs every session attention.
-  - Every .claude/rules/*.md has a `paths:` list whose globs each match a tracked file (a rename leaves no dead
-    rule), and appears in AGENTS.md's rule list; every rule AGENTS.md lists exists.
-  - The plugin manifest, marketplace and hooks JSON parse; every hook script they name exists.
-  - Public repository: no IPv4 addresses (except loopback/any/multicast), private mounts, e-mail addresses or
-    claude.ai links in AGENTS.md, rules or plugin files.
+  - Every .claude/rules/*.md has strict frontmatter with a `paths:` list (Claude Code treats a rule with broken
+    frontmatter as unscoped: it would load into every session) whose globs each match a tracked file (a rename leaves
+    no dead rule), and appears in AGENTS.md's rule list; every rule AGENTS.md lists exists; no nested rule folders
+    (Claude Code reads .claude/rules recursively, the list and the hooks do not).
+  - The marketplace lists the `incoming` plugin at its folder; the plugin's hooks.json registers knowledge.py for
+    SessionStart, InstructionsLoaded, PostToolUse and Stop; every hook script named exists.
+  - Public repository: no IPv4 addresses (except loopback/any/multicast), private mounts, personal e-mail addresses
+    or claude.ai links in AGENTS.md, rules or any plugin file.
 Run: python3 tools/check_knowledge.py [repo root]; exit 1 with the list of problems.
 """
 
@@ -23,18 +26,20 @@ import sys
 from pathlib import Path
 
 AGENTS_MAX = 28 * 1024
+HOOK_EVENTS = {"SessionStart", "InstructionsLoaded", "PostToolUse", "Stop"}
 PLUGIN = Path(".claude/plugins/incoming")
 PRIVATE = [
     (re.compile(r"\b(?!127\.0\.0\.1\b|0\.0\.0\.0\b|224\.)(?:\d{1,3}\.){3}\d{1,3}\b"), "IPv4 address"),
     (re.compile(r"/mnt/project-files"), "private claude.ai project files path"),
     (re.compile(r"claude\.ai/(?:chat|project|artifact)"), "claude.ai link"),
-    (re.compile(r"[\w.+-]+@(?:gmail|proton|yahoo|outlook)\.\w+"), "e-mail address"),
+    (re.compile(r"[\w.+-]+@(?!(?:example\.(?:com|org)|anthropic\.com|users\.noreply\.github\.com)\b)[\w-]+\.[\w.-]+"),
+     "e-mail address"),
 ]
 
 
 def tracked(root: Path) -> list[str]:
-    out = subprocess.run(["git", "-C", str(root), "ls-files"], capture_output=True, text=True, check=True).stdout
-    return out.splitlines()
+    out = subprocess.run(["git", "-C", str(root), "ls-files", "-z"], capture_output=True, text=True, check=True).stdout
+    return [f for f in out.split("\0") if f]
 
 
 def glob_regex(glob: str) -> re.Pattern:
@@ -67,12 +72,16 @@ def check(root: Path) -> list[str]:
     files = tracked(root)
     listed = set(re.findall(r"`([\w-]+\.md)`", agents.split("## `.claude/rules/` files", 1)[-1]))
     rules = sorted((root / ".claude/rules").glob("*.md"))
+    for f in sorted((root / ".claude/rules").rglob("*")):
+        if f.parent != root / ".claude/rules" and f.is_file():
+            problems.append(f"{f.relative_to(root)}: nested rule files are not supported; keep rules flat")
     for f in rules:
         text = f.read_text(encoding="utf-8")
         globs = rule_paths(text)
         if not globs:
-            problems.append(f"{f.name}: no `paths:` frontmatter (an unpathed rule loads into every session and "
-                            "every project thread; put session-wide rules in AGENTS.md)")
+            problems.append(f"{f.name}: no strict `paths:` frontmatter (only `paths:` with `  - \"glob\"` items and an "
+                            "optional `description:`); an unscoped rule loads into every session and every project "
+                            "thread: put session-wide rules in AGENTS.md")
         for g in globs or []:
             rx = glob_regex(g)
             if not any(rx.match(t) for t in files):
@@ -89,17 +98,30 @@ def check(root: Path) -> list[str]:
         except (OSError, ValueError) as e:
             problems.append(f"{j.relative_to(root)}: {e}")
             continue
+        if j.name == "marketplace.json":
+            listed = {(p.get("name"), (root / p.get("source", "")).resolve()) for p in data.get("plugins", [])}
+            if ("incoming", plugin.resolve()) not in listed:
+                problems.append(f"marketplace.json does not list plugin `incoming` at ./{PLUGIN}")
         if j.name == "hooks.json":
+            registered = set()
             for event, groups in data.get("hooks", {}).items():
                 for g in groups:
                     for h in g.get("hooks", []):
                         for script in re.findall(r"\$\{CLAUDE_PLUGIN_ROOT\}/([\w./-]+)", h.get("command", "")):
                             if not (plugin / script).is_file():
                                 problems.append(f"hooks.json {event}: {script} does not exist in the plugin")
+                            elif script == "hooks/knowledge.py":
+                                registered.add(event)
+            for event in sorted(HOOK_EVENTS - registered):
+                problems.append(f"hooks.json: {event} does not run hooks/knowledge.py")
 
-    public = [agents_path, *rules, *[p for p in plugin.rglob("*") if p.is_file() and p.suffix in (".md", ".json", ".py")]]
+    public = [agents_path, *rules, *[p for p in plugin.rglob("*") if p.is_file() and "__pycache__" not in p.parts]]
     for f in public:
-        for n, line in enumerate(f.read_text(encoding="utf-8").splitlines(), 1):
+        try:
+            text = f.read_text(encoding="utf-8")
+        except UnicodeDecodeError:
+            continue  # binary
+        for n, line in enumerate(text.splitlines(), 1):
             for rx, what in PRIVATE:
                 if rx.search(line):
                     problems.append(f"{f.relative_to(root)}:{n}: {what} in a public file")

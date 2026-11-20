@@ -15,6 +15,8 @@ import unittest
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
+# Test repositories use a local bare origin under .../zentixua/; the real scope is github.com/zentixua (tested below).
+os.environ["KNOWLEDGE_ORIGIN_RE"] = r"^/.*/zentixua/[\w.-]+$"
 HOOK = ROOT / ".claude/plugins/incoming/hooks/knowledge.py"
 sys.path.insert(0, str(ROOT / "tools"))
 sys.path.insert(0, str(HOOK.parent))
@@ -96,7 +98,7 @@ class GateTest(unittest.TestCase):
 
     def test_rule_without_paths(self):
         self.repo.write(".claude/rules/area.md", "# no frontmatter\n")
-        self.assertTrue(any("no `paths:`" in p for p in self.problems()))
+        self.assertTrue(any("no strict `paths:`" in p for p in self.problems()))
 
     def test_dead_glob_after_rename(self):
         self.repo.write(".claude/rules/area.md", RULE.replace("src/a/**", "src/gone/**"))
@@ -115,12 +117,39 @@ class GateTest(unittest.TestCase):
         hooks.write_text(hooks.read_text().replace("hooks/knowledge.py", "hooks/nope.py"))
         self.assertTrue(any("nope.py does not exist" in p for p in self.problems()))
 
+    def test_hooks_must_stay_registered(self):
+        hooks = self.repo.root / ".claude/plugins/incoming/hooks/hooks.json"
+        hooks.write_text('{"hooks": {}}')
+        found = self.problems()
+        self.assertEqual(sum("does not run hooks/knowledge.py" in p for p in found), 4)
+
+    def test_marketplace_must_list_plugin(self):
+        self.repo.write(".claude-plugin/marketplace.json", '{"name": "m", "plugins": []}')
+        self.assertTrue(any("does not list plugin" in p for p in self.problems()))
+
+    def test_nested_rules_rejected(self):
+        self.repo.write(".claude/rules/sub/x.md", RULE)
+        self.assertTrue(any("nested rule" in p for p in self.problems()))
+
+    def test_broken_frontmatter_is_unscoped(self):
+        self.repo.write(".claude/rules/area.md", RULE.replace("---\n\n#", "oops: [\n---\n\n#"))
+        self.assertTrue(any("no strict `paths:`" in p for p in self.problems()))
+
+    def test_non_ascii_tracked_file_matches(self):
+        self.repo.write(".claude/rules/area.md", RULE.replace("src/a/**", "src/é/*.java"))
+        self.repo.write("src/é/É.java", "")
+        self.repo.commit("x")
+        self.assertEqual(self.problems(), [])
+
     def test_private_facts(self):
         self.repo.write("AGENTS.md", AGENTS + "server 10.1.2.3, loopback 127.0.0.1, see /mnt/project-files/x\n")
+        self.repo.write(".claude/plugins/incoming/hooks/run.sh", "curl https://192.168.4.4/ # me@company.dev\n")
         found = self.problems()
-        self.assertTrue(any("IPv4" in p for p in found))
+        self.assertTrue(any("IPv4" in p and "AGENTS.md" in p for p in found))
+        self.assertTrue(any("IPv4" in p and "run.sh" in p for p in found))
+        self.assertTrue(any("e-mail" in p for p in found))
         self.assertTrue(any("project files" in p for p in found))
-        self.assertEqual(sum("IPv4" in p for p in found), 1)  # loopback allowed
+        self.assertEqual(sum("IPv4" in p for p in found), 2)  # loopback allowed
 
 
 class HookTest(unittest.TestCase):
@@ -154,6 +183,16 @@ class HookTest(unittest.TestCase):
         self.assertFalse(rx.match("mod/c/Y.java"))
         self.assertTrue(knowledge.glob_regex("src/**/*.py").match("src/t.py"))
         self.assertFalse(knowledge.glob_regex("tools/*.py").match("tools/sub/t.py"))
+        self.assertTrue(knowledge.glob_regex("*.md").match("docs/a/b.md"))  # no slash: any depth
+        self.assertTrue(knowledge.glob_regex("src/[ab]/x.py").match("src/b/x.py"))
+        self.assertFalse(knowledge.glob_regex("src/[!ab]/x.py").match("src/a/x.py"))
+
+    def test_scope_is_github_zentixua_only(self):
+        rx = __import__("re").compile(knowledge.DEFAULT_ORIGIN_RE)
+        self.assertTrue(rx.match("https://github.com/zentixua/incoming.git"))
+        self.assertTrue(rx.match("git@github.com:zentixua/open-skies.git"))
+        self.assertFalse(rx.match("https://evil.example/zentixua/incoming.git"))
+        self.assertFalse(rx.match("https://github.com/other/zentixua/x.git"))
 
     def test_pointer_once_per_session(self):
         out = self.tool("Read", file_path=str(self.repo.root / "src/a/B.java"))
@@ -161,7 +200,7 @@ class HookTest(unittest.TestCase):
         self.assertIsNone(self.tool("Edit", file_path=str(self.repo.root / "src/a/B.java")))
 
     def test_shell_and_grep_paths(self):
-        out = self.tool("Bash", command="cd x; sed -n 1,20p src/a/B.java | head")
+        out = self.tool("Bash", command="cd src; sed -n 1,20p a/B.java | head")
         self.assertIn("area.md", self.context(out))
         self.data = Path(self.tmp.name) / "data2"  # fresh session state
         self.assertIn("area.md", self.context(self.tool("Grep", pattern="class", path=str(self.repo.root / "src/a"))))
@@ -177,6 +216,10 @@ class HookTest(unittest.TestCase):
         self.run_hook({"hook_event_name": "InstructionsLoaded", "file_path": str(self.repo.root / ".claude/rules/area.md"),
                        "load_reason": "path_glob_match"})
         self.assertIsNone(self.tool("Read", file_path=str(self.repo.root / "src/a/B.java")))
+
+    def test_listing_the_rule_does_not_count(self):
+        self.tool("Bash", command="ls .claude/rules/area.md")
+        self.assertIn("area.md", self.context(self.tool("Read", file_path=str(self.repo.root / "src/a/B.java"))))
 
     def test_reading_the_rule_counts(self):
         self.tool("Bash", command="cat .claude/rules/area.md")
@@ -198,6 +241,17 @@ class HookTest(unittest.TestCase):
         self.assertEqual(out["decision"], "block")
         self.assertIn("team.md", out["reason"])
         self.assertIsNone(self.run_hook({"hook_event_name": "Stop"}))
+
+    def test_shell_edit_counts_as_change(self):
+        self.run_hook({"hook_event_name": "SessionStart"})
+        with open(self.repo.root / "src/a/B.java", "a") as f:
+            f.write("// shell append\n")
+        self.assertEqual(self.run_hook({"hook_event_name": "Stop"})["decision"], "block")
+
+    def test_rule_load_does_not_erase_change(self):
+        self.tool("Edit", file_path=str(self.repo.root / "src/a/B.java"))
+        self.run_hook({"hook_event_name": "InstructionsLoaded", "file_path": str(self.repo.root / ".claude/rules/area.md")})
+        self.assertEqual(self.run_hook({"hook_event_name": "Stop"})["decision"], "block")
 
     def test_stop_respects_stop_hook_active(self):
         self.tool("Bash", command="git commit -qm x")
