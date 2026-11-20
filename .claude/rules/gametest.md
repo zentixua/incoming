@@ -78,6 +78,10 @@ paths:
   an open PR go in `Scenario.knownIssues` until merge: only the broken property (loiter or hit) is waived; others remain
   mandatory, and the scenario is excluded from baseline. Scenario loading is ideal — only `-PscenarioRealChunks`
   exposes area waits and synchronous waits for chunks already requested by a ticket.
+- Rail scenarios place the launcher directly (`ScenarioRun.launchSite`), without the launch sector check
+  (`LaunchSite.clearAhead`): a `HILL` can stand closer than a player's launcher could, so a failure there is still a
+  flight-law defect, judged against the terrain the game allows (`ClimbOutTest`). A failed scenario check prints the
+  projectile's per-tick flight log (`SCENARIO flight … log`): read it before any rerun.
 - Flight scale (`scale.flight_speed`) is a world setting for the entire server: a scale-1 check sets it through
   `StrikeGameTests.flightScale` (CUSTOM preset, restored afterward), running in its own `flight_scale_*` batch;
   otherwise neighboring tests in the batch would fly at someone else's scale.

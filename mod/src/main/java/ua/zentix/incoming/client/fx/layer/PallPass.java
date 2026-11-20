@@ -399,6 +399,18 @@ public final class PallPass {
          * haze — on a screen white wall, added over {@link #base}.
          */
         public final Vector3f sunLight = new Vector3f(), skyLight = new Vector3f(), fireLight = new Vector3f();
+        /**
+         * Sun light above the air, linear ({@code NukePall.Sky.top}; xyz): matter gets it through the air of its beam
+         * ({@code fx_pall}: {@code pallSunBeam}); zero once the sun is below the horizon of the highest matter (no sun branch, no
+         * shadow map). w — the eye's altitude above sea level ({@code WaterDecal.SEA_LEVEL}), blocks: a point's altitude is its
+         * eye-relative y plus it ({@code pallSunHeight}).
+         */
+        public final Vector4f sunTop = new Vector4f();
+
+        /** The sun lights some height this frame: its beam above the air is not zero. */
+        public boolean sunUp() {
+            return sunTop.x > 0 || sunTop.y > 0 || sunTop.z > 0;
+        }
         /** Screen frame skylight on a white wall: 1 by day, at night like dust wall billows ({@code FarView.ambient}). */
         public float base = 1;
         /**
@@ -706,8 +718,8 @@ public final class PallPass {
         GlStateManager._pixelStore(GL11.GL_UNPACK_SKIP_ROWS, 0);
         GlStateManager._pixelStore(GL11.GL_UNPACK_SKIP_PIXELS, 0);
         GL11.glTexSubImage2D(GL11.GL_TEXTURE_2D, 0, 0, 0, WIDTH, ROWS, GL11.GL_RGBA, GL11.GL_FLOAT, tableBuffer);
-        // mushroom shadow by day if map exists; otherwise no tiles (zero texels): composite skips the map
-        boolean shade = sh != null && shadowMap >= 0 && f.sun.w > 0 && f.mushroomCount > 0;
+        // mushroom shadow while the sun lights some height, if map exists; otherwise no tiles (zero texels): composite skips the map
+        boolean shade = sh != null && shadowMap >= 0 && f.sunUp() && f.mushroomCount > 0;
         if (!shade) {
             for (int k = 0; k < MushroomField.MUSHROOMS; k++) {
                 int at = (k * MushroomField.WIDTH + MushroomField.SHADOW_RECT) * 4;
@@ -819,6 +831,7 @@ public final class PallPass {
             m.safeGetUniform("PallMax").set(f.max.x, f.max.y, f.max.z);
             m.safeGetUniform("PallSun").set(f.sun.x, f.sun.y, f.sun.z, f.sun.w);
             m.safeGetUniform("PallSunLight").set(f.sunLight.x, f.sunLight.y, f.sunLight.z);
+            m.safeGetUniform("PallSunTop").set(f.sunTop.x, f.sunTop.y, f.sunTop.z, f.sunTop.w);
             m.safeGetUniform("PallSkyLight").set(f.skyLight.x, f.skyLight.y, f.skyLight.z);
             m.safeGetUniform("PallFireLight").set(f.fireLight.x, f.fireLight.y, f.fireLight.z);
             m.safeGetUniform("PallBase").set(f.base);

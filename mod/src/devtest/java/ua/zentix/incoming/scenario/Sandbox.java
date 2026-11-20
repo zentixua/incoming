@@ -129,6 +129,8 @@ final class Sandbox {
     private Boolean soft;
     /** Frames per tick while frames are due on a CPU renderer: a frame lands within half a tick of its second. */
     private static final double FRAMES_PER_TICK = 2;
+    /** Seconds before a due frame from which the CPU renderer's world is slowed ({@link #paceFrame}). */
+    private static final double PACE_LEAD = 2;
     /** Rate from arming to the first measured frames (≈ 2 frames per tick at 4 frames/s, the smoke-filled llvmpipe rate). */
     private static final double SOFT_START_RATE = 2;
     private double paceRate = 20, paceFrameS;
@@ -236,6 +238,9 @@ final class Sandbox {
         int audioTick;
         /** Second sound starts from, relative to the effect (≤ 0): the first frame's, or a sound-only take's own. */
         double audioFrom;
+        /** Time of day of each frame, −1: unchanged ({@link SandboxCommand#dayTimes}); index of the frame whose time is set. */
+        long[] days = new long[0];
+        int daySet = -1;
         final List<String> frames = new ArrayList<>();
 
         Capture(String name, double[] times, double wavSeconds, Path out) {
@@ -559,6 +564,7 @@ final class Sandbox {
                 }
                 armed = new Capture(c.args().getFirst(), c.times(), c.number(2, 0), out);
                 armed.audioFrom = c.audioFrom();
+                armed.days = c.dayTimes();
                 // slow before the effect: its first frames (new particles, first draw of a shader) are the slowest
                 pace(armed.times.length > 0 ? SOFT_START_RATE : 20);
                 quiet(armed.times.length == 0 && armed.wavSeconds > 0);
@@ -1479,8 +1485,18 @@ final class Sandbox {
         Capture cap = capture;
         if (cap == null || effectTick < 0 || cap.next >= cap.times.length) return;
         double t = cap.times[cap.next];
+        if (cap.next < cap.days.length && cap.days[cap.next] >= 0 && cap.daySet != cap.next) {
+            // this frame's time of day, set right after the previous frame: client at once, server so its periodic packet agrees
+            cap.daySet = cap.next;
+            long day = cap.days[cap.next];
+            mc.level.setDayTime(day);
+            onServer(false, s -> s.overworld().setDayTime(day));
+        }
         if (tick < effectTick + Math.round(t * 20) || !fullSize(mc)) {
-            paceFrame();
+            // far from the next frame the world runs at full rate: pacing a whole 130 s take on llvmpipe (1–3 frames/s
+            // with a mushroom in view) stretches it to tens of minutes; the last PACE_LEAD seconds settle the rate
+            if (effectTick + Math.round(t * 20) - tick > PACE_LEAD * 20) pace(20);
+            else paceFrame();
             return;
         }
         double age = (tick - effectTick + partial) / 20.0;
@@ -1495,7 +1511,8 @@ final class Sandbox {
             }
         });
         cap.frames.add(String.format(Locale.ROOT, "{\"t\": %.2f, \"age\": %.3f, \"file\": \"%s\", \"fps\": %d}", t, age, file, mc.getFps()));
-        Incoming.LOG.info("SANDBOX shot {} age {} s fps {}; layer: {}; smoke: {}; flight: {}; air: {}; pall: {}", file, String.format(Locale.ROOT, "%.3f", age), mc.getFps(),
+        Incoming.LOG.info("SANDBOX shot {} age {} s fps {} day time {}; layer: {}; smoke: {}; flight: {}; air: {}; pall: {}", file, String.format(Locale.ROOT, "%.3f", age), mc.getFps(),
+                mc.level.getDayTime() % 24000,
                 ua.zentix.incoming.client.fx.layer.FxLayer.describeTiming(), ua.zentix.incoming.client.far.FarRenderer.describeSmoke(),
                 ua.zentix.incoming.client.far.FarFlightView.describe(), ua.zentix.incoming.client.fx.ClientAir.now(),
                 ua.zentix.incoming.client.nuclear.NukePall.describe());

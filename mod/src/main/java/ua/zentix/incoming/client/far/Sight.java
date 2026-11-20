@@ -110,37 +110,83 @@ public final class Sight {
     /** Wavelength of {@link #RAYLEIGH} and of visibility range (Koschmieder: eye's peak sensitivity), nm. */
     static final double REFERENCE_NM = 550;
 
+    /** Mean earth radius, m (IUGG): the sun's beam to matter aloft grazes a round earth. */
+    public static final double EARTH_R = 6_371_000;
     /**
-     * Relative optical air mass toward a body at elevation with sine {@code sinElevation} (Kasten &amp; Young 1989, Appl. Opt. 28,
-     * 4735): m = 1 / (sin h + 0.50572·(h + 6.07995°)^−1.6364), 1 overhead, ≈ 3 at 19.3°, 38 at the horizon; below it as at the
-     * horizon (the sun is then under the hills of the world's own sky, and its light fades with {@code day}).
+     * Column {@link #column} returns in the earth's shadow: no beam (exp(−τ) of it is 0 at every channel); finite so that the
+     * shader copy needs no infinity.
      */
-    public static double airMass(double sinElevation) {
-        double h = Math.toDegrees(Math.asin(Math.max(0, Math.min(1, sinElevation))));
-        return 1 / (Math.sin(Math.toRadians(h)) + 0.50572 * Math.pow(h + 6.07995, -1.6364));
+    public static final double SHADOWED = 1e4;
+    /**
+     * Highest matter a sunbeam can light, m (a 1 Mt cap reaches ~25 km; stratopause above it): sunlight is computed while the sun
+     * stands above this height's horizon ({@link #sunAbove}).
+     */
+    public static final double SUN_TOP = 40_000;
+
+    /**
+     * Air column along a sunbeam, relative to the vertical column above the ground, from a point {@code height} m above ground
+     * toward elevation sine {@code sinElevation}, through air of scale height {@code scale} m over a round earth (Chapman function).
+     * Above the point's horizon: e^(−z/H)·√(2x)/(y + √(y² + 4/π)), x = (R + z)/H, y = √(x/2)·sin e — the Chapman function through
+     * the bound erfcx(y) ≤ 2/(√π·(y + √(y² + 4/π))) (Abramowitz &amp; Stegun 7.1.13), within 6 % of the integrated column
+     * (SightTest), exact overhead and along the horizon. Below it the beam passes its lowest point z_t = (R + z)·cos e − R twice
+     * (2·e^(−z_t/H)·√(πx_t/2)) less the column above the point; z_t ≤ 0 is the earth's shadow ({@link #SHADOWED}). A cap 6 km up
+     * keeps the sun to −2.5° (√(2z/R)), 15 km up to −3.9°. Refraction (0.57° at the horizon) and the sun disc are left out: the world's
+     * own sun sets at 0° for the eye, and the beam there is already e^−40 through the haze.
+     */
+    public static double column(double height, double sinElevation, double scale) {
+        double z = Math.max(height, 0), s = Math.max(-1, Math.min(1, sinElevation)), x = (EARTH_R + z) / scale;
+        if (s >= 0) return Math.exp(-z / scale) * chapman(x, s);
+        double c = Math.sqrt(1 - s * s), low = z * c - EARTH_R * s * s / (1 + c);
+        if (low <= 0) return SHADOWED;
+        double horizontal = 2 * Math.exp(-low / scale) * Math.sqrt(Math.PI * (EARTH_R + low) / (2 * scale));
+        return Math.min(horizontal - Math.exp(-z / scale) * chapman(x, -s), SHADOWED);
+    }
+
+    /** Chapman function above the horizon, x = (R + z)/H, {@code mu} the sine of elevation ≥ 0 ({@link #column}). */
+    private static double chapman(double x, double mu) {
+        double y = Math.sqrt(0.5 * x) * mu;
+        return Math.sqrt(2 * x) / (y + Math.sqrt(y * y + 4 / Math.PI));
+    }
+
+    /** Sun at elevation sine {@code sinElevation} stands above the horizon of a point {@code height} m up (beam not in earth shadow). */
+    public static boolean sunAbove(double sinElevation, double height) {
+        return column(height, sinElevation, AIR_HEIGHT) < SHADOWED;
+    }
+
+    /** Vertical optical depth of clean air (Rayleigh, {@link #RAYLEIGH} × {@link #AIR_HEIGHT}: 0.093 at 550 nm) at {@code nm}. */
+    static double cleanDepth(double nm) {
+        double clean = Math.min(RAYLEIGH, KOSCHMIEDER / CLEAR);
+        return clean * AIR_HEIGHT * Math.pow(REFERENCE_NM / nm, RAYLEIGH_EXPONENT);
     }
 
     /**
-     * Vertical optical depth of the clear-day air at wavelength {@code nm}: clean air (Rayleigh, {@link #RAYLEIGH} × {@link #AIR_HEIGHT}
-     * at 550 nm: 0.093) and haze of the clear-day visibility range ({@link Visibility#CLEAR}: Koschmieder extinction less clean air,
-     * × {@link #HAZE_HEIGHT}: 0.22 at 550 nm), each with its own wavelength law — the same air as {@link Air#at}.
+     * Vertical optical depth of clear-day haze at {@code nm}: Koschmieder extinction of the clear-day visibility range
+     * ({@link Visibility#CLEAR}) less clean air, × {@link #HAZE_HEIGHT} (0.22 at 550 nm), Ångström law — the same air as {@link Air#at}.
      */
+    static double hazeDepth(double nm) {
+        double clear = KOSCHMIEDER / CLEAR, clean = Math.min(RAYLEIGH, clear);
+        return (clear - clean) * HAZE_HEIGHT * Math.pow(REFERENCE_NM / nm, ANGSTROM);
+    }
+
+    /** Vertical optical depth of the clear-day air at {@code nm} above the ground: {@link #cleanDepth} + {@link #hazeDepth}. */
     static double verticalDepth(double nm) {
-        double x = REFERENCE_NM / nm, clear = KOSCHMIEDER / CLEAR, clean = Math.min(RAYLEIGH, clear);
-        return clean * AIR_HEIGHT * Math.pow(x, RAYLEIGH_EXPONENT) + (clear - clean) * HAZE_HEIGHT * Math.pow(x, ANGSTROM);
+        return cleanDepth(nm) + hazeDepth(nm);
     }
 
     /**
-     * Direct sunlight through the air at sun elevation sine {@code sinElevation}, per display channel relative to the overhead sun, into
-     * {@code into}: exp(−(m − 1)·τ_c) (Beer–Lambert along the air mass {@link #airMass}, {@link #verticalDepth} per channel). Overhead —
-     * 1, 1, 1: the frame's daylight is white at noon (the eye is adapted to it); toward the horizon the long path removes blue
-     * first — at m = 3 red over blue ×1.5 relative to noon (×1.85 absolute), the sun 0.53 as bright in green. One law at every
-     * elevation, no threshold.
+     * Direct sunlight through the air at sun elevation sine {@code sinElevation} on matter {@code height} m above ground, per display
+     * channel, into {@code into}: Beer–Lambert along the beam's slant column ({@link #column}) of clean air and haze, each with its
+     * height scale and wavelength law, relative to the overhead sun at the same height: exp(−Σ τ_c·(column(e) − column(90°))).
+     * Overhead — 1, 1, 1: the frame's daylight is white at noon at every height (the eye is adapted to it; the brighter beam aloft
+     * and the thinner sky above it offset, est.). Toward the horizon the long path removes blue first — on the ground at 19.3°
+     * (column 3) red over blue ×1.5 relative to noon, green half as bright. Above the haze the path stays short: a cap 10 km up
+     * at a 3° sun keeps 0.7 of its light, golden, while sea-level ground gets 0.6 % of its green; after ground sunset it keeps a red beam until its own
+     * horizon (earth's shadow rising up the cloud), then none. One law at every elevation and height, no threshold.
      */
-    public static void sunThroughAir(double sinElevation, double[] into) {
-        // relative to the formula's own overhead value (0.9997): exactly white at noon
-        double m = airMass(sinElevation) - airMass(1);
-        for (int c = 0; c < 3; c++) into[c] = Math.exp(-m * verticalDepth(CHANNEL_NM[c]));
+    public static void sunThroughAir(double sinElevation, double height, double[] into) {
+        double clean = column(height, sinElevation, AIR_HEIGHT) - column(height, 1, AIR_HEIGHT);
+        double haze = column(height, sinElevation, HAZE_HEIGHT) - column(height, 1, HAZE_HEIGHT);
+        for (int c = 0; c < 3; c++) into[c] = Math.exp(-(clean * cleanDepth(CHANNEL_NM[c]) + haze * hazeDepth(CHANNEL_NM[c])));
     }
 
     /** Segment-mean fraction of initial extinction when it rises by x height scales: (1 − e^−x) / x. */
