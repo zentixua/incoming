@@ -43,12 +43,13 @@ public final class Corridor {
     }
 
     /**
-     * {@link #highest} with and without the climb in one walk over the corridor.
+     * {@link #highest} with and without the climb in one walk over the corridor, and the column that sets the altitude
+     * needed now.
      *
-     * @return {highest terrain, altitude needed now with {@code climb}}
+     * @return {highest terrain, altitude needed now with {@code climb}, that column's centre x, z and terrain height}
      */
     public static double[] both(double[] track, double halfWidth, Climb climb, Relief relief) {
-        double[] max = {Double.NEGATIVE_INFINITY, Double.NEGATIVE_INFINITY};
+        double[] max = {Double.NEGATIVE_INFINITY, Double.NEGATIVE_INFINITY, 0, 0, Double.NEGATIVE_INFINITY};
         int lanes = Math.max(1, (int) Math.ceil(2 * halfWidth / LANE));
         double travelled = 0;
         for (int i = 0; i == 0 || i + 3 < track.length; i += 2) {
@@ -70,7 +71,13 @@ public final class Corridor {
                 double along = point ? 0 : Math.max(0, base + (x + 0.5 - sx) * ux + (z + 0.5 - sz) * uz);
                 double h = relief.at(x, z);
                 max[0] = Math.max(max[0], h);
-                max[1] = Math.max(max[1], h - climb.gain(along));
+                double needed = h - climb.gain(along);
+                if (needed > max[1]) {
+                    max[1] = needed;
+                    max[2] = x + 0.5;
+                    max[3] = z + 0.5;
+                    max[4] = h;
+                }
                 return true;
             };
             for (int k = 0; k <= lanes; k++) {

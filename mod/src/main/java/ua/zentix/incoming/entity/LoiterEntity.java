@@ -248,13 +248,11 @@ public class LoiterEntity extends StrikeProjectile {
      * Terrain on the course before the orbit ({@link ClimbOut}): raise cruise altitude to clear the highest terrain on
      * the course by the orbit's terrain clearance; if a straight climb cannot get there in time, circle up at the
      * phase's turn limit, to the orbit side unless only the other side's circle is clear. The course ends at the next
-     * route point or at the target (its orbit flies at its own height). Not while heading for an immediate dive at a
-     * nearby target the operator picked: the dive goes down to it.
+     * route point or at the target (its orbit flies at its own height).
      *
      * @return circling: the caller does not steer toward the course
      */
     private boolean climbOut(Vec3 nav, WeaponSpec.Agility a, double yawGain) {
-        if (strikeNow && onFinalLeg()) return false;
         double reach = Math.min(ClimbOut.REACH, Math.hypot(nav.x - getX(), nav.z - getZ()));
         climbOut.measure(craft, nav, Autopilot.Turn.of(yawGain, a), HANDLING.climbAngle(), reach, orbitSide);
         cruiseAlt = Math.max(cruiseAlt, climbOut.ridge() + LOITER.terrainClearance());
