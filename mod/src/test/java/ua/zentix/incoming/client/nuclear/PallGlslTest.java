@@ -330,7 +330,7 @@ class PallGlslTest {
      * The head's lobes are the dust's parcels: the share of the path with the wind per phase ({@code pallWallCarried}) is Java's
      * ({@link BlastWall#carriedShare}), the parcel's place ({@code pallWallOrigin}) the law of {@link BlastWall#origin}; a lobe ({@code pallLobe},
      * copy {@link WallLobes#lobe}) is its cell's parcel carried by that law and riding its share of the local top, not a place behind the front
-     * (billows would go with the front - complaint 18.10); its mass is the law's head over its cell; the presentation numbers and the hash are
+     * (billows would go with the front); its mass is the law's head over its cell; the presentation numbers and the hash are
      * Java's, so the eye's dust and the frame read the same lobes.
      */
     @Test
@@ -563,7 +563,7 @@ class PallGlslTest {
     }
 
     /**
-     * The head is dense aerosol lit from all sides (19.11: lit only by a layer from its top, the dense front's face had the zenith sky's
+     * The head is dense aerosol lit from all sides (lit only by a layer from its top, the dense front's face would have the zenith sky's
      * blue or nothing): the lofted front is opaque, so a lobe shows what a semi-infinite layer of its dust sends back (Hapke 1981) — beams (sun,
      * ball) single-scattered with the phase plus multiply scattered, through the pall over it and the other lobes; the sky dome (whiter toward
      * the horizon) over its upper half and the lit ground under its lower half by the hemispherical reflectance; the thick layer's colour

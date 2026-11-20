@@ -357,8 +357,8 @@ Sample emptySample() {
 // radiance taken equal to the zenith's
 const float WALL_HORIZON_WHITE = 0.6;
 // presentation: the emerging light's spectrum (a thick layer's, R∞ = (1 − γ)/(1 + γ), blue/red 0.62 for the reference dust) to this
-// power in all, toward the footage's ochre (Silo S3E09 and the sketch: saturation 0.45–0.67, hue 30–40°; the law's spectrum alone measured
-// 0.37 at hue 26°, 19.11 frames)
+// power in all, toward the footage's ochre (Silo S3E09 and the sketch: saturation 0.45–0.67, hue 30–40°; the law's spectrum alone gives
+// 0.37 at hue 26°)
 const float WALL_OCHRE = 1.6;
 
 // Mean head optical depth above a pall point h (pallWallAt) up to the local top: the column the lobes carry over it (pallWallMean's
@@ -1029,8 +1029,8 @@ vec3 lobeLightIn(sampler2D ground, mat4 S, mat4 V, vec4 R, vec4 W, vec4 G, vec4 
     float burn = pallBurn(r, 0.0, G.y, G.w) * (1.0 - 0.75 * PallSun.w) * (1.0 - L.wet);
     if (burn > 0.0) lit += min(diffuse * pallFlame(PallBase, FIRE * (burn * PallGlowOnSmoke) / DUST, FIRE) * (1.0 - up), gFlame);
     lit += diffuse * pallLampsAt(p);
-    // a lobe's rim the ray only grazes (its chord under two optical depths) is thin dust: single scattering, not a dense surface (19.11 q1:
-    // the surface terms at grazing view drew a bright line along every rim)
+    // a lobe's rim the ray only grazes (its chord under two optical depths) is thin dust: single scattering, not a dense surface (the
+    // surface terms at grazing view would draw a bright line along every rim)
     lit = mix(thin, lit, clamp(0.5 * tau, 0.0, 1.0));
     // presentation: toward the footage's ochre (WALL_OCHRE)
     vec3 rInf = (1.0 - gamma) / (1.0 + gamma);

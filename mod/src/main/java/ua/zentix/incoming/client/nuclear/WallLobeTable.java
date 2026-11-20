@@ -35,7 +35,7 @@ public final class WallLobeTable {
     public final float[] records = new float[ROWS * WIDTH * 4];
     public final float[] directory = new float[WIDTH * 4];
     public final float[] tiles = new float[TILE_ROWS * WIDTH * 4];
-    /** Records used; lobes dropped from full tile lists this frame (logged by the pass; 0 in the judged views). */
+    /** Records used; lobes dropped from full tile lists this frame, the farthest of each list (logged by the pass). */
     public int count, truncated;
     private final int[] owner = new int[CAPACITY];
     private final float[] tileDist = new float[TILES_X * TILES_Y * TILE_CAP];

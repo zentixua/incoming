@@ -536,8 +536,7 @@ class BlastWallTest {
     }
 
     /**
-     * 19.11 (frame review of #678): the face of the dense lofted front of a 1 Mt wall 2.76 km out at noon was black or the zenith sky's blue.
-     * The face is lit as an aerosol volume from all sides: a tenth of a block behind the leading edge, at the foot and mid-height, it is
+     * The face of the dense lofted front of a 1 Mt wall 2.76 km out at noon is not black nor the zenith sky's blue: the face is lit as an aerosol volume from all sides: a tenth of a block behind the leading edge, at the foot and mid-height, it is
      * lit brown dust (red over blue), at least a fifth as bright as the sunlit top (Silo S3E09 crests over clefts 2.8–4.8).
      */
     @Test
@@ -606,7 +605,7 @@ class BlastWallTest {
     }
 
     /**
-     * The roll-up (Artem 19.11, lead's formulation): dust parcels, not eddies. A parcel lofted at a place rides its share of the layer top there
+     * The roll-up (Artem, 19.11): dust parcels, not eddies. A parcel lofted at a place rides its share of the layer top there
      * ({@link BlastWall#origin}): thrown up as the front arrives — more than half of its rise in the lofting burst, the first 0.15 of the wedge, a third
      * of a second — then ever slower until it stands, then the heated layer lifts it a little; the wind behind the front carries it outward far less than the front runs. Seen from the
      * front it goes up and back, which is the curl. Its billow coordinates stay its own all the way (noise rides the parcel): the dust

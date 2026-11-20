@@ -763,9 +763,9 @@ paths:
   near matter is ordered against near dust. The Wilson cloud stays in the rays, and so does the dust-wall head: on each
   ray the volume ends at the last slice boundary before the ray enters a slot's head span (`froxelEnd`, `pallWallSpans`)
   and the rays begin there; the march, the composite (read-out and upsample correction) and `fx_pall_mix` take the same
-  boundary. The head is a roller a few dozen blocks thick moving with the wave: one point per cell averaged over frames
-  drew it as clumps with holes and stippled the ground dust right after the front (laptop check of 3.11.0, bisected to
-  #641), and the ground in front of the volume's boundary took a thinner head than behind it (a straight seam at 256). Emission past half-float range is
+  boundary. The head's lobes are a few dozen blocks thick and move with the wave: one point per cell averaged over frames
+  would draw them as clumps with holes, and the ground in front of the volume's boundary would take a thinner head than
+  behind it. Emission past half-float range is
   clamped, not dropped (a hole). Same-frame checks (32-px checker tiles, history off): the volume over 0–256 equals the
   per-pixel ray over that span (up view red 100.8 vs 101.2); sequential shots drift with fires and history, so A/B only
   within one frame.
@@ -818,45 +818,25 @@ paths:
   background's pall dug into the edge when the gaze moved.
 - The blast-wave dust wall and the Wilson cloud are in the same pall passes (`client/nuclear/BlastWall`, the laws —
   `nuclear.md`), not as square puffs: puffs on a ring tens of kilometres across either punched holes in the wall or cost
-  thousands of quads, and a rim of flat squares does not curl. The slot has a head (`PallWall0/1`, mat4: the dust edge,
-  the wedge's length and its top, extinction, the path of dust with the wind behind the front, spray above water, the
-  noise tile, density at the edge and at the end of the wedge) and the Wilson shell (`PallWilson0/1`). The head is read
-  in `slot` (`fx_pall`) next to the pall: the same light and the same matter (dust; over fires with smoke, spray over
-  water), but its own noise (`wallNoise`: in the coordinates of the dust itself, `pallWallOrigin` — puffs stand where
-  the dust was torn off; the puff shape is the same `pallShape` as the pall's, denser in thick matter) and its own
-  thicknesses toward the light along the middle head: the head is not a flat plane but a low long wedge, and light comes
-  in from the side too. Scattered light — `wallChord` up to the top of the wedge at that place, sideways up to the exit
-  from the wedge at its height, down to the terrain; beams toward the sun and the ball — `wallChordNear` up to the top
-  of the head (no farther than 1.5 wedges and the top), cells denser at a point by the square's number: four even steps
-  over the whole length stepped over the wedge at its edge, and deep in the head there was even light. Each sample of
-  these thicknesses (and of the puffs' shadow) has its own extinction (`wallMove`: the frame `pallWallInside`, from the
-  edge toward the end of the wedge `pallWallDensity`), as in `BlastWall.sigma`: from the edge to the end of the wedge it
-  changes many times over. The Java copy of the light is `NukePall.dustLight` (its laws — `BlastWallTest`);
-  `PallGlslTest` checks the head at a point and the ray samples against `BlastWall.sigma` (it assembles them with the
-  same text as the shader), and the handoff to the pall beyond the wedge is one constant `PALL_WALL_HANDOFF_TO` =
-  `BlastWall.HANDOFF_TO` in the frame, the ring of segments and the ray to the light. The ray at the head is denser: its
-  segments on the ray (`pallWallSpans`: a ring from the dust edge to 1.5 wedge lengths, by height — the terrain map with
-  the head) run on their own grid with an offset per frame, a step of an eighth of the head's height (a head thicker
-  than the step, the ray either went straight through or passed by, and accumulation gave ripple), over all segments —
-  no more than `steps` steps beyond the usual ones; inside a segment the step boundary is the nearer of its grid and the
-  usual one (at the eye the usual are denser: a wall passing through the viewer otherwise lost the near dust). What the
-  ray distinguishes (`cone`: small puffs, storm columns) — by the grid step there, not by a step cut by the entry into
-  the segment (that one is random from frame to frame, and small puffs would flicker). The Wilson cloud is a thin shell:
-  its two passes by the ray are events, like tornadoes (light and transmission in advance, into the ray when the step
-  reaches the pass). The quads of the layer take in front of them both the middle head and the shell (`fx.vsh`:
-  `pallWallThrough` — `pallWallTau`, four steps per segment, `pallWilsonThrough`; each segment and pass is in haze at
-  its place). The slot's frame grows to include the head and the shell (`NukePall.slot`), and the blast is in the frame
-  even when the pall's table has nothing yet. The cost in the head: up to 7 noise samples per step at one lobe octave, 14 in a cross-fade with both shadow taps in dust (was 5 before #678) (the tile shift,
-  puffs and small puffs in the dust's coordinates; the puffs' shadow — two puff samples), small ones only at the eye;
-  and 24 middle-head evaluations (21 — thicknesses toward the light and the puffs' shadow, 3 — under the puffs) —
-  arithmetic without samples: two powers and an exponent each (the lofting top `pallWallTop` and mass `pallLoftMass`, the heated rise),
-  and one more power per step (exit sideways) and the top of the wedge above the point — the head's ALU is about 10–20 %
-  more than the former wall envelope, with the same number of samples. The pall with the head and the Wilson cloud far
-  away fades in the air haze like a mushroom (`pallAir`, the frame's air `PallAir` — `Sight.Air` in the model's blocks):
-  the share of their opacity that the haze took up to the place (`haze`, `passMatter` in `fx_pall`) shows airlight
-  (`pallAirLight`: vanilla's sky along the pixel from the sky/fog colours, added after `pallShown`), their opacity stays whole; quads and probes behind them take the real transmittance
-  (`pall_front`, `fx_probe`, `mushTransmit` in `fx.vsh`): in rain the wall at 8 km does not stand as a dark ring on
-  the horizon, and the sun quad never shows through it.
+  thousands of quads. The slot has a head (`PallWall0/1`, mat4: the dust edge, the wedge's length and its top,
+  extinction, the path of dust with the wind behind the front, spray above water, density at the edge and at the end of
+  the wedge) and the Wilson shell (`PallWilson0/1`). The head is drawn as its lobes (`nuclear.md`: `WallLobes`,
+  `WallLobeTable`), built once per frame on the CPU into rows of the mushroom table after the mushroom rows (no texture
+  unit is free) and only read by the shaders: the march takes the lobes of its pixel's screen tile (`fx_pall` main:
+  closed-form chords on its ray before the world, `pallLobeFound`) and composites each where it passes it
+  (`lobesBefore`, called with the whirls and Wilson crossings by `passesAll`), lit in `lobeLightIn`; the pall's own
+  samples carry no head density, only the mean head's shade over the handoff band (`headAbove`). The Wilson cloud is a
+  thin shell: its two passes by the ray are events, like tornadoes (light and transmission in advance, into the ray when
+  the step reaches the pass). The quads of the layer and the source probes take in front of them the head's lobes
+  (`pall_front`: `pallWallThrough` → `pallLobeWalk` on the mushroom table, Sampler11) and the shell (`pallWilsonThrough`);
+  the composite's edge pixels likewise (`pallTau`, Sampler7): the same records and chords as the march. The slot's frame
+  grows to include the head's lobes (`NukePall.slot`: `WallLobes.ceiling`) and the shell, and the blast is in the frame
+  even when the pall's table has nothing yet. The pall with the head and the Wilson cloud far away fades in the air haze
+  like a mushroom (`pallAir`, the frame's air `PallAir` — `Sight.Air` in the model's blocks): the share of their opacity
+  that the haze took up to the place (`haze`, `passMatter` in `fx_pall`) shows airlight (`pallAirLight`: vanilla's sky
+  along the pixel from the sky/fog colours, added after `pallShown`), their opacity stays whole; quads and probes behind
+  them take the real transmittance (`pall_front`, `fx_probe`, `mushTransmit` in `fx.vsh`): in rain the wall at 8 km does
+  not stand as a dark ring on the horizon, and the sun quad never shows through it.
 - The nuke's fire storm is in the same pall passes (`client/nuclear/FireStorm`, `FireStorms`): at the blast slot the
   fire map is RGBA16F by cells of 32 blocks (R — flame, G — smoke presentation, B — it × column rise), with mip levels.
   The levels are themselves clusters of sources (instead of the list of lamps `FxLights` or clusters per frame): glow at
