@@ -35,7 +35,8 @@ import java.util.function.LongSupplier;
  * a tower's lower floors brings down what those floors held; a hole that every block above still spans stands.
  * <p>
  * Impact work after the strike's explosions: snapshots of the chunks within {@link StrikeSupport#REACH} of a removal and
- * their neighbors, {@link #SHOTS_PER_UNIT} per unit; the solve on a ruin worker; then the fall in timed portions
+ * their neighbors, {@link #SHOTS_PER_UNIT} per unit; the solve on a background worker; then the fall (its own job, {@link Fall})
+ * in timed portions
  * ({@link #PORTION_NANOS}, at least one block): blocks changed since the snapshot stay, attachments and other
  * non-load-bearing blocks go first, load-bearing ones bottom-up (what falls never lands on a floor about to go). The
  * rubble share ({@link StrikeSupport#lands}) falls as vanilla falling blocks while the strike's falling limit has room
@@ -59,6 +60,8 @@ final class StrikeCollapse implements UnitQueue.Job {
     private final Vec3 centre;
     @Nullable
     private StrikeSupport support;
+    /** Snapshots done and the solve started: {@link Fall} holds it now. */
+    private boolean handedOver;
     /** Falling positions in removal order, their states as solved and replacements. */
     @Nullable
     private LongArrayList order;
@@ -71,8 +74,13 @@ final class StrikeCollapse implements UnitQueue.Job {
     /** Tests: portion clock (null: impact lane clock). */
     @Nullable
     LongSupplier clock;
-    /** Measurement: blocks dropped, falling entities, rubble placed at once, positions changed since the snapshot. */
-    int dropped, live, placed, changed, solved;
+    /**
+     * Measurement: blocks dropped, falling entities, rubble placed at once, positions changed since the snapshot, chunks
+     * solved, fall portions and the largest one (blocks).
+     */
+    int dropped, live, placed, changed, solved, portions, largestPortion;
+    /** Both jobs ended (tests). */
+    boolean finished;
 
     private record Landing(BlockPos from, BlockState state, @Nullable CompoundTag data) {}
 
@@ -91,13 +99,7 @@ final class StrikeCollapse implements UnitQueue.Job {
 
     @Override
     public boolean ready(ServerLevel level) {
-        if (support != null && support.started() && !support.done()) return false;
         return area.ready(level);
-    }
-
-    @Override
-    public boolean dynamicReadiness() {
-        return true;
     }
 
     @Override
@@ -110,47 +112,95 @@ final class StrikeCollapse implements UnitQueue.Job {
         return ImpactCost.Kind.GROUND.ordinal();
     }
 
+    /**
+     * Snapshot units; the last one starts the solve and hands over to {@link Fall}, a job queued then: its wait for the
+     * solve counts from that moment ({@link UnitQueue#GIVE_UP_TICKS} from queueing), not from the strike.
+     */
     @Override
     public boolean step(ServerLevel level) {
         long t0 = System.nanoTime();
-        int n;
-        boolean more;
         if (support == null) {
             // explosions done: their removals are final
             if (area.removedAt().isEmpty() || !IncomingConfig.SERVER.blockDamage.get()) return false;
             support = new StrikeSupport(level, area.removedAt(), area.removedWas());
         }
-        if (!support.started()) {
-            n = support.snapshot(SHOTS_PER_UNIT);
-            more = true;
-        } else if (order == null) {
-            if (!support.done()) return true;
-            n = prepare(level);
-            more = order != null && (next < order.size() || landed < landings.size());
-        } else if (next < order.size()) {
-            n = fall(level);
-            more = true;
-        } else {
-            n = land(level);
-            more = landed < landings.size();
-        }
+        int n = support.snapshot(SHOTS_PER_UNIT);
         area.record(level, ImpactCost.Kind.GROUND, System.nanoTime() - t0, n);
-        return more;
+        if (!support.started()) return true;
+        StrikeWorld.get(level).impacts().add(level, new Fall());
+        handedOver = true;
+        return false;
     }
 
     @Override
     public void end(ServerLevel level) {
-        if (support != null && Incoming.LOG.isDebugEnabled()) {
-            Incoming.LOG.debug("Collapse at {}: blast removed {}, chunks {}, solved {}, fell {} (falling {}, landed at once {}), changed before the fall {}",
-                    BlockPos.containing(centre).toShortString(), support.removedCount(), support.chunks(), solved, dropped, live, placed, changed);
+        if (!handedOver) {
+            if (support != null) support.cancel();
+            finished = true;
         }
-        if (support != null) support.cancel();
         area.release(level);
     }
 
     @Override
     public String describe() {
         return "Collapse at " + BlockPos.containing(centre).toShortString();
+    }
+
+    /** The fall: waits for the solve, then removal and landing portions. Holds the strike area. */
+    private final class Fall implements UnitQueue.Job {
+        Fall() {
+            area.retain();
+        }
+
+        @Override
+        public boolean ready(ServerLevel level) {
+            return support.done() && area.ready(level);
+        }
+
+        @Override
+        public boolean dynamicReadiness() {
+            return true;
+        }
+
+        @Override
+        public int unitKind() {
+            return ImpactCost.Kind.GROUND.ordinal();
+        }
+
+        @Override
+        public boolean step(ServerLevel level) {
+            long t0 = System.nanoTime();
+            int n;
+            boolean more;
+            if (order == null) {
+                n = prepare(level);
+                more = next < order.size() || landed < landings.size();
+            } else if (next < order.size()) {
+                n = fall(level);
+                more = true;
+            } else {
+                n = land(level);
+                more = landed < landings.size();
+            }
+            area.record(level, ImpactCost.Kind.GROUND, System.nanoTime() - t0, n);
+            return more;
+        }
+
+        @Override
+        public void end(ServerLevel level) {
+            support.cancel();
+            if (Incoming.LOG.isDebugEnabled()) {
+                Incoming.LOG.debug("Collapse at {}: blast removed {}, chunks {}, solved {}, fell {} (falling {}, landed at once {}), changed before the fall {}",
+                        BlockPos.containing(centre).toShortString(), support.removedCount(), support.chunks(), solved, dropped, live, placed, changed);
+            }
+            area.release(level);
+            finished = true;
+        }
+
+        @Override
+        public String describe() {
+            return "Collapse fall at " + BlockPos.containing(centre).toShortString();
+        }
     }
 
     /** Solve arrived: removal order (non-load-bearing first, load-bearing bottom-up), dust and rumble. */
@@ -238,6 +288,10 @@ final class StrikeCollapse implements UnitQueue.Job {
             }
             if (watch.getAsLong() - start >= PORTION_NANOS) break;
         }
+        if (n > 0) {
+            portions++;
+            largestPortion = Math.max(largestPortion, n);
+        }
         if (next >= order.size()) {
             for (int i = 0; i < fluid.size(); i++) {
                 BlockPos p = BlockPos.of(fluid.getLong(i));
@@ -299,7 +353,9 @@ final class StrikeCollapse implements UnitQueue.Job {
                 int y = rest(level, x, from.getY(), z, m) + 1;
                 BlockPos at = new BlockPos(x, y, z);
                 BlockState there = level.getBlockState(at);
-                if (y < level.getMaxBuildHeight() && FallingBlock.isFree(there) && there.getFluidState().isEmpty()) {
+                boolean room = y < level.getMaxBuildHeight() && FallingBlock.isFree(there) && there.getFluidState().isEmpty();
+                if (!room && l.data() != null) spill(level, from, l);
+                if (room) {
                     ColumnScar.replace(level, at, there, l.state());
                     if (l.data() != null) {
                         BlockEntity be = level.getBlockEntity(at);
@@ -315,6 +371,12 @@ final class StrikeCollapse implements UnitQueue.Job {
             if (watch.getAsLong() - start >= PORTION_NANOS) break;
         }
         return n;
+    }
+
+    /** A container with nowhere to land (water, the build limit): its contents come out where it fell. */
+    private static void spill(ServerLevel level, BlockPos at, Landing l) {
+        BlockEntity be = BlockEntity.loadStatic(at, l.state(), l.data(), level.registryAccess());
+        if (be instanceof net.minecraft.world.Container c) net.minecraft.world.Containers.dropContents(level, at, c);
     }
 
     /** Highest position below {@code y} in the column that a falling block would rest on ({@link FallingBlock#isFree} not). */

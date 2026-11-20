@@ -158,7 +158,9 @@ paths:
   block that actually changed; craft blocks and the crater are not recorded: the crater digs natural ground, which
   stands as an arch). The job (impact lane, kind `GROUND`): snapshots of every chunk within `Collapse.C` of a removal and
   their neighbors (`StrikeSupport.snapshot`, 8 per unit; unready or plot-grid chunks are missing — support mass, no
-  loads), the solve on a ruin worker (`RuinWorkers`, `SEEN`), then the fall in 5 ms portions: blocks changed since the
+  loads), the solve on the game's background workers (not `RuinWorkers`: a nuke's ruin queue would hold it for minutes),
+  then the fall in 5 ms portions — a second job queued when the solve starts (`Fall`): `UnitQueue` cancels a job that
+  stays unready `GIVE_UP_TICKS` after it was queued, and a collapse queued at the strike can wait long behind a salvo: blocks changed since the
   snapshot stay; non-load-bearing first, load-bearing bottom-up; the rubble share (`Debris.SOLID_SHARE`, same hash as the
   nuclear landing; containers always, with contents) falls as vanilla falling blocks while `CraterFalls.room` allows
   (the strike area's and the world's live limits), otherwise lands at once where it would rest, spread by

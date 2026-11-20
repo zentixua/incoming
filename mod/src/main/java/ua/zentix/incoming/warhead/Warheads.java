@@ -199,6 +199,47 @@ public final class Warheads {
         return new Probe(job);
     }
 
+    /**
+     * Tests: collapse ({@link StrikeCollapse}) after removals the test made itself ({@code removedAt}: {@link BlockPos#asLong},
+     * {@code removedWas}: states before), fall portions on {@code clock}.
+     */
+    public static CollapseProbe testCollapse(ServerLevel level, Vec3 centre, double reach, it.unimi.dsi.fastutil.longs.LongArrayList removedAt,
+                                             List<BlockState> removedWas, LongSupplier clock) {
+        BlastArea area = BlastArea.hold(level, centre, reach);
+        for (int i = 0; i < removedAt.size(); i++) area.recordRemoved(removedAt.getLong(i), removedWas.get(i));
+        StrikeCollapse job = new StrikeCollapse(area, List.of(), centre);
+        area.release(level);
+        job.clock = clock;
+        StrikeWorld.get(level).impacts().add(level, job);
+        return new CollapseProbe(job);
+    }
+
+    /** Tests: result of {@link #testCollapse}. */
+    public static final class CollapseProbe {
+        private final StrikeCollapse job;
+
+        private CollapseProbe(StrikeCollapse job) {
+            this.job = job;
+        }
+
+        public boolean done() {
+            return job.finished;
+        }
+
+        /** Blocks the collapse dropped. */
+        public int fell() {
+            return job.dropped;
+        }
+
+        public int portions() {
+            return job.portions;
+        }
+
+        public int largestPortion() {
+            return job.largestPortion;
+        }
+    }
+
     /** Tests: result of {@link #testBlast} or {@link #testRays}. */
     public static final class Probe {
         private final StagedExplosion job;

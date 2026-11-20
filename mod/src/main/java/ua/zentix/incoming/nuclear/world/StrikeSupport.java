@@ -24,8 +24,8 @@ import java.util.concurrent.Future;
  * {@link RuinWindow#restoring}) and with the removals as the window chunks' fractures. Result: positions the law drops
  * (beyond the strike's own removals), their states, and fluid beside them.
  * <p>
- * Server thread takes the snapshots in portions ({@link #snapshot}); the solve runs on a ruin worker ({@link RuinWorkers},
- * player-visible priority). Chunks not ready are missing from the window: solid mass that supports, as at a nuclear
+ * Server thread takes the snapshots in portions ({@link #snapshot}); the solve runs on the game's background workers
+ * ({@code Util.backgroundExecutor}). Chunks not ready are missing from the window: solid mass that supports, as at a nuclear
  * window edge; no chunk is loaded. Sable plot-grid chunks are missing too (craft blocks are not the world).
  */
 public final class StrikeSupport {
@@ -132,7 +132,15 @@ public final class StrikeSupport {
         Long2ObjectOpenHashMap<ChunkShot> shots = this.shots;
         Long2ObjectOpenHashMap<BlockState> removed = this.removed;
         long[] solve = this.solve;
-        solving = RuinWorkers.submit(() -> solve(solve, shots, removed, view, minY, maxY), RuinWorkers.Priority.SEEN);
+        // a few chunk windows, milliseconds: the game's background workers, not behind a nuke's ruin queue
+        solving = java.util.concurrent.CompletableFuture.supplyAsync(() -> {
+            try {
+                return solve(solve, shots, removed, view, minY, maxY);
+            } finally {
+                // this worker's traversal buffers (a tall window: megabytes) are not kept between strikes
+                Collapse.releaseBuffers();
+            }
+        }, net.minecraft.Util.backgroundExecutor());
     }
 
     /** Any thread: the law in each chunk's window; changes beyond the strike's own removals. */

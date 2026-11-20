@@ -168,6 +168,12 @@ final class BlastArea {
         removedWas.add(was);
     }
 
+    /** Tests: a removal made outside the strike's explosions. */
+    void recordRemoved(long pos, BlockState was) {
+        removedAt.add(pos);
+        removedWas.add(was);
+    }
+
     /** Positions removed so far ({@link #removed}); live list, read by the collapse pass. */
     it.unimi.dsi.fastutil.longs.LongArrayList removedAt() {
         return removedAt;

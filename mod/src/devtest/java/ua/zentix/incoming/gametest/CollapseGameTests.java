@@ -235,6 +235,38 @@ public final class CollapseGameTests {
         });
     }
 
+    /**
+     * The fall is portioned by time like the explosion's blocks ({@code WorkGameTests.blockPortionsByTime}): on a clock
+     * that advances 1 ms per block, every portion stops at the 5 ms deadline, so a whole storey does not come down in one
+     * tick's work. Removals made by the test: the ground-floor walls of half the block.
+     */
+    @GameTest(template = "range", batch = "collapse", timeoutTicks = 600, skyAccess = true)
+    public static void fallPortionsByTime(GameTestHelper h) {
+        quiet(h);
+        ground(h);
+        ServerLevel level = h.getLevel();
+        Map<BlockPos, BlockState> house = block(h, 24, 39, 28, 35, 4, true);
+        it.unimi.dsi.fastutil.longs.LongArrayList at = new it.unimi.dsi.fastutil.longs.LongArrayList();
+        java.util.List<BlockState> was = new java.util.ArrayList<>();
+        for (var e : house.entrySet()) {
+            BlockPos r = e.getKey();
+            if (r.getY() > GROUND + 3 || r.getX() > 31) continue;
+            BlockPos a = h.absolutePos(r);
+            level.setBlock(a, Blocks.AIR.defaultBlockState(), Block.UPDATE_CLIENTS);
+            at.add(a.asLong());
+            was.add(e.getValue());
+        }
+        long[] now = {0};
+        Warheads.CollapseProbe probe = Warheads.testCollapse(level, h.absoluteVec(new Vec3(28, GROUND + 2, 31.5)), 16, at, was,
+                () -> now[0] += 1_000_000);
+        h.succeedWhen(() -> {
+            h.assertTrue(probe.done(), "collapse unfinished");
+            h.assertTrue(probe.fell() > 100, "the storeys above the removed walls stayed up: " + probe.fell());
+            h.assertTrue(probe.largestPortion() == 5, "portion at 1 ms per block: " + probe.largestPortion() + " blocks");
+            h.assertTrue(probe.portions() * 5 >= probe.fell(), "portions " + probe.portions() + " for " + probe.fell());
+        });
+    }
+
     /** Salvo: houses on a grid, one per chunk, a missile into the ground floor of each. */
     private static final int SALVO_SIDE = 10, SALVO_STEP = 16;
 
