@@ -135,4 +135,17 @@ class FragmentModelTest {
         assertTrue(FragmentModel.death(1e6) <= FragmentModel.VITAL_SHARE + 1e-9);
         assertTrue(FragmentModel.death(30) < 0.01);
     }
+
+    /** The binocular danger-close warning: the warhead's hazard distance plus the salvo spread (a new player died to a missile aimed 8 m away). */
+    @Test
+    void dangerCloseUsesHazardDistanceAndSpread() {
+        double missile = FragmentModel.hazard(WeaponType.MISSILE);
+        org.junit.jupiter.api.Assertions.assertEquals(of(WeaponType.MISSILE).hazardDistance(), missile, 1e-9);
+        org.junit.jupiter.api.Assertions.assertTrue(FragmentModel.dangerClose(missile, 0, 8));
+        org.junit.jupiter.api.Assertions.assertFalse(FragmentModel.dangerClose(missile, 0, missile + 1));
+        org.junit.jupiter.api.Assertions.assertTrue(FragmentModel.dangerClose(missile, 20, missile + 1));
+        // no fragment warhead (B-2 bomb, nuke): no fragment warning; the nuclear review shows its own distance
+        org.junit.jupiter.api.Assertions.assertEquals(0, FragmentModel.hazard(WeaponType.NUKE));
+        org.junit.jupiter.api.Assertions.assertFalse(FragmentModel.dangerClose(0, 0, 1));
+    }
 }

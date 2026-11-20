@@ -30,6 +30,10 @@ does not fire for other players.
   weapon returns to a single round.
 - **LMB**: launch. With nothing under the reticle it says so above the hotbar.
 
+When you stand within reach of the warhead's fragments (the hazard distance plus the salvo spread: about 120 m for
+the Shahed and the Grad, 210 m for the Missile, 55 m for the Lancet), the reticle warns "Danger close". It does not stop
+the launch.
+
 The binoculars lock onto mobs, players, aircraft and blocks up to 400 blocks away. Farther out they mark the ground you
 see, as far as the air lets you make it out: 20 km in clear weather, 5 km in rain, 1 km in a thunderstorm, and no farther
 than the map reaches. Past your render distance this needs distant terrain from Voxy, Distant Horizons or LOD Server

@@ -42,6 +42,7 @@ import ua.zentix.incoming.registry.ModSounds;
 import ua.zentix.incoming.strike.Loadout;
 import ua.zentix.incoming.strike.TargetMode;
 import ua.zentix.incoming.strike.Waypoints;
+import ua.zentix.incoming.warhead.FragmentModel;
 import ua.zentix.incoming.target.Target;
 import ua.zentix.incoming.target.TargetPicker;
 
@@ -265,10 +266,19 @@ public final class Designator {
         g.drawString(font, weapon.copy().withStyle(ChatFormatting.GOLD), cx - font.width(weapon) / 2, cy + 52, 0xFFFFFFFF);
         InteractionHand hand = scopingHand();
         int linked = hand == null || p == null ? 0 : LauncherLinks.of(p.getItemInHand(hand)).size();
+        int line = cy + 64;
         if (linked > 0) {
             // LMB assigns missions to linked launchers rather than launching directly.
             Component assign = Component.translatable("incoming.hud.assign", linked).withStyle(ChatFormatting.YELLOW);
-            g.drawString(font, assign, cx - font.width(assign) / 2, cy + 64, 0xFFFFFFFF);
+            g.drawString(font, assign, cx - font.width(assign) / 2, line, 0xFFFFFFFF);
+            line += 12;
+        } else if (pick != null && p != null) {
+            // The shooter inside the weapon's fragment hazard distance: say so before the launch, not after the death.
+            double hazard = FragmentModel.hazard(l.weapon());
+            if (FragmentModel.dangerClose(hazard, l.spread(), pick.point().distanceTo(p.getEyePosition()))) {
+                Component danger = Component.translatable("incoming.hud.danger_close", String.format(Locale.ROOT, "%.0f", hazard)).withStyle(ChatFormatting.RED);
+                g.drawString(font, danger, cx - font.width(danger) / 2, line, 0xFFFFFFFF);
+            }
         }
         Component hint = Component.translatable("incoming.hud.scope_hint").withStyle(ChatFormatting.GRAY);
         g.drawString(font, hint, cx - font.width(hint) / 2, cy - r + 6, 0xFFFFFFFF);

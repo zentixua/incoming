@@ -247,6 +247,31 @@ public record FragmentModel(double count, double mu, double speed, double taylor
         return lo;
     }
 
+    /** DDESB fragment hazard distance of each weapon's warhead ({@link #hazardDistance}), m; 0 without fragments. */
+    private static final double[] HAZARD = new double[ua.zentix.incoming.strike.WeaponType.values().length];
+
+    static {
+        java.util.Arrays.fill(HAZARD, Double.NaN);
+    }
+
+    /** Hazard distance of {@code w}, computed once (a bisection over the fragment model, under a millisecond). */
+    public static double hazard(ua.zentix.incoming.strike.WeaponType w) {
+        double h = HAZARD[w.ordinal()];
+        if (Double.isNaN(h)) {
+            FragmentModel m = of(w.spec());
+            HAZARD[w.ordinal()] = h = m == null ? 0 : m.hazardDistance();
+        }
+        return h;
+    }
+
+    /**
+     * Danger close for the designator's warning: the shooter stands where the salvo's fragments are hazardous: within the hazard distance of the nearest
+     * possible impact (the aim point less the salvo spread).
+     */
+    public static boolean dangerClose(double hazard, int spread, double distance) {
+        return hazard > 0 && distance < hazard + spread;
+    }
+
     /**
      * Fragment {@code i} of blast {@code seed} with warhead {@code axis} (unit vector, nose along heading): unit
      * direction, mass, world speed. Identical server/client.
