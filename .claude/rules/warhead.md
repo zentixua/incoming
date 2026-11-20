@@ -152,8 +152,8 @@ paths:
   with the same `FragmentTrace`. Sable craft neither hold nor break the fragments. GameTest `FragmentGameTests` (1/R², a
   wall, glass, dents).
 
-- Collapse (`StrikeCollapse`, setting `world.collapse`): after the main explosions of a surface strike (and of the bomb's
-  charges), the nuclear support law (`nuclear/world/Collapse`, "what lost support falls") over the blocks the explosions
+- Collapse (`StrikeCollapse`, setting `world.collapse`): after the main explosions of a surface strike (and of a breaking-out
+  bomb's charges; a deep bomb keeps its own underground collapse laws: its cavity is dug alongside, `bomb_deep`), the nuclear support law (`nuclear/world/Collapse`, "what lost support falls") over the blocks the explosions
   removed (without the nuclear cascade through structure the spans did not hold before the strike, nuclear-world.md;
   `WorkGameTests.recordBlasts` skips the collapse's zero-radius `Detonate`). `StagedExplosion` records each removal with its old state in the strike's `BlastArea` (`removed`; only a
   block that actually changed; craft blocks and the crater are not recorded: the crater digs natural ground, which

@@ -743,8 +743,9 @@ public final class Warheads {
                 if (blocks) {
                     // Crater from top before cavity excavates charge column.
                     if (law.breaches()) unit(level, area, main, ImpactCost.Kind.GROUND, "Ejection crater", l -> happened() ? crater(l) : 0);
-                    // what the charge waves (bunker walls, the breakout wave above ground) left without support falls
-                    if (IncomingConfig.SERVER.collapse.get()) StrikeCollapse.queue(level, area, main, pos);
+                    // what the breakout wave above ground left without support falls; underground the bomb has its own
+                    // collapse laws (cavity, vaults in the crack zone, roof chimney) and the cavity is dug alongside
+                    if (law.breaches() && IncomingConfig.SERVER.collapse.get()) StrikeCollapse.queue(level, area, main, pos);
                     int r = Mth.ceil(law.crush());
                     for (int dy = -r; dy <= r; dy++) {
                         int y = dy;
