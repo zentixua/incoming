@@ -115,7 +115,7 @@ final class ChunkShot {
 
     private ChunkShot(int x, int z, int id, @Nullable RuinPlan old, boolean ruined, int minY,
                       PalettedContainer<BlockState>[] states, int[] heights, @Nullable int[] sky, @Nullable long[] livePrints,
-                      @Nullable long[] liveNormals, @Nullable boolean[] liveKnown, int cured) {
+                      @Nullable long[] liveNormals, @Nullable boolean[] liveKnown, int cured, boolean publish) {
         this.cured = cured;
         this.x = x;
         this.z = z;
@@ -135,7 +135,7 @@ final class ChunkShot {
         for (PalettedContainer<BlockState> c : states) {
             if (c == null) continue;
             size += c.getSerializedSize();
-            register(c);
+            if (publish) states(c, ChunkShot::ensure);
         }
         int surfaceType = type(Heightmap.Types.WORLD_SURFACE), solidType = type(Heightmap.Types.MOTION_BLOCKING_NO_LEAVES);
         for (int c = 0; c < 256; c++) {
@@ -158,21 +158,37 @@ final class ChunkShot {
     }
 
     /**
-     * Publish all palette states while on the server thread (global palette, over 256 states per section, cannot be
-     * enumerated — scan all positions); for logs, all axes too (ruins lay trunks horizontally).
+     * Each distinct state of a section copy once (any thread: reads the copy only): the palette's entries, or for the
+     * global palette (over 256 states per section, cannot be enumerated) every position's id seen once. Vanilla's
+     * {@code PalettedContainer.getAll} collects those ids in an {@code IntArraySet}, a linear search per position:
+     * 1–4 ms a section of a dense city, 27–110 ms a chunk (#688 review); a hash set visits each position once.
      */
-    private static void register(PalettedContainer<BlockState> c) {
-        boolean[] listed = {false};
-        if (c.maybeHas(st -> {
-            listed[0] = true;
-            ensure(st);
-            return false;
-        }) && !listed[0]) {
-            c.getAll(ChunkShot::ensure);
+    static void states(PalettedContainer<BlockState> c, java.util.function.Consumer<BlockState> out) {
+        var data = c.data;
+        Palette<BlockState> palette = data.palette();
+        if (!(palette instanceof GlobalPalette)) {
+            for (int k = 0; k < palette.getSize(); k++) out.accept(palette.valueFor(k));
+            return;
+        }
+        BitStorage storage = data.storage();
+        it.unimi.dsi.fastutil.ints.IntOpenHashSet seen = new it.unimi.dsi.fastutil.ints.IntOpenHashSet();
+        for (int i = 0; i < storage.getSize(); i++) {
+            int id = storage.get(i);
+            if (seen.add(id)) out.accept(palette.valueFor(id));
         }
     }
 
-    private static void ensure(BlockState st) {
+    /**
+     * Distinct states of section {@code i} ({@link #states}; none for an all-air section): a snapshot taken without
+     * publishing ({@link #take(LevelChunk, RuinContext.Applied, RuinPlan, boolean, boolean)}) publishes them section by
+     * section with {@link #ensure}.
+     */
+    void sectionStates(int i, java.util.function.Consumer<BlockState> out) {
+        if (states[i] != null) states(states[i], out);
+    }
+
+    /** Publish one snapshot state, with its log axes and lone-chest form (server thread). */
+    static void ensure(BlockState st) {
         Blast.ensure(st);
         if (st.hasProperty(BlockStateProperties.AXIS)) {
             for (var axis : BlockStateProperties.AXIS.getPossibleValues()) Blast.ensure(st.setValue(BlockStateProperties.AXIS, axis));
@@ -187,8 +203,16 @@ final class ChunkShot {
      * ({@link RuinPlan#unflash}), chunk comparison uses live sections; {@code unfire} — layer present without its plan
      * ({@link FlashScorch#marked}): snapshot treats chunk fire as air ({@link RuinPlan#unfire}).
      */
-    @SuppressWarnings("unchecked")
     static ChunkShot take(LevelChunk chunk, @Nullable RuinContext.Applied applied, @Nullable RuinPlan flash, boolean unfire) {
+        return take(chunk, applied, flash, unfire, true);
+    }
+
+    /**
+     * The same; {@code publish} false leaves the states unpublished: the caller publishes them in its own time portions
+     * ({@link #sectionStates}, {@link #ensure}) before a background reader gets the property table.
+     */
+    @SuppressWarnings("unchecked")
+    static ChunkShot take(LevelChunk chunk, @Nullable RuinContext.Applied applied, @Nullable RuinPlan flash, boolean unfire, boolean publish) {
         LevelChunkSection[] live = chunk.getSections();
         PalettedContainer<BlockState>[] states = (PalettedContainer<BlockState>[]) new PalettedContainer<?>[live.length];
         boolean[] own = flash != null || unfire ? new boolean[live.length] : null;
@@ -224,7 +248,7 @@ final class ChunkShot {
         int cured = Kindling.curedCells(chunk.getMinBuildHeight(), c -> heights[motion * 256 + c],
                 (lx, y, lz) -> chunk.getNoiseBiome(QuartPos.fromBlock(pos.getMinBlockX() + lx), QuartPos.fromBlock(y), QuartPos.fromBlock(pos.getMinBlockZ() + lz)));
         return new ChunkShot(pos.x, pos.z, System.identityHashCode(chunk), applied == null ? null : applied.plan(),
-                applied != null, chunk.getMinBuildHeight(), states, heights, sky, livePrints, liveNormals, own, cured);
+                applied != null, chunk.getMinBuildHeight(), states, heights, sky, livePrints, liveNormals, own, cured, publish);
     }
 
     private static final java.util.function.Predicate<BlockState> FIRE = s -> s.getBlock() instanceof BaseFireBlock;
@@ -250,7 +274,7 @@ final class ChunkShot {
             else RuinPlan.unfire(states, own, read.minY(), heights, null);
         }
         return new ChunkShot(read.pos().x, read.pos().z, 0, applied == null ? null : applied.plan(), applied != null,
-                read.minY(), states, heights, null, null, null, null, read.cured());
+                read.minY(), states, heights, null, null, null, null, read.cured(), true);
     }
 
     /**
