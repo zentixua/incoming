@@ -186,6 +186,7 @@ start() {
   else
     source "$ROOT/tools/soft_gl.sh"
     soft_mem_ok || exit 75
+    soft_gl_env
     echo "on the CPU (llvmpipe): no GPU lease; frames only, not frame costs"
   fi
   local t0; t0=$(date +%s.%N)
@@ -260,7 +261,7 @@ run_client() {
   if [ -n "${INCOMING_SANDBOX_SOFT:-}" ]; then
     # CPU display, no GPU or host audio (tools/soft_gl.sh); a socket per tree: several CPU sandboxes run at once
     source "$ROOT/tools/soft_gl.sh"
-    soft_display "wayland-incoming-sandbox-$(basename "$ROOT")" "$1" "$2" "bash $ROOT/mod/build/rig/sandbox.sh" > "$RUN/logs/client.out" 2>&1 &
+    soft_display "sandbox-$(basename "$ROOT")" "$1" "$2" "bash $ROOT/mod/build/rig/sandbox.sh" > "$RUN/logs/client.out" 2>&1 &
   else
     "$ROOT/tools/nested_kwin.sh" wayland-incoming-sandbox "$1" "$2" "bash $ROOT/mod/build/rig/sandbox.sh" > "$RUN/logs/client.out" 2>&1 &
   fi

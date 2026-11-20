@@ -3,10 +3,12 @@
 # netcup, cloud). Frames match the GPU's for vanilla rendering (same GL 4.6 core pipeline, Mesa conformance);
 # frame and GPU times do not: frame-cost questions go to the GPU (tools/stand, once on the final head).
 #
-#   soft_gl_env          exports the GL selection, thread and heap limits for the client
+#   soft_gl_env          exports the GL selection, thread and heap limits for the client; the heap
+#                        (INCOMING_CLIENT_HEAP, read by build.gradle) must be exported before `gradlew rigLaunch`
 #   soft_mem_ok          refuses (75, with numbers) when the machine cannot spare one more client
-#   soft_display <socket> <w> <h> <command>   runs the command on a CPU-only display: nested KWin where it exists
-#                        (tools/nested_kwin.sh with INCOMING_SOFT=1), otherwise xvfb-run; no host audio either way
+#   soft_display <name> <w> <h> <command>   runs the command on a CPU-only display: nested KWin on socket
+#                        wayland-incoming-soft-<name> where KWin exists (tools/nested_kwin.sh with INCOMING_SOFT=1; the
+#                        prefix is how tools/gpu_lease.sh tells it from a GPU client), otherwise xvfb-run; no host audio
 #
 # INCOMING_SOFT_HEAP: client heap (default 3g; 1536m fits netcup beside its servers: a flat sandbox used < 0.9 GB);
 # INCOMING_SOFT_THREADS: llvmpipe raster threads (default half the CPUs, at most 8: two clients fit a 16-thread laptop
@@ -23,8 +25,8 @@ soft_gl_env() {
   # one compiled-shader cache for all trees and sockets: a cold llvmpipe compiles the nuclear volume shaders for 140 s
   export MESA_SHADER_CACHE_DIR="${MESA_SHADER_CACHE_DIR:-$HOME/.cache/incoming-mesa-shaders}"
   export LP_NUM_THREADS="${INCOMING_SOFT_THREADS:-$(( n / 2 > 8 ? 8 : (n / 2 < 1 ? 1 : n / 2) ))}"
-  # JVMs inside (the client; Gradle too in client_scenario.sh) get a fixed heap instead of a quarter of the machine
-  export JAVA_TOOL_OPTIONS="-Xmx${INCOMING_SOFT_HEAP:-3g}${JAVA_TOOL_OPTIONS:+ $JAVA_TOOL_OPTIONS}"
+  # the game JVM only (build.gradle clientScenario): JAVA_TOOL_OPTIONS would also size Gradle's JVMs inside the unit
+  export INCOMING_CLIENT_HEAP="${INCOMING_SOFT_HEAP:-3g}"
 }
 
 # Memory ceiling of one CPU client, MB: heap + 1.5 GB native (llvmpipe keeps textures and framebuffers in process memory;
@@ -47,7 +49,7 @@ soft_mem_ok() {
 }
 
 soft_display() {
-  local socket=$1 w=$2 h=$3 cmd=$4 root; root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+  local socket=wayland-incoming-soft-$1 w=$2 h=$3 cmd=$4 root; root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
   if command -v kwin_wayland >/dev/null; then
     INCOMING_SOFT=1 "$root/tools/nested_kwin.sh" "$socket" "$w" "$h" "$cmd"
   elif command -v xvfb-run >/dev/null; then

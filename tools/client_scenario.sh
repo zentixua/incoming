@@ -60,6 +60,9 @@
 #     route - without approach whistle), pass (flying past), grad (MLRS salvo from 32 overhead), far (missile and Shahed due to
 #     range of entities); each layer, loops, time stamps and totals “SCENARIO check ... PASS|FAIL” - to the log;
 #     one case - flyby-grad, several - flyby-approach,pass;
+#   Without shaders, dh, voxy, lss or vista the client renders on the CPU (Mesa llvmpipe, tools/soft_gl.sh): no GPU lease,
+#     run it as `tools/laptop_job.sh --soft`; frames are the vanilla picture, frame and GPU times in its log are not frame
+#     costs. gpu - on the GPU anyway (a frame-time measurement), under the lease (tools/laptop_job.sh --gpu);
 #   shaders - also Sodium, Iris and a host shaderpack from the instance (like Artem); dh - another Distant Horizons from the instance;
 #   lss - also LOD Server Support (jar lod-server-support-neoforge-*.jar in mods catalog MC_DIR): the built-in server distributes
 #     LOD to his client (lss.test.integratedServer), the map and rays take the relief from him (target-map lss)
@@ -100,6 +103,7 @@ MC="$(python3 "$ROOT/tools/paths.py" MC)"
 # without it the same scenario checks the ordinary renderer. INCOMING_VIEWFX_FEEDS=4 exercises the cache bound.
 if [ "$INCOMING_SCENARIO" = viewfx ]; then export INCOMING_SANDBOX=1; fi
 unset INCOMING_SHADERS INCOMING_DH INCOMING_VOXY INCOMING_LSS INCOMING_VISTA
+GPU=
 for opt in "${@:2}"; do
   case "$opt" in
     shaders)
@@ -114,9 +118,23 @@ for opt in "${@:2}"; do
     dh) export INCOMING_DH=1 ;;
     voxy) export INCOMING_VOXY=1 ;;
     lss) export INCOMING_LSS=1 ;;
-    *) echo "unknown parameter: $opt (there are shaders, dh, voxy, lss, vista)" >&2; exit 2 ;;
+    gpu) GPU=1 ;;
+    *) echo "unknown parameter: $opt (there are shaders, dh, voxy, lss, vista, gpu)" >&2; exit 2 ;;
   esac
 done
+# shader packs, LOD mods and TV feeds need the GPU; everything else renders on the CPU
+[ -n "${INCOMING_SHADERS:-}${INCOMING_DH:-}${INCOMING_VOXY:-}${INCOMING_LSS:-}${INCOMING_VISTA:-}" ] && GPU=1
 export JAVA_HOME="${JAVA_HOME:-$HOME/.var/app/org.prismlauncher.PrismLauncher/data/PrismLauncher/java/java-runtime-delta}"
 cd "$ROOT/mod"
+if [ -z "$GPU" ]; then
+  # Gradle only writes the launch script and exits (no daemon left in a laptop_job --soft unit), then the client runs
+  # alone under the unit's memory ceiling
+  source "$ROOT/tools/soft_gl.sh"
+  soft_mem_ok || exit 75
+  soft_gl_env
+  mkdir -p "$RUN/logs"
+  "$ROOT/mod/gradlew" --no-daemon rigLaunch -PrigRun=runClientScenario -PrigOut=scenario -PscenarioDir=run/scenario -q --console=plain || exit 1
+  soft_display "scenario-$(basename "$ROOT")" 1280 720 "bash $ROOT/mod/build/rig/scenario.sh"
+  exit $?
+fi
 exec "$ROOT/tools/nested_kwin.sh" wayland-incoming-scenario 1280 720 "$ROOT/mod/gradlew runClientScenario -PscenarioDir=run/scenario --console=plain"

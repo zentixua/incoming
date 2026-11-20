@@ -39,7 +39,8 @@
 # The queue is capped (INCOMING_GPU_QUEUE_MAX other sessions, default 2): a newcomer beyond it is refused (75) at once.
 # The GPU serves only what needs it (shader packs, DH/Voxy, frame cost); vanilla frames render on the CPU
 # (tools/soft_gl.sh), so a long queue means work that belongs on the CPU or a session holding the GPU between frames.
-# CPU clients (nested KWin with INCOMING_SOFT=1 in its environment) are not GPU clients and never block the lease.
+# CPU clients (nested KWin on a `wayland-incoming-soft-…` socket, tools/soft_gl.sh) are not GPU clients and never block
+# the lease.
 # Files live in XDG_RUNTIME_DIR
 # (tmpfs): reboot clears it. Test: tools/test_gpu_lease.sh (CI).
 LEASE=${INCOMING_GPU_LEASE:-${XDG_RUNTIME_DIR:-/run/user/$(id -u)}/incoming-gpu.lease}
@@ -207,8 +208,9 @@ gpu_clients_running() {
       if [ "$a" = "$kwin" ] || [ "${a##*/}" = "$kwin" ]; then hit=1; fi
     done 2>/dev/null < "/proc/$p/cmdline"
     [ -n "$virt" ] && [ -n "$hit" ] || continue
-    # CPU session (tools/soft_gl.sh): QPainter KWin and llvmpipe client, no GPU
-    tr '\0' '\n' < "/proc/$p/environ" 2>/dev/null | grep -qx 'INCOMING_SOFT=1' && continue
+    # CPU session (tools/soft_gl.sh): QPainter KWin and llvmpipe client, no GPU. Told by its socket name, not its
+    # environment: kwin_wayland carries file capabilities, so its /proc/<pid>/environ is unreadable even to its owner
+    tr '\0' '\n' < "/proc/$p/cmdline" 2>/dev/null | grep -qx 'wayland-incoming-soft-.*' && continue
     [ -n "${1:-}" ] && _descends "$p" "$1" && continue
     echo "$p $(tr '\0' ' ' < "/proc/$p/cmdline" 2>/dev/null | cut -c1-200)"
   done

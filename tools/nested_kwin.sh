@@ -35,6 +35,8 @@ source "$ROOT/tools/gpu_lease.sh"
 RT=${XDG_RUNTIME_DIR:-/run/user/$(id -u)}
 socket_busy() { [ -e "$RT/$SOCKET.lock" ] && ! flock -n -s "$RT/$SOCKET.lock" true 2>/dev/null; }
 if [ -n "${INCOMING_SOFT:-}" ]; then
+  # the socket name is how gpu_lease.sh tells a CPU session from a GPU client
+  [[ $SOCKET == wayland-incoming-soft-* ]] || { echo "CPU session socket must be wayland-incoming-soft-…: $SOCKET" >&2; exit 2; }
   source "$ROOT/tools/soft_gl.sh"
   socket_busy && { echo "socket $SOCKET is occupied by another KWin" >&2; exit 75; }
   soft_gl_env

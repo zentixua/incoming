@@ -109,6 +109,9 @@ neoForge {
             gameDirectory = project.file(scenarioDir)
             if (project.findProperty('scenarioUser')) programArguments.addAll '--username', project.findProperty('scenarioUser')
             if (System.getenv('INCOMING_MP_PORT')) systemProperty 'incoming.mp.port', System.getenv('INCOMING_MP_PORT')
+            // fixed client heap (CPU-rendered clients, tools/soft_gl.sh: their unit has a memory ceiling); otherwise a
+            // quarter of the machine
+            if (System.getenv('INCOMING_CLIENT_HEAP')) jvmArgument "-Xmx${System.getenv('INCOMING_CLIENT_HEAP')}"
             // scenario mode (all, launch, nuke, fx, models…) — the list is in tools/client_scenario.sh
             systemProperty 'incoming.scenario', System.getenv('INCOMING_SCENARIO') ?: 'all'
             if (System.getenv('INCOMING_VIEWFX_STRIKES')) systemProperty 'incoming.viewfx.strikes', System.getenv('INCOMING_VIEWFX_STRIKES')
