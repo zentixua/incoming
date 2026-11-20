@@ -8,7 +8,7 @@ private pack; do not mention it in the mod's public text.
 Cinematic, realistic strikes: Shahed-136, Lancet, Grad, cruise missile, B-2 bunker-buster, salvos, nuclear ICBM; remote
 with binoculars, aiming at anything the player looks at (blocks, mobs, players, Create Aeronautics craft), custom
 Doppler 3D sound. Public repository, public product with a large audience: no sloppy work. Everything is in-game
-(Minecraft blocks, entities, characters). Played single-player, as an opened host world and on a whitelisted server.
+(Minecraft blocks, entities, characters). Played single-player, as an opened host world and on a whitelisted server; only the host is operator.
 Player-visible changes update the player guide in the same PR, both languages: docs/guide English, docs/guide/ru
 Russian (frames: `tools/client_scenario.sh guide`, `tools/guide_images.sh`). Nuclear design/deviations:
 docs/DESIGN-nuke.md. Neighbors: Open Skies pack (zentixua/open-skies), Almighty AI game-master bridge (zentixua/almighty).
@@ -33,8 +33,8 @@ instructions: work in a worktree from `origin/main`.
 - **Languages (Artem, 26.10).** Everything in the repository is in English: code, comments, log messages, CLAUDE.md,
   `.claude/rules`, AGENTS.md, internal docs, `tools/`, CI, commits and PRs. English plus Russian, in the same PR, only
   for what players need: README(.ru).md, `docs/guide`(`/ru`), release notes, store pages (docs/store) and the mod's
-  interface (`en_us`/`ru_ru`). No mixing inside one file. Public text: written for players (no developer
-  internals), plain and precise, no advertising, repetition or filler, every claim checked against code. Weapons go by their real names everywhere (Shahed-136, Lancet, Grad;
+  interface (`en_us`/`ru_ru`), English first. No mixing inside one file. Public text: written for players (no
+  developer internals), plain and precise, no emoji, advertising, repetition or filler, every claim checked against code. Weapons go by their real names everywhere (Shahed-136, Lancet, Grad;
   «Шахед-136», «Ланцет», «Град»), never "Shahed-style" (Artem, 14.10).
 - **No chronicles** (Artem, 12.10): every text (README, guide, store pages, AGENTS.md, rules, comments) states only the
   current state: no "before/now", version history or dated incident stories; a rule's reason is a present-tense
@@ -84,7 +84,7 @@ Scripts using numpy/scipy/soundfile/Pillow declare dependencies in `# /// script
 `python3 tools/fetch_runtime_mods.py` → `./gradlew runGameTestServer -PmcModsDir=run/ci-mods`.
 CI checks each commit once, on `main` push and PR; branches without PRs get no CI, so open a draft immediately.
 Checks follow changed paths (`tools.md`); Итог decides merge, failing if any needed check fails or is canceled.
-Release steps (only on Artem's word): `tools.md`.
+Release steps: `tools.md`.
 A PR changing packet/entity-data formats bumps `IncomingNetwork.PROTOCOL`. A release with behavior/lang keys different
 from the last shipped jar bumps it if not already bumped during that release: old jars must not join new hosts
 (NeoForge reports different mod versions).
@@ -122,6 +122,8 @@ defense, `launcher/`, `grid/` blackout, `sound/`, `client/`, `work/` tick budget
    are strengthened toward the reference footage, marked `presentation:` in code, without changing facts. A real size
    or shape changes only by Artem's word, as a marked deviation. Never add what reality lacks (fire on every block,
    smoke from nowhere, impossible colour, impossible flight, 200 m craters, "space" effects).
+- **Not done by design** (Artem, 19.11): consequence sliders (damage ×), Hollywood craters, pixel smoke, a small
+  "game-size" nuke default, smoke or fire shorter than its law.
 - **Every weapon, the nuke included,** has a realistic and cinematic launch, flight and impact (Artem, 07.11).
 - **Game launch, physical effects at the target.** Craft, press launch; target charge, blast, fragments, destruction
   and damage follow real specs/laws. Each number from `WeaponSpec` or law with nearby source; missing-data values
@@ -222,22 +224,24 @@ actually works, fix the real cause.
 - **One run answers everything** (Artem, 18.11): before any run that observes the system (test, measurement,
   reproduction), decide every question it must answer and record everything that could bear on them, so one run is
   enough to name the cause by number. A guess is not a result; a rerun only to add a forgotten probe is waste.
-  Tooling for the mod: the `deep-debug` skill. **No guess-tuning** (Artem, 20.11): a defect that survives three rounds
+  Tooling for the mod: the `deep-debug` skill. **Study before coding** (Artem, 20.11): for a look or performance
+  defect, one such run on our frame and on the reference footage, then the design from those numbers. **No guess-tuning** (Artem, 20.11): a defect that survives three rounds
   of tweaks means the model is wrong; stop tweaking and change the model.
 - **One visual session at a time:** one GPU (`tools/gpu_lease.sh`: other sessions' clients/`--gpu` jobs refuse, naming
   holder); finish with `tools/sandbox.sh stop`, then `tools/gpu_lease.sh release`.
 - **One independent review round** by the other vendor (if unavailable, a fresh session of the same vendor), effort
   by the rule below. The reviewer reads the diff and surrounding code, not the PR description or the author's
   conclusions. Each agent only where it is strong (Artem, 19.11): Codex reviews code (correctness, tests, budgets,
-  concurrency), never frames, WAV or look; a Claude session judges PR frames and WAV. Only serious errors block:
+  concurrency), never frames, WAV, logos or design; a Claude session judges those. Only serious errors block:
   wrong behavior, crash, tick-budget or frame-cost breach; the author fixes minor findings without another round.
-  Second round only for serious first-round fixes, no third.
+  Reviewers also report hacks, unsourced constants, duplication and stray edits. Second round only for serious
+  first-round fixes, no third.
 - **Effort** (Artem, 19.11), for every agent, task and review: the working range is low/medium/high.
   **medium** is the default. **high** for work that needs deep reasoning: diagnosis of an unknown cause, physics
   laws, rendering, performance, concurrency, and reviews of such changes. **low** for mechanical work: renames,
   moving or copying text, routine checks, collecting files or logs. Above high only when high demonstrably failed on
   that task (a missed serious error or a wrong result), stated in the PR or report.
-- **Author or explicitly accepted work owner merges:** green Итог (sole required check), review without serious errors. No repeated verification by
+- **Author or explicitly accepted work owner merges** (who owns a task in the team: open-skies `team.md`): green Итог (sole required check), review without serious errors. No repeated verification by
   someone else; CI-missed bugs get tests, not extra manual steps.
 - End commits with your own agent's name/address in `Co-Authored-By:`, never another agent's.
 - Community standards versus our tools/replacements: `docs/dev-pipeline.md`.

@@ -4,6 +4,7 @@ paths:
   - "mod/src/main/java/ua/zentix/incoming/warhead/**"
   - "mod/src/main/java/ua/zentix/incoming/nuclear/world/**"
   - "mod/src/test/java/ua/zentix/incoming/work/**"
+  - "mod/src/main/java/ua/zentix/incoming/client/fx/FireWatch.java"
 ---
 
 # Server work budget (`work/`)

@@ -38,7 +38,7 @@ paths:
 - A Flashback (0.39.10 is the last for 1.21.1; ARR, do not redistribute) or Replay Mod recording holds only the
   recording client's server→client packets: nothing beyond its view, no server-only facts, no FOV, screens or
   aim-down-sights. A camera beyond recorded chunks shows holes with caves, so film paths stay over recorded ground;
-  players'-eyes film moves the viewer on Flashback's server (`Film.spectate`), otherwise nearby sounds vanish.
+  players'-eyes film moves the viewer on Flashback's server (`tools/replayscan` `Film.spectate`), otherwise nearby sounds vanish.
 
 ## Server → client packet format
 - Flashback stores each mod packet as bytes and reads it across versions with the current codec. One frame is exactly

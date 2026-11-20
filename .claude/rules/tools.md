@@ -160,7 +160,7 @@ Prism: `~/.var/app/org.prismlauncher.PrismLauncher/data/PrismLauncher/` (`tools/
   (a PR merged without `main` moving gives the same tree): `Что изменилось` finds the tag `tested-tree-<tree>`
   (`tools/ci_reuse.py`), and the job “Сборка из проверенного прогона” takes the jar from there. If `main` moved, the full
   check runs.
-- Release (only on Artem's word for that release): bump `mod_version`, write `docs/releases/<version>.md` (in English;
+- Release (a public step: AGENTS.md): bump `mod_version`, write `docs/releases/<version>.md` (in English;
   no HTML comments, one line per paragraph, the compatibility line first), merge into `main` and run `build`
   manually on `main` with `release=true`: after all checks, the workflow releases `v<version>` with the jar (friends take it
   from there), and `publish` then uploads the same jar to Modrinth and CurseForge by itself (step `release`; a manual

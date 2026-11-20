@@ -28,15 +28,15 @@ Do not use it for: an approved change without a problem. That has its own CI and
    or GPU. Each share with its own number.
 5. **Truth from outside, not only our counters.** Check world state directly (chunk status via `getChunkNow`, NBT of a
    world copy, bot packets), not only our "done" counters.
-6. **Each term separately.** The first "cause" is often false (dust: "chunk edges" turned out to be samples below
-   ground, found only by a per-term probe). Measure each term, not the total.
+6. **Each term separately.** The first "cause" is often false (a "chunk edges" defect can be samples below ground,
+   visible only to a per-term probe). Measure each term, not the total.
 7. **Root, not symptom.** Fix the cause found by a number. Then a test that catches a recurrence, and a repeat of the
    same run on the same rig: before and after numbers in one table.
 
 ## Checklist: server (ticks, freezes, stutter)
 
 Where: netcup (Crafty test server 25571 or `./gradlew runServer`), not the cloud: JFR `ExecutionSample` barely works
-in the cloud VM. Do not touch 25565/25566 without Artem's word.
+in the cloud VM. Never touch the play servers (25565–25567) or their worlds without Artem's word.
 
 - **JFR for the whole run** (`-XX:StartFlightRecording=settings=profile,filename=…,dumponexit=true`):
   `ExecutionSample` on Server thread, GC and safepoint pauses, `ThreadPark`/`JavaMonitorEnter`/`ThreadSleep` > 10 ms,
@@ -119,7 +119,7 @@ One brief holds everything at once:
 
 In Russian, briefly: the cause in one sentence with a number, what we fix, when the check happens. Tables and raw data
 go in run files and the PR, not in chat. New knowledge (a gauge trap, a new probe, the path to analysis scripts) goes
-into memory or that area's `.claude/rules` in the same thread.
+into that area's `.claude/rules` or this skill by PR in the same thread; status and numbers go into the report.
 
 ## Gauges that lie
 - `MinecraftServer.getTickTimesNanos` misses work done in `ServerTickEvent.Post`: take tick cost from spark
