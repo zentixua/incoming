@@ -369,6 +369,21 @@ public final class WorkGameTests {
      */
     @GameTest(template = "range", timeoutTicks = 600, batch = "work_connected", skyAccess = true)
     public static void portionTakesReshapedNeighbours(GameTestHelper h) {
+        // the site is shared with earlier batches: their collapse rubble (queued or still falling) would land in this blast
+        whenSettled(h, 150, () -> portionTakesReshapedNeighboursOnSettled(h));
+    }
+
+    /** {@link #whenQueueEmpty}, and no falling block over the site (rubble of an earlier batch's collapse still in the air). */
+    private static void whenSettled(GameTestHelper h, int ticksLeft, Runnable then) {
+        whenQueueEmpty(h, ticksLeft, () -> {
+            var site = new net.minecraft.world.phys.AABB(h.absolutePos(BlockPos.ZERO)).inflate(80, 256, 80);
+            if (h.getLevel().getEntitiesOfClass(net.minecraft.world.entity.item.FallingBlockEntity.class, site).isEmpty()) then.run();
+            else if (ticksLeft <= 0) throw new GameTestAssertException("falling blocks over the site did not land");
+            else h.runAfterDelay(1, () -> whenSettled(h, ticksLeft - 1, then));
+        });
+    }
+
+    private static void portionTakesReshapedNeighboursOnSettled(GameTestHelper h) {
         ServerLevel level = h.getLevel();
         boolean debris = IncomingConfig.SERVER.debrisStay.get();
         IncomingConfig.SERVER.debrisStay.set(false);
