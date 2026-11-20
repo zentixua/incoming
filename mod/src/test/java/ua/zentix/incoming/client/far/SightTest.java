@@ -269,12 +269,13 @@ class SightTest {
             assertEquals(Sight.hazeDepth(Sight.CHANNEL_NM[c]), haze[c], 1e-6, "haze, channel " + c);
         }
         // every lit point takes the sun of its own altitude above sea level (eye-relative y plus the eye's altitude), the cap as the pall;
-        // the cap's sunward depths do not hang on its beam (they bound its own emission's escape too)
+        // the cap's sunward depths bound its own emission's escape by a continuous share of its beam
         String flat = fx.replaceAll("\\s+", " ");
         assertTrue(flat.contains("float pallSunHeight(vec3 p) { return p.y + PallSunTop.w; }"), "sun height is the point's altitude");
         assertEquals(2, flat.split("pallSunBeam\\(pallSunHeight\\(p\\)\\)", -1).length - 1, "cap and pall take the beam at their altitude");
-        assertTrue(flat.contains("if (pallSunUp()) { vec3 beam = pallSunBeam(pallSunHeight(p)); float toSun = mushSunTau("),
-                "the cap's sunward depth is taken whenever the frame has sun");
+        assertTrue(flat.contains("vec3 beam = pallSunUp() ? pallSunBeam(pallSunHeight(p)) : vec3(0.0);"), "the cap takes the beam of its altitude");
+        assertTrue(flat.contains("escape = mix(escape, min(escape, min(toSun, away)), sunShare);"),
+                "the sun-axis depths enter the emission escape by a continuous share, never on/off");
         ua.zentix.incoming.client.nuclear.GlslFunction column = ua.zentix.incoming.client.nuclear.GlslFunction.parse(fx, "sunColumn");
         for (double h : new double[]{Sight.AIR_HEIGHT, Sight.HAZE_HEIGHT}) {
             for (double z = -50; z <= 40_000; z += 250) {

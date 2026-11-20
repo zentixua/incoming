@@ -1000,6 +1000,10 @@ float sunColumn(float z, float s, float h) {
     return min(2.0 * exp(-low / h) * sqrt(3.14159265 * (SUN_EARTH_R + low) / (2.0 * h)) - exp(-zz / h) * sunChapman(x, -e), SUN_SHADOWED);
 }
 
+// Share of the beam above the air at which the cap's sun-axis depths fully enter its emission escape (mushAt), linear below it.
+// Not physical: a bookkeeping ramp in place of an on/off cut; at a 3 degree sun the cap aloft holds 0.3-0.7 of it, the ground 0.01
+const float MUSH_SUN_ESCAPE = 0.05;
+
 // Sun light on matter z blocks (= m) above sea level (NukePall.Sky.sunAt, Sight.sunThroughAir): the beam above the air through the
 // slant column of clean air and haze, relative to the overhead sun at that height (white at noon at every height). At a low sun a
 // cap kilometres up keeps a golden beam the ground has lost; after ground sunset a red one, until the earth's shadow climbs past it
@@ -1433,12 +1437,15 @@ vec4 mushAt(int k, Mush m, vec3 p, vec3 q, float cone, out float near, out vec3 
     vec3 light = vec3(0.0);
     // emission escape depth: shortest optical depth
     float escape = min(min(up, down), toEye);
-    // sun at the point's altitude (pallSunBeam): the cap kilometres up keeps it after the ground has lost it. The sunward depths
-    // are taken whenever the frame has sun (not by this point's beam): they also bound the escape of the matter's own emission
-    if (pallSunUp()) {
-        vec3 beam = pallSunBeam(pallSunHeight(p));
+    // sun at the point's altitude (pallSunBeam): the cap kilometres up keeps it after the ground has lost it. The sun-axis depths
+    // enter the escape of the matter's own emission by the share of the overhead beam that reaches the point (MUSH_SUN_ESCAPE:
+    // full in daylight as before, none in the earth's shadow): continuous in place and time, no step at the frame's sun gate
+    // or at the earth's shadow (an on/off cut changed the hot cloud's emission by a third)
+    vec3 beam = pallSunUp() ? pallSunBeam(pallSunHeight(p)) : vec3(0.0);
+    float sunShare = clamp(dot(beam, LUMA) / max(MUSH_SUN_ESCAPE * dot(PallSunTop.rgb, LUMA), 1e-6), 0.0, 1.0);
+    if (sunShare > 0.0) {
         float toSun = mushSunTau(k, m, p, kk, taus.w), away = more.x;
-        escape = min(escape, min(toSun, away));
+        escape = mix(escape, min(escape, min(toSun, away)), sunShare);
         // sun beam along slab through point on sun axis (cosine 1): its diffuse light and direct beam
         float cs = g * dot(-gDir, gSun);
         light += vec3(pallDiffuse(w.r, g, toSun, toSun + away, 0.0, 1.0, beam.r, 1.0, 0.0, 0.0, 0.0, cs),
