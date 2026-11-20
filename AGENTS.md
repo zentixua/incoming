@@ -33,8 +33,8 @@ instructions: work in a worktree from `origin/main`.
 - **Languages (Artem, 26.10).** Everything in the repository is in English: code, comments, log messages, CLAUDE.md,
   `.claude/rules`, AGENTS.md, internal docs, `tools/`, CI, commits and PRs. English plus Russian, in the same PR, only
   for what players need: README(.ru).md, `docs/guide`(`/ru`), release notes, store pages (docs/store) and the mod's
-  interface (`en_us`/`ru_ru`). No mixing inside one file. Public text: plain and precise, no advertising, repetition
-  or filler, every claim checked against code. Weapons go by their real names everywhere (Shahed-136, Lancet, Grad;
+  interface (`en_us`/`ru_ru`). No mixing inside one file. Public text: written for players (no developer
+  internals), plain and precise, no advertising, repetition or filler, every claim checked against code. Weapons go by their real names everywhere (Shahed-136, Lancet, Grad;
   «Шахед-136», «Ланцет», «Град»), never "Shahed-style" (Artem, 14.10).
 - **No chronicles** (Artem, 12.10): every text (README, guide, store pages, AGENTS.md, rules, comments) states only the
   current state: no "before/now", version history or dated incident stories; a rule's reason is a present-tense
