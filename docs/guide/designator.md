@@ -14,7 +14,8 @@ Recipe: redstone dust on top; iron ingot, spyglass and iron ingot in the middle 
 
 ![Strike Designator recipe](img/recipe-strike_designator.png)
 
-Ingredients: 1 redstone dust, 2 iron ingots, 1 spyglass and 1 compass. Makes 1 designator.
+Ingredients: 1 redstone dust, 2 iron ingots, 1 spyglass and 1 compass. Makes 1 designator. The recipe appears in the
+recipe book once you carry any of its ingredients.
 
 In Creative mode the designator is in the Incoming tab. If the world owner has limited the designator to operators, it
 does not fire for other players.
@@ -25,8 +26,9 @@ does not fire for other players.
 
 - **RMB (hold)**: binoculars. The reticle shows what is under it and how far away it is. When it locks onto a mob, a
   player or an aircraft, the designator beeps.
-- **Mouse wheel**: weapon (Shahed, Lancet, Missile, Grad, Bomb, Nuclear).
-- **LMB**: launch.
+- **Mouse wheel**: weapon (Shahed, Lancet, Missile, Grad, Bomb, Nuclear). The Grad fires a burst; wheeling on past it
+  returns to a single round unless you changed the burst.
+- **LMB**: launch. With nothing under the reticle it says so above the hotbar.
 
 The binoculars lock onto mobs, players, aircraft and blocks up to 400 blocks away. Farther out they mark the ground you
 see, as far as the air lets you make it out: 20 km in clear weather, 5 km in rain, 1 km in a thunderstorm, and no farther
@@ -43,7 +45,8 @@ The binoculars then fire with the same settings.
 - **Count and Spread**: up to 30 rounds over up to 150 blocks from the center.
 - **Target**: Where I look, Around me (where you stand, so step away first), Player (only [spotted](rules.md#spotting)
   players), Aircraft (Create aircraft nearby), On map.
-- **FIRE**, **Abort** and **Settings**.
+- **FIRE**, **Abort** and **Settings**. FIRE is greyed out until the order is complete; its tooltip says what is missing
+  (a yield, a player, an aircraft). In Survival a red line above it shows the munitions the order still lacks.
 
 ## Projectiles on screen
 

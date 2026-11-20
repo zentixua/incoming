@@ -6,6 +6,8 @@ import net.minecraft.client.Screenshot;
 import net.minecraft.client.gui.Gui;
 import net.minecraft.client.gui.components.AbstractWidget;
 import net.minecraft.client.gui.components.EditBox;
+import net.minecraft.client.gui.components.events.ContainerEventHandler;
+import net.minecraft.client.gui.components.events.GuiEventListener;
 import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.client.gui.screens.TitleScreen;
 import net.minecraft.client.gui.screens.inventory.CreativeModeInventoryScreen;
@@ -51,6 +53,7 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayDeque;
 import java.util.Comparator;
+import java.util.List;
 import java.util.function.BooleanSupplier;
 import java.util.function.Consumer;
 import java.util.function.Supplier;
@@ -243,6 +246,14 @@ final class NewbieWalk {
         run(() -> hover(() -> widgetWith(WeaponType.NUKE.displayName().getString())));
         settle();
         shot("console-icbm-tip", () -> "");
+        // Player target with nobody picked: what does FIRE do?
+        run(() -> click(widgetWith(ua.zentix.incoming.strike.TargetMode.PLAYER.displayName().getString())));
+        await(5);
+        run(() -> hover(() -> widgetWith(Component.translatable("incoming.remote.fire").getString())));
+        settle();
+        shot("console-player-fire", () -> "fire active " + (firstWidgetContaining(Component.translatable("incoming.remote.fire").getString()) instanceof AbstractWidget w && w.active));
+        run(() -> click(widgetWith(ua.zentix.incoming.strike.TargetMode.LOOK.displayName().getString())));
+        await(5);
         run(() -> hover(() -> widgetWith(Component.translatable("incoming.remote.settings").getString())));
         settle();
         shot("console-settings-hover", () -> "");
@@ -255,7 +266,7 @@ final class NewbieWalk {
         if (full) {
             // Server settings page, as a non-operator owner of a single-player world.
             run(() -> {
-                AbstractWidget server = firstWidgetContaining("Server", "Сервер");
+                AbstractWidget server = firstWidgetContaining("Server", "Сервер", "сервер");
                 Incoming.LOG.info("NEWBIE {} server settings button: {}", lang, server == null ? "none" : server.getMessage().getString() + " active " + server.active);
                 if (server != null && server.active) click(new double[]{server.getX() + 2, server.getY() + 2});
             });
@@ -284,9 +295,7 @@ final class NewbieWalk {
         await(5);
         if (full) {
             // Targeting map key.
-            run(() -> Keys.MAP.setDown(true));
-            await(2);
-            run(() -> Keys.MAP.setDown(false));
+            run(() -> net.minecraft.client.KeyMapping.click(Keys.MAP.getKey()));
             await(40);
             settle();
             shot("map", () -> String.valueOf(mc.screen));
@@ -363,13 +372,23 @@ final class NewbieWalk {
     }
 
     private AbstractWidget firstWidgetContaining(String... texts) {
-        if (mc.screen == null) return null;
-        for (var c : mc.screen.children()) {
-            if (!(c instanceof AbstractWidget w)) continue;
-            String m = w.getMessage().getString();
-            for (String t : texts) if (m.contains(t)) return w;
+        AbstractWidget w = mc.screen == null ? null : find(mc.screen.children(), texts);
+        if (w == null) Incoming.LOG.warn("NEWBIE no widget with {}", String.join("/", texts));
+        return w;
+    }
+
+    /** Depth-first, into option lists and their rows. */
+    private static AbstractWidget find(List<? extends GuiEventListener> children, String... texts) {
+        for (var c : children) {
+            if (c instanceof AbstractWidget w) {
+                String m = w.getMessage().getString();
+                for (String t : texts) if (m.contains(t)) return w;
+            }
+            if (c instanceof ContainerEventHandler box) {
+                AbstractWidget in = find(box.children(), texts);
+                if (in != null) return in;
+            }
         }
-        Incoming.LOG.warn("NEWBIE no widget with {}", String.join("/", texts));
         return null;
     }
 
