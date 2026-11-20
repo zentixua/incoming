@@ -57,7 +57,7 @@ public record InterceptorSpec(double radarRange, double engageRange, int railTic
      * acceleration ({@link Passport#boostAccel}). Real speed with the game's 1.5 s acceleration would mean ~70 g
      * along the axis: the missile would leave the canister at 9 blocks/tick and gain speed through its pitch-over,
      * its turn rate (one lateral acceleration, {@link #turnLimit}) falling with speed, and climb ~800 blocks before
-     * it could level off, above any low target (a cruise missile at 40 m: every interceptor missed).
+     * it could level off, above any low target such as a cruise missile at 40 m.
      */
     public double boostAccel(double x) {
         return FlightScale.blend(gameBoostAccel, passport.boostAccel(), x);

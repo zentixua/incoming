@@ -46,10 +46,10 @@ import java.util.Map;
  * path is out of the world), at game and at real flight scale. Every interceptor's launch range, height, sampled
  * closest approach and end are printed ({@code grep SAMCRUISE}); the missile must be shot down.
  * <p>
- * Not here: a SAM among trees or hills (measured 20.11.2026 with model forests and hills). The radar sees the
+ * Not here: a SAM among trees or hills (model forests and hills). The radar sees the
  * missile only 95–320 blocks out or never, and whether the interceptor is in time then depends on the sweep phase
  * ({@link SamBlockEntity#SWEEP} ticks, up to 40 blocks of missile flight): forest overhead seen at 120, tall forest
- * 95, hills 101 were hit locally, hills overhead missed on CI when the shot came 9 ticks after first sight; with the
+ * 95, hills 101 are hit when the shot comes promptly, hills overhead are missed when it comes 9 ticks after first sight; with the
  * aim 300 blocks off the SAM a forest hid it until 317 blocks and it dived onto its aim first, hills hid it entirely.
  * Works as designed (the guide advises open high ground).
  * <p>

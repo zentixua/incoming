@@ -89,11 +89,11 @@ paths:
   into the ground (`catchesTargetPassingOverhead`, `catchesDivingTargetOverhead`; at 30 g it misses if the Shahed is
   18 blocks short of the SAM at launch or already overhead, as with the second missile in GameTest
   `shootsDownHostileDrones`); a single angular speed has the same problem.
-- The motor follows the flight scale like speed does. Real top speed in the game's 1.5 s (~70 g axial) made the
-  missile leave the canister at 9 blocks/tick and keep accelerating through its pitch-over, its turn rate falling as
-  ω = a/v: it was ~800 blocks up before it could level off and missed every cruise missile (40 m) and Shahed at REAL.
-  Pure pursuit at real speeds then still passed crossing targets 10–40 blocks away; lead to the intercept point hits
-  them. `InterceptShareTest` runs at flight scale 0, 0.5 and 1; `SamCruiseGameTests` checks the world case.
+- The motor follows the flight scale like speed does (`boostAccel(x)`, `boostTicks(x)`). Real top speed reached in
+  the game's 1.5 s would be ~70 g axial: the missile leaves the canister at 9 blocks/tick and keeps accelerating through
+  its pitch-over while its turn rate falls (ω = a/v), so it climbs ~800 blocks before it can level off, above any
+  cruise missile (40 m at REAL). At real speeds pure pursuit passes crossing targets 10–40 blocks away; lead to the
+  intercept point hits them. `InterceptShareTest` runs at flight scale 0, 0.5 and 1; `SamCruiseGameTests` checks the world case.
 - In-world tests against a low target need a site without GameTest barrier walls (they hide it from the radar):
   `SamCruiseGameTests` holds its own chunks millions of blocks out, one site per test, 16 384 blocks apart; a
   real-scale case gets its own batch (`StrikeGameTests.flightScale` restores the value it found, so two such tests in
@@ -103,7 +103,7 @@ paths:
   close (model forests 95–320 blocks, hills ~100 or never; numbers in the `SamCruiseGameTests` javadoc): a missile aimed a few hundred blocks off the SAM can dive onto its aim before an
   interceptor gets there. Works as designed; the guide advises open high ground. Such late-sight cases are no
   regression tests: whether the shot is in time depends on the sweep phase (`SWEEP` 10 ticks, 40 blocks of missile
-  flight), and hills overhead missed on CI when it fired 9 ticks after first sight.
+  flight); a shot 9 ticks after first sight in hills overhead misses.
 - Interceptor flight is not saved: after a server restart mid-intercept, the missile is gone, the target keeps flying.
 - A nuclear warhead on a cruise missile or B-2 is intercepted like a conventional one (signature belongs to the carrier);
   an ICBM is not.
