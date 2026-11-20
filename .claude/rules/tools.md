@@ -9,7 +9,12 @@ paths:
 
 # Where things are, in detail
 
-The short layout is in the root CLAUDE.md; here, what each script does.
+The short layout is in AGENTS.md; here, what each script does.
+
+Prism: `~/.var/app/org.prismlauncher.PrismLauncher/data/PrismLauncher/` (`tools/paths.py`: PRISM);
+`instances/Open Skies/minecraft/` is Artem's playing instance (MC; folder name only in `tools/paths.py`, read by
+`build.gradle`, overridden by `MC_DIR`): `mods/` also supplies Create/Sable/Aeronautics for dev runs,
+`logs/latest.log`, `incoming-backup/` for `deploy.sh` removals; `java/java-runtime-delta` is JDK 21.
 
 ```
 /mnt/data/projects/incoming/             ← this project (git)
@@ -28,6 +33,9 @@ The short layout is in the root CLAUDE.md; here, what each script does.
     deploy.sh                            ← build → mods/ of an instance and dist/ (--test, --dry; --jar F: a ready jar from CI/release);
                                            does not touch an instance with pack auto-update: packwiz-installer would bring back the pack's jar
     logscan.py                           ← digest of logs/latest.log
+    check_knowledge.py                   ← CI job “Знания” (every run): agent knowledge layout (CLAUDE.md = @AGENTS.md, AGENTS.md
+                                           ≤ 24 KiB, every rule has live `paths:` and is listed, plugin hooks exist, no private
+                                           facts); test_check_knowledge.py also tests the plugin's hooks/knowledge.py
     nuke_survey.py <untouched> <blasted> <gz x> <gz z> ← nuclear ruins against the untouched world, block by block (region
                                            files only, safe on a live server's world): share of built blocks still in place by
                                            kind and distance ring, one-block spikes left standing, block columns at --spot=x,z
