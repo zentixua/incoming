@@ -79,9 +79,15 @@ public final class RuinDeliveryGameTests {
      * the new blocks, it would light the old ones on the client. The light thread is held so the chunk keeps waiting,
      * and a light change is marked on its holder meanwhile (as the chunk's own checks or a ruined neighbour's light
      * would); nothing of it may reach the client before the whole chunk.
+     * <p>
+     * At game speed: the light fence completes in wall time on the light thread, while the hold lasts {@code
+     * RuinDelivery.HOLD_LIMIT} ticks. Unthrottled, a CI shard where {@code light_late_busy} left the light thread a
+     * backlog sent the chunk 234 and 381 ticks after the write: the hold expired and a light update went first, or the
+     * test timed out (PR #683, 20.11.2026).
      */
     @GameTest(template = "range", timeoutTicks = 400, batch = "nuke_delivery_hold", skyAccess = true)
     public static void lightWaitsForTheWholeChunk(GameTestHelper h) {
+        StrikeGameTests.gameSpeed(h);
         ServerLevel level = h.getLevel();
         LevelChunk heavy = level.getChunkAt(h.absolutePos(new BlockPos(16, 12, 16)));
         int y = h.absolutePos(new BlockPos(0, 12, 0)).getY();
