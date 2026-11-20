@@ -307,8 +307,9 @@ public final class CollapseGameTests {
 
     /**
      * Every kind of storage on a floor that falls keeps all it holds (review of #688): a chest, a light container (brewing
-     * stand), a shulker box (its contents stay in the dropped box), and Create's item vault and depot, which are not
-     * vanilla containers (an item handler; a vault's own removal spills it). Contents are counted in the dropped items,
+     * stand), a shulker box (its contents stay in the dropped box), and Create's item vault, depot, basin, deployer and
+     * saw: not vanilla containers, cleared by {@code Clearable}, and the saw's item handler gives nothing out (before this
+     * fix its log was lost: extracting through the handler, then clearing). Contents are counted in the dropped items,
      * shulker contents inside the dropped box.
      */
     @GameTest(template = "range", batch = "collapse", timeoutTicks = 2400, skyAccess = true)
@@ -317,20 +318,24 @@ public final class CollapseGameTests {
         ground(h);
         ServerLevel level = h.getLevel();
         Map<BlockPos, BlockState> house = block(h, 24, 39, 28, 35, 4, true);
-        Block vault = net.minecraft.core.registries.BuiltInRegistries.BLOCK.get(net.minecraft.resources.ResourceLocation.parse("create:item_vault")),
-                depot = net.minecraft.core.registries.BuiltInRegistries.BLOCK.get(net.minecraft.resources.ResourceLocation.parse("create:depot"));
-        h.assertTrue(vault != Blocks.AIR && depot != Blocks.AIR, "no create:item_vault / create:depot — Create not loaded");
+        Block vault = create("item_vault"), depot = create("depot"), basin = create("basin"), deployer = create("deployer"), saw = create("mechanical_saw");
+        h.assertTrue(vault != Blocks.AIR && depot != Blocks.AIR && basin != Blocks.AIR && deployer != Blocks.AIR && saw != Blocks.AIR, "Create blocks missing — Create not loaded");
         int y = GROUND + 5;
         BlockPos chest = new BlockPos(26, y, 30), stand = new BlockPos(26, y, 33), shulker = new BlockPos(29, y, 33),
-                vaultAt = new BlockPos(28, y, 30), depotAt = new BlockPos(29, y, 31);
+                vaultAt = new BlockPos(28, y, 30), depotAt = new BlockPos(29, y, 31), basinAt = new BlockPos(27, y, 32),
+                deployerAt = new BlockPos(25, y, 31), sawAt = new BlockPos(28, y, 33);
         h.setBlock(chest, Blocks.CHEST);
         h.setBlock(stand, Blocks.BREWING_STAND);
         h.setBlock(shulker, Blocks.SHULKER_BOX);
         h.setBlock(vaultAt, vault);
         h.setBlock(depotAt, depot);
+        h.setBlock(basinAt, basin);
+        h.setBlock(deployerAt, deployer);
+        h.setBlock(sawAt, saw);
         net.minecraft.world.item.Item[] kinds = {net.minecraft.world.item.Items.DIAMOND, net.minecraft.world.item.Items.GUNPOWDER,
-                net.minecraft.world.item.Items.GOLD_INGOT, net.minecraft.world.item.Items.IRON_INGOT, net.minecraft.world.item.Items.EMERALD};
-        int[] want = {7, 3, 10, 200, 16};
+                net.minecraft.world.item.Items.GOLD_INGOT, net.minecraft.world.item.Items.IRON_INGOT, net.minecraft.world.item.Items.EMERALD,
+                net.minecraft.world.item.Items.COPPER_INGOT, net.minecraft.world.item.Items.BRICK, net.minecraft.world.item.Items.OAK_LOG};
+        int[] want = {7, 3, 10, 200, 16, 32, 5, 1};
         // the vault becomes its own controller on its first tick; its item handler exists from then on
         h.runAfterDelay(10, () -> {
             ((net.minecraft.world.Container) h.getBlockEntity(chest)).setItem(0, new net.minecraft.world.item.ItemStack(kinds[0], want[0]));
@@ -339,13 +344,16 @@ public final class CollapseGameTests {
             ((net.minecraft.world.Container) h.getBlockEntity(shulker)).setItem(0, new net.minecraft.world.item.ItemStack(kinds[2], want[2]));
             insert(h, vaultAt, kinds[3], want[3]);
             insert(h, depotAt, kinds[4], want[4]);
+            insert(h, basinAt, kinds[5], want[5]);
+            insert(h, deployerAt, kinds[6], want[6]);
+            insert(h, sawAt, kinds[7], want[7]);
             it.unimi.dsi.fastutil.longs.LongArrayList at = new it.unimi.dsi.fastutil.longs.LongArrayList();
             java.util.List<BlockState> was = new java.util.ArrayList<>();
             blowWestGroundFloor(h, house, at, was);
             Warheads.CollapseProbe probe = Warheads.testCollapse(level, h.absoluteVec(new Vec3(28, GROUND + 2, 31.5)), 16, at, was, System::nanoTime);
             h.succeedWhen(() -> {
                 h.assertTrue(probe.done() && probe.fell() > 100, "collapse " + probe.done() + ", fell " + probe.fell());
-                for (BlockPos p : new BlockPos[]{chest, stand, shulker, vaultAt, depotAt}) {
+                for (BlockPos p : new BlockPos[]{chest, stand, shulker, vaultAt, depotAt, basinAt, deployerAt, sawAt}) {
                     h.assertTrue(h.getBlockState(p).isAir() || !h.getBlockState(p).hasBlockEntity(), "storage at " + p + " stayed: its floor fell");
                 }
                 int[] got = new int[kinds.length];
@@ -359,6 +367,10 @@ public final class CollapseGameTests {
                 }
             });
         });
+    }
+
+    private static Block create(String id) {
+        return net.minecraft.core.registries.BuiltInRegistries.BLOCK.get(net.minecraft.resources.ResourceLocation.fromNamespaceAndPath("create", id));
     }
 
     /** Put {@code count} of {@code item} into the block's item handler (side-less), all of it. */

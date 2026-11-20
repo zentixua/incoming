@@ -180,7 +180,8 @@ paths:
   and is removed without clearing (`ColumnScar.replaceKeeping`), so its own `onRemove` spills what it keeps (chest,
   Create vault and depot: the vault's capability is the whole multiblock, its `onRemove` spills only its block); it
   lands as no rubble; an unrolled loot table stays unrolled (GameTest `storageContentsSurvive`: chest, brewing stand,
-  shulker box, Create vault and depot); the abandon
+  shulker box, Create vault, depot, basin, deployer and saw — the saw's handler gives nothing out, so extracting through
+  it and clearing lost its item); the abandon
   check covers only the removals the solve used. Known limits: a support built beside a hole while the solve runs is not
   seen; rubble lands in claimed land as vanilla falling sand does; the rubble share falls as vanilla falling blocks while `CraterFalls.room` allows, otherwise lands at
   once where it would rest, spread by `Debris.spread`; fluid ticks and landings in their own portions; one
