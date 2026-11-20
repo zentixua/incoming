@@ -223,20 +223,30 @@ public final class Warheads {
         }
 
         public boolean done() {
-            return job.finished;
+            return job.stats.finished;
         }
 
         /** Blocks the collapse dropped. */
         public int fell() {
-            return job.dropped;
+            return job.stats.dropped;
         }
 
         public int portions() {
-            return job.portions;
+            return job.stats.portions;
         }
 
         public int largestPortion() {
-            return job.largestPortion;
+            return job.stats.largestPortion;
+        }
+
+        /** Plans made again after the world changed under one. */
+        public int replans() {
+            return job.stats.replans;
+        }
+
+        /** Run {@code r} on the server thread when the solve is in and before anything falls (tests: change the world then). */
+        public void beforeFall(Runnable r) {
+            job.beforeFall = r;
         }
     }
 
