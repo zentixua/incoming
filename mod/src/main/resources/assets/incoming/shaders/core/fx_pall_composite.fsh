@@ -302,22 +302,37 @@ vec4 upsample(ivec2 full, ivec2 fullSize, ivec2 lowSize, float depth, vec3 dir, 
 // above white toward white (CROSS, like matter light in fx_pall), no brighter than 1 with the same hue
 vec3 ballLitWorld(ivec2 full, vec3 n, float kept, vec3 added) {
     vec3 world = texelFetch(Sampler9, full, 0).rgb, open = PallOpenSky * faceShade(PallFaceShade, n);
+    // a see-through surface in front of the lit world: its own light X stays, the world behind it W = (frame − X) / T is
+    // relit and seen through it (see.glsl)
+    vec4 glass = vec4(0.0, 0.0, 0.0, 1.0);
+    if (FxSee > 0.5 && seeBehind(pallScene(texelFetch(Sampler1, full, 0).r), pallScene(texelFetch(Sampler1, full, 0).g))) {
+        glass = texelFetch(FxGlass, full, 0);
+        world = clamp((world - glass.rgb) / max(glass.a, 1.0 / 255.0), 0.0, 1.0);
+    }
     vec3 lit = vec3(relit(world.r, kept, open.r, added.r), relit(world.g, kept, open.g, added.g),
             relit(world.b, kept, open.b, added.b));
     lit += vec3(CROSS * max(dot(lit, LUMA) - 1.0, 0.0));
     vec3 shown = vec3(pallDisplay(lit.r), pallDisplay(lit.g), pallDisplay(lit.b));
-    return shown / max(max(max(shown.r, shown.g), shown.b), 1.0);
+    return glass.rgb + glass.a * (shown / max(max(max(shown.r, shown.g), shown.b), 1.0));
 }
 
 // The pall on this pixel's ray up to a see-through surface at view-axis distance surface: the near volume up to it
 // (froxelNear, exact as the composite takes it to the world), and beyond the volume's end the rays' pall from there to the
-// world (rays) cut at the surface by the noiseless field, light in the same ratio to opacity (as upsample does). Light and
+// world (rays) cut at the surface by the noiseless field and the conventional smoke's mean field, light in the same ratio
+// to opacity (as upsample does). Mushrooms are not in it: one between the eye and a window counts as behind the window. Light and
 // transmittance never exceed the whole ray's (laid): the part in front of the surface is a part of it.
 vec4 mediumTo(float surface, ivec2 full, vec3 dir, float nearEnd, vec4 rays, vec4 laid) {
     vec4 beyond = vec4(0.0, 0.0, 0.0, 1.0);
     if (surface > nearEnd && 1.0 - rays.a > 0.0) {
-        float axis = max(dot(dir, PallForward), 1e-3);
-        float tau = max(exp(-pallTau(dir, nearEnd / axis, surface / axis)), rays.a);
+        float axis = max(dot(dir, PallForward), 1e-3), a = nearEnd / axis, b = surface / axis;
+        // the rays march the pall fields, the wall heads and conventional smoke (fx_pall): all of them up to the surface
+        float depth = pallTau(dir, a, b);
+        if (smokeOn()) {
+            vec2 span = pallBox(dir, SmokeMin, SmokeMax);
+            float t0 = max(span.x, a), t1 = min(span.y, b);
+            if (t1 > t0) depth += smokeTau(dir * t0, dir, t1 - t0, 6);
+        }
+        float tau = max(exp(-depth), rays.a);
         beyond = vec4(rays.rgb * clamp((1.0 - tau) / max(1.0 - rays.a, 1e-4), 0.0, 1.0), tau);
     }
     vec4 front = beyond;

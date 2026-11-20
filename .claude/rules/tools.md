@@ -55,6 +55,9 @@ Prism: `~/.var/app/org.prismlauncher.PrismLauncher/data/PrismLauncher/` (`tools/
                                            after it by see_through.py, fails outside its bounds; run it on changes to the
                                            effects layer's depth or composites (SceneDepth, SeeThrough, fx_depth, see.glsl)
     see_through.py <dir> [--min/--max case=share] [--sheet] ← the visible share per pane case of those frames, and a sheet
+    see_through_gl.py                    ← the see-through shaders on Mesa llvmpipe without a game: sampler counts (the pall
+                                           composite within 16), fx_depth on synthetic captures, the half-resolution
+                                           pair, the pall split with smoke in front of a far pane; exit 1 on a failed check
     nested_kwin.sh                       ← nested KWin for the client: no window and no host sound, its own D-Bus bus without starting services
                                            (nested_kwin_bus.conf) and XDG directories; takes the GPU lease and the client lock
                                            (gpu_lease.sh); exit 75 means whoever holds the GPU; with INCOMING_SOFT=1 a CPU session

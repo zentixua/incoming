@@ -62,6 +62,8 @@ public final class SeeThrough {
     private static boolean broken;
     /** A copy was (re)made at a new size or format this stage: its first blit is checked for GL errors (the only sync). */
     private static boolean fresh;
+    /** The world depth's internal format, and the texture and size it was read for. */
+    private static int worldFormat, formatOf = -1, formatWidth, formatHeight;
     private static final float[] CLEAR = new float[4];
     private static final java.nio.ByteBuffer MASK = org.lwjgl.BufferUtils.createByteBuffer(16);
 
@@ -129,11 +131,24 @@ public final class SeeThrough {
 
     /** The world's depth into {@code to} (its own format; recreated at a new size or format). */
     private static boolean copyDepth(Copy to, int world, int w, int h) {
-        GlStateManager._bindTexture(world);
-        int format = GL11.glGetTexLevelParameteri(GL11.GL_TEXTURE_2D, 0, GL30.GL_TEXTURE_INTERNAL_FORMAT);
+        int format = format(world, w, h);
         if (!to.ensure(format, w, h)) return fail("depth copy framebuffer incomplete, format 0x" + Integer.toHexString(format));
         blit(world, GL30.GL_DEPTH_ATTACHMENT, to.fbo, w, h, GL11.GL_DEPTH_BUFFER_BIT);
         return true;
+    }
+
+    /** The world depth's internal format, queried only for a new texture or size (the bound texture is restored). */
+    private static int format(int world, int w, int h) {
+        if (world != formatOf || w != formatWidth || h != formatHeight) {
+            int bound = GL11.glGetInteger(GL11.GL_TEXTURE_BINDING_2D);
+            GlStateManager._bindTexture(world);
+            worldFormat = GL11.glGetTexLevelParameteri(GL11.GL_TEXTURE_2D, 0, GL30.GL_TEXTURE_INTERNAL_FORMAT);
+            GlStateManager._bindTexture(bound);
+            formatOf = world;
+            formatWidth = w;
+            formatHeight = h;
+        }
+        return worldFormat;
     }
 
     /** The frame's colour into {@code to}. */
@@ -218,8 +233,8 @@ public final class SeeThrough {
         /** Texture of this format and size with its framebuffer; false — incomplete. */
         boolean ensure(int internal, int w, int h) {
             if (texture >= 0 && internal == format && w == width && h == height) return true;
-            // earlier errors are not this copy's
-            for (int i = 0; i < 16 && GL11.glGetError() != GL11.GL_NO_ERROR; i++) {}
+            // earlier errors are not this stage's: drained once, before its first new copy, so the stage's check sees its own
+            if (!fresh) for (int i = 0; i < 16 && GL11.glGetError() != GL11.GL_NO_ERROR; i++) {}
             fresh = true;
             if (texture < 0) texture = GlStateManager._genTexture();
             if (fbo < 0) fbo = GlStateManager.glGenFramebuffers();

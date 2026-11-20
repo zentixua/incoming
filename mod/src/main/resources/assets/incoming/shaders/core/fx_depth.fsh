@@ -83,8 +83,9 @@ void main() {
                 float through = 1.0 - after.a;
                 // BLEND: the frame was X + T·before; Fabulous: the target holds X itself
                 vec3 own = See.x < 1.5 ? max(after.rgb - through * texelFetch(Sampler5, px, 0).rgb, vec3(0.0)) : after.rgb;
-                if (through < 0.5 / 255.0) {
-                    // a fully covering surface (an opaque particle): the world here, it hides the layer
+                if (through < 0.5 / 255.0 || through > 1.0 - 0.5 / 255.0) {
+                    // a fully covering surface (an opaque particle), or one that wrote depth and no colour (a boat's water
+                    // mask): the world here, it hides the layer as before
                     dist = seen;
                     hard = near;
                 } else {

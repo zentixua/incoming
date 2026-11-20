@@ -34,8 +34,10 @@ uniform sampler2D Sampler1;
 // direct source visibility from half-resolution pass (fx_heat_shadow): ball codes (r), jet codes (g),
 // sample world distance along view (b)
 uniform sampler2D Sampler2;
-// a see-through surface in front of the world (SceneDepth: Sampler1 g, its distance): the frame copy holds the window over
-// what lies behind it, so the bend reaches only as far as the window (as without see-through)
+// a see-through surface in front of the world (SceneDepth: Sampler1 g, its distance; FxGlass its own light and transmittance,
+// own texture unit): the frame copy holds the window over what lies behind it, so the bend reaches only as far as the window
+// (as without see-through), and light on the world behind it relights that world, not the window
+uniform sampler2D FxGlass;
 uniform float FxSee;
 
 uniform mat4 InvViewProj;
@@ -395,10 +397,16 @@ void main() {
         if (HeatShadow.x > 0.0) heatSeen(px, depth, ballSeen, jetSeen);
         vec3 added = heatLight(p, n, ballSeen, jetSeen) * seen;
         if (dot(added, LUMA) > 1e-6) {
+            // behind a see-through surface: the world W = (frame − X) / T is lit, the surface's own light X stays
+            vec4 glass = vec4(0.0, 0.0, 0.0, 1.0);
+            if (FxSee > 0.5 && seeBehind(depth, pallScene(texelFetch(Sampler1, px, 0).g))) {
+                glass = texelFetch(FxGlass, px, 0);
+                world = clamp((world - glass.rgb) / max(glass.a, 1.0 / 255.0), 0.0, 1.0);
+            }
             vec3 lit = vec3(relit(world.r, 1.0, open.r, added.r), relit(world.g, 1.0, open.g, added.g), relit(world.b, 1.0, open.b, added.b));
             lit += vec3(CROSS * max(dot(lit, LUMA) - 1.0, 0.0));
             vec3 shown = vec3(pallDisplay(lit.r), pallDisplay(lit.g), pallDisplay(lit.b));
-            world = shown / max(max(max(shown.r, shown.g), shown.b), 1.0);
+            world = glass.rgb + glass.a * (shown / max(max(max(shown.r, shown.g), shown.b), 1.0));
         }
     }
     fragColor = vec4(world, 1.0);

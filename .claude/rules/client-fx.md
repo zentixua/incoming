@@ -40,12 +40,16 @@ paths:
   see-through or not; equal without see-through), `FxGlass` (X, T; own unit 16) and the layer's hardware depth (`hard`);
   the layer draws through `SceneDepth.bindLayer` (frame colour + `hard`). One surface per pixel (vanilla Fabulous keeps
   one): a fragment behind it is laid as T·light + opacity·X; the pall composite splits its medium at the surface
-  (`mediumTo`: near volume to the surface, the rays cut there by the noiseless field); heat shimmer bends only air in front
-  of it; probes take T; the water decal and the half-resolution upsampler key on g. Exact compositing: `SeeThroughGlslTest`.
+  (`mediumTo`: near volume to the surface, the rays cut there by the noiseless field and the smoke's mean field); heat
+  shimmer bends only air in front of it; flash and fireball light relight the world behind it, W = (frame − X)/T, never the
+  surface's own light; probes take T; the water decal and the half-resolution upsampler key on g (its reduction keeps one
+  frame pixel's pair). A surface with no coverage (a boat's water mask) or full coverage hides the layer as on main. Exact compositing: `SeeThroughGlslTest`.
   Readers of the surface's distance use g of the distance texture they already sample: the pall composite is at 16
-  samplers, the minimum a GL implementation must allow. Limits: smoke between two separate panes takes both tints, a pane
+  samplers, the minimum a GL implementation must allow. Limits: smoke between two separate panes takes both tints, a
+  mushroom between the eye and a window counts as behind it, two coplanar panes mix across half a half-resolution pixel,
+  an opaque vanilla particle behind a pane hides the layer at the pane, a pane
   under dense pall in front of it keeps its unattenuated X behind opaque smoke, piston-moved glass is not a surface, and
-  the first frame of an effect is tested against the world's depth. Check: `tools/see_through_check.sh` (sandbox `pane`).
+  the first frame of an effect is tested against the world's depth. Checks: `tools/see_through_check.sh` (sandbox `pane`), `tools/see_through_gl.py` (the shaders on llvmpipe).
 - Under Iris the first-person hand is in world depth at `AFTER_LEVEL` (Iris draws it inside the world pass with the depth
   range × 0.125, `HandRenderer.DEPTH`), so the layer reads it as world 0.09–0.115 m away; vanilla draws it after the layer.
   The pall skips those pixels (`pallHand`, `PALL_HAND` 0.12 m in `pall.glsl`, `PallHandTest`): resolve writes them invalid

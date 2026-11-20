@@ -114,7 +114,8 @@ public final class SceneDepth {
         boolean lod = !FxViews.secondary() && LodDepth.current(LOD);
         GlStateManager._glBindFramebuffer(GlConst.GL_FRAMEBUFFER, fbo);
         RenderSystem.viewport(0, 0, width, height);
-        // every pixel writes the layer's hardware depth
+        // every pixel writes the layer's hardware depth; the depth function is restored after
+        int func = GL11.glGetInteger(GL11.GL_DEPTH_FUNC);
         RenderSystem.enableDepthTest();
         RenderSystem.depthFunc(GL11.GL_ALWAYS);
         RenderSystem.depthMask(true);
@@ -140,7 +141,7 @@ public final class SceneDepth {
         if (mesh != null) BufferUploader.drawWithShader(mesh);
         GlStateManager._glBindFramebuffer(GlConst.GL_FRAMEBUFFER, previous);
         RenderSystem.viewport(VIEWPORT[0], VIEWPORT[1], VIEWPORT[2], VIEWPORT[3]);
-        RenderSystem.depthFunc(GL11.GL_LEQUAL);
+        RenderSystem.depthFunc(func);
         RenderSystem.depthMask(false);
         RenderSystem.enableDepthTest();
         last = lod ? 2 : 1;
