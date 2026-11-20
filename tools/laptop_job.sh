@@ -92,11 +92,12 @@ if [ "$mode" = gpu ]; then
     [ -z "$said" ] && { echo "$(date +%T) $who — waiting" >&2; said=1; }
     sleep 10
   done
+  gpu_cool
 fi
 
 # service environment contains only what the job needs (service does not inherit shell environment)
 envs=()
-while IFS= read -r line; do envs+=(-E "$line"); done < <(env | grep -E '^(JAVA_HOME|MC_DIR|MODS|INCOMING_[A-Z_]+|PYTHON_CPU_COUNT|XDG_RUNTIME_DIR)=' || true)
+while IFS= read -r line; do envs+=(-E "$line"); done < <(env | grep -E '^(JAVA_HOME|MC_DIR|MODS|INCOMING_[A-Z_]+|DELEGATE_TASK|PYTHON_CPU_COUNT|XDG_RUNTIME_DIR)=' || true)
 
 props=(-p OOMScoreAdjust=500)
 if [ "$mode" = soft ]; then
@@ -113,9 +114,12 @@ fi
 # keep the laptop awake; a server without a session seat (netcup: "Access denied") has no sleep to inhibit
 inhibit=(systemd-inhibit --what=sleep:idle --who="Incoming: $name" --why="mod check (tools/laptop_job.sh)")
 "${inhibit[@]}" true 2>/dev/null || inhibit=()
+# description names the delegated task (DELEGATE_TASK): mission-load sums the unit's CPU (systemd's resource record) into
+# the task's budget
+desc="incoming job $name, task ${DELEGATE_TASK:--}, $mode: $*"; desc=${desc:0:400}
 code=0
 "${inhibit[@]}" \
-  systemd-run --user --wait --pipe --collect --quiet --same-dir --unit="incoming-job-$name-$$" \
+  systemd-run --user --wait --pipe --collect --quiet --same-dir --unit="incoming-job-$name-$$" --description="$desc" \
     "${props[@]}" "${envs[@]}" -- "$(readlink -f "$0")" --in-unit "$mode" "$name" $$ -- "$@" 0<&0 198>&- &
 run=$!
 # stopping this script (Ctrl+C, TERM from a caller's timeout) stops its service: the client does not outlive the command

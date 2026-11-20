@@ -58,6 +58,7 @@ if socket_busy; then echo "socket $SOCKET is occupied by another KWin" >&2; exit
 lease_take "$owner" "$ROOT" ${INCOMING_GPU_WAIT:+--wait} || exit 75
 # own lease but own session client still running: INCOMING_GPU_WAIT waits for it
 while [ -n "${INCOMING_GPU_WAIT:-}" ] && gpu_client_busy >/dev/null; do sleep 10; done
+gpu_cool
 gpu_client_hold "$owner" "$ROOT" "$COMMAND" || exit 75
 mkdir -p "$HOME_DIR/config" "$HOME_DIR/data" "$HOME_DIR/cache" "$HOME_DIR/state"
 exec env -u DISPLAY -u WAYLAND_DISPLAY -u DBUS_SESSION_BUS_ADDRESS \
