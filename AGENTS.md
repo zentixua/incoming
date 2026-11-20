@@ -231,8 +231,11 @@ actually works, fix the real cause.
   run records by default (Artem, 20.11): JFR ring and GC log (`build.gradle`, all runs), spark in hand-run clients,
   servers and scenarios, mod timing markers, full logs; read them before any rerun.
   Tooling for the mod: the `deep-debug` skill. **Study before coding** (Artem, 20.11): for a look or performance
-  defect, one such run on our frame and on the reference footage, then the design from those numbers. **No guess-tuning** (Artem, 20.11): a defect that survives three rounds
-  of tweaks means the model is wrong; stop tweaking and change the model.
+  defect, one such run on our frame and on the reference footage, then the design from those numbers. **No guess-tuning; stuck work stops for a
+  root-cause analysis** (Artem, 20.11): every attempt has a timebox stated at its start in the plan or PR. Three rounds of fixes (tweaks,
+  frame-judge or review rounds) or the timebox without a measured shift toward the goal → stop, find the root cause from
+  the recorded data (deep-debug skill), write it with its number in the PR or the executor's report, then act on it: fix that cause,
+  change the approach, or correct the test or reference. A new approach is one possible outcome, not the automatic one.
 - **One GPU session at a time** (`tools/gpu_lease.sh`: other sessions' GPU clients/`--gpu` jobs refuse, naming holder;
   at most two sessions queue, a third is refused); finish with `tools/sandbox.sh stop`, then `tools/gpu_lease.sh
   release`. CPU clients need no lease, limited only by memory (`soft_gl.sh` admission).
@@ -244,8 +247,8 @@ actually works, fix the real cause.
   data loss (worlds, inventories, configs), tick/frame budget breach, each with a scenario and a number or probe; rare
   configurations are minor unless common setups hit them. Reviewers also report hacks, unsourced constants,
   duplication and stray edits; the author fixes minor findings without another round. At most two rounds (the second
-  checks the first round's fixes and new serious defects in them); a defect class surviving both means the approach
-  changes, not a third round. Merge only without an open serious finding: fixed, or recorded in the PR as an explicit
+  checks the first round's fixes and new serious defects in them); a defect class surviving both stops the work for the
+  root-cause analysis above, not a third round. Merge only without an open serious finding: fixed, or recorded in the PR as an explicit
   limit. Before each release, one Codex audit of the whole `main` diff since the last release.
 - **Effort** (Artem, 19.11), for every agent, task and review: the working range is low/medium/high.
   **medium** is the default. **high** for work that needs deep reasoning: diagnosis of an unknown cause, physics
