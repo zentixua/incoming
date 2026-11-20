@@ -197,8 +197,8 @@ public final class ClientScenario {
             new ViewFxScenario();
             return;
         }
-        if ("firstuse".equals(scenario)) {
-            new FirstUse(); // a new player's first-use screens, EN and RU, each in its own fresh flat world
+        if (scenario.startsWith("firstuse")) {
+            new FirstUse(); // a new player's first-use screens in the client's language, a fresh flat world
             return;
         }
         if ("sandbox".equals(scenario)) {

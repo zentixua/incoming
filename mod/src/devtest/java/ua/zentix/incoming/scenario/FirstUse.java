@@ -8,7 +8,6 @@ import net.minecraft.client.gui.components.AbstractWidget;
 import net.minecraft.client.gui.components.EditBox;
 import net.minecraft.client.gui.components.events.ContainerEventHandler;
 import net.minecraft.client.gui.components.events.GuiEventListener;
-import net.minecraft.client.gui.screens.GenericMessageScreen;
 import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.client.gui.screens.TitleScreen;
 import net.minecraft.client.gui.screens.inventory.CraftingScreen;
@@ -52,6 +51,10 @@ import ua.zentix.incoming.client.aim.Designator;
 import ua.zentix.incoming.client.screen.RemoteScreen;
 import ua.zentix.incoming.registry.ModItems;
 import ua.zentix.incoming.strike.TargetMode;
+import ua.zentix.incoming.strike.Loadout;
+import ua.zentix.incoming.registry.ModDataComponents;
+import ua.zentix.incoming.net.C2S;
+import net.neoforged.neoforge.network.PacketDistributor;
 import ua.zentix.incoming.strike.WeaponType;
 
 import java.lang.reflect.Field;
@@ -64,22 +67,21 @@ import java.util.function.Consumer;
 import java.util.function.Supplier;
 
 /**
- * What a new player meets before the first strike ({@code tools/client_scenario.sh firstuse}), as GUI frames on the
- * CPU: survival on a flat world without cheats, the host alone; no strike is launched. For each language (English,
- * then Russian) a fresh world and fresh first-use hints, so the recipe unlock and the toast happen as for a new
- * player, with the language set before the world loads (the recipe-book search index is built in it). Frames
- * {@code firstuse-<lang>-<step>.png}, each with a {@code FIRSTUSE shot} log line holding the state behind it (recipe
- * known and listed, tooltip lines, Fire's state, the action bar), and every chat/action-bar line as {@code FIRSTUSE
- * <lang> chat|actionbar}. A state the walk cannot reach is logged {@code FIRSTUSE FAIL} and fails the run.
+ * What a new player meets before the first strike ({@code tools/client_scenario.sh firstuse|firstuse-ru}), as GUI
+ * frames on the CPU: survival on a flat world without cheats, the host alone; no strike is launched. One language per
+ * launch, set in options.txt by the script before the client starts (the recipe-book search index is built in it; a
+ * language reload after a world outgrows the CPU client's memory ceiling); a fresh world and fresh first-use hints, so
+ * the recipe unlock and the toast happen as for a new player. Frames {@code firstuse-<lang>-<step>.png}, each with a
+ * {@code FIRSTUSE shot} log line holding the state behind it (recipe known and listed, tooltip lines, Fire's state,
+ * the action bar), and every chat/action-bar line as {@code FIRSTUSE <lang> chat|actionbar}. A state the walk cannot
+ * reach is logged {@code FIRSTUSE FAIL}.
  */
 final class FirstUse {
     private static final String WORLD = "incoming-firstuse";
-    private static final List<String> LANGS = List.of("en_us", "ru_ru");
 
     private final Minecraft mc = Minecraft.getInstance();
     private final ArrayDeque<Step> steps = new ArrayDeque<>();
-    private int stepTick, frames, pass = -1, failures;
-    private boolean onTitle, reloaded;
+    private int stepTick, frames, failures;
 
     private interface Step {
         boolean done(int t);
@@ -92,56 +94,36 @@ final class FirstUse {
             boolean overlay = e instanceof ClientChatReceivedEvent.System s && s.isOverlay();
             Incoming.LOG.info("FIRSTUSE {} {}: {}", lang(), overlay ? "actionbar" : "chat", e.getMessage().getString());
         });
-        nextPass();
+        start();
     }
 
     private String lang() {
-        return pass < 0 ? "-" : LANGS.get(pass).substring(0, 2);
+        return mc.options.languageCode.substring(0, 2);
     }
 
     // ---------------------------------------------------------------- the walk
 
-    private void nextPass() {
-        pass++;
-        if (pass >= LANGS.size()) {
-            any(() -> {
-                Incoming.LOG.info("FIRSTUSE done, {} failures", failures);
-                Incoming.LOG.info("SCENARIO done");
-                mc.stop();
-            });
-            return;
-        }
-        String code = LANGS.get(pass);
+    private void start() {
         until("title screen", 6000, () -> mc.screen instanceof TitleScreen && mc.getOverlay() == null, true);
         any(() -> {
             // a new player: no hint shown yet on this client
             IncomingConfig.CLIENT.shownHints.set(List.of());
-            reloaded = false;
-            mc.options.languageCode = code;
-            mc.getLanguageManager().setSelected(code);
-            mc.options.save();
-            mc.reloadResourcePacks().thenRun(() -> mc.execute(() -> reloaded = true));
+            createWorld();
         });
-        until("language " + code, 2400, () -> reloaded && mc.getOverlay() == null, true);
-        any(this::createWorld);
         until("world", 6000, () -> mc.player != null && mc.level != null, true);
         await(40);
         until("chunks drawn", 2400, () -> mc.levelRenderer.hasRenderedAllSections() && mc.levelRenderer.countRenderedSections() > 50, false);
         walk();
         any(() -> {
-            mc.options.keyUse.setDown(false);
-            if (mc.level != null) {
-                mc.level.disconnect();
-                mc.disconnect(new GenericMessageScreen(Component.translatable("menu.savingLevel")));
-                mc.setScreen(new TitleScreen());
-            }
+            Incoming.LOG.info("FIRSTUSE {} done, {} failures", lang(), failures);
+            Incoming.LOG.info("SCENARIO done");
+            mc.stop();
         });
-        any(this::nextPass);
     }
 
     /** Survival without cheats; a fresh directory each run beside whatever saves exist, nothing deleted. */
     private void createWorld() {
-        String name = WORLD + "-" + LANGS.get(pass) + "-" + System.currentTimeMillis();
+        String name = WORLD + "-" + mc.options.languageCode + "-" + System.currentTimeMillis();
         GameRules rules = new GameRules();
         rules.getRule(GameRules.RULE_DAYLIGHT).set(false, null);
         rules.getRule(GameRules.RULE_WEATHER_CYCLE).set(false, null);
@@ -266,12 +248,25 @@ final class FirstUse {
             onServer(server -> IncomingConfig.SERVER.nukeEnabled.set(true));
         });
         await(10);
-        // 6. Binoculars at the open sky, LMB.
+        // 6. Binoculars at the open sky, LMB, with the default missile (a nuclear order would open its review instead).
+        run(() -> {
+            Loadout l = Loadout.DEFAULT;
+            mc.player.getMainHandItem().set(ModDataComponents.LOADOUT.get(), l);
+            PacketDistributor.sendToServer(new C2S.SetLoadout(InteractionHand.MAIN_HAND, l));
+        });
+        // the mouse positions the walk set while screens were open turn the camera once the mouse is grabbed again:
+        // let that happen, then aim
+        await(10);
         run(() -> {
             mc.player.setXRot(-60);
             mc.options.keyUse.setDown(true);
         });
         await(20);
+        run(() -> {
+            mc.player.setXRot(-60);
+            Incoming.LOG.info("FIRSTUSE {} scope at pitch {}, scoping {}", lang(), mc.player.getXRot(), Designator.isScoping());
+        });
+        await(5);
         run(Designator::fire);
         await(5);
         shot("scope-sky", this::overlay);

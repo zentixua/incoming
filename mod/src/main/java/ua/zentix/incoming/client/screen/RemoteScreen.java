@@ -78,6 +78,7 @@ public class RemoteScreen extends Screen {
     /** Fire (or Mission) button: inactive while the order is incomplete ({@link #missing}). */
     @Nullable
     private Button fireButton;
+    private Component fireLabelText = Component.empty();
     private final List<Choice> choices = new ArrayList<>();
     /** Weapon description lines and window height: computed in {@link #init()} from font. */
     private int descLines = 1, h = BASE_H + (1 + HINT_LINES) * LINE;
@@ -231,6 +232,7 @@ public class RemoteScreen extends Screen {
         Component fireLabel = linked > 0 ? Component.translatable("incoming.remote.assign", linked) : Component.translatable("incoming.remote.fire");
         // Map route and launch site apply to On the map target, as when firing from map itself.
         boolean map = loadout.mode() == TargetMode.MAP;
+        fireLabelText = fireLabel;
         fireButton = addRenderableWidget(Button.builder(fireLabel.copy().withStyle(ChatFormatting.RED, ChatFormatting.BOLD),
                 b -> fire(map ? MapTarget.waypoints(minecraft.level) : Waypoints.NONE, map ? launchFrom() : Optional.empty()))
                 .bounds(x0 + 4, by, 128, 22).build());
@@ -442,6 +444,8 @@ public class RemoteScreen extends Screen {
         if (fireButton == null) return;
         Component why = missing();
         fireButton.active = why == null;
+        // an inactive button greys its label, but a styled colour overrides that: grey it here
+        fireButton.setMessage(fireLabelText.copy().withStyle(why == null ? ChatFormatting.RED : ChatFormatting.GRAY, ChatFormatting.BOLD));
         fireButton.setTooltip(why == null ? null : Tooltip.create(why));
     }
 
