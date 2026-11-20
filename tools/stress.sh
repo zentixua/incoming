@@ -7,7 +7,8 @@
 #   tools/stress.sh                 # full scenario
 #   INCOMING_STRESS_RESTART=1 tools/stress.sh   # + stop the server mid-flight and continue after restart
 #                                                (surface-path probes do not run in this mode)
-#   INCOMING_JFR=1 tools/stress.sh   # + server JFR profile (settings=profile) → mod/run/stress/server/stress.jfr
+#   INCOMING_JFR=profile tools/stress.sh   # every JVM's JFR with the profile settings (every run records a default-settings
+#                                          JFR ring to <run dir>/run.jfr and GC to gc.log: build.gradle)
 #   INCOMING_STRESS_PROBES=false tools/stress.sh   # no MLRS probe salvos in fresh areas (A/B measurement of server stalls)
 #   INCOMING_RIG_JVM=artem tools/stress.sh   # server JVM as in Artem's game: 8 GB, generational ZGC (VPS only:
 #                                             a 15 GB cloud host lacks memory); collector in the "server started" line
@@ -48,9 +49,9 @@ RIG="$ROOT/mod/build/rig"
 if [ -f "$RUN/run-id" ]; then
   keep="$RUN/logs/$(cat "$RUN/run-id")"
   mkdir -p "$keep"
-  # everything the run writes: logs, JVM output (*.out), GC pauses, crash reports, JFR profile
+  # everything the run writes: logs, JVM output (*.out), each JVM's GC log and JFR ring, crash reports
   [ -d "$RUN/server/logs" ] && mv "$RUN/server/logs" "$keep/server"
-  for f in "$RUN"/*.out "$RUN"/server/gc.log* "$RUN/server/stress.jfr"; do
+  for f in "$RUN"/*.out "$RUN"/server/gc.log* "$RUN"/server/run.jfr; do
     [ -e "$f" ] && mv "$f" "$keep/"
   done
   [ -d "$RUN/server/crash-reports" ] && mv "$RUN/server/crash-reports" "$keep/server-crash-reports"
@@ -58,6 +59,7 @@ if [ -f "$RUN/run-id" ]; then
     name=${c%% *}
     [ -d "$RUN/$name/logs" ] && mv "$RUN/$name/logs" "$keep/$name"
     [ -d "$RUN/$name/crash-reports" ] && mv "$RUN/$name/crash-reports" "$keep/$name-crash-reports"
+    for f in "$RUN/$name"/gc.log* "$RUN/$name/run.jfr"; do [ -e "$f" ] && mkdir -p "$keep/$name" && mv "$f" "$keep/$name/"; done
   done
   echo "previous run logs: $keep"
 fi

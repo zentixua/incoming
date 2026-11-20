@@ -302,6 +302,27 @@ jbr() {
 
 stop() {
   running || { echo "sandbox is not running"; return 0; }
+  # the client JVM first, alone: its shutdown dumps the JFR ring (run.jfr); stopping the unit at once also takes KWin
+  # and Xwayland, and the client dies with its display before the dump. JVMs anywhere in the unit's own cgroup subtree
+  # only; a vanished unit (empty ControlGroup) signals nothing
+  local u cg p java=() alive
+  for u in $(systemctl --user list-units "$UNIT-*" --state=active --no-legend --plain | awk '{print $1}'); do
+    cg=$(systemctl --user show "$u" -p ControlGroup --value)
+    [[ $cg == */"$u" ]] && [ -d "/sys/fs/cgroup$cg" ] || continue
+    for p in $(find "/sys/fs/cgroup$cg" -name cgroup.procs -exec cat {} + 2>/dev/null); do
+      # literal membership: the unit's cgroup itself or below it, not a sibling sharing its name as a prefix
+      local own; own=$(sed -n 's/^0:://p' "/proc/$p/cgroup" 2>/dev/null)
+      [ "$(cat /proc/"$p"/comm 2>/dev/null)" = java ] && { [ "$own" = "$cg" ] || [[ $own == "$cg"/* ]]; } && java+=("$p")
+    done
+  done
+  if [ ${#java[@]} -gt 0 ]; then
+    kill -TERM "${java[@]}" 2>/dev/null
+    # up to 30 s for the dump; a zombie (exited, unreaped) counts as gone
+    for _ in $(seq 300); do
+      alive=0; for p in "${java[@]}"; do [ -d /proc/"$p" ] && [ "$(awk '{print $3}' /proc/"$p"/stat 2>/dev/null)" != Z ] && alive=1; done
+      [ $alive = 0 ] && break; sleep 0.1
+    done
+  fi
   systemctl --user stop "$UNIT-*"
   echo "sandbox stopped"
 }

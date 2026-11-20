@@ -423,9 +423,8 @@ paths:
   fingerprints would become “stale” in 882 of 10881 zone chunks), so only plan positions are written.
 - Slow nuclear ticks (> 50 ms) log a breakdown (ruin queue includes visits and waiting jobs per tick, prebuilt ruins
   separately; checking a waiting job is not a lane-clock unit but continues until tick deadline and its time counts
-  toward the lane: `WorkClock.overdue`, `spent`); `INCOMING_JFR=1 tools/client_scenario.sh nuke` writes JFR to
-  `mod/run/scenario/logs/scenario.jfr`, GC pauses to `logs/gc.log`; for the rig server,
-  `INCOMING_JFR=1 tools/stress.sh` → `mod/run/stress/server/stress.jfr`.
+  toward the lane: `WorkClock.overdue`, `spent`); every run keeps a JFR ring in `<run dir>/run.jfr` and GC/safepoint
+  pauses in `gc.log` (`INCOMING_JFR=profile` for the profile settings).
 - Section deltas cost the client per position on its render thread: `ClientLevel.setBlock` (in the host pack 55–63 % of
   it is Voxy re-snapshotting the whole section per block, `VoxelIngestService.rawIngest`) and the client's own light
   propagation for every changed block, though the server sends the computed light. A 15 kt wave sends ~247 thousand
