@@ -22,7 +22,8 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 /**
  * Fire blocking beams ({@link FireRays}, {@link SoundFilters#reach}): a raid from 300 distant fires cost the client
  *  a third tick - a beam for each audible fire in each tick, ~1800 path blocks each (0,85 → 17,9 ms, WAV-run Sol,
- * final #456). The scene of that run: fires of 2 MW on the ring 1,7–1,9 km, night, ear in the center.
+ * final #456). The scene of that run: fires of 2 MW on the ring 1,7–1,9 km, night, ear in the center; here the ring is 1,1–1,3 km,
+ * inside the night audibility of a 2 MW pool (1,375 km), and still far beyond the loaded chunks.
  */
 class FireRaysTest {
     private static final Vec3 EAR = new Vec3(0.5, 66.62, 0.5);
@@ -108,7 +109,7 @@ class FireRaysTest {
     @Test
     void raysPerTickStayBoundedAsFiresGrow() {
         for (int n : new int[]{30, 300, 3000}) {
-            List<CraterFire> fires = ring(n, 1700, 1900);
+            List<CraterFire> fires = ring(n, 1100, 1300);
             FireRays rays = new FireRays();
             World world = new World(to -> 1);
             int lag = FireRays.lag(n), ticks = 3 * lag + 20;
@@ -120,7 +121,7 @@ class FireRaysTest {
                     assertTrue(f.hear(EAR, Propagation.Weather.NIGHT));
                     if (f.heard) heard++;
                 }
-                assertEquals(n, heard, n + " fires: all audible (night, 2 MW, ≤ 1,9 km)");
+                assertEquals(n, heard, n + " fires: all audible (night, 2 MW, ≤ 1,3 km)");
                 if (world.tick == 0) for (CraterFire f : fires) before += World.reads(EAR, f.burnCentre().add(0, 1.5, 0));
                 world.rays = 0;
                 world.chunks = world.reads = 0;
@@ -157,7 +158,7 @@ class FireRaysTest {
                 "wall to the east", to -> to.x > EAR.x ? 0 : 1);
         for (var w : worlds.entrySet()) {
             boolean wall = w.getKey().equals("wall to the east");
-            for (double[] r : new double[][]{{40, 40}, {1700, 1900}}) {
+            for (double[] r : new double[][]{{40, 40}, {1100, 1300}}) {
                 // the fire is exactly on the border of sectors (for 30 on the ring - at 270°) or in 40 m in a cage near the wall (x = x ear)
                 //  stands on the other side of the wall from its sector: the wall is half a circle - far away and without such
                 if (wall && r[0] == 40) continue;
