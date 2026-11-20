@@ -255,17 +255,18 @@ public final class FxViews {
         final SmokePuffs.ViewState puffs = new SmokePuffs.ViewState();
         final PlumeRenderer.ViewState plumes = new PlumeRenderer.ViewState();
         final NukeLight.ViewState light = new NukeLight.ViewState();
+        final SeeThrough.ViewState see = new SeeThrough.ViewState();
 
         void swap() {
             timing.swap(); flight.swap(); blasts.swap();
             depth.swap(); pall.swap(); half.swap(); bloom.swap(); heat.swap(); air.swap(); solids.swap(); smoke.swap();
-            layer.swap(); water.swap(); grid.swap(); smokeFrame.swap(); far.swap(); puffs.swap(); plumes.swap(); light.swap();
+            layer.swap(); water.swap(); grid.swap(); smokeFrame.swap(); far.swap(); puffs.swap(); plumes.swap(); light.swap(); see.swap();
         }
 
         void close() {
             timing.close();
             depth.close(); pall.close(); half.close(); bloom.close(); heat.close(); air.close(); solids.close(); smoke.close();
-            layer.close(); water.close();
+            layer.close(); water.close(); see.close();
         }
     }
 }

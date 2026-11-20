@@ -345,6 +345,9 @@ void main() {
         vec4 near = froxelNear(Sampler11, PallFroxel, vec2(full) + 0.5, min(depth, nearEnd));
         pall = froxelOver(near, pall);
     }
+    // the medium itself (light and extinction along the ray), before surface flames, shadow and ball light, which belong to
+    // the world behind it: split at a see-through surface
+    vec4 medium = pall;
     if (PallFire0[0].x > 0.0 || PallFire1[0].x > 0.0) {
         vec2 ndc = (vec2(full) + 0.5) / vec2(fullSize) * 2.0 - 1.0;
         vec4 farPoint = InvViewProj * vec4(ndc, 1.0, 1.0), nextPoint = InvViewProj * vec4(ndc + vec2(0.0, 2.0 / float(fullSize.y)), 1.0, 1.0);
@@ -400,9 +403,15 @@ void main() {
     }
     // accumulated pall always valid (fx_pall_resolve), but no input may damage frame world after it
     vec4 laid = pallValid(pall) ? pall : vec4(0.0, 0.0, 0.0, 1.0);
-    // a see-through surface in front of the world: the pall, its shadow and the ball's light on the world behind it reach the
-    // eye as that world does, under the surface's own light (see.glsl; the air between the eye and the surface is counted
-    // behind it — a window or a pane is a few blocks away)
-    if (FxSee > 0.5) laid.rgb = seeThrough(laid.rgb, 1.0 - laid.a, texelFetch(FxGlass, full, 0));
+    // a see-through surface in front of the world: the pall in front of it is laid as it is, the pall behind it, its shadow
+    // and the ball's light on the world behind it reach the eye as that world does, under the surface's own light (see.glsl)
+    if (FxSee > 0.5 && pallValid(pall)) {
+        vec4 raw = texelFetch(FxGlass, full, 0), g = seeGlass(raw);
+        float f = seeFront(raw), tauFront = pow(clamp(medium.a, 0.0, 1.0), f);
+        float share = medium.a < 0.9999 ? (1.0 - tauFront) / (1.0 - medium.a) : f;
+        vec3 front = medium.rgb * share;
+        laid.rgb = vec3(seeMediumLight(laid.r, laid.a, front.r, tauFront, g.r, g.a), seeMediumLight(laid.g, laid.a, front.g, tauFront, g.g, g.a),
+                seeMediumLight(laid.b, laid.a, front.b, tauFront, g.b, g.a));
+    }
     fragColor = laid;
 }

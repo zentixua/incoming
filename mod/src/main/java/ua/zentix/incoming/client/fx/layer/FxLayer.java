@@ -221,7 +221,11 @@ public final class FxLayer {
                     if (view != null) {
                         if (!ua.zentix.incoming.client.nuclear.ClientNuclear.isEmpty())
                             ua.zentix.incoming.client.nuclear.NukeRenderer.renderView(view);
-                        draw(view);
+                        try {
+                            draw(view);
+                        } finally {
+                            SeeThrough.endFrame();
+                        }
                         ua.zentix.incoming.client.nuclear.NukeRenderer.renderRainView(view);
                     }
                     if (!FxViews.skipped()) ua.zentix.incoming.client.render.PlumeRenderer.endFrame();
@@ -337,16 +341,16 @@ public final class FxLayer {
         lastQuads = QUADS.size();
         if (QUADS.size() == 0 && pall == null && !WaterDecal.active() && !hot) {
             PallPass.reset();
-            if (!FxViews.secondary()) SeeThrough.drew(false);
+            SeeThrough.drew(false);
             return;
         }
-        if (!FxViews.secondary()) SeeThrough.drew(true);
+        SeeThrough.drew(true);
         // probe (LayerTimes): time marks at pass boundaries; a drain frame — with a drain for each and with the quad
         // parts
         boolean drained = LayerTimes.begin();
         int models = FarRenderer.renderModels();
         LayerTimes.mark(LayerTimes.Pass.MODELS);
-        int scene = SceneDepth.update(e.getProjectionMatrix(), e.getModelViewMatrix());
+        int scene = SceneDepth.update(e.getProjectionMatrix(), e.getModelViewMatrix(), view.camera());
         LayerTimes.mark(LayerTimes.Pass.DEPTH);
         // from here the layer is hidden by the opaque world, not by see-through blocks in front of it
         SceneDepth.bindLayer();

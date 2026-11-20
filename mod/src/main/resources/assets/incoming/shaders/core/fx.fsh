@@ -327,7 +327,7 @@ void main() {
     if (FxSee > 0.5) {
         vec2 at = frag / ScreenSize;
         if (seeBehind(viewDistance, texture(FxSurface, at).r)) {
-            vec4 g = texture(FxGlass, at);
+            vec4 g = seeGlass(texture(FxGlass, at));
             through = g.a;
             if (FxGlowPass.x < 0.5) fragColor.rgb = seeThrough(fragColor.rgb, fragColor.a, g);
         }

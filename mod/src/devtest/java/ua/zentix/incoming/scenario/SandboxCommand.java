@@ -251,7 +251,8 @@ record SandboxCommand(Verb verb, List<String> args) {
             case PANE -> {
                 need(1, 2);
                 if (!args.getFirst().matches("off|[a-z0-9_]+(\\[[a-z0-9_=,]+])?")) throw new IllegalArgumentException("pane <block>|off [distance]");
-                if (args.size() > 1 && (number(1) < 1 || number(1) > 64)) throw new IllegalArgumentException("pane distance 1–64 blocks");
+                // the wall (3 × distance to each side, up to that above the eye) stays under vanilla's 32 768-block fill limit
+                if (args.size() > 1 && (number(1) < 1 || number(1) > 16)) throw new IllegalArgumentException("pane distance 1–16 blocks");
             }
             case AGAIN, CLEAR, RELOAD -> need(0, 0);
         }

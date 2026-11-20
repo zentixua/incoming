@@ -93,6 +93,27 @@ class SeeThroughGlslTest {
     }
 
     @Test
+    void thePallInFrontOfASurfaceIsNotTintedAndThePallBehindItIs() throws IOException {
+        String glsl = Files.readString(Path.of("src/main/resources/assets/incoming/shaders/include/see.glsl")).replaceAll("//[^\\n]*", "");
+        GlslFunction medium = GlslFunction.parse(glsl, "seeMediumLight");
+        Random r = new Random(13);
+        for (int run = 0; run < 1000; run++) {
+            // a uniform medium along the ray to the world W, with total light L and transmittance tau; the surface at share f of
+            // the ray; the pall's shadow keeps k of the world's light
+            double world = r.nextDouble(), cover = r.nextDouble(), colour = r.nextDouble(), f = r.nextDouble();
+            double tau = r.nextInt(6) == 0 ? 1 : r.nextDouble(), light = (1 - tau) * r.nextDouble(), kept = r.nextDouble();
+            double tauFront = Math.pow(tau, f), tauBehind = Math.pow(tau, 1 - f);
+            double lightFront = tau < 0.9999 ? light * (1 - tauFront) / (1 - tau) : 0, lightBehind = tau < 0.9999 ? light * (1 - tauBehind) / (1 - tau) : 0;
+            double own = cover * colour, through = 1 - cover;
+            double truth = lightFront + tauFront * (own + through * (lightBehind + tauBehind * kept * world));
+            double frame = own + through * world, alpha = tau * kept;
+            double laid = medium.call(Map.of("light", light, "tau", alpha, "lightFront", lightFront, "tauFront", tauFront,
+                    "glassLight", own, "through", through)) + alpha * frame;
+            assertEquals(truth, laid, 1e-9, "run " + run);
+        }
+    }
+
+    @Test
     void withoutASurfaceNothingChanges() throws IOException {
         GlslFunction see = seeLight();
         for (double light : new double[]{0, 0.2, 0.9}) {

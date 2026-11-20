@@ -80,7 +80,7 @@ void main() {
             if (any(lessThan(p, vec2(0.0))) || any(greaterThanEqual(p, size))) continue;
             // behind a see-through surface the source shines through by its transmittance
             float through = 1.0;
-            if (FxSee > 0.5 && seeBehind(front, texelFetch(FxSurface, ivec2(p), 0).r)) through = texelFetch(FxGlass, ivec2(p), 0).a;
+            if (FxSee > 0.5 && seeBehind(front, texelFetch(FxSurface, ivec2(p), 0).r)) through = seeGlass(texelFetch(FxGlass, ivec2(p), 0)).a;
             sum += clamp((texelFetch(Sampler0, ivec2(p), 0).r - front) / soft, 0.0, 1.0) * through;
             // not n++: Veil (bundled by Sable) rebuilds shaders through glsl-processor 0.2.3, which drops the semicolon after n++
             n += 1;

@@ -1,5 +1,7 @@
 #version 330
 
+#moj_import <incoming:see.glsl>
+
 // World distance behind pixel along view axis (client/fx/layer/SceneDepth): nearer of Minecraft depth and LOD-mod depth,
 // Distant Horizons or Voxy (Sampler1, client/render/LodDepth); sky is 1e9. With see-through surfaces (SeeThrough): the
 // opaque world (Sampler0, its depth before translucent geometry) hides the layer, the nearer translucent surface
@@ -24,20 +26,28 @@ uniform float LodWorld;
 uniform vec4 See;
 // world up in view space: a translucent surface seen from above is a fluid's top or a floor
 uniform vec3 ViewUp;
+// view → world (eye-relative) rotation
+uniform mat4 InvView;
+// see-through blocks around the eye (SeeBlocks, own unit): bit 1 — a translucent block, bit 2 — a translucent liquid;
+// SeeAt — the window's lower corner relative to the eye (xyz), present (w); SeeWrap — that corner's texture voxel
+uniform sampler3D SeeBlocks;
+uniform vec4 SeeAt;
+uniform vec3 SeeWrap;
 // Two 24-bit depth steps below 1: only clamped LOD is this close to Minecraft far plane (Voxy
 // blit_texture_depth_cutout: FAR − 2/(2²⁴−1) in NDC); blocks within render distance are an order closer
 const float PINNED = 1.0 - 2.0 / 16777215.0;
 // Nearer than this, a surface in front of the world is the first-person hand (Iris draws it in the world pass), not a block:
 // the player's body keeps blocks 0.3 away. As PALL_HAND (pall.glsl)
 const float SEE_HAND = 0.12;
-// A translucent surface whose eye-facing normal is this close to up is seen from above: water, ice, a glass floor. What lies
-// under it is under water or in a room; the layer's air-borne effects are not there, and it stays hidden as before
+// A translucent liquid's top seen from above (eye-facing normal this close to up) is the world: what lies under it is under
+// water, and the layer's air-borne effects are not there. Glass seen from above (a skylight) is looked through; outside the
+// see-through block window (SeeBlocks) any translucent surface seen from above counts as a liquid's top
 const float SEE_FROM_ABOVE = 0.9;
 
 layout(location = 0) out vec4 fragColor;
 // distance to the nearer see-through surface (the world's where there is none)
 layout(location = 1) out vec4 fragSurface;
-// the surface's own light X (rgb) and transmittance T (a), see.glsl
+// the surface's own light X (rgb), transmittance T and the share of the ray in front of it (a), see.glsl
 layout(location = 2) out vec4 fragGlass;
 
 float along(mat4 inverseProjection, vec2 ndc, float z) {
@@ -85,6 +95,16 @@ vec3 surfaceNormal(ivec2 px, ivec2 size, vec3 p) {
     return dot(n, p) > 0.0 ? -n : n;
 }
 
+// see-through block kind at view-space surface point p (SeeBlocks bits), a hair inside it along the view ray; −1 — outside the
+// window
+int blockAt(vec3 p) {
+    if (SeeAt.w < 0.5) return -1;
+    vec3 world = (InvView * vec4(p + normalize(p) * 0.02, 0.0)).xyz - SeeAt.xyz;
+    vec3 size = vec3(textureSize(SeeBlocks, 0));
+    if (any(lessThan(world, vec3(0.0))) || any(greaterThanEqual(world, size))) return -1;
+    return int(texelFetch(SeeBlocks, ivec3(mod(floor(world) + SeeWrap, size)), 0).r * 255.0 + 0.5);
+}
+
 void main() {
     ivec2 px = ivec2(gl_FragCoord.xy), size = textureSize(Sampler0, 0);
     vec2 uv = gl_FragCoord.xy / vec2(size);
@@ -92,7 +112,7 @@ void main() {
     float depth = texelFetch(Sampler0, px, 0).r;
     float dist = worldAt(Sampler0, uv, ndc, depth);
     float surface = dist, hard = depth;
-    vec4 glass = vec4(0.0, 0.0, 0.0, 1.0);
+    vec4 glass = vec4(0.0, 0.0, 0.0, seePack(1.0, 1.0));
     if (See.x > 0.5) {
         float near = texelFetch(Sampler2, px, 0).r;
         float seen = worldAt(Sampler2, uv, ndc, near);
@@ -110,13 +130,25 @@ void main() {
                 own = other.rgb;
             }
             vec3 p = surfaceAt(px, size);
-            bool solid = seen < SEE_HAND || through < 0.5 / 255.0 || dot(surfaceNormal(px, size, p), ViewUp) > SEE_FROM_ABOVE;
+            bool above = dot(surfaceNormal(px, size, p), ViewUp) > SEE_FROM_ABOVE;
+            int block = blockAt(p);
+            bool solid = seen < SEE_HAND || through < 0.5 / 255.0;
+            if (See.x > 2.5) {
+                // shader pack: entities and the hand reach the depth after the copy too (Iris batches them up to the
+                // translucent pass); only a surface standing in a see-through block is one, and the window is required
+                solid = solid || block < 0 || (block & 1) == 0 || ((block & 2) != 0 && above);
+            } else {
+                // a liquid's top seen from above is the world; outside the window any surface seen from above counts as one
+                bool liquid = above;
+                if (block >= 0) liquid = above && (block & 2) != 0;
+                solid = solid || liquid;
+            }
             if (solid) {
                 // the surface is the world here: the layer is hidden by it, as by any block
                 dist = seen;
                 hard = near;
             } else {
-                glass = vec4(own, through);
+                glass = vec4(own, seePack(through, clamp(seen / dist, 0.0, 1.0)));
             }
             surface = seen;
         }
