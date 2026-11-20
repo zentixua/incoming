@@ -116,14 +116,15 @@ public final class NukePall {
             double dx = cam.x - d.burst().x, dz = cam.z - d.burst().z;
             // eye above ground zero and terrain below it (pall map)
             double eye = cam.y - d.groundY(), floor = a.ground.at(cam.x, cam.z);
-            // dust-wall head at camera — mean, as in the frame (terrain and water below camera from pall map)
+            // dust-wall head at camera: its lobes, as the frame draws them (WallLobes; terrain and water below them from pall map)
             double head = 0, wetHere = 0;
             if (a.wall.slot(a.seconds(0), WALL_TICK) && WALL_TICK[3] > 0) {
                 wetHere = a.ground.hasWater() ? a.ground.water(cam.x, cam.z) : 0;
-                double hard = a.ground.hasHard() ? a.ground.hard(cam.x, cam.z) : 0;
-                head = BlastWall.sigma(WALL_TICK, dx, dz, eye - floor, wetHere, hard);
-                up += BlastWall.tau(WALL_TICK, dx, dz, eye - floor, Double.POSITIVE_INFINITY, wetHere, hard);
-                down += BlastWall.tau(WALL_TICK, dx, dz, 0, eye - floor, wetHere, hard);
+                WallLobes.Ground lobeGround = WallLobes.Ground.of(a.ground, d.burst().x, d.burst().z);
+                head = WallLobes.sigma(WALL_TICK, lobeGround, dx, eye, dz);
+                double[] column = WallLobes.vertical(WALL_TICK, lobeGround, dx, eye, dz);
+                up += column[0];
+                down += column[1];
                 if (head > headMax) {
                     headMax = head;
                     headWet = wetHere;
@@ -292,11 +293,11 @@ public final class NukePall {
             double ticks = active.ticks(partial), dx = camera.x - d.burst().x, dz = camera.z - d.burst().z;
             double eye = camera.y - d.groundY(), floor = active.ground.at(camera.x, camera.z);
             if (active.wall.slot(active.seconds(partial), WALL) && WALL[3] > 0) {
-                double wet = active.ground.hasWater() ? active.ground.water(camera.x, camera.z) : 0;
-                double hard = active.ground.hasHard() ? active.ground.hard(camera.x, camera.z) : 0;
-                extinction += BlastWall.sigma(WALL, dx, dz, eye - floor, wet, hard);
-                up += BlastWall.tau(WALL, dx, dz, eye - floor, Double.POSITIVE_INFINITY, wet, hard);
-                down += BlastWall.tau(WALL, dx, dz, 0, eye - floor, wet, hard);
+                WallLobes.Ground lobeGround = WallLobes.Ground.of(active.ground, d.burst().x, d.burst().z);
+                extinction += WallLobes.sigma(WALL, lobeGround, dx, eye, dz);
+                double[] column = WallLobes.vertical(WALL, lobeGround, dx, eye, dz);
+                up += column[0];
+                down += column[1];
             }
             if (active.pall.visible(ticks)) {
                 PallField.Water water = water(active);
@@ -425,7 +426,7 @@ public final class NukePall {
         HI.set(cx + r, (float) (ground + Math.max(a.ground.high(), 0) + top * (1 + PallField.BUMPS) * 1.05), cz + r);
         if (WALL[3] > 0) {
             LO.y = Math.min(LO.y, ground + Math.min(a.ground.low(), 0) - 0.5f * WALL[2]);
-            HI.y = Math.max(HI.y, ground + Math.max(a.ground.high(), 0) + WALL[2]);
+            HI.y = Math.max(HI.y, (float) (ground + Math.max(a.ground.high(), 0) + WallLobes.ceiling(WALL)));
         }
         if (WALL[18] > 0) HI.y = Math.max(HI.y, (float) (ground + WALL[19] + a.wall.wilsonReach(seconds)));
         CULL.set(LO.x, Math.min(LO.y, bottom), LO.z);
@@ -571,8 +572,9 @@ public final class NukePall {
     }
 
     /**
-     * On-screen wall-head dust color, as lit by {@code fx_pall} ({@code wall}, light in {@code main}), for the mean
-     * head without billows (their shadows go both ways, averaging to zero), outside water (camera spray over water,
+     * Wall-head dust color at a point inside the head (the eye's own dust: the fallback camera dust when the pall pass is off,
+     * {@link NukeDust}), for the mean head without lobes (the frame draws the lobes' surfaces, {@code fx_pall: lobeLightIn}; inside the dust
+     * the light comes from all of it), outside water (camera spray over water,
      * {@link NukeWater}): diffuse sun and sky light at the smaller optical depth to head top or leading
      * edge; ball light beneath the nearest ball-lit side, toward ball or from above if its beam to the top over the point does not pass through
      * the head (ball behind the head, closer to ground zero and low); sun and ball beams pass through head optical depth toward them; fires
@@ -594,8 +596,8 @@ public final class NukePall {
      */
     static final double WALL_HORIZON_WHITE = 0.6;
     /**
-     * presentation: sunlight scattered down the head's billowy outer skin lights its faces (copy of {@code WALL_SUN_FACE}): this share of
-     * the sun on a horizontal surface, reflected as by a thick layer of the dust (R∞), reaches the face through its skin.
+     * presentation: sunlight scattered down the head's billowy outer skin lights the dust inside its face: this share of the sun on a
+     * horizontal surface, reflected as by a thick layer of the dust (R∞), reaches the face through its skin.
      */
     static final double WALL_SUN_FACE = 3.0;
     /** presentation: the thick layer's spectrum to this power, toward the footage's ochre (copy of {@code WALL_OCHRE}). */
@@ -606,7 +608,7 @@ public final class NukePall {
         double rx = gx, rz = gz, len = Math.hypot(rx, rz);
         double top = wall[2], reach = BlastWall.HANDOFF_TO * wall[1] + top, s = wall[0] - len, toTop = Math.max(BlastWall.ceiling(wall) - up, 0);
         double ox = len > 1e-3 ? rx / len : 1, oz = len > 1e-3 ? rz / len : 0;
-        // above point, to local wedge top; toward edge, until wedge falls below point; toward light, no higher than head top (fx_pall: wall)
+        // above point, to local wedge top; toward edge, until wedge falls below point; toward light, no higher than head top
         double above = chord(wall, rx, rz, up, 0, 1, 0, Math.max(BlastWall.local(wall, s, 0) - up, 0), 4);
         double face = BlastWall.face(up / Math.max(top, 1e-3), wall[8]);
         double side = chord(wall, rx, rz, up, ox, 0, oz, Math.max(s - wall[1] * face, 0), 4);
@@ -627,7 +629,7 @@ public final class NukePall {
         double burn = CloudPuffs.burn(r, 0, glow[1], glow[3]) * (1 - 0.75 * sky.day);
         double[] lin = new double[3], thick = new double[3];
         double thickMax = 1e-4;
-        // what leaves the head's thick dust has the thick layer's colour R∞(ω′) per channel, relative to its brightest (fx_pall wall)
+        // what leaves the head's thick dust has the thick layer's colour R∞(ω′) per channel, relative to its brightest (fx_pall: lobeLightIn)
         for (int c = 0; c < 3; c++) {
             double w = Mth.lerp(smoke, Mth.lerp(sand, DUST_W[c], SAND_W[c]), SMOKE_W[c]);
             thick[c] = PallLight.reflectance(w, DUST_G) / Math.max(w, 1e-3);
@@ -646,7 +648,7 @@ public final class NukePall {
                 double flame = PallLight.flame(sky.base, fire * burn * sky.glowOnSmoke / DUST[c], fire);
                 from = Math.min(Math.max(PallLight.diffuse(w, DUST_G, depth, slab, PallLight.LAND, 1, 0, 1, 0, 0, flame, 0), 0), PallLight.linear(fire));
             }
-            // the head is an aerosol volume lit from all sides (fx_pall wall): the horizon sky through the face, the lit ground through the foot
+            // the head is an aerosol volume lit from all sides: the horizon sky through the face, the lit ground through the foot
             double k = PallLight.k(w, DUST_G), horizon = dome;
             double rInf = PallLight.reflectance(w, DUST_G);
             double toFace = 0.5 * horizon + WALL_SUN_FACE * rInf / Math.max(w, 1e-3) * sky.sun[c] * Math.max(sky.sy, 0);
