@@ -104,8 +104,11 @@ if [ "$mode" = soft ]; then
   source "$(dirname "$(readlink -f "$0")")/soft_gl.sh"
   props+=(-p CPUWeight=idle -p Nice=10 -p MemoryMax="$(soft_mem_cap)M" -p MemorySwapMax=0)
 fi
+# keep the laptop awake; a server without a session seat (netcup: "Access denied") has no sleep to inhibit
+inhibit=(systemd-inhibit --what=sleep:idle --who="Incoming: $name" --why="mod check (tools/laptop_job.sh)")
+"${inhibit[@]}" true 2>/dev/null || inhibit=()
 code=0
-systemd-inhibit --what=sleep:idle --who="Incoming: $name" --why="mod check (tools/laptop_job.sh)" \
+"${inhibit[@]}" \
   systemd-run --user --wait --pipe --collect --quiet --same-dir --unit="incoming-job-$name-$$" \
     "${props[@]}" "${envs[@]}" -- "$(readlink -f "$0")" --in-unit "$mode" "$name" $$ -- "$@" || code=$?
 # completion line for background waiter: exit code immediately visible, startup failure not lost

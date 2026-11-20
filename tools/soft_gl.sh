@@ -20,6 +20,8 @@ soft_gl_env() {
   export __GLX_VENDOR_LIBRARY_NAME=mesa
   [ -e /usr/share/glvnd/egl_vendor.d/50_mesa.json ] && export __EGL_VENDOR_LIBRARY_FILENAMES=/usr/share/glvnd/egl_vendor.d/50_mesa.json
   export LIBGL_ALWAYS_SOFTWARE=1 GALLIUM_DRIVER=llvmpipe
+  # one compiled-shader cache for all trees and sockets: a cold llvmpipe compiles the nuclear volume shaders for 140 s
+  export MESA_SHADER_CACHE_DIR="${MESA_SHADER_CACHE_DIR:-$HOME/.cache/incoming-mesa-shaders}"
   export LP_NUM_THREADS="${INCOMING_SOFT_THREADS:-$(( n / 2 > 8 ? 8 : (n / 2 < 1 ? 1 : n / 2) ))}"
   # JVMs inside (the client; Gradle too in client_scenario.sh) get a fixed heap instead of a quarter of the machine
   export JAVA_TOOL_OPTIONS="-Xmx${INCOMING_SOFT_HEAP:-3g}${JAVA_TOOL_OPTIONS:+ $JAVA_TOOL_OPTIONS}"
