@@ -55,6 +55,7 @@ sections = [
     ("Work budget", r"Incoming/\]: Mod work over 30 s:"),
     ("Mod loading", r"Loading mod incoming|Found mod file incoming|incoming.*(mod file|version)"),
     ("Strikes and nuclear detonations", r"Incoming/\]: (Strike:|Nuclear detonation|ICBM)"),
+    ("Collapse: replans, stops, claim-kept plans", r"Incoming/\]: Collapse at .* (replanned|stopped|kept standing)"),
     # Vanilla lateness accumulates between reports; include nearby strikes and slow ticks, excluding chat.
     ("Server lateness", r"^(?!.*(\[CHAT\]|\]: (\[Not Secure\] )?<)).*(Can't keep up|Incoming/\]: (Strike:|Impacts \(|Strike summary \(|Impact series summary \(|Blast: removing block|Nuclear tick|Server thread stalled)|Teleported)"),
     ("Projectiles: lost targets, self-destruction, interceptions", r"Incoming/\]: Projectiles: "),

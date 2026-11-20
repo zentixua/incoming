@@ -152,36 +152,60 @@ paths:
   with the same `FragmentTrace`. Sable craft neither hold nor break the fragments. GameTest `FragmentGameTests` (1/R², a
   wall, glass, dents).
 
-- Collapse (`StrikeCollapse`, setting `world.collapse`): after the main explosions of a surface strike (and of a breaking-out
-  bomb's charges; a deep bomb keeps its own underground collapse laws: its cavity is dug alongside, `bomb_deep`), the nuclear support law (`nuclear/world/Collapse`, "what lost support falls") over the blocks the explosions
-  removed (without the nuclear cascade through structure the spans did not hold before the strike, nuclear-world.md;
-  `WorkGameTests.recordBlasts` skips the collapse's zero-radius `Detonate`). `StagedExplosion` records each removal with its old state in the strike's `BlastArea` (`removed`; only a
-  block that actually changed; craft blocks and the crater are not recorded: the crater digs natural ground, which
-  stands as an arch). The snapshot job waits for one of `StrikeSupport.MAX_SOLVES` server-wide slots before it builds
-  anything (a slot covers snapshots, the queued or running solve and its result until the fall ends or is cancelled;
-  freed once, also when a queued solve is cancelled before it runs), snapshots every chunk within `Collapse.C` of a removal and its neighbors in
-  5 ms portions (unready or plot-grid chunks are missing — support mass, no loads; a removal the snapshot shows filled
-  again is no loss; a datapack reload between portions abandons), and starts the solve on the game's background workers
-  (not `RuinWorkers`: a nuke's ruin queue would hold it for minutes; also on a GameTest server: an inline solve took up to ~1 s
-  of one CI tick and put the world clock ahead of game time for later batches, `grid_nuke_destroyed` failed; collapse
-  tests have long timeouts instead). The solve orders the fall (non-load-bearing first, load-bearing bottom-up) and picks the rubble
-  share (`Debris.SOLID_SHARE`, same hash as the nuclear landing). The fall is a second job queued when the solve starts
-  (`Fall`): `UnitQueue` cancels a job unready `GIVE_UP_TICKS` after it was queued, and one queued at the strike can wait
-  long behind a salvo. It abandons the plan if a removal holds a load-bearing block again; one zero-radius
-  `ExplosionEvent.Detonate` without entities lets claim handlers keep positions, as for the blast; 5 ms portions (every
-  candidate, kept or not, checks the clock): blocks changed since the snapshot stay, writes only where the chunk and its
-  eight neighbors are ready and never into the plot grid, a non-vanilla block entity needs chunks ready `MODDED_REACH` around (its removal
-  may follow chains, as in `RuinPlan.neighbourRadius`); a container spills its contents first (vanilla `Container`, else
-  the item-handler capability: Create's vault is not a `Container`; an unrolled loot table stays unrolled); the abandon
-  check covers only the removals the solve used. Known limits: a support built beside a hole while the solve runs is not
-  seen; rubble lands in claimed land as vanilla falling sand does; the rubble share falls as vanilla falling blocks while `CraterFalls.room` allows, otherwise lands at
-  once where it would rest, spread by `Debris.spread`; fluid ticks and landings in their own portions; one
-  `S2C.Collapse` (dust, rumble) for the fallen load-bearing blocks (`StrikeSupport.MATERIAL` m³ a block). GameTest batch
-  `collapse` (missile and drone in a flat, drone on a roof corner — the law's fixed point: with everything gone as
-  removals nothing more falls; glass broken later by `Shatter` is not a removal —, portions by time, rebuilt support,
-  chest contents). Bench batches `collapse_salvo`/`collapse_salvo_off` (100 missiles into 100 houses beyond the platform)
-  run only when selected alone by name: their houses cover where the next batches' platforms spawn (two in a row hung
-  the runner).
+- Collapse (`StrikeCollapse`, setting `world.collapse`): after the main explosions of a surface strike (and of a
+  breaking-out bomb's charges; a deep bomb keeps its own underground collapse laws: its cavity is dug alongside,
+  `bomb_deep`), the nuclear support law (`nuclear/world/Collapse`, "what lost support falls") over the blocks the
+  explosions removed, without the nuclear cascade through structure the spans did not hold before the strike
+  (nuclear-world.md). `StagedExplosion` records each removal with its old state in the strike's `BlastArea` (`removed`;
+  only a block that actually changed; craft blocks and the crater are not recorded: the crater digs natural ground,
+  which stands as an arch). `WorkGameTests.recordBlasts` skips the collapse's zero-radius `Detonate`.
+  - Admission: one of `StrikeSupport.MAX_SOLVES` server-wide slots before any work (`slotFree` is tested before the
+    area's readiness, so a backlog costs no readiness scans); a slot covers snapshots, the queued or running solve and
+    its result until the fall ends or is cancelled, freed once, also when a queued solve is cancelled before it runs.
+  - Snapshots of every chunk within `Collapse.C` of a removal and its neighbors, in 5 ms portions of bounded units
+    (`StrikeSupport.unit`): 512 removals indexed or checked, 512 unready chunks skipped, one chunk's copy without
+    publication (0.1–0.2 ms at 21 sections, linear in height), one section's distinct states (`ChunkShot.states`;
+    vanilla `getAll` collects ids in an `IntArraySet`: 1.6–6.6 ms a section of 1024–4096 states, 34–138 ms a whole
+    dense chunk), 16 states into the property table (removal states included). GameTest `snapshotStepsStayInTheirSlice`
+    (4096-state sections, counting clock); wall times from `snapshotProbe`, which runs with the salvo bench. Unready or
+    plot-grid chunks are missing (support mass, no loads); a removal the snapshot shows filled again is no loss; a
+    datapack reload between portions abandons.
+  - The solve runs on the game's background workers (not `RuinWorkers`, whose nuclear queue can hold it for minutes;
+    not inline on a GameTest server, where a solve of up to ~1 s in one tick puts the world clock ahead of game time
+    for later batches; collapse tests have long timeouts). It orders the fall (non-load-bearing first, load-bearing
+    bottom-up), picks the rubble share (`Debris.SOLID_SHARE`, same hash as the nuclear landing) and lists the cells
+    beside each fall position that bore nothing (`Result.watch`).
+  - The fall is a second job (`Fall`), queued when the solve starts (`UnitQueue` cancels a job unready
+    `GIVE_UP_TICKS` after queueing). It writes once the Sable origin chunk is loaded (`NuclearTickets.ORIGIN`,
+    requested when the collapse takes its slot). Preparation in timed portions: the holes the solve used are checked;
+    claim handlers get `ExplosionEvent.Detonate` events of 1024 positions, attributed to the strike's projectile and
+    damage source, without entities; a kept load-bearing block keeps the whole plan standing.
+  - Stale plans: a removal holding a load-bearing block again, or a load-bearing block in a watch cell or hole beside a
+    position about to fall, means the world changed under the plan (a support built while it was solved or fell);
+    what is left of it is dropped and a new collapse over the strike's removals plus what already fell decides again
+    from fresh snapshots, at most `MAX_REPLANS` = 2 times (GameTests `rebuiltSupportHolds`, `braceBuiltDuringSolveHolds`).
+    A new support that touches no falling block but shortens a span through standing blocks is not seen.
+  - Writes, 5 ms portions (every candidate, kept or not, checks the clock): blocks changed since the snapshot stay;
+    only where the chunk and its eight neighbors are ready, never into the plot grid; a non-vanilla block entity needs
+    chunks ready `MODDED_REACH` around (its removal may follow chains, as in `RuinPlan.neighbourRadius`).
+  - Storage: a block holding items (vanilla `Container`, or the item-handler capability from no side or any face)
+    drops as a vanilla explosion drops it (`Block.dropResources` with its block entity: a shulker box keeps its
+    contents in the item) and is removed without clearing (`ColumnScar.replaceKeeping`), so its own `onRemove` spills
+    what it keeps (chest; Create vault, depot, saw: many Create block entities are `Clearable`, and the saw's handler
+    gives nothing out); it lands as no rubble; an unrolled loot table stays unrolled. GameTest `storageContentsSurvive`.
+    As in vanilla, `doTileDrops=false` loses a shulker box's contents, and a vault with an enlarged
+    `vaultCapacity` spawns its whole contents in one removal.
+  - Rubble: falls as vanilla falling blocks while `CraterFalls.room` allows, otherwise lands at once where it would
+    rest, spread by `Debris.spread`; fluid ticks and landings in their own portions; rubble lands in claimed land as
+    vanilla falling sand does. One `S2C.Collapse` (dust, rumble) for the fallen load-bearing blocks
+    (`StrikeSupport.MATERIAL` m³ a block).
+  - Telemetry: impact kind `COLLAPSE` in the slow-impact-tick line and the strike summary; the `Impact series summary`
+    line ends with blocks fallen and the longest collapse unit; replans, stops and claim-kept plans log one INFO line.
+  - GameTest batch `collapse`: missile and drone in a flat, drone on a roof corner (the law's fixed point: with
+    everything gone as removals nothing more falls; glass broken later by `Shatter` is not a removal), portions by
+    time, rebuilt support, brace during the solve, storage, snapshot slices, Sable origin hold. Bench batches
+    `collapse_salvo`/`collapse_salvo_off` (100 missiles into 100 houses beyond the platform) run only when selected
+    alone by name: their houses cover where the next batches' platforms spawn.
 
 ## Pitfalls
 - A support, not a block name (`SurfaceBlocks`): the Jarrett threshold for a panel applies only with a free back face.

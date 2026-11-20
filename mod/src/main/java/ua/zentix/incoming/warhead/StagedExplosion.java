@@ -1087,6 +1087,15 @@ final class StagedExplosion implements UnitQueue.Job {
     }
 
     /** Charge not canceled ({@code ExplosionEvent.Start}): post-main strike work only if explosion happened. */
+    /**
+     * A claim event on this strike's behalf ({@link StrikeCollapse}): a zero-radius explosion attributed as this one is
+     * (the same projectile and damage source, so a handler keyed to the attacker treats the collapse as the blast).
+     */
+    Explosion attributed(ServerLevel level, Vec3 centre) {
+        return new Explosion(level, direct, source, null, centre.x, centre.y, centre.z, 0f, false, Explosion.BlockInteraction.DESTROY_WITH_DECAY,
+                ModParticles.NONE.get(), ModParticles.NONE.get(), ModSounds.SILENT);
+    }
+
     boolean happened() {
         return started && !cancelled;
     }

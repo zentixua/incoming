@@ -266,6 +266,40 @@ public final class CollapseGameTests {
         });
     }
 
+    /**
+     * Supports built under the floor after the solve, before anything falls (pillars in the blown-out flat): the plan is
+     * stale, a new one from fresh snapshots decides, and the storeys above stay up on the new pillars.
+     */
+    @GameTest(template = "range", batch = "collapse", timeoutTicks = 2400, skyAccess = true)
+    public static void braceBuiltDuringSolveHolds(GameTestHelper h) {
+        quiet(h);
+        ground(h);
+        ServerLevel level = h.getLevel();
+        Map<BlockPos, BlockState> house = block(h, 24, 39, 28, 35, 4, true);
+        it.unimi.dsi.fastutil.longs.LongArrayList at = new it.unimi.dsi.fastutil.longs.LongArrayList();
+        java.util.List<BlockState> was = new java.util.ArrayList<>();
+        blowWestGroundFloor(h, house, at, was);
+        Warheads.CollapseProbe probe = Warheads.testCollapse(level, h.absoluteVec(new Vec3(28, GROUND + 2, 31.5)), 16, at, was, System::nanoTime);
+        probe.beforeFall(() -> {
+            // pillars inside the flat, beside what falls and none in a blown wall: only the cells beside the plan tell
+            for (int x = 25; x <= 28; x += 3) for (int z = 29; z <= 32; z += 3) for (int y = GROUND + 1; y <= GROUND + 3; y++) {
+                h.setBlock(new BlockPos(x, y, z), Blocks.BRICKS);
+            }
+        });
+        h.succeedWhen(() -> {
+            h.assertTrue(probe.done(), "collapse unfinished");
+            int above = 0, aboveGone = 0;
+            for (var e : house.entrySet()) {
+                BlockPos r = e.getKey();
+                if (r.getY() <= GROUND + 4 || r.getX() > 31 || e.getValue().is(Blocks.GLASS)) continue;
+                above++;
+                if (!stands(h, r, e.getValue())) aboveGone++;
+            }
+            h.assertTrue(probe.replans() >= 1, "the plan was not made again after the pillars went in");
+            h.assertTrue(aboveGone * 10 < above, "storeys fell onto new pillars: " + aboveGone + "/" + above);
+        });
+    }
+
     /** Removes the ground-floor walls of the block's west half (x ≤ 31) as a test's own blast; returns them. */
     private static Map<BlockPos, BlockState> blowWestGroundFloor(GameTestHelper h, Map<BlockPos, BlockState> house,
                                                                  it.unimi.dsi.fastutil.longs.LongArrayList at, java.util.List<BlockState> was) {
@@ -284,7 +318,7 @@ public final class CollapseGameTests {
 
     /**
      * The hole was filled again (walls rebuilt) before the collapse looked: no support was lost, nothing falls (review
-     * of #688: a repaired support must not count as a removal).
+     * a repaired support is no removal).
      */
     @GameTest(template = "range", batch = "collapse", timeoutTicks = 2400, skyAccess = true)
     public static void rebuiltSupportHolds(GameTestHelper h) {
@@ -305,29 +339,199 @@ public final class CollapseGameTests {
         });
     }
 
-    /** A chest on a floor that falls: its contents come out (review of #688: nothing lost with the block). */
+    /**
+     * Every kind of storage on a floor that falls keeps all it holds: a chest, a light container (brewing
+     * stand), a shulker box (its contents stay in the dropped box), and Create's item vault, depot, basin, deployer and
+     * saw: not vanilla containers, cleared by {@code Clearable}, and the saw's item handler gives nothing out (extracting
+     * through the handler and then clearing loses its log). Contents are counted in the dropped items,
+     * shulker contents inside the dropped box.
+     */
     @GameTest(template = "range", batch = "collapse", timeoutTicks = 2400, skyAccess = true)
-    public static void chestContentsSurvive(GameTestHelper h) {
+    public static void storageContentsSurvive(GameTestHelper h) {
         quiet(h);
         ground(h);
         ServerLevel level = h.getLevel();
         Map<BlockPos, BlockState> house = block(h, 24, 39, 28, 35, 4, true);
-        BlockPos chest = new BlockPos(26, GROUND + 5, 31);
+        Block vault = create("item_vault"), depot = create("depot"), basin = create("basin"), deployer = create("deployer"), saw = create("mechanical_saw");
+        h.assertTrue(vault != Blocks.AIR && depot != Blocks.AIR && basin != Blocks.AIR && deployer != Blocks.AIR && saw != Blocks.AIR, "Create blocks missing — Create not loaded");
+        int y = GROUND + 5;
+        BlockPos chest = new BlockPos(26, y, 30), stand = new BlockPos(26, y, 33), shulker = new BlockPos(29, y, 33),
+                vaultAt = new BlockPos(28, y, 30), depotAt = new BlockPos(29, y, 31), basinAt = new BlockPos(27, y, 32),
+                deployerAt = new BlockPos(25, y, 31), sawAt = new BlockPos(28, y, 33);
         h.setBlock(chest, Blocks.CHEST);
-        ((net.minecraft.world.level.block.entity.ChestBlockEntity) h.getBlockEntity(chest)).setItem(0, new net.minecraft.world.item.ItemStack(net.minecraft.world.item.Items.DIAMOND, 7));
-        it.unimi.dsi.fastutil.longs.LongArrayList at = new it.unimi.dsi.fastutil.longs.LongArrayList();
-        java.util.List<BlockState> was = new java.util.ArrayList<>();
-        blowWestGroundFloor(h, house, at, was);
-        Warheads.CollapseProbe probe = Warheads.testCollapse(level, h.absoluteVec(new Vec3(28, GROUND + 2, 31.5)), 16, at, was, System::nanoTime);
-        h.succeedWhen(() -> {
-            h.assertTrue(probe.done() && probe.fell() > 100, "collapse " + probe.done() + ", fell " + probe.fell());
-            h.assertTrue(!h.getBlockState(chest).is(Blocks.CHEST), "the chest's floor fell, the chest stayed");
-            int diamonds = 0;
-            for (var item : level.getEntitiesOfClass(net.minecraft.world.entity.item.ItemEntity.class, new net.minecraft.world.phys.AABB(h.absolutePos(chest)).inflate(16))) {
-                if (item.getItem().is(net.minecraft.world.item.Items.DIAMOND)) diamonds += item.getItem().getCount();
-            }
-            h.assertTrue(diamonds == 7, "diamonds out of the fallen chest: " + diamonds + " of 7");
+        h.setBlock(stand, Blocks.BREWING_STAND);
+        h.setBlock(shulker, Blocks.SHULKER_BOX);
+        h.setBlock(vaultAt, vault);
+        h.setBlock(depotAt, depot);
+        h.setBlock(basinAt, basin);
+        h.setBlock(deployerAt, deployer);
+        h.setBlock(sawAt, saw);
+        net.minecraft.world.item.Item[] kinds = {net.minecraft.world.item.Items.DIAMOND, net.minecraft.world.item.Items.GUNPOWDER,
+                net.minecraft.world.item.Items.GOLD_INGOT, net.minecraft.world.item.Items.IRON_INGOT, net.minecraft.world.item.Items.EMERALD,
+                net.minecraft.world.item.Items.COPPER_INGOT, net.minecraft.world.item.Items.BRICK, net.minecraft.world.item.Items.OAK_LOG};
+        int[] want = {7, 3, 10, 200, 16, 32, 5, 1};
+        // the vault becomes its own controller on its first tick; its item handler exists from then on
+        h.runAfterDelay(10, () -> {
+            ((net.minecraft.world.Container) h.getBlockEntity(chest)).setItem(0, new net.minecraft.world.item.ItemStack(kinds[0], want[0]));
+            // the ingredient slot: blaze powder in the fuel slot would burn as the stand's fuel
+            ((net.minecraft.world.Container) h.getBlockEntity(stand)).setItem(3, new net.minecraft.world.item.ItemStack(kinds[1], want[1]));
+            ((net.minecraft.world.Container) h.getBlockEntity(shulker)).setItem(0, new net.minecraft.world.item.ItemStack(kinds[2], want[2]));
+            insert(h, vaultAt, kinds[3], want[3]);
+            insert(h, depotAt, kinds[4], want[4]);
+            insert(h, basinAt, kinds[5], want[5]);
+            insert(h, deployerAt, kinds[6], want[6]);
+            insert(h, sawAt, kinds[7], want[7]);
+            it.unimi.dsi.fastutil.longs.LongArrayList at = new it.unimi.dsi.fastutil.longs.LongArrayList();
+            java.util.List<BlockState> was = new java.util.ArrayList<>();
+            blowWestGroundFloor(h, house, at, was);
+            Warheads.CollapseProbe probe = Warheads.testCollapse(level, h.absoluteVec(new Vec3(28, GROUND + 2, 31.5)), 16, at, was, System::nanoTime);
+            h.succeedWhen(() -> {
+                h.assertTrue(probe.done() && probe.fell() > 100, "collapse " + probe.done() + ", fell " + probe.fell());
+                for (BlockPos p : new BlockPos[]{chest, stand, shulker, vaultAt, depotAt, basinAt, deployerAt, sawAt}) {
+                    h.assertTrue(h.getBlockState(p).isAir() || !h.getBlockState(p).hasBlockEntity(), "storage at " + p + " stayed: its floor fell");
+                }
+                int[] got = new int[kinds.length];
+                for (var item : level.getEntitiesOfClass(net.minecraft.world.entity.item.ItemEntity.class, new net.minecraft.world.phys.AABB(h.absolutePos(chest)).inflate(24))) {
+                    count(item.getItem(), kinds, got);
+                    var inside = item.getItem().get(net.minecraft.core.component.DataComponents.CONTAINER);
+                    if (inside != null) inside.nonEmptyItems().forEach(st -> count(st, kinds, got));
+                }
+                for (int k = 0; k < kinds.length; k++) {
+                    h.assertTrue(got[k] == want[k], kinds[k] + " after the collapse: " + got[k] + " of " + want[k]);
+                }
+            });
         });
+    }
+
+    private static Block create(String id) {
+        return net.minecraft.core.registries.BuiltInRegistries.BLOCK.get(net.minecraft.resources.ResourceLocation.fromNamespaceAndPath("create", id));
+    }
+
+    /** Put {@code count} of {@code item} into the block's item handler (side-less), all of it. */
+    private static void insert(GameTestHelper h, BlockPos r, net.minecraft.world.item.Item item, int count) {
+        var handler = h.getLevel().getCapability(net.neoforged.neoforge.capabilities.Capabilities.ItemHandler.BLOCK, h.absolutePos(r), null);
+        h.assertTrue(handler != null, "no item handler at " + r);
+        while (count > 0) {
+            int n = Math.min(count, item.getDefaultMaxStackSize());
+            net.minecraft.world.item.ItemStack rest = net.neoforged.neoforge.items.ItemHandlerHelper.insertItem(handler, new net.minecraft.world.item.ItemStack(item, n), false);
+            h.assertTrue(rest.isEmpty(), "the item handler at " + r + " took only part: " + rest);
+            count -= n;
+        }
+    }
+
+    private static void count(net.minecraft.world.item.ItemStack st, net.minecraft.world.item.Item[] kinds, int[] got) {
+        for (int k = 0; k < kinds.length; k++) if (st.is(kinds[k])) got[k] += st.getCount();
+    }
+
+    /**
+     * A snapshot step is bounded by its time slice on the worst-case chunk (one whole dense chunk as a step takes
+     * 34–138 ms): 4×4 chunks whose top sections hold 4096 distinct states each (global palette), snapshotted on a
+     * counting clock (1 ms a read, 5 ms slices). Every call stops after at most 5 units, and a dense section is never
+     * part of a larger unit, so a call covers at most 5 of them.
+     */
+    @GameTest(template = "range", batch = "collapse", timeoutTicks = 2400, skyAccess = true)
+    public static void snapshotStepsStayInTheirSlice(GameTestHelper h) {
+        ServerLevel level = h.getLevel();
+        BlockPos o = h.absolutePos(BlockPos.ZERO);
+        int cx = (o.getX() >> 4) + 1, cz = (o.getZ() >> 4) + 1, sections = level.getSectionsCount();
+        // removal at a chunk's middle: the solve takes its chunk and the next on each axis, the snapshot their neighbors
+        BlockPos removal = new BlockPos(cx * 16 + 8, level.getMaxBuildHeight() - 24, cz * 16 + 8);
+        boolean[] done = {false};
+        h.succeedWhen(() -> {
+            if (!done[0]) {
+                // the batch's other collapses may hold every slot: wait for one before touching the world
+                h.assertTrue(StrikeSupport.tryReserve(), "waiting for a collapse solve slot");
+                done[0] = true;
+                // a failed bound is final (not an assertion succeedWhen would retry and then skip)
+                String failed = snapshotInSlices(level, cx, cz, sections, removal);
+                if (failed != null) throw new IllegalStateException(failed);
+            }
+        });
+    }
+
+    /**
+     * {@link #snapshotStepsStayInTheirSlice} with a slot held: dense sections in, snapshot, sections back, in one call.
+     * Returns the failed bound, or null.
+     */
+    @org.jetbrains.annotations.Nullable
+    private static String snapshotInSlices(ServerLevel level, int cx, int cz, int sections, BlockPos removal) {
+        StrikeSupport support = new StrikeSupport(level, new it.unimi.dsi.fastutil.longs.LongArrayList(new long[]{removal.asLong()}),
+                java.util.List.of(Blocks.STONE.defaultBlockState()));
+        ua.zentix.incoming.nuclear.world.DenseChunks dense = null;
+        int calls = 0, most = 0;
+        try {
+            dense = new ua.zentix.incoming.nuclear.world.DenseChunks(level, cx - 1, cz - 1, cx + 2, cz + 2, sections - 4, 4096);
+            long[] now = {0};
+            int[] reads = {0};
+            java.util.function.LongSupplier clock = () -> {
+                reads[0]++;
+                return now[0] += 1_000_000;
+            };
+            while (!support.started() && calls < 1_000_000) {
+                reads[0] = 0;
+                support.snapshot(clock, 5_000_000);
+                most = Math.max(most, reads[0] - 1);
+                calls++;
+            }
+        } finally {
+            support.cancel();
+            if (dense != null) dense.restore();
+        }
+        Incoming.LOG.info("COLLAPSEBENCH snapshot of {} dense sections ({} chunks solved): {} units in {} calls, at most {} a call",
+                dense.sections, support.chunks(), support.units(), calls, most);
+        if (!support.started()) return "snapshot never finished";
+        if (dense.sections != 64) return "dense sections " + dense.sections + " of 64";
+        if (most > 5) return "a snapshot call ran " + most + " units past its 5 ms slice";
+        if (calls * 5 < dense.sections) return "a call covered more than 5 dense sections: " + calls + " calls for " + dense.sections;
+        return null;
+    }
+
+    /**
+     * Conventional impact work holds the Sable origin chunk (Sable reads block-entity shapes at
+     * {@code BlockPos.ZERO}, which loads chunk (0, 0) synchronously when nothing holds it), as nuclear work does.
+     */
+    @GameTest(template = "range", batch = "collapse", timeoutTicks = 2400, skyAccess = true)
+    public static void impactWorkHoldsSableOrigin(GameTestHelper h) {
+        quiet(h);
+        ground(h);
+        ServerLevel level = h.getLevel();
+        h.assertTrue(ua.zentix.incoming.compat.SableTerrain.present(), "Sable not loaded");
+        Warheads.testDetonate(level, WeaponType.DRONE, h.absoluteVec(new Vec3(40, GROUND + 1, 40)), striker(level, WeaponType.DRONE), 0x4f524947L);
+        boolean[] held = {false};
+        h.onEachTick(() -> {
+            if (!StrikeWorld.get(level).impacts().isEmpty() && ua.zentix.incoming.nuclear.world.NuclearTickets.holdsOrigin(level)) held[0] = true;
+        });
+        h.succeedWhen(() -> {
+            h.assertTrue(StrikeWorld.get(level).idle(), "strike unfinished");
+            h.assertTrue(held[0], "the Sable origin chunk was not held while impact work ran");
+        });
+    }
+
+    /**
+     * Probe (bench, log only): wall time of a chunk snapshot on dense chunks, old publication against new, and the
+     * slowest collapse snapshot unit. Runs with the salvo bench ({@code -PgametestOnly=collapse_salvo}).
+     */
+    @GameTest(template = "range", batch = "collapse_salvo", timeoutTicks = 100, skyAccess = true)
+    public static void snapshotProbe(GameTestHelper h) {
+        if (!System.getProperty("incoming.gametest.only", "").equals("collapse_salvo")) {
+            h.succeed();
+            return;
+        }
+        ServerLevel level = h.getLevel();
+        BlockPos o = h.absolutePos(BlockPos.ZERO);
+        int cx = (o.getX() >> 4) + 1, cz = (o.getZ() >> 4) + 1;
+        // every section above the test's ground and houses
+        int from = (o.getY() + 48 - level.getMinBuildHeight()) >> 4;
+        BlockPos removal = new BlockPos(cx * 16 + 8, level.getMaxBuildHeight() - 24, cz * 16 + 8);
+        for (int distinct : new int[]{1024, 4096}) {
+            ua.zentix.incoming.nuclear.world.DenseChunks dense = new ua.zentix.incoming.nuclear.world.DenseChunks(level, cx - 1, cz - 1, cx + 2, cz + 2, from, distinct);
+            try {
+                Incoming.LOG.info("COLLAPSEBENCH snapshot probe, {} distinct states a section: {}", distinct, dense.probe(removal));
+            } finally {
+                dense.restore();
+            }
+        }
+        h.succeed();
     }
 
     /** Salvo: houses on a grid, one per chunk, a missile into the ground floor of each. */
