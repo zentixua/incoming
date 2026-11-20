@@ -68,6 +68,8 @@ out float pallFront;
 // Baked puff: direct sun/moon share of skylight, fireball light relative to light at the eye (rgb),
 // and directions toward direct light and fireballs in the puff's actual geometry and UV axes.
 out float sixKey;
+// share of the direct light that reaches the baked puff through the rest of its cloud (SmokePuffs.sunThrough, Emit byte)
+out float sixSun;
 out vec3 sixBall;
 out vec3 sixKeyDir;
 // world up in the puff's map axes: sky light comes from above, the ground's reflection from below (fx.fsh: skyDome)
@@ -197,6 +199,7 @@ void main() {
     }
     vertexColor = vec4(Color.rgb * light.rgb, Color.a) * seen;
     sixKey = 0.0;
+    sixSun = 1.0;
     sixBall = vec3(0.0);
     sixKeyDir = vec3(0.0, 1.0, 0.0);
     sixUpDir = vec3(0.0, 1.0, 0.0);
@@ -207,8 +210,9 @@ void main() {
         vec3 bd;
         sixBall = ballsToward(Position / unfold, bd);
         vec4 axes = puffAxes(UV2, Position.y);
-        // the cloud's own shadow takes the direct part only (SmokePuffs.sunThrough); sky and fire light stay
-        sixKey = FxSun.w * Emit / 255.0;
+        sixKey = FxSun.w;
+        // the cloud's own shadow takes the direct beam only (SmokePuffs.sunThrough); sky and fire light stay
+        sixSun = Emit / 255.0;
         sixKeyDir = puffDirection(normalize(FxSun.xyz), axes, UV2.y < 0);
         sixBallDir = puffDirection(bd, axes, UV2.y < 0);
         sixUpDir = puffDirection(vec3(0.0, 1.0, 0.0), axes, UV2.y < 0);

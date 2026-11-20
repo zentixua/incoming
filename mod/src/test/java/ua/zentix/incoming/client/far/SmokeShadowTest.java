@@ -7,8 +7,8 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
- * The cloud's own shadow ({@link SmokePuffs#sunThrough}): every puff of a black cloud was lit as if alone in the sky, and
- * the underside and core of the cloud came out as bright as its top (sandbox missile cloud with a side sun).
+ * The cloud's own shadow ({@link SmokePuffs#sunThrough}): without it every puff of a black cloud is lit as if alone in the
+ * sky, and the underside and core of the cloud are as bright as its top.
  */
 class SmokeShadowTest {
     /** Puff record at (x, y, z) with σ and soot mass, as {@code Draw.hold} writes it. */
@@ -73,7 +73,8 @@ class SmokeShadowTest {
 
     /**
      * A clump that is still the fire body (smoke share → 0) shades its neighbours by its share, as it shows as smoke: at
-     * the handoff the shadow fades in, not at full thickness at once (review #689: τ = 10 at share 0.01 passed 0.0045 %).
+     * the handoff the shadow fades in, not at full thickness at once (at full thickness τ = 10 would pass 0.0045 % at a
+     * share of 0.01).
      */
     @Test
     void theFireBodyFadesInAsAShadow() {
@@ -93,7 +94,28 @@ class SmokeShadowTest {
         }
     }
 
-    /** The veil's light by direction is the substance's; its cloud's shadow dims every direction alike (review #689). */
+    /**
+     * Within the pair budget a puff's beam is summed through the source's most attenuating puffs: the dense one above
+     * casts the shadow, a thin one beside the beam is what a capped sum leaves out.
+     */
+    @Test
+    void cappedSumKeepsTheDensestBlockers() {
+        double[] held = new double[3 * SmokePuffs.FIELDS];
+        double dense = 3 * 2 * Math.PI * 25 / SmokeGrid.SOOT_K;
+        puff(held, 0, 0, 0, 0, 5, dense);
+        puff(held, 1, 0, 10, 0, 5, dense);
+        puff(held, 2, 0, 20, 0, 5, dense / 30);
+        SmokePuffs.sunThrough(held, 0, 3, new boolean[3], 0, 1, 0, 0.8f);
+        double all = through(held, 0);
+        for (int i = 0; i < 3; i++) held[i * SmokePuffs.FIELDS + 17] = 1;
+        SmokePuffs.sunThrough(held, 0, 3, new boolean[3], 0, 1, 0, 0.8f, 1);
+        double one = through(held, 0);
+        // one blocker: the dense puff right above (the receiver itself is skipped), not the thin one
+        assertTrue(one < 0.3, "one blocker " + one);
+        assertTrue(one >= all && one - all < 0.1, one + " vs " + all);
+    }
+
+    /** The veil's light by direction is the substance's; its cloud's shadow dims every direction alike. */
     @Test
     void theVeilShadowKeepsTheSubstanceLaw() {
         org.joml.Vector3f forward = new org.joml.Vector3f(0, 0, 1);

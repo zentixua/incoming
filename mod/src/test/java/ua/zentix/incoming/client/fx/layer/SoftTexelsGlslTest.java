@@ -13,8 +13,8 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
  * Smoke and dust particles beside the eye ({@link FxQuads#softTexels}, {@code fx.fsh}): a 64-pixel billow magnified to the
- * screen drew flat texel squares 40–60 pixels wide with staircase edges (sandbox msl_in at 10 s). Pixel-art pieces keep the
- * nearest texel and the hard 0.1 cut.
+ * screen is smooth, not flat texel squares 40–60 pixels wide with staircase edges. Pixel-art pieces keep the nearest texel
+ * and the hard 0.1 cut.
  */
 class SoftTexelsGlslTest {
     private static final Path FX = Path.of("src/main/resources/assets/incoming/shaders/core/fx.fsh");

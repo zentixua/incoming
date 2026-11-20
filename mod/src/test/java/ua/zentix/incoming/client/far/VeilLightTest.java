@@ -9,8 +9,8 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
- * Light of the substance around the eye by direction ({@link SmokePuffs.Veil#byHeight}): inside dense dust the frame
- * was one flat colour (video 9:14 after a B-2 salvo: RGB 139/127/115 with SD 0 over the whole dust).
+ * Light of the substance around the eye by direction ({@link SmokePuffs.Veil#byHeight}): inside dense dust the frame is
+ * not one flat colour (a player's frame inside B-2 dust: RGB 139/127/115 with SD 0 over the whole dust).
  */
 class VeilLightTest {
     private static double linear(float shown) {

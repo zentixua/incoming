@@ -1467,6 +1467,10 @@ public final class SmokePuffs {
             long frame;
             /** Sun (direction, direct share) the cached shadow ({@link #sunThrough}) was computed for; NaN — not yet. */
             float sunX = Float.NaN, sunY, sunZ, sunKey;
+            /** The records changed since the shadow was computed. */
+            boolean dirty = true;
+            /** Plan in which the shadow was last computed (the oldest is renewed first). */
+            long shadowFrame = Long.MIN_VALUE;
             /** First record of the source in this frame's pending puffs ({@link #close}). */
             int from;
         }
@@ -1501,11 +1505,15 @@ public final class SmokePuffs {
                     m.out = new double[length];
                     m.gone = new boolean[n];
                 }
+                // the same records as the last merge (a cloud's snapshot changes, its clump list does not): each keeps its
+                // last shadow until the planner renews it ({@link #shadows}), instead of flashing unshadowed
+                boolean keep = m.count == n && m.out.length >= length;
                 System.arraycopy(held, start, m.in, 0, length);
                 java.util.Arrays.fill(merged, from, holding, false);
                 merge(held, from, holding, merged, CloudModel.SOOT_K, SmokeGrid.DROP_K);
+                if (keep) for (int i = 0; i < n; i++) held[start + i * FIELDS + 17] = m.out[i * FIELDS + 17];
                 System.arraycopy(held, start, m.out, 0, length);
-                m.sunX = Float.NaN;
+                m.dirty = true;
                 System.arraycopy(merged, from, m.gone, 0, n);
                 m.count = n;
             }
@@ -1521,30 +1529,42 @@ public final class SmokePuffs {
         private final java.util.ArrayList<Merged> stale = new java.util.ArrayList<>();
 
         /**
-         * The clouds' own shadow ({@link #sunThrough}) of this frame's sources, on the planner (the fill thread does no
-         * ray sums), within {@link #SHADOW_PAIRS} puff pairs: first the sources merged anew (no shadow yet), then those
-         * the sun has left by more than {@link #SHADOW_TURN}, the farthest first; the rest keep their last shadow until a
-         * later frame. The result also goes to the source's merge cache, so a replayed snapshot keeps it. Must run before
-         * {@link #thin} moves the records.
+         * The clouds' own shadow ({@link #sunThrough}) of this frame's sources whose records changed or whose sun moved
+         * by more than {@link #SHADOW_TURN}, on the planner (the fill thread does no ray sums), within a strict budget of
+         * puff pairs ({@link #SHADOW_PAIRS}; {@link #SHADOW_PAIRS_INLINE} for a plan on the render thread): the source
+         * renewed longest ago first, so none waits for ever; each against at most {@link #SHADOW_BLOCKERS} of its most
+         * attenuating puffs. The rest keep their last shadow. The result also goes to the source's merge cache, so a
+         * replayed snapshot keeps it. Must run before {@link #thin} moves the records.
          */
         private void shadows() {
+            // the planner's thread has the full budget; a plan made on the render thread (a secondary view, the inline
+            // diagnostic mode) a small one: the shadow converges over frames there
+            int budget = record != null ? SHADOW_PAIRS : SHADOW_PAIRS_INLINE, used = 0;
             stale.clear();
-            for (Merged m : merges.values()) if (m.frame == frame && sunStale(m)) stale.add(m);
-            stale.sort(java.util.Comparator.comparingDouble(this::sunAgreement));
-            int pairs = 0;
+            for (Merged m : merges.values()) if (m.frame == frame && (m.dirty || sunStale(m))) stale.add(m);
+            stale.sort(java.util.Comparator.comparingLong(m -> m.shadowFrame));
             for (Merged m : stale) {
                 int n = 0;
                 for (int i = 0; i < m.count; i++) if (!merged[m.from + i]) n++;
-                if (pairs > 0 && pairs + n * (n - 1) > SHADOW_PAIRS) break;
-                pairs += n * (n - 1);
-                sunThrough(held, m.from, m.from + m.count, merged, sunX, sunY, sunZ, sunKey);
+                int want = Math.min(n - 1, SHADOW_BLOCKERS), afford = n > 0 ? (budget - used) / n : 0;
+                int blockers = Math.min(want, afford);
+                // a source that does not fit waits for the next plan, unless nothing else ran: then it takes what fits
+                // (never more than the budget, or one blocker per puff for a source of more puffs than the budget)
+                if (blockers < Math.min(want, SHADOW_MIN_BLOCKERS)) {
+                    if (used > 0) break;
+                    blockers = Math.min(want, Math.max(1, afford));
+                }
+                sunThrough(held, m.from, m.from + m.count, merged, sunX, sunY, sunZ, sunKey, blockers);
+                used += n * Math.max(0, blockers);
                 for (int i = 0; i < m.count; i++) m.out[i * FIELDS + 17] = held[(m.from + i) * FIELDS + 17];
                 m.sunX = sunX;
                 m.sunY = sunY;
                 m.sunZ = sunZ;
                 m.sunKey = sunKey;
+                m.dirty = false;
+                m.shadowFrame = frame;
             }
-            shadowPairs = pairs;
+            shadowPairs = used;
         }
 
         /** Whether the cached shadow of m is for another sun: never computed, the share changed, or the sun turned. */
@@ -1552,7 +1572,7 @@ public final class SmokePuffs {
             return !(m.sunX == m.sunX) || Math.abs(m.sunKey - sunKey) > SHADOW_SHARE || sunAgreement(m) < Math.cos(SHADOW_TURN);
         }
 
-        /** Cosine between the sun of m's shadow and this frame's (−2 — never computed: first in line). */
+        /** Cosine between the sun of m's shadow and this frame's (−2 — never computed). */
         private double sunAgreement(Merged m) {
             return m.sunX == m.sunX ? m.sunX * sunX + m.sunY * sunY + m.sunZ * sunZ : -2;
         }
@@ -3262,6 +3282,13 @@ public final class SmokePuffs {
      * (the 100-strike raid needs 66 000–170 000 pairs for all its sources at once; a stale source waits for a later frame).
      */
     static final int SHADOW_PAIRS = 32768;
+    /** The same for a plan on the render thread (secondary views, {@code incoming.smoke.inline}): ~0.17 ms. */
+    static final int SHADOW_PAIRS_INLINE = 4096;
+    /**
+     * Blockers a puff's beam is summed through: the source's most attenuating puffs (the dense core casts the shadow;
+     * a grass dust front holds hundreds of thin puffs), at least {@link #SHADOW_MIN_BLOCKERS} or the source waits.
+     */
+    static final int SHADOW_BLOCKERS = 64, SHADOW_MIN_BLOCKERS = 8;
     /** The sun turning by more than this (rad, 0.5°) or its direct share changing by more than this renews a shadow. */
     static final double SHADOW_TURN = Math.toRadians(0.5), SHADOW_SHARE = 0.02;
     /** Pairs the last shadow pass summed. */
@@ -3288,12 +3315,50 @@ public final class SmokePuffs {
      * skipped), the share of the direct beam toward the sun (unit direction x, y, z) that passes the source's other
      * puffs, e^(−Στ), τ — the thickness along the ray from the puff's middle through each Gaussian ({@link #sightDepth},
      * attenuation after delta-Eddington, as the puffs are drawn). A puff's own shadow is in its maps (the baked billow);
-     * the shadow of the whole cloud was not anywhere: every puff of a black cloud was lit as if alone in the sky, and the
-     * cloud's underside and core came out as bright as its top (sandbox missile cloud, side sun: flanks 67 and 89 of 255,
-     * underside 81 against the top 90; daylight footage of fuel-fire smoke: near-black core under lit lobes). Share 0 —
-     * no direct light, nothing to compute.
+     * this is the shadow of the whole cloud, without which every puff of a black cloud is lit as if alone in the sky and
+     * the cloud's underside and core are as bright as its top (daylight footage of fuel-fire smoke: a near-black core
+     * under lit lobes). Share 0 — no direct light, nothing to compute.
      */
     static void sunThrough(double[] held, int from, int to, boolean[] merged, float x, float y, float z, float key) {
+        sunThrough(held, from, to, merged, x, y, z, key, Integer.MAX_VALUE);
+    }
+
+    /**
+     * The same summed through at most {@code blockers} puffs of the source: those of the largest attenuation (by its
+     * smoke share, as the puff's own opacity: a clump that is still the fire body, share → 0, fades in as a shadow as
+     * it fades in as smoke).
+     */
+    static void sunThrough(double[] held, int from, int to, boolean[] merged, float x, float y, float z, float key, int blockers) {
+        int n = 0;
+        int[] idx = new int[to - from];
+        double[] ext = new double[to - from];
+        for (int j = from; j < to; j++) {
+            if (merged[j]) continue;
+            int q = j * FIELDS;
+            double e = (SmokeGrid.SOOT_K * held[q + 5] + SmokeGrid.dustK((float) held[q + 8], (float) held[q + 9], (float) held[q + 10]) * held[q + 6]
+                    + SmokeGrid.DROP_K * held[q + 7]) * held[q + 13];
+            if (e > 0) {
+                idx[n] = j;
+                ext[n++] = e;
+            }
+        }
+        // the most attenuating first, when not all of them are summed
+        int count = n;
+        if (blockers < n) {
+            Integer[] order = new Integer[n];
+            for (int k = 0; k < n; k++) order[k] = k;
+            final double[] e = ext;
+            java.util.Arrays.sort(order, (a, b) -> Double.compare(e[b], e[a]));
+            int[] i2 = new int[n];
+            double[] e2 = new double[n];
+            for (int k = 0; k < n; k++) {
+                i2[k] = idx[order[k]];
+                e2[k] = ext[order[k]];
+            }
+            idx = i2;
+            ext = e2;
+            count = Math.max(0, blockers);
+        }
         for (int i = from; i < to; i++) {
             if (merged[i]) continue;
             int o = i * FIELDS;
@@ -3302,15 +3367,14 @@ public final class SmokePuffs {
                 continue;
             }
             double tau = 0;
-            for (int j = from; j < to; j++) {
-                if (j == i || merged[j]) continue;
+            // a puff among the blockers takes the next one instead of itself
+            int taken = 0;
+            for (int k = 0; k < n && taken < count; k++) {
+                int j = idx[k];
+                if (j == i) continue;
+                taken++;
                 int q = j * FIELDS;
-                // by its smoke share, as the puff's own opacity: a clump that is still the fire body (share → 0) fades in
-                // as a shadow as it fades in as smoke, not at once at full thickness
-                double ext = (SmokeGrid.SOOT_K * held[q + 5] + SmokeGrid.dustK((float) held[q + 8], (float) held[q + 9], (float) held[q + 10]) * held[q + 6]
-                        + SmokeGrid.DROP_K * held[q + 7]) * held[q + 13];
-                if (!(ext > 0)) continue;
-                tau += sightDepth(held[q] - held[o], held[q + 1] - held[o + 1], held[q + 2] - held[o + 2], held[q + 3], held[q + 4], ext, x, y, z);
+                tau += sightDepth(held[q] - held[o], held[q + 1] - held[o + 1], held[q + 2] - held[o + 2], held[q + 3], held[q + 4], ext[k], x, y, z);
             }
             held[o + 17] = Math.exp(-tau);
         }
@@ -3405,11 +3469,11 @@ public final class SmokePuffs {
          * {@code shown} as {@link #thick} gives it). Inside a scattering layer lit from above, the light coming down is
          * brighter than the light the matter below sends up: in the two streams of {@link #thick} (same closure) the
          * upward stream is R∞ = (1 − s)/(1 + s) of the downward one. Radiance linear in y between the two (the
-         * first-order angular term of the diffusion regime): ∝ 1 + s·y, at the horizon the thick-layer colour as before
-         * (the level of light deep in the cloud, its darkening under the matter above, is not modelled: puffs of the same
-         * cloud outside the veil are lit the same way). Droplet fog (s → 0) stays even, dust (s ≈ 0.5) is 2.7 times
-         * brighter overhead than underfoot, soot (s ≈ 0.93) almost black underfoot. Before, one colour for every
-         * direction: inside the dust of a B-2 salvo the frame was one flat beige (video 9:14: RGB 139/127/115, SD 0).
+         * first-order angular term of the diffusion regime): ∝ 1 + s·y, at the horizon the thick-layer colour (the level
+         * of light deep in the cloud, its darkening under the matter above, is not modelled: puffs of the same cloud
+         * outside the veil are lit the same way). Droplet fog (s → 0) stays even, dust (s ≈ 0.5) is 2.7 times brighter
+         * overhead than underfoot, soot (s ≈ 0.93) almost black underfoot; one colour for every direction would draw dense
+         * dust around the eye as a flat screen.
          */
         static float byHeight(float shown, double y) {
             double lin = Math.pow(Math.max(shown, 0), 2.2), s = (1 - lin) / (1 + lin);

@@ -112,7 +112,8 @@ with Iris.
   point itself as `via` waypoint (`SandboxCommand.order`), otherwise loop behind shooter, pass 200–350 blocks from
   point and sandbox times out (“effect did not start”); Grad/B-2 ignore waypoints and fly straight themselves.
   `strike <weapon> <count> [spread]`: real salvo (`/incoming salvo`) at a fresh point (320-block +X steps, like `real`),
-  launched 3000 blocks south; time from the salvo's first explosion within 300 blocks (B-2 ×12: `strike bunker 12 30`;
+  launched 3000 blocks south; time from the first explosion within 300 blocks of a round of this salvo (a track not yet
+  known at the command; B-2 ×12: `strike bunker 12 30`;
   `raid … bunker` is client-only and draws no cloud: the bomb's cloud comes from the server's breach and vent).
   `spent <weapon> [height]`: spent booster above point (default 20 m), time from motor burnout (hot nozzle: launch
   rarely shows it, booster tumbles in own trail). `fire [side]`: square netherrack fire (`clear` restores grass).

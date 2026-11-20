@@ -771,6 +771,9 @@ final class Sandbox {
                 site = HOME.add(freshX, 0, 0);
                 placeCamera();
                 server(c.order((int) Math.floor(site.x), (int) Math.floor(site.z)));
+                // the tracks already known belong to earlier effects (a salvo's rounds can still be arriving)
+                strikeBefore.clear();
+                strikeBefore.addAll(FlightTracks.all());
                 strikeSince = FlightTracks.now();
                 pending = Pending.STRIKE;
             }
@@ -1330,7 +1333,8 @@ final class Sandbox {
         double[] at = new double[3];
         for (FlightTrack t : FlightTracks.all()) {
             // this salvo only (tracks of the previous one live on for a minute), where its last sample was
-            if (t.weapon != pendingCmd.weapon() || !t.confirmedEnd() || t.deathTick() < strikeSince || !t.predict(t.lastTick(), at)) continue;
+            if (t.weapon != pendingCmd.weapon() || !t.confirmedEnd() || t.deathTick() < strikeSince || strikeBefore.contains(t)
+                    || !t.predict(t.lastTick(), at)) continue;
             if (site.distanceToSqr(at[0], site.y, at[2]) < STRIKE_NEAR * STRIKE_NEAR) {
                 Incoming.LOG.info("SANDBOX first explosion at {}", xyz(new Vec3(at[0], at[1], at[2])));
                 begin();
@@ -1343,6 +1347,8 @@ final class Sandbox {
     private static final double STRIKE_NEAR = 300;
     /** {@code strike}: track clock when the salvo was ordered; earlier explosions are not this salvo's. */
     private long strikeSince;
+    /** {@code strike}: tracks that existed when the salvo was ordered (identity): not this salvo's rounds. */
+    private final java.util.Set<FlightTrack> strikeBefore = java.util.Collections.newSetFromMap(new java.util.IdentityHashMap<>());
 
     private void watchFlight(Minecraft mc) {
         double[] at = new double[3];

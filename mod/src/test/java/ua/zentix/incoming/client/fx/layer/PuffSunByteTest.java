@@ -16,7 +16,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 /**
  * The clouds' own shadow reaches the shader as the baked puff's direct-sun share in its {@code Emit} byte
  * ({@link FxQuads#sixWay(float, float, float)}), and {@code fx.vsh} applies it to the direct term only: in the vertex colour
- * it also took the sky's and the fireballs' light (review #689).
+ * it would also take the sky's and the fireballs' light.
  */
 class PuffSunByteTest {
     @Test
@@ -54,9 +54,14 @@ class PuffSunByteTest {
     void theVertexShaderReadsItForPuffsOnly() throws IOException {
         String vsh = Files.readString(Path.of("src/main/resources/assets/incoming/shaders/core/fx.vsh"));
         assertTrue(vsh.contains("float emit = six ? 0.0 : Emit;"));
-        assertTrue(vsh.contains("sixKey = FxSun.w * Emit / 255.0;"));
+        assertTrue(vsh.contains("sixSun = Emit / 255.0;"));
+        assertTrue(vsh.contains("sixKey = FxSun.w;"));
+        // the shadow multiplies the direct term only; the diffuse weight stays 1 − the direct share (scaling sixKey by
+        // the beam's share would raise the diffuse weight from 0.2 to 1 in full shadow)
+        String fsh = Files.readString(Path.of("src/main/resources/assets/incoming/shaders/core/fx.fsh"));
+        assertTrue(fsh.contains("float sky = sixKey * sixSun * key + (1.0 - sixKey) * diffuse;"));
         // every glow decision reads the gated value
-        assertFalse(vsh.replace("float emit = six ? 0.0 : Emit;", "").replace("sixKey = FxSun.w * Emit / 255.0;", "")
+        assertFalse(vsh.replace("float emit = six ? 0.0 : Emit;", "").replace("sixSun = Emit / 255.0;", "")
                 .matches("(?s).*[^a-zA-Z_]Emit\\s*[<>-].*"), "glow logic reads the raw Emit byte");
     }
 }

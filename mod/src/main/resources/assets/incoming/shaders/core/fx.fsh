@@ -49,6 +49,7 @@ in float nearest;
 in float opacity;
 in float pallFront;
 in float sixKey;
+in float sixSun;
 in vec3 sixBall;
 in vec3 sixKeyDir;
 in vec3 sixUpDir;
@@ -98,9 +99,8 @@ const float GROUND_ALBEDO = 0.2;
 // axes): an isotropic sky over the upper hemisphere and the ground's reflection under it (Liu & Jordan 1963: a face
 // tilted by θ sees (1 + cos θ)/2 of the sky and (1 − cos θ)/2 of the ground). On a map axis e with cos c to the
 // vertical the squared-cosine weight is (1 + c)/6 from the sky and (1 − c)/6·albedo from the ground (exact at c = 0, ±1),
-// normalised to the six-side mean for uniform light. Before, the six-side mean: the ground lit the puff's underside as
-// brightly as the sky lit its top, and black smoke had no dark underside (sandbox missile cloud, morning sun from the
-// side: shadow flank 45/255, lit flank 65, underside 52)
+// normalised to the six-side mean for uniform light. A plain six-side mean would light a puff's underside from the
+// ground as brightly as its top from the sky, and black smoke would have no dark underside
 float skyDome(float sum, float tilt) {
     return (sum + (1.0 - GROUND_ALBEDO) / (1.0 + GROUND_ALBEDO) * tilt) / 6.0;
 }
@@ -190,8 +190,8 @@ vec4 fireFrames(vec2 uv, vec2 dx, vec2 dy, float m) {
 }
 
 // Smoke and dust particles (FxQuads.softTexels): a texel larger than a screen pixel is sampled smoothly — from one pixel
-// per texel (level 0) to two (level −1). A 64-pixel billow beside the eye covered the screen with flat texel squares of
-// 40–60 pixels and staircase edges (sandbox msl_in at 10 s: smoky debris tails and site dust around the camera)
+// per texel (level 0) to two (level −1): a 64-pixel billow beside the eye (smoky debris tails, site dust) spans the
+// screen, and its nearest texels would be flat squares of 40–60 pixels with staircase edges
 float softTexels(float level) {
     return clamp(-level, 0.0, 1.0);
 }
@@ -279,7 +279,8 @@ void main() {
         float key = pow(max(sixLight(a.rgb, b, sixKeyDir) / FxSixLight.z, 1e-6), shade);
         vec3 tilt = vec3(a.r - b.r, a.g - b.g, b.b - a.b);
         float diffuse = pow(max(skyDome(a.r + a.g + a.b + b.r + b.g + b.b, dot(sixUpDir, tilt)) / FxSixLight.z, 1e-6), shade);
-        float sky = sixKey * key + (1.0 - sixKey) * diffuse;
+        // the cloud in front of the sun takes its beam (sixSun); the direct share and the sky's light stay
+        float sky = sixKey * sixSun * key + (1.0 - sixKey) * diffuse;
         vec3 fire = sixBall * pow(max(sixLight(a.rgb, b, sixBallDir) / FxSixLight.z, 1e-6), shade);
         // a puff lying on the horizontal (shadow exponent 0 — the top of the layer lit from above): the balls' light — in this pixel
         if (-nearest * 127.0 - 13.0 < 0.5) {

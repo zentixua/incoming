@@ -122,8 +122,9 @@ paths:
   cloud). A puff under 32 pixels is smooth, without a cut-off. Smoke-kind
   particles (`FxQuads.softTexels`, byte 112) keep that only while a texel is at most a screen pixel: magnified, bilinear
   from one to two pixels per texel, and the 0.1 cut becomes a ramp over 0.05–0.15 (`fx.fsh`: `softTexels`, `particleCut`,
-  `SoftTexelsGlslTest`): beside the eye a 64-pixel billow (smoky debris tails, `NearLitter` site dust) drew flat texel
-  squares 40–60 px wide with staircase edges (sandbox `msl_in` at 10 s). Pixel-art pieces (flakes, paper) stay nearest. A glow (arc flash, halo) that is blocks in size up close uses
+  `SoftTexelsGlslTest`): beside the eye a 64-pixel billow (smoky debris tails, `NearLitter` site dust) spans the screen,
+  and its nearest texels would be flat squares 40–60 px wide with staircase edges. Pixel-art pieces (flakes, paper) stay
+  nearest. A glow (arc flash, halo) that is blocks in size up close uses
   `Spec.smooth()`: with the nearest pixel, a 64-pixel flash picture covering half the screen falls apart into rotated
   squares of its own pixels with a hard cut edge at 0.1 (frames of a substation arc knocked out by a nuclear strike,
   scenario `flash`). The halo `far/glow` (glare, veil, fire glow, trail ribbons, `FxQuads.glowShape`) larger than a quarter
@@ -1103,8 +1104,8 @@ paths:
   Veil colour by direction (`Veil.byHeight`): the two streams of `thick` with the same closure — light coming up is R∞ of
   light coming down, radiance ∝ 1 + s·y in the ray's height cosine y, the horizon keeps the thick-layer colour (the
   level deep in the cloud is not modelled; puffs of the same cloud outside the veil are lit the same way). Droplet fog
-  stays even, dust is ~2.7× brighter overhead than underfoot, soot nearly black underfoot (`VeilLightTest`). One colour
-  for every direction drew dense dust as a flat screen (video 9:14: RGB 139/127/115, SD 0).
+  stays even, dust is ~2.7× brighter overhead than underfoot, soot nearly black underfoot (`VeilLightTest`); one colour
+  for every direction draws dense dust around the eye as a flat screen.
   At a vertex — softness toward the world (`Veil.soft`): the vertex fades toward the world by the same `fx.fsh` as the
   soft edge of a quad, and half of the veil the world takes where half its opacity accumulates along the ray
   (`Veil.half`: the matter — a segment by the mean and spread over the thickness, `sightMoments`, a truncated Gaussian;
@@ -1137,17 +1138,22 @@ paths:
   36-byte format. No fragment basis derivatives/normalization. Ambient is the sky over the upper hemisphere and the
   ground's reflection under it (`skyDome`: map axis at cos c to world up weighs (1 + c)/6 of sky and (1 − c)/6 × albedo 0.2
   of ground, Liu–Jordan view factors; uniform light keeps the six-side mean, `SkyDomeGlslTest`; up in map axes is
-  `sixUpDir` from `fx.vsh`). The six-side mean lit the underside of black smoke as brightly as the top (sandbox missile
-  cloud, side sun: shadow flank 45/255, lit 65, underside 52). The cloud's own shadow (`SmokePuffs.sunThrough`, held
+  `sixUpDir` from `fx.vsh`): a plain six-side mean lights the underside of black smoke as brightly as the top. The
+  cloud's own shadow (`SmokePuffs.sunThrough`, held
   field 17, merged by attenuation): per held puff of one source, e^(−Στ) of the direct beam through its other puffs
   (`sightDepth`, delta-Eddington attenuation × the clump's smoke share, so the fire-body handoff fades in). Computed on
-  the planner (`Draw.shadows`, before `thin`), never on the fill thread: at most `SHADOW_PAIRS` (32768) pairs per
-  plan, new merges first, then sources the sun left by > 0.5° or share 0.02; the result goes into the merge cache
-  (`Merged.out`). Unbounded it cost 2.8–6.4 ms of the client thread at 100 strikes (review #689). The sun is
+  the planner (`Draw.shadows`, before `thin`), never on the fill thread, within a strict pair budget (`SHADOW_PAIRS`
+  32768; `SHADOW_PAIRS_INLINE` 4096 for a plan on the render thread: secondary views, inline mode): sources whose records
+  changed or whose sun moved > 0.5° (share 0.02), the one renewed longest ago first (no starvation), each against at
+  most `SHADOW_BLOCKERS` (64) of its most attenuating puffs; a source that does not fit waits. A fresh merge with the
+  same record count keeps its last shadow per record until renewed (no unshadowed flash). The result goes into the merge
+  cache (`Merged.out`). All pairs of a 100-strike raid are 66 000–170 000 (2.8–6.4 ms), a grass dust front alone
+  129 000: the budget is what bounds the frame. The sun is
   `FxLayer.sun(level, partial)`, set before collection (`FarRenderer.collect` → `SmokePuffs.sun`), captured at
   `Draw.begin`. The share reaches the shader in the baked puff's `Emit` byte (`FxQuads.sixWay(mix, shade, sun)`,
-  0…255; smoke never glows): `fx.vsh` gates every glow decision on `emit = six ? 0 : Emit` and multiplies only
-  `sixKey` (sky and fireball light stay; `PuffSunByteTest`). The veil keeps the shadow apart from the substance's
+  0…255; smoke never glows): `fx.vsh` gates every glow decision on `emit = six ? 0 : Emit` and passes it as `sixSun`;
+  `fx.fsh` multiplies only the direct term (`sixKey * sixSun * key`; the diffuse weight stays 1 − `sixKey`, sky and
+  fireball light stay; `PuffSunByteTest`). The veil keeps the shadow apart from the substance's
   colour (`VEIL_FIELDS` 11, field 10 = 1 − light), applied after `byHeight` (`SmokeShadowTest`). Tube places (fire
   plumes) keep the per-place maps only;
   frame fireballs

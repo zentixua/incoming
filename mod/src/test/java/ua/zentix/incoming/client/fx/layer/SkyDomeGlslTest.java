@@ -13,8 +13,8 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
  * Diffuse sky light on the baked puffs ({@code fx.fsh}: {@code skyDome}): the sky over the upper hemisphere, the ground's
- * reflection under it. With the six-side mean the ground lit the underside of black smoke as brightly as the sky lit its
- * top (sandbox missile cloud: underside 52/255 between the shadow flank 45 and the lit one 65).
+ * reflection under it, so the underside of black smoke is darker than its top (a plain six-side mean lights it from the
+ * ground as brightly as the sky lights the top).
  */
 class SkyDomeGlslTest {
     private static final Path FX = Path.of("src/main/resources/assets/incoming/shaders/core/fx.fsh");

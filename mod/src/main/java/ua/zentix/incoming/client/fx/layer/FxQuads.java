@@ -124,8 +124,8 @@ public final class FxQuads {
     /**
      * The next quads are smoke and dust particles: as {@link #nearestTexels}, but a texel larger than a screen pixel is
      * sampled smoothly and the faint edge fades over the same 0.1 threshold ({@code fx.fsh}: {@code softTexels},
-     * {@code particleCut}). A billow is not a block: its 64-pixel picture beside the eye drew flat texel squares 40–60
-     * pixels wide with staircase edges.
+     * {@code particleCut}). A billow is not a block: its 64-pixel picture beside the eye spans the screen, and its
+     * nearest texels would be flat squares 40–60 pixels wide with staircase edges.
      */
     public void softTexels() {
         nearest = SOFT_TEXELS;
