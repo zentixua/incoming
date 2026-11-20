@@ -11,17 +11,18 @@ paths:
 
 # Sound
 
-Crater fuel roar is `CraterFire`: continuous fire recording at native speed; level from `Sources.flame` and ISO 9613,
-duration and decay from `FuelPool.share` at emission time; starts from fuel-fire packet `S2C.FuelFire` at its cell
-centroid (aged from impact), not from the explosion packet (without a server, at impact position,
-`BlastEffects.legacyPool`). Fires have no individual loops: all fires sum by power into 4 `blast.fire` loops in
+Crater fuel roar is `CraterFire`: continuous fire recording at native speed; level from `Sources.poolFlame`
+(`POOL_FLAME_EFFICIENCY`: gas-flare measurement as an (est.) proxy, source in its comment; the city fire storm keeps
+`FLAME_EFFICIENCY`) and ISO 9613, duration and decay from `FuelPool.share` at emission time; starts from fuel-fire
+packet `S2C.FuelFire` at its cell centroid (aged from impact), not from the explosion packet (without a server, at impact
+position, `BlastEffects.legacyPool`). Fires have no individual loops: all fires sum by power into 4 `blast.fire` loops in
 quarters around the ear (`Quarters`, `BlastSounds.fireLoops`; cos²/sin² between neighbors, highs averaged by power).
 A 300-Shahed raid started one loop per crater, ~150 channels, each retrying every 10 ticks without a channel — pool 247
 saturated every half-second, the nearby fire fell into rumble (Sol WAV run, 25.10). Loop powers add at the ear only if
 their sounds are incoherent at every start offset: each quarter has its own `blast.fire` variant (`Quarters.seed`),
 a separate non-overlapping segment of a long large-fire recording (craigsmith 483323, `fire()` in `build_sounds.py`:
 native speed, avoiding metallic ringing, spectrum matched to accepted roar 483304 by linear correction without a
-limiter; at its own darker spectrum, A correction −5.6 dB versus −0.2, `Sources.flame` would be 3.5–5 dB quieter at
+limiter; at its own darker spectrum, A correction −5.6 dB versus −0.2, `Sources.poolFlame` would be 3.5–5 dB quieter at
 the same power). The same recording in two loops started on one tick added by amplitude, making a fire between them
 2 dB louder (R8 review, OpenAL loopback); offsets of one recording do not work — coherent when start difference equals
 the offset; noise synthesis under the recording's envelope softened crackling (review round 4). Neither 483304 (14 s)
@@ -39,10 +40,11 @@ stronger than 483304. Ceiling applies to the sum of all quarters (`Quarters.volu
 between two loops would be 3 dB above ceiling. Fire audibility is at the ear in the shared calibrated measure
 (`Sources.gain` → `Loudness.gain` > 0: at least one octave above background, `CraterFire.volume`), not file volume:
 the ceiling-level file is 8.1 dB louder, playback gain 2.54 times lower, and its `AUDIBLE` threshold cut a 2 MW fire's
-range from 1630 to 790 m (R11 review; `CraterFireTest.audibilityIsAtTheEarNotInTheFile` makes the same decision for the
-file and one 8.1 dB quieter). Now fire fades to the masking boundary (0.2/2/20 MW at night: 1265/1955/2735 m; at 6763a1c8
-the file level set it to 990/1630/2390). Inaudible individual fires do not enter the sum. Obstruction rays to audible
-fires use a tick budget (`FireRays`: at most 16 per tick, first untraced fires, one per each of 16 sectors, then oldest);
+range from 1630 to 790 m (R11 review; `CraterFireTest.audibilityIsAtTheEarNotInTheFile` makes the same decision for
+the file and one 8.1 dB quieter). A tracked fire fades to the modeled masking boundary (0.2/2/20 MW, clear night, open
+path: 795/1375/2085 m, `CraterFireTest`); a fire first reported beyond `FarBlasts.near` (640 blocks) does not start.
+Inaudible individual fires do not enter the sum. Obstruction rays to audible fires use a tick budget (`FireRays`: at
+most 16 per tick, first untraced fires, one per each of 16 sectors, then oldest);
 the ray itself stops at the last loaded chunk (`SoundFilters.reach`: beyond it the client world is empty, same result).
 A ray to every audible fire each tick costs ~1.4 million block/fluid reads per tick for 300 fires at 1.7–1.9 km
 (Sol scene client tick after #456: 0.85 → 17.9 ms; ray share from counters, no scene profile). Budget refines obstruction,

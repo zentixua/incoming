@@ -78,13 +78,25 @@ public final class Sources {
     public static final Source NUKE_LAUNCH = new Source(Double.NaN, Spectra.NUKE_LAUNCH, Spectra.NUKE_LAUNCH_LUFS, Loudness.ENGINE_LUFS);
 
     /**
-     * Flame noise: 10⁻⁶ of open-flame heat release becomes sound (est.; model efficiency, not a verified
-     * measured range). Strahle, “Combustion noise”, Prog. Energy Combust. Sci. 4 (1978), 157–176,
-     * doi:10.1016/0360-1285(78)90002-3, reviews the mechanism; its accessible abstract supplies no universal
-     * heat-to-sound efficiency for this pool fire.
+     * Burning-city flame noise: 10⁻⁶ of heat release becomes sound (est.; no measured fire-storm sound level). It lies
+     * inside the range measured on gas-flare diffusion flames, 1.5·10⁻⁷ to 3.6·10⁻⁶, rising with flow
+     * ({@link #POOL_FLAME_EFFICIENCY}).
      */
     public static final double FLAME_EFFICIENCY = 1e-6;
-    /** Crater-fire roar: fire recording, power from pool heat ({@link #flame}). */
+    /**
+     * Pool-fire flame noise: 1.5·10⁻⁷ of heat release becomes sound (est.: no measured pool-fire sound level found; this is
+     * the nearest measured open diffusion flame, used as a proxy). Measured on gas-flare flames of known heat release: S. Smith, B. Duck, J. Roberts, S. Randolph (Zeeco), R. Keith, G. Porter (Hoover &amp; Keith), “Noise
+     * Testing and Prediction Methods for Multi-Point Ground Flares”, AFRC Industrial Combustion Symposium, 2016: sound
+     * power from two Type 1 meters at 30.5 and 61 m, agreeing within 1.5 dB (tables 1–2), divided by heat release from the
+     * metered fuel flow (fig. 9). Efficiency rises with fuel flow through the fixed tip, from 1.5·10⁻⁷ (propane, lowest
+     * flow, 122.4 dB re 1 pW, so ≈ 11 MW) to 3.6·10⁻⁶ (natural gas, highest flow); values read from the figure's vector
+     * data, all from one pressure-assisted flare tip. A crater pool fire is a buoyant flame on a thin fuel layer, slower
+     * than those gas jets, so the proxy is the lowest-flow point; fuel, geometry and flow regime differ. Smith and Kilham's open
+     * turbulent burner flames, 1.2–8.2·10⁻⁸ (J. Acoust. Soc. Am. 35 (1963), 715–724, as tabulated by the same paper,
+     * table 5), are of the same order.
+     */
+    public static final double POOL_FLAME_EFFICIENCY = 1.5e-7;
+    /** Crater-fire roar: fire recording, power from pool heat ({@link #poolFlame}). */
     public static final Source BLAST_FIRE = new Source(Double.NaN, Spectra.BLAST_FIRE, Spectra.BLAST_FIRE_LUFS);
     /**
      * This fraction of debris and ground falling energy becomes sound: stone impacts on ground and each other —
@@ -101,7 +113,7 @@ public final class Sources {
     /** Debris torn off by nuclear wave near listener: fall recording, power from debris energy ({@link Clatter#watts}). */
     public static final Source RUIN_CLATTER = new Source(Double.NaN, Spectra.DEBRIS_FALL, Spectra.DEBRIS_FALL_LUFS, Loudness.ENGINE_LUFS);
     /**
-     * Burning-city roar: large-fire recording, power from burning heat ({@link #flame}: model storm and fire in
+     * Burning-city roar: large-fire recording, power from burning heat ({@link #FLAME_EFFICIENCY}: model storm and fire in
      * local chunks, {@code NukeAfter}).
      */
     public static final Source NUKE_FIRE = new Source(Double.NaN, Spectra.NUKE_FIRE, Spectra.NUKE_FIRE_LUFS, Loudness.ENGINE_LUFS);
@@ -120,9 +132,9 @@ public final class Sources {
 
     private Sources() {}
 
-    /** Flame A-weighted power level for heat release {@code watts}, W ({@link #FLAME_EFFICIENCY}), dBA from recording spectrum. */
-    public static double flame(double watts, Spectrum spectrum) {
-        return lw(FLAME_EFFICIENCY * watts) + spectrum.aWeighting();
+    /** Pool-fire A-weighted power level for heat release {@code watts}, W ({@link #POOL_FLAME_EFFICIENCY}), dBA from recording spectrum. */
+    public static double poolFlame(double watts, Spectrum spectrum) {
+        return lw(POOL_FLAME_EFFICIENCY * watts) + spectrum.aWeighting();
     }
 
     /**
