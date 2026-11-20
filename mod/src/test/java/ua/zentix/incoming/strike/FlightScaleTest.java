@@ -80,14 +80,21 @@ class FlightScaleTest {
         }
     }
 
-    /** Interceptor missile: top speed 14 → 50 blocks/tick (1000 m/s for 9M96), acceleration over the same ticks. */
+    /**
+     * Interceptor missile: top speed 14 → 50 blocks/tick (1000 m/s for 9M96); boost motor from the game's 1.5 s
+     * at 0.45 blocks/tick² to the real one, 11 s at its mean acceleration (Tsiolkovsky over the burn, ~107 m/s²),
+     * which can bring it to top speed. Real speed in the game's 1.5 s (~70 g along the axis) left the missile
+     * unable to pitch over before it was hundreds of blocks up.
+     */
     @Test
     void interceptorSpeed() {
         InterceptorSpec s = InterceptorSpec.SAM;
         check(s.gameMaxSpeed(), s.passport().maxSpeed() / 20, s::maxSpeed, "SAM");
-        assertEquals(s.gameBoostAccel(), s.boostAccel(0), 0);
-        double reach = (s.gameMaxSpeed() - s.launchSpeed()) / s.gameBoostAccel();
-        for (double x : XS) assertEquals(s.maxSpeed(x), s.launchSpeed() + s.boostAccel(x) * reach, 1e-9, "acceleration in the same tick at " + x);
+        check(s.gameBoostAccel(), s.passport().boostAccel(), s::boostAccel, "SAM boost");
+        assertEquals(s.gameBoostTicks(), s.boostTicks(0));
+        assertEquals(Math.round(s.passport().boost().burn() * 20), s.boostTicks(1));
+        assertEquals(107, s.passport().boostAccel() * 400, 1, "real mean boost acceleration, m/s²");
+        assertTrue(s.launchSpeed() + s.boostAccel(1) * s.boostTicks(1) >= s.maxSpeed(1), "the real motor reaches top speed within its burn");
     }
 
     /** Resistance without a motor: game without the Mach curve at 0, real ρ₀·CdA/2m with it at 1. */

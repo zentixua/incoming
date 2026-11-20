@@ -22,6 +22,23 @@ class HomingTest {
         assertEquals(1, got.length(), 1e-12);
     }
 
+    /**
+     * Lead: the point lies on the target's straight path where the missile at its speed arrives at the same moment;
+     * a target not slower than the missile is aimed at directly.
+     */
+    @Test
+    void leadMeetsTheTargetOnItsPath() {
+        Vec3 from = new Vec3(0, 70, 0), at = new Vec3(1000, 40, 300), v = new Vec3(-12.5, 0, 0);
+        double speed = 50;
+        Vec3 meet = Homing.lead(from, speed, at, v);
+        double t = (at.x - meet.x) / 12.5;
+        assertTrue(t > 0, "ahead of the target: " + meet);
+        assertEquals(0, meet.subtract(at.add(v.scale(t))).length(), 1e-9, "on the target's path");
+        assertEquals(speed * t, meet.distanceTo(from), 1e-6, "the missile arrives with the target");
+        assertEquals(at, Homing.lead(from, 12.5, at, v), "as fast as the target");
+        assertEquals(at, Homing.lead(from, 50, at, Vec3.ZERO), "standing target");
+    }
+
     /** The target is within the turn - heading straight towards it. */
     @Test
     void smallTurnReachesWant() {
