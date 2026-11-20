@@ -77,7 +77,7 @@
   "incoming.hud.loadout": "%s",
   "incoming.hud.loadout.salvo": "%s · ×%s · spread %s blocks",
   "incoming.hud.scope_hint": "LMB — launch · wheel — weapon · Shift+RMB — console",
-  "incoming.hud.danger_close": "Danger close: fragments reach %s m",
+  "incoming.hud.danger_close": "Danger close: hazardous fragments within %s m",
   "incoming.hud.in_flight": "In flight: %s",
   "incoming.hud.more": "and %s more",
   "incoming.hud.salvo": "LAUNCH · %s · %s / %s",

@@ -256,7 +256,8 @@ public final class Designator {
 
         Loadout l = loadout();
         LocalPlayer p = mc.player;
-        String dist = pick == null || p == null ? "—" : String.format(Locale.ROOT, "%.0f", pick.point().distanceTo(p.getEyePosition()));
+        double range = pick == null || p == null ? Double.NaN : pick.point().distanceTo(p.getEyePosition());
+        String dist = Double.isNaN(range) ? "—" : String.format(Locale.ROOT, "%.0f", range);
         Component what = pick == null ? Component.translatable("incoming.target_not_found") : pick.label();
         Component top = Component.translatable("incoming.hud.target", what, dist).withStyle(ChatFormatting.WHITE);
         g.drawString(font, top, cx - font.width(top) / 2, cy + 40, 0xFFFFFFFF);
@@ -272,11 +273,13 @@ public final class Designator {
             Component assign = Component.translatable("incoming.hud.assign", linked).withStyle(ChatFormatting.YELLOW);
             g.drawString(font, assign, cx - font.width(assign) / 2, line, 0xFFFFFFFF);
             line += 12;
-        } else if (pick != null && p != null) {
-            // The shooter inside the weapon's fragment hazard distance: say so before the launch, not after the death.
+        }
+        // The shooter inside the conventional warhead's fragment hazard distance (linked launchers strike the same
+        // point): say so before the launch, not after the death. A nuclear order has its own review with the distance.
+        if (!Double.isNaN(range) && !l.nuclear()) {
             double hazard = FragmentModel.hazard(l.weapon());
-            if (FragmentModel.dangerClose(hazard, l.spread(), pick.point().distanceTo(p.getEyePosition()))) {
-                Component danger = Component.translatable("incoming.hud.danger_close", String.format(Locale.ROOT, "%.0f", hazard)).withStyle(ChatFormatting.RED);
+            if (FragmentModel.dangerClose(hazard, l.spread(), range)) {
+                Component danger = Component.translatable("incoming.hud.danger_close", Math.round(hazard + l.spread())).withStyle(ChatFormatting.RED);
                 g.drawString(font, danger, cx - font.width(danger) / 2, line, 0xFFFFFFFF);
             }
         }

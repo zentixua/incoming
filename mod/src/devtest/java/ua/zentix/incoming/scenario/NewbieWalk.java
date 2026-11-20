@@ -106,6 +106,9 @@ final class NewbieWalk {
         started = true;
         // A fresh world directory each run, next to whatever saves exist: nothing is ever deleted.
         String world = WORLD + "-" + System.currentTimeMillis();
+        // The view distance is sent at login: targets 280 blocks out must be in the chunks the server delivers.
+        mc.options.renderDistance().set(20);
+        mc.options.save();
         GameRules rules = new GameRules();
         rules.getRule(GameRules.RULE_DAYLIGHT).set(false, null);
         rules.getRule(GameRules.RULE_WEATHER_CYCLE).set(false, null);
@@ -131,8 +134,6 @@ final class NewbieWalk {
                 mc.getLanguageManager().setSelected("en_us");
                 mc.reloadResourcePacks();
             }
-            // targets up to 300 blocks out stay in loaded chunks (block-accurate binoculars)
-            mc.options.renderDistance().set(20);
         });
         await(100);
         until("resources reloaded", 2400, () -> mc.getOverlay() == null);
@@ -275,6 +276,10 @@ final class NewbieWalk {
             ServerPlayer p = player(server);
             for (WeaponType w : order) p.getInventory().add(new ItemStack(w.spec().munition().item().get()));
         }));
+        until("target chunks", 2400, () -> {
+            for (int i = 0; i < order.length; i++) if (!targetLoaded(280, (i - 2) * 25)) return false;
+            return true;
+        });
         await(10);
         for (int i = 0; i < order.length; i++) {
             WeaponType w = order[i];
@@ -398,12 +403,15 @@ final class NewbieWalk {
         run(() -> click(widgetWith(Component.translatable("incoming.remote.fire").getString())));
         until("nuclear review", 100, () -> mc.screen instanceof ua.zentix.incoming.client.screen.NuclearReviewScreen);
         shot("op-nuke-review", () -> String.valueOf(mc.screen));
+        // Hold to launch: the screen polls the real key, which a windowless client cannot press; send what it sends.
+        java.util.UUID[] review = new java.util.UUID[1];
         run(() -> {
-            if (mc.screen != null) mc.screen.keyPressed(org.lwjgl.glfw.GLFW.GLFW_KEY_SPACE, 0, 0);
+            review[0] = reviewId();
+            if (review[0] != null) PacketDistributor.sendToServer(new C2S.NuclearAction(review[0], C2S.NuclearAction.BEGIN));
         });
-        await(90);
+        await(ua.zentix.incoming.strike.NuclearReview.HOLD_TICKS + 5);
         run(() -> {
-            if (mc.screen != null) mc.screen.keyReleased(org.lwjgl.glfw.GLFW.GLFW_KEY_SPACE, 0, 0);
+            if (review[0] != null) PacketDistributor.sendToServer(new C2S.NuclearAction(review[0], C2S.NuclearAction.COMMIT));
         });
         await(20);
         shot("op-nuke-launched", this::overlay);
@@ -413,15 +421,11 @@ final class NewbieWalk {
         shot("op-nuke-aborted", this::overlay);
         // Nuclear limits of the world, each refused with its own reason.
         refuse("refuse-nuke-disabled", () -> IncomingConfig.SERVER.nukeEnabled.set(false), () -> IncomingConfig.SERVER.nukeEnabled.set(true),
-                () -> scopedFire(WeaponType.NUKE));
-        refuse("refuse-nuke-carrier", () -> IncomingConfig.SERVER.carrierNukes.set(false), () -> IncomingConfig.SERVER.carrierNukes.set(true), () -> {
-            run(() -> setLoadout(new Loadout(WeaponType.MISSILE, 1, 0, ua.zentix.incoming.strike.TargetMode.LOOK, "", new Loadout.Nuke(1, false, true))));
-            scopedFire(null);
-        });
-        refuse("refuse-nuke-cap", () -> IncomingConfig.SERVER.nukeMaxYield.set(10), () -> IncomingConfig.SERVER.nukeMaxYield.set(Loadout.Nuke.DEFAULT_MAX_YIELD), () -> {
-            run(() -> setLoadout(new Loadout(WeaponType.NUKE, 1, 0, ua.zentix.incoming.strike.TargetMode.LOOK, "", new Loadout.Nuke(15, false, false))));
-            scopedFire(null);
-        });
+                () -> reviewNuclear(new Loadout(WeaponType.NUKE, 1, 0, ua.zentix.incoming.strike.TargetMode.LOOK, "", new Loadout.Nuke(1, false, false))));
+        // The console sends its order at once (Fire), before the server saves the designator's settings: as here.
+        refuse("refuse-nuke-carrier", () -> IncomingConfig.SERVER.carrierNukes.set(false), () -> IncomingConfig.SERVER.carrierNukes.set(true),
+                () -> reviewNuclear(new Loadout(WeaponType.MISSILE, 1, 0, ua.zentix.incoming.strike.TargetMode.LOOK, "", new Loadout.Nuke(1, false, true))));
+        refuse("refuse-nuke-cap", () -> IncomingConfig.SERVER.nukeMaxYield.set(10), () -> IncomingConfig.SERVER.nukeMaxYield.set(Loadout.Nuke.DEFAULT_MAX_YIELD), () -> reviewNuclear(new Loadout(WeaponType.NUKE, 1, 0, ua.zentix.incoming.strike.TargetMode.LOOK, "", new Loadout.Nuke(15, false, false))));
         run(() -> {
             if (mc.screen != null) mc.setScreen(null);
             setLoadout(Loadout.DEFAULT);
@@ -496,6 +500,34 @@ final class NewbieWalk {
         PacketDistributor.sendToServer(new C2S.SetLoadout(InteractionHand.MAIN_HAND, l));
     }
 
+    /** The console's Fire for a nuclear order at the far target: the review request, as {@code RemoteScreen.fire} sends it. */
+    private void reviewNuclear(Loadout l) {
+        run(() -> {
+            aimAt(280, 0);
+            C2S.AimHint hint = new C2S.AimHint(C2S.AimHint.POINT, ground, 0, Vec3.ZERO);
+            PacketDistributor.sendToServer(new C2S.ReviewNuclear(new C2S.Fire(l, Optional.of(hint), Optional.empty(), ua.zentix.incoming.strike.Waypoints.NONE, Optional.empty())));
+        });
+    }
+
+    private java.util.UUID reviewId() {
+        if (!(mc.screen instanceof ua.zentix.incoming.client.screen.NuclearReviewScreen s)) return null;
+        try {
+            Field f = s.getClass().getDeclaredField("review");
+            f.setAccessible(true);
+            return ((ua.zentix.incoming.net.S2C.NuclearReview) f.get(s)).id();
+        } catch (ReflectiveOperationException ex) {
+            Incoming.LOG.warn("NEWBIE review id", ex);
+            return null;
+        }
+    }
+
+    private boolean targetLoaded(double distance, double yaw) {
+        Vec3 eye = mc.player.getEyePosition();
+        double a = Math.toRadians(yaw);
+        int x = (int) Math.floor(eye.x + Math.sin(a) * distance), z = (int) Math.floor(eye.z - Math.cos(a) * distance);
+        return mc.level.getChunkSource().getChunk(x >> 4, z >> 4, false) != null;
+    }
+
     private EditBox editBox() {
         if (mc.screen == null) return null;
         for (var c : mc.screen.children()) if (c instanceof EditBox b) return b;
@@ -507,6 +539,7 @@ final class NewbieWalk {
         Vec3 eye = mc.player.getEyePosition();
         double a = Math.toRadians(yaw);
         int x = (int) Math.floor(eye.x + Math.sin(a) * distance), z = (int) Math.floor(eye.z - Math.cos(a) * distance);
+        if (mc.level.getChunkSource().getChunk(x >> 4, z >> 4, false) == null) Incoming.LOG.warn("NEWBIE target chunk {} {} not loaded", x, z);
         ground = new Vec3(x + 0.5, mc.level.getHeight(Heightmap.Types.MOTION_BLOCKING, x, z), z + 0.5);
         Vec3 d = ground.subtract(eye);
         mc.player.setYRot((float) Math.toDegrees(Math.atan2(-d.x, d.z)));

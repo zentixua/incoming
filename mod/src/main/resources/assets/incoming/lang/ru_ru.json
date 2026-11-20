@@ -77,7 +77,7 @@
   "incoming.hud.loadout": "%s",
   "incoming.hud.loadout.salvo": "%s · %s шт. · разброс %s бл.",
   "incoming.hud.scope_hint": "ЛКМ — пуск · колесо — оружие · Shift+ПКМ — пульт",
-  "incoming.hud.danger_close": "Опасно близко: осколки летят на %s м",
+  "incoming.hud.danger_close": "Опасно близко: опасные осколки в пределах %s м",
   "incoming.hud.in_flight": "В полёте: %s",
   "incoming.hud.more": "и ещё %s",
   "incoming.hud.salvo": "ПУСК · %s · %s / %s",

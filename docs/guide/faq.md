@@ -13,7 +13,7 @@ English · [Русский](ru/faq.md)
 | "No target found" | nothing is under the reticle, or the ground there is too far to make out: strike from the map |
 | "… cannot fly this route…" | remove or move route points |
 | "Only operators can use the designator here…" | the world owner set it up that way (Settings → Launch) |
-| "Danger close: fragments reach…" | you are inside the warhead's fragment hazard distance: aim farther or step back |
+| "Danger close: hazardous fragments within…" | you are inside the warhead's fragment hazard distance: aim farther or step back |
 | "Nothing under the crosshair…" | aim the binoculars at the ground, a block, a mob or an aircraft |
 | "Nuclear strikes: operators only…", "Nuclear weapons are off…", "… is above this world's limit…" | the world owner decides in Settings → Nuclear weapons; in your own single-player world that is you ([nuclear strike](nuke.md)) |
 | "Too many strikes in progress…" | the world owner set a limit: wait for impacts or [abort](designator.md#abort) |
