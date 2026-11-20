@@ -463,12 +463,14 @@ pieces are particles. A burning piece in flight leaves puffs of grey-black wood 
 drift away, and its flame lights the smoke around it. The bomb's blast is drawn the same way: a
 breach gives the cloud of the part of the charge that went into the air, a deeper blast a smaller cloud from the mouth of
 the hole; the dust of the impact and of a caved-in pit stays low and drifts.
+Smoke and dust puffs right beside you stay soft and smooth, without square pixels at their edges.
 
 Fuel left in a crater keeps burning, and so does the oil of a substation the strike knocked out. Over them a column of
 black smoke rises, leans downwind and stretches out with it; a bigger fire sends it higher. Burning craters of a salvo
 and an oil fire next to them are one fire: they send up one tall column, not several weak ones. By day it climbs higher than on a calm night, when
 it stays low and drifts flat. Near or kilometres away, the column is drawn the same way as a smoke trail: one unbroken,
-billowing tube, never a row of separate puffs; where it is narrower than about two pixels it is a thin line. At night the
+billowing tube, never a row of separate puffs; where it is narrower than about two pixels it is a thin line. By day its
+underside sees only the ground's reflected light and stays darker than its top. At night the
 flames light the smoke from below. The column grows from the fire at the
 speed of the wind, and when the fire goes out the last of the smoke drifts away. Blocks the blast sets on fire burn as
 ordinary Minecraft fire and look like any other fire in your game: vanilla, or the way a fire mod you have installed

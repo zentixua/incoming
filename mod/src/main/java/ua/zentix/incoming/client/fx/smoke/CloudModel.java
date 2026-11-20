@@ -65,8 +65,8 @@ import ua.zentix.incoming.nuclear.model.FuelPool;
  * the surface below it; an airburst has no dust when ground pressure is below the entrainment threshold. Church supplies only stabilized-cloud size and
  * height ({@link #HE_HEAT}).
  * <p>
- * <b>Optics.</b> Mass extinction: soot {@link #SOOT_K} m²/kg with albedo 0.25 and asymmetry 0.5 (Bond, Bergstrom 2006:
- * absorption 7.5 m²/g at 550 nm); dust {@code DustModel.K_MIX} (geometric optics of nuclear dust grains; as coarse grains settle,
+ * <b>Optics.</b> Mass extinction: soot {@link #SOOT_K} m²/kg with albedo {@link #SOOT_W} and asymmetry
+ * {@link #SOOT_G}; dust {@code DustModel.K_MIX} (geometric optics of nuclear dust grains; as coarse grains settle,
  * extinction follows the fine share, {@code DustModel.extinctionAloft}); condensation drops (5 µm): 3Q/(2ρr) =
  * 600 m²/kg. The cloud stays visible while its transverse optical depth exceeds {@link #SEEN} (Koschmieder contrast threshold).
  */
@@ -94,8 +94,14 @@ public final class CloudModel {
     public static final double FUEL_BALL_K = Math.pow(FuelFireball.SURFACE_POWER / 5.670374e-8, 0.25);
     /** Explosive ball: start and end of life, K (⚠ est.: no visible-temperature measurements by age). */
     public static final double HE_BALL_HOT = 3000, HE_BALL_END = 1500;
-    /** Soot: mass extinction (before delta-Eddington), m²/kg; albedo and asymmetry. */
-    public static final double SOOT_K = 7.5e3 / (1 - 0.25), SOOT_W = 0.25, SOOT_G = 0.5;
+    /**
+     * Soot: mass extinction (before delta-Eddington), m²/kg; albedo and asymmetry. Albedo 0.375: black smoke of single
+     * large hydrocarbon fires near the source, 0.35–0.4 at 538 nm (aircraft in the Kuwait oil-fire plumes, Weiss &amp; Hobbs
+     * 1992); the aged composite plume was 0.52–0.6, laboratory fresh black carbon 0.2–0.3 (Bond &amp; Bergstrom 2006).
+     * The same albedo for detonation soot and engine soot is an estimate (⚠ est.). Extinction 10 m²/g (⚠ est.): with
+     * this albedo, absorption 6.25 m²/g, near the 7.5 m²/g of fresh black carbon at 550 nm (Bond &amp; Bergstrom 2006).
+     */
+    public static final double SOOT_K = 1e4, SOOT_W = 0.375, SOOT_G = 0.5;
     /** Condensation drops, 5 µm: 3·2/(2·1000·5·10⁻⁶), m²/kg; asymmetry. */
     public static final double DROP_K = 600, DROP_G = 0.85;
     /** Free detonation carbon remaining as soot after ball afterburning, est. */

@@ -300,7 +300,7 @@ public final class FxParticle {
         // layer part (GPU timing by part): smoky debris tails, fire and ball, other particles
         FxQuads.Part was = out.part(budget == FxBudget.DEBRIS ? FxQuads.Part.DEBRIS
                 : kind == Fx.Kind.FIRE || kind == Fx.Kind.FIREBALL ? FxQuads.Part.FIRE : FxQuads.Part.PARTICLES);
-        out.nearestTexels(!smooth);
+        texels(out, kind, smooth);
         out.opacity(a);
         // emissive matter blooms (FxBloom): fire, sparks, flash, ball; smoke, dust, ring and ash do not
         out.emission(kind.lit ? 0 : hdr);
@@ -323,6 +323,15 @@ public final class FxParticle {
         }
         out.emission(0);
         out.part(was);
+    }
+
+    /**
+     * Texture mode of a particle's quads: smoke and dust billows are smooth when magnified (a texel square beside the eye
+     * is not smoke), pixel-art pieces stay crisp, {@code smooth} particles are smooth at any size.
+     */
+    public static void texels(FxQuads out, Fx.Kind kind, boolean smooth) {
+        if (!smooth && kind == Fx.Kind.SMOKE) out.softTexels();
+        else out.nearestTexels(!smooth);
     }
 
     private FxAtlas.Sprite sprite(float partial) {
