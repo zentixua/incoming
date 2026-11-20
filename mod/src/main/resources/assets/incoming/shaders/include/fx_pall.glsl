@@ -1439,8 +1439,8 @@ vec4 mushAt(int k, Mush m, vec3 p, vec3 q, float cone, out float near, out vec3 
     float escape = min(min(up, down), toEye);
     // sun at the point's altitude (pallSunBeam): the cap kilometres up keeps it after the ground has lost it. The sun-axis depths
     // enter the escape of the matter's own emission by the share of the overhead beam that reaches the point (MUSH_SUN_ESCAPE:
-    // full in daylight as before, none in the earth's shadow): continuous in place and time, no step at the frame's sun gate
-    // or at the earth's shadow (an on/off cut changed the hot cloud's emission by a third)
+    // full in daylight, none in the earth's shadow): continuous in place and time, no step at the frame's sun gate or at
+    // the earth's shadow (an on/off cut changes the hot cloud's emission by a third)
     vec3 beam = pallSunUp() ? pallSunBeam(pallSunHeight(p)) : vec3(0.0);
     float sunShare = clamp(dot(beam, LUMA) / max(MUSH_SUN_ESCAPE * dot(PallSunTop.rgb, LUMA), 1e-6), 0.0, 1.0);
     if (sunShare > 0.0) {
