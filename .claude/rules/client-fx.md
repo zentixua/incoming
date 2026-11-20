@@ -658,7 +658,8 @@ paths:
   screen values the midtones came out darker (0.3 linear — 0.58 on screen): thin fog a dirty grey, dusk in dense dust
   black.
   The frame's light (`NukePall.light`): a white horizontal wall at noon — 1, like the top of a white block by day; the
-  sky as Minecraft draws it, in linear × 0.5 (`PallLight.SKY`: at noon about a fifth of the daylight); the sun — the rest
+  sky as Minecraft draws it, in linear × 0.5 (`PallLight.SKY`: at noon about a fifth of the daylight; under a shader pack
+  in the hue of the pack's sky, `SkyBand.skyHue`, `nuclear.md`); the sun — the rest
   up to white (the blue of the sky is taken from its beam), times the air along its path (`Sight.sunThroughAir`: Beer–Lambert
   along the slant column (`Sight.column`: Chapman function, erfcx bound, round earth) of the clear-day air of `Sight.Air`,
   Rayleigh λ^−4.08 + haze λ^−1.3, each with its scale height, relative to the overhead sun at the lit point's height; at 19°

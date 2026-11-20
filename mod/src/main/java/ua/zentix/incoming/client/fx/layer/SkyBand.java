@@ -155,6 +155,31 @@ public final class SkyBand {
     }
 
     /**
+     * Hue of the sky's light on a horizontal surface from a filled band ({@link #fill}) into {@code out}: the cosine-weighted
+     * mean of the bins' linear radiance over the upper hemisphere (display^2.2, as {@code pallLinear}; weight sin·cos of
+     * the bin's elevation), divided by its Rec. 709 luminance; false if the band is black. The sky that lights a cloud is
+     * the sky the player sees: under a pack its colour is the pack's.
+     */
+    public static boolean skyHue(float[] band, double[] out) {
+        double r = 0, g = 0, b = 0;
+        for (int e = 0; e < EL; e++) {
+            double el = (e + 0.5) / EL * 0.5 * Math.PI, w = Math.sin(el) * Math.cos(el);
+            for (int a = 0; a < AZ; a++) {
+                int i = (e * AZ + a) * 4;
+                r += w * Math.pow(Math.max(band[i], 0), 2.2);
+                g += w * Math.pow(Math.max(band[i + 1], 0), 2.2);
+                b += w * Math.pow(Math.max(band[i + 2], 0), 2.2);
+            }
+        }
+        double lum = 0.2126 * r + 0.7152 * g + 0.0722 * b;
+        if (!(lum > 1e-12)) return false;
+        out[0] = r / lum;
+        out[1] = g / lum;
+        out[2] = b / lum;
+        return true;
+    }
+
+    /**
      * Airlight from a filled band ({@link #fill}) along direction (x, y, z), bilinear between bin centres, wrapping in
      * azimuth, elevation clamped to the horizon row below 0°. Copy of {@code pallAirBand} in {@code fx_pall}.
      */

@@ -248,6 +248,11 @@ public final class SkyBandPass {
         GL20.glUniform4fv(at, u);
     }
 
+    /** Hue of the pack's sky light on a horizontal surface ({@link SkyBand#skyHue}) into {@code out}; false — no band (vanilla sky). */
+    public static boolean skyHue(double[] out) {
+        return on && SkyBand.skyHue(DRAWN, out);
+    }
+
     /** Scenario line: the band's state and the airlight it gives along (x, y, z). */
     public static String describe(double x, double y, double z) {
         if (!on) return "band off (vanilla sky)";

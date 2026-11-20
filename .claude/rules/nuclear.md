@@ -306,7 +306,9 @@ Ruins and everything in `nuclear/world/` are in `nuclear-world.md`.
   over within a second), holes filled from the row's nearest seen bins, then the nearest row; nothing seen — vanilla;
   world change, pack off and shader reload drop it. Uploaded as the `PallAirBand` array by hand after `apply()` (Veil
   uploads zeroed copies of JSON-less uniforms there, `PallPass.quad`), `PallAirBandOn` in the JSON; the pass restores
-  all GL state it touches. Never the frame behind the pixel: screen taps there carry an off-axis sun and nearby blocks into the
+  all GL state it touches. The same band gives the sky light on the matter its hue (`SkyBand.skyHue`: cosine-weighted
+  upper hemisphere, linear; `NukePall.sky` keeps the law's brightness): vanilla's blue fill turns a dusk cap's sunlit
+  side grey against the pack's golden clouds. Never the frame behind the pixel: screen taps there carry an off-axis sun and nearby blocks into the
   cap; the band holds only sky and never the sun or moon
   (`SkyBandTest.capWithTheSunBehindItNeverTakesTheSunsColour`, `onlyTheSkyEntersTheBand`). The `haze` share is added
   after `pallShown`, alpha is the matter's

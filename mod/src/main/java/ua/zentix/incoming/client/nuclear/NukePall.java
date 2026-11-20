@@ -546,6 +546,9 @@ public final class NukePall {
      * Sun and sky at {@code eye} into {@code into}: sunlight above the air while the sun stands above the horizon of altitude
      * {@code top} (blocks above sea level), zero below it.
      */
+    /** Hue of the shader pack's sky light ({@link #sky}), render thread only. */
+    private static final double[] HUE = new double[3];
+
     static void sky(ClientLevel level, Vec3 eye, float partial, double top, Sky into) {
         into.eyeUp = (float) (eye.y - WaterDecal.SEA_LEVEL);
         float angle = level.getTimeOfDay(partial) * Mth.TWO_PI;
@@ -576,6 +579,13 @@ public final class NukePall {
         for (int c = 0; c < 3; c++) {
             into.top[c] = up ? sunLight(1, into.sky[c], weather) : 0;
             into.sun[c] = (float) (THROUGH_AIR[c] * into.top[c]);
+        }
+        // under a shader pack the sky that lights the matter is the pack's sky the player sees (SkyBand): its hue, at this law's
+        // brightness. Vanilla's sky colour stays blue-grey through a golden pack dusk, and its blue fill turns the cap's
+        // sunlit side grey against the pack's golden clouds (R/B 1.5 on screen under a beam of R/B 3.0)
+        if (ua.zentix.incoming.client.fx.layer.SkyBandPass.skyHue(HUE)) {
+            double lum = 0.2126 * into.sky[0] + 0.7152 * into.sky[1] + 0.0722 * into.sky[2];
+            for (int c = 0; c < 3; c++) into.sky[c] = (float) (lum * HUE[c]);
         }
         // wall reflection and fire glow (on screen) add to on-screen sky light — this value
         into.base = ambient;
@@ -805,12 +815,14 @@ public final class NukePall {
             ua.zentix.incoming.nuclear.model.MushroomModel.Shape shape = MushroomField.shape(last, 0);
             if (shape != null) {
                 double up = last.d.groundY() - WaterDecal.SEA_LEVEL + last.d.blocks(shape.capY());
-                double[] atCap = new double[3];
+                double[] atCap = new double[3], atTop = new double[3];
                 SKY.sunAt(up, atCap);
+                double topUp = last.d.groundY() - WaterDecal.SEA_LEVEL + last.d.blocks(shape.top());
+                SKY.sunAt(topUp, atTop);
                 Vec3 eye = mc.gameRenderer.getMainCamera().getPosition();
                 double capY = last.d.groundY() + last.d.blocks(shape.capY());
-                cap = String.format(java.util.Locale.ROOT, "at cap centre %.0f blocks above sea %.4f %.4f %.4f, airlight toward it: %s (vanilla sky %.3f %.3f %.3f, fog %.3f %.3f %.3f)",
-                        up, atCap[0], atCap[1], atCap[2],
+                cap = String.format(java.util.Locale.ROOT, "at cap centre %.0f blocks above sea %.4f %.4f %.4f, at top %.0f %.4f %.4f %.4f, airlight toward it: %s (vanilla sky %.3f %.3f %.3f, fog %.3f %.3f %.3f)",
+                        up, atCap[0], atCap[1], atCap[2], topUp, atTop[0], atTop[1], atTop[2],
                         ua.zentix.incoming.client.fx.layer.SkyBandPass.describe(last.d.burst().x - eye.x, capY - eye.y, last.d.burst().z - eye.z),
                         f.airSky.x, f.airSky.y, f.airSky.z, f.airFog.x, f.airFog.y, f.airFog.z);
             }

@@ -222,6 +222,38 @@ class SkyBandTest {
         assertTrue(drawn[0] < 0.2, "the sliver bin takes its neighbours' new sky, not the old pack's: " + drawn[0]);
     }
 
+    /**
+     * The sky's light on the matter under a pack takes the pack sky's hue: a uniform band gives its own colour (linear,
+     * unit luminance), the golden dusk sky gives a warm light, and only the upper hemisphere weighted by its cosine counts
+     * (a band bright only at the horizon row barely changes it); a black band gives none (vanilla's sky stays).
+     */
+    @Test
+    void skyLightTakesThePackSkysHue() {
+        float[] band = new float[SkyBand.AZ * SkyBand.EL * 4];
+        double[] hue = new double[3];
+        assertFalse(SkyBand.skyHue(band, hue), "black band: no hue");
+        for (int i = 0; i < SkyBand.AZ * SkyBand.EL; i++) {
+            band[i * 4] = 0.8f;
+            band[i * 4 + 1] = 0.5f;
+            band[i * 4 + 2] = 0.3f;
+        }
+        assertTrue(SkyBand.skyHue(band, hue));
+        double r = Math.pow(0.8, 2.2), g = Math.pow(0.5, 2.2), b = Math.pow(0.3, 2.2), lum = 0.2126 * r + 0.7152 * g + 0.0722 * b;
+        assertArrayEquals(new double[]{r / lum, g / lum, b / lum}, hue, 1e-6);
+        assertEquals(1, 0.2126 * hue[0] + 0.7152 * hue[1] + 0.0722 * hue[2], 1e-12, "unit luminance: brightness stays the law's");
+        float[] dusk = new float[band.length];
+        double[] d = new double[3];
+        for (int e = 0; e < SkyBand.EL; e++) {
+            for (int a = 0; a < SkyBand.AZ; a++) {
+                SkyBand.direction(a, e, 0.5, 0.5, d);
+                double[] c = dusk(d);
+                for (int k = 0; k < 3; k++) dusk[(e * SkyBand.AZ + a) * 4 + k] = (float) c[k];
+            }
+        }
+        assertTrue(SkyBand.skyHue(dusk, hue));
+        assertTrue(hue[0] > 1.5 * hue[2], "golden dusk sky: warm light " + hue[0] + " " + hue[2]);
+    }
+
     /** The band is read the same way it is laid out: a uniform per-bin colour comes back exactly at each bin centre. */
     @Test
     void readFindsEachBinAtItsCentre() {
