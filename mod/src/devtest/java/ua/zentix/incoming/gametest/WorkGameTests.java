@@ -103,7 +103,8 @@ public final class WorkGameTests {
         Vec3 c = Vec3.atCenterOf(h.absolutePos(CENTER));
         List<Blast> out = new ArrayList<>();
         Consumer<ExplosionEvent.Detonate> on = e -> {
-            if (e.getLevel() != level || e.getExplosion().center().distanceTo(c) > range) return;
+            // radius 0: a collapse's protection query (StrikeCollapse lets claim handlers keep positions), not a blast
+            if (e.getLevel() != level || e.getExplosion().center().distanceTo(c) > range || e.getExplosion().radius() <= 0) return;
             Set<BlockPos> solid = new HashSet<>();
             for (BlockPos p : e.getAffectedBlocks()) if (!level.getBlockState(p).isAir()) solid.add(p.immutable());
             out.add(new Blast(e.getExplosion().center(), e.getExplosion().radius(), level.getGameTime(), solid));
@@ -334,6 +335,10 @@ public final class WorkGameTests {
 
     private static void portionSkipsChangedBlockOnEmpty(GameTestHelper h) {
         ServerLevel level = h.getLevel();
+        // the gold block replaces one over the blast's hole: the collapse would rightly drop it; this checks the explosion
+        boolean collapse = IncomingConfig.SERVER.collapse.get();
+        IncomingConfig.SERVER.collapse.set(false);
+        StrikeGameTests.afterTest(h, () -> IncomingConfig.SERVER.collapse.set(collapse));
         buildTown(h);
         WorkClock clock = WorkClock.counting(MS);
         useCounting(h, clock);

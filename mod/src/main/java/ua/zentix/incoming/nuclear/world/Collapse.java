@@ -169,7 +169,8 @@ final class Collapse {
     /**
      * What lost support after a conventional strike (any thread): the same law over window {@code w} (the world as it
      * stood: live snapshots with the strike's removals restored, {@link RuinWindow#restoring}) with the strike's removals as window fractures {@code blasts} (index {@code k = (dz + 1) * 3 + dx + 1}, null
-     * where nothing broke). No third wave round (that is the nuclear wave reaching remnants) and no debris landing
+     * where nothing broke). No third wave round (that is the nuclear wave reaching remnants), no cascade through structure
+     * that had no support within the spans before the strike (see {@link #support}) and no debris landing
      * ({@link #landed} stays empty: the caller drops the blocks).
      */
     static Collapse solve(RuinWindow w, Blast[] blasts) {
@@ -319,8 +320,14 @@ final class Collapse {
         }
         // structure unsupported even before strike within {@link #C} (hall wider than 2C, blocks on floating
         // platform): everything touching broken/falling blocks falls, cascading through connections to fixed point.
-        // Ground does not fall this way: preexisting natural “hanging” arches/overhangs stand
+        // Ground does not fall this way: preexisting natural “hanging” arches/overhangs stand. Nuclear only: around a
+        // ruined district a floating remnant would read wrong; a conventional hit on a hall roof wider than the game's
+        // spans (est. numbers, real trusses span it) would otherwise bring down the whole roof
         IntArrayList queue = new IntArrayList();
+        if (d == null) {
+            for (int i = 0; i < fall.size(); i++) set(gone, fall.getInt(i));
+            return;
+        }
         for (int y = yb; y <= yt; y++) {
             for (int wz = LO - C; wz < HI + C; wz++) {
                 for (int wx = LO - C; wx < HI + C; wx++) {
