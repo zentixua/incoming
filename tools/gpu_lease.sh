@@ -272,12 +272,12 @@ gpu_slots_busy() {
   local IFS=';'; echo "${out[*]}" | sed 's/;/; /g'
 }
 
-# gpu_slot_take <description> — a shared GPU slot for a vanilla client, never waiting: 0 with the slot lock on fd 197 and
+# gpu_slot_take <description> — a shared GPU slot for a vanilla client, waiting at most 0.3 s: 0 with the slot lock on fd 197 and
 # a shared hold of the GPU client lock on fd 196 (the caller's process and every child it starts hold both; GPU_SLOT is
 # the slot's number), else 1 with the reason on stderr (the client then renders on the CPU). The shared hold excludes
 # every exclusive client in the kernel, also one started by a script that predates slots (its gpu_client_hold takes the
 # lock exclusively); the lease, its queue and unlocked clients are checked under $LEASE.lock, where lease_take counts
-# slot holders. A busy $LEASE.lock is a CPU fallback too: a vanilla client never waits for exclusive admission
+# slot holders. $LEASE.lock busy past 0.3 s is a CPU fallback too: a vanilla client never waits for exclusive admission
 gpu_slot_take() {
   local fd i why= free c
   artem_playing && { echo "Artem's game is running" >&2; return 1; }

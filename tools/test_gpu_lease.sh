@@ -335,7 +335,7 @@ fi
 # review probes (tools/probes): shared and exclusive launches exclude each other also across slot counts and older
 # scripts; a vanilla launch never waits on exclusive admission; a CPU client's admission uses its real ceiling; Artem's
 # game stops the whole shared session and frees its slot, with and without errexit
-for p in gpu-exclusion vanilla-no-wait soft-memory-override; do
+for p in gpu-exclusion vanilla-no-wait soft-memory-override soft-memory-fractional; do
   out=$(bash "$ROOT/tools/probes/$p.sh" "$ROOT" 2>&1) && ok "probe $p" || bad "probe $p: $out"
 done
 if command -v dbus-run-session >/dev/null; then

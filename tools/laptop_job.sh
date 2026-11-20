@@ -73,11 +73,13 @@ _ceiling() {
   echo "${INCOMING_JOB_MEM:-$max} ${INCOMING_JOB_SWAP:-$swap}"
 }
 [ "${1:-}" = --ceiling ] && { _ceiling "${2:-heavy}"; exit 0; }
-# systemd size (4608M, 16G, 1T, bytes) → MB
+# systemd size (4608M, 6.5G, 1T, bytes) → whole MB (rounded up); nothing (code 1) when it is not one
 _mb() {
-  local v=$1
-  case "$v" in *[kK]) echo $(( ${v%?} / 1024 )) ;; *[mM]) echo "${v%?}" ;; *[gG]) echo $(( ${v%?} * 1024 )) ;;
-    *[tT]) echo $(( ${v%?} * 1048576 )) ;; *) echo $(( v / 1048576 )) ;; esac
+  LC_ALL=C awk -v v="$1" 'BEGIN {
+    if (v !~ /^[0-9]+(\.[0-9]+)?[KkMmGgTt]?$/) exit 1
+    u = substr(v, length(v)); n = v + 0
+    f = u ~ /[Kk]/ ? 1 / 1024 : u ~ /[Mm]/ ? 1 : u ~ /[Gg]/ ? 1024 : u ~ /[Tt]/ ? 1048576 : 1 / 1048576
+    m = n * f; printf "%d\n", (m == int(m)) ? m : int(m) + 1 }'
 }
 
 # inside service: --gpu job waits for Artem's game to close. Output without set -e: caller may have exited, and writing to its
@@ -165,7 +167,8 @@ if [ "$mode" = soft ]; then
   exec 198>"${XDG_RUNTIME_DIR:-/run/user/$(id -u)}/incoming-soft-admit.lock"
   flock 198
   # admission for the ceiling this unit actually gets (INCOMING_JOB_MEM included), not the default estimate
-  soft_mem_ok "$(_mb "$mem_max")" || { echo "laptop_job $name: exit 75"; exit 75; }
+  cap_mb=$(_mb "$mem_max") || { echo "laptop_job $name: memory ceiling '$mem_max' is not a size (INCOMING_JOB_MEM)" >&2; exit 2; }
+  soft_mem_ok "$cap_mb" || { echo "laptop_job $name: exit 75"; exit 75; }
 fi
 # keep the laptop awake; a server without a session seat (netcup: "Access denied") has no sleep to inhibit
 inhibit=(systemd-inhibit --what=sleep:idle --who="Incoming: $name" --why="mod check (tools/laptop_job.sh)")

@@ -372,21 +372,13 @@ final class Sandbox {
 
     /** A command is running (from a file or chat): waiting, the effect and its frames, reload — the next one waits. */
     private boolean busy() {
-        return running != null || pending != null || reloading || waitUntil >= 0 || timeWait >= 0 || capture != null;
+        return running != null || pending != null || reloading || waitUntil >= 0 || timeWait >= 0 || capture != null || restoring;
     }
 
     /** Result of a command from a file (for a command from chat — a line in chat). */
     private void finish(String result) {
         Incoming.LOG.info("SANDBOX > {}", result);
-        // a failed command after `shots` (a typo in the effect, an effect that did not start): the armed take would wait
-        // for a later, unrelated effect, and a sound-only one would keep the window small
-        if (result.startsWith("error") && armed != null) {
-            armed = null;
-            if (capture == null) {
-                quiet(false);
-                pace(20);
-            }
-        }
+        if (result.startsWith("error")) failed();
         if (running != null) write(running, result);
         else if (Minecraft.getInstance().player != null) Minecraft.getInstance().player.displayClientMessage(Component.literal("fx: " + result), false);
         running = null;
@@ -405,6 +397,7 @@ final class Sandbox {
                 run(SandboxCommand.parse(line));
             } catch (IllegalArgumentException ex) {
                 ctx.getSource().sendFailure(Component.literal("fx: " + ex.getMessage()));
+                failed();
                 return 0;
             }
             return 1;
@@ -1023,6 +1016,29 @@ final class Sandbox {
         }
     }
 
+    /**
+     * A command failed, from the inbox or chat (a typo in the effect, an effect that did not start): an armed take would
+     * wait for a later, unrelated effect, and a sound-only one would keep the window small.
+     */
+    private void failed() {
+        if (armed == null) return;
+        armed = null;
+        if (capture == null) {
+            quiet(false);
+            pace(20);
+        }
+    }
+
+    /**
+     * A frame is taken only at the window's own size: after a quiet take (sound only) until the frame is back to the size
+     * it had, whatever path armed the take; a frame due meanwhile waits for the restored size.
+     */
+    private boolean fullSize(Minecraft mc) {
+        if (quiet == null && quietSize[0] == 0) return true;
+        var target = mc.getMainRenderTarget();
+        return quiet == null && target.width == quietSize[0] && target.height == quietSize[1];
+    }
+
     /** Result now, or once a window restore in progress ends ({@link #restoring}). */
     private void afterRestore(String result) {
         if (restoring) restoreResult = result;
@@ -1463,7 +1479,7 @@ final class Sandbox {
         Capture cap = capture;
         if (cap == null || effectTick < 0 || cap.next >= cap.times.length) return;
         double t = cap.times[cap.next];
-        if (tick < effectTick + Math.round(t * 20)) {
+        if (tick < effectTick + Math.round(t * 20) || !fullSize(mc)) {
             paceFrame();
             return;
         }
