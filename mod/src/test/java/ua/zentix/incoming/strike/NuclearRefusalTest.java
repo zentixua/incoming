@@ -8,8 +8,8 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNull;
 
 /**
- * A refused nuclear order names its own reason (a new player who is not an operator was told "the designator is for
- * operators only", though the designator worked and only nuclear weapons needed rights).
+ * A refused nuclear order names its own reason: the designator's rights, nuclear weapons in the world, operator rights,
+ * carrier warheads, the yield limit; never the designator's rights for a nuclear-only limit.
  */
 class NuclearRefusalTest {
     private static final Loadout ICBM = new Loadout(WeaponType.NUKE, 1, 0, TargetMode.LOOK, "", new Loadout.Nuke(15, false, false));

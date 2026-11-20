@@ -128,7 +128,7 @@ final class NewbieWalk {
     private void plan() {
         until("world", 6000, () -> mc.player != null && mc.level != null);
         run(() -> {
-            // The run directory keeps options.txt: a previous run ended in Russian.
+            // The run directory keeps options.txt, which may hold the second pass's Russian.
             if (!"en_us".equals(mc.options.languageCode)) {
                 mc.options.languageCode = "en_us";
                 mc.getLanguageManager().setSelected("en_us");

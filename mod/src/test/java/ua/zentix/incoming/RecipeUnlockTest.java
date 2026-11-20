@@ -21,7 +21,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
  * Every recipe of the mod appears in the vanilla recipe book: the book shows only unlocked recipes, and vanilla unlocks
- * them by a hidden advancement under {@code recipes/} (a new player found none of ours before). Each advancement
+ * them by a hidden advancement under {@code recipes/}. Each advancement
  * rewards its recipe, unlocks when the player holds any of its item ingredients (or the designator, for everything it
  * launches or links), and carries the recipe's own load conditions (Create or vanilla variant), so it never names a
  * recipe that is not loaded.

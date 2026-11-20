@@ -31,7 +31,7 @@ class LoadoutTest {
         }
     }
 
-    /** Wheel past the Grad and back: the missile stays a single shot (a new player got a 12-missile order). */
+    /** Wheel past the Grad and back: the missile stays a single shot (the burst belongs to the Grad). */
     @Test
     void scrollingPastBurstWeaponRestoresSingleShot() {
         Loadout grad = Loadout.DEFAULT.withWeapon(WeaponType.ROCKET);

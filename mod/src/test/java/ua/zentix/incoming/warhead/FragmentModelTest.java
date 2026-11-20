@@ -136,7 +136,7 @@ class FragmentModelTest {
         assertTrue(FragmentModel.death(30) < 0.01);
     }
 
-    /** The binocular danger-close warning: the warhead's hazard distance plus the salvo spread (a new player died to a missile aimed 8 m away). */
+    /** The binocular danger-close warning: the warhead's hazard distance plus the salvo spread. */
     @Test
     void dangerCloseUsesHazardDistanceAndSpread() {
         double missile = FragmentModel.hazard(WeaponType.MISSILE);
