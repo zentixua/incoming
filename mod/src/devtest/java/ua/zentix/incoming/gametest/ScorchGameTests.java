@@ -979,7 +979,7 @@ public final class ScorchGameTests {
      * 19.11 complaint: the flash set a fire block on nearly every turf column 3–5 km from 1 Mt. One law ({@code RuinPlanner.kindling},
      * {@code Kindling}): the flash ignites only dry fuel, with {@code PulseIgnition.share}. Light ~30 cal/cm² at the far chunks (15 kt:
      * every fuel's median is below it): green plains turf — burned, no fire; hay bales — fire on them; wool behind a glass roof — fire
-     * indoors; wool in a closed stone box or under tinted glass — none; a plank-roofed house — none (thick wood does not sustain); a savanna chunk (cured
+     * on the wool (one pane ×{@code RuinPlanner.GLASS} however obliquely the ray crosses the wall); wool in a closed stone box or under tinted glass — none; a plank-roofed house — none (thick wood does not sustain); a savanna chunk (cured
      * grass, downfall 0) — fire on most turf columns. Flash layer only (no wave).
      */
     @GameTest(template = "range", timeoutTicks = 40, batch = "nuke_flash_kindling", skyAccess = true)
@@ -1029,18 +1029,24 @@ public final class ScorchGameTests {
                 turf += f[1];
                 burned += f[0];
             }
-            // fire on the floor of the glass box stands on turf too: it is the wool's
-            for (int dx = 1; dx <= 3; dx++) {
-                for (int dz = 1; dz <= 3; dz++) {
-                    if (level.getBlockState(new BlockPos(fx + 9 + dx, ground + 1, fz + 3 + dz)).getBlock() instanceof BaseFireBlock) turf--;
-                }
-            }
             h.assertTrue(burned > 0, "the flash burned no turf: nothing checked; " + setup);
             h.assertTrue(turf == 0, turf + " fires on green turf; " + setup);
             int bales = 0;
             for (BlockPos p : hay) if (level.getBlockState(p.above()).getBlock() instanceof BaseFireBlock) bales++;
             h.assertTrue(bales >= 3, "fire on " + bales + " of 4 hay bales; " + setup);
             h.assertTrue(firesIn(level, fx + 9, fz + 3, ground) > 0, "no fire behind the glass; " + setup);
+            // the flame stands on the wool that burns, never on the floor beside it or past the wall
+            int onWool = 0;
+            for (int[] o : new int[][]{{1, 1}, {3, 1}, {1, 3}, {3, 3}}) {
+                if (level.getBlockState(new BlockPos(fx + 9 + o[0], ground + 2, fz + 3 + o[1])).getBlock() instanceof BaseFireBlock) onWool++;
+            }
+            int around = 0;
+            for (int x = fx + 8; x <= fx + 14; x++) {
+                for (int z = fz + 2; z <= fz + 8; z++) {
+                    for (int y = ground + 1; y <= ground + 6; y++) if (level.getBlockState(new BlockPos(x, y, z)).getBlock() instanceof BaseFireBlock) around++;
+                }
+            }
+            h.assertTrue(onWool == around, "glass box: " + onWool + " fires on wool of " + around + " in and around it; " + setup);
             h.assertTrue(firesIn(level, fx + 3, fz + 3, ground) == 0, "fire in a closed stone box; " + setup);
             h.assertTrue(firesIn(level, fx + 3, fz + 9, ground) == 0, "fire in or on a plank house; " + setup);
             h.assertTrue(firesIn(level, tx, tz, ground) == 0, "fire behind tinted glass; " + setup);

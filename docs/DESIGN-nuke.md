@@ -367,7 +367,7 @@ Thermal changes, only blocks seeing sphere:
 
 | Condition | Result |
 |---|---|
-| `Q` ≥ onset (`ThermalModel.ignite`), dry fuel the light reaches (`Kindling`: `pulse_paper`, `pulse_fabric`, `pulse_dry` — hay, dead bush; indoors through glass ×0.8; turf only where biome downfall ≤ 0.15, cured grass) | fire in the first air cell toward the ball, chance `PulseIgnition.share(q, fuel, Y)`; live turf, grass, leaves, flowers and wood: none (Kerr 1971, DNA EM-1, Glasstone §7.27/§7.60); wave keeps `Blowout.keep`: all < 2 psi, (8 − P)/6 at 2–5, ½ above (Martin 1980) |
+| `Q` ≥ onset (`ThermalModel.ignite`), dry fuel the light reaches (`Kindling`: `pulse_paper`, `pulse_fabric`, `pulse_dry` — hay, dead bush; indoors through glass ×0.8 per pane; turf only where biome downfall ≤ 0.15, cured grass) | fire on the lit fuel (air above it, else its neighbor toward the ball), chance `PulseIgnition.share(q, fuel, Y)`; live turf, grass, leaves, flowers and wood: none (Kerr 1971, DNA EM-1, Glasstone §7.27/§7.60); wave keeps `Blowout.keep`: all < 2 psi, (8 − P)/6 at 2–5, ½ above (Martin 1980) |
 | above-ground plants (`nuke_plants`, `Q` ~6) | grass/flowers/bushes/crops burn in patches with everything above (tall-grass top, reeds), ~8 % leave dead bush; snow layer melts, turf without snow loses snowy sides |
 | turf/moss (`Q` ~15) | patchy dirt/coarse dirt; within burned area at light ~30, podzol scorch |
 | snow block (`Q` ~15) | water |

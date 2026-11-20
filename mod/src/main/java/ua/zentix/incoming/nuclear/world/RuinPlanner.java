@@ -691,9 +691,10 @@ public final class RuinPlanner {
      * ground, on roofs, or indoors behind windows (Glasstone &amp; Dolan §7.50: outdoor ignition points are paper, trash, dry
      * grass and leaves; indoors, kindling lit through windows). Exposure is the pulse at the fuel along a ray toward the
      * ball's middle ({@link ThermalShadow#aim}) through the pre-wave window snapshots: only air, glass and panes ({@link #GLASS}
-     * each) and blocks without collision pass, until the ray reaches a point no column covers, where the window terrain
-     * shadow takes over ({@link RuinContext.Grid#share}). Fire stands in the first air cell along the ray (above fuel open to
-     * the sky), in this chunk; chance {@link PulseIgnition#share(double, PulseIgnition.Fuel, double)}.
+     * per pane: a run of glazing cells along the ray is one window, however obliquely the ray crosses it) and blocks without
+     * collision pass, until the ray reaches a point no column covers, where the window terrain shadow takes over
+     * ({@link RuinContext.Grid#share}). The flame stands on the lit fuel ({@link #expose}), in this chunk; chance
+     * {@link PulseIgnition#share(double, PulseIgnition.Fuel, double)}.
      */
     static void kindling(RuinContext.Grid g, Sections s, boolean flash) {
         if (!g.fires()) return;
@@ -734,9 +735,10 @@ public final class RuinPlanner {
     private static final long NO_FIRE = Long.MIN_VALUE;
 
     /**
-     * Pulse path from fuel at {@code x, y, z} toward {@code ball} ({@link #kindling}): fire position (first air cell on the
-     * path, in this chunk) or {@link #NO_FIRE}; {@code seen[0]} — share of the free pulse arriving (visible ball share ×
-     * glass). Voxel walk (Amanatides–Woo) through pre-wave snapshots, at most {@link #RAY_CELLS} cells.
+     * Pulse path from fuel at {@code x, y, z} toward {@code ball} ({@link #kindling}): fire position or {@link #NO_FIRE};
+     * {@code seen[0]} — share of the free pulse arriving (visible ball share × glass). The flame stands on the fuel that burns:
+     * in the air cell above it, else in its air face neighbor toward the ball (the walk's first cell), in this chunk; fuel
+     * with neither burns no flame. Voxel walk (Amanatides–Woo) through pre-wave snapshots, at most {@link #RAY_CELLS} cells.
      */
     static long expose(RuinContext.Grid g, ChunkShot shot, Blast.PropsView view, int x, int y, int z, Vec3 ball, double[] seen) {
         Vec3 from = new Vec3(x + 0.5, y + 0.5, z + 0.5);
@@ -757,8 +759,9 @@ public final class RuinPlanner {
         double ux = dx == 0 ? Double.POSITIVE_INFINITY : 1 / Math.abs(dx), uy = dy == 0 ? Double.POSITIVE_INFINITY : 1 / Math.abs(dy),
                 uz = dz == 0 ? Double.POSITIVE_INFINITY : 1 / Math.abs(dz);
         int cx = x, cy = y, cz = z;
-        long fire = NO_FIRE;
+        long fire = y + 1 < shot.maxY() && view.get(shot.get(x & 15, y + 1, z & 15)).air() ? BlockPos.asLong(x, y + 1, z) : NO_FIRE;
         double pass = 1;
+        boolean pane = false;
         for (int k = 0; k < RAY_CELLS; k++) {
             if (tx <= ty && tx <= tz) {
                 cx += sx;
@@ -775,11 +778,10 @@ public final class RuinPlanner {
             if (c == null) return NO_FIRE;
             Blast.Props p = view.get(c.get(cx & 15, cy, cz & 15));
             if (!p.is(Blast.Props.TRANSMITS)) return NO_FIRE;
-            if (p.is(Blast.Props.GLAZING)) pass *= GLASS;
-            if (fire == NO_FIRE && p.air()) {
-                if (cx >> 4 != shot.x || cz >> 4 != shot.z) return NO_FIRE;
-                fire = BlockPos.asLong(cx, cy, cz);
-            }
+            boolean glazing = p.is(Blast.Props.GLAZING);
+            if (glazing && !pane) pass *= GLASS;
+            pane = glazing;
+            if (k == 0 && fire == NO_FIRE && p.air() && cx >> 4 == shot.x && cz >> 4 == shot.z) fire = BlockPos.asLong(cx, cy, cz);
             // outdoors: no column covers this cell, the window's terrain line decides the rest
             if (g.shadowHeight(cx, cz) <= cy + 1) {
                 if (fire == NO_FIRE) return NO_FIRE;
