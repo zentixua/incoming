@@ -45,3 +45,11 @@ paths:
   Minecraft's launcher file layout (“Could not determine clean minecraft artifact path”). Use `tools/prod_client.py`
   for full-pack checks (libraries and ForgeWrapper from the Prism directory, instance copy in `mod/run/prod`; Artem's
   instance is untouched).
+- Measurement server without a panel: `./gradlew runServer -PserverDir=run/<name> -PmcModsDir=run/ci-mods` (after
+  `tools/fetch_runtime_mods.py`), `advertiseDedicatedServerToLan=false` in its `config/neoforge-server.toml`
+  (LoopbackGuard), RCON for commands. `forceload add` only queues tickets: wait with `execute if loaded` before acting.
+- Stop background scripts by PID: `pkill -f <pattern>` also matches your own shell's command line and kills it.
+- `tools/prod_client.py --video` copies Artem's `options.txt`; with `fullscreen:true` the window grows to the nested
+  screen and `x11_record.py` (which starts a segment only at exactly `--size`) records nothing after the menu: run
+  `--copy-only --dir D`, set `fullscreen:false` in `D/options.txt`, then `--no-copy --dir D --video …`. x11grab also
+  yields some all-black and duplicate frames; exclude them from per-frame metrics.

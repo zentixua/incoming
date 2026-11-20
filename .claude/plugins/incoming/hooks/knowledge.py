@@ -102,8 +102,18 @@ def save_state(session: str, st: dict) -> None:
     tmp.replace(f)
 
 
-def emit(event: str, text: str) -> None:
+def emit(event: str, text: str, session: str = "?") -> None:
     print(json.dumps({"hookSpecificOutput": {"hookEventName": event, "additionalContext": text}}))
+    log(event, session, text)
+
+
+def log(event: str, session: str, text: str) -> None:
+    """Evidence that the hook fired in a real session (read by the weekly knowledge self-test)."""
+    data = os.environ.get("CLAUDE_PLUGIN_DATA")
+    if data:
+        first = text.splitlines()[0][:160] if text else ""
+        with open(Path(data) / "fired.log", "a") as f:
+            f.write(f"{time.strftime('%Y-%m-%dT%H:%M:%S')} {event} {session} {first}\n")
 
 
 # ---------------------------------------------------------------- stale checkout
@@ -371,7 +381,7 @@ def main() -> int:
     if name == "SessionStart":
         text = stale_report(Path(event.get("cwd") or os.getcwd()))
         if text:
-            emit("SessionStart", text)
+            emit("SessionStart", text, session)
         return 0
     st = load_state(session)
     if name == "InstructionsLoaded":
@@ -391,7 +401,7 @@ def main() -> int:
                 notes += lint_memory(Path(fp))
         save_state(session, st)
         if notes:
-            emit("PostToolUse", "\n".join(notes))
+            emit("PostToolUse", "\n".join(notes), session)
         return 0
     if name == "Stop":
         if event.get("stop_hook_active") or not st.get("changed") or st.get("checklist"):
@@ -399,6 +409,7 @@ def main() -> int:
         st["checklist"] = True
         save_state(session, st)
         print(json.dumps({"decision": "block", "reason": CHECKLIST}))
+        log("Stop", session, "checklist")
         return 0
     return 0
 

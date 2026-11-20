@@ -4,8 +4,8 @@
 Every agent (claude.ai project threads, Claude Code, Codex) starts from these files, so a structural slip silently
 changes what agents know. Checks:
   - CLAUDE.md is exactly `@AGENTS.md` (Claude Code reads AGENTS.md through it; Codex reads AGENTS.md directly).
-  - AGENTS.md <= AGENTS_MAX bytes: Codex reads at most 32 KiB of AGENTS.md files in total (project_doc_max_bytes),
-    and the private team rules (~/.codex/AGENTS.md, <= 8 KiB) share that budget.
+  - AGENTS.md <= AGENTS_MAX bytes: Codex stops reading project AGENTS.md files at 32 KiB (project_doc_max_bytes;
+    its global ~/.codex/AGENTS.md is not counted, measured 20.11), and every line costs every session attention.
   - Every .claude/rules/*.md has a `paths:` list whose globs each match a tracked file (a rename leaves no dead
     rule), and appears in AGENTS.md's rule list; every rule AGENTS.md lists exists.
   - The plugin manifest, marketplace and hooks JSON parse; every hook script they name exists.
@@ -22,7 +22,7 @@ import subprocess
 import sys
 from pathlib import Path
 
-AGENTS_MAX = 24 * 1024
+AGENTS_MAX = 28 * 1024
 PLUGIN = Path(".claude/plugins/incoming")
 PRIVATE = [
     (re.compile(r"\b(?!127\.0\.0\.1\b|0\.0\.0\.0\b|224\.)(?:\d{1,3}\.){3}\d{1,3}\b"), "IPv4 address"),

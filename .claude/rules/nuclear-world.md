@@ -469,3 +469,11 @@ paths:
   square of chunks shares a few hundred hashes and the bins treeify (250 kt on Zearth 07.11.2026: `RuinSettle` rotation
   = 54 % of allocation, `ConcurrentHashMap$TreeNode.findTreeNode` the top server-thread frame). Use fastutil `Long2*`
   (mixing hash), or `RuinContext.key` for maps that must be concurrent (`RuinContextKeyTest`).
+- Acceptance (Artem, 05.11): destruction reaches every player in the zone together with the wave. Ruins in view lag
+  the front p99 ≤ 1 s, max ≤ 2 s (over chunks inside any player's `ChunkTrackingView`); tick p95 ≤ 50 ms during the
+  wave; preparation before launch ≤ 60 s with progress shown; heap ≤ 8 GB at 1 Mt; no save holds the world > 1 s.
+  Late arrivals see ruins at once, never intact. One 1 Mt detonation at a time is guaranteed, salvos best-effort. The
+  far zone settles on disk in the background; only near-player state must be exact at the wave.
+- Measure ruin cost on dense city chunks (cities on big real-terrain maps are denser than on small ones), never on
+  natural terrain samples; a map's pre-generated area is not the whole map (Artem, 04.11).
+

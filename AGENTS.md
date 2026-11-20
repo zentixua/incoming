@@ -34,7 +34,13 @@ instructions: work in a worktree from `origin/main`.
   `.claude/rules`, AGENTS.md, internal docs, `tools/`, CI, commits and PRs. English plus Russian, in the same PR, only
   for what players need: README(.ru).md, `docs/guide`(`/ru`), release notes, store pages (docs/store) and the mod's
   interface (`en_us`/`ru_ru`). No mixing inside one file. Public text: plain and precise, no advertising, repetition
-  or filler, every claim checked against code.
+  or filler, every claim checked against code. Weapons go by their real names everywhere (Shahed-136, Lancet, Grad;
+  «Шахед-136», «Ланцет», «Град»), never "Shahed-style" (Artem, 14.10).
+- **No chronicles** (Artem, 12.10): every text (README, guide, store pages, AGENTS.md, rules, comments) states only the
+  current state: no "before/now", version history or dated incident stories; a rule's reason is a present-tense
+  fact. Exceptions: `docs/releases/`, and `legacy/` code saying what it does.
+- **Fix the reported symptom as reported:** a measurement that does not reproduce it missed it; find the reproducing
+  case or restate the exact symptom before coding. Never change look or behavior nobody asked to change (Artem, 10.11).
 - **Never control Artem's computer** (no computer-use, no game clicks) and **don't ask him to check in game**:
   verify ourselves (unit tests, GameTest, headless client `tools/client_scenario.sh`, `tools/logscan.py` after play).
 - Never delete what your task did not create (worlds, saves, files, worktrees) without Artem's word; move surplus
@@ -126,7 +132,8 @@ defense, `launcher/`, `grid/` blackout, `sound/`, `client/`, `work/` tick budget
 - **Picture first, then performance** (Artem, 25.10, 04.11, 08.11): optimization never visibly hurts the picture;
   quality presets let players fit their PC. Each effect has a frame-cost limit held at any strike count; redesign
   effects that cannot perform well without hacks, discard costly, barely visible detail. Optimize what is noticeably
-  slow, by measurement, without asking.
+  slow (tick, preparation, memory, saves, frame, network), by measurement, without asking; an update is not ready
+  while such a cost remains. The highest quality setting looks best.
 - **Flight/air defense use our own game model** (Artem, 21.10): plausible/serious, not 1:1 real flight specs, guidance,
   radar or damage models. Shared class laws (inertia/bank, altitude-speed trade, gravity/drag/wind for unpowered,
   `guidance/`); game numbers in `WeaponSpec.Handling`, `Ballistic`, marked “not physical”.
@@ -196,7 +203,10 @@ actually works, fix the real cause.
   concrete correctness, data-loss or budget defect blocks; preference alone does not.
 - **Ready-made first** (Artem, 22.10): search mods/addons/libraries/tools before custom code (Modrinth, CurseForge,
   GitHub; Fabric via Roxy/Sinytra Connector). Custom only if no ready-made solution, reason in one PR line. Our ban
-  on vanilla/other-mod mixins concerns our code, not an argument against other mods.
+  on vanilla/other-mod mixins concerns our code, not an argument against other mods. A new mod or library that
+  clearly helps is welcome: try briefly, tell Artem what it gives and costs; a new required pack mod needs his word.
+- **License** (Artem, 22.10): Incoming is GPL-3.0-only; copy code only under compatible licenses (GPL-3.0, MIT, CC0),
+  from All-Rights-Reserved or closed mods take ideas only (the license is in the jar's `mods.toml`).
 - **Plan only large changes:** before coding, a few PR-description lines of what players see/hear and the law
   (existing mod law, new laws sourced). Small edits directly.
 - **Validation:** code changes need build and touched-area GameTest (`./gradlew build`; GameTest through `tools/laptop_job.sh … --
@@ -262,7 +272,8 @@ actually works, fix the real cause.
 
 ## Environment
 - Key mods: Create 6.0.10, **Create Aeronautics 1.3.2 + Sable 2.0.6** (craft are sub-levels, blocks in distant “plot”;
-  vanilla explosion breaks them via Sable mixin), Sodium, **host Iris with shaders**, Distant Horizons, Flashback,
-  Essential; the dedicated server uses the pack's `main`. Both server and clients require the mod jar.
+  vanilla explosion breaks them via Sable mixin), Sodium, **host Iris with shaders**, Voxy (via Roxy) with LOD Server
+  Support for distance (Distant Horizons is not in the pack; its support stays an optional `compat/` path, `dh.md`),
+  Flashback, Essential; the dedicated server uses the pack's `main`. Both server and clients require the mod jar.
 - Shahed/missile have no moving-target lead (`Dive.intercept` only for the Lancet dive): own game flight model
   (Artem, 21.10).

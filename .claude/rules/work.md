@@ -95,3 +95,6 @@ paths:
   Legacy admission is itself a budgeted unit: pending positions own no tickets, a bounded scan drops unloaded or
   already marked entries and chooses the nearest player chunk. Only one repair can hold its source-context ring;
   normal live-edit leases remain independent. Shutdown drops pending legacy positions and drains committed edits.
+- A walk over chunks that skips most of them still charges its time budget for the skips and stays bounded to the
+  area it searches (`FireWatch.box`).
+
