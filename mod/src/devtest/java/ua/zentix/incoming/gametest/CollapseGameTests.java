@@ -234,4 +234,101 @@ public final class CollapseGameTests {
             h.assertTrue(gone.size() * 4 < house.size(), "the house came down: " + gone.size() + "/" + house.size());
         });
     }
+
+    /** Salvo: houses on a grid, one per chunk, a missile into the ground floor of each. */
+    private static final int SALVO_SIDE = 10, SALVO_STEP = 16;
+
+    /**
+     * 100 missiles at once into 100 two-storey houses (one per chunk): the collapse adds impact work per strike, not per
+     * tick. Logs the impact lane per tick against the budget, with collapse ({@code collapse_salvo}) and without
+     * ({@code collapse_salvo_off}, the same strikes before this change). A bench, not a CI check: the houses cover 160 × 160
+     * blocks beyond the platform, where the next batches' platforms are placed, so it runs only when selected alone by name
+     * ({@code -PgametestOnly=collapse_salvo} or {@code collapse_salvo_off}) and otherwise passes at once.
+     */
+    @GameTest(template = "range", batch = "collapse_salvo", timeoutTicks = 6000, skyAccess = true)
+    public static void salvoCollapseStaysInBudget(GameTestHelper h) {
+        salvo(h, true);
+    }
+
+    @GameTest(template = "range", batch = "collapse_salvo_off", timeoutTicks = 6000, skyAccess = true)
+    public static void salvoWithoutCollapse(GameTestHelper h) {
+        salvo(h, false);
+    }
+
+    private static void salvo(GameTestHelper h, boolean collapse) {
+        if (!System.getProperty("incoming.gametest.only", "").equals(collapse ? "collapse_salvo" : "collapse_salvo_off")) {
+            h.succeed();
+            return;
+        }
+        quiet(h);
+        boolean was = IncomingConfig.SERVER.collapse.get();
+        IncomingConfig.SERVER.collapse.set(collapse);
+        ServerLevel level = h.getLevel();
+        java.util.List<net.minecraft.world.level.ChunkPos> forced = new java.util.ArrayList<>();
+        StrikeGameTests.afterTest(h, () -> {
+            IncomingConfig.SERVER.collapse.set(was);
+            for (var c : forced) level.setChunkForced(c.x, c.z, false);
+        });
+        BlockPos o = h.absolutePos(new BlockPos(0, 0, 0));
+        int cx0 = (o.getX() >> 4) - 1, cz0 = (o.getZ() >> 4) - 1, n = SALVO_SIDE * SALVO_STEP / 16 + 2;
+        for (int cx = cx0; cx <= cx0 + n; cx++) {
+            for (int cz = cz0; cz <= cz0 + n; cz++) {
+                level.setChunkForced(cx, cz, true);
+                forced.add(new net.minecraft.world.level.ChunkPos(cx, cz));
+            }
+        }
+        BlockState stone = Blocks.STONE.defaultBlockState(), wall = Blocks.BRICKS.defaultBlockState(), slab = Blocks.GRAY_CONCRETE.defaultBlockState(),
+                air = Blocks.AIR.defaultBlockState();
+        java.util.List<Map<BlockPos, BlockState>> upper = new java.util.ArrayList<>();
+        java.util.List<Vec3> at = new java.util.ArrayList<>();
+        for (int i = 0; i < SALVO_SIDE; i++) {
+            for (int j = 0; j < SALVO_SIDE; j++) {
+                // absolute: houses beyond the platform stand on ground filled here (the platform's own layer is one block)
+                int x0 = (o.getX() & ~15) + i * SALVO_STEP + 4, z0 = (o.getZ() & ~15) + j * SALVO_STEP + 4, g = o.getY() + GROUND;
+                Map<BlockPos, BlockState> up = new LinkedHashMap<>();
+                for (int x = x0 - 4; x < x0 + 12; x++) for (int z = z0 - 4; z < z0 + 12; z++) {
+                    for (int y = o.getY() - 8; y <= g + 10; y++) {
+                        BlockState st = y <= g ? stone : air;
+                        boolean in = x >= x0 && x <= x0 + 7 && z >= z0 && z <= z0 + 7;
+                        boolean edge = x == x0 || x == x0 + 7 || z == z0 || z == z0 + 7;
+                        if (in && y > g && y <= g + 8) st = (y - g) % 4 == 0 ? slab : edge ? wall : air;
+                        level.setBlock(new BlockPos(x, y, z), st, Block.UPDATE_CLIENTS);
+                        if (in && y > g + 4 && !st.isAir()) up.put(new BlockPos(x, y, z), st);
+                    }
+                }
+                upper.add(up);
+                at.add(new Vec3(x0 + 3.5, g + 2, z0 + 3.5));
+            }
+        }
+        for (int k = 0; k < at.size(); k++) Warheads.testDetonate(level, WeaponType.MISSILE, at.get(k), striker(level, WeaponType.MISSILE), 0x53414c56L + k);
+        net.minecraft.server.MinecraftServer server = level.getServer();
+        long cap = ua.zentix.incoming.work.WorkScheduler.totalNanos();
+        long[] lane = {0, 0, 0};
+        int[] ticks = {0};
+        h.onEachTick(() -> {
+            long ns = ua.zentix.incoming.work.WorkScheduler.ownNanos(server.getTickCount() - 1);
+            ticks[0]++;
+            lane[0] = Math.max(lane[0], ns);
+            lane[1] += ns;
+            if (ns > cap) lane[2]++;
+        });
+        boolean[] logged = {false};
+        h.succeedWhen(() -> {
+            h.assertTrue(StrikeWorld.get(level).idle(), "strikes unfinished");
+            int fell = 0, houses = 0;
+            for (Map<BlockPos, BlockState> up : upper) {
+                int g = 0;
+                for (var e : up.entrySet()) if (!level.getBlockState(e.getKey()).is(e.getValue().getBlock())) g++;
+                fell += g;
+                if (g * 2 > up.size()) houses++;
+            }
+            if (!logged[0]) {
+                logged[0] = true;
+                Incoming.LOG.info(String.format(java.util.Locale.ROOT,
+                        "COLLAPSEBENCH salvo %d missiles, collapse %s: %d ticks, impact lane max %.1f ms, mean %.1f ms, ticks over the %.0f ms budget %d; upper storeys gone %d blocks, mostly down in %d houses",
+                        at.size(), collapse ? "on" : "off", ticks[0], lane[0] / 1e6, lane[1] / 1e6 / Math.max(1, ticks[0]), cap / 1e6, lane[2], fell, houses));
+            }
+            if (collapse) h.assertTrue(houses * 10 >= at.size() * 8, "upper storeys stayed up in most houses: " + houses + "/" + at.size());
+        });
+    }
 }
