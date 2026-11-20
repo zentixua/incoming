@@ -63,11 +63,12 @@ public final class RuinSettleGameTests {
     }
 
     /**
-     * The disk fixture's chunk with its detonation 48 blocks west and the plan expected on disk. Its flash
-     * (2.2–4.4 cal/cm², 1.7–2.6 psi) can only burn the short grass (median {@link RuinPlanner#PLANT_Q} cal/cm²): turf
-     * burns from {@link RuinPlanner#BURN_Q}, strips from {@link RuinPlanner#STRIP_PSI} psi. Whether any tuft burns
-     * follows the world-noise patch under the chunk, so a cold patch leaves no ground trace at about 0.15 % of positions
-     * (chunk 546202, 801466 in the GameTest world: {@link RuinSettleGameTests#coldPatchFixtureMovesOn}).
+     * The disk fixture's chunk with its detonation 48 blocks west and the plan expected on disk. Over the chunk the
+     * unoccluded fluence is 2.2–4.4 cal/cm² and the incident overpressure 1.7–2.6 psi: only the short grass can burn
+     * (median {@link RuinPlanner#PLANT_Q} cal/cm²); turf burns from {@link RuinPlanner#BURN_Q}, strips from
+     * {@link RuinPlanner#STRIP_PSI} psi. Whether a tuft burns follows the seeded world noise under it plus coordinate
+     * grain, so with the GameTest world's seed 0 about 0.15 % of chunk positions leave no ground trace (sampled over
+     * random GameTest positions; chunk 546202, 801466: {@link RuinSettleGameTests#coldPatchFixtureMovesOn}).
      */
     record DiskFixture(ChunkPos target, LevelChunk source, CompoundTag before, Detonation d, RuinPlan plan,
                        LevelChunkSection[] expected, int trace) {
@@ -113,18 +114,18 @@ public final class RuinSettleGameTests {
     }
 
     /**
-     * The cold-patch chunk has no trace, and the disk fixture takes the next chunk that has one. Runs inside the disk
-     * test: a second test in batch {@code nuke_settle_disk} leaves its pass holding the loaded chunk unscarred until the
-     * timeout (3 of 3 local runs).
+     * The cold-patch chunk has no trace, and the disk fixture takes its east neighbour, which has one: a planner change
+     * that loses the trace there is caught here, not skipped by the selection.
      */
     private static void coldPatchFixtureMovesOn(GameTestHelper h) {
         ServerLevel level = h.getLevel();
-        ChunkPos cold = new ChunkPos(546202, 801466);
+        ChunkPos cold = new ChunkPos(546202, 801466), next = new ChunkPos(cold.x + 1, cold.z);
         DiskFixture bare = DiskFixture.at(level, cold, Integer.MAX_VALUE);
         h.assertTrue(bare.plan.changedBlocks() > 0 && bare.trace == 0,
                 "the cold-patch chunk is no longer bare: " + bare.plan.changedBlocks() + " changes, trace " + bare.trace);
         DiskFixture picked = DiskFixture.traced(level, cold, Integer.MAX_VALUE);
-        h.assertTrue(!picked.target.equals(cold) && picked.trace > 0, "the fixture kept a bare chunk");
+        h.assertTrue(picked.target.equals(next) && picked.trace > 0,
+                "the fixture took " + picked.target + " with trace " + picked.trace + ", not the traced neighbour " + next);
     }
 
     private static void diskPass(GameTestHelper h, boolean restart) {
@@ -158,7 +159,16 @@ public final class RuinSettleGameTests {
         boolean[] restarted = {!restart};
         @SuppressWarnings({"unchecked", "rawtypes"})
         CompletableFuture<Optional<CompoundTag>>[] reading = new CompletableFuture[1];
+        int[] passUnloads = {0};
         h.onEachTick(() -> {
+            // The pass confirms a chunk by its saved scar, so the released chunk must unload and save. Vanilla unloads
+            // only in spare tick time, which game-speed pacing can take whole: give it a bounded pass, as a live
+            // server's idle time would (an unconditional true could spin on generation holders).
+            var map = level.getChunkSource().chunkMap;
+            boolean pending = map.pendingUnloads.containsKey(target.toLong());
+            int[] opportunities = {256};
+            level.getChunkSource().tick(() -> opportunities[0]-- > 0, false);
+            if (pending && !map.pendingUnloads.containsKey(target.toLong())) passUnloads[0]++;
             long[] costs = NuclearWorld.get(level).lastNanos();
             long tick = java.util.Arrays.stream(costs).sum();
             nanos[0] += tick;
@@ -193,8 +203,8 @@ public final class RuinSettleGameTests {
             }
             h.assertTrue(changes > 0, "saved chunk is unchanged");
             h.assertTrue(DiskFixture.trace(source, result.sections()) > 0, "saved chunk has no ground trace");
-            Incoming.LOG.info("SETTLEBENCH restart={} chunks=1 changed={} wallMs={} nuclearTotalMs={} nuclearMaxMs={}",
-                    restart, changes, (System.nanoTime() - started) / 1_000_000, nanos[0] / 1_000_000.0, nanos[1] / 1_000_000.0);
+            Incoming.LOG.info("SETTLEBENCH restart={} chunks=1 changed={} wallMs={} nuclearTotalMs={} nuclearMaxMs={} unloadedByTestPass={}",
+                    restart, changes, (System.nanoTime() - started) / 1_000_000, nanos[0] / 1_000_000.0, nanos[1] / 1_000_000.0, passUnloads[0]);
             h.succeed();
         });
     }
