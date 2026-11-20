@@ -47,7 +47,10 @@ paths:
   Readers of the surface's distance use g of the distance texture they already sample: the pall composite is at 16
   samplers, the minimum a GL implementation must allow. Limits: smoke between two separate panes takes both tints, a
   mushroom between the eye and a window counts as behind it, two coplanar panes mix across half a half-resolution pixel,
-  an opaque vanilla particle behind a pane hides the layer at the pane, a pane
+  an opaque vanilla particle behind a pane hides the layer at the pane, beyond the near volume (256 m) the pall split
+  shares the rays' light by extinction (dark smoke in front of a far pane with lit smoke behind it: 0.25 against 0.20),
+  the relight of a world behind a surface infers it from the composited frame (exact for the surface alone; with pall or
+  rain in front of the pane 0.30 against 0.22, the error main has for any pixel under pall), a pane
   under dense pall in front of it keeps its unattenuated X behind opaque smoke, piston-moved glass is not a surface, and
   the first frame of an effect is tested against the world's depth. Checks: `tools/see_through_check.sh` (sandbox `pane`), `tools/see_through_gl.py` (the shaders on llvmpipe).
 - Under Iris the first-person hand is in world depth at `AFTER_LEVEL` (Iris draws it inside the world pass with the depth

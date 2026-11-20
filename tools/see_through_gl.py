@@ -200,6 +200,53 @@ def half_cases(depth, composite):
     print(f"limit: half composite across a coplanar T edge {out.round(3)}, exact [0.1 0.1 0.9 0.9]")
 
 
+def half_edges():
+    """Half-resolution smoke at a window's edges: the reduced distances and the surface come from one frame pixel."""
+    depth, composite = programs["fx_half_depth"], programs["fx_half_composite"]
+
+    def draw(full, t):
+        h, w, _ = full.shape
+        hw, hh = w // 2, h // 2
+        scene = texture(g.GL_RG32F, g.GL_RG, w, h, full)
+        glass = texture(g.GL_RGBA32F, g.GL_RGBA, w, h, [(0, 0, 0, v) for v in t.flatten()])
+        target(hw, hh, [(g.GL_RG32F, g.GL_RG), (g.GL_RGBA32F, g.GL_RGBA)])
+        g.glUseProgram(depth)
+        bind(depth, 1, scene)
+        g.glUniform1i(loc(depth, "FxGlass"), 16)
+        g.glActiveTexture(g.GL_TEXTURE0 + 16)
+        g.glBindTexture(g.GL_TEXTURE_2D, glass)
+        quad(depth)
+        pair = read(hw, hh)[..., :2]
+        low_t = read(hw, hh, attachment=1)[..., 3]
+        low_depth = g.glGetFramebufferAttachmentParameteriv(g.GL_FRAMEBUFFER, g.GL_COLOR_ATTACHMENT0,
+                                                            g.GL_FRAMEBUFFER_ATTACHMENT_OBJECT_NAME)
+        # fx.fsh in the half pass: unit smoke light at 10 m, hidden by r, tinted by the half pixel's own surface
+        low = np.where(pair[..., 0] > 10, np.where(pair[..., 1] < 10, low_t, 1.0), 0.0)
+        light = np.stack((low, low * 0, low * 0, low * 0 + 1), axis=-1)
+        target(w, h, [(g.GL_RGBA32F, g.GL_RGBA)])
+        g.glUseProgram(composite)
+        bind(composite, 0, texture(g.GL_RGBA32F, g.GL_RGBA, hw, hh, light))
+        bind(composite, 1, low_depth)
+        bind(composite, 2, scene)
+        bind(composite, 3, texture(g.GL_R32F, g.GL_RED, 1, 1, [0]))
+        g.glUniform1f(loc(composite, "HalfTile"), 64)
+        quad(composite)
+        return read(w, h)[..., 0]
+
+    # stained glass (T 0.1 at 2 m) with a one-pixel slit onto open ground at 100 m
+    full = np.tile([(100, 2), (100, 2), (100, 2), (100, 100), (100, 2), (100, 2)], (4, 1, 1)).astype(np.float32)
+    light = draw(full, np.where(full[..., 1] == 2, 0.1, 1.0))
+    print(f"half-resolution smoke through a one-pixel slit in glass: {light[1].round(3)}, exact [0.1 0.1 0.1 1 0.1 0.1]")
+    check(np.abs(light[:, [0, 1, 2, 4, 5]] - 0.1).max() < 0.05 and np.abs(light[:, 3] - 1).max() < 0.05,
+          "smoke behind glass beside a one-pixel slit keeps its tint, the slit none")
+    # the same glass beside a wall at 4 m, smoke at 10 m behind both
+    full = np.tile([(100, 2), (100, 2), (100, 2), (4, 4), (4, 4), (4, 4)], (4, 1, 1)).astype(np.float32)
+    light = draw(full, np.where(full[..., 1] == 2, 0.1, 1.0))
+    print(f"half-resolution smoke behind glass beside a wall: {light[1].round(3)}, exact [0.1 0.1 0.1 0 0 0]")
+    check(np.abs(light[:, :3] - 0.1).max() < 0.05 and light[:, 3:].max() < 0.05,
+          "smoke at a window's edge beside a wall takes the window's tint and stays hidden by the wall")
+
+
 def far_smoke_in_front():
     source = expand((CORE / "fx_pall_composite.fsh").read_text())
     fragment = source[:source.index("void main() {")] + """
@@ -277,6 +324,7 @@ for name in ("fx_depth", "fx_half_depth", "fx_half_composite", "fx_pall_composit
         check(len(active) <= 16, "the pall composite stays within 16 fragment samplers")
 depth_cases(programs["fx_depth"])
 half_cases(programs["fx_half_depth"], programs["fx_half_composite"])
+half_edges()
 far_smoke_in_front()
 if FAILED:
     sys.exit(f"see-through GL check failed: {len(FAILED)}")

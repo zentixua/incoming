@@ -534,6 +534,8 @@ public final class FxQuads {
                 com.mojang.blaze3d.systems.RenderSystem.getProjectionMatrix(), net.minecraft.client.Minecraft.getInstance().getWindow());
         boolean half = halfDepth >= 0;
         if (half) s.setSampler("Sampler1", halfDepth);
+        // the half-resolution pixel's own see-through surface, from the same frame pixel as its distances (HalfPass)
+        SceneDepth.glassUnit(half ? HalfPass.glass() : -1);
         // a half-resolution pixel spans two frame pixels: frame-space lookups (world distance, pall, tiles) scale by it
         s.safeGetUniform("FxGlowPass").set(0f, half ? 2f : 1f);
         s.safeGetUniform("FxHalf").set(half ? 1f : 0f);
@@ -563,6 +565,7 @@ public final class FxQuads {
     /** After a pass of {@link #passBegin}: the layer's ordinary state. */
     void passEnd(net.minecraft.client.renderer.ShaderInstance s, int rect, int tile) {
         s.clear();
+        SceneDepth.glassUnit(-1);
         if (rect >= 0) for (int i = 0; i < 4; i++) org.lwjgl.opengl.GL11.glDisable(org.lwjgl.opengl.GL30.GL_CLIP_DISTANCE0 + i);
         s.safeGetUniform("FxGlowPass").set(0f, 1f);
         s.safeGetUniform("FxHalf").set(0f);

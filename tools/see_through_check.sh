@@ -11,10 +11,11 @@ ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 graphics=fancy
 case "${1:-}" in fast|fancy|fabulous) graphics=$1; shift ;; esac
 S="$ROOT/tools/sandbox.sh" OUT="$ROOT/mod/run/see_through/$graphics" first=1
-mkdir -p "$OUT"
-rm -f "$OUT"/*.png
 # the check owns its sandbox: one already running (another task's, or with other code) is not stopped or reused
 "$S" status 2>/dev/null | grep -q "^running" && { echo "this tree's sandbox is already running: stop it first" >&2; exit 2; }
+# only its own frames are replaced (a stale frame of a failed shot must not pass)
+mkdir -p "$OUT"
+rm -f "$OUT"/base_*.png "$OUT"/blast_*.png "$OUT"/sheet.png
 "$S" start "$@" || exit $?
 trap '"$S" stop > /dev/null' EXIT
 "$S" fx "graphics $graphics" 'wait 40' > /dev/null || exit 1

@@ -340,6 +340,17 @@ public final class SceneDepth {
     }
 
     /**
+     * {@code FxGlass}'s unit holds {@code texture} (a pass at another resolution, {@link HalfPass#glass}); −1 — this frame's
+     * own (or the stand-in without see-through).
+     */
+    static void glassUnit(int texture) {
+        int unit = GlStateManager._getActiveTexture();
+        GlStateManager._activeTexture(GL13.GL_TEXTURE0 + GLASS_UNIT);
+        GL11.glBindTexture(GL11.GL_TEXTURE_2D, !see ? idle() : texture >= 0 ? texture : glass);
+        GlStateManager._activeTexture(unit);
+    }
+
+    /**
      * A 1×1 texture with no surface: own light 0, transmittance 1 ({@code see.glsl}). Not texture 0: an incomplete texture
      * floods driver debug output.
      */
