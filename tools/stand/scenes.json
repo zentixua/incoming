@@ -1,12 +1,12 @@
 {
   "stand": 1,
-  "about": "Scenes of the scene stand (README.md). Positions in blocks: +X east, +Z south; ground = top of the grass of the flat world. Launch bearings: degrees from south toward east. Every strike is its own command with spread 0 at a fixed aim point (a Vogel sunflower over the spread disc, turned per salvo and wave: the same for every version, unlike the salvo spread of Incoming, which takes the shared world random), from launch point i mod launchers, gap_s apart from one point, straight via the aim point; server_config is the world rule written to config/incoming-server.toml (drone_flight_time at its minimum: the flight is never shorter than the direct path). An impact is a projectile leaving the world near the target and its own explosion with a warhead damage type (warheads): a crash before arming is a vanilla explosion and does not count. Launch close-ups (launch): the camera stands 30 m beside the launch point at eye height and looks at it; the target is far downrange to the side, so impacts stay out of the frame; windows are timed from the command, the scene does not wait for impacts (they come last in the plan).",
+  "about": "Scenes of the scene stand (README.md). Positions in blocks: +X east, +Z south; ground = top of the grass of the flat world. Launch bearings: degrees from south toward east. Every strike is its own command with spread 0 at a fixed aim point (a Vogel sunflower over the spread disc, turned per salvo and wave: the same for every version, unlike the salvo spread of Incoming, which takes the shared world random), from launch point i mod launchers, gap_s apart from one point, straight via the aim point; server_config is the world rule written to config/incoming-server.toml (drone_flight_time at its minimum: the flight is never shorter than the direct path). An impact is a projectile leaving the world near the target and its own explosion with a warhead damage type (warheads): a crash before arming is a vanilla explosion and does not count. Launch close-ups (launch): the camera stands 30 m beside the launch point at eye height and looks at it; the target is far downrange to the side, so impacts stay out of the frame; windows are timed from the command, the scene does not wait for impacts (they come last in the plan). Megaton (`nuke`): a 1 Mt ground burst without flight (`incoming nuke now`) 3 km north of the camera, which stands on the ground facing it; world rules as on Artem's server (CUSTOM: game flight speeds, wave at 0.35 of sound speed, max_yield 1000); windows from the command: the last seconds of the dust wall's approach and seconds inside it; last scene (its ruins and pall would enter later windows).",
   "world": {"seed": 20261025, "day_time": 6000, "settle_s": 4, "limit_s": 1800},
   "ground": 65,
   "weapon": "drone",
   "projectiles": ["incoming:drone"],
   "warheads": ["incoming:strike"],
-  "server_config": {"launch": {"drone_flight_time": 5, "missile_flight_time": 5}},
+  "server_config": {"launch": {"drone_flight_time": 5, "missile_flight_time": 5}, "scale": {"scale_preset": "CUSTOM"}, "nuclear": {"max_yield": 1000, "wave_speed": 0.35}},
   "impact_margin": 40,
   "launch": {"dist": 400, "bearings": [-45, -35, -25, -15, -5, 5, 15, 25, 35, 45], "gap_s": 1.5},
   "settle_s": 1.5,
@@ -24,7 +24,7 @@
     "ua.zentix.incoming.client.far.FarRenderer#describeSmoke"
   ],
   "once": ["net.irisshaders.iris.Iris#getCurrentPackName", "net.irisshaders.iris.Iris#isPackInUseQuick"],
-  "sites": {"F": [0, 0], "C": [1000, 0], "D": [4000, 0], "L1": [0, 3000], "L2": [0, 6000], "L3": [0, 9000]},
+  "sites": {"F": [0, 0], "C": [1000, 0], "D": [4000, 0], "L1": [0, 3000], "L2": [0, 6000], "L3": [0, 9000], "M": [0, -12000]},
   "launch_view": {"camera": {"toward": [0, -1], "dist": 30, "height": 1.6, "look_height": 1.5}, "target": [2500, 0],
                   "windows": [{"name": "start", "at_s": 0, "s": 15}, {"name": "hang", "at_s": 30, "s": 10}]},
   "cameras": {
@@ -45,6 +45,8 @@
      "camera": "edge", "waves": {"strikes": 10, "every_s": 20, "count": 9, "launchers": 5}, "bucket_s": 10},
     {"id": "grad", "site": "L1", "launch": {"weapon": "rocket", "count": 12, "one_command": true}},
     {"id": "missile", "site": "L2", "launch": {"weapon": "missile", "count": 1, "via": true}},
-    {"id": "shahed", "site": "L3", "launch": {"weapon": "drone", "count": 5, "via": true}}
+    {"id": "shahed", "site": "L3", "launch": {"weapon": "drone", "count": 5, "via": true}},
+    {"id": "megaton", "site": "M", "nuke": {"kt": 1000, "burst": "ground", "toward": [0, 1], "dist": 3000, "height": 2, "look_height": 60},
+     "windows": [{"name": "approach", "at_s": 12, "s": 8}, {"name": "inside", "at_s": 20.5, "s": 6}]}
   ]
 }

@@ -340,7 +340,7 @@ public final class NukeDust {
     }
 
     /**
-     * Mean wall-head share at world point {@code p}, 0..1 ({@link BlastWall#sigma} relative to its density there): {@code slot} contains
+     * Wall-head share at world point {@code p}, 0..1 (its lobes' extinction, {@link WallLobes#sigma}, relative to the head's scale): {@code slot} contains
      * wall slot parameters ({@link BlastWall#slot}); terrain and water below the point come from the pall map.
      */
     private static double inHead(ClientNuclear.Active a, float[] slot, Vec3 p) {
@@ -348,7 +348,8 @@ public final class NukeDust {
         double k = slot[3] + (slot[7] - slot[3]) * wet;
         if (k <= 0) return 0;
         Detonation d = a.d;
-        return BlastWall.sigma(slot, p.x - d.burst().x, p.z - d.burst().z, p.y - d.groundY() - a.ground.at(p.x, p.z), wet) / k;
+        WallLobes.Ground ground = WallLobes.Ground.of(a.ground, d.burst().x, d.burst().z);
+        return Math.min(1, WallLobes.sigma(slot, ground, p.x - d.burst().x, p.y - d.groundY(), p.z - d.burst().z) / k);
     }
 
     /** Wall smoke: its color halfway toward gray of equal brightness ({@link #SMOKE_GREY}), darkened by factor {@code k}. */

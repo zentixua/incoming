@@ -169,6 +169,42 @@ class DustModelTest {
         assertTrue(c.fallout(60) > 3 * c.fallout(1800));
     }
 
+    /**
+     * The lofting burst ({@link DustModel#loftTop}, {@link DustModel#loftMass}) against the model's own laws behind a front of 3–11 psi (1 Mt
+     * surface burst 3 and 6 km out, 15 kt 0.8 and 1.5 km, Hiroshima 1.5 km): the top rising at the friction velocity, h ∝ ∫u* dτ
+     * ({@link DustModel#friction}), within 3 % of the phase-end top; the entrainment law ({@link DustModel#flux}) lofting 45–75 % of the phase's
+     * mass in its first tenth, the one shape between. Both fastest right behind the front: half the top by a fifth of the phase (Kuhl's x^(5/6):
+     * 0.43), and they stand at the phase end.
+     */
+    @Test
+    void loftingBurstFollowsTheFrictionVelocity() {
+        double[][] bursts = {{1000, 3000, 0}, {1000, 6000, 0}, {15, 800, 0}, {15, 1500, 0}, {15, 1500, HOB}};
+        int n = 2000;
+        for (double[] b : bursts) {
+            double kpa = BlastModel.kpa(HobBlast.psi(b[1], b[2], b[0])), tp = HobBlast.positivePhaseSeconds(b[1], b[2], b[0]);
+            double u0 = BlastModel.windSpeed(kpa) * Math.sqrt(HobBlast.alongGround(b[1], b[2], b[0])), front = BlastModel.frontSpeed(kpa);
+            double[] top = new double[n + 1], mass = new double[n + 1];
+            for (int i = 0; i < n; i++) {
+                double t = (i + 0.5) * tp / n, x = t / tp, wind = u0 * (1 - x) * Math.exp(-x);
+                top[i + 1] = top[i] + DustModel.friction(wind, front * t);
+                mass[i + 1] = mass[i] + DustModel.flux(DustModel.shockedAir(kpa), wind, front * t, DustModel.Surface.REFERENCE.threshold());
+            }
+            String at = b[0] + " kt at " + b[1] + " m";
+            for (int i = 1; i <= n; i++) assertEquals(top[i] / top[n], DustModel.loftTop((double) i / n), 0.03, at + ", x = " + (double) i / n);
+            double tenth = mass[n / 10] / mass[n];
+            assertTrue(tenth > 0.45 && tenth < 0.75, at + ": a tenth of the phase lofts " + tenth);
+        }
+        double law = DustModel.loftMass(0.1);
+        assertTrue(law > 0.45 && law < 0.75, "the lofted-mass shape lies outside the law's range: " + law);
+        assertTrue(DustModel.loftTop(0.2) > 0.48 && DustModel.loftTop(0.2) < 0.52, "half the top by a fifth of the phase: " + DustModel.loftTop(0.2));
+        assertEquals(0, DustModel.loftTop(0), 0);
+        assertEquals(1, DustModel.loftTop(1), 1e-12);
+        assertEquals(1, DustModel.loftTop(3), 1e-12);
+        assertEquals(1, DustModel.loftMass(1), 1e-12);
+        assertEquals(1, DustModel.loftMass(3), 1e-12);
+        assertEquals(0, (DustModel.loftTop(1) - DustModel.loftTop(0.999)) / 0.001, 0.01, "still rising at the phase end");
+    }
+
     /** Nothing is raised to the front; per wave phase - that's all; all the dust is soil and debris; there are no debris where the houses stand. */
     @Test
     void liftFollowsThePositivePhase() {

@@ -620,24 +620,53 @@ float pallDiffuse(float w, float g, float tau, float tc, float ground, float mu1
 // table of the pall. Laws — copies of BlastWall (PallGlslTest checks). The wall slot V — mat4 by columns (BlastWall.slot):
 //   [0] = (leading edge of the dust from the epicenter, length of the wedge, its top at the end — blocks; attenuation scale,
 //          1/block; 0 — no head)
-//   [1] = (angle of the rim, rad; over water — spray: its lag behind the edge of the dust, blocks; share of the top;
-//          attenuation, 1/block)
+//   [1] = (path of the dust with the wind behind the front, blocks — BlastWall.carried; over water — spray: its lag behind the edge
+//          of the dust, blocks; share of the top; attenuation, 1/block)
 //   [2] = (share of the positive phase at the end of the wedge; saltation e-folds over the wedge length; share of dust rising at
-//          once behind the front — pallWallDevelop; noise tile, blocks)
+//          once behind the front — pallWallDevelop; rise of the heated layer after the phase — pallWallHeated: lift)
 //   [3] = (dust over hard ground against soil at the rim and at the end of the wedge — BlastWall.pavedShare; attenuation of dust
 //          at the ground at the end of the wave phase at the rim and at the end of the wedge — shares of the scale)
 // The Wilson cloud of the slot — vec4 (same place): radius of the middle of the shell from the detonation point, its half-thickness
 // (blocks), attenuation in the middle (1/block; 0 — no cloud), height of the detonation point above the ground under the epicenter.
 
-// Lifted to the share s of the positive phase (DustModel.lifted): dynamic pressure impulse, ∫(1 − x)²e^(−2x)dx over all
-float pallLifted(float s) {
-    float x = clamp(s, 0.0, 1.0), y = 1.0 - x;
-    return (0.25 - exp(-2.0 * x) * (y * y / 2.0 - y / 2.0 + 0.25)) / 0.2161662;
+// presentation (BlastWall.LOFT_GAIN): the lofting burst at the front runs twice as fast — dust thrown up twice as fast, the layer at its
+// phase-end top and mass after half the phase; within sources (GRABLE: 6–25 m in the first tenths of a second)
+const float PALL_WALL_LOFT_GAIN = 2.0;
+
+// Layer top by phase share x, share of its top at the phase end (DustModel.loftTop): rises at the ground's friction velocity — fastest right
+// behind the front, standing by the phase end, (x·e^(1 − x))^0.88
+float pallLoftTop(float x) {
+    float c = clamp(x, 0.0, 1.0);
+    return pow(c * exp(1.0 - c), 0.88);
 }
 
-// Top of the wedge by the share u of its length behind the edge, share of the top at the end (BlastWall.top): u^(5/6), behind the wedge — all
-float pallWallTop(float u) {
-    return pow(clamp(u, 0.0, 1.0), 0.8333333);
+// Lofted mass by phase share x, share of the phase total (DustModel.loftMass): 1 − (1 − x)^8, most of it right behind the front
+float pallLoftMass(float x) {
+    return 1.0 - pow(1.0 - clamp(x, 0.0, 1.0), 8.0);
+}
+
+// Top of the wedge by the share u of its length behind the edge, share of the top at the end (BlastWall.top): the lofting burst at the dust
+// age there — u of the share ph of the phase at the wedge end; none ahead of the edge, all behind the wedge
+float pallWallTop(float u, float ph) {
+    if (u <= 0.0) return 0.0;
+    float p = PALL_WALL_LOFT_GAIN * max(ph, 0.001);
+    return pallLoftTop(min(u, 1.0) * p) / pallLoftTop(p);
+}
+
+// Share of the wedge where the layer top reaches the share zr of the top at the end (BlastWall.face): inverse of pallWallTop, x·e^(1 − x) = y
+// by two Newton steps from a guess
+float pallWallFace(float zr, float ph) {
+    float p = PALL_WALL_LOFT_GAIN * max(ph, 0.001), y = min(pow(clamp(zr, 0.0, 1.0) * pallLoftTop(p), 1.0 / 0.88), 1.0);
+    float x0 = mix(y / 2.7182818 * (1.0 + 0.6 * y), 1.0 - sqrt(max(2.0 * (1.0 - y), 0.0)), step(0.7, y)), e0 = exp(1.0 - x0);
+    float x1 = clamp(x0 - (x0 * e0 - y) / max((1.0 - x0) * e0, 0.001), 0.0, 1.0), e1 = exp(1.0 - x1);
+    float x2 = clamp(x1 - (x1 * e1 - y) / max((1.0 - x1) * e1, 0.001), 0.0, 1.0);
+    return min(x2 / p, 1.0);
+}
+
+// Top over dust of the phase share ph against its top at the end of the phase (BlastWall.heated): after the phase the heated ground lifts
+// the layer, h² = h₁² + b²·x (DustModel.Column.height) — √(1 + lift·(ph − 1)); before — 1
+float pallWallHeated(float ph, float lift) {
+    return sqrt(1.0 + lift * max(ph - 1.0, 0.0));
 }
 
 // Share of the path of dust with the wind behind the front for the share u of the positive phase (BlastWall.carriedShare): u·e^(1 − u);
@@ -647,42 +676,24 @@ float pallWallCarried(float u) {
     return x * exp(1.0 - x);
 }
 
-// Place of the dust of the head in its own coordinates (BlastWall.origin): point (rel — from the epicenter along the ground, z — above
-// the relief, blocks) minus the path with the wind behind the front — carried (blocks) for the share u of the phase; at the ground the
-// air stands still, higher it goes by the 1/7 law of the turbulent boundary layer (z against the top at the end of the wedge top), up —
-// 0.02–0.08 of the path (Kuhl §3.4: vertical speed in the layer — 0.02 u∞ at the bottom and 0.04–0.12 at the top). (x, height, z), blocks
-vec3 pallWallOrigin(vec2 rel, float z, float u, float top, float carried) {
-    float zr = clamp(z / max(top, 0.001), 0.0, 1.0);
-    float x = carried * pallWallCarried(u) * pow(zr, 1.0 / 7.0);
+// The dust parcel of the head in its own coordinates (BlastWall.origin): where it was lifted — point (rel — from the epicenter along the
+// ground, blocks) minus its path with the wind behind the front, carried (blocks) for the share u of the phase (at the ground the air
+// stands still, higher it goes by the 1/7 law of the turbulent boundary layer); and the share of the layer top over the place, local
+// (blocks), at which it rides (z — above the relief): the dusty layer grows as one body, a parcel keeps its share while the top over it
+// rises. Billows in these coordinates ride the parcels: thrown up at the front, lagging behind it, rising ever slower. (x, share, z)
+vec3 pallWallOrigin(vec2 rel, float z, float u, float local, float carried) {
+    float zr = z / max(local, 0.001);
+    float x = carried * pallWallCarried(u) * pow(clamp(zr, 0.0, 1.0), 1.0 / 7.0);
     vec2 out1 = rel / max(length(rel), 1e-3);
-    return vec3(rel.x - out1.x * x, z - x * (0.02 + 0.06 * zr), rel.y - out1.y * x);
+    return vec3(rel.x - out1.x * x, zr, rel.y - out1.y * x);
 }
 
-// Eddy turn of head dust, rad (BlastWall.rollAngle): positive — the top rolls outward; eddies of diameter size spin at σ_u ≈ 2.5 u*,
-// u* ≈ 0.04 U (BlastWall.EDDY), over the wind path so far (carried × pallWallCarried: out with the wave's wind, back as it reverses).
-// presentation: ×8 the physical rate (BlastWall.ROLL_GAIN) — only the billow pattern turns, not where dust is or how much
-const float PALL_WALL_ROLL = 1.6;
-float pallWallRollAngle(float ph, float carried, float size) {
-    return PALL_WALL_ROLL * carried * pallWallCarried(ph) / max(size, 1.0);
-}
-
-// Dust-coordinate point q (pallWallOrigin: x, height, z) turned within its eddy (BlastWall.roll): eddies of diameter size side by side
-// along the ground outward (out1), resting on it; the turn is full at the centre and zero at the rim — no seams between eddies
-vec3 pallWallRoll(vec3 q, vec2 out1, float size, float angle) {
-    float along = dot(q.xz, out1), rim = 0.5 * size;
-    float dx = along - size * (floor(along / size) + 0.5), dy = q.y - rim;
-    float r = length(vec2(dx, dy)) / rim;
-    if (r >= 1.0) return q;
-    float a = angle * (1.0 - r) * (1.0 - r), c = cos(a), sn = sin(a);
-    float ex = c * dx - sn * dy, ey = sn * dx + c * dy;
-    return vec3(q.x + out1.x * (ex - dx), rim + ey, q.z + out1.y * (ex - dx));
-}
-
-// Density at the ground by the share u of the wedge against its density at its end (BlastWall.shape): the lifted part in the layer of the top pallWallTop
-float pallWallShape(float u) {
+// Density at the ground by the share u of the wedge against its density at its end (BlastWall.shape): the mass lofted by then (pallLoftMass)
+// in the layer of the top pallWallTop
+float pallWallShape(float u, float ph) {
     if (u <= 0.0) return 0.0;
-    float x = min(u, 1.0);
-    return pallLifted(x) / pow(max(x, 0.0001), 0.8333333);
+    float x = min(u, 1.0), p = PALL_WALL_LOFT_GAIN * max(ph, 0.001);
+    return pallLoftMass(x * p) / pallLoftMass(p) / pallWallTop(x, ph);
 }
 
 // Where the head behind the wedge passes to the pall, in lengths of the wedge from the leading edge of the dust (BlastWall.HANDOFF_FROM,
@@ -695,12 +706,19 @@ float pallWallFade(float u) {
     return 1.0 - smoothstep(PALL_WALL_HANDOFF_FROM, PALL_WALL_HANDOFF_TO, u);
 }
 
+// Highest top of the head (BlastWall.ceiling): the heated layer at the end of the hand-over to the pall — top at the end of the wedge, share
+// of the phase there, rise of the heated layer
+float pallWallCeiling(float top, float ph, float lift) {
+    return top * pallWallHeated(PALL_WALL_HANDOFF_TO * ph, lift);
+}
+
 // Point in the frame of the head (BlastWall.sigma): s — beyond the leading edge of the dust, z — above the relief (blocks), len, top —
-// length and top of the wedge of the slot, lag — lag of the spray of the slot. Outside — 0, inside — 1
-float pallWallInside(float s, float z, float len, float top, float lag) {
+// length and top of the wedge of the slot, ceiling — its highest top (pallWallCeiling), lag — lag of the spray of the slot. Outside — 0,
+// inside — 1
+float pallWallInside(float s, float z, float len, float top, float ceiling, float lag) {
     if (s < -1.0) return 0.0;
     if (s > PALL_WALL_HANDOFF_TO * len + lag) return 0.0;
-    if (z > top) return 0.0;
+    if (z > ceiling) return 0.0;
     if (z < -0.5 * top) return 0.0;
     return 1.0;
 }
@@ -724,13 +742,15 @@ float pallWallDensity(float s, float len, float scale, float edge, float end, fl
 }
 
 // Share of the density of the head without noise (BlastWall.mean): s — beyond the leading edge of the dust (blocks; ahead — less than zero),
-// z — above the relief (blocks), len — length of the wedge, top — its top at the end. By height — the profile of the pall up to the top
-// of the wedge here; under the relief of the map — up to half that local top (the map is coarser than the world: in the lowlands under
+// z — above the relief (blocks), len — length of the wedge, top — its top at the end, ph — share of the phase at its end, lift — rise of
+// the heated layer (pallWallHeated). By height — the profile of the pall up to the top here; behind the wedge the heated layer spreads
+// the same dust higher; under the relief of the map — up to half that local top (the map is coarser than the world: in the lowlands under
 // it the head does not hang; with the full top a dense curb stood on the leading edge)
-float pallWallMean(float s, float z, float len, float top) {
+float pallWallMean(float s, float z, float len, float top, float ph, float lift) {
     float u = s / max(len, 0.001);
     if (u <= 0.0) return 0.0;
-    float h = max(top * pallWallTop(u), 0.001), k = pallWallShape(u) * pallWallFade(u);
+    float heat = pallWallHeated(u * ph, lift);
+    float h = max(top * pallWallTop(u, ph) * heat, 0.001), k = pallWallShape(u, ph) * pallWallFade(u) / heat;
     if (z < 0.0) return k * smoothstep(-0.5 * h, -0.25 * h, z);
     return k * pallProfile(z / h);
 }
@@ -765,7 +785,7 @@ WallAt pallWallAt(sampler2D ground, mat4 S, mat4 V, vec4 G, vec4 W, vec3 p, floa
     h.hard = 0.0;
     h.sand = 0.0;
     h.P = vec4(V[0].y, V[0].z, 0.0, 0.0);
-    if (V[0].w <= 0.0 || pallWallInside(h.s, h.z, V[0].y, V[0].z, V[1].y) <= 0.0) return h;
+    if (V[0].w <= 0.0 || pallWallInside(h.s, h.z, V[0].y, V[0].z, pallWallCeiling(V[0].z, V[2].x, V[2].w), V[1].y) <= 0.0) return h;
     if (W.w > 0.5) h.wet = pallWater(ground, G, h.rel);
     vec2 soil = pallSoil(ground, S, G, h.rel);
     h.hard = soil.x;
@@ -776,6 +796,312 @@ WallAt pallWallAt(sampler2D ground, mat4 S, mat4 V, vec4 G, vec4 W, vec3 p, floa
     return h;
 }
 
+// ---------------------------------------------------------------- head lobes (BlastWall: lobe laws, copies here)
+// The head is one explicit field of billow lobes, and everything that reads the head reads it: the march (fx_pall: the ray composites
+// each lobe at its depth), the layer quads and source probes (pall_front.glsl), the composite (fx_pall_composite) and the eye's own dust
+// (NukePall). A lobe is a parcel of dust lofted at the front (a lattice cell in the ground's ring coordinates: where the front threw it
+// up), carried outward by the wind behind the front at its height share (pallWallOrigin's law, inverted: where it is now) and riding
+// its share of the local top: thrown up at the front, lagging behind it, rising ever slower — the roll-back is the lobes' own motion.
+// Its mass is the law's head mass over its cell (pallWallMean's column above the ground × the cell's area now), so the lobes together
+// carry the law's head and the handoff to the pall (pallWallFade) is in their mass. A lobe's density is A·(1 − q²)², q its normalized
+// distance (a closed-form chord: probes and rays sum the same optical depths); the dense front is opaque (σ ~5/block), so what shows is
+// each lobe's rounded surface, not noise inside the dust (19.11–20.11: noise in an opaque front drew a smooth dune).
+
+// presentation: lobe spacing, wedge-end tops (Silo S3E09 01:00:33–37: crests 1.5–2 band heights wide; the spacing runs 0.9–1.8 of
+// this as the octave lattice steps)
+const float PALL_LOBE = 1.25;
+// presentation: radius across the ring and backward, spacings (neighbours overlap: one dense front, no gaps), and up, local tops
+// (the lobe's bottom is in the ground: the foot stays attached)
+const float PALL_LOBE_WIDE = 0.75;
+const float PALL_LOBE_TALL = 0.6;
+// presentation: lobe centres off the lattice, spacings; centre height share of the local top (from, range); size spread
+const float PALL_LOBE_JITTER = 0.6;
+const float PALL_LOBE_LOW = 0.25;
+const float PALL_LOBE_RISE = 0.2;
+const float PALL_LOBE_SIZE = 0.3;
+// walk samples per head span at most (pallLobeWalk): at half a spacing the 3×3 cells around each sample hold every lobe the ray crosses
+const int PALL_LOBE_WALK = 40;
+// a ray stops looking for lobes behind this optical depth of lobes already passed
+const float PALL_LOBE_OPAQUE = 9.0;
+
+// Lattice of slot V: spacing (blocks, a power of two, at least a block: a lobe keeps its cell while the wall moves on) and the next
+// octave's share — as the top grows an octave the lobes of the two lattices share the mass and morph in size over the last 15 % of it
+vec2 pallLobeTile(mat4 V) {
+    float k = log2(max(PALL_LOBE * V[0].z, 1.0)) + 0.5, k0 = floor(k);
+    return vec2(exp2(k0), smoothstep(0.85, 1.0, k - k0));
+}
+
+// Cells around the ring in lattice row j (a whole number: seamless; about one spacing apart)
+float pallLobeRow(int j) {
+    return max(floor(6.2831853 * (float(j) + 0.5) + 0.5), 3.0);
+}
+
+// Hash of lattice cell (i, j) at octave level (pcg4d, Jarzynski and Olano 2020): four numbers in [0, 1). Copy BlastWall.lobeHash
+vec4 pallLobeHash(int i, int j, int level) {
+    uvec4 v = uvec4(uint(i), uint(j), uint(level), uint(i) ^ (uint(j) << 12u)) * 1664525u + 1013904223u;
+    v.x += v.y * v.w;
+    v.y += v.z * v.x;
+    v.z += v.x * v.y;
+    v.w += v.y * v.z;
+    v ^= v >> 16u;
+    v.x += v.y * v.w;
+    v.y += v.z * v.x;
+    v.z += v.x * v.y;
+    v.w += v.y * v.z;
+    return vec4(v >> 8u) / 16777216.0;
+}
+
+// Share of a lobe's mass above a plane ζ of its vertical radii above its centre: ∫(1 − y²)³ from ζ to 1 over 32/35
+float pallLobeAbove(float zeta) {
+    float y = clamp(zeta, -1.0, 1.0), y2 = y * y;
+    return (0.4571429 - y * (1.0 - y2 + y2 * (0.6 * y2 - 0.1428571 * y2 * y2))) / 0.9142857;
+}
+
+// Lobe: centre (from the eye), outward unit at it, radii (forward, back, across, up; blocks), peak extinction A (1/block; 0 — none), the
+// ground under it (water, hard, sand shares: spray over water, debris dust over hard ground, desert dust)
+struct WallLobe {
+    vec3 c;
+    vec3 er;
+    vec4 R;
+    float A;
+    float wet;
+    float hard;
+    float sand;
+    // share of the wedge behind the dust edge at its centre
+    float u;
+};
+
+// Lobe of lattice cell (i, j), spacing D (blocks), lattice share weight, of slot S, V; ground, G, W — its relief/soil map, water. The
+// parcel lofted at radius ro is carried outward (pallWallOrigin: carried × pallWallCarried(phase share) × share^(1/7)) — where it is now,
+// three fixed-point steps; height share of the local top there (pallWallTop × pallWallHeated, spray lower over water). Its forward radius
+// never reaches past the dust edge (a young lobe has a short nose; the front is not outrun). Mass — the law's column above the ground at
+// its place now (pallWallDensity × pallWallShape × pallWallFade × the local top × ∫ profile) over its cell's area now (the cell's
+// ground area stretched by the carry: dr/dro and r/ro), the share of the kernel above the ground counted
+WallLobe pallLobe(sampler2D ground, mat4 S, mat4 V, vec4 G, vec4 W, int i, int j, float D, float weight) {
+    WallLobe L;
+    L.A = 0.0;
+    L.c = vec3(0.0);
+    L.er = vec3(1.0, 0.0, 0.0);
+    L.R = vec4(1.0);
+    L.wet = 0.0;
+    L.hard = 0.0;
+    L.sand = 0.0;
+    L.u = 0.0;
+    if (j < 0 || weight <= 0.0) return L;
+    float n = pallLobeRow(j);
+    vec4 h = pallLobeHash(i, j, int(log2(D) + 0.5));
+    float ro = (float(j) + 0.5 + PALL_LOBE_JITTER * (h.x - 0.5)) * D;
+    float a = (float(i) + 0.5 + PALL_LOBE_JITTER * (h.y - 0.5)) * 6.2831853 / n;
+    float zr = PALL_LOBE_LOW + PALL_LOBE_RISE * h.z, size = 1.0 + PALL_LOBE_SIZE * (h.w - 0.5);
+    float len = max(V[0].y, 0.001), carry = V[1].x * pow(zr, 0.1428571), r = ro;
+    for (int k = 0; k < 3; k++) r = ro + carry * pallWallCarried((V[0].x - r) / len * V[2].x);
+    vec2 out1 = vec2(cos(a), sin(a)), rel = out1 * r;
+    vec4 map = G.x > 0.0 ? textureLod(ground, rel / (2.0 * G.x) + 0.5, 0.0) : vec4(0.0);
+    L.wet = W.w > 0.5 && G.x > 0.0 ? clamp(map.g, 0.0, 1.0) : 0.0;
+    if (G.x > 0.0 && S[1].w >= 1.5) {
+        L.hard = clamp(map.b, 0.0, 1.0);
+        L.sand = clamp(map.a, 0.0, 1.0);
+    }
+    float s = V[0].x - r - V[1].y * L.wet, u = s / len;
+    if (u <= 0.0 || u >= PALL_WALL_HANDOFF_TO) return L;
+    L.u = u;
+    float ph = u * V[2].x, top = V[0].z * mix(1.0, V[1].z, L.wet), rise = pallWallTop(u, V[2].x);
+    float local = max(top * rise * pallWallHeated(ph, V[2].w), 0.5);
+    float column = pallWallDensity(s, len, V[0].w, V[3].z, V[3].w, V[1].w, L.wet, V[2].y, V[2].z, V[3].x, V[3].y, L.hard)
+            * pallWallShape(u, V[2].x) * pallWallFade(u) * top * rise * pallColumn(0.0);
+    if (column <= 0.0) return L;
+    // across: a young lobe flat against the curving ring would reach past it at its sides by across²/(2·edge); with across² ≤ edge·s and
+    // the nose ≤ s the whole lobe stays behind the dust edge
+    float morph = pow(weight, 0.3333333), wide = PALL_LOBE_WIDE * D * size * morph, across = min(wide, sqrt(max((r + s) * s, 0.25)));
+    L.R = vec4(clamp(s, 0.5, wide), wide, across, max(PALL_LOBE_TALL * local * size * morph, 0.5));
+    float zc = zr * local;
+    float stretch = 1.0 / max(1.0 + carry * (1.0 - ph) * exp(1.0 - ph) * V[2].x / len, 0.2);
+    float area = D * 6.2831853 * r / n * stretch;
+    float mass = column * area * weight / max(pallLobeAbove(-zc / L.R.w), 0.05);
+    L.A = mass / (0.4787189 * L.R.z * L.R.w * (L.R.x + L.R.y));
+    float relief = 0.0;
+    if (G.x > 0.0) relief = map.r;
+    L.c = vec3(S[0].x + rel.x, S[0].z + relief + zc, S[0].y + rel.y);
+    L.er = vec3(out1.x, 0.0, out1.y);
+    return L;
+}
+
+// ∫(c0 − B·x²)² over the part of [lo, hi] (ray length) inside one half-lobe: normalized ray alpha + t·beta, closest at ts
+float pallLobePart(vec3 alpha, vec3 beta, float lo, float hi) {
+    float B = dot(beta, beta);
+    if (B < 1e-12 || hi <= lo) return 0.0;
+    float ts = -dot(alpha, beta) / B, c0 = 1.0 - dot(alpha, alpha) + B * ts * ts;
+    if (c0 <= 0.0) return 0.0;
+    float w = sqrt(c0 / B), x0 = max(lo, ts - w) - ts, x1 = min(hi, ts + w) - ts;
+    if (x1 <= x0) return 0.0;
+    float g0 = x0 * (c0 * c0 + B * x0 * x0 * (0.2 * B * x0 * x0 - 0.6666667 * c0));
+    float g1 = x1 * (c0 * c0 + B * x1 * x1 * (0.2 * B * x1 * x1 - 0.6666667 * c0));
+    return g1 - g0;
+}
+
+// Optical depth of lobe L along the ray o + t·d over [ta, tb]: its forward and back halves (split where the ray crosses the plane through
+// its centre across the radius), each a closed-form chord
+float pallLobeTau(WallLobe L, vec3 o, vec3 d, float ta, float tb) {
+    if (L.A <= 0.0 || tb <= ta) return 0.0;
+    vec3 et = vec3(-L.er.z, 0.0, L.er.x), q = o - L.c;
+    vec3 a = vec3(dot(q, L.er), dot(q, et), q.y), b = vec3(dot(d, L.er), dot(d, et), d.y);
+    // the ray's part ahead of the centre plane (forward half) and behind it
+    vec2 ahead = vec2(1e30, -1e30), behind = vec2(-1e30, 1e30);
+    if (b.x > 1e-9) {
+        ahead = vec2(-a.x / b.x, 1e30);
+        behind = vec2(-1e30, -a.x / b.x);
+    } else if (b.x < -1e-9) {
+        ahead = vec2(-1e30, -a.x / b.x);
+        behind = vec2(-a.x / b.x, 1e30);
+    } else if (a.x >= 0.0) {
+        ahead = vec2(-1e30, 1e30);
+        behind = vec2(1e30, -1e30);
+    }
+    vec3 f = vec3(L.R.x, L.R.z, L.R.w), k = vec3(L.R.y, L.R.z, L.R.w);
+    return L.A * (pallLobePart(a / f, b / f, max(ta, ahead.x), min(tb, ahead.y)) + pallLobePart(a / k, b / k, max(ta, behind.x), min(tb, behind.y)));
+}
+
+// Density of lobe L at p (1/block)
+float pallLobeAt(WallLobe L, vec3 p) {
+    if (L.A <= 0.0) return 0.0;
+    vec3 et = vec3(-L.er.z, 0.0, L.er.x), q = p - L.c;
+    float x = dot(q, L.er);
+    float rx = L.R.y;
+    if (x >= 0.0) rx = L.R.x;
+    vec3 n = vec3(x / rx, dot(q, et) / L.R.z, q.y / L.R.w);
+    float c = max(1.0 - dot(n, n), 0.0);
+    return L.A * c * c;
+}
+
+// Outward normal of lobe L's density surface through p
+vec3 pallLobeNormal(WallLobe L, vec3 p) {
+    vec3 et = vec3(-L.er.z, 0.0, L.er.x), q = p - L.c;
+    float x = dot(q, L.er), rx = x >= 0.0 ? L.R.x : L.R.y;
+    vec3 g = L.er * (x / (rx * rx)) + et * (dot(q, et) / (L.R.z * L.R.z)) + vec3(0.0, q.y / (L.R.w * L.R.w), 0.0);
+    return dot(g, g) > 1e-20 ? normalize(g) : vec3(0.0, 1.0, 0.0);
+}
+
+// Highest a lobe of slot V reaches above the relief (blocks): the law's highest local top (the lofting burst peaks at half the
+// wedge, pallLoftTop's maximum 1; the heated layer at the handoff's end) times the highest centre share and vertical radius
+float pallLobeCeiling(mat4 V) {
+    float p = PALL_WALL_LOFT_GAIN * max(V[2].x, 0.001), peak = 1.0;
+    if (p >= 1.0) peak = pallLoftTop(p);
+    return V[0].z / peak * pallWallHeated(PALL_WALL_HANDOFF_TO * V[2].x, V[2].w)
+            * (PALL_LOBE_LOW + PALL_LOBE_RISE + PALL_LOBE_TALL * (1.0 + 0.5 * PALL_LOBE_SIZE));
+}
+
+// Farthest a lobe of slot V reaches behind its centre (blocks): the back radius at the larger lattice
+float pallLobeReach(mat4 V) {
+    return 2.0 * pallLobeTile(V).x * PALL_LOBE_WIDE * (1.0 + 0.5 * PALL_LOBE_SIZE);
+}
+
+#ifdef PALL_LOBE_COLLECT
+// Head lobes on the march's ray (fx_pall: pallLobeWalk in main records them here): the nearest LOBES by the ray distance nearest their
+// centres, sorted; cell (i, j, slot), lattice (spacing, share), optical depth on the ray; the ray part the walk covered
+// (gLobeFrom, gLobeTo). The march composites each at its depth (lobesBefore), lit where the ray enters it
+const int LOBES = 12;
+float gLobeT[LOBES] = float[LOBES](0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0);
+float gLobeTau[LOBES] = float[LOBES](0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0);
+ivec3 gLobeCell[LOBES] = ivec3[LOBES](ivec3(0), ivec3(0), ivec3(0), ivec3(0), ivec3(0), ivec3(0), ivec3(0), ivec3(0), ivec3(0), ivec3(0),
+        ivec3(0), ivec3(0));
+vec2 gLobeTile[LOBES] = vec2[LOBES](vec2(0.0), vec2(0.0), vec2(0.0), vec2(0.0), vec2(0.0), vec2(0.0), vec2(0.0), vec2(0.0), vec2(0.0), vec2(0.0),
+        vec2(0.0), vec2(0.0));
+int gLobes = 0, gLobeNext = 0;
+float gLobeFrom = 0.0, gLobeTo = 0.0;
+
+// record a lobe on the ray: slot k, cell (i, j), spacing D, lattice share, its optical depth on the ray, the ray distance nearest its centre
+void pallLobeFound(int k, int i, int j, float D, float weight, float tau, float t) {
+    int at = gLobes;
+    if (gLobes == LOBES) {
+        if (t >= gLobeT[LOBES - 1]) return;
+        at = LOBES - 1;
+    } else {
+        gLobes += 1;
+    }
+    for (int m = 0; m < LOBES; m++) {
+        if (at <= 0 || gLobeT[at - 1] <= t) break;
+        gLobeT[at] = gLobeT[at - 1];
+        gLobeTau[at] = gLobeTau[at - 1];
+        gLobeCell[at] = gLobeCell[at - 1];
+        gLobeTile[at] = gLobeTile[at - 1];
+        at -= 1;
+    }
+    gLobeT[at] = t;
+    gLobeTau[at] = tau;
+    gLobeCell[at] = ivec3(i, j, k);
+    gLobeTile[at] = vec2(D, weight);
+}
+#endif
+
+// Lobes of slot k (S, V; −1: none recorded) near the ray o + t·dir (o from the eye) on [ta, tb] (a head span, pallWallSpans; a light path):
+// their optical depth there. Samples
+// along the ray half a spacing apart (at most PALL_LOBE_WALK, spread over longer spans); at each, the parcel's lattice cell (its origin:
+// the point minus the carry at a lobe's middle height share) and the 3×3 cells around it; a cell is taken once per lattice. A lobe whose
+// surface the ray crosses lies in one of those cells. Stops once the lobes passed are opaque (PALL_LOBE_OPAQUE)
+float pallLobeWalk(int k, sampler2D ground, mat4 S, mat4 V, vec4 G, vec4 W, vec3 o, vec3 dir, float ta, float tb) {
+    if (V[0].w <= 0.0 || S[1].w < 0.5 || tb <= ta) return 0.0;
+    vec2 tile = pallLobeTile(V);
+    float tau = 0.0, behind = 0.0, len = max(V[0].y, 0.001);
+    float carry = V[1].x * pow(PALL_LOBE_LOW + 0.5 * PALL_LOBE_RISE, 0.1428571);
+    int seen[24];
+    int seenN = 0;
+    // both lattices walk the ray as far as the first one found it opaque
+    float end = tb;
+    for (int lv = 0; lv < 2; lv++) {
+        float weight = lv == 0 ? 1.0 - tile.y : tile.y;
+        if (weight <= 0.0) continue;
+        float D = lv == 0 ? tile.x : 2.0 * tile.x;
+        int samples = int(clamp(ceil((tb - ta) / (0.5 * D)), 1.0, float(PALL_LOBE_WALK)));
+        float ds = (tb - ta) / float(samples);
+        seenN = 0;
+        for (int m = 0; m < samples; m++) {
+            float t = ta + (float(m) + 0.5) * ds;
+            if (t > end + ds) break;
+            if (behind > PALL_LOBE_OPAQUE) {
+                end = min(end, t);
+                break;
+            }
+            vec2 rel = o.xz + dir.xz * t - S[0].xy;
+            float r = length(rel), a = atan(rel.y, rel.x);
+            if (a < 0.0) a += 6.2831853;
+            float ro = r - carry * pallWallCarried((V[0].x - r) / len * V[2].x);
+            int j0 = int(floor(ro / D));
+            for (int dj = -1; dj <= 1; dj++) {
+                int j = j0 + dj;
+                if (j < 0) continue;
+                float n = pallLobeRow(j);
+                int i0 = int(floor(a / 6.2831853 * n));
+                for (int di = -1; di <= 1; di++) {
+                    int i = int(mod(float(i0 + di), n));
+                    int key = j * 4096 + i;
+                    bool done = false;
+                    for (int q = 0; q < seenN; q++) done = done || seen[q] == key;
+                    if (done) continue;
+                    if (seenN < 24) {
+                        seen[seenN] = key;
+                        seenN += 1;
+                    } else {
+                        // oldest first: cells far behind the ray's walk are not met again
+                        for (int q = 0; q < 23; q++) seen[q] = seen[q + 1];
+                        seen[23] = key;
+                    }
+                    WallLobe L = pallLobe(ground, S, V, G, W, i, j, D, weight);
+                    float lt = pallLobeTau(L, o, dir, ta, tb);
+                    if (lt <= 1e-4) continue;
+                    tau += lt;
+                    // passed: the lobe's centre lies behind this sample along the ray
+                    float tc = dot(L.c - o, dir);
+                    if (tc < t) behind += lt;
+#ifdef PALL_LOBE_COLLECT
+                    if (k >= 0) pallLobeFound(k, i, j, D, weight, lt, tc);
+#endif
+                }
+            }
+        }
+    }
+    return tau;
+}
+
 // Segments of the ray dir from the eye on [ta, tb] where the head of the slot may be: the ring from the leading edge of the dust to one
 // and a half lengths of the wedge beyond it (with the spray), by height — from the bottom of the relief map to its top with the head.
 // (x, y) and (z, w) — entry and exit; exit ≤ entry — misses
@@ -783,9 +1109,11 @@ vec4 pallWallSpans(mat4 S, mat4 V, vec4 G, vec3 dir, float ta, float tb) {
     vec4 none = vec4(1.0, 0.0, 1.0, 0.0);
     if (V[0].w <= 0.0 || S[1].w < 0.5) return none;
     vec2 c = S[0].xy;
-    float top = V[0].z, outer = V[0].x + 1.0, inner = max(V[0].x - PALL_WALL_HANDOFF_TO * V[0].y - V[1].y, 0.0);
+    // the lobes: up to their highest reach, back to the farthest lobe's back (pallLobeCeiling, pallLobeReach)
+    float top = V[0].z, ceiling = pallLobeCeiling(V), outer = V[0].x + 1.0;
+    float inner = max(V[0].x - PALL_WALL_HANDOFF_TO * V[0].y - V[1].y - pallLobeReach(V), 0.0);
     // by height: the relief map (without it — the ground under the epicenter) with the head
-    float lo = S[0].z + min(G.y, 0.0) - 0.5 * top, hi = S[0].z + max(G.z, 0.0) + top;
+    float lo = S[0].z + min(G.y, 0.0) - 0.5 * top, hi = S[0].z + max(G.z, 0.0) + ceiling;
     if (abs(dir.y) > 1e-6) {
         float y0 = lo / dir.y, y1 = hi / dir.y;
         ta = max(ta, min(y0, y1));
@@ -809,22 +1137,14 @@ vec4 pallWallSpans(mat4 S, mat4 V, vec4 G, vec3 dir, float ta, float tb) {
     return spans;
 }
 
-// Thickness of the head of the slot without noise on the ray segment [ta, tb] (dir from the eye), steps steps on each of its segments
-// (pallWallSpans): what the head covers in front of the square of the layer (fx.vsh). The floor — the relief of the map under each point
+// Optical depth of the head of the slot on the ray segment [ta, tb] (dir from the eye): its lobes over each of its spans (pallWallSpans) —
+// what the head covers in front of the square of the layer (fx.vsh), a source (fx_probe) or the world (fx_pall_composite), the same lobes
+// the march draws. steps — unused (the lobes' chords are closed-form)
 float pallWallTau(sampler2D ground, mat4 S, mat4 V, vec4 G, vec4 W, vec3 dir, float ta, float tb, int steps) {
     vec4 spans = pallWallSpans(S, V, G, dir, ta, tb);
     float tau = 0.0;
-    for (int k = 0; k < 2; k++) {
-        vec2 sp = k == 0 ? spans.xy : spans.zw;
-        if (sp.y <= sp.x) continue;
-        float ds = (sp.y - sp.x) / float(steps);
-        for (int i = 0; i < steps; i++) {
-            vec3 q = dir * (sp.x + (float(i) + 0.5) * ds);
-            float floorUp = pallRelief(ground, S, G, q.xz);
-            WallAt h = pallWallAt(ground, S, V, G, W, q, floorUp);
-            if (h.P.w > 0.0) tau += h.P.w * pallWallMean(h.s - h.P.z, h.z, h.P.x, h.P.y) * ds;
-        }
-    }
+    if (spans.y > spans.x) tau += pallLobeWalk(-1, ground, S, V, G, W, vec3(0.0), dir, spans.x, spans.y);
+    if (spans.w > spans.z) tau += pallLobeWalk(-1, ground, S, V, G, W, vec3(0.0), dir, spans.z, spans.w);
     return tau;
 }
 
