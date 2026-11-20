@@ -745,6 +745,8 @@ public final class PallPass {
         VIEW_PROJECTION.set(projection).mul(view);
         VIEW_PROJECTION.invert(INVERSE);
         view.positiveZ(FORWARD).negate();
+        // the shader pack's sky behind distant matter (pallAirLight), from this frame before anything of ours lies on it
+        SkyBandPass.update(scene, VIEW_PROJECTION, f.sun.x, f.sun.y, f.sun.z);
         if (previousEye == null || previousEye.distanceToSqr(eye) > JUMP * JUMP) history = false;
         float dx = (float) (previousEye == null ? 0 : eye.x - previousEye.x), dy = (float) (previousEye == null ? 0 : eye.y - previousEye.y),
                 dz = (float) (previousEye == null ? 0 : eye.z - previousEye.z);
@@ -825,6 +827,7 @@ public final class PallPass {
             m.safeGetUniform("PallAir").set(f.air.x, f.air.y, f.air.z, f.air.w);
             m.safeGetUniform("PallAirSky").set(f.airSky.x, f.airSky.y, f.airSky.z);
             m.safeGetUniform("PallAirFog").set(f.airFog.x, f.airFog.y, f.airFog.z, f.airFog.w);
+            SkyBandPass.bind(m);
             m.safeGetUniform("PallSlot0").set(f.slot0);
             m.safeGetUniform("PallSlot1").set(f.slot1);
             m.safeGetUniform("PallMin").set(f.min.x, f.min.y, f.min.z);
@@ -891,6 +894,7 @@ public final class PallPass {
                 fs.safeGetUniform("PallAir").set(f.air.x, f.air.y, f.air.z, f.air.w);
                 fs.safeGetUniform("PallAirSky").set(f.airSky.x, f.airSky.y, f.airSky.z);
                 fs.safeGetUniform("PallAirFog").set(f.airFog.x, f.airFog.y, f.airFog.z, f.airFog.w);
+                SkyBandPass.bind(fs);
                 fs.safeGetUniform("PallFroxel").set(f.quality.tile, VOLUME_NEAR, VOLUME_FAR, 0f);
                 fs.safeGetUniform("PallFroxelFrame").set(w, h, VOLUME_CURRENT, 0f);
                 quad(fs, false);

@@ -807,7 +807,12 @@ public final class NukePall {
                 double up = last.d.groundY() - WaterDecal.SEA_LEVEL + last.d.blocks(shape.capY());
                 double[] atCap = new double[3];
                 SKY.sunAt(up, atCap);
-                cap = String.format(java.util.Locale.ROOT, "at cap centre %.0f blocks above sea %.4f %.4f %.4f", up, atCap[0], atCap[1], atCap[2]);
+                Vec3 eye = mc.gameRenderer.getMainCamera().getPosition();
+                double capY = last.d.groundY() + last.d.blocks(shape.capY());
+                cap = String.format(java.util.Locale.ROOT, "at cap centre %.0f blocks above sea %.4f %.4f %.4f, airlight toward it: %s (vanilla sky %.3f %.3f %.3f, fog %.3f %.3f %.3f)",
+                        up, atCap[0], atCap[1], atCap[2],
+                        ua.zentix.incoming.client.fx.layer.SkyBandPass.describe(last.d.burst().x - eye.x, capY - eye.y, last.d.burst().z - eye.z),
+                        f.airSky.x, f.airSky.y, f.airSky.z, f.airFog.x, f.airFog.y, f.airFog.z);
             }
         }
         String sun = String.format(java.util.Locale.ROOT, "sun %.2f° day %.3f, sky %.4f %.4f %.4f, beam above air %.4f %.4f %.4f, on ground %.4f %.4f %.4f, %s",

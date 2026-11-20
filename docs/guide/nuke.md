@@ -134,7 +134,8 @@ faster-rising cap. The gap is expected; in the first seconds, dust near the grou
 
 The cap stands kilometres above the haze, so it keeps the sun longer than the ground. As the sun sets, its light on the
 cloud turns golden, then red, and the edge of the earth's shadow climbs the stem and the cap; a large cap stays lit for a
-while after sunset on the ground.
+while after sunset on the ground. The air between you and a distant cloud takes the colour of the sky behind it,
+so with a shader pack a cloud at dusk sits in the same golden haze as the pack's sky.
 
 A ground burst leaves a crater and radioactive fallout downwind. Over water, spray takes the place of the dust wall.
 The wall rises from the ground right behind the wave and thickens over a second or two. Bare earth, fields and forests

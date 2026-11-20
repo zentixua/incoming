@@ -104,6 +104,12 @@ public final class FxLayer {
             Incoming.LOG.error("Scene depth shader failed to load: smoke has no soft edges and is not hidden by Distant Horizons LODs", ex);
         }
         try {
+            e.registerShader(new ShaderInstance(e.getResourceProvider(), Incoming.id("fx_sky_band"), DefaultVertexFormat.POSITION), s -> SkyBandPass.shader = s);
+        } catch (IOException ex) {
+            SkyBandPass.shader = null;
+            Incoming.LOG.error("Sky band shader failed to load: distant nuclear haze takes vanilla's sky colour under a shader pack", ex);
+        }
+        try {
             e.registerShader(new ShaderInstance(e.getResourceProvider(), Incoming.id("fx_probe"), SourceProbes.FORMAT), s -> SourceProbes.shader = s);
         } catch (IOException ex) {
             SourceProbes.shader = null;

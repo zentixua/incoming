@@ -9,12 +9,12 @@ import java.lang.reflect.InvocationTargetException;
 import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 
-class WaterDecalFailureTest {
+class ShaderPackFailureTest {
     @Test
     void fatalShaderPackQueryPropagatesWithoutDisablingTheAdapter() throws Exception {
-        var checked = WaterDecal.class.getDeclaredField("packChecked");
-        var inUse = WaterDecal.class.getDeclaredField("packInUse");
-        var query = WaterDecal.class.getDeclaredMethod("shaderPack");
+        var checked = ShaderPack.class.getDeclaredField("checked");
+        var inUse = ShaderPack.class.getDeclaredField("inUse");
+        var query = ShaderPack.class.getDeclaredMethod("inUse");
         checked.setAccessible(true);
         inUse.setAccessible(true);
         query.setAccessible(true);

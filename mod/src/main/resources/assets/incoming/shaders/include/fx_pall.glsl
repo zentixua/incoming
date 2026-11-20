@@ -55,6 +55,10 @@ uniform vec4 PallAir;
 // airlight (pallAirLight): vanilla's sky colour and fog colour on screen; PallAirFog.w — render distance (sky fog end)
 uniform vec3 PallAirSky;
 uniform vec4 PallAirFog;
+// under a shader pack: the pack's sky by direction (client/fx/layer/SkyBand, uploaded by hand: an array); 1 — use it
+uniform float PallAirBandOn;
+const int AIR_BAND_AZ = 16, AIR_BAND_EL = 6;
+uniform vec4 PallAirBand[AIR_BAND_AZ * AIR_BAND_EL];
 uniform mat4 PallSlot0;
 uniform mat4 PallSlot1;
 uniform vec3 PallMin;
@@ -918,14 +922,32 @@ float gTauEye = 0.0;
 int gSunK = -1;
 float gSunAt = 0.0, gSunNear = 0.0;
 
-// Airlight along view direction dir, on screen: the air's own light in front of distant matter. It is the sky vanilla
-// draws there without its sun, moon and stars, computed from the frame's sky and fog colours, never sampled from the
-// frame (a sampled frame carries the sun and nearby blocks into the cap). Vanilla's sky (LevelRenderer.renderSky,
+// The shader pack's sky along dir (SkyBand: bins of 22.5° azimuth × 15° elevation of the frame's sky-only pixels, the
+// sun and moon cones left out, holes filled), bilinear between bin centres, wrapping in azimuth; below the lowest row's
+// centre (and below the horizon) the lowest row. Copy — SkyBand.read
+vec3 pallAirBand(vec3 dir) {
+    float u = atan(dir.z, dir.x) / 6.28318530718 * float(AIR_BAND_AZ) - 0.5;
+    float v = asin(clamp(dir.y / max(length(dir), 1e-9), 0.0, 1.0)) / 1.57079632679 * float(AIR_BAND_EL) - 0.5;
+    v = clamp(v, 0.0, float(AIR_BAND_EL - 1));
+    float u0 = floor(u), v0 = floor(v), fu = u - u0, fv = v - v0;
+    int a0 = int(mod(u0, float(AIR_BAND_AZ))), a1 = int(mod(u0 + 1.0, float(AIR_BAND_AZ)));
+    int e0 = int(v0), e1 = min(e0 + 1, AIR_BAND_EL - 1);
+    vec3 lo = mix(PallAirBand[e0 * AIR_BAND_AZ + a0].rgb, PallAirBand[e0 * AIR_BAND_AZ + a1].rgb, fu);
+    vec3 hi = mix(PallAirBand[e1 * AIR_BAND_AZ + a0].rgb, PallAirBand[e1 * AIR_BAND_AZ + a1].rgb, fu);
+    return mix(lo, hi, fv);
+}
+
+// Airlight along view direction dir, on screen: the air's own light in front of distant matter, the sky radiance along
+// that line (Koschmieder). Under a shader pack it is the pack's sky there (pallAirBand: the pack paints a golden dusk
+// sky that vanilla's sky colour, blue-grey, does not know); otherwise the sky vanilla draws there without its sun, moon
+// and stars, computed from the frame's sky and fog colours. Never the frame behind this pixel: the band holds only sky
+// pixels outside the sun and moon cones, so the sun behind a cap and blocks beside it never enter it. Vanilla's sky (LevelRenderer.renderSky,
 // FogRenderer FOG_SKY): a disc 16 above the eye, radius 512, in the sky colour, fogged into the fog colour by its
 // cylinder distance, smoothstep from 0 to the render distance; the vertex distance runs 16 at the centre to 512 at the
 // rim, interpolated (the 45° fan's chords make the rim up to 8 % nearer, ignored); past the rim and below the horizon —
 // the clear colour, the fog colour. Copy — NukeExposure.airLight
 vec3 pallAirLight(vec3 dir) {
+    if (PallAirBandOn > 0.5) return pallAirBand(dir);
     float across = length(dir.xz);
     if (dir.y <= 0.0 || across * 16.0 >= 512.0 * dir.y) return PallAirFog.rgb;
     float d = 16.0 + (512.0 - 16.0) * (16.0 * across / dir.y) / 512.0;

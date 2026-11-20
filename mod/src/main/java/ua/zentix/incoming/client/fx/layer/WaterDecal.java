@@ -14,7 +14,6 @@ import net.minecraft.client.Minecraft;
 import net.minecraft.client.multiplayer.ClientLevel;
 import net.minecraft.client.renderer.ShaderInstance;
 import net.minecraft.world.level.material.FogType;
-import net.neoforged.fml.ModList;
 import net.neoforged.neoforge.client.event.RenderLevelStageEvent;
 import org.jetbrains.annotations.Nullable;
 import org.joml.Matrix4f;
@@ -22,12 +21,8 @@ import org.joml.Vector4f;
 import org.lwjgl.BufferUtils;
 import org.lwjgl.opengl.GL11;
 import ua.zentix.incoming.Incoming;
-import ua.zentix.incoming.compat.HandleFailures;
 import ua.zentix.incoming.client.far.FarView;
 
-import java.lang.invoke.MethodHandle;
-import java.lang.invoke.MethodHandles;
-import java.lang.invoke.MethodType;
 import java.nio.ByteBuffer;
 import java.util.Locale;
 
@@ -78,10 +73,6 @@ public final class WaterDecal {
     private static final Vector4f HAZE = new Vector4f();
     private static int count, texture = -1, lastCount;
     private static boolean wanted;
-    private static boolean packChecked;
-    /** {@code IrisApi.isShaderPackInUse} (reflection: mod does not depend on Iris); null — no Iris. */
-    @Nullable
-    private static MethodHandle packInUse;
 
     private WaterDecal() {}
 
@@ -156,7 +147,7 @@ public final class WaterDecal {
         Vector4f haze = fog.haze(view.range(), HAZE);
         s.safeGetUniform("Haze").set(haze.x, haze.y, haze.z, haze.w);
         s.safeGetUniform("Pixel").set((float) view.pixel());
-        boolean pack = shaderPack();
+        boolean pack = ShaderPack.inUse();
         s.safeGetUniform("Pack").set(pack ? PACK_DROP : 0f, pack ? PACK_STEP : 0f, pack ? PACK_JITTER : 0f);
         for (int i = 0; i < RINGS; i++) {
             double[] r = RING[i];
@@ -175,37 +166,6 @@ public final class WaterDecal {
         MeshData mesh = b.build();
         if (mesh != null) BufferUploader.drawWithShader(mesh);
         RenderSystem.enableDepthTest();
-    }
-
-    /** Iris shader pack currently renders the world. */
-    private static boolean shaderPack() {
-        if (!packChecked) {
-            packChecked = true;
-            packInUse = irisPackInUse();
-        }
-        if (packInUse == null) return false;
-        try {
-            return (boolean) packInUse.invokeExact();
-        } catch (Exception | LinkageError t) {
-            packInUse = null;
-            Incoming.LOG.warn("Iris: shader pack check failed, the water decal assumes no shader pack", t);
-            return false;
-        } catch (Throwable t) {
-            throw HandleFailures.propagate(t);
-        }
-    }
-
-    @Nullable
-    private static MethodHandle irisPackInUse() {
-        if (!ModList.get().isLoaded("iris")) return null;
-        try {
-            Class<?> api = Class.forName("net.irisshaders.iris.api.v0.IrisApi");
-            Object iris = api.getMethod("getInstance").invoke(null);
-            return MethodHandles.publicLookup().findVirtual(api, "isShaderPackInUse", MethodType.methodType(boolean.class)).bindTo(iris);
-        } catch (ReflectiveOperationException | LinkageError e) {
-            Incoming.LOG.warn("Iris: no shader pack API, the water decal assumes no shader pack", e);
-            return null;
-        }
     }
 
     /** Frame profiles to texture (custom 64×4 RGBA8: darkness, foam; allocate once, then update pixels only). */
