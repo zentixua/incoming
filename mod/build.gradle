@@ -82,7 +82,16 @@ def sandbox = System.getenv('INCOMING_SANDBOX') != null
 def scenarioDir = project.findProperty('scenarioDir') ?: (sandbox ? 'run/sandbox' : 'run/scenario')
 
 neoForge {
-    version = project.neo_version
+    // -PnoRecompile: binary Minecraft, no decompile/recompile (Vineflower needs ~4 GB): CPU-render hosts with little free
+    // memory (netcup, tools/soft_gl.sh) only run clients and need no Minecraft sources
+    if (project.hasProperty('noRecompile')) {
+        enable {
+            version = project.neo_version
+            disableRecompilation = true
+        }
+    } else {
+        version = project.neo_version
+    }
     parchment {
         mappingsVersion = project.parchment_mappings_version
         minecraftVersion = project.parchment_minecraft_version

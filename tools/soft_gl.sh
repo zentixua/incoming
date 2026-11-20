@@ -8,7 +8,7 @@
 #   soft_display <socket> <w> <h> <command>   runs the command on a CPU-only display: nested KWin where it exists
 #                        (tools/nested_kwin.sh with INCOMING_SOFT=1), otherwise xvfb-run; no host audio either way
 #
-# INCOMING_SOFT_HEAP: client heap (default 3g: a flat sandbox world peaks under 2 GB of heap);
+# INCOMING_SOFT_HEAP: client heap (default 3g; 1536m fits netcup beside its servers: a flat sandbox used < 0.9 GB);
 # INCOMING_SOFT_THREADS: llvmpipe raster threads (default half the CPUs, at most 8: two clients fit a 16-thread laptop
 # beside Artem's game); INCOMING_SOFT_RESERVE_MB: memory left for everyone else after the client starts (default 4096,
 # netcup's floor; the laptop keeps the same so Artem's game never swaps).
@@ -25,14 +25,21 @@ soft_gl_env() {
   export JAVA_TOOL_OPTIONS="-Xmx${INCOMING_SOFT_HEAP:-3g}${JAVA_TOOL_OPTIONS:+ $JAVA_TOOL_OPTIONS}"
 }
 
-# Memory admission: heap plus ~1.5 GB of native memory (llvmpipe, Xwayland, metaspace) must leave the reserve free
-soft_mem_ok() {
-  local heap=${INCOMING_SOFT_HEAP:-3g} avail need
+# Memory ceiling of one CPU client, MB: heap + 1.5 GB native (llvmpipe keeps textures and framebuffers in process memory;
+# a flat-world sandbox with -Xmx3g peaked at 3.0 GB of unit memory, heap use under 0.9 GB). tools/laptop_job.sh --soft
+# sets it as the unit's MemoryMax without swap, so the worst case is known before start
+soft_mem_cap() {
+  local heap=${INCOMING_SOFT_HEAP:-3g}
   case "$heap" in *g|*G) heap=$(( ${heap%?} * 1024 )) ;; *m|*M) heap=${heap%?} ;; esac
+  echo $(( heap + 1536 ))
+}
+
+# Memory admission: the client's ceiling must leave the reserve free
+soft_mem_ok() {
+  local avail cap; cap=$(soft_mem_cap)
   avail=$(awk '/^MemAvailable:/ { print int($2 / 1024) }' /proc/meminfo)
-  need=$(( heap + 1536 + ${INCOMING_SOFT_RESERVE_MB:-4096} ))
-  if [ "$avail" -lt "$need" ]; then
-    echo "soft client refused: ${avail} MB available, needs ${need} MB (heap ${heap} + 1536 native + reserve ${INCOMING_SOFT_RESERVE_MB:-4096})" >&2
+  if [ "$avail" -lt $(( cap + ${INCOMING_SOFT_RESERVE_MB:-4096} )) ]; then
+    echo "soft client refused: ${avail} MB available, needs its ceiling ${cap} MB + reserve ${INCOMING_SOFT_RESERVE_MB:-4096} MB (INCOMING_SOFT_HEAP lowers the ceiling)" >&2
     return 75
   fi
 }
