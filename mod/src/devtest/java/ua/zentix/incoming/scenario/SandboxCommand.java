@@ -60,8 +60,11 @@ import java.util.Locale;
  *       clips; {@code turn 0} stops);</li>
  *   <li>{@code zoom <k>} — zoom ×k (1–256; 1 — no zoom): the field of view k times narrower (tangent of the half-angle), as in Ok Zoomer, —
  *       last, after all who change it;</li>
- *   <li>{@code shots <name> <seconds, comma-separated> [wav]} — frames and sound of the next effect: frames at those seconds from
- *       its start, sound — that many seconds ({@code wav}, 0 — no sound) in {@code fx/out/<name>/};</li>
+ *   <li>{@code shots <name> <seconds, comma-separated | none> [wav]} — frames and sound of the next effect: frames at those seconds
+ *       from its start ({@code none}: sound only), sound — that many seconds ({@code wav}, 0 — no sound) in {@code fx/out/<name>/}.
+ *       On a CPU renderer the world slows while frames are due (a frame takes ~0.3 s there), so each frame is taken within a
+ *       fraction of a tick of its second; such a take's sound is not real-time, so {@code tools/sandbox.sh shot} records sound
+ *       in a second, unslowed take of the same effect ({@code none});</li>
  *   <li>{@code again} — the last effect once more (after a hot code swap), {@code clear} — remove all effects,
  *       {@code reload} — reload resources (like F3+T: shaders, textures, sounds, language), {@code wait <ticks>}.</li>
  * </ul>
@@ -385,6 +388,7 @@ record SandboxCommand(Verb verb, List<String> args) {
 
     /** {@code shots}: frame seconds in ascending order. */
     double[] times() {
+        if (args.get(1).equals("none")) return new double[0];
         String[] parts = args.get(1).split(",");
         double[] t = new double[parts.length];
         for (int i = 0; i < parts.length; i++) {

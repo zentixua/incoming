@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Heavy job on the host laptop (scenario clients and sandbox, Blender, trailer editing, bench):
 #
-#   tools/laptop_job.sh [--gpu [--wait] | --light] <name> -- <command …>
+#   tools/laptop_job.sh [--gpu [--wait] | --light | --soft] <name> -- <command …>
 #   tools/laptop_job.sh --status            ← running jobs, GPU holder, jobs waiting for Artem's game
 #
 # Job runs in its own transient systemd --user service (systemd-run --wait --collect), outside its caller's
@@ -18,6 +18,8 @@
 #            His game started while the job runs (polled every second) stops the job: "Artem's game started at T: job
 #            stopped", code 75
 #   --light  same as no flag: immediate, no lease (GameTest, build, server need no GPU)
+#   --soft   CPU-rendered client (tools/soft_gl.sh): immediate, no lease, idle CPU priority (CPUWeight=idle: Artem's game
+#            and every normal process go first), keeps running while Artem plays
 set -euo pipefail
 
 # Artem's game: artem_playing (gpu_lease.sh), java in his Prism instance directory
@@ -73,9 +75,9 @@ if [ "${1:-}" = --in-unit ]; then
 fi
 
 mode=heavy wait=
-case "${1:-}" in --gpu) mode=gpu; shift ;; --light) mode=light; shift ;; esac
+case "${1:-}" in --gpu) mode=gpu; shift ;; --light) mode=light; shift ;; --soft) mode=soft; shift ;; esac
 [ "$mode" = gpu ] && [ "${1:-}" = --wait ] && { wait=--wait; shift; }
-[ $# -ge 3 ] && [ "$2" = "--" ] || { echo "usage: $0 [--gpu [--wait]|--light] <name> -- <command …> | --status" >&2; exit 2; }
+[ $# -ge 3 ] && [ "$2" = "--" ] || { echo "usage: $0 [--gpu [--wait]|--light|--soft] <name> -- <command …> | --status" >&2; exit 2; }
 name=$1; shift 2
 
 # GPU lease belongs to session: foreign holder refuses (or waits with --wait); before service for immediate refusal
@@ -96,10 +98,12 @@ fi
 envs=()
 while IFS= read -r line; do envs+=(-E "$line"); done < <(env | grep -E '^(JAVA_HOME|MC_DIR|MODS|INCOMING_[A-Z_]+|PYTHON_CPU_COUNT|XDG_RUNTIME_DIR)=' || true)
 
+props=(-p OOMScoreAdjust=500)
+[ "$mode" = soft ] && props+=(-p CPUWeight=idle -p Nice=10)
 code=0
 systemd-inhibit --what=sleep:idle --who="Incoming: $name" --why="mod check (tools/laptop_job.sh)" \
   systemd-run --user --wait --pipe --collect --quiet --same-dir --unit="incoming-job-$name-$$" \
-    -p OOMScoreAdjust=500 "${envs[@]}" -- "$(readlink -f "$0")" --in-unit "$mode" "$name" $$ -- "$@" || code=$?
+    "${props[@]}" "${envs[@]}" -- "$(readlink -f "$0")" --in-unit "$mode" "$name" $$ -- "$@" || code=$?
 # completion line for background waiter: exit code immediately visible, startup failure not lost
 echo "laptop_job $name: exit $code"
 exit $code

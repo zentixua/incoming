@@ -22,21 +22,37 @@
 # Command (string) runs inside nested KWin session (--exit-with-session): KWin closes when it exits.
 # One GPU (tools/gpu_lease.sh): client acquires session lease and "GPU client" lock, holding them
 # while alive; foreign lease or running client refuses with 75 and holder details (INCOMING_GPU_WAIT=1 waits in lease queue).
+# INCOMING_SOFT=1: the whole session on the CPU, no lease or lock, any number beside the GPU client (tools/soft_gl.sh):
+# KWin composes with QPainter, Xwayland without glamor, the client's GL is Mesa llvmpipe. LIBGL_ALWAYS_SOFTWARE alone
+# is not enough: GLVND gives the client the NVIDIA GLX vendor Xwayland names, and NVIDIA ignores that variable.
 set -euo pipefail
 [ $# -eq 4 ] || { echo "usage: $0 <socket> <width> <height> <command>" >&2; exit 2; }
 SOCKET="$1" WIDTH="$2" HEIGHT="$3" COMMAND="$4"
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 HOME_DIR="$ROOT/mod/run/kwin/$SOCKET"
 source "$ROOT/tools/gpu_lease.sh"
+# socket held by live compositor (libwayland flocks <socket>.lock): second KWin on the same name crashes the first
+RT=${XDG_RUNTIME_DIR:-/run/user/$(id -u)}
+socket_busy() { [ -e "$RT/$SOCKET.lock" ] && ! flock -n -s "$RT/$SOCKET.lock" true 2>/dev/null; }
+if [ -n "${INCOMING_SOFT:-}" ]; then
+  source "$ROOT/tools/soft_gl.sh"
+  socket_busy && { echo "socket $SOCKET is occupied by another KWin" >&2; exit 75; }
+  soft_gl_env
+  mkdir -p "$HOME_DIR/config" "$HOME_DIR/data" "$HOME_DIR/cache" "$HOME_DIR/state"
+  exec env -u DISPLAY -u WAYLAND_DISPLAY -u DBUS_SESSION_BUS_ADDRESS \
+      XDG_CONFIG_HOME="$HOME_DIR/config" XDG_DATA_HOME="$HOME_DIR/data" \
+      XDG_CACHE_HOME="$HOME_DIR/cache" XDG_STATE_HOME="$HOME_DIR/state" \
+      PIPEWIRE_REMOTE="$HOME_DIR/no-audio-server" PULSE_SERVER="unix:$HOME_DIR/no-audio-server" \
+      KWIN_COMPOSE=Q XWAYLAND_NO_GLAMOR=1 \
+      nice -n "${INCOMING_SOFT_NICE:-10}" dbus-run-session --config-file="$ROOT/tools/nested_kwin_bus.conf" -- \
+      kwin_wayland --virtual --no-lockscreen --xwayland --socket "$SOCKET" --width "$WIDTH" --height "$HEIGHT" \
+      --exit-with-session "$COMMAND"
+fi
 owner="${INCOMING_GPU_OWNER:-$(lease_owner "$ROOT")}"
 # client lock first (otherwise refusal would leave a newly acquired lease for 10 min), then lease
 # (with INCOMING_GPU_WAIT, lease queue waits for running client: lease_take)
 if [ -z "${INCOMING_GPU_WAIT:-}" ] && who=$(gpu_client_busy); then echo "$who" >&2; exit 75; fi
-# socket held by live compositor (libwayland flocks <socket>.lock): second KWin on the same name crashes the first
-RT=${XDG_RUNTIME_DIR:-/run/user/$(id -u)}
-if [ -e "$RT/$SOCKET.lock" ] && ! flock -n -s "$RT/$SOCKET.lock" true 2>/dev/null; then
-  echo "socket $SOCKET is occupied by another KWin" >&2; exit 75
-fi
+if socket_busy; then echo "socket $SOCKET is occupied by another KWin" >&2; exit 75; fi
 lease_take "$owner" "$ROOT" ${INCOMING_GPU_WAIT:+--wait} || exit 75
 # own lease but own session client still running: INCOMING_GPU_WAIT waits for it
 while [ -n "${INCOMING_GPU_WAIT:-}" ] && gpu_client_busy >/dev/null; do sleep 10; done
