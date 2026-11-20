@@ -17,6 +17,10 @@ On a server, install the same Incoming version for everyone.
 | Iris | Nuclear effects with shaders | Clients only |
 | Flashback | Recording and replaying strikes | Clients only |
 
+Explosions, smoke, trails and the nuclear cloud stay visible behind glass, ice, slime, honey and water seen from below,
+tinted by them as the world behind is. With a shader pack the pack draws the glass its own way: the effects behind it
+are visible but not tinted, and only through see-through blocks within about 40 blocks of you.
+
 ## Voxy on NeoForge 1.21.1
 
 Use [Roxy 0.4.1](https://modrinth.com/mod/roxy/version/VnJRhuAn) with **Fabric Voxy 0.2.16-beta for Minecraft 1.21.11**.
