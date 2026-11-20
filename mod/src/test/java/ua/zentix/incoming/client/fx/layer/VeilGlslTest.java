@@ -37,8 +37,13 @@ class VeilGlslTest {
         String vsh = read("core/fx.vsh"), fsh = read("core/fx.fsh");
         assertEquals(FxQuads.VEIL / 127.0, mode(vsh), 1e-9);
         assertEquals(FxQuads.VEIL / 127.0, mode(fsh), 1e-9);
-        // the light word carries middle and width in sixteenths, × opacity (SmokePuffs.Veil.packed)
-        assertTrue(vsh.contains("veilMiddle = float(UV2.x) / 16.0 * Color.a;") && vsh.contains("veilWidth = float(UV2.y) / 16.0 * Color.a;"), "fx.vsh light word");
+        // the light word carries middle and width in quarters, × opacity (SmokePuffs.Veil.packed)
+        assertTrue(vsh.contains("veilMiddle = float(UV2.x) / 4.0 * Color.a;") && vsh.contains("veilWidth = float(UV2.y) / 4.0 * Color.a;"), "fx.vsh light word");
+        // the near part: share in Normal.z (byte /127, SmokePuffs.Veil.byteShare), width in the softness (sixteenths)
+        assertTrue(vsh.contains("veilNear = Normal.z * Color.a;") && vsh.contains("veilNearWidth = softness * Color.a;"), "fx.vsh near part");
+        assertTrue(fsh.contains("float depth = tau * (n * veilErf(scene / w0 * 0.70710678) + (1.0 - n) * ahead);"), "fx.fsh two parts");
+        // the mesh at the eye is not faded at the near plane
+        assertTrue(fsh.contains("if (!veil) seen *= clamp((viewDistance - 0.3) / 1.2, 0.0, 1.0);"), "near-plane fade spares the veil");
         assertTrue(vsh.contains("ivec2(0, 240) : UV2"), "the veil's light is open sky");
         // the veil branch uses the Beer–Lambert share, not the softness ramp
         assertTrue(fsh.contains("if (veil) seen *= veilBefore(scene, vertexColor.a);"), "fx.fsh veil branch");

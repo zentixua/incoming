@@ -249,12 +249,15 @@ vec3 bloomLight(vec4 c, float cover, float gain) {
 }
 
 // The veil of matter at the eye (SmokePuffs.Veil, FxQuads.VEIL in Normal.y): the share of the vertex's opacity a that lies in
-// front of the world at view-axis distance scene. Its matter lies along the ray as a Gaussian with middle m and width w
-// (veilMiddle, veilWidth: × a, fx.vsh), cut at the eye. Optical depth to the world: tau·(Φ((scene − m)/w) − Φ(−m/w))/(1 −
-// Φ(−m/w)), tau = −ln(1 − a) the whole ray's (Beer–Lambert: a near block keeps e^(−σd) of its contrast, the sky takes the
-// whole veil). Nearer than the mesh (viewDistance) nothing, as the frame's depth cuts it there in every pass.
+// front of the world at view-axis distance scene. Its matter lies along the ray in two parts (fx.vsh, each × a): the
+// share n of the depth around the eye, a half-Gaussian of width w0 from the eye, and the rest ahead, a Gaussian with
+// middle m and width w cut at the eye. Optical depth to the world: tau·(n·erf(scene/(√2 w0)) + (1 − n)·(Φ((scene − m)/w) −
+// Φ(−m/w))/(1 − Φ(−m/w))), tau = −ln(1 − a) the whole ray's (Beer–Lambert: a near block keeps e^(−σd) of its contrast, the
+// sky takes the whole veil). Nearer than the mesh (SmokePuffs.MESH_AT, 0.1 m) nothing: the frame's depth cuts it there.
 in float veilMiddle;
 in float veilWidth;
+in float veilNear;
+in float veilNearWidth;
 const float VEIL_MODE = 25.0 / 127.0;
 
 // Abramowitz–Stegun 7.1.26 erf (SmokeGrid.erf)
@@ -266,10 +269,12 @@ float veilErf(float x) {
 
 float veilBefore(float scene, float a) {
     if (!(a > 0.0) || !(scene >= viewDistance)) return 0.0;
-    float m = max(veilMiddle / a, 0.0), w = max(veilWidth / a, 1.0 / 16.0);
+    float m = max(veilMiddle / a, 0.0), w = max(veilWidth / a, 0.25);
+    float n = clamp(veilNear / a, 0.0, 1.0), w0 = max(veilNearWidth / a, 1.0 / 16.0);
     float cut = veilErf(-m / w * 0.70710678);
+    float ahead = max(veilErf((scene - m) / w * 0.70710678) - cut, 0.0) / max(1.0 - cut, 1e-6);
     float tau = -log(max(1.0 - a, 1e-3));
-    float depth = tau * max(veilErf((scene - m) / w * 0.70710678) - cut, 0.0) / max(1.0 - cut, 1e-6);
+    float depth = tau * (n * veilErf(scene / w0 * 0.70710678) + (1.0 - n) * ahead);
     return (1.0 - exp(-depth)) / a;
 }
 
@@ -381,7 +386,8 @@ void main() {
     }
     // right at the camera the square does not cut the screen with the near-plane edge (the same numbers — SmokePuffs.NEAR_FROM, NEAR_FADE: what
     // melts here gives to the veil)
-    seen *= clamp((viewDistance - 0.3) / 1.2, 0.0, 1.0);
+    // (the veil's own mesh lies at the eye on purpose: its matter starts there)
+    if (!veil) seen *= clamp((viewDistance - 0.3) / 1.2, 0.0, 1.0);
     // Minecraft fog dims a particle rather than painting it its own colour: the world behind it is in fog anyway, and an opaque spot of the fog's
     // colour at the draw edge would cover the bands of plume trails and the distant picture of explosions, which particles replace there
     seen *= 1.0 - fog * FxFogColor.a;

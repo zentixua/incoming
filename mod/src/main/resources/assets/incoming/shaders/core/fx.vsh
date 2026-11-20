@@ -80,11 +80,14 @@ out vec3 worldPos;
 out float emitGain;
 // 1 — spot of a small glowing thing (FxQuads, FxBloom.spots): halo by formula, light linear
 out float emitSpot;
-// the veil of matter at the eye (FxQuads.VEIL in Normal.y, SmokePuffs.Veil.packed in UV2): middle and width of the
-// vertex's matter along its ray, blocks, × its opacity (fx.fsh divides by the interpolated opacity: an empty vertex does
-// not pull a cell's matter to the eye); 0 for other quads
+// the veil of matter at the eye (FxQuads.VEIL in Normal.y, SmokePuffs.Veil): middle and width of the vertex's matter
+// ahead (UV2, quarters of a block), the share of the depth in the matter around the eye (Normal.z) and that part's width (softness),
+// each × the vertex opacity (fx.fsh divides by the interpolated opacity: an empty vertex does not pull a cell's matter to
+// the eye); 0 for other quads
 out float veilMiddle;
 out float veilWidth;
+out float veilNear;
+out float veilNearWidth;
 const float VEIL_MODE = 25.0 / 127.0;
 // in the sun (by day) or the moon (by night) in the world; w — share of direct light in the sky light (FxLayer.sun)
 uniform vec4 FxSun;
@@ -230,9 +233,13 @@ void main() {
     emitSpot = 0.0;
     veilMiddle = 0.0;
     veilWidth = 0.0;
+    veilNear = 0.0;
+    veilNearWidth = 0.0;
     if (abs(Normal.y - VEIL_MODE) < 0.004) {
-        veilMiddle = float(UV2.x) / 16.0 * Color.a;
-        veilWidth = float(UV2.y) / 16.0 * Color.a;
+        veilMiddle = float(UV2.x) / 4.0 * Color.a;
+        veilWidth = float(UV2.y) / 4.0 * Color.a;
+        veilNear = Normal.z * Color.a;
+        veilNearWidth = softness * Color.a;
     }
     if (Emit > 129.5) {
         emitSpot = 1.0;

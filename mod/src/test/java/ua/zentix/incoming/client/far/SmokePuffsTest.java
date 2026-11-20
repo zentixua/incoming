@@ -142,7 +142,8 @@ class SmokePuffsTest {
      * numerical from the Gaussian density), and the world's transmittance e^(−τ(S)) within 20 % where it still shows
      * (above 0.05: fainter contrast is below the 8-bit frame step on most blocks): eye along a dense SAM trail (σ 5 m, transverse depth 2.7), a distant dense clump at 60 m (a house in
      * front of it at 20 m gets less than 0.2 of the veil), thin haze, and the eye inside a broad dense dust cloud (σ 20 m,
-     * 0.3/m at the eye: a block at 3 m keeps e^(−0.9) of its contrast, not the whole veil — the flat screen inside dust).
+     * 0.3/m at the eye: a block at 3 m keeps e^(−0.9) of its contrast, not the whole veil — the flat screen inside dust),
+     * and light haze at the eye with a dense clump ahead (a wall between them keeps its colour).
      */
     @Test
     void veilFadesToTheWorldWhereItsMatterIs() {
@@ -158,7 +159,11 @@ class SmokePuffsTest {
         java.util.List<double[]> thin = java.util.List.of(new double[]{0, 0, 30, 40, 20, 0.2 * 2 * Math.PI * 40 * 20});
         // the eye 5 m off the middle of a broad dense dust cloud: extinction 0.3/m at its middle
         java.util.List<double[]> dust = java.util.List.of(new double[]{3, -2, 4, 20, 12, 0.3 * Math.pow(2 * Math.PI, 1.5) * 400 * 12});
-        for (java.util.List<double[]> gs : java.util.List.of(trail, far, thin, dust)) {
+        // review #716 r2: the tail of light haze centred 5 m behind the eye and a dense clump (σ 2 m, depth 3) at 40 m: a
+        // wall at 30 m keeps its colour (one shared profile widened to 18 m put the clump's matter in front of it)
+        java.util.List<double[]> detached = java.util.List.of(new double[]{0, 0, -5, 10, 10, 0.01 * Math.pow(2 * Math.PI, 1.5) * 1000},
+                new double[]{0, 0, 40, 2, 2, 3 * 2 * Math.PI * 4});
+        for (java.util.List<double[]> gs : java.util.List.of(trail, far, thin, dust, detached)) {
             double[] packed = new double[gs.size() * SmokePuffs.VEIL_FIELDS];
             for (int c = 0; c < gs.size(); c++) {
                 double[] g = gs.get(c);
@@ -171,8 +176,7 @@ class SmokePuffsTest {
             veil.fill(view, packed, gs.size());
             int k = SmokePuffs.Veil.index(SmokePuffs.Veil.N / 2, SmokePuffs.Veil.N / 2);
             double total = veil.tau[k], worst = 0, at = 0, house = 0, worstT = 0, atT = 0;
-            // forward ray (z) optical depth from Gaussian density in 0.05 m steps; check every meter from the mesh (2 m, the
-            // frame's depth cuts the veil nearer) to 120
+            // forward ray (z) optical depth from Gaussian density in 0.05 m steps; check every meter from 1 to 120
             double tau = 0;
             for (int step = 0; step < 2400; step++) {
                 double z = (step + 0.5) * 0.05;
@@ -182,7 +186,7 @@ class SmokePuffsTest {
                             * Math.exp(-0.5 * ((dx * dx + dz * dz) / (g[3] * g[3]) + dy * dy / (g[4] * g[4])));
                 }
                 double s = (step + 1) * 0.05;
-                if (s < SmokePuffs.VEIL_AT || (step + 1) % 20 != 0) continue;
+                if (s < 1 || (step + 1) % 20 != 0) continue;
                 double share = -Math.expm1(-tau) / -Math.expm1(-total), drawn = veil.before(k, s);
                 if (Math.abs(s - 20) < 1e-6) house = drawn;
                 if (Math.abs(share - drawn) > worst) {
@@ -199,9 +203,10 @@ class SmokePuffsTest {
             String got = String.format(java.util.Locale.ROOT,
                     "optical depth %.2f: share before world off by %.2f at %.0f m, transmittance off by %.0f %% at %.0f m, at 20 m %.2f",
                     total, worst, at, 100 * worstT, atT, house);
-            System.out.println("VEIL " + got + String.format(java.util.Locale.ROOT, " middle %.2f width %.2f alpha %.4f", veil.middle[k], veil.width[k], veil.alpha(k)));
+            System.out.println("VEIL " + got + String.format(java.util.Locale.ROOT, " near %.2f (width %.2f), ahead %.2f ± %.2f, alpha %.4f", veil.near[k], veil.nearWidth[k], veil.middle[k], veil.width[k], veil.alpha(k)));
             assertTrue(worst <= 0.2 && worstT <= 0.2, got);
             if (gs == far) assertTrue(house < 0.2, got);
+            if (gs == detached) assertTrue(veil.before(k, 30) * SmokePuffs.Veil.byteAlpha(veil.alpha(k)) < 0.1, got);
         }
     }
 

@@ -133,18 +133,19 @@ public final class FxQuads {
     }
 
     /**
-     * The next quads are the veil of matter at the eye ({@code SmokePuffs.Veil}, {@code fx.fsh} {@code veilBefore}:
-     * Beer–Lambert share before the world, the white sprite, open-sky light): their light word carries where the
-     * vertex's matter lies along its ray ({@code SmokePuffs.Veil.packed}). {@link #endVeil} returns the previous mode.
+     * The next vertices are the veil of matter at the eye ({@code SmokePuffs.Veil}, {@code fx.fsh} {@code veilBefore}:
+     * Beer–Lambert share before the world, the white sprite, open-sky light): {@code near} — the share of the ray's depth
+     * in the matter around the eye ({@code Normal.z}); their light word and softness carry where the matter lies
+     * ({@code SmokePuffs.Veil.packed}, {@code nearWidth}). {@link #endVeil} returns the previous mode.
      */
-    public void veil() {
+    public void veil(float near) {
         if (!veiling) {
             veilNearest = nearest;
             veilOpacity = opacity;
             veiling = true;
         }
         nearest = VEIL;
-        opacity = 0;
+        opacity = (byte) Math.round(Mth.clamp(near, 0, 1) * 127);
     }
 
     /** After the veil's quads: the texture mode before {@link #veil}. */

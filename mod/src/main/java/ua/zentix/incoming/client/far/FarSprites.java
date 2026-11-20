@@ -216,9 +216,6 @@ public final class FarSprites implements SmokePuffs.Out {
         int n = SmokePuffs.Veil.N;
         float depth = veil.depth();
         FxQuads.Part was = out.part(FxQuads.Part.VEIL);
-        // the veil's light is open sky (the only light its caller gives, SmokePuffs.OPEN_SKY): fx.vsh takes it for the
-        // veil mode, whose light word carries where the matter lies
-        out.veil();
         for (int j = 0; j + 1 < n; j++) {
             for (int i = 0; i + 1 < n; i++) {
                 int a = SmokePuffs.Veil.index(i, j), b = SmokePuffs.Veil.index(i + 1, j), c = SmokePuffs.Veil.index(i + 1, j + 1),
@@ -237,13 +234,18 @@ public final class FarSprites implements SmokePuffs.Out {
     }
 
     /**
-     * A veil vertex: opacity and colour, where its matter lies along the ray in the light word
-     * ({@link SmokePuffs.Veil#packed}; the veil's light is open sky, {@code fx.vsh} for {@link FxQuads#veil}).
+     * A veil vertex: opacity and colour, where its matter lies along the ray ({@link SmokePuffs.Veil#middle}: the light
+     * word, the mode byte and the softness; {@code fx.vsh} for {@link FxQuads#veil}).
      */
     private void veilCorner(SmokePuffs.Veil veil, int i, int j, int k, float u, float v) {
         float a = Math.min(1, veil.alpha(k));
+        // the veil's light is open sky (the only light its caller gives, SmokePuffs.OPEN_SKY): fx.vsh takes it for the
+        // veil mode, whose light word carries where the matter ahead lies; the near part's share in the mode's byte, its
+        // width in the softness
+        out.veil(veil.near[k]);
         out.vertex((float) veil.place(i, j, 0), (float) veil.place(i, j, 1), (float) veil.place(i, j, 2), u, v, Math.min(1, veil.r[k] * a),
-                Math.min(1, veil.g[k] * a), Math.min(1, veil.b[k] * a), a, 0, 1, veil.packed(k), 0);
+                Math.min(1, veil.g[k] * a), Math.min(1, veil.b[k] * a), a, SmokePuffs.Veil.sixteenths(veil.nearWidth[k], 1 / 16.0) / 16f, 1,
+                veil.packed(k), 0);
     }
 
     /**
