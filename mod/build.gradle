@@ -157,8 +157,9 @@ neoForge {
             if (System.getenv('INCOMING_FX_DRAIN')) systemProperty 'incoming.fx.drain', 'true'
             // garbage collector pauses — to tell them apart from slow code (run/scenario/logs/gc.log)
             jvmArgument "-Xlog:gc:file=${project.file("${scenarioDir}/logs/gc.log").absolutePath}:time,uptime"
-            // optional JFR profile: INCOMING_JFR=1 tools/client_scenario.sh nuke → run/scenario/logs/scenario.jfr
-            if (System.getenv('INCOMING_JFR')) jvmArgument "-XX:StartFlightRecording=filename=${project.file('run/scenario/logs/scenario.jfr').absolutePath},settings=profile"
+            // optional JFR profile: INCOMING_JFR=1 tools/client_scenario.sh nuke → run/scenario/logs/scenario.jfr (the
+            // sandbox: run/sandbox/logs; the JVM does not start when the folder is missing)
+            if (System.getenv('INCOMING_JFR')) jvmArgument "-XX:StartFlightRecording=filename=${project.file("${scenarioDir}/logs/scenario.jfr").absolutePath},settings=profile"
         }
         server {
             server()

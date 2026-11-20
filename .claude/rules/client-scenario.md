@@ -87,6 +87,8 @@ with Iris.
   `shaders` without Sodium/Iris jars, `dh` without Distant Horizons jar in sandbox mods (Gradle takes instance mods
   by patterns, silently skips missing) exits 2 explaining missing mods/Gradle source, instead of recording without
   Iris (`tools/test_sandbox.sh`). Sandbox installs no mods into pack: own `run/sandbox`.
+  Measurement start: `INCOMING_FX_DRAIN=1` (per-pass/part GPU drain frames in the `SANDBOX shot` line) and `INCOMING_JFR=1`
+  (JFR into `run/sandbox/logs/scenario.jfr`, beside `gc.log`) on `start`.
 - `scenery grass|paved|forest`: identical dust-source comparison geometry, 97×97 platform, stone paving or grass,
   forest of identical oak blocks (permeable canopies, trunks, central clearing). Before switching remove `house 0`,
   afterward `wait 80` for client block delivery. Sandbox world only.
