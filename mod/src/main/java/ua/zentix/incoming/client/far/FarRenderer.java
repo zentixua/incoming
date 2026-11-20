@@ -144,7 +144,8 @@ public final class FarRenderer {
         return String.format(java.util.Locale.ROOT,
                 "fill %.2f screens (budget %.0f, one club per gaussian %.2f, before merging %.2f), cluster share %.2f, merge level %d, veil gaussians %d, clusters %d, plan %.2f ms off-thread",
                 SmokePuffs.lastFill(), SmokePuffs.FILL_BUDGET, SmokePuffs.lastFloor(), SmokePuffs.lastRaw(), SmokePuffs.lastShare(),
-                SmokePuffs.lastLevel(), SmokePuffs.lastVeils(), SmokePuffs.lastItems(), SmokePuffs.lastPlanMillis());
+                SmokePuffs.lastLevel(), SmokePuffs.lastVeils(), SmokePuffs.lastItems(), SmokePuffs.lastPlanMillis())
+                + ", veil set " + SmokePuffs.lastVeilGaussians();
     }
 
     /** Saved only for secondary views; swapping leaves the primary draw path and operation order unchanged. */

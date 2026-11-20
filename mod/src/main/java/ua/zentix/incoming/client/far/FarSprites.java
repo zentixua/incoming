@@ -228,14 +228,20 @@ public final class FarSprites implements SmokePuffs.Out {
                 veilCorner(veil, i + 1, j, b, u, v, light);
             }
         }
+        out.endVeil();
         out.part(was);
         counts[5]++;
     }
 
+    /**
+     * A veil vertex: its opacity and colour as before, where its matter lies along the ray in the texture-mode bytes
+     * ({@link FxQuads#veil}: middle of its matter as m/(|m| + w), the width w as softness).
+     */
     private void veilCorner(SmokePuffs.Veil veil, int i, int j, int k, float u, float v, int light) {
-        float a = Math.min(1, veil.alpha(k));
+        float a = Math.min(1, veil.alpha(k)), scale = veil.scale[k], from = veil.from[k];
+        out.veil(from / (Math.abs(from) + scale));
         out.vertex((float) veil.place(i, j, 0), (float) veil.place(i, j, 1), (float) veil.place(i, j, 2), u, v, Math.min(1, veil.r[k] * a),
-                Math.min(1, veil.g[k] * a), Math.min(1, veil.b[k] * a), a, veil.soft[k], 1, light, 0);
+                Math.min(1, veil.g[k] * a), Math.min(1, veil.b[k] * a), a, scale, 1, light, 0);
     }
 
     /**
