@@ -64,14 +64,17 @@ Prism: `~/.var/app/org.prismlauncher.PrismLauncher/data/PrismLauncher/` (`tools/
                                            --soft: a CPU-rendered client, no lease, CPUWeight=idle, MemoryMax from soft_gl.sh, no swap,
                                            not stopped by Artem's game; without a sleep inhibitor where none is allowed (a server);
                                            TERM/Ctrl+C on laptop_job.sh stops its service (the client never outlives the command)
-                                           the unit's description names the delegated task (DELEGATE_TASK, set by `delegate`):
-                                           the task's budget sums its CPU from systemd's accounting (laptop-agents mission-load);
-                                           --gpu waits for a hot GPU (≥ 80 °C) to cool to 70 °C first (gpu_cool);
+                                           task load: at stop (ExecStopPost `laptop_job.sh --account`) the unit's CPU from its cgroup
+                                           goes to the load log (`cpu` row, task = DELEGATE_TASK set by `delegate`; job and task
+                                           names only, never the command's arguments); laptop-agents mission-load sums it;
+                                           --gpu waits for a hot GPU (≥ 80 °C) to cool to 70 °C first (gpu_cool, at most 180 s);
                                            A caller still waiting in the GPU queue dies with the agent's session cgroup at turn end
                                            (even setsid/nohup): start the wait in its own unit, `systemd-run --user
                                            --unit=incoming-wait-<name> --collect -p WorkingDirectory=$PWD --setenv=PATH="$PATH"
                                            --setenv=HOME="$HOME" --setenv=XDG_RUNTIME_DIR="$XDG_RUNTIME_DIR"
-                                           --setenv=DELEGATE_TASK="${DELEGATE_TASK:-}" bash -c '…'`, and
+                                           --setenv=DELEGATE_TASK="${DELEGATE_TASK:-}"
+                                           -p ExecStopPost="$PWD/tools/laptop_job.sh --account" bash -c '…'` (its own CPU, such as
+                                           Gradle preparation in the wrapper, then counts to the task), and
                                            name that unit in a mission's WAITING. After the job the lease stays with the launching
                                            tree for 10 min: run `tools/gpu_lease.sh release` from that tree
     gpu_lease.sh status|take [--wait]|release ← GPU lease: with a picture, one session (the owner is the delegated task,
@@ -82,8 +85,11 @@ Prism: `~/.var/app/org.prismlauncher.PrismLauncher/data/PrismLauncher/` (`tools/
                                            an honest queue (FIFO): a free GPU goes to the first waiter; status: who holds it and
                                            who waits; at most INCOMING_GPU_QUEUE_MAX (2) other sessions wait, a newcomer beyond is refused (75);
                                            a nested KWin on a wayland-incoming-soft-… socket is a CPU session, not a GPU client;
-                                           a new GPU client (nested_kwin.sh, laptop_job --gpu) waits while the GPU is ≥ 80 °C until
-                                           70 °C, at most 15 min (gpu_cool; INCOMING_GPU_COOL*); test: test_gpu_lease.sh
+                                           a new GPU client (nested_kwin.sh, sandbox.sh, laptop_job --gpu) waits before taking the
+                                           lease while the GPU is ≥ 80 °C until 70 °C, at most 180 s (gpu_cool; INCOMING_GPU_COOL*);
+                                           while a client holds the lock, each renewal appends a `gpu` row (owner, utilization,
+                                           temperature) to the load log (DELEGATE_LOAD_LOG, default ~/.local/state/delegate/load.tsv);
+                                           test: test_gpu_lease.sh
     logtime.py                           ← time of Minecraft log lines for digests of laptop tasks
     free_port.py                         ← a free port on 127.0.0.1 for check servers (stress.sh, mp_scenario.sh)
     rig_procs.sh                         ← processes of checks in their own sessions (source from stress.sh, mp_scenario.sh): the script's exit kills them with the JVM

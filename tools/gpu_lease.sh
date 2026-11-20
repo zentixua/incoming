@@ -261,21 +261,28 @@ gpu_client_hold() {
     set +e
     for f in /proc/$BASHPID/fd/*; do n=${f##*/}; [ "$n" -gt 2 ] 2>/dev/null && eval "exec $n>&-" 2>/dev/null; done
     exec </dev/null >/dev/null 2>&1
-    # renew only while lock busy (code 1); free or file missing (code 0, open error) ends renewal
-    while sleep "${INCOMING_GPU_RENEW:-30}"; do flock -n -s "$GPU_CLIENT" true 2>/dev/null; [ $? = 1 ] || exit 0; lease_renew "$1" "$2" || true; done
+    # renew only while lock busy (code 1); free or file missing (code 0, open error) ends renewal. Each renewal also
+    # appends one GPU sample of the running client to the delegated task's load log (laptop-agents mission-load):
+    #   gpu <epoch> <owner> <interval s> <utilization %> <temperature °C>
+    local log=${DELEGATE_LOAD_LOG:-${XDG_STATE_HOME:-$HOME/.local/state}/delegate/load.tsv} s
+    while sleep "${INCOMING_GPU_RENEW:-30}"; do flock -n -s "$GPU_CLIENT" true 2>/dev/null; [ $? = 1 ] || exit 0; lease_renew "$1" "$2" || true
+      s=$(timeout 5 nvidia-smi --query-gpu=utilization.gpu,temperature.gpu --format=csv,noheader,nounits 2>/dev/null | head -n 1)
+      [[ $s =~ ^([0-9]+),\ *([0-9.]+)$ ]] && mkdir -p "$(dirname "$log")" \
+        && printf 'gpu\t%s\t%s\t%s\t%s\t%s\n' "$(date +%s)" "$1" "${INCOMING_GPU_RENEW:-30}" "${BASH_REMATCH[1]}" "${BASH_REMATCH[2]}" >> "$log"
+    done
   ) &
 }
 
-# Cool-down before a new GPU client: while the GPU is at or above INCOMING_GPU_COOL °C (80), wait (poll
-# INCOMING_GPU_COOL_POLL s, 15) until it is INCOMING_GPU_COOL_TO °C (70) or below, at most INCOMING_GPU_COOL_MAX s (900).
-# Measured 20.11: shader-pack frames at 2560×1440 kept the laptop GPU 97 % busy at 86 °C median, 92 °C max, above its
-# slowdown point (87 °C) for 55 min, and the next client started on a hot GPU. No nvidia-smi: no wait.
+# Cool-down before a new GPU client, called before the lease is taken (a cooling caller holds no lease that could
+# expire): while the GPU is at or above INCOMING_GPU_COOL °C (80), wait (poll INCOMING_GPU_COOL_POLL s, 15) until it is
+# INCOMING_GPU_COOL_TO °C (70) or below, at most INCOMING_GPU_COOL_MAX s (180: inside sandbox startup's deadline).
+# The laptop GPU under shader-pack frames at 2560×1440 runs 97 % busy at 86 °C median, 92 °C max, above its slowdown
+# point (87 °C). No nvidia-smi or a sensor that does not answer in 5 s: no wait.
+gpu_temp() { timeout 5 nvidia-smi --query-gpu=temperature.gpu --format=csv,noheader,nounits 2>/dev/null | head -n 1; }
 gpu_cool() {
   local t waited=0 said=
-  while t=$(nvidia-smi --query-gpu=temperature.gpu --format=csv,noheader,nounits 2>/dev/null | head -n 1) \
-      && t=${t%%.*} && [[ $t =~ ^[0-9]+$ ]] \
-      && { [ -n "$said" ] && [ "$t" -gt "${INCOMING_GPU_COOL_TO:-70}" ] || [ "$t" -ge "${INCOMING_GPU_COOL:-80}" ]; } \
-      && [ "$waited" -lt "${INCOMING_GPU_COOL_MAX:-900}" ]; do
+  while [ "$waited" -lt "${INCOMING_GPU_COOL_MAX:-180}" ] && t=$(gpu_temp) && t=${t%%.*} && [[ $t =~ ^[0-9]+$ ]] \
+      && { [ -n "$said" ] && [ "$t" -gt "${INCOMING_GPU_COOL_TO:-70}" ] || [ "$t" -ge "${INCOMING_GPU_COOL:-80}" ]; }; do
     [ -z "$said" ] && { echo "$(date +%T) GPU at $t °C: cooling to ${INCOMING_GPU_COOL_TO:-70} °C before the next client" >&2; said=1; }
     sleep "${INCOMING_GPU_COOL_POLL:-15}"; waited=$((waited + ${INCOMING_GPU_COOL_POLL:-15}))
   done

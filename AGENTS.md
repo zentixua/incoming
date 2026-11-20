@@ -200,7 +200,8 @@ Project threads do not read `.claude/skills/` or `.claude/settings.json`).
 
 Agent workflow: task → branch → code → build/tests → PR → CI → one review round → merge. Extra checks only for
 visuals/sound/FPS, since tests cannot judge beauty or lag. First principles throughout: derive from how the thing
-actually works, fix the real cause.
+actually works, fix the real cause. **Sustainable pace** (Artem, 20.11): routine delivery, short lead time, no
+queues, little rework; each mission's budget is checked against its measured load (laptop-agents `mission`).
 - **One owner per task:** the owner implements, validates, handles review and merges; overlapping edits are
   coordinated; unfinished work is handed over with branch/PR, checked commit, measurements, risks and next action.
   The owner chooses the implementation and records a substantial decision (context, alternatives, choice,
@@ -238,9 +239,8 @@ actually works, fix the real cause.
   frame-judge or review rounds) or the timebox without a measured shift toward the goal → stop, find the root cause from
   the recorded data (deep-debug skill), write it with its number in the PR or the executor's report, then act on it: fix that cause,
   change the approach, or correct the test or reference. A new approach is one possible outcome, not the automatic one.
-- **One GPU session at a time** (`tools/gpu_lease.sh`: other sessions' GPU clients/`--gpu` jobs refuse, naming holder;
-  at most two sessions queue, a third is refused); finish with `tools/sandbox.sh stop`, then `tools/gpu_lease.sh
-  release`. CPU clients need no lease, limited only by memory (`soft_gl.sh` admission).
+- **One GPU session at a time** (`tools/gpu_lease.sh`, queue and cool-down in `tools.md`); finish with
+  `tools/sandbox.sh stop`, then `tools/gpu_lease.sh release`. CPU clients need no lease (`soft_gl.sh` admission).
 - **Independent review** by the other vendor (if unavailable, a fresh session of the same vendor), effort high (Artem,
   20.11). The reviewer reads the diff and surrounding code, not the PR description or the author's conclusions, and
   leaves its reproducing probe as a file, which becomes the regression test. Each agent only where it is strong

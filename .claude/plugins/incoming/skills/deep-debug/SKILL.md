@@ -113,8 +113,9 @@ that can produce it. Tuning constants inside a representation that cannot is the
   read the law, never the drawing, so a look change cannot move a physical quantity. What the player actually sees
   (occlusion, visibility probes) is tested on the drawing separately.
 - **Prototype before integration** (about 2 h): CPU vanilla frames of the chosen representation at the judge's views,
-  beside the reference and `main`. That first run already records what decides the design: the diagnostic probes, the
-  layer's GPU time and fill, counts and the budget numbers; final law, probe and budget integration comes after.
+  beside the reference and `main`. That first run already records what decides the design: the diagnostic probes,
+  fill, draw counts and CPU preparation time; GPU frame cost needs one GPU measurement (llvmpipe timings are not GPU
+  cost, client-scenario.md) where the design depends on it. Final law, probe and budget integration comes after.
 - **Rounds.** One short CPU job per round that answers all of the round's related questions (minutes), read as soon as it
   ends; each round changes the cause the last one named by number. Three rounds or the timebox without a measured shift:
   stop, name the root cause, and act on it (AGENTS.md).
