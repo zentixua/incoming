@@ -159,16 +159,19 @@ public final class RuinSettleGameTests {
         boolean[] restarted = {!restart};
         @SuppressWarnings({"unchecked", "rawtypes"})
         CompletableFuture<Optional<CompoundTag>>[] reading = new CompletableFuture[1];
-        int[] passUnloads = {0};
+        int[] spareTicks = {0};
+        var map = level.getChunkSource().chunkMap;
+        long key = target.toLong();
         h.onEachTick(() -> {
             // The pass confirms a chunk by its saved scar, so the released chunk must unload and save. Vanilla unloads
-            // only in spare tick time, which game-speed pacing can take whole: give it a bounded pass, as a live
-            // server's idle time would (an unconditional true could spin on generation holders).
-            var map = level.getChunkSource().chunkMap;
-            boolean pending = map.pendingUnloads.containsKey(target.toLong());
-            int[] opportunities = {256};
-            level.getChunkSource().tick(() -> opportunities[0]-- > 0, false);
-            if (pending && !map.pendingUnloads.containsKey(target.toLong())) passUnloads[0]++;
+            // only in spare tick time, which game-speed pacing can take whole: once the target is queued to drop, give
+            // it a bounded pass, as a live server's idle time would (an unconditional true could spin on generation
+            // holders). Only then: the extra cache tick also ages timed tickets.
+            if (map.toDrop.contains(key) || map.pendingUnloads.containsKey(key)) {
+                int[] opportunities = {256};
+                level.getChunkSource().tick(() -> opportunities[0]-- > 0, false);
+                spareTicks[0]++;
+            }
             long[] costs = NuclearWorld.get(level).lastNanos();
             long tick = java.util.Arrays.stream(costs).sum();
             nanos[0] += tick;
@@ -203,8 +206,11 @@ public final class RuinSettleGameTests {
             }
             h.assertTrue(changes > 0, "saved chunk is unchanged");
             h.assertTrue(DiskFixture.trace(source, result.sections()) > 0, "saved chunk has no ground trace");
-            Incoming.LOG.info("SETTLEBENCH restart={} chunks=1 changed={} wallMs={} nuclearTotalMs={} nuclearMaxMs={} unloadedByTestPass={}",
-                    restart, changes, (System.nanoTime() - started) / 1_000_000, nanos[0] / 1_000_000.0, nanos[1] / 1_000_000.0, passUnloads[0]);
+            // the settlement itself confirms the saved scar: the chunk unloaded and left its pending set
+            if (map.getVisibleChunkIfPresent(key) != null || map.pendingUnloads.containsKey(key)
+                    || RuinProgress.get(level).pass(d.id()).pending.contains(key)) return;
+            Incoming.LOG.info("SETTLEBENCH restart={} chunks=1 changed={} wallMs={} nuclearTotalMs={} nuclearMaxMs={} spareTicks={}",
+                    restart, changes, (System.nanoTime() - started) / 1_000_000, nanos[0] / 1_000_000.0, nanos[1] / 1_000_000.0, spareTicks[0]);
             h.succeed();
         });
     }
