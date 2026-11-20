@@ -26,6 +26,25 @@ paths:
   Preserve initializer sentinels too: bloom texture/FBO arrays start at -1, never zero/default framebuffer.
   Regression fixture: `tools/client_scenario.sh viewfx vista`, `INCOMING_VIEWFX_FEEDS=4` for four TVs, `INCOMING_VIEWFX_STRIKES=100` for raid cost; omit `vista` for
   the ordinary renderer. Vista/Moonlight are scenario-only runtime mods; no production dependency or camera-mod mixin.
+- See-through blocks (`fx/layer/SeeThrough`, `include/see.glsl`): by `AFTER_LEVEL` translucent terrain (stained/tinted
+  glass and panes, ice, slime, honey, water, portal) has written depth; tested against it, the layer loses everything
+  behind a window. Cutout blocks (glass, glass panes, leaves, bars) write no depth in their holes. The primary view copies
+  only while the layer drew the previous frame: Fast/Fancy and Sodium (`BLEND`) copy depth and colour at
+  `AFTER_BLOCK_ENTITIES`, clear the frame's alpha, and copy depth and colour again at `AFTER_TRANSLUCENT_BLOCKS`
+  (translucent blending leaves coverage 1 − T in alpha; X = after − T·before). Later passes (lines, translucent entities,
+  particles, clouds, weather) blend alpha with ONE, ZERO and are not in the copies; where they wrote depth they hide the
+  layer as before. Fabulous copies the main depth at `AFTER_TRANSLUCENT_BLOCKS` (still opaque) and reads vanilla's
+  translucent target (X, 1 − T, its depth). A shader pack and secondary views stay `NONE`: the main path, hidden behind
+  translucent blocks. `fx_depth` writes the distance texture as RG32F (r: what hides the layer; g: the nearest surface,
+  see-through or not; equal without see-through), `FxGlass` (X, T; own unit 16) and the layer's hardware depth (`hard`);
+  the layer draws through `SceneDepth.bindLayer` (frame colour + `hard`). One surface per pixel (vanilla Fabulous keeps
+  one): a fragment behind it is laid as T·light + opacity·X; the pall composite splits its medium at the surface
+  (`mediumTo`: near volume to the surface, the rays cut there by the noiseless field); heat shimmer bends only air in front
+  of it; probes take T; the water decal and the half-resolution upsampler key on g. Exact compositing: `SeeThroughGlslTest`.
+  Readers of the surface's distance use g of the distance texture they already sample: the pall composite is at 16
+  samplers, the minimum a GL implementation must allow. Limits: smoke between two separate panes takes both tints, a pane
+  under dense pall in front of it keeps its unattenuated X behind opaque smoke, piston-moved glass is not a surface, and
+  the first frame of an effect is tested against the world's depth. Check: `tools/see_through_check.sh` (sandbox `pane`).
 - Under Iris the first-person hand is in world depth at `AFTER_LEVEL` (Iris draws it inside the world pass with the depth
   range × 0.125, `HandRenderer.DEPTH`), so the layer reads it as world 0.09–0.115 m away; vanilla draws it after the layer.
   The pall skips those pixels (`pallHand`, `PALL_HAND` 0.12 m in `pall.glsl`, `PallHandTest`): resolve writes them invalid

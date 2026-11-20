@@ -50,6 +50,11 @@ Prism: `~/.var/app/org.prismlauncher.PrismLauncher/data/PrismLauncher/` (`tools/
                                            resource reload without a new client, frames and WAV in one command (`shot`);
                                            a nuke at the camera: `nuke 15 near`; how to work: client-scenario.md,
                                            “Effects sandbox”; check without a client: test_sandbox.sh (CI)
+    see_through_check.sh [graphics] [start options] ← regression check of effects behind see-through blocks: a blast seen
+                                           through a sandbox `pane` of each translucent block and stone, visible share 2 s
+                                           after it by see_through.py, fails outside its bounds; run it on changes to the
+                                           effects layer's depth or composites (SceneDepth, SeeThrough, fx_depth, see.glsl)
+    see_through.py <dir> [--min/--max case=share] [--sheet] ← the visible share per pane case of those frames, and a sheet
     nested_kwin.sh                       ← nested KWin for the client: no window and no host sound, its own D-Bus bus without starting services
                                            (nested_kwin_bus.conf) and XDG directories; takes the GPU lease and the client lock
                                            (gpu_lease.sh); exit 75 means whoever holds the GPU; with INCOMING_SOFT=1 a CPU session
