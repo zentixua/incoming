@@ -320,13 +320,15 @@ times and the pall's budget are not frame costs: frame cost belongs to the GPU a
   has no open sky, needs own clearing. Missile approaches target from behind shooter, attack does not see slope
   between them: from viewer hill it hits summit trees. Missile camera records with viewer near village and straight
   path (`from`/`via` collinear), approaching from lower-terrain side.
-- `firstuse` (`FirstUse`): a new player's screens on the CPU, no strike launched: flat survival world without cheats
-  (the host alone), one fresh world and cleared `shown_hints` per language (English, then Russian), the language set
-  at the title screen before the world loads (the recipe-book search index is built in it; the search repeats until
-  the book lists the recipe). Frames `firstuse-<lang>-<step>`: recipe book, first hold (toast and tooltip in one frame:
+- `firstuse`, `firstuse-ru` (`FirstUse`): a new player's screens on the CPU, no strike launched: flat survival world without cheats
+  (the host alone), one language per launch, set by the script in options.txt (a language reload after a world outgrows the
+  CPU client's memory ceiling), a fresh world and cleared `shown_hints`; the search repeats until the book lists the
+  recipe (the index is built off-thread). Frames `firstuse-<lang>-<step>`: recipe book, first hold (toast and tooltip in one frame:
   toasts draw over screens), console Fire inactive (player target, nobody picked), console with the munitions line,
-  Fire refused for missing munitions, the host's ICBM review, nuclear weapons off, binoculars at the sky. A required
-  state not reached logs `FIRSTUSE FAIL`; `FIRSTUSE done, N failures` ends the run.
+  Fire refused for missing munitions, the host's ICBM review, nuclear weapons off, binoculars 5° above the horizon
+  (looking higher marks the surface under the ray's end, `TargetPicker`: only a ray ending past the loaded chunks
+  has nothing under it). A required
+  state not reached logs `FIRSTUSE FAIL`; `FIRSTUSE <lang> done, N failures` ends the run.
 - `flame-edge`: plume at render edge, Grad rocket/missile on booster, night/day side views, same line from
   far-models viewer; client entity copy at 0.5/0.85/0.97 render distance, packet track at 0.97/1.1/1.4
   (`flame_<light>_<projectile>_<hundredths>_<entity|far>`, identical pose at 0.97 through both paths); reset

@@ -248,7 +248,7 @@ final class FirstUse {
             onServer(server -> IncomingConfig.SERVER.nukeEnabled.set(true));
         });
         await(10);
-        // 6. Binoculars at the open sky, LMB, with the default missile (a nuclear order would open its review instead).
+        // 6. Binoculars at the sky above the horizon (the ray ends past the loaded chunks, nothing under it), LMB, with the default missile (a nuclear order would open its review instead).
         run(() -> {
             Loadout l = Loadout.DEFAULT;
             mc.player.getMainHandItem().set(ModDataComponents.LOADOUT.get(), l);
@@ -258,12 +258,12 @@ final class FirstUse {
         // let that happen, then aim
         await(10);
         run(() -> {
-            mc.player.setXRot(-60);
+            mc.player.setXRot(-5);
             mc.options.keyUse.setDown(true);
         });
         await(20);
         run(() -> {
-            mc.player.setXRot(-60);
+            mc.player.setXRot(-5);
             Incoming.LOG.info("FIRSTUSE {} scope at pitch {}, scoping {}", lang(), mc.player.getXRot(), Designator.isScoping());
         });
         await(5);
