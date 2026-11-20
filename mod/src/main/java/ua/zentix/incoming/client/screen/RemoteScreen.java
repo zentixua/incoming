@@ -432,11 +432,21 @@ public class RemoteScreen extends Screen {
      * inactive and its tooltip names the missing part, instead of a click that does nothing.
      */
     @Nullable
-    Component missing() {
-        if (loadout.nuclear() && !validYield) return Component.translatable("incoming.remote.fire.no_yield", IncomingConfig.SERVER.nukeMaxYield.get());
+    private Component missing() {
+        Component order = orderMissing();
+        if (order != null) return order;
         if (loadout.mode() == TargetMode.AIRCRAFT && aircraft == null) return Component.translatable("incoming.remote.fire.no_aircraft");
         if (loadout.mode() == TargetMode.PLAYER && loadout.player().isEmpty()) return Component.translatable("incoming.remote.fire.no_player");
         return null;
+    }
+
+    /**
+     * What the order itself lacks, whatever its target (a valid yield), or null: the map, which sends its own target,
+     * checks only this; the console's target-mode requirements (a picked player or aircraft) are not the map's.
+     */
+    @Nullable
+    Component orderMissing() {
+        return loadout.nuclear() && !validYield ? Component.translatable("incoming.remote.fire.no_yield", IncomingConfig.SERVER.nukeMaxYield.get()) : null;
     }
 
     /** Fire's state follows {@link #missing}: also on typing the yield, which does not rebuild the screen. */

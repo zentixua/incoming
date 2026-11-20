@@ -36,7 +36,8 @@ class RecipeUnlockTest {
         for (JsonObject a : unlocks.values()) {
             for (JsonElement r : a.getAsJsonObject("rewards").getAsJsonArray("recipes")) {
                 // every reward names a recipe that exists
-                assertTrue(recipes.containsKey(r.getAsString().substring("incoming:".length())), "reward " + r + " names no recipe");
+                String reward = r.getAsString();
+                assertTrue(reward.startsWith("incoming:") && recipes.containsKey(reward.substring("incoming:".length())), "reward " + r + " names no recipe of the mod");
                 byReward.put(r.getAsString(), a);
             }
         }

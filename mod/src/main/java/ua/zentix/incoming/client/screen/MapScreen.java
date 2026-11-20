@@ -219,14 +219,14 @@ public class MapScreen extends Screen {
      * range (player absent from map means server checks route).
      */
     private boolean canFire() {
-        // the order itself must be complete too (a valid yield): the remote's Fire would drop it otherwise
-        if (remote.missing() != null) return false;
+        // the order itself must be complete too (a valid yield): the remote would drop it otherwise
+        if (remote.orderMissing() != null) return false;
         return (selectedPlayer().isPresent() || selected().isPresent() && !ceiling()) && routeLength().map(len -> len <= reach()).orElse(true);
     }
 
     private void updateButtons() {
         fireButton.active = canFire();
-        Component why = remote.missing();
+        Component why = remote.orderMissing();
         fireButton.setTooltip(why == null ? null : Tooltip.create(why));
         clearRouteButton.active = !route().isEmpty();
         launchButton.active = !ceiling();

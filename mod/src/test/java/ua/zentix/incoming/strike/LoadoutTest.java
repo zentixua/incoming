@@ -43,6 +43,7 @@ class LoadoutTest {
         Loadout wide = Loadout.DEFAULT.withSpread(20).withWeapon(WeaponType.ROCKET).withWeapon(WeaponType.MISSILE);
         assertEquals(1, wide.count());
         assertEquals(0, wide.spread());
+        // a smaller burst than the spec's (as the console or a server cap leaves it)
         Loadout capped = grad.withCount(5).withWeapon(WeaponType.MISSILE);
         assertEquals(1, capped.count());
         assertEquals(0, capped.spread());
