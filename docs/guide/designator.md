@@ -26,8 +26,8 @@ does not fire for other players.
 
 - **RMB (hold)**: binoculars. The reticle shows what is under it and how far away it is. When it locks onto a mob, a
   player or an aircraft, the designator beeps.
-- **Mouse wheel**: weapon (Shahed, Lancet, Missile, Grad, Bomb, Nuclear). The Grad fires a burst; wheeling on past it
-  returns to a single round unless you changed the burst.
+- **Mouse wheel**: weapon (Shahed, Lancet, Missile, Grad, Bomb, Nuclear). The Grad fires a burst; wheeling on to another
+  weapon returns to a single round.
 - **LMB**: launch. With nothing under the reticle it says so above the hotbar.
 
 The binoculars lock onto mobs, players, aircraft and blocks up to 400 blocks away. Farther out they mark the ground you

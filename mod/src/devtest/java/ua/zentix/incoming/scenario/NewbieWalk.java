@@ -69,7 +69,9 @@ import java.util.stream.Stream;
  * (no window: keys cannot be pressed).
  */
 final class NewbieWalk {
-    private static final String WORLD = "newbie";
+    private static final String WORLD = "incoming-newbie-scenario";
+    /** Written into the scenario's own world: only a world carrying it is ever deleted (a player's save never is). */
+    private static final String MARK = "incoming-newbie-scenario.mark";
 
     private final Minecraft mc = Minecraft.getInstance();
     private final ArrayDeque<Step> steps = new ArrayDeque<>();
@@ -95,6 +97,11 @@ final class NewbieWalk {
         if (started || !(e.getScreen() instanceof TitleScreen)) return;
         started = true;
         Path dir = mc.gameDirectory.toPath().resolve("saves").resolve(WORLD);
+        if (Files.isDirectory(dir) && !Files.exists(dir.resolve(MARK))) {
+            Incoming.LOG.error("NEWBIE saves/{} exists and is not the scenario's world: not touching it", WORLD);
+            mc.stop();
+            return;
+        }
         if (Files.isDirectory(dir)) {
             try (Stream<Path> walk = Files.walk(dir)) {
                 walk.sorted(Comparator.reverseOrder()).forEach(p -> p.toFile().delete());
@@ -120,7 +127,21 @@ final class NewbieWalk {
 
     private void plan() {
         until("world", 6000, () -> mc.player != null && mc.level != null);
+        run(() -> {
+            try {
+                Files.writeString(mc.gameDirectory.toPath().resolve("saves").resolve(WORLD).resolve(MARK), "scenario world, safe to delete\n");
+            } catch (IOException ex) {
+                Incoming.LOG.warn("NEWBIE mark not written", ex);
+            }
+            // The run directory keeps options.txt: a previous run ended in Russian.
+            if (!"en_us".equals(mc.options.languageCode)) {
+                mc.options.languageCode = "en_us";
+                mc.getLanguageManager().setSelected("en_us");
+                mc.reloadResourcePacks();
+            }
+        });
         await(100);
+        until("resources reloaded", 2400, () -> mc.getOverlay() == null);
         run(() -> onServer(server -> {
             ServerPlayer p = player(server);
             server.overworld().setDayTime(5000);

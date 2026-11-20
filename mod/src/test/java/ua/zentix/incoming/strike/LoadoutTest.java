@@ -39,8 +39,9 @@ class LoadoutTest {
         Loadout back = grad.withWeapon(WeaponType.MISSILE);
         assertEquals(1, back.count());
         assertEquals(0, back.spread());
-        // a burst the player set on purpose stays
-        Loadout chosen = grad.withCount(5).withWeapon(WeaponType.MISSILE);
-        assertEquals(5, chosen.count());
+        // also a single shot from a wide spread or a server-capped burst: the burst belongs to the Grad
+        Loadout wide = Loadout.DEFAULT.withSpread(20).withWeapon(WeaponType.ROCKET).withWeapon(WeaponType.MISSILE);
+        assertEquals(1, wide.count());
+        assertEquals(1, grad.withCount(5).withWeapon(WeaponType.MISSILE).count());
     }
 }

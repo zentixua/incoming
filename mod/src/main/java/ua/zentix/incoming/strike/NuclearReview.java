@@ -147,7 +147,13 @@ public final class NuclearReview {
         if (action == C2S.NuclearAction.RELEASE) { state.entry = e.held(-1); return true; }
         long now = p.serverLevel().getGameTime();
         var c = IncomingConfig.SERVER;
-        if (!p.level().dimension().equals(e.dimension) || now > e.expires || !allowed(p, e.order)
+        // A refused order already told its own reason (allowed); a generic line would replace it on the action bar.
+        if (!allowed(p, e.order)) {
+            state.entry = null;
+            finish(p, e);
+            return false;
+        }
+        if (!p.level().dimension().equals(e.dimension) || now > e.expires
                 || e.cap != c.nukeMaxYield.get() || e.flight != c.nukeFlightTime.get() || e.carrier != c.carrierNukes.get()
                 || e.opsOnly != c.nukeOpsOnly.get() || e.keyWindow != c.nukeSecondKeyWindow.get() || e.keyDistance != c.nukeSecondKeyDistance.get()
                 || e.scale != (float) c.effectsScale() || e.visibility != visibility(p)) {

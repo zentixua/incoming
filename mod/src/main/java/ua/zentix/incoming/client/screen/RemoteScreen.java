@@ -13,6 +13,7 @@ import ua.zentix.incoming.nuclear.model.ImpactPreview;
 import net.minecraft.client.gui.components.Tooltip;
 import net.neoforged.neoforge.items.wrapper.PlayerInvWrapper;
 import ua.zentix.incoming.strike.Munitions;
+import ua.zentix.incoming.strike.ServerActions;
 import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.client.player.LocalPlayer;
 import net.minecraft.network.chat.Component;
@@ -482,7 +483,7 @@ public class RemoteScreen extends Screen {
     private Component shortage() {
         LocalPlayer p = Minecraft.getInstance().player;
         if (p == null || p.hasInfiniteMaterials() || linked() > 0) return null;
-        return Munitions.shortage(new PlayerInvWrapper(p.getInventory()), Munitions.Bill.of(loadout));
+        return Munitions.shortage(new PlayerInvWrapper(p.getInventory()), Munitions.Bill.of(ServerActions.clamp(loadout)));
     }
 
     /** Text centred in window, wrapped to width: downward from {@code y}, or, if {@code up}, upward ending at {@code y}. */
