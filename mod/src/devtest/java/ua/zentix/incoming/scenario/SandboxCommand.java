@@ -130,9 +130,10 @@ record SandboxCommand(Verb verb, List<String> args) {
                 WeaponType w = weapon();
                 if (w == WeaponType.NUKE) throw new IllegalArgumentException("for a nuke use nuke <kt>");
                 if (verb == Verb.REAL) {
-                    if (houses() || roof() || masonry() || town() || block() || paved() ? args.size() != 2
+                    if (town() || field() ? args.size() > 3 || args.size() == 3 && !args.get(2).matches("([1-9]|1[0-2])")
+                            : houses() || roof() || masonry() || block() || paved() ? args.size() != 2
                             : args.size() > 1 && (args.size() != 3 || !List.of("deck", "concrete").contains(args.get(1)) || number(2) < 1 || number(2) > 6)) {
-                        throw new IllegalArgumentException("real <weapon> [deck|concrete <1–6 m> | houses | roof | masonry | town | block | paved]");
+                        throw new IllegalArgumentException("real <weapon> [deck|concrete <1–6 m> | houses | roof | masonry | town [1–12] | field [1–12] | block | paved]");
                     }
                     break;
                 }
@@ -310,7 +311,7 @@ record SandboxCommand(Verb verb, List<String> args) {
 
     /** {@code real … deck <m>}: thickness of the bridge deck, m; 0 — a strike on the ground. */
     int deck() {
-        return verb == Verb.REAL && args.size() == 3 ? (int) number(2) : 0;
+        return verb == Verb.REAL && args.size() == 3 && List.of("deck", "concrete").contains(args.get(1)) ? (int) number(2) : 0;
     }
 
     /** A metre of concrete resting on the existing earth, for supported-surface comparisons. */
@@ -340,6 +341,19 @@ record SandboxCommand(Verb verb, List<String> args) {
     /** {@code real … town}: a block on paving (houses 10×10×12 m, streets 6 m wide), a strike at the intersection. */
     boolean town() {
         return verb == Verb.REAL && args.size() > 1 && args.get(1).equals("town");
+    }
+
+    /** Most rounds of {@code real … town|field <count>}. */
+    static final int SALVO = 12;
+
+    /** {@code real … field}: the town's contrast markers on grass, without houses. */
+    boolean field() {
+        return verb == Verb.REAL && args.size() > 1 && args.get(1).equals("field");
+    }
+
+    /** {@code real … town|field <count>}: that many rounds at once (Sandbox.SALVO_AT), 1 without a count. */
+    int rounds() {
+        return (town() || field()) && args.size() > 2 ? (int) number(2) : 1;
     }
 
     /**

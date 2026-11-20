@@ -1194,6 +1194,12 @@ final class Sandbox {
                 // does not break through it), top — 8 above the ground
                 if (c.houses() || c.roof() || c.masonry()) buildHouses(server, BlockPos.containing(site));
                 if (c.town()) buildTown(server, BlockPos.containing(site));
+                if (c.town() || c.field()) markers(server, BlockPos.containing(site));
+                if (c.rounds() > 1) {
+                    // a salvo: the rounds at once at the side streets' crossings, none in the marker street (x −3…2)
+                    for (int i = 0; i < c.rounds(); i++) SandboxStrikes.detonate(server.overworld(), c.weapon(), at.add(SALVO_AT[i][0], 0, SALVO_AT[i][1]));
+                    return;
+                }
                 if (c.block()) buildBlock(server, BlockPos.containing(site));
                 if (c.masonry()) {
                     BlockPos o = BlockPos.containing(site);
@@ -1310,6 +1316,29 @@ final class Sandbox {
                 int x0 = o.getX() + 3 + 16 * i, z0 = o.getZ() + 3 + 16 * j;
                 run(server, "fill %d %d %d %d %d %d minecraft:stone_bricks".formatted(x0, y, z0, x0 + 9, y + 11, z0 + 9));
             }
+        }
+    }
+
+    /**
+     * Rounds of {@code real … town|field <count>} from the point: crossings of the side streets (x ±16) with the cross
+     * streets and the main street's far ends, 16 m and more from the marker street, around the camera 15 m south: a B-2
+     * salvo's dust around the eye with the markers standing.
+     */
+    private static final double[][] SALVO_AT = {{-16, 0}, {16, 0}, {-16, 16}, {16, 16}, {-16, -16}, {16, -16}, {-32, 0}, {32, 0},
+            {-16, 32}, {16, 32}, {-16, -32}, {16, -32}};
+
+    /** Contrast markers of {@code real … town|field}. */
+    private static void markers(MinecraftServer server, BlockPos o) {
+        int y = GROUND + 1;
+        // contrast markers along the street x −3…2 for the camera 15 m south ({@code cam 15 1.6 0 1.6}): a white and a black
+        // concrete column side by side, 3 m tall, faces 4.5, 9.5, 24.5, 39.5 and 59.5 m from the eye, on the right (x 1, 2)
+        // and left (x −3, −2) kerb and the farthest mid-street (x −1, 0), none hiding another; their contrast against
+        // clear air gives the transmittance by distance inside the dust
+        int[][] markers = {{10, 1}, {5, -3}, {-10, 1}, {-25, -3}, {-45, -1}};
+        for (int[] m : markers) {
+            int x = o.getX() + m[1], z = o.getZ() + m[0];
+            run(server, "fill %d %d %d %d %d %d minecraft:white_concrete".formatted(x, y, z, x, y + 2, z));
+            run(server, "fill %d %d %d %d %d %d minecraft:black_concrete".formatted(x + 1, y, z, x + 1, y + 2, z));
         }
     }
 

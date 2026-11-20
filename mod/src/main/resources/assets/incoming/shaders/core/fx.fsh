@@ -248,6 +248,29 @@ vec3 bloomLight(vec4 c, float cover, float gain) {
     return light * min(1.0, BLOOM_WHITE / max(max(light.r, max(light.g, light.b)), 1e-6)) * a;
 }
 
+// The veil of matter at the eye (SmokePuffs.Veil, FxQuads.VEIL in Normal.y): the share of the vertex's opacity a that lies in
+// front of the world at view-axis distance scene. Its ray's matter in two parts (fx.vsh: depths, each part's numbers × its
+// depth), each even: around the eye over 0…w0 (density: the extinction at the eye), ahead over m ± √3 w cut at the eye.
+// Optical depth to the world: near·clamp(scene/w0) + ahead·clamp((scene − from)/(to − from)). Beer–Lambert: a near block keeps e^(−σd) of its contrast, the sky takes the whole veil.
+// Nearer than the mesh (SmokePuffs.MESH_AT, 0.1 m) or the hand (PALL_HAND) nothing.
+in float veilNearDepth;
+in float veilAheadDepth;
+in float veilNearWidth;
+in float veilMiddle;
+in float veilWidth;
+const float VEIL_MODE = 25.0 / 127.0;
+
+float veilBefore(float scene, float a) {
+    if (!(a > 0.0) || !(scene >= viewDistance) || pallHand(scene)) return 0.0;
+    float nearDepth = max(veilNearDepth, 1e-6), aheadDepth = max(veilAheadDepth, 1e-6);
+    float w0 = max(veilNearWidth / nearDepth, 1.0 / 16.0);
+    float m = max(veilMiddle / aheadDepth, 0.0), w = max(veilWidth / aheadDepth, 0.25);
+    float from = max(m - 1.7320508 * w, 0.0), to = m + 1.7320508 * w;
+    float beyond = clamp((scene - from) / max(to - from, 0.25), 0.0, 1.0);
+    float depth = veilNearDepth * clamp(scene / w0, 0.0, 1.0) + veilAheadDepth * beyond;
+    return min((1.0 - exp(-depth)) / a, 1.0);
+}
+
 void main() {
     // derivatives — before the branch (outside it they are defined for all pixels)
     vec2 dx = dFdx(texCoord0), dy = dFdy(texCoord0);
@@ -341,11 +364,13 @@ void main() {
     }
     // visible share of the square — colour and emission have the same one
     float seen = 1.0;
-    if (FxScene > 0.5 && (softness > 0.0 || FxGlowPass.x > 0.5 || FxHalf > 0.5)) {
+    bool veil = abs(nearest - VEIL_MODE) < 0.004;
+    if (FxScene > 0.5 && (softness > 0.0 || veil || FxGlowPass.x > 0.5 || FxHalf > 0.5)) {
         // the puff melts as it enters the ground and walls, and vanishes behind terrain (and behind Distant Horizons LOD)
         // invalid distance (NaN, behind the eye) — there is no world behind the pixel, as for the sky
         float scene = pallScene(texture(Sampler1, frag / ScreenSize).r);
-        if (softness > 0.0) seen *= clamp((scene - viewDistance) / softness, 0.0, 1.0);
+        if (veil) seen *= veilBefore(scene, vertexColor.a);
+        else if (softness > 0.0) seen *= clamp((scene - viewDistance) / softness, 0.0, 1.0);
         // half-resolution target: without hardware depth, what lies behind the world is hidden by its distance (glare
         // in the eye has its probe instead, softness below zero, and is never cut by depth)
         else if (FxHalf > 0.5 && softness == 0.0 && nearest < 0.25 && scene < viewDistance) discard;
@@ -354,10 +379,11 @@ void main() {
     }
     // right at the camera the square does not cut the screen with the near-plane edge (the same numbers — SmokePuffs.NEAR_FROM, NEAR_FADE: what
     // melts here gives to the veil)
-    seen *= clamp((viewDistance - 0.3) / 1.2, 0.0, 1.0);
+    // (the veil's own mesh lies at the eye on purpose: its matter starts there)
+    if (!veil) seen *= clamp((viewDistance - 0.3) / 1.2, 0.0, 1.0);
     // Minecraft fog dims a particle rather than painting it its own colour: the world behind it is in fog anyway, and an opaque spot of the fog's
     // colour at the draw edge would cover the bands of plume trails and the distant picture of explosions, which particles replace there
-    seen *= 1.0 - fog * FxFogColor.a;
+    if (!veil) seen *= 1.0 - fog * FxFogColor.a;
     fragColor = color * seen * ColorModulator;
     // the half-resolution target is float: clamp as the 8-bit frame does before blending (NaN — nothing)
     if (FxHalf > 0.5) fragColor = any(isnan(fragColor)) ? vec4(0.0) : clamp(fragColor, 0.0, 1.0);

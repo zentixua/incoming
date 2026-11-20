@@ -1110,12 +1110,29 @@ paths:
   48-Gaussian cap. A frozen 0.5° yaw changed finer counts from 50 to 48 and previously removed an entire merge pass
   (24 -> 48 final Gaussians), causing a transmittance jump despite stable quad detail and place spacing.
   Budget/world reset and an empty veil frame clear this history.
-  At a vertex — softness toward the world (`Veil.soft`): the vertex fades toward the world by the same `fx.fsh` as the
-  soft edge of a quad, and half of the veil the world takes where half its opacity accumulates along the ray
-  (`Veil.half`: the matter — a segment by the mean and spread over the thickness, `sightMoments`, a truncated Gaussian;
-  for a dense one — nearer the start): a house in front of a distant cloud in the veil does not sink into it, and in
-  dense smoke around the eye a wall a few metres away is already almost hidden (⚠ linear descent —
-  approximation of the optical depth in front of the scene; formerly veil hid everything beyond 2 blocks).
+  At a vertex — where its matter lies along the ray (`Veil.split`; `fx.fsh` `veilBefore`, vertex mode `FxQuads.VEIL`):
+  the world at view-axis distance x takes the Beer–Lambert share (1 − e^(−τ(x)))/(1 − e^(−τ)) of the vertex's opacity.
+  The matter is in two parts, each even over a segment: around the eye from 0 with the extinction at the eye as density
+  (`eyeSigma` × share), and ahead over its middle ± √3 spread (`sightMoments`). Each Gaussian goes to the parts by how
+  much of its depth its own extinction at the eye explains (`INSIDE_FROM`…`INSIDE_TO`): per Gaussian, so order-free and
+  continuous as the eye moves or turns. A chain of segments "joined to the eye" jumps when a gap opens (a 0.1° turn took a
+  wall from T 0.78 to 0.12); one profile per vertex cannot hold haze at the eye and a clump ahead (a wall at 30 m T 0.21
+  against 0.96); half-Gaussian parts leave a gap along a trail in the gaze (T 45 % off at 7 m). τ is the ray's true depth:
+  the byte alpha carries at most −ln 0.001, the fog byte (the veil takes no Minecraft fog) the ratio beyond, log₁₀₀₀
+  (`Veil.deeper`); a capped τ squeezes the parts and leaves a gap between them. Words: middle and width ahead in quarter
+  metres (UV2, to 8 km: a budget clump at the edge of distant terrain keeps its place), the near share in `Normal.z`, its
+  extent in the softness; `fx.vsh` turns them into each part's depth and its numbers × that depth, so a cell interpolates
+  depths, not a share times a total (a dense clump beside haze put a wall mid-cell at T 0.30 against 0.50), and a vertex
+  without a part does not pull it. ⚠ Two even segments are the limit of 6 numbers per vertex: a cloud centred at the eye
+  (σ 5 m, depth 2) leaves a wall at 6.25 m T 0.137 against 0.206; half-Gaussian or linear-density near parts miss a trail
+  along the gaze by 45–54 %. Exact would be every Gaussian per pixel (`VeilRegressionTest`, `VeilSplitTest`). The veil's own mesh lies at `SmokePuffs.MESH_AT` (0.1 m, exempt from the near-plane fade); the
+  hand (`SmokePuffs.HAND` = `PALL_HAND`) takes no veil. At 2 m the frame's depth cuts the mesh: a surface crossing 2 m
+  shows a hard edge (coverage 0 → 1 − e^(−2σ)) and nearer walls lose their veil. Its sort key stays the half-opacity
+  depth (below). A linear ramp from the mesh instead of the law lays the whole veil on everything past ~3 m (B-2 ×12 at
+  10 s, marker at 4.7 m: T 0.014 against the law's 0.127). `SmokePuffsTest.veilFadesToTheWorld…` holds the share within
+  0.2 and the world's transmittance within 35 % where it exceeds 0.05 (SAM trail, distant clump, thin haze, dense dust
+  off its middle, haze with a clump ahead, the eye at a cloud's edge, a small cloud centred at the eye); `VeilGlslTest` ties the shader to the Java words.
+  Without a scene depth texture the veil covers everything (no world distance to share by).
   The mesh remains near the eye, but it blends at its matter's half-opacity depth (`Veil.depth`, alpha-weighted mean
   over all nodes), one key for every cell. In the projection-matched CPU trace, the old 2 m key put veil matter at
   96–109 m over textured clumps starting at 16–17 m, erasing their detail. Reordering preserves T, so a
