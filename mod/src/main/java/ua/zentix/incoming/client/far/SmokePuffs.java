@@ -3190,6 +3190,11 @@ public final class SmokePuffs {
      * on; at {@link #VEIL_AT} a wall nearer than 2 m lost its veil and a surface crossing 2 m showed a hard edge.
      */
     static final double MESH_AT = 0.1;
+    /**
+     * Nearer than this a distance behind the pixel is the first-person hand ({@code pall.glsl} {@code PALL_HAND}): the
+     * veil leaves it alone (centimetres of dust show nothing), so the mesh at {@link #MESH_AT} does not cut the hand.
+     */
+    static final double HAND = 0.12;
     /** A Gaussian that along no veil ray covers more than this share is not put into the veil. */
     static final double VEIL_MIN = 0.004;
     /** Numbers per veil Gaussian: center from the eye (3), σh, σv, mass attenuation, color (3), share. */
@@ -3222,17 +3227,35 @@ public final class SmokePuffs {
         /**
          * Where the vertex's matter lies along its ray, distances along the view axis (as the world's distance behind a
          * pixel, {@code SceneDepth}), in two parts with shares {@code near} and 1 − {@code near} of the ray's depth τ (as the
-         * shader reads it from the vertex opacity, {@link #shaderTau}): the matter the eye is inside, a half-Gaussian
-         * from the eye of width {@code nearWidth} whose slope there is that matter's extinction at the eye
-         * ({@link #eyeSigma}: exact near the eye and along a broad cloud's middle), and the matter ahead, a Gaussian with
-         * middle {@code middle} and width {@code width} cut at the eye ({@link #sightMoments}: a house in front of a
-         * distant cloud keeps its colour). Optical depth to a world point at distance x: τ·(near·erf(x/(√2 w₀)) + (1 −
-         * near)·(Φ((x − m)/w) − Φ(−m/w))/(1 − Φ(−m/w))); {@code fx.fsh} lays on the world the share (1 − e^(−that))/(1 −
+         * shader reads it from the vertex opacity and fog bytes, {@link #shaderTau}, {@link #deeper}): the matter the eye
+         * is inside, even from the eye over {@code nearWidth} with the matter's extinction at the eye as its density
+         * ({@link #eyeSigma}: exact near the eye), and the matter ahead, even over {@code middle} ± √3 {@code width} (from
+         * {@link #sightMoments}; a house in front of a distant cloud keeps its colour). Optical depth to a world point at
+         * distance x: τ·(near·clamp(x/w₀) + (1 − near)·clamp((x − m + √3w)/(2√3w))), the segment cut at the eye; {@code fx.fsh} lays on the world the share (1 − e^(−that))/(1 −
          * e^(−τ)) of the vertex's opacity (Beer–Lambert: a block at 3 m in dust of σ 0.1 keeps 74 % of its contrast, at
-         * 30 m 5 %). The matter joined to the eye along the ray and the matter beyond a gap keep their own shapes
-         * ({@link #split}): haze at the eye and a clump ahead, or a trail along the gaze.
+         * 30 m 5 %). The matter around the eye and the matter ahead keep their own shapes ({@link #split}): haze at the
+         * eye and a clump ahead, or a trail along the gaze. {@code fx.vsh} weights each
+         * part's numbers by that part's own opacity, so a vertex without a part does not pull it in its cell.
          */
-        final float[] middle = new float[N * N], width = new float[N * N], near = new float[N * N], nearWidth = new float[N * N];
+        final float[] middle = new float[N * N], width = new float[N * N], near = new float[N * N], nearWidth = new float[N * N],
+                deeper = new float[N * N];
+
+        /**
+         * How many times the ray's depth exceeds what the vertex opacity byte carries (at most −ln 0.001): in the vertex's
+         * fog byte ({@code Normal.x}, the veil takes no Minecraft fog) as log₁₀₀₀ of the ratio, 5.6 % steps, so the
+         * profile keeps its true slopes and extent in dense matter.
+         */
+        static final double DEEPER_MAX = 1000;
+
+        /** The depth ratio as the fog byte carries it. */
+        static double byteDeeper(double ratio) {
+            return Math.pow(DEEPER_MAX, Math.round(deeperByte(ratio) * 127) / 127.0);
+        }
+
+        /** The fog byte's value (0…1) for a depth ratio. */
+        static double deeperByte(double ratio) {
+            return Math.clamp(Math.log(Math.max(ratio, 1)) / Math.log(DEEPER_MAX), 0, 1);
+        }
 
         /**
          * The vertex's light word ({@code UV2}): middle and width of its matter ahead in quarters of a block (at most
@@ -3289,44 +3312,40 @@ public final class SmokePuffs {
         final org.joml.Vector3f forward = new org.joml.Vector3f(), left = new org.joml.Vector3f(), up = new org.joml.Vector3f();
         private final double[] moments = new double[2];
         private double[] eyes = new double[VEIL_MAX];
-        /** Per ray: each Gaussian's depth, middle and variance along it (scratch of {@link #fill}). */
-        private double[] rayT = new double[VEIL_MAX], rayMean = new double[VEIL_MAX], rayVar = new double[VEIL_MAX];
-        private int[] rayOrder = new int[VEIL_MAX];
+        /** Per ray: each Gaussian's depth, middle and variance along it, and its extinction at the eye (scratch of {@link #fill}). */
+        private double[] rayT = new double[VEIL_MAX], rayMean = new double[VEIL_MAX], rayVar = new double[VEIL_MAX], rayEye = new double[VEIL_MAX];
 
         /**
-         * Vertex k's two parts ({@link #near}): the Gaussians along its ray in order of where their matter starts
-         * (middle − √3 spread); one belongs to the matter around the eye while its start lies within the reach of the
-         * matter already joined to the eye (from the eye on), fully at no gap and not at all at a gap of one spread or
-         * more (continuous as the eye moves), and extends that reach to its end by the same weight; the rest is matter
-         * ahead. The part around the eye is a half-Gaussian from the eye whose slope there is the matter's extinction at
-         * the eye, no wider than its reach; the part ahead takes the middle and spread of its matter.
+         * A Gaussian's depth along a ray against its extinction at the eye times its reach along the ray (middle + √3
+         * spread): at or below the first share the eye is outside it (its matter lies ahead), at or above the second
+         * inside; linear between. A Gaussian centred at the eye gives 1.47; one whose edge (2.5 σ) touches the eye 0.07.
          */
-        private void split(int k, double n, int seen, double sum, double eye) {
+        static final double INSIDE_FROM = 0.25, INSIDE_TO = 0.75;
+
+        /**
+         * Vertex k's two parts ({@link #near}): each Gaussian's depth goes to the part around the eye by how much of it
+         * its own extinction at the eye explains ({@link #INSIDE_FROM}…{@link #INSIDE_TO}), the rest ahead — per
+         * Gaussian, so independent of their order and continuous as the eye moves or turns. The part around the eye lies
+         * evenly from the eye with its extinction at the eye as density; the part ahead evenly over its matter's middle ±
+         * √3 spread. Segments, not Gaussian profiles: a trail along the gaze joins its two parts (7.6 m, then 6–152 m)
+         * where half-Gaussians left a gap (T 45 % off at 7 m); a dense cloud around the eye 3 % off.
+         */
+        private void split(int k, double n, int seen, double sum) {
+            double inner = 0, eye = 0, ahead = 0, far = 0, far2 = 0;
             for (int c = 0; c < seen; c++) {
-                int i = c;
-                double start = rayMean[c] - Math.sqrt(3 * rayVar[c]);
-                while (i > 0 && rayMean[rayOrder[i - 1]] - Math.sqrt(3 * rayVar[rayOrder[i - 1]]) > start) {
-                    rayOrder[i] = rayOrder[i - 1];
-                    i--;
-                }
-                rayOrder[i] = c;
-            }
-            double reach = 0, inner = 0, ahead = 0, far = 0, far2 = 0;
-            for (int i = 0; i < seen; i++) {
-                int c = rayOrder[i];
-                double sd = Math.sqrt(rayVar[c]), start = rayMean[c] - Math.sqrt(3) * sd, end = rayMean[c] + Math.sqrt(3) * sd;
-                double joined = Math.clamp(1 - (start - reach) / Math.max(sd, VEIL_SCALE_MIN), 0, 1);
-                inner += joined * rayT[c];
-                if (end > reach) reach += joined * (end - reach);
-                double out = (1 - joined) * rayT[c];
+                double in = Math.clamp((rayEye[c] * (rayMean[c] + Math.sqrt(3 * rayVar[c])) / rayT[c] - INSIDE_FROM) / (INSIDE_TO - INSIDE_FROM), 0, 1);
+                inner += in * rayT[c];
+                eye += in * rayEye[c];
+                double out = (1 - in) * rayT[c];
                 ahead += out;
                 far += out * rayMean[c];
                 far2 += out * (rayVar[c] + rayMean[c] * rayMean[c]);
             }
+            double f = byteShare(inner / sum), tau = shaderTau(alpha(k)) * byteDeeper(sum / shaderTau(alpha(k)));
             double mean = ahead > 0 ? far / ahead : 0, spread = ahead > 0 ? Math.sqrt(Math.max(0, far2 / ahead - mean * mean)) : 0;
-            double f = byteShare(inner / sum), own = eye > 0 ? f * shaderTau(alpha(k)) * Math.sqrt(2 / Math.PI) / eye : reach;
             near[k] = (float) f;
-            nearWidth[k] = (float) (Math.max(VEIL_SCALE_MIN, Math.min(own, Math.max(reach, VEIL_SCALE_MIN))) / n);
+            deeper[k] = (float) (sum / shaderTau(alpha(k)));
+            nearWidth[k] = (float) (Math.max(VEIL_SCALE_MIN, eye > 0 ? f * tau / eye : VEIL_SCALE_MIN) / n);
             middle[k] = (float) (mean / n);
             width[k] = (float) (Math.max(VEIL_SCALE_MIN, spread) / n);
         }
@@ -3358,6 +3377,7 @@ public final class SmokePuffs {
             System.arraycopy(width, 0, c.width, 0, width.length);
             System.arraycopy(near, 0, c.near, 0, near.length);
             System.arraycopy(nearWidth, 0, c.nearWidth, 0, nearWidth.length);
+            System.arraycopy(deeper, 0, c.deeper, 0, deeper.length);
             System.arraycopy(depth, 0, c.depth, 0, depth.length);
             c.forward.set(forward);
             c.left.set(left);
@@ -3422,17 +3442,17 @@ public final class SmokePuffs {
         /**
          * Share of vertex k's opacity in front of a world point at view-axis distance x, as {@code fx.fsh}
          * {@code veilBefore} draws it from the vertex words ({@link #packed}, {@link #byteAlpha}, {@link #byteShare});
-         * nearer than the mesh ({@link #MESH_AT}) nothing, as the frame's depth cuts it.
+         * nearer than the mesh ({@link #MESH_AT}) or the hand ({@link #HAND}) nothing.
          */
         double before(int k, double x) {
             double a = byteAlpha(alpha(k));
             int p = packed(k);
             double m = (p & 0xFFFF) / 4.0, w = (p >>> 16) / 4.0, f = byteShare(near[k]), w0 = sixteenths(nearWidth[k], 1 / 16.0) / 16.0;
-            if (!(a > 0) || x < MESH_AT) return 0;
-            double cut = SmokeGrid.erf(-m / w * SQRT_HALF);
-            double ahead = Math.max(0, SmokeGrid.erf((x - m) / w * SQRT_HALF) - cut) / Math.max(1 - cut, 1e-6);
-            double depth = shaderTau(a) * (f * SmokeGrid.erf(x / w0 * SQRT_HALF) + (1 - f) * ahead);
-            return -Math.expm1(-depth) / a;
+            if (!(a > 0) || x < Math.max(MESH_AT, HAND)) return 0;
+            double from = Math.max(0, m - Math.sqrt(3) * w), to = m + Math.sqrt(3) * w;
+            double ahead = Math.clamp((x - from) / Math.max(to - from, 0.25), 0, 1);
+            double depth = shaderTau(a) * byteDeeper(deeper[k]) * (f * Math.clamp(x / w0, 0, 1) + (1 - f) * ahead);
+            return Math.min(1, -Math.expm1(-depth) / a);
         }
 
         /** Grid of frame view over the veil's Gaussians (count of them, {@link #VEIL_FIELDS} numbers each in g). */
@@ -3451,6 +3471,7 @@ public final class SmokePuffs {
             java.util.Arrays.fill(width, 0);
             java.util.Arrays.fill(near, 0);
             java.util.Arrays.fill(nearWidth, 0);
+            java.util.Arrays.fill(deeper, 1);
             java.util.Arrays.fill(depth, 0);
             describe(gs, count);
             // the matter's extinction at the eye, by the share the veil takes: the same for every ray
@@ -3459,7 +3480,7 @@ public final class SmokePuffs {
                 rayT = new double[count];
                 rayMean = new double[count];
                 rayVar = new double[count];
-                rayOrder = new int[count];
+                rayEye = new double[count];
             }
             for (int c = 0; c < count; c++) {
                 int o = c * VEIL_FIELDS;
@@ -3474,7 +3495,7 @@ public final class SmokePuffs {
                     ry /= n;
                     rz /= n;
                     int k = index(i, j);
-                    double sr = 0, sg = 0, sb = 0, sum = 0, all = 0, all2 = 0, eye = 0;
+                    double sr = 0, sg = 0, sb = 0, sum = 0, all = 0, all2 = 0;
                     int seen = 0;
                     for (int c = 0; c < count; c++) {
                         int o = c * VEIL_FIELDS;
@@ -3490,7 +3511,7 @@ public final class SmokePuffs {
                         sightMoments(gs[o], gs[o + 1], gs[o + 2], gs[o + 3], gs[o + 4], rx, ry, rz, moments);
                         all += t * moments[0];
                         all2 += t * (moments[1] + moments[0] * moments[0]);
-                        eye += eyes[c];
+                        rayEye[seen] = eyes[c];
                         rayT[seen] = t;
                         rayMean[seen] = moments[0];
                         rayVar[seen] = moments[1];
@@ -3501,7 +3522,7 @@ public final class SmokePuffs {
                         r[k] = (float) (sr / sum);
                         g[k] = (float) (sg / sum);
                         b[k] = (float) (sb / sum);
-                        split(k, n, seen, sum, eye);
+                        split(k, n, seen, sum);
                         // the sort key: where half the opacity of the whole matter accumulates ({@link #half})
                         double whole = all / sum;
                         depth[k] = (float) Math.max(VEIL_AT, half(sum, whole, Math.sqrt(Math.max(0, all2 / sum - whole * whole))));

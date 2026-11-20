@@ -241,11 +241,11 @@ public final class FarSprites implements SmokePuffs.Out {
         float a = Math.min(1, veil.alpha(k));
         // the veil's light is open sky (the only light its caller gives, SmokePuffs.OPEN_SKY): fx.vsh takes it for the
         // veil mode, whose light word carries where the matter ahead lies; the near part's share in the mode's byte, its
-        // width in the softness
+        // width in the softness, the ray's depth beyond the opacity byte in the fog byte
         out.veil(veil.near[k]);
         out.vertex((float) veil.place(i, j, 0), (float) veil.place(i, j, 1), (float) veil.place(i, j, 2), u, v, Math.min(1, veil.r[k] * a),
                 Math.min(1, veil.g[k] * a), Math.min(1, veil.b[k] * a), a, SmokePuffs.Veil.sixteenths(veil.nearWidth[k], 1 / 16.0) / 16f, 1,
-                veil.packed(k), 0);
+                veil.packed(k), (float) SmokePuffs.Veil.deeperByte(veil.deeper[k]));
     }
 
     /**

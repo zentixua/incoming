@@ -82,8 +82,8 @@ out float emitGain;
 out float emitSpot;
 // the veil of matter at the eye (FxQuads.VEIL in Normal.y, SmokePuffs.Veil): middle and width of the vertex's matter
 // ahead (UV2, quarters of a block), the share of the depth in the matter around the eye (Normal.z) and that part's width (softness),
-// each × the vertex opacity (fx.fsh divides by the interpolated opacity: an empty vertex does not pull a cell's matter to
-// the eye); 0 for other quads
+// each × the opacity of its own part (near: share × opacity; ahead: the rest; fx.fsh divides by the interpolated weight: a
+// vertex without a part does not pull that part in its cell); 0 for other quads
 out float veilMiddle;
 out float veilWidth;
 out float veilNear;
@@ -236,10 +236,10 @@ void main() {
     veilNear = 0.0;
     veilNearWidth = 0.0;
     if (abs(Normal.y - VEIL_MODE) < 0.004) {
-        veilMiddle = float(UV2.x) / 4.0 * Color.a;
-        veilWidth = float(UV2.y) / 4.0 * Color.a;
         veilNear = Normal.z * Color.a;
-        veilNearWidth = softness * Color.a;
+        veilNearWidth = softness * veilNear;
+        veilMiddle = float(UV2.x) / 4.0 * (Color.a - veilNear);
+        veilWidth = float(UV2.y) / 4.0 * (Color.a - veilNear);
     }
     if (Emit > 129.5) {
         emitSpot = 1.0;
