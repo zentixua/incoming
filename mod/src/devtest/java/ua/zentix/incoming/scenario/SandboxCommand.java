@@ -418,7 +418,7 @@ record SandboxCommand(Verb verb, List<String> args) {
         double[] t = new double[parts.length];
         for (int i = 0; i < parts.length; i++) {
             try {
-                t[i] = Double.parseDouble(parts[i]);
+                t[i] = Double.parseDouble(parts[i].split("@", 2)[0]);
             } catch (NumberFormatException e) {
                 throw new IllegalArgumentException("frame time — seconds separated by commas: " + args.get(1));
             }
@@ -427,6 +427,26 @@ record SandboxCommand(Verb verb, List<String> args) {
             if (i > 0 && t[i] < t[i - 1]) throw new IllegalArgumentException("frame times must ascend");
         }
         return t;
+    }
+
+    /**
+     * {@code shots}: time of day of each frame ({@code <seconds>@<day time>}, e.g. {@code 130@12500,130.5@12550}), −1 where
+     * none is given: a dusk strip in one take, the cloud nearly unchanged between frames.
+     */
+    long[] dayTimes() {
+        if (args.get(1).startsWith("none")) return new long[0];
+        String[] parts = args.get(1).split(",");
+        long[] d = new long[parts.length];
+        for (int i = 0; i < parts.length; i++) {
+            String[] at = parts[i].split("@", 2);
+            try {
+                d[i] = at.length > 1 ? Long.parseLong(at[1]) : -1;
+            } catch (NumberFormatException e) {
+                throw new IllegalArgumentException("frame day time — an integer tick after @: " + parts[i]);
+            }
+            if (at.length > 1 && d[i] < 0) throw new IllegalArgumentException("frame day time — a tick from 0: " + parts[i]);
+        }
+        return d;
     }
 
     private void need(int min, int max) {
