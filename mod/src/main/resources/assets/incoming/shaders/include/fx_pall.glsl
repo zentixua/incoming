@@ -374,22 +374,24 @@ const float WALL_LOBE = 1.75;
 // third axis at this rate, noise units per second (0.08 churned visibly slower than the footage on a 1 Mt ground sequence, 0.5 flickered
 // between frames 0.2 s apart)
 const float WALL_CHURN = 0.25;
-// presentation: vertical noise extent of the whole layer height, noise units (a quarter is one lobe): one row of lobes, crests on top
-const float WALL_ROW = 0.3;
-// presentation: head noise tiles around the ring (four lobes each: 96 lobes, 1 Mt 3 km out 196 blocks, 1.9 end tops; the footage's crests
-// are 1.5–2 band heights wide) and how many times longer the lobes are along the radius than across (wallNoise)
+// presentation: head domes tiles around the ring (four lobes each: 96 lobes, 1 Mt 3 km out 196 blocks, 1.9 end tops; the footage's crests
+// are 1.5–2 band heights wide) and how many times longer the lobes are along the radius than across (wallDomes)
 const float WALL_RING = 24.0;
 const float WALL_STRETCH = 3.0;
+// presentation: the head's top and face are a surface dented by round domes (the mushroom cap's billows: Worley domes, mushLobes), at most
+// this share of the local top deep: the dense lofted front is opaque, so a noise multiplier inside it never showed (19.11: a smooth
+// dune); dents only, so the dust never rises above the law's top nor runs ahead of the front, and it is denser by as much, its mass kept
+const float WALL_DOME = 0.4;
 // presentation: the billows' self-shadow at this share of the optical depth between them: at full depth the lobes (several layer tops
 // wide) shadow each other to near black, p90/p10 of the head's luminance 20–30; the footage's soft brown clefts are 2.8–4.8
-const float WALL_SHADE = 0.7;
+const float WALL_SHADE = 1.0;
 // Sky dome at the head's face (est.): the horizon sky is whiter than the zenith's blue (longer air path, multiple Rayleigh and aerosol
 // scattering), here the zenith sky light desaturated by this share toward its own luminance; its radiance taken equal to the zenith's
 const float WALL_HORIZON_WHITE = 0.6;
 // presentation: sunlight scattered down the head's billowy outer skin lights its faces (a cloud's shaded side is lit by its sunlit
 // neighbouring billows; the slab model above lights a face only through the dust over it): this share of the sun on a horizontal
 // surface, reflected as by a thick layer of the dust (R∞, which falls faster in blue: warm), reaches the face through its skin
-const float WALL_SUN_FACE = 1.5;
+const float WALL_SUN_FACE = 3.0;
 // presentation: the thick layer's spectrum (R∞/ω, blue/red 0.55) to this power, toward the footage's ochre (Silo S3E09 and the sketch:
 // saturation 0.45–0.67, hue 30–40°; with the law's spectrum alone the face measured 0.37 at hue 26°, 19.11 frames)
 const float WALL_OCHRE = 1.6;
@@ -401,46 +403,38 @@ vec3 wallLobes(mat4 V) {
     return vec3(size, 2.0 * size, smoothstep(0.45, 0.55, k - k0));
 }
 
-// Head noise at parcel q (pallWallOrigin: x, share of the layer top, z) in a tile of size blocks: (x, y) tile channels 0..1 (billows, fine
-// edges), z fine billows (multiplier, mean 1; fine is their share). The warp is at a scale incommensurate with the tile (0.43: no
-// repetition grid from above on a kilometres-wide ring) and moves with time (WALL_CHURN): the billows churn
-vec3 wallNoise(vec3 q, float size, float fine, float t, vec3 offset) {
-    // ring coordinates (presentation): around the ring a whole number of noise tiles (seamless, the texture repeats), along the radius
-    // stretched: lobes long along the radius, so the wall's top, the highest dust along hundreds of metres of view from the ground, keeps
-    // their rounded crests instead of averaging them out (19.11: a flat or dune-shell top); the parcel's radius, so they ride the dust
+// Head domes at parcel q (pallWallOrigin: x, share of the local top, z) of local top `local` (blocks) in a tile of size blocks, about
+// −0.5..0.5: the noise's Worley domes (channel B, as the cap's mushLobes), a quarter tile wide, a four times finer octave within while
+// resolved. Ring coordinates: around the ring a whole number of tiles (seamless, the texture repeats); along the radius stretched, so the
+// lobes keep their crests in the wall's silhouette, the highest dust along hundreds of metres of view from the ground; the parcel's
+// radius, so they ride the dust; churning slowly (WALL_CHURN)
+float wallDomes(vec3 q, float local, float size, float fine, float t, vec3 offset) {
     float r = length(q.xz), a = r > 1e-3 ? atan(q.z, q.x) / 6.2831853 : 0.0;
-    vec3 n3 = vec3(a * WALL_RING, q.y * WALL_ROW, r / (size * WALL_STRETCH)) + offset;
-    // warp at 11/24 of the scale: whole tiles around the ring too
-    vec2 w = texture(PallNoise, n3 * 0.4583333 + vec3(0.31, 0.5, 0.67 + t * WALL_CHURN)).rg - 0.5;
-    n3 += vec3(w.x, 0.0, w.y) * 0.3;
-    vec2 n = textureLod(PallNoise, n3, 0.0).rg;
-    float detail = fine > 0.0 ? fineAt(n3) : 1.0;
-    return vec3(n, mix(1.0, detail, fine));
+    vec3 u = vec3(a * WALL_RING, q.y * local / size + t * WALL_CHURN * 0.25, r / (size * WALL_STRETCH)) + offset;
+    float n = texture(PallNoise, u).b;
+    float f = fine > 0.0 ? textureLod(PallNoise, u * 4.0 + vec3(0.53, 0.29, 0.17), 0.0).b : 0.5;
+    return (n - 0.5) + 0.35 * fine * (f - 0.5);
 }
 
-// Head at h (pallWallAt) with billows: extinction, 1/block. Billows as pall (pallShape: mean 1, dense dust more continuous — fill by density
-// relative to dense, thinner toward the top: the top breaks into the lobes' rounded crests), fine billows within while resolved (fine; 0 for shadow
-// billows). Noise rides the dust parcels (pallWallOrigin): thrown up at the front, lagging behind it, rising slower; lobes of the layer's
-// size (wallLobes: lobes; t — seconds since the detonation, the churn)
+// Head at h (pallWallAt) with its domes: extinction, 1/block. The law's mean head (pallWallMean) with its top and face dented by the
+// domes (WALL_DOME: dents only, density raised by as much); the domes ride the dust parcels (pallWallOrigin: thrown up at the front,
+// lagging behind it, rising slower), lobes of the layer's size (wallLobes; t — seconds since the detonation, the churn); fine — the finer
+// octave's share (0 for shadow taps)
 float wallAt(mat4 V, WallAt h, float fine, float dense, vec3 lobes, float t) {
     float s = h.s - h.P.z;
-    float m = pallWallMean(s, h.z, h.P.x, h.P.y, V[2].x, V[2].w);
-    if (m <= 0.0 || h.P.w <= 0.0) return 0.0;
+    if (h.P.w <= 0.0 || s <= 0.0) return 0.0;
     float u = s / max(h.P.x, 0.001), ph = u * V[2].x;
-    float local = h.P.y * pallWallTop(u, V[2].x) * pallWallHeated(ph, V[2].w);
+    // dome size: the local top, at least that a twentieth of the wedge behind the edge (the toe is metres thin)
+    float local = h.P.y * pallWallTop(max(u, 0.05), V[2].x) * pallWallHeated(ph, V[2].w);
     vec3 o = pallWallOrigin(h.rel, h.z, ph, local, V[1].x);
-    float fill = clamp(h.P.w * m / max(dense, 1e-6) * 3.0, 0.0, 1.0) * (1.0 - smoothstep(0.4, 1.0, o.y));
-    // each octave keeps its own noise offset by its parity: a tile is the larger of one pair and the smaller of the next, so the offset
-    // must follow the tile, not its place in the pair (swapping at the boundary replaced every billow at once)
+    // each octave keeps its own noise offset by its parity: a tile is the larger of one pair and the smaller of the next
     float odd = mod(floor(log2(lobes.x) + 0.5), 2.0);
     vec3 even = vec3(0.618034, 0.414214, 0.732051), other = vec3(0.381966, 0.585786, 0.267949);
-    vec3 n = lobes.z < 1.0 ? wallNoise(o, lobes.x, fine, t, mix(even, other, odd)) : vec3(0.5, 0.5, 1.0);
-    float shape = lobes.z < 1.0 ? pallShape(n.xy, fill) * n.z : 0.0;
-    if (lobes.z > 0.0) {
-        vec3 n2 = wallNoise(o, lobes.y, fine, t, mix(other, even, odd));
-        shape = mix(shape, pallShape(n2.xy, fill) * n2.z, lobes.z);
-    }
-    return h.P.w * m * shape;
+    float d = lobes.z < 1.0 ? wallDomes(o, local, lobes.x, fine, t, mix(even, other, odd)) : 0.0;
+    if (lobes.z > 0.0) d = mix(d, wallDomes(o, local, lobes.y, fine, t, mix(other, even, odd)), lobes.z);
+    float dip = WALL_DOME * (0.5 - clamp(d, -0.5, 0.5)), keep = 1.0 - dip;
+    float m = pallWallMean(s - dip * local, h.z / keep, h.P.x, h.P.y, V[2].x, V[2].w);
+    return m > 0.0 ? h.P.w * m / keep : 0.0;
 }
 
 // point h shifted by v (blocks): same underlying water/terrain/hard ground, own extinction (edge to wedge end, 0 outside bounds),
@@ -473,6 +467,19 @@ float wallChordNear(mat4 V, WallAt h, vec3 v, float len, int n) {
         float a = float(i * i) / nn, b = float((i + 1) * (i + 1)) / nn;
         WallAt m = wallMove(V, h, v * (0.5 * (a + b) * len));
         sum += m.P.w * pallWallMean(m.s - m.P.z, m.z, m.P.x, m.P.y, V[2].x, V[2].w) * (b - a);
+    }
+    return sum * len;
+}
+
+// Optical depth toward the sun through the head's billows themselves (wallAt at each tap, denser near the point), not their mean: lobes
+// shade one another, lit tops over shaded undersides, as the mushroom cap's billows are lit (19.11: with the mean the dense face read as a
+// smooth dune)
+float wallChordBillows(mat4 V, WallAt h, vec3 v, float len, int n, float dense, vec3 lobes, float t) {
+    float sum = 0.0, nn = float(n * n);
+    for (int i = 0; i < n; i++) {
+        float a = float(i * i) / nn, b = float((i + 1) * (i + 1)) / nn;
+        WallAt m = wallMove(V, h, v * (0.5 * (a + b) * len));
+        sum += wallAt(V, m, 0.0, dense, lobes, t) * (b - a);
     }
     return sum * len;
 }
@@ -512,15 +519,17 @@ void wall(mat4 V, WallAt h, vec3 keyDir, vec3 sunDir, vec3 lightDir, float smoke
     float reach = PALL_WALL_HANDOFF_TO * h.P.x + h.P.y, s0 = h.s - h.P.z, toTop = max(pallWallCeiling(h.P.y, V[2].x, V[2].w) - h.z, 0.0);
     vec2 out1 = h.rel / max(length(h.rel), 1e-3);
     float u0 = s0 / max(h.P.x, 0.001);
-    float up = wallChord(V, h, vec3(0.0, 1.0, 0.0), max(h.P.y * pallWallTop(u0, V[2].x) * pallWallHeated(u0 * V[2].x, V[2].w) - h.z, 0.0), 4);
+    // up through the head's dented surface itself (its domes): a dome's top is lit from above, a cleft or underside lies deeper
+    float up = wallChordBillows(V, h, vec3(0.0, 1.0, 0.0), max(h.P.y * pallWallTop(u0, V[2].x) * pallWallHeated(u0 * V[2].x, V[2].w) - h.z, 0.0), 4, dense, lobes, t);
     float side = wallChord(V, h, vec3(out1.x, 0.0, out1.y), max(s0 - h.P.x * pallWallFace(h.z / max(h.P.y, 0.001), V[2].x), 0.0), 4);
     float down = wallChord(V, h, vec3(0.0, -1.0, 0.0), max(h.z, 0.0), 2);
-    // the layer light (two-stream: sky and sun scattered into the layer) enters through the nearest of the top, the face and the way
-    // back along the view ray (gTauBack)
-    float depth = min(min(up, side), gTauBack);
+    // the layer light (two-stream: sky and sun scattered into the layer) enters from above, through the dented head over the point: the
+    // domes' shape; the face's own light (horizon sky, sun down the skin, lit ground) comes through the face or back along the view ray
+    // (gTauBack) in s.side below. Capping this depth by the way back too lit every visible sample alike: no shape (19.11 r15)
+    float depth = up;
     float sunLen = sunDir.y > 0.05 ? min(reach, toTop / sunDir.y) : reach;
     float capLen = lightDir.y > 0.05 ? min(reach, toTop / lightDir.y) : reach;
-    float toSun = wallChordNear(V, h, sunDir, sunLen, 4), toCap = wallChordNear(V, h, lightDir, capLen, 4);
+    float toSun = wallChordBillows(V, h, sunDir, sunLen, 4, dense, lobes, t), toCap = wallChordNear(V, h, lightDir, capLen, 4);
     // dust of the soil lofted here (sand share; debris dust over hard ground, its share of the soil's mass at this wedge share — as
     // pallWallDensity), soot as the pall's
     float uw = clamp(s0 / max(h.P.x, 0.001), 0.0, 1.0);
@@ -554,7 +563,13 @@ void wall(mat4 V, WallAt h, vec3 keyDir, vec3 sunDir, vec3 lightDir, float smoke
     // itself. Without this the face of the dense lofted front had the zenith sky's blue or nothing (19.11 frames)
     vec3 horizon = mix(PallSkyLight, vec3(dot(PallSkyLight, vec3(0.2126, 0.7152, 0.0722))), WALL_HORIZON_WHITE);
     vec3 below = mix(PALL_LAND, PALL_SEA, h.wet) * (PallSunLight * max(sunDir.y, 0.0) + PallSkyLight);
-    vec3 face = 0.5 * horizon + WALL_SUN_FACE * rInf / max(w, vec3(1e-3)) * PallSunLight * max(sunDir.y, 0.0);
+    // the dented surface's own orientation (the density gradient, three taps a tenth of a lobe away): a dome turned toward the sun is lit
+    // by it, its flank and the cleft below less; without it every point of the face had the same light, a smooth dune (19.11 r15–r16)
+    float e = 0.1 * WALL_LOBE * max(h.P.y, 1.0);
+    vec3 grad = vec3(wallAt(V, wallMove(V, h, vec3(e, 0.0, 0.0)), fine, dense, lobes, t), wallAt(V, wallMove(V, h, vec3(0.0, e, 0.0)), fine, dense, lobes, t),
+            wallAt(V, wallMove(V, h, vec3(0.0, 0.0, e)), fine, dense, lobes, t)) - vec3(hd);
+    vec3 normal = dot(grad, grad) > 1e-12 ? -normalize(grad) : vec3(0.0, 1.0, 0.0);
+    vec3 face = 0.5 * horizon + WALL_SUN_FACE * rInf / max(w, vec3(1e-3)) * PallSunLight * max(dot(normal, sunDir), 0.0);
     s.side += hd * w * thick * (exp(-k * min(side, gTauBack)) * face + 0.5 * exp(-k * down) * below);
     s.phase += hd * g;
 }

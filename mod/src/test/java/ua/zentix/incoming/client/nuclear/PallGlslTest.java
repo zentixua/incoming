@@ -372,18 +372,21 @@ class PallGlslTest {
         // not at a place behind the front, nor turned in place
         String flat = body(read("include/fx_pall.glsl"), "float wallAt(").replaceAll("\\s+", " ");
         assertTrue(flat.contains("float u = s / max(h.P.x, 0.001), ph = u * V[2].x;")
-                && flat.contains("float local = h.P.y * pallWallTop(u, V[2].x) * pallWallHeated(ph, V[2].w);")
-                && flat.contains("vec3 o = pallWallOrigin(h.rel, h.z, ph, local, V[1].x);"), "head noise - not at the dust parcel");
-        String noise = body(read("include/fx_pall.glsl"), "vec3 wallNoise(").replaceAll("\\s+", " ");
-        assertTrue(noise.contains("vec3 n3 = vec3(a * WALL_RING, q.y * WALL_ROW, r / (size * WALL_STRETCH)) + offset;") && noise.contains("float r = length(q.xz),"),
-                "head noise - not the parcel's ring coordinates");
-        // whole noise tiles around the ring for the lobes, their warp (11/24) and fine detail (×4): no seam at ±π
+                && flat.contains("float local = h.P.y * pallWallTop(max(u, 0.05), V[2].x) * pallWallHeated(ph, V[2].w);")
+                && flat.contains("vec3 o = pallWallOrigin(h.rel, h.z, ph, local, V[1].x);"), "head domes - not at the dust parcel");
+        // the domes only dent the law's head (never above its top, never ahead of its front) and keep its mass
+        assertTrue(flat.contains("float dip = WALL_DOME * (0.5 - clamp(d, -0.5, 0.5)), keep = 1.0 - dip;")
+                && flat.contains("float m = pallWallMean(s - dip * local, h.z / keep, h.P.x, h.P.y, V[2].x, V[2].w);")
+                && flat.contains("return m > 0.0 ? h.P.w * m / keep : 0.0;"), "head domes - not dents of the law's head with its mass");
+        assertTrue(scalar(read("include/fx_pall.glsl"), "WALL_DOME") < 1, "a dome deeper than the head");
+        String noise = body(read("include/fx_pall.glsl"), "float wallDomes(").replaceAll("\\s+", " ");
+        assertTrue(noise.contains("vec3 u = vec3(a * WALL_RING, q.y * local / size + t * WALL_CHURN * 0.25, r / (size * WALL_STRETCH)) + offset;")
+                && noise.contains("float r = length(q.xz),") && noise.contains("texture(PallNoise, u).b"), "head domes - not Worley domes in the parcel's ring coordinates");
+        // whole noise tiles around the ring for the domes and their fine octave (×4): no seam at ±π
         double ring = scalar(read("include/fx_pall.glsl"), "WALL_RING");
         assertEquals(Math.rint(ring), ring, 0);
-        assertEquals(Math.rint(ring * 0.4583333), ring * 0.4583333, 1e-4);
-        assertTrue(noise.contains("n3 * 0.4583333"), "the warp's scale - not whole tiles around the ring");
         String at = body(read("include/fx_pall.glsl"), "float wallAt(").replaceAll("\\s+", " ");
-        assertTrue(at.contains("wallNoise(o, lobes.x, fine, t, mix(even, other, odd))") && at.contains("wallNoise(o, lobes.y, fine, t, mix(other, even, odd))"),
+        assertTrue(at.contains("wallDomes(o, local, lobes.x, fine, t, mix(even, other, odd))") && at.contains("wallDomes(o, local, lobes.y, fine, t, mix(other, even, odd))"),
                 "a tile's noise offset - by its place in the octave pair, not its parity: every billow pops at the boundary (review of #678)");
         assertTrue(!read("include/fx_pall.glsl").contains("pallWallRoll") && !GLSL.contains("pallWallRoll"), "the head pattern turns in place");
     }
@@ -592,14 +595,14 @@ class PallGlslTest {
         String fx = read("include/fx_pall.glsl");
         assertEquals(NukePall.WALL_HORIZON_WHITE, scalar(fx, "WALL_HORIZON_WHITE"), 1e-7);
         String wall = body(fx, "void wall(").replaceAll("\\s+", " ");
-        assertTrue(wall.contains("float depth = min(min(up, side), gTauBack);"), "the layer light - not through the nearest of the top, the face and the way back");
+        assertTrue(wall.contains("float depth = up;") && wall.contains("float up = wallChordBillows(V, h, vec3(0.0, 1.0, 0.0),"), "the layer light - not from above through the dented head");
         String step = body(fx, "void pallStep(").replaceAll("\\s+", " ");
         assertTrue(step.contains("gTauBack = -log(max(transmit, 1e-6)) + 1.0;") && step.contains("gTauBack = 1e9;"), "a march sample - lit only through the top or face");
         assertTrue(fx.replaceAll("\\s+", " ").contains("gTauBack = 1.0; vec4 matter = pallSource(p, cone, vec4(0.0), dustLight); gTauBack = 1e9;"), "a near-volume cell - lit at its depth");
         assertEquals(NukePall.WALL_SUN_FACE, scalar(fx, "WALL_SUN_FACE"), 1e-7);
         assertEquals(NukePall.WALL_OCHRE, scalar(fx, "WALL_OCHRE"), 1e-7);
         assertTrue(wall.contains("s.side += hd * w * thick * (exp(-k * min(side, gTauBack)) * face + 0.5 * exp(-k * down) * below);")
-                && wall.contains("vec3 face = 0.5 * horizon + WALL_SUN_FACE * rInf / max(w, vec3(1e-3)) * PallSunLight * max(sunDir.y, 0.0);"), "the horizon sky, the sun down the skin and the lit ground");
+                && wall.contains("vec3 face = 0.5 * horizon + WALL_SUN_FACE * rInf / max(w, vec3(1e-3)) * PallSunLight * max(dot(normal, sunDir), 0.0);"), "the horizon sky, the sun down the skin and the lit ground");
         assertTrue(wall.contains("vec3 below = mix(PALL_LAND, PALL_SEA, h.wet) * (PallSunLight * max(sunDir.y, 0.0) + PallSkyLight);"), "the ground below - not sun and sky on it");
         assertTrue(wall.contains("vec3 ru = 2.0 * k / (3.0 * (1.0 - w * g)), rInf = (1.0 - ru) / (1.0 + ru);"), "the skin's R-inf - not the slab's (PallLight.reflectance)");
         assertTrue(wall.contains("s.albedo += hd * w * thick;") && wall.contains("s.side += hd * w * thick *")
