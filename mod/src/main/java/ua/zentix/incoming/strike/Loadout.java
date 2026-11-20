@@ -97,8 +97,12 @@ public record Loadout(WeaponType weapon, int count, int spread, TargetMode mode,
 
     public Loadout withWeapon(WeaponType w) {
         // Weapon that cannot fire single shots (MLRS): default to spec burst.
-        WeaponSpec.Salvo salvo = w.spec().salvo();
+        WeaponSpec.Salvo salvo = w.spec().salvo(), from = weapon.spec().salvo();
         if (salvo.count() > 1 && weapon != w && count == 1) return new Loadout(w, salvo.count(), Math.max(spread, salvo.spread()), mode, player, nuke);
+        // Back from such a weapon with its burst untouched: a single shot again. Scrolling past the Grad must not
+        // leave the next missile order at its 12-round burst.
+        if (from.count() > 1 && salvo.count() <= 1 && weapon != w && count == from.count() && spread == from.spread())
+            return new Loadout(w, 1, 0, mode, player, nuke);
         return new Loadout(w, count, spread, mode, player, nuke);
     }
 

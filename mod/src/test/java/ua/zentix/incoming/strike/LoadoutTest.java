@@ -30,4 +30,17 @@ class LoadoutTest {
             assertEquals(nuke, Loadout.Nuke.CODEC.parse(NbtOps.INSTANCE, encoded).getOrThrow());
         }
     }
+
+    /** Wheel past the Grad and back: the missile stays a single shot (a new player got a 12-missile order). */
+    @Test
+    void scrollingPastBurstWeaponRestoresSingleShot() {
+        Loadout grad = Loadout.DEFAULT.withWeapon(WeaponType.ROCKET);
+        assertTrue(grad.count() > 1);
+        Loadout back = grad.withWeapon(WeaponType.MISSILE);
+        assertEquals(1, back.count());
+        assertEquals(0, back.spread());
+        // a burst the player set on purpose stays
+        Loadout chosen = grad.withCount(5).withWeapon(WeaponType.MISSILE);
+        assertEquals(5, chosen.count());
+    }
 }

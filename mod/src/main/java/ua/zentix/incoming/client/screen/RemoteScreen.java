@@ -11,6 +11,8 @@ import net.minecraft.client.gui.components.EditBox;
 import ua.zentix.incoming.IncomingConfig;
 import ua.zentix.incoming.nuclear.model.ImpactPreview;
 import net.minecraft.client.gui.components.Tooltip;
+import net.neoforged.neoforge.items.wrapper.PlayerInvWrapper;
+import ua.zentix.incoming.strike.Munitions;
 import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.client.player.LocalPlayer;
 import net.minecraft.network.chat.Component;
@@ -58,9 +60,9 @@ public class RemoteScreen extends Screen {
     private static final int LINE = 9;
     /**
      * Window height without weapon description and target hint. Text wraps to window width rather than overflowing:
-     * description gets as many lines as the menu's longest (window stays stable when switching weapons), hint gets two.
+     * description gets as many lines as the menu's longest (window stays stable when switching weapons), hint gets two plus a munitions line.
      */
-    private static final int BASE_H = 204, HINT_LINES = 2;
+    private static final int BASE_H = 204, HINT_LINES = 3;
     private static final int PAGE = 8;
     /** Settings for those without remote in hand (screen opened by command). */
     private static Loadout detached = Loadout.DEFAULT;
@@ -469,16 +471,29 @@ public class RemoteScreen extends Screen {
             }
         };
         // Hint above launch buttons: last line at bottom, extra lines grow upward.
-        lines(g, hint.copy().withStyle(ChatFormatting.DARK_GRAY), y0 + h - 28, true);
+        int top = lines(g, hint.copy().withStyle(ChatFormatting.DARK_GRAY), y0 + h - 28, true);
+        // Survival: the munitions this order takes, before Fire, so the refusal is no surprise (server pays the same bill).
+        Component short_ = shortage();
+        if (short_ != null) lines(g, short_.copy().withStyle(ChatFormatting.RED), top, true);
+    }
+
+    /** Munitions the order lacks in the player's inventory ({@link Munitions#shortage}); null if enough, creative or linked launchers (they pay). */
+    @Nullable
+    private Component shortage() {
+        LocalPlayer p = Minecraft.getInstance().player;
+        if (p == null || p.hasInfiniteMaterials() || linked() > 0) return null;
+        return Munitions.shortage(new PlayerInvWrapper(p.getInventory()), Munitions.Bill.of(loadout));
     }
 
     /** Text centred in window, wrapped to width: downward from {@code y}, or, if {@code up}, upward ending at {@code y}. */
-    private void lines(GuiGraphics g, Component text, int y, boolean up) {
+    /** @return top of the drawn lines */
+    private int lines(GuiGraphics g, Component text, int y, boolean up) {
         List<FormattedCharSequence> split = font.split(text, W - 8);
         int top = up ? y - split.size() * LINE : y;
         for (int i = 0; i < split.size(); i++) {
             g.drawCenteredString(font, split.get(i), width / 2, top + i * LINE, 0xFFFFFFFF);
         }
+        return top;
     }
 
     /** Moving-target hint ({@code player}, {@code aircraft}): whether selected weapon tracks it ({@link WeaponSpec.Tracking}). */
