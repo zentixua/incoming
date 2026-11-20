@@ -204,6 +204,7 @@ final class FirstUse {
         run(this::hoverHotbar0);
         shot("hold", () -> "toast " + hintToast() + ", tooltip: " + String.join(" | ", mc.player.getInventory().getItem(0)
                 .getTooltipLines(Item.TooltipContext.of(mc.level), mc.player, TooltipFlag.NORMAL).stream().map(Component::getString).toList()));
+        expect("hint toast up", () -> !"none".equals(hintToast()));
         run(() -> mc.setScreen(null));
         await(5);
         // 3. Console, target "a player" with nobody picked: Fire cannot send the order.
@@ -212,14 +213,17 @@ final class FirstUse {
         await(5);
         run(() -> hover(() -> widgetWith(Component.translatable("incoming.remote.fire").getString())));
         shot("fire-incomplete", () -> "fire active " + fireActive() + ", " + buttons());
+        expect("Fire inactive without a player", () -> "false".equals(fireActive()));
         // 4. Back to "where I look", the default missile, no munitions: the console's munitions line, then Fire.
         run(() -> click(widgetWith(TargetMode.LOOK.displayName().getString())));
         await(5);
         run(() -> hover(() -> widgetWith(Component.translatable("incoming.remote.fire").getString())));
         shot("console", () -> "fire active " + fireActive() + ", " + buttons());
+        expect("Fire active for a complete order", () -> "true".equals(fireActive()));
         run(() -> click(widgetWith(Component.translatable("incoming.remote.fire").getString())));
         await(10);
         shot("fire-refused", this::overlay);
+        expect("munitions refusal on the action bar", () -> overlay().contains(Component.translatable("incoming.munitions.short", "", "", "").getString().split(":")[0]));
         // 5. The host's ICBM: the nuclear review opens, then the same order in a world with nuclear weapons off.
         run(() -> {
             if (mc.screen != null) mc.setScreen(null);
@@ -231,6 +235,7 @@ final class FirstUse {
         run(() -> click(widgetWith(Component.translatable("incoming.remote.fire").getString())));
         await(20);
         shot("nuke-host", () -> "screen " + (mc.screen == null ? "none" : mc.screen.getClass().getSimpleName()) + ", " + overlay());
+        expect("the host's nuclear review open", () -> mc.screen instanceof ua.zentix.incoming.client.screen.NuclearReviewScreen);
         run(() -> {
             if (mc.screen != null) mc.screen.onClose();
             if (mc.screen != null) mc.setScreen(null);
@@ -243,6 +248,7 @@ final class FirstUse {
         run(() -> click(widgetWith(Component.translatable("incoming.remote.fire").getString())));
         await(10);
         shot("nuke-off", () -> "screen " + (mc.screen == null ? "none" : mc.screen.getClass().getSimpleName()) + ", " + overlay());
+        expect("nuclear-off refusal on the action bar", () -> overlay().contains(Component.translatable("incoming.nuke.disabled").getString()));
         run(() -> {
             if (mc.screen != null) mc.setScreen(null);
             onServer(server -> IncomingConfig.SERVER.nukeEnabled.set(true));
@@ -269,6 +275,8 @@ final class FirstUse {
         await(5);
         run(Designator::fire);
         await(5);
+        // on loaded ground the reticle marks the surface under the ray's end (TargetPicker); a pick is null only
+        // where that column is unknown, so the frame shows what the player sees here: an observation, not a check
         shot("scope-sky", this::overlay);
         run(() -> mc.options.keyUse.setDown(false));
         await(10);
@@ -467,6 +475,15 @@ final class FirstUse {
         int[] start = new int[1];
         run(() -> start[0] = frames);
         steps.add(t -> frames >= start[0] + 3);
+    }
+
+    /** A state the frame must show; otherwise a failure of the run. */
+    private void expect(String what, BooleanSupplier ok) {
+        run(() -> {
+            if (ok.getAsBoolean()) return;
+            failures++;
+            Incoming.LOG.warn("FIRSTUSE FAIL {} expected {}", lang(), what);
+        });
     }
 
     private void shot(String name, Supplier<String> note) {

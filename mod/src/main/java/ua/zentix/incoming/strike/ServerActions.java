@@ -428,9 +428,8 @@ public final class ServerActions {
             aim = ruled(player, aim);
             if (aim == null) return false;
         }
-        // A carrier warhead where carriers carry none is an ordinary strike (clamp), so only a nuclear order refuses here.
-        Loadout asked = new Loadout(weapon, count, spread, TargetMode.LOOK, "",
-                new Loadout.Nuke(nuke.yieldKt(), nuke.airBurst(), nuke.onCarrier() && IncomingConfig.SERVER.carrierNukes.get()));
+        // The order as requested, before clamping: a carrier warhead where carriers carry none is refused, as in review.
+        Loadout asked = new Loadout(weapon, count, spread, TargetMode.LOOK, "", nuke);
         if (asked.nuclear()) {
             Component no = nuclearRefusal(player, asked);
             if (no != null) {

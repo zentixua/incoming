@@ -43,6 +43,7 @@ import java.util.stream.Collectors;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.Mockito.mock;
@@ -92,10 +93,25 @@ class IncomingCommandTest {
     }
 
     private static CommandSourceStack source(int permission, boolean player, ServerLevel level) {
+        return source(permission, player, level, false);
+    }
+
+    /** {@code host}: the player owns the single-player world (cheats or not). */
+    private static CommandSourceStack source(int permission, boolean player, ServerLevel level, boolean host) {
         Player entity = null;
         if (player) {
-            entity = mock(Player.class);
-            when(entity.hasPermissions(2)).thenReturn(permission >= 2);
+            net.minecraft.server.level.ServerPlayer p = mock(net.minecraft.server.level.ServerPlayer.class);
+            when(p.hasPermissions(2)).thenReturn(permission >= 2);
+            net.minecraft.server.MinecraftServer server = mock(net.minecraft.server.MinecraftServer.class);
+            when(server.isSingleplayerOwner(any())).thenReturn(host);
+            try {
+                var f = net.minecraft.server.level.ServerPlayer.class.getDeclaredField("server");
+                f.setAccessible(true);
+                f.set(p, server);
+            } catch (ReflectiveOperationException e) {
+                throw new IllegalStateException(e);
+            }
+            entity = p;
         }
         return new CommandSourceStack(CommandSource.NULL, Vec3.ZERO, Vec2.ZERO, level, permission, "test", Component.literal("test"), null, entity);
     }
@@ -225,6 +241,12 @@ class IncomingCommandTest {
                 }
             }
         }
+        // the world host without cheats launches as an operator does, but detonation without flight stays an operator tool
+        IncomingConfig.SERVER.designatorForEveryone.set(true);
+        IncomingConfig.SERVER.nukeOpsOnly.set(true);
+        assertTrue(node("incoming", "nuke").canUse(source(0, true, null, true)));
+        assertFalse(node("incoming", "nuke").canUse(source(0, true, null, false)));
+        assertFalse(node("incoming", "nuke", "now").canUse(source(0, true, null, true)));
         IncomingConfig.SERVER.designatorForEveryone.set(false);
         IncomingConfig.SERVER.nukeOpsOnly.set(false);
         IncomingConfig.SERVER.nukeEnabled.set(true);

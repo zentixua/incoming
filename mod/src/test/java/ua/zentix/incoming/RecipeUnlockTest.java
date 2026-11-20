@@ -34,7 +34,11 @@ class RecipeUnlockTest {
         assertFalse(recipes.isEmpty(), "no recipes");
         Map<String, JsonObject> byReward = new HashMap<>();
         for (JsonObject a : unlocks.values()) {
-            for (JsonElement r : a.getAsJsonObject("rewards").getAsJsonArray("recipes")) byReward.put(r.getAsString(), a);
+            for (JsonElement r : a.getAsJsonObject("rewards").getAsJsonArray("recipes")) {
+                // every reward names a recipe that exists
+                assertTrue(recipes.containsKey(r.getAsString().substring("incoming:".length())), "reward " + r + " names no recipe");
+                byReward.put(r.getAsString(), a);
+            }
         }
         for (var e : recipes.entrySet()) {
             String id = "incoming:" + e.getKey();
@@ -46,6 +50,7 @@ class RecipeUnlockTest {
             for (var c : unlock.getAsJsonObject("criteria").entrySet()) {
                 JsonObject cond = c.getValue().getAsJsonObject();
                 if (cond.get("trigger").getAsString().equals("minecraft:inventory_changed")) {
+                    assertEquals(1, cond.getAsJsonObject("conditions").getAsJsonArray("items").size(), id + " " + c.getKey() + ": one item predicate");
                     triggers.add(cond.getAsJsonObject("conditions").getAsJsonArray("items").get(0).getAsJsonObject().get("items").getAsString());
                 }
             }
@@ -56,7 +61,9 @@ class RecipeUnlockTest {
             if (!e.getKey().equals("strike_designator")) assertTrue(triggers.contains("incoming:strike_designator"), id + ": not unlocked by the designator");
             // one requirement group: any criterion unlocks
             assertEquals(1, unlock.getAsJsonArray("requirements").size(), id);
-            assertEquals(unlock.getAsJsonObject("criteria").size(), unlock.getAsJsonArray("requirements").get(0).getAsJsonArray().size(), id);
+            Set<String> group = new HashSet<>();
+            for (JsonElement r : unlock.getAsJsonArray("requirements").get(0).getAsJsonArray()) group.add(r.getAsString());
+            assertEquals(unlock.getAsJsonObject("criteria").keySet(), group, id + ": the requirement group names every criterion");
         }
     }
 
@@ -64,9 +71,11 @@ class RecipeUnlockTest {
         URL dir = RecipeUnlockTest.class.getResource(resource);
         assertNotNull(dir, resource);
         Map<String, JsonObject> out = new HashMap<>();
-        try (Stream<Path> files = Files.walk(Path.of(dir.toURI()))) {
+        Path root = Path.of(dir.toURI());
+        try (Stream<Path> files = Files.walk(root)) {
             for (Path f : files.filter(f -> f.toString().endsWith(".json")).toList()) {
-                String name = f.getFileName().toString();
+                // the resource id: path under the root, '/'-separated, without ".json"
+                String name = root.relativize(f).toString().replace('\\', '/');
                 out.put(name.substring(0, name.length() - ".json".length()), JsonParser.parseString(Files.readString(f)).getAsJsonObject());
             }
         }

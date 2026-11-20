@@ -51,6 +51,11 @@ public final class NuclearReview {
         state.entry = null;
         if (!allowed(p, order)) return;
         // Linked launchers use their existing assignment path; ICBM is not a fixed-launcher weapon.
+        if (order.from().isPresent()) {
+            // the same launch-site check the launch makes after the hold (rights, dimension, range)
+            var bad = ServerActions.launchSiteProblem(p, new Vec3(order.from().get().x, 0, order.from().get().z));
+            if (bad != null) { ServerActions.refuse(p, bad); return; }
+        }
         if (!order.from().isEmpty() || !order.via().isEmpty()) {
             var problem = ServerActions.routeProblem(p.serverLevel(), p, true, order.loadout().weapon(),
                     order.from().map(LaunchOrigin.Place::new).orElse(null), order.via(),
@@ -152,8 +157,13 @@ public final class NuclearReview {
         if (action != C2S.NuclearAction.COMMIT || e.heldAt < 0 || now - e.heldAt < HOLD_TICKS) return false;
         state.entry = null; // consume before dispatch: duplicates cannot pay or launch twice
         Vec3 current = e.aim.target().subject().resolve(p.serverLevel()).orElse(null);
-        if (current == null || current.distanceToSqr(e.aim.point()) > 1 || ServerActions.ruled(p, e.aim) == null) {
+        if (current == null || current.distanceToSqr(e.aim.point()) > 1) {
             ServerActions.refuse(p, Component.translatable("incoming.nuke.review.changed"));
+            finish(p, e);
+            return false;
+        }
+        // ruled has already told its own reason (range, sight): a generic line would replace it on the action bar
+        if (ServerActions.ruled(p, e.aim) == null) {
             finish(p, e);
             return false;
         }

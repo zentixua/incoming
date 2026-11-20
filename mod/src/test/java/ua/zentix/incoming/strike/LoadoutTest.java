@@ -42,6 +42,9 @@ class LoadoutTest {
         // also a single shot from a wide spread or a server-capped burst: the burst belongs to the Grad
         Loadout wide = Loadout.DEFAULT.withSpread(20).withWeapon(WeaponType.ROCKET).withWeapon(WeaponType.MISSILE);
         assertEquals(1, wide.count());
-        assertEquals(1, grad.withCount(5).withWeapon(WeaponType.MISSILE).count());
+        assertEquals(0, wide.spread());
+        Loadout capped = grad.withCount(5).withWeapon(WeaponType.MISSILE);
+        assertEquals(1, capped.count());
+        assertEquals(0, capped.spread());
     }
 }

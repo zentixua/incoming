@@ -23,6 +23,10 @@ class NuclearRefusalTest {
         assertEquals("incoming.nuke.carrier_off", key(ServerActions.nuclearRefusal(CARRIER, true, true, false, false, 100)));
         assertEquals("incoming.nuke.over_cap", key(ServerActions.nuclearRefusal(ICBM, true, true, false, true, 10)));
         assertNull(ServerActions.nuclearRefusal(ICBM, true, true, false, true, 15));
+        // several causes at once: the first one the player can act on, in the order of the checks
+        assertEquals("incoming.nuke.disabled", key(ServerActions.nuclearRefusal(CARRIER, true, false, true, false, 10)));
+        assertEquals("incoming.nuke.ops_only", key(ServerActions.nuclearRefusal(CARRIER, true, true, true, false, 10)));
+        assertEquals("incoming.nuke.carrier_off", key(ServerActions.nuclearRefusal(CARRIER, true, true, false, false, 10)));
         // the ICBM always carries its warhead: the carrier setting does not apply to it
         assertNull(ServerActions.nuclearRefusal(ICBM, true, true, false, false, 100));
     }

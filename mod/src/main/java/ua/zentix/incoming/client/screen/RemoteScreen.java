@@ -432,7 +432,7 @@ public class RemoteScreen extends Screen {
      * inactive and its tooltip names the missing part, instead of a click that does nothing.
      */
     @Nullable
-    private Component missing() {
+    Component missing() {
         if (loadout.nuclear() && !validYield) return Component.translatable("incoming.remote.fire.no_yield", IncomingConfig.SERVER.nukeMaxYield.get());
         if (loadout.mode() == TargetMode.AIRCRAFT && aircraft == null) return Component.translatable("incoming.remote.fire.no_aircraft");
         if (loadout.mode() == TargetMode.PLAYER && loadout.player().isEmpty()) return Component.translatable("incoming.remote.fire.no_player");

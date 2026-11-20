@@ -96,7 +96,7 @@ class LangTest {
      */
     @Test
     void everyKeyInCodeIsTranslated() throws Exception {
-        Pattern call = Pattern.compile("\\b(?:translatable|translation)\\([^;]*;");
+        Pattern call = Pattern.compile("\\b(?:translatable|translation)\\s*\\([^;]*;");
         Pattern literal = Pattern.compile("\"(incoming\\.[a-z0-9_.]*[a-z0-9_])\"");
         JsonObject ru = load("ru_ru"), en = load("en_us");
         TreeSet<String> missing = new TreeSet<>();
