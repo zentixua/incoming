@@ -300,7 +300,9 @@ public final class FxParticle {
         // layer part (GPU timing by part): smoky debris tails, fire and ball, other particles
         FxQuads.Part was = out.part(budget == FxBudget.DEBRIS ? FxQuads.Part.DEBRIS
                 : kind == Fx.Kind.FIRE || kind == Fx.Kind.FIREBALL ? FxQuads.Part.FIRE : FxQuads.Part.PARTICLES);
-        out.nearestTexels(!smooth);
+        // smoke and dust billows: smooth when magnified (a texel square beside the eye is not smoke), pixel-art pieces stay crisp
+        if (!smooth && kind == Fx.Kind.SMOKE) out.softTexels();
+        else out.nearestTexels(!smooth);
         out.opacity(a);
         // emissive matter blooms (FxBloom): fire, sparks, flash, ball; smoke, dust, ring and ash do not
         out.emission(kind.lit ? 0 : hdr);

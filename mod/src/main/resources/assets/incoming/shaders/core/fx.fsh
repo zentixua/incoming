@@ -173,19 +173,40 @@ vec4 fireFrames(vec2 uv, vec2 dx, vec2 dy, float m) {
     return mix(textureGrad(Sampler0, uv0, dx, dy), textureGrad(Sampler0, uv1, dx, dy), m);
 }
 
+// Smoke and dust particles (FxQuads.softTexels): a texel larger than a screen pixel is sampled smoothly — from one pixel
+// per texel (level 0) to two (level −1). A 64-pixel billow beside the eye covered the screen with flat texel squares of
+// 40–60 pixels and staircase edges (sandbox msl_in at 10 s: smoky debris tails and site dust around the camera)
+float softTexels(float level) {
+    return clamp(-level, 0.0, 1.0);
+}
+
+// A particle up close fainter than 0.1 is not drawn (vanilla particle shader). For smoothly sampled smoke the cut is a ramp
+// over the same threshold: a hard cut on bilinear alpha draws a contour line across the billow
+float particleCut(float a, float lod, float soft) {
+    float threshold = 0.1 * clamp(2.0 - lod, 0.0, 1.0);
+    if (threshold <= 0.0) return 1.0;
+    if (soft > 0.5) return smoothstep(0.5 * threshold, 1.5 * threshold, a);
+    if (a < threshold) return 0.0;
+    return 1.0;
+}
+
 // Particle up close — as from the Minecraft atlas (NEAREST_MIPMAP_LINEAR): the nearest pixel of the picture and its copy half
 // the size, mixed between them; smoothed, it would come out soapy. Copies half that size or smaller (a puff of 32 pixels and less) —
 // smooth, like everything distant: the steps only shimmer there. The copy level — as in OpenGL, by derivatives.
-vec4 particle(vec2 uv, vec2 dx, vec2 dy, out float lod) {
+vec4 particle(vec2 uv, vec2 dx, vec2 dy, float soft, out float lod) {
     vec2 size = vec2(textureSize(Sampler0, 0));
     vec2 px = dx * size, py = dy * size;
-    lod = max(0.5 * log2(max(max(dot(px, px), dot(py, py)), 1e-12)), 0.0);
+    float level = 0.5 * log2(max(max(dot(px, px), dot(py, py)), 1e-12));
+    lod = max(level, 0.0);
     if (lod >= 1.0) return textureGrad(Sampler0, uv, dx, dy);
     vec2 size1 = size * 0.5;
     vec4 a = textureLod(Sampler0, (floor(uv * size) + 0.5) / size, 0.0);
     vec4 b = textureLod(Sampler0, (floor(uv * size1) + 0.5) / size1, 1.0);
-    return mix(a, b, lod);
+    vec4 near = mix(a, b, lod);
+    float blend = softTexels(level) * soft;
+    return blend > 0.0 ? mix(near, textureLod(Sampler0, uv, 0.0), blend) : near;
 }
+
 
 // Halo far/glow (tools/gen_particles.py, far_glow) at distance r from the middle in fractions of the half-size: exp(−(r/0.42)²),
 // at the edge — zero without a step; the picture's peak — at the four middle pixels (r = √2/63), it is 1
@@ -214,7 +235,7 @@ void main() {
         bool behind = quadPlace <= texelFetch(HalfCut, ivec2(gl_FragCoord.xy * FxGlowPass.y / FxHalfSplit.z), 0).r;
         if (behind != (FxHalfSplit.x < 1.5)) discard;
     }
-    float lod = 0.0;
+    float lod = 0.0, soft = 0.0;
     vec4 tex;
     bool six = nearest < -0.1 && nearest > -0.4;
     vec3 sixLit = vec3(1.0);
@@ -223,7 +244,8 @@ void main() {
         vec2 local = ((texCoord0 - FxGlow.xy) / (FxGlow.zw - FxGlow.xy) * 2.0 - 1.0) * (64.0 / 63.0);
         tex = vec4(glowAlpha(length(local)));
     } else if (nearest > 0.75) {
-        tex = particle(texCoord0, dx, dy, lod);
+        soft = nearest < 0.95 ? 1.0 : 0.0;
+        tex = particle(texCoord0, dx, dy, soft, lod);
     } else if (six && FxGlowPass.x > 0.5) {
         tex = vec4(sixAlpha(texCoord0, dx, dy, opacity));
     } else if (six) {
@@ -269,8 +291,9 @@ void main() {
     }
     // a particle up close fainter than 0.1 is not drawn, as in the vanilla particle shader: otherwise the faint halos of puffs add up
     // into a murky haze around the cloud. Far away (a puff smaller than 16 pixels) — without the cut: distant smoke is faint anyway
-    if (nearest > 0.75 && tex.a * opacity < 0.1 * clamp(2.0 - lod, 0.0, 1.0)) discard;
-    vec4 color = vec4(vertexColor.rgb * tex.rgb * sixLit, vertexColor.a * tex.a);
+    float cut = nearest > 0.75 ? particleCut(tex.a * opacity, lod, soft) : 1.0;
+    if (cut <= 0.0) discard;
+    vec4 color = vec4(vertexColor.rgb * tex.rgb * sixLit, vertexColor.a * tex.a) * cut;
     // frame pixel (for the glow pass — larger)
     vec2 frag = gl_FragCoord.xy * FxGlowPass.y;
     vec3 glow = vec3(0.0);
