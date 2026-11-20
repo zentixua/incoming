@@ -310,7 +310,9 @@ stop() {
     cg=$(systemctl --user show "$u" -p ControlGroup --value)
     [[ $cg == */"$u" ]] && [ -d "/sys/fs/cgroup$cg" ] || continue
     for p in $(find "/sys/fs/cgroup$cg" -name cgroup.procs -exec cat {} + 2>/dev/null); do
-      [ "$(cat /proc/"$p"/comm 2>/dev/null)" = java ] && grep -q "^0::$cg" "/proc/$p/cgroup" 2>/dev/null && java+=("$p")
+      # literal membership: the unit's cgroup itself or below it, not a sibling sharing its name as a prefix
+      local own; own=$(sed -n 's/^0:://p' "/proc/$p/cgroup" 2>/dev/null)
+      [ "$(cat /proc/"$p"/comm 2>/dev/null)" = java ] && { [ "$own" = "$cg" ] || [[ $own == "$cg"/* ]]; } && java+=("$p")
     done
   done
   if [ ${#java[@]} -gt 0 ]; then

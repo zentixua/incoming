@@ -59,6 +59,7 @@ if [ -f "$RUN/run-id" ]; then
     name=${c%% *}
     [ -d "$RUN/$name/logs" ] && mv "$RUN/$name/logs" "$keep/$name"
     [ -d "$RUN/$name/crash-reports" ] && mv "$RUN/$name/crash-reports" "$keep/$name-crash-reports"
+    for f in "$RUN/$name"/gc.log* "$RUN/$name/run.jfr"; do [ -e "$f" ] && mkdir -p "$keep/$name" && mv "$f" "$keep/$name/"; done
   done
   echo "previous run logs: $keep"
 fi
