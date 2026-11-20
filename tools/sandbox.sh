@@ -19,10 +19,12 @@
 #                                          each waits for its result
 #   tools/sandbox.sh swap                  build changes (Gradle), hot swap classes, reload resources
 #                                          if changed; code 3: hot swap failed, restart required
-#   tools/sandbox.sh shot <name> '<effect>' [--at 0.1,0.5,1,3] [--wav 4] [--cam 'range height azimuth look'] [--time day|night]
+#   tools/sandbox.sh shot <name> '<effect>' [--at 0.1,0.5,1,3|none] [--wav 4] [--cam 'range height azimuth look'] [--time day|night]
 #                        [--overlay] [--no-swap]
 #                                          swap, then the effect with frames at these seconds and audio: <name>_*.png, <name>.wav,
 #                                          capture.json; finishes with seconds from the command to the last frame.
+#                                          --at none: sound only (<name>.wav, capture.json); on the CPU its take runs in a
+#                                          160×90 window at 20 fps (Sandbox.quiet), about 1/10 of a frame take's CPU
 #                                          Each shot sets its own time: --time, default day (noon).
 #                                          The nuke near the camera: shot wall 'nuke 15 near' --cam '60 15 0 5' --at -0.5,0.1,1 —
 #                                          houses from the debris scene; time starts when the front reaches them (client-scenario.md)
@@ -363,12 +365,19 @@ shot() {
     # in a staging directory of its own; its timing replaces the frame take's empty audio block in capture.json
     # staging created here, atomically and fresh: never an existing shot's directory; the first frame's second passed as
     # given, so both takes round it to the same tick
+    # the take itself shrinks the window and frame limit (Sandbox.quiet): nobody looks at its frames
     local take from=0
+    mkdir -p "$FX/out"
     take=$(basename "$(mktemp -d "$FX/out/.wav-$name-XXXXXX")") || exit 1
-    awk -v f="${at%%,*}" 'BEGIN { exit !(f < 0) }' && from=${at%%,*}
-    fx "shots $name $at 0" || exit 1
-    FX_LIMIT=$limit fx "$effect" || exit 1
-    fx clear || exit 1
+    [ "$at" != none ] && awk -v f="${at%%,*}" 'BEGIN { exit !(f < 0) }' && from=${at%%,*}
+    if [ "$at" != none ]; then
+      fx "shots $name $at 0" || exit 1
+      FX_LIMIT=$limit fx "$effect" || exit 1
+      fx clear || exit 1
+    else
+      # sound only: no frame take; the output directory holds the WAV and capture.json
+      rm -rf "${out:?}" && mkdir -p "$out" && printf '{"name": "%s", "effect": "%s", "frames": []}\n' "$name" "${effect//\"/}" > "$out/capture.json"
+    fi
     fx "shots $take none@$from $wav" || exit 1
     fx "$effect" || { rm -rf "${FX:?}/out/$take"; exit 1; }
     if ! cut_wav "$FX/out/$take/capture.json" "$out/$name.wav" || ! audio_into "$FX/out/$take/capture.json" "$out/capture.json"; then
@@ -380,7 +389,7 @@ shot() {
     FX_LIMIT=$limit fx "$effect" || exit 1
     cut_wav "$out/capture.json" "$out/$name.wav" || { echo "no WAV" >&2; exit 1; }
   fi
-  ls "$out"/*.png | sed 's/^/frame: /'
+  [ "$at" = none ] || ls "$out"/*.png | sed 's/^/frame: /'
   echo "from command to last frame and audio: $(since "$t0") s"
 }
 

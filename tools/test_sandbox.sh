@@ -2,7 +2,7 @@
 # Effects sandbox check without a client (CI, "Остановка проверок"): `shot` sets time before the effect, not after
 # (23.10: 0,1 and 0,5 s "night" frames were daytime), separately for each shot (without --time, day); `shaders` and `dh`
 # without their mods in the sandbox directory refuse with a message, rather than capturing without Iris or DH (23.10: FX captured "under Iris" without Iris);
-# on a CPU renderer `shot` records sound in its own unslowed take; CPU client memory ceiling, admission, GL environment
+# on a CPU renderer `shot` records sound in its own unslowed take, `--at none` only that take; CPU client memory ceiling, admission, GL environment
 # and socket naming (tools/soft_gl.sh).
 set -uo pipefail
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
@@ -88,6 +88,14 @@ real_cut_wav "$tmp/nosound.json" "$tmp/nosound.wav" 2>/dev/null && bad "cut_wav 
 : > "$tmp/limit.log"
 ( shot n6 'blast drone' --at 1,600, --wav 0 --no-swap ) >/dev/null 2>&1
 grep -qx '15600 blast drone' "$tmp/limit.log" && ok "CPU shot deadline from the last frame, trailing comma too" || bad "CPU deadline: $(tr '\n' ';' < "$tmp/limit.log")"
+# sound only (--at none) on a CPU renderer: no frame take, one sound take (its quiet window is Sandbox.quiet, in the
+# client), WAV and capture.json in the shot's directory on a fresh tree (no fx/out yet)
+rm -rf "$FX/out"; : > "$tmp/fx.log"
+( shot n7 'real missile' --at none --wav 2 --no-swap ) >/dev/null 2>&1; rc=$?
+[ $rc = 0 ] && [ "$(grep -c '^shots' "$tmp/fx.log")" = 1 ] && grep -qE '^shots \.wav-n7-[A-Za-z0-9]+ none@0 2$' "$tmp/fx.log" \
+  && [ "$(grep -cx 'real missile' "$tmp/fx.log")" = 1 ] && ok "CPU sound-only shot: one sound take, no frame take" || bad "CPU sound-only shot: rc $rc $(tr '\n' ';' < "$tmp/fx.log")"
+python3 -c 'import json,sys,wave; w=wave.open(sys.argv[1]); a=json.load(open(sys.argv[2])); sys.exit(0 if abs(w.getnframes()/w.getframerate()-2)<0.01 and a["frames"]==[] and a["audio"]["seconds"]==2 else 1)' \
+  "$FX/out/n7/n7.wav" "$FX/out/n7/capture.json" 2>/dev/null && ok "CPU sound-only shot: WAV and capture.json" || bad "CPU sound-only shot output: $(ls "$FX/out" "$FX/out/n7" 2>&1 | tr '\n' ' ')"
 : > "$tmp/fx.log"; echo gpu > "$FX/renderer"
 ( shot n4 'blast drone' --at 0.5 --wav 2 --no-swap ) >/dev/null 2>&1
 [ "$(grep -c '^shots' "$tmp/fx.log")" = 1 ] && grep -qx 'shots n4 0.5 2' "$tmp/fx.log" && ok "GPU shot: one take with sound" || bad "GPU shot: $(tr '\n' ';' < "$tmp/fx.log")"

@@ -132,6 +132,18 @@ final class Sandbox {
     /** Rate from arming to the first measured frames (≈ 2 frames per tick at 4 frames/s, the smoke-filled llvmpipe rate). */
     private static final double SOFT_START_RATE = 2;
     private double paceRate = 20, paceFrameS;
+    /**
+     * Sound-only take on a CPU renderer ({@code shots <name> none… <s>}): nobody looks at its frames, yet llvmpipe drew
+     * full 1280×720 frames at 4–5 cores the whole take. The window shrinks to {@link #QUIET_W}×{@link #QUIET_H} and the
+     * frame limit drops to {@link #QUIET_FPS} (standard window and {@code maxFps} options) until the take ends; sound is
+     * mixed by OpenAL's own thread in real time and our voices start at their exact offset ({@code OwnSources}: a voice
+     * later than 30 ms seeks), so the WAV does not depend on the frame rate. Saved size and limit, null when not quiet.
+     */
+    private int[] quiet;
+    /** Window restored after a quiet take: the take's result waits until the frame is its size again (−1: nothing waits). */
+    private int quietRestoreSince = -1;
+    private String quietResult;
+    static final int QUIET_W = 160, QUIET_H = 90, QUIET_FPS = 20;
     private long paceLast;
     /** Point of effects that do not touch the ground (on the ground), and the current effect's point. */
     private static final Vec3 HOME = new Vec3(0.5, GROUND + 1, 0.5);
@@ -543,6 +555,7 @@ final class Sandbox {
                 armed.audioFrom = c.audioFrom();
                 // slow before the effect: its first frames (new particles, first draw of a shader) are the slowest
                 pace(armed.times.length > 0 ? SOFT_START_RATE : 20);
+                quiet(soft != null && soft && armed.times.length == 0 && armed.wavSeconds > 0);
                 finish("ok armed " + out);
             }
             case AGAIN -> {
@@ -597,6 +610,8 @@ final class Sandbox {
                 p.getX() + half, GROUND, p.getZ() + half));
         effectTick = -1;
         capture = null;
+        // effects that clear first (nuke … near) keep an armed sound-only take quiet
+        if (armed == null) quiet(false);
     }
 
     /** House under the point ({@code house}): height and half-width, in blocks; 0 — no house. */
@@ -973,7 +988,48 @@ final class Sandbox {
         if (cap != null && effectTick >= 0 && cap.next >= cap.times.length && tick >= cap.audioTick + Math.round(cap.wavSeconds * 20) + 10) {
             capture = null;
             write(cap.out.resolve("capture.json"), json(cap));
-            finish("ok " + cap.out);
+            if (quiet != null) {
+                // the next command may be a frame take: answer once the window is its size again
+                quiet(false);
+                quietResult = "ok " + cap.out;
+                quietRestoreSince = tick;
+            } else {
+                finish("ok " + cap.out);
+            }
+        }
+        if (quietRestoreSince >= 0) {
+            var target = mc.getMainRenderTarget();
+            boolean back = target.width == mc.getWindow().getWidth() && target.height == mc.getWindow().getHeight()
+                    && mc.getWindow().getWidth() == quietSize[0] && mc.getWindow().getHeight() == quietSize[1];
+            if (back || tick - quietRestoreSince > 100) {
+                quietRestoreSince = -1;
+                finish(back ? quietResult : "error window not restored to " + quietSize[0] + "x" + quietSize[1] + " after a sound-only take: "
+                        + target.width + "x" + target.height + " (tools/sandbox.sh restart)");
+            }
+        }
+    }
+
+    /** Window size to return to after a quiet take. */
+    private final int[] quietSize = new int[2];
+
+    /** Sound-only take on the CPU renderer: minimal window and frame limit ({@link #quiet}); false restores both. */
+    private void quiet(boolean on) {
+        Minecraft mc = Minecraft.getInstance();
+        long window = mc.getWindow().getWindow();
+        if (on && quiet == null) {
+            quiet = new int[] {mc.getWindow().getWidth(), mc.getWindow().getHeight(), mc.options.framerateLimit().get()};
+            quietSize[0] = quiet[0];
+            quietSize[1] = quiet[1];
+            Incoming.LOG.info("SANDBOX quiet take: window {}x{} → {}x{}, max fps {} → {}", quiet[0], quiet[1], QUIET_W, QUIET_H, quiet[2], QUIET_FPS);
+            mc.options.framerateLimit().set(QUIET_FPS);
+            // the client window fills the nested screen and the compositor keeps a maximized window's size: restore first
+            org.lwjgl.glfw.GLFW.glfwRestoreWindow(window);
+            org.lwjgl.glfw.GLFW.glfwSetWindowSize(window, QUIET_W, QUIET_H);
+        } else if (!on && quiet != null) {
+            Incoming.LOG.info("SANDBOX quiet take over: window {}x{}, max fps {}", quiet[0], quiet[1], quiet[2]);
+            mc.options.framerateLimit().set(quiet[2]);
+            org.lwjgl.glfw.GLFW.glfwSetWindowSize(window, quiet[0], quiet[1]);
+            quiet = null;
         }
     }
 
