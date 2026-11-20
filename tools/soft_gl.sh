@@ -1,4 +1,5 @@
-# CPU rendering (Mesa llvmpipe) for no-shader clients: no GPU, no lease, many at once beside the GPU client.
+# CPU rendering (Mesa llvmpipe) for no-shader clients: no GPU, no lease, many at once beside the GPU client; the fallback of
+# vanilla clients when no shared GPU slot is free (vanilla_display).
 # Sourced by tools/nested_kwin.sh (KDE laptop) and tools/sandbox.sh, tools/client_scenario.sh (xvfb-run elsewhere:
 # netcup, cloud). Frames match the GPU's for vanilla rendering (same GL 4.6 core pipeline, Mesa conformance);
 # frame and GPU times do not: frame-cost questions go to the GPU (tools/stand, once on the final head).
@@ -14,6 +15,11 @@
 #   soft_display <name> <w> <h> <command>   runs the command on a CPU-only display: nested KWin on socket
 #                        wayland-incoming-soft-<name> where KWin exists (tools/nested_kwin.sh with INCOMING_SOFT=1; the
 #                        prefix is how tools/gpu_lease.sh tells it from a GPU client), otherwise xvfb-run; no host audio
+#   vanilla_display <name> <w> <h> <command>   a vanilla client (no shader pack, DH or Voxy) on the GPU when a shared slot
+#                        is free (tools/gpu_lease.sh gpu_slot_take: nested KWin on wayland-incoming-shared-<name>), else
+#                        at once on the CPU (soft_display); never waits. Writes `gpu` or `soft` to INCOMING_RENDERER_FILE if
+#                        set; Artem's game starting stops a GPU client (75, "Artem's game started"), as every GPU client.
+#                        INCOMING_CPU_ONLY=1 keeps it on the CPU
 #
 # INCOMING_SOFT_HEAP: client heap (default 3g; 1536m fits netcup beside its servers: a flat sandbox used < 0.9 GB);
 # INCOMING_SOFT_THREADS: llvmpipe raster threads (default half the CPUs, at most 8: two clients fit a 16-thread laptop
@@ -34,13 +40,14 @@ soft_gl_env() {
   export INCOMING_CLIENT_HEAP="${INCOMING_SOFT_HEAP:-3g}"
 }
 
-# Memory ceiling of one CPU client, MB: heap + 1.5 GB native (llvmpipe keeps textures and framebuffers in process memory;
-# a flat-world sandbox with -Xmx3g peaked at 3.0 GB of unit memory, heap use under 0.9 GB). tools/laptop_job.sh --soft
-# sets it as the unit's MemoryMax without swap, so the worst case is known before start
+# Memory ceiling of one vanilla client, MB: heap + 2 GB native (llvmpipe keeps textures and framebuffers in process memory;
+# a flat-world sandbox with -Xmx3g peaked at 3.0 GB of unit memory on the CPU and 4.25 GB on a shared GPU slot, the NVIDIA
+# driver's memory beside a grown heap, 20.11). tools/laptop_job.sh --soft sets it as the unit's MemoryMax without swap,
+# so the worst case is known before start
 soft_mem_cap() {
   local heap=${INCOMING_SOFT_HEAP:-3g}
   case "$heap" in *g|*G) heap=$(( ${heap%?} * 1024 )) ;; *m|*M) heap=${heap%?} ;; esac
-  echo $(( heap + 1536 ))
+  echo $(( heap + 2048 ))
 }
 
 # Unused part of the running CPU clients' ceilings, MB: units of laptop_job.sh --soft are the jobs with a MemoryMax
@@ -88,4 +95,42 @@ soft_display() {
   else
     echo "no CPU display: neither kwin_wayland nor xvfb-run" >&2; return 2
   fi
+}
+
+vanilla_display() {
+  local name=$1 w=$2 h=$3 cmd=$4 root pc why err
+  root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+  # shellcheck source=gpu_lease.sh
+  declare -F gpu_slot_take >/dev/null || source "$root/tools/gpu_lease.sh"
+  if [ -n "${INCOMING_CPU_ONLY:-}" ]; then why="INCOMING_CPU_ONLY"
+  elif ! command -v kwin_wayland >/dev/null; then why="no nested KWin"
+  else
+    # in this shell, not $(…): the slot lock (fd 197) must stay open for the client started below
+    err=$(mktemp)
+    if gpu_slot_take "$name" 2>"$err"; then why=; else why=$(cat "$err"); fi
+    rm -f "$err"
+  fi
+  if [ -n "$why" ]; then
+    echo "renderer: CPU (llvmpipe): $why"
+    [ -n "${INCOMING_RENDERER_FILE:-}" ] && echo soft > "$INCOMING_RENDERER_FILE"
+    soft_display "$@"
+    return
+  fi
+  echo "renderer: GPU, shared slot $GPU_SLOT of $GPU_SLOTS"
+  [ -n "${INCOMING_RENDERER_FILE:-}" ] && echo gpu > "$INCOMING_RENDERER_FILE"
+  # the CPU selection of soft_gl_env (exported before Gradle by callers that may still land here) must not reach this client
+  env -u INCOMING_SOFT -u LIBGL_ALWAYS_SOFTWARE -u GALLIUM_DRIVER -u __GLX_VENDOR_LIBRARY_NAME -u __EGL_VENDOR_LIBRARY_FILENAMES \
+    -u LP_NUM_THREADS INCOMING_GPU_SHARED=1 "$root/tools/nested_kwin.sh" "wayland-incoming-shared-$name" "$w" "$h" "$cmd" &
+  pc=$!
+  # the slot stays with the client's session (fd 197 inherited); this shell lets it go
+  exec 197>&-
+  while kill -0 "$pc" 2>/dev/null; do
+    if artem_playing; then
+      echo "Artem's game started at $(date +%T): shared GPU client stopped"
+      kill -TERM "$pc" 2>/dev/null; wait "$pc"
+      return 75
+    fi
+    sleep "${INCOMING_GAME_POLL:-5}"
+  done
+  wait "$pc"
 }

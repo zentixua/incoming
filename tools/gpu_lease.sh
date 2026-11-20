@@ -38,10 +38,20 @@
 # the waiting process (PID and start time): exit or interruption (Ctrl+C) removes its position automatically.
 # On 23.10, without a queue, `start --wait` waited ~35 min while three sessions checking earlier took turns on the GPU.
 # The queue is capped (INCOMING_GPU_QUEUE_MAX other sessions, default 2): a newcomer beyond it is refused (75) at once.
-# The GPU serves only what needs it (shader packs, DH/Voxy, frame cost); vanilla frames render on the CPU
-# (tools/soft_gl.sh), so a long queue means work that belongs on the CPU or a session holding the GPU between frames.
+# The lease serves what needs the GPU to itself (shader packs, DH/Voxy, frame cost); a long queue means a session
+# holding the GPU between frames.
 # CPU clients (nested KWin on a `wayland-incoming-soft-…` socket, tools/soft_gl.sh) are not GPU clients and never block
 # the lease.
+#
+# Shared slots: vanilla clients (no shader pack, DH or Voxy: tools/soft_gl.sh vanilla_display) draw on the GPU beside each
+# other when it is free: gpu_slot_take holds one of INCOMING_GPU_SLOTS (3) slot locks (`$LEASE.slot<N>`, fd 197, inherited by
+# the client's nested KWin on a `wayland-incoming-shared-…` socket) and never waits: slots full, the lease held (also
+# idle, by any session), a lease waiter queued, an exclusive client running, Artem's game, or less free VRAM than
+# INCOMING_GPU_SLOT_VRAM (1024 MiB) send the client to the CPU at once. Exclusive users see slot holders as busy
+# (gpu_client_busy): a measurement never shares the GPU; with --wait it queues, and its queue entry keeps new shared clients
+# off until the running ones end. Measured 20.11 (RTX 4060, 8 GB; desktop 1.6 GB): a flat sandbox client with a 15 kt nuke
+# near the camera took 0.35 GB of VRAM, so VRAM is not the bound; three slots keep three clients' memory ceilings (4.5 GB
+# each) plus the 4 GB reserve within the laptop's 32 GB beside a build.
 # Files live in XDG_RUNTIME_DIR
 # (tmpfs): reboot clears it. Test: tools/test_gpu_lease.sh (CI).
 LEASE=${INCOMING_GPU_LEASE:-${XDG_RUNTIME_DIR:-/run/user/$(id -u)}/incoming-gpu.lease}
@@ -50,6 +60,9 @@ LEASE_IDLE=${INCOMING_GPU_LEASE_IDLE:-600}
 GPU_CLIENT=$LEASE.client
 # wait queue: "owner, worktree, since (epoch), process (PID start-time)" rows in arrival order; under $LEASE.lock
 QUEUE=$LEASE.queue
+# shared slots for vanilla GPU clients: $LEASE.slot1 … slotN, each a lock held by one client's process tree
+GPU_SLOTS=${INCOMING_GPU_SLOTS:-3}
+GPU_SLOT_VRAM=${INCOMING_GPU_SLOT_VRAM:-1024}
 # waiter polling interval, seconds
 LEASE_POLL=${INCOMING_GPU_POLL:-3}
 
@@ -213,6 +226,8 @@ gpu_clients_running() {
     # CPU session (tools/soft_gl.sh): QPainter KWin and llvmpipe client, no GPU. Told by its socket name, not its
     # environment: kwin_wayland carries file capabilities, so its /proc/<pid>/environ is unreadable even to its owner
     tr '\0' '\n' < "/proc/$p/cmdline" 2>/dev/null | grep -qx 'wayland-incoming-soft-.*' && continue
+    # shared GPU session: counted by its slot lock (gpu_slots_busy), which it cannot run without (nested_kwin.sh)
+    tr '\0' '\n' < "/proc/$p/cmdline" 2>/dev/null | grep -qx 'wayland-incoming-shared-.*' && continue
     [ -n "${1:-}" ] && _descends "$p" "$1" && continue
     echo "$p $(tr '\0' ' ' < "/proc/$p/cmdline" 2>/dev/null | cut -c1-200)"
   done
@@ -240,6 +255,52 @@ gpu_client_busy() {
   fi
   c=$(gpu_clients_running "$holder" | head -n 1)
   [ -n "$c" ] && { echo "GPU client is running without a lease (pre-lease script?): $c"; return 0; }
+  c=$(gpu_slots_busy)
+  [ -n "$c" ] && { echo "shared GPU clients are running (vanilla frames; they end with their sandbox or scenario): $c"; return 0; }
+  return 1
+}
+
+# held shared slots: "slot N: who" joined by "; ", empty when none
+gpu_slots_busy() {
+  local i f out=()
+  for i in $(seq "$GPU_SLOTS"); do
+    f=$LEASE.slot$i
+    [ -e "$f" ] && ! flock -n -s "$f" true 2>/dev/null && out+=("slot $i: $(cat "$f.who" 2>/dev/null)")
+  done
+  [ ${#out[@]} -gt 0 ] || return 0
+  local IFS=';'; echo "${out[*]}" | sed 's/;/; /g'
+}
+
+# gpu_slot_take <description> — a shared GPU slot for a vanilla client, never waiting: 0 with the slot lock on fd 197 (the
+# caller's process and every child it starts hold it; GPU_SLOT is its number), else 1 with the reason on stderr (the
+# client then renders on the CPU). Checked under $LEASE.lock, where lease_take also counts slot holders
+gpu_slot_take() {
+  local fd i why= free
+  artem_playing && { echo "Artem's game is running" >&2; return 1; }
+  free=$(timeout 5 nvidia-smi --query-gpu=memory.free --format=csv,noheader,nounits 2>/dev/null | head -n 1 | tr -d ' ')
+  [[ $free =~ ^[0-9]+$ ]] || { echo "no NVIDIA GPU (nvidia-smi)" >&2; return 1; }
+  [ "$free" -ge "$GPU_SLOT_VRAM" ] || { echo "${free} MiB of VRAM free, a shared client needs ${GPU_SLOT_VRAM}" >&2; return 1; }
+  exec {fd}>"$LEASE.lock"; flock "$fd"
+  _lease_read
+  if ! _lease_free; then why="GPU lease held by $L_OWNER ($L_TREE): exclusive work (frame cost, shader pack)"
+  elif [ -n "$(_queue_head)" ]; then why="exclusive GPU work is waiting: $(_queue_line)"
+  elif ! flock -n -s "$GPU_CLIENT" true 2>/dev/null; then why="exclusive GPU client is running: $(cat "$GPU_CLIENT.who" 2>/dev/null)"
+  fi
+  if [ -z "$why" ]; then
+    for i in $(seq "$GPU_SLOTS"); do
+      exec 197>"$LEASE.slot$i"
+      if flock -n 197; then
+        printf '%s, since %s: %s\n' "${DELEGATE_TASK:-$(lease_owner)}" "$(date +%H:%M)" "$1" > "$LEASE.slot$i.who"
+        GPU_SLOT=$i
+        exec {fd}>&-
+        return 0
+      fi
+      exec 197>&-
+    done
+    why="all $GPU_SLOTS shared GPU slots are busy: $(gpu_slots_busy)"
+  fi
+  exec {fd}>&-
+  echo "$why" >&2
   return 1
 }
 
@@ -290,7 +351,8 @@ lease_release() {
 set -uo pipefail
 me=$(lease_owner)
 case "${1:-}" in
-  status) out=$(lease_status); echo "$out"; [[ $out == "no lease"* ]] || gpu_client_busy; exit 0 ;;
+  status) out=$(lease_status); echo "$out"; [[ $out == "no lease"* ]] || gpu_client_busy
+    echo "shared GPU slots (vanilla clients): $(gpu_slots_busy | grep . || echo "none of $GPU_SLOTS in use")"; exit 0 ;;
   take) lease_take "$me" "$(cd "$(dirname "$0")/.." && pwd)" "${2:-}" && echo "GPU held by $me" ;;
   release)
     # own client only if lock held ("who" file remains after client exit)

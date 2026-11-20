@@ -133,8 +133,8 @@ final class Sandbox {
     private static final double SOFT_START_RATE = 2;
     private double paceRate = 20, paceFrameS;
     /**
-     * Sound-only take on a CPU renderer ({@code shots <name> none… <s>}): nobody looks at its frames, yet llvmpipe drew
-     * full 1280×720 frames at 4–5 cores the whole take. The window shrinks to {@link #QUIET_W}×{@link #QUIET_H} and the
+     * Sound-only take ({@code shots <name> none… <s>}): nobody looks at its frames, yet llvmpipe drew full 1280×720 frames
+     * at 4–5 cores the whole take (a GPU client spends 1.6 cores on unlimited frames). The window shrinks to {@link #QUIET_W}×{@link #QUIET_H} and the
      * frame limit drops to {@link #QUIET_FPS} (standard window and {@code maxFps} options) until the take ends; sound is
      * mixed by OpenAL's own thread in real time and our voices start at their exact offset ({@code OwnSources}: a voice
      * later than 30 ms seeks), so the WAV does not depend on the frame rate. Saved size and limit, null when not quiet.
@@ -555,7 +555,7 @@ final class Sandbox {
                 armed.audioFrom = c.audioFrom();
                 // slow before the effect: its first frames (new particles, first draw of a shader) are the slowest
                 pace(armed.times.length > 0 ? SOFT_START_RATE : 20);
-                quiet(soft != null && soft && armed.times.length == 0 && armed.wavSeconds > 0);
+                quiet(armed.times.length == 0 && armed.wavSeconds > 0);
                 finish("ok armed " + out);
             }
             case AGAIN -> {
@@ -1012,7 +1012,7 @@ final class Sandbox {
     /** Window size to return to after a quiet take. */
     private final int[] quietSize = new int[2];
 
-    /** Sound-only take on the CPU renderer: minimal window and frame limit ({@link #quiet}); false restores both. */
+    /** Sound-only take: minimal window and frame limit ({@link #quiet}); false restores both. */
     private void quiet(boolean on) {
         Minecraft mc = Minecraft.getInstance();
         long window = mc.getWindow().getWindow();

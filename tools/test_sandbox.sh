@@ -105,7 +105,7 @@ long=$(printf 'x%.0s' $(seq 80))
 [ "$(tree_id /a/wt-main)" != "$(tree_id /b/wt-main)" ] && [[ $(tree_id /a/wt-main) == wt-main-* ]] && [ ${#long} = 80 ] && [ "$(tree_id "/a/$long" | wc -c)" -le 48 ] && ok "tree id: alike names in different places differ" || bad "tree_id"
 [ "$(printf 'MemoryCurrent=1048576000\nMemoryMax=4831838208\n\nMemoryCurrent=5890895872\nMemoryMax=infinity\n\nMemoryMax=3221225472\nMemoryCurrent=[not set]\n' | soft_mem_headroom)" = 6680 ] \
   && ok "promised memory: unused ceilings of CPU clients only, in either property order" || bad "soft_mem_headroom"
-[ "$(INCOMING_SOFT_HEAP=3g soft_mem_cap)" = 4608 ] && [ "$(INCOMING_SOFT_HEAP=1536m soft_mem_cap)" = 3072 ] && ok "CPU client ceiling: heap + 1.5 GB" || bad "soft_mem_cap"
+[ "$(INCOMING_SOFT_HEAP=3g soft_mem_cap)" = 5120 ] && [ "$(INCOMING_SOFT_HEAP=1536m soft_mem_cap)" = 3584 ] && ok "vanilla client ceiling: heap + 2 GB" || bad "soft_mem_cap"
 out=$(INCOMING_SOFT_RESERVE_MB=100000000 soft_mem_ok 2>&1); rc=$?
 [ $rc = 75 ] && [[ $out == *"soft client refused"* ]] && ok "CPU client refused when memory is short" || bad "soft_mem_ok: $rc $out"
 ( soft_gl_env; [ "$__GLX_VENDOR_LIBRARY_NAME" = mesa ] && [ "$LIBGL_ALWAYS_SOFTWARE" = 1 ] && [ -n "$INCOMING_CLIENT_HEAP" ] && [ "$LP_NUM_THREADS" -ge 1 ] ) \

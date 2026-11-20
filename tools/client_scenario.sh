@@ -62,9 +62,10 @@
 #     route - without approach whistle), pass (flying past), grad (MLRS salvo from 32 overhead), far (missile and Shahed due to
 #     range of entities); each layer, loops, time stamps and totals “SCENARIO check ... PASS|FAIL” - to the log;
 #     one case - flyby-grad, several - flyby-approach,pass;
-#   Without shaders, dh, voxy, lss or vista the client renders on the CPU (Mesa llvmpipe, tools/soft_gl.sh): no GPU lease,
+#   Without shaders, dh, voxy, lss or vista the client is vanilla: on a shared GPU slot when one is free, else at once on
+#     the CPU (Mesa llvmpipe; tools/soft_gl.sh vanilla_display, INCOMING_CPU_ONLY=1 forces the CPU): no GPU lease,
 #     run it bare (the client goes into its own tools/laptop_job.sh --soft unit); frames are the vanilla picture, frame
-#     and GPU times in its log are not frame costs. gpu - on the GPU anyway (a frame-time measurement), under the lease;
+#     and GPU times in its log are not frame costs. gpu - on the GPU alone (a frame-time measurement), under the lease;
 #   shaders - also Sodium, Iris and a host shaderpack from the instance (like Artem); dh - another Distant Horizons from the instance;
 #   lss - also LOD Server Support (jar lod-server-support-neoforge-*.jar in mods catalog MC_DIR): the built-in server distributes
 #     LOD to his client (lss.test.integratedServer), the map and rays take the relief from him (target-map lss)
@@ -137,8 +138,8 @@ export JAVA_HOME="${JAVA_HOME:-$HOME/.var/app/org.prismlauncher.PrismLauncher/da
 cd "$ROOT/mod"
 if [ -z "$GPU" ]; then
   # Gradle only writes the launch script and exits, outside the client's memory ceiling; then the client alone runs in a
-  # laptop_job --soft unit (idle CPU, ceiling, everything stopped with it). Inside such a unit already (someone wrapped
-  # this script), the preparation shares its ceiling.
+  # laptop_job --soft unit (idle CPU, ceiling, everything stopped with it), on a shared GPU slot if one is free, else on
+  # the CPU (vanilla_display). Inside such a unit already (someone wrapped this script), the preparation shares its ceiling.
   source "$ROOT/tools/soft_gl.sh"
   # inside a --soft unit its admission already counted this client
   [ -n "${INCOMING_SOFT_UNIT:-}" ] || soft_mem_ok || exit 75
@@ -146,7 +147,7 @@ if [ -z "$GPU" ]; then
   mkdir -p "$RUN/logs"
   "$ROOT/mod/gradlew" --no-daemon rigLaunch -PrigRun=runClientScenario -PrigOut=scenario -PscenarioDir=run/scenario -q --console=plain || exit 1
   name="scenario-$(tree_id "$ROOT")"
-  [ -n "${INCOMING_SOFT_UNIT:-}" ] && { soft_display "$name" 1280 720 "bash $ROOT/mod/build/rig/scenario.sh"; exit $?; }
-  exec "$ROOT/tools/laptop_job.sh" --soft "$name" -- bash -c 'source "$1/tools/soft_gl.sh"; soft_display "$2" 1280 720 "bash $1/mod/build/rig/scenario.sh"' _ "$ROOT" "$name"
+  [ -n "${INCOMING_SOFT_UNIT:-}" ] && { vanilla_display "$name" 1280 720 "bash $ROOT/mod/build/rig/scenario.sh"; exit $?; }
+  exec "$ROOT/tools/laptop_job.sh" --soft "$name" -- bash -c 'source "$1/tools/soft_gl.sh"; vanilla_display "$2" 1280 720 "bash $1/mod/build/rig/scenario.sh"' _ "$ROOT" "$name"
 fi
 exec "$ROOT/tools/nested_kwin.sh" wayland-incoming-scenario 1280 720 "$ROOT/mod/gradlew runClientScenario -PscenarioDir=run/scenario --console=plain"

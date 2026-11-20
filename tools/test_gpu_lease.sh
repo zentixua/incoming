@@ -5,7 +5,8 @@
 # starting anything; jobs without GPU take no lease; a client without a lock (pre-lease script) also means a busy
 # GPU, not a free one; a CPU session (soft socket) is not; waiters form a fair FIFO queue capped at two other sessions; Artem's game is detected by its instance directory, not its
 # command-line path, and stops a --gpu job it starts during; a delegated task owns the lease across its trees; a running
-# client's GPU samples and a job's CPU go to the load log.
+# client's GPU samples and a job's CPU go to the load log; vanilla clients share GPU slots without waiting, fall back
+# to the CPU, and never share the GPU with a measurement; every laptop job has a memory ceiling and says when it hits it.
 set -uo pipefail
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 tmp=$(mktemp -d); trap 'rm -rf "$tmp"' EXIT
@@ -259,6 +260,78 @@ else
   [ $rc = 3 ] && [[ $out != *"Artem's game"* ]] && ok "job without his game keeps its own exit code" || bad "plain job: code $rc $out"
 fi
 
+# Shared GPU slots (vanilla clients): taken without waiting while the GPU is free of exclusive work, at most
+# INCOMING_GPU_SLOTS; a measurement (lease, its queue, an exclusive client) keeps them off and sees them as busy; every
+# refusal is a CPU fallback (vanilla_display), never a wait
+if [ $real = 1 ]; then echo "skip: Artem's game is running (shared slots refuse during it)"
+else
+  rm -f "$INCOMING_GPU_LEASE" "$INCOMING_GPU_LEASE.queue"
+  mkdir -p "$tmp/vram"
+  ln -sf "$INCOMING_GPU_KWIN" "$tmp/vram/kwin_wayland"
+  printf '#!/bin/bash\nif [[ "$*" == *memory.free* ]]; then echo "${STUB_FREE:-6000}"; else echo 97; fi\n' > "$tmp/vram/nvidia-smi"; chmod +x "$tmp/vram/nvidia-smi"
+  export PATH="$tmp/vram:$PATH" PRISM_DIR=$tmp/prism INCOMING_GPU_SLOTS=2
+  GPU_SLOTS=2
+  slot() { bash -c 'source "$1/tools/gpu_lease.sh"; gpu_slot_take "$2" 2>"$3.err" || exit 9; echo "$GPU_SLOT" > "$3"; sleep "$4"' _ "$ROOT" "$1" "$tmp/$1" "${2:-3}"; }
+  slot va & a=$!; slot vb & b=$!
+  for _ in $(seq 50); do [ -s "$tmp/va" ] && [ -s "$tmp/vb" ] && break; sleep 0.1; done
+  [ "$(sort "$tmp/va" "$tmp/vb" | tr '\n' ' ')" = "1 2 " ] && ok "two vanilla clients share the GPU: slots 1 and 2" || bad "shared slots: $(cat "$tmp/va" "$tmp/vb" "$tmp"/v?.err 2>&1)"
+  out=$(gpu_slot_take vc 2>&1); rc=$?
+  [ $rc = 1 ] && [[ $out == *"all 2 shared GPU slots are busy"*"slot 1: "*"slot 2: "* ]] && ok "third vanilla client goes to the CPU at once: $out" || { bad "third slot: $rc $out"; exec 197>&-; }
+  out=$(lease_status); [[ $out == "no lease, but shared GPU clients are running"* ]] && ok "status shows shared clients: $out" || bad "status with shared clients: $out"
+  out=$(lease_take FZC /x/wt-FZC 2>&1); rc=$?
+  [ $rc = 75 ] && [[ $out == *"shared GPU clients are running"* ]] && [ ! -s "$INCOMING_GPU_LEASE" ] && ok "a measurement never shares the GPU: lease refused while slots are held" || bad "lease_take beside shared clients: $rc $out"
+  out=$(INCOMING_GPU_OWNER=FZC "$ROOT/tools/nested_kwin.sh" wayland-test 64 64 true 2>&1); rc=$?
+  [ $rc = 75 ] && [[ $out == *"shared GPU clients are running"* ]] && ok "exclusive client refused beside shared ones" || bad "nested_kwin beside shared clients: $rc $out"
+  out=$(INCOMING_GPU_OWNER=FZC "$ROOT/tools/laptop_job.sh" --gpu bench -- false 2>&1); rc=$?
+  [ $rc = 75 ] && [[ $out == *"shared GPU clients are running"* ]] && ok "--gpu job refused beside shared clients" || bad "--gpu job beside shared clients: $rc $out"
+  # a waiting measurement queues; its queue entry keeps new vanilla clients on the CPU until the GPU is its
+  ( INCOMING_GPU_POLL=0.2 lease_take FZC /x/wt-FZC --wait 2>/dev/null; echo done > "$tmp/meas" ) & m=$!
+  sleep 0.6
+  out=$(gpu_slot_take vd 2>&1); rc=$?
+  [ $rc = 1 ] && [[ $out == *"exclusive GPU work is waiting"*FZC* ]] && ok "queued measurement keeps new vanilla clients off: $out" || { bad "slot beside a queued measurement: $rc $out"; exec 197>&-; }
+  [ ! -f "$tmp/meas" ] && ok "measurement waits for shared clients" || bad "measurement started beside shared clients"
+  wait $a $b
+  for _ in $(seq 50); do [ -f "$tmp/meas" ] && break; sleep 0.1; done
+  [ -f "$tmp/meas" ] && [ "$(cut -f1 "$INCOMING_GPU_LEASE")" = FZC ] && ok "shared clients ended, the measurement took the GPU" || bad "measurement after shared clients: $(cat "$INCOMING_GPU_LEASE")"
+  wait $m
+  out=$(gpu_slot_take ve 2>&1); rc=$?
+  [ $rc = 1 ] && [[ $out == *"GPU lease held by FZC"* ]] && ok "measurement holding the lease keeps vanilla clients on the CPU" || { bad "slot under a lease: $rc $out"; exec 197>&-; }
+  lease_release FZC
+  out=$(STUB_FREE=600 gpu_slot_take vf 2>&1); rc=$?
+  [ $rc = 1 ] && [[ $out == *"600 MiB of VRAM free"* ]] && ok "too little free VRAM: CPU" || { bad "slot with 600 MiB free: $rc $out"; exec 197>&-; }
+  out=$(PATH=/usr/bin:/bin gpu_slot_take vg 2>&1); rc=$?
+  command -v nvidia-smi >/dev/null 2>&1 || { [ $rc = 1 ] && [[ $out == *"no NVIDIA GPU"* ]] && ok "no GPU: CPU" || bad "slot without nvidia-smi: $rc $out"; }
+  exec 197>&-
+  # shared KWin only with a slot and on its own socket prefix (gpu_lease.sh tells it by that name)
+  out=$(INCOMING_GPU_SHARED=1 "$ROOT/tools/nested_kwin.sh" wayland-incoming-shared-t 64 64 true 2>&1); rc=$?
+  [ $rc = 2 ] && [[ $out == *"without a slot"* ]] && ok "shared GPU session refused without a slot" || bad "shared session without slot: $rc $out"
+  out=$(INCOMING_GPU_SHARED=1 "$ROOT/tools/nested_kwin.sh" wayland-test 64 64 true 2>&1); rc=$?
+  [ $rc = 2 ] && [[ $out == *"wayland-incoming-shared-"* ]] && ok "shared GPU session needs a shared socket name" || bad "shared socket name: $rc $out"
+  # vanilla_display: a free slot runs the client on the GPU with the slot held and no CPU GL selection; the slot is free
+  # once it ends; Artem's game starting stops it (75); no slot runs it on the CPU at once
+  mkdir -p "$tmp/vroot/tools"; cp "$ROOT/tools/soft_gl.sh" "$ROOT/tools/gpu_lease.sh" "$tmp/vroot/tools/"
+  printf '#!/bin/bash\necho "stub fd197=$(readlink /proc/$$/fd/197) soft=${INCOMING_SOFT:-} libgl=${LIBGL_ALWAYS_SOFTWARE:-} socket=$1"; sleep "${STUB_RUN:-1}"\n' > "$tmp/vroot/tools/nested_kwin.sh"
+  chmod +x "$tmp/vroot/tools/nested_kwin.sh"
+  vd() { bash -c 'source "$1/tools/soft_gl.sh"; soft_gl_env; soft_display() { echo "cpu display $1"; }; INCOMING_RENDERER_FILE=$2 INCOMING_GAME_POLL=0.2 vanilla_display v1 64 64 true' _ "$tmp/vroot" "$tmp/renderer"; }
+  out=$(vd); rc=$?
+  [ $rc = 0 ] && [[ $out == *"renderer: GPU, shared slot 1 of 2"*"stub fd197=$(readlink -m "$INCOMING_GPU_LEASE").slot1 soft= libgl= socket=wayland-incoming-shared-v1"* ]] \
+    && [ "$(cat "$tmp/renderer")" = gpu ] && ok "vanilla client on a shared slot, CPU GL selection dropped" || bad "vanilla_display GPU: $rc $out"
+  [ -z "$(gpu_slots_busy)" ] && ok "slot free after the client" || bad "slot held after client: $(gpu_slots_busy)"
+  out=$(STUB_FREE=10 vd); rc=$?
+  [ $rc = 0 ] && [[ $out == *"renderer: CPU (llvmpipe): 10 MiB of VRAM free"*"cpu display v1"* ]] && [ "$(cat "$tmp/renderer")" = soft ] \
+    && ok "no slot: CPU at once" || bad "vanilla_display fallback: $rc $out"
+  start=$(date +%s)
+  ( STUB_RUN=30 vd > "$tmp/vd.out" 2>&1; echo $? > "$tmp/vd.rc" ) & v=$!
+  sleep 0.8
+  ( cd "$tmp/prism/instances/Open Skies/minecraft" && exec "$tmp/bin/java" -cp x ) & j=$!
+  wait $v; took=$(( $(date +%s) - start ))
+  [ "$(cat "$tmp/vd.rc")" = 75 ] && grep -q "Artem's game started at .*: shared GPU client stopped" "$tmp/vd.out" && [ $took -lt 5 ] \
+    && ok "Artem's game stops a shared GPU client in ${took} s" || bad "shared client and game: rc $(cat "$tmp/vd.rc") after $took s: $(cat "$tmp/vd.out")"
+  out=$(vd 2>&1); [[ $out == *"renderer: CPU (llvmpipe): Artem's game is running"* ]] && ok "while Artem plays, vanilla clients render on the CPU" || bad "vanilla_display during game: $out"
+  kill $j 2>/dev/null; wait $j 2>/dev/null
+  unset INCOMING_GPU_SLOTS PRISM_DIR
+fi
+
 # a running client's GPU samples go to the load log under its owner, one per renewal; a job's CPU goes there at its stop
 lease_take wave /x/wt-wave >/dev/null 2>&1
 ( PATH="$tmp/smi:$PATH" INCOMING_GPU_RENEW=0.2 DELEGATE_TASK=mission-wave gpu_client_hold wave /x/wt-wave "sample test" && sleep 1.2 )
@@ -278,5 +351,17 @@ if systemctl --user show-environment >/dev/null 2>&1; then
   sleep 0.5
   [ $rc = 3 ] && grep -qP '^cpu\t[0-9]+\twave\tincoming-job-acct-[0-9]+\.service\t[0-9]+\t[0-9.]+$' "$tmp/load.tsv" \
     && ok "job CPU in the load log at its stop, exit code kept" || bad "job accounting: $rc $(grep '^cpu' "$tmp/load.tsv")"
+  # a job past its memory ceiling is stopped inside its own unit and says so (20.11: unlimited jobs and 12.7 GB of swap
+  # ended in a kernel OOM kill on the laptop)
+  out=$(INCOMING_JOB_MEM=64M INCOMING_JOB_SWAP=0 timeout 60 "$ROOT/tools/laptop_job.sh" memtest -- python3 -c 'import time; b = b"x" * (256 << 20); time.sleep(5)' 2>&1); rc=$?
+  [ $rc != 0 ] && [[ $out == *"laptop_job memtest: memory ceiling 64M (+ 0 swap) reached: "*"killed inside its unit"* ]] \
+    && ok "job past its ceiling stopped with a memory ceiling line: $(grep 'memory ceiling' <<< "$out")" || bad "memory ceiling: $rc $out"
+  out=$(timeout 60 "$ROOT/tools/laptop_job.sh" memok -- python3 -c 'b = bytearray(64 << 20)' 2>&1); rc=$?
+  [ $rc = 0 ] && [[ $out != *"memory ceiling"* ]] && ok "job within its ceiling: no ceiling line" || bad "job within ceiling: $rc $out"
 fi
+# every mode has a ceiling: GameTest/build/GPU jobs 10 GB + 4 GB swap from measured peaks, the whole pack 20 GB, CPU
+# clients their soft_gl.sh ceiling without swap
+[ "$("$ROOT/tools/laptop_job.sh" --ceiling heavy)" = "10G 4G" ] && [ "$("$ROOT/tools/laptop_job.sh" --ceiling gpu)" = "10G 4G" ] \
+  && [ "$("$ROOT/tools/laptop_job.sh" --ceiling full)" = "20G 4G" ] && [ "$(INCOMING_SOFT_HEAP=3g "$ROOT/tools/laptop_job.sh" --ceiling soft)" = "5120M 0" ] \
+  && [ "$(INCOMING_JOB_MEM=2G "$ROOT/tools/laptop_job.sh" --ceiling heavy)" = "2G 4G" ] && ok "memory ceiling for every mode" || bad "ceilings: $("$ROOT/tools/laptop_job.sh" --ceiling heavy)"
 exit $fail

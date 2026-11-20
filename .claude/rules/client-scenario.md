@@ -55,7 +55,7 @@ Sandbox is an MDG dev client with `devtest` (like JEI's `clientGameTest`); custo
 specified tick and chatless commands (Claude cannot see screen; NeoForge has no screenshot client tests,
 NeoForge #3624). Full-pack Iris client (`look_gate`, `prod_client.py`: ~3 min to first frame, 10–25 min per scene set,
 the nuke 5–6 min per scene) records only the one-off 3.4.1 comparison, in one session until scenes reach its level;
-not per PR. Vanilla frames on the CPU (below, “CPU rendering”), any number of sessions; one GPU session at a time. Tool-improvement options (own replacement agent → HotswapAgent
+not per PR. Vanilla frames on a shared GPU slot or the CPU (below, “Vanilla rendering”), any number of sessions; one exclusive GPU session at a time. Tool-improvement options (own replacement agent → HotswapAgent
 on JBR; scenarios as sandbox command lists): [evaluating tool changes](../../docs/dev-pipeline.md#7-evaluating-tool-changes).
 Scene bench (`tools/stand`, Artem's decision 24.10) differs from sandbox: sandbox gives work-in-progress frames in
 this tree's dev client; bench runs identical real strikes with any Incoming 3.4.1+ jar (release/CI artifact) beside
@@ -66,7 +66,7 @@ with `--packs none --scenes 100`.
 Laptop measurement 22.10: sandbox start 19–24 s (build 5–8 s, JVM-to-world client 13–15 s); with Iris/shaderpack 39 s
 (client 30 s); method-body/shader edit → frame at effect second 3 takes 10 s (Gradle/replacement 5–7 s), also 10 s
 with Iris.
-- `tools/sandbox.sh start [shaders] [dh] [gpu]`: on the CPU unless `shaders`, `dh` or `gpu` (“CPU rendering”); mod-only client (sable-companion alongside: not embedded in dev; `shaders`
+- `tools/sandbox.sh start [shaders] [dh] [gpu]`: vanilla (shared GPU slot or CPU, “Vanilla rendering”) unless `shaders`, `dh` or `gpu`; mod-only client (sable-companion alongside: not embedded in dev; `shaders`
   adds Sodium/Iris/host shaderpack from instance, `dh` Distant Horizons), flat world (`Sandbox`: bedrock, stone,
   dirt, grass, grass top y 64; noon, no weather/mobs; same world every launch), headless in nested KWin, as laptop
   job (unit `incoming-job-sandbox-<tree_id>`); lives until `stop`; in GPU mode also until Artem's game starts
@@ -122,7 +122,7 @@ with Iris.
   `stance stand|fly`: standing creative player with flight off, or spectator (default); check body/neck lean
   standing with `cam … 1.62 …`, then `wait 10` to land; in flight only impact tremor visible.
   `weather clear|rain`: own bench weather; afterward `wait 40` for client rain/humidity.
-- `tools/sandbox.sh shot <name> '<effect>' --at 0.1,0.5,1,3 --wav 4 [--cam …] [--time night] [--overlay]`: one command
+- `tools/sandbox.sh shot <name> '<effect>' --at 0.1,0.5,1,3|none --wav 4 [--cam …] [--time night] [--overlay]`: one command
   from edit to frames: build/replacement (`swap`), `clear`, effect; screenshot is first rendered frame after target
   tick (`capture.json` `age` includes tick fraction), audio slice from `audio.wav` (48 kHz) from effect start
   (`audio.from` seconds since effect start; `nuke … near` with pre-front frames starts from first frame). Effect
@@ -130,6 +130,13 @@ with Iris.
   sandbox daylight cycle disabled, so previous shot's night would persist. `time` sends client time immediately,
   ends once client receives it (no receipt in 2 s: `error`): server normally sends every 20 ticks; an effect
   immediately after command previously spent first second in old light.
+  `--at none`: sound only (WAV and `capture.json`). A take without frames (`shots <name> none… <s>`, also the CPU frame
+  shot's separate sound take) runs in a 160×90 window at 20 fps (`Sandbox.quiet`: `glfwRestoreWindow` first, the
+  nested compositor keeps a maximized window's size; restored before the take's result); sound does not depend on it:
+  OpenAL mixes in its own thread and a voice later than 30 ms seeks to its offset (`OwnSources`). 20.11, `real missile`,
+  camera 20 m, 40 s on llvmpipe: CPU 222–249 s → 47 s per take, same 45 s wall; per-second levels within 1 dB, band
+  levels within 0.13 dB, onset within 12 ms of the full-window take (two full-window takes differ as much). On the GPU
+  73 → 20 s.
 - Artem's game detection for sandbox/look gate/`--gpu` jobs: `artem_playing` (`gpu_lease.sh`), java working in Prism
   instance directory or Prism group, not command-line path: with `MC_DIR` pointing at instance, sandbox mods share
   its path and `pgrep -f 'PrismLauncher/instances/'` matched sandbox itself (code 75). `start shaders` without
@@ -167,10 +174,24 @@ with Iris.
 - `/fx surface <depth> [black|gray]`: saved partial damage on fresh covering patch, no explosion; checks fracture/
   chip size by depth (0 < depth ≤ 1); ordinary display with same server path/light.
 
-## CPU rendering (`tools/soft_gl.sh`)
-Vanilla frames (no shader pack, DH or Voxy) render with Mesa llvmpipe: `sandbox.sh start` and `client_scenario.sh`
-default to it, `gpu` forces the GPU. No lease, no GPU queue; the client runs in a `laptop_job.sh --soft` unit (idle CPU
-class, memory ceiling heap + 1.5 GB without swap, not stopped by Artem's game); `client_scenario.sh` puts it there
+## Vanilla rendering: shared GPU slot or CPU (`tools/soft_gl.sh`)
+Vanilla frames (no shader pack, DH or Voxy): `sandbox.sh start` and `client_scenario.sh` default to `vanilla_display`,
+which at client launch takes a shared GPU slot (`gpu_lease.sh gpu_slot_take`: up to 3 vanilla clients on the GPU at once,
+nested KWin on `wayland-incoming-shared-<name>`) or, at once and without waiting, renders with Mesa llvmpipe on the CPU:
+slots full, the exclusive lease held or queued for (frame-cost measurement, shader pack), an exclusive client running,
+Artem's game, under 1 GB of free VRAM, no NVIDIA GPU or no KWin (netcup, cloud). `INCOMING_CPU_ONLY=1` forces the CPU;
+`gpu` takes the GPU alone under the lease. The exclusive side sees slot holders as busy and waits (`--wait`) for them
+to end: a measurement never shares the GPU. A shared GPU client stops when Artem's game starts (75, “Artem's game
+started … shared GPU client stopped”; a restart lands on the CPU); a CPU client keeps running. The client log line
+`renderer: GPU, shared slot N of 3` or `renderer: CPU (llvmpipe): <reason>`; `sandbox.sh start` repeats it and the
+sandbox writes `fx/renderer`. Measured 20.11 (laptop, warm, 1280×720): `blast drone 7` with 4 frames 3.7 s and 6 s of
+CPU on a shared slot against 17.4 s and 107 s on llvmpipe; `nuke 15 near` with 3 frames 9.8–13.7 s against 52.5 s
+(320 s CPU); VRAM 0.35 GB per client (desktop 1.6 GB of 8), unit memory peak 4.25 GB on the GPU (3.0 on the CPU).
+Same frames: blast frames GPU against CPU mean |Δ| 4–7 of 255, luma within 1 (as between two GPU runs: 4.6); the
+llvmpipe `nuke … near` frames lag the GPU's front by 80–90 m (`R 2028` against `R 2107` at 0.1 s), and llvmpipe sound
+takes of `real missile` are 5–11 dB louder at 2–6 s than the GPU's (both at 20 and 60 fps): prefer the GPU when they differ.
+No lease, no GPU queue; the client runs in a `laptop_job.sh --soft` unit (idle CPU
+class, memory ceiling heap + 2 GB without swap, a CPU client not stopped by Artem's game); `client_scenario.sh` puts it there
 itself after Gradle writes the launch script (`rigLaunch`, outside the ceiling). Refused (75) when available memory,
 less the unused ceilings of running CPU clients, cannot hold this ceiling plus a 4 GB reserve; `laptop_job.sh` checks
 under a lock until the unit exists, so simultaneous starts cannot both pass. Gradle preparation (`rigLaunch`, `swap`)
@@ -197,7 +218,7 @@ times and the pall's budget are not frame costs: frame cost belongs to the GPU a
   three game servers) start 138 s cold, shot 40–45 s, peak 3.0 GB at `INCOMING_SOFT_HEAP=1536m`.
 - A host with little free memory (a server beside game servers): Gradle with `-PnoRecompile` (binary Minecraft:
   Vineflower's decompile needs ~4 GB and was OOM-killed under a 3.5 GB ceiling), mods from `tools/fetch_runtime_mods.py`
-  (`-PmcModsDir=run/ci-mods`), no Gradle daemon, `INCOMING_SOFT_HEAP=1536m` (ceiling 3 GB); one client at a time.
+  (`-PmcModsDir=run/ci-mods`), no Gradle daemon, `INCOMING_SOFT_HEAP=1536m` (ceiling 3.5 GB); one client at a time.
 
 ## Pitfalls
 - Server may lag client ticks during world generation: client-scenario frames anchor to events, not a counter.

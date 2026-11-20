@@ -6,11 +6,13 @@
 #
 #   tools/sandbox.sh start [shaders] [dh] [gpu] [--wait] [--size 1280x720]   background client (laptop job
 #                                          sandbox-<tree>), returns when the world is ready.
-#                                          Default (no shaders, no dh): on the CPU (Mesa llvmpipe, tools/soft_gl.sh), no
-#                                          GPU lease, any number of trees at once, also while Artem plays (lowest CPU
-#                                          priority); refused (75) only when memory is short. Frames are the vanilla
-#                                          picture; fps and GPU times in its log are not frame costs.
-#                                          shaders, dh or gpu: on the GPU: takes its session GPU lease (tools/gpu_lease.sh);
+#                                          Default (no shaders, no dh): vanilla, on a shared GPU slot when one is free
+#                                          (tools/gpu_lease.sh: up to 3 vanilla clients, none while the lease is held or
+#                                          Artem plays; his game starting stops it, like any GPU client), else at once on
+#                                          the CPU (Mesa llvmpipe, tools/soft_gl.sh: also while Artem plays, lowest CPU
+#                                          priority); no lease, any number of trees at once; refused (75) only when memory
+#                                          is short. Frames are the vanilla picture; fps and GPU times are not frame costs.
+#                                          shaders, dh or gpu: on the GPU alone: takes its session GPU lease (tools/gpu_lease.sh);
 #                                          held by another session: exit 75 with "GPU held by …" (--wait joins the lease
 #                                          queue in arrival order, refused when the queue is full); no Iris and Sodium
 #                                          (shaders), DH (dh): exit 2; Artem is playing: exit 75; runs until stop or
@@ -172,9 +174,10 @@ start() {
     shift
   done
   running && { echo "sandbox is already running ($UNIT)"; exit 0; }
-  # Vanilla rendering on the CPU unless the frame needs the GPU (shader pack, DH, a frame-time sample)
-  if [ -n "$gpu" ] || [ -n "${INCOMING_SHADERS:-}" ] || [ -n "${INCOMING_DH:-}" ]; then unset INCOMING_SANDBOX_SOFT
-  else export INCOMING_SANDBOX_SOFT=1; fi
+  # Vanilla rendering on a shared GPU slot, else the CPU (decided at client launch: tools/soft_gl.sh vanilla_display), unless
+  # the frame needs the GPU to itself (shader pack, DH, a frame-time sample: exclusive lease)
+  if [ -n "$gpu" ] || [ -n "${INCOMING_SHADERS:-}" ] || [ -n "${INCOMING_DH:-}" ]; then unset INCOMING_SANDBOX_VANILLA
+  else export INCOMING_SANDBOX_VANILLA=1; fi
   # JetBrains Runtime, if installed (tools/sandbox.sh jbr): hot swap also accepts new fields and methods
   if [ -z "${INCOMING_SANDBOX_JAVA:-}" ] && jbr_java >/dev/null; then export INCOMING_SANDBOX_JAVA="$(jbr_java)"; fi
   unset INCOMING_SANDBOX_ENHANCED
@@ -183,7 +186,7 @@ start() {
   fi
   local swaps="method bodies only"; [ -n "${INCOMING_SANDBOX_ENHANCED:-}" ] && swaps="new fields, methods and lambdas too"
   echo "JVM: ${INCOMING_SANDBOX_JAVA:-Gradle toolchain}; hot swap: $swaps"
-  if [ -z "${INCOMING_SANDBOX_SOFT:-}" ]; then
+  if [ -z "${INCOMING_SANDBOX_VANILLA:-}" ]; then
     artem_playing && { echo "Artem's game is running — leaving the GPU free" >&2; exit 75; }
     # One session at a time for visuals: another session holds the lease — refuse (leave its sandbox and jobs running); a GPU client
     # already running (our sandbox in another tree, our look gate) also causes refusal before building. --wait joins the lease queue
@@ -202,14 +205,16 @@ start() {
     done
   else
     soft_mem_ok || exit 75
+    # heap for Gradle's launch script; the GL selection comes with the display the client gets (vanilla_display)
     soft_gl_env
-    echo "on the CPU (llvmpipe): no GPU lease; frames only, not frame costs"
+    echo "vanilla: a shared GPU slot if one is free, else the CPU (llvmpipe); frames only, not frame costs"
   fi
   local t0; t0=$(date +%s.%N)
   mkdir -p "$RUN/logs" "$FX"
   rm -f "$FX/ready" "$FX/stopped"
-  # renderer of this client for `shot` (a CPU take records sound separately)
-  if [ -n "${INCOMING_SANDBOX_SOFT:-}" ]; then echo soft; else echo gpu; fi > "$FX/renderer"
+  # renderer of this client for `shot` (a CPU take records sound separately); a vanilla client writes its own at launch
+  rm -f "$FX/renderer"
+  [ -n "${INCOMING_SANDBOX_VANILLA:-}" ] || echo gpu > "$FX/renderer"
   cat > "$RUN/alsoft.conf" <<CONF
 [general]
 drivers = wave
@@ -250,7 +255,7 @@ OPT
   mods_check "$RUN/mods" || exit 2
   local build; build=$(since "$t0")
   local w=${size%x*} h=${size#*x}
-  local jobmode=--light; [ -n "${INCOMING_SANDBOX_SOFT:-}" ] && jobmode=--soft
+  local jobmode=--light; [ -n "${INCOMING_SANDBOX_VANILLA:-}" ] && jobmode=--soft
   INCOMING_SANDBOX=1 nohup "$ROOT/tools/laptop_job.sh" $jobmode "sandbox-$TREE_ID" -- "$ROOT/tools/sandbox.sh" _run "$w" "$h" > "$RUN/logs/job.log" 2>&1 &
   local job=$! waited=0
   # The job started: its client holds the lease; interrupting this wait (Ctrl+C, timeout) does not take the lease from a live client;
@@ -269,24 +274,27 @@ OPT
       exit 1
     fi
   done
-  echo "sandbox ready: build $build s, client $(cat "$FX/ready") s (JVM → world), total $(since "$t0") s"
+  echo "sandbox ready: build $build s, client $(cat "$FX/ready") s (JVM → world), total $(since "$t0") s; $(grep -m1 '^renderer:' "$RUN/logs/client.out" 2>/dev/null || echo "renderer: GPU (exclusive lease)")"
 }
 
 # Inside a laptop job: client in nested KWin; only Artem's game (shared machine) and stop shut it down
 run_client() {
-  if [ -n "${INCOMING_SANDBOX_SOFT:-}" ]; then
-    # CPU display, no GPU or host audio (tools/soft_gl.sh); a socket per tree: several CPU sandboxes run at once
-    soft_display "sandbox-$TREE_ID" "$1" "$2" "bash $ROOT/mod/build/rig/sandbox.sh" > "$RUN/logs/client.out" 2>&1 &
+  if [ -n "${INCOMING_SANDBOX_VANILLA:-}" ]; then
+    # shared GPU slot or CPU display, no host audio (tools/soft_gl.sh); a socket per tree: several sandboxes run at once
+    INCOMING_RENDERER_FILE="$FX/renderer" vanilla_display "sandbox-$TREE_ID" "$1" "$2" "bash $ROOT/mod/build/rig/sandbox.sh" > "$RUN/logs/client.out" 2>&1 &
   else
     "$ROOT/tools/nested_kwin.sh" wayland-incoming-sandbox "$1" "$2" "bash $ROOT/mod/build/rig/sandbox.sh" > "$RUN/logs/client.out" 2>&1 &
   fi
   local pc=$!
   # nested_kwin.sh (gpu_client_hold) renews the lease while the client is alive
   while kill -0 $pc 2>/dev/null; do
-    if [ -z "${INCOMING_SANDBOX_SOFT:-}" ] && artem_playing; then echo "$(date +%T) Artem's game started — stopping the sandbox" | tee "$FX/stopped"; kill -TERM $pc; wait $pc; exit 75; fi
+    if [ -z "${INCOMING_SANDBOX_VANILLA:-}" ] && artem_playing; then echo "$(date +%T) Artem's game started — stopping the sandbox" | tee "$FX/stopped"; kill -TERM $pc; wait $pc; exit 75; fi
     sleep 5
   done
-  wait $pc
+  wait $pc; local rc=$?
+  # a shared GPU client stops when Artem's game starts (vanilla_display): say so like the exclusive one
+  [ $rc = 75 ] && grep -m1 "Artem's game started" "$RUN/logs/client.out" > "$FX/stopped"
+  return $rc
 }
 
 # JetBrains Runtime 21 (DCEVM: -XX:+AllowEnhancedClassRedefinition), verified with the JetBrains SHA-512

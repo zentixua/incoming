@@ -51,11 +51,12 @@ Inspect frames and audio during implementation and include before/after evidence
 code review alone cannot judge appearance, sound or frame cost.
 
 The main visual target is vanilla rendering without shader packs; a shader pack adds on top and must not break
-it (AGENTS.md, "Vanilla first"). Vanilla frames render on the CPU with Mesa llvmpipe (`tools/soft_gl.sh`), the
-way Fabric API's client GameTest takes screenshots on GPU-less CI runners and Godot and NeoForge start clients
-there: the sandbox and headless scenarios default to it, need no GPU lease and run side by side, on the laptop
-or netcup. The GPU is reserved for what a CPU frame cannot show: shader-pack (Iris), Voxy/DH frames, frame time
-and the scene bench.
+it (AGENTS.md, "Vanilla first"). Vanilla frames take a shared GPU slot when one is free (up to three clients,
+about five times faster than the CPU) and otherwise render at once on the CPU with Mesa llvmpipe
+(`tools/soft_gl.sh`), the way Fabric API's client GameTest takes screenshots on GPU-less CI runners and Godot and
+NeoForge start clients there: the sandbox and headless scenarios default to it, need no GPU lease, never queue and
+run side by side, on the laptop or netcup. The GPU alone (the lease) is reserved for shader-pack (Iris), Voxy/DH
+frames, frame time and the scene bench.
 
 Changes that can affect frame cost also require the scene bench (`tools/stand`), with the scope and exceptions
 in AGENTS.md: compare frame cost at 100 strikes against `main`
