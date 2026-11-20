@@ -1006,7 +1006,7 @@ public final class ScorchGameTests {
         box(level, fx + 9, fz + 3, ground, Blocks.GLASS, Blocks.GLASS, Blocks.WHITE_WOOL);
         box(level, fx + 3, fz + 3, ground, Blocks.STONE_BRICKS, Blocks.STONE_BRICKS, Blocks.WHITE_WOOL);
         box(level, fx + 3, fz + 9, ground, Blocks.OAK_PLANKS, Blocks.OAK_PLANKS, null);
-        // tinted glass blocks light (review of #676): it shatters like glass, yet stops the pulse like a wall; in the chunk under the
+        // tinted glass blocks light: it shatters like glass, yet stops the pulse like a wall; in the chunk under the
         // burst, where rays from the far chunk toward the ball pass high above it (a neighbour of the far chunk would shade its boxes)
         LevelChunk tinted = inside.get(0);
         int tx = tinted.getPos().getMinBlockX() + 5, tz = tinted.getPos().getMinBlockZ() + 5;
