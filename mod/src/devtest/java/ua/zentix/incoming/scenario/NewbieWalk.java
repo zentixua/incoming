@@ -10,7 +10,12 @@ import net.minecraft.client.gui.components.events.ContainerEventHandler;
 import net.minecraft.client.gui.components.events.GuiEventListener;
 import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.client.gui.screens.TitleScreen;
+import net.minecraft.client.gui.screens.inventory.CraftingScreen;
 import net.minecraft.client.gui.screens.inventory.CreativeModeInventoryScreen;
+import net.minecraft.core.BlockPos;
+import net.minecraft.core.Direction;
+import net.minecraft.world.level.block.Blocks;
+import net.minecraft.world.phys.BlockHitResult;
 import net.minecraft.client.gui.screens.inventory.InventoryScreen;
 import net.minecraft.client.gui.screens.recipebook.RecipeBookComponent;
 import net.minecraft.network.chat.Component;
@@ -127,7 +132,15 @@ final class NewbieWalk {
         }));
         until("chunks drawn", 2400, () -> mc.levelRenderer.hasRenderedAllSections() && mc.levelRenderer.countRenderedSections() > 50);
         walk(true);
+        // The first pass's missile lands before the second pass; a dead player respawns.
+        until("strikes over", 2400, () -> ua.zentix.incoming.client.hud.ClientFlights.all().isEmpty());
+        await(100);
         run(() -> {
+            if (mc.player.isDeadOrDying()) mc.player.respawn();
+        });
+        await(40);
+        run(() -> {
+            if (mc.screen != null) mc.setScreen(null);
             lang = "ru";
             mc.options.languageCode = "ru_ru";
             mc.getLanguageManager().setSelected("ru_ru");
@@ -158,14 +171,28 @@ final class NewbieWalk {
             p.getInventory().add(new ItemStack(Items.COMPASS));
         }));
         await(40);
+        // A crafting table beside the player: the 3×3 recipe book (the inventory's 2×2 book never lists 3×3 recipes).
+        BlockPos[] table = new BlockPos[1];
+        run(() -> {
+            table[0] = mc.player.blockPosition().east();
+            onServer(server -> server.overworld().setBlockAndUpdate(table[0], Blocks.CRAFTING_TABLE.defaultBlockState()));
+        });
+        await(10);
         run(() -> {
             mc.player.getRecipeBook().setOpen(RecipeBookType.CRAFTING, true);
-            mc.setScreen(new InventoryScreen(mc.player));
+            mc.gameMode.useItemOn(mc.player, InteractionHand.MAIN_HAND, new BlockHitResult(Vec3.atCenterOf(table[0]), Direction.UP, table[0], false));
         });
+        until("crafting table", 200, () -> mc.screen instanceof CraftingScreen);
         await(10);
         run(() -> search("designator"));
         settle();
-        shot("recipe-book", () -> "known " + mc.player.getRecipeBook().contains(ResourceLocation.fromNamespaceAndPath(Incoming.MOD_ID, "strike_designator")));
+        shot("recipe-book", () -> "known " + mc.player.getRecipeBook().contains(ResourceLocation.fromNamespaceAndPath(Incoming.MOD_ID, "strike_designator"))
+                + ", listed " + listed());
+        run(() -> {
+            mc.player.closeContainer();
+            onServer(server -> server.overworld().removeBlock(table[0], false));
+        });
+        await(5);
         // The designator in hand, first time: what does the screen say?
         run(() -> onServer(server -> {
             ServerPlayer p = player(server);
@@ -323,7 +350,7 @@ final class NewbieWalk {
     private void aimAtGround() {
         Vec3 eye = mc.player.getEyePosition();
         if (ground == null) {
-            int x = (int) Math.floor(eye.x), z = (int) Math.floor(eye.z) - 40;
+            int x = (int) Math.floor(eye.x), z = (int) Math.floor(eye.z) - 150;
             ground = new Vec3(x + 0.5, mc.level.getHeight(Heightmap.Types.MOTION_BLOCKING, x, z), z + 0.5);
         }
         Vec3 d = ground.subtract(eye);
@@ -331,8 +358,24 @@ final class NewbieWalk {
         mc.player.setXRot((float) -Math.toDegrees(Math.atan2(d.y, Math.hypot(d.x, d.z))));
     }
 
+    /** Recipe collections the open book shows for the current search. */
+    private int listed() {
+        if (!(mc.screen instanceof CraftingScreen s)) return -1;
+        try {
+            RecipeBookComponent book = s.getRecipeBookComponent();
+            Field f = RecipeBookComponent.class.getDeclaredField("recipeBookPage");
+            f.setAccessible(true);
+            Object page = f.get(book);
+            Field c = page.getClass().getDeclaredField("recipeCollections");
+            c.setAccessible(true);
+            return ((List<?>) c.get(page)).size();
+        } catch (ReflectiveOperationException ex) {
+            return -2;
+        }
+    }
+
     private void search(String text) {
-        if (!(mc.screen instanceof InventoryScreen s)) return;
+        if (!(mc.screen instanceof CraftingScreen s)) return;
         try {
             RecipeBookComponent book = s.getRecipeBookComponent();
             Field f = RecipeBookComponent.class.getDeclaredField("searchBox");
