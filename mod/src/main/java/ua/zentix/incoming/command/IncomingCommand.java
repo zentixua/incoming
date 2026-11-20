@@ -196,7 +196,8 @@ public final class IncomingCommand {
 
     private static boolean mayNuke(CommandSourceStack s) {
         if (!IncomingConfig.SERVER.nukeEnabled.get()) return false;
-        return s.hasPermission(2) || !IncomingConfig.SERVER.nukeOpsOnly.get() && s.getEntity() instanceof Player p && ServerActions.mayUse(p);
+        // a player under the same rights as the designator's nuclear order (the world host counts as an operator)
+        return s.hasPermission(2) || s.getEntity() instanceof ServerPlayer p && ServerActions.mayUse(p) && ServerActions.mayUseNuke(p);
     }
 
     private static int nukeLook(CommandContext<CommandSourceStack> ctx, Loadout.Nuke nuke, Path path) throws CommandSyntaxException {

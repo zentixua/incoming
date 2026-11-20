@@ -197,6 +197,10 @@ public final class ClientScenario {
             new ViewFxScenario();
             return;
         }
+        if (scenario.startsWith("firstuse")) {
+            new FirstUse(); // a new player's first-use screens in the client's language, a fresh flat world
+            return;
+        }
         if ("sandbox".equals(scenario)) {
             new Sandbox(); // sandbox effects: your own flat world, commands /fx, hot swap (tools/sandbox.sh)
             return;

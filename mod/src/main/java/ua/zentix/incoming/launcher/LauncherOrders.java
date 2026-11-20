@@ -126,12 +126,11 @@ public final class LauncherOrders {
         List<GlobalPos> links = LauncherLinks.of(designator);
         Loadout l = ServerActions.clamp(loadout);
         if (!Mission.accepts(l.weapon())) {
-            player.displayClientMessage(Component.translatable("incoming.fixed_launcher.unsupported", l.weapon().displayName())
-                    .withStyle(ChatFormatting.RED), true);
+            ServerActions.refuse(player, Component.translatable("incoming.fixed_launcher.unsupported", l.weapon().displayName()));
             return;
         }
         if (l.nuclear()) {
-            player.displayClientMessage(Component.translatable("incoming.fixed_launcher.no_nuke").withStyle(ChatFormatting.RED), true);
+            ServerActions.refuse(player, Component.translatable("incoming.fixed_launcher.no_nuke"));
             return;
         }
         ServerActions.Aim ruled = ServerActions.ruled(player, aim);
