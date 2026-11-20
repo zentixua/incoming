@@ -123,6 +123,19 @@ class GateTest(unittest.TestCase):
         found = self.problems()
         self.assertEqual(sum("does not run hooks/knowledge.py" in p for p in found), 4)
 
+    def test_hooks_must_run_the_script(self):
+        hooks = self.repo.root / ".claude/plugins/incoming/hooks/hooks.json"
+        text = hooks.read_text()
+        hooks.write_text(text.replace('"python3 ', '"true ').replace("Grep|Glob|Bash", "Grep|Glob"))
+        found = self.problems()
+        self.assertEqual(sum("does not run hooks/knowledge.py" in p for p in found), 4)
+        hooks.write_text(text.replace("Grep|Glob|Bash", "Grep|Glob"))
+        self.assertTrue(any("matcher lacks Bash" in p for p in self.problems()))
+
+    def test_malformed_description_is_unscoped(self):
+        self.repo.write(".claude/rules/area.md", RULE.replace("---\n\n#", "description: [unfinished\n---\n\n#"))
+        self.assertTrue(any("no strict `paths:`" in p for p in self.problems()))
+
     def test_marketplace_must_list_plugin(self):
         self.repo.write(".claude-plugin/marketplace.json", '{"name": "m", "plugins": []}')
         self.assertTrue(any("does not list plugin" in p for p in self.problems()))
@@ -184,6 +197,8 @@ class HookTest(unittest.TestCase):
         self.assertTrue(knowledge.glob_regex("src/**/*.py").match("src/t.py"))
         self.assertFalse(knowledge.glob_regex("tools/*.py").match("tools/sub/t.py"))
         self.assertTrue(knowledge.glob_regex("*.md").match("docs/a/b.md"))  # no slash: any depth
+        self.assertTrue(knowledge.glob_regex("/*.md").match("AGENTS.md"))  # leading slash: root only
+        self.assertFalse(knowledge.glob_regex("/*.md").match("docs/a.md"))
         self.assertTrue(knowledge.glob_regex("src/[ab]/x.py").match("src/b/x.py"))
         self.assertFalse(knowledge.glob_regex("src/[!ab]/x.py").match("src/a/x.py"))
 
@@ -220,6 +235,18 @@ class HookTest(unittest.TestCase):
     def test_listing_the_rule_does_not_count(self):
         self.tool("Bash", command="ls .claude/rules/area.md")
         self.assertIn("area.md", self.context(self.tool("Read", file_path=str(self.repo.root / "src/a/B.java"))))
+
+    def test_rg_listing_the_rule_does_not_count(self):
+        self.tool("Bash", command="rg -l paths .claude/rules/area.md")
+        self.assertIn("area.md", self.context(self.tool("Read", file_path=str(self.repo.root / "src/a/B.java"))))
+
+    def test_shell_edit_of_dirty_file_counts(self):
+        with open(self.repo.root / "src/a/B.java", "a") as f:
+            f.write("// dirty before the session\n")
+        self.run_hook({"hook_event_name": "SessionStart"})
+        with open(self.repo.root / "src/a/B.java", "a") as f:
+            f.write("// shell edit in the session\n")
+        self.assertEqual(self.run_hook({"hook_event_name": "Stop"})["decision"], "block")
 
     def test_reading_the_rule_counts(self):
         self.tool("Bash", command="cat .claude/rules/area.md")

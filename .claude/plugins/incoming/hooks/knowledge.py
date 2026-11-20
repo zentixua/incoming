@@ -47,7 +47,7 @@ MEMORY_FILE_MAX = 4096  # B: recall shows the first 4 KB of a memory topic file 
 MEMORY_INDEX_MAX = 25_000  # B: auto memory loads the first 25 KB / 200 lines of MEMORY.md (docs: memory)
 MEMORY_TYPES = {"user", "feedback", "project", "reference"}
 EDIT_TOOLS = {"Edit", "Write", "MultiEdit", "NotebookEdit"}
-SHOW_COMMANDS = {"cat", "head", "tail", "sed", "less", "more", "bat", "nl", "awk", "grep", "rg"}
+SHOW_COMMANDS = {"cat", "head", "tail", "sed", "less", "more", "bat", "nl", "awk"}  # print the file, not matches
 
 CHECKLIST = (
     "Knowledge check before you finish (asked once per session). Did this session learn something a future agent "
@@ -183,7 +183,7 @@ def stale_report(cwd: Path, fetch: bool = True) -> str | None:
         return None
     commits = missing.split()
     files = (git(root, "diff", "--name-only", f"HEAD...{ref}", "--", *KNOWLEDGE) or "").split()
-    q = shlex.quote(str(root))
+    q, r = shlex.quote(str(root)), shlex.quote(ref)
     text = [
         f"This checkout lacks {len(commits)} commit(s) of {ref} that change project instructions ("
         + ", ".join(files) + "). The instructions loaded at start are outdated there; the current text wins.",
@@ -193,19 +193,19 @@ def stale_report(cwd: Path, fetch: bool = True) -> str | None:
         if len(diff) <= DIFF_MAX:
             text.append(f"Changes to AGENTS.md on {ref}:\n{diff}")
         else:
-            text.append(f"Read the current AGENTS.md now: git -C {q} show {ref}:AGENTS.md")
+            text.append(f"Read the current AGENTS.md now: git -C {q} show {shlex.quote(ref + ':AGENTS.md')}")
     rules = [f for f in files if f.startswith(".claude/rules/")]
     if rules:
-        text.append(f"Changed area rules (read with git -C {q} show {ref}:<file> when you work there): "
+        text.append(f"Changed area rules (read with git -C {q} show {r}:<file> when you work there): "
                     + ", ".join(rules))
-    text.append(f"Work in a worktree from {ref} (git -C {q} worktree add <dir> {ref}), not in this checkout.")
+    text.append(f"Work in a worktree from {ref} (git -C {q} worktree add <dir> {r}), not in this checkout.")
     return "\n".join(text)
 
 
 def checkout_state(root: Path) -> str:
     head = (git(root, "rev-parse", "HEAD") or "").strip()
-    status = git(root, "status", "--porcelain", "--untracked-files=no") or ""
-    return head + " " + hashlib.sha256(status.encode()).hexdigest()
+    diff = git(root, "diff", "HEAD", "--no-color", "--no-ext-diff") or ""  # content, so edits to dirty files count
+    return head + " " + hashlib.sha256(diff.encode()).hexdigest()
 
 
 # ---------------------------------------------------------------- area rules
@@ -214,7 +214,9 @@ def glob_regex(glob: str) -> re.Pattern:
     """Claude Code `paths:` glob → regex: `**` any depth, `*`/`?` within a segment, `{a,b}`, `[...]`; a glob without
     `/` matches the file name at any depth."""
     out, i = "", 0
-    if "/" not in glob:
+    if glob.startswith("/"):
+        glob = glob[1:]  # anchored at the project root
+    elif "/" not in glob:
         out = "(?:.*/)?"
     while i < len(glob):
         c = glob[i]
@@ -253,7 +255,9 @@ def static_prefix(glob: str) -> str:
     return head.rsplit("/", 1)[0] if m and "/" in head else ("" if m else head)
 
 
-HEADER_LINE = re.compile(r"^(?:paths:\s*|\s+-\s+(?:\"[^\"]+\"|'[^']+'|[^\s\"'#][^#]*?)\s*|description:\s.*|)$")
+HEADER_LINE = re.compile(
+    r"^(?:paths:\s*|\s+-\s+(?:\"[^\"]+\"|'[^']+'|[^\s\"'#\[{][^#]*?)\s*"
+    r"|description:\s+(?:\"[^\"]*\"|'[^']*'|[^\s\"'\[{&*!|>%@`][^#]*?)\s*|)$")
 
 
 def rule_paths(text: str) -> list[str] | None:

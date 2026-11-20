@@ -27,6 +27,8 @@ from pathlib import Path
 
 AGENTS_MAX = 28 * 1024
 HOOK_EVENTS = {"SessionStart", "InstructionsLoaded", "PostToolUse", "Stop"}
+HOOK_COMMAND = 'python3 "${CLAUDE_PLUGIN_ROOT}/hooks/knowledge.py"'
+POST_TOOLS = {"Read", "Edit", "Write", "MultiEdit", "NotebookEdit", "Grep", "Glob", "Bash"}
 PLUGIN = Path(".claude/plugins/incoming")
 PRIVATE = [
     (re.compile(r"\b(?!127\.0\.0\.1\b|0\.0\.0\.0\b|224\.)(?:\d{1,3}\.){3}\d{1,3}\b"), "IPv4 address"),
@@ -106,11 +108,15 @@ def check(root: Path) -> list[str]:
             registered = set()
             for event, groups in data.get("hooks", {}).items():
                 for g in groups:
+                    if event == "PostToolUse" and any(h.get("command") == HOOK_COMMAND for h in g.get("hooks", [])):
+                        missing = POST_TOOLS - set(g.get("matcher", "").split("|"))
+                        if missing:
+                            problems.append(f"hooks.json PostToolUse matcher lacks {', '.join(sorted(missing))}")
                     for h in g.get("hooks", []):
                         for script in re.findall(r"\$\{CLAUDE_PLUGIN_ROOT\}/([\w./-]+)", h.get("command", "")):
                             if not (plugin / script).is_file():
                                 problems.append(f"hooks.json {event}: {script} does not exist in the plugin")
-                            elif script == "hooks/knowledge.py":
+                            elif script == "hooks/knowledge.py" and h.get("command") == HOOK_COMMAND:
                                 registered.add(event)
             for event in sorted(HOOK_EVENTS - registered):
                 problems.append(f"hooks.json: {event} does not run hooks/knowledge.py")
