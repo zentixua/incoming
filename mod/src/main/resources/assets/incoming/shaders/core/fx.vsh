@@ -80,14 +80,16 @@ out vec3 worldPos;
 out float emitGain;
 // 1 — spot of a small glowing thing (FxQuads, FxBloom.spots): halo by formula, light linear
 out float emitSpot;
-// the veil of matter at the eye (FxQuads.VEIL in Normal.y, SmokePuffs.Veil): middle and width of the vertex's matter
-// ahead (UV2, quarters of a block), the share of the depth in the matter around the eye (Normal.z) and that part's width (softness),
-// each × the opacity of its own part (near: share × opacity; ahead: the rest; fx.fsh divides by the interpolated weight: a
-// vertex without a part does not pull that part in its cell); 0 for other quads
+// the veil of matter at the eye (FxQuads.VEIL in Normal.y, SmokePuffs.Veil): optical depth of the vertex's ray around the
+// eye and ahead (the opacity byte's −ln(1 − a) times the fog byte's 1000^fog, split by the near share in Normal.z), and each
+// part's numbers × its own depth (fx.fsh divides by the interpolated depth: depths interpolate across a cell, not their
+// product with a share, and a vertex without a part does not pull it): the near part's extent (softness),
+// the part ahead's middle and width (UV2, quarter metres); 0 for other quads
+out float veilNearDepth;
+out float veilAheadDepth;
+out float veilNearWidth;
 out float veilMiddle;
 out float veilWidth;
-out float veilNear;
-out float veilNearWidth;
 const float VEIL_MODE = 25.0 / 127.0;
 // in the sun (by day) or the moon (by night) in the world; w — share of direct light in the sky light (FxLayer.sun)
 uniform vec4 FxSun;
@@ -176,6 +178,7 @@ void main() {
     gl_ClipDistance[2] = clip.z;
     gl_ClipDistance[3] = clip.w;
     texCoord0 = UV0;
+    bool veil = abs(Normal.y - VEIL_MODE) < 0.004;
     float unfold = max(float(UV1.y) / 32767.0, 1e-4);
     bool six = Normal.y < -0.1 && Normal.y > -0.4;
     vec4 light;
@@ -185,7 +188,7 @@ void main() {
     } else {
         // Glow-spot UV2 stores its light (FxBloom.magnitude), not lightmap coordinates; the veil's, where its matter
         // lies (its light is open sky)
-        ivec2 lightmap = abs(Normal.y - VEIL_MODE) < 0.004 ? ivec2(0, 240) : UV2;
+        ivec2 lightmap = veil ? ivec2(0, 240) : UV2;
         light = Normal.y < -0.5 || Emit > 129.5 ? vec4(1.0) : texelFetch(Sampler2, lightmap / 16, 0);
         if (Normal.y > -0.5 && Emit < 129.5 && any(lessThan(lightmap, ivec2(240)))) {
             // Sky share at this point (sky 0..15): tint it like material under open sky, leaving block light unchanged.
@@ -231,15 +234,18 @@ void main() {
     opacity = Normal.z;
     emitGain = 0.0;
     emitSpot = 0.0;
+    veilNearDepth = 0.0;
+    veilAheadDepth = 0.0;
+    veilNearWidth = 0.0;
     veilMiddle = 0.0;
     veilWidth = 0.0;
-    veilNear = 0.0;
-    veilNearWidth = 0.0;
-    if (abs(Normal.y - VEIL_MODE) < 0.004) {
-        veilNear = Normal.z * Color.a;
-        veilNearWidth = softness * veilNear;
-        veilMiddle = float(UV2.x) / 4.0 * (Color.a - veilNear);
-        veilWidth = float(UV2.y) / 4.0 * (Color.a - veilNear);
+    if (veil) {
+        float depth = -log(max(1.0 - Color.a, 1e-3)) * pow(1000.0, Normal.x);
+        veilNearDepth = Normal.z * depth;
+        veilAheadDepth = depth - veilNearDepth;
+        veilNearWidth = softness * veilNearDepth;
+        veilMiddle = float(UV2.x) / 4.0 * veilAheadDepth;
+        veilWidth = float(UV2.y) / 4.0 * veilAheadDepth;
     }
     if (Emit > 129.5) {
         emitSpot = 1.0;

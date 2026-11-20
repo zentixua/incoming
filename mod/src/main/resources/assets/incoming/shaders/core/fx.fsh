@@ -249,27 +249,25 @@ vec3 bloomLight(vec4 c, float cover, float gain) {
 }
 
 // The veil of matter at the eye (SmokePuffs.Veil, FxQuads.VEIL in Normal.y): the share of the vertex's opacity a that lies in
-// front of the world at view-axis distance scene. Its matter lies along the ray in two parts (fx.vsh, each × its own
-// opacity), each even over a segment: the share n of the depth around the eye over 0…w0 (its density there is the matter's
-// extinction at the eye), and the rest ahead over m ± √3 w cut at the eye. Optical depth to the world: tau·(n·clamp(scene/w0)
-// + (1 − n)·clamp((scene − from)/(to − from))), tau the ray's: the opacity byte's −ln(1 − a) times the fog byte's ratio
-// (SmokePuffs.Veil.deeper). Beer–Lambert: a near block keeps e^(−σd) of its contrast, the sky takes the whole veil. Nearer
-// than the mesh (SmokePuffs.MESH_AT, 0.1 m) or the hand (PALL_HAND) nothing.
+// front of the world at view-axis distance scene. Its ray's matter in two parts (fx.vsh: depths, each part's numbers × its
+// depth), each even: around the eye over 0…w0 (density: the extinction at the eye), ahead over m ± √3 w cut at the eye.
+// Optical depth to the world: near·clamp(scene/w0) + ahead·clamp((scene − from)/(to − from)). Beer–Lambert: a near block keeps e^(−σd) of its contrast, the sky takes the whole veil.
+// Nearer than the mesh (SmokePuffs.MESH_AT, 0.1 m) or the hand (PALL_HAND) nothing.
+in float veilNearDepth;
+in float veilAheadDepth;
+in float veilNearWidth;
 in float veilMiddle;
 in float veilWidth;
-in float veilNear;
-in float veilNearWidth;
 const float VEIL_MODE = 25.0 / 127.0;
 
 float veilBefore(float scene, float a) {
     if (!(a > 0.0) || !(scene >= viewDistance) || pallHand(scene)) return 0.0;
-    float n = clamp(veilNear / a, 0.0, 1.0), ahead = max(a - veilNear, 1e-6);
-    float w0 = max(veilNearWidth / max(veilNear, 1e-6), 1.0 / 16.0);
-    float m = max(veilMiddle / ahead, 0.0), w = max(veilWidth / ahead, 0.25);
+    float nearDepth = max(veilNearDepth, 1e-6), aheadDepth = max(veilAheadDepth, 1e-6);
+    float w0 = max(veilNearWidth / nearDepth, 1.0 / 16.0);
+    float m = max(veilMiddle / aheadDepth, 0.0), w = max(veilWidth / aheadDepth, 0.25);
     float from = max(m - 1.7320508 * w, 0.0), to = m + 1.7320508 * w;
     float beyond = clamp((scene - from) / max(to - from, 0.25), 0.0, 1.0);
-    float tau = -log(max(1.0 - a, 1e-3)) * pow(1000.0, fog);
-    float depth = tau * (n * clamp(scene / w0, 0.0, 1.0) + (1.0 - n) * beyond);
+    float depth = veilNearDepth * clamp(scene / w0, 0.0, 1.0) + veilAheadDepth * beyond;
     return min((1.0 - exp(-depth)) / a, 1.0);
 }
 

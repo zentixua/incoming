@@ -3325,10 +3325,11 @@ public final class SmokePuffs {
         /**
          * Vertex k's two parts ({@link #near}): each Gaussian's depth goes to the part around the eye by how much of it
          * its own extinction at the eye explains ({@link #INSIDE_FROM}…{@link #INSIDE_TO}), the rest ahead — per
-         * Gaussian, so independent of their order and continuous as the eye moves or turns. The part around the eye lies
-         * evenly from the eye with its extinction at the eye as density; the part ahead evenly over its matter's middle ±
-         * √3 spread. Segments, not Gaussian profiles: a trail along the gaze joins its two parts (7.6 m, then 6–152 m)
-         * where half-Gaussians left a gap (T 45 % off at 7 m); a dense cloud around the eye 3 % off.
+         * Gaussian, so independent of their order and continuous as the eye moves or turns. Each part lies evenly: around
+         * the eye from 0 with its extinction at the eye as density, ahead over its matter's middle ± √3 spread. ⚠ Two
+         * segments are the representation's limit, 6 numbers per vertex for any profile: a cloud centred at the eye
+         * (σ 5 m, depth 2) leaves a wall at 6.25 m T 0.137 against the law's 0.206; a half-Gaussian part instead misses a
+         * trail along the gaze by 45 % at 7 m, a linear density by 54 %. Exact would be every Gaussian per pixel.
          */
         private void split(int k, double n, int seen, double sum) {
             double inner = 0, eye = 0, ahead = 0, far = 0, far2 = 0;

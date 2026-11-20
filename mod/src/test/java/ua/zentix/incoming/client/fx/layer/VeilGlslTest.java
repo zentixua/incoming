@@ -37,20 +37,20 @@ class VeilGlslTest {
         String vsh = read("core/fx.vsh"), fsh = read("core/fx.fsh");
         assertEquals(FxQuads.VEIL / 127.0, mode(vsh), 1e-9);
         assertEquals(FxQuads.VEIL / 127.0, mode(fsh), 1e-9);
-        // the light word carries middle and width in quarters, × opacity (SmokePuffs.Veil.packed)
-        assertTrue(vsh.contains("veilMiddle = float(UV2.x) / 4.0 * (Color.a - veilNear);") && vsh.contains("veilWidth = float(UV2.y) / 4.0 * (Color.a - veilNear);"), "fx.vsh light word");
-        // the near part: share in Normal.z (byte /127, SmokePuffs.Veil.byteShare), width in the softness (sixteenths)
-        assertTrue(vsh.contains("veilNear = Normal.z * Color.a;") && vsh.contains("veilNearWidth = softness * veilNear;"), "fx.vsh near part");
-        assertTrue(fsh.contains("float depth = tau * (n * clamp(scene / w0, 0.0, 1.0) + (1.0 - n) * beyond);"), "fx.fsh two parts");
-        assertTrue(fsh.contains("float beyond = clamp((scene - from) / max(to - from, 0.25), 0.0, 1.0);"), "fx.fsh part ahead");
-        // the hand is left alone, at the same distance as the pall's (SmokePuffs.HAND)
-        assertTrue(fsh.contains("|| pallHand(scene)) return 0.0;"), "the hand");
-        // the mesh at the eye is not faded at the near plane
-        assertTrue(fsh.contains("if (!veil) seen *= clamp((viewDistance - 0.3) / 1.2, 0.0, 1.0);"), "near-plane fade spares the veil");
-        assertTrue(vsh.contains("ivec2(0, 240) : UV2"), "the veil's light is open sky");
+        // the ray's depth from the opacity and fog bytes (SmokePuffs.Veil.shaderTau × byteDeeper), split by the near share
+        // in Normal.z; each part's numbers × its depth: near extent (softness, sixteenths), ahead middle and width (UV2,
+        // quarter metres, Veil.packed)
+        assertTrue(vsh.contains("float depth = -log(max(1.0 - Color.a, 1e-3)) * pow(1000.0, Normal.x);"), "fx.vsh depth");
+        assertTrue(vsh.contains("veilNearDepth = Normal.z * depth;") && vsh.contains("veilNearWidth = softness * veilNearDepth;"), "fx.vsh near part");
+        assertTrue(vsh.contains("veilMiddle = float(UV2.x) / 4.0 * veilAheadDepth;") && vsh.contains("veilWidth = float(UV2.y) / 4.0 * veilAheadDepth;"), "fx.vsh part ahead");
+        assertTrue(vsh.contains("ivec2 lightmap = veil ? ivec2(0, 240) : UV2;"), "the veil's light is open sky");
         // the veil branch uses the Beer–Lambert share, not the softness ramp
         assertTrue(fsh.contains("if (veil) seen *= veilBefore(scene, vertexColor.a);"), "fx.fsh veil branch");
-        assertTrue(fsh.contains("float tau = -log(max(1.0 - a, 1e-3)) * pow(1000.0, fog);"), "the ray's depth as Veil.shaderTau × byteDeeper reads it");
+        assertTrue(fsh.contains("float depth = veilNearDepth * clamp(scene / w0, 0.0, 1.0) + veilAheadDepth * beyond;"), "fx.fsh two parts");
+        assertTrue(fsh.contains("float beyond = clamp((scene - from) / max(to - from, 0.25), 0.0, 1.0);"), "fx.fsh part ahead");
         assertTrue(fsh.contains("if (!veil) seen *= 1.0 - fog * FxFogColor.a;"), "the veil's fog byte is its depth, not Minecraft fog");
+        assertTrue(fsh.contains("if (!veil) seen *= clamp((viewDistance - 0.3) / 1.2, 0.0, 1.0);"), "near-plane fade spares the veil");
+        // the hand is left alone, at the same distance as the pall's (SmokePuffs.HAND)
+        assertTrue(fsh.contains("|| pallHand(scene)) return 0.0;"), "the hand");
     }
 }

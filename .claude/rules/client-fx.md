@@ -1121,14 +1121,17 @@ paths:
   the byte alpha carries at most −ln 0.001, the fog byte (the veil takes no Minecraft fog) the ratio beyond, log₁₀₀₀
   (`Veil.deeper`); a capped τ squeezes the parts and leaves a gap between them. Words: middle and width ahead in quarter
   metres (UV2, to 8 km: a budget clump at the edge of distant terrain keeps its place), the near share in `Normal.z`, its
-  extent in the softness; `fx.vsh` weights each part's numbers by that part's own opacity, so a vertex without a part does
-  not pull it in its cell. The veil's own mesh lies at `SmokePuffs.MESH_AT` (0.1 m, exempt from the near-plane fade); the
+  extent in the softness; `fx.vsh` turns them into each part's depth and its numbers × that depth, so a cell interpolates
+  depths, not a share times a total (a dense clump beside haze put a wall mid-cell at T 0.30 against 0.50), and a vertex
+  without a part does not pull it. ⚠ Two even segments are the limit of 6 numbers per vertex: a cloud centred at the eye
+  (σ 5 m, depth 2) leaves a wall at 6.25 m T 0.137 against 0.206; half-Gaussian or linear-density near parts miss a trail
+  along the gaze by 45–54 %. Exact would be every Gaussian per pixel (`VeilRegressionTest`, `VeilSplitTest`). The veil's own mesh lies at `SmokePuffs.MESH_AT` (0.1 m, exempt from the near-plane fade); the
   hand (`SmokePuffs.HAND` = `PALL_HAND`) takes no veil. At 2 m the frame's depth cuts the mesh: a surface crossing 2 m
   shows a hard edge (coverage 0 → 1 − e^(−2σ)) and nearer walls lose their veil. Its sort key stays the half-opacity
   depth (below). A linear ramp from the mesh instead of the law lays the whole veil on everything past ~3 m (B-2 ×12 at
   10 s, marker at 4.7 m: T 0.014 against the law's 0.127). `SmokePuffsTest.veilFadesToTheWorld…` holds the share within
-  0.2 and the world's transmittance within 25 % where it exceeds 0.05 (SAM trail, distant clump, thin haze, dense dust
-  off its middle, haze with a clump ahead, the eye at a cloud's edge); `VeilGlslTest` ties the shader to the Java words.
+  0.2 and the world's transmittance within 35 % where it exceeds 0.05 (SAM trail, distant clump, thin haze, dense dust
+  off its middle, haze with a clump ahead, the eye at a cloud's edge, a small cloud centred at the eye); `VeilGlslTest` ties the shader to the Java words.
   Without a scene depth texture the veil covers everything (no world distance to share by).
   The mesh remains near the eye, but it blends at its matter's half-opacity depth (`Veil.depth`, alpha-weighted mean
   over all nodes), one key for every cell. In the projection-matched CPU trace, the old 2 m key put veil matter at
