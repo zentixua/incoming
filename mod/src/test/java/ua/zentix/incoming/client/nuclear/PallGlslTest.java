@@ -152,9 +152,7 @@ class PallGlslTest {
         assertEquals(sample, glsl(match(wall, "float m2 = (.+?);")), "shadow billows: the sample is not the same as that of thicknesses");
         assertEquals(sample, glsl(match(wall, "float hm = (.+?);")), "head at point: not the same sample");
         String[] stop = match(at, "if \\((.+?)\\) return h;").split("\\|\\|"), p = args(match(at, "h\\.P = vec4\\(([^;]+)\\); return h;"));
-        // the crest (pallWallCrest, presentation like the billow noise) at 1: the law's head
-        assertTrue(at.contains("float crest = pallWallCrest(h.rel);"), "the crest - not where the head point is built (every query must see it)");
-        String lag = glsl(match(at, "float lag = (.+?);")), numbers = "float crest = 1.0;\nfloat Px = " + glsl(p[0]) + ", Py = " + glsl(p[1]) + ", Pz = " + glsl(p[2]) + ";";
+        String lag = glsl(match(at, "float lag = (.+?);")), numbers = "float Px = " + glsl(p[0]) + ", Py = " + glsl(p[1]) + ", Pz = " + glsl(p[2]) + ";";
         StringBuilder test = new StringBuilder(GLSL).append("\nfloat headAt(float pts, float ptz, float ptwet, float pthard").append(SLOT_PARAMS).append(") {\n");
         for (String c : stop) test.append("if (").append(glsl(c)).append(") return 0.0;\n");
         test.append("float lag = ").append(lag).append(";\n").append(numbers).append("\nfloat Pw = ").append(glsl(p[3])).append(";\nreturn ")
@@ -576,23 +574,6 @@ class PallGlslTest {
                 "head dust - not the soil's with the pall's soot");
         assertTrue(!wall.contains("0.77"), "a constant soot share in the head");
         assertTrue(fx.contains("float burn = pallBurn(r, 0.0, G.y, G.w)"), "fire light below - not the slot's fire flame");
-    }
-
-    /**
-     * Crests (presentation, review of #678): the same along a radius (a crest seen end-on from the ground stays one dome across the wedge),
-     * within 1 − PALL_WALL_CREST..1, and continuous across the ring's ±π seam.
-     */
-    @Test
-    void crestsAreRadialDomesWithoutSeam() {
-        GlslFunction crest = GlslFunction.parse(GLSL, "pallWallCrest");
-        double dip = scalar(GLSL, "PALL_WALL_CREST");
-        for (double a = -3.14; a < 3.14; a += 0.0137) {
-            double near = crest.call(java.util.Map.of("rel.x", 800 * Math.cos(a), "rel.y", 800 * Math.sin(a))), far = crest.call(java.util.Map.of("rel.x", 3200 * Math.cos(a), "rel.y", 3200 * Math.sin(a)));
-            assertEquals(near, far, 1e-4, "angle " + a + ": the crest changes along the radius");
-            assertTrue(near >= 1 - dip - 1e-6 && near <= 1 + 1e-6, "angle " + a + ": " + near);
-        }
-        double eps = 1e-4, below = crest.call(java.util.Map.of("rel.x", -3000 * Math.cos(eps), "rel.y", -3000 * Math.sin(eps))), above = crest.call(java.util.Map.of("rel.x", -3000 * Math.cos(eps), "rel.y", 3000 * Math.sin(eps)));
-        assertEquals(below, above, 0.01, "a seam at ±π");
     }
 
     /**

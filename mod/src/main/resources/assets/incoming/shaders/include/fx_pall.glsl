@@ -439,7 +439,7 @@ WallAt wallMove(mat4 V, WallAt h, vec3 v) {
     m.s = V[0].x - length(m.rel);
     m.z = h.z + v.y;
     m.P.w = pallWallInside(m.s, m.z, V[0].y, V[0].z, pallWallCeiling(V[0].z, V[2].x, V[2].w), V[1].y) * pallWallDensity(m.s - m.P.z, V[0].y, V[0].w, V[3].z,
-            V[3].w, V[1].w, m.wet, V[2].y, V[2].z, V[3].x, V[3].y, m.hard) * V[0].z * mix(1.0, V[1].z, m.wet) / max(h.P.y, 1e-3);
+            V[3].w, V[1].w, m.wet, V[2].y, V[2].z, V[3].x, V[3].y, m.hard);
     return m;
 }
 
