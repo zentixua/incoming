@@ -21,6 +21,7 @@ Each player has their own, stored in `config/incoming-client.toml`.
 | Hearing damage | on | muffled hearing and faint ringing after a blast wave that hurts the ears; torn eardrums from 5 psi |
 | Incoming's blast effects | on | the flash, fireball, smoke, dust, debris, blast wave, sound, echo, jolt and hearing loss of strike blasts, and the bunker bomb's impact, ground tremor, gas vent and collapse; off hides these effects but does not make another mod replace them; only your picture and sound change, destruction and damage are the server's; air defense hits and nuclear blasts stay |
 | Muffle distant and hidden strikes | on | distant strikes lose high tones, hidden ones sound muffled, and inside the dust pall all distant sounds are muffled |
+| Hints already shown | empty | first-use hints this game has already shown or whose action you have already used, such as the console hint the first time you hold a designator; clear the list to see them again |
 
 The mod's sounds follow the Ambient/Environment volume slider.
 
@@ -49,14 +50,15 @@ world/server. The most useful settings are below; the rest are in the same file,
 | `launch.sight_rules` | on | [spotting](rules.md#spotting): strike only spotted targets |
 | `world.early_warning` | on | an early-warning network exists: sirens, target banners and nuclear launch notices. Off: only the owner gets flight data/countdowns; other players rely on sight, sound or their SAM radar. Legacy `world.siren` migrates automatically; an explicit new key takes precedence |
 | `world.block_damage`, `world.fire` | on | conventional strike destruction and fires; nuclear strikes have separate switches below |
+| `world.collapse` | on | [what a blast leaves without support falls](weapons.md#what-a-blast-does): storeys above blown-out walls and floors, the roof of a cavity above an underground bomb |
 | `nuclear.enabled`, `ops_only` | on, on | nuclear weapons exist; only operators launch them |
 | `nuclear.default_yield`, `max_yield` | 15, 100 | yield of a command without a number; largest allowed yield, kt (up to 1000 = 1 Mt) |
 | `nuclear.block_damage`, `nuclear.fires` | on | nuclear ruins/craters and thermal fires; independent of `world.block_damage` and `world.fire` |
 | `nuclear.black_rain` | on | smoke from the fires of a nuclear strike rains out downwind as black rain, washing a little radioactivity to the ground and contaminating skin and clothes; off: no black rain, the fires stay. Applies to new detonations |
-| `scale.scale_preset` | GAME | GAME: game flight speeds/heights, full nuclear radii, distant nuclear wave at 0.25 of the speed of sound; REAL: reference flight speeds/heights, full radii and physical wave timing; CUSTOM: the three numbers below. Flight and air defense remain a game model in every preset; see [Not physical](not-physical.md) |
+| `scale.scale_preset` | GAME | GAME: game flight speeds/heights, full nuclear radii, distant nuclear wave at 0.35 of the speed of sound; REAL: reference flight speeds/heights, full radii and physical wave timing; CUSTOM: the three numbers below. Flight and air defense remain a game model in every preset; see [Not physical](not-physical.md) |
 | `scale.flight_speed` | 0 | with CUSTOM: [flight speeds and heights](weapons.md#how-they-fly), 0 the game values, 1 true to life; in between every weapon goes the same share of the way. Turns stay game values. Flight times stay, so a faster weapon starts further away |
 | `nuclear.effects_scale` | 1.0 | with CUSTOM: scale of nuclear strike radii (1.0 is true to life) |
-| `nuclear.wave_speed` | 0.25 | with CUSTOM: speed of the blast wave away from the fireball, as a share of the speed of sound (1.0 is true to life) |
+| `nuclear.wave_speed` | 0.35 | with CUSTOM: speed of the blast wave away from the fireball, as a share of the speed of sound (1.0 is true to life) |
 | `air_defense.rails`, `air_defense.reload_seconds` | 4, 8 | ready SAM rails and seconds to load one missile from stock, including the first |
 | `grid.enabled` | on | [blackout](blackout.md) |
 | `grid.nuke_blackout`, `grid.max_radius` | on, 4096 | nuclear blackout without a substation; maximum radius of a substation or command outage in blocks (a nuke darkens its whole damage reach, at most 16384) |

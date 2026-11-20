@@ -48,6 +48,23 @@ strikes where you stand.
 or from a knocked-out substation's oil, and stops by itself when it burns out: about 2.5 minutes after a Shahed, about
 a quarter of an hour after a cruise missile ([burning craters](weapons.md#what-a-blast-looks-like)).
 
-**Can nukes be bigger?** Up to 1 Mt. The world owner raises the limit with `nuclear.max_yield` (100 kt by default,
-at most 1000) in the [world settings](settings.md#world-settings), then picks the yield on the console. Conventional
-weapons carry the charges of the real weapons, so there is no setting to make them stronger.
+**The crater fire won't go out.** It is the fuel left in the crater; it burns out by itself in the time given
+above. Neither rain nor punching it out helps:
+burning fuel lights again. Pour water over it or place a block on it, and that part goes out for good. `/incoming clear`
+does not put it out. Flammable blocks it has set alight burn as ordinary fire
+([burning craters](weapons.md#what-a-blast-looks-like)).
+
+**Why do blasts break so little?** Each weapon carries the charge of the real one, and a block is a metre. A Shahed
+(50 kg of TNT) leaves a crater in soil about 2.4 m across and breaks brick walls within about 3 m; a cruise missile (about
+150 kg) within about 7 m; a Grad rocket (6.4 kg) within about 1 m, so trees next to it can stay standing. What the
+blast leaves without support then falls: a missile in a ground-floor flat can bring down the storeys above it. Smoke and
+dust reach much farther than the damage, as in real footage. There is no setting to make conventional weapons
+stronger ([the real weapons](weapons.md#the-real-weapons), [what a blast does](weapons.md#what-a-blast-does)). The
+default 15 kt nuke brings down brick buildings out to about 700 m and wooden ones out to about 1.3 km.
+
+**Nuke too big or too small for my world?** Choose the yield on the console, from 1 kt up to the world's limit
+(100 kt by default). The world owner can raise the limit up to 1 Mt with `nuclear.max_yield` (at most 1000), or
+shrink every nuclear distance: set `scale.scale_preset` to `CUSTOM` and lower `nuclear.effects_scale` (1.0 is true to
+life; at 0.1 a 15 kt blast brings down brick out to about 70 m). Settings open with the Settings button on the console
+or under Mods → Incoming → Config; world settings can be changed there in a single-player world
+not opened to LAN, otherwise in `incoming-server.toml` ([world settings](settings.md#world-settings)).

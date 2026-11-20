@@ -79,8 +79,18 @@ A blast is the warhead's charge in TNT, not a game explosion power. Everything f
   missile breaches about 2.7 m of stone or masonry and 4.2 m of earth: a 1 m stone bridge deck gets a hole about five
   blocks across, 3 m of stone holds. A Shahed breaches about 1.75 m of stone, a Grad rocket less than a metre. The
   bomb, which explodes deep in the ground, breaches into a bunker or cave up to about 8 m of rock away. The manual's
-  rule is meant to be sure of a breach, so a real charge may break somewhat more. The span around the hole stays up:
-  there is no collapse of a weakened span.
+  rule is meant to be sure of a breach, so a real charge may break somewhat more. What the hole leaves without support
+  falls (next point).
+- **Collapse.** What the blast leaves without support falls, by the same rule as nuclear ruins. A block stands while it
+  rests on something that reaches the ground, or is held from the side no farther than its span: about 6 blocks for
+  stone, brick and concrete, 4 for planks; glass and sand hold nothing up. Natural ground stays as it is, and so does
+  a build these spans could not hold even before the hit (a roof wider than about 12 blocks without columns, a floating
+  platform): it loses only what the blast broke. A Shahed that
+  flies into a flat blows the flat out, and the storeys above usually still span it; a missile in the same flat takes
+  out more wall than they can span, and the part of the building above comes down right after the blast, in its dust.
+  A hit on a roof corner takes out the corner, not the house. About one fallen block in eight lands at the foot as
+  rubble of its own material, spread a little around; you see those fall, the rest turns to dust. Chests keep their
+  contents. The world setting `world.collapse` turns this off.
 - **Fire** starts only from fuel and burning debris. The Shahed and the missile still carry fuel; three quarters of it
   burns as a fireball (≈16 m across for the Shahed, ≈34 m for the missile) for one to three seconds. That flash ignites
   thin, dry fuel it reaches: leaves, dry grass, hay, books, and with the missile now and then cloth and wool. The flash

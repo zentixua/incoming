@@ -27,7 +27,8 @@ import java.util.Locale;
  *   {@code roof} — the same houses, a strike at the middle of the plank roof: where it falls and where the fuel burns; {@code masonry} — the same houses,
  *   a strike at the middle of the concrete roof of a stone brick house, with a paved road around (city, ±48 m): dust of the breached slab;
  *   {@code town} — a stone brick block on paving (houses 10×10×12 m, streets 6 m wide along X and Z, ±48 m), a strike at
- *   the intersection: wind at ground level in the street ({@code LocalWind});</li>
+ *   the intersection: wind at ground level in the street ({@code LocalWind}); {@code block} — a four-storey brick block of flats
+ *   on paving (16 × 8 m), the strike inside a ground-floor flat: the collapse of what lost support;</li>
  *   <li>{@code nuke <kt> [air|ground] [near [meters]]} — a nuclear detonation without flight ({@code /incoming nuke now}) at a new
  *       place; with {@code near} — the view from the camera: the houses and oaks of the {@code debris} scene at the point, the detonation that many meters to the north
  *       (by default {@link #NEAR_RANGE}), effect time — from the arrival of the front at the houses (frames also before it, from −10 s));</li>
@@ -51,6 +52,7 @@ import java.util.Locale;
  *       from the point (0 — south, 90 — west, as the player's turn), height of the look point above the ground;</li>
  *   <li>{@code stance stand|fly} — a standing player (body sway) or a flying observer (by default);</li>
  *   <li>{@code weather clear|rain} — weather for checking condensation in humid air;</li>
+ *   <li>{@code collapse on|off} — the server's collapse setting: the same strike with and without what lost support falling;</li>
  *   <li>{@code time day|night|<tick>}, {@code hud on|off}, {@code overlay on|off} — light, interface, model numbers;</li>
  *   <li>{@code track on|off} — the view keeps the effect's projectile ({@code launch}/{@code flight}) in the middle of the frame (as a player
  *       who follows it with zoom);</li>
@@ -74,7 +76,7 @@ record SandboxCommand(Verb verb, List<String> args) {
     /** {@code blast … water}: side and depth of the pond, blocks (the pond is wider than the Shahed's column and spray ring). */
     static final int POND = 64, POND_DEPTH = 4;
 
-    enum Verb { ICBM, ARRIVAL, BLAST, REAL, NUKE, AIRBURST, LAUNCH, FLIGHT, FIRE, SPENT, CAM, STANCE, WEATHER, TIME, HUD, OVERLAY, ZOOM, TRACK, SHOTS, AGAIN, CLEAR, RELOAD, WAIT, RAID, SAM, HOUSE, SCENERY, SURFACE, TURN, UI }
+    enum Verb { ICBM, ARRIVAL, BLAST, REAL, NUKE, AIRBURST, LAUNCH, FLIGHT, FIRE, SPENT, CAM, STANCE, WEATHER, TIME, HUD, OVERLAY, ZOOM, TRACK, SHOTS, AGAIN, CLEAR, RELOAD, WAIT, RAID, SAM, HOUSE, SCENERY, SURFACE, TURN, UI, COLLAPSE }
 
     /** An effect (repeated by {@code again} and captured by {@code shots}). */
     boolean effect() {
@@ -124,9 +126,9 @@ record SandboxCommand(Verb verb, List<String> args) {
                 WeaponType w = weapon();
                 if (w == WeaponType.NUKE) throw new IllegalArgumentException("for a nuke use nuke <kt>");
                 if (verb == Verb.REAL) {
-                    if (houses() || roof() || masonry() || town() || paved() ? args.size() != 2
+                    if (houses() || roof() || masonry() || town() || block() || paved() ? args.size() != 2
                             : args.size() > 1 && (args.size() != 3 || !List.of("deck", "concrete").contains(args.get(1)) || number(2) < 1 || number(2) > 6)) {
-                        throw new IllegalArgumentException("real <weapon> [deck|concrete <1–6 m> | houses | roof | masonry | town | paved]");
+                        throw new IllegalArgumentException("real <weapon> [deck|concrete <1–6 m> | houses | roof | masonry | town | block | paved]");
                     }
                     break;
                 }
@@ -203,6 +205,10 @@ record SandboxCommand(Verb verb, List<String> args) {
             case WEATHER -> {
                 need(1, 1);
                 if (!List.of("clear", "rain").contains(args.getFirst())) throw new IllegalArgumentException("clear or rain");
+            }
+            case COLLAPSE -> {
+                need(1, 1);
+                if (!List.of("on", "off").contains(args.getFirst())) throw new IllegalArgumentException("collapse on|off");
             }
             case HUD, OVERLAY, TRACK -> {
                 need(1, 1);
@@ -330,6 +336,14 @@ record SandboxCommand(Verb verb, List<String> args) {
     /** {@code real … town}: a block on paving (houses 10×10×12 m, streets 6 m wide), a strike at the intersection. */
     boolean town() {
         return verb == Verb.REAL && args.size() > 1 && args.get(1).equals("town");
+    }
+
+    /**
+     * {@code real … block}: a four-storey brick block of flats on paving (16 × 8 m, concrete slabs, a cross wall in the middle,
+     * windows), the strike inside a ground-floor flat as if through its window: what the blast leaves without support falls.
+     */
+    boolean block() {
+        return verb == Verb.REAL && args.size() > 1 && args.get(1).equals("block");
     }
 
     WeaponType weapon() {

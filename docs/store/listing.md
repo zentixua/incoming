@@ -69,7 +69,10 @@ upload list records the terrain/recipe/craft integrations above.
 ## Media
 
 The Modrinth icon is `docs/media/icon.png` (512×512); the CurseForge avatar is `docs/media/icon-400.png` (400×400 PNG).
-The first screen uses the factory-strike animation (`docs/media/hero.webp`), a tagline and a three-sentence introduction.
+Both are the 32×32 pixel-art mushroom cloud scaled with nearest-neighbour; the mod list logo (`incoming.png`) is the wide
+pixel wordmark with that icon.
+The first screen uses the banner (`docs/media/banner.jpg`, 1920×640: an in-game 15 kt night fireball with the pixel
+wordmark), a tagline and a three-sentence introduction. The factory-strike animation (`docs/media/hero.webp`) opens Features.
 The effect and nuclear sections lead, followed by weapons and controls. The body shows the factory approach/impacts and the 6 kt dusk burst as two animations.
 The gallery contains both body animations, the other animations and all stills, using the same files.
 Each refreshed animation is below 5 MB. Extra weapon screenshots are in the Gallery.
@@ -91,8 +94,8 @@ and dusk nuclear animations also appear in the page bodies.
 | `docs/guide/img/weapon-grad.jpg` | Grad MLRS | Ready for a rocket salvo. |
 | `docs/guide/img/weapon-b2.jpg` | B-2 bomber | On its way to drop a bunker buster. |
 | `docs/guide/img/weapon-icbm.jpg` | ICBM ascent | A ballistic missile in flight. |
+| `docs/guide/img/remote.png` | Designator console | Shift+RMB with the designator: weapon, count, spread, target and fire. |
 | `docs/guide/img/scope.png` | Binocular targeting | Aim at anything you can see. |
-| `docs/guide/img/remote.png` | Strike remote | Pick a weapon and set up a salvo. |
 | `docs/guide/img/map.png` | Targeting map | Choose a target on the city map. |
 
 The factory and nuclear scenes were recorded with Incoming 3.10.1 on copies of Project Zearth and Newisle.
