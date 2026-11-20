@@ -18,7 +18,8 @@ in vec4 Color;
 in ivec2 UV1;
 // World lightmap; baked puffs store their geometry basis (puffBasis) here and use FULL_BRIGHT lighting.
 in ivec2 UV2;
-// x: Minecraft fog 0..1; y: 1 — particle (by the nearest pixel, as from the Minecraft atlas), −1 — a far-model atlas
+// x: Minecraft fog 0..1; y: 1 — particle (by the nearest pixel, as from the Minecraft atlas; 112/127 — a smoke particle,
+// smooth when magnified, FxQuads.softTexels), −1 — a far-model atlas
 // tile
 // (the light is already in it), ½ — halo far/glow (large — by formula, fx.fsh), −¼ — a baked puff with
 // six-sided light (FxAtlas.puff6), ⅝ — fire frames; z: opacity of a particle without texture, for a puff or fire — a
