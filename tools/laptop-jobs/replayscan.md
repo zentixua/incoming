@@ -35,7 +35,7 @@ Paths start at `/mnt/data/projects/incoming`, `W=mod/run/claude-work`, `JAVA_HOM
 ```sh
 cd $W/replayscan
 V=<version>; R=<replay name without .zip>; G=$PWD/game/$V; T=$PWD/../replayscan-wt/tools
-timeout -k 60 4h $T/laptop_job.sh scan-$R -- python3 $T/prod_client.py --no-copy --dir $G --incoming-jar $G/day/<jar> \
+timeout -k 60 4h $T/laptop_job.sh --full scan-$R -- python3 $T/prod_client.py --no-copy --dir $G --incoming-jar $G/day/<jar> \
   --size 640x360 --jvm=-Xmx8g --prop replayscan.replay=$PWD/replays/$R.zip --prop replayscan.out=$PWD/out/$R \
   --prop replayscan.viewers=players --prop replayscan.every=2
 uv run $T/replayscan/replaydb.py build out/$R
