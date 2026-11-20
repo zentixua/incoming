@@ -353,9 +353,14 @@ class PallGlslTest {
         assertEquals(4, WallLobeTable.RECORD);
         for (String[] c : new String[][]{{"PALL_LOBE", "" + WallLobes.LOBE}, {"PALL_LOBE_WIDE", "" + WallLobes.WIDE}, {"PALL_LOBE_TALL", "" + WallLobes.TALL},
                 {"PALL_LOBE_LOW", "" + WallLobes.LOW}, {"PALL_LOBE_RISE", "" + WallLobes.RISE}, {"PALL_LOBE_SIZE", "" + WallLobes.SIZE},
-                {"PALL_LOBE_CHILD_OUT", "" + WallLobes.CHILD_OUT}, {"PALL_LOBE_CHILD_SIZE", "" + WallLobes.CHILD_SIZE}, {"PALL_LOBE_OPAQUE", "" + WallLobes.OPAQUE}}) {
+                {"PALL_LOBE_CHILD_OUT", "" + WallLobes.CHILD_OUT}, {"PALL_LOBE_CHILD_SIZE", "" + WallLobes.CHILD_SIZE}, {"PALL_LOBE_OPAQUE", "" + WallLobes.OPAQUE},
+                {"PALL_LOBE_CUT", "" + WallLobes.CUT}, {"PALL_LOBE_SEEN", "" + WallLobes.SEEN}}) {
             assertEquals(Double.parseDouble(c[1]), scalar(GLSL, c[0]), 1e-7, c[0]);
         }
+        // the Gaussian kernel's chord uses the same error function
+        GlslFunction erf = GlslFunction.parse(GLSL, "pallErf");
+        for (double x = -4; x <= 4; x += 0.01) assertEquals(WallLobes.erf(x), erf.call(Map.of("x", x)), 1e-9, "x = " + x);
+        assertEquals(0.8427007929, WallLobes.erf(1), 2e-7, "erf(1)");
         // the walk's lattice cell is the parcel's (the carry at a lobe's middle height share), as WallLobes.walk
         String walk = body(GLSL, "float pallLobeWalk(").replaceAll("\\s+", " ");
         assertTrue(walk.contains("float carry = V[1].x * pow(PALL_LOBE_LOW + 0.5 * PALL_LOBE_RISE, 0.1428571);")

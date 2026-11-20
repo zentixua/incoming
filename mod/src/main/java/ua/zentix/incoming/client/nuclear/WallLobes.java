@@ -11,8 +11,9 @@ import net.minecraft.util.Mth;
  * ({@link BlastWall#origin}'s law, inverted) and riding its share of the local top ({@link BlastWall#top}, {@link BlastWall#heated}), so it
  * is thrown up at the front, lags behind it and rises ever slower: the roll-back is the lobes' own motion. Its mass is the law's head
  * column above the ground at its place ({@link BlastWall#mean} integrated over height) times its cell's area there, so the lobes carry
- * the law's head mass and its handoff to the pall ({@link BlastWall#handoff}). A lobe's density is A·(1 − q²)² with q its normalized
- * distance (forward, back, across and up radii): the chord is closed-form, so rays and probes sum the same optical depths.
+ * the law's head mass and its handoff to the pall ({@link BlastWall#handoff}). A lobe's density is A·e^(−q²) with q its normalized
+ * distance (forward, back, across and up kernel radii, {@link #SEEN}): the chord is closed-form, so rays and probes sum the same optical
+ * depths.
  *
  * <p>Each parent carries {@link #CHILDREN} child lobes on its upper half ({@link #cell}): the crest's own lumps (the sketch's and the
  * footage's cauliflower, near lobes 12 % × 8 % of the frame), a share of its mass, churning at the footage's ~0.2 lobe widths per second.
@@ -23,15 +24,22 @@ import net.minecraft.util.Mth;
 final class WallLobes {
     /** Lobe spacing, wedge-end tops (presentation). */
     static final double LOBE = 1.25;
-    /** Radius across the ring and backward, spacings; up, local tops (presentation). */
+    /** Seen radius across the ring and backward, spacings; up, local tops (presentation). */
     static final double WIDE = 0.6, TALL = 0.6;
+    /**
+     * A lobe's density is Gaussian, A·e^(−q²), cut at q = {@link #CUT}: the dense lobe shows to about {@link #SEEN} of its kernel radii
+     * (where its chord's optical depth falls to one, √ln of its central depth of hundreds) with a soft edge — its optical depth runs from
+     * 10 to 0.1 over a third of that radius, the turbulent fringe of real dust (a compactly supported kernel such as (1 − q²)² puts that
+     * span into 3 % of the radius: a hard shell). Kernel radii are the seen radii over {@link #SEEN}.
+     */
+    static final double CUT = 3, SEEN = 2.5;
     /** Centres off the lattice, spacings; centre height share (from, range); size spread (presentation). */
     static final double JITTER = 0.6, LOW = 0.25, RISE = 0.2, SIZE = 0.3;
     /** Walk samples per span at most; a walk stops behind this optical depth of lobes already passed. */
     static final int WALK = 40;
     static final double OPAQUE = 9;
-    /** ∫ of (1 − q²)² over the unit half-ball: a half-lobe's mass is this × its three radii × A. */
-    static final double HALF = 16 * Math.PI / 105;
+    /** ∫ of e^(−q²) over half of space: a half-lobe's mass is this × its three kernel radii × A (the cut leaves out 10⁻⁴). */
+    static final double HALF = Math.pow(Math.PI, 1.5) / 2;
 
     private WallLobes() {
     }
@@ -94,10 +102,16 @@ final class WallLobes {
         return new double[] {(x >>> 8) / 16777216.0, (y >>> 8) / 16777216.0, (z >>> 8) / 16777216.0, (w >>> 8) / 16777216.0};
     }
 
-    /** Share of a lobe's mass above a plane ζ vertical radii above its centre. Copy {@code pallLobeAbove}. */
+    /** Share of a lobe's mass above a plane ζ vertical kernel radii above its centre: erfc(ζ)/2. */
     static double above(double zeta) {
-        double y = Mth.clamp(zeta, -1, 1), y2 = y * y;
-        return (16.0 / 35 - y * (1 - y2 + y2 * (0.6 * y2 - y2 * y2 / 7))) / (32.0 / 35);
+        return 0.5 * (1 - erf(zeta));
+    }
+
+    /** Error function (Abramowitz and Stegun 7.1.26, error below 1.5·10⁻⁷). Copy {@code pallErf}. */
+    static double erf(double x) {
+        double a = Math.abs(x), t = 1 / (1 + 0.3275911 * a);
+        double y = 1 - t * (0.254829592 + t * (-0.284496736 + t * (1.421413741 + t * (-1.453152027 + t * 1.061405429)))) * Math.exp(-a * a);
+        return Math.copySign(y, x);
     }
 
     /** Parent lobe of cell (i, j) in the lattice of spacing D and share weight, carrying the cell's whole mass (see {@link #cell}). */
@@ -120,9 +134,11 @@ final class WallLobes {
         double column = BlastWall.density(slot, s, wet, hard) * BlastWall.shape(u, slot[8]) * BlastWall.handoff(u) * top * rise
                 * PallField.column(0);
         if (column <= 0) return Lobe.NONE;
-        // a young lobe flat against the curving ring would reach past it at its sides: across² ≤ edge·s and nose ≤ s keep it behind
-        double morph = Math.cbrt(weight), wide = WIDE * D * size * morph, across = Math.min(wide, Math.sqrt(Math.max((r + s) * s, 0.25)));
-        double front = Mth.clamp(s, 0.5, wide), up = Math.max(TALL * local * size * morph, 0.5);
+        // the kernel's reach (CUT radii) stays behind the dust edge: nose ≤ s; a young lobe flat against the curving ring would reach past it
+        // at its sides by across²/(2·edge), so across² ≤ edge·s too
+        double morph = Math.cbrt(weight), wide = WIDE / SEEN * D * size * morph;
+        double across = Math.min(wide, Math.sqrt(Math.max((r + s) * s, 0.04)) / CUT);
+        double front = Mth.clamp(s / CUT, 0.2, wide), up = Math.max(TALL / SEEN * local * size * morph, 0.2);
         double zc = zr * local;
         double stretch = 1 / Math.max(1 + carry * (1 - ph) * Math.exp(1 - ph) * slot[8] / len, 0.2);
         double area = D * 2 * Math.PI * r / n * stretch;
@@ -131,19 +147,19 @@ final class WallLobes {
         return new Lobe(ex * r, g[0] + zc, ez * r, ex, ez, front, wide, across, up, a, wet, hard, sand, u, mass);
     }
 
-    /** ∫(c0 − B·x²)² over the part of [lo, hi] inside one half-lobe. Copy {@code pallLobePart}. */
+    /**
+     * ∫e^(−q²) over the part of [lo, hi] inside one half-lobe, within the cut: normalized ray a + t·b, q² = q_min² + |b|²(t − ts)², so
+     * e^(−q_min²)·√π/(2|b|)·(erf(|b|(t1 − ts)) − erf(|b|(t0 − ts))). Copy {@code pallLobePart}.
+     */
     private static double part(double ax, double ay, double az, double bx, double by, double bz, double lo, double hi) {
         double B = bx * bx + by * by + bz * bz;
         if (B < 1e-12 || hi <= lo) return 0;
-        double ts = -(ax * bx + ay * by + az * bz) / B, c0 = 1 - (ax * ax + ay * ay + az * az) + B * ts * ts;
-        if (c0 <= 0) return 0;
-        double w = Math.sqrt(c0 / B), x0 = Math.max(lo, ts - w) - ts, x1 = Math.min(hi, ts + w) - ts;
+        double ts = -(ax * bx + ay * by + az * bz) / B, q2 = ax * ax + ay * ay + az * az - B * ts * ts;
+        if (q2 >= CUT * CUT) return 0;
+        double w = Math.sqrt((CUT * CUT - q2) / B), x0 = Math.max(lo, ts - w) - ts, x1 = Math.min(hi, ts + w) - ts;
         if (x1 <= x0) return 0;
-        return g(x1, c0, B) - g(x0, c0, B);
-    }
-
-    private static double g(double x, double c0, double B) {
-        return x * (c0 * c0 + B * x * x * (0.2 * B * x * x - 2.0 / 3 * c0));
+        double b = Math.sqrt(B);
+        return Math.exp(-q2) * 0.886226925 / b * (erf(b * x1) - erf(b * x0));
     }
 
     /** Optical depth of a lobe along o + t·d (relative to ground zero) over [ta, tb]. Copy {@code pallLobeTau}. */
@@ -188,16 +204,17 @@ final class WallLobes {
     static double at(Lobe l, double x, double y, double z) {
         if (l.a <= 0) return 0;
         double qx = x - l.x, qy = y - l.y, qz = z - l.z, r = qx * l.ex + qz * l.ez, t = -qx * l.ez + qz * l.ex;
-        double nr = r / (r >= 0 ? l.front : l.back), nt = t / l.across, ny = qy / l.up;
-        double c = Math.max(1 - nr * nr - nt * nt - ny * ny, 0);
-        return l.a * c * c;
+        double nr = r / (r >= 0 ? l.front : l.back), nt = t / l.across, ny = qy / l.up, q2 = nr * nr + nt * nt + ny * ny;
+        return q2 >= CUT * CUT ? 0 : l.a * Math.exp(-q2);
     }
 
     /** Children per parent and their share of its mass above the ground (presentation: the crest's lumps). */
     static final int CHILDREN = 3, PER_CELL = 1 + CHILDREN;
     static final double CHILD_SHARE = 0.1;
-    /** Child centre at this share of the parent's radii out from its centre, its radii this share of the parent's (presentation). */
+    /** Child centre at this share of the parent's seen radii out from its centre, its radii this share of the parent's (presentation). */
     static final double CHILD_OUT = 0.85, CHILD_SIZE = 0.4;
+    /** How far a child's kernel reaches out from its parent's centre, in the parent's kernel radii; at least the parent's own cut. */
+    static final double CHILD_REACH = Math.max(CUT, CHILD_OUT * SEEN + CHILD_SIZE * CUT);
     /**
      * Churn (presentation, Silo S3E09: features deform at ≈ 0.2 lobe widths per second, no coherent rotation): a child's direction swings
      * around its seat at this angular rate (rad/s) by {@link #CHURN_SWING} rad, its own phase per child.
@@ -223,14 +240,15 @@ final class WallLobes {
             double phase = 2 * Math.PI * h[2], swing = CHURN_SWING * Math.sin(CHURN * seconds + phase);
             double az = 2 * Math.PI * (c + h[0]) / CHILDREN + swing, el = Math.toRadians(20 + 50 * h[1]) + 0.5 * swing * (h[3] - 0.5);
             double dr = Math.cos(el) * Math.cos(az), dt = Math.cos(el) * Math.sin(az), dy = Math.sin(el);
-            // seat on the parent's ellipsoid (forward or back radius by side), out by CHILD_OUT
-            double ox = dr * (dr >= 0 ? p.front : p.back) * CHILD_OUT, ot = dt * p.across * CHILD_OUT, oy = dy * p.up * CHILD_OUT;
+            // seat on the parent's seen surface (forward or back radius by side), CHILD_OUT of the way out
+            double seat = CHILD_OUT * SEEN;
+            double ox = dr * (dr >= 0 ? p.front : p.back) * seat, ot = dt * p.across * seat, oy = dy * p.up * seat;
             double cx = p.x + ox * p.ex - ot * p.ez, cz = p.z + ox * p.ez + ot * p.ex, cy = p.y + oy;
             double r = Math.hypot(cx, cz), s = edge - r;
-            if (s <= 0.5) continue;
+            if (s <= 0.6) continue;
             double ex = cx / r, ez = cz / r;
-            double wide = CHILD_SIZE * Math.max(p.back, p.across), up = Math.max(CHILD_SIZE * p.up, 0.5);
-            double across = Math.min(wide, Math.sqrt(Math.max(edge * s, 0.25))), front = Math.min(wide, s);
+            double wide = CHILD_SIZE * Math.max(p.back, p.across), up = Math.max(CHILD_SIZE * p.up, 0.2);
+            double across = Math.min(wide, Math.sqrt(Math.max(edge * s, 0.04)) / CUT), front = Math.min(wide, s / CUT);
             double share = CHILD_SHARE * law / Math.max(above(-(cy - groundAt(ground, cx, cz)) / up), 0.05);
             double a = share / (HALF * across * up * (front + wide));
             out[n++] = new Lobe(cx, cy, cz, ex, ez, front, wide, across, up, a, p.wet, p.hard, p.sand, p.u, share);
@@ -252,13 +270,12 @@ final class WallLobes {
     static double ceiling(float[] slot) {
         double p = BlastWall.LOFT_GAIN * Math.max(slot[8], 1e-3);
         double local = slot[2] / (p >= 1 ? ua.zentix.incoming.nuclear.model.DustModel.loftTop(p) : 1) * BlastWall.heated(BlastWall.HANDOFF_TO * slot[8], slot[11]);
-        double up = TALL * (1 + 0.5 * SIZE);
-        return local * (LOW + RISE + up * (CHILD_OUT + CHILD_SIZE));
+        return local * (LOW + RISE + TALL / SEEN * (1 + 0.5 * SIZE) * CHILD_REACH);
     }
 
     /** Farthest a lobe reaches behind its centre, blocks: the back radius at the larger lattice. Copy {@code pallLobeReach}. */
     static double reach(float[] slot) {
-        return 2 * tile(slot)[0] * WIDE * (1 + 0.5 * SIZE) * (CHILD_OUT + CHILD_SIZE);
+        return 2 * tile(slot)[0] * WIDE / SEEN * (1 + 0.5 * SIZE) * CHILD_REACH;
     }
 
     /**

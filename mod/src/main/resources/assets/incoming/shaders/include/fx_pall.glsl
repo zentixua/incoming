@@ -1047,7 +1047,7 @@ void lobesBefore(float t, inout vec3 light, inout float transmit, inout float ha
         gLobeNext += 1;
         if (transmit < 0.005) continue;
         WallLobe L = pallLobeRecord(Sampler7, gLobeIndex[at], PallSlot0[0].xy, PallSlot1[0].xy);
-        float reach = max(max(L.R.x, L.R.y), max(L.R.z, L.R.w));
+        float reach = PALL_LOBE_CUT * max(max(L.R.x, L.R.y), max(L.R.z, L.R.w));
         float lo = max(gLobeFrom, gLobeT[at] - reach), hi = min(gLobeTo, gLobeT[at] + reach), want = min(1.0, 0.5 * gLobeTau[at]);
         for (int b = 0; b < 10; b++) {
             float mid = 0.5 * (lo + hi);

@@ -9,7 +9,7 @@ import java.util.Arrays;
  * The frame's dust-wall head lobes ({@link WallLobes}) as the shaders read them: rows of the frame's object table (the mushroom table,
  * RGBA32F, {@link MushroomField#WIDTH} texels wide — every texture unit is taken, so the lobes ride in it), built once per frame here.
  * <ul>
- *     <li>Records, {@link #RECORD} texels each from row {@link #ROW}: (centre from the eye, peak extinction), (radii forward, back,
+ *     <li>Records, {@link #RECORD} texels each from row {@link #ROW}: (centre from the eye, peak extinction), (kernel radii forward, back,
  *     across, up), (slot, wedge share, optical depth up through the other lobes, toward the sun through them), (water, hard, sand
  *     under it, 0). Cells of a lattice row are contiguous, {@link WallLobes#PER_CELL} records each (parent, children; empty ones zero).</li>
  *     <li>Directory, row {@link #DIR_ROW}: per slot and lattice ({@link #ENTRY} texels from texel 5 × (2 × slot + lattice)): (spacing,
@@ -138,7 +138,7 @@ public final class WallLobeTable {
             int o = texel(at);
             if (records[o + 3] <= 0) continue;
             float cx = records[o], cy = records[o + 1], cz = records[o + 2];
-            float r = Math.max(Math.max(records[o + 4], records[o + 5]), Math.max(records[o + 6], records[o + 7]));
+            float r = (float) WallLobes.CUT * Math.max(Math.max(records[o + 4], records[o + 5]), Math.max(records[o + 6], records[o + 7]));
             float dist = (float) Math.sqrt(cx * cx + cy * cy + cz * cz);
             int a0 = 0, a1 = TILES_X - 1, b0 = 0, b1 = TILES_Y - 1;
             if (dist > r) {
@@ -219,12 +219,13 @@ public final class WallLobeTable {
         int k = (int) records[o + 8];
         double gx = cx - centres[2 * k], gz = cz - centres[2 * k + 1], gr = Math.max(Math.hypot(gx, gz), 1e-3);
         double erx = gx / gr, erz = gz / gr;
-        // sunward point on the ellipsoid: R²l/√(lᵀR²l), a twentieth inside
+        // sunward point on the seen surface (SEEN kernel radii): R²l/√(lᵀR²l)
         double lr = sx * erx + sz * erz, lt = -sx * erz + sz * erx, rr = lr >= 0 ? records[o + 4] : records[o + 5];
         double nr = rr * rr * lr, nt = records[o + 6] * records[o + 6] * lt, ny = records[o + 7] * records[o + 7] * sy;
         double norm = Math.sqrt(Math.max(rr * rr * lr * lr + records[o + 6] * records[o + 6] * lt * lt + records[o + 7] * records[o + 7] * sy * sy, 1e-9));
-        double px = cx + 0.95 * (nr * erx - nt * erz) / norm, py = cy + 0.95 * ny / norm, pz = cz + 0.95 * (nr * erz + nt * erx) / norm;
-        double ty = cy + 0.95 * records[o + 7];
+        double seen = WallLobes.SEEN;
+        double px = cx + seen * (nr * erx - nt * erz) / norm, py = cy + seen * ny / norm, pz = cz + seen * (nr * erz + nt * erx) / norm;
+        double ty = cy + seen * records[o + 7];
         double sun = 0, up = 0;
         int j0 = (int) directory[de + 2], rows = (int) directory[de + 3];
         double angle = Math.atan2(gz, gx);
@@ -256,7 +257,7 @@ public final class WallLobeTable {
         float a = records[o + 3];
         if (a <= 0) return 0;
         float cx = records[o], cy = records[o + 1], cz = records[o + 2];
-        float far = Math.max(Math.max(records[o + 4], records[o + 5]), Math.max(records[o + 6], records[o + 7]));
+        float far = (float) WallLobes.CUT * Math.max(Math.max(records[o + 4], records[o + 5]), Math.max(records[o + 6], records[o + 7]));
         // quick miss: the path's nearest approach to the centre beyond the largest radius
         double qx = px - cx, qy = py - cy, qz = pz - cz, along = Math.max(0, Math.min(len, -(qx * dx + qy * dy + qz * dz)));
         double mx = qx + dx * along, my = qy + dy * along, mz = qz + dz * along;

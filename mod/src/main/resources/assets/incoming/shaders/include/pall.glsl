@@ -803,9 +803,9 @@ WallAt pallWallAt(sampler2D ground, mat4 S, mat4 V, vec4 G, vec4 W, vec3 p, floa
 // (NukePall) uses the Java field itself. A lobe is a parcel of dust lofted at the front, carried outward by the wind behind the front at
 // its height share and riding its share of the local top — thrown up at the front, lagging behind it, rising ever slower: the roll-back
 // is the lobes' own motion; its parent carries the law's head column above the ground over its lattice cell, three children on its upper
-// half share it (the crest's lumps, churning). Density A·(1 − q²)², q the normalized distance (forward, back, across, up radii): the
-// chord is closed-form, so every reader sums the same optical depths. The lofted front is opaque (σ ~5/block): what shows is each lobe's
-// rounded surface (19.11–20.11: noise inside the opaque front drew a smooth dune; dents moved its mass).
+// half share it (the crest's lumps, churning). Density A·e^(−q²), q the normalized distance (forward, back, across, up kernel radii):
+// the chord is closed-form, so every reader sums the same optical depths. The lofted front is opaque (σ ~5/block), so noise inside it
+// never shows and a dent moves its mass: what shows is each lobe's rounded, soft-edged surface.
 
 // Layout of the lobe rows in the frame's object table (the mushroom table, MushroomField.WIDTH texels wide; copy of WallLobeTable):
 // records of four texels from row PALL_LOBE_ROW; the directory row; the screen tiles' rows
@@ -827,6 +827,11 @@ const float PALL_LOBE_RISE = 0.2;
 const float PALL_LOBE_SIZE = 0.3;
 const float PALL_LOBE_CHILD_OUT = 0.85;
 const float PALL_LOBE_CHILD_SIZE = 0.4;
+// a lobe's density is Gaussian, A·e^(−q²), cut at q = PALL_LOBE_CUT kernel radii; the dense lobe shows to about PALL_LOBE_SEEN of them,
+// with a soft edge (its optical depth runs from 10 to 0.1 over a third of that radius: the turbulent fringe of dust); the presentation
+// sizes above are seen radii (WallLobes)
+const float PALL_LOBE_CUT = 3.0;
+const float PALL_LOBE_SEEN = 2.5;
 // walk samples per head span at most (pallLobeWalk): at half a spacing the 3×3 cells around each sample hold every lobe the ray crosses;
 // a walk stops behind this optical depth of lobes already passed
 const int PALL_LOBE_WALK = 40;
@@ -843,7 +848,7 @@ float pallLobeRow(int j) {
     return max(floor(6.2831853 * (float(j) + 0.5) + 0.5), 3.0);
 }
 
-// Lobe: centre (from the eye), outward unit at it, radii (forward, back, across, up; blocks), peak extinction A (1/block; 0 — none),
+// Lobe: centre (from the eye), outward unit at it, kernel radii (forward, back, across, up; blocks), peak extinction A (1/block; 0 — none),
 // slot, wedge share, optical depths through the other lobes up from its top and toward the sun from its sunward side (WallLobeTable.light),
 // the ground under it (water, hard, sand shares)
 struct WallLobe {
@@ -883,17 +888,24 @@ WallLobe pallLobeRecord(sampler2D t, int index, vec2 c0, vec2 c1) {
     return L;
 }
 
-// ∫(c0 − B·x²)² over the part of [lo, hi] (ray length) inside one half-lobe: normalized ray alpha + t·beta, closest at ts
+// Error function (Abramowitz and Stegun 7.1.26, error below 1.5·10⁻⁷; WallLobes.erf)
+float pallErf(float x) {
+    float a = abs(x), t = 1.0 / (1.0 + 0.3275911 * a);
+    float y = 1.0 - t * (0.254829592 + t * (-0.284496736 + t * (1.421413741 + t * (-1.453152027 + t * 1.061405429)))) * exp(-a * a);
+    return sign(x) * y;
+}
+
+// ∫e^(−q²) over the part of [lo, hi] (ray length) inside one half-lobe, within the cut: normalized ray alpha + t·beta, q² = q_min² +
+// |beta|²(t − ts)², so e^(−q_min²)·√π/(2|beta|)·(erf(|beta|(t1 − ts)) − erf(|beta|(t0 − ts))) (WallLobes.part)
 float pallLobePart(vec3 alpha, vec3 beta, float lo, float hi) {
     float B = dot(beta, beta);
     if (B < 1e-12 || hi <= lo) return 0.0;
-    float ts = -dot(alpha, beta) / B, c0 = 1.0 - dot(alpha, alpha) + B * ts * ts;
-    if (c0 <= 0.0) return 0.0;
-    float w = sqrt(c0 / B), x0 = max(lo, ts - w) - ts, x1 = min(hi, ts + w) - ts;
+    float ts = -dot(alpha, beta) / B, q2 = dot(alpha, alpha) - B * ts * ts;
+    if (q2 >= PALL_LOBE_CUT * PALL_LOBE_CUT) return 0.0;
+    float w = sqrt((PALL_LOBE_CUT * PALL_LOBE_CUT - q2) / B), x0 = max(lo, ts - w) - ts, x1 = min(hi, ts + w) - ts;
     if (x1 <= x0) return 0.0;
-    float g0 = x0 * (c0 * c0 + B * x0 * x0 * (0.2 * B * x0 * x0 - 0.6666667 * c0));
-    float g1 = x1 * (c0 * c0 + B * x1 * x1 * (0.2 * B * x1 * x1 - 0.6666667 * c0));
-    return g1 - g0;
+    float b = sqrt(B);
+    return exp(-q2) * 0.886226925 / b * (pallErf(b * x1) - pallErf(b * x0));
 }
 
 // Optical depth of lobe L along the ray o + t·d over [ta, tb]: its forward and back halves (split where the ray crosses the plane through
@@ -927,6 +939,11 @@ vec3 pallLobeNormal(WallLobe L, vec3 p) {
     return dot(g, g) > 1e-20 ? normalize(g) : vec3(0.0, 1.0, 0.0);
 }
 
+// How far a child's kernel reaches out from its parent's centre, in the parent's kernel radii, at least the parent's cut (WallLobes.CHILD_REACH)
+float pallLobeChildReach() {
+    return max(PALL_LOBE_CUT, PALL_LOBE_CHILD_OUT * PALL_LOBE_SEEN + PALL_LOBE_CHILD_SIZE * PALL_LOBE_CUT);
+}
+
 // Highest a lobe of slot V reaches above the relief (blocks): the law's highest local top (the lofting burst peaks at half the wedge,
 // pallLoftTop's maximum 1; the heated layer at the handoff's end) times the highest centre share and vertical reach of a child on its
 // parent (WallLobes.ceiling)
@@ -934,12 +951,12 @@ float pallLobeCeiling(mat4 V) {
     float p = PALL_WALL_LOFT_GAIN * max(V[2].x, 0.001), peak = 1.0;
     if (p >= 1.0) peak = pallLoftTop(p);
     return V[0].z / peak * pallWallHeated(PALL_WALL_HANDOFF_TO * V[2].x, V[2].w)
-            * (PALL_LOBE_LOW + PALL_LOBE_RISE + PALL_LOBE_TALL * (1.0 + 0.5 * PALL_LOBE_SIZE) * (PALL_LOBE_CHILD_OUT + PALL_LOBE_CHILD_SIZE));
+            * (PALL_LOBE_LOW + PALL_LOBE_RISE + PALL_LOBE_TALL / PALL_LOBE_SEEN * (1.0 + 0.5 * PALL_LOBE_SIZE) * pallLobeChildReach());
 }
 
 // Farthest a lobe of slot V reaches behind its centre (blocks): a child at the back of a parent of the larger lattice (WallLobes.reach)
 float pallLobeReach(mat4 V) {
-    return 2.0 * pallLobeTile(V).x * PALL_LOBE_WIDE * (1.0 + 0.5 * PALL_LOBE_SIZE) * (PALL_LOBE_CHILD_OUT + PALL_LOBE_CHILD_SIZE);
+    return 2.0 * pallLobeTile(V).x * PALL_LOBE_WIDE / PALL_LOBE_SEEN * (1.0 + 0.5 * PALL_LOBE_SIZE) * pallLobeChildReach();
 }
 
 #ifdef PALL_LOBE_COLLECT
