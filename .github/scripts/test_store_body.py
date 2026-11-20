@@ -21,7 +21,7 @@ STORE = ROOT / "docs/store"
 
 class StoreBodyTest(unittest.TestCase):
     def test_store_headers_use_the_shared_banner_and_keep_the_tagline(self):
-        banner = "https://raw.githubusercontent.com/zentixua/incoming/main/docs/media/hero.webp"
+        banner = "https://raw.githubusercontent.com/zentixua/incoming/main/docs/media/banner.jpg"
         for stem in ("description", "curseforge"):
             for suffix, tagline in ((".md", "Air strikes and air defense for Minecraft 1.21.1."),
                                     (".ru.md", "Удары с воздуха и ПВО для Minecraft 1.21.1.")):
@@ -306,8 +306,8 @@ class StoreBodyTest(unittest.TestCase):
                 if name in ("description", "curseforge"):
                     self.assertTrue(all(url.startswith(prefix) for url in images))
                 files = [url.removeprefix(prefix) for url in images]
-                self.assertEqual(files, ["docs/media/hero.webp", "docs/media/nuke-dusk.webp"])
-                self.assertTrue(set(files) <= gallery_files)
+                self.assertEqual(files, ["docs/media/banner.jpg", "docs/media/hero.webp", "docs/media/nuke-dusk.webp"])
+                self.assertTrue(set(files[1:]) <= gallery_files)
 
     def test_curseforge_manual_settings_match_upload_configuration(self):
         config = json.loads((STORE / "curseforge.json").read_text())

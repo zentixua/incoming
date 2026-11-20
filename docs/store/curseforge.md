@@ -1,6 +1,6 @@
 # Incoming: Air Strikes & Nukes
 
-![Cruise missile salvo over a factory in Project Zearth, seen from a fixed camera on a low terrace](https://raw.githubusercontent.com/zentixua/incoming/main/docs/media/hero.webp)
+![Incoming: a nuclear fireball rising over the horizon at night](https://raw.githubusercontent.com/zentixua/incoming/main/docs/media/banner.jpg)
 
 Air strikes and air defense for Minecraft 1.21.1.
 
@@ -11,6 +11,8 @@ It includes six weapons, air defense and sirens, with a designator for choosing 
 
 - **Explosions and aftermath:** fireballs light up nearby terrain, blasts break blocks and shatter windows, and dust and smoke rise and drift with the wind. Strikes can start fires; leftover fuel burns in the crater.
 - **Blackout:** strike a transformer substation to cut electric lights in its district.
+
+![Cruise missile salvo over a factory in Project Zearth, seen from a fixed camera on a low terrace](https://raw.githubusercontent.com/zentixua/incoming/main/docs/media/hero.webp)
 
 ### Nuclear strikes
 
