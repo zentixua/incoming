@@ -522,7 +522,7 @@ jobs:
           [ '${{ contains(needs.*.result, 'failure') || contains(needs.*.result, 'cancelled') }}' = false ]
           # Release: every check ran here, except mod checks reused from the run that passed them on this very tree.
           if [ '${{ github.event_name == 'workflow_dispatch' && inputs.release }}' = true ]; then
-            for result in '${{ needs.store.result }}' '${{ needs.rig.result }}' '${{ needs.replayscan.result }}' '${{ needs.lookgate.result }}' '${{ needs.stand.result }}'; do
+            for result in '${{ needs.knowledge.result }}' '${{ needs.store.result }}' '${{ needs.rig.result }}' '${{ needs.replayscan.result }}' '${{ needs.lookgate.result }}' '${{ needs.stand.result }}'; do
               [ "$result" != skipped ]
             done
             [ '${{ needs.reuse.result }}' = success ] || \
