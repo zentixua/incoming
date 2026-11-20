@@ -28,8 +28,9 @@ import java.util.function.LongSupplier;
  * (beyond the strike's own removals) in the order to drop them, their states, what lands as rubble, fluid beside them.
  * <p>
  * Server thread takes the snapshots in timed portions ({@link #snapshot}); the solve runs on the game's background
- * workers ({@code Util.backgroundExecutor}), at most {@link #MAX_SOLVES} at a time across the server ({@link #reserve}):
- * a salvo's snapshots wait for a slot instead of piling up. Chunks not ready are missing from the window: solid mass
+ * workers ({@code Util.backgroundExecutor}). At most {@link #MAX_SOLVES} collapses hold snapshots, a solve or an
+ * unconsumed result at a time across the server ({@link #tryReserve}): a salvo's collapses wait for a slot instead of
+ * piling up. Chunks not ready are missing from the window: solid mass
  * that supports, as at a nuclear window edge; no chunk is loaded. Sable plot-grid chunks are missing too (craft blocks
  * are not the world).
  */
@@ -58,12 +59,36 @@ public final class StrikeSupport {
     private final long[] needed;
     private final Long2ObjectOpenHashMap<ChunkShot> shots = new Long2ObjectOpenHashMap<>();
     private int taken;
-    /** Holds one of {@link #MAX_SOLVES} until the solve ends or is abandoned before it starts. */
-    private boolean reserved;
+    /**
+     * Holds one of {@link #MAX_SOLVES} from construction until the result is consumed ({@link #release}) or the collapse
+     * is abandoned ({@link #cancel}): snapshots, a queued or running solve and its result all count. Released once.
+     */
+    private final java.util.concurrent.atomic.AtomicBoolean released = new java.util.concurrent.atomic.AtomicBoolean();
+    /** Removals the solve used ({@link #start}): those the snapshot still showed empty. */
+    private it.unimi.dsi.fastutil.longs.LongSet lost = it.unimi.dsi.fastutil.longs.LongSets.EMPTY_SET;
     @Nullable
     private CompletableFuture<Result> solving;
 
     /**
+     * Take one of the server's {@link #MAX_SOLVES} slots for a new collapse: false — wait. The collapse constructed
+     * after a true return owns it.
+     */
+    public static boolean tryReserve() {
+        while (true) {
+            int n = SOLVES.get();
+            if (n >= MAX_SOLVES) return false;
+            if (SOLVES.compareAndSet(n, n + 1)) return true;
+        }
+    }
+
+    /** Free this collapse's slot: its result was consumed, or it is abandoned. Only the first call frees. */
+    public void release() {
+        if (released.compareAndSet(false, true)) SOLVES.decrementAndGet();
+    }
+
+    /**
+     * Owns a slot taken by {@link #tryReserve}.
+     *
      * @param removedAt  positions the strike removed ({@link BlockPos#asLong}); a position removed twice keeps its first state
      * @param removedWas states before removal, parallel
      */
@@ -99,35 +124,18 @@ public final class StrikeSupport {
         return solve.length;
     }
 
-    /** Positions the strike removed ({@link BlockPos#asLong}), for checks before the fall. */
-    public it.unimi.dsi.fastutil.longs.LongSet removedPositions() {
-        return removed.keySet();
-    }
-
-    /** Take a solve slot ({@link #MAX_SOLVES}) unless held already: false — wait. */
-    public boolean reserve() {
-        if (reserved) return true;
-        while (true) {
-            int n = SOLVES.get();
-            if (n >= MAX_SOLVES) return false;
-            if (SOLVES.compareAndSet(n, n + 1)) return reserved = true;
-        }
-    }
-
-    private void unreserve() {
-        if (!reserved) return;
-        reserved = false;
-        SOLVES.decrementAndGet();
+    /** Removals the solve took as lost support ({@link BlockPos#asLong}), for the check before the fall. */
+    public it.unimi.dsi.fastutil.longs.LongSet lostPositions() {
+        return lost;
     }
 
     /**
-     * Server thread, with a slot ({@link #reserve}): snapshot chunks until {@code budgetNanos} on {@code clock} passes (at
+     * Server thread: snapshot chunks until {@code budgetNanos} on {@code clock} passes (at
      * least one); once all are taken, start the solve.
      *
      * @return snapshots taken in this call
      */
     public int snapshot(LongSupplier clock, long budgetNanos) {
-        if (!reserved) throw new IllegalStateException("collapse snapshot without a solve slot");
         long start = clock.getAsLong();
         int n = 0;
         while (taken < needed.length) {
@@ -159,11 +167,14 @@ public final class StrikeSupport {
         return solving.get();
     }
 
-    /** Abandon (strike cancelled, server stopping): drop the snapshots; a solve already running ends into the void. */
+    /**
+     * Abandon (strike cancelled, server stopping): drop the snapshots and the slot; a solve already running ends into the
+     * void (milliseconds over the limit at most).
+     */
     public void cancel() {
-        if (solving == null) unreserve();
-        else solving.cancel(false);
+        if (solving != null) solving.cancel(false);
         shots.clear();
+        release();
     }
 
     private void start() {
@@ -187,9 +198,9 @@ public final class StrikeSupport {
         Long2ObjectOpenHashMap<ChunkShot> shots = new Long2ObjectOpenHashMap<>(this.shots);
         this.shots.clear();
         long[] solve = this.solve;
+        this.lost = lost.keySet();
         if (!fresh || lost.isEmpty()) {
             solving = CompletableFuture.completedFuture(Result.EMPTY);
-            unreserve();
             return;
         }
         java.util.function.Supplier<Result> task = () -> {
@@ -198,19 +209,17 @@ public final class StrikeSupport {
             } finally {
                 // this worker's traversal buffers (a tall window: megabytes) are not kept between strikes
                 Collapse.releaseBuffers();
-                SOLVES.decrementAndGet();
             }
         };
-        // the slot now belongs to the task, released when it ends
-        reserved = false;
-        // a GameTest server ticks without pauses: a worker's wall time would race the test's tick deadline
-        if (level.getServer() instanceof net.minecraft.gametest.framework.GameTestServer) solving = CompletableFuture.completedFuture(task.get());
-        else {
+        // a GameTest server ticks without pauses: a worker's wall time would race the test's tick deadline (a bench measuring
+        // the server thread as in the game sets incoming.collapse.worker)
+        if (level.getServer() instanceof net.minecraft.gametest.framework.GameTestServer && !Boolean.getBoolean("incoming.collapse.worker")) {
+            solving = CompletableFuture.completedFuture(task.get());
+        } else {
             try {
                 solving = CompletableFuture.supplyAsync(task, net.minecraft.Util.backgroundExecutor());
             } catch (java.util.concurrent.RejectedExecutionException e) {
-                // workers shut down (server stopping): the task never runs to free its slot
-                SOLVES.decrementAndGet();
+                // workers shut down (server stopping)
                 solving = CompletableFuture.failedFuture(e);
             }
         }
@@ -324,6 +333,12 @@ public final class StrikeSupport {
         double s = Debris.spread(fall);
         return new double[]{RuinPlanner.grain(x, y, z, 61) * s, RuinPlanner.grain(x, y, z, 67) * s};
     }
+
+    /**
+     * Chunk readiness radius around a write that removes a non-vanilla block entity: its removal may follow chains (a
+     * Create belt reads up to 20 blocks), as for nuclear ruins ({@code RuinPlan#neighbourRadius}).
+     */
+    public static final int MODDED_REACH = RuinPlanner.REACH;
 
     /** Load-bearing state (server thread): anything with collision but leaves and liquids ({@link Blast.Props#bearing}). */
     public static boolean bearing(BlockState st) {

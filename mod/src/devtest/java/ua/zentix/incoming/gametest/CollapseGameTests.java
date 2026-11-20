@@ -133,10 +133,15 @@ public final class CollapseGameTests {
             at.add(h.absolutePos(e.getKey()).asLong());
             was.add(e.getValue());
         }
+        if (!StrikeSupport.tryReserve()) throw new IllegalStateException("no collapse solve slot");
         StrikeSupport s = new StrikeSupport(h.getLevel(), at, was);
-        if (!s.reserve()) throw new IllegalStateException("no collapse solve slot");
         while (!s.started()) s.snapshot(System::nanoTime, Long.MAX_VALUE);
-        StrikeSupport.Result r = s.result();
+        StrikeSupport.Result r;
+        try {
+            r = s.result();
+        } finally {
+            s.release();
+        }
         java.util.List<BlockPos> out = new java.util.ArrayList<>();
         for (int i = 0; i < r.at().length; i++) {
             if (!StrikeSupport.bearing(r.was()[i])) continue;
@@ -352,10 +357,13 @@ public final class CollapseGameTests {
         quiet(h);
         boolean was = IncomingConfig.SERVER.collapse.get();
         IncomingConfig.SERVER.collapse.set(collapse);
+        // solves on the background workers, as in the game: the impact lane is what the server thread pays
+        System.setProperty("incoming.collapse.worker", "true");
         ServerLevel level = h.getLevel();
         java.util.List<net.minecraft.world.level.ChunkPos> forced = new java.util.ArrayList<>();
         StrikeGameTests.afterTest(h, () -> {
             IncomingConfig.SERVER.collapse.set(was);
+            System.clearProperty("incoming.collapse.worker");
             for (var c : forced) level.setChunkForced(c.x, c.z, false);
         });
         BlockPos o = h.absolutePos(new BlockPos(0, 0, 0));

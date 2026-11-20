@@ -106,9 +106,11 @@ final class StrikeCollapse implements UnitQueue.Job {
         if (!area.ready(level)) return false;
         if (support == null) {
             if (area.removedAt().isEmpty() || !IncomingConfig.SERVER.blockDamage.get()) return true;
+            // the slot first: a waiting collapse holds nothing but its strike area
+            if (!StrikeSupport.tryReserve()) return false;
             support = new StrikeSupport(level, area.removedAt(), area.removedWas());
         }
-        return support.reserve();
+        return true;
     }
 
     @Override
@@ -237,7 +239,7 @@ final class StrikeCollapse implements UnitQueue.Job {
         }
         solved = result.solved();
         // a support built back into the hole while the solve ran: the plan no longer describes the world
-        for (long p : support.removedPositions()) {
+        for (long p : support.lostPositions()) {
             BlockPos at = BlockPos.of(p);
             if (Terrain.ready(level, at) && StrikeSupport.bearing(level.getBlockState(at))) {
                 result = emptyResult();
@@ -280,7 +282,8 @@ final class StrikeCollapse implements UnitQueue.Job {
             int i = next++;
             BlockPos p = BlockPos.of(at[i]);
             BlockState st = result.was()[i];
-            if (kept.contains(at[i]) || !writable(level, p.getX(), p.getZ(), safe) || level.getBlockState(p) != st) {
+            if (kept.contains(at[i]) || !writable(level, p.getX(), p.getZ(), safe) || level.getBlockState(p) != st
+                    || modded(st) && !Terrain.readyAround(level, Vec3.atCenterOf(p), 16 * StrikeSupport.MODDED_REACH)) {
                 changed++;
             } else {
                 spill(level, p, st);
@@ -330,14 +333,29 @@ final class StrikeCollapse implements UnitQueue.Job {
     }
 
     /**
-     * A container's contents come out where it stood before it goes (its block lands as rubble or dust like the rest);
+     * A container's contents come out where it stood before it goes (its block lands as rubble or dust like the rest):
+     * a vanilla {@link Container}, or any other inventory through the loader's item-handler capability (a Create vault);
      * an unopened loot chest keeps its table unrolled, as the crater's removal does ({@link ColumnScar#replace}).
      */
     private static void spill(ServerLevel level, BlockPos p, BlockState st) {
         if (!st.hasBlockEntity()) return;
         BlockEntity be = level.getBlockEntity(p);
-        if (!(be instanceof Container c) || be instanceof RandomizableContainer r && r.getLootTable() != null) return;
-        Containers.dropContents(level, p, c);
+        if (be == null || be instanceof RandomizableContainer r && r.getLootTable() != null) return;
+        if (be instanceof Container c) {
+            Containers.dropContents(level, p, c);
+            return;
+        }
+        var items = level.getCapability(net.neoforged.neoforge.capabilities.Capabilities.ItemHandler.BLOCK, p, st, be, null);
+        if (items == null) return;
+        for (int i = 0; i < items.getSlots(); i++) {
+            var stack = items.extractItem(i, items.getStackInSlot(i).getCount(), false);
+            if (!stack.isEmpty()) Containers.dropItemStack(level, p.getX(), p.getY(), p.getZ(), stack);
+        }
+    }
+
+    /** A non-vanilla block entity: its removal may read far ({@link StrikeSupport#MODDED_REACH}). */
+    private static boolean modded(BlockState st) {
+        return st.hasBlockEntity() && !"minecraft".equals(net.minecraft.core.registries.BuiltInRegistries.BLOCK.getKey(st.getBlock()).getNamespace());
     }
 
     /**
