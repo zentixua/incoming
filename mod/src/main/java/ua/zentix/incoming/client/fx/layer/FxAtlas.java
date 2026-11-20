@@ -39,7 +39,9 @@ import java.util.Optional;
 public final class FxAtlas extends SimplePreparableReloadListener<NativeImage[]> {
     public static final FxAtlas INSTANCE = new FxAtlas();
 
-    private static final int CELL = 64, COLS = 16, ROWS = 132;
+    /** Atlas cell, pixels: smoke particle sprites are whole cells ({@code fx.fsh}: {@code SOFT_CELL}). */
+    static final int CELL = 64;
+    private static final int COLS = 16, ROWS = 132;
     /** Sheet size, pixels. */
     static final int WIDTH = COLS * CELL, HEIGHT = ROWS * CELL;
     /**

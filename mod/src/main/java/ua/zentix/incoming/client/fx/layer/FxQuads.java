@@ -124,12 +124,16 @@ public final class FxQuads {
     /**
      * The next quads are smoke and dust particles: as {@link #nearestTexels}, but a texel larger than a screen pixel is
      * sampled smoothly and the faint edge fades over the same 0.1 threshold ({@code fx.fsh}: {@code softTexels},
-     * {@code particleCut}). A billow is not a block: its 64-pixel picture beside the eye drew flat texel squares 40–60
-     * pixels wide with staircase edges.
+     * {@code particleCut}): a billow beside the eye is smooth, without texel squares.
      */
     public void softTexels() {
         nearest = SOFT_TEXELS;
         opacity = 0;
+    }
+
+    /** Texture-mode byte ({@code Normal.y}) of the next quads. */
+    public byte textureMode() {
+        return nearest;
     }
 
     /** {@code Normal.y} of {@link #softTexels}: above the particle threshold 0.75, below the nearest-texel 0.95. */

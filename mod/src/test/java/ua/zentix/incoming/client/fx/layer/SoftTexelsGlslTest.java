@@ -3,15 +3,10 @@ package ua.zentix.incoming.client.fx.layer;
 import org.junit.jupiter.api.Test;
 import ua.zentix.incoming.client.nuclear.GlslFunction;
 
-import java.awt.image.BufferedImage;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.util.ArrayList;
-import java.util.List;
 import java.util.Map;
-
-import javax.imageio.ImageIO;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -65,26 +60,35 @@ class SoftTexelsGlslTest {
     }
 
     @Test
-    void bilinearReadsAtTheSpriteEdgeTakeOnlyTransparentTexels() throws IOException {
-        // smoothly sampled level 0 reads half a texel past the sprite: the smoke row's own borders, its row neighbours and
-        // the slots below it (FxAtlas: smoke row 0; fire, flash, glow, disc, spark, flake, paper in row 1) are transparent
-        Path tex = Path.of("src/main/resources/assets/incoming/textures");
-        List<String> slots = new ArrayList<>();
-        for (int i = 0; i < 16; i++) slots.add(String.format(java.util.Locale.ROOT, "fx/particle/smoke_%02d", i));
-        for (int i = 0; i < 8; i++) slots.add(String.format(java.util.Locale.ROOT, "fx/particle/fire_%02d", i));
-        slots.addAll(List.of("fx/particle/flash", "far/glow", "far/disc", "fx/particle/spark", "fx/particle/flake",
-                "fx/particle/paper"));
-        for (String slot : slots) {
-            BufferedImage image = ImageIO.read(tex.resolve(slot + ".png").toFile());
-            int w = image.getWidth(), h = image.getHeight();
-            for (int x = 0; x < w; x++) {
-                assertEquals(0, image.getRGB(x, 0) >>> 24, slot + " top " + x);
-                assertEquals(0, image.getRGB(x, h - 1) >>> 24, slot + " bottom " + x);
-            }
-            for (int y = 0; y < h; y++) {
-                assertEquals(0, image.getRGB(0, y) >>> 24, slot + " left " + y);
-                assertEquals(0, image.getRGB(w - 1, y) >>> 24, slot + " right " + y);
-            }
+    void smoothReadStaysInsideTheSpritesCell() throws IOException {
+        // fx.fsh clamps the smooth read into a SOFT_CELL square: every smoke sprite must be exactly one such atlas cell
+        String fsh = Files.readString(FX);
+        java.util.regex.Matcher m = java.util.regex.Pattern.compile("const float SOFT_CELL = ([0-9.]+);").matcher(fsh);
+        assertTrue(m.find());
+        assertEquals(FxAtlas.CELL, Double.parseDouble(m.group(1)), 0);
+        for (int i = 0; i < 16; i++) {
+            FxAtlas.Sprite s = FxAtlas.smoke(i);
+            double x0 = s.u0() * FxAtlas.WIDTH, x1 = s.u1() * FxAtlas.WIDTH, y0 = s.v0() * FxAtlas.HEIGHT,
+                    y1 = s.v1() * FxAtlas.HEIGHT;
+            assertEquals(0, x0 % FxAtlas.CELL, 1e-3, "smoke " + i);
+            assertEquals(0, y0 % FxAtlas.CELL, 1e-3, "smoke " + i);
+            assertEquals(FxAtlas.CELL, x1 - x0, 1e-3, "smoke " + i);
+            assertEquals(FxAtlas.CELL, y1 - y0, 1e-3, "smoke " + i);
         }
+    }
+
+    @Test
+    void particlesWriteTheirTextureMode() {
+        // regular smoke: soft; explicitly smooth smoke and any smooth particle: 0; a pixel-art piece: the nearest texel
+        assertEquals(FxQuads.SOFT_TEXELS, mode(ua.zentix.incoming.client.fx.particle.Fx.Kind.SMOKE, false));
+        assertEquals(0, mode(ua.zentix.incoming.client.fx.particle.Fx.Kind.SMOKE, true));
+        assertEquals(127, mode(ua.zentix.incoming.client.fx.particle.Fx.Kind.SPARK, false));
+        assertEquals(0, mode(ua.zentix.incoming.client.fx.particle.Fx.Kind.SPARK, true));
+    }
+
+    private static byte mode(ua.zentix.incoming.client.fx.particle.Fx.Kind kind, boolean smooth) {
+        FxQuads out = new FxQuads();
+        ua.zentix.incoming.client.fx.particle.FxParticle.texels(out, kind, smooth);
+        return out.textureMode();
     }
 }

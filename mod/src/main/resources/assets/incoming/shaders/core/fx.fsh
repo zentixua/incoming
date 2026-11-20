@@ -90,18 +90,15 @@ float sixLight(vec3 a, vec3 b, vec3 l) {
     return side * q.x + vertical * q.y + depth * q.z;
 }
 
-// Ground reflectance for the diffuse light from below (grass and soil in the visible, ~0.2: the usual default of
-// isotropic-sky irradiance models, est.)
-const float GROUND_ALBEDO = 0.2;
-
 // Diffuse light of the puff's six maps (sum — of all six, tilt — the top-minus-bottom difference along world up in map
 // axes): an isotropic sky over the upper hemisphere and the ground's reflection under it (Liu & Jordan 1963: a face
 // tilted by θ sees (1 + cos θ)/2 of the sky and (1 − cos θ)/2 of the ground). On a map axis e with cos c to the
 // vertical the squared-cosine weight is (1 + c)/6 from the sky and (1 − c)/6·albedo from the ground (exact at c = 0, ±1),
-// normalised to the six-side mean for uniform light. The plain six-side mean lights the underside of black smoke as
+// normalised to the six-side mean for uniform light. Ground reflectance — PALL_LAND (pall.glsl), the land albedo of the
+// nuclear pall's light from below. The plain six-side mean lights the underside of black smoke as
 // brightly as the sky lights its top
 float skyDome(float sum, float tilt) {
-    return (sum + (1.0 - GROUND_ALBEDO) / (1.0 + GROUND_ALBEDO) * tilt) / 6.0;
+    return (sum + (1.0 - PALL_LAND) / (1.0 + PALL_LAND) * tilt) / 6.0;
 }
 
 // Downscaled copies of the sheet (FxAtlas.MIPS)
@@ -190,8 +187,9 @@ vec4 fireFrames(vec2 uv, vec2 dx, vec2 dy, float m) {
 
 // Smoke and dust particles (FxQuads.softTexels): a texel larger than a screen pixel is sampled smoothly — from one pixel
 // per texel (level 0) to two (level −1). Sampled by the nearest texel, a 64-pixel billow beside the eye draws flat texel
-// squares 40–60 pixels wide with staircase edges. Bilinear reads at the sprite edge take only transparent texels: smoke
-// sprites and their atlas neighbours have transparent borders (SoftTexelsGlslTest)
+// squares 40–60 pixels wide with staircase edges. The smooth read is clamped into the sprite's atlas cell (SOFT_CELL =
+// FxAtlas.CELL), so a resource-pack sprite without a transparent border never takes a neighbour's texels
+const float SOFT_CELL = 64.0;
 float softTexels(float level) {
     return clamp(-level, 0.0, 1.0);
 }
@@ -215,12 +213,19 @@ vec4 particle(vec2 uv, vec2 dx, vec2 dy, float soft, out float lod) {
     float level = 0.5 * log2(max(max(dot(px, px), dot(py, py)), 1e-12));
     lod = max(level, 0.0);
     if (lod >= 1.0) return textureGrad(Sampler0, uv, dx, dy);
-    vec2 size1 = size * 0.5;
-    vec4 a = textureLod(Sampler0, (floor(uv * size) + 0.5) / size, 0.0);
-    vec4 b = textureLod(Sampler0, (floor(uv * size1) + 0.5) / size1, 1.0);
-    vec4 near = mix(a, b, lod);
     float blend = softTexels(level) * soft;
-    return blend > 0.0 ? mix(near, textureLod(Sampler0, uv, 0.0), blend) : near;
+    // the smooth read stays within the sprite's own atlas cell: half a texel inside its edge (smoke slots are whole cells)
+    vec2 cell = floor(uv * size / SOFT_CELL) * SOFT_CELL;
+    vec4 fine = blend > 0.0 ? textureLod(Sampler0, clamp(uv * size, cell + 0.5, cell + SOFT_CELL - 0.5) / size, 0.0)
+            : vec4(0.0);
+    if (blend >= 1.0) return fine;
+    vec4 a = textureLod(Sampler0, (floor(uv * size) + 0.5) / size, 0.0);
+    vec4 near = a;
+    if (lod > 0.0) {
+        vec2 size1 = size * 0.5;
+        near = mix(a, textureLod(Sampler0, (floor(uv * size1) + 0.5) / size1, 1.0), lod);
+    }
+    return blend > 0.0 ? mix(near, fine, blend) : near;
 }
 
 // Halo far/glow (tools/gen_particles.py, far_glow) at distance r from the middle in fractions of the half-size: exp(−(r/0.42)²),
@@ -267,7 +272,7 @@ void main() {
         vec4 a;
         vec3 b;
         sixFrames(texCoord0, dx, dy, opacity, a, b);
-        // sky light: direct (sun, moon) — by sides, diffuse — the average over six; both — against the average over six
+        // sky light: direct (sun, moon) — by sides, diffuse — sky above and ground reflection below (skyDome); both — against the average over six
         // sides per puff (the vertex colour — a thick layer of matter in diffuse sky light, R∞): towards the sun the translucent
         // edge is brighter, on the sun's side the dense puff is darker (forward scattering). Fireballs — by sides, in fractions of light
         // at the eye, and not brighter than the fire on screen (FxLights). The sum — in linear, to the screen — exponent 1/2.2
