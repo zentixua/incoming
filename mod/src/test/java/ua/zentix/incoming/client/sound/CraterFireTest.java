@@ -40,29 +40,6 @@ class CraterFireTest {
         assertEquals(0, CraterFire.heat(ua.zentix.incoming.client.fx.FuelBurn.at(m.pool, net.minecraft.core.BlockPos.ZERO), m.poolSeconds + 2, distance));
     }
 
-    /**
-     * A missile crater pool's roar at 20 and 100 m (open meadow path at night, ear 1.62 m) from the measured pool-flame
-     * efficiency ({@link Sources#POOL_FLAME_EFFICIENCY}): the level a player hears beside the crater. The estimated 10⁻⁶
-     * gave 8.2 dB more at every distance.
-     */
-    @Test
-    void missilePoolRoarsAtItsMeasuredLevel() {
-        CloudModel m = model(WeaponType.MISSILE);
-        Vec3 ear = new Vec3(0, 65.62, 0);
-        double lwA = Sources.poolFlame(m.poolWatts, Spectra.BLAST_FIRE);
-        double[] at = new double[2];
-        int i = 0;
-        for (double d : new double[]{20, 100}) {
-            Vec3 pos = new Vec3(d, 64, 0);
-            Propagation.Path path = Propagation.Path.over(pos.distanceTo(ear), ua.zentix.incoming.strike.Hearing.height(pos, ear), Propagation.Weather.NIGHT);
-            at[i++] = Propagation.level(lwA - Spectra.BLAST_FIRE.aWeighting(), Spectra.BLAST_FIRE, path, null);
-        }
-        System.out.printf(java.util.Locale.ROOT, "missile pool %.2f MW: LwA %.1f dBA, %.1f dBA at 20 m, %.1f dBA at 100 m%n", m.poolWatts / 1e6, lwA, at[0], at[1]);
-        assertEquals(116.5, lwA, 0.3, "missile pool sound power, dBA");
-        assertEquals(78.8, at[0], 0.3, "missile pool at 20 m, dBA");
-        assertEquals(63.7, at[1], 0.3, "missile pool at 100 m, dBA");
-    }
-
     /** Fire volume {@code watts} W in {@code d} m on an open path at night - as in {@link CraterFire#tick} (without an obstacle). */
     private static float volume(double watts, double d, Sources.Source source) {
         return Sources.volume(source.power(Sources.poolFlame(watts, source.spectrum())), new Vec3(d, 64, 0), new Vec3(0, 65.62, 0), Propagation.Weather.NIGHT);
@@ -100,13 +77,14 @@ class CraterFireTest {
     }
 
     /**
-     * A single fire sounds the same as in 6763a1c8 (average loop volume according to the law of flame): the files are louder
+     * A single fire sounds the same with the current files as with the 6763a1c8 file at the same flame law (the law's own
+     * change is {@code CraterFireLevelTest}): the files are louder
      *  (on the ceiling), and the volume in the game is the same, at any distance. It sounds like the real average volume of files at the
      *  volume that the client gives; for 6763a1c8 - its spec (spectrum, −21,6 LUFS) and the average of its files according to the measurement
      *  (−21,726, −21,704, −21,718, −21,712 - circle review 5; for power −21,715).
      */
     @Test
-    void aSingleFireSoundsAsIn6763a1c8() throws java.io.IOException {
+    void aSingleFireSoundsAsWithThe6763a1c8File() throws java.io.IOException {
         Spectrum before = Spectrum.of(-24.1, -6.5, -6.2, -7.6, -6.3, 0.0, -3.8, -18.7);
         Sources.Source then = new Sources.Source(Double.NaN, before, -21.6);
         double file = SoundAssetsTest.loopMean("blast.fire"), fileThen = -21.715;
@@ -122,8 +100,8 @@ class CraterFireTest {
     /**
      * Whether a fire can be heard is determined by the sound at the ear, not the volume of the file (review R11): the real decision to launch
      *  ({@link CraterFire#volume}, then {@link Quarters#plays}) for 0,2, 2 and 20 MW 5 m – 12 km at night the same file
-     *  on the ceiling and the same file collected on 8,1 dB quieter; nowhere is the fire that sounded in 6763a1c8 (the volume of the file
-     * −21,6 LUFS is not quieter than {@code AUDIBLE}) is now silent; the border is where the fire drowns in the background in all octaves.
+     *  on the ceiling and the same file collected on 8,1 dB quieter; at the same flame law, nowhere is a fire that sounded with the 6763a1c8
+     * file (−21,6 LUFS, gated on {@code AUDIBLE}) now silent; the border is where the fire drowns in the background in all octaves.
      */
     @Test
     void audibilityIsAtTheEarNotInTheFile() {
@@ -137,14 +115,14 @@ class CraterFireTest {
                 boolean now = plays(CraterFire.volume(Sources.BLAST_FIRE, watts, at, ear, Propagation.Weather.NIGHT));
                 assertEquals(now, plays(CraterFire.volume(quiet, watts, at, ear, Propagation.Weather.NIGHT)), watts + " W in " + d + " m: the file is quieter - the solution is the same");
                 boolean wasPlaying = volume(watts, d, then) >= VoiceBudget.AUDIBLE;
-                assertTrue(!wasPlaying || now, watts + " W in " + d + " m: in 6763a1c8 it sounded - it still sounds");
+                assertTrue(!wasPlaying || now, watts + " W in " + d + " m: with the 6763a1c8 file at the same law it sounded - it still sounds");
                 double gain = Sources.gain(Sources.BLAST_FIRE.power(Sources.poolFlame(watts, Spectra.BLAST_FIRE)), at, ear, Propagation.Weather.NIGHT);
                 assertEquals(gain > 0, now, watts + " W in " + d + " m: sounds until it drowns in the background");
                 if (now) last = d;
                 if (wasPlaying) lastThen = d;
             }
-            System.out.printf(java.util.Locale.ROOT, "fire %.0f W heard to %.0f m (6763a1c8: %.0f m)%n", watts, last, lastThen);
-            assertTrue(last > 300 && last >= lastThen, watts + " W: audible beyond 300 m and no closer than in 6763a1c8");
+            System.out.printf(java.util.Locale.ROOT, "fire %.0f W heard to %.0f m (6763a1c8 file at the same law: %.0f m)%n", watts, last, lastThen);
+            assertTrue(last > 300 && last >= lastThen, watts + " W: audible beyond 300 m and no closer than with the 6763a1c8 file");
         }
     }
 

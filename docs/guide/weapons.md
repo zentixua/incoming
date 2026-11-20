@@ -20,8 +20,8 @@ Weapon details: [Shahed](#shahed), [Lancet](#lancet), [cruise missile](#cruise-m
 
 Fuel burning in a crater produces a continuous roar and crackle from where it burns. It fades as the fuel runs out; the
 recording does not fade and restart every few seconds. Its level and arrival time depend on the heat output and the path
-to you. The level follows measured open flames: a burning cruise missile crater is about 79 dBA at 20 blocks
-and 64 dBA at 100 blocks over grass.
+to you. A fully burning cruise missile crater is modeled at about 79 dBA at 20 blocks and 64 dBA at 100
+blocks over open grass at night, from sound measurements of open gas flames.
 
 A fireball grows from the ground and rises smoothly, drifting with the wind together with its smoke. While it burns,
 orange flame with bright cores churns among dark soot, and the fuel's soot appears as the fuel burns; as it cools, it

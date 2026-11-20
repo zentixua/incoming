@@ -78,20 +78,20 @@ public final class Sources {
     public static final Source NUKE_LAUNCH = new Source(Double.NaN, Spectra.NUKE_LAUNCH, Spectra.NUKE_LAUNCH_LUFS, Loudness.ENGINE_LUFS);
 
     /**
-     * Burning-city flame noise: 10⁻⁶ of heat release becomes sound (est.). Measured open turbulent diffusion flames
-     * radiate 1.5·10⁻⁷ to 3.6·10⁻⁶ of their heat as sound, more the faster the flame's flow ({@link #POOL_FLAME_EFFICIENCY});
-     * a city fire storm draws strong inflow winds, so it takes a value inside that range, not the slow pool end.
+     * Burning-city flame noise: 10⁻⁶ of heat release becomes sound (est.; no measured fire-storm sound level). It lies
+     * inside the range measured on gas-flare diffusion flames, 1.5·10⁻⁷ to 3.6·10⁻⁶, rising with flow
+     * ({@link #POOL_FLAME_EFFICIENCY}).
      */
     public static final double FLAME_EFFICIENCY = 1e-6;
     /**
-     * Pool-fire flame noise: 1.5·10⁻⁷ of heat release becomes sound. Measured on open turbulent diffusion flames of known
-     * heat release: S. Smith, B. Duck, J. Roberts, S. Randolph (Zeeco), R. Keith, G. Porter (Hoover &amp; Keith), “Noise
+     * Pool-fire flame noise: 1.5·10⁻⁷ of heat release becomes sound (est.: no measured pool-fire sound level found; this is
+     * the nearest measured open diffusion flame, used as a proxy). Measured on gas-flare flames of known heat release: S. Smith, B. Duck, J. Roberts, S. Randolph (Zeeco), R. Keith, G. Porter (Hoover &amp; Keith), “Noise
      * Testing and Prediction Methods for Multi-Point Ground Flares”, AFRC Industrial Combustion Symposium, 2016: sound
      * power from two Type 1 meters at 30.5 and 61 m, agreeing within 1.5 dB (tables 1–2), divided by heat release from the
      * metered fuel flow (fig. 9). Efficiency rises with fuel flow through the fixed tip, from 1.5·10⁻⁷ (propane, lowest
      * flow, 122.4 dB re 1 pW, so ≈ 11 MW) to 3.6·10⁻⁶ (natural gas, highest flow); values read from the figure's vector
-     * data. A crater pool fire is a buoyant flame on a thin fuel layer, slower than any of those gas jets: its nearest
-     * measured point is the lowest-flow one, taken here (an upper bound for the slower pool flame). Smith and Kilham's open
+     * data, all from one pressure-assisted flare tip. A crater pool fire is a buoyant flame on a thin fuel layer, slower
+     * than those gas jets, so the proxy is the lowest-flow point; fuel, geometry and flow regime differ. Smith and Kilham's open
      * turbulent burner flames, 1.2–8.2·10⁻⁸ (J. Acoust. Soc. Am. 35 (1963), 715–724, as tabulated by the same paper,
      * table 5), are of the same order.
      */
