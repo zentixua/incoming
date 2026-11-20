@@ -1007,8 +1007,9 @@ float lobeDensity(WallLobe L, vec3 p) {
 // light), from where it begins until it turns opaque: light (premultiplied, rgb) and its transmittance (a); `at` — eye distance where it
 // shows (half its opacity). Each sample is lit as dust in a volume: the sun through the lobe toward it (its noise-free chord, the
 // lumps' own shadow one tap toward it), the neighbouring lobes (record) and the pall over it (its depth along the beam), with Wrenninge's
-// multiple-scattering octaves (2013: Σ 0.5ⁱ·e^(−0.5ⁱτ)·p(0.5ⁱg)); the sky dome (the pall's own two streams at its depth over the lobe) through
-// the lobe upward and the lit ground through it downward, diffuse light fading as e^(−kτ) (pallK), never below WALL_FLOOR of them;
+// multiple-scattering octaves (2013: Σ 0.5ⁱ·e^(−0.5ⁱτ)·p(0.5ⁱg)); diffuse light along the shortest way out, the lobe's outward normal: the
+// sky dome (the pall's own two streams at its depth over the lobe) over its upper share, the lit ground over its lower share, fading
+// as e^(−kτ) (pallK), never below WALL_FLOOR of them;
 // the ball as a beam; fires below; lamps. Colour: the dust of the soil lofted there with the pall's soot, its thick-layer spectrum to
 // WALL_OCHRE (presentation)
 vec4 lobeMarch(sampler2D ground, mat4 S, mat4 V, vec4 R, vec4 W, vec4 G, vec4 H, WallLobe L, int index, float ta, float tb, out float at) {
@@ -1030,7 +1031,7 @@ vec4 lobeMarch(sampler2D ground, mat4 S, mat4 V, vec4 R, vec4 W, vec4 G, vec4 H,
     float g = mix(PALL_DUST_G, PALL_MIST_G, L.wet), cs = dot(dir, sunDir);
     vec3 kd = vec3(pallK(w.r, g), pallK(w.g, g), pallK(w.b, g));
     vec3 sunIn = sun * exp(-s.tau / max(sunDir.y, 0.12) - L.sun);
-    vec3 dome = mix(above, vec3(dot(above, LUMA)), 0.5 * WALL_HORIZON_WHITE) * exp(-kd * L.up);
+    vec3 dome = above * exp(-kd * L.up);
     vec3 ground0 = mix(PALL_LAND, PALL_SEA, L.wet) * (sun * max(sunDir.y, 0.0) * exp(-s.tau / max(sunDir.y, 0.12)) + above);
     vec3 toLight = pallBall(S, G, H) - p0;
     float toLen = length(toLight);
@@ -1064,11 +1065,14 @@ vec4 lobeMarch(sampler2D ground, mat4 S, mat4 V, vec4 R, vec4 W, vec4 G, vec4 H,
                 float tauC = pallLobeTau(L, p, lightDir, 0.0, reach), cc = dot(dir, lightDir);
                 lit += cap * 0.25 * (exp(-tauC) * hg(g, cc) + 0.5 * exp(-0.5 * tauC) * hg(0.5 * g, cc));
             }
-            // diffuse: the dome through the lobe above, the lit ground and the fires through it below
-            float tauU = pallLobeTau(L, p, vec3(0.0, 1.0, 0.0), 0.0, reach), tauD = pallLobeTau(L, p, vec3(0.0, -1.0, 0.0), 0.0, reach);
-            vec3 amb = 0.5 * (dome * exp(-kd * tauU) + ground0 * exp(-kd * tauD));
+            // diffuse: what is around the lobe enters along its shortest way out, its outward normal (the lobe's own density gradient):
+            // the sky dome over the normal's upper share, whiter toward the horizon, the lit ground and the fires over its lower share
+            vec3 n = pallLobeNormal(L, p);
+            float tauOut = pallLobeTau(L, p, n, 0.0, reach), upShare = 0.5 + 0.5 * n.y;
+            vec3 sky = mix(dome, vec3(dot(dome, LUMA)), WALL_HORIZON_WHITE * (1.0 - max(n.y, 0.0)));
+            vec3 amb = (sky * upShare + ground0 * (1.0 - upShare)) * exp(-kd * tauOut);
             amb = max(amb, WALL_FLOOR * 0.5 * (dome + ground0));
-            lit += amb + min(0.5 * fires * exp(-kd * tauD), gFlame) + lamps;
+            lit += amb + min(fires * (1.0 - upShare) * exp(-kd * tauOut), gFlame) + lamps;
             float tr = exp(-sigma * min(ds, tb - t));
             if (T > 0.5 && T * tr <= 0.5) at = t;
             light += T * (1.0 - tr) * w * tint * lit;

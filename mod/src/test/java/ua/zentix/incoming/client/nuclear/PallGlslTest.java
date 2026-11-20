@@ -580,8 +580,9 @@ class PallGlslTest {
                 && march.contains("float tauS = pallLobeTau(L, p, sunDir, 0.0, reach) + lump * 0.12 * tile;")
                 && march.contains("float ms = exp(-tauS) * hg(g, cs) + 0.5 * exp(-0.5 * tauS) * hg(0.5 * g, cs) + 0.25 * exp(-0.25 * tauS) * hg(0.25 * g, cs);"),
                 "the sun - not through the lobe, its neighbours and the pall with the octaves");
-        // the dome through the lobe above, the lit ground below, as diffuse light fades in dust, with the daylight floor
-        assertTrue(march.contains("vec3 amb = 0.5 * (dome * exp(-kd * tauU) + ground0 * exp(-kd * tauD));")
+        // diffuse light along the shortest way out (the lobe's outward normal), sky over its upper share, ground below, with the floor
+        assertTrue(march.contains("float tauOut = pallLobeTau(L, p, n, 0.0, reach), upShare = 0.5 + 0.5 * n.y;")
+                && march.contains("vec3 amb = (sky * upShare + ground0 * (1.0 - upShare)) * exp(-kd * tauOut);")
                 && march.contains("amb = max(amb, WALL_FLOOR * 0.5 * (dome + ground0));")
                 && march.contains("vec3 ground0 = mix(PALL_LAND, PALL_SEA, L.wet) * (sun * max(sunDir.y, 0.0) * exp(-s.tau / max(sunDir.y, 0.12)) + above);"),
                 "the sky dome and the lit ground");
