@@ -597,7 +597,7 @@ public final class NukePall {
      * presentation: sunlight scattered down the head's billowy outer skin lights its faces (copy of {@code WALL_SUN_FACE}): this share of
      * the sun on a horizontal surface, reflected as by a thick layer of the dust (R∞), reaches the face through its skin.
      */
-    static final double WALL_SUN_FACE = 1.0;
+    static final double WALL_SUN_FACE = 1.5;
     /** presentation: the thick layer's spectrum to this power, toward the footage's ochre (copy of {@code WALL_OCHRE}). */
     static final double WALL_OCHRE = 1.6;
 

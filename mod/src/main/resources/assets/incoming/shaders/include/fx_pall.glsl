@@ -376,6 +376,10 @@ const float WALL_LOBE = 1.75;
 const float WALL_CHURN = 0.25;
 // presentation: vertical noise extent of the whole layer height, noise units (a quarter is one lobe): one row of lobes, crests on top
 const float WALL_ROW = 0.3;
+// presentation: head noise tiles around the ring (four lobes each: 96 lobes, 1 Mt 3 km out 196 blocks, 1.9 end tops; the footage's crests
+// are 1.5–2 band heights wide) and how many times longer the lobes are along the radius than across (wallNoise)
+const float WALL_RING = 24.0;
+const float WALL_STRETCH = 3.0;
 // presentation: the billows' self-shadow at this share of the optical depth between them: at full depth the lobes (several layer tops
 // wide) shadow each other to near black, p90/p10 of the head's luminance 20–30; the footage's soft brown clefts are 2.8–4.8
 const float WALL_SHADE = 0.7;
@@ -385,7 +389,7 @@ const float WALL_HORIZON_WHITE = 0.6;
 // presentation: sunlight scattered down the head's billowy outer skin lights its faces (a cloud's shaded side is lit by its sunlit
 // neighbouring billows; the slab model above lights a face only through the dust over it): this share of the sun on a horizontal
 // surface, reflected as by a thick layer of the dust (R∞, which falls faster in blue: warm), reaches the face through its skin
-const float WALL_SUN_FACE = 1.0;
+const float WALL_SUN_FACE = 1.5;
 // presentation: the thick layer's spectrum (R∞/ω, blue/red 0.55) to this power, toward the footage's ochre (Silo S3E09 and the sketch:
 // saturation 0.45–0.67, hue 30–40°; with the law's spectrum alone the face measured 0.37 at hue 26°, 19.11 frames)
 const float WALL_OCHRE = 1.6;
@@ -401,8 +405,13 @@ vec3 wallLobes(mat4 V) {
 // edges), z fine billows (multiplier, mean 1; fine is their share). The warp is at a scale incommensurate with the tile (0.43: no
 // repetition grid from above on a kilometres-wide ring) and moves with time (WALL_CHURN): the billows churn
 vec3 wallNoise(vec3 q, float size, float fine, float t, vec3 offset) {
-    vec3 n3 = vec3(q.x / size, q.y * WALL_ROW, q.z / size) + offset;
-    vec2 w = texture(PallNoise, n3 * 0.43 + vec3(0.31, 0.5, 0.67 + t * WALL_CHURN)).rg - 0.5;
+    // ring coordinates (presentation): around the ring a whole number of noise tiles (seamless, the texture repeats), along the radius
+    // stretched: lobes long along the radius, so the wall's top, the highest dust along hundreds of metres of view from the ground, keeps
+    // their rounded crests instead of averaging them out (19.11: a flat or dune-shell top); the parcel's radius, so they ride the dust
+    float r = length(q.xz), a = r > 1e-3 ? atan(q.z, q.x) / 6.2831853 : 0.0;
+    vec3 n3 = vec3(a * WALL_RING, q.y * WALL_ROW, r / (size * WALL_STRETCH)) + offset;
+    // warp at 11/24 of the scale: whole tiles around the ring too
+    vec2 w = texture(PallNoise, n3 * 0.4583333 + vec3(0.31, 0.5, 0.67 + t * WALL_CHURN)).rg - 0.5;
     n3 += vec3(w.x, 0.0, w.y) * 0.3;
     vec2 n = textureLod(PallNoise, n3, 0.0).rg;
     float detail = fine > 0.0 ? fineAt(n3) : 1.0;
@@ -410,7 +419,7 @@ vec3 wallNoise(vec3 q, float size, float fine, float t, vec3 offset) {
 }
 
 // Head at h (pallWallAt) with billows: extinction, 1/block. Billows as pall (pallShape: mean 1, dense dust more continuous — fill by density
-// relative to dense, thinner toward the top: the top is a row of rounded crests), fine billows within while resolved (fine; 0 for shadow
+// relative to dense, thinner toward the top: the top breaks into the lobes' rounded crests), fine billows within while resolved (fine; 0 for shadow
 // billows). Noise rides the dust parcels (pallWallOrigin): thrown up at the front, lagging behind it, rising slower; lobes of the layer's
 // size (wallLobes: lobes; t — seconds since the detonation, the churn)
 float wallAt(mat4 V, WallAt h, float fine, float dense, vec3 lobes, float t) {

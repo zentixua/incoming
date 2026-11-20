@@ -243,7 +243,9 @@ Ruins and everything in `nuclear/world/` are in `nuclear-world.md`.
   head's share of the layer light's sky in `scattered`) and the lit ground (albedo × (sun + sky)) through the dust below,
   each e^(−kτ); presentation: sunlight down the billowy skin, `WALL_SUN_FACE` × sun × R∞(ω′)/ω (warm). Billow
   self-shadow × `WALL_SHADE` (0.7). The head's albedo takes the thick layer's spectrum (R∞(ω′)/ω relative to its brightest
-  channel: what leaves dense dust has scattered many times; blue/red 0.55, not ω's 0.84). The head keeps its fine sub-octave (lumps riding the parcels). Java copy `NukePall.dustLight` (`PallGlslTest.headIsLitFromAllSides`,
+  channel: what leaves dense dust has scattered many times; raw R∞ blue/red 0.53, R∞/ω 0.63 for the reference dust)
+  to the power `WALL_OCHRE` 1.6 (presentation, toward the footage's ochre). Lobes in ring coordinates (`wallNoise`:
+  `WALL_RING` 24 tiles around the ring, `WALL_STRETCH` 3 along the radius) so the top's crests survive the view-long maximum. The head keeps its fine sub-octave (lumps riding the parcels). Java copy `NukePall.dustLight` (`PallGlslTest.headIsLitFromAllSides`,
   `BlastWallTest.denseFrontFaceIsLitDust`).
   Rays sample the head more densely (`pallWallSpans`: ring from dust edge to 1.5 wedges and terrain-map height layer,
   step one eighth its height, at most `steps` extra steps). Same light as pall, light-path depth follows wedge shape

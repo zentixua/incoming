@@ -375,7 +375,13 @@ class PallGlslTest {
                 && flat.contains("float local = h.P.y * pallWallTop(u, V[2].x) * pallWallHeated(ph, V[2].w);")
                 && flat.contains("vec3 o = pallWallOrigin(h.rel, h.z, ph, local, V[1].x);"), "head noise - not at the dust parcel");
         String noise = body(read("include/fx_pall.glsl"), "vec3 wallNoise(").replaceAll("\\s+", " ");
-        assertTrue(noise.contains("vec3 n3 = vec3(q.x / size, q.y * WALL_ROW, q.z / size) + offset;"), "head noise - not the parcel's coordinates");
+        assertTrue(noise.contains("vec3 n3 = vec3(a * WALL_RING, q.y * WALL_ROW, r / (size * WALL_STRETCH)) + offset;") && noise.contains("float r = length(q.xz),"),
+                "head noise - not the parcel's ring coordinates");
+        // whole noise tiles around the ring for the lobes, their warp (11/24) and fine detail (×4): no seam at ±π
+        double ring = scalar(read("include/fx_pall.glsl"), "WALL_RING");
+        assertEquals(Math.rint(ring), ring, 0);
+        assertEquals(Math.rint(ring * 0.4583333), ring * 0.4583333, 1e-4);
+        assertTrue(noise.contains("n3 * 0.4583333"), "the warp's scale - not whole tiles around the ring");
         String at = body(read("include/fx_pall.glsl"), "float wallAt(").replaceAll("\\s+", " ");
         assertTrue(at.contains("wallNoise(o, lobes.x, fine, t, mix(even, other, odd))") && at.contains("wallNoise(o, lobes.y, fine, t, mix(other, even, odd))"),
                 "a tile's noise offset - by its place in the octave pair, not its parity: every billow pops at the boundary (review of #678)");
@@ -596,7 +602,8 @@ class PallGlslTest {
                 && wall.contains("vec3 face = 0.5 * horizon + WALL_SUN_FACE * rInf / max(w, vec3(1e-3)) * PallSunLight * max(sunDir.y, 0.0);"), "the horizon sky, the sun down the skin and the lit ground");
         assertTrue(wall.contains("vec3 below = mix(PALL_LAND, PALL_SEA, h.wet) * (PallSunLight * max(sunDir.y, 0.0) + PallSkyLight);"), "the ground below - not sun and sky on it");
         assertTrue(wall.contains("vec3 ru = 2.0 * k / (3.0 * (1.0 - w * g)), rInf = (1.0 - ru) / (1.0 + ru);"), "the skin's R-inf - not the slab's (PallLight.reflectance)");
-        assertTrue(wall.contains("s.albedo += hd * w * thick;") && wall.contains("s.side += hd * w * thick *"), "the head's colour - not a thick layer's");
+        assertTrue(wall.contains("s.albedo += hd * w * thick;") && wall.contains("s.side += hd * w * thick *")
+                && wall.contains("vec3(WALL_OCHRE))"), "the head's colour - not a thick layer's toward ochre");
         assertTrue(fx.replaceAll("\\s+", " ").contains("vec3 emit = s.albedo * (field + beams + fire + lamps) + s.side;"), "the side light - not emitted");
         assertTrue(wall.contains("* WALL_SHADE;"), "billow self-shadow - not softened");
     }
