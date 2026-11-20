@@ -249,7 +249,7 @@ times and the pall's budget are not frame costs: frame cost belongs to the GPU a
   sha512 from open-skies `pack/mods/*.pw.toml`); do not write `iris.properties`, shaders off. Cloud DH builds little:
   frame share covered by LOD beyond render distance in `SCENARIO … depth:`.
 - Accessibility welcome screen/unfocused pause break headless client; `client_scenario.sh` writes own `options.txt`.
-- Headless client works in cloud without KWin/shaders (Gradle creates `run/scenario/logs` for gc.log):
+- Headless client works in cloud without KWin/shaders (Gradle creates `run/scenario/logs` for gc.log and the JFR ring):
   `INCOMING_SCENARIO=launch LIBGL_ALWAYS_SOFTWARE=1 xvfb-run -a -s "-screen 0 1280x720x24" ./gradlew runClientScenario
   -PmcModsDir=run/ci-mods` (mods from `tools/fetch_runtime_mods.py`, 3–6 fps). llvmpipe builds chunk sections slowly:
   after abrupt viewpoint change, entities may remain absent for several frames.

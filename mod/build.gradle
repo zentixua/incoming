@@ -60,6 +60,9 @@ repositories {
 def mcModsDir = file(project.findProperty('mcModsDir')
         ?: providers.exec { commandLine 'python3', file('../tools/paths.py').path, 'MODS' }.standardOutput.asText.get().trim())
 def runtimeModPatterns = ['create-1.21.1-*.jar', 'sable-neoforge-1.21.1-*.jar', 'create-aeronautics-bundled-1.21.1-*.jar']
+// spark (the community profiler, in the host's pack) in hand-run clients, servers, scenarios and the sandbox: /spark
+// profiler and tickmonitor without a rerun; not in GameTest and flight scenarios, which run as in CI
+def sparkModPatterns = ['spark-*-neoforge.jar']
 // client scenario with Sodium and Iris, as on the host (tools/client_scenario.sh nuke shaders)
 // (and LambDynamicLights if the directory has it, as in the pack: a held torch lights the nuclear pall, MovingLight)
 def shaderModPatterns = System.getenv('INCOMING_SHADERS') ? ['sodium-neoforge-*.jar', 'iris-neoforge-*.jar', 'lambdynamiclights-*.jar'] : []
@@ -155,10 +158,6 @@ neoForge {
             // effects-layer GPU time per pass and part (drain frames, LayerTimes): INCOMING_FX_DRAIN=1 tools/sandbox.sh
             // start
             if (System.getenv('INCOMING_FX_DRAIN')) systemProperty 'incoming.fx.drain', 'true'
-            // garbage collector pauses — to tell them apart from slow code (run/scenario/logs/gc.log)
-            jvmArgument "-Xlog:gc:file=${project.file("${scenarioDir}/logs/gc.log").absolutePath}:time,uptime"
-            // optional JFR profile: INCOMING_JFR=1 tools/client_scenario.sh nuke → run/scenario/logs/scenario.jfr
-            if (System.getenv('INCOMING_JFR')) jvmArgument "-XX:StartFlightRecording=filename=${project.file('run/scenario/logs/scenario.jfr').absolutePath},settings=profile"
         }
         server {
             server()
@@ -175,10 +174,6 @@ neoForge {
             systemProperty 'incoming.stress.players', System.getenv('INCOMING_STRESS_PLAYERS') ?: '3'
             systemProperty 'incoming.stress.restart', System.getenv('INCOMING_STRESS_RESTART') ?: 'false'
             systemProperty 'incoming.stress.probes', System.getenv('INCOMING_STRESS_PROBES') ?: 'true'
-            jvmArgument "-Xlog:gc:file=${project.file('run/stress/server/gc.log').absolutePath}:time,uptime"
-            // optional server JFR profile, as for the client scenario: INCOMING_JFR=1 tools/stress.sh →
-            // run/stress/server/stress.jfr
-            if (System.getenv('INCOMING_JFR')) jvmArgument "-XX:StartFlightRecording=filename=${project.file('run/stress/server/stress.jfr').absolutePath},settings=profile"
             // server and three clients on one machine: without a limit each JVM takes ¼ of memory, and the kernel kills
             // a client. INCOMING_RIG_JVM=artem — server with the JVM as in Artem's game (8 GB, generational ZGC), only
             // where there is enough memory (VPS): 8 GB of server and three 2 GB clients would not fit in the 15 GB
@@ -242,6 +237,14 @@ neoForge {
         configureEach {
             systemProperty 'forge.logging.markers', 'REGISTRIES'
             logLevel = org.slf4j.event.Level.INFO
+            // Always-on telemetry in every run (AGENTS.md, "One run answers everything"; deep-debug skill): a JFR ring of
+            // the last 30 minutes, dumped on exit to <run>/logs/run.jfr (default settings, about 1 % CPU;
+            // INCOMING_JFR=profile records with the profile settings), and the GC and safepoint log <run>/logs/gc.log
+            def jfr = System.getenv('INCOMING_JFR') == 'profile' ? 'profile' : 'default'
+            jvmArguments.add(gameDirectory.map { d ->
+                "-XX:StartFlightRecording=name=incoming,settings=${jfr},disk=true,maxage=30m,maxsize=256m,dumponexit=true,filename=${new File(d.asFile, 'logs/run.jfr').absolutePath}".toString()
+            })
+            jvmArguments.add(gameDirectory.map { d -> "-Xlog:gc*,safepoint:file=${new File(d.asFile, 'logs/gc.log').absolutePath}:time,uptime".toString() })
         }
     }
     mods {
@@ -252,9 +255,10 @@ neoForge {
     }
 }
 // -Xlog:gc writes to logs/ of the run directory, and the JVM does not create that directory itself nor start without it
-// (fresh clone, cloud)
-tasks.matching { it.name == 'runClientScenario' }.configureEach { doFirst { project.file("${scenarioDir}/logs").mkdirs() } }
-tasks.matching { it.name == 'runStressServer' }.configureEach { doFirst { project.file('run/stress/server').mkdirs() } }
+// (fresh clone, cloud); rigLaunch scripts create it themselves
+tasks.matching { it.name.startsWith('run') && it.hasProperty('gameDirectory') }.configureEach { task ->
+    task.doFirst { new File(task.gameDirectory.get().asFile, 'logs').mkdirs() }
+}
 neoForge.addModdingDependenciesTo(sourceSets.devtest)
 // unit tests of code that holds data in Minecraft classes (Vec3, NBT), without starting the game
 neoForge.addModdingDependenciesTo(sourceSets.test)
@@ -395,8 +399,8 @@ def copyRuntimeMods = { String runDir ->
         if (sandbox && runDir == 'scenario') from(configurations.sandboxMods)
         if (runDir == 'scenario') from(configurations.viewFxMods)
         if (runDir == 'gametest' && project.hasProperty('withLss')) from(configurations.lssGameTestMods)
-        def patterns = runDir == 'scenario' ? (sandbox ? [] : runtimeModPatterns) + shaderModPatterns + dhModPatterns + voxyModPatterns + lssModPatterns
-                : runDir in ['gametest', 'scenario-sweep', 'scenario-record'] ? runtimeModPatterns + lithiumModPatterns : runtimeModPatterns
+        def patterns = runDir == 'scenario' ? (sandbox ? [] : runtimeModPatterns) + sparkModPatterns + shaderModPatterns + dhModPatterns + voxyModPatterns + lssModPatterns
+                : runDir in ['gametest', 'scenario-sweep', 'scenario-record'] ? runtimeModPatterns + lithiumModPatterns : runtimeModPatterns + sparkModPatterns
         // without from() patterns it would take the whole mods directory; the patterns are in this from(): in the
         // each-closure an include would go to the task root and would filter out the sandbox jar as well
         if (patterns) from(mcModsDir, { CopySpec spec -> spec.include(patterns) } as Action<CopySpec>)

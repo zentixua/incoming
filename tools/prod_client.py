@@ -156,7 +156,11 @@ def launch_args(dest, props, username, game_extra, extra_jvm=()):
 
     jvm = ["-Xms512m", "-Xmx8196m", "-Duser.language=en",
            f"-Dforgewrapper.librariesDir={libs}", f"-Dforgewrapper.installer={installer}", f"-Dforgewrapper.minecraft={client_jar}",
-           f"-Xlog:gc:file={os.path.join(dest, 'logs', 'gc.log')}:time,uptime"]
+           # always-on telemetry, as every Gradle run (build.gradle): JFR ring dumped on exit, GC and safepoint log
+           "-XX:StartFlightRecording=name=incoming,settings="
+           + ("profile" if os.environ.get("INCOMING_JFR") == "profile" else "default")
+           + f",disk=true,maxage=30m,maxsize=256m,dumponexit=true,filename={os.path.join(dest, 'logs', 'run.jfr')}",
+           f"-Xlog:gc*,safepoint:file={os.path.join(dest, 'logs', 'gc.log')}:time,uptime"]
     jvm += [f"-D{k}={v}" for k, v in props.items()]
     jvm += mcm.get("+jvmArgs", [])
     # its arguments - last: of the two -Xmx JVM takes the last one

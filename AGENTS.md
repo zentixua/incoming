@@ -227,20 +227,26 @@ actually works, fix the real cause.
   (`mod/run/renderdoc/`, Python analysis); edit the numerically identified cause, not a presumed model.
 - **One run answers everything** (Artem, 18.11): before any run that observes the system (test, measurement,
   reproduction), decide every question it must answer and record everything that could bear on them, so one run is
-  enough to name the cause by number. A guess is not a result; a rerun only to add a forgotten probe is waste.
+  enough to name the cause by number. A guess is not a result; a rerun only to add a forgotten probe is waste. Every
+  run records by default (Artem, 20.11): JFR ring and GC log (`build.gradle`, all runs), spark in dev clients, mod
+  timing markers, full logs; read them before any rerun.
   Tooling for the mod: the `deep-debug` skill. **Study before coding** (Artem, 20.11): for a look or performance
   defect, one such run on our frame and on the reference footage, then the design from those numbers. **No guess-tuning** (Artem, 20.11): a defect that survives three rounds
   of tweaks means the model is wrong; stop tweaking and change the model.
 - **One GPU session at a time** (`tools/gpu_lease.sh`: other sessions' GPU clients/`--gpu` jobs refuse, naming holder;
   at most two sessions queue, a third is refused); finish with `tools/sandbox.sh stop`, then `tools/gpu_lease.sh
   release`. CPU clients need no lease, limited only by memory (`soft_gl.sh` admission).
-- **One independent review round** by the other vendor (if unavailable, a fresh session of the same vendor), effort
-  by the rule below. The reviewer reads the diff and surrounding code, not the PR description or the author's
-  conclusions. Each agent only where it is strong (Artem, 19.11): Codex reviews code (correctness, tests, budgets,
-  concurrency), never frames, WAV, logos or design; a Claude session judges those. Only serious errors block:
-  wrong behavior, crash, tick-budget or frame-cost breach; the author fixes minor findings without another round.
-  Reviewers also report hacks, unsourced constants, duplication and stray edits. Second round only for serious
-  first-round fixes, no third.
+- **Independent review** by the other vendor (if unavailable, a fresh session of the same vendor), effort high (Artem,
+  20.11). The reviewer reads the diff and surrounding code, not the PR description or the author's conclusions, and
+  leaves its reproducing probe as a file, which becomes the regression test. Each agent only where it is strong
+  (Artem, 19.11): Codex reviews code (correctness, tests, budgets, concurrency) and plans before large or physics code,
+  never frames, WAV, logos or design; a Claude session judges those. Serious = player-visible wrong behavior, crash,
+  data loss (worlds, inventories, configs), tick/frame budget breach, each with a scenario and a number or probe; rare
+  configurations are minor unless common setups hit them. Reviewers also report hacks, unsourced constants,
+  duplication and stray edits; the author fixes minor findings without another round. At most two rounds (the second
+  checks the first round's fixes and new serious defects in them); a defect class surviving both means the approach
+  changes, not a third round. Merge only without an open serious finding: fixed, or recorded in the PR as an explicit
+  limit. Before each release, one Codex audit of the whole `main` diff since the last release.
 - **Effort** (Artem, 19.11), for every agent, task and review: the working range is low/medium/high.
   **medium** is the default. **high** for work that needs deep reasoning: diagnosis of an unknown cause, physics
   laws, rendering, performance, concurrency, and reviews of such changes. **low** for mechanical work: renames,

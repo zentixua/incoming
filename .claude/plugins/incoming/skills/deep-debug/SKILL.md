@@ -38,11 +38,14 @@ Do not use it for: an approved change without a problem. That has its own CI and
 Where: netcup (Crafty test server 25571 or `./gradlew runServer`), not the cloud: JFR `ExecutionSample` barely works
 in the cloud VM. Never touch the play servers (25565–25567) or their worlds without Artem's word.
 
-- **JFR for the whole run** (`-XX:StartFlightRecording=settings=profile,filename=…,dumponexit=true`):
-  `ExecutionSample` on Server thread, GC and safepoint pauses, `ThreadPark`/`JavaMonitorEnter`/`ThreadSleep` > 10 ms,
-  `CPULoad`, `ThreadCPULoad` (thread running or waiting), `ObjectAllocationSample`, file IO.
-- **GC log**: `-Xlog:gc*,safepoint:file=gc.log:time,uptime`.
-- **spark**: `tickmonitor` and the server profiler. Remember: tickmonitor measures intervals between tick **starts**,
+- **Always on in every Gradle run and `prod_client.py`** (build.gradle): a JFR ring of the last 30 minutes dumped on
+  exit to `<run>/logs/run.jfr` and the GC/safepoint log `<run>/logs/gc.log`; while running, `jcmd <pid> JFR.dump
+  name=incoming filename=…` saves the window around an event without stopping. `INCOMING_JFR=profile` for the profile
+  settings: `ExecutionSample` on Server thread, GC and safepoint pauses, `ThreadPark`/`JavaMonitorEnter`/`ThreadSleep`
+  > 10 ms, `CPULoad`, `ThreadCPULoad` (thread running or waiting), `ObjectAllocationSample`, file IO. A Crafty server
+  needs the same flags added to its JVM arguments.
+- **spark** (copied into dev clients, servers, scenarios and the sandbox from the host's instance): `tickmonitor` and
+  the server profiler. Remember: tickmonitor measures intervals between tick **starts**,
   not tick length.
 - **Mod log**: DEBUG for `ua.zentix.incoming`, `-Dincoming.nukeDiag=true` for the nuke. Lines: "Mod work over 30 s"
   (tick, mod lanes, "the rest", unload debt), "Server thread stalled" (StallWatch, stacks), "Can't keep up",

@@ -302,6 +302,19 @@ jbr() {
 
 stop() {
   running || { echo "sandbox is not running"; return 0; }
+  # the client JVM first, alone: its shutdown dumps the JFR ring (logs/run.jfr); stopping the unit at once also takes
+  # KWin and Xwayland, and the client dies with its display before the dump
+  local u cg p java=()
+  for u in $(systemctl --user list-units "$UNIT-*" --state=active --no-legend --plain | awk '{print $1}'); do
+    cg=$(systemctl --user show "$u" -p ControlGroup --value)
+    for p in $(cat /sys/fs/cgroup"$cg"/cgroup.procs /sys/fs/cgroup"$cg"/*/cgroup.procs 2>/dev/null); do
+      [ "$(cat /proc/"$p"/comm 2>/dev/null)" = java ] && java+=("$p")
+    done
+  done
+  if [ ${#java[@]} -gt 0 ]; then
+    kill -TERM "${java[@]}" 2>/dev/null
+    for _ in $(seq 300); do kill -0 "${java[@]}" 2>/dev/null || break; sleep 0.1; done
+  fi
   systemctl --user stop "$UNIT-*"
   echo "sandbox stopped"
 }
