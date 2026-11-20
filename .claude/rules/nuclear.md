@@ -244,8 +244,12 @@ Ruins and everything in `nuclear/world/` are in `nuclear-world.md`.
   each e^(−kτ); presentation: sunlight down the billowy skin, `WALL_SUN_FACE` × sun × R∞(ω′)/ω (warm). Billow
   self-shadow × `WALL_SHADE` (0.7). The head's albedo takes the thick layer's spectrum (R∞(ω′)/ω relative to its brightest
   channel: what leaves dense dust has scattered many times; raw R∞ blue/red 0.53, R∞/ω 0.63 for the reference dust)
-  to the power `WALL_OCHRE` 1.6 (presentation, toward the footage's ochre). Lobes in ring coordinates (`wallNoise`:
-  `WALL_RING` 24 tiles around the ring, `WALL_STRETCH` 3 along the radius) so the top's crests survive the view-long maximum. The head keeps its fine sub-octave (lumps riding the parcels). Java copy `NukePall.dustLight` (`PallGlslTest.headIsLitFromAllSides`,
+  to the power `WALL_OCHRE` 1.6 (presentation, toward the footage's ochre). Head shape (20.11, representation change): the law's mean head
+  dented by Worley domes (`wallDomes`, noise channel B as the cap's `mushLobes`; ring coordinates: `WALL_RING` 24 tiles around
+  the ring, `WALL_STRETCH` 3 along the radius, parcel coordinates, slow churn), dents only, at most `WALL_DOME` 0.4 of the local top,
+  density / (1 − dip) so the mass stays; light from above through the dented head (`wallChordBillows`, also the sun path); the
+  face's sun term by the dented surface's normal (density gradient, three taps). A noise multiplier inside the opaque dense
+  front never showed (r12–r14: a smooth dune). Java copy `NukePall.dustLight` (`PallGlslTest.headIsLitFromAllSides`,
   `BlastWallTest.denseFrontFaceIsLitDust`).
   Rays sample the head more densely (`pallWallSpans`: ring from dust edge to 1.5 wedges and terrain-map height layer,
   step one eighth its height, at most `steps` extra steps). Same light as pall, light-path depth follows wedge shape
