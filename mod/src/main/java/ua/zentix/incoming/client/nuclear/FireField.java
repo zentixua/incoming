@@ -3,6 +3,8 @@ package ua.zentix.incoming.client.nuclear;
 import net.minecraft.util.RandomSource;
 import net.minecraft.world.phys.Vec3;
 import ua.zentix.incoming.nuclear.Detonation;
+import ua.zentix.incoming.nuclear.model.Blowout;
+import ua.zentix.incoming.nuclear.model.PulseIgnition;
 import ua.zentix.incoming.nuclear.model.ThermalModel;
 
 import java.util.ArrayList;
@@ -11,10 +13,11 @@ import java.util.List;
 /**
  * Where and how much burns after detonation — client model for burning-city sound and secondary explosions (the server places
  * the fire itself; the client sees only fire blocks in local chunks). Rings of width {@link #RING} around ground zero: in each ring
- * light ignites a fraction of columns with the same probability as the server ({@code RuinPlanner.fire}: min(1, q/{@link ThermalModel#igniteAll}) from the threshold, q is light on the
- * ground, fading at the ruin edge); {@link #SHARE} of columns contain fuel. Fire starts with the flash
- * (server flash layer, {@code FlashScorch}: each location when light reaches the ignition threshold there, {@link Detonation#flashTicks});
- * on arrival, the wave blows out half at 2 psi and above ({@link #keep}). The server fire limit per detonation ({@link #MAX_FIRES})
+ * light ignites fuel with the server's law ({@code RuinPlanner.kindling}: {@link #chance}, q is light on the ground, fading at the ruin
+ * edge); {@link #SHARE} of fueled columns hold a fire. Which ground holds fuel (cured grass, buildings, not green turf) the model does not
+ * know: it counts as if all did, and the comparison with local chunks weighs it by the storm's terrain survey ({@code FireStorm#fuelAt}).
+ * Fire starts with the flash (server flash layer, {@code FlashScorch}: each location when light reaches the ignition threshold there,
+ * {@link Detonation#flashTicks}); on arrival, the wave blows out a share ({@link Blowout}, {@link #keep}). The server fire limit per detonation ({@link #MAX_FIRES})
  * counts what burns after the wave ({@code RuinPlan.write}): only fire the wave will not blow out counts; the flash
  * layer keeps igniting while this count is below the limit, and ignites removable fire without counting it. The model cuts rings from ground zero with the same count
  * as the layer: the same amount ignited out to the same ring (before the wave, including what it will blow out: at 2 psi and above near ground zero, twice
@@ -30,7 +33,7 @@ import java.util.List;
 final class FireField {
     /** Ring width, blocks. */
     static final double RING = 32;
-    /** Fraction of columns with somewhere for fire to stand (grass, dirt, wood — not stone or water). */
+    /** Fraction of fueled columns where a fire block stands (est.). */
     static final double SHARE = 0.6;
     /** Default server post-wave fires per detonation ({@code fires_per_detonation}); the client does not know the server's custom value. */
     static final int MAX_FIRES = 20_000;
@@ -44,7 +47,7 @@ final class FireField {
     final Detonation d;
     /** Flash-ignited fires in a ring, including those blown out by the wave ({@link #MAX_FIRES} caps those that remain). */
     final double[] lit;
-    /** Share not blown out by the wave (1 or {@code RuinPlanner.BLOWN_KEEP} at 2 psi and above). */
+    /** Share not blown out by the wave ({@link Blowout#keep}). */
     final double[] keep;
     /** Post-wave fires in a ring ({@link #lit} × {@link #keep}): what burns later; total capped at {@link #MAX_FIRES}. */
     final double[] fires;
@@ -82,9 +85,6 @@ final class FireField {
         this.total = after;
     }
 
-    /** Share of fires not blown out by the wave at 2 psi and above ({@code RuinPlanner.BLOWN_KEEP}). */
-    static final double BLOWN_KEEP = 0.5;
-
     /**
      * How many locations in {@code ring} the flash would ignite without a fire limit: fraction of columns with a place for fire,
      * using light probability at the ring middle ({@code RuinPlanner.fire}); inside the fireball at ground level or below the ignition
@@ -96,12 +96,21 @@ final class FireField {
         double q = d.fluence(new Vec3(d.burst().x + r, d.groundY() + 1, d.burst().z)) * edge(r, ruin);
         if (q < ThermalModel.ignite(d.yieldKt())) return 0;
         double area = Math.PI * (Math.pow((ring + 1) * RING, 2) - Math.pow(ring * RING, 2));
-        return SHARE * Math.min(1, q / ThermalModel.igniteAll(d.yieldKt())) * area;
+        return SHARE * chance(d, q) * area;
     }
 
-    /** Share of {@code ring} fire the wave will not blow out: {@link #BLOWN_KEEP} at 2 psi and above at ring middle, otherwise 1. */
+    /**
+     * Share of fuel the flash ignites at {@code q} cal/cm² ({@link PulseIgnition#share(double, PulseIgnition.Fuel, double)}): the
+     * fuel that carries a mass fire is a cured grass bed or a building lit through its windows (paper behind glass, 7.9/0.8 = 9.9
+     * cal/cm² at 1 Mt, within 8 % of dry grass 9.1), so the dry-grass threshold stands for both.
+     */
+    static double chance(Detonation d, double q) {
+        return PulseIgnition.share(q, PulseIgnition.Fuel.GRASS, d.yieldKt());
+    }
+
+    /** Share of {@code ring} fire the wave will not blow out ({@link Blowout#keep} at ring middle). */
     static double keepAt(Detonation d, int ring) {
-        return d.psi(new Vec3(d.burst().x + radius(ring), d.groundY() + 1, d.burst().z)) >= 2 ? BLOWN_KEEP : 1;
+        return Blowout.keep(d.psi(new Vec3(d.burst().x + radius(ring), d.groundY() + 1, d.burst().z)));
     }
 
     private static double edge(double r, double ruin) {

@@ -41,6 +41,11 @@ public final class ModTags {
     public static final TagKey<Block> PULSE_PAPER = block("pulse_paper");
     public static final TagKey<Block> PULSE_GRASS = block("pulse_grass");
     public static final TagKey<Block> PULSE_FABRIC = block("pulse_fabric");
+    /**
+     * Dry plant fuel (hay, dead bush, dried kelp, scaffolding): {@link #PULSE_GRASS} without live plants. The nuclear flash
+     * ignites only dry fuel ({@code nuclear/world/Kindling}): this, {@link #PULSE_PAPER} and {@link #PULSE_FABRIC}.
+     */
+    public static final TagKey<Block> PULSE_DRY = block("pulse_dry");
 
     /** Nuclear strike: biomes light does not recolor (seas, rivers, caves) — {@code nuclear/world/ScorchedBiomes}. */
     public static final TagKey<Biome> NUKE_KEEPS_BIOME = TagKey.create(Registries.BIOME, Incoming.id("nuke_keeps_biome"));

@@ -696,6 +696,8 @@ public final class NuclearGameTests {
     @GameTest(template = "range", timeoutTicks = 40, batch = "nuke_fresh", skyAccess = true)
     public static void freshPlanNextToRuinsMatchesPrepared(GameTestHelper h) {
         ServerLevel level = h.getLevel();
+        // turf that lights: cured grass (green turf holds no fire)
+        ScorchGameTests.fillBiome(h, 0, 63, ScorchGameTests.DRY_MEADOW);
         BlockPos c = chunkCorner(h);
         // explosion from the side where there are more than 28 blocks to the edge of the site (0 and 63)
         int side = c.getX() >= 32 ? -1 : 1;
@@ -1666,6 +1668,7 @@ public final class NuclearGameTests {
     /** A forgotten explosion (the chunk loaded for the first time days later) burns, but does not set fire; fresh - sets fire. */
     @GameTest(template = "range", timeoutTicks = 20, batch = "nuke_fires", skyAccess = true)
     public static void forgottenDetonationDoesNotIgnite(GameTestHelper h) {
+        ScorchGameTests.fillBiome(h, 0, 63, ScorchGameTests.DRY_MEADOW);
         Detonation d = detonation(h, CENTER, 60, 15, 0.025f);
         scarAll(h, d, new ColumnScar.Budget(false));
         h.assertTrue(fires(h) == 0, "a forgotten explosion set fire to: " + fires(h));

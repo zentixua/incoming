@@ -27,7 +27,11 @@ import ua.zentix.incoming.grid.GridLights;
 import ua.zentix.incoming.grid.Outage;
 import ua.zentix.incoming.nuclear.Detonation;
 import ua.zentix.incoming.nuclear.flash.FlashChar;
+import ua.zentix.incoming.nuclear.model.FireballModel;
+import ua.zentix.incoming.nuclear.model.FlashPyrolysis;
 import ua.zentix.incoming.nuclear.model.Fragility;
+import ua.zentix.incoming.nuclear.model.PulseIgnition;
+import ua.zentix.incoming.nuclear.world.Kindling;
 import ua.zentix.incoming.nuclear.world.ThermalShadow;
 import ua.zentix.incoming.util.Palettes;
 
@@ -46,8 +50,9 @@ import java.util.List;
  *     ({@code Blackouts.nuke}), and each has its own failure arc ({@code GridEffects.failure}); a second would be
  *     redundant;</li>
  *     <li>smoke wisps from flash-heated surfaces: roofs, grassy ground, foliage and wooden walls facing the ball emit pyrolysis
- *     smoke until the wave reaches them ({@link Smoke}). Locations are points in front of the camera (out to {@link #SMOKE_RANGE}
- *     blocks); light follows char ({@link FlashChar}): pulse × angle × shadow from client heightmaps; smoke uses cloud-model emissions
+ *     smoke until the wave reaches them ({@link Smoke}). Locations are fixed points of a world grid around the eye (out to
+ *     {@link #SMOKE_RANGE} blocks, every direction); light follows char ({@link FlashChar}): pulse × angle × shadow from client
+ *     heightmaps; the amount is bounded by what the surface holds ({@link FlashPyrolysis}); smoke uses cloud-model emissions
  *     ({@link Puffs}).</li>
  * </ul>
  */
@@ -62,7 +67,7 @@ public final class FlashAftermath {
     private static final int ARC = 0xDCE8FF, ARC_EDGE = 0x5A7CFF;
     /** Jagged discharge segments and points per segment. */
     private static final int BOLT_SEGMENTS = 5, BOLT_DOTS = 3;
-    /** Camera search range for smoke wisps, blocks. */
+    /** Range of smoke-wisp probes around the eye, blocks. */
     static final double SMOKE_RANGE = 128;
     /** Median and spread of light exposure that makes a surface smoke, cal/cm². */
     static final double SMOKE_Q = 5, SMOKE_BETA = 0.6;
@@ -252,37 +257,35 @@ public final class FlashAftermath {
     /**
      * Flash smoke wisps come from pyrolysis, not combustion: light above the charring threshold ({@link #SMOKE_Q}, spread {@link #SMOKE_BETA}
      * per {@link Fragility}) heats wood, foliage and grass surfaces, releasing volatiles — whitish tar smoke
-     * seen rising from houses in Nevada tests before wave arrival (Glasstone and Dolan 1977, §7.40–7.45). No flame: the server
-     * places fire (flash layer). Probes — {@link #SMOKE_PROBES} equal-area locations in a sector ahead of the camera out to
-     * {@link #SMOKE_RANGE} blocks; smoking locations emit through the cloud model ({@link Puffs}):
+     * seen rising from houses in Nevada tests before wave arrival (Glasstone and Dolan 1977, §7.27, §7.40–7.45). No flame: the server
+     * places fire (flash layer). Probes — one per {@link #SMOKE_CELL}-block cell of a world-anchored grid around the eye, in every
+     * direction out to {@link #SMOKE_RANGE} blocks, at a point fixed in the cell by the detonation seed (the same ground smokes
+     * wherever the camera looks); smoking locations emit through the cloud model ({@link Puffs}):
      * <ul>
-     * <li>volatiles — α·(q − q₀)·S / L<sub>g</sub>: absorption α = {@value #ABSORB} (est.) (wood and foliage 0.6–0.9), light above
-     * threshold q₀ = {@link #SMOKE_Q} cal/cm², S — area represented by the probe, heat of wood gasification
-     * L<sub>g</sub> = {@value #GASIFY} J/kg (Tewarson, SFPE Handbook, table 3-4.x: 1.8 MJ/kg for Douglas fir; (est.) from memory);</li>
+     * <li>volatiles — what the bed under the probe holds and the light can dry and gasify ({@link FlashPyrolysis}: green turf 0.166 kg/m²
+     * at 120 % moisture, cured grass at 6 %, outer canopy, the heated layer of wood), over the cell's area;</li>
      * <li>smoke from them — {@value #SMOKE_YIELD} kg per kg (est.) (smoldering wood aerosol yield 0.01–0.1), extinction
      * {@value #SMOKE_K} m²/kg (~4.4 m²/g for smoldering smoke, Mulholland, SFPE Handbook; (est.) from memory), gray-brown color;</li>
      * <li>heat into air — {@value #TO_AIR} of absorbed heat (est.), gas ~{@value #SMOKE_K_GAS} K (wood pyrolysis 500–700 K).</li>
      * </ul>
      * A wisp remains visible until the wave reaches the location (its dust wall sweeps it away).
      */
-    static final int SMOKE_PROBES = 384;
-    /** Probes per tick: the full distribution is covered in the first {@link #SMOKE_PROBES} / this many flash ticks. */
+    static final double SMOKE_CELL = 12;
+    /** Probes per tick, nearest first: the ~360 cells within range take the first 15 flash ticks. */
     static final int SMOKE_PER_TICK = 24;
-    static final double ABSORB = 0.7, GASIFY = 1.8e6, SMOKE_YIELD = 0.05, SMOKE_K = 4.4e3, TO_AIR = 0.1, SMOKE_K_GAS = 600;
-    /** Joules per square meter in one calorie per square centimeter. */
-    static final double CAL_CM2 = 41_868;
+    static final double SMOKE_YIELD = 0.05, SMOKE_K = 4.4e3, TO_AIR = 0.1, SMOKE_K_GAS = 600;
 
-    /** Probes ahead of the camera: emit pyrolysis smoke where light heated a surface above threshold and the wave has not arrived. */
+    /** Grid probes: emit pyrolysis smoke where light heated a surface above threshold and the wave has not arrived. */
     private static final class Smoke implements Effects.Effect {
         private final Detonation d;
-        private final RandomSource rnd;
         private final double reach;
+        /** Probe cells (x, z cell indices packed), nearest to the eye first; null until the first tick. */
+        private long[] cells;
         private Puffs smoke;
         private int probed;
 
         Smoke(Detonation d) {
             this.d = d;
-            this.rnd = RandomSource.create(d.seed() ^ 0x5307E);
             double lo = 0, hi = Math.max(1, d.ruinRadius());
             for (int i = 0; i < 30; i++) {
                 double r = (lo + hi) / 2;
@@ -294,26 +297,25 @@ public final class FlashAftermath {
 
         @Override
         public boolean tick(ClientLevel level, int t) {
-            if (reach <= 0 || probed >= SMOKE_PROBES) {
+            if (reach <= 0 || cells != null && probed >= cells.length) {
                 if (smoke != null) smoke.close();
                 return false;
             }
-            var camera = Minecraft.getInstance().gameRenderer.getMainCamera();
-            Vec3 cam = camera.getPosition();
+            Vec3 cam = Minecraft.getInstance().gameRenderer.getMainCamera().getPosition();
             if (smoke == null) {
                 smoke = new Puffs(FarBlasts.air(level, cam), 0.71f, 0.68f, 0.65f, d.seed());
                 SmokeGrid.add(smoke);
+                cells = cells(cam);
             }
-            double yaw = Math.toRadians(camera.getYRot()), sector = Math.toRadians(120), r0 = 4, r1 = r0 + SMOKE_RANGE;
-            // probe represents an equal share of sector area
-            double area = 0.5 * sector * (r1 * r1 - r0 * r0) / SMOKE_PROBES;
-            double now = SmokeGrid.seconds(0);
+            double area = SMOKE_CELL * SMOKE_CELL, now = SmokeGrid.seconds(0), pulse = FireballModel.pulseSeconds(d.yieldKt());
             BlockPos.MutableBlockPos m = new BlockPos.MutableBlockPos();
             // light comes from the fireball, not the burst point (a surface burst's point lies on the ground)
             Vec3 ball = ThermalShadow.aim(d);
-            for (int k = 0; k < SMOKE_PER_TICK && probed < SMOKE_PROBES; k++, probed++) {
-                double a = yaw + (rnd.nextDouble() - 0.5) * sector, r = Math.sqrt(r0 * r0 + rnd.nextDouble() * (r1 * r1 - r0 * r0));
-                int x = Mth.floor(cam.x - Math.sin(a) * r), z = Mth.floor(cam.z + Math.cos(a) * r);
+            for (int k = 0; k < SMOKE_PER_TICK && probed < cells.length; k++, probed++) {
+                long cell = cells[probed];
+                int cx = (int) (cell >> 32), cz = (int) cell;
+                RandomSource rnd = RandomSource.create(d.seed() ^ 0x5307E ^ cell * 0x9E3779B97F4A7C15L);
+                int x = Mth.floor((cx + rnd.nextDouble()) * SMOKE_CELL), z = Mth.floor((cz + rnd.nextDouble()) * SMOKE_CELL);
                 double dist = Math.hypot(x + 0.5 - d.burst().x, z + 0.5 - d.burst().z);
                 double wave = d.arrivalTicks(dist);
                 if (dist > reach || t >= wave) continue;
@@ -327,7 +329,8 @@ public final class FlashAftermath {
                     y = top - rnd.nextInt(8);
                 }
                 BlockState st = level.getBlockState(m.set(x, y, z));
-                if (!burns(st, face)) continue;
+                FlashPyrolysis.Bed bed = bed(level, st, m, face);
+                if (bed == null) continue;
                 BlockState ahead = level.getBlockState(m.move(face));
                 if (!ahead.isAir() && !ahead.canBeReplaced()) continue;
                 double cos = FlashChar.incidence(ball, x, y, z, face);
@@ -338,18 +341,43 @@ public final class FlashAftermath {
                 q *= ThermalShadow.share(level, d, at);
                 if (!Fragility.possible(q, SMOKE_Q, SMOKE_BETA)) continue;
                 if (!Fragility.hit(q, SMOKE_Q, SMOKE_BETA, rnd.nextGaussian())) continue;
-                double absorbed = ABSORB * q * CAL_CM2 * area, volatiles = ABSORB * Math.max(0, q - SMOKE_Q) * CAL_CM2 * area / GASIFY;
-                smoke.add(at.x, at.y, at.z, now, TO_AIR * absorbed, SMOKE_K_GAS, 0.5 * Math.sqrt(area), 0, SMOKE_YIELD * volatiles, SMOKE_K,
+                double volatiles = FlashPyrolysis.volatiles(bed, q, pulse) * area;
+                if (volatiles <= 0) continue;
+                double absorbed = FlashPyrolysis.ABSORB * q * FlashPyrolysis.CAL_CM2 * area;
+                smoke.add(at.x, at.y, at.z, now, TO_AIR * absorbed, SMOKE_K_GAS, 0.5 * SMOKE_CELL, 0, SMOKE_YIELD * volatiles, SMOKE_K,
                         now + (wave - t) / 20);
                 puffs++;
             }
             return true;
         }
 
-        private static boolean burns(BlockState st, Direction face) {
-            if (st.isAir()) return false;
-            if (FlashChar.material(st) == FlashChar.CHARS || st.is(BlockTags.LEAVES)) return true;
-            return face == Direction.UP && (st.is(Blocks.GRASS_BLOCK) || st.is(BlockTags.REPLACEABLE_BY_TREES) || st.is(Blocks.HAY_BLOCK));
+        /** Grid cells whose square lies within {@link #SMOKE_RANGE} of {@code eye}, nearest first. */
+        private static long[] cells(Vec3 eye) {
+            int r = (int) Math.ceil(SMOKE_RANGE / SMOKE_CELL), ex = Mth.floor(eye.x / SMOKE_CELL), ez = Mth.floor(eye.z / SMOKE_CELL);
+            List<long[]> in = new ArrayList<>();
+            for (int cz = ez - r; cz <= ez + r; cz++) {
+                for (int cx = ex - r; cx <= ex + r; cx++) {
+                    double d = Math.hypot((cx + 0.5) * SMOKE_CELL - eye.x, (cz + 0.5) * SMOKE_CELL - eye.z);
+                    if (d <= SMOKE_RANGE) in.add(new long[]{(long) cx << 32 | (cz & 0xFFFFFFFFL), Double.doubleToLongBits(d)});
+                }
+            }
+            in.sort(Comparator.comparingDouble(c -> Double.longBitsToDouble(c[1])));
+            long[] out = new long[in.size()];
+            for (int i = 0; i < out.length; i++) out[i] = in.get(i)[0];
+            return out;
+        }
+
+        /** Fuel bed a surface face presents to the pulse; null — none (stone, soil, glass). */
+        @Nullable
+        private static FlashPyrolysis.Bed bed(ClientLevel level, BlockState st, BlockPos at, Direction face) {
+            if (st.isAir()) return null;
+            if (st.is(BlockTags.LEAVES)) return FlashPyrolysis.Bed.FOLIAGE;
+            if (face == Direction.UP && (st.is(Blocks.HAY_BLOCK) || Kindling.of(st) == PulseIgnition.Fuel.GRASS)) return FlashPyrolysis.Bed.CURED_GRASS;
+            if (FlashChar.material(st) == FlashChar.CHARS) return FlashPyrolysis.Bed.WOOD;
+            if (face == Direction.UP && (st.is(Blocks.GRASS_BLOCK) || st.is(BlockTags.REPLACEABLE_BY_TREES))) {
+                return Kindling.cured(level.getBiome(at)) ? FlashPyrolysis.Bed.CURED_GRASS : FlashPyrolysis.Bed.GREEN_GRASS;
+            }
+            return null;
         }
     }
 }

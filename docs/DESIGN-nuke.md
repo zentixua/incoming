@@ -355,7 +355,7 @@ Pressure thresholds psi (`data/incoming/tags/block/nuke_*.json`, datapack-overri
 |---|---|---|
 | glass, panes, lanterns, torches, candles, flowerpots, cobweb, snow layer (`nuke_fragile`) | 0.5–1 | air (glass-break sound to nearby players) |
 | grass, flowers, saplings, crops, fern, vines, moss carpet (`nuke_plants`) | ~8 | air with pressure-stripped turf; light burns them nearer edge (below) |
-| leaves (`#leaves`) | 2 | air; at `Q` ≥ 10 fire in place |
+| leaves (`#leaves`) | 2 | air (live foliage chars and smokes, no fire) |
 | doors, fences, trapdoors, wool, carpets, planks, furniture (`nuke_light`) | 3–5 | air / debris |
 | trees (log column + leaves at its top) | blowdown curve (`ForestBlowdown`): 30 % down at Glasstone's moderate-damage range, 90 % at severe (table 5.149, fig. 5.146), coniferous (`nuke_conifers`) or deciduous stand, range ∝ W^0.37–0.40; 15 kt: deciduous 3.4/4.8 psi, conifers 5.6/8.8; 250 kt: 2.9/3.8 and 4.3/6.4 | toppled whole, horizontal logs on ground **away from epicenter** (radial blowdown like Tunguska/Hiroshima) |
 | brick, cobblestone, stone brick, concrete, terracotta (`nuke_masonry`) | 10–15 | air / debris / gravel |
@@ -367,7 +367,7 @@ Thermal changes, only blocks seeing sphere:
 
 | Condition | Result |
 |---|---|
-| `Q` ≥ 5, flammable top block (leaves, grass, wool, wood, hay via `isFlammable`) | fire above, probability ~ `Q/20`, capped `nuclear.max_fires`; wave extinguishes some at `P` ≥ 2 |
+| `Q` ≥ onset (`ThermalModel.ignite`), dry fuel the light reaches (`Kindling`: `pulse_paper`, `pulse_fabric`, `pulse_dry` — hay, dead bush; indoors through glass ×0.8; turf only where biome downfall ≤ 0.15, cured grass) | fire in the first air cell toward the ball, chance `PulseIgnition.share(q, fuel, Y)`; live turf, grass, leaves, flowers and wood: none (Kerr 1971, DNA EM-1, Glasstone §7.27/§7.60); wave keeps `Blowout.keep`: all < 2 psi, (8 − P)/6 at 2–5, ½ above (Martin 1980) |
 | above-ground plants (`nuke_plants`, `Q` ~6) | grass/flowers/bushes/crops burn in patches with everything above (tall-grass top, reeds), ~8 % leave dead bush; snow layer melts, turf without snow loses snowy sides |
 | turf/moss (`Q` ~15) | patchy dirt/coarse dirt; within burned area at light ~30, podzol scorch |
 | snow block (`Q` ~15) | water |
@@ -614,9 +614,10 @@ teleport then) run 24/tick, echo starts later. Live only: no echo on seek/world 
 voices/loops.
 
 **Burning city** (`client/nuclear/NukeAfter`, `FireField`, `FireWatch`). Client lacks server fire settings, so distant
-`FireField` model: 32-block rings, column-burning share same as ruins (from the yield-dependent threshold `ThermalModel.ignite` (foliage, Glasstone tables
-7.35/7.40: 15 kt 3.6, 1 Mt 6.0 cal/cm²) up to `min(1, q/igniteAll)`, 4× threshold; 60 % columns flammable), flash
-ignites, ≥ 2 psi wave blows out half; default `fires_per_detonation` 20 000 using server post-wave count (measured before the yield-dependent threshold: 15 kt airburst
+`FireField` model: 32-block rings, ignition by the server's law (`PulseIgnition.share` at the dry-grass threshold, which
+also stands for kindling behind glass, from the onset `ThermalModel.ignite`: 15 kt 3.6, 1 Mt 6.0 cal/cm²; 60 % of fueled
+columns hold a fire), weighed by the storm's terrain survey (`FireStorm.fuelAt`: cured grass, dry fuel, buildings),
+flash ignites, the wave keeps `Blowout.keep`; default `fires_per_detonation` 20 000 using server post-wave count (measured before the yield-dependent threshold: 15 kt airburst
 40 000 before wave to ~146 blocks, 20 000 after), grow 20 s, decay with 5 min time. Local chunks count real fire blocks
 (fire-palette sections sample every 8th block, chunks fitting 0.1 ms/tick; detailed-city scenario 0.13 ms/tick versus
 3.2 full count), place at actual positions; distant model weighted by real/modeled local fires (disabled/extinguished

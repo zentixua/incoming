@@ -64,9 +64,10 @@ final class DiskShots {
      * flash-layer mark in chunk data ({@code FLASH_LAYER}: detonation ID whose layer fire stands without ruins; 0 absent):
      * snapshot for that detonation reads fire as air, like in-memory chunk snapshot ({@link ChunkShot#fromDisk}).
      */
-    record Read(ChunkPos pos, int minY, PalettedContainer<BlockState>[] states, int[] heights, int unprimed, @Nullable String skip, int flashLayer) {
+    record Read(ChunkPos pos, int minY, PalettedContainer<BlockState>[] states, int[] heights, int unprimed, @Nullable String skip, int flashLayer,
+                int cured) {
         static Read skipped(ChunkPos pos, String why) {
-            return new Read(pos, 0, empty(), new int[0], 0, why, 0);
+            return new Read(pos, 0, empty(), new int[0], 0, why, 0, 0);
         }
 
         /**
@@ -103,7 +104,7 @@ final class DiskShots {
                     }
                 }
             }
-            return new Read(pos, minY, states, out, 0, null, flashLayer);
+            return new Read(pos, minY, states, out, 0, null, flashLayer, cured);
         }
 
         /**
@@ -169,7 +170,49 @@ final class DiskShots {
             PalettedContainer<BlockState> c = parsed.get();
             if (c.maybeHas(st -> !st.isAir())) states[index] = c;
         }
-        return new Read(pos, f.minY, states, heights, unprimed, null, flashLayer(f, checked.tag));
+        return new Read(pos, f.minY, states, heights, unprimed, null, flashLayer(f, checked.tag), cured(f, list, states, heights, unprimed));
+    }
+
+    /**
+     * Cells whose surface biome cures grass ({@link Kindling#curedCells}), parsing only the biomes of the sections that hold the
+     * surface.
+     */
+    private static int cured(Format f, ListTag list, PalettedContainer<BlockState>[] states, int[] heights, int unprimed) {
+        java.util.function.IntUnaryOperator surface = surface(f.minY, states, heights, unprimed);
+        @SuppressWarnings("unchecked")
+        PalettedContainerRO<Holder<Biome>>[] parsed = (PalettedContainerRO<Holder<Biome>>[]) new PalettedContainerRO<?>[f.sections];
+        Codec<PalettedContainerRO<Holder<Biome>>> codec = PalettedContainer.codecRO(f.biomes.asHolderIdMap(), f.biomes.holderByNameCodec(),
+                PalettedContainer.Strategy.SECTION_BIOMES, f.biomes.getHolderOrThrow(Biomes.PLAINS));
+        return Kindling.curedCells(f.minY, surface, (lx, y, lz) -> {
+            int index = (y - f.minY) >> 4;
+            if (index < 0 || index >= f.sections) return null;
+            if (parsed[index] == null) {
+                for (int i = 0; i < list.size(); i++) {
+                    CompoundTag section = list.getCompound(i);
+                    if (section.getByte("Y") - f.minSection != index || !section.contains("biomes", Tag.TAG_COMPOUND)) continue;
+                    parsed[index] = codec.parse(NbtOps.INSTANCE, section.getCompound("biomes")).result().orElse(null);
+                }
+                if (parsed[index] == null) return null;
+            }
+            return parsed[index].get(lx >> 2, (y >> 2) & 3, lz >> 2);
+        });
+    }
+
+    /**
+     * First air above a column (index {@code lz << 4 | lx}): the disk motion heightmap, or without it (a map from an editor) the
+     * first air above the highest non-air block, as priming would find it up to plants and leaves ({@link Read#primed} runs later,
+     * on the server thread).
+     */
+    private static java.util.function.IntUnaryOperator surface(int minY, PalettedContainer<BlockState>[] states, int[] heights, int unprimed) {
+        int motion = ChunkShot.type(net.minecraft.world.level.levelgen.Heightmap.Types.MOTION_BLOCKING);
+        if ((unprimed & 1 << motion) == 0) return c -> heights[motion * 256 + c];
+        return c -> {
+            for (int i = states.length - 1; i >= 0; i--) {
+                if (states[i] == null) continue;
+                for (int y = 15; y >= 0; y--) if (!states[i].get(c & 15, y, c >> 4).isAir()) return minY + (i << 4) + y + 1;
+            }
+            return minY;
+        };
     }
 
     /** Flash-layer mark in chunk data (attachment, as NeoForge writes {@code neoforge:attachments}); 0 absent. */
@@ -302,7 +345,12 @@ final class DiskShots {
             PalettedContainer<BlockState> c = sections.sections()[i].getStates();
             if (c.maybeHas(st -> !st.isAir())) states[i] = c;
         }
-        return new Scorch(sections, new Read(pos, f.minY, states, heights, unprimed, null, flashLayer(f, checked.tag)));
+        LevelChunkSection[] all = sections.sections();
+        int cured = Kindling.curedCells(f.minY, surface(f.minY, states, heights, unprimed), (lx, y, lz) -> {
+            int index = (y - f.minY) >> 4;
+            return index < 0 || index >= all.length ? null : all[index].getNoiseBiome(lx >> 2, (y >> 2) & 3, lz >> 2);
+        });
+        return new Scorch(sections, new Read(pos, f.minY, states, heights, unprimed, null, flashLayer(f, checked.tag), cured));
     }
 
     private static Scorch skippedScorch(ChunkPos pos, String why) {

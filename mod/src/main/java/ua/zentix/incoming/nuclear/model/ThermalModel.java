@@ -15,8 +15,6 @@ public final class ThermalModel {
     public static final double BURN_2 = 5;
     /** Third-degree burn. */
     public static final double BURN_3 = 8;
-    /** Fluence over the ignition threshold ({@link #ignite}) at which every ground combustible ignites ({@code RuinPlanner}). */
-    public static final double IGNITE_ALL_SHARE = 4;
     /** Visibility, m: clear, rain, thunderstorm — same as visuals ({@link Visibility}). */
     public static final double VISIBILITY_CLEAR = Visibility.CLEAR;
     public static final double VISIBILITY_RAIN = Visibility.RAIN;
@@ -28,22 +26,16 @@ public final class ThermalModel {
     }
 
     /**
-     * Ignition threshold of ground fuel, cal/cm²: where the easiest kindling (deciduous foliage, 0.25 MJ/m² = 6.0 cal/cm² at
-     * 1 Mt, {@link PulseIgnition.Fuel#LEAVES}) starts to ignite. The threshold grows with yield: a longer pulse lets the fuel
-     * shed more heat (Glasstone &amp; Dolan 1977, §7.35 and table 7.40). Scaled like table 7.35 thin-fabric ignition
-     * ({@link BurnInjury#thinFabric}): 15 kt 3.6, 50 kt 4.3, 500 kt 5.6, 1 Mt 6.0 (⚠ approximation: one scaling for all
-     * thin kindling; table 7.40 rows grow by a similar factor from 35 kt to 1.4 Mt).
+     * Ignition onset of kindling, cal/cm²: the median of the easiest dry kindling (dry deciduous leaves, 0.25 MJ/m² =
+     * 6.0 cal/cm² at 1 Mt, {@link PulseIgnition.Fuel#LEAVES}) scaled by pulse length ({@link PulseIgnition#pulseScale}):
+     * 15 kt 3.6, 50 kt 4.3, 500 kt 5.6, 1 Mt 6.0. Where the flash starts fires and how far the flash layer reaches; what
+     * ignites there is {@link PulseIgnition#share(double, PulseIgnition.Fuel, double)} of the fuel that is actually there.
      * <p>
      * Compare it with {@link #fluenceCalPerCm2} itself: that is exposure on a surface facing the fireball, the most any
      * surface receives (the threshold is defined the same way), so slopes do not raise it.
      */
     public static double ignite(double yieldKt) {
-        return PulseIgnition.Fuel.LEAVES.threshold * BurnInjury.thinFabric(yieldKt) / BurnInjury.thinFabric(1000);
-    }
-
-    /** Fluence at which every ground combustible ignites, cal/cm². */
-    public static double igniteAll(double yieldKt) {
-        return IGNITE_ALL_SHARE * ignite(yieldKt);
+        return PulseIgnition.Fuel.LEAVES.threshold * PulseIgnition.pulseScale(yieldKt);
     }
 
     /** Thermal energy density at slant range R, cal/cm². */

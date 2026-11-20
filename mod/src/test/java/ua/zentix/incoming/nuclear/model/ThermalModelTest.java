@@ -49,7 +49,6 @@ class ThermalModelTest {
         assertEquals(5.59, ThermalModel.ignite(500), 0.02);
         assertEquals(PulseIgnition.Fuel.LEAVES.threshold, ThermalModel.ignite(1000), 1e-9);
         for (double y = 1; y < 20_000; y *= 1.3) assertTrue(ThermalModel.ignite(y * 1.3) >= ThermalModel.ignite(y), "monotonic at " + y);
-        assertEquals(4 * ThermalModel.ignite(500), ThermalModel.igniteAll(500), 1e-9);
     }
 
     /**
@@ -62,7 +61,7 @@ class ThermalModelTest {
         for (double r : new double[] {12_059, 12_705, 14_302}) {
             assertTrue(ThermalModel.fluenceCalPerCm2(r, 500, true, V) < ThermalModel.ignite(500), "500 kt at " + r);
         }
-        // the same burst ignites at 3.8 km
-        assertTrue(ThermalModel.fluenceCalPerCm2(3784, 500, true, V) > ThermalModel.igniteAll(500));
+        // the same burst ignites nearly all dry grass at 3.8 km
+        assertTrue(PulseIgnition.share(ThermalModel.fluenceCalPerCm2(3784, 500, true, V), PulseIgnition.Fuel.GRASS, 500) > 0.99);
     }
 }

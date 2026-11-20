@@ -261,7 +261,11 @@ paths:
   the ruins but not the layer, which burned turf the ruins keep — GameTest `flashScorchesBeforeTheWaveAndRuinsMatch`
   has that wall) and a background layer
   (`RuinPlanner.flash`: same `land` without pressure — no turf stripping or rubble; all light-ignited fires,
-  from `ThermalModel.ignite(yield)` with chance `min(1, q/igniteAll)`, with wave-blown fires marked — position roll not below chance × `BLOWN_KEEP` at ≥ 2 psi —
+  from `ThermalModel.ignite(yield)`, only on dry fuel (`RuinPlanner.kindling`, `Kindling`: tags `pulse_paper`/`pulse_fabric`/`pulse_dry`,
+  ray toward the ball through air/glass ×`GLASS`/no-collision cells until no column covers it, fire in the first air cell, in
+  this chunk; turf only in cured-grass cells, `ChunkShot.cured` from biome downfall ≤ `Kindling.DRY_DOWNFALL`) with chance
+  `PulseIgnition.share(q, fuel, yield)`; live turf/grass/leaves/wood never get fire (19.11 complaint: fire on ~every turf
+  column at 3–5 km, 1 Mt; GameTest `flashIgnitesOnlyDryFuel`), with wave-blown fires marked — position roll not below chance × `Blowout.keep(psi)` —
   `RuinPlan.blown`; biomes; `FlashFaces`); one unit per ready layer writes like ruins (`RuinPlan.applyFlash`: directly
   into sections, section packets, LODs, `FlashSync.chars`), no earlier than light at the chunk's point nearest the
   sphere reaches ignition threshold (`Detonation.flashTicks`, emitted pulse fraction

@@ -230,6 +230,8 @@ public final class RuinBackgroundGameTests {
      */
     @GameTest(template = "range", timeoutTicks = 100, batch = "nuke_background_disk", skyAccess = true)
     public static void diskPlanMatchesMemoryPlan(GameTestHelper h) {
+        // street turf with cured grass: fire the wave leaves (roof fuel goes with the roofs)
+        ScorchGameTests.fillBiome(h, 0, 63, ScorchGameTests.DRY_MEADOW);
         RuinCostGameTests.city(h);
         ServerLevel level = h.getLevel();
         // 15 kt 160 blocks over the middle of the site (1 block = 10 m): roofs stand (~3–4 psi) and take ~13 cal/cm²
@@ -310,7 +312,7 @@ public final class RuinBackgroundGameTests {
     }
 
     /**
-     * A flash layer over the {@code RuinCostGameTests.city} block: boards on the roofs (there is something for fire to stand on), a layer in all
+     * A flash layer over the {@code RuinCostGameTests.city} block: hay on the roofs (dry fuel the flash lights; boards do not hold its fire), a layer in all
      *  chunks of the site, then the ruins of the explosion are forgotten - the fire and the mark of the layer remain in the chunks. [0] - chunks with a mark,
      * [1] - layer fires.
      */
@@ -322,7 +324,7 @@ public final class RuinBackgroundGameTests {
                 for (int lz = 0; lz < 16; lz++) {
                     int x = c.getPos().getMinBlockX() + lx, z = c.getPos().getMinBlockZ() + lz;
                     int y = c.getHeight(net.minecraft.world.level.levelgen.Heightmap.Types.WORLD_SURFACE, lx, lz);
-                    if (c.getBlockState(m.set(x, y, z)).is(Blocks.SMOOTH_STONE)) level.setBlock(m.set(x, y + 1, z), Blocks.OAK_PLANKS.defaultBlockState(), 2);
+                    if (c.getBlockState(m.set(x, y, z)).is(Blocks.SMOOTH_STONE)) level.setBlock(m.set(x, y + 1, z), Blocks.HAY_BLOCK.defaultBlockState(), 2);
                 }
             }
         }
