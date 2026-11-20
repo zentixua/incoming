@@ -1,7 +1,12 @@
 package ua.zentix.incoming.defense;
 
+import com.electronwill.nightconfig.core.CommentedConfig;
 import net.minecraft.world.phys.Vec3;
+import net.neoforged.fml.config.IConfigSpec;
+import net.neoforged.fml.config.ModConfig;
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
+import ua.zentix.incoming.IncomingConfig;
 import ua.zentix.incoming.entity.FlightPhase;
 import ua.zentix.incoming.guidance.AltitudeHold;
 import ua.zentix.incoming.guidance.Craft;
@@ -12,6 +17,7 @@ import ua.zentix.incoming.guidance.Orbit;
 import ua.zentix.incoming.strike.WeaponSpec;
 import ua.zentix.incoming.strike.WeaponType;
 
+import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.EnumMap;
 import java.util.List;
@@ -35,6 +41,10 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
  *  and slide; “Lancet” - approach and circle over the target ({@link Orbit}, radius {@link WeaponSpec.Loiter#radius()}), dive at
  *  dive speed, when the target under the wing is steeper than 40° after the circle; B-2 - in a straight line at your altitude through the release point.
  * Target - a point on the ground in 0–600 blocks from SAM, approach - from any side from beyond the edge of the radar range.
+ * <p>
+ * Every world flight scale ({@link ua.zentix.incoming.strike.FlightScale}: game, between, real) runs the same raids:
+ * at real scale a cruise missile flies 40 blocks up, and a missile accelerating to real speed in the game's 1.5 s
+ * would climb hundreds of blocks before it could level off and miss every one.
  */
 class InterceptShareTest {
     private static final InterceptorSpec SPEC = InterceptorSpec.SAM;
@@ -55,8 +65,54 @@ class InterceptShareTest {
         }
     }
 
+    /** World flight scale for the test: a server config in memory (CUSTOM preset), without starting a server. */
+    private static void flightScale(double x) {
+        CommentedConfig config = CommentedConfig.inMemory();
+        IncomingConfig.SERVER_SPEC.correct(config);
+        try {
+            // ILoadedConfig is sealed and its only implementation is package-private (as in IncomingCommandTest).
+            var constructor = Class.forName("net.neoforged.fml.config.LoadedConfig").getDeclaredConstructor(CommentedConfig.class, Path.class, ModConfig.class);
+            constructor.setAccessible(true);
+            IncomingConfig.SERVER_SPEC.acceptConfig((IConfigSpec.ILoadedConfig) constructor.newInstance(config, null, null));
+        } catch (ReflectiveOperationException e) {
+            throw new IllegalStateException(e);
+        }
+        IncomingConfig.SERVER.scalePreset.set(IncomingConfig.ScalePreset.CUSTOM);
+        IncomingConfig.SERVER.flightSpeed.set(x);
+    }
+
+    @AfterEach
+    void unloadConfig() {
+        IncomingConfig.SERVER_SPEC.acceptConfig(null);
+    }
+
     @Test
     void sharesByTargetClass() {
+        List<String> lines = new ArrayList<>();
+        for (double x : new double[] {0, 0.5, 1}) {
+            flightScale(x);
+            Map<WeaponType, Share> shares = shares();
+            shares.forEach((w, s) -> lines.add(String.format(Locale.ROOT, "scale %.1f %-8s shot down %5.1f %% raids, defeats %5.1f %% missiles (%d missiles on %d raids)",
+                    x, w, 100 * s.downedShare(), 100 * s.hitShare(), s.missiles(), s.raids())));
+            System.out.println(String.join("\n", lines));
+            assertEquals(List.of(WeaponType.DRONE, WeaponType.MISSILE, WeaponType.BUNKER, WeaponType.LOITER), List.copyOf(shares.keySet()),
+                    "sAM target classes");
+            // shares are not a fitting, but a check that the model is not broken: every SAM class it can see at least sometimes fails
+            // (above game scale the B-2 flies higher than the 450 blocks at which the radar sees it)
+            shares.forEach((w, s) -> {
+                WeaponSpec.Airframe a = w.spec().airframe();
+                if (a.cruiseHeight() <= SPEC.radarRange() * a.radar().visibility()) assertTrue(s.downed() > 0, "scale " + x + " " + w + ": not a single one shot down");
+            });
+            // a missile the SAM fires at a target in view over flat ground hits it at every scale, the motor and lead included
+            for (WeaponType w : List.of(WeaponType.DRONE, WeaponType.MISSILE, WeaponType.LOITER)) {
+                Share s = shares.get(w);
+                assertTrue(s.hitShare() >= 0.9, String.format(Locale.ROOT, "scale %.1f %s: %d of %d missiles hit", x, w, s.hits(), s.missiles()));
+            }
+        }
+        System.out.println("InterceptShareTest:\n" + String.join("\n", lines));
+    }
+
+    private static Map<WeaponType, Share> shares() {
         Map<WeaponType, Share> shares = new EnumMap<>(WeaponType.class);
         for (WeaponType w : WeaponType.values()) {
             WeaponSpec.Airframe a = w.spec().airframe();
@@ -70,14 +126,7 @@ class InterceptShareTest {
             }
             shares.put(w, new Share(RAIDS, downed, missiles, hits));
         }
-        List<String> lines = new ArrayList<>();
-        shares.forEach((w, s) -> lines.add(String.format(Locale.ROOT, "%-8s shot down %5.1f %% raids, defeats %5.1f %% missiles (%d missiles on %d raids)",
-                w, 100 * s.downedShare(), 100 * s.hitShare(), s.missiles(), s.raids())));
-        System.out.println("InterceptShareTest:\n" + String.join("\n", lines));
-        assertEquals(List.of(WeaponType.DRONE, WeaponType.MISSILE, WeaponType.BUNKER, WeaponType.LOITER), List.copyOf(shares.keySet()),
-                "sAM target classes");
-        // shares are not a fitting, but a check that the model is not broken: every SAM class at least sometimes fails
-        shares.forEach((w, s) -> assertTrue(s.downed() > 0, w + ": not a single one shot down"));
+        return shares;
     }
 
     /** One raid: {shot down (0/1), missiles launched, of those hit}. */
@@ -104,7 +153,7 @@ class InterceptShareTest {
                 f = null;
                 continue;
             }
-            Vec3 next = f.steer(now);
+            Vec3 next = f.steer(now, now.subtract(prev));
             if (f.fuze(next, prev, now, a.noseLength()) >= 0) return new int[] {1, missiles, 1};
             if (next.y < GROUND) f = null;
             else f.moveTo(next);

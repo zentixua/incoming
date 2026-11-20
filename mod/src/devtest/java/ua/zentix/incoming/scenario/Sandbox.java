@@ -1083,6 +1083,8 @@ final class Sandbox {
             }
             if (c.near()) {
                 buildHouses(server, BlockPos.containing(site));
+                furnish(server, BlockPos.containing(site));
+                if (c.dry()) savanna(server, BlockPos.containing(site), 160);
                 sameDetonationNumber(server);
                 sameGameTime(server, at);
             }
@@ -1131,6 +1133,44 @@ final class Sandbox {
                 "fill %d %d %d %d %d %d minecraft:glass".formatted(x + 6, y + 2, z - 3, x + 10, y + 3, z - 3)));
         for (int[] t : new int[][]{{x - 8, z + 12}, {x + 8, z + 12}, {x, z - 14}}) build.addAll(oak(t[0], y, t[1]));
         for (String c : build) run(server, c);
+    }
+
+    /**
+     * Dry fuel at the {@code nuke … near} houses ({@link #buildHouses}): bookshelves and wool two blocks behind the stone house's
+     * north (blast-facing) panes at pane height, wool behind the plank house's north glass, and hay bales in the open — what the
+     * flash can set burning ({@code Kindling}); the rest of the scene is green turf, oaks and wood.
+     */
+    private static void furnish(MinecraftServer server, BlockPos o) {
+        int x = o.getX(), y = o.getY(), z = o.getZ();
+        for (String c : List.of(
+                "fill %d %d %d %d %d %d minecraft:bookshelf".formatted(x - 10, y + 1, z - 2, x - 8, y + 2, z - 2),
+                "fill %d %d %d %d %d %d minecraft:white_wool".formatted(x - 7, y + 1, z - 2, x - 6, y + 2, z - 2),
+                "fill %d %d %d %d %d %d minecraft:oak_planks".formatted(x + 6, y + 1, z - 1, x + 10, y + 1, z - 1),
+                "fill %d %d %d %d %d %d minecraft:red_wool".formatted(x + 6, y + 2, z - 1, x + 10, y + 2, z - 1),
+                "setblock %d %d %d minecraft:hay_block".formatted(x - 2, y + 1, z + 8),
+                "setblock %d %d %d minecraft:hay_block".formatted(x + 2, y + 1, z + 9),
+                "setblock %d %d %d minecraft:hay_block".formatted(x + 16, y + 1, z + 6),
+                "setblock %d %d %d minecraft:hay_block".formatted(x - 16, y + 1, z + 6),
+                "setblock %d %d %d minecraft:hay_block".formatted(x - 18, y + 1, z - 8),
+                "setblock %d %d %d minecraft:hay_block".formatted(x + 18, y + 1, z - 8))) run(server, c);
+    }
+
+    /** Savanna (cured grass) over a square of half-side {@code r} around {@code o}, like {@code /fillbiome} without its volume limit. */
+    private static void savanna(MinecraftServer server, BlockPos o, int r) {
+        var level = server.overworld();
+        var biome = level.registryAccess().registryOrThrow(net.minecraft.core.registries.Registries.BIOME)
+                .getHolderOrThrow(net.minecraft.world.level.biome.Biomes.SAVANNA);
+        List<net.minecraft.world.level.chunk.ChunkAccess> changed = new ArrayList<>();
+        for (int cx = (o.getX() - r) >> 4; cx <= (o.getX() + r) >> 4; cx++) {
+            for (int cz = (o.getZ() - r) >> 4; cz <= (o.getZ() + r) >> 4; cz++) {
+                var chunk = level.getChunk(cx, cz);
+                chunk.fillBiomesFromNoise((x, y, z, sampler) -> biome, level.getChunkSource().randomState().sampler());
+                chunk.setUnsaved(true);
+                changed.add(chunk);
+            }
+        }
+        level.getChunkSource().chunkMap.resendBiomesForChunks(changed);
+        Incoming.LOG.info("SANDBOX savanna: {} chunks", changed.size());
     }
 
     /**

@@ -14,6 +14,12 @@ package ua.zentix.incoming.nuclear.model;
  * while the ball shines and goes out without external heat (Drysdale, “An Introduction to Fire Dynamics”, ch. 6:
  * a single plank does not sustain burning). Burning fuel resting on it ignites it — minutes of flame, not a pulse.
  * <p>
+ * Live vegetation is not such fuel: green turf, grass, leaves and flowers char, steam and smoke under any pulse and
+ * flame only while it lasts. “Wet or green leaves, however, are virtually impossible to ignite and even when ignited will
+ * not participate in the development of a persistent fire” (Kerr et al. 1971, DNA N2:TR 2-70, p. 4-2; the same in DNA EM-1
+ * 1978, ch. 15; Glasstone &amp; Dolan §7.27, §7.60). Table 7.40's rows are all dry kindling. The nuclear flash therefore
+ * applies this law only to dry fuel ({@code nuclear/world/Kindling}).
+ * <p>
  * Threshold scatter is lognormal, σ ln = {@value #SPREAD} (⚠ estimate: Glasstone's table thresholds for one material
  * vary by 1.5–2 times with moisture and color).
  */
@@ -51,10 +57,28 @@ public final class PulseIgnition {
         }
     }
 
-    /** Share of {@code fuel} igniting under fluence {@code q} cal/cm². */
+    /** Share of {@code fuel} igniting under fluence {@code q} cal/cm² from a pulse of seconds (fuel ball; the table's 1 Mt row). */
     public static double share(double q, Fuel fuel) {
         if (!(q > 0) || Double.isInfinite(fuel.threshold)) return 0;
         return normal(Math.log(q / fuel.threshold) / SPREAD);
+    }
+
+    /**
+     * Share of {@code fuel} igniting under a nuclear pulse of {@code yieldKt}: the same law with every threshold scaled by
+     * pulse length ({@link #pulseScale}), as Glasstone &amp; Dolan 1977 table 7.40 rows grow from 35 kt to 1.4 Mt and 20 Mt.
+     */
+    public static double share(double q, Fuel fuel, double yieldKt) {
+        return share(q / pulseScale(yieldKt), fuel);
+    }
+
+    /**
+     * Threshold of a {@code yieldKt} pulse relative to the 1 Mt row: a longer pulse lets the fuel shed more heat (Glasstone
+     * &amp; Dolan 1977, §7.35, table 7.40). Scaled like table 7.35 thin-fabric ignition ({@link BurnInjury#thinFabric}):
+     * 15 kt 0.6, 500 kt 0.93, 1 Mt 1 (⚠ approximation: one scaling for all thin kindling; table 7.40 rows grow by a
+     * similar factor from 35 kt to 1.4 Mt).
+     */
+    public static double pulseScale(double yieldKt) {
+        return BurnInjury.thinFabric(yieldKt) / BurnInjury.thinFabric(1000);
     }
 
     /** Standard normal distribution function (Abramowitz, Stegun 26.2.17, error &lt; 7.5·10⁻⁸). */

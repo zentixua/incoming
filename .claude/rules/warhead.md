@@ -259,7 +259,7 @@ paths:
   of `ServerLevel.explode` itself (in Sable — the transfer of an explosion from a plot) do not see it, so an explosion in a
   grid of plots is entirely vanilla `level.explode`. Work posted from work (an explosion wakes handlers) goes to the end of
   the queue — a walk of `UnitQueue` by index.
-  Mixins of the host's pack on the explosion path (the jar scan — `/mnt/project-files/reports/explosion-mixins/laptop-explosion-mixins.sh`,
+  Mixins of the host's pack on the explosion path (scan the pack jars for mixins on these classes,
   repeat when the pack is updated; the analysis — javap): amendments 2.1.10 `ExplosionMixin` — only `FireballExplosion`, not
   ours; supplementaries 3.9.9 `ExplosionMixin` — the client's `finalizeExplosion`, reached by our `ClientboundExplodePacket`;
   `SelfGunpowderMixin` — `GunpowderBlock.onBlockExploded`, called through `onExplosionHit`; collective 8.39 — a Fabric config,

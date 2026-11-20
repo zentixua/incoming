@@ -53,7 +53,8 @@ The SAM is a block that shoots down other players' Shaheds, Lancets, cruise miss
 projectiles of the player who placed it, and of that player's team, alone.
 
 The block itself is the radar cabin. Four missile canisters stand upright on top of it, so the whole SAM is about five
-and a half blocks tall. An interceptor leaves its canister straight up, then turns toward the target in a short arc.
+and a half blocks tall. An interceptor leaves its canister straight up, then turns in a short arc toward the point where it will meet the
+target.
 
 ![A SAM launches interceptors from a city square](img/sam.webp)
 
@@ -75,8 +76,13 @@ and a half blocks tall. An interceptor leaves its canister straight up, then tur
 How often it shoots targets down follows from the game model; nothing is tuned. In a batch of 400 simulated raids per
 target over flat ground, with the target point up to 600 blocks from the SAM, every interceptor it fired hit:
 all Shaheds, cruise missiles and Lancets were shot down, and 78 % of B-2s. The other B-2s never came within the 450
-blocks at which the radar sees them. In a real game targets get through behind hills, in salvos larger than its four
-rails while it reloads, and when it runs out of missiles.
+blocks at which the radar sees them. With real flight speeds (`REAL`) the same raids bring down all Shaheds and Lancets
+and 99.5 % of cruise missiles; the B-2 then flies at 12 km, out of the radar's sight. In a real game targets get
+through behind hills, in salvos larger than its four rails while it reloads, and when it runs out of missiles.
+
+A cruise missile flies 12 blocks above the treetops (40 with `REAL`). From a SAM among trees or in hills the radar
+sees it only 100–300 blocks out, or not at all, and a missile aimed at something a few hundred blocks from
+the SAM can get there before an interceptor reaches it. Put the SAM on open, high ground.
 
 Against a SAM: a salvo (it has only four rails), a route around it or behind hills, the hard-to-detect B-2, or the Grad.
 

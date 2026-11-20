@@ -19,8 +19,8 @@ import java.util.UUID;
 
 /**
  * Interceptor missile flight: our own game model (not physical). Rail exit is upward at the spec's angle
- * (vertically from a canister for the SAM); acceleration and pursuit aim at the target's current position every
- * tick, with a lateral-acceleration turn limit ({@link Homing}, {@link InterceptorSpec#turnLimit}). The proximity
+ * (vertically from a canister for the SAM); acceleration and pursuit aim at the predicted intercept point every
+ * tick ({@link Homing#lead}), with a lateral-acceleration turn limit ({@link Homing}, {@link InterceptorSpec#turnLimit}). The proximity
  * fuze bursts it at closest approach if within fuze radius ({@link #fuze}): a burst shoots the target down. There
  * is no die roll: a miss passes outside that radius; the target keeps flying and the missile turns after it while
  * fuel lasts. If the target disappears, gains a rider, or fuel runs out, the missile self-destructs in the air.
@@ -109,6 +109,12 @@ public final class Interceptor {
         return end != null;
     }
 
+    /** How flight ended; null while it lasts. */
+    @Nullable
+    public End end() {
+        return end;
+    }
+
     /** Flight visual in the world (null means absent: flight is outside ticking chunks). */
     @Nullable
     public InterceptorEntity view() {
@@ -144,7 +150,7 @@ public final class Interceptor {
         }
         // The target has already moved this tick (entities and virtual flights tick earlier): its segment starts at its previous position.
         Vec3 tNow = t.position(), tPrev = tNow.subtract(t.getDeltaMovement());
-        Vec3 next = steer(tNow);
+        Vec3 next = steer(tNow, t.getDeltaMovement());
         double s = fuze(next, tPrev, tNow, t.airframe().noseLength());
         Vec3 hit = obstacle(level, pos, next);
         if (s >= 0 && (hit == null || s * pos.distanceTo(next) <= pos.distanceTo(hit))) {
@@ -160,15 +166,18 @@ public final class Interceptor {
     }
 
     /**
-     * World-independent pursuit tick: age; after leaving the rail, turn toward the current target position within
-     * the spec's limit at this speed ({@link InterceptorSpec#turnLimit}); speed follows the powered-flight law
-     * ({@link InterceptorSpec#speed}: engine and altitude/speed exchange). Returns the missile's end-of-tick
-     * position; {@link #moveTo} moves it after obstacle checks.
+     * World-independent pursuit tick: age; after leaving the rail, turn toward the point where it meets the target
+     * flying on at {@code targetVelocity} per tick ({@link Homing#lead}, recomputed each tick) within the spec's
+     * limit at this speed ({@link InterceptorSpec#turnLimit}); speed follows the powered-flight law ({@link
+     * InterceptorSpec#speed}: engine and altitude/speed exchange). Returns the missile's end-of-tick position;
+     * {@link #moveTo} moves it after obstacle checks.
      */
-    Vec3 steer(Vec3 targetNow) {
+    Vec3 steer(Vec3 targetNow, Vec3 targetVelocity) {
         age++;
         if (age > spec.railTicks()) {
-            Vec3 to = targetNow.subtract(pos);
+            // lead from the target's tick-start position: the same instant as this missile's position (the fuze compares
+            // this tick's segments of both; aiming from the end-of-tick position led one target step too far)
+            Vec3 to = Homing.lead(pos, speed, targetNow.subtract(targetVelocity), targetVelocity).subtract(pos);
             if (to.lengthSqr() > 1.0e-6) dir = Homing.turn(dir, to.normalize(), spec.turnLimit(speed));
         }
         speed = spec.speed(speed, age, dir.y);

@@ -26,7 +26,8 @@ import java.util.List;
  * ({@code fillBiomesFromNoise} per section: old biome except tiered cells), with biome packet to players viewing
  * chunk. Cells change from {@link #BELOW} blocks underground upward: deeper caves/biomes untouched. Preserve
  * biomes tagged {@link ModTags#NUKE_KEEPS_BIOME} (oceans, rivers, caves), without precipitation (desert, badlands, savanna,
- * already dry; plains rain would arrive permanently), and snowy biomes (warm biome would prevent future snow and ice permanently); own
+ * already dry; plains rain would arrive permanently) or with cured grass ({@link Kindling#cured}: already dry, and the flash fire
+ * law reads it from the biome before and after the layer alike), and snowy biomes (warm biome would prevent future snow and ice permanently); own
  * biomes only advance in tier. Permanent change: singed-biome grass stays brown.
  */
 public final class ScorchedBiomes {
@@ -63,7 +64,7 @@ public final class ScorchedBiomes {
     static boolean replaces(Holder<Biome> biome, int level) {
         int now = levelOf(biome);
         if (now > 0) return level > now;
-        return !biome.is(ModTags.NUKE_KEEPS_BIOME) && biome.value().hasPrecipitation() && biome.value().getBaseTemperature() >= SNOWY;
+        return !biome.is(ModTags.NUKE_KEEPS_BIOME) && biome.value().hasPrecipitation() && !Kindling.cured(biome) && biome.value().getBaseTemperature() >= SNOWY;
     }
 
     /**

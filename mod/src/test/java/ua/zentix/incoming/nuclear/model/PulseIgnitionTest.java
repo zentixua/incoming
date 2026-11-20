@@ -59,4 +59,22 @@ class PulseIgnitionTest {
         assertEquals(0.841345, PulseIgnition.normal(1), 1e-6);
         assertEquals(0.022750, PulseIgnition.normal(-2), 1e-6);
     }
+
+    /**
+     * Nuclear pulse (19.11 complaint: a fire block on nearly every turf column 3–5 km from 1 Mt): the same law with thresholds scaled by
+     * pulse length; at 1 Mt the table row itself, at 15 kt 0.6 of it, so the median of each fuel moves with the onset {@link ThermalModel#ignite}.
+     */
+    @Test
+    void nuclearPulseScalesThresholdsWithYield() {
+        for (double y : new double[]{15, 50, 500, 1000, 5000}) {
+            for (PulseIgnition.Fuel f : new PulseIgnition.Fuel[]{PulseIgnition.Fuel.PAPER, PulseIgnition.Fuel.GRASS, PulseIgnition.Fuel.FABRIC}) {
+                double median = f.threshold * PulseIgnition.pulseScale(y);
+                assertEquals(0.5, PulseIgnition.share(median, f, y), 1e-6, f + " at " + y + " kt");
+                assertEquals(ThermalModel.ignite(y) / PulseIgnition.Fuel.LEAVES.threshold, median / f.threshold, 1e-9);
+            }
+        }
+        assertEquals(1, PulseIgnition.pulseScale(1000), 1e-9);
+        assertEquals(0.6, PulseIgnition.pulseScale(15), 0.01);
+        assertEquals(0, PulseIgnition.share(1e6, PulseIgnition.Fuel.SOLID, 1000), "thick wood never ignites from the pulse");
+    }
 }

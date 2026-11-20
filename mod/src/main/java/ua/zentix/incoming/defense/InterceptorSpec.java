@@ -12,8 +12,8 @@ import ua.zentix.incoming.util.Air;
  * not physical, chosen for game scale (hundreds of blocks visible, a slower missile so flight can be seen),
  * rather than real system data. There is no hit probability: the target is shot down if the missile bursts within
  * fuze radius ({@link Interceptor}). Rail count and reload are world rules ({@code air_defense}). The world
- * flight scale ({@link FlightScale}) takes maximum missile speed from game to real values ({@link #maxSpeed()}),
- * with acceleration over the same ticks ({@link #boostAccel()}); turn limit and ranges remain game values.
+ * flight scale ({@link FlightScale}) takes maximum missile speed ({@link #maxSpeed()}) and the boost motor
+ * ({@link #boostAccel()}, {@link #boostTicks()}) from game to real values; turn limit and ranges remain game values.
  *
  * @param radarRange radar range, blocks (game value): projectiles beyond it are unseen; low-signature ones are
  * seen closer, per their spec ({@code WeaponSpec.Signature.visibility}); a hill or building between radar and
@@ -24,7 +24,7 @@ import ua.zentix.incoming.util.Air;
  * @param elevation rail angle above the horizon, degrees: the missile leaves upward toward the target (90 is
  * vertical)
  * @param launchSpeed launch rail exit speed, blocks/tick
- * @param boostTicks acceleration ticks
+ * @param gameBoostTicks acceleration ticks at game speed
  * @param gameBoostAccel speed gain per acceleration tick at game speed, blocks/tick²
  * @param gameMaxSpeed maximum speed, blocks/tick (game value, not physical)
  * @param lateralG maximum lateral acceleration, g: turn limit at any speed ({@link #turnLimit}), so a slow
@@ -35,7 +35,7 @@ import ua.zentix.incoming.util.Air;
  * client.render.InterceptorRenderer})
  * @param passport real article specifications
  */
-public record InterceptorSpec(double radarRange, double engageRange, int railTicks, double elevation, double launchSpeed, int boostTicks, double gameBoostAccel, double gameMaxSpeed,
+public record InterceptorSpec(double radarRange, double engageRange, int railTicks, double elevation, double launchSpeed, int gameBoostTicks, double gameBoostAccel, double gameMaxSpeed,
                               double lateralG, int fuelTicks, double fuse, double noseLength, Passport passport) {
     /** Maximum speed on the world flight scale, blocks/tick ({@link #maxSpeed(double)}). */
     public double maxSpeed() {
@@ -53,11 +53,24 @@ public record InterceptorSpec(double radarRange, double engageRange, int railTic
     }
 
     /**
-     * Speed gain per acceleration tick at scale {@code x}, blocks/tick²: reach maximum speed in the same
-     * acceleration ticks.
+     * Speed gain per acceleration tick at scale {@code x}, blocks/tick²: game to the real boost motor's mean
+     * acceleration ({@link Passport#boostAccel}). Real speed with the game's 1.5 s acceleration would mean ~70 g
+     * along the axis: the missile would leave the canister at 9 blocks/tick and gain speed through its pitch-over,
+     * its turn rate (one lateral acceleration, {@link #turnLimit}) falling with speed, and climb ~800 blocks before
+     * it could level off, above any low target such as a cruise missile at 40 m.
      */
     public double boostAccel(double x) {
-        return x == 0 ? gameBoostAccel : gameBoostAccel * (maxSpeed(x) - launchSpeed) / (gameMaxSpeed - launchSpeed);
+        return FlightScale.blend(gameBoostAccel, passport.boostAccel(), x);
+    }
+
+    /** Acceleration ticks on the world flight scale ({@link #boostTicks(double)}). */
+    public int boostTicks() {
+        return boostTicks(FlightScale.x());
+    }
+
+    /** Acceleration ticks at scale {@code x}: game to the real boost motor's burn ({@link Article.SolidMotor#burn}). */
+    public int boostTicks(double x) {
+        return (int) Math.round(FlightScale.blend(gameBoostTicks, passport.boost().burn() * 20, x));
     }
 
     /**
@@ -89,7 +102,17 @@ public record InterceptorSpec(double radarRange, double engageRange, int railTic
      */
     public record Passport(double launchMass, double length, double diameter, double maxSpeed, double lateralG, double rangeMin,
                            double rangeMax, double altitudeMin, double altitudeMax, Article.Charge warhead, double fuse,
-                           Article.SolidMotor boost, Article.SolidMotor sustain) {}
+                           Article.SolidMotor boost, Article.SolidMotor sustain) {
+        /**
+         * Mean boost acceleration, blocks/tick²: the ideal speed gain over the burn (Tsiolkovsky, Δv = w ln(m₀ /
+         * (m₀ − propellant))) divided by the burn time; gravity and climb losses are left to the flight law
+         * ({@link InterceptorSpec#speed}). 1 block = 1 m and 20 ticks/s: 1 m/s² = 1/400 blocks/tick².
+         */
+        public double boostAccel() {
+            double dv = boost.exhaust() * Math.log(launchMass / (launchMass - boost.propellant()));
+            return dv / boost.burn() / 400;
+        }
+    }
 
     /**
      * 9M96E2 (S-400; the S-350's 9M96E is 333 kg, 4.75 m, 900 m/s, 1–40 km, up to 20 km): 420 kg, length 5.65 m
@@ -112,7 +135,7 @@ public record InterceptorSpec(double radarRange, double engageRange, int railTic
     /**
      * 9M96 SAM missile ({@link #M96}). Game model, not physical (slower than the real one so flight is visible):
      * vertical canister launch as on the S-350 and S-400's 9M96, up to 14 blocks/tick (280 m/s) in one and a half
-     * seconds of acceleration (~12.5 in vertical climb, the rest gained in sustain mode), 15 s flight, ~4 km;
+     * seconds of acceleration at game flight scale (real scale: the 9M96's 1000 m/s and 11 s burn) (~12.5 in vertical climb, the rest gained in sustain mode), 15 s flight, ~4 km;
      * speed follows the same powered-flight law as projectiles ({@link #speed}: vertical climb reduces
      * acceleration through altitude/speed exchange). Lateral acceleration 40 g is not physical: open sources give
      * “over 20 g” for 9M96 at altitudes up to 30–35 km (FAS, “S-400 SA-20 Triumf”,
@@ -137,7 +160,7 @@ public record InterceptorSpec(double radarRange, double engageRange, int railTic
      */
     public double speed(double speed, int age, double climbSine) {
         double boost = boostAccel();
-        double accel = age <= boostTicks ? boost : boost * passport.sustain().thrust() / passport.boost().thrust();
+        double accel = age <= boostTicks() ? boost : boost * passport.sustain().thrust() / passport.boost().thrust();
         return WeaponSpec.Handling.speed(speed, maxSpeed(), climbSine, accel, 1);
     }
 

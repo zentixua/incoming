@@ -28,3 +28,7 @@ paths:
 - Trailer: sound is assembled from the log (`Recorder`), and the engine reports a sound only at start: loops started
   before the plan (the projectile's motor since launch): `Recorder.start` writes them into the log itself; without this
   the chase plans have no motor.
+- Flashback PNG-sequence export is CPU-bound in one encoder thread: ~3.4 frames/s at 1080p, ~1.9 at 1440p; plan
+  time ≈ frames × candidates / rate + ~40 s. Lossless ~30 % faster: before export set
+  `STBImageWrite.stbi_write_png_compression_level` to 5 and `stbi_write_force_png_filter` to 2 (LWJGL 3.3.3).
+

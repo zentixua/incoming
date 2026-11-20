@@ -16,8 +16,8 @@ paths:
   not yet sent), others afterward, and chunks requested by a player move to visible; visible chunks and their server
   prechecks get an extra 12 ms beyond the short lane deadline when the server has no spare time
   (`ScarQueue.SEEN_BUSY_NANOS`, `WorkClock.canStartVisible`: with a full tick as the wave crossed a player's city, a
-  2 ms lane left visible ruins up to 64 ticks behind the front, netcup 16.10; 6 ms left 250 kt ruins in view 18-30
-  ticks behind, Zearth r4 run4); while ruins in view wait (`ScarQueue.seenWaiting`) the zone behind the wave takes
+  2 ms lane leaves visible ruins up to 64 ticks behind the front, 6 ms leaves 250 kt ruins in view 18-30 ticks
+  behind); while ruins in view wait (`ScarQueue.seenWaiting`) the zone behind the wave takes
   no new squares, since their disk loads end on the server thread between ticks; the visible part (`ScarQueue.workSeen`:
   enqueuing chunks loaded at detonation, visible ruins, prechecks) runs before craters, unseen ruins after them: the
   crater's one-column units took the lane for 4.5 s after a 250 kt ground burst, so chunks in view were not even
@@ -27,7 +27,7 @@ paths:
   r4 run3, GameTest `seenChunkEnqueuedPastDiskPlans`); a chunk
   needing another unit (neighbor
   fracture for an on-site plan, stale plan) returns to its queue's tail, not head: several-ms window fractures would
-  hold up dozens of ready visible chunks (0.2 ms replacement), 38 ticks on netcup 16.10; visible chunks are prechecked
+  hold up dozens of ready visible chunks (0.2 ms replacement) for 38 ticks; visible chunks are prechecked
   `ScarQueue.LOOKAHEAD` (20) ticks before the wave: plans that became stale during flight (grass grew, player placed a
   block) and chunks without plans receive a background plan now, ready by the wave (GameTest
   `staleSeenPlanReplannedBeforeWave`); a background plan stale at replacement is not applied — rebuild on the server
@@ -78,7 +78,7 @@ paths:
   (`ForestBlowdown`, Glasstone fig. 5.146: drag damage reaches farther than ∛W, conifers are stronger), with the tree's
   own randomness from its base position; a fixed 5 psi left Zearth's oak and birch standing at 3–4 km from 250 kt,
   where Glasstone has 30–90 % down (`ForestBlowdownTest`); other logs (stilts, pillars, log walls, beams) are timber like planks (5 psi):
-  before 07.11.2026 they never broke and log stilts held houses, tall bare trunks stood (Zearth 250 kt; GameTests
+  otherwise log stilts hold houses and tall bare trunks stand (GameTests
   `houseOnLogStiltsFalls`, `trunksFallOnlyWhole`); any broken log except a felled trunk's (`Collapse.markFelled`) starts
   the support pass and lands as rubble: a cut stilt or branch carrying only logs left the logs above it hanging
   (GameTest `timberDoesNotHang`). `Collapse` drops what lost support: 0-1 traversal from supports (all load-bearing blocks at
@@ -261,7 +261,11 @@ paths:
   the ruins but not the layer, which burned turf the ruins keep — GameTest `flashScorchesBeforeTheWaveAndRuinsMatch`
   has that wall) and a background layer
   (`RuinPlanner.flash`: same `land` without pressure — no turf stripping or rubble; all light-ignited fires,
-  from `ThermalModel.ignite(yield)` with chance `min(1, q/igniteAll)`, with wave-blown fires marked — position roll not below chance × `BLOWN_KEEP` at ≥ 2 psi —
+  from `ThermalModel.ignite(yield)`, only on dry fuel (`RuinPlanner.kindling`, `Kindling`: tags `pulse_paper`/`pulse_fabric`/`pulse_dry`,
+  ray toward the ball through air/glass ×`GLASS`/no-collision cells until no column covers it, fire in the first air cell, in
+  this chunk; turf only in cured-grass cells, `ChunkShot.cured` from biome downfall ≤ `Kindling.DRY_DOWNFALL`) with chance
+  `PulseIgnition.share(q, fuel, yield)`; live turf/grass/leaves/wood never get fire (19.11 complaint: fire on ~every turf
+  column at 3–5 km, 1 Mt; GameTest `flashIgnitesOnlyDryFuel`), with wave-blown fires marked — position roll not below chance × `Blowout.keep(psi)` —
   `RuinPlan.blown`; biomes; `FlashFaces`); one unit per ready layer writes like ruins (`RuinPlan.applyFlash`: directly
   into sections, section packets, LODs, `FlashSync.chars`), no earlier than light at the chunk's point nearest the
   sphere reaches ignition threshold (`Detonation.flashTicks`, emitted pulse fraction
@@ -462,6 +466,14 @@ paths:
   not a complete nuclear heap bound. FarLods tags copies, snapshots and headers by cancellation generation; late
   results release their slots but cannot publish. Regressions: `nuke_lifecycle_detached`, `nuke_lifecycle_far`.
 - Never key a zone-sized `java.util` hash map by a raw chunk key (`ChunkPos.asLong`): `Long.hashCode` is `x ^ z`, so a zone's
-  square of chunks shares a few hundred hashes and the bins treeify (250 kt on Zearth 07.11.2026: `RuinSettle` rotation
+  square of chunks shares a few hundred hashes and the bins treeify (a 250 kt zone: `RuinSettle` rotation
   = 54 % of allocation, `ConcurrentHashMap$TreeNode.findTreeNode` the top server-thread frame). Use fastutil `Long2*`
   (mixing hash), or `RuinContext.key` for maps that must be concurrent (`RuinContextKeyTest`).
+- Acceptance (Artem, 05.11): destruction reaches every player in the zone together with the wave. Ruins in view lag
+  the front p99 ≤ 1 s, max ≤ 2 s (over chunks inside any player's `ChunkTrackingView`); tick p95 ≤ 50 ms during the
+  wave; preparation before launch ≤ 60 s with progress shown; heap ≤ 8 GB at 1 Mt; no save holds the world > 1 s.
+  Late arrivals see ruins at once, never intact. One 1 Mt detonation at a time is guaranteed, salvos best-effort. The
+  far zone settles on disk in the background; only near-player state must be exact at the wave.
+- Measure ruin cost on dense city chunks (cities on big real-terrain maps are denser than on small ones), never on
+  natural terrain samples; a map's pre-generated area is not the whole map (Artem, 04.11).
+

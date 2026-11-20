@@ -181,11 +181,13 @@ final class NukeAfter {
                 double ang = 2 * Math.PI * (j + 0.5) / n + offset;
                 double x = b.x + Math.cos(ang) * r, z = b.z + Math.sin(ang) * r;
                 // local chunks show actual fire: the model there is for comparison only
+                // the model counts every column as fueled: weigh it by the storm's terrain survey
+                double fueled = each * a.storm.fuelAt(x, z);
                 if (level.getChunkSource().getChunk((int) Math.floor(x) >> 4, (int) Math.floor(z) >> 4, false) != null) {
-                    modelHere += each;
+                    modelHere += fueled;
                     continue;
                 }
-                sink(wind, ear, x, z, each * model);
+                sink(wind, ear, x, z, fueled * model);
             }
         }
         modelLoaded = modelHere;
@@ -295,6 +297,8 @@ final class NukeAfter {
             FireField.Secondary s = secondaries.get(nextSecondary++);
             // fires extinguished or disabled on the server — nothing left to explode
             if (!d.fires() || trust < 0.2) continue;
+            // only where something burns: the storm's fueled share of the cell (green meadow, sea — none)
+            if ((s.seed() >>> 11) * 0x1.0p-53 >= a.storm.fuelAt(s.x(), s.z())) continue;
             double y = FarTerrain.of(level).at((int) Math.floor(s.x()), (int) Math.floor(s.z()));
             if (Double.isNaN(y) || y <= level.getMinBuildHeight() + 1) y = d.groundY() + 1;
             BlastEffects.blast(new S2C.Blast(s.big() ? S2C.Blast.MISSILE : S2C.Blast.DRONE, new Vec3(s.x(), y + 0.5, s.z()),

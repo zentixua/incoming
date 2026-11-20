@@ -18,7 +18,9 @@ import net.minecraft.world.phys.shapes.Shapes;
 import org.jetbrains.annotations.Nullable;
 import ua.zentix.incoming.IncomingConfig;
 import ua.zentix.incoming.nuclear.Detonation;
+import ua.zentix.incoming.nuclear.model.Blowout;
 import ua.zentix.incoming.nuclear.model.Fragility;
+import ua.zentix.incoming.nuclear.model.PulseIgnition;
 import ua.zentix.incoming.nuclear.model.ThermalModel;
 import ua.zentix.incoming.nuclear.model.WorldNoise;
 import ua.zentix.incoming.registry.ModBlocks;
@@ -327,14 +329,8 @@ public final class RuinPlanner {
             long at = e.getLongKey();
             s.set(BlockPos.getX(at) & 15, BlockPos.getY(at), BlockPos.getZ(at) & 15, e.getValue());
         }
-        // wave-torn leaves ignite in light where wave weak and fire not blown out
-        if (g.fires()) {
-            for (int k = 0; k < c.leaves.size(); k++) {
-                m.set(c.leaves.getLong(k));
-                if (d.psi(Vec3.atCenterOf(m)) < 3 && g.lit(m) >= 10) s.fire(m.getX(), m.getY(), m.getZ(), 1.0, 1.0);
-            }
-        }
         double[] heat = land(g, s, c.ground, c, false);
+        kindling(g, s, false);
         Blast own = c.blast();
         if (own != null) for (int i = 0; i < own.trees().size(); i++) lay(s, own.trees().get(i), own.treeLogs().get(i));
         // after everything deposited on ground (rubble, trunks)
@@ -358,8 +354,8 @@ public final class RuinPlanner {
 
     /**
      * Chunk flash layer (any thread): light-only changes at flash, before wave ({@link FlashScorch}).
-     * Like {@link #scorch} without pressure: no turf stripping (wave), all light-ignited fires (from {@link ThermalModel#ignite}, min(1, q/igniteAll), without
-     * wave-blown fraction); fires wave will later extinguish (half from 2 psi, same hash roll as ruins)
+     * Like {@link #scorch} without pressure: no turf stripping (wave), all light-ignited fires (dry fuel from {@link ThermalModel#ignite},
+     * {@link #kindling}, without wave-blown fraction); fires wave will later extinguish ({@link Blowout}, same hash roll as ruins)
      * listed in plan ({@link RuinPlan#blown}), extinguished by ruin replacement. Face scorch on blocks unchanged by light, using
      * chunk/in-memory-neighbor window (absent neighbor means exposed edge face). Where wave breaks nothing, ruins from
      * pre-flash world change same positions to same states (GameTest {@code flashScorchesBeforeTheWaveAndRuinsMatch}): wave
@@ -384,6 +380,7 @@ public final class RuinPlanner {
         int[] ground = new int[256];
         for (int column = 0; column < 256; column++) ground[column] = groundOf(s, column & 15, column >> 4, bottom);
         double[] heat = land(g, s, ground, null, flash);
+        kindling(g, s, flash);
         for (int column = 0; column < 256; column++) if (ground[column] != Integer.MIN_VALUE) snowy(s, column & 15, ground[column], column >> 4);
         return biomes(g.ctx().noise, ground, heat, shot.x << 4, shot.z << 4);
     }
@@ -447,11 +444,15 @@ public final class RuinPlanner {
                 if (lit >= ThermalModel.ignite(d.yieldKt())) fireball(s, lx, ground, lz);
                 continue;
             }
+            // a grass bed is fuel only where the biome cures it (Kindling): green turf chars and smokes, never sustains fire
+            boolean bed = s.props(lx, ground, lz).is(Blast.Props.TURF) && (s.shot.cured >> ((lz >> 2) << 2 | lx >> 2) & 1) != 0;
             boolean stripped = ground(s, noise, lx, ground, lz, x, z, q, groundPsi, blockDamage);
             plants(s, noise, lx, ground, lz, x, z, q, stripped);
             // ignition compares exposure facing the fireball with its threshold: a slope gets no more than that
             double qFire = Math.min(q, lit);
-            if (fires && qFire >= ThermalModel.ignite(d.yieldKt())) fire(s, lx, ground, lz, x, z, qFire / ThermalModel.igniteAll(d.yieldKt()), groundPsi, flash);
+            if (fires && bed && !stripped && qFire >= ThermalModel.ignite(d.yieldKt()) && ground + 1 < s.maxY && s.get(lx, ground + 1, lz).isAir()) {
+                fire(s, x, ground + 1, z, PulseIgnition.share(qFire, PulseIgnition.Fuel.GRASS, d.yieldKt()), groundPsi, flash);
+            }
         }
         return heat;
     }
@@ -672,23 +673,122 @@ public final class RuinPlanner {
     }
 
     /**
-     * Ground fires where light ignited fuel (chance rises with light: {@code share} is light over
-     * {@link ThermalModel#igniteAll}), not all extinguished by wave (from 2 psi {@link #BLOWN_KEEP} remain). {@code flash}
-     * means flash layer: candidate by light probability, fraction surviving wave separate.
+     * Fire at {@code x, y, z} the flash ignites with {@code chance}; the wave leaves {@link Blowout#keep} of it at ground
+     * pressure {@code psi}. {@code flash} means flash layer: it places fire by ignition chance and lists what the wave blows out
+     * (same position roll as ruins); ruins place the kept share ({@link Sections#finish}).
      */
-    private static void fire(Sections s, int lx, int ground, int lz, int x, int z, double share, double psi, boolean flash) {
-        if (ground + 1 >= s.maxY) return;
-        double lit = Math.min(1, share), keep = psi >= 2 ? BLOWN_KEEP : 1;
-        Blast.Props now = s.props(lx, ground, lz);
-        if (s.get(lx, ground + 1, lz).isAir() && (now.is(Blast.Props.FLAMMABLE) || now.is(Blast.Props.DIRT))) {
-            if (flash) s.fire(x, ground + 1, z, lit, keep);
-            else s.fire(x, ground + 1, z, lit * keep, 1);
+    private static void fire(Sections s, int x, int y, int z, double chance, double psi, boolean flash) {
+        s.fire(x, y, z, chance, Blowout.keep(psi), flash);
+    }
+
+    /** Window glass passes this share of the pulse (est.: soda-lime glass transmits 0.85–0.9 from 0.35 to 2.7 µm, where a ~6000 K fireball emits nearly all its light). */
+    static final double GLASS = 0.8;
+    /** Cells a pulse ray crosses from fuel toward the ball before it must be outdoors (room depth to a window). */
+    static final int RAY_CELLS = 16;
+
+    /**
+     * Dry fuel the flash reaches (any thread; {@link Kindling}): paper, fabric, hay, dead bush wherever they stand — on open
+     * ground, on roofs, or indoors behind windows (Glasstone &amp; Dolan §7.50: outdoor ignition points are paper, trash, dry
+     * grass and leaves; indoors, kindling lit through windows). Exposure is the pulse at the fuel along a ray toward the
+     * ball's middle ({@link ThermalShadow#aim}) through the pre-wave window snapshots: only air, glass and panes ({@link #GLASS}
+     * each) and blocks without collision pass, until the ray reaches a point no column covers, where the window terrain
+     * shadow takes over ({@link RuinContext.Grid#share}). Fire stands in the first air cell along the ray (above fuel open to
+     * the sky), in this chunk; chance {@link PulseIgnition#share(double, PulseIgnition.Fuel, double)}.
+     */
+    static void kindling(RuinContext.Grid g, Sections s, boolean flash) {
+        if (!g.fires()) return;
+        Detonation d = g.ctx().d;
+        ChunkShot shot = s.shot;
+        Blast.PropsView view = g.view();
+        double onset = ThermalModel.ignite(d.yieldKt());
+        int x0 = shot.x << 4, z0 = shot.z << 4;
+        Vec3 ball = ThermalShadow.aim(d);
+        Vec3 nearest = new Vec3(Mth.clamp(d.burst().x, x0, x0 + 16), Mth.clamp(d.burst().y, shot.minY, shot.maxY()), Mth.clamp(d.burst().z, z0, z0 + 16));
+        if (d.fluence(nearest) < onset) return;
+        double[] seen = new double[1];
+        for (int i = 0; i < shot.sections; i++) {
+            if (!shot.mayHave(i, st -> view.get(st).fuel() != null)) continue;
+            int y0 = shot.minY + (i << 4);
+            for (int y = y0; y < y0 + 16; y++) {
+                for (int lz = 0; lz < 16; lz++) {
+                    for (int lx = 0; lx < 16; lx++) {
+                        BlockState st = shot.get(lx, y, lz);
+                        PulseIgnition.Fuel fuel = view.get(st).fuel();
+                        if (fuel == null || s.get(lx, y, lz) != st) continue;
+                        int x = x0 + lx, z = z0 + lz;
+                        if (inFireball(d, x, y, z)) continue;
+                        double free = d.fluence(new Vec3(x + 0.5, y + 0.5, z + 0.5));
+                        if (free < onset) continue;
+                        long at = expose(g, shot, view, x, y, z, ball, seen);
+                        if (at == NO_FIRE) continue;
+                        int fx = BlockPos.getX(at), fy = BlockPos.getY(at), fz = BlockPos.getZ(at);
+                        double q = free * seen[0];
+                        if (q < onset) continue;
+                        fire(s, fx, fy, fz, PulseIgnition.share(q, fuel, d.yieldKt()), d.psi(new Vec3(fx + 0.5, fy, fz + 0.5)), flash);
+                    }
+                }
+            }
         }
     }
 
-    /** Fire fraction surviving wave where ground pressure at least 2 psi. */
-    static final double BLOWN_KEEP = 0.5;
+    private static final long NO_FIRE = Long.MIN_VALUE;
 
+    /**
+     * Pulse path from fuel at {@code x, y, z} toward {@code ball} ({@link #kindling}): fire position (first air cell on the
+     * path, in this chunk) or {@link #NO_FIRE}; {@code seen[0]} — share of the free pulse arriving (visible ball share ×
+     * glass). Voxel walk (Amanatides–Woo) through pre-wave snapshots, at most {@link #RAY_CELLS} cells.
+     */
+    static long expose(RuinContext.Grid g, ChunkShot shot, Blast.PropsView view, int x, int y, int z, Vec3 ball, double[] seen) {
+        Vec3 from = new Vec3(x + 0.5, y + 0.5, z + 0.5);
+        // fuel open to the sky (column top): fire on it, light as on the ground there
+        if (g.shadowHeight(x, z) <= y + 1) {
+            if (y + 1 >= shot.maxY() || !view.get(shot.get(x & 15, y + 1, z & 15)).air()) return NO_FIRE;
+            seen[0] = g.share(from.add(0, 0.5, 0));
+            return seen[0] > 0 ? BlockPos.asLong(x, y + 1, z) : NO_FIRE;
+        }
+        double dx = ball.x - from.x, dy = ball.y - from.y, dz = ball.z - from.z, len = Math.sqrt(dx * dx + dy * dy + dz * dz);
+        if (len < 1e-6) return NO_FIRE;
+        dx /= len;
+        dy /= len;
+        dz /= len;
+        int sx = dx > 0 ? 1 : -1, sy = dy > 0 ? 1 : -1, sz = dz > 0 ? 1 : -1;
+        double tx = dx == 0 ? Double.POSITIVE_INFINITY : 0.5 / Math.abs(dx), ty = dy == 0 ? Double.POSITIVE_INFINITY : 0.5 / Math.abs(dy),
+                tz = dz == 0 ? Double.POSITIVE_INFINITY : 0.5 / Math.abs(dz);
+        double ux = dx == 0 ? Double.POSITIVE_INFINITY : 1 / Math.abs(dx), uy = dy == 0 ? Double.POSITIVE_INFINITY : 1 / Math.abs(dy),
+                uz = dz == 0 ? Double.POSITIVE_INFINITY : 1 / Math.abs(dz);
+        int cx = x, cy = y, cz = z;
+        long fire = NO_FIRE;
+        double pass = 1;
+        for (int k = 0; k < RAY_CELLS; k++) {
+            if (tx <= ty && tx <= tz) {
+                cx += sx;
+                tx += ux;
+            } else if (ty <= tz) {
+                cy += sy;
+                ty += uy;
+            } else {
+                cz += sz;
+                tz += uz;
+            }
+            if (cy < shot.minY || cy >= shot.maxY()) return NO_FIRE;
+            ChunkShot c = g.at((cx >> 4) - shot.x, (cz >> 4) - shot.z);
+            if (c == null) return NO_FIRE;
+            Blast.Props p = view.get(c.get(cx & 15, cy, cz & 15));
+            if (!p.is(Blast.Props.TRANSMITS)) return NO_FIRE;
+            if (p.is(Blast.Props.GLAZING)) pass *= GLASS;
+            if (fire == NO_FIRE && p.air()) {
+                if (cx >> 4 != shot.x || cz >> 4 != shot.z) return NO_FIRE;
+                fire = BlockPos.asLong(cx, cy, cz);
+            }
+            // outdoors: no column covers this cell, the window's terrain line decides the rest
+            if (g.shadowHeight(cx, cz) <= cy + 1) {
+                if (fire == NO_FIRE) return NO_FIRE;
+                seen[0] = pass * g.share(new Vec3(cx + 0.5, cy + 0.5, cz + 0.5));
+                return seen[0] > 0 ? fire : NO_FIRE;
+            }
+        }
+        return NO_FIRE;
+    }
     /** Toppled trunk: horizontal logs along surface away from epicenter. */
     private static void lay(Sections s, long[] tree, BlockState log) {
         BlockPos base = BlockPos.of(tree[0]);
@@ -722,8 +822,8 @@ public final class RuinPlanner {
         /** Changes: section index {@code << 12} | position in section. */
         private final Int2ObjectOpenHashMap<BlockState> changes = new Int2ObjectOpenHashMap<>();
         /**
-         * Fire candidates: position, probability and wave-surviving fraction (flash layer; ruins use 1,
-         * their probability already post-wave).
+         * Fire candidates: position, ignition probability and wave-surviving fraction ({@link Blowout#keep}); several fuels
+         * lighting one cell combine their ignition first, the cell's blowout applies once.
          */
         final LongArrayList fires = new LongArrayList();
         final it.unimi.dsi.fastutil.doubles.DoubleArrayList fireChance = new it.unimi.dsi.fastutil.doubles.DoubleArrayList(),
@@ -772,9 +872,22 @@ public final class RuinPlanner {
             changed.add(k);
         }
 
-        void fire(int x, int y, int z, double chance, double keep) {
+        /** Fire candidate index by position: several fuels lighting one cell ignite it if any does. */
+        private final it.unimi.dsi.fastutil.longs.Long2IntOpenHashMap fireAt = new it.unimi.dsi.fastutil.longs.Long2IntOpenHashMap();
+        /** Flash layer: fires by ignition chance, the wave-blown listed; otherwise ruins: fires the wave keeps. */
+        private boolean flashLayer;
+
+        void fire(int x, int y, int z, double chance, double keep, boolean flash) {
             if (chance <= 0) return;
-            fires.add(BlockPos.asLong(x, y, z));
+            flashLayer = flash;
+            long at = BlockPos.asLong(x, y, z);
+            int k = fireAt.getOrDefault(at, -1);
+            if (k >= 0) {
+                fireChance.set(k, 1 - (1 - fireChance.getDouble(k)) * (1 - chance));
+                return;
+            }
+            fireAt.put(at, fires.size());
+            fires.add(at);
             fireChance.add(chance);
             fireKeep.add(keep);
         }
@@ -825,8 +938,8 @@ public final class RuinPlanner {
             for (int k = 0; k < fires.size(); k++) {
                 long f = fires.getLong(k);
                 int fx = BlockPos.getX(f), fy = BlockPos.getY(f), fz = BlockPos.getZ(f);
-                double roll = hash(fx, fy, fz, 29), chance = fireChance.getDouble(k);
-                if (roll >= chance) continue;
+                double roll = hash(fx, fy, fz, 29), chance = fireChance.getDouble(k), kept = chance * fireKeep.getDouble(k);
+                if (roll >= (flashLayer ? chance : kept)) continue;
                 int i = (fy - minY) >> 4;
                 if (i < 0 || i >= sections) continue;
                 BlockState fire = fireAt(fx, fy, fz);
@@ -835,7 +948,7 @@ public final class RuinPlanner {
                 fireCells.add(cell);
                 fireStates.add(fire);
                 // same roll as ruins (their probability chance · keep): wave extinguishes what ruins would not ignite
-                if (roll >= chance * fireKeep.getDouble(k)) blown.add(cell);
+                if (roll >= kept) blown.add(cell);
             }
             ChunkPos pos = new ChunkPos(chunkX, chunkZ);
             if (n == 0 && fireCells.isEmpty() && outside.isEmpty() && fluidTicks.length == 0) return RuinPlan.nothing(ctx, biomes);

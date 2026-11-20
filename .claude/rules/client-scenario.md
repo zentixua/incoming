@@ -135,8 +135,8 @@ with Iris.
   instance directory or Prism group, not command-line path: with `MC_DIR` pointing at instance, sandbox mods share
   its path and `pgrep -f 'PrismLauncher/instances/'` matched sandbox itself (code 75). `start shaders` without
   instance shaderpack refuses, instead of running packless sandbox.
-- Nuclear effects near camera in seconds: `nuke <kt> [air|ground] near [m]` (`debris` scene without new client): at
-  fresh location, stone-brick house with glass panes/plank roof, glass-windowed plank house, three oaks
+- Nuclear effects near camera in seconds: `nuke <kt> [air|ground] near [m] [dry]` (`debris` scene without new client; `dry`: savanna site): at
+  fresh location, stone-brick house with glass panes/plank roof, glass-windowed plank house (dry fuel behind north windows, hay bales outside: `Sandbox.furnish`), three oaks
   (`ClientScenario.debrisEvents` layout); burst `m` north (default 2000, like `debris`); effect time (`--at`) is
   front arrival at houses by client detonation clock, frames allowed beforehand (from −10 s). `debris` camera:
   `--cam '60 15 0 5'` (60 south, 15 above ground, facing houses). Wave same as all client scenarios (sound-speed

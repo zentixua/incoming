@@ -10,6 +10,8 @@ displayName = "${mod_name}"
 authors = "${mod_authors}"
 displayURL = "${mod_url}"
 logoFile = "incoming.png"
+# Pixel-art logo: draw it with nearest-neighbour scaling.
+logoBlur = false
 credits = "Sound authors, sources and licenses: assets/incoming/sounds/credits.txt. Bundled: FastNoiseLite and sable-companion (MIT; license notices included). Minecraft-derived assets: META-INF/ASSET-NOTICES.txt."
 description = '''${mod_description}'''
 

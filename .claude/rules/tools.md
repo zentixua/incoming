@@ -9,7 +9,12 @@ paths:
 
 # Where things are, in detail
 
-The short layout is in the root CLAUDE.md; here, what each script does.
+The short layout is in AGENTS.md; here, what each script does.
+
+Prism: `~/.var/app/org.prismlauncher.PrismLauncher/data/PrismLauncher/` (`tools/paths.py`: PRISM);
+`instances/Open Skies/minecraft/` is Artem's playing instance (MC; folder name only in `tools/paths.py`, read by
+`build.gradle`, overridden by `MC_DIR`): `mods/` also supplies Create/Sable/Aeronautics for dev runs,
+`logs/latest.log`, `incoming-backup/` for `deploy.sh` removals; `java/java-runtime-delta` is JDK 21.
 
 ```
 /mnt/data/projects/incoming/             ← this project (git)
@@ -28,6 +33,9 @@ The short layout is in the root CLAUDE.md; here, what each script does.
     deploy.sh                            ← build → mods/ of an instance and dist/ (--test, --dry; --jar F: a ready jar from CI/release);
                                            does not touch an instance with pack auto-update: packwiz-installer would bring back the pack's jar
     logscan.py                           ← digest of logs/latest.log
+    check_knowledge.py                   ← CI job “Знания” (every run): agent knowledge layout (CLAUDE.md = @AGENTS.md, AGENTS.md
+                                           ≤ 28 KiB, every rule has live `paths:` and is listed, plugin hooks exist, no private
+                                           facts); test_check_knowledge.py also tests the plugin's hooks/knowledge.py
     nuke_survey.py <untouched> <blasted> <gz x> <gz z> ← nuclear ruins against the untouched world, block by block (region
                                            files only, safe on a live server's world): share of built blocks still in place by
                                            kind and distance ring, one-block spikes left standing, block columns at --spot=x,z
@@ -47,6 +55,12 @@ The short layout is in the root CLAUDE.md; here, what each script does.
                                            --wait, in the lease queue) and waits until Artem's game is closed; his game started during the
                                            job (polled every second) stops it: “Artem's game started at T: job stopped”, exit 75;
                                            at the end, “laptop_job <name>: exit N”; --status: what runs and who holds the GPU
+                                           A caller still waiting in the GPU queue dies with the agent's session cgroup at turn end
+                                           (even setsid/nohup): start the wait in its own unit, `systemd-run --user
+                                           --unit=incoming-wait-<name> --collect -p WorkingDirectory=$PWD --setenv=PATH="$PATH"
+                                           --setenv=HOME="$HOME" --setenv=XDG_RUNTIME_DIR="$XDG_RUNTIME_DIR" bash -c '…'`, and
+                                           name that unit in a mission's WAITING. After the job the lease stays with the launching
+                                           tree for 10 min: run `tools/gpu_lease.sh release` from that tree
     gpu_lease.sh status|take [--wait]|release ← GPU lease: with a picture, one session (the owner is found by the tree
                                            wt-<S>…); a client on the GPU is one (the lock is held by nested_kwin.sh); another
                                            session: refusal “GPU held by …, since …”; a live nested KWin without the lock (the script before
@@ -116,13 +130,13 @@ The short layout is in the root CLAUDE.md; here, what each script does.
                                            (INCOMING_SIZE=1920x1080, frames and the sound log go to mod/run/scenario/trailer/)
     trailer/edit.py [--lang en|ru] [--draft] [--rec …] ← editing to music (Kevin MacLeod, CC BY), titles, sound from the log →
                                            dist/incoming-trailer.mp4, -lite.mp4 and -credits.txt (lines for the video description)
-    trailer/icon_from_frames.py <frames> <folder> ← the mod icon from the “icon” plan (a Shahed against the sky): 512 and a small variant
+    trailer/icon_from_frames.py <frames> <folder> ← the old Shahed-against-the-sky icon from frames (superseded by the pixel icon)
   docs/DESIGN-nuke.md                    ← nuclear strike design
   docs/guide/                            ← player guide in English (pages by topic, pictures in img/),
                                            docs/guide/ru/ — the same in Russian
   docs/store/                            ← Modrinth and CurseForge page texts
-  docs/media/                            ← icon (also the mod logo incoming.png), the hero.webp loop for README and pages,
-                                           frames for the gallery
+  docs/media/                            ← pixel icon (icon.png 512, icon-400.png; incoming.png is the wide pixel logo), banner.jpg
+                                           heading README and pages, the hero.webp loop, frames for the gallery
   .github/workflows/build.yml            ← CI: what changed → build, unit tests (4 JVMs), GameTest in parts, summary; jar in
                                            artifacts; release; an already checked tree takes that run's jar (tools/ci_reuse.py)
   .github/PULL_REQUEST_TEMPLATE.md       ← PR description template: what changes for the player, how it was checked
@@ -146,7 +160,8 @@ The short layout is in the root CLAUDE.md; here, what each script does.
   (a PR merged without `main` moving gives the same tree): `Что изменилось` finds the tag `tested-tree-<tree>`
   (`tools/ci_reuse.py`), and the job “Сборка из проверенного прогона” takes the jar from there. If `main` moved, the full
   check runs.
-- Release: bump `mod_version`, write `docs/releases/<version>.md` (in English), merge into `main` and run `build`
+- Release (a public step: AGENTS.md): bump `mod_version`, write `docs/releases/<version>.md` (in English;
+  no HTML comments, one line per paragraph, the compatibility line first), merge into `main` and run `build`
   manually on `main` with `release=true`: after all checks, the workflow releases `v<version>` with the jar (friends take it
   from there), and `publish` then uploads the same jar to Modrinth and CurseForge by itself (step `release`; a manual
   `publish release` re-sends a version and skips stores that already have the jar). If `main` has moved on from the commit checked in the game, a branch `claude/release-…` from that commit with only

@@ -4,6 +4,7 @@ paths:
   - "mod/src/main/java/ua/zentix/incoming/warhead/**"
   - "mod/src/main/java/ua/zentix/incoming/nuclear/world/**"
   - "mod/src/test/java/ua/zentix/incoming/work/**"
+  - "mod/src/main/java/ua/zentix/incoming/client/fx/FireWatch.java"
 ---
 
 # Server work budget (`work/`)
@@ -95,3 +96,6 @@ paths:
   Legacy admission is itself a budgeted unit: pending positions own no tickets, a bounded scan drops unloaded or
   already marked entries and chooses the nearest player chunk. Only one repair can hold its source-context ring;
   normal live-edit leases remain independent. Shutdown drops pending legacy positions and drains committed edits.
+- A walk over chunks that skips most of them still charges its time budget for the skips and stays bounded to the
+  area it searches (`FireWatch.box`).
+

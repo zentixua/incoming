@@ -1,0 +1,18 @@
+{
+  "description": "Incoming knowledge hooks: outdated-checkout notice, area-rule pointers, save checklist (hooks/knowledge.py)",
+  "hooks": {
+    "SessionStart": [
+      {"hooks": [{"type": "command", "command": "python3 \"${CLAUDE_PLUGIN_ROOT}/hooks/knowledge.py\"", "timeout": 15}]}
+    ],
+    "InstructionsLoaded": [
+      {"hooks": [{"type": "command", "command": "python3 \"${CLAUDE_PLUGIN_ROOT}/hooks/knowledge.py\"", "timeout": 5}]}
+    ],
+    "PostToolUse": [
+      {"matcher": "Read|Edit|Write|MultiEdit|NotebookEdit|Grep|Glob|Bash",
+       "hooks": [{"type": "command", "command": "python3 \"${CLAUDE_PLUGIN_ROOT}/hooks/knowledge.py\"", "timeout": 10}]}
+    ],
+    "Stop": [
+      {"hooks": [{"type": "command", "command": "python3 \"${CLAUDE_PLUGIN_ROOT}/hooks/knowledge.py\"", "timeout": 5}]}
+    ]
+  }
+}
