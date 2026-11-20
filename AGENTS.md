@@ -232,9 +232,9 @@ actually works, fix the real cause.
   servers and scenarios, mod timing markers, full logs; read them before any rerun.
   Tooling for the mod: the `deep-debug` skill. **Study before coding** (Artem, 20.11): for a look or performance
   defect, one such run on our frame and on the reference footage, then the design from those numbers. **No guess-tuning; stuck work stops for a
-  root-cause analysis** (Artem, 20.11): every attempt has a timebox set at its start. Three rounds of fixes (tweaks,
+  root-cause analysis** (Artem, 20.11): every attempt has a timebox stated at its start in the plan or PR. Three rounds of fixes (tweaks,
   frame-judge or review rounds) or the timebox without a measured shift toward the goal → stop, find the root cause from
-  the recorded data (deep-debug skill), write it with its number in report.md or the PR, then act on it: fix that cause,
+  the recorded data (deep-debug skill), write it with its number in the PR or the executor's report, then act on it: fix that cause,
   change the approach, or correct the test or reference. A new approach is one possible outcome, not the automatic one.
 - **One GPU session at a time** (`tools/gpu_lease.sh`: other sessions' GPU clients/`--gpu` jobs refuse, naming holder;
   at most two sessions queue, a third is refused); finish with `tools/sandbox.sh stop`, then `tools/gpu_lease.sh
