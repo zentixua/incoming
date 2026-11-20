@@ -579,7 +579,7 @@ public final class NukePall {
 
     /**
      * Wall-head dust color at a point inside the head (the eye's own dust: the fallback camera dust when the pall pass is off,
-     * {@link NukeDust}), for the mean head without lobes (the frame draws the lobes' surfaces, {@code fx_pall: lobeLightIn}; inside the dust
+     * {@link NukeDust}), for the mean head without lobes (the frame marches the lobes, {@code fx_pall: lobeMarch}; inside the dust
      * the light comes from all of it), outside water (camera spray over water,
      * {@link NukeWater}): diffuse sun and sky light at the smaller optical depth to head top or leading
      * edge; ball light beneath the nearest ball-lit side, toward ball or from above if its beam to the top over the point does not pass through
@@ -635,7 +635,7 @@ public final class NukePall {
         double burn = CloudPuffs.burn(r, 0, glow[1], glow[3]) * (1 - 0.75 * sky.day);
         double[] lin = new double[3], thick = new double[3];
         double thickMax = 1e-4;
-        // what leaves the head's thick dust has the thick layer's colour R∞(ω′) per channel, relative to its brightest (fx_pall: lobeLightIn)
+        // what leaves the head's thick dust has the thick layer's colour R∞(ω′) per channel, relative to its brightest (fx_pall: lobeMarch)
         for (int c = 0; c < 3; c++) {
             double w = Mth.lerp(smoke, Mth.lerp(sand, DUST_W[c], SAND_W[c]), SMOKE_W[c]);
             thick[c] = PallLight.reflectance(w, DUST_G) / Math.max(w, 1e-3);
