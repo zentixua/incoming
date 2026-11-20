@@ -190,8 +190,6 @@ start() {
     _lease_read
     fresh=1; [ "$L_OWNER" = "$INCOMING_GPU_OWNER" ] && ! _lease_free && fresh=
     if [ -z "$wait" ] && who=$(gpu_client_busy); then echo "$who" >&2; exit 75; fi
-    # cool before the lease and before the startup deadline starts (the client's own nested_kwin.sh then finds it cool)
-    gpu_cool
     lease_take "$INCOMING_GPU_OWNER" "$ROOT" $wait || exit 75
     # Startup failed (build, client): release the lease just acquired so other sessions do not wait 10 min for nothing
     [ -n "$fresh" ] && trap 'lease_release "$INCOMING_GPU_OWNER"' EXIT

@@ -239,7 +239,7 @@ queues, little rework; each mission's budget is checked against its measured loa
   frame-judge or review rounds) or the timebox without a measured shift toward the goal → stop, find the root cause from
   the recorded data (deep-debug skill), write it with its number in the PR or the executor's report, then act on it: fix that cause,
   change the approach, or correct the test or reference. A new approach is one possible outcome, not the automatic one.
-- **One GPU session at a time** (`tools/gpu_lease.sh`, queue and cool-down in `tools.md`); finish with
+- **One GPU session at a time** (`tools/gpu_lease.sh`, queue in `tools.md`); finish with
   `tools/sandbox.sh stop`, then `tools/gpu_lease.sh release`. CPU clients need no lease (`soft_gl.sh` admission).
 - **Independent review** by the other vendor (if unavailable, a fresh session of the same vendor), effort high (Artem,
   20.11). The reviewer reads the diff and surrounding code, not the PR description or the author's conclusions, and

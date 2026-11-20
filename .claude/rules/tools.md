@@ -84,10 +84,7 @@ Prism: `~/.var/app/org.prismlauncher.PrismLauncher/data/PrismLauncher/` (`tools/
                                            an honest queue (FIFO): a free GPU goes to the first waiter; status: who holds it and
                                            who waits; at most INCOMING_GPU_QUEUE_MAX (2) other sessions wait, a newcomer beyond is refused (75);
                                            a nested KWin on a wayland-incoming-soft-… socket is a CPU session, not a GPU client;
-                                           at the handoff to a new GPU client (gpu_client_hold: lease and client lock already its own)
-                                           it waits while the GPU is ≥ 80 °C until 70 °C, at most 180 s of wall time (gpu_cool;
-                                           INCOMING_GPU_COOL*); sandbox.sh also cools before its startup deadline starts; while a
-                                           client holds the lock, each renewal appends a `gpu` row (utilization, temperature) billed to
+                                           while a client holds the lock, each renewal appends a `gpu` row (utilization) billed to
                                            the client's DELEGATE_TASK to the load log (DELEGATE_LOAD_LOG, default
                                            ~/.local/state/delegate/load.tsv), only while that client still holds the lock;
                                            test: test_gpu_lease.sh
