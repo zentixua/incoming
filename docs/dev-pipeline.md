@@ -50,13 +50,21 @@ is not a fix. Local batch selection, scenario controls and test pitfalls are doc
 Inspect frames and audio during implementation and include before/after evidence in the PR. Unit tests and
 code review alone cannot judge appearance, sound or frame cost.
 
+The main visual target is vanilla rendering without shader packs; a shader pack adds on top and must not break
+it (AGENTS.md, "Vanilla first"). Vanilla frames render on the CPU with Mesa llvmpipe (`tools/soft_gl.sh`), the
+way Fabric API's client GameTest takes screenshots on GPU-less CI runners and Godot and NeoForge start clients
+there: the sandbox and headless scenarios default to it, need no GPU lease and run side by side, on the laptop
+or netcup. The GPU is reserved for what a CPU frame cannot show: shader-pack (Iris), Voxy/DH frames, frame time
+and the scene bench.
+
 Changes that can affect frame cost also require the scene bench (`tools/stand`), with the scope and exceptions
 in AGENTS.md: compare frame cost at 100 strikes against `main`
 in the same GPU session. The reviewer checks the bench frames and the relevant WAV alongside the code.
 See [the scene bench instructions](../tools/stand/README.md) for sampling and paired runs.
 
-Only one visual session may use a GPU at a time. `tools/gpu_lease.sh` coordinates ownership; the sandbox and
-headless client wrappers use it. Stop the sandbox and release the lease when finished. Headless checks must
+Only one session may use the GPU at a time. `tools/gpu_lease.sh` coordinates ownership and caps its queue at
+two waiting sessions; the GPU-mode sandbox and headless client wrappers use it. Stop the sandbox and release the
+lease when finished. CPU clients take no lease; `soft_gl.sh` admits one only while memory allows it. Headless checks must
 not open a desktop window or host audio; use the provided wrappers, as described in
 [rigs.md](../.claude/rules/rigs.md).
 

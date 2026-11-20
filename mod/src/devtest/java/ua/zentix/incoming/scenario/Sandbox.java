@@ -125,6 +125,14 @@ final class Sandbox {
     private final Path inbox = dir.resolve("inbox");
     private boolean started, ready;
     private int tick = -1;
+    /** CPU renderer (Mesa llvmpipe, tools/soft_gl.sh): frames pace the world ({@link #paceFrame}). */
+    private Boolean soft;
+    /** Frames per tick while frames are due on a CPU renderer: a frame lands within half a tick of its second. */
+    private static final double FRAMES_PER_TICK = 2;
+    /** Rate from arming to the first measured frames (≈ 2 frames per tick at 4 frames/s, the smoke-filled llvmpipe rate). */
+    private static final double SOFT_START_RATE = 2;
+    private double paceRate = 20, paceFrameS;
+    private long paceLast;
     /** Point of effects that do not touch the ground (on the ground), and the current effect's point. */
     private static final Vec3 HOME = new Vec3(0.5, GROUND + 1, 0.5);
     private Vec3 site = HOME;
@@ -210,6 +218,8 @@ final class Sandbox {
         long audioStart = -1;
         /** Tick sound starts: the first frame, if it is before the effect's start, otherwise the effect's start. */
         int audioTick;
+        /** Second sound starts from, relative to the effect (≤ 0): the first frame's, or a sound-only take's own. */
+        double audioFrom;
         final List<String> frames = new ArrayList<>();
 
         Capture(String name, double[] times, double wavSeconds, Path out) {
@@ -530,6 +540,9 @@ final class Sandbox {
                     return;
                 }
                 armed = new Capture(c.args().getFirst(), c.times(), c.number(2, 0), out);
+                armed.audioFrom = c.audioFrom();
+                // slow before the effect: its first frames (new particles, first draw of a shader) are the slowest
+                pace(armed.times.length > 0 ? SOFT_START_RATE : 20);
                 finish("ok armed " + out);
             }
             case AGAIN -> {
@@ -556,6 +569,8 @@ final class Sandbox {
      */
     private void clear() {
         Minecraft.getInstance().setScreen(null);
+        // effects that clear first (nuke … near, camera moves) keep an armed frame take slowed
+        pace(paced() ? SOFT_START_RATE : 20);
         raid.clear();
         ArrivalScene.reset();
         turnYaw = Float.NaN;
@@ -656,7 +671,7 @@ final class Sandbox {
         if (c.verb() != SandboxCommand.Verb.REAL && c.verb() != SandboxCommand.Verb.NUKE && c.verb() != SandboxCommand.Verb.SURFACE) site = HOME;
         // frames before the effect's start — only where the start is known in advance (the front's arrival at the
         // houses)
-        if (armed != null && armed.times[0] < 0 && !c.near()) throw new IllegalArgumentException("frames before the effect's start — only for nuke … near");
+        if (armed != null && armed.times.length > 0 && armed.times[0] < 0 && !c.near()) throw new IllegalArgumentException("frames before the effect's start — only for nuke … near");
         switch (c.verb()) {
             case ICBM -> {
                 placeCamera();
@@ -891,7 +906,7 @@ final class Sandbox {
             // the first frame is already in the past (the detonation is closer than the frames before the front) —
             // sound from this tick, frames — now (their
             // real time — age in capture.json)
-            int first = at + (int) Math.round(Math.min(0, capture.times[0]) * 20);
+            int first = at + (int) Math.round(capture.audioFrom * 20);
             if (first < tick) {
                 Incoming.LOG.warn("SANDBOX frames before {} s are already past (the front comes in {} s): taken now, see age",
                         String.format(Locale.ROOT, "%.2f", (tick - at) / 20.0), String.format(Locale.ROOT, "%.2f", (at - tick) / 20.0));
@@ -1365,7 +1380,10 @@ final class Sandbox {
         Capture cap = capture;
         if (cap == null || effectTick < 0 || cap.next >= cap.times.length) return;
         double t = cap.times[cap.next];
-        if (tick < effectTick + Math.round(t * 20)) return;
+        if (tick < effectTick + Math.round(t * 20)) {
+            paceFrame();
+            return;
+        }
         double age = (tick - effectTick + partial) / 20.0;
         String file = String.format(Locale.ROOT, "%s_%06.2fs.png", cap.name, t);
         NativeImage image = Screenshot.takeScreenshot(mc.getMainRenderTarget());
@@ -1383,6 +1401,45 @@ final class Sandbox {
                 ua.zentix.incoming.client.far.FarFlightView.describe(), ua.zentix.incoming.client.fx.ClientAir.now(),
                 ua.zentix.incoming.client.nuclear.NukePall.describe());
         cap.next++;
+        if (cap.next >= cap.times.length) pace(20);
+        else paceFrame();
+    }
+
+    /**
+     * CPU renderer (llvmpipe: 3–5 frames/s inside smoke): ticks would run ahead of frames, and a frame meant for second 1.0
+     * came 0.29 s late. While frames are due the world runs at {@code /tick rate} giving about {@link #FRAMES_PER_TICK} frames
+     * per tick from the measured frame time (the client follows a slower server rate); game time, physics and effects
+     * are the same, only wall time stretches. GPU renderers are left at 20 ticks/s.
+     */
+    private void paceFrame() {
+        if (!paced()) return;
+        long now = System.nanoTime();
+        if (paceLast != 0) {
+            double frame = (now - paceLast) / 1e9;
+            paceFrameS = paceFrameS == 0 ? frame : paceFrameS * 0.7 + frame * 0.3;
+            pace(1 / (FRAMES_PER_TICK * paceFrameS));
+        }
+        paceLast = now;
+    }
+
+    /** Frames are due (armed or capturing), whatever the current rate: a fast stretch may have raised it to 20. */
+    private boolean paced() {
+        return (armed != null && armed.times.length > 0) || (capture != null && capture.next < capture.times.length);
+    }
+
+    /** World rate, ticks/s (CPU renderer only; 20 restores); command only on a change of more than a tenth. */
+    private void pace(double rate) {
+        // render thread: the GL context answers only there, and only after the window exists
+        if (soft == null) soft = ua.zentix.incoming.client.fx.layer.GpuWatch.software(com.mojang.blaze3d.platform.GlUtil.getRenderer());
+        if (!soft) return;
+        double r = Math.max(1, Math.min(20, rate));
+        if (r < 20 && Math.abs(r - paceRate) <= paceRate * 0.1) return;
+        if (r == 20 && paceRate == 20) return;
+        if (r == 20) paceLast = 0;
+        paceRate = r;
+        // the manager itself, not /tick rate: the command's feedback would print into the frames' chat
+        Incoming.LOG.info("SANDBOX tick rate {}", String.format(Locale.ROOT, "%.1f", r));
+        onServer(false, srv -> srv.tickRateManager().setTickRate((float) r));
     }
 
     /** Model numbers over the frame: last blast, distant blasts and their sound, sound at the ear, fires, camera. */

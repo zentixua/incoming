@@ -4,14 +4,17 @@
 # hot swap, resources through reload, without a new client. Scenario: Sandbox (mod/src/devtest); commands:
 # SandboxCommand; client directory: mod/run/sandbox; frames and audio: mod/run/sandbox/fx/out/<name>/.
 #
-#   tools/sandbox.sh start [shaders] [dh] [soft] [--wait] [--size 1280x720]   background client (laptop job
-#                                          sandbox-<tree>): takes its session GPU lease (tools/gpu_lease.sh);
+#   tools/sandbox.sh start [shaders] [dh] [gpu] [--wait] [--size 1280x720]   background client (laptop job
+#                                          sandbox-<tree>), returns when the world is ready.
+#                                          Default (no shaders, no dh): on the CPU (Mesa llvmpipe, tools/soft_gl.sh), no
+#                                          GPU lease, any number of trees at once, also while Artem plays (lowest CPU
+#                                          priority); refused (75) only when memory is short. Frames are the vanilla
+#                                          picture; fps and GPU times in its log are not frame costs.
+#                                          shaders, dh or gpu: on the GPU: takes its session GPU lease (tools/gpu_lease.sh);
 #                                          held by another session: exit 75 with "GPU held by …" (--wait joins the lease
-#                                          queue in arrival order); no Iris and Sodium (shaders), DH (dh): exit 2;
-#                                          Artem is playing: exit 75; returns when the world is ready; runs until stop or
-#                                          Artem's game starts, renewing the lease; other sessions' jobs without GPU do not stop it;
-#                                          soft: no GPU or lease (xvfb-run, llvmpipe: 3–10 frames/s, without
-#                                          shaders; cloud)
+#                                          queue in arrival order, refused when the queue is full); no Iris and Sodium
+#                                          (shaders), DH (dh): exit 2; Artem is playing: exit 75; runs until stop or
+#                                          Artem's game starts, renewing the lease; other sessions' jobs without GPU do not stop it
 #   tools/sandbox.sh fx '<command>' …      /fx commands in sequence (blast drone, cam 60 10 90 8, time night, clear, …),
 #                                          each waits for its result
 #   tools/sandbox.sh swap                  build changes (Gradle), hot swap classes, reload resources
@@ -33,7 +36,10 @@ set -uo pipefail
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 RUN="$ROOT/mod/run/sandbox"
 FX="$RUN/fx"
-UNIT="incoming-job-sandbox-$(basename "$ROOT")"
+source "$ROOT/tools/soft_gl.sh"
+# unit and CPU display of this tree: name plus path hash (tree_id), so alike-named trees elsewhere do not share them
+TREE_ID=$(tree_id "$ROOT")
+UNIT="incoming-job-sandbox-$TREE_ID"
 # JetBrains Runtime: one for all trees, in mod/run of the main tree (git-common-dir points to the main .git)
 JBR_DIR="$(cd "$(git -C "$ROOT" rev-parse --path-format=absolute --git-common-dir)/.." && pwd)/mod/run/jbr"
 JBR_BUILD=jbr-21.0.11-linux-x64-b1163.116
@@ -106,13 +112,25 @@ swap() {
 }
 
 # A slice of client audio.wav from the effect start (capture.json), saved as a separate WAV
+# audio block of a sound take ($1 capture.json) into the frame take's capture.json ($2)
+audio_into() {
+  python3 - "$1" "$2" <<'PY'
+import json, sys
+take, frames = json.load(open(sys.argv[1])), json.load(open(sys.argv[2]))
+frames["audio"] = dict(take["audio"], take="separate, 20 ticks/s")
+json.dump(frames, open(sys.argv[2], "w"))
+PY
+}
+
 cut_wav() {
   python3 - "$1" "$2" <<'PY'
 import json, struct, sys, wave
 cap = json.load(open(sys.argv[1]))
 a = cap["audio"]
-if a["seconds"] <= 0 or a["start"] < 0:
+if a["seconds"] <= 0:
     sys.exit(0)
+if a["start"] < 0:
+    sys.exit("sound requested, but the client recorded none (audio.start -1: no audio.wav from OpenAL)")
 with open(a["file"], "rb") as f:
     data = f.read()
 pos, fmt, start = 12, None, None
@@ -138,19 +156,23 @@ PY
 }
 
 start() {
-  local size=1280x720 opts=() pack wait= fresh=
+  local size=1280x720 opts=() pack wait= fresh= gpu=
   while [ $# -gt 0 ]; do
     case "$1" in
       --wait) wait=--wait ;;
       shaders) export INCOMING_SHADERS=1 ;;
       dh) export INCOMING_DH=1 ;;
-      soft) export INCOMING_SANDBOX_SOFT=1 ;;
+      gpu) gpu=1 ;;
+      soft) ;;
       --size) size=$2; shift ;;
       *) echo "unknown parameter: $1" >&2; exit 2 ;;
     esac
     shift
   done
   running && { echo "sandbox is already running ($UNIT)"; exit 0; }
+  # Vanilla rendering on the CPU unless the frame needs the GPU (shader pack, DH, a frame-time sample)
+  if [ -n "$gpu" ] || [ -n "${INCOMING_SHADERS:-}" ] || [ -n "${INCOMING_DH:-}" ]; then unset INCOMING_SANDBOX_SOFT
+  else export INCOMING_SANDBOX_SOFT=1; fi
   # JetBrains Runtime, if installed (tools/sandbox.sh jbr): hot swap also accepts new fields and methods
   if [ -z "${INCOMING_SANDBOX_JAVA:-}" ] && jbr_java >/dev/null; then export INCOMING_SANDBOX_JAVA="$(jbr_java)"; fi
   unset INCOMING_SANDBOX_ENHANCED
@@ -176,15 +198,16 @@ start() {
       [ -z "$said" ] && { echo "$(date +%T) $who — waiting" >&2; said=1; }
       sleep 10
     done
-  elif [ -n "${INCOMING_SHADERS:-}" ]; then
-    echo "soft: without shaders (llvmpipe)" >&2; exit 2
-  elif ! command -v xvfb-run >/dev/null; then
-    # The NVIDIA driver ignores LIBGL_ALWAYS_SOFTWARE: a client in nested KWin would use the GPU
-    echo "soft requires xvfb-run (cloud); it is not installed here" >&2; exit 2
+  else
+    soft_mem_ok || exit 75
+    soft_gl_env
+    echo "on the CPU (llvmpipe): no GPU lease; frames only, not frame costs"
   fi
   local t0; t0=$(date +%s.%N)
   mkdir -p "$RUN/logs" "$FX"
   rm -f "$FX/ready" "$FX/stopped"
+  # renderer of this client for `shot` (a CPU take records sound separately)
+  if [ -n "${INCOMING_SANDBOX_SOFT:-}" ]; then echo soft; else echo gpu; fi > "$FX/renderer"
   cat > "$RUN/alsoft.conf" <<CONF
 [general]
 drivers = wave
@@ -225,7 +248,8 @@ OPT
   mods_check "$RUN/mods" || exit 2
   local build; build=$(since "$t0")
   local w=${size%x*} h=${size#*x}
-  INCOMING_SANDBOX=1 nohup "$ROOT/tools/laptop_job.sh" --light "sandbox-$(basename "$ROOT")" -- "$ROOT/tools/sandbox.sh" _run "$w" "$h" > "$RUN/logs/job.log" 2>&1 &
+  local jobmode=--light; [ -n "${INCOMING_SANDBOX_SOFT:-}" ] && jobmode=--soft
+  INCOMING_SANDBOX=1 nohup "$ROOT/tools/laptop_job.sh" $jobmode "sandbox-$TREE_ID" -- "$ROOT/tools/sandbox.sh" _run "$w" "$h" > "$RUN/logs/job.log" 2>&1 &
   local job=$! waited=0
   # The job started: its client holds the lease; interrupting this wait (Ctrl+C, timeout) does not take the lease from a live client;
   # release it only if the job itself failed to start
@@ -249,9 +273,8 @@ OPT
 # Inside a laptop job: client in nested KWin; only Artem's game (shared machine) and stop shut it down
 run_client() {
   if [ -n "${INCOMING_SANDBOX_SOFT:-}" ]; then
-    # No GPU or host audio, like the xvfb-run path in rigs.md (cloud)
-    PIPEWIRE_REMOTE="$RUN/no-audio-server" PULSE_SERVER="unix:$RUN/no-audio-server" LIBGL_ALWAYS_SOFTWARE=1 \
-      xvfb-run -a -s "-screen 0 ${1}x${2}x24" bash "$ROOT/mod/build/rig/sandbox.sh" > "$RUN/logs/client.out" 2>&1 &
+    # CPU display, no GPU or host audio (tools/soft_gl.sh); a socket per tree: several CPU sandboxes run at once
+    soft_display "sandbox-$TREE_ID" "$1" "$2" "bash $ROOT/mod/build/rig/sandbox.sh" > "$RUN/logs/client.out" 2>&1 &
   else
     "$ROOT/tools/nested_kwin.sh" wayland-incoming-sandbox "$1" "$2" "bash $ROOT/mod/build/rig/sandbox.sh" > "$RUN/logs/client.out" 2>&1 &
   fi
@@ -306,10 +329,36 @@ shot() {
   # would persist into the next one; `time` finishes when the time reaches the client
   fx "time $time" || exit 1
   fx "overlay $overlay" || exit 1
-  fx "shots $name $at $wav" || exit 1
-  fx "$effect" || exit 1
-  local out="$FX/out/$name"
-  cut_wav "$out/capture.json" "$out/$name.wav"
+  local out="$FX/out/$name" limit=${FX_LIMIT:-3600}
+  # Java's split drops trailing empty fields: "600," is "600", so the deadline below must read the same last frame
+  while [[ $at == *, ]]; do at=${at%,}; done
+  if [ "$(cat "$FX/renderer" 2>/dev/null)" = soft ]; then
+    # a paced take runs down to 1 tick/s: the last frame's second may take 20 wall seconds per game second
+    limit=$(awk -v l="${at##*,}" -v b="$limit" 'BEGIN { printf "%d", b + (l > 0 ? l : 0) * 20 }')
+  fi
+  if [ "$(cat "$FX/renderer" 2>/dev/null)" = soft ] && [ "$wav" != 0 ]; then
+    # CPU renderer: the frame take slows the world (Sandbox.paceFrame), so its sound is not real-time; sound comes from a
+    # second take of the same effect at 20 ticks/s without frames, from the same second (frames before a front included),
+    # in a staging directory of its own; its timing replaces the frame take's empty audio block in capture.json
+    # staging created here, atomically and fresh: never an existing shot's directory; the first frame's second passed as
+    # given, so both takes round it to the same tick
+    local take from=0
+    take=$(basename "$(mktemp -d "$FX/out/.wav-$name-XXXXXX")") || exit 1
+    awk -v f="${at%%,*}" 'BEGIN { exit !(f < 0) }' && from=${at%%,*}
+    fx "shots $name $at 0" || exit 1
+    FX_LIMIT=$limit fx "$effect" || exit 1
+    fx clear || exit 1
+    fx "shots $take none@$from $wav" || exit 1
+    fx "$effect" || { rm -rf "${FX:?}/out/$take"; exit 1; }
+    if ! cut_wav "$FX/out/$take/capture.json" "$out/$name.wav" || ! audio_into "$FX/out/$take/capture.json" "$out/capture.json"; then
+      echo "sound take: no WAV ($FX/out/$take kept)" >&2; exit 1
+    fi
+    rm -rf "${FX:?}/out/$take"
+  else
+    fx "shots $name $at $wav" || exit 1
+    FX_LIMIT=$limit fx "$effect" || exit 1
+    cut_wav "$out/capture.json" "$out/$name.wav" || { echo "no WAV" >&2; exit 1; }
+  fi
   ls "$out"/*.png | sed 's/^/frame: /'
   echo "from command to last frame and audio: $(since "$t0") s"
 }

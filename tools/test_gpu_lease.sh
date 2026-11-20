@@ -3,13 +3,14 @@
 # start time, or waits with --wait; the owner reacquires without waiting; abandoned leases expire; another session cannot
 # renew or release it; owner comes from the tree; laptop_job.sh --gpu and sandbox.sh start from another session refuse before
 # starting anything; jobs without GPU take no lease; a client without a lock (pre-lease script) also means a busy
-# GPU, not a free one; waiters form a fair FIFO queue; Artem's game is detected by its instance directory, not its
+# GPU, not a free one; a CPU session (soft socket) is not; waiters form a fair FIFO queue capped at two other sessions; Artem's game is detected by its instance directory, not its
 # command-line path, and stops a --gpu job it starts during.
 set -uo pipefail
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 tmp=$(mktemp -d); trap 'rm -rf "$tmp"' EXIT
 export INCOMING_GPU_LEASE=$tmp/lease INCOMING_GPU_LEASE_IDLE=600
-# The test "nested KWin" is a stub program: real laptop clients do not affect it
+# The test "nested KWin" is a stub program: real laptop clients do not affect it. `sandbox.sh start gpu` below must be
+# refused; JAVA_HOME=/nonexistent keeps a regression from building and launching a real client
 export INCOMING_GPU_KWIN=$tmp/kwin_wayland
 printf '#!/bin/bash\ntrap "kill \\$c; exit" TERM\nsleep 60 & c=$!\nwait\n' > "$INCOMING_GPU_KWIN"; chmod +x "$INCOMING_GPU_KWIN"
 unset INCOMING_GPU_OWNER
@@ -57,7 +58,7 @@ out=$(INCOMING_GPU_OWNER=FZC "$ROOT/tools/laptop_job.sh" --gpu film -- false 2>&
 if [ -n "$(systemctl --user list-units "incoming-job-sandbox-$(basename "$ROOT")-*" --state=active --no-legend --plain 2>/dev/null)" ]; then
   echo "skip: sandbox in this tree is running (start would say \"already running\")"
 else
-  out=$(INCOMING_GPU_OWNER=FZC "$ROOT/tools/sandbox.sh" start 2>&1); rc=$?
+  out=$(JAVA_HOME=/nonexistent INCOMING_GPU_OWNER=FZC "$ROOT/tools/sandbox.sh" start gpu 2>&1); rc=$?
   # On the laptop, Artem's game may refuse first (also 75, no lease acquired)
   [ $rc = 75 ] && [[ $out == *"GPU held by SH"* || $out == *"Artem's game is running"* ]] && [ "$(cut -f1 "$INCOMING_GPU_LEASE")" = SH ] \
     && ok "sandbox start from another session refused with 75, lease held by SH" || bad "sandbox start: $rc $out"
@@ -122,7 +123,7 @@ out=$(INCOMING_GPU_OWNER=FZC "$ROOT/tools/nested_kwin.sh" wayland-test 64 64 tru
 out=$(INCOMING_GPU_OWNER=FZC "$ROOT/tools/laptop_job.sh" --gpu film -- false 2>&1); rc=$?
 [ $rc = 75 ] && [[ $out == *"client is running without a lease"* ]] && ok "laptop_job --gpu refused" || bad "laptop_job --gpu with unlocked client: $rc $out"
 if [ -z "$(systemctl --user list-units "incoming-job-sandbox-$(basename "$ROOT")-*" --state=active --no-legend --plain 2>/dev/null)" ]; then
-  out=$(INCOMING_GPU_OWNER=FZC "$ROOT/tools/sandbox.sh" start 2>&1); rc=$?
+  out=$(JAVA_HOME=/nonexistent INCOMING_GPU_OWNER=FZC "$ROOT/tools/sandbox.sh" start gpu 2>&1); rc=$?
   [ $rc = 75 ] && [[ $out == *"client is running without a lease"* || $out == *"Artem's game is running"* ]] && [ ! -s "$INCOMING_GPU_LEASE" ] \
     && ok "sandbox start refused with 75" || bad "sandbox start with unlocked client: $rc $out"
 fi
@@ -181,6 +182,27 @@ for _ in $(seq 50); do [ -f "$tmp/tr" ] && break; sleep 0.1; done
 [ "$(cut -f1 "$INCOMING_GPU_LEASE")" = TR ] && ok "interrupted waiter does not hold the queue; next waiter acquired" || bad "interrupted waiter holds queue: $(cut -f1 "$INCOMING_GPU_LEASE") $(cat "$INCOMING_GPU_LEASE.queue")"
 kill $q4 2>/dev/null; wait $q4 2>/dev/null
 lease_release TR
+
+# The queue is capped: with two other sessions waiting, a third is refused at once and pointed to the CPU path
+rm -f "$INCOMING_GPU_LEASE" "$INCOMING_GPU_LEASE.queue"
+lease_take V3 /x/wt-V3
+( lease_take L1 /x/wt-L1 --wait 2>/dev/null ) & q1=$!
+( lease_take WV /x/wt-WV --wait 2>/dev/null ) & q2=$!
+sleep 0.5
+out=$(timeout 5 bash -c "source '$ROOT/tools/gpu_lease.sh'; lease_take SM /x/wt-SM --wait" 2>&1); rc=$?
+[ $rc = 75 ] && [[ $out == *"GPU queue is full (2 sessions waiting"*"without shaders/dh/gpu"* ]] && ok "third waiter refused: queue full" || bad "queue cap: $rc $out"
+out=$(INCOMING_GPU_QUEUE_MAX=3 timeout 1 bash -c "source '$ROOT/tools/gpu_lease.sh'; lease_take SM /x/wt-SM --wait" 2>&1); rc=$?
+[ $rc = 124 ] && ok "a higher cap queues the third waiter" || bad "INCOMING_GPU_QUEUE_MAX=3: $rc $out"
+kill $q1 $q2 2>/dev/null; wait $q1 $q2 2>/dev/null
+lease_release V3; rm -f "$INCOMING_GPU_LEASE.queue"
+
+# A CPU session (nested KWin on a wayland-incoming-soft-… socket, tools/soft_gl.sh) is no GPU client: the lease stays free
+"$INCOMING_GPU_KWIN" --virtual --xwayland --socket wayland-incoming-soft-sandbox-x --exit-with-session "bash /x/sandbox.sh" & k=$!
+sleep 0.3
+gpu_client_busy >/dev/null && bad "CPU session counted as a GPU client: $(gpu_client_busy)" || ok "CPU session leaves the GPU free"
+lease_take FZC /x/wt-FZC && ok "lease taken beside a CPU session" || bad "CPU session blocks the lease"
+lease_release FZC
+kill $k; wait $k 2>/dev/null
 unset INCOMING_GPU_POLL
 
 # Artem's game is java in its instance directory; sandbox java with instance paths in its command line is not that game

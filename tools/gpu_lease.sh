@@ -36,6 +36,11 @@
 # own session renews and restarts its work as before; lease ends only on release or expiry. The queue holds
 # the waiting process (PID and start time): exit or interruption (Ctrl+C) removes its position automatically.
 # On 23.10, without a queue, `start --wait` waited ~35 min while three sessions checking earlier took turns on the GPU.
+# The queue is capped (INCOMING_GPU_QUEUE_MAX other sessions, default 2): a newcomer beyond it is refused (75) at once.
+# The GPU serves only what needs it (shader packs, DH/Voxy, frame cost); vanilla frames render on the CPU
+# (tools/soft_gl.sh), so a long queue means work that belongs on the CPU or a session holding the GPU between frames.
+# CPU clients (nested KWin on a `wayland-incoming-soft-…` socket, tools/soft_gl.sh) are not GPU clients and never block
+# the lease.
 # Files live in XDG_RUNTIME_DIR
 # (tmpfs): reboot clears it. Test: tools/test_gpu_lease.sh (CI).
 LEASE=${INCOMING_GPU_LEASE:-${XDG_RUNTIME_DIR:-/run/user/$(id -u)}/incoming-gpu.lease}
@@ -138,6 +143,12 @@ lease_take() {
     local pos key; pos=$(_queue_live | awk -F'\t' -v m="$me" '$4 == m { print NR; exit }')
     if [ -z "$pos" ]; then
       _queue_keep
+      local others; others=$(_queue_live | awk -F'\t' -v o="$owner" '$1 != o { print $1 }' | sort -u | wc -l)
+      if [ "$others" -ge "${INCOMING_GPU_QUEUE_MAX:-2}" ]; then
+        exec {fd}>&-
+        echo "GPU queue is full ($others sessions waiting, at most ${INCOMING_GPU_QUEUE_MAX:-2}): $why. Vanilla frames need no GPU (tools/sandbox.sh start without shaders/dh/gpu); shader frames later, once, on the final head" >&2
+        return 75
+      fi
       printf '%s\t%s\t%s\t%s\n' "$owner" "$tree" "${queued:-$now}" "$me" >> "$QUEUE"
       queued=${queued:-$now}
       pos=$(_queue_live | wc -l)
@@ -197,6 +208,9 @@ gpu_clients_running() {
       if [ "$a" = "$kwin" ] || [ "${a##*/}" = "$kwin" ]; then hit=1; fi
     done 2>/dev/null < "/proc/$p/cmdline"
     [ -n "$virt" ] && [ -n "$hit" ] || continue
+    # CPU session (tools/soft_gl.sh): QPainter KWin and llvmpipe client, no GPU. Told by its socket name, not its
+    # environment: kwin_wayland carries file capabilities, so its /proc/<pid>/environ is unreadable even to its owner
+    tr '\0' '\n' < "/proc/$p/cmdline" 2>/dev/null | grep -qx 'wayland-incoming-soft-.*' && continue
     [ -n "${1:-}" ] && _descends "$p" "$1" && continue
     echo "$p $(tr '\0' ' ' < "/proc/$p/cmdline" 2>/dev/null | cut -c1-200)"
   done

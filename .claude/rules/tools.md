@@ -39,22 +39,31 @@ Prism: `~/.var/app/org.prismlauncher.PrismLauncher/data/PrismLauncher/` (`tools/
     nuke_survey.py <untouched> <blasted> <gz x> <gz z> ← nuclear ruins against the untouched world, block by block (region
                                            files only, safe on a live server's world): share of built blocks still in place by
                                            kind and distance ring, one-block spikes left standing, block columns at --spot=x,z
-    client_scenario.sh <scenario> [shaders] [dh] [voxy] [lss] ← client without a window (KWin virtual + Xwayland), frames and sound in WAV;
+    client_scenario.sh <scenario> [shaders] [dh] [voxy] [lss] [gpu] ← client without a window (KWin virtual + Xwayland), frames and sound in WAV;
+                                           on the CPU unless shaders/dh/voxy/lss/vista/gpu (run it bare: Gradle writes the launch
+                                           script, then the client goes into its own laptop_job.sh --soft unit);
                                            scenarios and what each captures: in the script header
-    sandbox.sh start|fx|swap|shot|restart|stop|jbr ← effects sandbox: a client with only the mod (+ Iris with a shaderpack, DH) in a
+    sandbox.sh start|fx|swap|shot|restart|stop|jbr ← effects sandbox (on the CPU unless shaders/dh/gpu): a client with only the mod (+ Iris with a shaderpack, DH) in a
                                            flat world, an effect by the /fx command in seconds, hot code swap and
                                            resource reload without a new client, frames and WAV in one command (`shot`);
                                            a nuke at the camera: `nuke 15 near`; how to work: client-scenario.md,
                                            “Effects sandbox”; check without a client: test_sandbox.sh (CI)
     nested_kwin.sh                       ← nested KWin for the client: no window and no host sound, its own D-Bus bus without starting services
                                            (nested_kwin_bus.conf) and XDG directories; takes the GPU lease and the client lock
-                                           (gpu_lease.sh); exit 75 means whoever holds the GPU
-    laptop_job.sh [--gpu|--light] <name> -- <command> ← heavy job on the host's laptop: its own temporary systemd service
+                                           (gpu_lease.sh); exit 75 means whoever holds the GPU; with INCOMING_SOFT=1 a CPU session
+                                           (soft_gl.sh): no lease or lock, socket wayland-incoming-soft-…
+    soft_gl.sh                           ← CPU rendering (Mesa llvmpipe) for no-shader clients, sourced: GL vendor/thread/heap
+                                           environment, memory ceiling and admission, CPU display (nested KWin on a
+                                           wayland-incoming-soft-<name> socket, else xvfb-run); details: client-scenario.md, “CPU rendering”
+    laptop_job.sh [--gpu|--light|--soft] <name> -- <command> ← heavy job on the host's laptop: its own temporary systemd service
                                            (not in the Claude group), the laptop does not sleep, everything of it is stopped on exit; no queue;
                                            --gpu [--wait] takes the GPU lease of its session (another session's: refusal 75; with
                                            --wait, in the lease queue) and waits until Artem's game is closed; his game started during the
                                            job (polled every second) stops it: “Artem's game started at T: job stopped”, exit 75;
-                                           at the end, “laptop_job <name>: exit N”; --status: what runs and who holds the GPU
+                                           at the end, “laptop_job <name>: exit N”; --status: what runs and who holds the GPU;
+                                           --soft: a CPU-rendered client, no lease, CPUWeight=idle, MemoryMax from soft_gl.sh, no swap,
+                                           not stopped by Artem's game; without a sleep inhibitor where none is allowed (a server);
+                                           TERM/Ctrl+C on laptop_job.sh stops its service (the client never outlives the command)
                                            A caller still waiting in the GPU queue dies with the agent's session cgroup at turn end
                                            (even setsid/nohup): start the wait in its own unit, `systemd-run --user
                                            --unit=incoming-wait-<name> --collect -p WorkingDirectory=$PWD --setenv=PATH="$PATH"
@@ -67,7 +76,9 @@ Prism: `~/.var/app/org.prismlauncher.PrismLauncher/data/PrismLauncher/` (`tools/
                                            the lease) also counts as busy; running work extends it, without it expires in 10 min; Artem's game
                                            is artem_playing (java in his instance's folder or in the Prism group); --wait:
                                            an honest queue (FIFO): a free GPU goes to the first waiter; status: who holds it and
-                                           who waits; test: test_gpu_lease.sh
+                                           who waits; at most INCOMING_GPU_QUEUE_MAX (2) other sessions wait, a newcomer beyond is refused (75);
+                                           a nested KWin on a wayland-incoming-soft-… socket is a CPU session, not a GPU client;
+                                           test: test_gpu_lease.sh
     logtime.py                           ← time of Minecraft log lines for digests of laptop tasks
     free_port.py                         ← a free port on 127.0.0.1 for check servers (stress.sh, mp_scenario.sh)
     rig_procs.sh                         ← processes of checks in their own sessions (source from stress.sh, mp_scenario.sh): the script's exit kills them with the JVM

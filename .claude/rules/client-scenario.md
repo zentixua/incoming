@@ -55,7 +55,7 @@ Sandbox is an MDG dev client with `devtest` (like JEI's `clientGameTest`); custo
 specified tick and chatless commands (Claude cannot see screen; NeoForge has no screenshot client tests,
 NeoForge #3624). Full-pack Iris client (`look_gate`, `prod_client.py`: ~3 min to first frame, 10–25 min per scene set,
 the nuke 5–6 min per scene) records only the one-off 3.4.1 comparison, in one session until scenes reach its level;
-not per PR. One visual session at a time: one GPU. Tool-improvement options (own replacement agent → HotswapAgent
+not per PR. Vanilla frames on the CPU (below, “CPU rendering”), any number of sessions; one GPU session at a time. Tool-improvement options (own replacement agent → HotswapAgent
 on JBR; scenarios as sandbox command lists): [evaluating tool changes](../../docs/dev-pipeline.md#7-evaluating-tool-changes).
 Scene bench (`tools/stand`, Artem's decision 24.10) differs from sandbox: sandbox gives work-in-progress frames in
 this tree's dev client; bench runs identical real strikes with any Incoming 3.4.1+ jar (release/CI artifact) beside
@@ -66,11 +66,11 @@ with `--packs none --scenes 100`.
 Laptop measurement 22.10: sandbox start 19–24 s (build 5–8 s, JVM-to-world client 13–15 s); with Iris/shaderpack 39 s
 (client 30 s); method-body/shader edit → frame at effect second 3 takes 10 s (Gradle/replacement 5–7 s), also 10 s
 with Iris.
-- `tools/sandbox.sh start [shaders] [dh]`: mod-only client (sable-companion alongside: not embedded in dev; `shaders`
+- `tools/sandbox.sh start [shaders] [dh] [gpu]`: on the CPU unless `shaders`, `dh` or `gpu` (“CPU rendering”); mod-only client (sable-companion alongside: not embedded in dev; `shaders`
   adds Sodium/Iris/host shaderpack from instance, `dh` Distant Horizons), flat world (`Sandbox`: bedrock, stone,
   dirt, grass, grass top y 64; noon, no weather/mobs; same world every launch), headless in nested KWin, as laptop
-  job; lives until `stop` or Artem's game starts (`fx/stopped`; game running means immediate exit 75); other jobs
-  cannot stop it. One GPU (`tools/gpu_lease.sh`): client (`nested_kwin.sh`, used by every client) acquires its
+  job (unit `incoming-job-sandbox-<tree_id>`); lives until `stop`; in GPU mode also until Artem's game starts
+  (`fx/stopped`; game running means immediate exit 75); other jobs cannot stop it. GPU mode, one GPU (`tools/gpu_lease.sh`): client (`nested_kwin.sh`, used by every client) acquires its
   session lease (owner from `wt-<S>…` tree) and GPU-client lock, holds/renews while alive; `start` requests them
   before building. Another session holds GPU: exit 75, line “GPU held by <owner> (<tree>), since <time>”; client
   already running (even own session's sandbox in another tree/look gate): exit 75, “client running on GPU …”;
@@ -86,8 +86,7 @@ with Iris.
   times), process semaphores (`sem`, `ts`) do not hold GPU between frames while editing.
   `shaders` without Sodium/Iris jars, `dh` without Distant Horizons jar in sandbox mods (Gradle takes instance mods
   by patterns, silently skips missing) exits 2 explaining missing mods/Gradle source, instead of recording without
-  Iris (`tools/test_sandbox.sh`). `soft` uses no GPU, only where xvfb-run exists (cloud): nested KWin's NVIDIA
-  driver ignores `LIBGL_ALWAYS_SOFTWARE`, so client took GPU. Sandbox installs no mods into pack: own `run/sandbox`.
+  Iris (`tools/test_sandbox.sh`). Sandbox installs no mods into pack: own `run/sandbox`.
 - `scenery grass|paved|forest`: identical dust-source comparison geometry, 97×97 platform, stone paving or grass,
   forest of identical oak blocks (permeable canopies, trunks, central clearing). Before switching remove `house 0`,
   afterward `wait 80` for client block delivery. Sandbox world only.
@@ -167,6 +166,38 @@ with Iris.
 
 - `/fx surface <depth> [black|gray]`: saved partial damage on fresh covering patch, no explosion; checks fracture/
   chip size by depth (0 < depth ≤ 1); ordinary display with same server path/light.
+
+## CPU rendering (`tools/soft_gl.sh`)
+Vanilla frames (no shader pack, DH or Voxy) render with Mesa llvmpipe: `sandbox.sh start` and `client_scenario.sh`
+default to it, `gpu` forces the GPU. No lease, no GPU queue; the client runs in a `laptop_job.sh --soft` unit (idle CPU
+class, memory ceiling heap + 1.5 GB without swap, not stopped by Artem's game); `client_scenario.sh` puts it there
+itself after Gradle writes the launch script (`rigLaunch`, outside the ceiling). Refused (75) when available memory,
+less the unused ceilings of running CPU clients, cannot hold this ceiling plus a 4 GB reserve; `laptop_job.sh` checks
+under a lock until the unit exists, so simultaneous starts cannot both pass. Gradle preparation (`rigLaunch`, `swap`)
+is ordinary build work outside the ceiling, like any build or GameTest. Units and sockets carry `tree_id` (tree name
+cut to 40 bytes and a path hash). The picture is the GPU's (same GL core pipeline; the client logs `GL info: llvmpipe`); fps, layer GPU
+times and the pall's budget are not frame costs: frame cost belongs to the GPU and `tools/stand`.
+- Laptop: nested KWin composes with QPainter (`KWIN_COMPOSE=Q`), Xwayland without glamor (`XWAYLAND_NO_GLAMOR=1`),
+  the client takes Mesa's GLX (`__GLX_VENDOR_LIBRARY_NAME=mesa`): GLVND otherwise hands it the NVIDIA vendor that
+  Xwayland names, and NVIDIA ignores `LIBGL_ALWAYS_SOFTWARE`. The socket is `wayland-incoming-soft-<name>`: its name is
+  how `gpu_lease.sh` tells a CPU session from a GPU client (kwin_wayland has file capabilities, its environment is
+  unreadable). Elsewhere (netcup, cloud) `xvfb-run`.
+- llvmpipe draws 3–10 frames/s: a frame lands up to 0.3 s after its tick. While shot frames are due, the sandbox slows
+  the world (`Sandbox.paceFrame`: `tickRateManager().setTickRate` for two frames per tick, not `/tick rate`, whose
+  feedback prints into the frame's chat), so frames land within 0.02 s of their second (`blast drone` at 0.1, 0.5, 1 and 3 s:
+  ages 0.102, 0.521, 1.005, 3.009 s; unpaced 0.163, 0.524, 1.292, 3.061 s). Pacing follows the armed take, not the
+  current rate: effects that `clear` first (`nuke … near`) and fast stretches that raised the rate keep it. A slowed
+  take's sound is not real-time: `shot` records sound in a second take of the same effect at 20 ticks/s from the first
+  frame's second (`shots .wav-<name>-XXXXXX none@<s> <wav>`, a fresh `mktemp` staging directory), cuts the WAV from it and writes
+  its timing into the frames' `capture.json` (`audio.take`); the effect's deadline grows by 20 s per game second.
+- Mesa caches compiled shaders in `~/.cache/incoming-mesa-shaders`, shared by every tree: a cold llvmpipe compiles the
+  nuclear volume shaders for 140 s (laptop) or 74 s (netcup) before `ready`; a cold blast's first frame takes seconds.
+- Measured 20.11 (flat sandbox, 1280×720, `blast drone`): laptop (16 threads, `LP_NUM_THREADS` 8) start 240 s cold,
+  shot 18 s for frames alone, 36 s with the sound take; unit memory peak 3.0 GB at `-Xmx3g`. netcup (12 vCPU beside
+  three game servers) start 138 s cold, shot 40–45 s, peak 3.0 GB at `INCOMING_SOFT_HEAP=1536m`.
+- A host with little free memory (a server beside game servers): Gradle with `-PnoRecompile` (binary Minecraft:
+  Vineflower's decompile needs ~4 GB and was OOM-killed under a 3.5 GB ceiling), mods from `tools/fetch_runtime_mods.py`
+  (`-PmcModsDir=run/ci-mods`), no Gradle daemon, `INCOMING_SOFT_HEAP=1536m` (ceiling 3 GB); one client at a time.
 
 ## Pitfalls
 - Server may lag client ticks during world generation: client-scenario frames anchor to events, not a counter.

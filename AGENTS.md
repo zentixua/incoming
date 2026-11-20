@@ -74,7 +74,7 @@ cd mod && ./gradlew runScenarioSweep      # flight scenarios, all seeds; -Pscena
                                          # -PscenarioOnly=<regex> selects; -PscenarioRealChunks uses real loading
 cd mod && ./gradlew runScenarioRecord     # rerecord trajectory baseline; explain shifts in the scenario PR
 tools/client_scenario.sh nuke            # headless: mod/run/scenario/screenshots/*.png, audio.wav, logs
-tools/sandbox.sh shot <name> '<effect>'   # effect frames/WAV ~10 s after edit (client-scenario.md)
+tools/sandbox.sh shot <name> '<effect>'   # effect frames/WAV, CPU-rendered, no GPU queue (client-scenario.md)
 tools/stand/run.sh <name> ci:<branch> --packs none --scenes 100  # scene bench, ~3 GPU min; tools/stand/README.md
 tools/deploy.sh                          # jar → dist/ for friends and mods/ without pack auto-update
 python3 tools/logscan.py [--since 18:30]   # after play: mod errors, strikes, detonations, Sable
@@ -122,6 +122,9 @@ defense, `launcher/`, `grid/` blackout, `sound/`, `client/`, `work/` tick budget
    are strengthened toward the reference footage, marked `presentation:` in code, without changing facts. A real size
    or shape changes only by Artem's word, as a marked deviation. Never add what reality lacks (fire on every block,
    smoke from nowhere, impossible colour, impossible flight, 200 m craters, "space" effects).
+- **Vanilla first** (Artem, 20.11): the main visual target is the picture in vanilla rendering without shader packs;
+  shader packs (Iris) add on top and must not break it. Tune and judge without shaders; under a pack, only check it
+  still works.
 - **Not done by design** (Artem, 19.11): consequence sliders (damage ×), Hollywood craters, pixel smoke, a small
   "game-size" nuke default, smoke or fire shorter than its law.
 - **Every weapon, the nuke included,** has a realistic and cinematic launch, flight and impact (Artem, 07.11).
@@ -216,7 +219,8 @@ actually works, fix the real cause.
   by tests. Documentation-only changes use the applicable CI checks, without a game run. Open draft immediately
   (CI only on PRs); split large work.
 - **Visual/audio:** edit → sandbox frame/WAV (`tools/sandbox.sh shot`) beside same `main` frame; before/after frames/
-  WAV in PR. Scene bench (100-strike frame cost versus `main`) only for changes that can change frame cost: render/FX
+  WAV in PR. Vanilla frames render on the CPU (Mesa llvmpipe, `tools/soft_gl.sh`): no GPU lease, sessions in parallel,
+  laptop or netcup. The GPU only for what needs it: shader-pack/Voxy/DH frames, frame time, the scene bench. Scene bench (100-strike frame cost versus `main`) only for changes that can change frame cost: render/FX
   code, shaders, particle or draw counts (Artem, 30.10); once, on the final PR head after review. Colors, textures,
   sounds, text, server and tool changes skip it. Never merge above frame-cost limit. No full-pack Iris recording per PR.
 - **Performance starts with measurement:** GPU time by layer parts (mod markers, bench line, F3), RenderDoc frame
@@ -227,8 +231,9 @@ actually works, fix the real cause.
   Tooling for the mod: the `deep-debug` skill. **Study before coding** (Artem, 20.11): for a look or performance
   defect, one such run on our frame and on the reference footage, then the design from those numbers. **No guess-tuning** (Artem, 20.11): a defect that survives three rounds
   of tweaks means the model is wrong; stop tweaking and change the model.
-- **One visual session at a time:** one GPU (`tools/gpu_lease.sh`: other sessions' clients/`--gpu` jobs refuse, naming
-  holder); finish with `tools/sandbox.sh stop`, then `tools/gpu_lease.sh release`.
+- **One GPU session at a time** (`tools/gpu_lease.sh`: other sessions' GPU clients/`--gpu` jobs refuse, naming holder;
+  at most two sessions queue, a third is refused); finish with `tools/sandbox.sh stop`, then `tools/gpu_lease.sh
+  release`. CPU clients need no lease, limited only by memory (`soft_gl.sh` admission).
 - **One independent review round** by the other vendor (if unavailable, a fresh session of the same vendor), effort
   by the rule below. The reviewer reads the diff and surrounding code, not the PR description or the author's
   conclusions. Each agent only where it is strong (Artem, 19.11): Codex reviews code (correctness, tests, budgets,
@@ -253,7 +258,7 @@ actually works, fix the real cause.
   through `util/Terrain`. Nuclear loads use background vanilla `TicketType` (`NuclearTickets`).
 - `Locale.ROOT` for command numbers: Artem's Russian locale makes `String.format("%.1f")` use comma.
 - Heavy laptop jobs through `tools/laptop_job.sh` (own systemd service; `--gpu` waits for Artem's game to close and
-  leases the GPU); full-pack jobs (≈12 GB) run singly, GPU-free jobs may overlap within 32 GB; fix excess use in code.
+  leases the GPU; `--soft` CPU clients run at idle CPU priority under a memory ceiling, also while he plays); full-pack jobs (≈12 GB) run singly, GPU-free jobs may overlap within 32 GB; fix excess use in code.
   `/tmp` is RAM tmpfs: large clones/instance copies/frames go to disk, e.g. ignored `mod/run/`.
 - Checks must never reach Artem's screen/speakers. Clients only via `tools/nested_kwin.sh` (`--virtual`, no desktop
   window/host OpenAL audio, scenario audio to file); without KWin (cloud), `xvfb-run` with same muted host audio (`rigs.md`).

@@ -60,8 +60,12 @@ import java.util.Locale;
  *       clips; {@code turn 0} stops);</li>
  *   <li>{@code zoom <k>} — zoom ×k (1–256; 1 — no zoom): the field of view k times narrower (tangent of the half-angle), as in Ok Zoomer, —
  *       last, after all who change it;</li>
- *   <li>{@code shots <name> <seconds, comma-separated> [wav]} — frames and sound of the next effect: frames at those seconds from
- *       its start, sound — that many seconds ({@code wav}, 0 — no sound) in {@code fx/out/<name>/};</li>
+ *   <li>{@code shots <name> <seconds, comma-separated | none[@s]> [wav]} — frames and sound of the next effect: frames at those
+ *       seconds from its start ({@code none}: sound only, from second {@code s} ≤ 0), sound — that many seconds ({@code wav}, 0 — no
+ *       sound) in {@code fx/out/<name>/}.
+ *       On a CPU renderer the world slows while frames are due (a frame takes ~0.3 s there), so each frame is taken within a
+ *       fraction of a tick of its second; such a take's sound is not real-time, so {@code tools/sandbox.sh shot} records sound
+ *       in a second, unslowed take of the same effect ({@code none});</li>
  *   <li>{@code again} — the last effect once more (after a hot code swap), {@code clear} — remove all effects,
  *       {@code reload} — reload resources (like F3+T: shaders, textures, sounds, language), {@code wait <ticks>}.</li>
  * </ul>
@@ -383,8 +387,33 @@ record SandboxCommand(Verb verb, List<String> args) {
         return args.size() > i ? number(i) : otherwise;
     }
 
+    /**
+     * {@code shots}: second the sound starts from, relative to the effect: the first frame's second if before the effect
+     * (−10…0), otherwise 0; a sound-only take ({@code none@<s>}) states it.
+     */
+    double audioFrom() {
+        String a = args.get(1);
+        if (a.equals("none")) return 0;
+        if (a.startsWith("none@")) {
+            double from;
+            try {
+                from = Double.parseDouble(a.substring(5));
+            } catch (NumberFormatException e) {
+                throw new IllegalArgumentException("sound-only take — none or none@<seconds before the effect>: " + a);
+            }
+            if (from < -10 || from > 0) throw new IllegalArgumentException("sound start −10…0 s");
+            return from;
+        }
+        if (!a.startsWith("none")) return Math.min(0, times()[0]);
+        throw new IllegalArgumentException("sound-only take — none or none@<seconds before the effect>: " + a);
+    }
+
     /** {@code shots}: frame seconds in ascending order. */
     double[] times() {
+        if (args.get(1).startsWith("none")) {
+            audioFrom();
+            return new double[0];
+        }
         String[] parts = args.get(1).split(",");
         double[] t = new double[parts.length];
         for (int i = 0; i < parts.length; i++) {
