@@ -52,6 +52,9 @@ import java.util.Locale;
  *       needed) across the view, that many blocks in front of the camera (by default {@link #PANE_DISTANCE}), from the grass to
  *       above the frame; it follows the camera ({@code cam}, effects at a new place); {@code off} removes it: effects seen
  *       through glass, ice, leaves, bars and every other block;</li>
+ *   <li>{@code mob <entity>|off [distance]} — a still, silent mob of this {@code minecraft:} type on the ground that many blocks in
+ *       front of the camera toward the point (by default 15); it follows the camera like {@code pane}: effects behind a
+ *       mob must stay hidden by it (with a shader pack entities reach the depth late);</li>
  *   <li>{@code cam <distance> [height] [azimuth°] [look]} — where the camera is: distance from the point, height above the ground, azimuth
  *       from the point (0 — south, 90 — west, as the player's turn), height of the look point above the ground;</li>
  *   <li>{@code stance stand|fly} — a standing player (body sway) or a flying observer (by default);</li>
@@ -86,7 +89,7 @@ record SandboxCommand(Verb verb, List<String> args) {
     /** {@code pane}: the wall's distance in front of the camera by default, blocks. */
     static final double PANE_DISTANCE = 4;
 
-    enum Verb { ICBM, ARRIVAL, BLAST, REAL, NUKE, AIRBURST, LAUNCH, FLIGHT, FIRE, SPENT, CAM, STANCE, WEATHER, TIME, HUD, OVERLAY, ZOOM, TRACK, SHOTS, AGAIN, CLEAR, RELOAD, WAIT, RAID, SAM, HOUSE, SCENERY, SURFACE, TURN, UI, COLLAPSE, PANE }
+    enum Verb { ICBM, ARRIVAL, BLAST, REAL, NUKE, AIRBURST, LAUNCH, FLIGHT, FIRE, SPENT, CAM, STANCE, WEATHER, TIME, HUD, OVERLAY, ZOOM, TRACK, SHOTS, AGAIN, CLEAR, RELOAD, WAIT, RAID, SAM, HOUSE, SCENERY, SURFACE, TURN, UI, COLLAPSE, PANE, MOB }
 
     /** An effect (repeated by {@code again} and captured by {@code shots}). */
     boolean effect() {
@@ -257,6 +260,11 @@ record SandboxCommand(Verb verb, List<String> args) {
                 need(1, 2);
                 if (!args.getFirst().matches("off|[a-z0-9_]+(\\[[a-z0-9_=,]+])?")) throw new IllegalArgumentException("pane <block>|off [distance]");
                 if (args.size() > 1 && (number(1) < 1 || number(1) > 64)) throw new IllegalArgumentException("pane distance 1–64 blocks");
+            }
+            case MOB -> {
+                need(1, 2);
+                if (!args.getFirst().matches("off|[a-z0-9_]+")) throw new IllegalArgumentException("mob <entity>|off [distance]");
+                if (args.size() > 1 && (number(1) < 2 || number(1) > 100)) throw new IllegalArgumentException("mob distance 2–100 blocks");
             }
             case AGAIN, CLEAR, RELOAD -> need(0, 0);
         }
