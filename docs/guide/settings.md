@@ -54,10 +54,10 @@ world/server. The most useful settings are below; the rest are in the same file,
 | `nuclear.default_yield`, `max_yield` | 15, 100 | yield of a command without a number; largest allowed yield, kt (up to 1000 = 1 Mt) |
 | `nuclear.block_damage`, `nuclear.fires` | on | nuclear ruins/craters and thermal fires; independent of `world.block_damage` and `world.fire` |
 | `nuclear.black_rain` | on | smoke from the fires of a nuclear strike rains out downwind as black rain, washing a little radioactivity to the ground and contaminating skin and clothes; off: no black rain, the fires stay. Applies to new detonations |
-| `scale.scale_preset` | GAME | GAME: game flight speeds/heights, full nuclear radii, distant nuclear wave at 0.25 of the speed of sound; REAL: reference flight speeds/heights, full radii and physical wave timing; CUSTOM: the three numbers below. Flight and air defense remain a game model in every preset; see [Not physical](not-physical.md) |
+| `scale.scale_preset` | GAME | GAME: game flight speeds/heights, full nuclear radii, distant nuclear wave at 0.35 of the speed of sound; REAL: reference flight speeds/heights, full radii and physical wave timing; CUSTOM: the three numbers below. Flight and air defense remain a game model in every preset; see [Not physical](not-physical.md) |
 | `scale.flight_speed` | 0 | with CUSTOM: [flight speeds and heights](weapons.md#how-they-fly), 0 the game values, 1 true to life; in between every weapon goes the same share of the way. Turns stay game values. Flight times stay, so a faster weapon starts further away |
 | `nuclear.effects_scale` | 1.0 | with CUSTOM: scale of nuclear strike radii (1.0 is true to life) |
-| `nuclear.wave_speed` | 0.25 | with CUSTOM: speed of the blast wave away from the fireball, as a share of the speed of sound (1.0 is true to life) |
+| `nuclear.wave_speed` | 0.35 | with CUSTOM: speed of the blast wave away from the fireball, as a share of the speed of sound (1.0 is true to life) |
 | `air_defense.rails`, `air_defense.reload_seconds` | 4, 8 | ready SAM rails and seconds to load one missile from stock, including the first |
 | `grid.enabled` | on | [blackout](blackout.md) |
 | `grid.nuke_blackout`, `grid.max_radius` | on, 4096 | nuclear blackout without a substation; maximum radius of a substation or command outage in blocks (a nuke darkens its whole damage reach, at most 16384) |
