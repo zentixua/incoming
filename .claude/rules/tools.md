@@ -49,7 +49,8 @@ Prism: `~/.var/app/org.prismlauncher.PrismLauncher/data/PrismLauncher/` (`tools/
                                            “Effects sandbox”; check without a client: test_sandbox.sh (CI)
     nested_kwin.sh                       ← nested KWin for the client: no window and no host sound, its own D-Bus bus without starting services
                                            (nested_kwin_bus.conf) and XDG directories; takes the GPU lease and the client lock
-                                           (gpu_lease.sh); exit 75 means whoever holds the GPU
+                                           (gpu_lease.sh); exit 75 means whoever holds the GPU; with INCOMING_SOFT=1 a CPU session
+                                           (soft_gl.sh): no lease or lock, socket wayland-incoming-soft-…
     soft_gl.sh                           ← CPU rendering (Mesa llvmpipe) for no-shader clients, sourced: GL vendor/thread/heap
                                            environment, memory ceiling and admission, CPU display (nested KWin on a
                                            wayland-incoming-soft-<name> socket, else xvfb-run); details: client-scenario.md, “CPU rendering”

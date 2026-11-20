@@ -9,7 +9,8 @@ set -uo pipefail
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 tmp=$(mktemp -d); trap 'rm -rf "$tmp"' EXIT
 export INCOMING_GPU_LEASE=$tmp/lease INCOMING_GPU_LEASE_IDLE=600
-# The test "nested KWin" is a stub program: real laptop clients do not affect it
+# The test "nested KWin" is a stub program: real laptop clients do not affect it. `sandbox.sh start gpu` below must be
+# refused; JAVA_HOME=/nonexistent keeps a regression from building and launching a real client
 export INCOMING_GPU_KWIN=$tmp/kwin_wayland
 printf '#!/bin/bash\ntrap "kill \\$c; exit" TERM\nsleep 60 & c=$!\nwait\n' > "$INCOMING_GPU_KWIN"; chmod +x "$INCOMING_GPU_KWIN"
 unset INCOMING_GPU_OWNER
@@ -57,7 +58,7 @@ out=$(INCOMING_GPU_OWNER=FZC "$ROOT/tools/laptop_job.sh" --gpu film -- false 2>&
 if [ -n "$(systemctl --user list-units "incoming-job-sandbox-$(basename "$ROOT")-*" --state=active --no-legend --plain 2>/dev/null)" ]; then
   echo "skip: sandbox in this tree is running (start would say \"already running\")"
 else
-  out=$(INCOMING_GPU_OWNER=FZC "$ROOT/tools/sandbox.sh" start gpu 2>&1); rc=$?
+  out=$(JAVA_HOME=/nonexistent INCOMING_GPU_OWNER=FZC "$ROOT/tools/sandbox.sh" start gpu 2>&1); rc=$?
   # On the laptop, Artem's game may refuse first (also 75, no lease acquired)
   [ $rc = 75 ] && [[ $out == *"GPU held by SH"* || $out == *"Artem's game is running"* ]] && [ "$(cut -f1 "$INCOMING_GPU_LEASE")" = SH ] \
     && ok "sandbox start from another session refused with 75, lease held by SH" || bad "sandbox start: $rc $out"
@@ -122,7 +123,7 @@ out=$(INCOMING_GPU_OWNER=FZC "$ROOT/tools/nested_kwin.sh" wayland-test 64 64 tru
 out=$(INCOMING_GPU_OWNER=FZC "$ROOT/tools/laptop_job.sh" --gpu film -- false 2>&1); rc=$?
 [ $rc = 75 ] && [[ $out == *"client is running without a lease"* ]] && ok "laptop_job --gpu refused" || bad "laptop_job --gpu with unlocked client: $rc $out"
 if [ -z "$(systemctl --user list-units "incoming-job-sandbox-$(basename "$ROOT")-*" --state=active --no-legend --plain 2>/dev/null)" ]; then
-  out=$(INCOMING_GPU_OWNER=FZC "$ROOT/tools/sandbox.sh" start gpu 2>&1); rc=$?
+  out=$(JAVA_HOME=/nonexistent INCOMING_GPU_OWNER=FZC "$ROOT/tools/sandbox.sh" start gpu 2>&1); rc=$?
   [ $rc = 75 ] && [[ $out == *"client is running without a lease"* || $out == *"Artem's game is running"* ]] && [ ! -s "$INCOMING_GPU_LEASE" ] \
     && ok "sandbox start refused with 75" || bad "sandbox start with unlocked client: $rc $out"
 fi

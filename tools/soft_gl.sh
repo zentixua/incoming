@@ -5,7 +5,12 @@
 #
 #   soft_gl_env          exports the GL selection, thread and heap limits for the client; the heap
 #                        (INCOMING_CLIENT_HEAP, read by build.gradle) must be exported before `gradlew rigLaunch`
-#   soft_mem_ok          refuses (75, with numbers) when the machine cannot spare one more client
+#   soft_mem_ok          refuses (75, with numbers) when the machine cannot spare one more client: available memory
+#                        minus the unused part of every running CPU client's ceiling must still hold this client's
+#                        ceiling and the reserve (tools/laptop_job.sh --soft checks it again under a lock until its unit
+#                        exists, so simultaneous starts cannot both spend the same memory)
+#   tree_id [root]       unit and socket name of a worktree: its directory name plus a hash of its full path (two trees
+#                        named alike in different places do not share a sandbox unit or a CPU display)
 #   soft_display <name> <w> <h> <command>   runs the command on a CPU-only display: nested KWin on socket
 #                        wayland-incoming-soft-<name> where KWin exists (tools/nested_kwin.sh with INCOMING_SOFT=1; the
 #                        prefix is how tools/gpu_lease.sh tells it from a GPU client), otherwise xvfb-run; no host audio
@@ -38,14 +43,31 @@ soft_mem_cap() {
   echo $(( heap + 1536 ))
 }
 
-# Memory admission: the client's ceiling must leave the reserve free
+# Unused part of the running CPU clients' ceilings, MB: units of laptop_job.sh --soft are the jobs with a MemoryMax
+soft_mem_promised() {
+  local u max cur sum=0
+  for u in $(systemctl --user list-units 'incoming-job-*' --state=active --no-legend --plain 2>/dev/null | awk '{print $1}'); do
+    { read -r max; read -r cur; } < <(systemctl --user show "$u" -p MemoryMax -p MemoryCurrent --value 2>/dev/null)
+    [[ $max =~ ^[0-9]+$ ]] || continue
+    [[ $cur =~ ^[0-9]+$ ]] || cur=0
+    [ "$cur" -lt "$max" ] && sum=$(( sum + (max - cur) / 1048576 ))
+  done
+  echo "$sum"
+}
+
+# Memory admission: the client's ceiling must leave the reserve free, after what running CPU clients may still take
 soft_mem_ok() {
-  local avail cap; cap=$(soft_mem_cap)
+  local avail cap promised; cap=$(soft_mem_cap); promised=$(soft_mem_promised)
   avail=$(awk '/^MemAvailable:/ { print int($2 / 1024) }' /proc/meminfo)
-  if [ "$avail" -lt $(( cap + ${INCOMING_SOFT_RESERVE_MB:-4096} )) ]; then
-    echo "soft client refused: ${avail} MB available, needs its ceiling ${cap} MB + reserve ${INCOMING_SOFT_RESERVE_MB:-4096} MB (INCOMING_SOFT_HEAP lowers the ceiling)" >&2
+  if [ $(( avail - promised )) -lt $(( cap + ${INCOMING_SOFT_RESERVE_MB:-4096} )) ]; then
+    echo "soft client refused: ${avail} MB available, ${promised} MB promised to running CPU clients; needs its ceiling ${cap} MB + reserve ${INCOMING_SOFT_RESERVE_MB:-4096} MB (INCOMING_SOFT_HEAP lowers the ceiling)" >&2
     return 75
   fi
+}
+
+tree_id() {
+  local root; root=$(readlink -m "${1:-$(dirname "${BASH_SOURCE[0]}")/..}")
+  echo "$(basename "$root")-$(printf %s "$root" | md5sum | cut -c1-6)"
 }
 
 soft_display() {

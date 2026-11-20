@@ -36,7 +36,10 @@ set -uo pipefail
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 RUN="$ROOT/mod/run/sandbox"
 FX="$RUN/fx"
-UNIT="incoming-job-sandbox-$(basename "$ROOT")"
+source "$ROOT/tools/soft_gl.sh"
+# unit and CPU display of this tree: name plus path hash (tree_id), so alike-named trees elsewhere do not share them
+TREE_ID=$(tree_id "$ROOT")
+UNIT="incoming-job-sandbox-$TREE_ID"
 # JetBrains Runtime: one for all trees, in mod/run of the main tree (git-common-dir points to the main .git)
 JBR_DIR="$(cd "$(git -C "$ROOT" rev-parse --path-format=absolute --git-common-dir)/.." && pwd)/mod/run/jbr"
 JBR_BUILD=jbr-21.0.11-linux-x64-b1163.116
@@ -109,6 +112,16 @@ swap() {
 }
 
 # A slice of client audio.wav from the effect start (capture.json), saved as a separate WAV
+# audio block of a sound take ($1 capture.json) into the frame take's capture.json ($2)
+audio_into() {
+  python3 - "$1" "$2" <<'PY'
+import json, sys
+take, frames = json.load(open(sys.argv[1])), json.load(open(sys.argv[2]))
+frames["audio"] = dict(take["audio"], take="separate, 20 ticks/s")
+json.dump(frames, open(sys.argv[2], "w"))
+PY
+}
+
 cut_wav() {
   python3 - "$1" "$2" <<'PY'
 import json, struct, sys, wave
@@ -184,7 +197,6 @@ start() {
       sleep 10
     done
   else
-    source "$ROOT/tools/soft_gl.sh"
     soft_mem_ok || exit 75
     soft_gl_env
     echo "on the CPU (llvmpipe): no GPU lease; frames only, not frame costs"
@@ -235,7 +247,7 @@ OPT
   local build; build=$(since "$t0")
   local w=${size%x*} h=${size#*x}
   local jobmode=--light; [ -n "${INCOMING_SANDBOX_SOFT:-}" ] && jobmode=--soft
-  INCOMING_SANDBOX=1 nohup "$ROOT/tools/laptop_job.sh" $jobmode "sandbox-$(basename "$ROOT")" -- "$ROOT/tools/sandbox.sh" _run "$w" "$h" > "$RUN/logs/job.log" 2>&1 &
+  INCOMING_SANDBOX=1 nohup "$ROOT/tools/laptop_job.sh" $jobmode "sandbox-$TREE_ID" -- "$ROOT/tools/sandbox.sh" _run "$w" "$h" > "$RUN/logs/job.log" 2>&1 &
   local job=$! waited=0
   # The job started: its client holds the lease; interrupting this wait (Ctrl+C, timeout) does not take the lease from a live client;
   # release it only if the job itself failed to start
@@ -260,8 +272,7 @@ OPT
 run_client() {
   if [ -n "${INCOMING_SANDBOX_SOFT:-}" ]; then
     # CPU display, no GPU or host audio (tools/soft_gl.sh); a socket per tree: several CPU sandboxes run at once
-    source "$ROOT/tools/soft_gl.sh"
-    soft_display "sandbox-$(basename "$ROOT")" "$1" "$2" "bash $ROOT/mod/build/rig/sandbox.sh" > "$RUN/logs/client.out" 2>&1 &
+    soft_display "sandbox-$TREE_ID" "$1" "$2" "bash $ROOT/mod/build/rig/sandbox.sh" > "$RUN/logs/client.out" 2>&1 &
   else
     "$ROOT/tools/nested_kwin.sh" wayland-incoming-sandbox "$1" "$2" "bash $ROOT/mod/build/rig/sandbox.sh" > "$RUN/logs/client.out" 2>&1 &
   fi
@@ -316,21 +327,30 @@ shot() {
   # would persist into the next one; `time` finishes when the time reaches the client
   fx "time $time" || exit 1
   fx "overlay $overlay" || exit 1
-  local out="$FX/out/$name"
+  local out="$FX/out/$name" limit=${FX_LIMIT:-3600}
+  if [ "$(cat "$FX/renderer" 2>/dev/null)" = soft ]; then
+    # a paced take runs down to 1 tick/s: the last frame's second may take 20 wall seconds per game second
+    limit=$(awk -v l="${at##*,}" -v b="$limit" 'BEGIN { printf "%d", b + (l > 0 ? l : 0) * 20 }')
+  fi
   if [ "$(cat "$FX/renderer" 2>/dev/null)" = soft ] && [ "$wav" != 0 ]; then
     # CPU renderer: the frame take slows the world (Sandbox.paceFrame), so its sound is not real-time; sound comes from a
-    # second take of the same effect at 20 ticks/s without frames
+    # second take of the same effect at 20 ticks/s without frames, from the same second (frames before a front included),
+    # in a staging directory of its own; its timing replaces the frame take's empty audio block in capture.json
+    local take=".wav-$name-$$" from
+    from=$(awk -v f="${at%%,*}" 'BEGIN { printf "%.2f", f < 0 ? f : 0 }')
     fx "shots $name $at 0" || exit 1
-    fx "$effect" || exit 1
+    FX_LIMIT=$limit fx "$effect" || exit 1
     fx clear || exit 1
-    fx "shots $name-wav none $wav" || exit 1
-    fx "$effect" || exit 1
-    cut_wav "$FX/out/$name-wav/capture.json" "$out/$name.wav"
-    rm -rf "${FX:?}/out/$name-wav"
+    fx "shots $take none@$from $wav" || exit 1
+    fx "$effect" || { rm -rf "${FX:?}/out/$take"; exit 1; }
+    if ! cut_wav "$FX/out/$take/capture.json" "$out/$name.wav" || ! audio_into "$FX/out/$take/capture.json" "$out/capture.json"; then
+      echo "sound take: no WAV ($FX/out/$take kept)" >&2; exit 1
+    fi
+    rm -rf "${FX:?}/out/$take"
   else
     fx "shots $name $at $wav" || exit 1
-    fx "$effect" || exit 1
-    cut_wav "$out/capture.json" "$out/$name.wav"
+    FX_LIMIT=$limit fx "$effect" || exit 1
+    cut_wav "$out/capture.json" "$out/$name.wav" || { echo "no WAV" >&2; exit 1; }
   fi
   ls "$out"/*.png | sed 's/^/frame: /'
   echo "from command to last frame and audio: $(since "$t0") s"

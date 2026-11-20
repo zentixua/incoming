@@ -17,6 +17,7 @@ bad() { echo "FAIL: $1"; fail=1; }
 FX=$tmp/fx
 fx() { echo "$1" >> "$tmp/fx.log"; }
 swap() { echo swap >> "$tmp/fx.log"; }
+eval "$(declare -f cut_wav | sed '1s/^cut_wav/real_cut_wav/')"
 cut_wav() { :; }
 ( shot n1 'blast drone' --time night --no-swap ) >/dev/null 2>&1
 ( shot n2 'flight missile' --at 0.5 --wav 2 ) >/dev/null 2>&1
@@ -47,17 +48,44 @@ INCOMING_SHADERS=1 mods_check "$tmp/mods" && ok "shaders with Iris and Sodium ac
 out=$(INCOMING_SHADERS=1 INCOMING_DH=1 mods_check "$tmp/mods" 2>&1); rc=$?
 [ $rc = 1 ] && [[ $out == *"DistantHorizons-*.jar"* ]] && ok "dh without Distant Horizons refused" || bad "dh without DH: $rc $out"
 
-# CPU renderer (tools/soft_gl.sh): frames in a paced take without sound, sound in a second take of the same effect
-: > "$tmp/fx.log"; mkdir -p "$FX/out/n3"; echo soft > "$FX/renderer"
-( shot n3 'blast drone' --at 0.5,1 --wav 2 --no-swap ) >/dev/null 2>&1
-grep -qx 'shots n3 0.5,1 0' "$tmp/fx.log" && grep -qx 'shots n3-wav none 2' "$tmp/fx.log" && [ "$(grep -cx 'blast drone' "$tmp/fx.log")" = 2 ] \
-  && [ "$(grep -n -x 'clear' "$tmp/fx.log" | tail -1 | cut -d: -f1)" -lt "$(grep -n 'shots n3-wav' "$tmp/fx.log" | cut -d: -f1)" ] \
-  && ok "CPU shot: frames take without sound, cleared, then a sound take" || bad "CPU shot: $(tr '\n' ';' < "$tmp/fx.log")"
+# CPU renderer (tools/soft_gl.sh): frames in a paced take without sound, sound in a second take of the same effect from
+# the first frame's second, in a staging directory of its own (an existing shot named like it stays); the WAV is cut
+# from that take and its timing goes into the frames' capture.json; a missing sound take fails the shot
+cut_wav() { real_cut_wav "$@"; }
+python3 - "$tmp/audio.wav" <<'PY'
+import sys, wave
+with wave.open(sys.argv[1], "wb") as w:
+    w.setnchannels(2); w.setsampwidth(2); w.setframerate(48000); w.writeframes(b"\0" * 4 * 48000 * 3)
+PY
+AUDIO=$tmp/audio.wav
+fx() {
+  echo "$1" >> "$tmp/fx.log"
+  if [[ $1 == "shots "* ]]; then
+    local a=($1); mkdir -p "$FX/out/${a[1]}"
+    printf '{"name": "%s", "audio": {"file": "%s", "start": 44, "from": 0, "seconds": %s}, "frames": []}\n' "${a[1]}" "$AUDIO" "${a[3]:-0}" > "$FX/out/${a[1]}/capture.json"
+  fi
+}
+: > "$tmp/fx.log"; mkdir -p "$FX/out/n3-wav"; echo soft > "$FX/renderer"; touch "$FX/out/n3-wav/keep.png"
+( shot n3 'nuke 15 near' --at -0.5,1 --wav 2 --no-swap ) >/dev/null 2>&1; rc=$?
+take=$(sed -n 's/^shots \(\.wav-n3-[0-9]*\) none@-0.50 2$/\1/p' "$tmp/fx.log")
+[ $rc = 0 ] && grep -qx 'shots n3 -0.5,1 0' "$tmp/fx.log" && [ -n "$take" ] && [ "$(grep -cx 'nuke 15 near' "$tmp/fx.log")" = 2 ] \
+  && [ "$(grep -n -x 'clear' "$tmp/fx.log" | tail -1 | cut -d: -f1)" -lt "$(grep -n "shots $take" "$tmp/fx.log" | cut -d: -f1)" ] \
+  && ok "CPU shot: frames take without sound, cleared, then a sound take from -0.5 s ($take)" || bad "CPU shot: rc $rc $(tr '\n' ';' < "$tmp/fx.log")"
+python3 -c 'import wave,sys; w=wave.open(sys.argv[1]); sys.exit(0 if abs(w.getnframes()/w.getframerate()-2)<0.01 else 1)' "$FX/out/n3/n3.wav" 2>/dev/null \
+  && ok "CPU shot: WAV cut from the sound take" || bad "CPU shot: no 2 s WAV"
+python3 -c 'import json,sys; a=json.load(open(sys.argv[1]))["audio"]; sys.exit(0 if a["seconds"]==2 and a["take"].startswith("separate") else 1)' "$FX/out/n3/capture.json" 2>/dev/null \
+  && ok "CPU shot: sound take timing in the frames' capture.json" || bad "CPU shot capture.json: $(cat "$FX/out/n3/capture.json")"
+[ -f "$FX/out/n3-wav/keep.png" ] && [ ! -d "$FX/out/$take" ] && ok "CPU shot: another shot named n3-wav kept, staging removed" || bad "CPU shot staging: $(ls "$FX/out")"
+AUDIO=$tmp/missing.wav
+( shot n5 'blast drone' --at 0.5 --wav 2 --no-swap ) >/dev/null 2>&1; rc=$?
+[ $rc != 0 ] && ok "CPU shot without a readable sound take fails" || bad "CPU shot with a broken sound take returned 0"
+AUDIO=$tmp/audio.wav
 : > "$tmp/fx.log"; echo gpu > "$FX/renderer"
 ( shot n4 'blast drone' --at 0.5 --wav 2 --no-swap ) >/dev/null 2>&1
 [ "$(grep -c '^shots' "$tmp/fx.log")" = 1 ] && grep -qx 'shots n4 0.5 2' "$tmp/fx.log" && ok "GPU shot: one take with sound" || bad "GPU shot: $(tr '\n' ';' < "$tmp/fx.log")"
 
 source "$ROOT/tools/soft_gl.sh"
+[ "$(tree_id /a/wt-main)" != "$(tree_id /b/wt-main)" ] && [[ $(tree_id /a/wt-main) == wt-main-* ]] && ok "tree id: alike names in different places differ" || bad "tree_id"
 [ "$(INCOMING_SOFT_HEAP=3g soft_mem_cap)" = 4608 ] && [ "$(INCOMING_SOFT_HEAP=1536m soft_mem_cap)" = 3072 ] && ok "CPU client ceiling: heap + 1.5 GB" || bad "soft_mem_cap"
 out=$(INCOMING_SOFT_RESERVE_MB=100000000 soft_mem_ok 2>&1); rc=$?
 [ $rc = 75 ] && [[ $out == *"soft client refused"* ]] && ok "CPU client refused when memory is short" || bad "soft_mem_ok: $rc $out"

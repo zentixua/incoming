@@ -100,9 +100,15 @@ while IFS= read -r line; do envs+=(-E "$line"); done < <(env | grep -E '^(JAVA_H
 
 props=(-p OOMScoreAdjust=500)
 if [ "$mode" = soft ]; then
-  # idle CPU class and the client's memory ceiling (soft_mem_cap): a CPU client never pushes the host into swap
+  # idle CPU class and the client's memory ceiling (soft_mem_cap): a CPU client never pushes the host into swap;
+  # INCOMING_SOFT_UNIT tells scripts inside that the ceiling is already theirs
   source "$(dirname "$(readlink -f "$0")")/soft_gl.sh"
-  props+=(-p CPUWeight=idle -p Nice=10 -p MemoryMax="$(soft_mem_cap)M" -p MemorySwapMax=0)
+  props+=(-p CPUWeight=idle -p Nice=10 -p MemoryMax="$(soft_mem_cap)M" -p MemorySwapMax=0 -E INCOMING_SOFT_UNIT=1)
+  # admission and unit start under one lock: a second start counts this unit's ceiling as promised
+  # fd 198 (199 is the GPU client lock): closed for the job itself, so the lock ends with this script's hold
+  exec 198>"${XDG_RUNTIME_DIR:-/run/user/$(id -u)}/incoming-soft-admit.lock"
+  flock 198
+  soft_mem_ok || { echo "laptop_job $name: exit 75"; exit 75; }
 fi
 # keep the laptop awake; a server without a session seat (netcup: "Access denied") has no sleep to inhibit
 inhibit=(systemd-inhibit --what=sleep:idle --who="Incoming: $name" --why="mod check (tools/laptop_job.sh)")
@@ -110,7 +116,14 @@ inhibit=(systemd-inhibit --what=sleep:idle --who="Incoming: $name" --why="mod ch
 code=0
 "${inhibit[@]}" \
   systemd-run --user --wait --pipe --collect --quiet --same-dir --unit="incoming-job-$name-$$" \
-    "${props[@]}" "${envs[@]}" -- "$(readlink -f "$0")" --in-unit "$mode" "$name" $$ -- "$@" || code=$?
+    "${props[@]}" "${envs[@]}" -- "$(readlink -f "$0")" --in-unit "$mode" "$name" $$ -- "$@" 198>&- &
+run=$!
+if [ "$mode" = soft ]; then
+  # hold the admission lock until the unit (and its MemoryMax) exists
+  for _ in $(seq 100); do systemctl --user is-active -q "incoming-job-$name-$$" && break; kill -0 $run 2>/dev/null || break; sleep 0.1; done
+  exec 198>&-
+fi
+wait $run || code=$?
 # completion line for background waiter: exit code immediately visible, startup failure not lost
 echo "laptop_job $name: exit $code"
 exit $code

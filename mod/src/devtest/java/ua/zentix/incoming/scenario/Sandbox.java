@@ -218,6 +218,8 @@ final class Sandbox {
         long audioStart = -1;
         /** Tick sound starts: the first frame, if it is before the effect's start, otherwise the effect's start. */
         int audioTick;
+        /** Second sound starts from, relative to the effect (≤ 0): the first frame's, or a sound-only take's own. */
+        double audioFrom;
         final List<String> frames = new ArrayList<>();
 
         Capture(String name, double[] times, double wavSeconds, Path out) {
@@ -538,6 +540,7 @@ final class Sandbox {
                     return;
                 }
                 armed = new Capture(c.args().getFirst(), c.times(), c.number(2, 0), out);
+                armed.audioFrom = c.audioFrom();
                 // slow before the effect: its first frames (new particles, first draw of a shader) are the slowest
                 pace(armed.times.length > 0 ? SOFT_START_RATE : 20);
                 finish("ok armed " + out);
@@ -566,7 +569,8 @@ final class Sandbox {
      */
     private void clear() {
         Minecraft.getInstance().setScreen(null);
-        pace(20);
+        // effects that clear first (nuke … near, camera moves) keep an armed frame take slowed
+        pace(paced() ? SOFT_START_RATE : 20);
         raid.clear();
         ArrivalScene.reset();
         turnYaw = Float.NaN;
@@ -902,7 +906,7 @@ final class Sandbox {
             // the first frame is already in the past (the detonation is closer than the frames before the front) —
             // sound from this tick, frames — now (their
             // real time — age in capture.json)
-            int first = at + (int) Math.round(Math.min(0, capture.times.length == 0 ? 0 : capture.times[0]) * 20);
+            int first = at + (int) Math.round(capture.audioFrom * 20);
             if (first < tick) {
                 Incoming.LOG.warn("SANDBOX frames before {} s are already past (the front comes in {} s): taken now, see age",
                         String.format(Locale.ROOT, "%.2f", (tick - at) / 20.0), String.format(Locale.ROOT, "%.2f", (at - tick) / 20.0));
@@ -1408,13 +1412,19 @@ final class Sandbox {
      * are the same, only wall time stretches. GPU renderers are left at 20 ticks/s.
      */
     private void paceFrame() {
+        if (!paced()) return;
         long now = System.nanoTime();
-        if (paceRate < 20 && paceLast != 0) {
+        if (paceLast != 0) {
             double frame = (now - paceLast) / 1e9;
             paceFrameS = paceFrameS == 0 ? frame : paceFrameS * 0.7 + frame * 0.3;
             pace(1 / (FRAMES_PER_TICK * paceFrameS));
         }
         paceLast = now;
+    }
+
+    /** Frames are due (armed or capturing), whatever the current rate: a fast stretch may have raised it to 20. */
+    private boolean paced() {
+        return (armed != null && armed.times.length > 0) || (capture != null && capture.next < capture.times.length);
     }
 
     /** World rate, ticks/s (CPU renderer only; 20 restores); command only on a change of more than a tenth. */

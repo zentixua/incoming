@@ -69,8 +69,8 @@ with Iris.
 - `tools/sandbox.sh start [shaders] [dh] [gpu]`: on the CPU unless `shaders`, `dh` or `gpu` (“CPU rendering”); mod-only client (sable-companion alongside: not embedded in dev; `shaders`
   adds Sodium/Iris/host shaderpack from instance, `dh` Distant Horizons), flat world (`Sandbox`: bedrock, stone,
   dirt, grass, grass top y 64; noon, no weather/mobs; same world every launch), headless in nested KWin, as laptop
-  job; lives until `stop` or Artem's game starts (`fx/stopped`; game running means immediate exit 75); other jobs
-  cannot stop it. One GPU (`tools/gpu_lease.sh`): client (`nested_kwin.sh`, used by every client) acquires its
+  job (unit `incoming-job-sandbox-<tree_id>`); lives until `stop`; in GPU mode also until Artem's game starts
+  (`fx/stopped`; game running means immediate exit 75); other jobs cannot stop it. GPU mode, one GPU (`tools/gpu_lease.sh`): client (`nested_kwin.sh`, used by every client) acquires its
   session lease (owner from `wt-<S>…` tree) and GPU-client lock, holds/renews while alive; `start` requests them
   before building. Another session holds GPU: exit 75, line “GPU held by <owner> (<tree>), since <time>”; client
   already running (even own session's sandbox in another tree/look gate): exit 75, “client running on GPU …”;
@@ -169,9 +169,12 @@ with Iris.
 
 ## CPU rendering (`tools/soft_gl.sh`)
 Vanilla frames (no shader pack, DH or Voxy) render with Mesa llvmpipe: `sandbox.sh start` and `client_scenario.sh`
-default to it, `gpu` forces the GPU. No lease, no GPU queue; the laptop job runs `--soft` (idle CPU class, memory
-ceiling heap + 1.5 GB without swap, not stopped by Artem's game); refused (75) only when the ceiling plus a 4 GB reserve
-does not fit. The picture is the GPU's (same GL core pipeline; the client logs `GL info: llvmpipe`); fps, layer GPU
+default to it, `gpu` forces the GPU. No lease, no GPU queue; the client runs in a `laptop_job.sh --soft` unit (idle CPU
+class, memory ceiling heap + 1.5 GB without swap, not stopped by Artem's game); `client_scenario.sh` puts it there
+itself after Gradle writes the launch script (`rigLaunch`, outside the ceiling). Refused (75) when available memory,
+less the unused ceilings of running CPU clients, cannot hold this ceiling plus a 4 GB reserve; `laptop_job.sh` checks
+under a lock until the unit exists, so simultaneous starts cannot both pass. Units and sockets carry `tree_id` (tree
+name and path hash). The picture is the GPU's (same GL core pipeline; the client logs `GL info: llvmpipe`); fps, layer GPU
 times and the pall's budget are not frame costs: frame cost belongs to the GPU and `tools/stand`.
 - Laptop: nested KWin composes with QPainter (`KWIN_COMPOSE=Q`), Xwayland without glamor (`XWAYLAND_NO_GLAMOR=1`),
   the client takes Mesa's GLX (`__GLX_VENDOR_LIBRARY_NAME=mesa`): GLVND otherwise hands it the NVIDIA vendor that
@@ -181,8 +184,11 @@ times and the pall's budget are not frame costs: frame cost belongs to the GPU a
 - llvmpipe draws 3–10 frames/s: a frame lands up to 0.3 s after its tick. While shot frames are due, the sandbox slows
   the world (`Sandbox.paceFrame`: `tickRateManager().setTickRate` for two frames per tick, not `/tick rate`, whose
   feedback prints into the frame's chat), so frames land within 0.02 s of their second (`blast drone` at 0.1, 0.5, 1 and 3 s:
-  ages 0.102, 0.521, 1.005, 3.009 s; unpaced 0.163, 0.524, 1.292, 3.061 s). A slowed take's sound is not real-time:
-  `shot` records sound in a second take of the same effect at 20 ticks/s (`shots <name> none <wav>`).
+  ages 0.102, 0.521, 1.005, 3.009 s; unpaced 0.163, 0.524, 1.292, 3.061 s). Pacing follows the armed take, not the
+  current rate: effects that `clear` first (`nuke … near`) and fast stretches that raised the rate keep it. A slowed
+  take's sound is not real-time: `shot` records sound in a second take of the same effect at 20 ticks/s from the first
+  frame's second (`shots .wav-<name>-<pid> none@<s> <wav>`, its own staging directory), cuts the WAV from it and writes
+  its timing into the frames' `capture.json` (`audio.take`); the effect's deadline grows by 20 s per game second.
 - Mesa caches compiled shaders in `~/.cache/incoming-mesa-shaders`, shared by every tree: a cold llvmpipe compiles the
   nuclear volume shaders for 140 s (laptop) or 74 s (netcup) before `ready`; a cold blast's first frame takes seconds.
 - Measured 20.11 (flat sandbox, 1280×720, `blast drone`): laptop (16 threads, `LP_NUM_THREADS` 8) start 240 s cold,
