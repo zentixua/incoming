@@ -328,13 +328,14 @@ public final class CollapseGameTests {
         h.setBlock(shulker, Blocks.SHULKER_BOX);
         h.setBlock(vaultAt, vault);
         h.setBlock(depotAt, depot);
-        net.minecraft.world.item.Item[] kinds = {net.minecraft.world.item.Items.DIAMOND, net.minecraft.world.item.Items.BLAZE_POWDER,
+        net.minecraft.world.item.Item[] kinds = {net.minecraft.world.item.Items.DIAMOND, net.minecraft.world.item.Items.GUNPOWDER,
                 net.minecraft.world.item.Items.GOLD_INGOT, net.minecraft.world.item.Items.IRON_INGOT, net.minecraft.world.item.Items.EMERALD};
         int[] want = {7, 3, 10, 200, 16};
         // the vault becomes its own controller on its first tick; its item handler exists from then on
         h.runAfterDelay(10, () -> {
             ((net.minecraft.world.Container) h.getBlockEntity(chest)).setItem(0, new net.minecraft.world.item.ItemStack(kinds[0], want[0]));
-            ((net.minecraft.world.Container) h.getBlockEntity(stand)).setItem(4, new net.minecraft.world.item.ItemStack(kinds[1], want[1]));
+            // the ingredient slot: blaze powder in the fuel slot would burn as the stand's fuel
+            ((net.minecraft.world.Container) h.getBlockEntity(stand)).setItem(3, new net.minecraft.world.item.ItemStack(kinds[1], want[1]));
             ((net.minecraft.world.Container) h.getBlockEntity(shulker)).setItem(0, new net.minecraft.world.item.ItemStack(kinds[2], want[2]));
             insert(h, vaultAt, kinds[3], want[3]);
             insert(h, depotAt, kinds[4], want[4]);

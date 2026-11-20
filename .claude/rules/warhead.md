@@ -160,7 +160,10 @@ paths:
   stands as an arch). The snapshot job waits for one of `StrikeSupport.MAX_SOLVES` server-wide slots before it builds
   anything (a slot covers snapshots, the queued or running solve and its result until the fall ends or is cancelled;
   freed once, also when a queued solve is cancelled before it runs), snapshots every chunk within `Collapse.C` of a removal and its neighbors in
-  5 ms portions (unready or plot-grid chunks are missing — support mass, no loads; a removal the snapshot shows filled
+  5 ms portions of bounded units (`StrikeSupport.unit`: 512 removals indexed or checked, one chunk's copy without
+  publication, one section's distinct states — `ChunkShot.states`, not vanilla `getAll`, whose `IntArraySet` costs 1–4 ms
+  a dense section —, 16 states put into the property table; a whole dense chunk as one step took 27–110 ms; GameTest
+  `snapshotStepsStayInTheirSlice` on 4096-state sections, wall times from `snapshotProbe` with the salvo bench) (unready or plot-grid chunks are missing — support mass, no loads; a removal the snapshot shows filled
   again is no loss; a datapack reload between portions abandons), and starts the solve on the game's background workers
   (not `RuinWorkers`: a nuke's ruin queue would hold it for minutes; also on a GameTest server: an inline solve took up to ~1 s
   of one CI tick and put the world clock ahead of game time for later batches, `grid_nuke_destroyed` failed; collapse
@@ -168,11 +171,16 @@ paths:
   share (`Debris.SOLID_SHARE`, same hash as the nuclear landing). The fall is a second job queued when the solve starts
   (`Fall`): `UnitQueue` cancels a job unready `GIVE_UP_TICKS` after it was queued, and one queued at the strike can wait
   long behind a salvo. It abandons the plan if a removal holds a load-bearing block again; one zero-radius
-  `ExplosionEvent.Detonate` without entities lets claim handlers keep positions, as for the blast; 5 ms portions (every
+  `ExplosionEvent.Detonate` without entities per 1024 positions lets claim handlers keep positions, as for the blast (the
+  hole check and these events are timed portions too); 5 ms portions (every
   candidate, kept or not, checks the clock): blocks changed since the snapshot stay, writes only where the chunk and its
   eight neighbors are ready and never into the plot grid, a non-vanilla block entity needs chunks ready `MODDED_REACH` around (its removal
-  may follow chains, as in `RuinPlan.neighbourRadius`); a container spills its contents first (vanilla `Container`, else
-  the item-handler capability: Create's vault is not a `Container`; an unrolled loot table stays unrolled); the abandon
+  may follow chains, as in `RuinPlan.neighbourRadius`); a block holding items (vanilla `Container`, or the item-handler capability from no side or any face) drops as a
+  vanilla explosion drops it (`Block.dropResources` with its block entity: a shulker box keeps its contents in the item)
+  and is removed without clearing (`ColumnScar.replaceKeeping`), so its own `onRemove` spills what it keeps (chest,
+  Create vault and depot: the vault's capability is the whole multiblock, its `onRemove` spills only its block); it
+  lands as no rubble; an unrolled loot table stays unrolled (GameTest `storageContentsSurvive`: chest, brewing stand,
+  shulker box, Create vault and depot); the abandon
   check covers only the removals the solve used. Known limits: a support built beside a hole while the solve runs is not
   seen; rubble lands in claimed land as vanilla falling sand does; the rubble share falls as vanilla falling blocks while `CraterFalls.room` allows, otherwise lands at
   once where it would rest, spread by `Debris.spread`; fluid ticks and landings in their own portions; one
