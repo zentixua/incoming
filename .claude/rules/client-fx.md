@@ -119,7 +119,11 @@ paths:
   hundred blocks away would vanish entirely (scenario `occlusion`). A particle up close is drawn as from the Minecraft
   atlas: the nearest pixel of the picture and copies half as small, and anything fainter than 0.1 alpha is not drawn (as in
   the vanilla particle shader; without this the puffs come out soft, and faint halos add up into a murky haze around the
-  cloud). A puff under 32 pixels is smooth, without a cut-off. A glow (arc flash, halo) that is blocks in size up close uses
+  cloud). A puff under 32 pixels is smooth, without a cut-off. Smoke-kind
+  particles (`FxQuads.softTexels`, byte 112) keep that only while a texel is at most a screen pixel: magnified, bilinear
+  from one to two pixels per texel, and the 0.1 cut becomes a ramp over 0.05–0.15 (`fx.fsh`: `softTexels`, `particleCut`,
+  `SoftTexelsGlslTest`): beside the eye a 64-pixel billow (smoky debris tails, `NearLitter` site dust) drew flat texel
+  squares 40–60 px wide with staircase edges (sandbox `msl_in` at 10 s). Pixel-art pieces (flakes, paper) stay nearest. A glow (arc flash, halo) that is blocks in size up close uses
   `Spec.smooth()`: with the nearest pixel, a 64-pixel flash picture covering half the screen falls apart into rotated
   squares of its own pixels with a hard cut edge at 0.1 (frames of a substation arc knocked out by a nuclear strike,
   scenario `flash`). The halo `far/glow` (glare, veil, fire glow, trail ribbons, `FxQuads.glowShape`) larger than a quarter
@@ -1096,6 +1100,11 @@ paths:
   48-Gaussian cap. A frozen 0.5° yaw changed finer counts from 50 to 48 and previously removed an entire merge pass
   (24 -> 48 final Gaussians), causing a transmittance jump despite stable quad detail and place spacing.
   Budget/world reset and an empty veil frame clear this history.
+  Veil colour by direction (`Veil.byHeight`): the two streams of `thick` with the same closure — light coming up is R∞ of
+  light coming down, radiance ∝ 1 + s·y in the ray's height cosine y, the horizon keeps the thick-layer colour (the
+  level deep in the cloud is not modelled; puffs of the same cloud outside the veil are lit the same way). Droplet fog
+  stays even, dust is ~2.7× brighter overhead than underfoot, soot nearly black underfoot (`VeilLightTest`). One colour
+  for every direction drew dense dust as a flat screen (video 9:14: RGB 139/127/115, SD 0).
   At a vertex — softness toward the world (`Veil.soft`): the vertex fades toward the world by the same `fx.fsh` as the
   soft edge of a quad, and half of the veil the world takes where half its opacity accumulates along the ray
   (`Veil.half`: the matter — a segment by the mean and spread over the thickness, `sightMoments`, a truncated Gaussian;
@@ -1121,11 +1130,15 @@ paths:
   visible where it is denser (along the tube) and where it ends. color — a thick layer of mixture (`SmokePuffs.thick`:
   R∞ = (1 − s)/(1 + s), s² = (1 − ω')/(1 − ω'g'), closure by the mean of hemispheres — for Eddington soot came out
   negative, soot black; inversion — `SmokeGrid.dustAlbedo`) in the sky's light at the eye; light from the sides — in the
-  shader (`fx.fsh`: `sixFrames`, `sixLight`): direct (sun, moon — `FxLayer.sun`, share
-  (est.)) uses squared-cosine weights (sum 1; plain cosines would make 45° sunlight √2 brighter). Directions follow
+  shader (`fx.fsh`: `sixFrames`, `sixLight`): direct (sun, moon — `FxLayer.sun`, clear-day share 0.8 after Erbs 1982,
+  moon (est.)) uses squared-cosine weights (sum 1; plain cosines would make 45° sunlight √2 brighter). Directions follow
   the actual plane and clump UV axes. Two `UV2` shorts carry the basis instead of constant `FULL_BRIGHT`
   (`PuffGeometry.faceLight/flatLight`); `fx.vsh` restores light and transforms directions at vertices, retaining the
-  36-byte format. No fragment basis derivatives/normalization. Ambient averages all six sides; frame fireballs
+  36-byte format. No fragment basis derivatives/normalization. Ambient is the sky over the upper hemisphere and the
+  ground's reflection under it (`skyDome`: map axis at cos c to world up weighs (1 + c)/6 of sky and (1 − c)/6 × albedo 0.2
+  of ground, Liu–Jordan view factors; uniform light keeps the six-side mean, `SkyDomeGlslTest`; up in map axes is
+  `sixUpDir` from `fx.vsh`). The six-side mean lit the underside of black smoke as brightly as the top (sandbox missile
+  cloud, side sun: shadow flank 45/255, lit 65, underside 52); frame fireballs
   (`FxLights`) use the maps and cannot exceed on-screen fire in the same
   to the same extent as for `balls` (illuminance × the sky's light `FxAmbient`: otherwise at night the fire would barely
   light the smoke); the shadow in the maps — of the bake's matter (`bake.py`: ω 0.55, g 0.55), of the puff's mixture —
