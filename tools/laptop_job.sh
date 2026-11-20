@@ -19,7 +19,7 @@
 #            stopped", code 75
 #   --light  same as no flag: immediate, no lease (GameTest, build, server need no GPU)
 #   --soft   CPU-rendered client (tools/soft_gl.sh): immediate, no lease, idle CPU priority (CPUWeight=idle: Artem's game
-#            and every normal process go first), keeps running while Artem plays
+#            and every normal process go first), memory capped at heap + 2 GB without swap, keeps running while Artem plays
 set -euo pipefail
 
 # Artem's game: artem_playing (gpu_lease.sh), java in his Prism instance directory
@@ -99,7 +99,12 @@ envs=()
 while IFS= read -r line; do envs+=(-E "$line"); done < <(env | grep -E '^(JAVA_HOME|MC_DIR|MODS|INCOMING_[A-Z_]+|PYTHON_CPU_COUNT|XDG_RUNTIME_DIR)=' || true)
 
 props=(-p OOMScoreAdjust=500)
-[ "$mode" = soft ] && props+=(-p CPUWeight=idle -p Nice=10)
+if [ "$mode" = soft ]; then
+  # idle CPU class, and a memory ceiling of heap + 2 GB native: a CPU client never pushes the host into swap
+  heap=${INCOMING_SOFT_HEAP:-3g}
+  case "$heap" in *g|*G) heap=$(( ${heap%?} * 1024 )) ;; *m|*M) heap=${heap%?} ;; esac
+  props+=(-p CPUWeight=idle -p Nice=10 -p MemoryMax=$(( heap + 2048 ))M -p MemorySwapMax=0)
+fi
 code=0
 systemd-inhibit --what=sleep:idle --who="Incoming: $name" --why="mod check (tools/laptop_job.sh)" \
   systemd-run --user --wait --pipe --collect --quiet --same-dir --unit="incoming-job-$name-$$" \
