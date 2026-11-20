@@ -139,6 +139,11 @@ final class ScenarioRun {
     // observation
     private final Map<UUID, Track> tracks = new LinkedHashMap<>();
     private final FlightTrace trace = new FlightTrace();
+    /**
+     * Per-tick flight log of the scenario projectile (tick, phase, position and ground under it from the site centre,
+     * speed, nose angles), printed when a check fails: one failing run names the cause without a rerun.
+     */
+    private final List<String> flightLog = new ArrayList<>();
     @Nullable
     private Outcome outcome;
     private final Consumer<ExplosionEvent.Start> onBlast = this::onBlast;
@@ -583,6 +588,7 @@ final class ScenarioRun {
             if (e.getUUID().equals(projectileId)) passWaypoints(e, tr, pos);
             tr.last = pos;
             if (outcome == null) trace.add(t, tr.order, e.flightPhase().ordinal(), e.isVirtual(), pos.subtract(site.origin));
+            if (outcome == null && tr.order == 0) logFlight(t, e, pos);
             if (outcome == null && e instanceof BunkerBusterEntity bomb && bomb.isDrilling()) {
                 outcome = new Outcome("entry", t, bomb.entry(), WeaponType.BUNKER);
             }
@@ -703,8 +709,16 @@ final class ScenarioRun {
             // with a real load, the flight depends on the generation speed on the machine: the reference is not about it
             if (s.baselined() && !ScenarioMode.REAL_CHUNKS) checkBaseline();
         } catch (GameTestAssertException e) {
+            Incoming.LOG.warn("SCENARIO flight {}: log (tick phase virtual x y z ground speed pitch yaw)\n{}", s.id(), String.join("\n", flightLog));
             throw new GameTestAssertException(e.getMessage() + " — " + ScenarioMode.reproduce(s));
         }
+    }
+
+    private void logFlight(int t, StrikeProjectile e, Vec3 pos) {
+        Vec3 rel = pos.subtract(site.origin);
+        double ground = e.isVirtual() ? Double.NaN : site.ground(pos.x, pos.z, false).y - site.origin.y;
+        flightLog.add(String.format(Locale.ROOT, "%d %s %s %.2f %.2f %.2f %.0f %.3f %.1f %.1f", t, e.flightPhase(), e.isVirtual() ? "V" : "W",
+                rel.x, rel.y, rel.z, ground, e.speed(), e.getXRot(), e.getYRot()));
     }
 
     /** A property that is violated by a known flaw in the mod ({@link Scenario#knownIssues}): violation - in the log, test further. */

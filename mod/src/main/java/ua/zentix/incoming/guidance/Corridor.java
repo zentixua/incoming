@@ -39,7 +39,16 @@ public final class Corridor {
      * @param halfWidth corridor half-width, blocks
      */
     public static double highest(double[] track, double halfWidth, Climb climb, Relief relief) {
-        double[] max = {Double.NEGATIVE_INFINITY};
+        return both(track, halfWidth, climb, relief)[1];
+    }
+
+    /**
+     * {@link #highest} with and without the climb in one walk over the corridor.
+     *
+     * @return {highest terrain, altitude needed now with {@code climb}}
+     */
+    public static double[] both(double[] track, double halfWidth, Climb climb, Relief relief) {
+        double[] max = {Double.NEGATIVE_INFINITY, Double.NEGATIVE_INFINITY};
         int lanes = Math.max(1, (int) Math.ceil(2 * halfWidth / LANE));
         double travelled = 0;
         for (int i = 0; i == 0 || i + 3 < track.length; i += 2) {
@@ -59,7 +68,9 @@ public final class Corridor {
             double sx = ax, sz = az, base = travelled;
             GridWalk.Visitor visit = (x, z) -> {
                 double along = point ? 0 : Math.max(0, base + (x + 0.5 - sx) * ux + (z + 0.5 - sz) * uz);
-                max[0] = Math.max(max[0], relief.at(x, z) - climb.gain(along));
+                double h = relief.at(x, z);
+                max[0] = Math.max(max[0], h);
+                max[1] = Math.max(max[1], h - climb.gain(along));
                 return true;
             };
             for (int k = 0; k <= lanes; k++) {
@@ -68,6 +79,6 @@ public final class Corridor {
             }
             if (!point) travelled += len;
         }
-        return max[0];
+        return max;
     }
 }
