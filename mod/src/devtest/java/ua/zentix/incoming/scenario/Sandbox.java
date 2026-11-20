@@ -435,6 +435,14 @@ final class Sandbox {
                 onServer(false, s -> ua.zentix.incoming.IncomingConfig.SERVER.collapse.set(on));
                 finish("ok");
             }
+            case GRAPHICS -> {
+                String g = c.args().getFirst();
+                mc.options.graphicsMode().set(g.equals("fast") ? net.minecraft.client.GraphicsStatus.FAST
+                        : g.equals("fancy") ? net.minecraft.client.GraphicsStatus.FANCY : net.minecraft.client.GraphicsStatus.FABULOUS);
+                // as the video settings screen does: Fabulous targets made or dropped, chunks rebuilt
+                mc.levelRenderer.allChanged();
+                finish("ok");
+            }
             case WEATHER -> {
                 boolean rain = c.args().getFirst().equals("rain");
                 onServer(false, s -> s.overworld().setWeatherParameters(rain ? 0 : 6000, rain ? 6000 : 0, rain, false));

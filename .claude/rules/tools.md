@@ -45,7 +45,7 @@ Prism: `~/.var/app/org.prismlauncher.PrismLauncher/data/PrismLauncher/` (`tools/
                                            its Gradle step and another Gradle run in the same tree (GameTest) collide on
                                            downloadAssets: start the second after the client's launch script exists;
                                            scenarios and what each captures: in the script header
-    sandbox.sh start|fx|swap|shot|restart|stop|jbr ← effects sandbox (on the CPU unless shaders/dh/gpu): a client with only the mod (+ Iris with a shaderpack, DH) in a
+    sandbox.sh start|fx|swap|shot|restart|stop|jbr ← effects sandbox (on the CPU unless shaders/sodium/dh/gpu): a client with only the mod (+ Iris with a shaderpack, Sodium without one, DH) in a
                                            flat world, an effect by the /fx command in seconds, hot code swap and
                                            resource reload without a new client, frames and WAV in one command (`shot`);
                                            a nuke at the camera: `nuke 15 near`; how to work: client-scenario.md,

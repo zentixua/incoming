@@ -55,6 +55,8 @@ import java.util.Locale;
  *   <li>{@code mob <entity>|off [distance]} — a still, silent mob of this {@code minecraft:} type on the ground that many blocks in
  *       front of the camera toward the point (by default 15); it follows the camera like {@code pane}: effects behind a
  *       mob must stay hidden by it (with a shader pack entities reach the depth late);</li>
+ *   <li>{@code graphics fast|fancy|fabulous} — the client's graphics mode (Fabulous: translucent terrain, particles, clouds and
+ *       weather in their own targets);</li>
  *   <li>{@code cam <distance> [height] [azimuth°] [look]} — where the camera is: distance from the point, height above the ground, azimuth
  *       from the point (0 — south, 90 — west, as the player's turn), height of the look point above the ground;</li>
  *   <li>{@code stance stand|fly} — a standing player (body sway) or a flying observer (by default);</li>
@@ -89,7 +91,7 @@ record SandboxCommand(Verb verb, List<String> args) {
     /** {@code pane}: the wall's distance in front of the camera by default, blocks. */
     static final double PANE_DISTANCE = 4;
 
-    enum Verb { ICBM, ARRIVAL, BLAST, REAL, NUKE, AIRBURST, LAUNCH, FLIGHT, FIRE, SPENT, CAM, STANCE, WEATHER, TIME, HUD, OVERLAY, ZOOM, TRACK, SHOTS, AGAIN, CLEAR, RELOAD, WAIT, RAID, SAM, HOUSE, SCENERY, SURFACE, TURN, UI, COLLAPSE, PANE, MOB }
+    enum Verb { ICBM, ARRIVAL, BLAST, REAL, NUKE, AIRBURST, LAUNCH, FLIGHT, FIRE, SPENT, CAM, STANCE, WEATHER, TIME, HUD, OVERLAY, ZOOM, TRACK, SHOTS, AGAIN, CLEAR, RELOAD, WAIT, RAID, SAM, HOUSE, SCENERY, SURFACE, TURN, UI, COLLAPSE, PANE, MOB, GRAPHICS }
 
     /** An effect (repeated by {@code again} and captured by {@code shots}). */
     boolean effect() {
@@ -219,6 +221,10 @@ record SandboxCommand(Verb verb, List<String> args) {
                 need(1, 1);
                 if (!List.of("clear", "rain").contains(args.getFirst())) throw new IllegalArgumentException("clear or rain");
             }
+            case GRAPHICS -> {
+                need(1, 1);
+                if (!List.of("fast", "fancy", "fabulous").contains(args.getFirst())) throw new IllegalArgumentException("graphics fast|fancy|fabulous");
+            }
             case COLLAPSE -> {
                 need(1, 1);
                 if (!List.of("on", "off").contains(args.getFirst())) throw new IllegalArgumentException("collapse on|off");
@@ -259,7 +265,8 @@ record SandboxCommand(Verb verb, List<String> args) {
             case PANE -> {
                 need(1, 2);
                 if (!args.getFirst().matches("off|[a-z0-9_]+(\\[[a-z0-9_=,]+])?")) throw new IllegalArgumentException("pane <block>|off [distance]");
-                if (args.size() > 1 && (number(1) < 1 || number(1) > 64)) throw new IllegalArgumentException("pane distance 1–64 blocks");
+                // the wall spans the frame at that distance: beyond 16 blocks it exceeds vanilla's fill limit (32768 blocks)
+                if (args.size() > 1 && (number(1) < 1 || number(1) > 16)) throw new IllegalArgumentException("pane distance 1–16 blocks");
             }
             case MOB -> {
                 need(1, 2);
