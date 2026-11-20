@@ -34,7 +34,8 @@ paths:
   (translucent blending leaves coverage 1 − T in alpha; X = after − T·before). Later passes (lines, translucent entities,
   particles, clouds, weather) blend alpha with ONE, ZERO and are not in the copies; where they wrote depth they hide the
   layer as before. Fabulous copies the main depth at `AFTER_TRANSLUCENT_BLOCKS` (still opaque) and reads vanilla's
-  translucent target (X, 1 − T, its depth). A shader pack and secondary views stay `NONE`: the main path, hidden behind
+  translucent target (X, 1 − T, its depth): by `AFTER_LEVEL` the transparency chain's final blit has replaced the main
+  depth, so a Fabulous frame without the copy loses the layer's occlusion (sandbox `graphics fabulous`, `std_near`). A shader pack and secondary views stay `NONE`: the main path, hidden behind
   translucent blocks. `fx_depth` writes the distance texture as RG32F (r: what hides the layer; g: the nearest surface,
   see-through or not; equal without see-through), `FxGlass` (X, T; own unit 16) and the layer's hardware depth (`hard`);
   the layer draws through `SceneDepth.bindLayer` (frame colour + `hard`). One surface per pixel (vanilla Fabulous keeps
