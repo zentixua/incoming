@@ -29,7 +29,11 @@ paths:
 - See-through blocks (`fx/layer/SeeThrough`, `include/see.glsl`): by `AFTER_LEVEL` translucent terrain (stained/tinted
   glass and panes, ice, slime, honey, water, portal) has written depth; tested against it, the layer loses everything
   behind a window. Cutout blocks (glass, glass panes, leaves, bars) write no depth in their holes. The primary view copies
-  only while the layer drew the previous frame: Fast/Fancy and Sodium (`BLEND`) copy depth and colour at
+  only while the layer drew the previous frame and something was drawn between the two stages in a recent frame
+  (`SeeThrough.Drawn`: an `ANY_SAMPLES_PASSED` query per frame, read only when available, never waited for; a window
+  coming into view is looked through from its second frame): the copies and their passes cost +0.6–0.7 ms of GPU at
+  2560×1600 with 100 strikes (scene bench, +18–22%), all of it bandwidth, and a view with no translucent terrain pays
+  none of it. Fast/Fancy and Sodium (`BLEND`) copy depth and colour at
   `AFTER_BLOCK_ENTITIES`, clear the frame's alpha, and copy depth and colour again at `AFTER_TRANSLUCENT_BLOCKS`
   (translucent blending leaves coverage 1 − T in alpha; X = after − T·before). Later passes (lines, translucent entities,
   particles, clouds, weather) blend alpha with ONE, ZERO and are not in the copies; where they wrote depth they hide the
@@ -37,7 +41,7 @@ paths:
   translucent target (X, 1 − T, its depth): by `AFTER_LEVEL` the transparency chain's final blit has replaced the main
   depth, so a Fabulous frame without the copy loses the layer's occlusion (sandbox `graphics fabulous`, `std_near`). A shader pack and secondary views stay `NONE`: the main path, hidden behind
   translucent blocks. `fx_depth` writes the distance texture as RG32F (r: what hides the layer; g: the nearest surface,
-  see-through or not; equal without see-through), `FxGlass` (X, T; own unit 16) and the layer's hardware depth (`hard`);
+  see-through or not; equal without see-through), `FxGlass` (X, T in RGBA8; own unit 16) and the layer's hardware depth (`hard`);
   the layer draws through `SceneDepth.bindLayer` (frame colour + `hard`). One surface per pixel (vanilla Fabulous keeps
   one): a fragment behind it is laid as T·light + opacity·X; the pall composite splits its medium at the surface
   (`mediumTo`: near volume to the surface, the rays cut there by the noiseless field and the smoke's mean field); heat

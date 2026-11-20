@@ -49,7 +49,7 @@ final class HalfPass {
     static ShaderInstance depthShader, composite;
     private static int accum = -1, accumFbo = -1, depth = -1, depthFbo = -1, width, height, ring;
     /**
-     * The see-through surface of each half-resolution pixel (RGBA16, {@code see.glsl}): taken from the frame pixel its
+     * The see-through surface of each half-resolution pixel (RGBA8, {@code see.glsl}): taken from the frame pixel its
      * distances come from ({@code fx_half_depth}), so smoke at a window's edge takes the tint of the place it is hidden by.
      */
     private static int glass = -1;
@@ -208,7 +208,7 @@ final class HalfPass {
             texture(accum, GL30.GL_RGBA16F, GL11.GL_RGBA, hw, hh);
             // r: world distance (the soft edge), g: to the nearest surface, see-through or not (the composite's key)
             texture(depth, GL30.GL_RG32F, GL30.GL_RG, hw, hh);
-            texture(glass, GL30.GL_RGBA16, GL11.GL_RGBA, hw, hh);
+            texture(glass, GL11.GL_RGBA8, GL11.GL_RGBA, hw, hh);
             boolean ok = attach(accumFbo, accum) && attach(depthFbo, depth, glass);
             GlStateManager._glBindFramebuffer(GL30.GL_DRAW_FRAMEBUFFER, draw);
             if (!ok) {

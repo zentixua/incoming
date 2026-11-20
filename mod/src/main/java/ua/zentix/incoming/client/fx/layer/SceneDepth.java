@@ -50,7 +50,7 @@ public final class SceneDepth {
     private static int[] FBOS = {-1, -1}, TEXTURES = {-1, -1};
     private static int fbo = -1, texture = -1, width, height, current;
     /**
-     * See-through surfaces ({@link SeeThrough}): the nearest translucent surface's own light and transmittance (RGBA16,
+     * See-through surfaces ({@link SeeThrough}): the nearest translucent surface's own light and transmittance (RGBA8,
      * {@code see.glsl}), and the layer's hardware depth (the opaque world and what hides the layer drawn after it); one each,
      * attached to both framebuffers. The distance to the surface is the second channel of the distance texture.
      */
@@ -429,7 +429,7 @@ public final class SceneDepth {
         height = h;
         // the colour the layer framebuffer was made for no longer matches the new depth size
         layerColour = -1;
-        glass = image(glass, GL30.GL_RGBA16, GL11.GL_RGBA, GL11.GL_UNSIGNED_SHORT, w, h);
+        glass = image(glass, GL11.GL_RGBA8, GL11.GL_RGBA, GL11.GL_UNSIGNED_BYTE, w, h);
         hard = image(hard, GL30.GL_DEPTH_COMPONENT32F, GL11.GL_DEPTH_COMPONENT, GL11.GL_FLOAT, w, h);
         for (int i = 0; i < 2; i++) {
             if (!ensureOne(i, w, h)) {

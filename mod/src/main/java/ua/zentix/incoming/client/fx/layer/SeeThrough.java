@@ -7,7 +7,9 @@ import net.minecraft.client.Minecraft;
 import net.neoforged.neoforge.client.event.RenderLevelStageEvent;
 import org.jetbrains.annotations.Nullable;
 import org.lwjgl.opengl.GL11;
+import org.lwjgl.opengl.GL15;
 import org.lwjgl.opengl.GL30;
+import org.lwjgl.opengl.GL33;
 import ua.zentix.incoming.Incoming;
 
 /**
@@ -80,7 +82,20 @@ public final class SeeThrough {
             started = captured = false;
             mode = Mode.NONE;
         }
-        if (!wanted || broken || WaterDecal.shaderPack()) return;
+        if (!wanted || broken || WaterDecal.shaderPack()) {
+            DRAWN.end();
+            return;
+        }
+        // whether anything is drawn between the two stages (translucent terrain): without it no surface can stand in front of
+        // the layer and the copies are skipped; the answer is a frame old (never waited for), so a window coming into view
+        // is looked through from its second frame
+        if (first) {
+            boolean seen = DRAWN.seen();
+            DRAWN.begin();
+            if (!seen) return;
+        } else {
+            DRAWN.end();
+        }
         boolean fabulous = Minecraft.useShaderTransparency();
         // BLEND copies at both stages, Fabulous only after translucent terrain (it lies in its own target)
         if (!fabulous && !first && !started) return;
@@ -222,8 +237,61 @@ public final class SeeThrough {
 
     /** {@code describe} line part: the mode of the last frame. */
     static String describe() {
-        return broken ? "broken" : mode.name().toLowerCase(java.util.Locale.ROOT);
+        return broken ? "broken" : mode.name().toLowerCase(java.util.Locale.ROOT) + (DRAWN.last ? "" : " (nothing translucent drawn)");
     }
+
+    /**
+     * Samples drawn between {@code AFTER_BLOCK_ENTITIES} and {@code AFTER_TRANSLUCENT_BLOCKS} (translucent terrain, and
+     * what Fast/Fancy draw there before it: solid particles, outlines), one query per frame in a small ring, read only when
+     * available: never a wait for the GPU.
+     */
+    private static final class Drawn {
+        private final int[] queries = new int[4];
+        private final boolean[] pending = new boolean[4];
+        private int next, active = -1;
+        /** The newest available answer; true until there is one (copy rather than miss a surface). */
+        private boolean last = true;
+
+        /** Anything drawn in the newest frame whose answer is available. */
+        boolean seen() {
+            if (queries[0] == 0) return true;
+            // newest first among the finished ones, older ones are dropped
+            for (int k = 1; k <= queries.length; k++) {
+                int i = Math.floorMod(next - k, queries.length);
+                if (!pending[i]) continue;
+                if (GL15.glGetQueryObjecti(queries[i], GL15.GL_QUERY_RESULT_AVAILABLE) == 0) continue;
+                last = GL15.glGetQueryObjecti(queries[i], GL15.GL_QUERY_RESULT) != 0;
+                for (int j = 0; j < queries.length; j++) {
+                    int o = Math.floorMod(i - j, queries.length);
+                    if (pending[o] && GL15.glGetQueryObjecti(queries[o], GL15.GL_QUERY_RESULT_AVAILABLE) != 0) pending[o] = false;
+                }
+                break;
+            }
+            return last;
+        }
+
+        void begin() {
+            if (active >= 0) return;
+            if (queries[0] == 0) GL15.glGenQueries(queries);
+            // another query of this kind already running (another mod): no answer this frame, copies stay on
+            if (GL15.glGetQueryi(GL33.GL_ANY_SAMPLES_PASSED, GL15.GL_CURRENT_QUERY) != 0) return;
+            int i = next;
+            // a slot still waiting for its answer is reused only after its answer (a full ring means the GPU is 4 frames behind)
+            if (pending[i] && GL15.glGetQueryObjecti(queries[i], GL15.GL_QUERY_RESULT_AVAILABLE) == 0) return;
+            GL15.glBeginQuery(GL33.GL_ANY_SAMPLES_PASSED, queries[i]);
+            active = i;
+        }
+
+        void end() {
+            if (active < 0) return;
+            GL15.glEndQuery(GL33.GL_ANY_SAMPLES_PASSED);
+            pending[active] = true;
+            next = (active + 1) % queries.length;
+            active = -1;
+        }
+    }
+
+    private static final Drawn DRAWN = new Drawn();
 
     /** A frame-sized copy: texture and its draw framebuffer. */
     private static final class Copy {
