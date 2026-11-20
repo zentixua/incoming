@@ -1,5 +1,6 @@
 package ua.zentix.incoming;
 
+import java.util.List;
 import net.neoforged.neoforge.common.ModConfigSpec;
 import ua.zentix.incoming.strike.Loadout;
 
@@ -28,9 +29,12 @@ public final class IncomingConfig {
 
     /**
      * Distant nuclear-wave speed in {@link ScalePreset#GAME}, as a fraction of sound speed: not physical — the server
-     * has more time for ruins, and the rolling wall is visible (Artem's decision, 18.10; used on his servers).
+     * has more time for ruins, and the rolling wall is visible (Artem's decisions: 0.25 on 18.10, 0.35 on 19.11, the
+     * value his servers run).
      */
-    public static final double GAME_WAVE_SPEED = 0.25;
+    public static final double GAME_WAVE_SPEED = 0.35;
+    /** {@link #GAME_WAVE_SPEED} before 3.14.0: configs still holding it move to the new default ({@code ServerConfigMigration}). */
+    public static final double OLD_GAME_WAVE_SPEED = 0.25;
 
     /**
      * Scale preset (a map-scale setting): flight speed, distant nuclear-wave speed and nuclear radii
@@ -150,7 +154,7 @@ public final class IncomingConfig {
 
         Server(ModConfigSpec.Builder b) {
             b.translation("incoming.config.scale").push("scale");
-            scalePreset = b.comment("GAME (default): game flight speeds and heights, full nuclear radii, distant nuclear wave at 0.25 of sound speed.",
+            scalePreset = b.comment("GAME (default): game flight speeds and heights, full nuclear radii, distant nuclear wave at 0.35 of sound speed.",
                             "REAL: reference flight speeds and heights, full nuclear radii and physical wave timing. Flight and air defense use a game model.",
                             "CUSTOM uses flight_speed, nuclear.wave_speed and nuclear.effects_scale as set; effects_scale below 1 shrinks nuclear effects.")
                     .translation("incoming.config.scale_preset").defineEnum("scale_preset", ScalePreset.GAME);
@@ -227,7 +231,7 @@ public final class IncomingConfig {
             nukeEffectsScale = b.comment("Works with scale.scale_preset = CUSTOM. Scale of all radii: 1.0 is true to life (1 block = 1 m); lower for small worlds.")
                     .translation("incoming.config.nuke_effects_scale").defineInRange("effects_scale", 1.0, 0.005, 1.0);
             nukeWaveSpeed = b.comment("Works with scale.scale_preset = CUSTOM. Speed of the blast wave and its dust wall away from the fireball,",
-                            "as a share of the speed of sound (1.0 is true to life, 0.25 is the GAME preset). Lower is not true to life: it",
+                            "as a share of the speed of sound (1.0 is true to life, 0.35 is the GAME preset). Lower is not true to life: it",
                             "gives the server more time to build ruins ahead of the wave and lets players watch the wall roll in. Near the",
                             "fireball the wave is always true to life; beyond the dust wall only the sound travels on, at the speed of sound.")
                     .translation("incoming.config.nuke_wave_speed").defineInRange("wave_speed", GAME_WAVE_SPEED, 0.15, 1.0);
@@ -334,6 +338,7 @@ public final class IncomingConfig {
         public final ModConfigSpec.BooleanValue soundMuffling;
         public final ModConfigSpec.BooleanValue mapPrefetch;
         public final ModConfigSpec.BooleanValue blastEffects;
+        public final ModConfigSpec.ConfigValue<List<? extends String>> shownHints;
 
         /**
          * Volumetric mushroom cloud, dust wall and post-wave dust/smoke pall (client/fx/layer/PallPass): quality; OFF disables
@@ -389,6 +394,8 @@ public final class IncomingConfig {
                             "this player's picture and sound change: destruction and damage are the server's. Air defence hits and nuclear",
                             "blasts stay Incoming's.")
                     .translation("incoming.config.blast_effects").define("blast_effects", true);
+            shownHints = b.comment("First-use hints this client has already shown or whose action the player has used (client/hud/FirstUseHints); clear the list to see them again.")
+                    .translation("incoming.config.shown_hints").defineListAllowEmpty("shown_hints", List.of(), () -> "", o -> o instanceof String);
         }
     }
 }

@@ -142,8 +142,8 @@ defense, `launcher/`, `grid/` blackout, `sound/`, `client/`, `work/` tick budget
   (`strike/FlightScale`: 0 game, 1 real, between v_game·(v_real/v_game)^x per weapon; cruise/dive, B-2 route/drop height,
   interceptor speed, Grad launch rail exit/drag; speed-derived range, leg, waypoint capture, attack geometry, approach
   lane grow with cruise, `Airframe.stretch`; maneuver remains game). Never derive game speed from render distance:
-  each player's differs, server flight is shared. Default distant nuclear wave also game speed, 0.25 sound speed.
-  `scale_preset`: `GAME` default flight 0/wave 0.25, `REAL` real life, `CUSTOM` uses `flight_speed`,
+  each player's differs, server flight is shared. Default distant nuclear wave also game speed, 0.35 sound speed.
+  `scale_preset`: `GAME` default flight 0/wave 0.35, `REAL` real life, `CUSTOM` uses `flight_speed`,
   `nuclear.wave_speed`, `nuclear.effects_scale` as set.
 - **Time** (Artem, 10.11): no modes. What players watch move (flight, flash, wave, mushroom, the first 20 minutes of
   fires) runs in real seconds; slow consequences (fires burning out, black rain, fallout decay, sickness, burns, hearing,
@@ -153,7 +153,7 @@ defense, `launcher/`, `grid/` blackout, `sound/`, `client/`, `work/` tick budget
   `NuclearEvents`, clients via `S2C.NukeClock`). An effect never precedes its cause (`NukeClockTest`). No new
   time settings; durations stay in world hours.
 - **Physics deviations** only preset scale or Artem's explicit decision; mark every one “not physical” in code and
-  guide deviation list (game flight speeds/heights, wave 0.25 let players see approach/wave; real values in weapon
+  guide deviation list (game flight speeds/heights, wave 0.35 let players see approach/wave; real values in weapon
   table). No silent deviations. Presentation boosts change no facts, so are not deviations.
 - **Complaints never repeat:** each fix gets a test/check that would catch recurrence.
 

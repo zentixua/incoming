@@ -35,7 +35,7 @@ Launch an ICBM or fit a nuclear warhead to a cruise missile or B-2 bomb. Operato
 
 ### Launching
 
-- **Strike Designator:** aim through binoculars or use the console map. Set salvos and routes, or watch through a projectile's camera.
+- **Strike Designator:** aim through binoculars, or press Shift+RMB with it in hand to open the console: weapon, salvo, spread, target and map. Set routes, or watch through a projectile's camera.
 - **Fixed launchers:** load ammunition, assign a target with the designator and fire with redstone.
 
 ## Requirements and dependencies

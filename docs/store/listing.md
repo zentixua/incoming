@@ -91,8 +91,8 @@ and dusk nuclear animations also appear in the page bodies.
 | `docs/guide/img/weapon-grad.jpg` | Grad MLRS | Ready for a rocket salvo. |
 | `docs/guide/img/weapon-b2.jpg` | B-2 bomber | On its way to drop a bunker buster. |
 | `docs/guide/img/weapon-icbm.jpg` | ICBM ascent | A ballistic missile in flight. |
+| `docs/guide/img/remote.png` | Designator console | Shift+RMB with the designator: weapon, count, spread, target and fire. |
 | `docs/guide/img/scope.png` | Binocular targeting | Aim at anything you can see. |
-| `docs/guide/img/remote.png` | Strike remote | Pick a weapon and set up a salvo. |
 | `docs/guide/img/map.png` | Targeting map | Choose a target on the city map. |
 
 The factory and nuclear scenes were recorded with Incoming 3.10.1 on copies of Project Zearth and Newisle.

@@ -74,14 +74,14 @@
       "description": "A ballistic missile in flight."
     },
     {
+      "file": "docs/guide/img/remote.png",
+      "title": "Designator console",
+      "description": "Shift+RMB with the designator: weapon, count, spread, target and fire."
+    },
+    {
       "file": "docs/guide/img/scope.png",
       "title": "Binocular targeting",
       "description": "Aim at anything you can see."
-    },
-    {
-      "file": "docs/guide/img/remote.png",
-      "title": "Strike remote",
-      "description": "Pick a weapon and set up a salvo."
     },
     {
       "file": "docs/guide/img/map.png",
