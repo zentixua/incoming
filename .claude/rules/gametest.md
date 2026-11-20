@@ -112,6 +112,10 @@ paths:
   threshold and place posts at the same fractions of its radius (`BlastGameTests.radiusTest`), not an unjittered
   threshold. World state from previous batches remains: crater-fall areas (`CraterFalls`) live another 10 s after the
   explosion; the next batch's platform is 5 blocks away, so area-limit checks must tolerate a neighboring open area.
+  Nuclear ground traces follow seeded world noise plus coordinate grain (`RuinPlanner`, world seed 0 in GameTest): a
+  weak flash burns a fixture's grass only where they allow, so a fixture that needs a trace takes the first chunk whose
+  plan has one and pins a known bare chunk's successor (`RuinSettleGameTests.DiskFixture.traced`; the disk fixture's
+  chunk is bare at 0.14–0.15 % of sampled positions).
 - Vanilla starts a test only when all platform chunks tick entities (`GameTestInfo.tick`); beyond the platform,
   chunks are level 32: blocks tick (sand and gravel start falling), entities do not. The explosion area (`AreaLoader`)
   enables entity ticking in rings as neighbors become ready and releases at explosion end: on slow CI machines,
@@ -156,8 +160,10 @@ paths:
   Assert partial conversion when removing that ticket, not at eventual unload (`grid_tower`). Fixtures isolating
   ScarQueue neighbor handoff seed current-light chunks with `LIGHT_REPAIRED`: prior batches' scar/outage contexts
   could otherwise trigger legitimate legacy recovery, borrowing neighbors and bypassing the intended deadlock.
-  Disk-light fixtures give vanilla a bounded spare-time unload pass before checking `pendingUnloads`: GameTest
-  pacing may otherwise consume the entire tick deadline. Do not pass unconditional true when generation holders
+  Disk-light fixtures, and disk-settle fixtures waiting for a released chunk's saved scar (`RuinSettleGameTests`),
+  give vanilla a bounded spare-time unload pass once the chunk is queued to drop (`toDrop`/`pendingUnloads`; the extra
+  `ServerChunkCache.tick` also ages timed tickets): GameTest pacing (`gameSpeed` too) may otherwise consume the entire
+  tick deadline, and the chunk never unloads and saves. Do not pass unconditional true when generation holders
   could be revived; their unload callbacks can reenqueue until server tasks get a turn.
 - A GameTest red in one CI shard only usually depends on order, neighbours or a cold JVM; adding or removing a batch
   reshuffles the shards, so order-dependent tests fail on unrelated PRs. Reproduce locally with the same
