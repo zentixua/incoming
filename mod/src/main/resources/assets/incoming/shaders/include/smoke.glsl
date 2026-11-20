@@ -22,7 +22,7 @@ uniform mat4 SmokeHi;
 const int SMOKE_N = 64;
 const int SMOKE_CASCADES = 3;
 // delta-Eddington albedo ω', asymmetry g': soot, dust (cell albedo), droplets (SmokeGrid)
-const float SMOKE_SOOT_W = 0.2;
+const float SMOKE_SOOT_W = 0.31034483;
 const float SMOKE_SOOT_G = 0.33333334;
 const float SMOKE_DUST_G = 0.375;
 const float SMOKE_DROP_W = 0.99963975;
