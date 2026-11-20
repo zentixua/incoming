@@ -220,12 +220,12 @@ final class BlastArea {
             rays.append(st.label).append(' ').append(ms(rayStages[st.ordinal()]));
         }
         return String.format(Locale.ROOT,
-                "Strike summary (%s) at %d %d %d: units %d, explosions %d, blocks removed %d, glass %d, debris %d, over %d ticks, total %s ms, "
+                "Strike summary (%s) at %d %d %d: units %d, explosions %d, blocks removed %d, glass %d, debris %d, collapse fell %d, over %d ticks, total %s ms, "
                         + "longest unit %s ms (%s); explosion steps: %s ms; rays: steps %d, in air %d, cached %d, "
                         + "aircraft queries %d, vanilla explosions %d; blocks over 10 ms %d",
                 dimension, Mth.floor(centre.x), Mth.floor(centre.y), Mth.floor(centre.z), units,
                 done[ImpactCost.Kind.RAYS.ordinal()], done[ImpactCost.Kind.BLOCKS.ordinal()], done[ImpactCost.Kind.GLASS.ordinal()],
-                done[ImpactCost.Kind.DEBRIS.ordinal()], lastUnitAt - heldAt + 1, ms(nanos), ms(maxUnit), maxKind.label(), rays,
+                done[ImpactCost.Kind.DEBRIS.ordinal()], done[ImpactCost.Kind.COLLAPSE.ordinal()], lastUnitAt - heldAt + 1, ms(nanos), ms(maxUnit), maxKind.label(), rays,
                 rayCounts.steps, rayCounts.airSteps, rayCounts.cached, rayCounts.craftQueries, rayCounts.vanilla, slowBlocks);
     }
 

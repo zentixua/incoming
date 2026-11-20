@@ -31,7 +31,9 @@ public final class ImpactCost {
         /** Vanilla explosions: entity collection, {@code ExplosionEvent.Detonate}, damage, knockback. */
         HITS("explosions: Detonate and damage"),
         /** Casing fragments: rays, damage, glass, chips ({@code warhead.FragmentStrike}). */
-        FRAGMENTS("fragments");
+        FRAGMENTS("fragments"),
+        /** What lost support falls ({@code warhead.StrikeCollapse}): snapshots, preparation, fall, landings; count: blocks fallen. */
+        COLLAPSE("collapse");
 
         private final String label;
 
@@ -76,6 +78,9 @@ public final class ImpactCost {
     private long seriesMaxUnit;
     private long seriesMaxTick;
     private int seriesSlowTicks;
+    /** Series collapse: blocks fallen, longest collapse unit. */
+    private int seriesCollapsed;
+    private long seriesCollapseMax;
     private long tickUnitsNanos;
 
     /** Work of {@code kind} took {@code took} ns and completed {@code count} (explosions, blocks, debris). */
@@ -86,6 +91,10 @@ public final class ImpactCost {
         seriesNanos += took;
         seriesMaxUnit = Math.max(seriesMaxUnit, took);
         tickUnitsNanos += took;
+        if (kind == Kind.COLLAPSE) {
+            seriesCollapsed += count;
+            seriesCollapseMax = Math.max(seriesCollapseMax, took);
+        }
     }
 
     /** Strike (blast area) released: add to series summary. */
@@ -112,12 +121,12 @@ public final class ImpactCost {
         }
         if (seriesStart < 0 || !idle || now - seriesLastWork < SERIES_QUIET_TICKS) return;
         Incoming.LOG.info(String.format(Locale.ROOT,
-                "Impact series summary (%s): strikes %d, units %d, total %.1f ms, longest unit %.1f ms, longest tick %.1f ms, ticks over 50 ms %d, over %d ticks",
+                "Impact series summary (%s): strikes %d, units %d, total %.1f ms, longest unit %.1f ms, longest tick %.1f ms, ticks over 50 ms %d, over %d ticks; collapse: %d blocks fell, longest unit %.1f ms",
                 level.dimension().location(), seriesStrikes, seriesUnits, seriesNanos / 1e6, seriesMaxUnit / 1e6, seriesMaxTick / 1e6,
-                seriesSlowTicks, seriesLastWork - seriesStart + 1));
+                seriesSlowTicks, seriesLastWork - seriesStart + 1, seriesCollapsed, seriesCollapseMax / 1e6));
         seriesStart = -1;
-        seriesStrikes = seriesUnits = seriesSlowTicks = 0;
-        seriesNanos = seriesMaxUnit = seriesMaxTick = 0;
+        seriesStrikes = seriesUnits = seriesSlowTicks = seriesCollapsed = 0;
+        seriesNanos = seriesMaxUnit = seriesMaxTick = seriesCollapseMax = 0;
     }
 
     /** Server tick end: log slow tick, reset counters; log long impact queue waits too. */

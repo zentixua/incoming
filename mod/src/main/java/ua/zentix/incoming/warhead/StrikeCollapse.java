@@ -63,9 +63,22 @@ final class StrikeCollapse implements UnitQueue.Job {
     /** Vanilla falling-block gravity and drag per tick ({@code FallingBlockEntity.tick}). */
     private static final double GRAVITY = 0.04, DRAG = 0.98;
 
+    /** Replans after the world changed under a plan ({@link #replan}): a support built while it was solved or fell. */
+    static final int MAX_REPLANS = 2;
+
     private final BlastArea area;
     private final List<StagedExplosion> after;
     private final Vec3 centre;
+    /** Positions taken as removed (the strike's; for a replan also what the earlier plan dropped) and their states before. */
+    private final it.unimi.dsi.fastutil.longs.LongArrayList removedAt;
+    private final List<BlockState> removedWas;
+    /** Replans before this plan. */
+    private final int replans;
+    /** This collapse and its replans: measurement shared by the chain. */
+    final Stats stats;
+    /** What this plan dropped, for a replan ({@link #replan}). */
+    private final it.unimi.dsi.fastutil.longs.LongArrayList droppedAt = new it.unimi.dsi.fastutil.longs.LongArrayList();
+    private final List<BlockState> droppedWas = new ArrayList<>();
     @Nullable
     private StrikeSupport support;
     /** Snapshots done and the solve started: {@link Fall} holds it now. */
@@ -86,20 +99,42 @@ final class StrikeCollapse implements UnitQueue.Job {
     /** Tests: portion clock (null: impact lane clock). */
     @Nullable
     LongSupplier clock;
+    /** Tests: runs once when the solve is in, before preparation (a world change between solve and fall). */
+    @Nullable
+    Runnable beforeFall;
     /**
-     * Measurement: blocks dropped, falling entities, rubble placed at once, positions changed since the snapshot or kept by
-     * claims or unready chunks, chunks solved, fall portions and the largest one (blocks).
+     * Measurement of a collapse and its replans: blocks dropped, falling entities, rubble placed at once, positions changed
+     * since the snapshot or kept by claims or unready chunks, chunks solved, fall portions and the largest one (blocks),
+     * replans; every job of the chain ended (tests).
      */
-    int dropped, live, placed, changed, solved, portions, largestPortion;
-    /** Both jobs ended (tests). */
-    boolean finished;
+    static final class Stats {
+        int dropped, live, placed, changed, solved, portions, largestPortion, replans;
+        boolean finished;
+        /** Jobs of the chain not yet ended. */
+        private int open;
+    }
 
     private record Landing(BlockPos from, BlockState state) {}
 
     StrikeCollapse(BlastArea area, List<StagedExplosion> after, Vec3 centre) {
+        this(area, after, centre, area.removedAt(), area.removedWas(), 0, new Stats());
+    }
+
+    private StrikeCollapse(BlastArea area, List<StagedExplosion> after, Vec3 centre, it.unimi.dsi.fastutil.longs.LongArrayList removedAt,
+                           List<BlockState> removedWas, int replans, Stats stats) {
         this.area = area.retain();
         this.after = after;
         this.centre = centre;
+        this.removedAt = removedAt;
+        this.removedWas = removedWas;
+        this.replans = replans;
+        this.stats = stats;
+        stats.open++;
+    }
+
+    /** One job of the chain ended; the last sets {@link Stats#finished}. */
+    private void closed() {
+        if (--stats.open == 0) stats.finished = true;
     }
 
     /** Queue the collapse of a strike whose explosions are {@code after}, holding {@code area}. */
@@ -113,13 +148,15 @@ final class StrikeCollapse implements UnitQueue.Job {
     @Override
     public boolean ready(ServerLevel level) {
         // the cheap slot test first: a backlog of waiting collapses costs no area readiness scans
-        if (support == null && !area.removedAt().isEmpty() && !StrikeSupport.slotFree()) return false;
+        if (support == null && !removedAt.isEmpty() && !StrikeSupport.slotFree()) return false;
         if (!area.ready(level)) return false;
         if (support == null) {
-            if (area.removedAt().isEmpty() || !IncomingConfig.SERVER.blockDamage.get()) return true;
+            if (removedAt.isEmpty() || !IncomingConfig.SERVER.blockDamage.get()) return true;
             // the slot first: a waiting collapse holds nothing but its strike area
             if (!StrikeSupport.tryReserve()) return false;
-            support = new StrikeSupport(level, area.removedAt(), area.removedWas());
+            support = new StrikeSupport(level, removedAt, removedWas);
+            // the fall's writes need the Sable origin chunk loaded (Fall#ready): requested now, loaded while this solves
+            if (ua.zentix.incoming.compat.SableTerrain.present()) ua.zentix.incoming.nuclear.world.NuclearTickets.holdOrigin(level, true);
         }
         return true;
     }
@@ -136,7 +173,7 @@ final class StrikeCollapse implements UnitQueue.Job {
 
     @Override
     public int unitKind() {
-        return ImpactCost.Kind.GROUND.ordinal();
+        return ImpactCost.Kind.COLLAPSE.ordinal();
     }
 
     /**
@@ -147,8 +184,9 @@ final class StrikeCollapse implements UnitQueue.Job {
     public boolean step(ServerLevel level) {
         if (support == null) return false;
         long t0 = System.nanoTime();
-        int n = support.snapshot(watch(level), PORTION_NANOS);
-        area.record(level, ImpactCost.Kind.GROUND, System.nanoTime() - t0, n);
+        support.snapshot(watch(level), PORTION_NANOS);
+        // counted: blocks fallen; a snapshot unit drops none
+        area.record(level, ImpactCost.Kind.COLLAPSE, System.nanoTime() - t0, 0);
         if (!support.started()) return true;
         StrikeWorld.get(level).impacts().add(level, new Fall());
         handedOver = true;
@@ -159,7 +197,7 @@ final class StrikeCollapse implements UnitQueue.Job {
     public void end(ServerLevel level) {
         if (!handedOver) {
             if (support != null) support.cancel();
-            finished = true;
+            closed();
         }
         area.release(level);
     }
@@ -181,7 +219,7 @@ final class StrikeCollapse implements UnitQueue.Job {
 
         @Override
         public boolean ready(ServerLevel level) {
-            return support.done() && area.ready(level);
+            return support.done() && area.ready(level) && originReady(level);
         }
 
         @Override
@@ -191,7 +229,7 @@ final class StrikeCollapse implements UnitQueue.Job {
 
         @Override
         public int unitKind() {
-            return ImpactCost.Kind.GROUND.ordinal();
+            return ImpactCost.Kind.COLLAPSE.ordinal();
         }
 
         @Override
@@ -212,7 +250,7 @@ final class StrikeCollapse implements UnitQueue.Job {
                 n = land(level);
                 more = landed < landings.size();
             }
-            area.record(level, ImpactCost.Kind.GROUND, System.nanoTime() - t0, n);
+            area.record(level, ImpactCost.Kind.COLLAPSE, System.nanoTime() - t0, n);
             return more;
         }
 
@@ -220,11 +258,12 @@ final class StrikeCollapse implements UnitQueue.Job {
         public void end(ServerLevel level) {
             support.cancel();
             if (Incoming.LOG.isDebugEnabled()) {
-                Incoming.LOG.debug("Collapse at {}: blast removed {}, chunks {}, solved {}, fell {} (falling {}, landed at once {}), stayed {}",
-                        BlockPos.containing(centre).toShortString(), support.removedCount(), support.chunks(), solved, dropped, live, placed, changed);
+                Incoming.LOG.debug("Collapse at {}: removed {}, chunks {}, solved {}, fell {} (falling {}, landed at once {}), stayed {}, replans {}",
+                        BlockPos.containing(centre).toShortString(), support.removedCount(), support.chunks(), stats.solved, stats.dropped,
+                        stats.live, stats.placed, stats.changed, stats.replans);
             }
             area.release(level);
-            finished = true;
+            closed();
         }
 
         @Override
@@ -241,6 +280,11 @@ final class StrikeCollapse implements UnitQueue.Job {
      * load-bearing block again; claim handlers keep their positions ({@link #OFFER_UNIT} a unit); then dust and rumble.
      */
     private void prepare(ServerLevel level) {
+        if (result == null && beforeFall != null) {
+            Runnable r = beforeFall;
+            beforeFall = null;
+            r.run();
+        }
         if (result == null) {
             try {
                 result = support.result();
@@ -253,7 +297,7 @@ final class StrikeCollapse implements UnitQueue.Job {
                 prepared = true;
                 return;
             }
-            solved = result.solved();
+            stats.solved += result.solved();
             holes = support.lostPositions().toLongArray();
         }
         LongSupplier watch = watch(level);
@@ -262,7 +306,8 @@ final class StrikeCollapse implements UnitQueue.Job {
         while (holesChecked < holes.length) {
             BlockPos at = BlockPos.of(holes[holesChecked++]);
             if (Terrain.ready(level, at) && StrikeSupport.bearing(level.getBlockState(at))) {
-                result = emptyResult();
+                // the solve decides again whether what it holds up still lacks support
+                replan(level, "a removed block is back at " + at.toShortString());
                 prepared = true;
                 return;
             }
@@ -285,6 +330,8 @@ final class StrikeCollapse implements UnitQueue.Job {
                 // a protected load-bearing block stays, and the solve dropped what it holds up with it: the plan no
                 // longer describes the world, nothing falls (protection wins over the collapse)
                 if (StrikeSupport.bearing(result.was()[i])) {
+                    Incoming.LOG.info("Collapse at {} kept standing: claim protection keeps load-bearing {}",
+                            BlockPos.containing(centre).toShortString(), BlockPos.of(all[i]).toShortString());
                     result = emptyResult();
                     prepared = true;
                     return;
@@ -305,7 +352,51 @@ final class StrikeCollapse implements UnitQueue.Job {
     }
 
     private static StrikeSupport.Result emptyResult() {
-        return new StrikeSupport.Result(new long[0], new BlockState[0], new BlockState[0], new BlockState[0], new long[0], 0, 0, null, null);
+        return StrikeSupport.Result.EMPTY;
+    }
+
+    /**
+     * The world changed under this plan before it was done (a support built back into a hole or beside what falls, while
+     * it was solved or fell): what is left of it is dropped, and a new plan over the strike's removals and what this one
+     * dropped decides again from fresh snapshots, at most {@link #MAX_REPLANS} times (then the rest stays standing).
+     */
+    private void replan(ServerLevel level, String why) {
+        result = emptyResult();
+        next = 0;
+        String at = BlockPos.containing(centre).toShortString();
+        if (replans >= MAX_REPLANS) {
+            Incoming.LOG.info("Collapse at {} stopped: {} after {} replans", at, why, replans);
+            return;
+        }
+        Incoming.LOG.info("Collapse at {} replanned: {}", at, why);
+        stats.replans++;
+        it.unimi.dsi.fastutil.longs.LongArrayList removals = new it.unimi.dsi.fastutil.longs.LongArrayList(removedAt);
+        List<BlockState> states = new ArrayList<>(removedWas);
+        removals.addAll(droppedAt);
+        states.addAll(droppedWas);
+        StrikeCollapse again = new StrikeCollapse(area, after, centre, removals, states, replans + 1, stats);
+        again.clock = clock;
+        StrikeWorld.get(level).impacts().add(level, again);
+    }
+
+    /**
+     * A load-bearing block now beside {@code p} where the solve saw none ({@link StrikeSupport.Result#watch}) or in one of
+     * the holes it took as lost: the plan no longer describes what holds {@code p}. Its chunk and neighbours are ready
+     * ({@link #writable}).
+     */
+    private boolean stale(ServerLevel level, BlockPos p, BlockPos.MutableBlockPos m) {
+        it.unimi.dsi.fastutil.longs.LongSet watch = result.watch(), lost = support.lostPositions();
+        for (net.minecraft.core.Direction d : net.minecraft.core.Direction.values()) {
+            m.setWithOffset(p, d);
+            long q = m.asLong();
+            if ((watch.contains(q) || lost.contains(q)) && StrikeSupport.bearing(level.getBlockState(m))) return true;
+        }
+        return false;
+    }
+
+    /** Sable reads block-entity shapes at the origin on a block change: the fall writes once that chunk is loaded. */
+    private static boolean originReady(ServerLevel level) {
+        return !ua.zentix.incoming.compat.SableTerrain.present() || level.getChunkSource().getChunkNow(0, 0) != null;
     }
 
     /** Timed portion of the fall. */
@@ -323,10 +414,15 @@ final class StrikeCollapse implements UnitQueue.Job {
             BlockState st = result.was()[i];
             if (kept.contains(at[i]) || !writable(level, p.getX(), p.getZ(), safe) || level.getBlockState(p) != st
                     || modded(st) && !Terrain.readyAround(level, Vec3.atCenterOf(p), 16 * StrikeSupport.MODDED_REACH)) {
-                changed++;
+                stats.changed++;
+            } else if (stale(level, p, m)) {
+                replan(level, "a support beside " + p.toShortString());
+                break;
             } else {
                 boolean item = remove(level, p, st, result.to()[i]);
-                dropped++;
+                droppedAt.add(at[i]);
+                droppedWas.add(st);
+                stats.dropped++;
                 n++;
                 BlockState rubble = item ? null : result.rubble()[i];
                 if (rubble != null) {
@@ -337,8 +433,8 @@ final class StrikeCollapse implements UnitQueue.Job {
             if (watch.getAsLong() - start >= PORTION_NANOS) break;
         }
         if (n > 0) {
-            portions++;
-            largestPortion = Math.max(largestPortion, n);
+            stats.portions++;
+            stats.largestPortion = Math.max(stats.largestPortion, n);
         }
         return n;
     }
@@ -424,7 +520,7 @@ final class StrikeCollapse implements UnitQueue.Job {
         e.dropItem = false;
         double ticks = fallTicks(Math.max(1, fall));
         e.setDeltaMovement(off[0] / ticks, 0, off[1] / ticks);
-        live++;
+        stats.live++;
     }
 
     /**
@@ -467,7 +563,7 @@ final class StrikeCollapse implements UnitQueue.Job {
                 // under water rubble sinks away, as in the nuclear pile (RuinPlanner#buries)
                 if (y < level.getMaxBuildHeight() && FallingBlock.isFree(there) && there.getFluidState().isEmpty()) {
                     ColumnScar.replace(level, at, there, l.state());
-                    placed++;
+                    stats.placed++;
                     n++;
                 }
             }

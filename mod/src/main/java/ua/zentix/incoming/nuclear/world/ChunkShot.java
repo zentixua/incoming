@@ -161,7 +161,7 @@ final class ChunkShot {
      * Each distinct state of a section copy once (any thread: reads the copy only): the palette's entries, or for the
      * global palette (over 256 states per section, cannot be enumerated) every position's id seen once. Vanilla's
      * {@code PalettedContainer.getAll} collects those ids in an {@code IntArraySet}, a linear search per position:
-     * 1–4 ms a section of a dense city, 27–110 ms a chunk (#688 review); a hash set visits each position once.
+     * 1.6–6.6 ms a section of 1024–4096 distinct states; a hash set visits each position once (0.07–0.28 ms).
      */
     static void states(PalettedContainer<BlockState> c, java.util.function.Consumer<BlockState> out) {
         var data = c.data;

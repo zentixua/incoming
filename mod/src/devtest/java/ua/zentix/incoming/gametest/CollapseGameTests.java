@@ -266,6 +266,40 @@ public final class CollapseGameTests {
         });
     }
 
+    /**
+     * Supports built under the floor after the solve, before anything falls (pillars in the blown-out flat): the plan is
+     * stale, a new one from fresh snapshots decides, and the storeys above stay up on the new pillars.
+     */
+    @GameTest(template = "range", batch = "collapse", timeoutTicks = 2400, skyAccess = true)
+    public static void braceBuiltDuringSolveHolds(GameTestHelper h) {
+        quiet(h);
+        ground(h);
+        ServerLevel level = h.getLevel();
+        Map<BlockPos, BlockState> house = block(h, 24, 39, 28, 35, 4, true);
+        it.unimi.dsi.fastutil.longs.LongArrayList at = new it.unimi.dsi.fastutil.longs.LongArrayList();
+        java.util.List<BlockState> was = new java.util.ArrayList<>();
+        blowWestGroundFloor(h, house, at, was);
+        Warheads.CollapseProbe probe = Warheads.testCollapse(level, h.absoluteVec(new Vec3(28, GROUND + 2, 31.5)), 16, at, was, System::nanoTime);
+        probe.beforeFall(() -> {
+            // pillars inside the flat, beside what falls and none in a blown wall: only the cells beside the plan tell
+            for (int x = 25; x <= 28; x += 3) for (int z = 29; z <= 32; z += 3) for (int y = GROUND + 1; y <= GROUND + 3; y++) {
+                h.setBlock(new BlockPos(x, y, z), Blocks.BRICKS);
+            }
+        });
+        h.succeedWhen(() -> {
+            h.assertTrue(probe.done(), "collapse unfinished");
+            int above = 0, aboveGone = 0;
+            for (var e : house.entrySet()) {
+                BlockPos r = e.getKey();
+                if (r.getY() <= GROUND + 4 || r.getX() > 31 || e.getValue().is(Blocks.GLASS)) continue;
+                above++;
+                if (!stands(h, r, e.getValue())) aboveGone++;
+            }
+            h.assertTrue(probe.replans() >= 1, "the plan was not made again after the pillars went in");
+            h.assertTrue(aboveGone * 10 < above, "storeys fell onto new pillars: " + aboveGone + "/" + above);
+        });
+    }
+
     /** Removes the ground-floor walls of the block's west half (x ≤ 31) as a test's own blast; returns them. */
     private static Map<BlockPos, BlockState> blowWestGroundFloor(GameTestHelper h, Map<BlockPos, BlockState> house,
                                                                  it.unimi.dsi.fastutil.longs.LongArrayList at, java.util.List<BlockState> was) {
@@ -284,7 +318,7 @@ public final class CollapseGameTests {
 
     /**
      * The hole was filled again (walls rebuilt) before the collapse looked: no support was lost, nothing falls (review
-     * of #688: a repaired support must not count as a removal).
+     * a repaired support is no removal).
      */
     @GameTest(template = "range", batch = "collapse", timeoutTicks = 2400, skyAccess = true)
     public static void rebuiltSupportHolds(GameTestHelper h) {
@@ -306,10 +340,10 @@ public final class CollapseGameTests {
     }
 
     /**
-     * Every kind of storage on a floor that falls keeps all it holds (review of #688): a chest, a light container (brewing
+     * Every kind of storage on a floor that falls keeps all it holds: a chest, a light container (brewing
      * stand), a shulker box (its contents stay in the dropped box), and Create's item vault, depot, basin, deployer and
-     * saw: not vanilla containers, cleared by {@code Clearable}, and the saw's item handler gives nothing out (before this
-     * fix its log was lost: extracting through the handler, then clearing). Contents are counted in the dropped items,
+     * saw: not vanilla containers, cleared by {@code Clearable}, and the saw's item handler gives nothing out (extracting
+     * through the handler and then clearing loses its log). Contents are counted in the dropped items,
      * shulker contents inside the dropped box.
      */
     @GameTest(template = "range", batch = "collapse", timeoutTicks = 2400, skyAccess = true)
@@ -390,8 +424,8 @@ public final class CollapseGameTests {
     }
 
     /**
-     * A snapshot step is bounded by its time slice on the worst-case chunk (review of #688: a whole dense chunk was one
-     * step, 27–110 ms): 4×4 chunks whose top sections hold 4096 distinct states each (global palette), snapshotted on a
+     * A snapshot step is bounded by its time slice on the worst-case chunk (one whole dense chunk as a step takes
+     * 34–138 ms): 4×4 chunks whose top sections hold 4096 distinct states each (global palette), snapshotted on a
      * counting clock (1 ms a read, 5 ms slices). Every call stops after at most 5 units, and a dense section is never
      * part of a larger unit, so a call covers at most 5 of them.
      */
@@ -408,13 +442,19 @@ public final class CollapseGameTests {
                 // the batch's other collapses may hold every slot: wait for one before touching the world
                 h.assertTrue(StrikeSupport.tryReserve(), "waiting for a collapse solve slot");
                 done[0] = true;
-                snapshotInSlices(h, level, cx, cz, sections, removal);
+                // a failed bound is final (not an assertion succeedWhen would retry and then skip)
+                String failed = snapshotInSlices(level, cx, cz, sections, removal);
+                if (failed != null) throw new IllegalStateException(failed);
             }
         });
     }
 
-    /** {@link #snapshotStepsStayInTheirSlice} with a slot held: dense sections in, snapshot, sections back, in one call. */
-    private static void snapshotInSlices(GameTestHelper h, ServerLevel level, int cx, int cz, int sections, BlockPos removal) {
+    /**
+     * {@link #snapshotStepsStayInTheirSlice} with a slot held: dense sections in, snapshot, sections back, in one call.
+     * Returns the failed bound, or null.
+     */
+    @org.jetbrains.annotations.Nullable
+    private static String snapshotInSlices(ServerLevel level, int cx, int cz, int sections, BlockPos removal) {
         StrikeSupport support = new StrikeSupport(level, new it.unimi.dsi.fastutil.longs.LongArrayList(new long[]{removal.asLong()}),
                 java.util.List.of(Blocks.STONE.defaultBlockState()));
         ua.zentix.incoming.nuclear.world.DenseChunks dense = null;
@@ -439,14 +479,15 @@ public final class CollapseGameTests {
         }
         Incoming.LOG.info("COLLAPSEBENCH snapshot of {} dense sections ({} chunks solved): {} units in {} calls, at most {} a call",
                 dense.sections, support.chunks(), support.units(), calls, most);
-        h.assertTrue(support.started(), "snapshot never finished");
-        h.assertTrue(dense.sections == 64, "dense sections " + dense.sections + " of 64");
-        h.assertTrue(most <= 5, "a snapshot call ran " + most + " units past its 5 ms slice");
-        h.assertTrue(calls * 5 >= dense.sections, "a call covered more than 5 dense sections: " + calls + " calls for " + dense.sections);
+        if (!support.started()) return "snapshot never finished";
+        if (dense.sections != 64) return "dense sections " + dense.sections + " of 64";
+        if (most > 5) return "a snapshot call ran " + most + " units past its 5 ms slice";
+        if (calls * 5 < dense.sections) return "a call covered more than 5 dense sections: " + calls + " calls for " + dense.sections;
+        return null;
     }
 
     /**
-     * Conventional impact work holds the Sable origin chunk (review of #694: Sable reads block-entity shapes at
+     * Conventional impact work holds the Sable origin chunk (Sable reads block-entity shapes at
      * {@code BlockPos.ZERO}, which loads chunk (0, 0) synchronously when nothing holds it), as nuclear work does.
      */
     @GameTest(template = "range", batch = "collapse", timeoutTicks = 2400, skyAccess = true)

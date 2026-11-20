@@ -25,13 +25,17 @@ public final class DenseChunks {
     private final ServerLevel level;
     private final List<LevelChunk> chunks = new ArrayList<>();
     private final int fromSection;
-    private final List<BlockState[]> was = new ArrayList<>();
+    /** Sections written and their blocks before, in order. */
+    private final List<Written> written = new ArrayList<>();
+
+    private record Written(LevelChunkSection section, BlockState[] old) {}
     /** Sections written (global palette). */
     public final int sections;
 
     /**
      * Fill chunks {@code cx0..cx1 × cz0..cz1} (loaded) from section index {@code fromSection} (world bottom 0) to the top,
-     * {@code distinct} different states a section (block-entity-free states of the registry, in turn).
+     * {@code distinct} different states a section (block-entity-free states of the registry). On a failure part-way, what
+     * was written is put back before the exception leaves.
      */
     public DenseChunks(ServerLevel level, int cx0, int cz0, int cx1, int cz1, int fromSection, int distinct) {
         this.level = level;
@@ -42,37 +46,36 @@ public final class DenseChunks {
         }
         // the same states in every section: a section's distinct count is what costs; new states' properties are
         // computed once per server run whatever the chunk
-        int n = 0, k = 0;
-        for (int cx = cx0; cx <= cx1; cx++) {
-            for (int cz = cz0; cz <= cz1; cz++) {
-                LevelChunk chunk = level.getChunkSource().getChunkNow(cx, cz);
-                if (chunk == null) throw new IllegalStateException("chunk " + cx + " " + cz + " not loaded");
-                chunks.add(chunk);
-                LevelChunkSection[] s = chunk.getSections();
-                for (int i = fromSection; i < s.length; i++) {
-                    BlockState[] old = new BlockState[4096];
-                    for (int p = 0; p < 4096; p++) {
-                        old[p] = s[i].getBlockState(p & 15, p >> 8, p >> 4 & 15);
-                        s[i].setBlockState(p & 15, p >> 8, p >> 4 & 15, pool.get((k + p % distinct) % pool.size()), false);
+        int n = 0;
+        try {
+            for (int cx = cx0; cx <= cx1; cx++) {
+                for (int cz = cz0; cz <= cz1; cz++) {
+                    LevelChunk chunk = level.getChunkSource().getChunkNow(cx, cz);
+                    if (chunk == null) throw new IllegalStateException("chunk " + cx + " " + cz + " not loaded");
+                    LevelChunkSection[] s = chunk.getSections();
+                    for (int i = fromSection; i < s.length; i++) {
+                        BlockState[] old = new BlockState[4096];
+                        for (int p = 0; p < 4096; p++) old[p] = s[i].getBlockState(p & 15, p >> 8, p >> 4 & 15);
+                        written.add(new Written(s[i], old));
+                        for (int p = 0; p < 4096; p++) s[i].setBlockState(p & 15, p >> 8, p >> 4 & 15, pool.get(p % distinct % pool.size()), false);
+                        if (s[i].getStates().data.palette() instanceof GlobalPalette) n++;
                     }
-                    was.add(old);
-                    if (s[i].getStates().data.palette() instanceof GlobalPalette) n++;
+                    chunks.add(chunk);
                 }
             }
+        } catch (RuntimeException e) {
+            restore();
+            throw e;
         }
         this.sections = n;
     }
 
-    /** Put the original blocks back. */
+    /** Put the original blocks back (every section written so far). */
     public void restore() {
-        int w = 0;
-        for (LevelChunk chunk : chunks) {
-            LevelChunkSection[] s = chunk.getSections();
-            for (int i = fromSection; i < s.length; i++) {
-                BlockState[] old = was.get(w++);
-                for (int p = 0; p < 4096; p++) s[i].setBlockState(p & 15, p >> 8, p >> 4 & 15, old[p], false);
-            }
+        for (Written w : written) {
+            for (int p = 0; p < 4096; p++) w.section.setBlockState(p & 15, p >> 8, p >> 4 & 15, w.old[p], false);
         }
+        written.clear();
     }
 
     /**

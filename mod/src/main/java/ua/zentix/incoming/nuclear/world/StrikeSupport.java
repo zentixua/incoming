@@ -160,7 +160,7 @@ public final class StrikeSupport {
      * Server thread: work units ({@link #INDEX_UNIT}…) until {@code budgetNanos} on {@code clock} passes (at least one):
      * index the removals, then for each chunk to solve and its neighbors a snapshot copy, its sections' states published,
      * then the removals checked against the snapshots; the last unit starts the solve. A dense chunk is many units, never
-     * one: its whole copy with every state published took 27–110 ms (#688 review).
+     * one: its whole copy with every state published takes 34–138 ms (1024–4096 states a section, 21 sections).
      *
      * @return snapshots taken in this call
      */
@@ -288,6 +288,9 @@ public final class StrikeSupport {
         for (ChunkShot s : shots.values()) fresh &= s.fresh();
         Long2ObjectOpenHashMap<BlockState> lost = losses;
         int minY = level.getMinBuildHeight(), maxY = level.getMaxBuildHeight();
+        // a datapack reload after the removals' states were published and before the first snapshot leaves fresh
+        // snapshots and a table without those states: their few distinct kinds again
+        for (BlockState st : removedKinds) ChunkShot.ensure(st);
         Blast.PropsView view = Blast.publish();
         Long2ObjectOpenHashMap<ChunkShot> shots = new Long2ObjectOpenHashMap<>(this.shots);
         this.shots.clear();
@@ -330,6 +333,7 @@ public final class StrikeSupport {
         LongArrayList at = new LongArrayList();
         List<BlockState> was = new ArrayList<>(), to = new ArrayList<>();
         LongArrayList fluid = new LongArrayList();
+        LongOpenHashSet watch = new LongOpenHashSet();
         int solved = 0;
         for (long c : solve) {
             ChunkPos centre = new ChunkPos(c);
@@ -357,6 +361,13 @@ public final class StrikeSupport {
                 at.add(p);
                 was.add(w.get(BlockPos.getX(p) - w.x0, BlockPos.getY(p), BlockPos.getZ(p) - w.z0));
                 to.add(e.getValue());
+                // the cells beside it that bore nothing: a support built there before it falls makes the plan stale
+                for (net.minecraft.core.Direction d : net.minecraft.core.Direction.values()) {
+                    long q = BlockPos.offset(p, d);
+                    int qy = BlockPos.getY(q);
+                    if (qy < minY || qy >= maxY || removed.containsKey(q) || col.changes.containsKey(q)) continue;
+                    if (!view.get(w.get(BlockPos.getX(q) - w.x0, qy, BlockPos.getZ(q) - w.z0)).bearing()) watch.add(q);
+                }
             }
             fluid.addAll(col.fluidTicks);
         }
@@ -400,18 +411,21 @@ public final class StrikeSupport {
                 common = e.getKey();
             }
         }
-        return new Result(pos, states, into, rubble, fluid.toLongArray(), solved, mass,
+        return new Result(pos, states, into, rubble, fluid.toLongArray(), watch, solved, mass,
                 mass > 0 ? new net.minecraft.world.phys.Vec3(sx / mass, base, sz / mass) : null, common);
     }
 
     /**
      * Positions the law drops in fall order ({@link BlockPos#asLong}), their states as the world stood, what replaces them
-     * (air, water beside water), what lands as rubble (null: turns to dust), fluid positions to tick, chunks solved,
+     * (air, water beside water), what lands as rubble (null: turns to dust), fluid positions to tick, the cells beside
+     * them that bore nothing in the solve ({@code watch}: a load-bearing block there now means the plan is stale), chunks solved,
      * load-bearing blocks fallen, the base of their mass (mean x/z, lowest y) and their most common state.
      */
-    public record Result(long[] at, BlockState[] was, BlockState[] to, @Nullable BlockState[] rubble, long[] fluidTicks, int solved,
+    public record Result(long[] at, BlockState[] was, BlockState[] to, @Nullable BlockState[] rubble, long[] fluidTicks,
+                         it.unimi.dsi.fastutil.longs.LongSet watch, int solved,
                          int mass, net.minecraft.world.phys.@Nullable Vec3 base, @Nullable BlockState common) {
-        static final Result EMPTY = new Result(new long[0], new BlockState[0], new BlockState[0], new BlockState[0], new long[0], 0, 0, null, null);
+        public static final Result EMPTY = new Result(new long[0], new BlockState[0], new BlockState[0], new BlockState[0], new long[0],
+                it.unimi.dsi.fastutil.longs.LongSets.EMPTY_SET, 0, 0, null, null);
     }
 
     /**
