@@ -400,10 +400,12 @@ public final class PallPass {
          */
         public final Vector3f sunLight = new Vector3f(), skyLight = new Vector3f(), fireLight = new Vector3f();
         /**
-         * Sun light above the air, linear ({@code NukePall.Sky.top}): matter at height z gets it through the air of its beam
-         * ({@code fx_pall}: {@code pallSunBeam}); zero once the sun is below every height's horizon (no sun branch, no shadow map).
+         * Sun light above the air, linear ({@code NukePall.Sky.top}; xyz): matter gets it through the air of its beam
+         * ({@code fx_pall}: {@code pallSunBeam}); zero once the sun is below the horizon of the highest matter (no sun branch, no
+         * shadow map). w — the eye's altitude above sea level ({@code WaterDecal.SEA_LEVEL}), blocks: a point's altitude is its
+         * eye-relative y plus it ({@code pallSunHeight}).
          */
-        public final Vector3f sunTop = new Vector3f();
+        public final Vector4f sunTop = new Vector4f();
 
         /** The sun lights some height this frame: its beam above the air is not zero. */
         public boolean sunUp() {
@@ -829,7 +831,7 @@ public final class PallPass {
             m.safeGetUniform("PallMax").set(f.max.x, f.max.y, f.max.z);
             m.safeGetUniform("PallSun").set(f.sun.x, f.sun.y, f.sun.z, f.sun.w);
             m.safeGetUniform("PallSunLight").set(f.sunLight.x, f.sunLight.y, f.sunLight.z);
-            m.safeGetUniform("PallSunTop").set(f.sunTop.x, f.sunTop.y, f.sunTop.z);
+            m.safeGetUniform("PallSunTop").set(f.sunTop.x, f.sunTop.y, f.sunTop.z, f.sunTop.w);
             m.safeGetUniform("PallSkyLight").set(f.skyLight.x, f.skyLight.y, f.skyLight.z);
             m.safeGetUniform("PallFireLight").set(f.fireLight.x, f.fireLight.y, f.fireLight.z);
             m.safeGetUniform("PallBase").set(f.base);

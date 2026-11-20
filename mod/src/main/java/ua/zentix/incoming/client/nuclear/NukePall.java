@@ -17,6 +17,7 @@ import ua.zentix.incoming.IncomingConfig;
 import ua.zentix.incoming.client.far.FarView;
 import ua.zentix.incoming.client.far.Sight;
 import ua.zentix.incoming.client.fx.layer.PallPass;
+import ua.zentix.incoming.client.fx.layer.WaterDecal;
 import ua.zentix.incoming.client.sound.SoundFilters;
 import ua.zentix.incoming.nuclear.Detonation;
 
@@ -461,11 +462,11 @@ public final class NukePall {
      * is its illumination of a white wall under the whole sky.
      */
     private static void light(ClientLevel level, Vec3 eye, float partial, PallPass.Frame f) {
-        sky(level, eye, partial, SKY);
+        sky(level, eye, partial, litTop(partial), SKY);
         f.sun.set(SKY.sx, SKY.sy, 0, SKY.day);
         f.skyLight.set(SKY.sky[0], SKY.sky[1], SKY.sky[2]);
         f.sunLight.set(SKY.sun[0], SKY.sun[1], SKY.sun[2]);
-        f.sunTop.set(SKY.top[0], SKY.top[1], SKY.top[2]);
+        f.sunTop.set(SKY.top[0], SKY.top[1], SKY.top[2], SKY.eyeUp);
         // airlight: the sky vanilla draws behind distant matter, without its sun, moon and stars (fx_pall: pallAirLight)
         float[] fog = ua.zentix.incoming.client.fx.layer.FxLayer.fogColor();
         f.airSky.set(SKY.shown[0], SKY.shown[1], SKY.shown[2]);
@@ -496,10 +497,13 @@ public final class NukePall {
          * light; zero once the sun is below the horizon of {@link Sight#SUN_TOP}.
          */
         final float[] top = new float[3];
+        /** Eye altitude above sea level ({@link WaterDecal#SEA_LEVEL}), blocks: fx_pall's sun height is p.y plus it. */
+        float eyeUp;
 
         /**
-         * Sun light on matter {@code height} blocks (= m) above the ground, per channel, into {@code into}: {@link #top} through the air
-         * of its beam ({@link Sight#sunThroughAir}); the copy in {@code fx_pall} is {@code pallSunBeam}.
+         * Sun light on matter at altitude {@code height} blocks (= m) above sea level ({@link WaterDecal#SEA_LEVEL}: one reference for
+         * every detonation, cap, pall and wall), per channel, into {@code into}: {@link #top} through the air of its beam
+         * ({@link Sight#sunThroughAir}); the copy in {@code fx_pall} is {@code pallSunBeam(pallSunHeight(p))}.
          */
         void sunAt(double height, double[] into) {
             if (top[0] <= 0 && top[1] <= 0 && top[2] <= 0) {
@@ -518,8 +522,32 @@ public final class NukePall {
         float base, exposure, glowOnSmoke;
     }
 
-    /** Sun and sky at {@code eye} into {@code into} (as in {@link #light}). */
+    /**
+     * Altitude above sea level ({@link WaterDecal#SEA_LEVEL}) of the highest matter of all detonations, blocks: the mushroom's top,
+     * or {@link Sight#SUN_TOP} while one has no mushroom (pall and wall only; their sun branches cost per sample, no shadow map).
+     * The frame computes sunlight while the sun stands above this height's horizon.
+     */
+    private static double litTop(float partial) {
+        double top = 0;
+        for (ClientNuclear.Active a : ClientNuclear.detonations()) {
+            ua.zentix.incoming.nuclear.model.MushroomModel.Shape s = MushroomField.shape(a, partial);
+            if (s == null) return Sight.SUN_TOP;
+            top = Math.max(top, a.d.groundY() - WaterDecal.SEA_LEVEL + a.d.blocks(s.top()));
+        }
+        return Math.min(top, Sight.SUN_TOP);
+    }
+
+    /** Sun and sky at {@code eye} into {@code into} (as in {@link #light}), sunlight computed up to {@link Sight#SUN_TOP}. */
     static void sky(ClientLevel level, Vec3 eye, float partial, Sky into) {
+        sky(level, eye, partial, Sight.SUN_TOP, into);
+    }
+
+    /**
+     * Sun and sky at {@code eye} into {@code into}: sunlight above the air while the sun stands above the horizon of altitude
+     * {@code top} (blocks above sea level), zero below it.
+     */
+    static void sky(ClientLevel level, Vec3 eye, float partial, double top, Sky into) {
+        into.eyeUp = (float) (eye.y - WaterDecal.SEA_LEVEL);
         float angle = level.getTimeOfDay(partial) * Mth.TWO_PI;
         into.sx = -Mth.sin(angle);
         into.sy = Mth.cos(angle);
@@ -543,7 +571,7 @@ public final class NukePall {
         // direct sunlight above the air while it reaches the highest matter (earth's shadow, not the eye's daylight: a cap kilometres
         // up stays sunlit after ground sunset); on the ground, through the air along its slant column (Sight.sunThroughAir: Rayleigh +
         // clear-day haze, every elevation and height), relative to the overhead sun: white at noon, redder and dimmer as it sinks
-        boolean up = weather > 0 && Sight.sunAbove(into.sy, Sight.SUN_TOP);
+        boolean up = weather > 0 && Sight.sunAbove(into.sy, top);
         Sight.sunThroughAir(into.sy, 0, THROUGH_AIR);
         for (int c = 0; c < 3; c++) {
             into.top[c] = up ? sunLight(1, into.sky[c], weather) : 0;
@@ -592,7 +620,7 @@ public final class NukePall {
         double gx = x - d.burst().x, gz = z - d.burst().z;
         double hard = a.ground.hasHard() ? a.ground.hard(x, z) : 0, sand = a.ground.hasSand() ? a.ground.sand(x, z) : 0;
         dustLight(DUST_WALL, DUST_GLOW, sky, d.windDir(), gx, gy, gz, gy - a.ground.at(x, z), a.pall.smoke(Math.hypot(gx, gz), a.ticks(0)),
-                PallField.sandShare(sand, hard, BlastWall.paved(DUST_WALL, DUST_WALL[0] - Math.hypot(gx, gz))), into);
+                PallField.sandShare(sand, hard, BlastWall.paved(DUST_WALL, DUST_WALL[0] - Math.hypot(gx, gz))), y - WaterDecal.SEA_LEVEL, into);
         return true;
     }
 
@@ -616,6 +644,12 @@ public final class NukePall {
      */
     static void dustLight(float[] wall, float[] glow, Sky sky, double wind, double gx, double gy, double gz, double up, double smoke, double sand,
                           float[] into) {
+        dustLight(wall, glow, sky, wind, gx, gy, gz, up, smoke, sand, gy, into);
+    }
+
+    /** {@link #dustLight}, the point {@code altitude} blocks above sea level ({@link Sky#sunAt}: its sun). */
+    static void dustLight(float[] wall, float[] glow, Sky sky, double wind, double gx, double gy, double gz, double up, double smoke, double sand,
+                          double altitude, float[] into) {
         double rx = gx, rz = gz, len = Math.hypot(rx, rz);
         double top = wall[2], reach = BlastWall.HANDOFF_TO * wall[1] + top, s = wall[0] - len, toTop = Math.max(top - up, 0);
         double ox = len > 1e-3 ? rx / len : 1, oz = len > 1e-3 ? rz / len : 0;
@@ -637,9 +671,9 @@ public final class NukePall {
         // ball light is a beam from cap center, like the mushroom body (CloudPuffs.ball), × eye adaptation
         double lit = CloudPuffs.ball(sky.exposure, glow[0], ll);
         double burn = CloudPuffs.burn(r, 0, glow[1], glow[3]) * (1 - 0.75 * sky.day);
-        // sun at the point's height above ground zero, as fx_pall's pallSunAt (Sky.sunAt)
+        // sun at the point's altitude, as fx_pall's pallSunAt (Sky.sunAt)
         double[] lin = new double[3], sun = new double[3];
-        sky.sunAt(gy, sun);
+        sky.sunAt(altitude, sun);
         for (int c = 0; c < 3; c++) {
             double w = Mth.lerp(smoke, Mth.lerp(sand, DUST_W[c], SAND_W[c]), SMOKE_W[c]);
             double fire = FIRE[c];
@@ -765,17 +799,20 @@ public final class NukePall {
                     a.ground.water(a.d.burst().x + from[0], a.d.burst().z + from[1]));
         }
         // sun terms of the frame (light): elevation, eye daylight, sky, beam above the air, on the ground and at the last cap's height
-        double capM = 0;
+        String cap = "no cap";
         if (!all.isEmpty()) {
-            ua.zentix.incoming.nuclear.model.MushroomModel.Shape cap = MushroomField.shape(all.getLast(), 0);
-            if (cap != null) capM = all.getLast().d.blocks(cap.capY());
+            ClientNuclear.Active last = all.getLast();
+            ua.zentix.incoming.nuclear.model.MushroomModel.Shape shape = MushroomField.shape(last, 0);
+            if (shape != null) {
+                double up = last.d.groundY() - WaterDecal.SEA_LEVEL + last.d.blocks(shape.capY());
+                double[] atCap = new double[3];
+                SKY.sunAt(up, atCap);
+                cap = String.format(java.util.Locale.ROOT, "at cap centre %.0f blocks above sea %.4f %.4f %.4f", up, atCap[0], atCap[1], atCap[2]);
+            }
         }
-        double[] atCap = new double[3];
-        SKY.sunAt(capM, atCap);
-        String sun = String.format(java.util.Locale.ROOT, "sun %.2f° day %.3f, sky %.4f %.4f %.4f, beam above air %.4f %.4f %.4f, on ground %.4f %.4f %.4f, "
-                        + "at cap %.0f blocks %.4f %.4f %.4f",
+        String sun = String.format(java.util.Locale.ROOT, "sun %.2f° day %.3f, sky %.4f %.4f %.4f, beam above air %.4f %.4f %.4f, on ground %.4f %.4f %.4f, %s",
                 Math.toDegrees(Math.asin(Mth.clamp(SKY.sy, -1, 1))), SKY.day, SKY.sky[0], SKY.sky[1], SKY.sky[2], SKY.top[0], SKY.top[1], SKY.top[2],
-                SKY.sun[0], SKY.sun[1], SKY.sun[2], capM, atCap[0], atCap[1], atCap[2]);
+                SKY.sun[0], SKY.sun[1], SKY.sun[2], cap);
         return String.format(java.util.Locale.ROOT, "sigma at camera %.4f /block (visibility %.0f blocks; mist %.4f), depth up %.2f down %.2f, muffle %.2f, ash %d, quality %s, "
                         + "light: %s, fires %.2f × %.2f, ball r %.0f blocks, black body %.3g %.3g %.3g, under the pall: %s, surge r %.0f top %.0f sigma %.4f, "
                         + "frames: %s; mushrooms %d (exposure %.6g); firestorm: %s; nuclear camera: %s",

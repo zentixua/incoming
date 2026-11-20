@@ -64,9 +64,9 @@ uniform vec4 PallSun;
 // sun/sky light, linear (white wall at noon — 1); fire glow on a white wall beneath haze is in display values. PallSunLight is
 // the sun on the ground; matter aloft takes pallSunBeam of its height
 uniform vec3 PallSunLight;
-// sun light above the air, linear (NukePall.Sky.top: weather, remainder to white after sky light); zero once the sun is below
-// every height's horizon (Sight.SUN_TOP)
-uniform vec3 PallSunTop;
+// sun light above the air, linear (rgb, NukePall.Sky.top: weather, remainder to white after sky light); zero once the sun is
+// below the horizon of the frame's highest matter. w — the eye's altitude above sea level (WaterDecal.SEA_LEVEL), blocks
+uniform vec4 PallSunTop;
 uniform vec3 PallSkyLight;
 uniform vec3 PallFireLight;
 // frame display skylight (white wall: day 1, night as wall billows, FarView.ambient): dust wall adds fire reflection
@@ -1000,13 +1000,13 @@ float sunColumn(float z, float s, float h) {
     return min(2.0 * exp(-low / h) * sqrt(3.14159265 * (SUN_EARTH_R + low) / (2.0 * h)) - exp(-zz / h) * sunChapman(x, -e), SUN_SHADOWED);
 }
 
-// Sun light on matter z blocks (= m) above the ground (NukePall.Sky.sunAt, Sight.sunThroughAir): the beam above the air through the
+// Sun light on matter z blocks (= m) above sea level (NukePall.Sky.sunAt, Sight.sunThroughAir): the beam above the air through the
 // slant column of clean air and haze, relative to the overhead sun at that height (white at noon at every height). At a low sun a
 // cap kilometres up keeps a golden beam the ground has lost; after ground sunset a red one, until the earth's shadow climbs past it
 vec3 pallSunBeam(float z) {
     float clean = sunColumn(z, PallSun.y, SUN_AIR_H) - sunColumn(z, 1.0, SUN_AIR_H);
     float haze = sunColumn(z, PallSun.y, SUN_HAZE_H) - sunColumn(z, 1.0, SUN_HAZE_H);
-    return PallSunTop * exp(-(clean * SUN_CLEAN + haze * SUN_HAZE));
+    return PallSunTop.rgb * exp(-(clean * SUN_CLEAN + haze * SUN_HAZE));
 }
 
 // The sun lights some height this frame (PallPass.Frame.sunUp): sun branches and the shadow map exist
@@ -1014,17 +1014,20 @@ bool pallSunUp() {
     return PallSunTop.r + PallSunTop.g + PallSunTop.b > 0.0;
 }
 
-// Height of eye-relative p above ground zero of the first active pall slot, blocks: the sun's height for pall and wall
+// Altitude of eye-relative p above sea level, blocks: the sun's height for cap, stem, pall and wall alike (one reference for every
+// detonation: slot order or ground zero never moves it; NukePall.Sky.sunAt)
 float pallSunHeight(vec3 p) {
-    if (PallSlot0[1].w > 0.5) return p.y - PallSlot0[0].z;
-    return p.y - PallSlot1[0].z;
+    return p.y + PallSunTop.w;
 }
 
-// Sun above eye-relative pall point p (at its height, pallSunBeam) through mushrooms on its ray: shadow map as world
-// (fx_pall_composite: shade), from matter above map midpoint (mushShadowFrom); no map while the sun lights no height
+// Sun above eye-relative pall point p (at its altitude, pallSunBeam) through mushrooms on its ray: shadow map as world
+// (fx_pall_composite: shade), from matter above map midpoint (mushShadowFrom); no map while the sun lights no height, no lookup
+// in the earth's shadow
 vec3 pallSunAt(vec3 p) {
     if (!pallSunUp()) return vec3(0.0);
-    return pallSunBeam(pallSunHeight(p)) * mushShadowFrom(Sampler7, Sampler8, mushShadowSun(PallSun.xyz), p, 0.5);
+    vec3 beam = pallSunBeam(pallSunHeight(p));
+    if (max(beam.r, max(beam.g, beam.b)) <= 0.0) return beam;
+    return beam * mushShadowFrom(Sampler7, Sampler8, mushShadowSun(PallSun.xyz), p, 0.5);
 }
 
 void pallLighting(vec3 dir) {
@@ -1430,10 +1433,10 @@ vec4 mushAt(int k, Mush m, vec3 p, vec3 q, float cone, out float near, out vec3 
     vec3 light = vec3(0.0);
     // emission escape depth: shortest optical depth
     float escape = min(min(up, down), toEye);
-    // sun at the point's height (pallSunBeam): the cap kilometres up keeps it after the ground has lost it; a point already in the
-    // earth's shadow (beam a ten-thousandth of the sky) skips its sunward trace
-    vec3 beam = pallSunUp() ? pallSunBeam(q.y) : vec3(0.0);
-    if (dot(beam, LUMA) > 1e-4 * dot(PallSkyLight, LUMA)) {
+    // sun at the point's altitude (pallSunBeam): the cap kilometres up keeps it after the ground has lost it. The sunward depths
+    // are taken whenever the frame has sun (not by this point's beam): they also bound the escape of the matter's own emission
+    if (pallSunUp()) {
+        vec3 beam = pallSunBeam(pallSunHeight(p));
         float toSun = mushSunTau(k, m, p, kk, taus.w), away = more.x;
         escape = min(escape, min(toSun, away));
         // sun beam along slab through point on sun axis (cosine 1): its diffuse light and direct beam

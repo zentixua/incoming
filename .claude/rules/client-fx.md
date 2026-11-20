@@ -665,9 +665,12 @@ paths:
   red/blue ×1.5 against noon and half as bright, one law at every elevation — the former `low` ramp only below 20° left a 19°
   sun white; our lighting input only, vanilla/shaderpack sun untouched). The beam depends on the lit point's height:
   `PallSunLight` is the ground's; the frame passes the beam above the air (`PallSunTop`, `NukePall.Sky.top`: weather,
-  remainder to white; zero once the sun is below the horizon of `Sight.SUN_TOP`), and `fx_pall` applies the law per point
-  (`pallSunBeam`: mushroom by height above ground zero, pall/wall by height above the slot's ground; Java wall dust
-  `Sky.sunAt`). The eye's daylight `day` no longer gates the beam: the cap kept only the ground's sun, gone with the eye's
+  remainder to white; zero once the sun is below the horizon of the frame's highest matter, `NukePall.litTop`: the mushroom
+  top, `Sight.SUN_TOP` without one), and `fx_pall` applies the law per point (`pallSunBeam(pallSunHeight(p))`: altitude above
+  sea level `WaterDecal.SEA_LEVEL`, eye-relative y + `PallSunTop.w`, one reference for cap, stem, pall and wall of every
+  detonation — a slot's ground zero made the pall's sun change when another detonation took slot 0, review #686; Java wall
+  dust `Sky.sunAt` at `y − SEA_LEVEL`). The cap's sunward depths are taken whenever the frame has sun, not by its own beam:
+  they also bound the escape of its emission, and a beam threshold stepped the hot cloud's glow by a third (review #686). The eye's daylight `day` no longer gates the beam: the cap kept only the ground's sun, gone with the eye's
   sunset (0.012/0.005/0.0005 at dayTime 12600, zero by 12750), and drew flat blue-grey in vanilla's sky light against a golden
   shaderpack dusk (logo frames 19.11). Now a cap 10 km up at a 3° sun keeps 0.78/0.68/0.46, at −1.9° red 0.20/0.09/0.01;
   the earth's shadow climbs the cloud (dip √(2z/R)); `SightTest.capAloftKeepsTheSunAfterGroundSunset`, `shaderSunIsThisLaw`. The light of the ball and of fires on dust follows the same
