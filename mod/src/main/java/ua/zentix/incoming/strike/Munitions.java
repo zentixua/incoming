@@ -171,7 +171,7 @@ public final class Munitions {
      */
     public static boolean pay(ServerPlayer player, Bill bill) {
         MutableComponent missing = pay(of(player), bill);
-        if (missing != null) player.displayClientMessage(missing.withStyle(ChatFormatting.RED), true);
+        if (missing != null) ServerActions.refuse(player, missing);
         return missing == null;
     }
 

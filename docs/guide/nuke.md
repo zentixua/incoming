@@ -13,7 +13,7 @@ come first; [what happens](#what-happens) describes the strike.
 
 ## How to launch
 
-By default only operators can.
+By default operators and the host of a single-player or LAN world can, cheats on or off.
 
 1. You need an ICBM item, or a missile or bomb plus a Nuclear Warhead ([recipes](munitions.md#recipes)).
 2. On the console: the Nuclear weapon, or the nuclear warhead option of the Missile and the Bomb; the yield

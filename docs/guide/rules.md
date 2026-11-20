@@ -2,7 +2,7 @@
 
 English · [Русский](ru/rules.md)
 
-By default the designator works for every player, and nuclear weapons only for operators ([nuclear strike](nuke.md)).
+By default the designator works for every player, and nuclear weapons only for operators and the host of a single-player or LAN world ([nuclear strike](nuke.md)).
 
 ## Spotting
 

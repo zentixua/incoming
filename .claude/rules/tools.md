@@ -42,6 +42,8 @@ Prism: `~/.var/app/org.prismlauncher.PrismLauncher/data/PrismLauncher/` (`tools/
     client_scenario.sh <scenario> [shaders] [dh] [voxy] [lss] [gpu] ← client without a window (KWin virtual + Xwayland), frames and sound in WAV;
                                            on the CPU unless shaders/dh/voxy/lss/vista/gpu (run it bare: Gradle writes the launch
                                            script, then the client goes into its own laptop_job.sh --soft unit);
+                                           its Gradle step and another Gradle run in the same tree (GameTest) collide on
+                                           downloadAssets: start the second after the client's launch script exists;
                                            scenarios and what each captures: in the script header
     sandbox.sh start|fx|swap|shot|restart|stop|jbr ← effects sandbox (on the CPU unless shaders/dh/gpu): a client with only the mod (+ Iris with a shaderpack, DH) in a
                                            flat world, an effect by the /fx command in seconds, hot code swap and

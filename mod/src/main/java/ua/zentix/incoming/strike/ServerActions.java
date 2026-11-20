@@ -62,6 +62,14 @@ public final class ServerActions {
 
     private ServerActions() {}
 
+    /**
+     * One channel for every refused order: the reason in red on the action bar, above the hotbar, where the player
+     * looks while aiming through the binoculars or right after the console closes on Fire.
+     */
+    public static void refuse(Player player, Component reason) {
+        player.displayClientMessage(reason.copy().withStyle(ChatFormatting.RED), true);
+    }
+
     public static boolean mayUse(Player player) {
         return IncomingConfig.SERVER.designatorForEveryone.get() || player.hasPermissions(2);
     }
@@ -80,7 +88,7 @@ public final class ServerActions {
     /** Shared reviewed/unreviewed dispatch. A reviewed aim is immutable until this call. */
     static void fire(ServerPlayer player, C2S.Fire p, @Nullable Aim reviewed) {
         if (!mayUse(player)) {
-            player.displayClientMessage(Component.translatable("incoming.no_permission").withStyle(ChatFormatting.RED), true);
+            refuse(player, Component.translatable("incoming.no_permission"));
             return;
         }
         if (tooSoon(player, ModAttachments.LAST_FIRE.get())) return;
@@ -99,14 +107,14 @@ public final class ServerActions {
             Vec3 at = new Vec3(p.from().get().x, 0, p.from().get().z);
             MutableComponent bad = launchSiteProblem(player, at);
             if (bad != null) {
-                player.displayClientMessage(bad.withStyle(ChatFormatting.RED), true);
+                refuse(player, bad);
                 return;
             }
             from = new LaunchOrigin.Place(at);
         }
         MutableComponent problem = routeProblem(player.serverLevel(), player, true, l.weapon(), from, p.via(), aim.point());
         if (problem != null) {
-            player.displayClientMessage(problem.withStyle(ChatFormatting.RED), true);
+            refuse(player, problem);
             return;
         }
         // Designator follows player rules for everyone, operators included: order pays munitions.
@@ -247,7 +255,7 @@ public final class ServerActions {
         if (!(level.getEntity(p.projectile()) instanceof StrikeProjectile proj) || !player.getUUID().equals(proj.ownerId())) return;
         // Non-operator nuclear projectile goes where warning was announced and second key turned.
         if (proj.isNuclear() && !NuclearKeys.trusted(player)) {
-            player.displayClientMessage(Component.translatable("incoming.nuke.no_retarget").withStyle(ChatFormatting.RED), true);
+            refuse(player, Component.translatable("incoming.nuke.no_retarget"));
             return;
         }
         C2S.AimHint h = p.aim();
@@ -373,9 +381,35 @@ public final class ServerActions {
                 Math.min(l.spread(), IncomingConfig.SERVER.maxSpread.get()), l.mode(), l.player(), n);
     }
 
-    /** Nuclear weapons: enabled and allowed for this player (default operators only). */
+    /** Nuclear weapons: enabled and allowed for this player (default operators and the world host, {@link NuclearKeys#trusted}). */
     public static boolean mayUseNuke(ServerPlayer player) {
-        return IncomingConfig.SERVER.nukeEnabled.get() && (!IncomingConfig.SERVER.nukeOpsOnly.get() || player.hasPermissions(2));
+        return IncomingConfig.SERVER.nukeEnabled.get() && (!IncomingConfig.SERVER.nukeOpsOnly.get() || NuclearKeys.trusted(player));
+    }
+
+    /**
+     * Why {@code player}'s nuclear order {@code l} is refused, or null: {@link #nuclearRefusal(Loadout, boolean,
+     * boolean, boolean, boolean, int)} with this world's settings. Review and launch both ask here, so they never disagree.
+     */
+    @Nullable
+    static Component nuclearRefusal(ServerPlayer player, Loadout l) {
+        var c = IncomingConfig.SERVER;
+        return nuclearRefusal(l, mayUse(player), c.nukeEnabled.get(), c.nukeOpsOnly.get() && !NuclearKeys.trusted(player),
+                c.carrierNukes.get(), c.nukeMaxYield.get());
+    }
+
+    /**
+     * Why a nuclear order {@code l} is refused, the first reason in the order the player can act on: the designator
+     * itself, nuclear weapons in this world, operator rights (the world host counts as one), a warhead on a carrier,
+     * the yield limit; null if allowed.
+     */
+    @Nullable
+    static Component nuclearRefusal(Loadout l, boolean mayUse, boolean enabled, boolean needsOperator, boolean carrierNukes, int cap) {
+        if (!mayUse) return Component.translatable("incoming.no_permission");
+        if (!enabled) return Component.translatable("incoming.nuke.disabled");
+        if (needsOperator) return Component.translatable("incoming.nuke.ops_only");
+        if (l.nuke().onCarrier() && !l.weapon().spec().warhead().always() && !carrierNukes) return Component.translatable("incoming.nuke.carrier_off");
+        if (l.nuke().yieldKt() > cap) return Component.translatable("incoming.nuke.over_cap", l.nuke().yieldKt(), cap);
+        return null;
     }
 
     /**
@@ -394,22 +428,21 @@ public final class ServerActions {
             aim = ruled(player, aim);
             if (aim == null) return false;
         }
-        if ((weapon.spec().warhead().always() || nuke.onCarrier() && Loadout.carriesNuke(weapon))
-                && nuke.yieldKt() > IncomingConfig.SERVER.nukeMaxYield.get()) {
-            player.sendSystemMessage(Component.translatable("incoming.nuke.review.cap", IncomingConfig.SERVER.nukeMaxYield.get()));
-            return false;
+        // The order as requested, before clamping: a carrier warhead where carriers carry none is refused, as in review.
+        Loadout asked = new Loadout(weapon, count, spread, TargetMode.LOOK, "", nuke);
+        if (asked.nuclear()) {
+            Component no = nuclearRefusal(player, asked);
+            if (no != null) {
+                refuse(player, no);
+                return false;
+            }
         }
         Loadout l = order(weapon, count, spread, nuke);
-        if (l.nuclear() && !mayUseNuke(player)) {
-            player.displayClientMessage(Component.translatable(IncomingConfig.SERVER.nukeEnabled.get()
-                    ? "incoming.nuke.ops_only" : "incoming.nuke.disabled").withStyle(ChatFormatting.RED), true);
-            return false;
-        }
         int limit = IncomingConfig.SERVER.maxActivePerPlayer.get();
         if (limit > 0 && !player.hasPermissions(2)) {
             int active = StrikeWorld.active(player.server, player.getUUID());
             if (active >= limit) {
-                player.displayClientMessage(Component.translatable("incoming.too_many_active", active, limit).withStyle(ChatFormatting.RED), true);
+                refuse(player, Component.translatable("incoming.too_many_active", active, limit));
                 return false;
             }
         }
@@ -431,8 +464,7 @@ public final class ServerActions {
     @Nullable
     public static Aim ruled(ServerPlayer player, Aim aim) {
         if (!withinMapRange(player, aim.point().x, aim.point().z)) {
-            player.displayClientMessage(Component.translatable("incoming.map.out_of_range", IncomingConfig.SERVER.mapRange.get())
-                    .withStyle(ChatFormatting.RED), true);
+            refuse(player, Component.translatable("incoming.map.out_of_range", IncomingConfig.SERVER.mapRange.get()));
             return null;
         }
         return sighted(player, aim, subject -> seesNow(player, subject));
@@ -473,7 +505,7 @@ public final class ServerActions {
         if (seen.test(target)) return sighted;
         Sightings.Contact c = Sightings.contact(level, Sides.side(player), id);
         if (c == null) {
-            player.displayClientMessage(Component.translatable("incoming.target.unseen", name).withStyle(ChatFormatting.RED), true);
+            refuse(player, Component.translatable("incoming.target.unseen", name));
             return null;
         }
         long age = c.age(level.getGameTime());
@@ -572,7 +604,7 @@ public final class ServerActions {
         }
         if (owner != null) {
             if (r.ok()) StrikeService.confirm(owner, l.weapon(), r.eta());
-            else owner.displayClientMessage(Component.translatable("incoming.launch_failed").withStyle(ChatFormatting.RED), true);
+            else refuse(owner, Component.translatable("incoming.launch_failed"));
             if (!r.ok() && paid != null) Munitions.refund(List.of(owner), owner.getUUID(), paid, why);
         }
         return r.ok();
@@ -591,12 +623,11 @@ public final class ServerActions {
         if (h.kind() == C2S.AimHint.GROUND) {
             // Ceiling world (Nether): column top is bedrock roof, so no map “ground” site.
             if (player.level().dimensionType().hasCeiling()) {
-                player.displayClientMessage(Component.translatable("incoming.map.no_ceiling").withStyle(ChatFormatting.RED), true);
+                refuse(player, Component.translatable("incoming.map.no_ceiling"));
                 return null;
             }
             if (!groundInRange(player, h.point().x, h.point().z)) {
-                player.displayClientMessage(Component.translatable("incoming.map.out_of_range", IncomingConfig.SERVER.mapRange.get())
-                        .withStyle(ChatFormatting.RED), true);
+                refuse(player, Component.translatable("incoming.map.out_of_range", IncomingConfig.SERVER.mapRange.get()));
                 return null;
             }
         } else {
@@ -676,17 +707,16 @@ public final class ServerActions {
             case PLAYER -> {
                 ServerPlayer victim = findPlayer(player.server, l.player());
                 if (victim == null) {
-                    player.displayClientMessage(Component.translatable("incoming.player_not_found", l.player()).withStyle(ChatFormatting.RED), false);
+                    refuse(player, Component.translatable("incoming.player_not_found", l.player()));
                     return null;
                 }
                 if (victim.level() != level) {
-                    player.displayClientMessage(Component.translatable("incoming.player_other_world", victim.getDisplayName()).withStyle(ChatFormatting.RED), false);
+                    refuse(player, Component.translatable("incoming.player_other_world", victim.getDisplayName()));
                     return null;
                 }
                 // Like map site: server loads/generates target area; world range limits it.
                 if (!withinMapRange(player, victim.getX(), victim.getZ())) {
-                    player.displayClientMessage(Component.translatable("incoming.player_out_of_range", victim.getDisplayName(),
-                            IncomingConfig.SERVER.mapRange.get()).withStyle(ChatFormatting.RED), false);
+                    refuse(player, Component.translatable("incoming.player_out_of_range", victim.getDisplayName(), IncomingConfig.SERVER.mapRange.get()));
                     return null;
                 }
                 return atPlayer(victim);
@@ -742,7 +772,7 @@ public final class ServerActions {
     }
 
     private static void notFound(ServerPlayer player) {
-        player.displayClientMessage(Component.translatable("incoming.target_not_found").withStyle(ChatFormatting.RED), true);
+        refuse(player, Component.translatable("incoming.target_not_found"));
     }
 
     /**

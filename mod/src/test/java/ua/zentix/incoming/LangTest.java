@@ -89,6 +89,34 @@ class LangTest {
         }
     }
 
+    /**
+     * Every key the code names exists in both languages: a missing one shows the raw key to the player (a refusal
+     * reason, a tooltip). Covers every literal {@code "incoming.…"} string in a {@code translatable(…)} or config
+     * {@code translation(…)} statement of the mod's sources; keys assembled from a prefix (ending in a dot) are not.
+     */
+    @Test
+    void everyKeyInCodeIsTranslated() throws Exception {
+        Pattern call = Pattern.compile("\\b(?:translatable|translation)\\s*\\([^;]*;");
+        Pattern literal = Pattern.compile("\"(incoming\\.[a-z0-9_.]*[a-z0-9_])\"");
+        JsonObject ru = load("ru_ru"), en = load("en_us");
+        TreeSet<String> missing = new TreeSet<>();
+        int seen = 0;
+        try (Stream<Path> files = Files.walk(Path.of("src/main/java"))) {
+            for (Path f : files.filter(f -> f.toString().endsWith(".java")).toList()) {
+                Matcher c = call.matcher(Files.readString(f));
+                while (c.find()) {
+                    Matcher m = literal.matcher(c.group());
+                    while (m.find()) {
+                        seen++;
+                        if (!en.has(m.group(1)) || !ru.has(m.group(1))) missing.add(m.group(1) + " (" + f.getFileName() + ")");
+                    }
+                }
+            }
+        }
+        assertTrue(seen > 100, "found only " + seen + " keys: wrong source root?");
+        assertEquals(new TreeSet<>(), missing, "keys named in code but absent from a lang file");
+    }
+
     @Test
     void cameraKeyIsNotHardcoded() throws Exception {
         for (String lang : new String[]{"ru_ru", "en_us"}) {
