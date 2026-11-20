@@ -591,6 +591,7 @@ class PallGlslTest {
         assertTrue(step.contains("gTauBack = -log(max(transmit, 1e-6)) + 1.0;") && step.contains("gTauBack = 1e9;"), "a march sample - lit only through the top or face");
         assertTrue(fx.replaceAll("\\s+", " ").contains("gTauBack = 1.0; vec4 matter = pallSource(p, cone, vec4(0.0), dustLight); gTauBack = 1e9;"), "a near-volume cell - lit at its depth");
         assertEquals(NukePall.WALL_SUN_FACE, scalar(fx, "WALL_SUN_FACE"), 1e-7);
+        assertEquals(NukePall.WALL_OCHRE, scalar(fx, "WALL_OCHRE"), 1e-7);
         assertTrue(wall.contains("s.side += hd * w * thick * (exp(-k * min(side, gTauBack)) * face + 0.5 * exp(-k * down) * below);")
                 && wall.contains("vec3 face = 0.5 * horizon + WALL_SUN_FACE * rInf / max(w, vec3(1e-3)) * PallSunLight * max(sunDir.y, 0.0);"), "the horizon sky, the sun down the skin and the lit ground");
         assertTrue(wall.contains("vec3 below = mix(PALL_LAND, PALL_SEA, h.wet) * (PallSunLight * max(sunDir.y, 0.0) + PallSkyLight);"), "the ground below - not sun and sky on it");

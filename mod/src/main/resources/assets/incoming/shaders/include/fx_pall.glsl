@@ -386,6 +386,9 @@ const float WALL_HORIZON_WHITE = 0.6;
 // neighbouring billows; the slab model above lights a face only through the dust over it): this share of the sun on a horizontal
 // surface, reflected as by a thick layer of the dust (R∞, which falls faster in blue: warm), reaches the face through its skin
 const float WALL_SUN_FACE = 1.0;
+// presentation: the thick layer's spectrum (R∞/ω, blue/red 0.55) to this power, toward the footage's ochre (Silo S3E09 and the sketch:
+// saturation 0.45–0.67, hue 30–40°; with the law's spectrum alone the face measured 0.37 at hue 26°, 19.11 frames)
+const float WALL_OCHRE = 1.6;
 
 // Head lobe tiles: (smaller tile of the two octaves, larger, share of the larger), blocks, at least a block
 vec3 wallLobes(mat4 V) {
@@ -533,7 +536,7 @@ void wall(mat4 V, WallAt h, vec3 keyDir, vec3 sunDir, vec3 lightDir, float smoke
     vec3 k = vec3(pallK(w.r, g), pallK(w.g, g), pallK(w.b, g));
     vec3 ru = 2.0 * k / (3.0 * (1.0 - w * g)), rInf = (1.0 - ru) / (1.0 + ru);
     vec3 thick = rInf / max(w, vec3(1e-3));
-    thick /= max(max(thick.r, thick.g), max(thick.b, 1e-4));
+    thick = pow(thick / max(max(thick.r, thick.g), max(thick.b, 1e-4)), vec3(WALL_OCHRE));
     s.albedo += hd * w * thick;
     // The head is an aerosol volume lit from all sides, not a layer lit from its top: besides the layer light from above (the two-stream
     // through the dust over the point) and the sun's single scattering with its phase (beams), the half of the sphere around the

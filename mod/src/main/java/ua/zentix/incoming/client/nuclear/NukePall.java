@@ -598,6 +598,8 @@ public final class NukePall {
      * the sun on a horizontal surface, reflected as by a thick layer of the dust (R∞), reaches the face through its skin.
      */
     static final double WALL_SUN_FACE = 1.0;
+    /** presentation: the thick layer's spectrum to this power, toward the footage's ochre (copy of {@code WALL_OCHRE}). */
+    static final double WALL_OCHRE = 1.6;
 
     static void dustLight(float[] wall, float[] glow, Sky sky, double wind, double gx, double gy, double gz, double up, double smoke, double sand,
                           float[] into) {
@@ -649,7 +651,7 @@ public final class NukePall {
             double rInf = PallLight.reflectance(w, DUST_G);
             double toFace = 0.5 * horizon + WALL_SUN_FACE * rInf / Math.max(w, 1e-3) * sky.sun[c] * Math.max(sky.sy, 0);
             double around = Math.exp(-k * side) * toFace + 0.5 * Math.exp(-k * below) * PallLight.LAND * (sky.sun[c] * Math.max(sky.sy, 0) + sky.sky[c]);
-            lin[c] = w * thick[c] / thickMax * (Math.max(field, 0) + beams + from + around);
+            lin[c] = w * Math.pow(thick[c] / thickMax, WALL_OCHRE) * (Math.max(field, 0) + beams + from + around);
         }
         // to screen like pall (fx_pall: toward white, shoulder)
         PallLight.screen(lin, into);
