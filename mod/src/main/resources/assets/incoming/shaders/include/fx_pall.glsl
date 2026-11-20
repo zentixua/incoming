@@ -968,101 +968,134 @@ vec4 pallSource(vec3 p, float cone, vec4 inflow, out vec3 dustLight) {
 
 
 
-// Hapke's functions for a semi-infinite layer of the dust (Hapke 1981; similarity ω* = ω(1 − g)/(1 − ωg) for its multiple scattering):
-// H(x) = (1 + 2x)/(1 + 2γx), γ = √(1 − ω*)
-vec3 hapkeH(vec3 gamma, float x) {
-    return (1.0 + 2.0 * x) / (1.0 + 2.0 * gamma * x);
+// presentation: the lobe's turbulent surface — its density × a Worley-dome factor e^(β(n − ½)) over its mean 2·sinh(β/2)/β (the
+// mushroom base surge's domes, mushLobes: noise channel B), riding the lobe, its tile this many seen radii (four domes a tile: lumps a
+// quarter of the seen radius, with a four times finer octave while resolved), churning at WALL_CHURN noise units per second (Silo S3E09:
+// ≈ 0.2 lobe widths per second). β 3 shifts the dense surface by about ±0.3 kernel radii: lumps in the face and the silhouette; the factor
+// is bounded (e^(±β/2) over its mean), so the drawn optical depth of any chord stays within it of the probes' noise-free lobes
+const float WALL_BILLOW = 3.0;
+const float WALL_BILLOW_TILE = 1.0;
+const float WALL_CHURN = 0.25;
+// presentation (est.): inside dense dust at noon the light never falls below this share of the sky and lit ground around (diffusing in
+// through the dust from every side; the two streams from the top alone go black within tens of optical depths — a haboob at midday
+// is dark brown, not night)
+const float WALL_FLOOR = 0.04;
+// fringe march of one lobe: at most this many steps from its cut to where it turns opaque
+const int WALL_STEPS = 20;
+
+// Worley domes of lobe L (record index: its own offset) at p, about 0..1 (mushLobes)
+float lobeDomes(WallLobe L, int index, vec3 p, float tile, float cone, float t) {
+    vec3 k = fract(vec3(float(index)) * vec3(0.1031, 0.1030, 0.0973)) * 7.0;
+    vec3 u = (p - L.c) / tile + k + vec3(0.0, t * WALL_CHURN, 0.0);
+    float n = texture(PallNoise, u).b, fine = 1.0 - smoothstep(0.5, 1.0, cone * 16.0 / tile), f = 0.5;
+    if (fine > 0.0) f = textureLod(PallNoise, u * 4.0 + vec3(0.53, 0.29, 0.17), 0.0).b;
+    return n + 0.35 * fine * (f - 0.5);
 }
 
-// Light leaving a head lobe at p (where the ray enters it), normal n, of slot S, V (ground, R relief/soil map and numbers, W water; G, H
-// glow/ball light): the lofted front is opaque (mean free path tenths of a metre), so a lobe shows the light a semi-infinite layer of its
-// dust sends back (Hapke 1981): beams (the sun, the ball) single-scattered with the dust's phase plus multiply scattered,
-// ω/4·μ0/(μ0 + μ)·(p + H(μ0)H(μ) − 1), and diffuse light (the sky dome above, whiter toward the horizon; the lit ground below; fires
-// below; lamps) by the hemispherical reflectance (1 − γ)/(1 + 2γμ). Its colour is the thick layer's own: the blue goes deeper and is
-// absorbed. The pall above the head dims the sky and the sun on it (its two streams at its depth over the point, as the pall's own light);
-// the other lobes shadow the sun (pallLobeWalk toward it, the lobe's own chord taken out: its own side is its orientation)
-vec3 lobeLightIn(sampler2D ground, mat4 S, mat4 V, vec4 R, vec4 W, vec4 G, vec4 H, WallLobe L, vec3 p, vec3 n, float tau) {
+// Noise-free density of lobe L at p (1/block)
+float lobeDensity(WallLobe L, vec3 p) {
+    vec3 et = vec3(-L.er.z, 0.0, L.er.x), q = p - L.c;
+    float x = dot(q, L.er), rx = L.R.y;
+    if (x >= 0.0) rx = L.R.x;
+    vec3 n = vec3(x / rx, dot(q, et) / L.R.z, q.y / L.R.w);
+    float q2 = dot(n, n);
+    if (q2 >= PALL_LOBE_CUT * PALL_LOBE_CUT) return 0.0;
+    return L.A * exp(-q2);
+}
+
+// A lobe marched through its fringe on the ray over [ta, tb] (slot S, V: ground, R relief/soil map and numbers, W water; G, H glow/ball
+// light), from where it begins until it turns opaque: light (premultiplied, rgb) and its transmittance (a); `at` — eye distance where it
+// shows (half its opacity). Each sample is lit as dust in a volume: the sun through the lobe toward it (its noise-free chord, the
+// lumps' own shadow one tap toward it), the neighbouring lobes (record) and the pall over it (its depth along the beam), with Wrenninge's
+// multiple-scattering octaves (2013: Σ 0.5ⁱ·e^(−0.5ⁱτ)·p(0.5ⁱg)); the sky dome (the pall's own two streams at its depth over the lobe) through
+// the lobe upward and the lit ground through it downward, diffuse light fading as e^(−kτ) (pallK), never below WALL_FLOOR of them;
+// the ball as a beam; fires below; lamps. Colour: the dust of the soil lofted there with the pall's soot, its thick-layer spectrum to
+// WALL_OCHRE (presentation)
+vec4 lobeMarch(sampler2D ground, mat4 S, mat4 V, vec4 R, vec4 W, vec4 G, vec4 H, WallLobe L, int index, float ta, float tb, out float at) {
     vec3 dir = gDir, sunDir = gSun;
-    float floorUp = pallRelief(ground, S, R, p.xz);
-    PallAt f = pallField(Sampler1, ground, S, R, W, p, floorUp, 1.0);
+    float rmax = max(max(L.R.x, L.R.y), max(L.R.z, L.R.w)), rmin = min(min(L.R.x, L.R.y), min(L.R.z, L.R.w));
+    float tile = WALL_BILLOW_TILE * PALL_LOBE_SEEN * rmax, norm = 2.0 * sinh(0.5 * WALL_BILLOW) / WALL_BILLOW;
+    vec3 p0 = dir * clamp(dot(L.c, dir), ta, tb);
+    // the light around the lobe, once: the pall over it, the sun and ball on it, the ground below
+    float floorUp = pallRelief(ground, S, R, p0.xz);
+    PallAt f = pallField(Sampler1, ground, S, R, W, p0, floorUp, 1.0);
     Sample s = emptySample();
     s.tau = f.column.x + f.column.y + f.column.z;
     s.slab = f.slab.x + f.slab.y + f.slab.z;
     s.slabAlbedo = f.slab.x * f.dustW + f.slab.y * PALL_HAZE_W + f.slab.z * PALL_MIST_W;
     s.slabPhase = (f.slab.x + f.slab.y) * PALL_DUST_G + f.slab.z * PALL_MIST_G;
     s.water = (f.slab.x + f.slab.y) * f.wet + f.slab.z;
-    vec3 sun = pallSunAt(p);
-    vec3 above = scattered(s, 0.0, sun);
-    // the dust of the soil lofted there (sand share, debris dust over hard ground), soot as the pall's; spray over water
+    vec3 sun = pallSunAt(p0), above = scattered(s, 0.0, sun);
     vec3 w = mix(pallDustW(L.sand, L.hard, V[3].x + (V[3].y - V[3].x) * clamp(L.u, 0.0, 1.0), f.smoke), PALL_MIST_W, L.wet);
-    float g = mix(PALL_DUST_G, PALL_MIST_G, L.wet);
-    vec3 star = w * (1.0 - g) / (1.0 - w * g), gamma = sqrt(max(1.0 - star, vec3(0.0)));
-    float mu = max(dot(n, -dir), 0.02);
-    vec3 hMu = hapkeH(gamma, mu), diffuse = (1.0 - gamma) / (1.0 + 2.0 * gamma * mu);
-    vec3 lit = vec3(0.0), thin = vec3(0.0);
-    // the sun: through the pall over the point and the other lobes toward it (WallLobeTable.light)
-    float mu0 = dot(n, sunDir);
-    vec3 sunBeam = sun * exp(-s.tau / max(sunDir.y, 0.12) - L.sun);
-    if (mu0 > 0.0 && dot(sun, sun) > 0.0) lit += sunBeam * (0.25 * w * mu0 / (mu0 + mu)) * (hg(g, dot(dir, sunDir)) + hapkeH(gamma, mu0) * hMu - 1.0);
-    thin += sunBeam * (0.25 * w * hg(g, dot(dir, sunDir)));
-    // the ball: a beam from the cap centre, through the pall over the point
-    vec3 toLight = pallBall(S, G, H) - p;
-    float toLen = length(toLight);
-    vec3 lightDir = toLight / max(toLen, 1e-3), cap = pallBallLight(G, H, toLen);
-    float muC = dot(n, lightDir);
-    if (cap.r + cap.g + cap.b > 1e-5) {
-        vec3 beam = cap * exp(-s.tau / clamp(lightDir.y, 0.12, 1.0));
-        if (muC > 0.0) lit += beam * (0.25 * w * muC / (muC + mu)) * (hg(g, dot(dir, lightDir)) + hapkeH(gamma, muC) * hMu - 1.0);
-        thin += beam * (0.25 * w * hg(g, dot(dir, lightDir)));
-    }
-    // diffuse: the sky dome over the upper half (the pall's light at the head's top; toward the horizon whiter), the lit ground under the
-    // lower half (its albedo × the sun and sky on it)
-    // the dome's light fades through the other lobes above as diffuse light does in dust, e^(−kτ) (pallK)
-    float up = 0.5 + 0.5 * n.y;
+    float g = mix(PALL_DUST_G, PALL_MIST_G, L.wet), cs = dot(dir, sunDir);
     vec3 kd = vec3(pallK(w.r, g), pallK(w.g, g), pallK(w.b, g));
-    vec3 dome = mix(above, vec3(dot(above, LUMA)), WALL_HORIZON_WHITE * (1.0 - max(n.y, 0.0))) * exp(-kd * L.up);
+    vec3 sunIn = sun * exp(-s.tau / max(sunDir.y, 0.12) - L.sun);
+    vec3 dome = mix(above, vec3(dot(above, LUMA)), 0.5 * WALL_HORIZON_WHITE) * exp(-kd * L.up);
     vec3 ground0 = mix(PALL_LAND, PALL_SEA, L.wet) * (sun * max(sunDir.y, 0.0) * exp(-s.tau / max(sunDir.y, 0.12)) + above);
-    lit += diffuse * (dome * up + ground0 * (1.0 - up));
-    thin += 0.5 * w * (dome + ground0);
-    // fires below the dust (as the pall's bottom light), lamps around
-    float r = length(p.xz - S[0].xy);
-    float burn = pallBurn(r, 0.0, G.y, G.w) * (1.0 - 0.75 * PallSun.w) * (1.0 - L.wet);
-    if (burn > 0.0) lit += min(diffuse * pallFlame(PallBase, FIRE * (burn * PallGlowOnSmoke) / DUST, FIRE) * (1.0 - up), gFlame);
-    lit += diffuse * pallLampsAt(p);
-    // a lobe's rim the ray only grazes (its chord under two optical depths) is thin dust: single scattering, not a dense surface (the
-    // surface terms at grazing view would draw a bright line along every rim)
-    lit = mix(thin, lit, clamp(0.5 * tau, 0.0, 1.0));
-    // presentation: toward the footage's ochre (WALL_OCHRE)
-    vec3 rInf = (1.0 - gamma) / (1.0 + gamma);
-    return lit * pow(rInf / max(max(rInf.r, rInf.g), max(rInf.b, 1e-4)), vec3(WALL_OCHRE - 1.0));
+    vec3 toLight = pallBall(S, G, H) - p0;
+    float toLen = length(toLight);
+    vec3 lightDir = toLight / max(toLen, 1e-3), cap = pallBallLight(G, H, toLen) * exp(-s.tau / clamp(lightDir.y, 0.12, 1.0));
+    bool ball = cap.r + cap.g + cap.b > 1e-5;
+    float burn = pallBurn(length(p0.xz - S[0].xy), 0.0, G.y, G.w) * (1.0 - 0.75 * PallSun.w) * (1.0 - L.wet);
+    vec3 fires = vec3(0.0);
+    if (burn > 0.0) fires = pallFlame(PallBase, FIRE * (burn * PallGlowOnSmoke) / DUST, FIRE);
+    vec3 lamps = pallLampsAt(p0);
+    float open = pallOpenHere(p0);
+    // presentation: toward the footage's ochre (WALL_OCHRE): the thick layer's spectrum
+    vec3 star = w * (1.0 - g) / (1.0 - w * g), gamma = sqrt(max(1.0 - star, vec3(0.0))), rInf = (1.0 - gamma) / (1.0 + gamma);
+    vec3 tint = pow(rInf / max(max(rInf.r, rInf.g), max(rInf.b, 1e-4)), vec3(WALL_OCHRE - 1.0));
+    float reach = PALL_LOBE_CUT * rmax, cone = max(dot(L.c, dir) * gPixel, 0.0), age = PallSlot0[3].z;
+    if (L.slot == 1) age = PallSlot1[3].z;
+    vec3 light = vec3(0.0);
+    float T = 1.0, t = ta + gJitter * min(0.05 * rmax, tb - ta);
+    at = 0.5 * (ta + tb);
+    for (int i = 0; i < WALL_STEPS && t < tb; i++) {
+        vec3 p = dir * t;
+        float base = lobeDensity(L, p), ds = 0.3 * rmax;
+        if (base > 1e-6) {
+            float sigma = base * exp(WALL_BILLOW * (lobeDomes(L, index, p, tile, cone, age) - 0.5)) / norm * open;
+            ds = clamp(0.6 / max(sigma, 1e-6), 0.04 * rmin, 0.3 * rmax);
+            // sun: through the lobe (noise-free chord) and its lumps one tap toward it, then the octaves
+            float lump = max(base * (exp(WALL_BILLOW * (lobeDomes(L, index, p + sunDir * (0.12 * tile), tile, cone, age) - 0.5)) / norm - 1.0), 0.0);
+            float tauS = pallLobeTau(L, p, sunDir, 0.0, reach) + lump * 0.12 * tile;
+            float ms = exp(-tauS) * hg(g, cs) + 0.5 * exp(-0.5 * tauS) * hg(0.5 * g, cs) + 0.25 * exp(-0.25 * tauS) * hg(0.25 * g, cs);
+            vec3 lit = sunIn * (0.25 * ms);
+            if (ball) {
+                float tauC = pallLobeTau(L, p, lightDir, 0.0, reach), cc = dot(dir, lightDir);
+                lit += cap * 0.25 * (exp(-tauC) * hg(g, cc) + 0.5 * exp(-0.5 * tauC) * hg(0.5 * g, cc));
+            }
+            // diffuse: the dome through the lobe above, the lit ground and the fires through it below
+            float tauU = pallLobeTau(L, p, vec3(0.0, 1.0, 0.0), 0.0, reach), tauD = pallLobeTau(L, p, vec3(0.0, -1.0, 0.0), 0.0, reach);
+            vec3 amb = 0.5 * (dome * exp(-kd * tauU) + ground0 * exp(-kd * tauD));
+            amb = max(amb, WALL_FLOOR * 0.5 * (dome + ground0));
+            lit += amb + min(0.5 * fires * exp(-kd * tauD), gFlame) + lamps;
+            float tr = exp(-sigma * min(ds, tb - t));
+            if (T > 0.5 && T * tr <= 0.5) at = t;
+            light += T * (1.0 - tr) * w * tint * lit;
+            T *= tr;
+            if (T < 0.01) break;
+        }
+        t += ds;
+    }
+    return vec4(light, T);
 }
 
-// Lobes recorded on this ray up to eye distance t join the ray light in order: each read from its record, entered where its own optical
-// depth along the ray reaches one (half its chord if thinner), lit there (lobeLightIn) and taken whole — the closed-form chord the walk
-// summed, × the outdoor-air share there (as a march step)
+// Lobes recorded on this ray up to eye distance t join the ray light in order: each read from its record and marched through its fringe
+// (lobeMarch) where the march reaches it
 void lobesBefore(float t, inout vec3 light, inout float transmit, inout float haze) {
     for (int m = 0; m < LOBES; m++) {
         if (gLobeNext >= gLobes || gLobeT[gLobeNext] > t) return;
         int at = gLobeNext;
         gLobeNext += 1;
         if (transmit < 0.005) continue;
-        WallLobe L = pallLobeRecord(Sampler7, gLobeIndex[at], PallSlot0[0].xy, PallSlot1[0].xy);
+        int index = gLobeIndex[at];
+        WallLobe L = pallLobeRecord(Sampler7, index, PallSlot0[0].xy, PallSlot1[0].xy);
         float reach = PALL_LOBE_CUT * max(max(L.R.x, L.R.y), max(L.R.z, L.R.w));
-        float lo = max(gLobeFrom, gLobeT[at] - reach), hi = min(gLobeTo, gLobeT[at] + reach), want = min(1.0, 0.5 * gLobeTau[at]);
-        for (int b = 0; b < 10; b++) {
-            float mid = 0.5 * (lo + hi);
-            if (pallLobeTau(L, vec3(0.0), gDir, gLobeFrom, mid) < want) lo = mid;
-            else hi = mid;
-        }
-        float te = 0.5 * (lo + hi);
-        vec3 p = gDir * te, n = pallLobeNormal(L, p);
-        float open = pallOpenHere(p);
-        if (open <= 0.0) continue;
-        vec3 l;
-        if (L.slot == 0) l = lobeLightIn(Sampler5, PallSlot0, PallWall0, PallGround0, PallWater0, PallGlow0, PallHot0, L, p, n, gLobeTau[at]);
-        else l = lobeLightIn(Sampler6, PallSlot1, PallWall1, PallGround1, PallWater1, PallGlow1, PallHot1, L, p, n, gLobeTau[at]);
-        float tr = exp(-gLobeTau[at] * open);
-        passMatter(te, l * (1.0 - tr), tr, light, transmit, haze);
+        float lo = max(gLobeFrom, gLobeT[at] - reach), hi = min(gLobeTo, gLobeT[at] + reach), shows;
+        vec4 r;
+        if (L.slot == 0) r = lobeMarch(Sampler5, PallSlot0, PallWall0, PallGround0, PallWater0, PallGlow0, PallHot0, L, index, lo, hi, shows);
+        else r = lobeMarch(Sampler6, PallSlot1, PallWall1, PallGround1, PallWater1, PallGlow1, PallHot1, L, index, lo, hi, shows);
+        passMatter(shows, r.rgb, r.a, light, transmit, haze);
     }
 }
 

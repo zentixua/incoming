@@ -550,16 +550,16 @@ class PallGlslTest {
 
     /**
      * The head's material is the pall's dust at that place (18.11: a constant 77 % soot in the head made a black disk out to the ignition range):
-     * a lobe's light ({@code lobeLightIn}) gets the pall's soot share ({@code f.smoke}: fire zone × fire growth) and mixes it into the soil's dust the same way
+     * a lobe ({@code lobeMarch}) gets the pall's soot share ({@code f.smoke}: fire zone × fire growth) and mixes it into the soil's dust the same way
      * ({@code pallDustW}); fire light below is the slot's fire flame ({@code G.y}, {@link PallField#fireLight}).
      */
     @Test
     void headSootIsThePallsSoot() {
-        String light = body(read("include/fx_pall.glsl"), "vec3 lobeLightIn(").replaceAll("\\s+", " ");
+        String light = body(read("include/fx_pall.glsl"), "vec4 lobeMarch(").replaceAll("\\s+", " ");
         assertTrue(light.contains("vec3 w = mix(pallDustW(L.sand, L.hard, V[3].x + (V[3].y - V[3].x) * clamp(L.u, 0.0, 1.0), f.smoke), PALL_MIST_W, L.wet);"),
                 "head dust - not the soil's with the pall's soot");
         assertTrue(!light.contains("0.77"), "a constant soot share in the head");
-        assertTrue(light.contains("float burn = pallBurn(r, 0.0, G.y, G.w)"), "fire light below - not the slot's fire flame");
+        assertTrue(light.contains("float burn = pallBurn(length(p0.xz - S[0].xy), 0.0, G.y, G.w)"), "fire light below - not the slot's fire flame");
     }
 
     /**
@@ -574,27 +574,24 @@ class PallGlslTest {
         String fx = read("include/fx_pall.glsl");
         assertEquals(NukePall.WALL_HORIZON_WHITE, scalar(fx, "WALL_HORIZON_WHITE"), 1e-7);
         assertEquals(NukePall.WALL_OCHRE, scalar(fx, "WALL_OCHRE"), 1e-7);
-        String light = body(fx, "vec3 lobeLightIn(").replaceAll("\\s+", " ");
-        // Hapke's semi-infinite layer: similarity ω*, γ, H(x) = (1 + 2x)/(1 + 2γx)
-        assertTrue(body(fx, "vec3 hapkeH(").replaceAll("\\s+", " ").contains("return (1.0 + 2.0 * x) / (1.0 + 2.0 * gamma * x);"), "H - not Hapke's");
-        assertTrue(light.contains("vec3 star = w * (1.0 - g) / (1.0 - w * g), gamma = sqrt(max(1.0 - star, vec3(0.0)));"), "γ - not of the similar albedo");
-        // beams: single scattering with the dust's phase plus multiple, ω/4·μ0/(μ0 + μ)·(p + H(μ0)H(μ) − 1), through the pall and the other lobes
-        assertTrue(light.contains("lit += sunBeam * (0.25 * w * mu0 / (mu0 + mu)) * (hg(g, dot(dir, sunDir)) + hapkeH(gamma, mu0) * hMu - 1.0);")
-                && light.contains("vec3 sunBeam = sun * exp(-s.tau / max(sunDir.y, 0.12) - L.sun);"), "the sun - not a beam on the dust's surface shadowed by the other lobes");
-        assertTrue(light.contains("if (muC > 0.0) lit += beam * (0.25 * w * muC / (muC + mu)) * (hg(g, dot(dir, lightDir)) + hapkeH(gamma, muC) * hMu - 1.0);"), "the ball - not a beam");
-        // a grazed rim is thin dust: single scattering, not the dense surface
-        assertTrue(light.contains("lit = mix(thin, lit, clamp(0.5 * tau, 0.0, 1.0));"), "a lobe's thin rim - lit as a dense surface");
-        // diffuse: the dome over the upper half (whiter toward the horizon), the lit ground under the lower half, by (1 − γ)/(1 + 2γμ)
-        assertTrue(light.contains("diffuse = (1.0 - gamma) / (1.0 + 2.0 * gamma * mu);")
-                && light.contains("lit += diffuse * (dome * up + ground0 * (1.0 - up));")
-                && light.contains("vec3 dome = mix(above, vec3(dot(above, LUMA)), WALL_HORIZON_WHITE * (1.0 - max(n.y, 0.0))) * exp(-kd * L.up);")
-                && light.contains("vec3 ground0 = mix(PALL_LAND, PALL_SEA, L.wet) * (sun * max(sunDir.y, 0.0) * exp(-s.tau / max(sunDir.y, 0.12)) + above);"),
+        String march = body(fx, "vec4 lobeMarch(").replaceAll("\\s+", " ");
+        // the sun through the lobe itself (its noise-free chord), the lumps toward it, the neighbours and the pall; multiple-scattering octaves
+        assertTrue(march.contains("vec3 sunIn = sun * exp(-s.tau / max(sunDir.y, 0.12) - L.sun);")
+                && march.contains("float tauS = pallLobeTau(L, p, sunDir, 0.0, reach) + lump * 0.12 * tile;")
+                && march.contains("float ms = exp(-tauS) * hg(g, cs) + 0.5 * exp(-0.5 * tauS) * hg(0.5 * g, cs) + 0.25 * exp(-0.25 * tauS) * hg(0.25 * g, cs);"),
+                "the sun - not through the lobe, its neighbours and the pall with the octaves");
+        // the dome through the lobe above, the lit ground below, as diffuse light fades in dust, with the daylight floor
+        assertTrue(march.contains("vec3 amb = 0.5 * (dome * exp(-kd * tauU) + ground0 * exp(-kd * tauD));")
+                && march.contains("amb = max(amb, WALL_FLOOR * 0.5 * (dome + ground0));")
+                && march.contains("vec3 ground0 = mix(PALL_LAND, PALL_SEA, L.wet) * (sun * max(sunDir.y, 0.0) * exp(-s.tau / max(sunDir.y, 0.12)) + above);"),
                 "the sky dome and the lit ground");
-        assertTrue(light.contains("vec3 rInf = (1.0 - gamma) / (1.0 + gamma);") && light.contains("vec3(WALL_OCHRE - 1.0)"), "the head's colour - not a thick layer's toward ochre");
-        // each lobe is lit where the ray enters it (its optical depth reaches one) by its own surface's normal
+        assertTrue(march.contains("vec3 tint = pow(rInf / max(max(rInf.r, rInf.g), max(rInf.b, 1e-4)), vec3(WALL_OCHRE - 1.0));"), "the head's colour - not a thick layer's toward ochre");
+        // the lumps: a bounded, mean-preserving dome factor on the lobe's density
+        assertTrue(march.contains("float sigma = base * exp(WALL_BILLOW * (lobeDomes(L, index, p, tile, cone, age) - 0.5)) / norm * open;")
+                && march.contains("norm = 2.0 * sinh(0.5 * WALL_BILLOW) / WALL_BILLOW;"), "the lumps - not a bounded mean-1 factor");
+        assertTrue(scalar(fx, "WALL_FLOOR") < 0.1, "the floor - more than a dim glow");
         String pass = body(fx, "void lobesBefore(").replaceAll("\\s+", " ");
-        assertTrue(pass.contains("want = min(1.0, 0.5 * gLobeTau[at]);") && pass.contains("vec3 p = gDir * te, n = pallLobeNormal(L, p);")
-                && pass.contains("passMatter(te, l * (1.0 - tr), tr, light, transmit, haze);"), "a lobe - not lit and taken where the ray enters it");
+        assertTrue(pass.contains("passMatter(shows, r.rgb, r.a, light, transmit, haze);"), "a lobe - not composited where it shows");
     }
 
     /**
