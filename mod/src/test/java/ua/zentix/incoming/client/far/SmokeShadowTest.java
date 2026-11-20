@@ -70,4 +70,44 @@ class SmokeShadowTest {
         assertEquals(1, SmokePuffs.sunLight(0, 0), 1e-12);
         assertEquals(0.6, SmokePuffs.sunLight(0.8, 0.5), 1e-12);
     }
+
+    /**
+     * A clump that is still the fire body (smoke share → 0) shades its neighbours by its share, as it shows as smoke: at
+     * the handoff the shadow fades in, not at full thickness at once (review #689: τ = 10 at share 0.01 passed 0.0045 %).
+     */
+    @Test
+    void theFireBodyFadesInAsAShadow() {
+        double[] held = new double[2 * SmokePuffs.FIELDS];
+        double soot = 10 * 2 * Math.PI * 25 / SmokeGrid.SOOT_K;
+        double previous = 1;
+        for (double share : new double[]{0, 0.01, 0.1, 0.5, 1}) {
+            puff(held, 0, 0, 0, 0, 5, soot);
+            puff(held, 1, 0, 10, 0, 5, soot);
+            held[SmokePuffs.FIELDS + 13] = share;
+            SmokePuffs.sunThrough(held, 0, 2, new boolean[2], 0, 1, 0, 0.8f);
+            double t = through(held, 0);
+            if (share == 0) assertEquals(1, t, 1e-12);
+            if (share == 0.01) assertTrue(t > 0.9, "1 % share passes " + t);
+            assertTrue(t <= previous, "share " + share);
+            previous = t;
+        }
+    }
+
+    /** The veil's light by direction is the substance's; its cloud's shadow dims every direction alike (review #689). */
+    @Test
+    void theVeilShadowKeepsTheSubstanceLaw() {
+        org.joml.Vector3f forward = new org.joml.Vector3f(0, 0, 1);
+        FarView view = SmokeFillTest.view(net.minecraft.world.phys.Vec3.ZERO, forward);
+        float drops = SmokePuffs.thick(0, 0, 1, 0.9f);
+        double sigma = 20, ext = 30 * 2 * Math.PI * sigma * sigma;
+        SmokePuffs.Veil open = new SmokePuffs.Veil(), shaded = new SmokePuffs.Veil();
+        open.fill(view, new double[]{0, 0, 0, sigma, sigma, ext, drops, drops, drops, 1, 0}, 1);
+        shaded.fill(view, new double[]{0, 0, 0, sigma, sigma, ext, drops, drops, drops, 1, 0.8}, 1);
+        int n = SmokePuffs.Veil.N, mid = n / 2, top = SmokePuffs.Veil.index(mid, n - 1), bottom = SmokePuffs.Veil.index(mid, 0);
+        double ratioOpen = Math.pow(open.r[top] / open.r[bottom], 2.2), ratioShaded = Math.pow(shaded.r[top] / shaded.r[bottom], 2.2);
+        // fog stays even under the shadow too; the shadow leaves 0.2 of the light everywhere
+        assertEquals(ratioOpen, ratioShaded, 1e-3);
+        assertTrue(ratioShaded < 1.3, "fog " + ratioShaded);
+        assertEquals(0.2, Math.pow(shaded.r[top] / open.r[top], 2.2), 1e-3);
+    }
 }

@@ -47,6 +47,12 @@ public final class SmokePuffs {
         /** Veil of the substance at the eye on screen ({@link Veil}) with world light `light` (packed). */
         void veil(Veil veil, int light);
 
+        /**
+         * Share of the direct sunlight that reaches the next baked puff through the rest of its cloud
+         * ({@link SmokePuffs#sunThrough}); applies to that puff only, then 1 again.
+         */
+        default void sun(float through) {}
+
         boolean ribbon(double ax, double ay, double az, double halfA, float alphaA, int lightA, double bx, double by, double bz, double halfB,
                        float alphaB, int lightB, float r, float g, float b, float[] joint);
     }
@@ -624,6 +630,7 @@ public final class SmokePuffs {
 
     private static void report(Draw d, Draw veil) {
         lastFill = d.lastFill;
+        lastShadowPairs = d.shadowPairs;
         lastShare = d.lastShare;
         lastFloor = d.lastFloor;
         lastRaw = d.lastRaw;
@@ -665,6 +672,11 @@ public final class SmokePuffs {
      */
     static int lastLevel() {
         return lastLevel;
+    }
+
+    /** Puff pairs the last plan's shadow pass summed ({@link #SHADOW_PAIRS}). */
+    static int lastShadowPairs() {
+        return lastShadowPairs;
     }
 
     static int lastVeils() {
@@ -1015,11 +1027,21 @@ public final class SmokePuffs {
             return count++ * STRIDE;
         }
 
+        /** Direct-sun share of the next puff ({@link Out#sun}). */
+        private float sun = 1;
+
+        @Override
+        public void sun(float through) {
+            sun = through;
+        }
+
         @Override
         public void puff6(double dx, double dy, double dz, double halfA, double halfB, FxAtlas.Sprite sprite, float mix, float shade, float r,
                           float g, float b, float a) {
             int o = next(sprite);
             double[] c = calls;
+            c[o + 14] = sun;
+            sun = 1;
             c[o] = PUFF;
             c[o + 1] = dx;
             c[o + 2] = dy;
@@ -1039,6 +1061,8 @@ public final class SmokePuffs {
                               float mix, float shade, float r, float g, float b, float a) {
             int o = next(sprite);
             double[] c = calls;
+            c[o + 14] = sun;
+            sun = 1;
             c[o] = FLAT;
             c[o + 1] = dx;
             c[o + 2] = dy;
@@ -1108,6 +1132,7 @@ public final class SmokePuffs {
                 if (trimmed > 0 && left[k]) continue;
                 int o = k * STRIDE;
                 int kind = (int) c[o];
+                if (kind == PUFF || kind == FLAT) out.sun((float) c[o + 14]);
                 if (kind == PUFF) out.puff6(c[o + 1] + ox, c[o + 2] + oy, c[o + 3] + oz, c[o + 4], c[o + 5], sprites[k], (float) c[o + 6],
                         (float) c[o + 7], (float) c[o + 8], (float) c[o + 9], (float) c[o + 10], (float) c[o + 11]);
                 else if (kind == FLAT) out.puff6Flat(c[o + 1] + ox, c[o + 2] + oy, c[o + 3] + oz, c[o + 4], c[o + 5], c[o + 12], c[o + 13],
@@ -1440,8 +1465,10 @@ public final class SmokePuffs {
             boolean[] gone = new boolean[0];
             int count;
             long frame;
-            /** Sun (direction, direct share) the cached shadow ({@link #sunThrough}) was computed for. */
+            /** Sun (direction, direct share) the cached shadow ({@link #sunThrough}) was computed for; NaN — not yet. */
             float sunX = Float.NaN, sunY, sunZ, sunKey;
+            /** First record of the source in this frame's pending puffs ({@link #close}). */
+            int from;
         }
 
         /** Sun of the frame ({@link SmokePuffs#sun}), captured on the client thread at {@link #begin}. */
@@ -1483,17 +1510,51 @@ public final class SmokePuffs {
                 m.count = n;
             }
             m.frame = frame;
-            // the cloud's own shadow: recomputed with the merge, or when the sun has moved since
-            if (m.sunX != sunX || m.sunY != sunY || m.sunZ != sunZ || m.sunKey != sunKey) {
-                sunThrough(held, from, holding, merged, sunX, sunY, sunZ, sunKey);
-                System.arraycopy(held, start, m.out, 0, length);
+            m.from = from;
+            for (int o = start + 12; o < end; o += FIELDS) held[o] = context;
+            from = holding;
+        }
+
+        /** Pairs the last shadow pass of this instance summed ({@link #shadows}). */
+        int shadowPairs;
+        /** Sources whose shadow is stale this frame (scratch of {@link #shadows}). */
+        private final java.util.ArrayList<Merged> stale = new java.util.ArrayList<>();
+
+        /**
+         * The clouds' own shadow ({@link #sunThrough}) of this frame's sources, on the planner (the fill thread does no
+         * ray sums), within {@link #SHADOW_PAIRS} puff pairs: first the sources merged anew (no shadow yet), then those
+         * the sun has left by more than {@link #SHADOW_TURN}, the farthest first; the rest keep their last shadow until a
+         * later frame. The result also goes to the source's merge cache, so a replayed snapshot keeps it. Must run before
+         * {@link #thin} moves the records.
+         */
+        private void shadows() {
+            stale.clear();
+            for (Merged m : merges.values()) if (m.frame == frame && sunStale(m)) stale.add(m);
+            stale.sort(java.util.Comparator.comparingDouble(this::sunAgreement));
+            int pairs = 0;
+            for (Merged m : stale) {
+                int n = 0;
+                for (int i = 0; i < m.count; i++) if (!merged[m.from + i]) n++;
+                if (pairs > 0 && pairs + n * (n - 1) > SHADOW_PAIRS) break;
+                pairs += n * (n - 1);
+                sunThrough(held, m.from, m.from + m.count, merged, sunX, sunY, sunZ, sunKey);
+                for (int i = 0; i < m.count; i++) m.out[i * FIELDS + 17] = held[(m.from + i) * FIELDS + 17];
                 m.sunX = sunX;
                 m.sunY = sunY;
                 m.sunZ = sunZ;
                 m.sunKey = sunKey;
             }
-            for (int o = start + 12; o < end; o += FIELDS) held[o] = context;
-            from = holding;
+            shadowPairs = pairs;
+        }
+
+        /** Whether the cached shadow of m is for another sun: never computed, the share changed, or the sun turned. */
+        private boolean sunStale(Merged m) {
+            return !(m.sunX == m.sunX) || Math.abs(m.sunKey - sunKey) > SHADOW_SHARE || sunAgreement(m) < Math.cos(SHADOW_TURN);
+        }
+
+        /** Cosine between the sun of m's shadow and this frame's (−2 — never computed: first in line). */
+        private double sunAgreement(Merged m) {
+            return m.sunX == m.sunX ? m.sunX * sunX + m.sunY * sunY + m.sunZ * sunZ : -2;
         }
 
         /**
@@ -1506,6 +1567,7 @@ public final class SmokePuffs {
             reused = 0;
             // Merges of sources not drawn this frame are not kept.
             merges.values().removeIf(m -> m.frame != frame);
+            shadows();
             frame++;
             thin();
             if (blobEntry.length < holding) blobEntry = new int[2 * holding];
@@ -2348,7 +2410,7 @@ public final class SmokePuffs {
             sprays = ctxSprays[c];
             look = LOOKS[(int) held[o + 15]];
             lookFrame = held[o + 16];
-            sunLit = sunLight(sunKey, held[o + 17]);
+            puffSun = held[o + 17];
             current = i;
             blob(held[o], held[o + 1], held[o + 2], held[o + 3], held[o + 4], held[o + 5], held[o + 6], held[o + 7], (float) held[o + 8],
                     (float) held[o + 9], (float) held[o + 10], (int) held[o + 11], held[o + 13], held[o + 14] > 0.5);
@@ -2620,6 +2682,12 @@ public final class SmokePuffs {
          */
         boolean veilAdd(Out out, FarView view, double px, double py, double pz, double sh, double sv, double ext, float r, float g, float b,
                         double share) {
+            return veilAdd(out, view, px, py, pz, sh, sv, ext, r, g, b, share, 1);
+        }
+
+        /** The same with the light the cloud's own shadow leaves (linear, {@link #sunLight}). */
+        boolean veilAdd(Out out, FarView view, double px, double py, double pz, double sh, double sv, double ext, float r, float g, float b,
+                        double share, double light) {
             if (!(share > 0) || !(ext > 0) || !(sh > 0) || !(sv > 0)) return false;
             if ((1 - Math.exp(-ext / (2 * Math.PI * sh * Math.min(sh, sv)))) * share < VEIL_MIN) return false;
             if ((veilCount + 1) * VEIL_FIELDS > veils.length) veils = java.util.Arrays.copyOf(veils, 2 * veils.length);
@@ -2634,6 +2702,7 @@ public final class SmokePuffs {
             veils[o + 7] = g;
             veils[o + 8] = b;
             veils[o + 9] = Math.min(share, 1);
+            veils[o + 10] = 1 - Math.clamp(light, 0, 1);
             veilOut = out;
             veilView = view;
             return true;
@@ -2793,10 +2862,11 @@ public final class SmokePuffs {
             veils[a + 5] = ext;
             for (int c = 6; c <= 8; c++) veils[a + c] = fa * veils[a + c] + fb * veils[b + c];
             veils[a + 9] = Math.min(1, w / ext);
+            veils[a + 10] = fa * veils[a + 10] + fb * veils[b + 10];
         }
 
         /** Light of the puff being drawn against an unshadowed one ({@link #sunLight}). */
-        private double sunLit = 1;
+        private double puffSun = 1;
 
         /**
          * Puff: in the plan pass ({@link #planning}) — only how many screens the cluster will close at share
@@ -2852,7 +2922,7 @@ public final class SmokePuffs {
             double whole = planning ? 0 : veilShare();
             if (!planning && (veiled > 0 || whole > 0))
                 veil(this, px, py, pz, sh, sv, ks + kd + kw, ks, kd, kw, dr, dg, db, (veiled + (1 - veiled) * whole) * vis * air * smoke,
-                        (float) Math.pow(sunLit, 1 / 2.2));
+                        sunLight(sunKey, puffSun));
             if (outside <= 0 || whole >= 1) return 0;
             // out of frame — not needed: the ball of the whole puff square (a puff — up to 1.2 radius, its spot — up to
             // ~0.9 from the middle)
@@ -2864,7 +2934,7 @@ public final class SmokePuffs {
             // not for fire (FxSkyTint)
             // the cloud's own shadow takes the direct part of the sun's light ({@link #sunThrough}); the colour is the
             // thick-layer colour in display units, so the linear light factor goes with power 1/2.2
-            float lit = (float) ((0.88 + 0.24 * unit(h)) * view.skyLight() * Math.pow(sunLit, 1 / 2.2));
+            float lit = (float) ((0.88 + 0.24 * unit(h)) * view.skyLight());
             float cr = thick(ks, kd, kw, dr) * lit, cg = thick(ks, kd, kw, dg) * lit, cb = thick(ks, kd, kw, db) * lit;
             double light = shade(ks, kd, kw, dg);
             float shade = (float) (light / BAKED_K), sprayShade = (float) (light / SPRAY_K);
@@ -2925,11 +2995,17 @@ public final class SmokePuffs {
                 // facing the camera, light from the side and behind), the light of sun, sky and fire is full (shade
                 // level 0; the balls' light is per pixel, fx.fsh); from below — as usual. Softness at the terrain — the
                 // ray's path in the layer down to the ground (rw / sin e), not the half-size
-                if (lying > 0) out.puff6Flat(px + ox, py + oy, pz + oz, rh * grow * k, rh * grow * k,
+                if (lying > 0) {
+                    out.sun((float) puffSun);
+                    out.puff6Flat(px + ox, py + oy, pz + oz, rh * grow * k, rh * grow * k,
                         Math.min(rh, rw * d / Math.max(Math.abs(py), 1e-3)) * ua.zentix.incoming.client.fx.layer.FxQuads.SOFT, clubAngle(hj), sprite,
                         (float) (frame - f0), py < 0 ? 0 : (spray ? sprayShade : shade), cr, cg, cb, opticalShare(sub * last, lying));
-                if (lying < 1) out.puff6(px + ox, py + oy, pz + oz, rh * grow * k, rv * grow * k, sprite, (float) (frame - f0), spray ? sprayShade : shade,
-                        cr, cg, cb, opticalShare(sub * last, 1 - lying));
+                }
+                if (lying < 1) {
+                    out.sun((float) puffSun);
+                    out.puff6(px + ox, py + oy, pz + oz, rh * grow * k, rv * grow * k, sprite, (float) (frame - f0), spray ? sprayShade : shade,
+                            cr, cg, cb, opticalShare(sub * last, 1 - lying));
+                }
             }
             return fill;
         }
@@ -3181,6 +3257,16 @@ public final class SmokePuffs {
      */
     private static final float[] SUN = {0, 1, 0, 0};
 
+    /**
+     * Puff pairs the shadow pass sums per frame ({@link Draw#shadows}): ~42 ns a pair, ~1.4 ms of the planner at most
+     * (the 100-strike raid needs 66 000–170 000 pairs for all its sources at once; a stale source waits for a later frame).
+     */
+    static final int SHADOW_PAIRS = 32768;
+    /** The sun turning by more than this (rad, 0.5°) or its direct share changing by more than this renews a shadow. */
+    static final double SHADOW_TURN = Math.toRadians(0.5), SHADOW_SHARE = 0.02;
+    /** Pairs the last shadow pass summed. */
+    private static int lastShadowPairs;
+
     /** {@link #SUN} for the next frames (client thread). */
     public static void sun(float x, float y, float z, float key) {
         SUN[0] = x;
@@ -3219,8 +3305,10 @@ public final class SmokePuffs {
             for (int j = from; j < to; j++) {
                 if (j == i || merged[j]) continue;
                 int q = j * FIELDS;
-                double ext = SmokeGrid.SOOT_K * held[q + 5] + SmokeGrid.dustK((float) held[q + 8], (float) held[q + 9], (float) held[q + 10]) * held[q + 6]
-                        + SmokeGrid.DROP_K * held[q + 7];
+                // by its smoke share, as the puff's own opacity: a clump that is still the fire body (share → 0) fades in
+                // as a shadow as it fades in as smoke, not at once at full thickness
+                double ext = (SmokeGrid.SOOT_K * held[q + 5] + SmokeGrid.dustK((float) held[q + 8], (float) held[q + 9], (float) held[q + 10]) * held[q + 6]
+                        + SmokeGrid.DROP_K * held[q + 7]) * held[q + 13];
                 if (!(ext > 0)) continue;
                 tau += sightDepth(held[q] - held[o], held[q + 1] - held[o + 1], held[q + 2] - held[o + 2], held[q + 3], held[q + 4], ext, x, y, z);
             }
@@ -3238,8 +3326,12 @@ public final class SmokePuffs {
     static final double VEIL_AT = 2;
     /** A Gaussian that along no veil ray covers more than this share is not put into the veil. */
     static final double VEIL_MIN = 0.004;
-    /** Numbers per veil Gaussian: center from the eye (3), σh, σv, mass attenuation, color (3), share. */
-    static final int VEIL_FIELDS = 10;
+    /**
+     * Numbers per veil Gaussian: center from the eye (3), σh, σv, mass attenuation, color (3), share, and the share of its
+     * light its cloud's own shadow takes (0 — unshadowed; {@link #sunLight}): the light apart from the colour, which is the
+     * substance's reflectance ({@link Veil#byHeight} reads it as such).
+     */
+    static final int VEIL_FIELDS = 11;
     /**
      * Veil cells along each screen axis. The substance's edge at the eye on screen — ~σ/distance; for a SAM trail
      * passing through the camera (σ ~5 m) — tens of degrees: a cell of ~13° (field of view 70°) holds it, and linear
@@ -3412,7 +3504,7 @@ public final class SmokePuffs {
                     ry /= n;
                     rz /= n;
                     int k = index(i, j);
-                    double sr = 0, sg = 0, sb = 0, sum = 0, far = 0, far2 = 0;
+                    double sr = 0, sg = 0, sb = 0, sd = 0, sum = 0, far = 0, far2 = 0;
                     for (int c = 0; c < count; c++) {
                         int o = c * VEIL_FIELDS;
                         double along = sightDepth(gs[o], gs[o + 1], gs[o + 2], gs[o + 3], gs[o + 4], gs[o + 5], rx, ry, rz);
@@ -3424,15 +3516,18 @@ public final class SmokePuffs {
                         sr += t * gs[o + 6];
                         sg += t * gs[o + 7];
                         sb += t * gs[o + 8];
+                        sd += t * gs[o + 10];
                         sightMoments(gs[o], gs[o + 1], gs[o + 2], gs[o + 3], gs[o + 4], rx, ry, rz, moments);
                         far += t * moments[0];
                         far2 += t * (moments[1] + moments[0] * moments[0]);
                     }
                     tau[k] = sum;
                     if (sum > 0) {
-                        r[k] = byHeight((float) (sr / sum), ry);
-                        g[k] = byHeight((float) (sg / sum), ry);
-                        b[k] = byHeight((float) (sb / sum), ry);
+                        // the material's light by direction, then the light its cloud's shadow leaves (display units)
+                        float lit = (float) Math.pow(Math.max(0, 1 - sd / sum), 1 / 2.2);
+                        r[k] = byHeight((float) (sr / sum), ry) * lit;
+                        g[k] = byHeight((float) (sg / sum), ry) * lit;
+                        b[k] = byHeight((float) (sb / sum), ry) * lit;
                         double mean = far / sum, spread = Math.sqrt(Math.max(0, far2 / sum - mean * mean));
                         double half = half(sum, mean, spread);
                         depth[k] = (float) Math.max(VEIL_AT, half);
@@ -3452,9 +3547,9 @@ public final class SmokePuffs {
      * melted.
      */
     private static void veil(Draw d, double px, double py, double pz, double sh, double sv, double ext, double ks, double kd, double kw, float dr,
-                             float dg, float db, double share, float lit) {
-        float cr = thick(ks, kd, kw, dr) * lit, cg = thick(ks, kd, kw, dg) * lit, cb = thick(ks, kd, kw, db) * lit;
-        d.veilAdd(d.out, d.view, px, py, pz, sh, sv, ext, cr, cg, cb, share);
+                             float dg, float db, double share, double light) {
+        float cr = thick(ks, kd, kw, dr), cg = thick(ks, kd, kw, dg), cb = thick(ks, kd, kw, db);
+        d.veilAdd(d.out, d.view, px, py, pz, sh, sv, ext, cr, cg, cb, share, light);
     }
 
     /**

@@ -48,6 +48,12 @@ public final class FarRenderer {
             if (!Boolean.getBoolean("incoming.smoke.inline")) SmokePuffs.planner(SmokePuffs.worker());
         }
         SPRITES.begin(view, out, probes);
+        // this frame's sun for the clouds' own shadow, before the clouds are collected (the layer's uniform takes the same)
+        var level = net.minecraft.client.Minecraft.getInstance().level;
+        if (level != null) {
+            float[] sun = ua.zentix.incoming.client.fx.layer.FxLayer.sun(level, view.partial());
+            SmokePuffs.sun(sun[0], sun[1], sun[2], sun[3]);
+        }
         // smoke-tube billow budget shared by projectile trails and fire plumes
         FarFlightView.budget();
         // clouds (blast, launch, fire) use baked billows near and far
@@ -142,9 +148,9 @@ public final class FarRenderer {
      */
     public static String describeSmoke() {
         return String.format(java.util.Locale.ROOT,
-                "fill %.2f screens (budget %.0f, one club per gaussian %.2f, before merging %.2f), cluster share %.2f, merge level %d, veil gaussians %d, clusters %d, plan %.2f ms off-thread",
+                "fill %.2f screens (budget %.0f, one club per gaussian %.2f, before merging %.2f), cluster share %.2f, merge level %d, veil gaussians %d, clusters %d, plan %.2f ms off-thread, shadow pairs %d",
                 SmokePuffs.lastFill(), SmokePuffs.FILL_BUDGET, SmokePuffs.lastFloor(), SmokePuffs.lastRaw(), SmokePuffs.lastShare(),
-                SmokePuffs.lastLevel(), SmokePuffs.lastVeils(), SmokePuffs.lastItems(), SmokePuffs.lastPlanMillis());
+                SmokePuffs.lastLevel(), SmokePuffs.lastVeils(), SmokePuffs.lastItems(), SmokePuffs.lastPlanMillis(), SmokePuffs.lastShadowPairs());
     }
 
     /** Saved only for secondary views; swapping leaves the primary draw path and operation order unchanged. */

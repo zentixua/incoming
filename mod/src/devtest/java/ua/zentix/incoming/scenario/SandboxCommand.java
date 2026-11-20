@@ -150,9 +150,10 @@ record SandboxCommand(Verb verb, List<String> args) {
             }
             case STRIKE -> {
                 need(2, 3);
-                weapon();
-                if (number(1) < 1 || number(1) > 40 || number(1) != Math.rint(number(1))) throw new IllegalArgumentException("count 1–40");
-                if (args.size() > 2 && (number(2) < 0 || number(2) > 200)) throw new IllegalArgumentException("spread 0–200 blocks");
+                if (weapon() == WeaponType.NUKE) throw new IllegalArgumentException("strike: conventional weapons (the nuke: nuke)");
+                if (!(number(1) >= 1 && number(1) <= 40) || number(1) != Math.rint(number(1))) throw new IllegalArgumentException("count 1–40");
+                if (args.size() > 2 && (!(number(2) >= 0 && number(2) <= 200) || number(2) != Math.rint(number(2))))
+                    throw new IllegalArgumentException("spread 0–200 whole blocks");
             }
             case NUKE -> {
                 need(1, 5);

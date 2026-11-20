@@ -56,7 +56,7 @@ class VeilLightTest {
         SmokePuffs.Veil veil = new SmokePuffs.Veil();
         double sigma = 20, ext = 30 * 2 * Math.PI * sigma * sigma;
         float dust = SmokePuffs.thick(0, 1, 0, SmokeGrid.dustAlbedo(0.6f));
-        veil.fill(view, new double[]{0, 0, 0, sigma, sigma, ext, dust, dust, dust, 1}, 1);
+        veil.fill(view, new double[]{0, 0, 0, sigma, sigma, ext, dust, dust, dust, 1, 0}, 1);
         int n = SmokePuffs.Veil.N, mid = n / 2;
         float top = veil.r[SmokePuffs.Veil.index(mid, n - 1)], centre = veil.r[SmokePuffs.Veil.index(mid, mid)],
                 bottom = veil.r[SmokePuffs.Veil.index(mid, 0)];

@@ -334,11 +334,13 @@ class FxBloomTest {
         assertTrue(fsh.contains("if (FxGlowPass.x > 0.5 && scene < viewDistance * 0.999 - 0.05) discard;"), "what is behind the world does not glow");
         assertTrue(fsh.contains("float scene = pallScene(texture(Sampler1, frag / ScreenSize).r);"), "distance to the world — at the frame pixel, not the pass");
         assertTrue(fsh.contains("glow = color.rgb * emitGain;"), "spot: colour — linear light");
-        assertTrue(vsh.contains("if (Emit > " + (FxBloom.SPOT - 0.5) + ")"), "spot — from " + FxBloom.SPOT);
+        // a baked puff's Emit byte is its sun share, not glow (PuffSunByteTest): the glow logic reads the gated value
+        assertTrue(vsh.contains("float emit = six ? 0.0 : Emit;"), "glow code gated for baked puffs");
+        assertTrue(vsh.contains("if (emit > " + (FxBloom.SPOT - 0.5) + ")"), "spot — from " + FxBloom.SPOT);
         assertTrue(vsh.contains("vertexColor = vec4(Color.rgb * bloomMag(float(UV2.x)), bloomMag(float(UV2.y)));"), "spot: light and covered share — in UV2");
-        assertTrue(vsh.contains("Normal.y < -0.5 || Emit > " + (FxBloom.SPOT - 0.5) + " ? vec4(1.0)"), "spot: UV2 — not a lightmap");
-        assertTrue(vsh.contains("emitGain = bloomGain(Emit - " + (double) FxBloom.EMITTER + ");"), "over-exposure of the glowing");
-        assertTrue(vsh.contains("if ((Emit > " + (FxBloom.SPOT - 0.5) + " && !glowPass) || (Emit > " + (FxBloom.SKIP - 0.5) + " && Emit < "
+        assertTrue(vsh.contains("Normal.y < -0.5 || emit > " + (FxBloom.SPOT - 0.5) + " ? vec4(1.0)"), "spot: UV2 — not a lightmap");
+        assertTrue(vsh.contains("emitGain = bloomGain(emit - " + (double) FxBloom.EMITTER + ");"), "over-exposure of the glowing");
+        assertTrue(vsh.contains("if ((emit > " + (FxBloom.SPOT - 0.5) + " && !glowPass) || (emit > " + (FxBloom.SKIP - 0.5) + " && emit < "
                 + (FxBloom.SKIP + 0.5) + " && glowPass)) gl_Position = vec4(2.0, 2.0, 2.0, 1.0);"), "spot — only in the pass, its square — only in the layer");
     }
 

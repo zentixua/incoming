@@ -42,7 +42,7 @@ class VeilDepthTest {
         FarView view = SmokeFillTest.view(Vec3.ZERO, new Vector3f(0, 0, 1));
         SmokePuffs.Veil veil = new SmokePuffs.Veil();
         double ext = 2 * 2 * Math.PI * 25;
-        veil.fill(view, new double[]{-6, 0, 20, 5, 5, ext, 0.4, 0.3, 0.2, 1, 6, 0, 80, 5, 5, ext, 0.4, 0.3, 0.2, 1}, 2);
+        veil.fill(view, new double[]{-6, 0, 20, 5, 5, ext, 0.4, 0.3, 0.2, 1, 0, 6, 0, 80, 5, 5, ext, 0.4, 0.3, 0.2, 1, 0}, 2);
         FxQuads quads = new FxQuads();
         FarSprites sprites = new FarSprites();
         quads.begin(view.left(), view.up());
@@ -70,7 +70,7 @@ class VeilDepthTest {
         FarView view = SmokeFillTest.view(Vec3.ZERO, new Vector3f(0, 0, 1));
         SmokePuffs.Veil veil = new SmokePuffs.Veil();
         double ext = tau * 2 * Math.PI * sigma * sigma;
-        veil.fill(view, new double[]{0, 0, z, sigma, sigma, ext, 0.4, 0.3, 0.2, 1}, 1);
+        veil.fill(view, new double[]{0, 0, z, sigma, sigma, ext, 0.4, 0.3, 0.2, 1, 0}, 1);
         return veil;
     }
 }

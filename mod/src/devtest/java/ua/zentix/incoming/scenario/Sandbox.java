@@ -771,6 +771,7 @@ final class Sandbox {
                 site = HOME.add(freshX, 0, 0);
                 placeCamera();
                 server(c.order((int) Math.floor(site.x), (int) Math.floor(site.z)));
+                strikeSince = FlightTracks.now();
                 pending = Pending.STRIKE;
             }
             case LAUNCH, FLIGHT -> {
@@ -1328,7 +1329,8 @@ final class Sandbox {
     private void watchStrike() {
         double[] at = new double[3];
         for (FlightTrack t : FlightTracks.all()) {
-            if (t.weapon != pendingCmd.weapon() || !t.confirmedEnd() || !t.predict(t.deathTick(), at)) continue;
+            // this salvo only (tracks of the previous one live on for a minute), where its last sample was
+            if (t.weapon != pendingCmd.weapon() || !t.confirmedEnd() || t.deathTick() < strikeSince || !t.predict(t.lastTick(), at)) continue;
             if (site.distanceToSqr(at[0], site.y, at[2]) < STRIKE_NEAR * STRIKE_NEAR) {
                 Incoming.LOG.info("SANDBOX first explosion at {}", xyz(new Vec3(at[0], at[1], at[2])));
                 begin();
@@ -1339,6 +1341,8 @@ final class Sandbox {
 
     /** {@code strike}: an explosion this near the point (blocks, horizontally) starts the effect. */
     private static final double STRIKE_NEAR = 300;
+    /** {@code strike}: track clock when the salvo was ordered; earlier explosions are not this salvo's. */
+    private long strikeSince;
 
     private void watchFlight(Minecraft mc) {
         double[] at = new double[3];

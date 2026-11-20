@@ -165,9 +165,22 @@ public final class FxQuads {
      * in {@code Normal.y} within the band of baked puffs (−0.4…−0.1), {@link #SHADE_STEPS} steps.
      */
     public void sixWay(float mix, float shade) {
+        sixWay(mix, shade, 1);
+    }
+
+    /**
+     * The same with the share of direct sunlight that reaches the puff through the rest of its cloud
+     * ({@code SmokePuffs.sunThrough}): in the {@code Emit} byte (0…255), which a baked puff does not use for glow
+     * (smoke does not glow), {@code fx.vsh} reads it as the puff's direct light share.
+     */
+    public void sixWay(float mix, float shade, float sun) {
         nearest = (byte) (mix < 0 ? 0 : -13 - Math.round(Mth.clamp(shade / SHADE_MAX, 0, 1) * SHADE_STEPS));
         opacity = mix < 0 ? 0 : (byte) Math.round(Mth.clamp(mix, 0, 1) * 127);
+        sunByte = (byte) Math.round(Mth.clamp(sun, 0, 1) * 255);
     }
+
+    /** Direct-sun share of baked puffs in the {@code Emit} byte ({@link #sixWay(float, float, float)}). */
+    private byte sunByte = (byte) 255;
 
     /** Greatest degree of the puffs' map shadow (soot — ~1.3) and steps in the byte band −13…−50 ({@code fx.fsh}). */
     public static final float SHADE_MAX = 1.5f;
@@ -281,7 +294,8 @@ public final class FxQuads {
         MemoryUtil.memPutByte(p + 32, (byte) Math.round(Mth.clamp(fog, 0, 1) * 127));
         MemoryUtil.memPutByte(p + 33, nearest);
         MemoryUtil.memPutByte(p + 34, opacity);
-        MemoryUtil.memPutByte(p + 35, emit);
+        // a baked puff (six-way band of Normal.y) carries its direct-sun share there instead; its emission is always 0
+        MemoryUtil.memPutByte(p + 35, nearest <= -13 && nearest >= -13 - SHADE_STEPS ? sunByte : emit);
         if (emit != 0) {
             glows = true;
             emits[n - 1] = true;

@@ -143,12 +143,22 @@ public final class FarSprites implements SmokePuffs.Out {
      * its directional light from the frame maps, raising their shadows to shade ({@link SmokePuffs#shade}). Opacity a
      * already includes atmospheric haze. The plane faces the eye position with world up; map axes follow its geometry.
      */
+    /** Direct-sun share of the next baked puff ({@link SmokePuffs.Out#sun}). */
+    private float sun = 1;
+
+    @Override
+    public void sun(float through) {
+        sun = through;
+    }
+
     public void puff6(double dx, double dy, double dz, double halfA, double halfB, FxAtlas.Sprite sprite, float mix, float shade, float r, float g,
                       float b, float a) {
+        float through = sun;
+        sun = 1;
         if (a < 0.002f) return;
         double d = Math.sqrt(dx * dx + dy * dy + dz * dz), unfold = FarDraw.fold(d, far);
         FxQuads.Part was = out.part(FxQuads.Part.CLUBS);
-        out.sixWay(mix, shade);
+        out.sixWay(mix, shade, through);
         out.facePosition((float) (dx * unfold), (float) (dy * unfold), (float) (dz * unfold), (float) d, (float) (halfA * unfold),
                 (float) (halfB * unfold), sprite, Math.min(1, r * a), Math.min(1, g * a), Math.min(1, b * a), Math.min(1, a),
                 (float) Math.max(halfA, halfB) * FxQuads.SOFT, (float) unfold, LightTexture.FULL_BRIGHT, 0);
@@ -165,10 +175,12 @@ public final class FarSprites implements SmokePuffs.Out {
      */
     public void puff6Flat(double dx, double dy, double dz, double halfA, double halfB, double soft, double angle, FxAtlas.Sprite sprite, float mix, float shade,
                           float r, float g, float b, float a) {
+        float through = sun;
+        sun = 1;
         if (a < 0.002f) return;
         double d = Math.sqrt(dx * dx + dy * dy + dz * dz), unfold = FarDraw.fold(d, far);
         FxQuads.Part was = out.part(FxQuads.Part.CLUBS);
-        out.sixWay(mix, shade);
+        out.sixWay(mix, shade, through);
         out.flat((float) (dx * unfold), (float) (dy * unfold), (float) (dz * unfold), (float) d, (float) (halfA * unfold), (float) (halfB * unfold),
                 angle, sprite, Math.min(1, r * a), Math.min(1, g * a), Math.min(1, b * a), Math.min(1, a),
                 (float) soft, (float) unfold, LightTexture.FULL_BRIGHT, 0);

@@ -65,8 +65,9 @@ import ua.zentix.incoming.nuclear.model.FuelPool;
  * the surface below it; an airburst has no dust when ground pressure is below the entrainment threshold. Church supplies only stabilized-cloud size and
  * height ({@link #HE_HEAT}).
  * <p>
- * <b>Optics.</b> Mass extinction: soot {@link #SOOT_K} m²/kg with albedo 0.25 and asymmetry 0.5 (Bond, Bergstrom 2006:
- * absorption 7.5 m²/g at 550 nm); dust {@code DustModel.K_MIX} (geometric optics of nuclear dust grains; as coarse grains settle,
+ * <b>Optics.</b> Mass extinction: soot {@link #SOOT_K} m²/kg (10 m²/g; fresh black-carbon absorption 7.5 m²/g at
+ * 550 nm, Bond, Bergstrom 2006) with albedo {@link #SOOT_W} (black smoke of large fuel fires, Weiss, Hobbs 1992) and
+ * asymmetry 0.5; dust {@code DustModel.K_MIX} (geometric optics of nuclear dust grains; as coarse grains settle,
  * extinction follows the fine share, {@code DustModel.extinctionAloft}); condensation drops (5 µm): 3Q/(2ρr) =
  * 600 m²/kg. The cloud stays visible while its transverse optical depth exceeds {@link #SEEN} (Koschmieder contrast threshold).
  */

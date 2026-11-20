@@ -1140,9 +1140,16 @@ paths:
   `sixUpDir` from `fx.vsh`). The six-side mean lit the underside of black smoke as brightly as the top (sandbox missile
   cloud, side sun: shadow flank 45/255, lit 65, underside 52). The cloud's own shadow (`SmokePuffs.sunThrough`, held
   field 17, merged by attenuation): per held puff of one source, e^(−Στ) of the direct beam through its other puffs
-  (`sightDepth`, delta-Eddington attenuation), computed in `close` with the merge and cached with it and the sun
-  (`SmokePuffs.sun` from `FxLayer.sun`, captured at `Draw.begin` on the client thread); the puff's and its veil's light
-  × (1 − share·(1 − T)) (`sunLight`, `SmokeShadowTest`). Tube places (fire plumes) keep the per-place maps only;
+  (`sightDepth`, delta-Eddington attenuation × the clump's smoke share, so the fire-body handoff fades in). Computed on
+  the planner (`Draw.shadows`, before `thin`), never on the fill thread: at most `SHADOW_PAIRS` (32768) pairs per
+  plan, new merges first, then sources the sun left by > 0.5° or share 0.02; the result goes into the merge cache
+  (`Merged.out`). Unbounded it cost 2.8–6.4 ms of the client thread at 100 strikes (review #689). The sun is
+  `FxLayer.sun(level, partial)`, set before collection (`FarRenderer.collect` → `SmokePuffs.sun`), captured at
+  `Draw.begin`. The share reaches the shader in the baked puff's `Emit` byte (`FxQuads.sixWay(mix, shade, sun)`,
+  0…255; smoke never glows): `fx.vsh` gates every glow decision on `emit = six ? 0 : Emit` and multiplies only
+  `sixKey` (sky and fireball light stay; `PuffSunByteTest`). The veil keeps the shadow apart from the substance's
+  colour (`VEIL_FIELDS` 11, field 10 = 1 − light), applied after `byHeight` (`SmokeShadowTest`). Tube places (fire
+  plumes) keep the per-place maps only;
   frame fireballs
   (`FxLights`) use the maps and cannot exceed on-screen fire in the same
   to the same extent as for `balls` (illuminance × the sky's light `FxAmbient`: otherwise at night the fire would barely

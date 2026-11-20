@@ -458,6 +458,15 @@ public final class FxLayer {
      * toward the horizon), at night from the moon — 0.5 (⚠ estimate), in rain — a fifth (clouds scatter).
      */
     private static void sun(ShaderInstance s, ClientLevel level, float partial) {
+        float[] sun = sun(level, partial);
+        s.safeGetUniform("FxSun").set(sun[0], sun[1], sun[2], sun[3]);
+    }
+
+    /**
+     * {@link #sun} as numbers (x, y, z toward the sun or moon, direct share), for the uniform and, before the smoke is
+     * collected in the same frame, for the clouds' own shadow ({@code SmokePuffs.sun}).
+     */
+    public static float[] sun(ClientLevel level, float partial) {
         float a = level.getTimeOfDay(partial) * net.minecraft.util.Mth.TWO_PI;
         float x = -net.minecraft.util.Mth.sin(a), y = net.minecraft.util.Mth.cos(a);
         float key = y >= 0 ? DAY_DIRECT : 0.5f;
@@ -466,9 +475,7 @@ public final class FxLayer {
             y = -y;
         }
         key *= net.minecraft.util.Mth.clamp(y / 0.1f, 0, 1) * (1 - 0.8f * level.getRainLevel(partial));
-        s.safeGetUniform("FxSun").set(x, y, 0f, key);
-        // the same sun for the clouds' own shadow (SmokePuffs.sunThrough)
-        ua.zentix.incoming.client.far.SmokePuffs.sun(x, y, 0f, key);
+        return new float[]{x, y, 0f, key};
     }
 
     /**

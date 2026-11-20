@@ -152,6 +152,9 @@ float pall(vec3 p) {
 }
 
 void main() {
+    bool six = Normal.y < -0.1 && Normal.y > -0.4;
+    // a baked puff's Emit byte is its direct-sun share through its cloud (FxQuads.sixWay), not glow: smoke does not glow
+    float emit = six ? 0.0 : Emit;
     vec4 view = ModelViewMat * vec4(Position, 1.0);
     gl_Position = ProjMat * view;
     vec4 clip = vec4(1.0);
@@ -168,15 +171,14 @@ void main() {
     gl_ClipDistance[3] = clip.w;
     texCoord0 = UV0;
     float unfold = max(float(UV1.y) / 32767.0, 1e-4);
-    bool six = Normal.y < -0.1 && Normal.y > -0.4;
     vec4 light;
     if (six) {
         // Puff UV2 stores a basis, not lightmap coordinates; FULL_BRIGHT bypasses the ordinary particle-lighting branch.
         light = texelFetch(Sampler2, ivec2(15), 0);
     } else {
         // Glow-spot UV2 stores its light (FxBloom.magnitude), not lightmap coordinates.
-        light = Normal.y < -0.5 || Emit > 129.5 ? vec4(1.0) : texelFetch(Sampler2, UV2 / 16, 0);
-        if (Normal.y > -0.5 && Emit < 129.5 && any(lessThan(UV2, ivec2(240)))) {
+        light = Normal.y < -0.5 || emit > 129.5 ? vec4(1.0) : texelFetch(Sampler2, UV2 / 16, 0);
+        if (Normal.y > -0.5 && emit < 129.5 && any(lessThan(UV2, ivec2(240)))) {
             // Sky share at this point (sky 0..15): tint it like material under open sky, leaving block light unchanged.
             light.rgb *= mix(vec3(1.0), FxSkyFix, float(UV2.y) / 240.0);
             // Add fireball light to the lightmap relative to open-sky light on screen, capped at daylight brightness.
@@ -205,7 +207,8 @@ void main() {
         vec3 bd;
         sixBall = ballsToward(Position / unfold, bd);
         vec4 axes = puffAxes(UV2, Position.y);
-        sixKey = FxSun.w;
+        // the cloud's own shadow takes the direct part only (SmokePuffs.sunThrough); sky and fire light stay
+        sixKey = FxSun.w * Emit / 255.0;
         sixKeyDir = puffDirection(normalize(FxSun.xyz), axes, UV2.y < 0);
         sixBallDir = puffDirection(bd, axes, UV2.y < 0);
         sixUpDir = puffDirection(vec3(0.0, 1.0, 0.0), axes, UV2.y < 0);
@@ -220,19 +223,19 @@ void main() {
     opacity = Normal.z;
     emitGain = 0.0;
     emitSpot = 0.0;
-    if (Emit > 129.5) {
+    if (emit > 129.5) {
         emitSpot = 1.0;
         emitGain = 1.0;
         // spot light is linear: hue — in the vertex colour, magnitude — in UV2.x, covered share — in UV2.y
         // (FxBloom.magnitude)
         vertexColor = vec4(Color.rgb * bloomMag(float(UV2.x)), bloomMag(float(UV2.y)));
-    } else if (Emit > 1.5) {
-        emitGain = bloomGain(Emit - 2.0);
+    } else if (emit > 1.5) {
+        emitGain = bloomGain(emit - 2.0);
     }
     // a spot — only in the glow pass; a square that glows by spots — only in the layer: the other one is beyond the
     // frame
     bool glowPass = FxGlowPass.x > 0.5;
-    if ((Emit > 129.5 && !glowPass) || (Emit > 0.5 && Emit < 1.5 && glowPass)) gl_Position = vec4(2.0, 2.0, 2.0, 1.0);
+    if ((emit > 129.5 && !glowPass) || (emit > 0.5 && emit < 1.5 && glowPass)) gl_Position = vec4(2.0, 2.0, 2.0, 1.0);
     // glare and veil with a probe: the pall and mushrooms in front of the source — already in it (fx_probe, up to the
     // source itself); at the corners
     // of the square at the eye they must not be counted — light at the eye comes from the source, and the glare's

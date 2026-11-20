@@ -86,7 +86,7 @@ class SandboxCommandTest {
         assertTrue(c.effect());
         assertEquals("incoming salvo bunker 12 30 at 3 5 from 3 3005", c.order(3, 5));
         assertEquals("incoming salvo missile 4 0 at 3 5 from 3 3005", SandboxCommand.parse("strike missile 4").order(3, 5));
-        for (String bad : new String[]{"strike bunker", "strike bunker 0", "strike bunker 41", "strike bunker 2.5", "strike bunker 12 500", "strike tank 3"})
+        for (String bad : new String[]{"strike bunker", "strike bunker 0", "strike bunker 41", "strike bunker 2.5", "strike bunker 12 500", "strike tank 3", "strike nuke 1", "strike bunker 12 30.9", "strike bunker 12 NaN", "strike bunker NaN"})
             assertThrows(IllegalArgumentException.class, () -> SandboxCommand.parse(bad), bad);
     }
 
