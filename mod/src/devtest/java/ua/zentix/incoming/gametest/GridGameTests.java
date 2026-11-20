@@ -949,7 +949,8 @@ public final class GridGameTests {
         Outage o = grid.outages().stream().filter(Outage::byDamage).max(java.util.Comparator.comparingInt(Outage::id)).orElseThrow();
         ChunkPos c = new ChunkPos(h.absolutePos(CENTER));
         h.assertTrue(o.lightAt(Districts.of(c.x, c.z)) == Outage.NEVER, "the destroyed district has a repair time");
-        Outage down = grid.downOutage(node.id(), level.getGameTime()).orElseThrow();
+        // outage times are on the grid clock (the world clock, never slower than real: a long tick puts it ahead of game time)
+        Outage down = grid.downOutage(node.id(), Blackouts.now(level)).orElseThrow();
         h.assertTrue(down.restoreAt() == o.rerouteAt(), "destroyed substation's area not rerouted: " + down.restoreAt());
         h.startSequence()
                 .thenWaitUntil(() -> {
@@ -957,10 +958,10 @@ public final class GridGameTests {
                     h.assertFalse(h.getBlockState(CENTER).getValue(SubstationBlock.POWERED), "the substation is “under current”");
                 })
                 // supply around it rerouted: its own outage is over, the zone it stands in still has no grid
-                .thenExecute(() -> grid.replace(grid.downOutage(node.id(), level.getGameTime()).orElseThrow().restoring(level.getGameTime(), 0)))
+                .thenExecute(() -> grid.replace(grid.downOutage(node.id(), Blackouts.now(level)).orElseThrow().restoring(Blackouts.now(level), 0)))
                 .thenIdle(45)
                 .thenExecute(() -> {
-                    h.assertTrue(grid.destroyed(c.x, c.z, level.getGameTime()), "the destroyed zone has power");
+                    h.assertTrue(grid.destroyed(c.x, c.z, Blackouts.now(level)), "the destroyed zone has power");
                     h.assertFalse(h.getBlockState(CENTER).getValue(SubstationBlock.POWERED), "a destroyed substation hums");
                     h.assertTrue(GridLights.isUnlit(h.getBlockState(lamp)), "lantern relit by itself");
                     h.assertTrue(Blackouts.restore(level, null, 0) >= 1, "nothing to return");

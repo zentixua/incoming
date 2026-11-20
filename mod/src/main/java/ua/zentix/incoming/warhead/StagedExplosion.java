@@ -913,6 +913,7 @@ final class StagedExplosion implements UnitQueue.Job {
                         long since = System.nanoTime();
                         ua.zentix.incoming.work.BlockLighting.changed(level, p);
                         state.onExplosionHit(level, p, explosion, this::addOrAppend);
+                        area.removed(level, p, state);
                         long took = System.nanoTime() - since;
                         if (took > SLOW_BLOCK_NANOS) area.slowBlock(level, state, p, took);
                         blown++;
@@ -1313,6 +1314,7 @@ final class StagedExplosion implements UnitQueue.Job {
                 PoiRecords.recordWithNeighbours(level, p, s);
                 ua.zentix.incoming.work.BlockLighting.changed(level, p);
                 s.onExplosionHit(level, p, e, (stack, at) -> addOrAppend(stack, at));
+                area.removed(level, p, s);
             }
             hit.add(p);
             long now = clock.getAsLong();

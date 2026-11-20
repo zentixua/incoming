@@ -199,6 +199,47 @@ public final class Warheads {
         return new Probe(job);
     }
 
+    /**
+     * Tests: collapse ({@link StrikeCollapse}) after removals the test made itself ({@code removedAt}: {@link BlockPos#asLong},
+     * {@code removedWas}: states before), fall portions on {@code clock}.
+     */
+    public static CollapseProbe testCollapse(ServerLevel level, Vec3 centre, double reach, it.unimi.dsi.fastutil.longs.LongArrayList removedAt,
+                                             List<BlockState> removedWas, LongSupplier clock) {
+        BlastArea area = BlastArea.hold(level, centre, reach);
+        for (int i = 0; i < removedAt.size(); i++) area.recordRemoved(removedAt.getLong(i), removedWas.get(i));
+        StrikeCollapse job = new StrikeCollapse(area, List.of(), centre);
+        area.release(level);
+        job.clock = clock;
+        StrikeWorld.get(level).impacts().add(level, job);
+        return new CollapseProbe(job);
+    }
+
+    /** Tests: result of {@link #testCollapse}. */
+    public static final class CollapseProbe {
+        private final StrikeCollapse job;
+
+        private CollapseProbe(StrikeCollapse job) {
+            this.job = job;
+        }
+
+        public boolean done() {
+            return job.finished;
+        }
+
+        /** Blocks the collapse dropped. */
+        public int fell() {
+            return job.dropped;
+        }
+
+        public int portions() {
+            return job.portions;
+        }
+
+        public int largestPortion() {
+            return job.largestPortion;
+        }
+    }
+
     /** Tests: result of {@link #testBlast} or {@link #testRays}. */
     public static final class Probe {
         private final StagedExplosion job;
@@ -592,6 +633,8 @@ public final class Warheads {
             if (main.isEmpty()) return false;
             if (IncomingConfig.SERVER.blockDamage.get() && !onCraft) {
                 unit(level, area, main, ImpactCost.Kind.GROUND, "Crater", l -> happened() ? Craters.dig(l, pos, weapon.spec().charge(), mat, seed) : 0);
+                // what the blast left without support falls (the explosion's removals are known once it ends)
+                if (IncomingConfig.SERVER.collapse.get()) StrikeCollapse.queue(level, area, main, pos);
             }
             if (weapon.spec().fuelAtImpact() > 0 && !onCraft) {
                 Craters.ignite(level, area, main, this::happened, pos, weapon.spec().fuelAtImpact());
@@ -700,6 +743,9 @@ public final class Warheads {
                 if (blocks) {
                     // Crater from top before cavity excavates charge column.
                     if (law.breaches()) unit(level, area, main, ImpactCost.Kind.GROUND, "Ejection crater", l -> happened() ? crater(l) : 0);
+                    // what the breakout wave above ground left without support falls; underground the bomb has its own
+                    // collapse laws (cavity, vaults in the crack zone, roof chimney) and the cavity is dug alongside
+                    if (law.breaches() && IncomingConfig.SERVER.collapse.get()) StrikeCollapse.queue(level, area, main, pos);
                     int r = Mth.ceil(law.crush());
                     for (int dy = -r; dy <= r; dy++) {
                         int y = dy;

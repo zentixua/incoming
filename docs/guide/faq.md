@@ -56,7 +56,8 @@ does not put it out. Flammable blocks it has set alight burn as ordinary fire
 
 **Why do blasts break so little?** Each weapon carries the charge of the real one, and a block is a metre. A Shahed
 (50 kg of TNT) leaves a crater in soil about 2.4 m across and breaks brick walls within about 3 m; a cruise missile (about
-150 kg) within about 7 m; a Grad rocket (6.4 kg) within about 1 m, so trees next to it can stay standing. Smoke and
+150 kg) within about 7 m; a Grad rocket (6.4 kg) within about 1 m, so trees next to it can stay standing. What the
+blast leaves without support then falls: a missile in a ground-floor flat can bring down the storeys above it. Smoke and
 dust reach much farther than the damage, as in real footage. There is no setting to make conventional weapons
 stronger ([the real weapons](weapons.md#the-real-weapons), [what a blast does](weapons.md#what-a-blast-does)). The
 default 15 kt nuke brings down brick buildings out to about 700 m and wooden ones out to about 1.3 km.
