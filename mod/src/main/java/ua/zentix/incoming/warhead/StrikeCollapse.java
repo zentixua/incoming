@@ -43,11 +43,12 @@ import java.util.function.LongSupplier;
  * {@link StrikeSupport}) over the blocks the strike's explosions removed ({@link BlastArea#removedAt}). A missile through
  * a tower's lower floors brings down what those floors held; a hole that every block above still spans stands.
  * <p>
- * Impact work after the strike's explosions: with one of the server's solve slots ({@link StrikeSupport#reserve}),
+ * Impact work after the strike's explosions: with one of the server's solve slots ({@link StrikeSupport#tryReserve}),
  * snapshots of the chunks within {@link StrikeSupport#REACH} of a removal and their neighbors in timed portions; the
  * solve on a background worker; then the fall (its own job, {@link Fall}, queued when the solve starts) in timed
- * portions ({@link #PORTION_NANOS}, at least one block): claim handlers may keep positions (one
- * {@code ExplosionEvent.Detonate} for the collapse, as for the blast); blocks changed since the snapshot stay; writes only
+ * portions ({@link #PORTION_NANOS}, at least one block): claim handlers may keep positions
+ * ({@code ExplosionEvent.Detonate} events attributed to the strike, {@link #OFFER_UNIT} positions each; a kept
+ * load-bearing block cancels the fall); blocks changed since the snapshot stay; writes only
  * where the chunk and its neighbors are ready and never into the Sable plot grid; a block that holds items is removed
  * as the game removes a broken block, so its contents come out ({@link #remove}). The rubble share falls as vanilla falling blocks while the strike's falling limit has room ({@link CraterFalls}),
  * otherwise lands at once where it would come to rest, spread around its column by fall height
@@ -111,6 +112,8 @@ final class StrikeCollapse implements UnitQueue.Job {
     /** Area ready and a solve slot held (the explosions are done: their removals are final). */
     @Override
     public boolean ready(ServerLevel level) {
+        // the cheap slot test first: a backlog of waiting collapses costs no area readiness scans
+        if (support == null && !area.removedAt().isEmpty() && !StrikeSupport.slotFree()) return false;
         if (!area.ready(level)) return false;
         if (support == null) {
             if (area.removedAt().isEmpty() || !IncomingConfig.SERVER.blockDamage.get()) return true;
@@ -270,13 +273,24 @@ final class StrikeCollapse implements UnitQueue.Job {
             // protection (claims) as for the blast itself: handlers filter the positions of an explosion's Detonate; a
             // zero-radius explosion without entities, so no handler reads it as a new blast (blackout, damage)
             int end = Math.min(all.length, offered + OFFER_UNIT);
-            Explosion e = new Explosion(level, null, centre.x, centre.y, centre.z, 0f, false, Explosion.BlockInteraction.DESTROY_WITH_DECAY);
+            Explosion e = after.isEmpty() ? new Explosion(level, null, centre.x, centre.y, centre.z, 0f, false, Explosion.BlockInteraction.DESTROY_WITH_DECAY)
+                    : after.getFirst().attributed(level, centre);
             List<BlockPos> list = e.getToBlow();
             for (int i = offered; i < end; i++) list.add(BlockPos.of(all[i]));
             EventHooks.onExplosionDetonate(level, e, new ArrayList<>(), 0);
             LongOpenHashSet allowed = new LongOpenHashSet(list.size());
             for (BlockPos p : list) allowed.add(p.asLong());
-            for (int i = offered; i < end; i++) if (!allowed.contains(all[i])) kept.add(all[i]);
+            for (int i = offered; i < end; i++) {
+                if (allowed.contains(all[i])) continue;
+                // a protected load-bearing block stays, and the solve dropped what it holds up with it: the plan no
+                // longer describes the world, nothing falls (protection wins over the collapse)
+                if (StrikeSupport.bearing(result.was()[i])) {
+                    result = emptyResult();
+                    prepared = true;
+                    return;
+                }
+                kept.add(all[i]);
+            }
             offered = end;
             if (offered < all.length) return;
         }

@@ -55,7 +55,10 @@ public final class StrikeSupport {
     /** The strike's removals (positions, states before), indexed into {@link #removed} by {@link #index}. */
     private final LongArrayList removedAt;
     private final List<BlockState> removedWas;
-    private final Long2ObjectOpenHashMap<BlockState> removed;
+    /** Removals indexed so far, position → state before (first state of a position removed twice). */
+    private final Long2ObjectOpenHashMap<BlockState> removed = new Long2ObjectOpenHashMap<>();
+    /** Removal states already queued for the property table. */
+    private final it.unimi.dsi.fastutil.objects.ReferenceOpenHashSet<BlockState> removedKinds = new it.unimi.dsi.fastutil.objects.ReferenceOpenHashSet<>();
     private final LongOpenHashSet solveSet = new LongOpenHashSet();
     private int indexed;
     /** Chunks to solve ({@link ChunkPos#asLong}); null until every removal is indexed. */
@@ -92,7 +95,7 @@ public final class StrikeSupport {
 
     /**
      * Server-thread work unit of {@link #snapshot}, each bounded by a fixed count, not by the world's size: removals
-     * indexed (a removal adds up to four chunks), states put into the property table (a new state's properties read its
+     * indexed (a removal adds up to four chunks) or chunks skipped as not ready, states put into the property table (a new state's properties read its
      * shape, tags and fuel), removals checked against the snapshot. A chunk's copy is one unit (its sections' palette
      * copies and fingerprints, linear in the world's height), a section's distinct states another (4096 positions).
      */
@@ -126,7 +129,11 @@ public final class StrikeSupport {
         this.level = level;
         this.removedAt = removedAt;
         this.removedWas = removedWas;
-        this.removed = new Long2ObjectOpenHashMap<>(removedAt.size());
+    }
+
+    /** Whether a slot is free now (a cheap test before a waiting collapse checks its area; {@link #tryReserve} takes it). */
+    public static boolean slotFree() {
+        return SOLVES.get() < MAX_SOLVES;
     }
 
     /** Positions the strike removed. */
@@ -188,7 +195,7 @@ public final class StrikeSupport {
             return 0;
         }
         publishing = null;
-        while (taken < needed.length) {
+        for (int skipped = 0; taken < needed.length && skipped < INDEX_UNIT; skipped++) {
             long c = needed[taken++];
             ChunkPos pos = new ChunkPos(c);
             LevelChunk chunk = level.getChunkSource().getChunkNow(pos.x, pos.z);
@@ -199,7 +206,7 @@ public final class StrikeSupport {
             section = 0;
             return 1;
         }
-        check();
+        if (taken == needed.length) check();
         return 0;
     }
 
@@ -208,7 +215,10 @@ public final class StrikeSupport {
         int end = Math.min(removedAt.size(), indexed + INDEX_UNIT);
         for (; indexed < end; indexed++) {
             long at = removedAt.getLong(indexed);
-            if (removed.putIfAbsent(at, removedWas.get(indexed)) != null) continue;
+            BlockState was = removedWas.get(indexed);
+            if (removed.putIfAbsent(at, was) != null) continue;
+            // into the property table by the bounded ensure units, not inside a check unit
+            if (removedKinds.add(was)) pending.add(was);
             int x = BlockPos.getX(at), z = BlockPos.getZ(at);
             for (int cx = (x - REACH) >> 4; cx <= (x + REACH) >> 4; cx++) {
                 for (int cz = (z - REACH) >> 4; cz <= (z + REACH) >> 4; cz++) solveSet.add(ChunkPos.asLong(cx, cz));
@@ -240,9 +250,7 @@ public final class StrikeSupport {
             int x = BlockPos.getX(at), y = BlockPos.getY(at), z = BlockPos.getZ(at);
             ChunkShot s = shots.get(ChunkPos.asLong(x >> 4, z >> 4));
             if (s != null && y >= minY && y < maxY && Blast.props(s.raw(x & 15, y, z & 15)).bearing()) continue;
-            BlockState was = removed.get(at);
-            losses.put(at, was);
-            Blast.ensure(was);
+            losses.put(at, removed.get(at));
         }
         if (checked == checking.length) start();
     }

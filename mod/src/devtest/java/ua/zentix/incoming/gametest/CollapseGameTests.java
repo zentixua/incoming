@@ -395,42 +395,75 @@ public final class CollapseGameTests {
      * counting clock (1 ms a read, 5 ms slices). Every call stops after at most 5 units, and a dense section is never
      * part of a larger unit, so a call covers at most 5 of them.
      */
-    @GameTest(template = "range", batch = "collapse", timeoutTicks = 100, skyAccess = true)
+    @GameTest(template = "range", batch = "collapse", timeoutTicks = 2400, skyAccess = true)
     public static void snapshotStepsStayInTheirSlice(GameTestHelper h) {
         ServerLevel level = h.getLevel();
         BlockPos o = h.absolutePos(BlockPos.ZERO);
         int cx = (o.getX() >> 4) + 1, cz = (o.getZ() >> 4) + 1, sections = level.getSectionsCount();
         // removal at a chunk's middle: the solve takes its chunk and the next on each axis, the snapshot their neighbors
         BlockPos removal = new BlockPos(cx * 16 + 8, level.getMaxBuildHeight() - 24, cz * 16 + 8);
-        ua.zentix.incoming.nuclear.world.DenseChunks dense = new ua.zentix.incoming.nuclear.world.DenseChunks(level, cx - 1, cz - 1, cx + 2, cz + 2, sections - 4, 4096);
-        h.assertTrue(StrikeSupport.tryReserve(), "no collapse solve slot");
+        boolean[] done = {false};
+        h.succeedWhen(() -> {
+            if (!done[0]) {
+                // the batch's other collapses may hold every slot: wait for one before touching the world
+                h.assertTrue(StrikeSupport.tryReserve(), "waiting for a collapse solve slot");
+                done[0] = true;
+                snapshotInSlices(h, level, cx, cz, sections, removal);
+            }
+        });
+    }
+
+    /** {@link #snapshotStepsStayInTheirSlice} with a slot held: dense sections in, snapshot, sections back, in one call. */
+    private static void snapshotInSlices(GameTestHelper h, ServerLevel level, int cx, int cz, int sections, BlockPos removal) {
         StrikeSupport support = new StrikeSupport(level, new it.unimi.dsi.fastutil.longs.LongArrayList(new long[]{removal.asLong()}),
                 java.util.List.of(Blocks.STONE.defaultBlockState()));
+        ua.zentix.incoming.nuclear.world.DenseChunks dense = null;
         int calls = 0, most = 0;
         try {
+            dense = new ua.zentix.incoming.nuclear.world.DenseChunks(level, cx - 1, cz - 1, cx + 2, cz + 2, sections - 4, 4096);
             long[] now = {0};
             int[] reads = {0};
             java.util.function.LongSupplier clock = () -> {
                 reads[0]++;
                 return now[0] += 1_000_000;
             };
-            while (!support.started()) {
+            while (!support.started() && calls < 1_000_000) {
                 reads[0] = 0;
                 support.snapshot(clock, 5_000_000);
                 most = Math.max(most, reads[0] - 1);
                 calls++;
-                h.assertTrue(calls < 1_000_000, "snapshot never finished");
             }
         } finally {
             support.cancel();
-            dense.restore();
+            if (dense != null) dense.restore();
         }
-        Incoming.LOG.info("COLLAPSEBENCH snapshot of {} dense sections in {} chunks: {} units in {} calls, at most {} a call",
+        Incoming.LOG.info("COLLAPSEBENCH snapshot of {} dense sections ({} chunks solved): {} units in {} calls, at most {} a call",
                 dense.sections, support.chunks(), support.units(), calls, most);
+        h.assertTrue(support.started(), "snapshot never finished");
         h.assertTrue(dense.sections == 64, "dense sections " + dense.sections + " of 64");
         h.assertTrue(most <= 5, "a snapshot call ran " + most + " units past its 5 ms slice");
         h.assertTrue(calls * 5 >= dense.sections, "a call covered more than 5 dense sections: " + calls + " calls for " + dense.sections);
-        h.succeed();
+    }
+
+    /**
+     * Conventional impact work holds the Sable origin chunk (review of #694: Sable reads block-entity shapes at
+     * {@code BlockPos.ZERO}, which loads chunk (0, 0) synchronously when nothing holds it), as nuclear work does.
+     */
+    @GameTest(template = "range", batch = "collapse", timeoutTicks = 2400, skyAccess = true)
+    public static void impactWorkHoldsSableOrigin(GameTestHelper h) {
+        quiet(h);
+        ground(h);
+        ServerLevel level = h.getLevel();
+        h.assertTrue(ua.zentix.incoming.compat.SableTerrain.present(), "Sable not loaded");
+        Warheads.testDetonate(level, WeaponType.DRONE, h.absoluteVec(new Vec3(40, GROUND + 1, 40)), striker(level, WeaponType.DRONE), 0x4f524947L);
+        boolean[] held = {false};
+        h.onEachTick(() -> {
+            if (!StrikeWorld.get(level).impacts().isEmpty() && ua.zentix.incoming.nuclear.world.NuclearTickets.holdsOrigin(level)) held[0] = true;
+        });
+        h.succeedWhen(() -> {
+            h.assertTrue(StrikeWorld.get(level).idle(), "strike unfinished");
+            h.assertTrue(held[0], "the Sable origin chunk was not held while impact work ran");
+        });
     }
 
     /**
