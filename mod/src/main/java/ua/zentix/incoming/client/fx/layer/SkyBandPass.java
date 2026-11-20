@@ -39,7 +39,7 @@ import java.util.Locale;
  * <p>
  * The array is not in the program's JSON ({@code ShaderInstance} sets no arrays): it is uploaded after {@code apply()},
  * right before the draw ({@link #upload}). Veil (inside Sable) finds uniforms the JSON omits and uploads zeroed copies of
- * them at the end of every {@code apply()}, and may swap the program there; an upload before {@code apply()} lost to both.
+ * them at the end of every {@code apply()}, and may swap the program there; an upload before {@code apply()} loses to both.
  * <p>
  * Only sky counts: the world distance must say sky at the sample and {@code BAND_EDGE} pixels around it; with a LOD mod
  * installed, only frames whose distance includes its LODs ({@link SceneDepth#withLod}) — otherwise a LOD silhouette

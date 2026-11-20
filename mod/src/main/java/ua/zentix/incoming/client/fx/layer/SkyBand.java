@@ -6,17 +6,17 @@ import java.util.Arrays;
  * The sky a shader pack draws, by direction from the eye: the airlight in front of distant nuclear matter under a pack
  * ({@code pallAirLight} in {@code fx_pall}). Real airlight in front of a far object is the sky radiance along that line
  * (Koschmieder); under a shader pack that sky is the pack's, not vanilla's {@code getSkyColor}, which stays blue-grey at dusk
- * while the pack paints the sky gold (mission dusk-mushroom: the haze share, ≈0.42 of a 15 kt cap's lit side at 9 km, kept
- * the cap blue against an orange sky).
+ * while the pack paints the sky gold (with vanilla's colour the haze share, ≈0.42 of a 15 kt cap's lit side at 9 km,
+ * leaves the cap blue against an orange sky).
  * <p>
  * {@link #AZ} × {@link #EL} bins over the upper hemisphere (azimuth around the eye, elevation 0–90°). Each frame
  * {@code fx_sky_band} takes {@link #SAMPLES}² jittered directions per bin and averages the frame's pixels there that are sky
  * (world distance = sky, {@link SceneDepth}) and lie outside a cone of {@link #EXCLUDE_DEG} around the sun and the moon
  * ({@link #takes}): the sun disc and the pack's glare never enter, nor anything in front of the sky (terrain, LOD,
- * blocks; review #671 rejected screen taps that carried the sun and nearby blocks into the cap). Bins are smoothed over
+ * blocks; screen taps behind the pixel carry the sun and nearby blocks into the cap). Bins are smoothed over
  * {@link #TAU} seconds from captures where at least {@link #MIN_SHARE} of its samples were sky (a sliver of a bin is
- * noise, and refreshing on it kept an old sky alive: a pack switched by Iris's Apply held its colour for tens of seconds,
- * review #686 r4); a bin not seen for {@link #STALE} seconds is dropped (what is on screen refills at once). Empty bins take their row's nearest seen bins
+ * noise, and refreshing on it would keep an old sky alive: a pack switched by Iris's Apply would hold its colour for tens
+ * of seconds); a bin not seen for {@link #STALE} seconds is dropped (what is on screen refills at once). Empty bins take their row's nearest seen bins
  * (by azimuth), an empty row the nearest filled row; with no bin seen, the band is off and the airlight is vanilla's sky.
  * Without a shader pack the band is never filled: airlight stays vanilla's sky. Minecraft-free (unit tests); GL in
  * {@link SkyBandPass}.

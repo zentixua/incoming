@@ -61,7 +61,7 @@ class SkyBandTest {
     }
 
     /**
-     * Lead decision 20.11 (B): a cap with the sun directly behind it never takes the sun's colour. The pack draws a white sun
+     * A cap with the sun directly behind it never takes the sun's colour. The pack draws a white sun
      * disc with glare out to 8° (brighter than any sky); the cap's airlight there is the sky beside the sun, within the dusk
      * sky's own range, at sun elevations from 1° to 20°, and the same for the moon opposite.
      */
@@ -199,7 +199,7 @@ class SkyBandTest {
     }
 
     /**
-     * Review #686 r4: a pack switched by Iris's Apply (no shader reload, same world) — the old pack's sky leaves a bin seen
+     * A pack switched by Iris's Apply (no shader reload, same world) — the old pack's sky leaves a bin seen
      * by the new one within a second, and a bin only grazed by a sliver of sky (under 1/8 of its samples) is not kept alive
      * by it: it expires after {@link SkyBand#STALE}.
      */

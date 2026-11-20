@@ -204,8 +204,8 @@ class SightTest {
     }
 
     /**
-     * Mushroom flat blue-grey at dusk (19.11, logo frames at dayTime 12600–12900): the cap took the sun of the ground — gone with the
-     * eye's sunset — and only vanilla's blue sky lit it. A cap kilometres up stands above the haze and keeps the sun: at a 3° sun
+     * A cap lit only by the ground's sun at dusk (dayTime 12600–12900) loses it with the eye's sunset and draws flat
+     * blue-grey in vanilla's sky light. A cap kilometres up stands above the haze and keeps the sun: at a 3° sun
      * the ground gets 2 % of noon green, a cap 10 km up over 60 %, golden (red over blue); at −2° (the ground long in the earth's
      * shadow) a cap 15 km up still has a red beam, while the shadow's top √(2z/R) sits at 2.5° for 6 km and 3.9° for 15 km.
      * One law over the whole dusk: no step between neighbouring ticks of the world clock at any height.
