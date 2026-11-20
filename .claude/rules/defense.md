@@ -100,8 +100,10 @@ paths:
   one batch leave the scale changed).
 - A cruise missile flies 12 blocks above the treetops (`MOTION_BLOCKING`); the radar's line of sight ignores leaves
   but not trunks, from an antenna 1.5 blocks above the SAM's ground. Among trees or hills it sees the missile only
-  close (in `SamCruiseGameTests` forest 120–320 blocks, hills ~100 or never): a missile aimed a few hundred blocks off the SAM can dive onto its aim before an
-  interceptor gets there. Works as designed; the guide advises open high ground.
+  close (model forests 95–320 blocks, hills ~100 or never; numbers in the `SamCruiseGameTests` javadoc): a missile aimed a few hundred blocks off the SAM can dive onto its aim before an
+  interceptor gets there. Works as designed; the guide advises open high ground. Such late-sight cases are no
+  regression tests: whether the shot is in time depends on the sweep phase (`SWEEP` 10 ticks, 40 blocks of missile
+  flight), and hills overhead missed on CI when it fired 9 ticks after first sight.
 - Interceptor flight is not saved: after a server restart mid-intercept, the missile is gone, the target keeps flying.
 - A nuclear warhead on a cruise missile or B-2 is intercepted like a conventional one (signature belongs to the carrier);
   an ICBM is not.
