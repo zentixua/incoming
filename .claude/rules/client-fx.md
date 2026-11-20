@@ -1138,7 +1138,12 @@ paths:
   ground's reflection under it (`skyDome`: map axis at cos c to world up weighs (1 + c)/6 of sky and (1 − c)/6 × albedo 0.2
   of ground, Liu–Jordan view factors; uniform light keeps the six-side mean, `SkyDomeGlslTest`; up in map axes is
   `sixUpDir` from `fx.vsh`). The six-side mean lit the underside of black smoke as brightly as the top (sandbox missile
-  cloud, side sun: shadow flank 45/255, lit 65, underside 52); frame fireballs
+  cloud, side sun: shadow flank 45/255, lit 65, underside 52). The cloud's own shadow (`SmokePuffs.sunThrough`, held
+  field 17, merged by attenuation): per held puff of one source, e^(−Στ) of the direct beam through its other puffs
+  (`sightDepth`, delta-Eddington attenuation), computed in `close` with the merge and cached with it and the sun
+  (`SmokePuffs.sun` from `FxLayer.sun`, captured at `Draw.begin` on the client thread); the puff's and its veil's light
+  × (1 − share·(1 − T)) (`sunLight`, `SmokeShadowTest`). Tube places (fire plumes) keep the per-place maps only;
+  frame fireballs
   (`FxLights`) use the maps and cannot exceed on-screen fire in the same
   to the same extent as for `balls` (illuminance × the sky's light `FxAmbient`: otherwise at night the fire would barely
   light the smoke); the shadow in the maps — of the bake's matter (`bake.py`: ω 0.55, g 0.55), of the puff's mixture —
