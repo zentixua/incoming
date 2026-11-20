@@ -88,6 +88,22 @@ public final class ColumnScar {
         level.setBlock(pos, with, flags);
     }
 
+    /**
+     * Replace a block keeping what it holds: no clearing and no loot-table removal, so the old block's {@code onRemove}
+     * spills its contents as when a player breaks it (a conventional collapse, {@code StrikeCollapse}); otherwise as
+     * {@link #replace}.
+     */
+    public static void replaceKeeping(ServerLevel level, BlockPos pos, BlockState old, BlockState with) {
+        if (old.hasBlockEntity()) {
+            // deferred data promoted to a live block entity, which onRemove then empties (see replace)
+            level.getBlockEntity(pos);
+            level.getChunkAt(pos).pendingBlockEntities.remove(pos);
+        }
+        if (!old.is(with.getBlock())) PoiRecords.recordIfMissing(level, pos, old);
+        ua.zentix.incoming.work.BlockLighting.changed(level, pos);
+        level.setBlock(pos, with, FLAGS);
+    }
+
     /** Thermal fluence at a point with terrain and building shadows ({@link ThermalShadow}), cal/cm². */
     static double lit(Level level, Detonation d, BlockPos pos) {
         Vec3 p = Vec3.atCenterOf(pos).add(0, 0.5, 0);

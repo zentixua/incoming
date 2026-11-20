@@ -75,10 +75,7 @@ public final class WorkGameTests {
      */
     private static void buildTown(GameTestHelper h) {
         ServerLevel level = h.getLevel();
-        // debris settles as blocks (coal block, basalt), including in the crater: test block removal only without it
-        boolean debris = IncomingConfig.SERVER.debrisStay.get();
-        IncomingConfig.SERVER.debrisStay.set(false);
-        StrikeGameTests.afterTest(h, () -> IncomingConfig.SERVER.debrisStay.set(debris));
+        explosionOnly(h);
         BlockPos c = h.absolutePos(CENTER);
         for (int gx = -1; gx <= 1; gx++) {
             for (int gz = -1; gz <= 1; gz++) {
@@ -93,6 +90,21 @@ public final class WorkGameTests {
                 level.setBlock(base.offset(3, 7, 3), Blocks.GLOWSTONE.defaultBlockState(), 2);
             }
         }
+    }
+
+    /**
+     * The explosion's own removals, nothing settling into them afterwards: debris settles as blocks (coal block, basalt)
+     * and the collapse's rubble (the houses' own stone bricks) falls into the blast's holes, both rightly, so a check that
+     * every chosen position ends empty runs without them. The collapse has its own batch ({@code CollapseGameTests}).
+     */
+    private static void explosionOnly(GameTestHelper h) {
+        boolean debris = IncomingConfig.SERVER.debrisStay.get(), collapse = IncomingConfig.SERVER.collapse.get();
+        IncomingConfig.SERVER.debrisStay.set(false);
+        IncomingConfig.SERVER.collapse.set(false);
+        StrikeGameTests.afterTest(h, () -> {
+            IncomingConfig.SERVER.debrisStay.set(debris);
+            IncomingConfig.SERVER.collapse.set(collapse);
+        });
     }
 
     /** Explosions near the platform: each explosion's chosen removal positions (blocks, not air), in order. */
@@ -335,10 +347,8 @@ public final class WorkGameTests {
 
     private static void portionSkipsChangedBlockOnEmpty(GameTestHelper h) {
         ServerLevel level = h.getLevel();
-        // the gold block replaces one over the blast's hole: the collapse would rightly drop it; this checks the explosion
-        boolean collapse = IncomingConfig.SERVER.collapse.get();
-        IncomingConfig.SERVER.collapse.set(false);
-        StrikeGameTests.afterTest(h, () -> IncomingConfig.SERVER.collapse.set(collapse));
+        // the gold block replaces one over the blast's hole: the collapse would rightly drop it; buildTown checks the
+        // explosion alone
         buildTown(h);
         WorkClock clock = WorkClock.counting(MS);
         useCounting(h, clock);
@@ -385,9 +395,7 @@ public final class WorkGameTests {
 
     private static void portionTakesReshapedNeighboursOnSettled(GameTestHelper h) {
         ServerLevel level = h.getLevel();
-        boolean debris = IncomingConfig.SERVER.debrisStay.get();
-        IncomingConfig.SERVER.debrisStay.set(false);
-        StrikeGameTests.afterTest(h, () -> IncomingConfig.SERVER.debrisStay.set(debris));
+        explosionOnly(h);
         BlockPos c = h.absolutePos(CENTER);
         BlockState[] rows = {Blocks.OAK_FENCE.defaultBlockState(), Blocks.GLASS_PANE.defaultBlockState(),
                 Blocks.COBBLESTONE_WALL.defaultBlockState(), Blocks.IRON_BARS.defaultBlockState(),

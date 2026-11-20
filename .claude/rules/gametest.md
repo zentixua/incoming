@@ -161,4 +161,11 @@ paths:
   name the shared state by number; never skip the test.
 - `FakePlayer.die()` is a no-op: test death with a real `ServerPlayer`. After a blast, fire as well as rubble may fill
   a broken block's spot: assert the block is gone, not that the spot is air.
+- A check that every position a blast chose ends empty holds only for the explosion alone: the collapse's rubble (the
+  building's own material) and settled debris rightly fall into the holes, at positions that vary with where the runner
+  places the test (rubble share by position hash). `WorkGameTests.explosionOnly` turns both off for such checks
+  (`buildTown` calls it); with the collapse on, about one town salvo in eight leaves stone bricks in chosen positions.
+- `succeedWhen` retries on `GameTestAssertException` until the timeout: a one-time fixture run inside it (after waiting
+  for a slot or state) must report its failed bound with another exception (`IllegalStateException`), or the retry skips
+  the done fixture and passes (`CollapseGameTests.snapshotStepsStayInTheirSlice`).
 
