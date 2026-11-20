@@ -175,7 +175,7 @@ final class Sandbox {
     @Nullable
     private Capture armed, capture;
 
-    private enum Pending { SERVER, LAUNCH, FLIGHT, SITE, NUKE, SAM, POND }
+    private enum Pending { SERVER, LAUNCH, FLIGHT, STRIKE, SITE, NUKE, SAM, POND }
 
     private int pendingSince;
     private SandboxCommand pendingCmd;
@@ -765,6 +765,14 @@ final class Sandbox {
                 else placeCamera();
                 pending = Pending.SITE;
             }
+            case STRIKE -> {
+                // untouched ground each time, as for real: craters and fires of the previous salvo stay where they are
+                freshX += REAL_STEP;
+                site = HOME.add(freshX, 0, 0);
+                placeCamera();
+                server(c.order((int) Math.floor(site.x), (int) Math.floor(site.z)));
+                pending = Pending.STRIKE;
+            }
             case LAUNCH, FLIGHT -> {
                 placeCamera();
                 // own launch — on behalf of the player: the server takes the owner from the command's source
@@ -955,6 +963,7 @@ final class Sandbox {
                     }
                 }
                 case LAUNCH, FLIGHT -> watchFlight(mc);
+                case STRIKE -> watchStrike();
                 case SAM -> watchSam();
                 case POND -> {
                     if (mc.level.getFluidState(BlockPos.containing(site).atY(GROUND)).isSource()) {
@@ -1315,6 +1324,22 @@ final class Sandbox {
     }
 
     /** Launch — from the projectile's first movement at the point; flyby — at the moment it is closest to it. */
+    /** {@code strike}: the effect starts with the first explosion of the salvo's weapon within {@link #STRIKE_NEAR} blocks of the point. */
+    private void watchStrike() {
+        double[] at = new double[3];
+        for (FlightTrack t : FlightTracks.all()) {
+            if (t.weapon != pendingCmd.weapon() || !t.confirmedEnd() || !t.predict(t.deathTick(), at)) continue;
+            if (site.distanceToSqr(at[0], site.y, at[2]) < STRIKE_NEAR * STRIKE_NEAR) {
+                Incoming.LOG.info("SANDBOX first explosion at {}", xyz(new Vec3(at[0], at[1], at[2])));
+                begin();
+                return;
+            }
+        }
+    }
+
+    /** {@code strike}: an explosion this near the point (blocks, horizontally) starts the effect. */
+    private static final double STRIKE_NEAR = 300;
+
     private void watchFlight(Minecraft mc) {
         double[] at = new double[3];
         if (projectile == null || projectile.isDead()) {

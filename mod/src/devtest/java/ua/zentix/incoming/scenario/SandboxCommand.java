@@ -45,6 +45,9 @@ import java.util.Locale;
  *       (by default {@link #FLIGHT_FROM}), the target — as many to the north; for a weapon with an operator route (Shahed, missile,
  *       Lancet) the route point is the point itself ({@link #order}); time — from the nearest place to it; for {@code launch} and
  *       {@code flight} the last word {@code own} — a launch by the player (own projectiles: the list and marks on screen);</li>
+ *   <li>{@code strike <weapon> <count> [spread]} — a real salvo at the point (the server's {@code /incoming salvo}: warheads,
+ *       craters, fires, dust), launched {@link #LAUNCH_RANGE} blocks to the south; time — from the first explosion of that
+ *       weapon near the point (a B-2 ×12: {@code strike bunker 12 30});</li>
  *   <li>{@code spent <weapon> [height]} — a spent booster ({@code SpentBoosterEntity}) at the height above the point (by
  *       default 20 m): it falls tumbling and lies; time — from the end of its engine's work (hot nozzle, {@code NozzleGlow});</li>
  *   <li>{@code fire [side]} — a fire: a square of netherrack with fire at the point;</li>
@@ -80,12 +83,12 @@ record SandboxCommand(Verb verb, List<String> args) {
     /** {@code blast … water}: side and depth of the pond, blocks (the pond is wider than the Shahed's column and spray ring). */
     static final int POND = 64, POND_DEPTH = 4;
 
-    enum Verb { ICBM, ARRIVAL, BLAST, REAL, NUKE, AIRBURST, LAUNCH, FLIGHT, FIRE, SPENT, CAM, STANCE, WEATHER, TIME, HUD, OVERLAY, ZOOM, TRACK, SHOTS, AGAIN, CLEAR, RELOAD, WAIT, RAID, SAM, HOUSE, SCENERY, SURFACE, TURN, UI, COLLAPSE }
+    enum Verb { ICBM, ARRIVAL, BLAST, REAL, NUKE, AIRBURST, LAUNCH, FLIGHT, STRIKE, FIRE, SPENT, CAM, STANCE, WEATHER, TIME, HUD, OVERLAY, ZOOM, TRACK, SHOTS, AGAIN, CLEAR, RELOAD, WAIT, RAID, SAM, HOUSE, SCENERY, SURFACE, TURN, UI, COLLAPSE }
 
     /** An effect (repeated by {@code again} and captured by {@code shots}). */
     boolean effect() {
         return switch (verb) {
-            case ICBM, ARRIVAL, BLAST, REAL, NUKE, AIRBURST, LAUNCH, FLIGHT, FIRE, SPENT, RAID, SAM, SURFACE, UI -> true;
+            case ICBM, ARRIVAL, BLAST, REAL, NUKE, AIRBURST, LAUNCH, FLIGHT, STRIKE, FIRE, SPENT, RAID, SAM, SURFACE, UI -> true;
             default -> false;
         };
     }
@@ -144,6 +147,12 @@ record SandboxCommand(Verb verb, List<String> args) {
                 need(1, own() ? 3 : 2);
                 weapon();
                 if (args.size() > (own() ? 2 : 1) && !(number(1) >= 50 && number(1) <= 5000)) throw new IllegalArgumentException("from the point 50–5000 blocks");
+            }
+            case STRIKE -> {
+                need(2, 3);
+                weapon();
+                if (number(1) < 1 || number(1) > 40 || number(1) != Math.rint(number(1))) throw new IllegalArgumentException("count 1–40");
+                if (args.size() > 2 && (number(2) < 0 || number(2) > 200)) throw new IllegalArgumentException("spread 0–200 blocks");
             }
             case NUKE -> {
                 need(1, 5);
@@ -297,6 +306,8 @@ record SandboxCommand(Verb verb, List<String> args) {
     String order(int x, int z) {
         WeaponType w = weapon();
         if (verb == Verb.LAUNCH) return String.format(Locale.ROOT, "incoming salvo %s 1 0 at %d %d from %d %d", w.getSerializedName(), x, z - LAUNCH_RANGE, x, z);
+        if (verb == Verb.STRIKE) return String.format(Locale.ROOT, "incoming salvo %s %d %d at %d %d from %d %d", w.getSerializedName(), (int) number(1),
+                args.size() > 2 ? (int) number(2) : 0, x, z, x, z + LAUNCH_RANGE);
         if (verb != Verb.FLIGHT) throw new IllegalStateException("not a launch: " + this);
         int from = flightFrom();
         String s = String.format(Locale.ROOT, "incoming salvo %s 1 0 at %d %d from %d %d", w.getSerializedName(), x, z - from, x, z + from);

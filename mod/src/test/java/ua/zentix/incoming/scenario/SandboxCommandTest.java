@@ -79,6 +79,17 @@ class SandboxCommandTest {
         assertEquals("incoming salvo missile 1 0 at 3 -2995 from 3 5", SandboxCommand.parse("launch missile").order(3, 5));
     }
 
+    /** {@code strike}: a real salvo at the point itself, from the south (B-2 ×12). */
+    @Test
+    void strikeAimsTheSalvoAtThePoint() {
+        SandboxCommand c = SandboxCommand.parse("strike bunker 12 30");
+        assertTrue(c.effect());
+        assertEquals("incoming salvo bunker 12 30 at 3 5 from 3 3005", c.order(3, 5));
+        assertEquals("incoming salvo missile 4 0 at 3 5 from 3 3005", SandboxCommand.parse("strike missile 4").order(3, 5));
+        for (String bad : new String[]{"strike bunker", "strike bunker 0", "strike bunker 41", "strike bunker 2.5", "strike bunker 12 500", "strike tank 3"})
+            assertThrows(IllegalArgumentException.class, () -> SandboxCommand.parse(bad), bad);
+    }
+
     @Test
     void shotsKeepTimesInOrder() {
         SandboxCommand c = SandboxCommand.parse("shots drone_50 0,0.1,0.5,3 4");
