@@ -5,6 +5,7 @@ import it.unimi.dsi.fastutil.longs.Long2ObjectMap;
 import it.unimi.dsi.fastutil.longs.Long2ObjectOpenHashMap;
 import it.unimi.dsi.fastutil.longs.LongArrayList;
 import it.unimi.dsi.fastutil.longs.LongOpenHashSet;
+import it.unimi.dsi.fastutil.objects.Reference2IntOpenHashMap;
 import net.minecraft.core.BlockPos;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.level.ChunkPos;
@@ -15,18 +16,22 @@ import ua.zentix.incoming.compat.SubLevels;
 
 import java.util.ArrayList;
 import java.util.List;
-import java.util.concurrent.Future;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.atomic.AtomicInteger;
+import java.util.function.LongSupplier;
 
 /**
  * The ruin support law ({@link Collapse}: what lost support falls) for a conventional strike. The strike's explosions
  * removed some blocks; every chunk within {@link Collapse#C} of a removal is solved in its own window, exactly as a
  * nuclear chunk is, over the world as it stood (live snapshots with the removals put back,
  * {@link RuinWindow#restoring}) and with the removals as the window chunks' fractures. Result: positions the law drops
- * (beyond the strike's own removals), their states, and fluid beside them.
+ * (beyond the strike's own removals) in the order to drop them, their states, what lands as rubble, fluid beside them.
  * <p>
- * Server thread takes the snapshots in portions ({@link #snapshot}); the solve runs on the game's background workers
- * ({@code Util.backgroundExecutor}). Chunks not ready are missing from the window: solid mass that supports, as at a nuclear
- * window edge; no chunk is loaded. Sable plot-grid chunks are missing too (craft blocks are not the world).
+ * Server thread takes the snapshots in timed portions ({@link #snapshot}); the solve runs on the game's background
+ * workers ({@code Util.backgroundExecutor}), at most {@link #MAX_SOLVES} at a time across the server ({@link #reserve}):
+ * a salvo's snapshots wait for a slot instead of piling up. Chunks not ready are missing from the window: solid mass
+ * that supports, as at a nuclear window edge; no chunk is loaded. Sable plot-grid chunks are missing too (craft blocks
+ * are not the world).
  */
 public final class StrikeSupport {
     /** Chunks within this distance of a removal can lose support: the exact band of a chunk's solve ({@link Collapse}). */
@@ -37,6 +42,13 @@ public final class StrikeSupport {
      * raised from it.
      */
     public static final double MATERIAL = Debris.SOLID_SHARE;
+    /**
+     * Collapses snapshotted or solving at once, server-wide: a strike's snapshots are tens of chunk copies (megabytes for
+     * a tall city); a solve takes milliseconds, so a few slots keep a salvo's collapses moving without holding its
+     * snapshots in memory (est.).
+     */
+    static final int MAX_SOLVES = 4;
+    private static final AtomicInteger SOLVES = new AtomicInteger();
 
     private final ServerLevel level;
     private final Long2ObjectOpenHashMap<BlockState> removed;
@@ -46,8 +58,10 @@ public final class StrikeSupport {
     private final long[] needed;
     private final Long2ObjectOpenHashMap<ChunkShot> shots = new Long2ObjectOpenHashMap<>();
     private int taken;
+    /** Holds one of {@link #MAX_SOLVES} until the solve ends or is abandoned before it starts. */
+    private boolean reserved;
     @Nullable
-    private Future<Result> solving;
+    private CompletableFuture<Result> solving;
 
     /**
      * @param removedAt  positions the strike removed ({@link BlockPos#asLong}); a position removed twice keeps its first state
@@ -85,20 +99,45 @@ public final class StrikeSupport {
         return solve.length;
     }
 
+    /** Positions the strike removed ({@link BlockPos#asLong}), for checks before the fall. */
+    public it.unimi.dsi.fastutil.longs.LongSet removedPositions() {
+        return removed.keySet();
+    }
+
+    /** Take a solve slot ({@link #MAX_SOLVES}) unless held already: false — wait. */
+    public boolean reserve() {
+        if (reserved) return true;
+        while (true) {
+            int n = SOLVES.get();
+            if (n >= MAX_SOLVES) return false;
+            if (SOLVES.compareAndSet(n, n + 1)) return reserved = true;
+        }
+    }
+
+    private void unreserve() {
+        if (!reserved) return;
+        reserved = false;
+        SOLVES.decrementAndGet();
+    }
+
     /**
-     * Server thread: snapshot up to {@code max} more chunks; once all are taken, start the solve.
+     * Server thread, with a slot ({@link #reserve}): snapshot chunks until {@code budgetNanos} on {@code clock} passes (at
+     * least one); once all are taken, start the solve.
      *
      * @return snapshots taken in this call
      */
-    public int snapshot(int max) {
+    public int snapshot(LongSupplier clock, long budgetNanos) {
+        if (!reserved) throw new IllegalStateException("collapse snapshot without a solve slot");
+        long start = clock.getAsLong();
         int n = 0;
-        while (taken < needed.length && n < max) {
+        while (taken < needed.length) {
             long c = needed[taken++];
             ChunkPos pos = new ChunkPos(c);
             LevelChunk chunk = level.getChunkSource().getChunkNow(pos.x, pos.z);
             if (chunk == null || SubLevels.inPlotGrid(level, pos)) continue;
             shots.put(c, ChunkShot.take(chunk, null, null, false));
             n++;
+            if (clock.getAsLong() - start >= budgetNanos) break;
         }
         if (taken == needed.length && solving == null) start();
         return n;
@@ -120,30 +159,67 @@ public final class StrikeSupport {
         return solving.get();
     }
 
-    /** Abandon the solve (strike cancelled, server stopping). */
+    /** Abandon (strike cancelled, server stopping): drop the snapshots; a solve already running ends into the void. */
     public void cancel() {
-        if (solving != null) solving.cancel(false);
+        if (solving == null) unreserve();
+        else solving.cancel(false);
+        shots.clear();
     }
 
     private void start() {
-        for (BlockState st : removed.values()) Blast.ensure(st);
-        Blast.PropsView view = Blast.publish();
+        // a datapack reload between snapshot portions reset the property table: earlier snapshots' states are gone
+        // from the table the worker would read; the strike leaves no collapse rather than a half-read one
+        boolean fresh = true;
+        for (ChunkShot s : shots.values()) fresh &= s.fresh();
+        // a removal the snapshot no longer shows empty (a block put back, a support built in the hole since the blast)
+        // is no loss of support
+        Long2ObjectOpenHashMap<BlockState> lost = new Long2ObjectOpenHashMap<>(removed.size());
         int minY = level.getMinBuildHeight(), maxY = level.getMaxBuildHeight();
-        Long2ObjectOpenHashMap<ChunkShot> shots = this.shots;
-        Long2ObjectOpenHashMap<BlockState> removed = this.removed;
+        for (var e : removed.long2ObjectEntrySet()) {
+            long at = e.getLongKey();
+            int x = BlockPos.getX(at), y = BlockPos.getY(at), z = BlockPos.getZ(at);
+            ChunkShot s = shots.get(ChunkPos.asLong(x >> 4, z >> 4));
+            if (s != null && y >= minY && y < maxY && Blast.props(s.raw(x & 15, y, z & 15)).bearing()) continue;
+            lost.put(at, e.getValue());
+            Blast.ensure(e.getValue());
+        }
+        Blast.PropsView view = Blast.publish();
+        Long2ObjectOpenHashMap<ChunkShot> shots = new Long2ObjectOpenHashMap<>(this.shots);
+        this.shots.clear();
         long[] solve = this.solve;
-        // a few chunk windows, milliseconds: the game's background workers, not behind a nuke's ruin queue
-        solving = java.util.concurrent.CompletableFuture.supplyAsync(() -> {
+        if (!fresh || lost.isEmpty()) {
+            solving = CompletableFuture.completedFuture(Result.EMPTY);
+            unreserve();
+            return;
+        }
+        java.util.function.Supplier<Result> task = () -> {
             try {
-                return solve(solve, shots, removed, view, minY, maxY);
+                return solve(solve, shots, lost, view, minY, maxY);
             } finally {
                 // this worker's traversal buffers (a tall window: megabytes) are not kept between strikes
                 Collapse.releaseBuffers();
+                SOLVES.decrementAndGet();
             }
-        }, net.minecraft.Util.backgroundExecutor());
+        };
+        // the slot now belongs to the task, released when it ends
+        reserved = false;
+        // a GameTest server ticks without pauses: a worker's wall time would race the test's tick deadline
+        if (level.getServer() instanceof net.minecraft.gametest.framework.GameTestServer) solving = CompletableFuture.completedFuture(task.get());
+        else {
+            try {
+                solving = CompletableFuture.supplyAsync(task, net.minecraft.Util.backgroundExecutor());
+            } catch (java.util.concurrent.RejectedExecutionException e) {
+                // workers shut down (server stopping): the task never runs to free its slot
+                SOLVES.decrementAndGet();
+                solving = CompletableFuture.failedFuture(e);
+            }
+        }
     }
 
-    /** Any thread: the law in each chunk's window; changes beyond the strike's own removals. */
+    /**
+     * Any thread: the law in each chunk's window; changes beyond the strike's own removals, ordered for the fall:
+     * non-load-bearing first (attachments, leaves, water), load-bearing bottom-up.
+     */
     static Result solve(long[] solve, Long2ObjectMap<ChunkShot> shots, Long2ObjectMap<BlockState> removed, Blast.PropsView view, int minY, int maxY) {
         // removals as fractures of their chunks (Blast keys: section, y, z, x; sorted)
         Long2ObjectOpenHashMap<IntArrayList> byChunk = new Long2ObjectOpenHashMap<>();
@@ -180,49 +256,64 @@ public final class StrikeSupport {
             for (var e : col.changes.long2ObjectEntrySet()) {
                 long p = e.getLongKey();
                 if (removed.containsKey(p)) continue;
-                int wx = BlockPos.getX(p) - w.x0, wz = BlockPos.getZ(p) - w.z0;
                 at.add(p);
-                was.add(w.get(wx, BlockPos.getY(p), wz));
+                was.add(w.get(BlockPos.getX(p) - w.x0, BlockPos.getY(p), BlockPos.getZ(p) - w.z0));
                 to.add(e.getValue());
             }
             fluid.addAll(col.fluidTicks);
         }
-        return new Result(at, was, to, fluid, solved);
+        int n = at.size();
+        Integer[] order = new Integer[n];
+        boolean[] bearing = new boolean[n];
+        for (int i = 0; i < n; i++) {
+            order[i] = i;
+            bearing[i] = view.get(was.get(i)).bearing();
+        }
+        java.util.Arrays.sort(order, (a, b) -> bearing[a] != bearing[b] ? (bearing[a] ? 1 : -1)
+                : Integer.compare(BlockPos.getY(at.getLong(a)), BlockPos.getY(at.getLong(b))));
+        long[] pos = new long[n];
+        BlockState[] states = new BlockState[n], into = new BlockState[n], rubble = new BlockState[n];
+        double sx = 0, sz = 0;
+        int base = Integer.MAX_VALUE, mass = 0;
+        Reference2IntOpenHashMap<BlockState> kinds = new Reference2IntOpenHashMap<>();
+        for (int k = 0; k < n; k++) {
+            int i = order[k];
+            long p = at.getLong(i);
+            BlockState st = was.get(i);
+            pos[k] = p;
+            states[k] = st;
+            into[k] = to.get(i);
+            if (!bearing[i]) continue;
+            int x = BlockPos.getX(p), y = BlockPos.getY(p), z = BlockPos.getZ(p);
+            Blast.Props props = view.get(st);
+            // the same rubble share and hash as the nuclear landing (Collapse#land); not where water takes the place
+            if (into[k].isAir() && props.rubble() && RuinPlanner.hash(x, y, z, 71) < Debris.SOLID_SHARE) rubble[k] = Collapse.rubbleOf(st, props, x, y, z);
+            mass++;
+            sx += x + 0.5;
+            sz += z + 0.5;
+            base = Math.min(base, y);
+            kinds.addTo(st, 1);
+        }
+        BlockState common = null;
+        int most = 0;
+        for (var e : kinds.reference2IntEntrySet()) {
+            if (e.getIntValue() > most) {
+                most = e.getIntValue();
+                common = e.getKey();
+            }
+        }
+        return new Result(pos, states, into, rubble, fluid.toLongArray(), solved, mass,
+                mass > 0 ? new net.minecraft.world.phys.Vec3(sx / mass, base, sz / mass) : null, common);
     }
 
     /**
-     * Positions the law drops ({@link BlockPos#asLong}), their states as the world stood and what replaces them (air,
-     * water beside water), fluid positions to tick, chunks actually solved.
+     * Positions the law drops in fall order ({@link BlockPos#asLong}), their states as the world stood, what replaces them
+     * (air, water beside water), what lands as rubble (null: turns to dust), fluid positions to tick, chunks solved,
+     * load-bearing blocks fallen, the base of their mass (mean x/z, lowest y) and their most common state.
      */
-    public record Result(LongArrayList at, List<BlockState> was, List<BlockState> to, LongArrayList fluidTicks, int solved) {}
-
-    // ---------------------------------------------------------------- landing (server thread)
-
-    /** Load-bearing state (anything with collision but leaves and liquids, {@link Blast.Props#bearing}). */
-    public static boolean bearing(BlockState st) {
-        return Blast.props(st).bearing();
-    }
-
-    /**
-     * Fallen block lands as rubble (the same share as nuclear collapse, {@link Debris#SOLID_SHARE}, of blocks that make
-     * rubble, strength from 1; position hash as there). Containers always land, with their contents.
-     */
-    public static boolean lands(BlockState st, int x, int y, int z) {
-        Blast.Props p = Blast.props(st);
-        if (p.air() || p.fluid() || p.leaves() || !p.rubble()) return false;
-        return p.is(Blast.Props.CONTAINER) || RuinPlanner.hash(x, y, z, 71) < Debris.SOLID_SHARE;
-    }
-
-    /** Container: lands whole in the pile with its contents. */
-    public static boolean container(BlockState st) {
-        return Blast.props(st).is(Blast.Props.CONTAINER);
-    }
-
-    /** What a fallen block lands as: full load-bearing blocks as themselves, others as rubble; a chest half as a lone chest. */
-    public static BlockState rubble(BlockState st, int x, int y, int z) {
-        Blast.Props p = Blast.props(st);
-        if (p.is(Blast.Props.CONTAINER)) return Collapse.landedState(st);
-        return Collapse.rubbleOf(st, p, x, y, z);
+    public record Result(long[] at, BlockState[] was, BlockState[] to, @Nullable BlockState[] rubble, long[] fluidTicks, int solved,
+                         int mass, net.minecraft.world.phys.@Nullable Vec3 base, @Nullable BlockState common) {
+        static final Result EMPTY = new Result(new long[0], new BlockState[0], new BlockState[0], new BlockState[0], new long[0], 0, 0, null, null);
     }
 
     /**
@@ -232,5 +323,10 @@ public final class StrikeSupport {
     public static double[] spread(int x, int y, int z, double fall) {
         double s = Debris.spread(fall);
         return new double[]{RuinPlanner.grain(x, y, z, 61) * s, RuinPlanner.grain(x, y, z, 67) * s};
+    }
+
+    /** Load-bearing state (server thread): anything with collision but leaves and liquids ({@link Blast.Props#bearing}). */
+    public static boolean bearing(BlockState st) {
+        return Blast.props(st).bearing();
     }
 }

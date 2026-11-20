@@ -156,19 +156,26 @@ paths:
   charges), the nuclear support law (`nuclear/world/Collapse`, "what lost support falls") over the blocks the explosions
   removed. `StagedExplosion` records each removal with its old state in the strike's `BlastArea` (`removed`; only a
   block that actually changed; craft blocks and the crater are not recorded: the crater digs natural ground, which
-  stands as an arch). The job (impact lane, kind `GROUND`): snapshots of every chunk within `Collapse.C` of a removal and
-  their neighbors (`StrikeSupport.snapshot`, 8 per unit; unready or plot-grid chunks are missing — support mass, no
-  loads), the solve on the game's background workers (not `RuinWorkers`: a nuke's ruin queue would hold it for minutes),
-  then the fall in 5 ms portions — a second job queued when the solve starts (`Fall`): `UnitQueue` cancels a job that
-  stays unready `GIVE_UP_TICKS` after it was queued, and a collapse queued at the strike can wait long behind a salvo: blocks changed since the
-  snapshot stay; non-load-bearing first, load-bearing bottom-up; the rubble share (`Debris.SOLID_SHARE`, same hash as the
-  nuclear landing; containers always, with contents) falls as vanilla falling blocks while `CraterFalls.room` allows
-  (the strike area's and the world's live limits), otherwise lands at once where it would rest, spread by
-  `Debris.spread`; one `S2C.Collapse` (dust, rumble) for the fallen load-bearing blocks (`StrikeSupport.MATERIAL` m³ a
-  block). GameTest batch `collapse` (missile and drone in a flat, drone on a roof corner; the law's fixed point: with
-  everything gone as removals nothing more falls; glass broken later by `Shatter` is not a removal). Bench batches
-  `collapse_salvo`/`collapse_salvo_off` (100 missiles into 100 houses beyond the platform) run only when selected alone
-  by name: their houses cover where the next batches' platforms spawn (two in a row hung the runner).
+  stands as an arch). The snapshot job waits for one of `StrikeSupport.MAX_SOLVES` server-wide solve slots (a salvo's
+  snapshots must not pile up in memory), snapshots every chunk within `Collapse.C` of a removal and its neighbors in
+  5 ms portions (unready or plot-grid chunks are missing — support mass, no loads; a removal the snapshot shows filled
+  again is no loss; a datapack reload between portions abandons), and starts the solve on the game's background workers
+  (not `RuinWorkers`: a nuke's ruin queue would hold it for minutes; inline on a GameTest server, whose unpaused ticks
+  would race a worker). The solve orders the fall (non-load-bearing first, load-bearing bottom-up) and picks the rubble
+  share (`Debris.SOLID_SHARE`, same hash as the nuclear landing). The fall is a second job queued when the solve starts
+  (`Fall`): `UnitQueue` cancels a job unready `GIVE_UP_TICKS` after it was queued, and one queued at the strike can wait
+  long behind a salvo. It abandons the plan if a removal holds a load-bearing block again; one zero-radius
+  `ExplosionEvent.Detonate` without entities lets claim handlers keep positions, as for the blast; 5 ms portions (every
+  candidate, kept or not, checks the clock): blocks changed since the snapshot stay, writes only where the chunk and its
+  eight neighbors are ready and never into the plot grid, a container spills its contents first (an unrolled loot table
+  stays unrolled); the rubble share falls as vanilla falling blocks while `CraterFalls.room` allows, otherwise lands at
+  once where it would rest, spread by `Debris.spread`; fluid ticks and landings in their own portions; one
+  `S2C.Collapse` (dust, rumble) for the fallen load-bearing blocks (`StrikeSupport.MATERIAL` m³ a block). GameTest batch
+  `collapse` (missile and drone in a flat, drone on a roof corner — the law's fixed point: with everything gone as
+  removals nothing more falls; glass broken later by `Shatter` is not a removal —, portions by time, rebuilt support,
+  chest contents). Bench batches `collapse_salvo`/`collapse_salvo_off` (100 missiles into 100 houses beyond the platform)
+  run only when selected alone by name: their houses cover where the next batches' platforms spawn (two in a row hung
+  the runner).
 
 ## Pitfalls
 - A support, not a block name (`SurfaceBlocks`): the Jarrett threshold for a panel applies only with a free back face.

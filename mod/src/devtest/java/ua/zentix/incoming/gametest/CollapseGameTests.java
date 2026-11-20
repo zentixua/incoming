@@ -134,12 +134,13 @@ public final class CollapseGameTests {
             was.add(e.getValue());
         }
         StrikeSupport s = new StrikeSupport(h.getLevel(), at, was);
-        while (!s.started()) s.snapshot(Integer.MAX_VALUE);
+        if (!s.reserve()) throw new IllegalStateException("no collapse solve slot");
+        while (!s.started()) s.snapshot(System::nanoTime, Long.MAX_VALUE);
         StrikeSupport.Result r = s.result();
         java.util.List<BlockPos> out = new java.util.ArrayList<>();
-        for (int i = 0; i < r.at().size(); i++) {
-            if (!StrikeSupport.bearing(r.was().get(i))) continue;
-            BlockPos p = BlockPos.of(r.at().getLong(i));
+        for (int i = 0; i < r.at().length; i++) {
+            if (!StrikeSupport.bearing(r.was()[i])) continue;
+            BlockPos p = BlockPos.of(r.at()[i]);
             out.add(h.relativePos(p));
         }
         return out;
@@ -248,14 +249,7 @@ public final class CollapseGameTests {
         Map<BlockPos, BlockState> house = block(h, 24, 39, 28, 35, 4, true);
         it.unimi.dsi.fastutil.longs.LongArrayList at = new it.unimi.dsi.fastutil.longs.LongArrayList();
         java.util.List<BlockState> was = new java.util.ArrayList<>();
-        for (var e : house.entrySet()) {
-            BlockPos r = e.getKey();
-            if (r.getY() > GROUND + 3 || r.getX() > 31) continue;
-            BlockPos a = h.absolutePos(r);
-            level.setBlock(a, Blocks.AIR.defaultBlockState(), Block.UPDATE_CLIENTS);
-            at.add(a.asLong());
-            was.add(e.getValue());
-        }
+        blowWestGroundFloor(h, house, at, was);
         long[] now = {0};
         Warheads.CollapseProbe probe = Warheads.testCollapse(level, h.absoluteVec(new Vec3(28, GROUND + 2, 31.5)), 16, at, was,
                 () -> now[0] += 1_000_000);
@@ -264,6 +258,69 @@ public final class CollapseGameTests {
             h.assertTrue(probe.fell() > 100, "the storeys above the removed walls stayed up: " + probe.fell());
             h.assertTrue(probe.largestPortion() == 5, "portion at 1 ms per block: " + probe.largestPortion() + " blocks");
             h.assertTrue(probe.portions() * 5 >= probe.fell(), "portions " + probe.portions() + " for " + probe.fell());
+        });
+    }
+
+    /** Removes the ground-floor walls of the block's west half (x ≤ 31) as a test's own blast; returns them. */
+    private static Map<BlockPos, BlockState> blowWestGroundFloor(GameTestHelper h, Map<BlockPos, BlockState> house,
+                                                                 it.unimi.dsi.fastutil.longs.LongArrayList at, java.util.List<BlockState> was) {
+        Map<BlockPos, BlockState> out = new LinkedHashMap<>();
+        for (var e : house.entrySet()) {
+            BlockPos r = e.getKey();
+            if (r.getY() > GROUND + 3 || r.getX() > 31) continue;
+            BlockPos a = h.absolutePos(r);
+            h.getLevel().setBlock(a, Blocks.AIR.defaultBlockState(), Block.UPDATE_CLIENTS);
+            at.add(a.asLong());
+            was.add(e.getValue());
+            out.put(r, e.getValue());
+        }
+        return out;
+    }
+
+    /**
+     * The hole was filled again (walls rebuilt) before the collapse looked: no support was lost, nothing falls (review
+     * of #688: a repaired support must not count as a removal).
+     */
+    @GameTest(template = "range", batch = "collapse", timeoutTicks = 600, skyAccess = true)
+    public static void rebuiltSupportHolds(GameTestHelper h) {
+        quiet(h);
+        ground(h);
+        ServerLevel level = h.getLevel();
+        Map<BlockPos, BlockState> house = block(h, 24, 39, 28, 35, 4, true);
+        it.unimi.dsi.fastutil.longs.LongArrayList at = new it.unimi.dsi.fastutil.longs.LongArrayList();
+        java.util.List<BlockState> was = new java.util.ArrayList<>();
+        Map<BlockPos, BlockState> blown = blowWestGroundFloor(h, house, at, was);
+        for (var e : blown.entrySet()) level.setBlock(h.absolutePos(e.getKey()), e.getValue(), Block.UPDATE_CLIENTS);
+        Warheads.CollapseProbe probe = Warheads.testCollapse(level, h.absoluteVec(new Vec3(28, GROUND + 2, 31.5)), 16, at, was, System::nanoTime);
+        h.succeedWhen(() -> {
+            h.assertTrue(probe.done(), "collapse unfinished");
+            h.assertTrue(probe.fell() == 0, "storeys fell onto rebuilt walls: " + probe.fell());
+            for (var e : house.entrySet()) h.assertTrue(stands(h, e.getKey(), e.getValue()), "fell: " + e.getKey());
+        });
+    }
+
+    /** A chest on a floor that falls: its contents come out (review of #688: nothing lost with the block). */
+    @GameTest(template = "range", batch = "collapse", timeoutTicks = 600, skyAccess = true)
+    public static void chestContentsSurvive(GameTestHelper h) {
+        quiet(h);
+        ground(h);
+        ServerLevel level = h.getLevel();
+        Map<BlockPos, BlockState> house = block(h, 24, 39, 28, 35, 4, true);
+        BlockPos chest = new BlockPos(26, GROUND + 5, 31);
+        h.setBlock(chest, Blocks.CHEST);
+        ((net.minecraft.world.level.block.entity.ChestBlockEntity) h.getBlockEntity(chest)).setItem(0, new net.minecraft.world.item.ItemStack(net.minecraft.world.item.Items.DIAMOND, 7));
+        it.unimi.dsi.fastutil.longs.LongArrayList at = new it.unimi.dsi.fastutil.longs.LongArrayList();
+        java.util.List<BlockState> was = new java.util.ArrayList<>();
+        blowWestGroundFloor(h, house, at, was);
+        Warheads.CollapseProbe probe = Warheads.testCollapse(level, h.absoluteVec(new Vec3(28, GROUND + 2, 31.5)), 16, at, was, System::nanoTime);
+        h.succeedWhen(() -> {
+            h.assertTrue(probe.done() && probe.fell() > 100, "collapse " + probe.done() + ", fell " + probe.fell());
+            h.assertTrue(!h.getBlockState(chest).is(Blocks.CHEST), "the chest's floor fell, the chest stayed");
+            int diamonds = 0;
+            for (var item : level.getEntitiesOfClass(net.minecraft.world.entity.item.ItemEntity.class, new net.minecraft.world.phys.AABB(h.absolutePos(chest)).inflate(16))) {
+                if (item.getItem().is(net.minecraft.world.item.Items.DIAMOND)) diamonds += item.getItem().getCount();
+            }
+            h.assertTrue(diamonds == 7, "diamonds out of the fallen chest: " + diamonds + " of 7");
         });
     }
 
