@@ -251,14 +251,16 @@ Ruins and everything in `nuclear/world/` are in `nuclear-world.md`.
   cells, stops behind optical depth `OPAQUE` 9); the eye's dust (`NukePall`, `NukeDust.inHead`) takes `WallLobes.sigma` and
   `vertical` over the same cells. Both readers give the same optical depth on a ray (`marchAndProbesReadTheSameLobes`).
   Cost: CPU ≈ 0.5 ms build + 0.8 ms tiles and light per frame for a 1 Mt ring (`PallPass.describe`); GPU pall pass of a
-  1 Mt wall at 3 km 3.6–6.1 ms at 640×346 rays. Light (`lobeLightIn`): the lofted front is opaque (σ ~5/block at the face),
-  so a lobe shows what a semi-infinite layer of its dust sends back (Hapke 1981, similarity ω* = ω(1 − g)/(1 − ωg),
-  γ = √(1 − ω*)): sun and ball beams ω/4·μ0/(μ0 + μ)·(p + H(μ0)H(μ) − 1) through the pall over it and the neighbouring
-  lobes (record), diffuse light by (1 − γ)/(1 + 2γμ): the sky dome over its upper half (the pall's two streams at the depth
-  over the point, `WALL_HORIZON_WHITE` toward the horizon, faded e^(−kτ) through the lobes above), the lit ground under its
-  lower half, fires below, lamps; lit where its own optical depth along the ray reaches one (half its chord if thinner); a
-  grazed rim under two optical depths takes single scattering instead (the surface terms would draw a bright line along every
-  rim). Colour: the thick layer's spectrum to `WALL_OCHRE` 1.6 (presentation, toward the footage's ochre). The camera dust
+  1 Mt wall at 3 km 3.6–6.1 ms at 640×346 rays. Look and light (`lobeMarch`): each lobe is marched through its fringe
+  (from its cut until opaque) with its density × a mean-preserving Worley-dome factor e^(β(n − ½))/(2·sinh(β/2)/β) riding
+  it (`WALL_BILLOW` 3, tile `WALL_BILLOW_TILE` seen radii, churn `WALL_CHURN`; presentation, the mushroom surge's domes): a
+  smooth analytic surface shows no turbulence (dense dust is opaque within a metre, so detail inside it never shows), the
+  lumps must displace its surface. The factor is bounded (e^(±β/2) over its mean), so the drawn chord stays within it of the
+  probes' noise-free lobes. Each sample is lit as a volume, no surface normal (a normal-lit thin rim draws a bright ring):
+  the sun through the lobe (noise-free chord), its lumps one tap toward it, the neighbours (record) and the pall, with
+  Wrenninge's multiple-scattering octaves; the dome through the lobe upward and lit ground downward, e^(−kτ), never below
+  `WALL_FLOOR` of them (presentation (est.): two streams from the top alone are black tens of optical depths inside, a
+  haboob at noon is dark brown); the ball as a beam; fires; lamps. Colour: the thick layer's spectrum to `WALL_OCHRE` 1.6 (presentation, toward the footage's ochre). The camera dust
   colour `NukePall.dustLight` is the light inside the mean head (pall pass off).
   Wilson cloud is a Gaussian shell behind front (0.93 front radius,
   0.15–3.5·∛(Y/15) s) when the negative phase condenses water in the world air (`BlastWall.condenses`: `Condensation.water`, the

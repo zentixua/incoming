@@ -824,7 +824,7 @@ paths:
   `WallLobeTable`), built once per frame on the CPU into rows of the mushroom table after the mushroom rows (no texture
   unit is free) and only read by the shaders: the march takes the lobes of its pixel's screen tile (`fx_pall` main:
   closed-form chords on its ray before the world, `pallLobeFound`) and composites each where it passes it
-  (`lobesBefore`, called with the whirls and Wilson crossings by `passesAll`), lit in `lobeLightIn`; the pall's own
+  (`lobesBefore`, called with the whirls and Wilson crossings by `passesAll`), marched and lit in `lobeMarch`; the pall's own
   samples carry no head density, only the mean head's shade over the handoff band (`headAbove`). The Wilson cloud is a
   thin shell: its two passes by the ray are events, like tornadoes (light and transmission in advance, into the ray when
   the step reaches the pass). The quads of the layer and the source probes take in front of them the head's lobes
