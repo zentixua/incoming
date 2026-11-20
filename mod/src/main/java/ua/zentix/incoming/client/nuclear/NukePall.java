@@ -805,9 +805,22 @@ public final class NukePall {
             ua.zentix.incoming.nuclear.model.MushroomModel.Shape shape = MushroomField.shape(last, 0);
             if (shape != null) {
                 double up = last.d.groundY() - WaterDecal.SEA_LEVEL + last.d.blocks(shape.capY());
-                double[] atCap = new double[3];
+                double top = last.d.groundY() - WaterDecal.SEA_LEVEL + last.d.blocks(shape.top());
+                double[] atCap = new double[3], atTop = new double[3];
                 SKY.sunAt(up, atCap);
-                cap = String.format(java.util.Locale.ROOT, "at cap centre %.0f blocks above sea %.4f %.4f %.4f", up, atCap[0], atCap[1], atCap[2]);
+                SKY.sunAt(top, atTop);
+                // air from the eye to the cap centre: the share the haze shows there and the airlight it shows (pallAir, pallAirLight)
+                Vec3 eye = mc.gameRenderer.getMainCamera().getPosition();
+                double dx = last.d.burst().x - eye.x, dy = last.d.groundY() + last.d.blocks(shape.capY()) - eye.y, dz = last.d.burst().z - eye.z;
+                double dist = Math.sqrt(dx * dx + dy * dy + dz * dz);
+                Sight.Air air = Sight.Air.at(eye.y - WaterDecal.SEA_LEVEL, Sight.range(mc.level == null ? 0 : mc.level.getRainLevel(1),
+                        mc.level == null ? 0 : mc.level.getThunderLevel(1)));
+                double haze = 1 - air.transmittance(dist, dy);
+                double[] airLight = NukeExposure.airLight(dx / dist, dy / dist, dz / dist, new double[] {f.airSky.x, f.airSky.y, f.airSky.z},
+                        new double[] {f.airFog.x, f.airFog.y, f.airFog.z}, f.airFog.w);
+                cap = String.format(java.util.Locale.ROOT, "at cap centre %.0f blocks above sea %.4f %.4f %.4f, at top %.0f blocks above sea %.4f %.4f %.4f, "
+                                + "haze toward the cap centre %.3f (%.0f blocks), airlight there %.3f %.3f %.3f",
+                        up, atCap[0], atCap[1], atCap[2], top, atTop[0], atTop[1], atTop[2], haze, dist, airLight[0], airLight[1], airLight[2]);
             }
         }
         String sun = String.format(java.util.Locale.ROOT, "sun %.2f° day %.3f, sky %.4f %.4f %.4f, beam above air %.4f %.4f %.4f, on ground %.4f %.4f %.4f, %s",
