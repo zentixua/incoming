@@ -415,6 +415,11 @@ final class Sandbox {
                 });
                 finish("ok");
             }
+            case COLLAPSE -> {
+                boolean on = c.args().getFirst().equals("on");
+                onServer(false, s -> ua.zentix.incoming.IncomingConfig.SERVER.collapse.set(on));
+                finish("ok");
+            }
             case WEATHER -> {
                 boolean rain = c.args().getFirst().equals("rain");
                 onServer(false, s -> s.overworld().setWeatherParameters(rain ? 0 : 6000, rain ? 6000 : 0, rain, false));
@@ -1024,14 +1029,14 @@ final class Sandbox {
             begin();
             return;
         }
-        if ((c.masonry() || c.town()) && paved < 0) {
+        if ((c.masonry() || c.town() || c.block()) && paved < 0) {
             // city: paving around, not lawn; the client must get it before the blast packet (dust ground — at the
             // client)
             paved = tick;
             server("fill %d %d %d %d %d %d minecraft:gray_concrete".formatted(s.getX() - 48, GROUND, s.getZ() - 48, s.getX() + 48, GROUND, s.getZ() + 48));
             return;
         }
-        if ((c.masonry() || c.town()) && tick - paved < 20) return;
+        if ((c.masonry() || c.town() || c.block()) && tick - paved < 20) return;
         paved = -1;
         pending = Pending.SERVER;
         knownNukes.clear();
@@ -1063,6 +1068,7 @@ final class Sandbox {
                 // does not break through it), top — 8 above the ground
                 if (c.houses() || c.roof() || c.masonry()) buildHouses(server, BlockPos.containing(site));
                 if (c.town()) buildTown(server, BlockPos.containing(site));
+                if (c.block()) buildBlock(server, BlockPos.containing(site));
                 if (c.masonry()) {
                     BlockPos o = BlockPos.containing(site);
                     run(server, "fill %d %d %d %d %d %d minecraft:air".formatted(o.getX() - 11, o.getY() + 6, o.getZ() - 3,
@@ -1071,7 +1077,8 @@ final class Sandbox {
                             o.getX() - 4, o.getY() + 7, o.getZ() + 4));
                 }
                 SandboxStrikes.detonate(server.overworld(), c.weapon(),
-                        c.houses() ? at.add(8, 0, 5) : c.roof() ? at.add(8, 6, 0) : c.masonry() ? at.add(-8, 8, 0) : at);
+                        c.houses() ? at.add(8, 0, 5) : c.roof() ? at.add(8, 6, 0) : c.masonry() ? at.add(-8, 8, 0)
+                                : c.block() ? at.add(-4, 1, 3.5) : at);
                 return;
             }
             if (c.near()) {
@@ -1137,6 +1144,27 @@ final class Sandbox {
                 int x0 = o.getX() + 3 + 16 * i, z0 = o.getZ() + 3 + 16 * j;
                 run(server, "fill %d %d %d %d %d %d minecraft:stone_bricks".formatted(x0, y, z0, x0 + 9, y + 11, z0 + 9));
             }
+        }
+    }
+
+    /**
+     * Block {@code real … block}: four storeys of 4 m (3 m of brick wall, a concrete slab) over x − 8 … x + 7, z … z + 7, a
+     * brick cross wall at x, glass windows every third metre of the long walls; the same block as {@code CollapseGameTests}.
+     */
+    private static void buildBlock(MinecraftServer server, BlockPos o) {
+        int x0 = o.getX() - 8, x1 = o.getX() + 7, z0 = o.getZ(), z1 = o.getZ() + 7;
+        for (int s = 0; s < 4; s++) {
+            int b = GROUND + 4 * s;
+            run(server, "fill %d %d %d %d %d %d minecraft:bricks".formatted(x0, b + 1, z0, x1, b + 3, z0));
+            run(server, "fill %d %d %d %d %d %d minecraft:bricks".formatted(x0, b + 1, z1, x1, b + 3, z1));
+            run(server, "fill %d %d %d %d %d %d minecraft:bricks".formatted(x0, b + 1, z0, x0, b + 3, z1));
+            run(server, "fill %d %d %d %d %d %d minecraft:bricks".formatted(x1, b + 1, z0, x1, b + 3, z1));
+            run(server, "fill %d %d %d %d %d %d minecraft:bricks".formatted(o.getX(), b + 1, z0, o.getX(), b + 3, z1));
+            for (int x = x0 + 2; x < x1; x += 3) {
+                run(server, "setblock %d %d %d minecraft:glass".formatted(x, b + 2, z0));
+                run(server, "setblock %d %d %d minecraft:glass".formatted(x, b + 2, z1));
+            }
+            run(server, "fill %d %d %d %d %d %d minecraft:gray_concrete".formatted(x0, b + 4, z0, x1, b + 4, z1));
         }
     }
 

@@ -37,7 +37,7 @@ Launch an ICBM or fit a nuclear warhead to a cruise missile or B-2 bomb. Operato
 
 ### Launching
 
-- **Strike Designator:** aim through binoculars or use the console map. Set salvos and routes, or watch through a projectile's camera.
+- **Strike Designator:** aim through binoculars, or press Shift+RMB with it in hand to open the console: weapon, salvo, spread, target and map. Set routes, or watch through a projectile's camera.
 - **Fixed launchers:** load ammunition, assign a target with the designator and fire with redstone.
 
 ## Requirements and dependencies
@@ -65,6 +65,10 @@ Start with the [player guide](docs/guide/README.md).
 **Client or server?** Both. It works in single-player, LAN worlds and dedicated servers. Use the same Incoming version on both sides.
 
 **How demanding is it?** Large salvos, nuclear strikes and shaders can be demanding. See [performance help](docs/guide/faq.md#troubleshooting).
+
+**Why do blasts break so little?** Each weapon carries the charge of the real one, and a block is a metre. A Shahed (50 kg of TNT) leaves a crater in soil about 2.4 m across and breaks brick walls within about 3 m; a cruise missile (about 150 kg) within about 7 m; a Grad rocket (6.4 kg) within about 1 m, so trees next to it can stay standing. Smoke and dust reach much farther than the damage, as in real footage. The default 15 kt nuke brings down brick buildings out to about 700 m and wooden ones out to about 1.3 km. See [what a blast does](docs/guide/weapons.md#what-a-blast-does).
+
+**Nuke too big or too small for my world?** Choose the yield on the console, from 1 kt up to the world's limit (100 kt by default). The world owner can raise the limit up to 1 Mt with `nuclear.max_yield`, or shrink every nuclear distance: set `scale.scale_preset` to `CUSTOM` and lower `nuclear.effects_scale` (1.0 is true to life; at 0.1 a 15 kt blast brings down brick out to about 70 m). Open settings with the Settings button on the console (Shift+RMB with the Strike Designator) or under Mods → Incoming → Config; world settings can be changed there in a single-player world not opened to LAN, otherwise in `incoming-server.toml`. See [world settings](docs/guide/settings.md#world-settings).
 
 **Can I protect builds?** The owner can restrict launches and disable destruction and fires in [world settings](docs/guide/settings.md#world-settings). Destruction is on by default.
 

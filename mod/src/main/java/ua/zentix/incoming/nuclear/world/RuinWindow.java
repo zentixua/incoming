@@ -29,11 +29,36 @@ final class RuinWindow {
     private final int sections;
     /** Original column top (highest non-air) and support top (as {@code MOTION_BLOCKING_NO_LEAVES} − 1); MIN — empty. */
     private final int[] top = new int[SIDE * SIDE], solid = new int[SIDE * SIDE];
+    /**
+     * Original blocks the snapshots no longer hold (a conventional strike's removals, {@link #restoring}) by window key
+     * {@code (y − minY) << 12 | wz << 6 | wx}; null — snapshots are the original world.
+     */
+    @org.jetbrains.annotations.Nullable
+    private final it.unimi.dsi.fastutil.ints.Int2ObjectOpenHashMap<BlockState> restored;
+    /** Distinct restored states per section slot ({@code k * sections + section}); null — none there. */
+    @org.jetbrains.annotations.Nullable
+    private final java.util.List<BlockState>[] restoredStates;
 
     /**
      * @param shots chunk and neighbor snapshots (index {@code k = (dz + 1) * 3 + dx + 1}); null — missing chunk
      */
     RuinWindow(ChunkPos centre, int minY, int maxY, ChunkShot[] shots, Blast.PropsView view) {
+        this(centre, minY, maxY, shots, view, null);
+    }
+
+    /**
+     * Window of live snapshots where {@code removed} (world {@link net.minecraft.core.BlockPos#asLong} → state before
+     * removal) puts back what a conventional strike took out: the world as it stood. Snapshot heightmaps rise over put-back
+     * blocks. Missing chunks stay mass.
+     */
+    static RuinWindow restoring(ChunkPos centre, int minY, int maxY, ChunkShot[] shots, Blast.PropsView view,
+                                it.unimi.dsi.fastutil.longs.Long2ObjectMap<BlockState> removed) {
+        return new RuinWindow(centre, minY, maxY, shots, view, removed);
+    }
+
+    @SuppressWarnings("unchecked")
+    private RuinWindow(ChunkPos centre, int minY, int maxY, ChunkShot[] shots, Blast.PropsView view,
+                       @org.jetbrains.annotations.Nullable it.unimi.dsi.fastutil.longs.Long2ObjectMap<BlockState> removed) {
         this.centre = centre;
         this.x0 = centre.getMinBlockX() - 16;
         this.z0 = centre.getMinBlockZ() - 16;
@@ -72,6 +97,31 @@ final class RuinWindow {
                 }
             }
         }
+        it.unimi.dsi.fastutil.ints.Int2ObjectOpenHashMap<BlockState> back = null;
+        java.util.List<BlockState>[] states = null;
+        if (removed != null) {
+            for (var e : removed.long2ObjectEntrySet()) {
+                long at = e.getLongKey();
+                int wx = net.minecraft.core.BlockPos.getX(at) - x0, y = net.minecraft.core.BlockPos.getY(at), wz = net.minecraft.core.BlockPos.getZ(at) - z0;
+                if (wx < 0 || wx >= SIDE || wz < 0 || wz >= SIDE || y < minY || y >= maxY) continue;
+                int k = (wz >> 4) * 3 + (wx >> 4);
+                if (shots[k] == null) continue;
+                BlockState st = e.getValue();
+                if (back == null) {
+                    back = new it.unimi.dsi.fastutil.ints.Int2ObjectOpenHashMap<>();
+                    states = (java.util.List<BlockState>[]) new java.util.List<?>[9 * sections];
+                }
+                back.put((y - minY) << 12 | wz << 6 | wx, st);
+                int slot = k * sections + ((y - minY) >> 4);
+                if (states[slot] == null) states[slot] = new java.util.ArrayList<>(2);
+                if (!states[slot].contains(st)) states[slot].add(st);
+                int i = wz * SIDE + wx;
+                if (!st.isAir() && (top[i] == Integer.MIN_VALUE || y > top[i])) top[i] = y;
+                if (Heightmap.Types.MOTION_BLOCKING_NO_LEAVES.isOpaque().test(st) && (solid[i] == Integer.MIN_VALUE || y > solid[i])) solid[i] = y;
+            }
+        }
+        this.restored = back;
+        this.restoredStates = states;
     }
 
     /** Original state at window position. */
@@ -79,7 +129,12 @@ final class RuinWindow {
         if (y < minY || y >= maxY) return AIR;
         if (wx < 0 || wx >= SIDE || wz < 0 || wz >= SIDE) return MASS;
         ChunkShot s = shots[(wz >> 4) * 3 + (wx >> 4)];
-        return s == null ? MASS : s.get(wx & 15, y, wz & 15);
+        if (s == null) return MASS;
+        if (restored != null) {
+            BlockState was = restored.get((y - minY) << 12 | wz << 6 | wx);
+            if (was != null) return was;
+        }
+        return s.get(wx & 15, y, wz & 15);
     }
 
     /** Original block properties at window position. */
@@ -91,8 +146,20 @@ final class RuinWindow {
         if (s == null) return massProps;
         int sec = (y - minY) >> 4, slot = k * sections + sec;
         ChunkShot.Sec p = props[slot];
-        if (p == null) p = props[slot] = s.props(sec, view);
+        if (p == null) p = props[slot] = restoredStates != null && restoredStates[slot] != null ? restoredSection(k, sec) : s.props(sec, view);
         return p.get((y & 15) << 8 | (wz & 15) << 4 | wx & 15);
+    }
+
+    /** Properties of a section holding put-back blocks: by position, as a ruined chunk's section ({@link ChunkShot#props}). */
+    private ChunkShot.Sec restoredSection(int k, int sec) {
+        Blast.Props[] full = new Blast.Props[4096];
+        int bx = (k % 3) << 4, bz = (k / 3) << 4, y0 = minY + (sec << 4);
+        for (int y = 0; y < 16; y++) {
+            for (int z = 0; z < 16; z++) {
+                for (int x = 0; x < 16; x++) full[y << 8 | z << 4 | x] = view.get(get(bx + x, y0 + y, bz + z));
+            }
+        }
+        return new ChunkShot.Sec(null, null, full);
     }
 
     /** Original block at position is air. */
@@ -103,7 +170,11 @@ final class RuinWindow {
     /** Whether section {@code section} (index from world bottom) of window chunk {@code k} may contain a state matching {@code test}. */
     boolean mayHave(int k, int section, java.util.function.Predicate<BlockState> test) {
         ChunkShot s = shots[k];
-        return s != null && s.mayHave(section, test);
+        if (s == null) return false;
+        if (restoredStates != null && section >= 0 && section < sections && restoredStates[k * sections + section] != null) {
+            for (BlockState st : restoredStates[k * sections + section]) if (test.test(st)) return true;
+        }
+        return s.mayHave(section, test);
     }
 
     boolean has(int wx, int wz) {

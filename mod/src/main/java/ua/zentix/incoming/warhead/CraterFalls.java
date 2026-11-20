@@ -95,6 +95,23 @@ public final class CraterFalls {
     }
 
     /**
+     * A falling block starting at {@code from} would be admitted live ({@link #settle}): room under the area and world
+     * limits and the position entity-ticking. Collapse (not vanilla falling sand) asks before spawning one and places the
+     * block itself otherwise ({@link StrikeCollapse}).
+     */
+    boolean room(ServerLevel level, BlockPos from) {
+        prune(level);
+        if (live.size() >= TOTAL_CAP || !level.isPositionEntityTicking(from)) return false;
+        boolean in = false;
+        for (Zone z : zones.values()) {
+            if (!z.contains(from)) continue;
+            if (z.live >= LIVE_CAP) return false;
+            in = true;
+        }
+        return in;
+    }
+
+    /**
      * {@code falling} began at {@code from} (already empty). Above area limit, place immediately on support and
      * return {@code true} (no entity entry), otherwise admit live. Where blocks tick but entities do not (level
      * 32: edge, not-yet-grown blast area as {@code AreaLoader} grows entity-ticking rings with ready neighbors,

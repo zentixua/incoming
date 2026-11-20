@@ -378,7 +378,7 @@ Ruins and everything in `nuclear/world/` are in `nuclear-world.md`.
   same air path as head dust, `BlastWall.carriedShare`); masonry-breach dust (mass for all positions represented by
   sample, `S2C.NukeDebris.weight`) forms downwind effects-layer billow streaks (`BlastDust`: grouped in 4-block cells
   within 48 blocks of camera, one per chunk beyond, to `NukeDust.NEAR`; fades into Kuhl layer). With game wave
-  (`wave_speed` 0.25), near-burst front is slower than real wind behind it: cap wind at in-game front speed, air path
+  (`wave_speed` 0.35), near-burst front is slower than real wind behind it: cap wind at in-game front speed, air path
   at front position, no wind ahead (`BlastGustTest.piecesStayBehindTheFront`: without speed cap, a leaf clump at 600 m
   reached 7 blocks/tick in one tick and overtook front). Wind clock uses detonation ID (`ClientNuclear.ticksOf`): entry
   and seek replace detonation records while airborne pieces remain. Surface litter is only turf, litter and leaves
@@ -430,12 +430,19 @@ Ruins and everything in `nuclear/world/` are in `nuclear-world.md`.
   reviews of #668: a lead of 30 made a fresh 15 kt front 621 m instead of 174 m, alternating 10-tick delays showed 200 for
   160, a lag of 30 showed 50 for 20). Anchors carry the server's age for the detonation at send: the live detonation
   packet (0) and `S2C.NukeTick` (server game time, every server tick while the dimension holds a show,
-  `NuclearStrikes.showing`). Target = anchor + own ticks since it arrived, at most one while anchors stream (a client
-  faster than a lagging server waits), unlimited without them (old recordings, after the show, `ended`); the shown age
-  moves toward it by at most `MAX_STEP` (3) per tick, never back; a past detonation (entry, seek) takes the first anchor
-  whole; frames never step back (`at`). Own ticks alone lagged the server 31–55 ticks in the full host pack (ruins, throws
-  and debris 1.5–2.7 s before the drawn wave). `ClientNuclearTest`: lagging server, heavy client, alternating delays,
-  server stall and backward anchor, client freeze, no stream, past snap, frames.
+  `NuclearStrikes.showing`). The shown age is continuous in the client's own time (ticks plus frame partial): it advances
+  every frame at the server's measured rate (anchor ages per own tick over `RATE_WINDOW`) × steering 1 + error/`RESPONSE`
+  in [`SLOWEST` 0.8, `FASTEST` 3] toward the estimated server age less `DELAY` (one tick of jitter buffer); never back, at
+  most `LEAD` 3 ticks past the latest anchor (ruins and debris arrive ≥ 2 ticks after the wave); eases to a stop over
+  `EASE` only after `STALE` ticks of frames without an anchor (server stall; packets a frozen client could not read do not
+  count). Without a stream (after the show, `ended`; in a Flashback replay, a live burst with no per-tick anchor within
+  `PROBE` 1 s is a recording made before them; a live server's late first anchor only holds the burst at `LEAD`) it follows own time, uncapped; tick-time callers ask the tick's own age (`ticks(0)`: a partial ahead
+  advances the clock past every frame of the tick, review of #678); a past detonation
+  (entry, seek) takes the first anchor whole. #668's law (at most one tick past the anchor, whole-tick steps) held
+  40–43 % of frames up to 149 ms on a 1 Mt rig: the wall moved in 20 Hz steps (19.11). Own ticks alone lagged the server
+  31–55 ticks in the full host pack. `ClientNuclearTest`: recorded rig anchor streams (`age-clock/J3.txt`, `J6.txt`) with
+  jitter, lagging server, heavy client, alternating delays, server stall and backward anchor, client freeze, no stream,
+  past snap, frames.
 - `Detonation.dayTime` (time of day at detonation) is no longer read: kept only for the save/packet formats. Slow
   consequences use the world clock (`WorldClock` on the server, `ClientClock` mirroring it from the client's day) and the
   detonation clock; server anchors per detonation (`NuclearEvents.Anchor`: world clock at burst and show end) are

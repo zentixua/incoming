@@ -44,8 +44,9 @@ The short layout is in the root CLAUDE.md; here, what each script does.
     laptop_job.sh [--gpu|--light] <name> -- <command> ← heavy job on the host's laptop: its own temporary systemd service
                                            (not in the Claude group), the laptop does not sleep, everything of it is stopped on exit; no queue;
                                            --gpu [--wait] takes the GPU lease of its session (another session's: refusal 75; with
-                                           --wait, in the lease queue) and waits until Artem's game is closed; at the end, “laptop_job <name>:
-                                           exit N”; --status: what runs and who holds the GPU
+                                           --wait, in the lease queue) and waits until Artem's game is closed; his game started during the
+                                           job (polled every second) stops it: “Artem's game started at T: job stopped”, exit 75;
+                                           at the end, “laptop_job <name>: exit N”; --status: what runs and who holds the GPU
     gpu_lease.sh status|take [--wait]|release ← GPU lease: with a picture, one session (the owner is found by the tree
                                            wt-<S>…); a client on the GPU is one (the lock is held by nested_kwin.sh); another
                                            session: refusal “GPU held by …, since …”; a live nested KWin without the lock (the script before

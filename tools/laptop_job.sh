@@ -14,7 +14,9 @@
 #   --gpu    client or Blender: acquires session GPU lease (owner by worktree) before starting service; held by
 #            another session: refusal 75 with "GPU held by …, since …" (--wait joins lease queue in arrival
 #            order); renews lease while running. Also waits until Artem's game closes (Java in Prism instance
-#            directory): shared machine. If caller exits (timeout, lost session) while job waits for game, job never starts (code 75)
+#            directory): shared machine. If caller exits (timeout, lost session) while job waits for game, job never starts (code 75).
+#            His game started while the job runs (polled every second) stops the job: "Artem's game started at T: job
+#            stopped", code 75
 #   --light  same as no flag: immediate, no lease (GameTest, build, server need no GPU)
 set -euo pipefail
 
@@ -45,8 +47,27 @@ if [ "${1:-}" = --in-unit ]; then
   # session lease renews while it holds the lock
   tree=$(cd "$(dirname "$(readlink -f "$0")")/.." && pwd)
   gpu_client_hold "$INCOMING_GPU_OWNER" "$tree" "job $name" || exit 75
-  "$@"
-  code=$?
+  # Artem's game started during the job (19.11: a GPU run measured frame times while he watched a replay): poll every
+  # second, stop the whole job (its own process group: TERM, KILL after 10 s) and say so; the job ends with 75.
+  # The service stops whatever else is left in its group when this script exits
+  set -m
+  "$@" &
+  job=$!
+  set +m
+  code=
+  while kill -0 "$job" 2>/dev/null; do
+    if artem_playing; then
+      echo "$name: Artem's game started at $(date +%T): job stopped"
+      kill -TERM -- "-$job" 2>/dev/null
+      for _ in $(seq 100); do kill -0 -- "-$job" 2>/dev/null || break; sleep 0.1; done
+      kill -KILL -- "-$job" 2>/dev/null
+      code=75
+      break
+    fi
+    sleep "${INCOMING_GAME_POLL:-1}"
+  done
+  wait "$job"; rc=$?
+  [ -n "$code" ] || code=$rc
   lease_renew "$INCOMING_GPU_OWNER" "$tree" || true
   exit $code
 fi
