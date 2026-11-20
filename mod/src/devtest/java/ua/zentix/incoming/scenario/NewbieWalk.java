@@ -46,18 +46,14 @@ import ua.zentix.incoming.registry.ModCreativeTabs;
 import ua.zentix.incoming.registry.ModItems;
 import ua.zentix.incoming.strike.WeaponType;
 
-import java.io.IOException;
 import java.lang.reflect.Field;
 import java.lang.reflect.Method;
-import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayDeque;
-import java.util.Comparator;
 import java.util.List;
 import java.util.function.BooleanSupplier;
 import java.util.function.Consumer;
 import java.util.function.Supplier;
-import java.util.stream.Stream;
 
 /**
  * A brand-new player's first strike, without the guide ({@code tools/client_scenario.sh newbie}): a survival world
@@ -70,8 +66,6 @@ import java.util.stream.Stream;
  */
 final class NewbieWalk {
     private static final String WORLD = "incoming-newbie-scenario";
-    /** Written into the scenario's own world: only a world carrying it is ever deleted (a player's save never is). */
-    private static final String MARK = "incoming-newbie-scenario.mark";
 
     private final Minecraft mc = Minecraft.getInstance();
     private final ArrayDeque<Step> steps = new ArrayDeque<>();
@@ -96,25 +90,14 @@ final class NewbieWalk {
     private void onTitle(ScreenEvent.Init.Post e) {
         if (started || !(e.getScreen() instanceof TitleScreen)) return;
         started = true;
-        Path dir = mc.gameDirectory.toPath().resolve("saves").resolve(WORLD);
-        if (Files.isDirectory(dir) && !Files.exists(dir.resolve(MARK))) {
-            Incoming.LOG.error("NEWBIE saves/{} exists and is not the scenario's world: not touching it", WORLD);
-            mc.stop();
-            return;
-        }
-        if (Files.isDirectory(dir)) {
-            try (Stream<Path> walk = Files.walk(dir)) {
-                walk.sorted(Comparator.reverseOrder()).forEach(p -> p.toFile().delete());
-            } catch (IOException ex) {
-                Incoming.LOG.warn("NEWBIE old world not deleted", ex);
-            }
-        }
+        // A fresh world directory each run, next to whatever saves exist: nothing is ever deleted.
+        String world = WORLD + "-" + System.currentTimeMillis();
         GameRules rules = new GameRules();
         rules.getRule(GameRules.RULE_DAYLIGHT).set(false, null);
         rules.getRule(GameRules.RULE_WEATHER_CYCLE).set(false, null);
         rules.getRule(GameRules.RULE_DOMOBSPAWNING).set(false, null);
-        LevelSettings settings = new LevelSettings(WORLD, GameType.SURVIVAL, false, Difficulty.PEACEFUL, false, rules, WorldDataConfiguration.DEFAULT);
-        mc.createWorldOpenFlows().createFreshLevel(WORLD, settings, new WorldOptions(20260927L, true, false),
+        LevelSettings settings = new LevelSettings(world, GameType.SURVIVAL, false, Difficulty.PEACEFUL, false, rules, WorldDataConfiguration.DEFAULT);
+        mc.createWorldOpenFlows().createFreshLevel(world, settings, new WorldOptions(20260927L, true, false),
                 WorldPresets::createNormalWorldDimensions, e.getScreen());
     }
 
@@ -128,11 +111,6 @@ final class NewbieWalk {
     private void plan() {
         until("world", 6000, () -> mc.player != null && mc.level != null);
         run(() -> {
-            try {
-                Files.writeString(mc.gameDirectory.toPath().resolve("saves").resolve(WORLD).resolve(MARK), "scenario world, safe to delete\n");
-            } catch (IOException ex) {
-                Incoming.LOG.warn("NEWBIE mark not written", ex);
-            }
             // The run directory keeps options.txt: a previous run ended in Russian.
             if (!"en_us".equals(mc.options.languageCode)) {
                 mc.options.languageCode = "en_us";
