@@ -51,6 +51,7 @@ in float pallFront;
 in float sixKey;
 in vec3 sixBall;
 in vec3 sixKeyDir;
+in vec3 sixUpDir;
 in vec3 sixBallDir;
 in vec3 worldPos;
 // glow (FxBloom): how many times brighter than shown the light is; 0 — does not glow
@@ -87,6 +88,21 @@ float sixLight(vec3 a, vec3 b, vec3 l) {
     float vertical = l.y > 0.0 ? a.g : b.g;
     float depth = l.z < 0.0 ? a.b : b.b;
     return side * q.x + vertical * q.y + depth * q.z;
+}
+
+// Ground reflectance for the diffuse light from below (grass and soil in the visible, ~0.2: the usual default of
+// isotropic-sky irradiance models, est.)
+const float GROUND_ALBEDO = 0.2;
+
+// Diffuse light of the puff's six maps (sum — of all six, tilt — the top-minus-bottom difference along world up in map
+// axes): an isotropic sky over the upper hemisphere and the ground's reflection under it (Liu & Jordan 1963: a face
+// tilted by θ sees (1 + cos θ)/2 of the sky and (1 − cos θ)/2 of the ground). On a map axis e with cos c to the
+// vertical the squared-cosine weight is (1 + c)/6 from the sky and (1 − c)/6·albedo from the ground (exact at c = 0, ±1),
+// normalised to the six-side mean for uniform light. Before, the six-side mean: the ground lit the puff's underside as
+// brightly as the sky lit its top, and black smoke had no dark underside (sandbox missile cloud, morning sun from the
+// side: shadow flank 45/255, lit flank 65, underside 52)
+float skyDome(float sum, float tilt) {
+    return (sum + (1.0 - GROUND_ALBEDO) / (1.0 + GROUND_ALBEDO) * tilt) / 6.0;
 }
 
 // Downscaled copies of the sheet (FxAtlas.MIPS)
@@ -261,7 +277,8 @@ void main() {
         // exponent not below 0.001 and the base not zero: pow(0, 0) is undefined in GLSL (NaN — a black pixel in blending)
         float shade = max((-nearest * 127.0 - 13.0) / 37.0 * 1.5, 0.001);
         float key = pow(max(sixLight(a.rgb, b, sixKeyDir) / FxSixLight.z, 1e-6), shade);
-        float diffuse = pow(max((a.r + a.g + a.b + b.r + b.g + b.b) / 6.0 / FxSixLight.z, 1e-6), shade);
+        vec3 tilt = vec3(a.r - b.r, a.g - b.g, b.b - a.b);
+        float diffuse = pow(max(skyDome(a.r + a.g + a.b + b.r + b.g + b.b, dot(sixUpDir, tilt)) / FxSixLight.z, 1e-6), shade);
         float sky = sixKey * key + (1.0 - sixKey) * diffuse;
         vec3 fire = sixBall * pow(max(sixLight(a.rgb, b, sixBallDir) / FxSixLight.z, 1e-6), shade);
         // a puff lying on the horizontal (shadow exponent 0 — the top of the layer lit from above): the balls' light — in this pixel
