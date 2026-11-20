@@ -246,18 +246,21 @@ public class LoiterEntity extends StrikeProjectile {
 
     /**
      * Terrain on the course before the orbit ({@link ClimbOut}): raise cruise altitude to clear the highest terrain on
-     * the course by the orbit's terrain clearance; if a straight climb cannot get there in time, turn at the phase's
-     * turn limit in the orbit direction (circle up). On the final leg the course ends at the target: its orbit flies
-     * at its own height.
+     * the course by the orbit's terrain clearance; if a straight climb cannot get there in time, circle up at the
+     * phase's turn limit, to the orbit side unless only the other side's circle is clear. The course ends at the next
+     * route point or at the target (its orbit flies at its own height). Not while heading for an immediate dive at a
+     * nearby target the operator picked: the dive goes down to it.
      *
      * @return circling: the caller does not steer toward the course
      */
     private boolean climbOut(Vec3 nav, WeaponSpec.Agility a, double yawGain) {
-        double reach = onFinalLeg() ? Math.min(ClimbOut.REACH, Math.hypot(nav.x - getX(), nav.z - getZ())) : ClimbOut.REACH;
-        climbOut.measure(craft, nav, Autopilot.Turn.of(yawGain, a), HANDLING.climbAngle(), reach);
+        if (strikeNow && onFinalLeg()) return false;
+        double reach = Math.min(ClimbOut.REACH, Math.hypot(nav.x - getX(), nav.z - getZ()));
+        climbOut.measure(craft, nav, Autopilot.Turn.of(yawGain, a), HANDLING.climbAngle(), reach, orbitSide);
         cruiseAlt = Math.max(cruiseAlt, climbOut.ridge() + LOITER.terrainClearance());
-        if (!climbOut.circle(position())) return false;
-        flight.steerYaw(flight.yaw() + orbitSide * 90.0, yawGain, a.turnRate(), a.turnAccel());
+        int side = climbOut.circle(position());
+        if (side == 0) return false;
+        flight.steerYaw(flight.yaw() + side * 90.0, yawGain, a.turnRate(), a.turnAccel());
         return true;
     }
 

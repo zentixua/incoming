@@ -141,9 +141,11 @@ final class ScenarioRun {
     private final FlightTrace trace = new FlightTrace();
     /**
      * Per-tick flight log of the scenario projectile (tick, phase, position and ground under it from the site centre,
-     * speed, nose angles), printed when a check fails: one failing run names the cause without a rerun.
+     * speed, nose angles), printed when a check fails or the flight never ends: one failing run names the cause without
+     * a rerun. Raw numbers per tick, formatted only when printed.
      */
-    private final List<String> flightLog = new ArrayList<>();
+    private final List<double[]> flightLog = new ArrayList<>();
+    private boolean flightLogPrinted;
     @Nullable
     private Outcome outcome;
     private final Consumer<ExplosionEvent.Start> onBlast = this::onBlast;
@@ -709,7 +711,7 @@ final class ScenarioRun {
             // with a real load, the flight depends on the generation speed on the machine: the reference is not about it
             if (s.baselined() && !ScenarioMode.REAL_CHUNKS) checkBaseline();
         } catch (GameTestAssertException e) {
-            Incoming.LOG.warn("SCENARIO flight {}: log (tick phase virtual x y z ground speed pitch yaw)\n{}", s.id(), String.join("\n", flightLog));
+            printFlightLog();
             throw new GameTestAssertException(e.getMessage() + " — " + ScenarioMode.reproduce(s));
         }
     }
@@ -717,8 +719,18 @@ final class ScenarioRun {
     private void logFlight(int t, StrikeProjectile e, Vec3 pos) {
         Vec3 rel = pos.subtract(site.origin);
         double ground = e.isVirtual() ? Double.NaN : site.ground(pos.x, pos.z, false).y - site.origin.y;
-        flightLog.add(String.format(Locale.ROOT, "%d %s %s %.2f %.2f %.2f %.0f %.3f %.1f %.1f", t, e.flightPhase(), e.isVirtual() ? "V" : "W",
-                rel.x, rel.y, rel.z, ground, e.speed(), e.getXRot(), e.getYRot()));
+        flightLog.add(new double[]{t, e.flightPhase().ordinal(), e.isVirtual() ? 1 : 0, rel.x, rel.y, rel.z, ground, e.speed(), e.getXRot(), e.getYRot()});
+    }
+
+    private void printFlightLog() {
+        if (flightLogPrinted) return;
+        flightLogPrinted = true;
+        StringBuilder out = new StringBuilder();
+        for (double[] r : flightLog) {
+            out.append(String.format(Locale.ROOT, "%n%d %s %s %.2f %.2f %.2f %.0f %.3f %.1f %.1f", (int) r[0], FlightPhase.values()[(int) r[1]],
+                    r[2] > 0 ? "V" : "W", r[3], r[4], r[5], r[6], r[7], r[8], r[9]));
+        }
+        Incoming.LOG.warn("SCENARIO flight {}: log (tick phase virtual x y z ground speed pitch yaw){}", s.id(), out);
     }
 
     /** A property that is violated by a known flaw in the mod ({@link Scenario#knownIssues}): violation - in the log, test further. */
@@ -838,6 +850,8 @@ final class ScenarioRun {
     }
 
     private void cleanup() {
+        // the flight never ended (GameTest timeout): its log as for a failed check
+        if (!checked && !flightLog.isEmpty()) printFlightLog();
         NeoForge.EVENT_BUS.unregister(onBlast);
         NeoForge.EVENT_BUS.unregister(onDetonate);
         NeoForge.EVENT_BUS.unregister(onBlockUpdate);
