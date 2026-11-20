@@ -8,7 +8,9 @@ import net.minecraft.world.level.Level;
 import net.minecraft.world.phys.Vec3;
 import org.jetbrains.annotations.Nullable;
 import ua.zentix.incoming.IncomingConfig;
+import ua.zentix.incoming.guidance.Autopilot;
 import ua.zentix.incoming.guidance.Bearing;
+import ua.zentix.incoming.guidance.ClimbOut;
 import ua.zentix.incoming.guidance.Dive;
 import ua.zentix.incoming.guidance.Orbit;
 import ua.zentix.incoming.strike.FlightTickets;
@@ -27,6 +29,8 @@ import java.util.UUID;
  * settings (each salvo member ±20%), then a steep dive accelerating to 4 blocks/tick. From the projectile camera
  * (left-click), the operator selects a target: dive immediately if nearby, otherwise fly there and orbit there.
  * With an operator route ({@code Waypoints}), first pass its points, then join the orbit from the final leg.
+ * Toward a ridge it cannot out-climb (catapult at the foot of a hill, a ridge above cruise altitude) it circles up
+ * first ({@link ClimbOut}).
  */
 public class LoiterEntity extends StrikeProjectile {
     /** Spec: speeds (≈115 km/h, dive 4 blocks/tick), turn limits, orbit height above target, catapult. */
@@ -44,6 +48,8 @@ public class LoiterEntity extends StrikeProjectile {
     private boolean strikeNow;
     /** Closest approach to target in this dive, blocks. */
     private double closest = Double.MAX_VALUE;
+    /** Terrain on the course before the orbit: circle up first if a straight climb cannot clear it. */
+    private final ClimbOut climbOut = new ClimbOut();
 
     public LoiterEntity(EntityType<? extends LoiterEntity> type, Level level) {
         super(type, level);
@@ -192,14 +198,19 @@ public class LoiterEntity extends StrikeProjectile {
         if (ph == FlightPhase.CLIMB) {
             // Wings unfolded, propeller pulling: climb toward the orbit (or operator route waypoint).
             throttle(AIR.cruiseSpeed());
+            Vec3 nav = navPoint(aim);
+            boolean circle = climbOut(nav, HANDLING.climb(), LOITER.climbYawGain());
             holdAltitude(Math.max(cruiseAlt, floor), LOITER.altitudeGain(), HANDLING.climb());
-            flight.steerYaw(bearingTo(navPoint(aim)).yaw(), LOITER.climbYawGain(), HANDLING.climb().turnRate(), HANDLING.climb().turnAccel());
+            if (!circle) flight.steerYaw(bearingTo(nav).yaw(), LOITER.climbYawGain(), HANDLING.climb().turnRate(), HANDLING.climb().turnAccel());
             if (phaseAge() > LOITER.climbTicks()) setPhase(FlightPhase.CRUISE);
         } else if (ph == FlightPhase.CRUISE) {
             throttle(AIR.cruiseSpeed());
-            holdAltitude(Math.max(cruiseAlt, floor), LOITER.altitudeGain(), HANDLING.cruise());
             Vec3 nav = navPoint(aim);
-            if (!onFinalLeg()) {
+            boolean circle = climbOut(nav, HANDLING.cruise(), LOITER.cruiseYawGain());
+            holdAltitude(Math.max(cruiseAlt, floor), LOITER.altitudeGain(), HANDLING.cruise());
+            if (circle) {
+                // Climb-out circle: course and orbit wait until a straight climb clears the ridge.
+            } else if (!onFinalLeg()) {
                 // Operator route: point by point, then join the orbit from the final leg.
                 flight.steerYaw(bearingTo(nav).yaw(), LOITER.cruiseYawGain(), HANDLING.cruise().turnRate(), HANDLING.cruise().turnAccel());
             } else if (strikeNow) {
@@ -231,6 +242,24 @@ public class LoiterEntity extends StrikeProjectile {
         }
 
         advance(level, aim, AIR.reachPad());
+    }
+
+    /**
+     * Terrain on the course before the orbit ({@link ClimbOut}): raise cruise altitude to clear the highest terrain on
+     * the course by the orbit's terrain clearance; if a straight climb cannot get there in time, circle up at the
+     * phase's turn limit, to the orbit side unless only the other side's circle is clear. The course ends at the next
+     * route point or at the target (its orbit flies at its own height).
+     *
+     * @return circling: the caller does not steer toward the course
+     */
+    private boolean climbOut(Vec3 nav, WeaponSpec.Agility a, double yawGain) {
+        double reach = Math.min(ClimbOut.REACH, Math.hypot(nav.x - getX(), nav.z - getZ()));
+        climbOut.measure(craft, nav, Autopilot.Turn.of(yawGain, a), HANDLING.climbAngle(), reach, orbitSide);
+        cruiseAlt = Math.max(cruiseAlt, climbOut.ridge() + LOITER.terrainClearance());
+        int side = climbOut.circle(position());
+        if (side == 0) return false;
+        flight.steerYaw(flight.yaw() + side * 90.0, yawGain, a.turnRate(), a.turnAccel());
+        return true;
     }
 
     @Override

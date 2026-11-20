@@ -223,7 +223,9 @@ building or the roof.
 
 A small drone launched from a catapult. Its electric motor is quiet: it is heard only a few hundred blocks away. It
 circles over the target while you pick what to hit in its
-[camera](camera.md#lancet), and does not miss. The blast is small: enough for a vehicle, a player or a single house.
+[camera](camera.md#lancet), and does not miss. The blast is small: enough for a vehicle, a player or a single house. If a
+hill on its way is too steep to climb over straight away, for example right behind the catapult, it first circles up
+until it can clear it, then flies on.
 
 ## Cruise missile
 

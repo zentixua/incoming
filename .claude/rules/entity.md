@@ -48,7 +48,13 @@ paths:
   game number), altitude density/world wind (`Path` by tick, 4 steps/tick), firing solution `aim` (Newton over speed/
   heading at rack angle) for MLRS with ground wind `Wind.ground`, flies through wind profile: wind drift/spec rail-exit
   spread disperse salvo; drag-free parabola remains for launch-sector check; `guidance/Orbit` loiter circle (heading
-  vector field with v/r lead, tangent entry); `guidance/BombDrop` bunker-buster fall (controls steer nose, speed from
+  vector field with v/r lead, tangent entry); `guidance/ClimbOut` Lancet terrain before the orbit (climb and cruise): corridor over the predicted course for 256 blocks, at most to the next route point or target, raises
+  cruise altitude to its highest column + `terrainClearance`; a straight climb at full `climbAngle` (the Lancet holds it
+  while far below) that cannot clear a column by 1 block makes it circle at its turn limit, to the orbit side unless
+  only the other side's circle as flown is clear (climbing until a straight climb clears the course's critical column,
+  `Corridor.both`; never judged by a part of the circle it leaves first), until it can (catapult at a
+  hill foot, `loiter_rail.point.hill.11`); under a roof (column top above the craft) it neither circles nor climbs;
+  `ClimbOutTest`; `guidance/BombDrop` bunker-buster fall (controls steer nose, speed from
   gravity along path/drag, wind `drift` through `StrikeProjectile.drift`): same steps for bomb/B-2 simulating drop
   (no wind, controls compensate) and releasing when it will hit from current altitude; bomb drag via flight-scale
   `Airframe.drag()` (`Ballistics.Drag` overloads for other-scale tests); B-2 flight level scale `cruiseHeight()` up to
