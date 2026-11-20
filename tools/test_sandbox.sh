@@ -86,6 +86,8 @@ AUDIO=$tmp/audio.wav
 
 source "$ROOT/tools/soft_gl.sh"
 [ "$(tree_id /a/wt-main)" != "$(tree_id /b/wt-main)" ] && [[ $(tree_id /a/wt-main) == wt-main-* ]] && ok "tree id: alike names in different places differ" || bad "tree_id"
+[ "$(printf 'MemoryCurrent=1048576000\nMemoryMax=4831838208\n\nMemoryCurrent=5890895872\nMemoryMax=infinity\n\nMemoryMax=3221225472\nMemoryCurrent=[not set]\n' | soft_mem_headroom)" = 6680 ] \
+  && ok "promised memory: unused ceilings of CPU clients only, in either property order" || bad "soft_mem_headroom"
 [ "$(INCOMING_SOFT_HEAP=3g soft_mem_cap)" = 4608 ] && [ "$(INCOMING_SOFT_HEAP=1536m soft_mem_cap)" = 3072 ] && ok "CPU client ceiling: heap + 1.5 GB" || bad "soft_mem_cap"
 out=$(INCOMING_SOFT_RESERVE_MB=100000000 soft_mem_ok 2>&1); rc=$?
 [ $rc = 75 ] && [[ $out == *"soft client refused"* ]] && ok "CPU client refused when memory is short" || bad "soft_mem_ok: $rc $out"

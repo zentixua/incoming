@@ -45,14 +45,19 @@ soft_mem_cap() {
 
 # Unused part of the running CPU clients' ceilings, MB: units of laptop_job.sh --soft are the jobs with a MemoryMax
 soft_mem_promised() {
-  local u max cur sum=0
+  local u
   for u in $(systemctl --user list-units 'incoming-job-*' --state=active --no-legend --plain 2>/dev/null | awk '{print $1}'); do
-    { read -r max; read -r cur; } < <(systemctl --user show "$u" -p MemoryMax -p MemoryCurrent --value 2>/dev/null)
-    [[ $max =~ ^[0-9]+$ ]] || continue
-    [[ $cur =~ ^[0-9]+$ ]] || cur=0
-    [ "$cur" -lt "$max" ] && sum=$(( sum + (max - cur) / 1048576 ))
-  done
-  echo "$sum"
+    # key=value lines: `show --value` prints properties in systemd's order, not the order asked
+    systemctl --user show "$u" -p MemoryMax -p MemoryCurrent 2>/dev/null; echo
+  done | soft_mem_headroom
+}
+
+# MemoryMax=/MemoryCurrent= blocks (blank line between units) → MB still promised: units without a finite MemoryMax
+# are not CPU clients
+soft_mem_headroom() {
+  awk -F= '/^MemoryMax=/ { max = $2 } /^MemoryCurrent=/ { cur = $2 }
+    /^$/ { if (max ~ /^[0-9]+$/) { if (cur !~ /^[0-9]+$/) cur = 0; if (cur < max) sum += (max - cur) / 1048576 } max = ""; cur = "" }
+    END { if (max ~ /^[0-9]+$/) { if (cur !~ /^[0-9]+$/) cur = 0; if (cur < max) sum += (max - cur) / 1048576 } printf "%d\n", sum }'
 }
 
 # Memory admission: the client's ceiling must leave the reserve free, after what running CPU clients may still take
