@@ -122,9 +122,9 @@ defense, `launcher/`, `grid/` blackout, `sound/`, `client/`, `work/` tick budget
    are strengthened toward the reference footage, marked `presentation:` in code, without changing facts. A real size
    or shape changes only by Artem's word, as a marked deviation. Never add what reality lacks (fire on every block,
    smoke from nowhere, impossible colour, impossible flight, 200 m craters, "space" effects).
-- **Vanilla first** (Artem, 20.11): the main visual target is the picture in vanilla rendering without shader packs;
-  shader packs (Iris) add on top and must not break it. Tune and judge without shaders; under a pack, only check it
-  still works.
+- **Vanilla first** (Artem, 20.11): the look is built and accepted without shaders first; under a shader pack (Iris)
+  every effect works and looks at least as good, never broken. Accept in both: CPU vanilla frames, then one GPU
+  shader-pack check on the last head.
 - **Not done by design** (Artem, 19.11): consequence sliders (damage ×), Hollywood craters, pixel smoke, a small
   "game-size" nuke default, smoke or fire shorter than its law.
 - **Every weapon, the nuke included,** has a realistic and cinematic launch, flight and impact (Artem, 07.11).
