@@ -51,7 +51,7 @@ public final class WallProbe {
                 b.append(String.format(Locale.ROOT, "; u %.2f (r %.0f smoke %.2f sand %.2f burn %.3f, sigma@0.1top %.3g):", u, r, smoke, sand, burn,
                         BlastWall.sigma(s, ux * r, uz * r, 0.1 * s[2], 0)));
                 for (double zf : new double[]{0.9, 0.5, 0.1}) {
-                    double up = zf * s[2] * BlastWall.top(Math.min(u, 1));
+                    double up = zf * BlastWall.local(s, u * s[1], 0);
                     NukePall.dustLight(s, glow, sky, d.windDir(), ux * r, up, uz * r, up, smoke, sand, c);
                     b.append(String.format(Locale.ROOT, " z%.1f %s", zf, rgb(c)));
                 }

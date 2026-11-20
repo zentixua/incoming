@@ -1098,6 +1098,30 @@ class Plan(unittest.TestCase):
         # Last in the plan: their impacts do not enter other scenes windows
         others = [i for i, x in enumerate(steps) if x["do"] == "salvo" and x["id"] not in plan.launch_ids(self.scenes)]
         self.assertLess(max(others), steps.index(grad))
+
+    def test_megaton_wall(self):
+        steps = self.p["steps"]
+        i = next(k for k, x in enumerate(steps) if x["do"] == "cmd" and x["cmd"].startswith("incoming nuke now"))
+        self.assertEqual(steps[i]["cmd"], "incoming nuke now at 0 65 -12000 1000 ground")
+        # The camera stands on the ground 3 km from ground zero, facing it, away from every other site
+        eye, look = steps[i - 1]["eye"], steps[i - 1]["look"]
+        self.assertAlmostEqual(math.dist((eye[0], eye[2]), (0, -12000)), 3000)
+        self.assertAlmostEqual(eye[1] - self.scenes["ground"], 2)
+        self.assertEqual((look[0], look[2]), (0, -12000))
+        for name, site in self.scenes["sites"].items():
+            if name != "M":
+                self.assertGreater(math.dist(site, (0, -12000)), 10000)
+        # 1 Mt is allowed by the bench's world rules; the wave as on Artem's server
+        self.assertEqual(self.scenes["server_config"]["nuclear"], {"max_yield": 1000, "wave_speed": 0.35})
+        self.assertEqual(self.scenes["server_config"]["scale"], {"scale_preset": "CUSTOM"})
+        # Windows from the command: the wall's last 8 s of approach (front at 3 km ~20.2 s after the burst) and 6 s inside
+        self.assertEqual([x["do"] for x in steps[i + 1:i + 8]], ["wait", "window", "shot", "wait", "window", "shot", "wait"])
+        self.assertEqual((steps[i + 1]["s"], steps[i + 2]["name"], steps[i + 2]["s"]), (12, "megaton/approach", 8))
+        self.assertEqual((steps[i + 5]["name"], steps[i + 5]["s"]), ("megaton/inside", 6))
+        self.assertEqual(plan.windows(self.scenes, ["megaton"]), ["megaton/approach", "megaton/inside"])
+        # Last of all: its ruins and pall enter no other window
+        self.assertFalse(any(x["do"] in ("window", "impact_window", "salvo") for x in steps[:i] if x.get("name", x.get("id", "")).startswith("megaton")))
+        self.assertEqual([x["do"] for x in steps[i + 8:]], ["wait"])
         # No wait for completion; validity does not require it either
         ev = [{"type": "gl"}, {"type": "salvo", "id": "grad"}]
         res = {"meta": {"done": {"x": 1}, "impacts": {}}, "windows": {}}
