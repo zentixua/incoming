@@ -289,10 +289,15 @@ Ruins and everything in `nuclear/world/` are in `nuclear-world.md`.
   shader pack it is the pack's sky (`fx/layer/SkyBand`, `SkyBandPass`, pass `fx_sky_band`, lead decision 20.11):
   vanilla's sky stays blue-grey at dusk while the pack paints it gold, and the haze share (≈0.42 of a 15 kt cap's lit
   side at 9 km) kept the cap a cold blue cut-out on an orange sky. 16 × 6 bins (22.5° azimuth × 15° elevation) of the
-  frame's sky-only pixels (`SceneDepth` = sky), 8² jittered directions per bin, a 10° cone around the sun and the moon
-  left out, read back without waiting, smoothed (τ 0.5 s), stale after 10 s, holes filled from the row's nearest
-  seen bins, then the nearest row; nothing seen — vanilla. Uploaded as the `PallAirBand` array by hand, `PallAirBandOn`
-  in the JSON. Never the frame behind the pixel: review #671 rejected screen taps (they carried an off-axis sun and
+  frame's sky-only pixels (`SceneDepth` = sky on the 5×5 block around the sample and 4 px out: a pack's TAA carries a
+  silhouette's colour into the sky beside it; with a LOD mod installed, only frames whose distance holds its LODs),
+  8² jittered directions per bin, a 10° cone around the sun and the moon on the pack's sun path left out
+  (`IrisApi.getSunPathRotation`, `SkyBand.packSun`), read back through a fenced pixel-pack buffer without waiting,
+  smoothed (τ 0.5 s) from captures where ≥ 1/8 of a bin is sky, stale after 2 s (a pack switched by Iris's Apply takes
+  over within a second), holes filled from the row's nearest seen bins, then the nearest row; nothing seen — vanilla;
+  world change, pack off and shader reload drop it. Uploaded as the `PallAirBand` array by hand after `apply()` (Veil
+  uploads zeroed copies of JSON-less uniforms there, `PallPass.quad`), `PallAirBandOn` in the JSON; the pass restores
+  all GL state it touches. Never the frame behind the pixel: review #671 rejected screen taps (they carried an off-axis sun and
   nearby blocks into the cap); the band holds only sky and never the sun or moon
   (`SkyBandTest.capWithTheSunBehindItNeverTakesTheSunsColour`, `onlyTheSkyEntersTheBand`). The `haze` share is added
   after `pallShown`, alpha is the matter's

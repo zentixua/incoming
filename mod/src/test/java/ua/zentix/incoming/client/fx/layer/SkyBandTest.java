@@ -198,6 +198,30 @@ class SkyBandTest {
         }
     }
 
+    /**
+     * Review #686 r4: a pack switched by Iris's Apply (no shader reload, same world) — the old pack's sky leaves a bin seen
+     * by the new one within a second, and a bin only grazed by a sliver of sky (under 1/8 of its samples) is not kept alive
+     * by it: it expires after {@link SkyBand#STALE}.
+     */
+    @Test
+    void aSwitchedPackTakesOverWithinASecond() {
+        SkyBand band = new SkyBand();
+        float[] old = new float[SkyBand.AZ * SkyBand.EL * 4], next = new float[SkyBand.AZ * SkyBand.EL * 4], drawn = new float[old.length];
+        for (int i = 0; i < SkyBand.AZ * SkyBand.EL; i++) {
+            old[i * 4] = 1;
+            old[i * 4 + 3] = 1;
+            next[i * 4 + 3] = i == 0 ? 1f / 64 : 1;
+        }
+        for (int f = 0; f <= 300; f++) band.observe(old, f / 60.0);
+        for (int f = 1; f <= 60; f++) band.observe(next, 5 + f / 60.0);
+        assertTrue(band.fill(drawn, 6));
+        assertTrue(drawn[4] < Math.exp(-1 / SkyBand.TAU) + 0.01, "a bin seen by the new pack: " + drawn[4] + " of the old sky left");
+        for (int f = 61; f <= 60 * (1 + SkyBand.STALE); f++) band.observe(next, 5 + f / 60.0);
+        assertTrue(band.fill(drawn, 5 + 1 + SkyBand.STALE));
+        assertTrue(drawn[3] < 1, "the sliver bin is not fresh: filled from its row");
+        assertTrue(drawn[0] < 0.2, "the sliver bin takes its neighbours' new sky, not the old pack's: " + drawn[0]);
+    }
+
     /** The band is read the same way it is laid out: a uniform per-bin colour comes back exactly at each bin centre. */
     @Test
     void readFindsEachBinAtItsCentre() {
@@ -249,8 +273,12 @@ class SkyBandTest {
                 block(pall, "vec3 pallAirBand", "// Airlight along view direction dir"));
         // the pass takes only sky pixels (SceneDepth: sky 1e9) with sky around them, and nothing behind the eye
         assertTrue(pass.contains("return texelFetch(Sampler1, clamp(p, ivec2(0), size - 1), 0).r >= 1e8;"));
-        assertTrue(pass.contains("if (!skyAt(at, depth) || !skyAt(at + ivec2(BAND_EDGE, 0), depth) || !skyAt(at - ivec2(BAND_EDGE, 0), depth)"));
-        assertTrue(pass.contains("|| !skyAt(at + ivec2(0, BAND_EDGE), depth) || !skyAt(at - ivec2(0, BAND_EDGE), depth)) continue;"));
+        assertEquals("bool skyAround(ivec2 at, ivec2 size) { for (int dy = -2; dy <= 2; dy++) { for (int dx = -2; dx <= 2; dx++) { "
+                        + "if (!skyAt(at + ivec2(dx, dy), size)) return false; } } "
+                        + "return skyAt(at + ivec2(BAND_EDGE, 0), size) && skyAt(at - ivec2(BAND_EDGE, 0), size) "
+                        + "&& skyAt(at + ivec2(0, BAND_EDGE), size) && skyAt(at - ivec2(0, BAND_EDGE), size); }",
+                block(pass, "bool skyAround", "// Copy — SkyBand.takes"));
+        assertTrue(pass.contains("if (!skyAround(at, depth)) continue;"));
         assertTrue(pass.contains("if (clip.w <= 0.0) continue;"));
     }
 }

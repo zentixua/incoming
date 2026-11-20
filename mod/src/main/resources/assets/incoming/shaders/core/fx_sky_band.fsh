@@ -2,8 +2,8 @@
 
 // The shader pack's sky by direction (client/fx/layer/SkyBand, SkyBandPass): one pixel per bin of AZ azimuth × EL
 // elevation bins over the upper hemisphere. BAND_SAMPLES² directions per bin, jittered per frame; each that lands on
-// screen on a sky pixel (world distance = sky, SceneDepth: 1e9) whose neighbours BAND_EDGE pixels away are sky too (a
-// pack's TAA and blur carry a silhouette's colour a few pixels into the sky beside it), outside the cones around the
+// screen on a sky pixel (world distance = sky, SceneDepth: 1e9) with sky all around it (skyAround: a pack's TAA and blur
+// carry a silhouette's colour a few pixels into the sky beside it), outside the cones around the
 // sun and the moon (skyBandTakes, the pack's sun path), adds the frame's colour there. Output: mean colour, share of the
 // samples taken.
 uniform sampler2D Sampler0;
@@ -21,6 +21,18 @@ const int BAND_AZ = 16, BAND_EL = 6, BAND_SAMPLES = 8, BAND_EDGE = 4;
 
 bool skyAt(ivec2 p, ivec2 size) {
     return texelFetch(Sampler1, clamp(p, ivec2(0), size - 1), 0).r >= 1e8;
+}
+
+// Sky on the whole 5x5 block around the sample (a pack's TAA clamps history to the 3x3 neighbourhood: a pixel one step
+// from a post can keep the post's colour) and BAND_EDGE pixels out on both axes (its blur)
+bool skyAround(ivec2 at, ivec2 size) {
+    for (int dy = -2; dy <= 2; dy++) {
+        for (int dx = -2; dx <= 2; dx++) {
+            if (!skyAt(at + ivec2(dx, dy), size)) return false;
+        }
+    }
+    return skyAt(at + ivec2(BAND_EDGE, 0), size) && skyAt(at - ivec2(BAND_EDGE, 0), size)
+            && skyAt(at + ivec2(0, BAND_EDGE), size) && skyAt(at - ivec2(0, BAND_EDGE), size);
 }
 
 // Copy — SkyBand.takes
@@ -49,8 +61,7 @@ void main() {
             vec2 uv = clip.xy / clip.w * 0.5 + 0.5;
             if (uv.x < 0.0 || uv.y < 0.0 || uv.x >= 1.0 || uv.y >= 1.0) continue;
             ivec2 at = ivec2(uv * vec2(depth));
-            if (!skyAt(at, depth) || !skyAt(at + ivec2(BAND_EDGE, 0), depth) || !skyAt(at - ivec2(BAND_EDGE, 0), depth)
-                    || !skyAt(at + ivec2(0, BAND_EDGE), depth) || !skyAt(at - ivec2(0, BAND_EDGE), depth)) continue;
+            if (!skyAround(at, depth)) continue;
             sum += texelFetch(Sampler0, ivec2(uv * vec2(frame)), 0).rgb;
             n += 1.0;
         }

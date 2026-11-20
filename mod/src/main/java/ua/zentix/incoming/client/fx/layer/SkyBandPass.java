@@ -18,6 +18,7 @@ import org.jetbrains.annotations.Nullable;
 import org.joml.Matrix4f;
 import org.lwjgl.opengl.GL11;
 import org.lwjgl.opengl.GL12;
+import org.lwjgl.opengl.GL13;
 import org.lwjgl.opengl.GL15;
 import org.lwjgl.opengl.GL20;
 import org.lwjgl.opengl.GL21;
@@ -34,7 +35,7 @@ import java.util.Locale;
  * frame's sky pixels into {@link SkyBand#AZ} × {@link SkyBand#EL} bins (RGBA16F target), read back through a pixel-pack buffer
  * when its fence has passed (never waits: a frame or two later; one readback in flight), smoothed on the CPU, and uploaded
  * to the pall programs as {@code PallAirBand} with {@code PallAirBandOn}. Without a pack nothing runs and the band stays off:
- * the airlight is vanilla's sky. The pass is 96 pixels × 64 samples, six texel fetches each.
+ * the airlight is vanilla's sky. The pass is 96 pixels × 64 samples, up to 31 texel fetches each (the sky test around the sample).
  * <p>
  * The array is not in the program's JSON ({@code ShaderInstance} sets no arrays): it is uploaded after {@code apply()},
  * right before the draw ({@link #upload}). Veil (inside Sable) finds uniforms the JSON omits and uploads zeroed copies of
@@ -53,6 +54,8 @@ public final class SkyBandPass {
     private static final float[] READ = new float[SkyBand.AZ * SkyBand.EL * 4], DRAWN = new float[SkyBand.AZ * SkyBand.EL * 4];
     private static final int[] VIEWPORT = new int[4];
     private static final double[] SUN = new double[3];
+    /** Caller's 2D texture on units 0 and 1 (the pass's samplers). */
+    private static final int[] UNITS = new int[2];
     private static int fbo = -1, texture = -1, pbo = -1;
     @Nullable
     private static FloatBuffer readBuffer, upload;
@@ -103,7 +106,14 @@ public final class SkyBandPass {
                 depthMask = GL11.glGetBoolean(GL11.GL_DEPTH_WRITEMASK);
         int texture0 = RenderSystem.getShaderTexture(0), texture1 = RenderSystem.getShaderTexture(1);
         ShaderInstance previousShader = RenderSystem.getShader();
-        int bound = GL11.glGetInteger(GL11.GL_TEXTURE_BINDING_2D);
+        // the draw binds and then unbinds textures on units 0 and 1 (ShaderInstance.apply/clear) and binds its own vertex array
+        int activeUnit = GlStateManager._getActiveTexture();
+        for (int u = 0; u < UNITS.length; u++) {
+            GlStateManager._activeTexture(GL13.GL_TEXTURE0 + u);
+            UNITS[u] = GL11.glGetInteger(GL11.GL_TEXTURE_BINDING_2D);
+        }
+        GlStateManager._activeTexture(activeUnit);
+        int vertexArray = GL11.glGetInteger(GL30.GL_VERTEX_ARRAY_BINDING), arrayBuffer = GL11.glGetInteger(GL15.GL_ARRAY_BUFFER_BINDING);
         GL11.glGetIntegerv(GL11.GL_VIEWPORT, VIEWPORT);
         try {
             if (!ensure()) {
@@ -112,7 +122,8 @@ public final class SkyBandPass {
             }
             collect();
             on = BAND.fill(DRAWN, now);
-            if (fence != 0 || !captureable(mc)) return;
+            // no sun direction (the empty warm-up frame before the first pall): no cone to leave out, no capture
+            if (fence != 0 || sx * sx + sy * sy < 1e-6f || !captureable(mc)) return;
             capture(s, mc, scene, viewProjection, sx, sy);
             captured = now;
         } finally {
@@ -134,7 +145,15 @@ public final class SkyBandPass {
             RenderSystem.setShaderTexture(1, texture1);
             RenderSystem.setShader(() -> previousShader);
             ProgramManager.glUseProgram(program);
-            GlStateManager._bindTexture(bound);
+            for (int u = 0; u < UNITS.length; u++) {
+                GlStateManager._activeTexture(GL13.GL_TEXTURE0 + u);
+                GlStateManager._bindTexture(UNITS[u]);
+            }
+            GlStateManager._activeTexture(activeUnit);
+            // the caller's vertex array; BufferUploader forgets which of its buffers it left bound
+            GlStateManager._glBindVertexArray(vertexArray);
+            GlStateManager._glBindBuffer(GL15.GL_ARRAY_BUFFER, arrayBuffer);
+            BufferUploader.invalidate();
         }
     }
 

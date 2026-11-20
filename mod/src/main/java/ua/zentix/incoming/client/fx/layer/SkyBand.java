@@ -14,7 +14,9 @@ import java.util.Arrays;
  * (world distance = sky, {@link SceneDepth}) and lie outside a cone of {@link #EXCLUDE_DEG} around the sun and the moon
  * ({@link #takes}): the sun disc and the pack's glare never enter, nor anything in front of the sky (terrain, LOD,
  * blocks; review #671 rejected screen taps that carried the sun and nearby blocks into the cap). Bins are smoothed over
- * {@link #TAU} seconds; a bin not seen for {@link #STALE} seconds is dropped. Empty bins take their row's nearest seen bins
+ * {@link #TAU} seconds from captures where at least {@link #MIN_SHARE} of its samples were sky (a sliver of a bin is
+ * noise, and refreshing on it kept an old sky alive: a pack switched by Iris's Apply held its colour for tens of seconds,
+ * review #686 r4); a bin not seen for {@link #STALE} seconds is dropped (what is on screen refills at once). Empty bins take their row's nearest seen bins
  * (by azimuth), an empty row the nearest filled row; with no bin seen, the band is off and the airlight is vanilla's sky.
  * Without a shader pack the band is never filled: airlight stays vanilla's sky. Minecraft-free (unit tests); GL in
  * {@link SkyBandPass}.
@@ -33,7 +35,9 @@ public final class SkyBand {
     /** Smoothing time constant, seconds (the shader's jittered samples, stars and drifting pack clouds average out). */
     public static final double TAU = 0.5;
     /** A bin not seen for this long is no longer the sky there (the sky changes through dusk), seconds. */
-    public static final double STALE = 10;
+    public static final double STALE = 2;
+    /** Least share of a bin's samples that must be sky for a capture to count there. */
+    public static final double MIN_SHARE = 1.0 / 8;
 
     private final float[] color = new float[AZ * EL * 3];
     private final double[] seen = new double[AZ * EL];
@@ -91,11 +95,10 @@ public final class SkyBand {
     public void observe(float[] rgba, double now) {
         for (int i = 0; i < AZ * EL; i++) {
             float share = rgba[i * 4 + 3];
-            if (!(share > 0) || !Float.isFinite(rgba[i * 4]) || !Float.isFinite(rgba[i * 4 + 1]) || !Float.isFinite(rgba[i * 4 + 2])) continue;
+            if (!(share >= MIN_SHARE) || !Float.isFinite(rgba[i * 4]) || !Float.isFinite(rgba[i * 4 + 1]) || !Float.isFinite(rgba[i * 4 + 2])) continue;
             boolean fresh = fresh(i, now);
             double dt = Double.isNaN(seen[i]) ? 0 : Math.max(now - seen[i], 0);
-            // a partly seen bin (terrain, frame edge) moves by its share
-            double k = fresh ? 1 - Math.exp(-dt * Math.min(share, 1) / TAU) : 1;
+            double k = fresh ? 1 - Math.exp(-dt / TAU) : 1;
             for (int c = 0; c < 3; c++) color[i * 3 + c] += (float) ((rgba[i * 4 + c] - color[i * 3 + c]) * k);
             seen[i] = now;
         }
