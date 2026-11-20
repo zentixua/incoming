@@ -9,7 +9,7 @@ import ua.zentix.incoming.Incoming;
 import ua.zentix.incoming.nuclear.model.Blowout;
 
 /**
- * Review of #676: several fuels lighting one fire cell. Their ignition combines first (the cell lights if any fuel does), then the
+ * Several fuels lighting one fire cell. Their ignition combines first (the cell lights if any fuel does), then the
  * cell's blowout ({@link Blowout#keep}) applies once — in the flash layer and in ruins alike, so the layer's blown list and the ruin
  * fire agree. Applying blowout per fuel before combining would give the ruins 1 − (1 − 0.5)² = 0.75 at 5 psi for two certain
  * ignitions, where the flash keeps 0.5.
