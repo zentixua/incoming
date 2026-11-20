@@ -52,6 +52,7 @@ public final class RuinSettleGameTests {
     /** Real disk-only chunk outside 5 psi: neither a player nor a LOD client ever brings it into memory. */
     @GameTest(template = "range", batch = "nuke_settle_disk", timeoutTicks = 2400, skyAccess = true)
     public static void oldDiskChunkGetsPlannedRuinsWithoutPlayers(GameTestHelper h) {
+        coldPatchFixtureMovesOn(h);
         diskPass(h, false);
     }
 
@@ -61,28 +62,86 @@ public final class RuinSettleGameTests {
         diskPass(h, true);
     }
 
+    /**
+     * The disk fixture's chunk with its detonation 48 blocks west and the plan expected on disk. Its flash
+     * (2.2–4.4 cal/cm², 1.7–2.6 psi) can only burn the short grass (median {@link RuinPlanner#PLANT_Q} cal/cm²): turf
+     * burns from {@link RuinPlanner#BURN_Q}, strips from {@link RuinPlanner#STRIP_PSI} psi. Whether any tuft burns
+     * follows the world-noise patch under the chunk, so a cold patch leaves no ground trace at about 0.15 % of positions
+     * (chunk 546202, 801466 in the GameTest world: {@link RuinSettleGameTests#coldPatchFixtureMovesOn}).
+     */
+    record DiskFixture(ChunkPos target, LevelChunk source, CompoundTag before, Detonation d, RuinPlan plan,
+                       LevelChunkSection[] expected, int trace) {
+        static final int GROUND = 64;
+
+        static DiskFixture at(ServerLevel level, ChunkPos target, int id) {
+            LevelChunk source = fixture(level, target, GROUND);
+            CompoundTag before = ChunkSerializer.write(level, source);
+            Detonation d = new Detonation(id, new Vec3(target.getMiddleBlockX() - 48, GROUND + 1, target.getMiddleBlockZ()),
+                    GROUND + 1, 7, true, level.getGameTime() - 10000, 0, 0, 20000, 42, 0.03f, false, 1, 0, false);
+            RuinContext ctx = new RuinContext(level, d);
+            ctx.putDisk(level, DiskShots.parse(level, target, before));
+            RuinContext.Grid grid = ctx.cachedGridForTest(level, target);
+            RuinPlan plan = RuinPlanner.finish(grid, Collapse.solve(grid));
+            // A past detonation ignites nothing (its fires burned out long ago): expect the plan without its fires.
+            LevelChunkSection[] expected = plan.testAppliedCopy(level, source, false);
+            return new DiskFixture(target, source, before, d, plan, expected, trace(source, expected));
+        }
+
+        /**
+         * The first chunk eastward from {@code from} whose plan leaves a ground trace: the check is the pass, not the
+         * noise under one position (as {@code BlastGameTests.layPosts} takes measurable posts).
+         */
+        static DiskFixture traced(ServerLevel level, ChunkPos from, int id) {
+            for (int i = 0; i < 16; i++) {
+                DiskFixture f = at(level, new ChunkPos(from.x + i, from.z), id);
+                if (f.trace > 0) return f;
+            }
+            throw new IllegalStateException("no chunk with a ground trace in 16 east of " + from);
+        }
+
+        /** Grass and short grass the plan changes. */
+        static int trace(LevelChunk source, LevelChunkSection[] sections) {
+            int trace = 0;
+            for (int s = 0; s < sections.length; s++) {
+                for (int y = 0; y < 16; y++) for (int z = 0; z < 16; z++) for (int x = 0; x < 16; x++) {
+                    var was = source.getSections()[s].getBlockState(x, y, z);
+                    if (sections[s].getBlockState(x, y, z) != was && (was.is(Blocks.GRASS_BLOCK) || was.is(Blocks.SHORT_GRASS))) trace++;
+                }
+            }
+            return trace;
+        }
+    }
+
+    /**
+     * The cold-patch chunk has no trace, and the disk fixture takes the next chunk that has one. Runs inside the disk
+     * test: a second test in batch {@code nuke_settle_disk} leaves its pass holding the loaded chunk unscarred until the
+     * timeout (3 of 3 local runs).
+     */
+    private static void coldPatchFixtureMovesOn(GameTestHelper h) {
+        ServerLevel level = h.getLevel();
+        ChunkPos cold = new ChunkPos(546202, 801466);
+        DiskFixture bare = DiskFixture.at(level, cold, Integer.MAX_VALUE);
+        h.assertTrue(bare.plan.changedBlocks() > 0 && bare.trace == 0,
+                "the cold-patch chunk is no longer bare: " + bare.plan.changedBlocks() + " changes, trace " + bare.trace);
+        DiskFixture picked = DiskFixture.traced(level, cold, Integer.MAX_VALUE);
+        h.assertTrue(!picked.target.equals(cold) && picked.trace > 0, "the fixture kept a bare chunk");
+    }
+
     private static void diskPass(GameTestHelper h, boolean restart) {
         StrikeGameTests.gameSpeed(h);
         ServerLevel level = h.getLevel();
         ChunkPos pad = new ChunkPos(h.absolutePos(new BlockPos(32, 1, 32)));
-        ChunkPos target = new ChunkPos(pad.x + 200, pad.z + 200);
-        int ground = 64;
-        LevelChunk source = fixture(level, target, ground);
-        CompoundTag before = ChunkSerializer.write(level, source);
-        ua.zentix.incoming.util.RegionFiles.write(level, target, before);
-        h.assertTrue(NuclearTickets.inMemory(level, target.toLong()) == null, "fixture loaded into world");
         NuclearEvents events = NuclearEvents.get(level);
-        Detonation d = new Detonation(events.nextId(), new Vec3(target.getMiddleBlockX() - 48, ground + 1, target.getMiddleBlockZ()),
-                ground + 1, 7, true, level.getGameTime() - 10000, 0, 0, 20000, 42, 0.03f, false, 1, 0, false);
+        DiskFixture fixture = DiskFixture.traced(level, new ChunkPos(pad.x + 200, pad.z + 200), events.nextId());
+        ChunkPos target = fixture.target;
+        LevelChunk source = fixture.source;
+        Detonation d = fixture.d;
+        LevelChunkSection[] expected = fixture.expected;
+        ua.zentix.incoming.util.RegionFiles.write(level, target, fixture.before);
+        h.assertTrue(NuclearTickets.inMemory(level, target.toLong()) == null, "fixture loaded into world");
         h.assertTrue(NuclearPrep.horizontal(target, d) > NuclearPrep.heavyRadius(d), "fixture is inside heavy zone");
         h.assertTrue(ScarQueue.inRange(target, d), "fixture is outside ruin radius");
-        RuinContext ctx = new RuinContext(level, d);
-        ctx.putDisk(level, DiskShots.parse(level, target, before));
-        RuinContext.Grid grid = ctx.cachedGridForTest(level, target);
-        RuinPlan plan = RuinPlanner.finish(grid, Collapse.solve(grid));
-        h.assertTrue(plan.changedBlocks() > 0, "fixture has no planned changes");
-        // A past detonation ignites nothing (its fires burned out long ago): expect the plan without its fires.
-        LevelChunkSection[] expected = plan.testAppliedCopy(level, source, false);
+        h.assertTrue(fixture.plan.changedBlocks() > 0, "fixture has no planned changes");
         // As in a 3.10.3 save: retained event, with no settlement data and no live onDetonation call.
         events.past().add(d);
         events.setDirty();
@@ -123,20 +182,17 @@ public final class RuinSettleGameTests {
             h.assertTrue(restarted[0], "restart case was not exercised");
             DiskShots.Sections result = DiskShots.parseSections(DiskShots.Format.of(level), target, saved);
             h.assertTrue(result.skip() == null, "saved chunk cannot be parsed: " + result.skip());
-            int changes = 0, trace = 0;
+            int changes = 0;
             for (int s = 0; s < expected.length; s++) {
                 for (int y = 0; y < 16; y++) for (int z = 0; z < 16; z++) for (int x = 0; x < 16; x++) {
                     var want = expected[s].getBlockState(x, y, z);
                     var got = result.sections()[s].getBlockState(x, y, z);
                     h.assertTrue(got == want, "saved plan mismatch at section " + s + ", " + x + "," + y + "," + z + ": " + got + " != " + want);
-                    if (got != source.getSections()[s].getBlockState(x, y, z)) {
-                        changes++;
-                        if (source.getSections()[s].getBlockState(x, y, z).is(Blocks.GRASS_BLOCK) || source.getSections()[s].getBlockState(x, y, z).is(Blocks.SHORT_GRASS)) trace++;
-                    }
+                    if (got != source.getSections()[s].getBlockState(x, y, z)) changes++;
                 }
             }
             h.assertTrue(changes > 0, "saved chunk is unchanged");
-            h.assertTrue(trace > 0, "saved chunk has no ground trace");
+            h.assertTrue(DiskFixture.trace(source, result.sections()) > 0, "saved chunk has no ground trace");
             Incoming.LOG.info("SETTLEBENCH restart={} chunks=1 changed={} wallMs={} nuclearTotalMs={} nuclearMaxMs={}",
                     restart, changes, (System.nanoTime() - started) / 1_000_000, nanos[0] / 1_000_000.0, nanos[1] / 1_000_000.0);
             h.succeed();

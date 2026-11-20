@@ -112,6 +112,9 @@ paths:
   threshold and place posts at the same fractions of its radius (`BlastGameTests.radiusTest`), not an unjittered
   threshold. World state from previous batches remains: crater-fall areas (`CraterFalls`) live another 10 s after the
   explosion; the next batch's platform is 5 blocks away, so area-limit checks must tolerate a neighboring open area.
+  Nuclear ground-trace patches follow world noise at the position (`RuinPlanner`, world seed 0 in GameTest): a weak
+  flash burns a fixture's grass only outside cold patches, so a fixture that needs a trace takes the first chunk whose
+  plan has one (`RuinSettleGameTests.DiskFixture.traced`; the disk fixture's bare chunk: 0.15 % of positions).
 - Vanilla starts a test only when all platform chunks tick entities (`GameTestInfo.tick`); beyond the platform,
   chunks are level 32: blocks tick (sand and gravel start falling), entities do not. The explosion area (`AreaLoader`)
   enables entity ticking in rings as neighbors become ready and releases at explosion end: on slow CI machines,
