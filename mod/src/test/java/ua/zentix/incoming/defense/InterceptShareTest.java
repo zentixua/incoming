@@ -44,7 +44,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
  * <p>
  * Every world flight scale ({@link ua.zentix.incoming.strike.FlightScale}: game, between, real) runs the same raids:
  * at real scale a cruise missile flies 40 blocks up, and a missile accelerating to real speed in the game's 1.5 s
- * climbed hundreds of blocks before it could level off, missing every one (player report, CurseForge, 19.11.2026).
+ * would climb hundreds of blocks before it could level off and miss every one.
  */
 class InterceptShareTest {
     private static final InterceptorSpec SPEC = InterceptorSpec.SAM;
@@ -103,7 +103,7 @@ class InterceptShareTest {
                 WeaponSpec.Airframe a = w.spec().airframe();
                 if (a.cruiseHeight() <= SPEC.radarRange() * a.radar().visibility()) assertTrue(s.downed() > 0, "scale " + x + " " + w + ": not a single one shot down");
             });
-            // a missile the SAM fires at a target in view over flat ground hits it at every scale; at real scale it once missed every cruise missile
+            // a missile the SAM fires at a target in view over flat ground hits it at every scale, the motor and lead included
             for (WeaponType w : List.of(WeaponType.DRONE, WeaponType.MISSILE, WeaponType.LOITER)) {
                 Share s = shares.get(w);
                 assertTrue(s.hitShare() >= 0.9, String.format(Locale.ROOT, "scale %.1f %s: %d of %d missiles hit", x, w, s.hits(), s.missiles()));
