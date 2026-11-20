@@ -43,9 +43,10 @@ in the cloud VM. Never touch the play servers (25565–25567) or their worlds wi
   name=incoming filename=…` saves the window around an event without stopping. `INCOMING_JFR=profile` for the profile
   settings: `ExecutionSample` on Server thread, GC and safepoint pauses, `ThreadPark`/`JavaMonitorEnter`/`ThreadSleep`
   > 10 ms, `CPULoad`, `ThreadCPULoad` (thread running or waiting), `ObjectAllocationSample`, file IO. A Crafty server
-  needs the same flags added to its JVM arguments. A Gradle run crashes at its first heap OutOfMemoryError
-  (`-XX:+CrashOnOutOfMemoryError`; `hs_err_pid*.log` and `.jfr` beside `run.jfr`) instead of hanging with its other
-  threads alive.
+  needs the same flags added to its JVM arguments. A Gradle run crashes at its first JVM-raised OutOfMemoryError
+  (`-XX:+CrashOnOutOfMemoryError`) instead of hanging with its other threads alive: then the recording is
+  `hs_err_pid*.jfr` beside `hs_err_pid*.log` in the run directory (`run.jfr` stays empty on the JDK 21 runtime).
+  `prod_client.py` and Gradle's own daemon do not carry the flag.
 - **spark** (copied from the host's instance into `runClient`, `runServer`, client scenarios and the sandbox; not into
   GameTest, flight sweeps, the stress rig or machines without the instance): `tickmonitor` and the server profiler. Remember: tickmonitor measures intervals between tick **starts**,
   not tick length.
@@ -95,22 +96,28 @@ quality ladder step, compare only equal steps; in the `mushroom` scenario the fi
 A look task converges only when the target is fixed, measured the same way on both sides, and drawn by a representation
 that can produce it. Tuning constants inside a representation that cannot is the slow failure: no number moves.
 
-- **Target, frozen.** In the plan, before code: the reference frames (real footage, then film VFX; never another
+- **Target, fixed.** In the plan, before code: the reference frames (real footage, then film VFX; never another
   renderer's look, such as a shader pack's clouds, as the reference), Artem's decisions, the judge's views and the done
-  numbers. Judge in vanilla (AGENTS.md "Vanilla first"); a shader pack gets one "not broken" check.
-- **Gate script proven on the reference.** The script that gates our frames (crop, mask, luma, hue/saturation, contrast
-  p90/p10, feature size, churn per second) first runs on the reference: it must pass the reference and fail the current
-  `main` frame on the reported defect. Otherwise it does not measure the defect.
-- **Existing system first.** Name the mod system that already draws the nearest phenomenon and show one frame of it at the
-  target's scale: billows, dust rings and smoke are lit puffs (`far/SmokePuffs`, six-way light maps; sources
-  `FrontDust`, `BlastDust`); seeing inside dust is distance fog; thin haze is the pall march. A new renderer only when
-  that frame shows why the existing one fails.
-- **Picture apart from physics.** The drawing takes where, when and how much from the law; probes, sound and gameplay
-  read the law, never the drawing, so a look change cannot move a physical quantity or break its tests.
+  numbers. The player outcome stays fixed for the task; correcting a wrong camera, tick, crop or gate so that it shows
+  the reported symptom stays in the task, a new outcome goes to a follow-up PR. Judge in vanilla (AGENTS.md "Vanilla
+  first"); a shader pack gets one "not broken" check of the look, which does not waive a pack-specific functional test.
+- **Gate script calibrated on the reference.** The script that gates our frames (crop, mask, luma, hue/saturation,
+  contrast p90/p10, feature size, per-lobe light distribution, churn per second) first runs on the reference: it must
+  pass the reference and fail the current `main` frame on the reported defect. Necessary, not sufficient (exposure,
+  scale or a crop can separate two inputs without measuring the defect): the fresh judge still decides.
+- **Existing system first.** Name what in the mod (or the community) already draws the nearest phenomenon and show it
+  at the target's scale, by a frame or by a measured motion/load case. For example: billows, dust rings and smoke are lit
+  puffs (`far/SmokePuffs`, six-way light maps; sources `FrontDust`, `BlastDust`); seeing inside dust is distance fog;
+  thin haze is the pall march. A new renderer only when that evidence shows why the existing one fails.
+- **Picture apart from physics.** The drawing takes where, when and how much from the law; physics, sound and gameplay
+  read the law, never the drawing, so a look change cannot move a physical quantity. What the player actually sees
+  (occlusion, visibility probes) is tested on the drawing separately.
 - **Prototype before integration** (about 2 h): CPU vanilla frames of the chosen representation at the judge's views,
-  beside the reference and `main`, before any law, probe or budget work.
-- **Rounds.** One short CPU job per question (minutes), read as soon as it ends; each round changes the cause the last
-  one named by number. Three rounds or the timebox without a measured shift: stop for the root cause (AGENTS.md).
+  beside the reference and `main`. That first run already records what decides the design: the diagnostic probes, the
+  layer's GPU time and fill, counts and the budget numbers; final law, probe and budget integration comes after.
+- **Rounds.** One short CPU job per round that answers all of the round's related questions (minutes), read as soon as it
+  ends; each round changes the cause the last one named by number. Three rounds or the timebox without a measured shift:
+  stop, name the root cause, and act on it (AGENTS.md).
 - **Judge.** A fresh Claude session gets `main`|PR pairs, the reference frames, the law's numbers for the scene and the
   done numbers; never the author's notes. Codex reviews the code only.
 

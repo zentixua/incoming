@@ -207,15 +207,15 @@ actually works, fix the real cause.
   consequences) in the PR or a design document; disagreements are settled with code, tests or measurements. A
   concrete correctness, data-loss or budget defect blocks; preference alone does not.
 - **Ready-made first** (Artem, 22.10): search mods/addons/libraries/tools before custom code (Modrinth, CurseForge,
-  GitHub; Fabric via Roxy/Sinytra Connector) and the mod's own systems (a new renderer only if a frame shows the one
-  drawing that phenomenon fails). Custom only if no ready-made solution, reason in one PR line. Our ban
+  GitHub; Fabric via Roxy/Sinytra Connector) and the mod's own systems (a new renderer only with a frame or measurement
+  showing the existing one fails). Custom only if no ready-made solution, reason in one PR line. Our ban
   on vanilla/other-mod mixins concerns our code, not an argument against other mods. A new mod or library that
   clearly helps is welcome: try briefly, tell Artem what it gives and costs; a new required pack mod needs his word.
 - **License** (Artem, 22.10): Incoming is GPL-3.0-only; copy code only under compatible licenses (GPL-3.0, MIT, CC0),
   from All-Rights-Reserved or closed mods take ideas only (the license is in the jar's `mods.toml`).
 - **Plan only large changes:** before coding, a few PR-description lines of what players see/hear and the law
   (existing mod law, new laws sourced). Small edits directly. A brief gives goal, decisions, references, done numbers,
-  not the implementation; that target stays fixed for the task: new views or criteria go to a follow-up PR.
+  not the implementation. The player outcome stays fixed: fixing evidence stays in, new outcomes go to a follow-up PR.
 - **Validation:** code changes need build and touched-area GameTest (`./gradlew build`; GameTest through `tools/laptop_job.sh … --
   ./gradlew runGameTestServer -PgametestOnly=…`). Numeric claims get unit tests/GameTest; comment/guide promises held
   by tests. Documentation-only changes use the applicable CI checks, without a game run. Open draft immediately
