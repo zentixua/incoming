@@ -43,7 +43,9 @@ in the cloud VM. Never touch the play servers (25565–25567) or their worlds wi
   name=incoming filename=…` saves the window around an event without stopping. `INCOMING_JFR=profile` for the profile
   settings: `ExecutionSample` on Server thread, GC and safepoint pauses, `ThreadPark`/`JavaMonitorEnter`/`ThreadSleep`
   > 10 ms, `CPULoad`, `ThreadCPULoad` (thread running or waiting), `ObjectAllocationSample`, file IO. A Crafty server
-  needs the same flags added to its JVM arguments.
+  needs the same flags added to its JVM arguments. A Gradle run crashes at its first heap OutOfMemoryError
+  (`-XX:+CrashOnOutOfMemoryError`; `hs_err_pid*.log` and `.jfr` beside `run.jfr`) instead of hanging with its other
+  threads alive.
 - **spark** (copied from the host's instance into `runClient`, `runServer`, client scenarios and the sandbox; not into
   GameTest, flight sweeps, the stress rig or machines without the instance): `tickmonitor` and the server profiler. Remember: tickmonitor measures intervals between tick **starts**,
   not tick length.
