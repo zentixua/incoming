@@ -12,7 +12,8 @@ once per `launch.gap_s` from each point (one launcher sends a Shahed every 1–2
 the target itself (`via`); without a waypoint it loops and approaches from behind the shooter. Nearby
 launch scene (`launch`): camera 30 m beside the launch site at eye height, target far to the side (impacts
 out of frame), windows from command time, without waiting for salvo completion (these scenes are last,
-so their impacts do not enter other windows). Harness only executes numbers, so test the plan without
+so their impacts do not enter other windows). Megaton scene (`nuke`): one 1 Mt ground burst, camera on the ground facing the
+approaching dust wall, windows from command time; last of all. Harness only executes numbers, so test the plan without
 the game (test_gate.py).
 
 Minecraft axes: +X east, +Z south. Camera `toward`: unit (dx, dz) from the site; launch bearing from south
@@ -114,6 +115,30 @@ No wait for salvo completion: impacts far away after the windows."""
     return out
 
 
+def nuke_steps(scenes, s, tp):
+    """Megaton dust wall (`nuke`): camera on the ground `dist` from ground zero facing it, one detonation without flight
+(`incoming nuke now`, operator console), windows from the command time (`windows`: start `at_s`, duration `s`; set around the
+front's arrival at the camera for the bench's world rules) with a frame at each end. No salvo: nothing to await, so this scene
+is last (its ruins and pall would enter later windows)."""
+    nk = s["nuke"]
+    site = _site(scenes, s["site"])
+    g = scenes["ground"]
+    tx, tz = nk["toward"]
+    eye = [site[0] + tx * nk["dist"], g + nk["height"], site[1] + tz * nk["dist"]]
+    look = [site[0], g + nk["look_height"], site[1]]
+    out = [tp([round(v, 2) for v in eye], [round(v, 2) for v in look]),
+           {"do": "cmd", "cmd": f"incoming nuke now at {site[0]:g} {g:g} {site[1]:g} {nk['kt']} {nk['burst']}"}]
+    t = 0.0
+    for w in s["windows"]:
+        if w["at_s"] > t:
+            out.append({"do": "wait", "s": w["at_s"] - t})
+        out.append({"do": "window", "name": f"{s['id']}/{w['name']}", "s": w["s"]})
+        out.append({"do": "shot", "name": f"{s['id']}_{w['at_s'] + w['s']:g}s"})
+        out.append({"do": "wait", "s": scenes["after_shot_s"]})
+        t = w["at_s"] + w["s"] + scenes["after_shot_s"]
+    return out
+
+
 def launch_ids(scenes):
     """Nearby launch scenes: do not wait for their salvos to finish."""
     return {s["id"] for s in scenes["scenes"] if "launch" in s}
@@ -175,6 +200,9 @@ def build(scenes, only=None):
         if "launch" in s:
             steps += launch_steps(scenes, s, tp)
             continue
+        if "nuke" in s:
+            steps += nuke_steps(scenes, s, tp)
+            continue
         if s.get("impact_window"):
             eye, look = camera(scenes, s["camera"], site, spread)
             steps.append(tp(eye, look))
@@ -231,6 +259,8 @@ def windows(scenes, only=None):
             continue
         if "launch" in s:
             out += [f"{s['id']}/{w['name']}" for w in scenes["launch_view"]["windows"]]
+        elif "nuke" in s:
+            out += [f"{s['id']}/{w['name']}" for w in s["windows"]]
         elif s.get("impact_window"):
             out.append(s["id"])
         else:

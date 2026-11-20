@@ -212,28 +212,45 @@ Ruins and everything in `nuclear/world/` are in `nuclear-world.md`.
   airbursts above 15 kt (1 Mt at 700 m) touch ground behind the front, shrinking the wedge by 1.5 on that tick, top
   10–25 % lower, and pall handoff band (`PALL_WALL_HANDOFF_FROM/TO` shader constants) jumps away from sphere: slot has
   no sphere radius (all 20 numbers used); game bursts (up to 15 kt, airbursts above 2.9 sphere radii) never do this.
-  Over wedge fraction u behind edge, lofted amount follows dynamic-pressure impulse (`DustModel.lifted`), top Kuhl
-  dusty-layer law u^(5/6) (`top`), ground density their ratio (`shape`: 0 at edge, at u ≈ 0.1 2.6 times denser than wedge
-  back); column depth grows rearward. Back top and edge/back density use the same `DustModel.Column` (`first`,
-  `lifted`: 256-node table down to 0.2 psi); intermediate density is linear (est.). Beyond wedge, transition to
+  Lofting burst (19.11, Artem: the dense front emerges from the lofting, not a drawn wall): over wedge fraction u behind
+  the edge (dust age u × wedge-end phase fraction `ph`), lofted mass follows the entrainment law's shape
+  (`DustModel.loftMass` 1 − (1 − x)^8: the law lofts 47–72 % of the phase's mass in its first tenth for 3–11 psi; one shape,
+  est.), the top rises at the ground friction velocity (`DustModel.loftTop` (x·e^(1−x))^0.88, within 3 % of ∫u*; Kuhl's
+  phase-end top `waveTop` still sets how high), both × `BlastWall.LOFT_GAIN` 2 (presentation: 15 kt 1.5 km out 22 m at
+  0.1 s, GRABLE 6–25 m; ×3 would exceed it and be "not physical"); ground density is their ratio (`shape`, about twice the
+  back density over the front fifth); saltation develops over `DustModel.SATURATION_M` 2 m of grain path (Andreotti 2010),
+  not 0.25 s. After the phase the heated layer lifts the same dust (`heated`, h² = h₁² + b²·x over `RISE_S`; slot lift
+  [2].w); `ceiling` bounds rays and spans. `DustModel.lifted` (impulse shape) now serves conventional dust only. Back top
+  and edge/back density use the same `DustModel.Column` (256-node table down to 0.2 psi). Beyond wedge, transition to
   pall from 1 to 1.5 wedge lengths (`handoff`; pall takes 1 − handoff by local age / t₊). Where wind no longer lofts
-  visible dust (thinner than `GONE`, visible over 4 km), no head, dust remains pall. Law copies: `pallLifted`,
-  `pallWallTop/Shape/Fade/Mean` (`PallGlslTest`). Head noise uses dust coordinates (`BlastWall.origin`, copy
-  `pallWallOrigin`): position minus post-front wind path (`carried`: air path over local positive phase, U·t₊/e by
-  Friedlander, tens of meters for 15 kt at 592 m; phase share `carriedShare` = u·e^(1−u)); air stationary at ground,
-  1/7 boundary-layer law above, upward 0.02–0.08 of path (Kuhl §3.4). Billows form where front lofted dust and stay there;
-  against the departing front, edge dust goes up/back, rolling the wall. The pattern also turns in eddies on concentric rings resting on
-  the ground (`pallWallRoll`/`BlastWall.roll`, angle `rollAngle` = `EDDY` 0.2 × wind path × `carriedShare` / eddy size: top
-  outward with the wave's wind, back as it reverses; × `ROLL_GAIN` 8, presentation, turn zero at eddy rims). Eddies are the local
-  layer's size, not the tile's (the tile is the thickest layer's, near ground zero: 79 m for 15 kt where the layer 1 km out is
-  16–29 m): the octave tile/2^k nearest the local top (`wallBillows`, fixed scales, two near a boundary); thinner than tile/11
-  (toe) billows give way to their mean: tile-sized holes in a metres-thick sheet read as a translucent shell at the front (18.11).
-  Close-up check 19.11 (sandbox, side view along the front): the head is a thin ramp (15 kt 1.5 km: top 37 m over a 291 m
-  wedge), its turn lasts the head's life (0.9–3.6 s) — texture churn, not a wall rolling over itself; the tall translucent
-  sheet above it in the first seconds is the Wilson shell (`pallWilson`), not dust. Noise tile (`TILE` of maximum phase-end layer
-  top) is fixed per detonation: a tile growing with the head, like old noise in a tile rotated by wall angle at front,
-  moved billows over ground at front speed — dust “spread from epicenter” (18.10 complaint,
-  `BlastWallTest.headCloudsStayWhereTheDustWasLifted`). Cartesian coordinates, no tiled circumference or noise phases.
+  visible dust (thinner than `GONE`, visible over 4 km), no head, dust remains pall. Law copies: `pallLoftTop/Mass`,
+  `pallWallTop/Face/Heated/Shape/Fade/Mean/Ceiling` (`PallGlslTest`). Roll-up (19.11, Artem): head noise rides the dust
+  parcels (`BlastWall.origin`, copy `pallWallOrigin`): horizontally where the front lofted it minus the post-front wind
+  path (`carried`: U·t₊/e by Friedlander; phase share `carriedShare` = u·e^(1−u); air stationary at ground, 1/7
+  boundary-layer law above), vertically its share of the local layer top (the layer grows as one self-similar body).
+  Seen from the departing front, each parcel goes up and back: a kinematic curl of trajectories, not an eddy; no
+  per-eddy turn, octave ladder or toe sheet (removed 19.11). Lobes (`wallLobes` in `fx_pall`): `WALL_LOBE` 1.75 wedge-end
+  tops wide, one row (`WALL_ROW`), tile on power-of-two block octaves with a cross-fade only when the top grows an octave
+  (a tile following the top moved billows over the ground — 18.10 “dust spread from epicenter”,
+  `BlastWallTest.headCloudsStayWhereTheDustWasLifted`); churn `WALL_CHURN` (~0.2 lobe widths/s, Silo S3E09) moves the
+  warp through its third axis on the detonation clock. All presentation, marked in code. Cartesian coordinates, no tiled
+  circumference or noise phases. Head light (19.11): the head is an aerosol volume lit from all
+  sides. The layer light (two-stream) enters through the nearest of the top, the face and the way back along the view ray
+  (`gTauBack`: −ln transmittance + one optical depth, set around `pallSource` in `pallStep` and near-volume cells, 1e9
+  elsewhere: a head step is 1/8 of the wall, 12.6 blocks for 1 Mt 3 km, while the lofted front's mean free path is tenths
+  of a metre, so a jittered sample lay 0–70 optical depths past the face and its light was lit or black per 2×2-pixel ray
+  cell). The face also sees the horizon sky (the dome: zenith sky light desaturated by `WALL_HORIZON_WHITE`, also the
+  head's share of the layer light's sky in `scattered`) and the lit ground (albedo × (sun + sky)) through the dust below,
+  each e^(−kτ); presentation: sunlight down the billowy skin, `WALL_SUN_FACE` × sun × R∞(ω′)/ω (warm). Billow
+  self-shadow × `WALL_SHADE` (0.7). The head's albedo takes the thick layer's spectrum (R∞(ω′)/ω relative to its brightest
+  channel: what leaves dense dust has scattered many times; raw R∞ blue/red 0.53, R∞/ω 0.63 for the reference dust)
+  to the power `WALL_OCHRE` 1.6 (presentation, toward the footage's ochre). Head shape (20.11, representation change): the law's mean head
+  dented by Worley domes (`wallDomes`, noise channel B as the cap's `mushLobes`; ring coordinates: `WALL_RING` 24 tiles around
+  the ring, `WALL_STRETCH` 3 along the radius, parcel coordinates, slow churn), dents only, at most `WALL_DOME` 0.4 of the local top,
+  density / (1 − dip) so the mass stays; light from above through the dented head (`wallChordBillows`, also the sun path); the
+  face's sun term by the dented surface's normal (density gradient, three taps). A noise multiplier inside the opaque dense
+  front never showed (r12–r14: a smooth dune). Java copy `NukePall.dustLight` (`PallGlslTest.headIsLitFromAllSides`,
+  `BlastWallTest.denseFrontFaceIsLitDust`).
   Rays sample the head more densely (`pallWallSpans`: ring from dust edge to 1.5 wedges and terrain-map height layer,
   step one eighth its height, at most `steps` extra steps). Same light as pall, light-path depth follows wedge shape
   (`wall` in `fx_pall`, copy `NukePall.dustLight`): diffuse uses the lesser mean-head depth above point (to local wedge

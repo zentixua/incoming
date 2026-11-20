@@ -116,6 +116,12 @@ does not run the paired scene acceptance gate or certify visible terrain publica
    hangs); frame at each end (`<id>_15s`, `<id>_40s`). No completion wait, so these scenes are last and
    later cameras face south away from earlier impacts. Not gated; capture subsets
    (`--scenes 100,grad,missile,shahed`).
+6. `megaton`: one 1 Mt ground burst without flight (`incoming nuke now`) at `M`, 12 km north of `F`; camera on the ground
+   3 km south of ground zero, facing it. World rules as on Artem's server (`CUSTOM`, game flight speeds, wave 0.35 of
+   sound speed, `max_yield` 1000). Command-relative windows: `approach` 12–20 s (the dust wall's last ~960 m; the front
+   reaches 3 km ~20.2 s after the burst), `inside` 20.5–26.5 s; frame at each end. The cost of the nuclear dust wall
+   filling the frame, which the "100" scene never shows. Last scene (its pall and ruins would enter later windows). Not
+   gated; `--scenes megaton --against ci:main` for changes to the wall or pall.
 
 ## Run
 ```sh

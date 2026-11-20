@@ -37,6 +37,7 @@ import net.neoforged.neoforge.client.event.ScreenEvent;
 import net.neoforged.neoforge.client.event.ViewportEvent;
 import net.neoforged.neoforge.common.NeoForge;
 import org.jetbrains.annotations.Nullable;
+import ua.zentix.incoming.IncomingConfig;
 import ua.zentix.incoming.Incoming;
 import ua.zentix.incoming.client.IncomingClient;
 import ua.zentix.incoming.client.flight.FlightTrack;
@@ -418,6 +419,14 @@ final class Sandbox {
             case COLLAPSE -> {
                 boolean on = c.args().getFirst().equals("on");
                 onServer(false, s -> ua.zentix.incoming.IncomingConfig.SERVER.collapse.set(on));
+                finish("ok");
+            }
+            case WAVE -> {
+                double speed = c.number(0);
+                onServer(false, s -> {
+                    IncomingConfig.SERVER.scalePreset.set(IncomingConfig.ScalePreset.CUSTOM);
+                    IncomingConfig.SERVER.nukeWaveSpeed.set(speed);
+                });
                 finish("ok");
             }
             case WEATHER -> {

@@ -11,7 +11,8 @@ import java.util.regex.Pattern;
 /**
  * GLSL function from numbers to a number: declarations {@code float a = …, b = …;}, {@code if (condition) return …;},
  * {@code return …;}; expressions contain numbers, variables ({@code n.x} for vec2), file {@code const float} constants,
- * + − * /, comparisons, built-ins {@code smoothstep, clamp, mix, min, max, exp, log2, pow, abs, sqrt, sign, floor, fract, sin, cos},
+ * + − * /, comparisons, built-ins {@code smoothstep, clamp, mix, min, max, exp, log2, pow, abs, sqrt, sign, floor, fract, sin, cos, atan (two
+ * arguments), mod},
  * and similar functions from the same file.
  */
 public record GlslFunction(List<String> tokens, List<String> params, String source) {
@@ -56,7 +57,7 @@ public record GlslFunction(List<String> tokens, List<String> params, String sour
     }
 
     private static final class Run {
-        private static final Set<String> BUILTIN = Set.of("smoothstep", "clamp", "mix", "min", "max", "exp", "log2", "pow", "abs", "sqrt", "sign", "floor", "fract", "sin", "cos");
+        private static final Set<String> BUILTIN = Set.of("smoothstep", "step", "clamp", "mix", "min", "max", "exp", "log2", "pow", "abs", "sqrt", "sign", "floor", "fract", "sin", "cos", "atan", "mod");
         private final List<String> t;
         private final Map<String, Double> vars;
         private final String source;
@@ -174,6 +175,7 @@ public record GlslFunction(List<String> tokens, List<String> params, String sour
                     double f = Math.max(0, Math.min(1, (a.get(2) - a.get(0)) / (a.get(1) - a.get(0))));
                     yield f * f * (3 - 2 * f);
                 }
+                case "step" -> a.get(1) < a.get(0) ? 0.0 : 1.0;
                 case "clamp" -> Math.max(a.get(1), Math.min(a.get(2), a.get(0)));
                 case "mix" -> a.get(0) * (1 - a.get(2)) + a.get(1) * a.get(2);
                 case "min" -> Math.min(a.get(0), a.get(1));
@@ -188,6 +190,8 @@ public record GlslFunction(List<String> tokens, List<String> params, String sour
                 case "fract" -> a.get(0) - Math.floor(a.get(0));
                 case "sin" -> Math.sin(a.get(0));
                 case "cos" -> Math.cos(a.get(0));
+                case "atan" -> Math.atan2(a.get(0), a.get(1));
+                case "mod" -> a.get(0) - a.get(1) * Math.floor(a.get(0) / a.get(1));
                 default -> throw new AssertionError("i don't know the function " + name);
             };
         }
