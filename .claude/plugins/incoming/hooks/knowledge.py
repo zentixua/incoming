@@ -144,7 +144,7 @@ def emit(event: str, text: str, session: str = "?") -> None:
 def log(kind: str, session: str, text: str = "") -> None:
     """Evidence that the hook acted in a real session (read by the weekly knowledge self-test)."""
     if os.environ.get("CLAUDE_PLUGIN_DATA"):
-        first = text.splitlines()[0][:160] if text else ""
+        first = " | ".join(text.splitlines())[:400] if text else ""
         with open(data_dir() / "fired.log", "a") as f:
             f.write(f"{time.strftime('%Y-%m-%dT%H:%M:%S')} {kind} {session} {first}\n")
 
