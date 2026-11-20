@@ -67,11 +67,13 @@ class SkyBandTest {
      */
     @Test
     void capWithTheSunBehindItNeverTakesTheSunsColour() {
-        for (double elevation : new double[]{1, 5, 12, 20}) {
-            double r = Math.toRadians(elevation);
-            double[] sun = {Math.cos(r), Math.sin(r), 0};
-            for (double[] body : new double[][]{sun, {-sun[0], -sun[1], 0}}) {
+        for (double rotation : new double[]{0, 30, -40}) for (double elevation : new double[]{1, 5, 12, 20}) {
+            // the vanilla sun at this elevation in the west, as the pack draws it on its turned path
+            double a = Math.toRadians(90 - elevation), sun[] = new double[3];
+            SkyBand.packSun(-Math.sin(a), Math.cos(a), rotation, sun);
+            for (double[] body : new double[][]{sun, {-sun[0], -sun[1], -sun[2]}}) {
                 Function<double[], double[]> frame = d -> angle(d, body) < 8 ? new double[]{1, 1, 1} : dusk(d);
+                String at = "rotation " + rotation + "°, sun " + elevation + "°";
                 SkyBand band = new SkyBand();
                 for (int f = 0; f < 30; f++) band.observe(pass(frame, d -> true, sun, (f * 0.754877) % 1, (f * 0.569840) % 1), f / 60.0);
                 float[] drawn = new float[SkyBand.AZ * SkyBand.EL * 4];
@@ -80,8 +82,8 @@ class SkyBandTest {
                 SkyBand.read(drawn, body[0], Math.max(body[1], 0), body[2], air);
                 // the brightest the sky itself gets
                 assertTrue(air[0] <= 0.95 + 1e-6 && air[1] <= 0.55 + 1e-6 && air[2] <= 0.40 + 1e-6,
-                        elevation + "°: airlight in front of the sun " + air[0] + " " + air[1] + " " + air[2]);
-                assertTrue(air[2] < 0.5 * air[0], elevation + "°: not white, the dusk sky's own warmth: " + air[0] + " " + air[2]);
+                        at + ": airlight in front of the sun " + air[0] + " " + air[1] + " " + air[2]);
+                assertTrue(air[2] < 0.5 * air[0], at + ": not white, the dusk sky's own warmth: " + air[0] + " " + air[2]);
             }
         }
     }
@@ -153,6 +155,49 @@ class SkyBandTest {
         assertEquals(0.2 + 0.6 * Math.exp(-2 / SkyBand.TAU), last, 1e-3, "two seconds: e^(−t/τ)");
     }
 
+    /**
+     * The pack's sun path (Iris {@code CelestialUniforms}: Ry(−90°)·Rz(rotation)·Rx(sky angle) on the zenith) recomputed
+     * with explicit matrices: {@link SkyBand#packSun} is that direction for any rotation and time of day, and with no
+     * rotation it is vanilla's sun (−sin a, cos a, 0). A 30° turn moves the noon sun 30° off vanilla's (far outside the cone),
+     * a sun at the horizon barely (the turn is about the east–west axis).
+     */
+    @Test
+    void packSunFollowsTheTurnedPath() {
+        for (double rotation : new double[]{0, 30, -40, 75}) {
+            for (double sky = 0; sky < 1; sky += 0.07) {
+                double a = sky * 2 * Math.PI, r = Math.toRadians(rotation);
+                // Rx(a)·(0, 1, 0)
+                double x = 0, y = Math.cos(a), z = Math.sin(a);
+                // Rz(r)
+                double x2 = x * Math.cos(r) - y * Math.sin(r), y2 = x * Math.sin(r) + y * Math.cos(r), z2 = z;
+                // Ry(−90°): x' = x cos θ + z sin θ, z' = −x sin θ + z cos θ, θ = −90°
+                double[] want = {-z2, y2, x2}, got = new double[3];
+                SkyBand.packSun(-Math.sin(a), Math.cos(a), rotation, got);
+                assertArrayEquals(want, got, 1e-12, "rotation " + rotation + ", sky angle " + sky);
+            }
+        }
+        double a = Math.toRadians(10), vanilla[] = {-Math.sin(a), Math.cos(a), 0}, turned[] = new double[3];
+        SkyBand.packSun(vanilla[0], vanilla[1], 0, turned);
+        assertArrayEquals(vanilla, turned, 1e-12);
+        SkyBand.packSun(vanilla[0], vanilla[1], 30, turned);
+        assertEquals(29.6, angle(vanilla, turned), 0.2, "turned sun off vanilla's");
+    }
+
+    /** Straight up and down the azimuth is undefined: the read takes azimuth 0 (as the shader) and stays finite. */
+    @Test
+    void verticalRaysReadAFiniteBand() {
+        float[] band = new float[SkyBand.AZ * SkyBand.EL * 4];
+        for (int i = 0; i < band.length; i++) band[i] = (i % 7) * 0.1f;
+        double[] up = new double[3], down = new double[3], near = new double[3];
+        SkyBand.read(band, 0, 1, 0, up);
+        SkyBand.read(band, 0, -1, 0, down);
+        SkyBand.read(band, 1e-12, 1, 0, near);
+        for (int c = 0; c < 3; c++) {
+            assertTrue(Double.isFinite(up[c]) && Double.isFinite(down[c]), "channel " + c);
+            assertEquals(near[c], up[c], 1e-9, "zenith: azimuth 0");
+        }
+    }
+
     /** The band is read the same way it is laid out: a uniform per-bin colour comes back exactly at each bin centre. */
     @Test
     void readFindsEachBinAtItsCentre() {
@@ -185,14 +230,15 @@ class SkyBandTest {
     @Test
     void shadersMatchTheJavaCopy() throws IOException {
         String pass = text("/assets/incoming/shaders/core/fx_sky_band.fsh"), pall = text("/assets/incoming/shaders/include/fx_pall.glsl");
-        assertTrue(pass.contains("const int BAND_AZ = " + SkyBand.AZ + ", BAND_EL = " + SkyBand.EL + ", BAND_SAMPLES = " + SkyBand.SAMPLES + ";"));
+        assertTrue(pass.contains("const int BAND_AZ = " + SkyBand.AZ + ", BAND_EL = " + SkyBand.EL + ", BAND_SAMPLES = " + SkyBand.SAMPLES + ", BAND_EDGE = 4;"));
         assertTrue(pall.contains("const int AIR_BAND_AZ = " + SkyBand.AZ + ", AIR_BAND_EL = " + SkyBand.EL + ";"));
         assertEquals("bool skyBandTakes(vec3 dir, vec3 sun, float cosOut) { return abs(dot(dir, sun)) < cosOut; }",
                 block(pass, "bool skyBandTakes", "// Copy — SkyBand.direction"));
         assertEquals("vec3 bandDir(ivec2 bin, vec2 at) { float az = (float(bin.x) + at.x) / float(BAND_AZ) * 6.28318530718, "
                         + "el = (float(bin.y) + at.y) / float(BAND_EL) * 1.57079632679; return vec3(cos(el) * cos(az), sin(el), cos(el) * sin(az)); }",
                 block(pass, "vec3 bandDir", "void main()"));
-        assertEquals("vec3 pallAirBand(vec3 dir) { float u = atan(dir.z, dir.x) / 6.28318530718 * float(AIR_BAND_AZ) - 0.5; "
+        assertEquals("vec3 pallAirBand(vec3 dir) { float az = 0.0; if (abs(dir.x) + abs(dir.z) > 1e-9 * length(dir)) az = atan(dir.z, dir.x); "
+                        + "float u = az / 6.28318530718 * float(AIR_BAND_AZ) - 0.5; "
                         + "float v = asin(clamp(dir.y / max(length(dir), 1e-9), 0.0, 1.0)) / 1.57079632679 * float(AIR_BAND_EL) - 0.5; "
                         + "v = clamp(v, 0.0, float(AIR_BAND_EL - 1)); float u0 = floor(u), v0 = floor(v), fu = u - u0, fv = v - v0; "
                         + "int a0 = int(mod(u0, float(AIR_BAND_AZ))), a1 = int(mod(u0 + 1.0, float(AIR_BAND_AZ))); "
@@ -201,8 +247,10 @@ class SkyBandTest {
                         + "vec3 hi = mix(PallAirBand[e1 * AIR_BAND_AZ + a0].rgb, PallAirBand[e1 * AIR_BAND_AZ + a1].rgb, fu); "
                         + "return mix(lo, hi, fv); }",
                 block(pall, "vec3 pallAirBand", "// Airlight along view direction dir"));
-        // the pass takes only sky pixels (SceneDepth: sky 1e9) and nothing behind the eye
-        assertTrue(pass.contains("if (texelFetch(Sampler1, ivec2(uv * vec2(depth)), 0).r < 1e8) continue;"));
+        // the pass takes only sky pixels (SceneDepth: sky 1e9) with sky around them, and nothing behind the eye
+        assertTrue(pass.contains("return texelFetch(Sampler1, clamp(p, ivec2(0), size - 1), 0).r >= 1e8;"));
+        assertTrue(pass.contains("if (!skyAt(at, depth) || !skyAt(at + ivec2(BAND_EDGE, 0), depth) || !skyAt(at - ivec2(BAND_EDGE, 0), depth)"));
+        assertTrue(pass.contains("|| !skyAt(at + ivec2(0, BAND_EDGE), depth) || !skyAt(at - ivec2(0, BAND_EDGE), depth)) continue;"));
         assertTrue(pass.contains("if (clip.w <= 0.0) continue;"));
     }
 }

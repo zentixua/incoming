@@ -746,7 +746,7 @@ public final class PallPass {
         VIEW_PROJECTION.invert(INVERSE);
         view.positiveZ(FORWARD).negate();
         // the shader pack's sky behind distant matter (pallAirLight), from this frame before anything of ours lies on it
-        SkyBandPass.update(scene, VIEW_PROJECTION, f.sun.x, f.sun.y, f.sun.z);
+        SkyBandPass.update(scene, VIEW_PROJECTION, f.sun.x, f.sun.y);
         if (previousEye == null || previousEye.distanceToSqr(eye) > JUMP * JUMP) history = false;
         float dx = (float) (previousEye == null ? 0 : eye.x - previousEye.x), dy = (float) (previousEye == null ? 0 : eye.y - previousEye.y),
                 dz = (float) (previousEye == null ? 0 : eye.z - previousEye.z);
@@ -1030,6 +1030,8 @@ public final class PallPass {
                 Minecraft.getInstance().getWindow());
         FxViews.screenSize(s);
         s.apply();
+        // the shader-pack sky band array: after apply() (Veil uploads zeroed copies of JSON-less uniforms there)
+        SkyBandPass.upload();
         int unit = GlStateManager._getActiveTexture();
         if (withNoise) {
             // ShaderInstance cannot bind a 3D texture (all its textures are 2D): custom unit and binding

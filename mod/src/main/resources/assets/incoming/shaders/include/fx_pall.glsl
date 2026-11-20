@@ -926,7 +926,10 @@ float gSunAt = 0.0, gSunNear = 0.0;
 // sun and moon cones left out, holes filled), bilinear between bin centres, wrapping in azimuth; below the lowest row's
 // centre (and below the horizon) the lowest row. Copy — SkyBand.read
 vec3 pallAirBand(vec3 dir) {
-    float u = atan(dir.z, dir.x) / 6.28318530718 * float(AIR_BAND_AZ) - 0.5;
+    // straight up or down atan(0, 0) is undefined: azimuth 0
+    float az = 0.0;
+    if (abs(dir.x) + abs(dir.z) > 1e-9 * length(dir)) az = atan(dir.z, dir.x);
+    float u = az / 6.28318530718 * float(AIR_BAND_AZ) - 0.5;
     float v = asin(clamp(dir.y / max(length(dir), 1e-9), 0.0, 1.0)) / 1.57079632679 * float(AIR_BAND_EL) - 0.5;
     v = clamp(v, 0.0, float(AIR_BAND_EL - 1));
     float u0 = floor(u), v0 = floor(v), fu = u - u0, fv = v - v0;

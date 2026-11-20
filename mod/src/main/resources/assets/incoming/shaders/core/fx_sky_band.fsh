@@ -2,8 +2,10 @@
 
 // The shader pack's sky by direction (client/fx/layer/SkyBand, SkyBandPass): one pixel per bin of AZ azimuth × EL
 // elevation bins over the upper hemisphere. BAND_SAMPLES² directions per bin, jittered per frame; each that lands on
-// screen on a sky pixel (world distance = sky, SceneDepth: 1e9) outside the cones around the sun and the moon
-// (skyBandTakes) adds the frame's colour there. Output: mean colour, share of the samples taken.
+// screen on a sky pixel (world distance = sky, SceneDepth: 1e9) whose neighbours BAND_EDGE pixels away are sky too (a
+// pack's TAA and blur carry a silhouette's colour a few pixels into the sky beside it), outside the cones around the
+// sun and the moon (skyBandTakes, the pack's sun path), adds the frame's colour there. Output: mean colour, share of the
+// samples taken.
 uniform sampler2D Sampler0;
 // world distance behind each pixel (SceneDepth)
 uniform sampler2D Sampler1;
@@ -15,7 +17,11 @@ uniform vec2 BandJitter;
 
 out vec4 fragColor;
 
-const int BAND_AZ = 16, BAND_EL = 6, BAND_SAMPLES = 8;
+const int BAND_AZ = 16, BAND_EL = 6, BAND_SAMPLES = 8, BAND_EDGE = 4;
+
+bool skyAt(ivec2 p, ivec2 size) {
+    return texelFetch(Sampler1, clamp(p, ivec2(0), size - 1), 0).r >= 1e8;
+}
 
 // Copy — SkyBand.takes
 bool skyBandTakes(vec3 dir, vec3 sun, float cosOut) {
@@ -42,7 +48,9 @@ void main() {
             if (clip.w <= 0.0) continue;
             vec2 uv = clip.xy / clip.w * 0.5 + 0.5;
             if (uv.x < 0.0 || uv.y < 0.0 || uv.x >= 1.0 || uv.y >= 1.0) continue;
-            if (texelFetch(Sampler1, ivec2(uv * vec2(depth)), 0).r < 1e8) continue;
+            ivec2 at = ivec2(uv * vec2(depth));
+            if (!skyAt(at, depth) || !skyAt(at + ivec2(BAND_EDGE, 0), depth) || !skyAt(at - ivec2(BAND_EDGE, 0), depth)
+                    || !skyAt(at + ivec2(0, BAND_EDGE), depth) || !skyAt(at - ivec2(0, BAND_EDGE), depth)) continue;
             sum += texelFetch(Sampler0, ivec2(uv * vec2(frame)), 0).rgb;
             n += 1.0;
         }

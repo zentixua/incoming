@@ -58,6 +58,11 @@ public final class SceneDepth {
 
     private SceneDepth() {}
 
+    /** This frame's distances include a LOD mod's terrain (Distant Horizons or Voxy depth was read). */
+    static boolean withLod() {
+        return last == 2;
+    }
+
     /**
      * Fill this frame's distance texture from the world projection; −1 — failed (shader not loaded, framebuffer
      * lacks depth): draw the layer without soft edges then.

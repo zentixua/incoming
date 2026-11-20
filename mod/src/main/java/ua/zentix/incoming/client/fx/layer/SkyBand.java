@@ -62,6 +62,18 @@ public final class SkyBand {
     }
 
     /**
+     * The sun's direction as a shader pack draws it, into {@code out}: Iris turns the vanilla orbit (sx, sy, 0) about the
+     * east–west axis by the pack's {@code sunPathRotation} ({@code CelestialUniforms}: Ry(−90°)·Rz(rotation)·Rx(sky angle)
+     * applied to the zenith, vanilla's sky without Rz), so (sx, sy·cos r, −sy·sin r). The moon is opposite.
+     */
+    public static void packSun(double sx, double sy, double rotationDeg, double[] out) {
+        double r = Math.toRadians(rotationDeg);
+        out[0] = sx;
+        out[1] = sy * Math.cos(r);
+        out[2] = -sy * Math.sin(r);
+    }
+
+    /**
      * Sample direction in bin (a, e) at fraction (u, v) of the bin, into {@code out} (unit, y up). Copy of {@code bandDir} in
      * {@code fx_sky_band}.
      */
@@ -74,7 +86,7 @@ public final class SkyBand {
 
     /**
      * One pass's result: per bin (a + e·AZ) rgb mean of its sky pixels and the share of its samples that were sky
-     * ({@code rgba}, length AZ·EL·4), at time {@code now} (seconds).
+     * ({@code rgba}, length AZ·EL·4), captured at {@code now} (seconds; the capture's time, not its readback's).
      */
     public void observe(float[] rgba, double now) {
         for (int i = 0; i < AZ * EL; i++) {
@@ -145,7 +157,9 @@ public final class SkyBand {
      */
     public static void read(float[] band, double x, double y, double z, double[] out) {
         double len = Math.sqrt(x * x + y * y + z * z);
-        double u = Math.atan2(z, x) / (2 * Math.PI) * AZ - 0.5;
+        // straight up or down the azimuth is undefined (GLSL atan(0, 0)): take 0, as the shader does
+        double az = Math.abs(x) + Math.abs(z) > 1e-9 * len ? Math.atan2(z, x) : 0;
+        double u = az / (2 * Math.PI) * AZ - 0.5;
         double v = Math.asin(Math.min(Math.max(y / Math.max(len, 1e-9), 0), 1)) / (0.5 * Math.PI) * EL - 0.5;
         v = Math.min(Math.max(v, 0), EL - 1);
         double u0 = Math.floor(u), v0 = Math.floor(v), fu = u - u0, fv = v - v0;
