@@ -11,6 +11,9 @@ import net.minecraft.client.gui.components.EditBox;
 import ua.zentix.incoming.IncomingConfig;
 import ua.zentix.incoming.nuclear.model.ImpactPreview;
 import net.minecraft.client.gui.components.Tooltip;
+import net.neoforged.neoforge.items.wrapper.PlayerInvWrapper;
+import ua.zentix.incoming.strike.Munitions;
+import ua.zentix.incoming.strike.ServerActions;
 import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.client.player.LocalPlayer;
 import net.minecraft.network.chat.Component;
@@ -58,9 +61,9 @@ public class RemoteScreen extends Screen {
     private static final int LINE = 9;
     /**
      * Window height without weapon description and target hint. Text wraps to window width rather than overflowing:
-     * description gets as many lines as the menu's longest (window stays stable when switching weapons), hint gets two.
+     * description gets as many lines as the menu's longest (window stays stable when switching weapons), hint gets two plus a munitions line.
      */
-    private static final int BASE_H = 204, HINT_LINES = 2;
+    private static final int BASE_H = 204, HINT_LINES = 3;
     private static final int PAGE = 8;
     /** Settings for those without remote in hand (screen opened by command). */
     private static Loadout detached = Loadout.DEFAULT;
@@ -72,6 +75,9 @@ public class RemoteScreen extends Screen {
     private UUID aircraft;
     private int page;
     private boolean validYield = true;
+    /** Fire (or Mission) button: inactive while the order is incomplete ({@link #missing}). */
+    @Nullable
+    private Button fireButton;
     private final List<Choice> choices = new ArrayList<>();
     /** Weapon description lines and window height: computed in {@link #init()} from font. */
     private int descLines = 1, h = BASE_H + (1 + HINT_LINES) * LINE;
@@ -142,6 +148,7 @@ public class RemoteScreen extends Screen {
                 validYield = value.isPresent();
                 yield.setTextColor(validYield ? 0xFFFFFF : 0xFF6060);
                 if (validYield) commit(loadout.withNuke(loadout.nuke().withYield(value.getAsInt())));
+                readiness();
             });
             validYield = n.yieldKt() <= cap;
             nuke.add(new Cell(yield, List.of(Component.literal("1000 kt"))));
@@ -224,9 +231,10 @@ public class RemoteScreen extends Screen {
         Component fireLabel = linked > 0 ? Component.translatable("incoming.remote.assign", linked) : Component.translatable("incoming.remote.fire");
         // Map route and launch site apply to On the map target, as when firing from map itself.
         boolean map = loadout.mode() == TargetMode.MAP;
-        addRenderableWidget(Button.builder(fireLabel.copy().withStyle(ChatFormatting.RED, ChatFormatting.BOLD),
+        fireButton = addRenderableWidget(Button.builder(fireLabel.copy().withStyle(ChatFormatting.RED, ChatFormatting.BOLD),
                 b -> fire(map ? MapTarget.waypoints(minecraft.level) : Waypoints.NONE, map ? launchFrom() : Optional.empty()))
                 .bounds(x0 + 4, by, 128, 22).build());
+        readiness();
         addRenderableWidget(Button.builder(Component.translatable("incoming.remote.clear"), b -> {
             PacketDistributor.sendToServer(new C2S.Clear());
             onClose();
@@ -374,9 +382,7 @@ public class RemoteScreen extends Screen {
      * here rather than the screen field.
      */
     void fire(Waypoints via, Optional<Vec3> from) {
-        if (loadout.nuclear() && !validYield) return;
-        if (loadout.mode() == TargetMode.AIRCRAFT && aircraft == null) return;
-        if (loadout.mode() == TargetMode.PLAYER && loadout.player().isEmpty()) return;
+        if (missing() != null) return;
         if (!loadout.weapon().spec().route().waypoints()) via = Waypoints.NONE;
         Optional<C2S.AimHint> aim;
         if (loadout.mode() == TargetMode.MAP) {
@@ -419,6 +425,26 @@ public class RemoteScreen extends Screen {
         };
     }
 
+    /**
+     * What the order still lacks before Fire can send it (yield, a picked aircraft or player), or null: Fire stays
+     * inactive and its tooltip names the missing part, instead of a click that does nothing.
+     */
+    @Nullable
+    private Component missing() {
+        if (loadout.nuclear() && !validYield) return Component.translatable("incoming.remote.fire.no_yield", IncomingConfig.SERVER.nukeMaxYield.get());
+        if (loadout.mode() == TargetMode.AIRCRAFT && aircraft == null) return Component.translatable("incoming.remote.fire.no_aircraft");
+        if (loadout.mode() == TargetMode.PLAYER && loadout.player().isEmpty()) return Component.translatable("incoming.remote.fire.no_player");
+        return null;
+    }
+
+    /** Fire's state follows {@link #missing}: also on typing the yield, which does not rebuild the screen. */
+    private void readiness() {
+        if (fireButton == null) return;
+        Component why = missing();
+        fireButton.active = why == null;
+        fireButton.setTooltip(why == null ? null : Tooltip.create(why));
+    }
+
     private void openConfig() {
         ModList.get().getModContainerById(Incoming.MOD_ID).ifPresent(c -> minecraft.setScreen(new IncomingConfigScreen(c, this)));
     }
@@ -446,16 +472,29 @@ public class RemoteScreen extends Screen {
             }
         };
         // Hint above launch buttons: last line at bottom, extra lines grow upward.
-        lines(g, hint.copy().withStyle(ChatFormatting.DARK_GRAY), y0 + h - 28, true);
+        int top = lines(g, hint.copy().withStyle(ChatFormatting.DARK_GRAY), y0 + h - 28, true);
+        // Survival: the munitions this order takes, before Fire, so the refusal is no surprise (server pays the same bill).
+        Component short_ = shortage();
+        if (short_ != null) lines(g, short_.copy().withStyle(ChatFormatting.RED), top, true);
+    }
+
+    /** Munitions the order lacks in the player's inventory ({@link Munitions#shortage}); null if enough, creative or linked launchers (they pay). */
+    @Nullable
+    private Component shortage() {
+        LocalPlayer p = Minecraft.getInstance().player;
+        if (p == null || p.hasInfiniteMaterials() || linked() > 0) return null;
+        return Munitions.shortage(new PlayerInvWrapper(p.getInventory()), Munitions.Bill.of(ServerActions.clamp(loadout)));
     }
 
     /** Text centred in window, wrapped to width: downward from {@code y}, or, if {@code up}, upward ending at {@code y}. */
-    private void lines(GuiGraphics g, Component text, int y, boolean up) {
+    /** @return top of the drawn lines */
+    private int lines(GuiGraphics g, Component text, int y, boolean up) {
         List<FormattedCharSequence> split = font.split(text, W - 8);
         int top = up ? y - split.size() * LINE : y;
         for (int i = 0; i < split.size(); i++) {
             g.drawCenteredString(font, split.get(i), width / 2, top + i * LINE, 0xFFFFFFFF);
         }
+        return top;
     }
 
     /** Moving-target hint ({@code player}, {@code aircraft}): whether selected weapon tracks it ({@link WeaponSpec.Tracking}). */

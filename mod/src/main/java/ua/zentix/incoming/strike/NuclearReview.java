@@ -55,7 +55,7 @@ public final class NuclearReview {
             var problem = ServerActions.routeProblem(p.serverLevel(), p, true, order.loadout().weapon(),
                     order.from().map(LaunchOrigin.Place::new).orElse(null), order.via(),
                     order.aim().map(C2S.AimHint::point).orElse(p.position()));
-            if (problem != null) { p.sendSystemMessage(problem); return; }
+            if (problem != null) { ServerActions.refuse(p, problem); return; }
         }
         ServerActions.Aim aim = ServerActions.reviewAim(p, order);
         if (aim == null || (aim = ServerActions.ruled(p, aim)) == null) return;
@@ -75,20 +75,13 @@ public final class NuclearReview {
 
     private static boolean allowed(ServerPlayer p, C2S.Fire order) {
         if (!ua.zentix.incoming.launcher.LauncherLinks.of(ServerActions.designator(p)).isEmpty()) {
-            p.sendSystemMessage(Component.translatable("incoming.fixed_launcher.no_nuke"));
+            ServerActions.refuse(p, Component.translatable("incoming.fixed_launcher.no_nuke"));
             return false;
         }
-        if (!order.loadout().nuclear() || !ServerActions.mayUse(p) || !ServerActions.mayUseNuke(p)) {
-            p.sendSystemMessage(Component.translatable("incoming.no_permission"));
-            return false;
-        }
-        if (order.loadout().nuke().yieldKt() > IncomingConfig.SERVER.nukeMaxYield.get()
-                || order.loadout().nuke().onCarrier() && !order.loadout().weapon().spec().warhead().always()
-                && !IncomingConfig.SERVER.carrierNukes.get()) {
-            p.sendSystemMessage(Component.translatable("incoming.nuke.review.cap", IncomingConfig.SERVER.nukeMaxYield.get()));
-            return false;
-        }
-        return true;
+        if (!order.loadout().nuclear()) return false;
+        Component reason = ServerActions.nuclearRefusal(p, order.loadout());
+        if (reason != null) ServerActions.refuse(p, reason);
+        return reason == null;
     }
 
     /** Current weather estimate, using the same clear/rain/thunder visibility anchors as the event. */
@@ -137,12 +130,18 @@ public final class NuclearReview {
         if (action == C2S.NuclearAction.RELEASE) { state.entry = e.held(-1); return true; }
         long now = p.serverLevel().getGameTime();
         var c = IncomingConfig.SERVER;
-        if (!p.level().dimension().equals(e.dimension) || now > e.expires || !allowed(p, e.order)
+        // A refused order already told its own reason (allowed); a generic line would replace it on the action bar.
+        if (!allowed(p, e.order)) {
+            state.entry = null;
+            finish(p, e);
+            return false;
+        }
+        if (!p.level().dimension().equals(e.dimension) || now > e.expires
                 || e.cap != c.nukeMaxYield.get() || e.flight != c.nukeFlightTime.get() || e.carrier != c.carrierNukes.get()
                 || e.opsOnly != c.nukeOpsOnly.get() || e.keyWindow != c.nukeSecondKeyWindow.get() || e.keyDistance != c.nukeSecondKeyDistance.get()
                 || e.scale != (float) c.effectsScale() || e.visibility != visibility(p)) {
             state.entry = null;
-            p.sendSystemMessage(Component.translatable("incoming.nuke.review.changed"));
+            ServerActions.refuse(p, Component.translatable("incoming.nuke.review.changed"));
             finish(p, e);
             return false;
         }
@@ -154,7 +153,7 @@ public final class NuclearReview {
         state.entry = null; // consume before dispatch: duplicates cannot pay or launch twice
         Vec3 current = e.aim.target().subject().resolve(p.serverLevel()).orElse(null);
         if (current == null || current.distanceToSqr(e.aim.point()) > 1 || ServerActions.ruled(p, e.aim) == null) {
-            p.sendSystemMessage(Component.translatable("incoming.nuke.review.changed"));
+            ServerActions.refuse(p, Component.translatable("incoming.nuke.review.changed"));
             finish(p, e);
             return false;
         }

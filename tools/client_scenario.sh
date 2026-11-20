@@ -1,11 +1,13 @@
 #!/usr/bin/env bash
 # Client mod without window: virtual display KWin + Xwayland (tools/nested_kwin.sh - its own bus D-Bus and settings), sound is recorded in WAV (OpenAL Soft "wave").
 # The script (mod/src/devtest/.../ClientScenario) launches all types of weapons and shoots footage.
-#   tools/client_scenario.sh [all|guide|launch|rocket|loiter|hud|map|target-map|nuke-map|salvo-map|route-map|launch-map|nuke|nuke-water|nuke-lake|pall|pall-front|pall-low|pall-mine|mushroom|firestorm|wall|debris|fx|fx-night|fx-late|models|far-models|occlusion|onboard|flyby|flyby-all|flyby-<case>] [shaders] [dh] [voxy] [lss]   → mod/run/scenario/screenshots/*.png, audio.wav, logs/latest.log
+#   tools/client_scenario.sh [all|guide|firstuse|launch|rocket|loiter|hud|map|target-map|nuke-map|salvo-map|route-map|launch-map|nuke|nuke-water|nuke-lake|pall|pall-front|pall-low|pall-mine|mushroom|firestorm|wall|debris|fx|fx-night|fx-late|models|far-models|occlusion|onboard|flyby|flyby-all|flyby-<case>] [shaders] [dh] [voxy] [lss]   → mod/run/scenario/screenshots/*.png, audio.wav, logs/latest.log
 #   all - Shahed, rocket, bomb, salvo, binoculars and remote control (short flights from afar);
 #   guide - player guide frames (GuideShots): recipes, binoculars, remote control, GIF cards, projectiles on the screen, camera,
 #     "Lancet", SAM, stationary launcher; INCOMING_GUIDE=recipes,map - only these sections; map - based on drawing 20 chunks, without dh;
 #     pictures in docs/guide/img - tools/guide_images.sh;
+#   firstuse - a new player's first-use screens without strikes (FirstUse): recipe book, first hold, console Fire states,
+#     refusals, binoculars at the sky; EN and RU, each in a fresh flat survival world without cheats;
 #   launch - launch with the player's launcher, accelerator compartment, projectile chamber (N) before impact;
 #   rocket - MLRS salvo: camera next to the package, arcs above the head, gaps in the area;
 #   map - the projectile camera is further drawn: the video is nearby, then the map is based on telemetry, the hit is on the map;

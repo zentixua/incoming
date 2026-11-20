@@ -30,4 +30,18 @@ class LoadoutTest {
             assertEquals(nuke, Loadout.Nuke.CODEC.parse(NbtOps.INSTANCE, encoded).getOrThrow());
         }
     }
+
+    /** Wheel past the Grad and back: the missile stays a single shot (the burst belongs to the Grad). */
+    @Test
+    void scrollingPastBurstWeaponRestoresSingleShot() {
+        Loadout grad = Loadout.DEFAULT.withWeapon(WeaponType.ROCKET);
+        assertTrue(grad.count() > 1);
+        Loadout back = grad.withWeapon(WeaponType.MISSILE);
+        assertEquals(1, back.count());
+        assertEquals(0, back.spread());
+        // also a single shot from a wide spread or a server-capped burst: the burst belongs to the Grad
+        Loadout wide = Loadout.DEFAULT.withSpread(20).withWeapon(WeaponType.ROCKET).withWeapon(WeaponType.MISSILE);
+        assertEquals(1, wide.count());
+        assertEquals(1, grad.withCount(5).withWeapon(WeaponType.MISSILE).count());
+    }
 }

@@ -12,7 +12,9 @@ English · [Русский](ru/faq.md)
 | "Launch failed: the world near the target is not loaded" | the munition was returned; try again |
 | "No target found" | nothing is under the reticle, or the ground there is too far to make out: strike from the map |
 | "… cannot fly this route…" | remove or move route points |
-| "The designator is for operators only…" | the world owner set it up that way |
+| "Only operators can use the designator here…" | the world owner set it up that way (Settings → Launch) |
+| "Nothing under the crosshair…" | aim the binoculars at the ground, a block, a mob or an aircraft |
+| "Nuclear strikes: operators and the world host only…", "Nuclear weapons are off…", "… is above this world's limit…" | the world owner decides in Settings → Nuclear weapons; in your own single-player world that is you ([nuclear strike](nuke.md)) |
 | "Too many strikes in progress…" | the world owner set a limit: wait for impacts or [abort](designator.md#abort) |
 | "Mission given to launchers…" | [launchers](launcher.md#mission) are linked to the designator; unlink them with RMB to make it fire by itself |
 | "Incoming: your graphics card stalled on the nuclear cloud…" | one frame of the nuclear cloud took your graphics card over a second, so the fireball, mushroom cloud and dust stay off until you restart the game; update the graphics driver, set "Mushroom cloud, dust wall and pall" lower, and [report it](https://github.com/zentixua/incoming/issues) with your log |

@@ -279,7 +279,7 @@ public final class NuclearKeys {
         }
         if (owner != null) {
             if (r.ok()) StrikeService.confirm(owner, l.weapon(), r.eta());
-            else owner.displayClientMessage(Component.translatable("incoming.launch_failed").withStyle(ChatFormatting.RED), true);
+            else ServerActions.refuse(owner, Component.translatable("incoming.launch_failed"));
         }
         if (!r.ok()) {
             if (o.paid != null) Munitions.refund(owner != null ? List.of(owner) : online, o.ownerId, o.paid, why);

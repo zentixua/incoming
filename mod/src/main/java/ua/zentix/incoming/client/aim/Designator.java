@@ -147,7 +147,13 @@ public final class Designator {
     /** LMB in binoculars: launch at the crosshair (map route and launch site apply only to map and remote launches). */
     public static void fire() {
         TargetPicker.Pick pk = pick;
-        if (pk == null || !isScoping()) return;
+        if (!isScoping()) return;
+        LocalPlayer p = Minecraft.getInstance().player;
+        if (pk == null) {
+            // Nothing under the crosshair (sky, beyond sight): say so instead of a click that does nothing.
+            if (p != null) p.displayClientMessage(Component.translatable("incoming.target_not_found.aim").withStyle(ChatFormatting.RED), true);
+            return;
+        }
         C2S.AimHint hint;
         if (pk.entity() != null) {
             hint = new C2S.AimHint(C2S.AimHint.ENTITY, pk.point(), pk.entity().getId(), Vec3.ZERO);
