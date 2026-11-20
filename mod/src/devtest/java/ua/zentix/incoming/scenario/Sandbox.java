@@ -2,7 +2,6 @@ package ua.zentix.incoming.scenario;
 
 import com.mojang.blaze3d.platform.NativeImage;
 import com.mojang.brigadier.arguments.StringArgumentType;
-import net.minecraft.Util;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.Screenshot;
 import net.minecraft.client.gui.GuiGraphics;
@@ -134,6 +133,22 @@ final class Sandbox {
     /** Rate from arming to the first measured frames (≈ 2 frames per tick at 4 frames/s, the smoke-filled llvmpipe rate). */
     private static final double SOFT_START_RATE = 2;
     private double paceRate = 20, paceFrameS;
+    /**
+     * Sound-only take ({@code shots <name> none… <s>}): nobody looks at its frames, yet llvmpipe drew full 1280×720 frames
+     * at 4–5 cores the whole take (a GPU client spends 1.6 cores on unlimited frames). The window shrinks to {@link #QUIET_W}×{@link #QUIET_H} and the
+     * frame limit drops to {@link #QUIET_FPS} (standard window and {@code maxFps} options) until the take ends; sound is
+     * mixed by OpenAL's own thread in real time and our voices start at their exact offset ({@code OwnSources}: a voice
+     * later than 30 ms seeks), so the WAV does not depend on the frame rate. Saved size and limit, null when not quiet.
+     */
+    private int[] quiet;
+    /**
+     * Window being restored after a quiet take: a frame take's {@code ok armed} and the sound take's own result wait until
+     * the frame is its size again ({@link #afterRestore}); restoreSince is the tick of the request.
+     */
+    private boolean restoring;
+    private int restoreSince;
+    private String restoreResult;
+    static final int QUIET_W = 160, QUIET_H = 90, QUIET_FPS = 20;
     private long paceLast;
     /** Point of effects that do not touch the ground (on the ground), and the current effect's point. */
     private static final Vec3 HOME = new Vec3(0.5, GROUND + 1, 0.5);
@@ -209,6 +224,12 @@ final class Sandbox {
     private double closest = Double.MAX_VALUE;
     /** Nuke near the camera: how many runs there were (site — {@link #nearSite}). */
     private int nearRuns;
+    /**
+     * What the take's second 0 is, written into capture.json ({@code clock}) and every {@code SANDBOX shot} line: the
+     * effect's start, or for {@code nuke … near} the front's arrival at the houses, the burst that many seconds earlier.
+     * A frame time read as seconds after the burst misled a review (20.11: "stale puffs" that were the burst's own dust).
+     */
+    private String clock = "effect start";
 
     /** Effect snapshot: frames at the seconds {@code times}, sound {@code wavSeconds}. */
     private static final class Capture {
@@ -361,12 +382,13 @@ final class Sandbox {
 
     /** A command is running (from a file or chat): waiting, the effect and its frames, reload — the next one waits. */
     private boolean busy() {
-        return running != null || pending != null || reloading || waitUntil >= 0 || timeWait >= 0 || capture != null;
+        return running != null || pending != null || reloading || waitUntil >= 0 || timeWait >= 0 || capture != null || restoring;
     }
 
     /** Result of a command from a file (for a command from chat — a line in chat). */
     private void finish(String result) {
         Incoming.LOG.info("SANDBOX > {}", result);
+        if (result.startsWith("error")) failed();
         if (running != null) write(running, result);
         else if (Minecraft.getInstance().player != null) Minecraft.getInstance().player.displayClientMessage(Component.literal("fx: " + result), false);
         running = null;
@@ -385,6 +407,7 @@ final class Sandbox {
                 run(SandboxCommand.parse(line));
             } catch (IllegalArgumentException ex) {
                 ctx.getSource().sendFailure(Component.literal("fx: " + ex.getMessage()));
+                failed();
                 return 0;
             }
             return 1;
@@ -549,7 +572,10 @@ final class Sandbox {
                 armed.days = c.dayTimes();
                 // slow before the effect: its first frames (new particles, first draw of a shader) are the slowest
                 pace(armed.times.length > 0 ? SOFT_START_RATE : 20);
-                finish("ok armed " + out);
+                quiet(armed.times.length == 0 && armed.wavSeconds > 0);
+                // frames only once the window is its size again (a quiet take before it may still be shrinking back)
+                if (armed.times.length > 0) afterRestore("ok armed " + out);
+                else finish("ok armed " + out);
             }
             case AGAIN -> {
                 if (lastEffect == null) finish("error no effects yet");
@@ -603,6 +629,8 @@ final class Sandbox {
                 p.getX() + half, GROUND, p.getZ() + half));
         effectTick = -1;
         capture = null;
+        // effects that clear first (nuke … near) keep an armed sound-only take quiet
+        if (armed == null) quiet(false);
     }
 
     /** House under the point ({@code house}): height and half-width, in blocks; 0 — no house. */
@@ -904,6 +932,7 @@ final class Sandbox {
     /** Effect starts at tick {@code at} (not before it): frame and sound clocks from it. */
     private void begin(int at) {
         pending = null;
+        clock = "effect start";
         effectTick = at;
         Incoming.LOG.info("SANDBOX effect {} at {} tick {} (now {}) audio {}", pendingCmd, xyz(site), at, tick, audioBytes());
         capture = armed;
@@ -979,7 +1008,83 @@ final class Sandbox {
         if (cap != null && effectTick >= 0 && cap.next >= cap.times.length && tick >= cap.audioTick + Math.round(cap.wavSeconds * 20) + 10) {
             capture = null;
             write(cap.out.resolve("capture.json"), json(cap));
-            finish("ok " + cap.out);
+            // the next command may be a frame take: answer once the window is its size again
+            quiet(false);
+            afterRestore("ok " + cap.out);
+        }
+        if (restoring) {
+            var target = mc.getMainRenderTarget();
+            boolean back = target.width == mc.getWindow().getWidth() && target.height == mc.getWindow().getHeight()
+                    && mc.getWindow().getWidth() == quietSize[0] && mc.getWindow().getHeight() == quietSize[1];
+            if (back || tick - restoreSince > 100) {
+                restoring = false;
+                String result = restoreResult;
+                restoreResult = null;
+                String error = "error window not restored to " + quietSize[0] + "x" + quietSize[1] + " after a sound-only take: "
+                        + target.width + "x" + target.height + " (tools/sandbox.sh restart)";
+                if (!back) Incoming.LOG.error("SANDBOX {}", error);
+                if (result != null) finish(back ? result : error);
+            }
+        }
+    }
+
+    /**
+     * A command failed, from the inbox or chat (a typo in the effect, an effect that did not start): an armed take would
+     * wait for a later, unrelated effect, and a sound-only one would keep the window small.
+     */
+    private void failed() {
+        if (armed == null) return;
+        armed = null;
+        if (capture == null) {
+            quiet(false);
+            pace(20);
+        }
+    }
+
+    /**
+     * A frame is taken only at the window's own size: after a quiet take (sound only) until the frame is back to the size
+     * it had, whatever path armed the take; a frame due meanwhile waits for the restored size.
+     */
+    private boolean fullSize(Minecraft mc) {
+        if (quiet == null && quietSize[0] == 0) return true;
+        var target = mc.getMainRenderTarget();
+        return quiet == null && target.width == quietSize[0] && target.height == quietSize[1];
+    }
+
+    /** Result now, or once a window restore in progress ends ({@link #restoring}). */
+    private void afterRestore(String result) {
+        if (restoring) restoreResult = result;
+        else finish(result);
+    }
+
+    /** Window size and frame limit to return to after a quiet take. */
+    private final int[] quietSize = new int[2];
+    private int quietFps;
+
+    /** Sound-only take: minimal window and frame limit ({@link #quiet}); false restores both. */
+    private void quiet(boolean on) {
+        Minecraft mc = Minecraft.getInstance();
+        long window = mc.getWindow().getWindow();
+        if (on && quiet == null) {
+            // still shrinking back from the previous quiet take: its saved size is the window's own
+            quiet = restoring ? new int[] {quietSize[0], quietSize[1], quietFps}
+                    : new int[] {mc.getWindow().getWidth(), mc.getWindow().getHeight(), mc.options.framerateLimit().get()};
+            quietFps = quiet[2];
+            restoring = false;
+            quietSize[0] = quiet[0];
+            quietSize[1] = quiet[1];
+            Incoming.LOG.info("SANDBOX quiet take: window {}x{} → {}x{}, max fps {} → {}", quiet[0], quiet[1], QUIET_W, QUIET_H, quiet[2], QUIET_FPS);
+            mc.options.framerateLimit().set(QUIET_FPS);
+            // the client window fills the nested screen and the compositor keeps a maximized window's size: restore first
+            org.lwjgl.glfw.GLFW.glfwRestoreWindow(window);
+            org.lwjgl.glfw.GLFW.glfwSetWindowSize(window, QUIET_W, QUIET_H);
+        } else if (!on && quiet != null) {
+            Incoming.LOG.info("SANDBOX quiet take over: window {}x{}, max fps {}", quiet[0], quiet[1], quiet[2]);
+            mc.options.framerateLimit().set(quiet[2]);
+            org.lwjgl.glfw.GLFW.glfwSetWindowSize(window, quiet[0], quiet[1]);
+            quiet = null;
+            restoring = true;
+            restoreSince = tick;
         }
     }
 
@@ -1283,6 +1388,7 @@ final class Sandbox {
         double wait = a.d.arrivalTicks(houses.distanceTo(a.d.burst())) - a.ticks(0);
         Incoming.LOG.info("SANDBOX near: burst {}, wave {} of sound, front at the houses in {} ticks", xyz(a.d.burst()), a.d.wave(), Math.round(wait));
         begin(tick + (int) Math.round(wait));
+        clock = String.format(Locale.ROOT, "front at the houses (burst %.2f s earlier)", (wait + a.ticks(0)) / 20.0);
     }
 
     private static boolean loaded(Minecraft mc, BlockPos at) {
@@ -1393,7 +1499,7 @@ final class Sandbox {
             mc.level.setDayTime(day);
             onServer(false, s -> s.overworld().setDayTime(day));
         }
-        if (tick < effectTick + Math.round(t * 20)) {
+        if (tick < effectTick + Math.round(t * 20) || !fullSize(mc)) {
             // far from the next frame the world runs at full rate: pacing a whole 130 s take on llvmpipe (1–3 frames/s
             // with a mushroom in view) stretches it to tens of minutes; the last PACE_LEAD seconds settle the rate
             if (effectTick + Math.round(t * 20) - tick > PACE_LEAD * 20) pace(20);
@@ -1404,15 +1510,16 @@ final class Sandbox {
         String file = String.format(Locale.ROOT, "%s_%06.2fs.png", cap.name, t);
         NativeImage image = Screenshot.takeScreenshot(mc.getMainRenderTarget());
         Path to = cap.out.resolve(file);
-        Util.ioPool().execute(() -> {
-            try (image) {
-                image.writeToFile(to);
-            } catch (IOException ex) {
-                Incoming.LOG.error("SANDBOX frame {} not written", to, ex);
-            }
-        });
+        // written here, before the take can report done: an asynchronous write let `fx` return while the last PNG was
+        // still being written, and a copy right after it was truncated (20.11, dusk-light-law); ~0.1 s per 1280×720 frame
+        // on the render thread, after the frame's age is taken
+        try (image) {
+            image.writeToFile(to);
+        } catch (IOException ex) {
+            Incoming.LOG.error("SANDBOX frame {} not written", to, ex);
+        }
         cap.frames.add(String.format(Locale.ROOT, "{\"t\": %.2f, \"age\": %.3f, \"file\": \"%s\", \"fps\": %d}", t, age, file, mc.getFps()));
-        Incoming.LOG.info("SANDBOX shot {} age {} s fps {} day time {}; layer: {}; smoke: {}; flight: {}; air: {}; pall: {}", file, String.format(Locale.ROOT, "%.3f", age), mc.getFps(),
+        Incoming.LOG.info("SANDBOX shot {} age {} s (t = 0 at {}) fps {} day time {}; layer: {}; smoke: {}; flight: {}; air: {}; pall: {}", file, String.format(Locale.ROOT, "%.3f", age), clock, mc.getFps(),
                 mc.level.getDayTime() % 24000,
                 ua.zentix.incoming.client.fx.layer.FxLayer.describeTiming(), ua.zentix.incoming.client.far.FarRenderer.describeSmoke(),
                 ua.zentix.incoming.client.far.FarFlightView.describe(), ua.zentix.incoming.client.fx.ClientAir.now(),
@@ -1552,10 +1659,10 @@ final class Sandbox {
 
     private String json(Capture c) {
         return String.format(Locale.ROOT, "{\"name\": \"%s\", \"effect\": \"%s\", \"site\": [%.1f, %.1f, %.1f], \"camera\": [%.1f, %.1f, %.1f, %.1f], "
-                        + "\"audio\": {\"file\": \"%s\", \"start\": %d, \"from\": %.2f, \"seconds\": %.2f}, \"frames\": [%s]}\n",
+                        + "\"audio\": {\"file\": \"%s\", \"start\": %d, \"from\": %.2f, \"seconds\": %.2f}, \"clock\": \"t = 0 at %s\", \"frames\": [%s]}\n",
                 c.name, lastEffect, site.x, site.y, site.z, camDist, camHeight, camBearing, camLook,
                 FMLPaths.GAMEDIR.get().resolve("audio.wav").toAbsolutePath(), c.audioStart, (c.audioTick - effectTick) / 20.0, c.wavSeconds,
-                String.join(", ", c.frames));
+                clock, String.join(", ", c.frames));
     }
 
     private static void write(Path file, String text) {

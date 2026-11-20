@@ -3414,7 +3414,7 @@ public final class SmokePuffs {
      * Color of the thick layer of the mix on screen (one channel): albedo ω' and asymmetry g' — by the shares of the
      * attenuation of soot, dust (albedo {@code dustW}) and droplets; reflection of a semi-infinite two-stream layer R∞
      * = (1 − s)/(1 + s), s = √((1 − ω')/(1 − ω'g')) (closure by the hemisphere averages; for Eddington s is 2/√3 times
-     * larger, and for soot — ω' ≈ 0.2 — the reflection would come out negative, and soot would be a black hole); to the
+     * larger, and for soot — ω' ≈ 0.31 — the reflection would come out negative, and soot would be a black hole); to the
      * screen — power 1/2.2. Inverse — {@link SmokeGrid#dustAlbedo}.
      */
     static float thick(double soot, double dust, double water, float dustW) {
@@ -3460,7 +3460,7 @@ public final class SmokePuffs {
      * the baked substance of this puff ({@link #BAKED_K} for smoke, {@link #SPRAY_K} for spray). The puff's maps are
      * the light that passed its thickness τ (≈ e^(−kτ) against the average over the puff), so for a mix with a
      * different albedo the map is taken to this power ({@code fx.fsh}): white aluminum-oxide smoke and droplets (ω' ≈
-     * 0.999) give almost no shadow — clear through, like a cloud; soot (ω' ≈ 0.2) — darker than the baked puff. ⚠ An
+     * 0.999) give almost no shadow — clear through, like a cloud; soot (ω' ≈ 0.31) — darker than the baked puff. ⚠ An
      * approximation: the light's path in the puff is the same, only its attenuation on it changes. Shares — by
      * attenuation, as for {@link #thick}.
      */

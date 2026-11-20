@@ -4,9 +4,10 @@ import ua.zentix.incoming.client.fx.plume.Smoke;
 
 /**
  * Condensed engine products ({@link Smoke}: Al₂O₃, salts, soot, ice) as smoke-grid substances. Grid has three:
- * soot (ω 0.25), dust (ω from ground colour), droplets (ω ≈ 1, no absorption). Product with extinction σ_m and
- * albedo ω becomes soot/droplet mixture with same raw optical depth σ_m·m and albedo: soot optical-depth share
- * (1 − ω)/(1 − ω_soot), rest droplets. Droplet asymmetry 0.85 (engine smoke 0.6–0.8, {@link Smoke#ASYMMETRY}):
+ * soot ({@link CloudModel#SOOT_W}), dust (ω from ground colour), droplets (ω ≈ 1, no absorption). Product with
+ * extinction σ_m and albedo ω becomes soot/droplet mixture with same raw optical depth σ_m·m and albedo: soot
+ * optical-depth share (1 − ω)/(1 − ω_soot), rest droplets. A product darker than grid soot (engine soot, ω 0.25 of
+ * fresh laboratory black carbon) is all grid soot: same optical depth, albedo of grid soot. Droplet asymmetry 0.85 (engine smoke 0.6–0.8, {@link Smoke#ASYMMETRY}):
  * they scatter slightly more forward — known difference, not tuning.
  */
 public final class Matter {
