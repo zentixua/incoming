@@ -249,10 +249,12 @@ vec3 bloomLight(vec4 c, float cover, float gain) {
 }
 
 // The veil of matter at the eye (SmokePuffs.Veil, FxQuads.VEIL in Normal.y): the share of the vertex's opacity a that lies in
-// front of the world at view-axis distance scene. Its matter lies along the ray as a Gaussian with middle m and width w (the
-// softness), cut at the eye; m is signed in Normal.z as m/(|m| + w). Optical depth to the world: tau·(Φ((scene − m)/w) −
-// Φ(−m/w))/(1 − Φ(−m/w)), tau = −ln(1 − a) the whole ray's (Beer–Lambert: a near block keeps e^(−σd) of its contrast, the
-// sky takes the whole veil)
+// front of the world at view-axis distance scene. Its matter lies along the ray as a Gaussian with middle m and width w
+// (veilMiddle, veilWidth: × a, fx.vsh), cut at the eye. Optical depth to the world: tau·(Φ((scene − m)/w) − Φ(−m/w))/(1 −
+// Φ(−m/w)), tau = −ln(1 − a) the whole ray's (Beer–Lambert: a near block keeps e^(−σd) of its contrast, the sky takes the
+// whole veil). Nearer than the mesh (viewDistance) nothing, as the frame's depth cuts it there in every pass.
+in float veilMiddle;
+in float veilWidth;
 const float VEIL_MODE = 25.0 / 127.0;
 
 // Abramowitz–Stegun 7.1.26 erf (SmokeGrid.erf)
@@ -263,12 +265,12 @@ float veilErf(float x) {
 }
 
 float veilBefore(float scene, float a) {
-    float q = clamp(opacity, -126.0 / 127.0, 126.0 / 127.0);
-    float m = q / (1.0 - abs(q)) * softness;
-    float cut = veilErf(-m / softness * 0.70710678);
+    if (!(a > 0.0) || !(scene >= viewDistance)) return 0.0;
+    float m = max(veilMiddle / a, 0.0), w = max(veilWidth / a, 1.0 / 16.0);
+    float cut = veilErf(-m / w * 0.70710678);
     float tau = -log(max(1.0 - a, 1e-3));
-    float depth = tau * max(veilErf((scene - m) / softness * 0.70710678) - cut, 0.0) / max(1.0 - cut, 1e-6);
-    return (1.0 - exp(-depth)) / max(a, 1e-4);
+    float depth = tau * max(veilErf((scene - m) / w * 0.70710678) - cut, 0.0) / max(1.0 - cut, 1e-6);
+    return (1.0 - exp(-depth)) / a;
 }
 
 void main() {
@@ -364,11 +366,12 @@ void main() {
     }
     // visible share of the square — colour and emission have the same one
     float seen = 1.0;
-    if (FxScene > 0.5 && (softness > 0.0 || FxGlowPass.x > 0.5 || FxHalf > 0.5)) {
+    bool veil = abs(nearest - VEIL_MODE) < 0.004;
+    if (FxScene > 0.5 && (softness > 0.0 || veil || FxGlowPass.x > 0.5 || FxHalf > 0.5)) {
         // the puff melts as it enters the ground and walls, and vanishes behind terrain (and behind Distant Horizons LOD)
         // invalid distance (NaN, behind the eye) — there is no world behind the pixel, as for the sky
         float scene = pallScene(texture(Sampler1, frag / ScreenSize).r);
-        if (softness > 0.0 && abs(nearest - VEIL_MODE) < 0.004) seen *= veilBefore(scene, vertexColor.a);
+        if (veil) seen *= veilBefore(scene, vertexColor.a);
         else if (softness > 0.0) seen *= clamp((scene - viewDistance) / softness, 0.0, 1.0);
         // half-resolution target: without hardware depth, what lies behind the world is hidden by its distance (glare
         // in the eye has its probe instead, softness below zero, and is never cut by depth)

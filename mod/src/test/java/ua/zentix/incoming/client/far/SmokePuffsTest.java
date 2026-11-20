@@ -171,7 +171,8 @@ class SmokePuffsTest {
             veil.fill(view, packed, gs.size());
             int k = SmokePuffs.Veil.index(SmokePuffs.Veil.N / 2, SmokePuffs.Veil.N / 2);
             double total = veil.tau[k], worst = 0, at = 0, house = 0, worstT = 0, atT = 0;
-            // forward ray (z) optical depth from Gaussian density in 0.05 m steps; check every meter from 1 to 120
+            // forward ray (z) optical depth from Gaussian density in 0.05 m steps; check every meter from the mesh (2 m, the
+            // frame's depth cuts the veil nearer) to 120
             double tau = 0;
             for (int step = 0; step < 2400; step++) {
                 double z = (step + 0.5) * 0.05;
@@ -181,7 +182,7 @@ class SmokePuffsTest {
                             * Math.exp(-0.5 * ((dx * dx + dz * dz) / (g[3] * g[3]) + dy * dy / (g[4] * g[4])));
                 }
                 double s = (step + 1) * 0.05;
-                if (s < 1 || (step + 1) % 20 != 0) continue;
+                if (s < SmokePuffs.VEIL_AT || (step + 1) % 20 != 0) continue;
                 double share = -Math.expm1(-tau) / -Math.expm1(-total), drawn = veil.before(k, s);
                 if (Math.abs(s - 20) < 1e-6) house = drawn;
                 if (Math.abs(share - drawn) > worst) {
@@ -189,7 +190,7 @@ class SmokePuffsTest {
                     at = s;
                 }
                 // the world's transmittance through the drawn veil against the law, where the world still shows
-                double law = Math.exp(-tau), shown = 1 - drawn * veil.alpha(k);
+                double law = Math.exp(-tau), shown = 1 - drawn * SmokePuffs.Veil.byteAlpha(veil.alpha(k));
                 if (law > 0.05 && Math.abs(shown / law - 1) > worstT) {
                     worstT = Math.abs(shown / law - 1);
                     atT = s;
@@ -198,10 +199,34 @@ class SmokePuffsTest {
             String got = String.format(java.util.Locale.ROOT,
                     "optical depth %.2f: share before world off by %.2f at %.0f m, transmittance off by %.0f %% at %.0f m, at 20 m %.2f",
                     total, worst, at, 100 * worstT, atT, house);
-            System.out.println("VEIL " + got + String.format(java.util.Locale.ROOT, " from %.2f scale %.2f alpha %.4f", veil.from[k], veil.scale[k], veil.alpha(k)));
+            System.out.println("VEIL " + got + String.format(java.util.Locale.ROOT, " middle %.2f width %.2f alpha %.4f", veil.middle[k], veil.width[k], veil.alpha(k)));
             assertTrue(worst <= 0.2 && worstT <= 0.2, got);
             if (gs == far) assertTrue(house < 0.2, got);
         }
+    }
+
+    /**
+     * The veil's matter along a ray moves continuously as the eye moves (review r1 of the Beer–Lambert veil: a switch
+     * between "eye inside" and "matter ahead" moved the whole of a clump's depth to the eye for a 1 cm step, a wall's
+     * transmittance 0.93 → 0.55): thin haze at the eye plus a dense clump ahead, the eye stepped through the band where
+     * the two shapes blend; a wall at 20 m changes its transmittance by less than 0.02 per 5 cm step.
+     */
+    @Test
+    void veilMatterMovesContinuouslyWithTheEye() {
+        FarView view = SmokeFillTest.view(new net.minecraft.world.phys.Vec3(0, 100, 0), new org.joml.Vector3f(0, 0, 1));
+        int k = SmokePuffs.Veil.index(SmokePuffs.Veil.N / 2, SmokePuffs.Veil.N / 2);
+        double was = Double.NaN, worst = 0;
+        for (double back = 0; back <= 60; back += 0.05) {
+            // haze around the eye (σ 30 m), clump of depth 2 at 40 m ahead; the eye walks back from the clump
+            double[] g = {0, 0, 5 - back, 30, 15, 0.02 * Math.pow(2 * Math.PI, 1.5) * 900 * 15, 0.8, 0.8, 0.8, 1,
+                    0, 0, 40 + back, 6, 6, 2 * 2 * Math.PI * 36, 0.8, 0.8, 0.8, 1};
+            SmokePuffs.Veil veil = new SmokePuffs.Veil();
+            veil.fill(view, g, 2);
+            double t = 1 - veil.before(k, 20) * SmokePuffs.Veil.byteAlpha(veil.alpha(k));
+            if (!Double.isNaN(was)) worst = Math.max(worst, Math.abs(t - was));
+            was = t;
+        }
+        assertTrue(worst < 0.02, "largest step of the wall's transmittance per 5 cm: " + worst);
     }
 
     /**

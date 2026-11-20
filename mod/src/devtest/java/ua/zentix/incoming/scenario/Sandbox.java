@@ -1331,10 +1331,10 @@ final class Sandbox {
     private static void markers(MinecraftServer server, BlockPos o) {
         int y = GROUND + 1;
         // contrast markers along the street x −3…2 for the camera 15 m south ({@code cam 15 1.6 0 1.6}): a white and a black
-        // concrete column side by side, 3 m tall, at 5.5, 10.5, 25.5, 40.5 and 60.5 m from the eye, alternately on the
-        // right (x 1, 2) and left (x −3, −2) kerb, none hiding another; their contrast against the nearest gives the
-        // transmittance by distance inside the dust
-        int[][] markers = {{10, 1}, {5, -3}, {-10, 1}, {-25, -3}, {-45, 1}};
+        // concrete column side by side, 3 m tall, at 5.5, 10.5, 25.5, 40.5 and 60.5 m from the eye, on the right (x 1, 2)
+        // and left (x −3, −2) kerb and the farthest mid-street (x −1, 0), none hiding another; their contrast against
+        // clear air gives the transmittance by distance inside the dust
+        int[][] markers = {{10, 1}, {5, -3}, {-10, 1}, {-25, -3}, {-45, -1}};
         for (int[] m : markers) {
             int x = o.getX() + m[1], z = o.getZ() + m[0];
             run(server, "fill %d %d %d %d %d %d minecraft:white_concrete".formatted(x, y, z, x, y + 2, z));

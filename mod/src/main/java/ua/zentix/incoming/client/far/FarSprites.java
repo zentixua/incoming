@@ -216,16 +216,19 @@ public final class FarSprites implements SmokePuffs.Out {
         int n = SmokePuffs.Veil.N;
         float depth = veil.depth();
         FxQuads.Part was = out.part(FxQuads.Part.VEIL);
+        // the veil's light is open sky (the only light its caller gives, SmokePuffs.OPEN_SKY): fx.vsh takes it for the
+        // veil mode, whose light word carries where the matter lies
+        out.veil();
         for (int j = 0; j + 1 < n; j++) {
             for (int i = 0; i + 1 < n; i++) {
                 int a = SmokePuffs.Veil.index(i, j), b = SmokePuffs.Veil.index(i + 1, j), c = SmokePuffs.Veil.index(i + 1, j + 1),
                         d = SmokePuffs.Veil.index(i, j + 1);
                 if (Math.max(Math.max(veil.alpha(a), veil.alpha(b)), Math.max(veil.alpha(c), veil.alpha(d))) < 0.002f) continue;
                 out.quad(depth);
-                veilCorner(veil, i, j, a, u, v, light);
-                veilCorner(veil, i, j + 1, d, u, v, light);
-                veilCorner(veil, i + 1, j + 1, c, u, v, light);
-                veilCorner(veil, i + 1, j, b, u, v, light);
+                veilCorner(veil, i, j, a, u, v);
+                veilCorner(veil, i, j + 1, d, u, v);
+                veilCorner(veil, i + 1, j + 1, c, u, v);
+                veilCorner(veil, i + 1, j, b, u, v);
             }
         }
         out.endVeil();
@@ -234,14 +237,13 @@ public final class FarSprites implements SmokePuffs.Out {
     }
 
     /**
-     * A veil vertex: its opacity and colour as before, where its matter lies along the ray in the texture-mode bytes
-     * ({@link FxQuads#veil}: middle of its matter as m/(|m| + w), the width w as softness).
+     * A veil vertex: opacity and colour, where its matter lies along the ray in the light word
+     * ({@link SmokePuffs.Veil#packed}; the veil's light is open sky, {@code fx.vsh} for {@link FxQuads#veil}).
      */
-    private void veilCorner(SmokePuffs.Veil veil, int i, int j, int k, float u, float v, int light) {
-        float a = Math.min(1, veil.alpha(k)), scale = veil.scale[k], from = veil.from[k];
-        out.veil(from / (Math.abs(from) + scale));
+    private void veilCorner(SmokePuffs.Veil veil, int i, int j, int k, float u, float v) {
+        float a = Math.min(1, veil.alpha(k));
         out.vertex((float) veil.place(i, j, 0), (float) veil.place(i, j, 1), (float) veil.place(i, j, 2), u, v, Math.min(1, veil.r[k] * a),
-                Math.min(1, veil.g[k] * a), Math.min(1, veil.b[k] * a), a, scale, 1, light, 0);
+                Math.min(1, veil.g[k] * a), Math.min(1, veil.b[k] * a), a, 0, 1, veil.packed(k), 0);
     }
 
     /**

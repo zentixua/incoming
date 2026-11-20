@@ -130,7 +130,7 @@ record SandboxCommand(Verb verb, List<String> args) {
                 WeaponType w = weapon();
                 if (w == WeaponType.NUKE) throw new IllegalArgumentException("for a nuke use nuke <kt>");
                 if (verb == Verb.REAL) {
-                    if (town() || field() ? args.size() > 3 || args.size() == 3 && (number(2) < 1 || number(2) > SALVO)
+                    if (town() || field() ? args.size() > 3 || args.size() == 3 && !args.get(2).matches("([1-9]|1[0-2])")
                             : houses() || roof() || masonry() || block() || paved() ? args.size() != 2
                             : args.size() > 1 && (args.size() != 3 || !List.of("deck", "concrete").contains(args.get(1)) || number(2) < 1 || number(2) > 6)) {
                         throw new IllegalArgumentException("real <weapon> [deck|concrete <1–6 m> | houses | roof | masonry | town [1–12] | field [1–12] | block | paved]");
@@ -311,7 +311,7 @@ record SandboxCommand(Verb verb, List<String> args) {
 
     /** {@code real … deck <m>}: thickness of the bridge deck, m; 0 — a strike on the ground. */
     int deck() {
-        return verb == Verb.REAL && args.size() == 3 ? (int) number(2) : 0;
+        return verb == Verb.REAL && args.size() == 3 && List.of("deck", "concrete").contains(args.get(1)) ? (int) number(2) : 0;
     }
 
     /** A metre of concrete resting on the existing earth, for supported-surface comparisons. */

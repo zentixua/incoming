@@ -80,6 +80,12 @@ out vec3 worldPos;
 out float emitGain;
 // 1 — spot of a small glowing thing (FxQuads, FxBloom.spots): halo by formula, light linear
 out float emitSpot;
+// the veil of matter at the eye (FxQuads.VEIL in Normal.y, SmokePuffs.Veil.packed in UV2): middle and width of the
+// vertex's matter along its ray, blocks, × its opacity (fx.fsh divides by the interpolated opacity: an empty vertex does
+// not pull a cell's matter to the eye); 0 for other quads
+out float veilMiddle;
+out float veilWidth;
+const float VEIL_MODE = 25.0 / 127.0;
 // in the sun (by day) or the moon (by night) in the world; w — share of direct light in the sky light (FxLayer.sun)
 uniform vec4 FxSun;
 
@@ -174,11 +180,13 @@ void main() {
         // Puff UV2 stores a basis, not lightmap coordinates; FULL_BRIGHT bypasses the ordinary particle-lighting branch.
         light = texelFetch(Sampler2, ivec2(15), 0);
     } else {
-        // Glow-spot UV2 stores its light (FxBloom.magnitude), not lightmap coordinates.
-        light = Normal.y < -0.5 || Emit > 129.5 ? vec4(1.0) : texelFetch(Sampler2, UV2 / 16, 0);
-        if (Normal.y > -0.5 && Emit < 129.5 && any(lessThan(UV2, ivec2(240)))) {
+        // Glow-spot UV2 stores its light (FxBloom.magnitude), not lightmap coordinates; the veil's, where its matter
+        // lies (its light is open sky)
+        ivec2 lightmap = abs(Normal.y - VEIL_MODE) < 0.004 ? ivec2(0, 240) : UV2;
+        light = Normal.y < -0.5 || Emit > 129.5 ? vec4(1.0) : texelFetch(Sampler2, lightmap / 16, 0);
+        if (Normal.y > -0.5 && Emit < 129.5 && any(lessThan(lightmap, ivec2(240)))) {
             // Sky share at this point (sky 0..15): tint it like material under open sky, leaving block light unchanged.
-            light.rgb *= mix(vec3(1.0), FxSkyFix, float(UV2.y) / 240.0);
+            light.rgb *= mix(vec3(1.0), FxSkyFix, float(lightmap.y) / 240.0);
             // Add fireball light to the lightmap relative to open-sky light on screen, capped at daylight brightness.
             // The screen cannot show more; self-lit material (FULL_BRIGHT) does not receive it.
             vec3 add = balls(Position / unfold);
@@ -220,6 +228,12 @@ void main() {
     opacity = Normal.z;
     emitGain = 0.0;
     emitSpot = 0.0;
+    veilMiddle = 0.0;
+    veilWidth = 0.0;
+    if (abs(Normal.y - VEIL_MODE) < 0.004) {
+        veilMiddle = float(UV2.x) / 16.0 * Color.a;
+        veilWidth = float(UV2.y) / 16.0 * Color.a;
+    }
     if (Emit > 129.5) {
         emitSpot = 1.0;
         emitGain = 1.0;

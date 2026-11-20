@@ -133,18 +133,18 @@ public final class FxQuads {
     }
 
     /**
-     * The next quads are the veil of matter at the eye ({@code SmokePuffs.Veil}, {@code fx.fsh}: Beer–Lambert share before
-     * the world, the white sprite); {@code from} — the middle m of the vertex's matter along its ray as m/(|m| + w), w its
-     * width ({@code Normal.z}, the softness carries w). {@link #endVeil} returns the previous mode.
+     * The next quads are the veil of matter at the eye ({@code SmokePuffs.Veil}, {@code fx.fsh} {@code veilBefore}:
+     * Beer–Lambert share before the world, the white sprite, open-sky light): their light word carries where the
+     * vertex's matter lies along its ray ({@code SmokePuffs.Veil.packed}). {@link #endVeil} returns the previous mode.
      */
-    public void veil(float from) {
+    public void veil() {
         if (!veiling) {
             veilNearest = nearest;
             veilOpacity = opacity;
             veiling = true;
         }
         nearest = VEIL;
-        opacity = (byte) Math.round(Mth.clamp(from, -VEIL_FROM_MAX, VEIL_FROM_MAX) * 127);
+        opacity = 0;
     }
 
     /** After the veil's quads: the texture mode before {@link #veil}. */
@@ -160,8 +160,6 @@ public final class FxQuads {
 
     /** {@code Normal.y} of the veil ({@link #veil}): in the plain-texture band of {@code fx.fsh} (−0.1…0.25). */
     static final byte VEIL = 25;
-    /** Largest share of the matter's middle in the veil byte: the middle stays within 126 widths. */
-    public static final float VEIL_FROM_MAX = 126 / 127f;
 
     /** Texture-mode byte ({@code Normal.y}) of the next quads. */
     public byte textureMode() {
