@@ -148,9 +148,11 @@ For the first seconds a thin white condensation shell stands over the wave: the 
 point (Minecraft air is humid enough for it in clear weather and in rain).
 The dust has the colour of the ground it comes from: grey-brown over grass, fields and forest, pale tan over sand. Right
 behind the wave it is clean dust; smoke darkens it only as the fires under it grow, over minutes, and only burning
-fires light it orange from below. Its billows ride the dust: thrown up at the wave, they fall behind it, rise ever slower
-and churn as they go, so the wall's top curls back over itself like a breaking wave seen from behind. Its top billows in rounded
-lumps, and its face is lit by the sky and the sunlit ground around it.
+fires light it orange from below. The wall does not carry the dust along: each billow is thrown up where the wave passes it,
+keeps rising ever slower while the wave runs on, churns in rounded lumps and settles into the haze behind, so a hump of dust
+runs over the land with the wave and lays the haze down behind it (near the largest bursts the wind behind the wave carries
+the dust a little outward first). The billows are lit by the sun, the sky and the sunlit ground around them; inside the wall
+it is dim brown dusk, not darkness.
 Burns, radiation and falling debris can still hurt you after the flash, so stay under cover and watch your dose.
 
 ![A dust wave approaches beneath the mushroom cloud at dusk](../media/blast-wave-dusk-hq.jpg)
