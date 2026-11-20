@@ -116,13 +116,13 @@ The short layout is in the root CLAUDE.md; here, what each script does.
                                            (INCOMING_SIZE=1920x1080, frames and the sound log go to mod/run/scenario/trailer/)
     trailer/edit.py [--lang en|ru] [--draft] [--rec …] ← editing to music (Kevin MacLeod, CC BY), titles, sound from the log →
                                            dist/incoming-trailer.mp4, -lite.mp4 and -credits.txt (lines for the video description)
-    trailer/icon_from_frames.py <frames> <folder> ← the mod icon from the “icon” plan (a Shahed against the sky): 512 and a small variant
+    trailer/icon_from_frames.py <frames> <folder> ← the old Shahed-against-the-sky icon from frames (superseded by the pixel icon)
   docs/DESIGN-nuke.md                    ← nuclear strike design
   docs/guide/                            ← player guide in English (pages by topic, pictures in img/),
                                            docs/guide/ru/ — the same in Russian
   docs/store/                            ← Modrinth and CurseForge page texts
-  docs/media/                            ← icon (also the mod logo incoming.png), the hero.webp loop for README and pages,
-                                           frames for the gallery
+  docs/media/                            ← pixel icon (icon.png 512, icon-400.png; incoming.png is the wide pixel logo), banner.jpg
+                                           heading README and pages, the hero.webp loop, frames for the gallery
   .github/workflows/build.yml            ← CI: what changed → build, unit tests (4 JVMs), GameTest in parts, summary; jar in
                                            artifacts; release; an already checked tree takes that run's jar (tools/ci_reuse.py)
   .github/PULL_REQUEST_TEMPLATE.md       ← PR description template: what changes for the player, how it was checked
