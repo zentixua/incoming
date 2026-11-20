@@ -3,6 +3,10 @@
 English · [Русский](ru/designator.md)
 
 The designator aims and launches every strike: from its binoculars, from its console or from the [map](map.md).
+Shift+RMB with the designator in hand opens the console; the first time you hold a designator, a hint in the corner
+of the screen says so.
+
+![Console: weapon, count, spread, target, fire](img/remote.png)
 
 ## Crafting
 
@@ -34,8 +38,6 @@ hold the final launch control for three seconds. Releasing cancels the hold. [Nu
 
 Shift+RMB with the designator in hand. Here you choose how many rounds to launch, how widely to spread them and where.
 The binoculars then fire with the same settings.
-
-![Console: weapon, count, spread, target, fire](img/remote.png)
 
 - **Weapon**: six buttons, each with a tooltip. The Missile and the Bomb also get a warhead button.
 - **Count and Spread**: up to 30 rounds over up to 150 blocks from the center.
