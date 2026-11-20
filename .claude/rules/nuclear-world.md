@@ -314,6 +314,12 @@ paths:
   (`ScarQueue.debris`): the replacement completing the entire 5×5 square around a chunk forgets its layer
   (`RuinContext.applied`).
 
+- `Collapse` also serves conventional strikes (`StrikeSupport`, warhead.md): a window of live snapshots with the strike's
+  removals put back (`RuinWindow.restoring`: by-position section properties where blocks were put back, heightmaps
+  raised over them) and the removals as `Blast` records; `Collapse.solve(w, blasts)` runs without a `Detonation`: no
+  third wave round (`Blast.remnants`) and no `land()` (the caller drops the blocks). A change to the support rules
+  changes both classes.
+
 ## Pitfalls
 - Fire ignition (`RuinPlanner.land` → `fire`) compares exposure facing the fireball (`RuinContext.Grid.lit`, `min(q, lit)`)
   with `ThermalModel.ignite(yield)`: the fluence formula already is the exposure on a surface facing the ball, so a

@@ -152,6 +152,22 @@ paths:
   with the same `FragmentTrace`. Sable craft neither hold nor break the fragments. GameTest `FragmentGameTests` (1/R², a
   wall, glass, dents).
 
+- Collapse (`StrikeCollapse`, setting `world.collapse`): after the main explosions of a surface strike (and of the bomb's
+  charges), the nuclear support law (`nuclear/world/Collapse`, "what lost support falls") over the blocks the explosions
+  removed. `StagedExplosion` records each removal with its old state in the strike's `BlastArea` (`removed`; only a
+  block that actually changed; craft blocks and the crater are not recorded: the crater digs natural ground, which
+  stands as an arch). The job (impact lane, kind `GROUND`): snapshots of every chunk within `Collapse.C` of a removal and
+  their neighbors (`StrikeSupport.snapshot`, 8 per unit; unready or plot-grid chunks are missing — support mass, no
+  loads), the solve on a ruin worker (`RuinWorkers`, `SEEN`), then the fall in 5 ms portions: blocks changed since the
+  snapshot stay; non-load-bearing first, load-bearing bottom-up; the rubble share (`Debris.SOLID_SHARE`, same hash as the
+  nuclear landing; containers always, with contents) falls as vanilla falling blocks while `CraterFalls.room` allows
+  (the strike area's and the world's live limits), otherwise lands at once where it would rest, spread by
+  `Debris.spread`; one `S2C.Collapse` (dust, rumble) for the fallen load-bearing blocks (`StrikeSupport.MATERIAL` m³ a
+  block). GameTest batch `collapse` (missile and drone in a flat, drone on a roof corner; the law's fixed point: with
+  everything gone as removals nothing more falls; glass broken later by `Shatter` is not a removal). Bench batches
+  `collapse_salvo`/`collapse_salvo_off` (100 missiles into 100 houses beyond the platform) run only when selected alone
+  by name: their houses cover where the next batches' platforms spawn (two in a row hung the runner).
+
 ## Pitfalls
 - A support, not a block name (`SurfaceBlocks`): the Jarrett threshold for a panel applies only with a free back face.
   A solid block behind the loaded face holds it; the wave's ray stops. The ray face is the actual entry into the cell
@@ -197,7 +213,7 @@ paths:
   without this a missile at a terrace would shear a wedge of earth into a block up to 4 m (the earth's R is 4.2 m — 2.4 times
   the crater radius), and a bomb with λ < 1 would dig a cone to the surface beyond `BuriedBlast` (review #420; GameTest
   `blast_breach_terrace`, `blast_breach_buried_open`). Indestructible, resistance ≥ 1200, the map's `STOP` and protection
-  claims — the ray stops. There is no collapse of a weakened span (the mod has no load law). Bodies and charge blocks go in
+  claims — the ray stops. What the breach leaves without support falls afterwards (`StrikeCollapse`, below). Bodies and charge blocks go in
   one front from the nearest to the farthest (`StagedExplosion.FRONT`), without mixing: a block broken before the front
   reaches a body is no longer a screen; farther blocks still stand. The arrival time — the integral of dr/U(P(r)),
   `BlastModel.chemicalArrivalSeconds`; the server step is 50 ms; the budget may postpone execution. Glass and the reflecting
