@@ -2,7 +2,6 @@ package ua.zentix.incoming.scenario;
 
 import com.mojang.blaze3d.platform.NativeImage;
 import com.mojang.brigadier.arguments.StringArgumentType;
-import net.minecraft.Util;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.Screenshot;
 import net.minecraft.client.gui.GuiGraphics;
@@ -1382,6 +1381,7 @@ final class Sandbox {
         double wait = a.d.arrivalTicks(houses.distanceTo(a.d.burst())) - a.ticks(0);
         Incoming.LOG.info("SANDBOX near: burst {}, wave {} of sound, front at the houses in {} ticks", xyz(a.d.burst()), a.d.wave(), Math.round(wait));
         begin(tick + (int) Math.round(wait));
+        clock = String.format(Locale.ROOT, "front at the houses (burst %.2f s earlier)", (wait + a.ticks(0)) / 20.0);
     }
 
     private static boolean loaded(Minecraft mc, BlockPos at) {
@@ -1503,15 +1503,16 @@ final class Sandbox {
         String file = String.format(Locale.ROOT, "%s_%06.2fs.png", cap.name, t);
         NativeImage image = Screenshot.takeScreenshot(mc.getMainRenderTarget());
         Path to = cap.out.resolve(file);
-        Util.ioPool().execute(() -> {
-            try (image) {
-                image.writeToFile(to);
-            } catch (IOException ex) {
-                Incoming.LOG.error("SANDBOX frame {} not written", to, ex);
-            }
-        });
+        // written here, before the take can report done: an asynchronous write let `fx` return while the last PNG was
+        // still being written, and a copy right after it was truncated (20.11, dusk-light-law); ~0.1 s per 1280×720 frame
+        // on the render thread, after the frame's age is taken
+        try (image) {
+            image.writeToFile(to);
+        } catch (IOException ex) {
+            Incoming.LOG.error("SANDBOX frame {} not written", to, ex);
+        }
         cap.frames.add(String.format(Locale.ROOT, "{\"t\": %.2f, \"age\": %.3f, \"file\": \"%s\", \"fps\": %d}", t, age, file, mc.getFps()));
-        Incoming.LOG.info("SANDBOX shot {} age {} s fps {} day time {}; layer: {}; smoke: {}; flight: {}; air: {}; pall: {}", file, String.format(Locale.ROOT, "%.3f", age), mc.getFps(),
+        Incoming.LOG.info("SANDBOX shot {} age {} s (t = 0 at {}) fps {} day time {}; layer: {}; smoke: {}; flight: {}; air: {}; pall: {}", file, String.format(Locale.ROOT, "%.3f", age), clock, mc.getFps(),
                 mc.level.getDayTime() % 24000,
                 ua.zentix.incoming.client.fx.layer.FxLayer.describeTiming(), ua.zentix.incoming.client.far.FarRenderer.describeSmoke(),
                 ua.zentix.incoming.client.far.FarFlightView.describe(), ua.zentix.incoming.client.fx.ClientAir.now(),
@@ -1651,10 +1652,10 @@ final class Sandbox {
 
     private String json(Capture c) {
         return String.format(Locale.ROOT, "{\"name\": \"%s\", \"effect\": \"%s\", \"site\": [%.1f, %.1f, %.1f], \"camera\": [%.1f, %.1f, %.1f, %.1f], "
-                        + "\"audio\": {\"file\": \"%s\", \"start\": %d, \"from\": %.2f, \"seconds\": %.2f}, \"frames\": [%s]}\n",
+                        + "\"audio\": {\"file\": \"%s\", \"start\": %d, \"from\": %.2f, \"seconds\": %.2f}, \"clock\": \"t = 0 at %s\", \"frames\": [%s]}\n",
                 c.name, lastEffect, site.x, site.y, site.z, camDist, camHeight, camBearing, camLook,
                 FMLPaths.GAMEDIR.get().resolve("audio.wav").toAbsolutePath(), c.audioStart, (c.audioTick - effectTick) / 20.0, c.wavSeconds,
-                String.join(", ", c.frames));
+                clock, String.join(", ", c.frames));
     }
 
     private static void write(Path file, String text) {

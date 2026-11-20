@@ -35,6 +35,13 @@ flight missile'
 [ "$(cat "$tmp/fx.log")" = "$want" ] && ok "shot: time before effect, default day without --time" || bad "shot command order:
 $(cat "$tmp/fx.log")"
 
+# options.txt always holds renderClouds (an edit of a missing line silently did nothing), and a later start keeps edits
+client_options "$tmp/options.txt"; sed -i 's/^renderClouds:.*/renderClouds:"false"/' "$tmp/options.txt"; client_options "$tmp/options.txt"
+[ "$(grep -c '^renderClouds:' "$tmp/options.txt")" = 1 ] && grep -q '^renderClouds:"false"$' "$tmp/options.txt" \
+  && ok "options: renderClouds present, edits kept" || bad "options.txt renderClouds: $(grep renderClouds "$tmp/options.txt")"
+printf 'guiScale:2\n' > "$tmp/old-options.txt"; client_options "$tmp/old-options.txt"
+grep -q '^renderClouds:"true"$' "$tmp/old-options.txt" && ok "options: an old sandbox gets the line" || bad "old options.txt without renderClouds"
+
 # Modes and mods: shaders needs Sodium and Iris, dh needs Distant Horizons; no mode needs no mods
 mkdir -p "$tmp/mods"
 ( unset INCOMING_SHADERS INCOMING_DH; mods_check "$tmp/mods" ) && ok "without shaders and dh, no mods required" || bad "refused without a mode"

@@ -222,10 +222,12 @@ queues, little rework; each mission's budget is checked against its measured loa
   by tests. Documentation-only changes use the applicable CI checks, without a game run. Open draft immediately
   (CI only on PRs); split large work.
 - **Visual/audio:** edit → sandbox frame/WAV (`tools/sandbox.sh shot`) beside same `main` frame; before/after frames/
-  WAV in PR. Vanilla frames take a shared GPU slot if free, else the CPU at once (`soft_gl.sh`): no lease, sessions in
-  parallel. The exclusive GPU only for shader-pack/Voxy/DH frames, frame time, the scene bench. Scene bench (100-strike frame cost versus `main`) only for changes that can change frame cost: render/FX
-  code, shaders, particle or draw counts (Artem, 30.10); once, on the final PR head after review. Colors, textures,
-  sounds, text, server and tool changes skip it. Never merge above frame-cost limit. No full-pack Iris recording per PR.
+  WAV in PR; where frames render: `client-scenario.md`. Scene bench (100-strike frame
+  cost versus `main`) only for changes that can change frame cost: render/FX code, shaders, particle or draw counts
+  (Artem, 30.10); once, on the final PR head after review; colors, textures, sounds, text, server, tools skip it. Never
+  merge above frame-cost limit or with a bench look flag unanswered in the PR (intended or fixed). No
+  full-pack Iris recording per PR. A new version for Artem's review (frames, clip, animation) first goes beside the one
+  he last saw, same times: what he accepted must still hold by number.
 - **Performance starts with measurement:** GPU time by layer parts (mod markers, bench line, F3), RenderDoc frame
   (`mod/run/renderdoc/`, Python analysis); edit the numerically identified cause, not a presumed model.
 - **One run answers everything** (Artem, 18.11): before any run that observes the system (test, measurement,
@@ -240,7 +242,7 @@ queues, little rework; each mission's budget is checked against its measured loa
   the recorded data (deep-debug skill), write it with its number in the PR or the executor's report, then act on it: fix that cause,
   change the approach, or correct the test or reference. A new approach is one possible outcome, not the automatic one.
 - **One GPU session at a time** (`tools/gpu_lease.sh`, queue in `tools.md`); finish with
-  `tools/sandbox.sh stop`, then `tools/gpu_lease.sh release`. Vanilla clients need no lease (`soft_gl.sh` admission).
+  `tools/sandbox.sh stop`, then `tools/gpu_lease.sh release`.
 - **Independent review** by the other vendor (if unavailable, a fresh session of the same vendor), effort high (Artem,
   20.11). The reviewer reads the diff and surrounding code, not the PR description or the author's conclusions, and
   leaves its reproducing probe as a file, which becomes the regression test. Each agent only where it is strong

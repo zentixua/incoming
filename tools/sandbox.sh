@@ -169,6 +169,25 @@ print(f"audio: {sys.argv[2]} ({len(chunk) / align / rate:.1f} s, {rate} Hz)")
 PY
 }
 
+# Client options of a sandbox run directory (first start writes them; later starts keep the client's own edits)
+client_options() {
+  [ -f "$1" ] || cat > "$1" <<OPT
+onboardAccessibility:false
+pauseOnLostFocus:false
+renderDistance:12
+simulationDistance:8
+guiScale:2
+soundCategory_master:1.0
+soundCategory_ambient:1.0
+soundCategory_music:0.0
+tutorialStep:none
+joinedFirstServer:true
+OPT
+  # the client writes options.txt only on a clean exit; a sandbox stopped by kill never had this line, and an edit
+  # of it (renderClouds:"false" for sky masks) silently did nothing (20.11, dust-wall)
+  grep -q '^renderClouds:' "$1" || echo 'renderClouds:"true"' >> "$1"
+}
+
 start() {
   local size=1280x720 opts=() pack wait= fresh= gpu=
   while [ $# -gt 0 ]; do
@@ -234,18 +253,7 @@ sample-type = int16
 [wave]
 file = $RUN/audio.wav
 CONF
-  [ -f "$RUN/options.txt" ] || cat > "$RUN/options.txt" <<OPT
-onboardAccessibility:false
-pauseOnLostFocus:false
-renderDistance:12
-simulationDistance:8
-guiScale:2
-soundCategory_master:1.0
-soundCategory_ambient:1.0
-soundCategory_music:0.0
-tutorialStep:none
-joinedFirstServer:true
-OPT
+  client_options "$RUN/options.txt"
   mkdir -p "$RUN/config"
   if [ -n "${INCOMING_SHADERS:-}" ]; then
     local MC; MC="$(python3 "$ROOT/tools/paths.py" MC)"
