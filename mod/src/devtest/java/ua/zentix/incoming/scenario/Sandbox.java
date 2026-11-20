@@ -500,6 +500,12 @@ final class Sandbox {
                 placeCamera();
                 finish("ok");
             }
+            case MOB -> {
+                mob = c.args().getFirst().equals("off") ? null : c.args().getFirst();
+                mobDistance = c.number(1, 15);
+                placeCamera();
+                finish("ok");
+            }
             case HUD -> {
                 mc.options.hideGui = c.args().getFirst().equals("off");
                 finish("ok");
@@ -589,6 +595,11 @@ final class Sandbox {
         effectTick = -1;
         capture = null;
     }
+
+    /** Mob in front of the camera ({@code mob}): entity type, distance; null — none. */
+    @Nullable
+    private String mob;
+    private double mobDistance = 15;
 
     /** Wall across the view ({@code pane}): block, distance in front of the camera; null — none. */
     @Nullable
@@ -1417,6 +1428,17 @@ final class Sandbox {
         String me = Minecraft.getInstance().player.getGameProfile().getName();
         server(String.format(Locale.ROOT, "tp %s %.2f %.2f %.2f facing %.2f %.2f %.2f", me, eye.x, y - 1.62, eye.z, site.x, GROUND + 1 + camLook, site.z));
         placePane(eye, y);
+        placeMob(eye);
+    }
+
+    /** The {@code mob}: the previous one gone (clear kills it too), a new one on the ground toward the point. */
+    private void placeMob(Vec3 eye) {
+        server("kill @e[tag=sandbox_mob]");
+        if (mob == null) return;
+        double dx = site.x - eye.x, dz = site.z - eye.z, len = Math.max(Math.hypot(dx, dz), 1e-6);
+        float yaw = (float) Math.toDegrees(Math.atan2(-dx, dz)) + 180;
+        server(String.format(Locale.ROOT, "summon minecraft:%s %.2f %d %.2f {NoAI:1b,Invulnerable:1b,Silent:1b,PersistenceRequired:1b,Tags:[\"sandbox_mob\"],Rotation:[%.1ff,0f]}",
+                mob, eye.x + dx / len * mobDistance, GROUND + 1, eye.z + dz / len * mobDistance, yaw));
     }
 
     /**
