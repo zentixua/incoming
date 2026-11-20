@@ -204,7 +204,7 @@ class NukeExposureTest {
 
     private static final List<Block> BLOCKS = List.of(
             new Block("pallAirLight", "vec3 pallAirLight(vec3 dir) {", "// Add matter of opacity", """
-                    vec3 pallAirLight(vec3 dir) { float across = length(dir.xz);
+                    vec3 pallAirLight(vec3 dir) { if (PallAirBandOn > 0.5) return pallAirBand(dir); float across = length(dir.xz);
                     if (dir.y <= 0.0 || across * 16.0 >= 512.0 * dir.y) return PallAirFog.rgb;
                     float d = 16.0 + (512.0 - 16.0) * (16.0 * across / dir.y) / 512.0;
                     return mix(PallAirSky, PallAirFog.rgb, d < PallAirFog.w ? smoothstep(0.0, PallAirFog.w, d) : 1.0); }

@@ -658,11 +658,24 @@ paths:
   screen values the midtones came out darker (0.3 linear — 0.58 on screen): thin fog a dirty grey, dusk in dense dust
   black.
   The frame's light (`NukePall.light`): a white horizontal wall at noon — 1, like the top of a white block by day; the
-  sky as Minecraft draws it, in linear × 0.5 (`PallLight.SKY`: at noon about a fifth of the daylight); the sun — the rest
+  sky as Minecraft draws it, in linear × 0.5 (`PallLight.SKY`: at noon about a fifth of the daylight; under a shader pack
+  in the hue of the pack's sky, `SkyBand.skyHue`, `nuclear.md`); the sun — the rest
   up to white (the blue of the sky is taken from its beam), times the air along its path (`Sight.sunThroughAir`: Beer–Lambert
-  over the Kasten–Young air mass through the clear-day air of `Sight.Air`, Rayleigh λ^−4.08 + haze λ^−1.3, relative to the
-  overhead sun; at 19° red/blue ×1.5 against noon and half as bright, one law at every elevation — the former `low` ramp only
-  below 20° left a 19° sun white; our lighting input only, vanilla/shaderpack sun untouched). The light of the ball and of fires on dust follows the same
+  along the slant column (`Sight.column`: Chapman function, erfcx bound, round earth) of the clear-day air of `Sight.Air`,
+  Rayleigh λ^−4.08 + haze λ^−1.3, each with its scale height, relative to the overhead sun at the lit point's height; at 19°
+  red/blue ×1.5 against noon and half as bright, one law at every elevation (a ramp only below 20° leaves a 19° sun
+  white); our lighting input only, vanilla/shaderpack sun untouched). The beam depends on the lit point's height:
+  `PallSunLight` is the ground's; the frame passes the beam above the air (`PallSunTop`, `NukePall.Sky.top`: weather,
+  remainder to white; zero once the sun is below the horizon of the frame's highest matter, `NukePall.litTop`: the mushroom
+  top, `Sight.SUN_TOP` without one), and `fx_pall` applies the law per point (`pallSunBeam(pallSunHeight(p))`: altitude above
+  sea level `WaterDecal.SEA_LEVEL`, eye-relative y + `PallSunTop.w`, one reference for cap, stem, pall and wall of every
+  detonation: a slot's ground zero as reference would change the pall's sun whenever another detonation takes slot 0; Java
+  wall dust `Sky.sunAt` at `y − SEA_LEVEL`). The cap's sunward depths are taken whenever the frame has sun, not by its own
+  beam: they also bound the escape of its emission, and a beam threshold there steps the hot cloud's glow by a third. The
+  eye's daylight `day` does not gate the beam: the ground's sun is gone with the eye's sunset (0.012/0.005/0.0005 at
+  dayTime 12600, zero by 12750), and a cap lit by it alone draws flat blue-grey in vanilla's sky light against a golden
+  shader-pack dusk. A cap 10 km up at a 3° sun keeps 0.78/0.68/0.46, at −1.9° red 0.20/0.09/0.01; the earth's shadow
+  climbs the cloud (dip √(2z/R)); `SightTest.capAloftKeepsTheSunAfterGroundSunset`, `shaderSunIsThisLaw`. The light of the ball and of fires on dust follows the same
   laws for the pall, the wall's head, Wilson clouds and dust near the camera (the slot's numbers — `CloudPuffs.pallLight`;
   dust near the camera — `NukePall.dustColor`). The ball is the same source as the mushroom's body
   (`MushroomModel.light`): a Lambertian ball of the cap's radius with the brightness of a black body at its visible
@@ -854,7 +867,7 @@ paths:
   more than the former wall envelope, with the same number of samples. The pall with the head and the Wilson cloud far
   away fades in the air haze like a mushroom (`pallAir`, the frame's air `PallAir` — `Sight.Air` in the model's blocks):
   the share of their opacity that the haze took up to the place (`haze`, `passMatter` in `fx_pall`) shows airlight
-  (`pallAirLight`: vanilla's sky along the pixel from the sky/fog colours, added after `pallShown`), their opacity stays whole; quads and probes behind them take the real transmittance
+  (`pallAirLight`: the sky along the pixel — vanilla's from the sky/fog colours, or under a shader pack the pack's sky band `SkyBand`, `nuclear.md`; added after `pallShown`), their opacity stays whole; quads and probes behind them take the real transmittance
   (`pall_front`, `fx_probe`, `mushTransmit` in `fx.vsh`): in rain the wall at 8 km does not stand as a dark ring on
   the horizon, and the sun quad never shows through it.
 - The nuke's fire storm is in the same pall passes (`client/nuclear/FireStorm`, `FireStorms`): at the blast slot the

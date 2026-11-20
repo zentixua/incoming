@@ -291,15 +291,30 @@ Ruins and everything in `nuclear/world/` are in `nuclear-world.md`.
 - Fires under mushroom come from storm fire map (`FireStorm.meanFlame`, trust `gate`), not haze table: it knows no water
   and made daytime cap underside orange over sea. `MushroomField.fire` writes light after frame light (day/night).
 - Distant mushroom fades into air haze (`pallAir` in `pall.glsl`, like distant `Sight.Air`) by Koschmieder:
-  L = T_air·L_cap + (1 − T_air)·airlight, the cap's opacity kept whole; airlight on screen (`pallAirLight`) is vanilla's drawn sky along the
-  pixel without its sun, moon and stars, computed from the frame's sky colour (`ClientLevel.getSkyColor`) and fog colour
-  (`FxLayer.fogColor`): sky disc 16 above the eye fogged by FOG_SKY (0 → render distance, cylinder, smoothstep), fog
-  colour at/below the horizon. Never sampled from the frame: a sampled frame carried the sun (screen taps off axis)
-  and nearby blocks into the cap (review #671). The `haze` share is added after `pallShown`, alpha is the matter's
+  L = T_air·L_cap + (1 − T_air)·airlight, the cap's opacity kept whole; airlight on screen (`pallAirLight`) is the sky
+  radiance along the pixel. Without a shader pack it is vanilla's drawn sky without its sun, moon and stars, computed
+  from the frame's sky colour (`ClientLevel.getSkyColor`) and fog colour (`FxLayer.fogColor`): sky disc 16 above the
+  eye fogged by FOG_SKY (0 → render distance, cylinder, smoothstep), fog colour at/below the horizon. Under an Iris
+  shader pack it is the pack's sky (`fx/layer/SkyBand`, `SkyBandPass`, pass `fx_sky_band`): vanilla's sky stays
+  blue-grey at dusk while the pack paints it gold, and with vanilla's colour the haze share (≈0.42 of a 15 kt cap's lit
+  side at 9 km) leaves the cap a cold blue cut-out on an orange sky. 16 × 6 bins (22.5° azimuth × 15° elevation) of the
+  frame's sky-only pixels (`SceneDepth` = sky on the 5×5 block around the sample and 4 px out: a pack's TAA carries a
+  silhouette's colour into the sky beside it; with a LOD mod installed, only frames whose distance holds its LODs),
+  8² jittered directions per bin, a 10° cone around the sun and the moon on the pack's sun path left out
+  (`IrisApi.getSunPathRotation`, `SkyBand.packSun`), read back through a fenced pixel-pack buffer without waiting,
+  smoothed (τ 0.5 s) from captures where ≥ 1/8 of a bin is sky, stale after 2 s (a pack switched by Iris's Apply takes
+  over within a second), holes filled from the row's nearest seen bins, then the nearest row; nothing seen — vanilla;
+  world change, pack off and shader reload drop it. Uploaded as the `PallAirBand` array by hand after `apply()` (Veil
+  uploads zeroed copies of JSON-less uniforms there, `PallPass.quad`), `PallAirBandOn` in the JSON; the pass restores
+  all GL state it touches. The same band gives the sky light on the matter its hue (`SkyBand.skyHue`: cosine-weighted
+  upper hemisphere, linear; `NukePall.sky` keeps the law's brightness): vanilla's blue fill turns a dusk cap's sunlit
+  side grey against the pack's golden clouds. Never the frame behind the pixel: screen taps there carry an off-axis sun and nearby blocks into the
+  cap; the band holds only sky and never the sun or moon
+  (`SkyBandTest.capWithTheSunBehindItNeverTakesTheSunsColour`, `onlyTheSkyEntersTheBand`). The `haze` share is added
+  after `pallShown`, alpha is the matter's
   transmittance only — in rain, a mushroom 10 km away is not a crisp silhouette, and the sun never shows through a cap
   (the former `lost` share let the frame behind through: the sun quad through the cap at 240 s;
-  `NukeExposureTest.hazeNeverShowsWhatLiesBehindTheCap`, `opaqueCapNeverShowsTheSunNorItsNeighbours`). Under Iris the
-  shaderpack's sky can differ from vanilla's, so distant hazed matter takes vanilla's sky tone. Haze thins with altitude (aerosol scale
+  `NukeExposureTest.hazeNeverShowsWhatLiesBehindTheCap`, `opaqueCapNeverShowsTheSunNorItsNeighbours`). Haze thins with altitude (aerosol scale
   1.2 km, clean air 8 km; visibility at sea level): uniform-height haze hid two thirds of a 2 kt cap 5 km high over a
   hill 2.6 km away, leaving a pale translucent sphere. Cap is droplets and NO₂, no color clock or own color
   (`MushroomModel.capDrops`/`capNo2`, `MushroomField.capMatter`; numbers/sources DESIGN-nuke §1.3): droplets scatter

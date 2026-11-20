@@ -411,7 +411,8 @@ class BlastWallTest {
         double[] colour = day ? new double[]{0.47, 0.65, 1} : new double[3];
         for (int c = 0; c < 3; c++) {
             s.sky[c] = NukePall.skyLight(colour[c], floor);
-            s.sun[c] = NukePall.sunLight(1, s.sky[c], s.day);
+            s.top[c] = NukePall.sunLight(1, s.sky[c], s.day);
+            s.sun[c] = s.top[c];
         }
         s.base = ambient;
         s.exposure = (float) Sight.adapted(1, ambient);
@@ -428,6 +429,29 @@ class BlastWallTest {
      *  the sun and sky, in depth there is a shadow; at night, too, as soon as the ball on the head stops blinding the eye accustomed to the dark (its light
      *  is about of a white wall; before, everything that it illuminates is overexposed).
      */
+    /**
+     * The wall's dust takes the sun of its own altitude (as {@code fx_pall}'s {@code pallSunAt}): at a 3° sun the ground lies under
+     * a long path of haze (2 % of noon green), while the same dust 6 km up keeps a golden beam. The point's altitude reaches the sun
+     * term ({@link NukePall.Sky#sunAt}); the ball's light is left out so that the sun decides.
+     */
+    @Test
+    void wallDustTakesTheSunOfItsAltitude() {
+        CloudPuffs puffs = new CloudPuffs(GROUND);
+        BlastWall w = new BlastWall(GROUND, false);
+        float[] s = new float[BlastWall.SLOT], glow = new float[8], low = new float[3], high = new float[3];
+        double t = 0.5;
+        while (GROUND.metres(w.wall(t).head()) < 1500) t += 0.05;
+        slot(puffs, w, t, 0, s, glow);
+        glow[4] = glow[5] = glow[6] = 0;
+        NukePall.Sky dusk = sky(true);
+        dusk.sy = (float) Math.sin(Math.toRadians(3));
+        double head = s[0], len = s[1], h = s[2];
+        NukePall.dustLight(s, glow, dusk, GROUND.windDir(), head - len, 0.9 * h, 0, 0.9 * h, 0, 0, 0, low);
+        NukePall.dustLight(s, glow, dusk, GROUND.windDir(), head - len, 0.9 * h, 0, 0.9 * h, 0, 0, 6000, high);
+        assertTrue(high[0] > low[0] + 0.03, "the sun of 6 km lights the same dust brighter: " + Arrays.toString(high) + " vs " + Arrays.toString(low));
+        assertTrue(high[0] - low[0] > 3 * (high[2] - low[2]), "the beam aloft is golden, it adds red: " + Arrays.toString(high) + " vs " + Arrays.toString(low));
+    }
+
     @Test
     void nearDustTakesWallLight() {
         CloudPuffs puffs = new CloudPuffs(GROUND);

@@ -170,6 +170,19 @@ public final class NukeExposure {
      * Depends on the pixel's own direction only: no sun, nothing drawn beside the pixel.
      */
     static double[] airLight(double x, double y, double z, double[] sky, double[] fog, double renderDistance) {
+        return airLight(x, y, z, sky, fog, renderDistance, null);
+    }
+
+    /**
+     * {@link #airLight} under a shader pack: with a filled sky band ({@code band}, {@link ua.zentix.incoming.client.fx.layer.SkyBand#fill};
+     * null — no pack, or nothing seen yet) the airlight is the pack's sky along the pixel ({@code pallAirBand}), else vanilla's.
+     */
+    static double[] airLight(double x, double y, double z, double[] sky, double[] fog, double renderDistance, float[] band) {
+        if (band != null) {
+            double[] out = new double[3];
+            ua.zentix.incoming.client.fx.layer.SkyBand.read(band, x, y, z, out);
+            return out;
+        }
         double across = Math.hypot(x, z);
         if (y <= 0 || across * 16 >= 512 * y) return fog.clone();
         double d = 16 + (512 - 16) * (16 * across / y) / 512;
