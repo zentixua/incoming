@@ -102,7 +102,7 @@ with Iris.
   (`Warheads.detonate`) on untouched ground each time (320-block +X steps; other effects return to original point;
   `deck` hits bridge center: stone deck this many meters above water channel along X, slab breach; `concrete`
   same concrete deck; `paved` meter of black concrete on ground; `town [n]`/`field [n]`: town block or grass with
-  white/black concrete marker pairs along the street at 5.5–60.5 m from the camera `cam 15 1.6 0 1.6`, n ≤ 12 rounds at
+  white/black concrete marker pairs along the street, faces 4.5–59.5 m from the camera `cam 15 1.6 0 1.6`, n ≤ 12 rounds at
   once at the side-street crossings, none in the marker street: the eye inside a B-2 ×12 salvo's dust; the shot log's
   `veil set` lists the veil Gaussians, from which the law's transmittance to each marker follows). `nuke <kt> [air|ground]`: `/incoming nuke now`
   6 km away; `airburst`: SAM burst 30 m above point; `sam`: loaded SAM at point and Shahed from 1400 blocks north

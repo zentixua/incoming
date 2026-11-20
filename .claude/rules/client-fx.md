@@ -1110,17 +1110,24 @@ paths:
   48-Gaussian cap. A frozen 0.5° yaw changed finer counts from 50 to 48 and previously removed an entire merge pass
   (24 -> 48 final Gaussians), causing a transmittance jump despite stable quad detail and place spacing.
   Budget/world reset and an empty veil frame clear this history.
-  At a vertex — where its matter lies along the ray (`Veil.from`, `Veil.scale`; `fx.fsh` `veilBefore`, vertex mode
-  `FxQuads.VEIL`): a Gaussian along the ray cut at the eye, so the world at distance x takes the Beer–Lambert share
-  (1 − e^(−τ(x)))/(1 − e^(−τ)) of the vertex's opacity. The eye inside the matter: the middle at the eye and the width
-  that makes the slope there the matter's extinction at the eye (`eyeSigma` × share; τ as the shader reads it from the
-  byte alpha, at most −ln 0.001, `Veil.shaderTau`: with the true τ the slope came out 4.7× too low along a SAM trail);
-  the matter ahead: its middle and spread along the ray (`sightMoments`). A house in front of a distant cloud keeps its
-  colour; inside dust a block keeps e^(−σd) of its contrast. A linear ramp from the mesh (2 m) lays the whole veil on
-  everything past ~3 m, a flat screen (B-2 ×12 at 10 s, marker at 4.7 m: T 0.014 against the law's 0.127), and puts a
-  fresh cloud's matter behind a crisp street (3 s: T ≈ 1 against ≈ 0). `SmokePuffsTest.veilFadesToTheWorld…`
-  holds the share within 0.2 and the world's transmittance within 20 % where it exceeds 0.05 (trail, distant clump,
-  thin haze, the eye off the middle of a dense dust cloud).
+  At a vertex — where its matter lies along the ray (`Veil.split`; `fx.fsh` `veilBefore`, vertex mode `FxQuads.VEIL`):
+  the world at view-axis distance x takes the Beer–Lambert share (1 − e^(−τ(x)))/(1 − e^(−τ)) of the vertex's opacity.
+  The matter is in two parts: the Gaussians whose segments (middle ± √3 spread) chain to the eye along the ray, a
+  half-Gaussian from the eye whose slope there is the extinction at the eye (`eyeSigma` × share), no wider than their
+  reach; the rest beyond a gap, a Gaussian at its middle and spread (`sightMoments`). Joining is weighted by the gap
+  (none: fully, one spread: not at all), so the parts move continuously with the eye (`veilMatterMovesContinuously…`).
+  One profile per vertex cannot hold haze at the eye and a clump ahead: blended, it widened to 18 m and darkened a wall
+  at 30 m to T 0.21 against 0.96. τ is the one the shader reads from the byte alpha (`Veil.shaderTau`, at most
+  −ln 0.001); the true τ gives a slope 4.7× too low along a SAM trail. Words: middle and width ahead in quarter metres
+  (UV2, to 8 km: a budget clump at the edge of distant terrain keeps its place), the near share in `Normal.z`, its width
+  in the softness; `fx.vsh` passes each × opacity, so an empty vertex does not pull a cell's matter to the eye. The
+  veil's own mesh lies at `SmokePuffs.MESH_AT` (0.1 m, exempt from the near-plane fade): the frame's depth cuts it only
+  at the hand. At 2 m a surface crossing 2 m shows a hard edge (coverage 0 → 1 − e^(−2σ)) and nearer walls lose their
+  veil. Its sort key stays the half-opacity depth (below). A linear ramp from the mesh instead of the law lays the whole
+  veil on everything past ~3 m (B-2 ×12 at 10 s, marker at 4.7 m: T 0.014 against the law's 0.127).
+  `SmokePuffsTest.veilFadesToTheWorld…` holds the share within 0.2 and the world's transmittance within 20 % where it
+  exceeds 0.05 (SAM trail, distant clump, thin haze, the eye off the middle of dense dust, haze with a clump ahead);
+  `VeilGlslTest` ties the shader to the Java words.
   The mesh remains near the eye, but it blends at its matter's half-opacity depth (`Veil.depth`, alpha-weighted mean
   over all nodes), one key for every cell. In the projection-matched CPU trace, the old 2 m key put veil matter at
   96–109 m over textured clumps starting at 16–17 m, erasing their detail. Reordering preserves T, so a
