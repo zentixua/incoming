@@ -90,8 +90,10 @@ Prism: `~/.var/app/org.prismlauncher.PrismLauncher/data/PrismLauncher/` (`tools/
                                            an honest queue (FIFO): a free GPU goes to the first waiter; status: who holds it and
                                            who waits; at most INCOMING_GPU_QUEUE_MAX (2) other sessions wait, a newcomer beyond is refused (75);
                                            a nested KWin on a wayland-incoming-soft-… socket is a CPU session, not a GPU client;
-                                           shared slots (gpu_slot_take, INCOMING_GPU_SLOTS 3, `$LEASE.slot<N>` locks): vanilla clients on the
-                                           GPU beside each other, never while the lease is held or queued for; the lease side sees them as busy;
+                                           shared slots (gpu_slot_take, INCOMING_GPU_SLOTS 3, `$LEASE.slot<N>` locks plus a shared hold of the
+                                           client lock, so any exclusive client, also an older script's, is refused by the kernel): vanilla
+                                           clients on the GPU beside each other, never while the lease is held or queued for, never waiting
+                                           (busy admission is a CPU fallback); the lease side sees them as busy;
                                            while a client holds the lock, each renewal appends a `gpu` row (utilization) billed to
                                            the client's DELEGATE_TASK to the load log (DELEGATE_LOAD_LOG, default
                                            ~/.local/state/delegate/load.tsv), only while that client still holds the lock;
@@ -99,6 +101,7 @@ Prism: `~/.var/app/org.prismlauncher.PrismLauncher/data/PrismLauncher/` (`tools/
     logtime.py                           ← time of Minecraft log lines for digests of laptop tasks
     free_port.py                         ← a free port on 127.0.0.1 for check servers (stress.sh, mp_scenario.sh)
     rig_procs.sh                         ← processes of checks in their own sessions (source from stress.sh, mp_scenario.sh): the script's exit kills them with the JVM
+    probes/                              ← review probes kept as regression tests (run by test_gpu_lease.sh, test_sandbox.sh)
     test_rig_procs.sh                    ← check of rig_procs.sh (CI): Ctrl+C, TERM, end of script, a foreign session, fd, RIG_GRACE timeout: no orphans
     look_gate/run.sh <name> <tree> [scenes] ← picture-and-sound gate: ProbeScenario scenes under Iris with the whole build (README.md
                                            there): only a one-off comparison with 3.4.1, then to be removed; hearing always without deafening, sampling in the order of the reference and in the air of its game time;

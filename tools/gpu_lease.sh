@@ -44,13 +44,14 @@
 # the lease.
 #
 # Shared slots: vanilla clients (no shader pack, DH or Voxy: tools/soft_gl.sh vanilla_display) draw on the GPU beside each
-# other when it is free: gpu_slot_take holds one of INCOMING_GPU_SLOTS (3) slot locks (`$LEASE.slot<N>`, fd 197, inherited by
-# the client's nested KWin on a `wayland-incoming-shared-…` socket) and never waits: slots full, the lease held (also
-# idle, by any session), a lease waiter queued, an exclusive client running, Artem's game, or less free VRAM than
+# other when it is free: gpu_slot_take holds one of INCOMING_GPU_SLOTS (3) slot locks (`$LEASE.slot<N>`, fd 197) and a
+# shared hold of the client lock (fd 196), inherited by the client's nested KWin on a `wayland-incoming-shared-…` socket,
+# and never waits: slots full, the lease held (also idle, by any session), a lease waiter queued, an exclusive or
+# unlocked client running, admission busy, Artem's game, or less free VRAM than
 # INCOMING_GPU_SLOT_VRAM (1024 MiB) send the client to the CPU at once. Exclusive users see slot holders as busy
 # (gpu_client_busy): a measurement never shares the GPU; with --wait it queues, and its queue entry keeps new shared clients
 # off until the running ones end. Measured 20.11 (RTX 4060, 8 GB; desktop 1.6 GB): a flat sandbox client with a 15 kt nuke
-# near the camera took 0.35 GB of VRAM, so VRAM is not the bound; three slots keep three clients' memory ceilings (4.5 GB
+# near the camera took 0.35 GB of VRAM, so VRAM is not the bound; three slots keep three clients' memory ceilings (5 GB
 # each) plus the 4 GB reserve within the laptop's 32 GB beside a build.
 # Files live in XDG_RUNTIME_DIR
 # (tmpfs): reboot clears it. Test: tools/test_gpu_lease.sh (CI).
@@ -260,31 +261,39 @@ gpu_client_busy() {
   return 1
 }
 
-# held shared slots: "slot N: who" joined by "; ", empty when none
+# held shared slots, whatever slot count the observer is configured for: "slot N: who" joined by "; ", empty when none
 gpu_slots_busy() {
-  local i f out=()
-  for i in $(seq "$GPU_SLOTS"); do
-    f=$LEASE.slot$i
-    [ -e "$f" ] && ! flock -n -s "$f" true 2>/dev/null && out+=("slot $i: $(cat "$f.who" 2>/dev/null)")
+  local f out=()
+  for f in "$LEASE".slot*; do
+    [[ $f =~ \.slot([0-9]+)$ ]] || continue
+    ! flock -n -s "$f" true 2>/dev/null && out+=("slot ${BASH_REMATCH[1]}: $(cat "$f.who" 2>/dev/null)")
   done
   [ ${#out[@]} -gt 0 ] || return 0
   local IFS=';'; echo "${out[*]}" | sed 's/;/; /g'
 }
 
-# gpu_slot_take <description> — a shared GPU slot for a vanilla client, never waiting: 0 with the slot lock on fd 197 (the
-# caller's process and every child it starts hold it; GPU_SLOT is its number), else 1 with the reason on stderr (the
-# client then renders on the CPU). Checked under $LEASE.lock, where lease_take also counts slot holders
+# gpu_slot_take <description> — a shared GPU slot for a vanilla client, never waiting: 0 with the slot lock on fd 197 and
+# a shared hold of the GPU client lock on fd 196 (the caller's process and every child it starts hold both; GPU_SLOT is
+# the slot's number), else 1 with the reason on stderr (the client then renders on the CPU). The shared hold excludes
+# every exclusive client in the kernel, also one started by a script that predates slots (its gpu_client_hold takes the
+# lock exclusively); the lease, its queue and unlocked clients are checked under $LEASE.lock, where lease_take counts
+# slot holders. A busy $LEASE.lock is a CPU fallback too: a vanilla client never waits for exclusive admission
 gpu_slot_take() {
-  local fd i why= free
+  local fd i why= free c
   artem_playing && { echo "Artem's game is running" >&2; return 1; }
   free=$(timeout 5 nvidia-smi --query-gpu=memory.free --format=csv,noheader,nounits 2>/dev/null | head -n 1 | tr -d ' ')
   [[ $free =~ ^[0-9]+$ ]] || { echo "no NVIDIA GPU (nvidia-smi)" >&2; return 1; }
   [ "$free" -ge "$GPU_SLOT_VRAM" ] || { echo "${free} MiB of VRAM free, a shared client needs ${GPU_SLOT_VRAM}" >&2; return 1; }
-  exec {fd}>"$LEASE.lock"; flock "$fd"
+  exec {fd}>"$LEASE.lock"
+  # status probes hold it for milliseconds; an exclusive start checking processes longer sends this client to the CPU
+  LC_ALL=C flock -w 0.3 "$fd" || { exec {fd}>&-; echo "GPU admission is busy (an exclusive start is checking)" >&2; return 1; }
   _lease_read
   if ! _lease_free; then why="GPU lease held by $L_OWNER ($L_TREE): exclusive work (frame cost, shader pack)"
   elif [ -n "$(_queue_head)" ]; then why="exclusive GPU work is waiting: $(_queue_line)"
-  elif ! flock -n -s "$GPU_CLIENT" true 2>/dev/null; then why="exclusive GPU client is running: $(cat "$GPU_CLIENT.who" 2>/dev/null)"
+  elif c=$(gpu_clients_running | head -n 1) && [ -n "$c" ]; then why="GPU client is running without a lease: $c"
+  else
+    exec 196>"$GPU_CLIENT"
+    flock -n -s 196 || { exec 196>&-; why="exclusive GPU client is running: $(cat "$GPU_CLIENT.who" 2>/dev/null)"; }
   fi
   if [ -z "$why" ]; then
     for i in $(seq "$GPU_SLOTS"); do
@@ -297,6 +306,7 @@ gpu_slot_take() {
       fi
       exec 197>&-
     done
+    exec 196>&-
     why="all $GPU_SLOTS shared GPU slots are busy: $(gpu_slots_busy)"
   fi
   exec {fd}>&-
@@ -311,7 +321,11 @@ gpu_client_hold() {
   gpu_client_inherited && return 0
   exec 199>"$GPU_CLIENT"
   # wait up to 2 s: a neighboring `flock -n` probe (status, renewal) holds the lock briefly
-  if ! flock -w 2 199; then echo "GPU client is running: $(cat "$GPU_CLIENT.who" 2>/dev/null)" >&2; exec 199>&-; return 75; fi
+  if ! flock -w 2 199; then
+    local sh; sh=$(gpu_slots_busy)
+    if [ -n "$sh" ]; then echo "shared GPU clients are running: $sh" >&2; else echo "GPU client is running: $(cat "$GPU_CLIENT.who" 2>/dev/null)" >&2; fi
+    exec 199>&-; return 75
+  fi
   printf '%s (%s), since %s: %s\n' "$1" "$(readlink -m "$2")" "$(date +%H:%M)" "$3" > "$GPU_CLIENT.who"
   local me=$BASHPID
   echo "$me $(_proc_start "$me")" > "$GPU_CLIENT.pid"

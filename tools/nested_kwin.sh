@@ -56,10 +56,13 @@ if [ -n "${INCOMING_GPU_SHARED:-}" ]; then
   # shared GPU session of a vanilla client (tools/soft_gl.sh vanilla_display): no lease or exclusive lock; it runs only
   # with the shared slot its caller took (gpu_slot_take, fd 197), which every process of this session then holds
   [[ $SOCKET == wayland-incoming-shared-* ]] || { echo "shared GPU session socket must be wayland-incoming-shared-…: $SOCKET" >&2; exit 2; }
-  [[ $(readlink "/proc/$$/fd/197" 2>/dev/null) == "$(readlink -m "$LEASE").slot"* ]] || { echo "shared GPU session without a slot (gpu_slot_take)" >&2; exit 2; }
+  [[ $(readlink "/proc/$$/fd/197" 2>/dev/null) =~ ^$(readlink -m "$LEASE")\.slot[0-9]+$ ]] \
+    && [ "$(readlink "/proc/$$/fd/196" 2>/dev/null)" = "$(readlink -m "$GPU_CLIENT")" ] \
+    && ! flock -n -x "$GPU_CLIENT" true 2>/dev/null \
+    || { echo "shared GPU session without a slot (gpu_slot_take)" >&2; exit 2; }
   socket_busy && { echo "socket $SOCKET is occupied by another KWin" >&2; exit 75; }
   mkdir -p "$HOME_DIR/config" "$HOME_DIR/data" "$HOME_DIR/cache" "$HOME_DIR/state"
-  exec env -u DISPLAY -u WAYLAND_DISPLAY -u DBUS_SESSION_BUS_ADDRESS \
+  exec env -u DISPLAY -u WAYLAND_DISPLAY -u DBUS_SESSION_BUS_ADDRESS -u KWIN_COMPOSE -u XWAYLAND_NO_GLAMOR \
       XDG_CONFIG_HOME="$HOME_DIR/config" XDG_DATA_HOME="$HOME_DIR/data" \
       XDG_CACHE_HOME="$HOME_DIR/cache" XDG_STATE_HOME="$HOME_DIR/state" \
       PIPEWIRE_REMOTE="$HOME_DIR/no-audio-server" PULSE_SERVER="unix:$HOME_DIR/no-audio-server" \

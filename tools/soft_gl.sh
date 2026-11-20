@@ -50,7 +50,7 @@ soft_mem_cap() {
   echo $(( heap + 2048 ))
 }
 
-# Unused part of the running CPU clients' ceilings, MB: units of laptop_job.sh --soft are the jobs with a MemoryMax
+# Unused part of the running laptop jobs' ceilings, MB (every laptop_job.sh unit has a MemoryMax)
 soft_mem_promised() {
   local u
   for u in $(systemctl --user list-units 'incoming-job-*' --state=active --no-legend --plain 2>/dev/null | awk '{print $1}'); do
@@ -60,19 +60,20 @@ soft_mem_promised() {
 }
 
 # MemoryMax=/MemoryCurrent= blocks (blank line between units) → MB still promised: units without a finite MemoryMax
-# are not CPU clients
+# promise nothing
 soft_mem_headroom() {
   awk -F= '/^MemoryMax=/ { max = $2 } /^MemoryCurrent=/ { cur = $2 }
     /^$/ { if (max ~ /^[0-9]+$/) { if (cur !~ /^[0-9]+$/) cur = 0; if (cur < max) sum += (max - cur) / 1048576 } max = ""; cur = "" }
     END { if (max ~ /^[0-9]+$/) { if (cur !~ /^[0-9]+$/) cur = 0; if (cur < max) sum += (max - cur) / 1048576 } printf "%d\n", sum }'
 }
 
-# Memory admission: the client's ceiling must leave the reserve free, after what running CPU clients may still take
+# Memory admission: the client's ceiling ($1 MB, default soft_mem_cap) must leave the reserve free, after what running
+# capped jobs may still take
 soft_mem_ok() {
-  local avail cap promised; cap=$(soft_mem_cap); promised=$(soft_mem_promised)
+  local avail cap promised; cap=${1:-$(soft_mem_cap)}; promised=$(soft_mem_promised)
   avail=$(awk '/^MemAvailable:/ { print int($2 / 1024) }' /proc/meminfo)
   if [ $(( avail - promised )) -lt $(( cap + ${INCOMING_SOFT_RESERVE_MB:-4096} )) ]; then
-    echo "soft client refused: ${avail} MB available, ${promised} MB promised to running CPU clients; needs its ceiling ${cap} MB + reserve ${INCOMING_SOFT_RESERVE_MB:-4096} MB (INCOMING_SOFT_HEAP lowers the ceiling)" >&2
+    echo "soft client refused: ${avail} MB available, ${promised} MB promised to running laptop jobs; needs its ceiling ${cap} MB + reserve ${INCOMING_SOFT_RESERVE_MB:-4096} MB (INCOMING_SOFT_HEAP lowers the ceiling)" >&2
     return 75
   fi
 }
@@ -98,14 +99,14 @@ soft_display() {
 }
 
 vanilla_display() {
-  local name=$1 w=$2 h=$3 cmd=$4 root pc why err
+  local name=$1 w=$2 h=$3 cmd=$4 root pc why err rc
   root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
   # shellcheck source=gpu_lease.sh
   declare -F gpu_slot_take >/dev/null || source "$root/tools/gpu_lease.sh"
   if [ -n "${INCOMING_CPU_ONLY:-}" ]; then why="INCOMING_CPU_ONLY"
   elif ! command -v kwin_wayland >/dev/null; then why="no nested KWin"
   else
-    # in this shell, not $(…): the slot lock (fd 197) must stay open for the client started below
+    # in this shell, not $(…): the slot locks (fds 196, 197) must stay open for the client started below
     err=$(mktemp)
     if gpu_slot_take "$name" 2>"$err"; then why=; else why=$(cat "$err"); fi
     rm -f "$err"
@@ -118,19 +119,30 @@ vanilla_display() {
   fi
   echo "renderer: GPU, shared slot $GPU_SLOT of $GPU_SLOTS"
   [ -n "${INCOMING_RENDERER_FILE:-}" ] && echo gpu > "$INCOMING_RENDERER_FILE"
-  # the CPU selection of soft_gl_env (exported before Gradle by callers that may still land here) must not reach this client
+  # its own process group (set -m): Artem's game stops the whole session (dbus-run-session, KWin, Xwayland, client),
+  # not only its first process. The CPU selection of soft_gl_env (exported before Gradle by callers that may still land
+  # here) must not reach this client
+  set -m
   env -u INCOMING_SOFT -u LIBGL_ALWAYS_SOFTWARE -u GALLIUM_DRIVER -u __GLX_VENDOR_LIBRARY_NAME -u __EGL_VENDOR_LIBRARY_FILENAMES \
-    -u LP_NUM_THREADS INCOMING_GPU_SHARED=1 "$root/tools/nested_kwin.sh" "wayland-incoming-shared-$name" "$w" "$h" "$cmd" &
+    -u LP_NUM_THREADS -u KWIN_COMPOSE -u XWAYLAND_NO_GLAMOR INCOMING_GPU_SHARED=1 \
+    "$root/tools/nested_kwin.sh" "wayland-incoming-shared-$name" "$w" "$h" "$cmd" &
   pc=$!
-  # the slot stays with the client's session (fd 197 inherited); this shell lets it go
-  exec 197>&-
+  set +m
+  # the slot stays with the client's session (fds inherited); this shell lets it go
+  exec 196>&- 197>&-
   while kill -0 "$pc" 2>/dev/null; do
     if artem_playing; then
+      kill -TERM -- "-$pc" 2>/dev/null || true
+      # the session gone and the slot free (KWin may outlive its D-Bus wrapper): up to 10 s, then KILL
+      for _ in $(seq 100); do kill -0 -- "-$pc" 2>/dev/null || break; sleep 0.1; done
+      kill -KILL -- "-$pc" 2>/dev/null || true
+      wait "$pc" 2>/dev/null || true
+      for _ in $(seq 50); do flock -n "$LEASE.slot$GPU_SLOT" true 2>/dev/null && break; sleep 0.1; done
       echo "Artem's game started at $(date +%T): shared GPU client stopped"
-      kill -TERM "$pc" 2>/dev/null; wait "$pc"
       return 75
     fi
     sleep "${INCOMING_GAME_POLL:-5}"
   done
-  wait "$pc"
+  rc=0; wait "$pc" || rc=$?
+  return $rc
 }

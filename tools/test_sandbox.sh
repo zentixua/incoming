@@ -100,6 +100,9 @@ python3 -c 'import json,sys,wave; w=wave.open(sys.argv[1]); a=json.load(open(sys
 ( shot n4 'blast drone' --at 0.5 --wav 2 --no-swap ) >/dev/null 2>&1
 [ "$(grep -c '^shots' "$tmp/fx.log")" = 1 ] && grep -qx 'shots n4 0.5 2' "$tmp/fx.log" && ok "GPU shot: one take with sound" || bad "GPU shot: $(tr '\n' ';' < "$tmp/fx.log")"
 
+# review probe: an empty shot name never replaces fx/out, and any valid effect text keeps capture.json valid
+out=$(bash "$ROOT/tools/probes/sound-only-output.sh" "$ROOT" 2>&1) && ok "probe sound-only-output" || bad "probe sound-only-output: $out"
+
 source "$ROOT/tools/soft_gl.sh"
 long=$(printf 'x%.0s' $(seq 80))
 [ "$(tree_id /a/wt-main)" != "$(tree_id /b/wt-main)" ] && [[ $(tree_id /a/wt-main) == wt-main-* ]] && [ ${#long} = 80 ] && [ "$(tree_id "/a/$long" | wc -c)" -le 48 ] && ok "tree id: alike names in different places differ" || bad "tree_id"

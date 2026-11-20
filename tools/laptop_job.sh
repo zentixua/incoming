@@ -52,10 +52,12 @@ if [ "${1:-}" = --account ]; then
   printf 'cpu\t%s\t%s\t%s\t%s\t%s\n' "$(date +%s)" "${DELEGATE_TASK:--}" "${cg##*/}" \
     "$(( $(date +%s) - ${INCOMING_JOB_START:-$(date +%s)} ))" "$(awk -v u="$us" 'BEGIN { printf "%.1f", u / 1e6 }')" >> "$log" 2>/dev/null
   # the unit hit its memory ceiling (the kernel killed inside it; systemd then stops the rest): the caller prints it
+  # memory.events: oom = this cgroup reached its own limit, oom_kill = processes killed in it (also by a global OOM)
   oom=$(awk '$1 == "oom_kill" { print $2 }' "/sys/fs/cgroup$cg/memory.events" 2>/dev/null)
+  own=$(awk '$1 == "oom" { print $2 }' "/sys/fs/cgroup$cg/memory.events" 2>/dev/null)
   if [ "${SERVICE_RESULT:-}" = oom-kill ] || [ "${oom:-0}" -gt 0 ]; then
     peak=$(awk '{ printf "%.1f", $1 / 1073741824 }' "/sys/fs/cgroup$cg/memory.peak" 2>/dev/null)
-    [ -n "${INCOMING_JOB_OOM:-}" ] && echo "${oom:-1} ${peak:-?}" > "$INCOMING_JOB_OOM"
+    [ -n "${INCOMING_JOB_OOM:-}" ] && echo "${oom:-1} ${peak:-?} $([ "${own:-0}" -gt 0 ] && echo own || echo host)" > "$INCOMING_JOB_OOM"
   fi
   exit 0
 fi
@@ -71,6 +73,12 @@ _ceiling() {
   echo "${INCOMING_JOB_MEM:-$max} ${INCOMING_JOB_SWAP:-$swap}"
 }
 [ "${1:-}" = --ceiling ] && { _ceiling "${2:-heavy}"; exit 0; }
+# systemd size (4608M, 16G, 1T, bytes) → MB
+_mb() {
+  local v=$1
+  case "$v" in *[kK]) echo $(( ${v%?} / 1024 )) ;; *[mM]) echo "${v%?}" ;; *[gG]) echo $(( ${v%?} * 1024 )) ;;
+    *[tT]) echo $(( ${v%?} * 1048576 )) ;; *) echo $(( v / 1048576 )) ;; esac
+}
 
 # inside service: --gpu job waits for Artem's game to close. Output without set -e: caller may have exited, and writing to its
 # closed pipe must not fail the job
@@ -156,7 +164,8 @@ if [ "$mode" = soft ]; then
   # fd 198 (199 is the GPU client lock): closed for the job itself, so the lock ends with this script's hold
   exec 198>"${XDG_RUNTIME_DIR:-/run/user/$(id -u)}/incoming-soft-admit.lock"
   flock 198
-  soft_mem_ok || { echo "laptop_job $name: exit 75"; exit 75; }
+  # admission for the ceiling this unit actually gets (INCOMING_JOB_MEM included), not the default estimate
+  soft_mem_ok "$(_mb "$mem_max")" || { echo "laptop_job $name: exit 75"; exit 75; }
 fi
 # keep the laptop awake; a server without a session seat (netcup: "Access denied") has no sleep to inhibit
 inhibit=(systemd-inhibit --what=sleep:idle --who="Incoming: $name" --why="mod check (tools/laptop_job.sh)")
@@ -179,8 +188,12 @@ if [ "$mode" = soft ]; then
 fi
 wait $run || code=$?
 if [ -s "$oomfile" ]; then
-  read -r killed peak < "$oomfile"
-  echo "laptop_job $name: memory ceiling $mem_max (+ $mem_swap swap) reached: $killed process(es) killed inside its unit, peak $peak GB; job stopped (laptop_job.sh --full or INCOMING_JOB_MEM for a larger job)"
+  read -r killed peak where < "$oomfile"
+  if [ "$where" = host ]; then
+    echo "laptop_job $name: out of memory on the laptop (below its ceiling $mem_max): $killed process(es) killed inside its unit, peak $peak GB; job stopped"
+  else
+    echo "laptop_job $name: memory ceiling $mem_max (+ $mem_swap swap) reached: $killed process(es) killed inside its unit, peak $peak GB; job stopped (laptop_job.sh --full or INCOMING_JOB_MEM for a larger job)"
+  fi
   rm -f "$oomfile"
 fi
 # completion line for background waiter: exit code immediately visible, startup failure not lost

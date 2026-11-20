@@ -332,6 +332,16 @@ else
   unset INCOMING_GPU_SLOTS PRISM_DIR
 fi
 
+# review probes (tools/probes): shared and exclusive launches exclude each other also across slot counts and older
+# scripts; a vanilla launch never waits on exclusive admission; a CPU client's admission uses its real ceiling; Artem's
+# game stops the whole shared session and frees its slot, with and without errexit
+for p in gpu-exclusion vanilla-no-wait soft-memory-override; do
+  out=$(bash "$ROOT/tools/probes/$p.sh" "$ROOT" 2>&1) && ok "probe $p" || bad "probe $p: $out"
+done
+if command -v dbus-run-session >/dev/null; then
+  out=$(INCOMING_GPU_KWIN=no-such-kwin timeout 120 python3 "$ROOT/tools/probes/shared-game-stop.py" "$ROOT" 2>&1) && ok "probe shared-game-stop" || bad "probe shared-game-stop: $out"
+fi
+
 # a running client's GPU samples go to the load log under its owner, one per renewal; a job's CPU goes there at its stop
 lease_take wave /x/wt-wave >/dev/null 2>&1
 ( PATH="$tmp/smi:$PATH" INCOMING_GPU_RENEW=0.2 DELEGATE_TASK=mission-wave gpu_client_hold wave /x/wt-wave "sample test" && sleep 1.2 )

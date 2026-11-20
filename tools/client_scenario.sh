@@ -132,7 +132,7 @@ for opt in "${@:2}"; do
     *) echo "unknown parameter: $opt (there are shaders, dh, voxy, lss, vista, gpu)" >&2; exit 2 ;;
   esac
 done
-# shader packs, LOD mods and TV feeds need the GPU; everything else renders on the CPU
+# shader packs, LOD mods and TV feeds need the GPU alone; everything else is vanilla (shared GPU slot or CPU)
 [ -n "${INCOMING_SHADERS:-}${INCOMING_DH:-}${INCOMING_VOXY:-}${INCOMING_LSS:-}${INCOMING_VISTA:-}" ] && GPU=1
 export JAVA_HOME="${JAVA_HOME:-$HOME/.var/app/org.prismlauncher.PrismLauncher/data/PrismLauncher/java/java-runtime-delta}"
 cd "$ROOT/mod"

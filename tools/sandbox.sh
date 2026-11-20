@@ -126,6 +126,16 @@ json.dump(frames, open(sys.argv[2], "w"))
 PY
 }
 
+# a sound-only take's capture.json ($1) as the shot's ($2), named $3
+renamed_capture() {
+  python3 - "$1" "$2" "$3" <<'PY'
+import json, sys
+cap = json.load(open(sys.argv[1]))
+cap["name"] = sys.argv[3]
+json.dump(cap, open(sys.argv[2], "w"))
+PY
+}
+
 cut_wav() {
   python3 - "$1" "$2" <<'PY'
 import json, struct, sys, wave
@@ -267,7 +277,7 @@ OPT
     if [ -f "$FX/stopped" ] || ! kill -0 $job 2>/dev/null || [ $waited -gt 1500 ]; then
       echo "client did not start within $((waited / 5)) s:" >&2
       grep 'SANDBOX screen' "$RUN/logs/latest.log" 2>/dev/null | tail -n 1 >&2
-      tail -n 20 "$RUN/logs/latest.log" "$RUN/logs/job.log" >&2
+      tail -n 20 "$RUN/logs/latest.log" "$RUN/logs/job.log" "$RUN/logs/client.out" >&2
       [ $waited -gt 1500 ] && stop >&2
       # The job failed to start or stopped: release the lease just acquired
       if [ -n "$fresh" ] && { [ $waited -gt 1500 ] || ! kill -0 $job 2>/dev/null; }; then lease_release "$INCOMING_GPU_OWNER"; fi
@@ -293,7 +303,8 @@ run_client() {
   done
   wait $pc; local rc=$?
   # a shared GPU client stops when Artem's game starts (vanilla_display): say so like the exclusive one
-  [ $rc = 75 ] && grep -m1 "Artem's game started" "$RUN/logs/client.out" > "$FX/stopped"
+  local said; said=$(grep -m1 "Artem's game started" "$RUN/logs/client.out")
+  [ $rc = 75 ] && [ -n "$said" ] && echo "$said" > "$FX/stopped"
   return $rc
 }
 
@@ -352,6 +363,8 @@ shot() {
     esac
     shift
   done
+  # one directory name under fx/out: an empty or path-like name would point output (and its replacement) elsewhere
+  [[ $name =~ ^[A-Za-z0-9_][A-Za-z0-9_.-]*$ ]] || { echo "shot name: letters, digits, _ . - (not starting with a dot): '$name'" >&2; exit 2; }
   t0=$(date +%s.%N)
   if [ $doswap = 1 ]; then swap || exit $?; fi
   fx clear || exit 1
@@ -382,13 +395,18 @@ shot() {
       fx "shots $name $at 0" || exit 1
       FX_LIMIT=$limit fx "$effect" || exit 1
       fx clear || exit 1
-    else
-      # sound only: no frame take; the output directory holds the WAV and capture.json
-      rm -rf "${out:?}" && mkdir -p "$out" && printf '{"name": "%s", "effect": "%s", "frames": []}\n' "$name" "${effect//\"/}" > "$out/capture.json"
     fi
     fx "shots $take none@$from $wav" || exit 1
     fx "$effect" || { rm -rf "${FX:?}/out/$take"; exit 1; }
-    if ! cut_wav "$FX/out/$take/capture.json" "$out/$name.wav" || ! audio_into "$FX/out/$take/capture.json" "$out/capture.json"; then
+    if [ "$at" = none ]; then
+      # sound only: the take's own capture.json (client-written) under the shot's name; the shot's directory is replaced
+      # only once its WAV exists
+      local st; st=$(mktemp -d "$FX/out/.new-$name-XXXXXX") || exit 1
+      if ! cut_wav "$FX/out/$take/capture.json" "$st/$name.wav" || ! renamed_capture "$FX/out/$take/capture.json" "$st/capture.json" "$name"; then
+        rm -rf "$st"; echo "sound take: no WAV ($FX/out/$take kept)" >&2; exit 1
+      fi
+      rm -rf "${out:?}" && mv "$st" "$out" || exit 1
+    elif ! cut_wav "$FX/out/$take/capture.json" "$out/$name.wav" || ! audio_into "$FX/out/$take/capture.json" "$out/capture.json"; then
       echo "sound take: no WAV ($FX/out/$take kept)" >&2; exit 1
     fi
     rm -rf "${FX:?}/out/$take"

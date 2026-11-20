@@ -140,9 +140,13 @@ final class Sandbox {
      * later than 30 ms seeks), so the WAV does not depend on the frame rate. Saved size and limit, null when not quiet.
      */
     private int[] quiet;
-    /** Window restored after a quiet take: the take's result waits until the frame is its size again (−1: nothing waits). */
-    private int quietRestoreSince = -1;
-    private String quietResult;
+    /**
+     * Window being restored after a quiet take: a frame take's {@code ok armed} and the sound take's own result wait until
+     * the frame is its size again ({@link #afterRestore}); restoreSince is the tick of the request.
+     */
+    private boolean restoring;
+    private int restoreSince;
+    private String restoreResult;
     static final int QUIET_W = 160, QUIET_H = 90, QUIET_FPS = 20;
     private long paceLast;
     /** Point of effects that do not touch the ground (on the ground), and the current effect's point. */
@@ -374,6 +378,15 @@ final class Sandbox {
     /** Result of a command from a file (for a command from chat — a line in chat). */
     private void finish(String result) {
         Incoming.LOG.info("SANDBOX > {}", result);
+        // a failed command after `shots` (a typo in the effect, an effect that did not start): the armed take would wait
+        // for a later, unrelated effect, and a sound-only one would keep the window small
+        if (result.startsWith("error") && armed != null) {
+            armed = null;
+            if (capture == null) {
+                quiet(false);
+                pace(20);
+            }
+        }
         if (running != null) write(running, result);
         else if (Minecraft.getInstance().player != null) Minecraft.getInstance().player.displayClientMessage(Component.literal("fx: " + result), false);
         running = null;
@@ -556,7 +569,9 @@ final class Sandbox {
                 // slow before the effect: its first frames (new particles, first draw of a shader) are the slowest
                 pace(armed.times.length > 0 ? SOFT_START_RATE : 20);
                 quiet(armed.times.length == 0 && armed.wavSeconds > 0);
-                finish("ok armed " + out);
+                // frames only once the window is its size again (a quiet take before it may still be shrinking back)
+                if (armed.times.length > 0) afterRestore("ok armed " + out);
+                else finish("ok armed " + out);
             }
             case AGAIN -> {
                 if (lastEffect == null) finish("error no effects yet");
@@ -988,36 +1003,46 @@ final class Sandbox {
         if (cap != null && effectTick >= 0 && cap.next >= cap.times.length && tick >= cap.audioTick + Math.round(cap.wavSeconds * 20) + 10) {
             capture = null;
             write(cap.out.resolve("capture.json"), json(cap));
-            if (quiet != null) {
-                // the next command may be a frame take: answer once the window is its size again
-                quiet(false);
-                quietResult = "ok " + cap.out;
-                quietRestoreSince = tick;
-            } else {
-                finish("ok " + cap.out);
-            }
+            // the next command may be a frame take: answer once the window is its size again
+            quiet(false);
+            afterRestore("ok " + cap.out);
         }
-        if (quietRestoreSince >= 0) {
+        if (restoring) {
             var target = mc.getMainRenderTarget();
             boolean back = target.width == mc.getWindow().getWidth() && target.height == mc.getWindow().getHeight()
                     && mc.getWindow().getWidth() == quietSize[0] && mc.getWindow().getHeight() == quietSize[1];
-            if (back || tick - quietRestoreSince > 100) {
-                quietRestoreSince = -1;
-                finish(back ? quietResult : "error window not restored to " + quietSize[0] + "x" + quietSize[1] + " after a sound-only take: "
-                        + target.width + "x" + target.height + " (tools/sandbox.sh restart)");
+            if (back || tick - restoreSince > 100) {
+                restoring = false;
+                String result = restoreResult;
+                restoreResult = null;
+                String error = "error window not restored to " + quietSize[0] + "x" + quietSize[1] + " after a sound-only take: "
+                        + target.width + "x" + target.height + " (tools/sandbox.sh restart)";
+                if (!back) Incoming.LOG.error("SANDBOX {}", error);
+                if (result != null) finish(back ? result : error);
             }
         }
     }
 
-    /** Window size to return to after a quiet take. */
+    /** Result now, or once a window restore in progress ends ({@link #restoring}). */
+    private void afterRestore(String result) {
+        if (restoring) restoreResult = result;
+        else finish(result);
+    }
+
+    /** Window size and frame limit to return to after a quiet take. */
     private final int[] quietSize = new int[2];
+    private int quietFps;
 
     /** Sound-only take: minimal window and frame limit ({@link #quiet}); false restores both. */
     private void quiet(boolean on) {
         Minecraft mc = Minecraft.getInstance();
         long window = mc.getWindow().getWindow();
         if (on && quiet == null) {
-            quiet = new int[] {mc.getWindow().getWidth(), mc.getWindow().getHeight(), mc.options.framerateLimit().get()};
+            // still shrinking back from the previous quiet take: its saved size is the window's own
+            quiet = restoring ? new int[] {quietSize[0], quietSize[1], quietFps}
+                    : new int[] {mc.getWindow().getWidth(), mc.getWindow().getHeight(), mc.options.framerateLimit().get()};
+            quietFps = quiet[2];
+            restoring = false;
             quietSize[0] = quiet[0];
             quietSize[1] = quiet[1];
             Incoming.LOG.info("SANDBOX quiet take: window {}x{} → {}x{}, max fps {} → {}", quiet[0], quiet[1], QUIET_W, QUIET_H, quiet[2], QUIET_FPS);
@@ -1030,6 +1055,8 @@ final class Sandbox {
             mc.options.framerateLimit().set(quiet[2]);
             org.lwjgl.glfw.GLFW.glfwSetWindowSize(window, quiet[0], quiet[1]);
             quiet = null;
+            restoring = true;
+            restoreSince = tick;
         }
     }
 

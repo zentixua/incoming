@@ -130,9 +130,11 @@ with Iris.
   sandbox daylight cycle disabled, so previous shot's night would persist. `time` sends client time immediately,
   ends once client receives it (no receipt in 2 s: `error`): server normally sends every 20 ticks; an effect
   immediately after command previously spent first second in old light.
-  `--at none`: sound only (WAV and `capture.json`). A take without frames (`shots <name> none… <s>`, also the CPU frame
+  `--at none`: sound only (WAV and the take's `capture.json`; the shot's directory is replaced once the WAV exists).
+  Shot names: one directory name (letters, digits, `_ . -`). A take without frames (`shots <name> none… <s>`, also the CPU frame
   shot's separate sound take) runs in a 160×90 window at 20 fps (`Sandbox.quiet`: `glfwRestoreWindow` first, the
-  nested compositor keeps a maximized window's size; restored before the take's result); sound does not depend on it:
+  nested compositor keeps a maximized window's size; a frame take's `ok armed` and the sound take's result wait until the
+  frame is its size again; a failed command after `shots` drops the armed take and restores it); sound does not depend on it:
   OpenAL mixes in its own thread and a voice later than 30 ms seeks to its offset (`OwnSources`). 20.11, `real missile`,
   camera 20 m, 40 s on llvmpipe: CPU 222–249 s → 47 s per take, same 45 s wall; per-second levels within 1 dB, band
   levels within 0.13 dB, onset within 12 ms of the full-window take (two full-window takes differ as much). On the GPU
@@ -177,12 +179,13 @@ with Iris.
 ## Vanilla rendering: shared GPU slot or CPU (`tools/soft_gl.sh`)
 Vanilla frames (no shader pack, DH or Voxy): `sandbox.sh start` and `client_scenario.sh` default to `vanilla_display`,
 which at client launch takes a shared GPU slot (`gpu_lease.sh gpu_slot_take`: up to 3 vanilla clients on the GPU at once,
-nested KWin on `wayland-incoming-shared-<name>`) or, at once and without waiting, renders with Mesa llvmpipe on the CPU:
-slots full, the exclusive lease held or queued for (frame-cost measurement, shader pack), an exclusive client running,
+nested KWin on `wayland-incoming-shared-<name>`, holding its slot lock and a shared hold of the exclusive client lock, so
+the kernel refuses any exclusive client beside it) or, at once and without waiting, renders with Mesa llvmpipe on the CPU:
+slots full, the exclusive lease held or queued for (frame-cost measurement, shader pack), an exclusive or unlocked client running, admission busy,
 Artem's game, under 1 GB of free VRAM, no NVIDIA GPU or no KWin (netcup, cloud). `INCOMING_CPU_ONLY=1` forces the CPU;
 `gpu` takes the GPU alone under the lease. The exclusive side sees slot holders as busy and waits (`--wait`) for them
-to end: a measurement never shares the GPU. A shared GPU client stops when Artem's game starts (75, “Artem's game
-started … shared GPU client stopped”; a restart lands on the CPU); a CPU client keeps running. The client log line
+to end: a measurement never shares the GPU. A shared GPU client stops when Artem's game starts: its whole process group,
+slot freed (75, “Artem's game started … shared GPU client stopped”; a restart lands on the CPU); a CPU client keeps running. The client log line
 `renderer: GPU, shared slot N of 3` or `renderer: CPU (llvmpipe): <reason>`; `sandbox.sh start` repeats it and the
 sandbox writes `fx/renderer`. Measured 20.11 (laptop, warm, 1280×720): `blast drone 7` with 4 frames 3.7 s and 6 s of
 CPU on a shared slot against 17.4 s and 107 s on llvmpipe; `nuke 15 near` with 3 frames 9.8–13.7 s against 52.5 s
