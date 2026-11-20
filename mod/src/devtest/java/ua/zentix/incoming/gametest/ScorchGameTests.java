@@ -979,7 +979,7 @@ public final class ScorchGameTests {
      * 19.11 complaint: the flash set a fire block on nearly every turf column 3–5 km from 1 Mt. One law ({@code RuinPlanner.kindling},
      * {@code Kindling}): the flash ignites only dry fuel, with {@code PulseIgnition.share}. Light ~30 cal/cm² at the far chunks (15 kt:
      * every fuel's median is below it): green plains turf — burned, no fire; hay bales — fire on them; wool behind a glass roof — fire
-     * on the wool (one pane ×{@code RuinPlanner.GLASS} however obliquely the ray crosses the wall); wool in a closed stone box or under tinted glass — none; a plank-roofed house — none (thick wood does not sustain); a savanna chunk (cured
+     * on the wool (one window ×{@code GlassPath.GLASS} however obliquely the ray crosses the wall); wool in a closed stone box or under tinted glass — none; a plank-roofed house — none (thick wood does not sustain); a savanna chunk (cured
      * grass, downfall 0) — fire on most turf columns. Flash layer only (no wave).
      */
     @GameTest(template = "range", timeoutTicks = 40, batch = "nuke_flash_kindling", skyAccess = true)
