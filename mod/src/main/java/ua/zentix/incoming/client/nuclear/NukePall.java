@@ -269,6 +269,9 @@ public final class NukePall {
         float bottom = (float) (level.getMinBuildHeight() - eye.y);
         for (int i = 0; i < visible.size() && k < 2; i++) if (slot(visible.get(i), k, eye, partial, frustum, bottom, f)) SLOTTED[k++] = visible.get(i);
         if (k == 0 && f.mushroomCount == 0 && !f.ballsLit) return null;
+        f.young.zero();
+        f.dustWall.active = false;
+        if (k > 0 && ua.zentix.incoming.client.fx.layer.DustWallPass.march != null) youngWall(SLOTTED[0], eye, partial, f);
         // without pall use zero bounds: the ray cannot enter (inverted bounds would span the entire ray)
         if (k == 0) {
             f.min.zero();
@@ -283,6 +286,67 @@ public final class NukePall {
         else if (ua.zentix.incoming.client.fx.layer.FxViews.secondary()) eyeDust(level, eye, partial, f.eyeDust);
         else f.eyeDust.set(sigma, tauUp, tauDown);
         return f;
+    }
+
+    /**
+     * Vertical optical depth of the lofted layer at which the young wall's presentation density is full ({@link #youngWall}):
+     * thicker layers draw alike, thinner ones by the square root of their share (presentation: the wall reads as matte,
+     * semi-transparent dust, not as the law's opaque skin).
+     */
+    private static final double YOUNG_FULL_DEPTH = 20;
+    /** Presentation dust extinction of the young wall where it is full, 1/block (the approved animation's 0.11 m⁻¹). */
+    private static final double YOUNG_SIGMA = 0.11;
+    /** Ground bounce under the wall: share of sun and sky light the burnt ground returns (est.). */
+    private static final double GROUND_BOUNCE = 0.1;
+
+    /**
+     * Inputs of the young dust wall of slot 0's detonation ({@code DustWallPass}: presentation model; physics only as inputs):
+     * the game front and arrival table, the pall's layer top and lofted depth at the handoff, the fireball and frame light,
+     * wind; and the pall's handover ring ({@link PallPass.Frame#young}).
+     */
+    private static void youngWall(ClientNuclear.Active a, Vec3 eye, float partial, PallPass.Frame f) {
+        Detonation d = a.d;
+        double t = a.seconds(partial), span = ua.zentix.incoming.client.fx.layer.DustWallPass.SPAN,
+                fade = ua.zentix.incoming.client.fx.layer.DustWallPass.FADE;
+        double front = d.blocks(a.wall.shock(t));
+        if (front <= 1) return;
+        ua.zentix.incoming.client.fx.layer.DustWallPass.Frame w = f.dustWall;
+        double inner = d.blocks(a.wall.shock(t - span)), whole = d.blocks(a.wall.shock(t - span + fade));
+        f.young.set((float) inner, (float) Math.max(inner + 1, whole), 0, 0);
+        float gx = (float) (d.burst().x - eye.x), gz = (float) (d.burst().z - eye.z), gy = (float) (d.groundY() - eye.y);
+        w.eye[0] = -gx;
+        w.eye[1] = -gy;
+        w.eye[2] = -gz;
+        w.eye[3] = (float) t;
+        int n = ua.zentix.incoming.client.fx.layer.DustWallPass.NODES;
+        a.pall.young(span, n, w.table);
+        double top = 0;
+        for (int j = 0; j < n; j++) {
+            double depth = w.table[4 * j + 2];
+            w.table[4 * j + 2] = depth < PallField.GONE_DEPTH ? 0f : (float) (YOUNG_SIGMA * Math.min(1.6, Math.sqrt(depth / YOUNG_FULL_DEPTH)));
+            if (w.table[4 * j + 2] > 0) top = Math.max(top, w.table[4 * j + 1]);
+        }
+        w.ring[0] = (float) front;
+        w.ring[1] = (float) inner;
+        w.ring[2] = (float) (top * 1.55 * 1.45 * 1.6 + 45);
+        w.ring[3] = (float) a.pall.reach();
+        // fireball: slot 0's ball light (CloudPuffs.pallLight): radius, drift along the wind, height, black-body light × exposure
+        double cos = Math.cos(d.windDir()), sin = Math.sin(d.windDir());
+        w.ball[0] = (float) (cos * f.glow0.z);
+        w.ball[1] = f.hot0.w;
+        w.ball[2] = (float) (sin * f.glow0.z);
+        w.ball[3] = f.glow0.x;
+        w.ballLight.set(f.hot0.x, f.hot0.y, f.hot0.z).mul(f.exposure);
+        w.sunDir.set(f.sun.x, f.sun.y, 0);
+        w.sunLight.set(f.sunLight);
+        w.skyLight.set(f.skyLight);
+        float up = Math.max(f.sun.y, 0);
+        w.groundLight.set(f.sunLight).mul(up).add(f.skyLight).mul((float) GROUND_BOUNCE);
+        w.albedo.set(0.8687934f, 0.8099112f, 0.7286264f);
+        double wind = d.blocks(d.windSpeed());
+        w.windX = (float) (cos * wind);
+        w.windZ = (float) (sin * wind);
+        w.active = true;
     }
 
     /** Optical medium at a camera; never updates the player's ash, hearing or dust veil. */
@@ -828,9 +892,25 @@ public final class NukePall {
                 SKY.sun[0], SKY.sun[1], SKY.sun[2], cap);
         return String.format(java.util.Locale.ROOT, "sigma at camera %.4f /block (visibility %.0f blocks; mist %.4f), depth up %.2f down %.2f, muffle %.2f, ash %d, quality %s, "
                         + "light: %s, fires %.2f × %.2f, ball r %.0f blocks, black body %.3g %.3g %.3g, under the pall: %s, surge r %.0f top %.0f sigma %.4f, "
-                        + "frames: %s; mushrooms %d (exposure %.6g); firestorm: %s; nuclear camera: %s",
+                        + "frames: %s; mushrooms %d (exposure %.6g); firestorm: %s; nuclear camera: %s; young wall: %s",
                 sigma, sigma > 1e-5f ? 3.912 / sigma : Double.POSITIVE_INFINITY, mist, tauUp, tauDown, muffle, NukeAsh.alive(), quality(),
                 sun, f.glowOnSmoke, f.glow0.y, f.glow0.x, f.hot0.x, f.hot0.y, f.hot0.z, under, f.water0.x, f.water0.y, f.water0.z,
-                mc.level == null ? "-" : PallPass.describe(), f.mushroomCount, f.exposure, FireStorms.describe(), NukeLight.describe());
+                mc.level == null ? "-" : PallPass.describe(), f.mushroomCount, f.exposure, FireStorms.describe(), NukeLight.describe(), youngDescribe(f));
+    }
+
+    /** The young wall's inputs this frame ({@link #youngWall}). */
+    private static String youngDescribe(PallPass.Frame f) {
+        ua.zentix.incoming.client.fx.layer.DustWallPass.Frame w = f.dustWall;
+        if (!w.active) return "off";
+        // the node nearest the eye's radius
+        double r = Math.hypot(w.eye[0], w.eye[2]);
+        int j = (int) Math.round(Math.min(r / Math.max(w.ring[3], 1), 1) * (ua.zentix.incoming.client.fx.layer.DustWallPass.NODES - 1));
+        return String.format(java.util.Locale.ROOT, "t %.2f s, front %.0f, inner %.0f, pall whole to %.0f fades to %.0f, envelope %.0f, reach %.0f; "
+                        + "at the eye's radius %.0f: arrival %.2f s, layer %.1f blocks, sigma %.4f; ball at %.0f %.0f %.0f r %.0f light %.3g %.3g %.3g; "
+                        + "sun %.2f %.2f light %.3f %.3f %.3f, sky %.3f %.3f %.3f, ground %.3f %.3f %.3f; wind %.2f %.2f",
+                w.eye[3], w.ring[0], w.ring[1], f.young.x, f.young.y, w.ring[2], w.ring[3], r, w.table[4 * j], w.table[4 * j + 1], w.table[4 * j + 2],
+                w.ball[0], w.ball[1], w.ball[2], w.ball[3], w.ballLight.x, w.ballLight.y, w.ballLight.z, w.sunDir.x, w.sunDir.y,
+                w.sunLight.x, w.sunLight.y, w.sunLight.z, w.skyLight.x, w.skyLight.y, w.skyLight.z, w.groundLight.x, w.groundLight.y, w.groundLight.z,
+                w.windX, w.windZ);
     }
 }

@@ -386,6 +386,14 @@ public final class PallPass {
 
     /** Frame pall — renderer input ({@code client/nuclear/NukePall#frame}). */
     public static final class Frame {
+        /**
+         * Young dust wall drawn by its own pass ({@link DustWallPass}): per slot (xy — slot 0, zw — slot 1) the radius from ground
+         * zero, blocks, inside which the pall draws its dust and head whole, and the radius beyond which the pass alone draws them;
+         * zeroes — the pall draws everything.
+         */
+        public final Vector4f young = new Vector4f();
+        /** The young wall's pass inputs ({@link DustWallPass}); inactive — no young wall this frame. */
+        public final DustWallPass.Frame dustWall = new DustWallPass.Frame();
         /** Detonation slots ({@code pall.glsl}): at most two most prominent. */
         public final Matrix4f slot0 = new Matrix4f().zero(), slot1 = new Matrix4f().zero();
         /** Field table: {@link #ROWS} rows of {@link #WIDTH} nodes, RGBA. */
@@ -856,6 +864,7 @@ public final class PallPass {
             m.safeGetUniform("PallWater0").set(f.water0.x, f.water0.y, f.water0.z, f.water0.w);
             m.safeGetUniform("PallWater1").set(f.water1.x, f.water1.y, f.water1.z, f.water1.w);
             m.safeGetUniform("PallWall0").set(f.wall0);
+            m.safeGetUniform("PallYoung").set(f.young.x, f.young.y, f.young.z, f.young.w);
             m.safeGetUniform("PallWall1").set(f.wall1);
             m.safeGetUniform("PallWilson0").set(f.wilson0.x, f.wilson0.y, f.wilson0.z, f.wilson0.w);
             m.safeGetUniform("PallWilson1").set(f.wilson1.x, f.wilson1.y, f.wilson1.z, f.wilson1.w);
