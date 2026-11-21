@@ -45,6 +45,8 @@ public final class WallPuffs implements SmokeGrid.Source {
     static final double ROUND = 1.25;
     /** Per-billow scatter of the frame (life share) and of the size (share). */
     static final double SCATTER_FRAME = 0.18, SCATTER_SIZE = 0.3;
+    /** Front band: rows of wall-height cells behind the front; it starts where tier cells exceed this many band cells. */
+    static final double FRONT_ROWS = 6, FRONT_FROM = 1.2;
     /** Dust-impact frame by age: life share from, span, e-fold s. */
     static final double FRAME_FROM = 0.12, FRAME_SPAN = 0.7, FRAME_S = 3;
     /** Curl: the top is thrown outward by the wind behind the front, then pulled back (share of the top). */
@@ -59,6 +61,8 @@ public final class WallPuffs implements SmokeGrid.Source {
     private final double[] top = new double[PallField.BINS], tau = new double[PallField.BINS];
     private boolean gone;
     private int drawn;
+    /** Front-band cell, blocks: the settled wall height (mean over the dusty radii). */
+    private final double frontCell;
 
     private WallPuffs(ClientNuclear.Active a) {
         this.a = a;
@@ -74,6 +78,13 @@ public final class WallPuffs implements SmokeGrid.Source {
             top[i] = Math.max(a.d.blocks(a.pall.layer(i).height(settledAt)), PallField.MIN_TOP_BLOCKS);
             tau[i] = a.pall.layer(i).depth(handover);
         }
+        double sum = 0, n = 0;
+        for (int i = 0; i < PallField.BINS; i++) {
+            if (tau[i] < 0.5) continue;
+            sum += top[i];
+            n++;
+        }
+        frontCell = n > 0 ? sum / n : a.d.blocks(50);
     }
 
     /** Client tick: one source per land detonation while its young wall lives. */
@@ -175,13 +186,50 @@ public final class WallPuffs implements SmokeGrid.Source {
                     if (dist > 2 * cell && (vx * lx + vz * lz) < 0.5 * dist) continue;
                     double age = (t - d.arrivalTicks(Math.hypot(r, hobB))) / 20;
                     if (age <= 0 || age > YOUNG_S) continue;
+                    w *= 1 - frontShare(dist, outer - r);
+                    if (w <= 0.01) continue;
                     layer(r, lay);
                     if (lay[1] <= 0) continue;
                     emitPatch(out, px, gy, pz, rx / Math.max(r, 1e-6), rz / Math.max(r, 1e-6), age, cell, w, lay[0], lay[1], metre, seed);
                 }
             }
         }
+        // the front band: where the distance tiers are coarser than the wall is tall, billows of about the wall's height on a
+        // world-fixed grid of their own, a few hundred metres behind the front (its face and hump are what the eye reads there)
+        double f = frontCell, band = FRONT_ROWS * f;
+        SEEN.clear();
+        double step = 0.5 * f / Math.max(outer, f);
+        for (double phi = 0; phi < 2 * Math.PI; phi += step) {
+            double cx = Math.cos(phi), cz = Math.sin(phi);
+            double sx = gx + cx * outer - ex, sz = gz + cz * outer - ez, sd = Math.hypot(sx, sz);
+            if (sd < FRONT_FROM * f / PER_DISTANCE * 0.8 || (sx * lx + sz * lz) < 0.4 * sd) continue;
+            for (double rr = outer + 0.5 * f; rr > outer - band - f && rr > 0; rr -= 0.5 * f) {
+                long i = (long) Math.floor(cx * rr / f), j = (long) Math.floor(cz * rr / f);
+                if (!SEEN.add(i * 0x1F1F1F1FL ^ j)) continue;
+                double px = gx + (i + 0.15 + 0.7 * hash(i, j, seed + 77)) * f, pz = gz + (j + 0.15 + 0.7 * hash(i, j, seed + 78)) * f;
+                double rx = px - gx, rz = pz - gz, r = Math.hypot(rx, rz);
+                double vx = px - ex, vz = pz - ez, dist = Math.hypot(vx, vz);
+                double w = frontShare(dist, outer - r);
+                if (w <= 0.01 || r < inner) continue;
+                double age = (t - d.arrivalTicks(Math.hypot(r, hobB))) / 20;
+                if (age <= 0 || age > YOUNG_S) continue;
+                layer(r, lay);
+                if (lay[1] <= 0) continue;
+                emitPatch(out, px, gy, pz, rx / Math.max(r, 1e-6), rz / Math.max(r, 1e-6), age, f, w, lay[0], lay[1], metre, seed);
+            }
+        }
         return drawn > 0;
+    }
+
+    private static final it.unimi.dsi.fastutil.longs.LongOpenHashSet SEEN = new it.unimi.dsi.fastutil.longs.LongOpenHashSet();
+
+    /**
+     * Share of the front band ({@link #FRONT_ROWS} cells of {@link #frontCell} behind the front) at eye distance {@code dist} and
+     * {@code behind} the front: full where the distance tiers' cell is over twice the band's, none under 1.2 times.
+     */
+    private double frontShare(double dist, double behind) {
+        double f = frontCell, band = FRONT_ROWS * f;
+        return smooth(FRONT_FROM * f / PER_DISTANCE, 2 * f / PER_DISTANCE, dist) * (1 - smooth(0.7 * band, band, behind));
     }
 
     /** One billow column at (x, z) with ground y: age s since the front touched it, cell blocks, tier weight, layer top/depth. */
