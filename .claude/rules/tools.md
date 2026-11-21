@@ -53,7 +53,7 @@ Prism: `~/.var/app/org.prismlauncher.PrismLauncher/data/PrismLauncher/` (`tools/
                                            “Effects sandbox”; check without a client: test_sandbox.sh (CI)
     nested_kwin.sh                       ← nested KWin for the client: no window and no host sound, its own D-Bus bus without starting services
                                            (nested_kwin_bus.conf) and XDG directories; takes the GPU lease and the client lock
-                                           (gpu_lease.sh); exit 75 means whoever holds the GPU; with INCOMING_SOFT=1 a CPU session
+                                           (gpu_lease.sh); exit 75 means whoever holds the GPU or Artem's game running (an exclusive client never starts beside it); with INCOMING_SOFT=1 a CPU session
                                            (soft_gl.sh): no lease or lock, socket wayland-incoming-soft-…; with INCOMING_GPU_SHARED=1
                                            a vanilla client on a shared GPU slot (its caller's slot lock, socket wayland-incoming-shared-…)
     soft_gl.sh                           ← vanilla clients, sourced: vanilla_display (shared GPU slot, else CPU at once), CPU rendering (Mesa llvmpipe): GL vendor/thread/heap
