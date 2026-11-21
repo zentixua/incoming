@@ -1,6 +1,7 @@
 package ua.zentix.incoming.client.nuclear;
 
 import org.junit.jupiter.api.Test;
+import ua.zentix.incoming.nuclear.NukeClock;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -153,22 +154,29 @@ class ClientNuclearTest {
         assertTrue(caught > 0 && caught <= 158 + 60, "caught up at server tick " + caught);
     }
 
-    /** Without anchors (a recording made before them, a show that ended) the age is the client's own ticks, as before. */
+    /** After show end, a dimension-wide anchor for a different show leaves this age alone. */
     @Test
-    void withoutAnchorsTheAgeIsOwnTicks() {
+    void endedShowKeepsAdvancingOnItsOwnTime() {
         ClientNuclear.AgeClock clock = new ClientNuclear.AgeClock(0, true);
         clock.ended();
         for (int c = 0; c < 50; c++) clock.tick();
         assertEquals(50, clock.shown(), 1e-9);
         clock.anchor(30);
-        double last = clock.shown();
-        for (int c = 0; c < 10; c++) {
-            clock.tick();
-            assertTrue(clock.shown() > last && clock.shown() < 50 + 10, "after its show the anchor no longer caps the age, nor pulls it back");
-            last = clock.shown();
-        }
-        for (int c = 0; c < 200; c++) clock.tick();
-        assertEquals(30 + 210, clock.shown(), 0.5, "own ticks from the anchor once past it");
+        for (int c = 0; c < 10; c++) clock.tick();
+        assertEquals(60, clock.shown(), 1e-9);
+    }
+
+    @Test
+    void postShowSeekDoesNotRewindToTheSnapshotAnchor() {
+        long lastShowTick = (long) (20 * NukeClock.SHOW_S) - 1;
+        long seekAge = lastShowTick + 400;
+        var clock = new ClientNuclear.AgeClock(seekAge, false);
+        // The snapshot has both the end of the show and its last per-tick anchor.
+        clock.ended();
+        clock.anchor(lastShowTick);
+        assertEquals(seekAge, clock.shown(), 1e-9);
+        clock.tick();
+        assertEquals(seekAge + 1, clock.shown(), 1e-9);
     }
 
     /**

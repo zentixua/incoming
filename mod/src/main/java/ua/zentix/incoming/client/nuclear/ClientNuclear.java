@@ -77,9 +77,10 @@ public final class ClientNuclear {
             this.live = live;
             // live: the packet is the server's first anchor (age 0 at send); past (entry, seek): the level clock's estimate
             // until the server's next anchor, which the clock takes whole
-            this.clock = live ? new AgeClock(0, true, ua.zentix.incoming.client.replay.Replay.active())
-                    : new AgeClock(Math.max(0, clientNow - d.gameTime()), false);
-            if (SHOW_ENDS.containsKey(d.id())) clock.ended();
+            long start = live ? 0 : Math.max(0, clientNow - d.gameTime());
+            this.clock = new AgeClock(start, live, live && ua.zentix.incoming.client.replay.Replay.active());
+            // A replay can seek back into a show whose end is still cached from later in the recording.
+            if (!live && start + TIME_SYNC_TICKS >= NukeClock.SHOW_S * 20 && SHOW_ENDS.containsKey(d.id())) clock.ended();
             this.puffs = puffs;
             this.wall = wall;
             this.water = water;
@@ -187,7 +188,7 @@ public final class ClientNuclear {
         private boolean anchored;
         /** Viewing a Flashback replay: the recording may predate per-tick anchors ({@link #PROBE}). */
         private final boolean replay;
-        /** The show is over: anchors sent for other detonations' shows no longer cap this one. */
+        /** The show is over: this clock ignores further stream anchors. */
         private boolean over;
         /** A past detonation (entry, seek) shown from an estimate: the server's first anchor sets the age whole. */
         private boolean estimated;
@@ -213,11 +214,12 @@ public final class ClientNuclear {
 
         /** An anchor: the server's age for this detonation when the packet was sent ({@code S2C.NukeTick}). */
         void anchor(long serverAge) {
+            if (over) return;
             anchor = Math.max(0, serverAge);
             anchorAt = at;
             anchored = true;
             unseen = true;
-            streamed = !over;
+            streamed = true;
             if (estimated) {
                 estimated = false;
                 shown = anchor;
@@ -372,7 +374,11 @@ public final class ClientNuclear {
         if (live) {
             NukeLight.detonation(level);
             NukeFlash.detonation(a);
-            FlashAftermath.detonation(d, p.blackout());
+            FlashAftermath.detonation(d, partial -> {
+                // Sync can replace the active clock. Smoke must follow the clock still driving this detonation.
+                Active current = DETONATIONS.get(d.id());
+                return current != null && d.equals(current.d) ? current.clock.at(partial) : Double.POSITIVE_INFINITY;
+            }, p.blackout());
         }
     }
 
