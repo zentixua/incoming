@@ -22,6 +22,8 @@ import net.neoforged.neoforge.gametest.GameTestHolder;
 import net.neoforged.neoforge.gametest.PrefixGameTestTemplate;
 import ua.zentix.incoming.Incoming;
 import ua.zentix.incoming.IncomingConfig;
+import ua.zentix.incoming.net.S2C;
+import ua.zentix.incoming.nuclear.world.StrikeSupport;
 import ua.zentix.incoming.warhead.Warheads;
 
 import java.util.ArrayList;
@@ -68,6 +70,8 @@ public final class CollapseRegressionGameTests {
     @GameTest(template = "range", batch = "collapse_overlap", timeoutTicks = 2400, skyAccess = true)
     public static void simultaneousHolesInOnePillarDoNotLeaveRoofHanging(GameTestHelper h) {
         List<BlockPos> roof = cutPillar(h);
+        Vec3 at = h.absoluteVec(Vec3.atCenterOf(PILLAR));
+        var watcher = FuelFireGameTests.Watcher.near(h, at, S2C.Collapse.class);
         Warheads.CollapseProbe a = collapse(h, PILLAR, 23, List.of(PILLAR));
         Warheads.CollapseProbe b = collapse(h, PILLAR.above(2), 23, List.of(PILLAR.above(2)));
         h.startSequence()
@@ -76,15 +80,29 @@ public final class CollapseRegressionGameTests {
                     long hanging = roof.stream().filter(p -> h.getBlockState(p).is(Blocks.BRICKS)).count();
                     h.assertTrue(hanging == 0 && a.fell() + b.fell() == 28, hanging + "/" + roof.size()
                             + " roof blocks stayed (fell " + a.fell() + " + " + b.fell() + ", expected 28 total)");
+                    double volume = watcher.got.stream().filter(p -> p.pos().distanceToSqr(at) < 16 * 16)
+                            .mapToDouble(S2C.Collapse::volume).sum();
+                    h.assertTrue(Math.abs(volume - StrikeSupport.MATERIAL * 28) < 1e-5, "wrong dust volume for 28 blocks: " + volume);
                 }).thenSucceed();
     }
 
     @GameTest(template = "range", batch = "collapse_overlap", timeoutTicks = 2400, skyAccess = true)
     public static void overlappingHolesKeepBothClaimContexts(GameTestHelper h) {
-        cutPillar(h);
+        CollapseGameTests.quiet(h);
+        CollapseGameTests.ground(h);
+        // Either timber support is enough for the roof. Only the two cuts together drop it.
+        BlockPos left = PILLAR.west(), right = PILLAR.east();
+        BlockState timber = Blocks.OAK_PLANKS.defaultBlockState();
+        for (int i = 1; i < 5; i++) {
+            set(h, left.above(i), timber);
+            set(h, right.above(i), timber);
+        }
+        for (int dx = -1; dx <= 1; dx++) for (int dz = -1; dz <= 1; dz++) {
+            set(h, PILLAR.offset(dx, 5, dz), timber);
+        }
         BlockPos protectedRoof = h.absolutePos(PILLAR.above(5));
-        Vec3 allowed = h.absoluteVec(Vec3.atCenterOf(PILLAR));
-        Vec3 denied = h.absoluteVec(Vec3.atCenterOf(PILLAR.above(2)));
+        Vec3 allowed = h.absoluteVec(Vec3.atCenterOf(left));
+        Vec3 denied = h.absoluteVec(Vec3.atCenterOf(right));
         boolean[] offered = new boolean[2];
         Consumer<ExplosionEvent.Detonate> claim = e -> {
             if (e.getLevel() != h.getLevel() || e.getExplosion().radius() != 0) return;
@@ -94,15 +112,57 @@ public final class CollapseRegressionGameTests {
         };
         NeoForge.EVENT_BUS.addListener(claim);
         StrikeGameTests.afterTest(h, () -> NeoForge.EVENT_BUS.unregister(claim));
-        Warheads.CollapseProbe a = collapse(h, PILLAR, 23, List.of(PILLAR));
-        Warheads.CollapseProbe b = collapse(h, PILLAR.above(2), 23, List.of(PILLAR.above(2)));
+        Warheads.CollapseProbe a = collapse(h, left, 23, List.of(left));
+        Warheads.CollapseProbe b = collapse(h, right, 23, List.of(right));
         h.startSequence()
                 .thenWaitUntil(() -> h.assertTrue(a.done() && b.done(), "both concurrent collapses must finish"))
                 .thenExecute(() -> {
                     h.assertTrue(offered[0] && offered[1], "shared roof offered in both impact contexts");
-                    h.assertTrue(a.fell() + b.fell() == 0, "protected bearing block must keep the fall plan standing");
-                    h.assertBlockPresent(Blocks.BRICKS, PILLAR.above(5));
+                    for (int dx = -1; dx <= 1; dx++) for (int dz = -1; dz <= 1; dz++) {
+                        h.assertBlockPresent(Blocks.OAK_PLANKS, PILLAR.offset(dx, 5, dz));
+                    }
                 }).thenSucceed();
+    }
+
+    /** Each adjacent house has its own pillar. Only one of the two cuts is allowed to bring down its house. */
+    @GameTest(template = "range", batch = "collapse_overlap", timeoutTicks = 2400, skyAccess = true)
+    public static void claimAtOneHouseDoesNotHoldUpTheOther(GameTestHelper h) {
+        CollapseGameTests.quiet(h);
+        CollapseGameTests.ground(h);
+        BlockPos footA = new BlockPos(28, GROUND + 1, 31), footB = footA.east(6);
+        buildCutHouse(h, footA);
+        List<BlockPos> roofB = buildCutHouse(h, footB);
+        BlockPos claimed = h.absolutePos(footA.above());
+        Vec3 centerA = h.absoluteVec(Vec3.atCenterOf(footA));
+        int[] protectedOffers = new int[1];
+        Consumer<ExplosionEvent.Detonate> claim = e -> {
+            if (e.getLevel() != h.getLevel() || e.getExplosion().radius() != 0) return;
+            if (e.getExplosion().center().equals(centerA) && e.getExplosion().getToBlow().remove(claimed)) protectedOffers[0]++;
+        };
+        NeoForge.EVENT_BUS.addListener(claim);
+        StrikeGameTests.afterTest(h, () -> NeoForge.EVENT_BUS.unregister(claim));
+        Warheads.CollapseProbe a = collapse(h, footA, 23, List.of(footA));
+        Warheads.CollapseProbe b = collapse(h, footB, 23, List.of(footB));
+        h.startSequence()
+                .thenWaitUntil(() -> h.assertTrue(a.done() && b.done(), "both collapses must finish"))
+                .thenExecute(() -> {
+                    long hanging = roofB.stream().filter(p -> h.getBlockState(p).is(Blocks.BRICKS)).count();
+                    h.assertBlockPresent(Blocks.BRICKS, footA.above());
+                    h.assertTrue(a.fell() == 0 && protectedOffers[0] > 0, "the claimed house must remain standing");
+                    h.assertTrue(hanging == 0 && b.fell() == 13, "unclaimed house B kept " + hanging
+                            + "/9 roof blocks hanging and dropped " + b.fell() + " of 13 blocks");
+                }).thenSucceed();
+    }
+
+    private static List<BlockPos> buildCutHouse(GameTestHelper h, BlockPos foot) {
+        for (int i = 1; i < 5; i++) set(h, foot.above(i), BRICKS);
+        List<BlockPos> roof = new ArrayList<>();
+        for (int dx = -1; dx <= 1; dx++) for (int dz = -1; dz <= 1; dz++) {
+            BlockPos p = foot.offset(dx, 5, dz);
+            roof.add(p);
+            set(h, p, BRICKS);
+        }
+        return roof;
     }
 
     @GameTest(template = "range", batch = "collapse_storage", timeoutTicks = 2400, skyAccess = true)

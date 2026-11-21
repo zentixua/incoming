@@ -173,7 +173,7 @@ public final class IncomingConfig {
                     .translation("incoming.config.shatter_glass").define("shatter_glass", true);
             fire = b.comment("Conventional blasts and burning debris start fires.")
                     .translation("incoming.config.fire").define("fire", true);
-            debrisStay = b.comment("Ground clods stay as blocks on loose ground; large airframe parts and burning debris can also remain. Small chips disperse. Off: all debris disappears on landing. Fire still needs fuel.")
+            debrisStay = b.comment("Ground clods stay as blocks on loose ground. Collapse rubble, large airframe parts and burning debris can also remain. Small chips disperse. Off: debris disappears on landing. Fire still needs fuel.")
                     .translation("incoming.config.debris_stay").define("debris_stay", true);
             collapse = b.comment("What a blast leaves without support falls: storeys above blown-out walls and floors, the roof of a cavity above an underground bomb.")
                     .translation("incoming.config.collapse").define("collapse", true);

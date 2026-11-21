@@ -183,7 +183,9 @@ paths:
     requested when the collapse takes its slot). Preparation in timed portions: the holes the solve used are checked;
     claim handlers get `ExplosionEvent.Detonate` events of up to 1024 positions, attributed to the strike's projectile and
     damage source, without entities. Candidates in a shared support window also go through each peer impact whose
-    losses it used. A kept load-bearing block keeps the whole plan standing (`overlappingHolesKeepBothClaimContexts`).
+    losses it used. If a peer's claim context keeps a load-bearing block, the worker solves again on the same capture
+    with that peer's fractures omitted. A bearing block protected in the strike's own context stops its plan.
+    GameTests `overlappingHolesKeepBothClaimContexts` and `claimAtOneHouseDoesNotHoldUpTheOther`.
   - Stale plans: a removal holding a load-bearing block again, or a load-bearing block in a watch cell or hole beside a
     position about to fall, means the world changed under the plan (a support built while it was solved or fell);
     what is left of it is dropped and a new collapse over the strike's removals plus what already fell decides again
@@ -203,9 +205,9 @@ paths:
     rest, spread by `Debris.spread`; fluid ticks and landings in their own portions; rubble lands in claimed land as
     vanilla falling sand does. With `world.debris_stay` off, live rubble disappears on landing and direct landing
     skips placement. One `S2C.Collapse` (dust, rumble) for the fallen load-bearing blocks
-    (`StrikeSupport.MATERIAL` m³ a block).
+    (`StrikeSupport.MATERIAL` m³ a block). In shared plans the packet uses only the blocks the fall actually removed.
   - Telemetry: impact kind `COLLAPSE` in the slow-impact-tick line and the strike summary; the `Impact series summary`
-    line ends with blocks fallen and the longest collapse unit; replans, stops and claim-kept plans log one INFO line.
+    line ends with blocks fallen and the longest collapse unit. Replan and stop lines identify refilled peer holes.
   - GameTest batch `collapse`: missile and drone in a flat, drone on a roof corner (the law's fixed point: with
     everything gone as removals nothing more falls; glass broken later by `Shatter` is not a removal), portions by
     time, rebuilt support, brace during the solve, storage, snapshot slices, Sable origin hold. Bench batches

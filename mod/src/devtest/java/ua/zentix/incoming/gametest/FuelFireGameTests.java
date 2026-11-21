@@ -10,6 +10,7 @@ import net.minecraft.network.PacketSendListener;
 import net.minecraft.network.protocol.Packet;
 import net.minecraft.network.protocol.PacketFlow;
 import net.minecraft.network.protocol.common.ClientboundCustomPayloadPacket;
+import net.minecraft.network.protocol.common.custom.CustomPacketPayload;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.server.network.CommonListenerCookie;
@@ -195,7 +196,7 @@ public final class FuelFireGameTests {
         int deck = c.getY() + 3;
         for (BlockPos p : BlockPos.betweenClosed(c.offset(-2, 3, -2), c.offset(2, 3, 2))) level.setBlock(p, Blocks.OAK_PLANKS.defaultBlockState(), 2);
         Vec3 at = new Vec3(c.getX() + 0.5, deck + 1, c.getZ() + 0.5);
-        Watcher watcher = Watcher.near(h, Vec3.atCenterOf(c.offset(8, 0, 0)));
+        Watcher<S2C.FuelFire> watcher = Watcher.near(h, Vec3.atCenterOf(c.offset(8, 0, 0)), S2C.FuelFire.class);
         FuelFires.testPour(level, at, WeaponType.DRONE, 0, 64);
         int n = WeaponType.DRONE.spec().pool().cells();
         h.assertTrue(cells(level, at).size() == n, "not on the flooring " + n + " cells: " + cells(level, at));
@@ -233,25 +234,25 @@ public final class FuelFireGameTests {
     }
 
     /**
-     * The player next to the crater to check delivery: crater packets ({@link S2C.FuelFire}) that the server sends to him are added to the list,
-     *  others are bypassed. While the check is underway, he is on the list of players on the server ({@code PacketDistributor.sendToPlayersNear} is looking for him there),
-     * , but not in the world: they are not sending him chunks or entities. Not {@code makeMockServerPlayerInLevel}: The input really breaks about
-     *  packages Create ({@code gametest.md}).
+     * Records one custom payload type sent to a nearby player. The player is on the server list consulted by
+     * {@code PacketDistributor.sendToPlayersNear}, without joining the level or receiving chunks and entities.
      */
-    private static final class Watcher extends ServerGamePacketListenerImpl {
-        final List<S2C.FuelFire> got = new ArrayList<>();
+    static final class Watcher<T extends CustomPacketPayload> extends ServerGamePacketListenerImpl {
+        final List<T> got = new ArrayList<>();
+        private final Class<T> payloadType;
 
-        private Watcher(ServerPlayer player, Connection connection) {
+        private Watcher(ServerPlayer player, Connection connection, Class<T> payloadType) {
             super(player.server, connection, player, CommonListenerCookie.createInitial(player.getGameProfile(), false));
+            this.payloadType = payloadType;
         }
 
-        static Watcher near(GameTestHelper h, Vec3 pos) {
+        static <T extends CustomPacketPayload> Watcher<T> near(GameTestHelper h, Vec3 pos, Class<T> payloadType) {
             ServerLevel level = h.getLevel();
             FakePlayer player = new FakePlayer(level, new GameProfile(UUID.randomUUID(), "fuel-fire-watcher"));
             player.setPos(pos);
             Connection connection = new Connection(PacketFlow.SERVERBOUND);
             new EmbeddedChannel(connection);
-            Watcher watcher = new Watcher(player, connection);
+            Watcher<T> watcher = new Watcher<>(player, connection, payloadType);
             // the list of players NeoForge is read-only: the list itself is a field
             List<ServerPlayer> players = ObfuscationReflectionHelper.getPrivateValue(PlayerList.class, level.getServer().getPlayerList(), "players");
             players.add(player);
@@ -261,7 +262,9 @@ public final class FuelFireGameTests {
 
         @Override
         public void send(Packet<?> packet, @Nullable PacketSendListener listener) {
-            if (packet instanceof ClientboundCustomPayloadPacket custom && custom.payload() instanceof S2C.FuelFire fire) got.add(fire);
+            if (packet instanceof ClientboundCustomPayloadPacket custom && payloadType.isInstance(custom.payload())) {
+                got.add(payloadType.cast(custom.payload()));
+            }
         }
     }
 

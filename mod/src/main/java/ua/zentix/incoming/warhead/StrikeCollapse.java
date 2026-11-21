@@ -3,6 +3,7 @@ package ua.zentix.incoming.warhead;
 import it.unimi.dsi.fastutil.longs.Long2BooleanOpenHashMap;
 import it.unimi.dsi.fastutil.longs.LongIterator;
 import it.unimi.dsi.fastutil.longs.LongOpenHashSet;
+import it.unimi.dsi.fastutil.objects.Reference2IntOpenHashMap;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
 import net.minecraft.server.level.ServerLevel;
@@ -87,14 +88,15 @@ final class StrikeCollapse implements UnitQueue.Job {
     @Nullable
     private StrikeSupport.Result result;
     /** Positions claim handlers kept ({@link #prepare}). */
-    private final LongOpenHashSet kept = new LongOpenHashSet();
+    private LongOpenHashSet kept = new LongOpenHashSet();
     /** Preparation cursors: removals checked for a support built back, fall positions offered to claim handlers. */
     @Nullable
     private LongIterator holes;
     private int offered, peerWindow, peerSource, peerOffered;
+    private boolean claimsChanged;
     private boolean prepared;
     private int next, nextFluid;
-    private boolean sent;
+    private @Nullable Dust sharedDust;
     /** Rubble that lands without a live falling block: source and state. */
     private final List<Landing> landings = new ArrayList<>();
     private int landed;
@@ -117,6 +119,26 @@ final class StrikeCollapse implements UnitQueue.Job {
     }
 
     private record Landing(BlockPos from, BlockState state) {}
+
+    /** Material removed by this fall from a shared plan. Other falls can consume candidates between portions. */
+    private static final class Dust {
+        private final Reference2IntOpenHashMap<BlockState> kinds = new Reference2IntOpenHashMap<>();
+        private int blocks, bottom = Integer.MAX_VALUE, most;
+        private double x, z;
+        private @Nullable BlockState common;
+
+        void add(BlockPos p, BlockState state) {
+            blocks++;
+            x += p.getX() + 0.5;
+            z += p.getZ() + 0.5;
+            bottom = Math.min(bottom, p.getY());
+            int count = kinds.addTo(state, 1) + 1;
+            if (count > most) {
+                most = count;
+                common = state;
+            }
+        }
+    }
 
     StrikeCollapse(BlastArea area, List<StagedExplosion> after, Vec3 centre) {
         this(area, after, centre, area.removedAt(), area.removedWas(), 0, new Stats());
@@ -258,10 +280,11 @@ final class StrikeCollapse implements UnitQueue.Job {
 
         @Override
         public void end(ServerLevel level) {
+            announceShared(level);
             support.cancel();
             if (Incoming.LOG.isDebugEnabled()) {
-                Incoming.LOG.debug("Collapse at {}: removed {}, chunks {}, solved {}, fell {} (falling {}, landed at once {}), stayed {}, replans {}",
-                        BlockPos.containing(centre).toShortString(), support.removedCount(), support.chunks(), stats.solved, stats.dropped,
+                Incoming.LOG.debug("Collapse at {}: recorded removals with peers {}, chunks {}, solved {}, fell {} (falling {}, landed at once {}), stayed {}, replans {}",
+                        BlockPos.containing(centre).toShortString(), support.recordedRemovals(), support.chunks(), stats.solved, stats.dropped,
                         stats.live, stats.placed, stats.changed, stats.replans);
             }
             area.release(level);
@@ -297,10 +320,12 @@ final class StrikeCollapse implements UnitQueue.Job {
             if (result == null || result.at().length == 0) {
                 result = emptyResult();
                 prepared = true;
+                support.releaseCapture();
                 return;
             }
             stats.solved += result.solved();
-            holes = support.lostPositions().iterator();
+            holes = result.lostPositions().iterator();
+            if (sharedDust == null && !result.peerClaims().isEmpty()) sharedDust = new Dust();
         }
         LongSupplier watch = watch(level);
         long start = watch.getAsLong();
@@ -309,7 +334,7 @@ final class StrikeCollapse implements UnitQueue.Job {
             BlockPos at = BlockPos.of(holes.nextLong());
             if (Terrain.ready(level, at) && StrikeSupport.bearing(level.getBlockState(at))) {
                 // the solve decides again whether what it holds up still lacks support
-                replan(level, "a removed block is back at " + at.toShortString());
+                replan(level, refilled(at));
                 prepared = true;
                 return;
             }
@@ -323,40 +348,72 @@ final class StrikeCollapse implements UnitQueue.Job {
             StrikeRemovals.Source source = area.collapseSource();
             Explosion e = source != null ? source.explosion(level)
                     : after.getFirst().attributed(level, centre);
-            if (!allow(level, e, null, offered, end)) return;
+            BlockPos protectedBlock = protectedBearing(level, e, null, offered, end);
+            if (protectedBlock != null) {
+                Incoming.LOG.info("Collapse at {} kept standing: claim protection keeps load-bearing {}",
+                        BlockPos.containing(centre).toShortString(), protectedBlock.toShortString());
+                result = emptyResult();
+                prepared = true;
+                support.releaseCapture();
+                return;
+            }
             offered = end;
             if (offered < all.length || !result.peerClaims().isEmpty()) return;
         }
         if (peerWindow < result.peerClaims().size()) {
             StrikeSupport.PeerClaims peer = result.peerClaims().get(peerWindow);
             int end = Math.min(peer.indices().length, peerOffered + OFFER_UNIT);
-            if (!allow(level, peer.sources().get(peerSource).explosion(level), peer.indices(), peerOffered, end)) return;
-            peerOffered = end;
-            if (end < peer.indices().length) return;
+            StrikeRemovals.Source source = peer.sources().get(peerSource);
+            if (!support.excludedPeer(source)) {
+                Explosion e = source.explosion(level);
+                BlockPos protectedBlock = protectedBearing(level, e, peer.indices(), peerOffered, end);
+                if (protectedBlock == null && end < peer.indices().length) {
+                    peerOffered = end;
+                    return;
+                }
+                if (protectedBlock != null) {
+                    claimsChanged |= support.excludePeer(source);
+                    Incoming.LOG.info("Collapse at {} excludes peer at {}: claim protection keeps load-bearing {}",
+                            BlockPos.containing(centre).toShortString(), BlockPos.containing(e.center()).toShortString(),
+                            protectedBlock.toShortString());
+                }
+            }
             peerOffered = 0;
             if (++peerSource < peer.sources().size()) return;
             peerSource = 0;
             if (++peerWindow < result.peerClaims().size()) return;
         }
+        if (claimsChanged) {
+            claimsChanged = false;
+            offered = peerWindow = peerSource = peerOffered = 0;
+            kept = new LongOpenHashSet();
+            result = null;
+            support.retryClaims();
+            return;
+        }
         prepared = true;
-        if (result.peerClaims().isEmpty()) announce(level);
+        support.releaseCapture();
+        if (sharedDust == null) announce(level, result.base(), result.common(), result.mass());
     }
 
-    /** One dust and rumble packet for a plan that actually removes blocks. */
-    private void announce(ServerLevel level) {
-        if (sent) return;
-        sent = true;
-        Vec3 base = result.base();
+    private void announceShared(ServerLevel level) {
+        Dust dust = sharedDust;
+        if (dust == null || dust.blocks == 0) return;
+        announce(level, new Vec3(dust.x / dust.blocks, dust.bottom, dust.z / dust.blocks), dust.common, dust.blocks);
+        sharedDust = null;
+    }
+
+    private void announce(ServerLevel level, @Nullable Vec3 base, @Nullable BlockState common, int mass) {
         if (base != null) {
-            GroundMaterial m = result.common() == null ? null : GroundMaterial.of(result.common());
+            GroundMaterial m = common == null ? null : GroundMaterial.of(common);
             // dust from the fallen material: a block of wall or floor stands for StrikeSupport.MATERIAL m³ of real material
             PacketDistributor.sendToPlayersNear(level, null, base.x, base.y, base.z, IncomingConfig.SERVER.farRange.get(),
-                    new S2C.Collapse(base, (m == null ? GroundMaterial.BRICK : m).ordinal(), (float) (result.mass() * StrikeSupport.MATERIAL)));
+                    new S2C.Collapse(base, (m == null ? GroundMaterial.BRICK : m).ordinal(), (float) (mass * StrikeSupport.MATERIAL)));
         }
     }
 
-    /** Claim handlers may keep any candidate. A kept bearing block invalidates the whole support plan. */
-    private boolean allow(ServerLevel level, Explosion e, @Nullable int[] indices, int from, int end) {
+    /** Keep decorative blocks directly and return the first protected bearing block for a support-based retry. */
+    private @Nullable BlockPos protectedBearing(ServerLevel level, Explosion e, @Nullable int[] indices, int from, int end) {
         long[] all = result.at();
         List<BlockPos> list = e.getToBlow();
         for (int i = from; i < end; i++) list.add(BlockPos.of(all[indices == null ? i : indices[i]]));
@@ -367,16 +424,10 @@ final class StrikeCollapse implements UnitQueue.Job {
             int index = indices == null ? i : indices[i];
             long at = all[index];
             if (allowed.contains(at)) continue;
-            if (StrikeSupport.bearing(result.was()[index])) {
-                Incoming.LOG.info("Collapse at {} kept standing: claim protection keeps load-bearing {}",
-                        BlockPos.containing(centre).toShortString(), BlockPos.of(at).toShortString());
-                result = emptyResult();
-                prepared = true;
-                return false;
-            }
+            if (StrikeSupport.bearing(result.was()[index])) return BlockPos.of(at);
             kept.add(at);
         }
-        return true;
+        return null;
     }
 
     private static StrikeSupport.Result emptyResult() {
@@ -412,14 +463,19 @@ final class StrikeCollapse implements UnitQueue.Job {
      * the holes it took as lost: the plan no longer describes what holds {@code p}. Its chunk and neighbours are ready
      * ({@link #writable}).
      */
-    private boolean stale(ServerLevel level, BlockPos p, BlockPos.MutableBlockPos m) {
-        it.unimi.dsi.fastutil.longs.LongSet watch = result.watch(), lost = support.lostPositions();
+    private @Nullable String stale(ServerLevel level, BlockPos p, BlockPos.MutableBlockPos m) {
+        it.unimi.dsi.fastutil.longs.LongSet watch = result.watch(), lost = result.lostPositions();
         for (net.minecraft.core.Direction d : net.minecraft.core.Direction.values()) {
             m.setWithOffset(p, d);
             long q = m.asLong();
-            if ((watch.contains(q) || lost.contains(q)) && StrikeSupport.bearing(level.getBlockState(m))) return true;
+            if (!watch.contains(q) && !lost.contains(q) || !StrikeSupport.bearing(level.getBlockState(m))) continue;
+            return lost.contains(q) ? refilled(m) : "a support beside " + p.toShortString();
         }
-        return false;
+        return null;
+    }
+
+    private String refilled(BlockPos at) {
+        return (support.peerLoss(at.asLong()) ? "a peer removal refilled at " : "a removed block is back at ") + at.toShortString();
     }
 
     /** Sable reads block-entity shapes at the origin on a block change: the fall writes once that chunk is loaded. */
@@ -440,15 +496,16 @@ final class StrikeCollapse implements UnitQueue.Job {
             int i = next++;
             BlockPos p = BlockPos.of(at[i]);
             BlockState st = result.was()[i];
+            String stale;
             if (kept.contains(at[i]) || !writable(level, p.getX(), p.getZ(), safe) || level.getBlockState(p) != st
                     || modded(st) && !Terrain.readyAround(level, Vec3.atCenterOf(p), 16 * StrikeSupport.MODDED_REACH)) {
                 stats.changed++;
-            } else if (stale(level, p, m)) {
-                replan(level, "a support beside " + p.toShortString());
+            } else if ((stale = stale(level, p, m)) != null) {
+                replan(level, stale);
                 break;
             } else {
                 boolean item = remove(level, p, st, result.to()[i]);
-                announce(level);
+                if (sharedDust != null && StrikeSupport.bearing(st)) sharedDust.add(p, st);
                 droppedAt.add(at[i]);
                 droppedWas.add(st);
                 StrikeRemovals.Source source = area.collapseSource();
@@ -470,6 +527,7 @@ final class StrikeCollapse implements UnitQueue.Job {
             stats.portions++;
             stats.largestPortion = Math.max(stats.largestPortion, n);
         }
+        if (next >= result.at().length) announceShared(level);
         return n;
     }
 
