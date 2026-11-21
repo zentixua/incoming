@@ -217,6 +217,40 @@ float hgDisc(float g, float c, float mu0) {
 // Coarse-noise tile warp (tile fractions): tile repeats every tile blocks, visible as bands from above; smooth warp
 // up to one sixth of a tile over two tiles breaks repetition (more stretches billows into bands), preserving value
 // distribution (same noise elsewhere, mean billow shape remains 1)
+// presentation (Artem's approved animation): fibrous streaks along the radial flow on young dust — a density multiplier 1 ± 0.55
+// (0.45…1.55, mean 1: it never opens the layer) of a noise PALL_STREAK_ALONG long along the flow, PALL_STREAK_UP tall and
+// PALL_STREAK_ACROSS across it at 40 noise tiles from ground zero (widening outward like a fan; the angle enters through the
+// direction, so there is no seam). rel — from ground zero, up — above ground, blocks; tile — the slot's noise tile
+float pallStreak(vec2 rel, float up, float tile) {
+    float r = max(length(rel), 1e-3);
+    vec2 e = rel / r;
+    float k = 40.0 * tile / PALL_STREAK_ACROSS;
+    float n = texture(PallNoise, vec3(e.x * k + up / PALL_STREAK_UP, e.y * k, r / PALL_STREAK_ALONG) * 0.25).r;
+    return 1.0 + 1.1 * (n - 0.5);
+}
+
+// presentation (Artem's approved animation): wisps — in half of the PALL_WISP_CELL cells of the young layer the top stretches up in a
+// narrow plume (σ PALL_WISP_WIDTH) by up to PALL_WISP_RISE of itself, starting 0–8 s after the local phase ended (PallField.mixed:
+// 1 − e^(−age/PALL_MIX_S)), rising over 5 s and gone by PALL_WISP_END; a multiplier on the top (pallField's bumps), so the dust rises
+// into it from the layer itself. Hash by cell as fireSpot
+float pallWisp(mat4 S, vec3 p) {
+    vec2 q = p.xz - S[0].xy;
+    float mixed = texture(Sampler1, vec2(min(length(q) / S[0].w, 1.0), S[2].z)).a;
+    if (mixed <= 0.0) return 1.0;
+    float age = -PALL_MIX_S * log(max(1.0 - mixed, 1e-4));
+    if (age >= PALL_WISP_END) return 1.0;
+    vec2 cell = floor(q / PALL_WISP_CELL);
+    vec3 hp = fract(vec3(cell.xyx) * vec3(0.1031, 0.1030, 0.0973));
+    hp += dot(hp, hp.yzx + 33.33);
+    vec2 h = fract((hp.xx + hp.yz) * hp.zy);
+    if (h.x >= 0.5) return 1.0;
+    vec2 c = (cell + 0.25 + 0.5 * h) * PALL_WISP_CELL;
+    float d = length(q - c), tb = age - 8.0 * h.y;
+    if (tb <= 0.0) return 1.0;
+    float rise = PALL_WISP_RISE * (1.0 - exp(-tb / 5.0)) * (1.0 - smoothstep(0.5 * PALL_WISP_END, PALL_WISP_END, age));
+    return 1.0 + rise * exp(-0.5 * d * d / (PALL_WISP_WIDTH * PALL_WISP_WIDTH));
+}
+
 vec3 warpNoise(mat4 S, vec3 p) {
     vec3 q = vec3(p.x - S[0].x - S[1].x, 0.0, p.z - S[0].y - S[1].y) / S[3].y;
     return texture(PallNoise, q * 0.07 + vec3(0.31, 0.5, 0.67)).rgb - 0.5;
@@ -404,6 +438,8 @@ float wallAt(mat4 V, WallAt h, float fine, float dense) {
     float k0 = floor(clamp(k, 0.0, 3.0)), b = k >= 3.0 ? 0.0 : smoothstep(0.35, 0.65, max(k, 0.0) - k0), size = tile * exp2(-k0);
     float shape = b < 1.0 ? wallBillows(V, h, ph, size, fine, fill, vec3(0.618034, 0.414214, 0.732051)) : 0.0;
     if (b > 0.0) shape = mix(shape, wallBillows(V, h, ph, 0.5 * size, fine, fill, vec3(0.381966, 0.585786, 0.267949)), b);
+    // presentation: the head's streaks along the flow (pallStreak), while resolved
+    if (fine > 0.0) shape *= mix(1.0, pallStreak(h.rel, h.z, tile), fine);
     return h.P.w * m * mix(1.0, shape, resolved);
 }
 
@@ -523,7 +559,7 @@ void slot(mat4 S, mat4 V, sampler2D ground, vec4 R, vec4 W, vec4 G, vec4 H, vec3
     // layer floor is local terrain (PallGround map): valley pall is still a slab, fires/ground at its bottom, not epicenter
     // ground height; no map, epicenter ground
     float floorUp = pallRelief(ground, S, R, p.xz);
-    PallAt f = pallField(Sampler1, ground, S, R, W, p, floorUp, topBumps(S, p));
+    PallAt f = pallField(Sampler1, ground, S, R, W, p, floorUp, topBumps(S, p) * pallWisp(S, p));
     // Dust lifted out of the flat layer by inflow has the same material and billows. Its light is computed here too,
     // including self-shadowing: above the old top it does not become flat gray fill.
     if (inflow.w > 0.0 && length(inflow.xz - S[0].xy) < 1.0) {
@@ -600,6 +636,9 @@ void slot(mat4 S, mat4 V, sampler2D ground, vec4 R, vec4 W, vec4 G, vec4 H, vec3
     // young layer patches disperse as it mixes (pallMixed): old pall is an even blanket from above
     float raw = carpetCoarse(S, uvA, uvB, phaseBlend, fill), detail = fine > 0.0 ? carpetFine(uvA, uvB, phaseBlend) : 1.0;
     float coarse = pallMixed(raw, f.mixed), shape = pallMixed(raw * mix(1.0, detail, fine), f.mixed);
+    // presentation: streaks along the flow on the young layer (pallStreak), fading as it mixes and below the pixel footprint
+    float streaks = (0.35 + 0.65 * exp(-max(age - 1.0, 0.0) / 4.0)) * (1.0 - f.mixed) * (1.0 - smoothstep(0.5, 1.0, cone / PALL_STREAK_ACROSS));
+    if (streaks > 0.01) shape *= mix(1.0, pallStreak(vec2(p.x - S[0].x, p.z - S[0].y), p.y - S[0].z, tile), streaks);
     s.clumps = shape;
     float d = f.sigma.x * shape, h = f.sigma.y * mix(1.0, shape, 0.5), m = f.sigma.z * shape;
     // Local/neighbor billow shadow: depth toward key light relative to mean (clumpShade). Density is coarse × fine;

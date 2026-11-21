@@ -203,10 +203,10 @@ class BlastWallTest {
         assertEquals(0, BlastWall.top(0));
         // the hump at the front (not physical, BlastWall.hump) still stands a little above the law at the wedge end, gone by 1.2 wedges
         assertEquals(BlastWall.hump(1), BlastWall.top(1), 1e-12);
-        assertEquals(1, BlastWall.top(3), 1e-12);
+        assertEquals(BlastWall.hump(3), BlastWall.top(3), 1e-12);
         assertEquals(0, BlastWall.shape(0));
         assertEquals(1 / BlastWall.hump(1), BlastWall.shape(1), 1e-12);
-        assertEquals(1, BlastWall.shape(2), 1e-12);
+        assertEquals(1 / BlastWall.hump(2), BlastWall.shape(2), 1e-12);
         double peak = 0, at = 0;
         for (double u = 0.001; u <= 1; u += 0.001) {
             assertEquals(DustModel.lifted(u), BlastWall.shape(u) * BlastWall.top(u), 1e-9, "pole not raised, u = " + u);

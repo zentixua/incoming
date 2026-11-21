@@ -383,7 +383,8 @@ class PallGlslTest {
         assertTrue(f.contains("float topD = max(dust.g, 1.0) * bumps,"), "the bumps are not the top of the layer");
         assertTrue(f.contains("a.mixed = dust.a;"), "confusion - not from the table");
         String fx = read("include/fx_pall.glsl");
-        assertTrue(fx.contains("pallField(Sampler1, ground, S, R, W, p, floorUp, topBumps(S, p));"), "pall beam - without top bumps");
+        // the top bumps, and the wisps of young dust (presentation, pallWisp) on top of them
+        assertTrue(fx.contains("pallField(Sampler1, ground, S, R, W, p, floorUp, topBumps(S, p) * pallWisp(S, p));"), "pall beam - without top bumps");
         assertTrue(body(fx, "float topBumps(").contains("return 1.0 + PALL_BUMPS * (2.0 * n - 1.0);"), "tubercles - not 1 ± PALL_BUMPS");
     }
 

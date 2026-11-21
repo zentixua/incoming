@@ -606,6 +606,16 @@ float pallLitDepth(float tau, float gate) {
 // saturates (PALL_TURB_REACH noise tiles, est., about twice the physical path so it reads from afar); after the eddies die the pattern
 // keeps turning slowly (PALL_TURB_SLOW tiles/s, est.) until the layer has mixed (PALL_MIX_S). The noise is not stretched along the flow:
 // a stretched coordinate makes its gaps as long as its billows, and the layer opened into black voids; PALL_MIX_S is DustModel.RISE_S (PallField.mixed: 1 − e^(−age/60 s))
+// presentation (Artem's approved animation; fx_pall: pallWisp): wisp cells, plume width (σ), the top's rise share (copy
+// PallField.WISP_RISE: the pall's bounds), lifetime after the local phase ended, blocks and seconds
+const float PALL_WISP_CELL = 60.0;
+const float PALL_WISP_WIDTH = 8.0;
+const float PALL_WISP_RISE = 0.6;
+const float PALL_WISP_END = 14.0;
+// presentation (Artem's approved animation: streaks 28 m along the flow, 5 m tall, 4.5 m across; fx_pall: pallStreak)
+const float PALL_STREAK_ALONG = 28.0;
+const float PALL_STREAK_UP = 5.0;
+const float PALL_STREAK_ACROSS = 4.5;
 const float PALL_TURB_S = 8.0;
 const float PALL_TURB_REACH = 1.2;
 const float PALL_TURB_SLOW = 0.015;
@@ -686,10 +696,13 @@ float pallLifted(float s) {
 }
 
 // Top of the wedge by the share u of its length behind the edge, share of the top at the end (BlastWall.top): u^(5/6), behind the wedge — all
-// not physical (BlastWall.HUMP, hump): a low hump along the front, column unchanged (pallWallShape divides by it)
+// not physical (BlastWall.HUMP, CORE_SINK, hump): a low hump along the front, then the heavy core settles; column unchanged
+// (pallWallShape divides by it)
 const float PALL_WALL_HUMP = 0.38;
+const float PALL_CORE_SINK = 0.5;
 float pallWallHump(float u) {
-    return 1.0 + PALL_WALL_HUMP * smoothstep(0.0, 0.3, u) * (1.0 - smoothstep(0.3, 1.2, u));
+    return (1.0 + PALL_WALL_HUMP * smoothstep(0.0, 0.3, u) * (1.0 - smoothstep(0.3, 1.2, u)))
+            * (1.0 - PALL_CORE_SINK * smoothstep(0.5, 3.0, u) * (1.0 - smoothstep(10.0, 40.0, u)));
 }
 float pallWallTop(float u) {
     return pow(clamp(u, 0.0, 1.0), 0.8333333) * pallWallHump(u);

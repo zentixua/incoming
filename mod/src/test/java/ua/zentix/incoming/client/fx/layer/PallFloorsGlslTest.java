@@ -63,4 +63,12 @@ class PallFloorsGlslTest {
         assertEquals(total, reach.call(Map.of("age", 120.0)), 1e-6, "still once the layer has mixed");
         assertEquals(0, reach.call(Map.of("age", 0.0)), 1e-9);
     }
+
+    /** The pall's bounds make room for the wisps: the shader's rise share is the Java copy NukePall's bounds use. */
+    @Test
+    void wispRiseIsTheBoundsCopy() {
+        java.util.regex.Matcher m = java.util.regex.Pattern.compile("const float PALL_WISP_RISE = ([0-9.]+);").matcher(read());
+        assertTrue(m.find());
+        assertEquals(ua.zentix.incoming.client.nuclear.PallField.WISP_RISE, Double.parseDouble(m.group(1)), 1e-9);
+    }
 }

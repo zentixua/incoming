@@ -467,15 +467,20 @@ public final class BlastWall {
     // ---------------------------------------------------------------- wedge laws (shared with shader: pallWall* in pall.glsl)
 
     /**
-     * not physical (Artem 21.11, guide deviation list): a low hump runs along the front — the head's top stands up to this share above the
-     * law's top near a third of the wedge behind the front and sinks back to it by 1.2 wedges ({@link #hump}); the column is unchanged
-     * ({@link #shape} is divided by the same factor). The approved animation: +38 %, sinking from ~0.75 s after the front.
+     * not physical (Artem's approved animation 21.11, guide deviation list): a low hump runs along the front — the dust's top stands up to
+     * {@code HUMP} above the law's near a third of the local positive phase behind the front and sinks back by 1.2 phases — and then the
+     * heavy core settles: the top sinks to {@code 1 − CORE_SINK} of the law's from half a phase to three phases, coming back up as the
+     * layer mixes (10–40 phases). The column is unchanged ({@link #shape} and the pall's dust row divide by the same factor), so every
+     * reader keeps the law's matter. The animation: +38 % sinking from ~0.75 s, the core to half by ~4.5 s.
      */
-    static final double HUMP = 0.38;
+    static final double HUMP = 0.38, CORE_SINK = 0.5;
 
-    /** The hump's factor on the head's top at wedge fraction u: 1 + {@link #HUMP} rising over 0–0.3, sinking over 0.3–1.2. Copy {@code pallWallHump}. */
-    static double hump(double u) {
-        return 1 + HUMP * smooth(0, 0.3, u) * (1 - smooth(0.3, 1.2, u));
+    /**
+     * The presentation factor on the dust's top at phase share v since the front (wedge fraction u for the head, age over the local positive
+     * phase for the pall, {@code PallField}): the hump times the core's settle. Copy {@code pallWallHump}.
+     */
+    public static double hump(double v) {
+        return (1 + HUMP * smooth(0, 0.3, v) * (1 - smooth(0.3, 1.2, v))) * (1 - CORE_SINK * smooth(0.5, 3, v) * (1 - smooth(10, 40, v)));
     }
 
     /**
@@ -595,7 +600,7 @@ public final class BlastWall {
         return sum * h / 3;
     }
 
-    static double smooth(double e0, double e1, double x) {
+    public static double smooth(double e0, double e1, double x) {
         double f = Mth.clamp((x - e0) / (e1 - e0), 0, 1);
         return f * f * (3 - 2 * f);
     }

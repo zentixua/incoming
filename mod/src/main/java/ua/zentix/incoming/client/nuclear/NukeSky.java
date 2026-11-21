@@ -58,14 +58,16 @@ public final class NukeSky {
     private static final float[] AMBER = {1f, (float) Math.pow(0.6, 2.2), (float) Math.pow(0.3, 2.2)};
 
     /**
-     * Diffuse sky light on airborne matter while a fireball lights the air: its linear tint (luma 1) and its share, the share by which
-     * the fog and sky turn amber ({@link #fogColor}, half of {@link #amber}); no detonation — share 0.
+     * Diffuse sky light on airborne matter while a fireball lights the air: its linear tint (luma 1) and its share; no detonation — share 0.
+     * presentation (the reference's warm ochre dust, Silo S3E09): the share is up to four times the fog's ({@link #fogColor}: half of
+     * {@link #amber}), so the dust takes the glowing sky's hue as the reference does (wall saturation 0.30 → 0.36–0.43, Silo 0.54);
+     * the light's brightness is unchanged, only its tint.
      */
     public static float[] amberTint(Vec3 cam, float partial) {
         float amber = 0;
         for (ClientNuclear.Active a : ClientNuclear.detonations()) amber = Math.max(amber, amber(a, cam, partial));
         float luma = 0.2126f * AMBER[0] + 0.7152f * AMBER[1] + 0.0722f * AMBER[2];
-        return new float[] {AMBER[0] / luma, AMBER[1] / luma, AMBER[2] / luma, 0.5f * amber};
+        return new float[] {AMBER[0] / luma, AMBER[1] / luma, AMBER[2] / luma, Math.min(1f, 2f * amber)};
     }
 
     public static void fogColor(ViewportEvent.ComputeFogColor e) {

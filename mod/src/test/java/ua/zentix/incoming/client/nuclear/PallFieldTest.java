@@ -54,7 +54,8 @@ class PallFieldTest {
                 if (ball) inBall++;
                 double depth = ball ? 0 : c.depth(age) * (1 - BlastWall.handoff(age / positive));
                 assertEquals(c.depth(age) < PallField.GONE_DEPTH ? 0 : depth, v[0] * PallField.column(0) * v[1], 1e-6 * depth + 1e-12, i + ", " + age + " s");
-                assertEquals(Math.max(PallField.MIN_TOP_BLOCKS, quarter.blocks(c.height(age))), v[1], 1e-9);
+                // the law's top shaped by the hump and the heavy core's settle (not physical, BlastWall.hump)
+                assertEquals(Math.max(PallField.MIN_TOP_BLOCKS, quarter.blocks(c.height(age)) * BlastWall.hump(age / positive)), v[1], 1e-9);
             }
             p.dust(i, arrival + 20 * quarter.scale() * 0.9 * positive, v);
             assertEquals(0, v[0], "dust younger than the wave phase - in the head of the wall");
@@ -155,13 +156,16 @@ class PallFieldTest {
                 false, 1f, Detonation.NO_DAY_TIME, false));
         double[] v = new double[4];
         int i = (int) (1000 / p.reach() * PallField.BINS);
-        double arrival = arrival(p, i), prev = 0;
+        double arrival = arrival(p, i), prev = 0, positive = p.layer(i).positive();
+        // the law's top (the hump and the core's settle, BlastWall.hump, are presentation on top of it)
         for (double age = 1.5; age <= 1800; age += 0.5) {
             p.dust(i, arrival + 20 * age, v);
-            assertTrue(v[1] >= prev - 1e-9, age + " s: the top of the dust has dropped");
-            prev = v[1];
+            double law = v[1] / BlastWall.hump(age / positive);
+            assertTrue(law >= prev - 1e-9, age + " s: the top of the dust has dropped");
+            prev = law;
         }
         p.dust(i, arrival + 20 * 5, v);
+        v[1] /= BlastWall.hump(5 / positive);
         assertTrue(v[1] > 60 && v[1] < 150, "to 1 km after 5 s top " + v[1]);
         p.dust(i, arrival + 20 * 600, v);
         assertTrue(v[1] > 120 && v[1] < 350, "in 1 km in 10 minutes top " + v[1]);
@@ -480,7 +484,8 @@ class PallFieldTest {
             p.dust(i, arrival + 20 * age, dust);
             p.spray(i, arrival + 20 * age, spray);
             assertEquals(Math.max(1, PallField.sprayTop(Math.max(1, GROUND.blocks(WaterModel.sprayHeight(wind))), age)), spray[1], 1e-9);
-            assertTrue(spray[1] < dust[1], age + " s: splashes " + spray[1] + " no less than dust " + dust[1]);
+            double law = dust[1] / BlastWall.hump(age / p.layer(i).positive());
+            assertTrue(spray[1] < law, age + " s: splashes " + spray[1] + " no less than dust " + law);
         }
     }
 

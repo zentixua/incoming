@@ -357,6 +357,9 @@ public final class PallField {
         return (ticks - arrival[i]) / (20.0 * d.scale());
     }
 
+    /** presentation: wisps stretch the young layer's top by up to this share of itself (copy {@code PALL_WISP_RISE}): the pall's bounds. */
+    public static final double WISP_RISE = 0.6;
+
     /** Table rows per detonation: dust, spray, haze, in order. */
     public static final int ROWS = 3;
     static final int DUST_ROW = 0, SPRAY_ROW = 1, HAZE_ROW = 2;
@@ -405,7 +408,8 @@ public final class PallField {
      */
     void dust(int i, double ticks, double[] out) {
         double age = seconds(i, ticks), depth = columns[i].depth(age);
-        out[1] = Math.max(d.blocks(columns[i].height(age)), MIN_TOP_BLOCKS);
+        // not physical (BlastWall.hump): the hump and the heavy core's settle shape the top; the column stays the law's
+        out[1] = Math.max(d.blocks(columns[i].height(age)) * BlastWall.hump(age / columns[i].positive()), MIN_TOP_BLOCKS);
         // profile column is column(0) of top: vertical optical depth exactly matches the layer, even at minimum top
         out[0] = depth < GONE_DEPTH ? 0 : depth / (column(0) * out[1]) * pallShare(i, ticks);
         out[2] = fire[i] * FireStorm.growth(clockSeconds(ticks));
