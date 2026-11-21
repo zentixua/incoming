@@ -199,8 +199,20 @@ public final class WallPuffs implements SmokeGrid.Source {
         drawn++;
     }
 
+    /** Scenario line: front ground radius, eye ground distance and its age, hand-over layer top/depth there, billows drawn. */
     String describe() {
-        return "wall puffs " + drawn;
+        double t = a.ticks(0);
+        double ex = SmokeGrid.eyeX() - a.d.burst().x, ez = SmokeGrid.eyeZ() - a.d.burst().z, r = Math.hypot(ex, ez);
+        double age = (t - a.d.arrivalTicks(Math.hypot(r, a.d.blocks(Math.max(0, a.d.hobMetres()))))) / 20;
+        layer(r, lay);
+        return String.format(java.util.Locale.ROOT, "wall puffs: front %.0f inner %.0f, eye r %.0f age %.2f s, layer top %.1f tau %.1f, drawn %d",
+                front(t), front(t - 20 * YOUNG_S), r, age, lay[0], lay[1], drawn);
+    }
+
+    static String describeAll() {
+        StringBuilder b = new StringBuilder();
+        for (WallPuffs w : WALLS.values()) b.append(w.describe()).append(' ');
+        return b.isEmpty() ? "wall puffs: none" : b.toString().trim();
     }
 
     @Override

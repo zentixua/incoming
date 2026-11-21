@@ -75,6 +75,8 @@ public final class NukePall {
     private static volatile float sigma, mist, muffle;
     /** Vertical dust optical depth at camera, above and below down to ground (pall and wall head): ray reach ({@link #frame}). */
     private static volatile float tauUp, tauDown;
+    /** Eye medium the pall pass draws (probe B: without the young head, which {@link WallPuffs} draws). */
+    private static volatile float drawnSigma, drawnUp, drawnDown;
     private static volatile double earX, earY, earZ;
 
     private NukePall() {}
@@ -103,12 +105,12 @@ public final class NukePall {
         FireStorms.tick(all);
         if (all.isEmpty()) {
             unmuffle();
-            sigma = mist = tauUp = tauDown = 0;
+            sigma = mist = tauUp = tauDown = drawnSigma = drawnUp = drawnDown = 0;
             NukeAsh.tick(level, cam, 0, 0, null);
             return;
         }
         PallPass.prepare();
-        double s = 0, wet = 0, densest = 0, dust = 0, headMax = 0, headWet = 0, up = 0, down = 0;
+        double s = 0, wet = 0, densest = 0, dust = 0, headMax = 0, headWet = 0, up = 0, down = 0, headSigma = 0, headUp = 0, headDown = 0;
         // ash and wind from the detonation with densest camera pall; screen veil from the densest wall head
         ClientNuclear.Active nearest = null, headAt = null;
         for (ClientNuclear.Active a : all) {
@@ -125,6 +127,12 @@ public final class NukePall {
                 head = BlastWall.sigma(WALL_TICK, dx, dz, eye - floor, wetHere, hard);
                 up += BlastWall.tau(WALL_TICK, dx, dz, eye - floor, Double.POSITIVE_INFINITY, wetHere, hard);
                 down += BlastWall.tau(WALL_TICK, dx, dz, 0, eye - floor, wetHere, hard);
+                // probe B: the young wall at the eye is WallPuffs' billows (their veil); the head stays only for sound
+                if (WallPuffs.ON) {
+                    headSigma += head;
+                    headUp += BlastWall.tau(WALL_TICK, dx, dz, eye - floor, Double.POSITIVE_INFINITY, wetHere, hard);
+                    headDown += BlastWall.tau(WALL_TICK, dx, dz, 0, eye - floor, wetHere, hard);
+                }
                 if (head > headMax) {
                     headMax = head;
                     headWet = wetHere;
@@ -158,6 +166,9 @@ public final class NukePall {
         mist = (float) wet;
         tauUp = (float) up;
         tauDown = (float) down;
+        drawnSigma = (float) Math.max(0, s - headSigma * open);
+        drawnUp = (float) Math.max(0, up - headUp);
+        drawnDown = (float) Math.max(0, down - headDown);
         if (headAt != null && !drawsHead(headAt, cam)) NukeDust.veil(headAt, cam, headMax, headWet > 0.5);
         if (muffles()) {
             // muffling changes smoothly: pall covers over seconds
@@ -192,7 +203,7 @@ public final class NukePall {
 
     static void reset() {
         unmuffle();
-        sigma = mist = tauUp = tauDown = 0;
+        sigma = mist = tauUp = tauDown = drawnSigma = drawnUp = drawnDown = 0;
         PallPass.reset();
         NukeAsh.reset();
     }
@@ -281,7 +292,7 @@ public final class NukePall {
         // does not hide the mushroom behind it
         if (q == PallPass.Quality.OFF) f.eyeDust.zero();
         else if (ua.zentix.incoming.client.fx.layer.FxViews.secondary()) eyeDust(level, eye, partial, f.eyeDust);
-        else f.eyeDust.set(sigma, tauUp, tauDown);
+        else f.eyeDust.set(drawnSigma, drawnUp, drawnDown);
         return f;
     }
 
@@ -830,9 +841,9 @@ public final class NukePall {
                 SKY.sun[0], SKY.sun[1], SKY.sun[2], cap);
         return String.format(java.util.Locale.ROOT, "sigma at camera %.4f /block (visibility %.0f blocks; mist %.4f), depth up %.2f down %.2f, muffle %.2f, ash %d, quality %s, "
                         + "light: %s, fires %.2f × %.2f, ball r %.0f blocks, black body %.3g %.3g %.3g, under the pall: %s, surge r %.0f top %.0f sigma %.4f, "
-                        + "frames: %s; mushrooms %d (exposure %.6g); firestorm: %s; nuclear camera: %s",
+                        + "frames: %s; mushrooms %d (exposure %.6g); firestorm: %s; nuclear camera: %s; %s",
                 sigma, sigma > 1e-5f ? 3.912 / sigma : Double.POSITIVE_INFINITY, mist, tauUp, tauDown, muffle, NukeAsh.alive(), quality(),
                 sun, f.glowOnSmoke, f.glow0.y, f.glow0.x, f.hot0.x, f.hot0.y, f.hot0.z, under, f.water0.x, f.water0.y, f.water0.z,
-                mc.level == null ? "-" : PallPass.describe(), f.mushroomCount, f.exposure, FireStorms.describe(), NukeLight.describe());
+                mc.level == null ? "-" : PallPass.describe(), f.mushroomCount, f.exposure, FireStorms.describe(), NukeLight.describe(), WallPuffs.describeAll());
     }
 }
