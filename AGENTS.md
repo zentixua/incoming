@@ -132,8 +132,7 @@ defense, `launcher/`, `grid/` blackout, `sound/`, `client/`, `work/` tick budget
   and damage follow real specs/laws. Each number from `WeaponSpec` or law with nearby source; missing-data values
   marked `(est.)`, approximate laws identified.
 - **Judging the look:** sandbox frame beside the same `main` frame and the reference footage; the player's eye
-  decides, numbers inform. Before/after frames go to Artem. Prefer community particle/effect libraries,
-  post-effects, shaderpacks; custom only where none exists.
+  decides, numbers inform. Before/after frames go to Artem.
 - **Picture first, then performance** (Artem, 25.10, 04.11, 08.11): optimization never visibly hurts the picture;
   quality presets let players fit their PC. Each effect has a frame-cost limit held at any strike count; redesign
   effects that cannot perform well without hacks, discard costly, barely visible detail. Optimize what is noticeably
@@ -142,8 +141,10 @@ defense, `launcher/`, `grid/` blackout, `sound/`, `client/`, `work/` tick budget
 - **Flight/air defense use our own game model** (Artem, 21.10): plausible/serious, not 1:1 real flight specs, guidance,
   radar or damage models. Shared class laws (inertia/bank, altitude-speed trade, gravity/drag/wind for unpowered,
   `guidance/`); game numbers in `WeaponSpec.Handling`, `Ballistic`, marked “not physical”.
-- **Fix causes, not outcomes.** Correct the producing model, not its output; one law per class; weapon-specific
-  numbers in spec, not constants or weapon `switch`.
+- **Fix causes, not outcomes; never glue** (Artem, 21.11). Correct the producing model, not its output; one law per
+  class; weapon-specific numbers in spec, not constants or weapon `switch`. One phenomenon on screen = one model: where
+  a real law and the wanted look disagree, build one presentation model for the look with physics only as its visible
+  inputs (where, when, how much, wind), never a law plus look corrections on its result. Review: glue is serious.
 - **Configure causes, not consequences.** Player sets conditions, world computes consequences. Four setting kinds:
   world rules (phenomena, permissions, salvos, flight time, real-product choices: nuclear yield 1–15 kt, burst height);
   map time/distance scale (`GAME` default, `REAL`, `CUSTOM`); performance (one work budget/tick, quality); convenience.
@@ -151,11 +152,11 @@ defense, `launcher/`, `grid/` blackout, `sound/`, `client/`, `work/` tick budget
   setting signals: named after a consequence (“blast power ×”, “kill probability”, “radar range”) or a multiplier
   without physical meaning.
 - **Minecraft scale.** Block = meter, so dimensions/everything at target (charge, fragments, crater, penetration,
-  damage) stay real under every setting. Short visibility/play range (hundreds of blocks) lets real-speed fast
-  weapons cross rendering in fractions of a second. Approach speed is game property, not product: two spec numbers
+  damage) stay real under every setting. Real-speed fast weapons cross the short render range (hundreds of
+  blocks) in fractions of a second. Approach speed is game property, not product: two spec numbers
   per weapon (game `WeaponSpec.Airframe`, real sourced `Article.Envelope`), one world `scale.flight_speed`
   (`strike/FlightScale`, details in `strike.md`). Never derive game speed from render distance: each player's
-  differs, server flight is shared. Default distant nuclear wave also game speed, 0.35 sound speed.
+  differs, server flight is shared.
   `scale_preset`: `GAME` default flight 0/wave 0.35, `REAL` real life, `CUSTOM` uses `flight_speed`,
   `nuclear.wave_speed`, `nuclear.effects_scale` as set.
 - **Time** (Artem, 10.11): no modes. What players watch move (flight, flash, wave, mushroom, the first 20 minutes of
@@ -205,11 +206,10 @@ queues, little rework; each mission's budget is checked against its measured loa
 - **One owner per task:** the owner implements, validates, handles review and merges; overlapping edits are
   coordinated; unfinished work is handed over with branch/PR, checked commit, measurements, risks and next action.
   The owner chooses the implementation and records a substantial decision (context, alternatives, choice,
-  consequences) in the PR or a design document; disagreements are settled with code, tests or measurements. A
-  concrete correctness, data-loss or budget defect blocks; preference alone does not.
+  consequences) in the PR or a design document; disagreements are settled with code, tests or measurements.
 - **Ready-made first** (Artem, 22.10): search mods/addons/libraries/tools before custom code (Modrinth, CurseForge,
   GitHub; Fabric via Roxy/Sinytra Connector) and the mod's own systems (a new renderer only with a frame or measurement
-  showing the existing one fails). Custom only if no ready-made solution, reason in one PR line. Our ban
+  showing the existing one fails). Custom code: the reason in one PR line. Our ban
   on vanilla/other-mod mixins concerns our code, not an argument against other mods. A new mod or library that
   clearly helps is welcome: try briefly, tell Artem what it gives and costs; a new required pack mod needs his word.
 - **License** (Artem, 22.10): Incoming is GPL-3.0-only; copy code only under compatible licenses (GPL-3.0, MIT, CC0),
