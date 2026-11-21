@@ -223,8 +223,10 @@ public final class WallPuffs implements SmokeGrid.Source {
                     dustR, dustG, dustB, CloudModel.T_AIR_K, 0);
         } else {
             // far cells are wider than the wall is tall: a roll of wall-height billows along the front, not one flattened lump
-            double sg = 0.4 * ROUND * topH * size, half = Math.max(0, 0.5 * cell * (0.6 + 0.8 * k1) - sg);
-            out.segment(x + 0.5 * lean * ux, y + Math.max(sg, 0.5 * topH), z + 0.5 * lean * uz, -uz * half, 0, ux * half, sg, sg, 0, mass, 0,
+            // a freshly torn-up sheet is lower than wide: flat billows at least a quarter cell across (thin round ones strung along
+            // the roll read as beads)
+            double sv = 0.4 * ROUND * topH * size, sg = Math.max(sv, 0.3 * cell * size), half = Math.max(0, 0.5 * cell * (0.6 + 0.8 * k1) - sg);
+            out.segment(x + 0.5 * lean * ux, y + Math.max(sv, 0.5 * topH), z + 0.5 * lean * uz, -uz * half, 0, ux * half, sg, sv, 0, mass, 0,
                     dustR, dustG, dustB, CloudModel.T_AIR_K, 0);
         }
         drawn++;
