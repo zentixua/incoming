@@ -239,9 +239,9 @@ loaded: it reads the saved height of each place, and for land nobody has explore
 knows the ground but not trees or buildings. Chunks still saved in the pre-1.18 format stay unknown to it until they load. A heightmap already
 converted to the current format remains usable even if the chunk still needs terrain below zero. It flies over a hill on its way and dives behind it. It does not look for a
 way around through valleys: the route is yours to set. If a hill, the rim of a pit or a building hides the target, the
-missile climbs until it can see it and then dives. It cannot get past a building that hides the target at a steep angle right next to it (for
-example, 40 blocks taller than the target and 20 blocks from it), and it cannot reach a target under a roof: use
-the bomb there.
+missile climbs until the path opens or it needs to commit to the dive. A steep obstacle right next to the target
+(for example, a building 40 blocks taller than the target and 20 blocks away) can take the hit. A roof or wall can
+take the hit when the aim point is inside a closed building. Use the bomb to reach a target beneath a roof.
 
 ## Grad
 
