@@ -22,11 +22,12 @@ import java.util.List;
  * run 19.11.2026). A whole chunk costs the client about 0.55 ms (decode, light from the packet, Voxy and Sodium once
  * per chunk; same run, world load).
  * <p>
+ * A whole chunk waits for light because a packet built on the write tick could show new blocks in old light.
  * Consecutive ruin writes share one pending send, fenced by the light checks of the latest write. The fence completes
  * on the light thread and the send runs on the chunk cache's main-thread queue, after the section light marks queued
  * there. An earlier fence could send newer blocks in older light. While a delivery waits, vanilla's light broadcast
- * for that chunk is held for up to {@link #HOLD_LIMIT} ticks ({@link #onLevelTickPre}), since its light is computed
- * over the new blocks and would light the old ones on the client.
+ * for that chunk is held for up to {@link #HOLD_LIMIT} ticks per hold ({@link #onLevelTickPre}). Light from the
+ * chunk's new blocks or from a ruined neighbour could otherwise reach the client's old blocks.
  */
 public final class RuinDelivery {
     /** Client render-thread cost of one whole chunk from the server, ns (host pack, wave-hitch run 19.11.2026). */
@@ -52,6 +53,7 @@ public final class RuinDelivery {
     static final class PendingWhole {
         private final LevelChunk chunk;
         private final long firstWrite;
+        private long holdSince;
         private long revision;
         private long positions;
         private boolean holding = true;
@@ -59,6 +61,14 @@ public final class RuinDelivery {
         private PendingWhole(LevelChunk chunk, long firstWrite) {
             this.chunk = chunk;
             this.firstWrite = firstWrite;
+            this.holdSince = firstWrite;
+        }
+
+        private void expireHold(long now) {
+            if (holding && now - holdSince >= HOLD_LIMIT) {
+                holding = false;
+                expired++;
+            }
         }
     }
 
@@ -96,9 +106,15 @@ public final class RuinDelivery {
         long key = pos.toLong();
         NuclearWorld world = NuclearWorld.get(level);
         PendingWhole pending = world.wholeWaiting.get(key);
+        long written = level.getGameTime();
         if (pending == null || pending.chunk != chunk) {
-            pending = new PendingWhole(chunk, level.getGameTime());
+            pending = new PendingWhole(chunk, written);
             world.wholeWaiting.put(key, pending);
+        }
+        pending.expireHold(written);
+        if (!pending.holding) {
+            pending.holdSince = written;
+            pending.holding = true;
         }
         pending.positions += positions;
         long revision = ++world.wholeRevision;
@@ -145,12 +161,9 @@ public final class RuinDelivery {
             var en = it.next();
             PendingWhole pending = en.getValue();
             long key = en.getLongKey();
-            if (now - pending.firstWrite >= HOLD_LIMIT) {
+            pending.expireHold(now);
+            if (!pending.holding) {
                 // The latest fence can still deliver the blocks after the vanilla light broadcast resumes.
-                if (pending.holding) {
-                    pending.holding = false;
-                    expired++;
-                }
                 if (level.getChunkSource().getChunkNow(ChunkPos.getX(key), ChunkPos.getZ(key)) != pending.chunk) {
                     it.remove();
                     gone++;

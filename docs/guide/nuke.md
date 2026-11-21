@@ -156,8 +156,6 @@ Burns, radiation and falling debris can still hurt you after the flash, so stay 
 
 ![A dust wave approaches beneath the mushroom cloud at dusk](../media/blast-wave-dusk-hq.jpg)
 
-Heavily damaged terrain appears with lighting that matches its new blocks, including when several waves reach it in quick succession.
-
 Distant Horizons and Voxy can show ruins without you visiting them. ICBM strikes prepare the hardest-hit area during
 flight; other nuclear carriers can take longer to update the distant view. Broken windows and fallen trees farther
 out appear when you approach. In Voxy, players who missed the strike also need to approach to see its distant ruins.

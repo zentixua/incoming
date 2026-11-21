@@ -122,9 +122,9 @@ paths:
   tick unless a whole-chunk delivery is pending. Further writes join that delivery, and only the light fence for the
   latest write revision can build the packet (on the chunk cache's main-thread queue, like `BlockLighting`). While it
   waits, vanilla's light broadcast for that chunk is held (`RuinDelivery.onLevelTickPre` clears its holder's light bits,
-  AT; at most `HOLD_LIMIT` ticks from the first write): computed over the new blocks, it would light the old ones
-  (plus up to 24 removed positions with their blocks as client debris, `ScarQueue.thrown`, `RuinPlan.thrown`, to
-  players already holding the chunk); Distant Horizons LODs:
+  AT; each hold lasts up to `HOLD_LIMIT` ticks, and a write after expiry starts a new hold). Light from new blocks
+  or a ruined neighbour would otherwise reach the client's old blocks. Those viewers also get up to 24 removed
+  blocks as client debris (`ScarQueue.thrown`, `RuinPlan.thrown`); Distant Horizons LODs:
   `compat/DhChunks` (`overwriteChunkDataAsync`); block entities and POIs go through the world after replacement;
   mismatching old-state hash at plan positions means replan; lamp and blackout twin hash identically), `NuclearPrep`
   (prebuilt ruins during ICBM flight: in-memory chunks in ruin radius (plus chunks loaded during flight, every 40 ticks)
@@ -438,7 +438,7 @@ paths:
   same ruins through deltas, both client chunks equal the server's; `lightWaitsForTheWholeChunk`: light thread held,
   a light mark on the waiting chunk reaches the client without the hold). `firstFenceCannotSendSecondWritesWithUnprocessedLight`
   holds the second write's light, requiring one packet with both sources at light 15.
-  `smallWriteJoinsWholeWithoutRenewingLightHold` also checks the 200-tick deadline. Measuring stalls: `jstack -l` and
+  `lightHoldExpiresBeforeALaterWriteRestartsIt` checks the 200-tick deadline and restart. Measuring stalls: `jstack -l` and
   `ThreadMXBean.dumpAllThreads(true, true)` walk the heap at a safepoint, 115–250 ms each on the full-pack client:
   probes every 0.5 s turned a 4 s stall into 13 s; subtract `-Xlog:safepoint` ThreadDump/PrintThreads time.
 - `ChunkMap.getPlayers(pos, false)` (`isChunkTracked`) excludes players whose chunk is still queued for sending;

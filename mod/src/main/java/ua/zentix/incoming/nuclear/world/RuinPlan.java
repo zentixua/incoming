@@ -58,11 +58,12 @@ import java.util.List;
  * sections in place (like {@code setBlock}; never replace by reading into section, see pitfalls); column heightmaps and
  * sky sources from plan (different live “before” value means column changed since plan: rescan entire chunk),
  * section emptiness to light engine; light checks (highest changed column point, new/removed blocks beneath
- * surviving top, new/removed light sources) in one light-engine task. Chunk viewers
- * receive same-tick section packets ({@code ChunkHolder.blockChanged}, like {@code setBlock}); Distant Horizons
- * LODs queued same tick ({@link DhUpdates}). Block entities/POIs not changed this way: world
- * changes them afterward ({@link ColumnScar#replace}: {@code onRemove} and consequences, no inventory drops, deferred
- * data removed). Queue places trunks in neighboring chunks after their ruins. Fires applied with
+ * surviving top, new/removed light sources) in one light-engine task. Chunk viewers receive same-tick section
+ * packets for small writes ({@code ChunkHolder.blockChanged}, like {@code setBlock}), or a whole chunk after the
+ * latest write's light checks when a whole delivery is pending ({@link RuinDelivery}). Distant Horizons LODs are
+ * queued in the same tick ({@link DhUpdates}). Block entities/POIs change through the world afterward
+ * ({@link ColumnScar#replace}: {@code onRemove} and consequences, no inventory drops, deferred data removed).
+ * Queue places trunks in neighboring chunks after their ruins. Fires applied with
  * ruins (without {@code setBlock}: wall/tree fire does not wake neighbors), only fire tick scheduled.
  */
 public final class RuinPlan {

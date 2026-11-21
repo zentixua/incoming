@@ -52,7 +52,7 @@ public final class RuinDeliveryRevisionGameTests {
     }
 
     @GameTest(template = "range", batch = "nuke_delivery_revision_expiry", timeoutTicks = 350, skyAccess = true)
-    public static void smallWriteJoinsWholeWithoutRenewingLightHold(GameTestHelper h) {
+    public static void lightHoldExpiresBeforeALaterWriteRestartsIt(GameTestHelper h) {
         overlappingWrites(h, true);
     }
 
@@ -63,10 +63,11 @@ public final class RuinDeliveryRevisionGameTests {
         var engine = cache.getLightEngine();
         LevelChunk chunk = level.getChunkAt(h.absolutePos(new BlockPos(32, 30, 32)));
         var pos = chunk.getPos();
-        // Separate the two sources by more than block light's maximum range.
+        // Keep each source outside the others' block light.
         int y = h.absolutePos(new BlockPos(0, 30, 0)).getY();
         BlockPos first = pos.getBlockAt(0, y, 0);
         BlockPos second = pos.getBlockAt(15, y, 15);
+        BlockPos third = pos.getBlockAt(0, y + 2, 15);
         ChunkHolder holder = cache.chunkMap.getVisibleChunkIfPresent(pos.toLong());
         h.assertTrue(holder != null && holder.getTickingChunk() == chunk, "fixture chunk must be ticking");
         List<ClientboundLevelChunkWithLightPacket> packets = watch(h, holder);
@@ -114,12 +115,18 @@ public final class RuinDeliveryRevisionGameTests {
                             "waiting for the original light hold deadline");
                 })
                 .thenExecute(() -> {
-                    if (smallWrite) assertHold(h, holder, y, true);
+                    if (smallWrite) assertHold(h, holder, y, true, "tick 199 from the first write");
                 })
                 .thenExecuteAfter(1, () -> {
                     if (smallWrite) {
-                        assertHold(h, holder, y, false);
+                        assertHold(h, holder, y, false, "tick 200 from the first write");
                         h.assertTrue(packets.isEmpty() && RuinDelivery.waiting(level, pos), "delivery must still wait for light");
+                    }
+                })
+                .thenExecuteAfter(1, () -> {
+                    if (smallWrite) {
+                        applySingleSource(h, chunk, third);
+                        assertHold(h, holder, y, true, "a new write after expiry");
                         releaseLight.countDown();
                     }
                 })
@@ -129,8 +136,9 @@ public final class RuinDeliveryRevisionGameTests {
                     h.assertTrue(packets.size() == 1, "expected one coalesced whole chunk, got " + packets.size());
                     assertSource(h, first, packets.getFirst());
                     assertSource(h, second, packets.getFirst());
-                    Incoming.LOG.info("RUIN_DELIVERY coalesced {} whole packet with both sources at 15/15{}",
-                            packets.size(), smallWrite ? " after the 200-tick hold expired" : "");
+                    if (smallWrite) assertSource(h, third, packets.getFirst());
+                    Incoming.LOG.info("RUIN_DELIVERY coalesced {} whole packet with {} sources at 15/15{}",
+                            packets.size(), smallWrite ? 3 : 2, smallWrite ? " after expiry and hold restart" : "");
                 })
                 .thenSucceed();
     }
@@ -148,12 +156,12 @@ public final class RuinDeliveryRevisionGameTests {
         h.assertTrue(plan.apply(level, chunk, d, new ColumnScar.Budget(false)), "single-position plan is stale");
     }
 
-    private static void assertHold(GameTestHelper h, ChunkHolder holder, int y, boolean expected) {
+    private static void assertHold(GameTestHelper h, ChunkHolder holder, int y, boolean expected, String when) {
         ServerLevel level = h.getLevel();
         holder.sectionLightChanged(LightLayer.BLOCK, SectionPos.blockToSectionCoord(y));
         RuinDelivery.onLevelTickPre(new LevelTickEvent.Pre(() -> true, level));
         h.assertTrue(holder.blockChangedLightSectionFilter.isEmpty() == expected,
-                "vanilla light hold must end 200 ticks after the first write");
+                "expected vanilla light hold " + expected + " at " + when);
     }
 
     private static List<ClientboundLevelChunkWithLightPacket> watch(GameTestHelper h, ChunkHolder holder) {
