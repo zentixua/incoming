@@ -296,6 +296,11 @@ public final class NukePall {
     private static final double YOUNG_FULL_DEPTH = 20;
     /** Presentation dust extinction of the young wall where it is full, 1/block (the approved animation's 0.11 m⁻¹). */
     private static final double YOUNG_SIGMA = 0.11;
+    /**
+     * Age at which the young wall has settled behind its hump, model seconds (LOOK: about a second): its layer height is the
+     * dust law's layer top at that age, the wall's own hump and settling ride on it.
+     */
+    private static final double YOUNG_SETTLE_S = 1.0;
     /** Ground bounce under the wall: share of sun and sky light the burnt ground returns (est.). */
     private static final double GROUND_BOUNCE = 0.1;
 
@@ -319,7 +324,7 @@ public final class NukePall {
         w.eye[2] = -gz;
         w.eye[3] = (float) t;
         int n = ua.zentix.incoming.client.fx.layer.DustWallPass.NODES;
-        a.pall.young(span, n, w.table);
+        a.pall.young(YOUNG_SETTLE_S, span, n, w.table);
         double top = 0;
         for (int j = 0; j < n; j++) {
             double depth = w.table[4 * j + 2];

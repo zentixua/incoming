@@ -254,6 +254,9 @@ vec3 dwLight(vec3 q, vec3 rd, float s) {
     vec3 L = dwBallLight(q) * (lit * (1.0 + 0.9 * pow(c, 5.0)) + 1.6 * pow(c, 10.0) * lit * (1.0 - smoothstep(0.0, 0.06, s)));
     float sunLit = exp(-sd * 7.0 * 0.8);
     L += DwSunLight * sunLit * (0.6 + 0.4 * max(dot(rd, DwSunDir), 0.0));
+    // multiple scattering (presentation): light diffused deep into the mass along a much thinner path, so the shaded
+    // body stays a warm dark brown, never black
+    L += dwBallLight(q) * 0.22 * exp(-sd * 7.0 * 0.2) + DwSunLight * 0.12 * exp(-sd * 7.0 * 0.15);
     L += DwSkyLight * (0.5 + 0.5 * smoothstep(0.0, 40.0, q.y)) + DwGroundLight;
     return DwAlbedo * L;
 }
