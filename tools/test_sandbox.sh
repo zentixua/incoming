@@ -70,7 +70,7 @@ fx() {
   echo "${FX_LIMIT:-} $1" >> "$tmp/limit.log"
   if [[ $1 == "shots "* ]]; then
     local a=($1); mkdir -p "$FX/out/${a[1]}"
-    printf '{"name": "%s", "audio": {"file": "%s", "start": 44, "from": 0, "seconds": %s}, "frames": []}\n' "${a[1]}" "$AUDIO" "${a[3]:-0}" > "$FX/out/${a[1]}/capture.json"
+    printf '{"name": "%s", "audio": {"file": "%s", "start": 44, "from": 0, "seconds": %s}, "rate": %s, "frames": []}\n' "${a[1]}" "$AUDIO" "${a[3]:-0}" "${MOCK_RATE:-20}" > "$FX/out/${a[1]}/capture.json"
   fi
 }
 : > "$tmp/fx.log"; mkdir -p "$FX/out/n3-wav"; echo soft > "$FX/renderer"; touch "$FX/out/n3-wav/keep.png"
@@ -106,6 +106,13 @@ python3 -c 'import json,sys,wave; w=wave.open(sys.argv[1]); a=json.load(open(sys
 : > "$tmp/fx.log"; echo gpu > "$FX/renderer"
 ( shot n4 'blast drone' --at 0.5 --wav 2 --no-swap ) >/dev/null 2>&1
 [ "$(grep -c '^shots' "$tmp/fx.log")" = 1 ] && grep -qx 'shots n4 0.5 2' "$tmp/fx.log" && ok "GPU shot: one take with sound" || bad "GPU shot: $(tr '\n' ';' < "$tmp/fx.log")"
+# a GPU take its dense frames slowed (capture.json rate < 20): sound from a second take at 20 ticks/s from the first frame
+: > "$tmp/fx.log"
+( MOCK_RATE=4.0; shot n8 'nuke 15 near' --at -1,0,1 --wav 2 --no-swap ) >/dev/null 2>&1; rc=$?
+[ $rc = 0 ] && grep -qx 'shots n8 -1,0,1 2' "$tmp/fx.log" && grep -qE '^shots \.wav-n8-[A-Za-z0-9]+ none@-1 2$' "$tmp/fx.log" \
+  && [ "$(grep -cx 'nuke 15 near' "$tmp/fx.log")" = 2 ] \
+  && python3 -c 'import json,sys; sys.exit(0 if json.load(open(sys.argv[1]))["audio"]["take"].startswith("separate") else 1)' "$FX/out/n8/capture.json" 2>/dev/null \
+  && ok "slowed GPU shot: sound from a second take" || bad "slowed GPU shot: rc $rc $(tr '\n' ';' < "$tmp/fx.log")"
 
 # review probe: an empty shot name never replaces fx/out, and any valid effect text keeps capture.json valid
 out=$(bash "$ROOT/tools/probes/sound-only-output.sh" "$ROOT" 2>&1) && ok "probe sound-only-output" || bad "probe sound-only-output: $out"

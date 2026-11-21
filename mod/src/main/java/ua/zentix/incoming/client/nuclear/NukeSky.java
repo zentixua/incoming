@@ -60,7 +60,8 @@ public final class NukeSky {
     /**
      * Diffuse sky light on airborne matter while a fireball lights the air: its linear tint (luma 1) and its share; no detonation — share 0.
      * presentation (the reference's warm ochre dust, Silo S3E09): the share is up to four times the fog's ({@link #fogColor}: half of
-     * {@link #amber}), so the dust takes the glowing sky's hue as the reference does (wall saturation 0.30 → 0.36–0.43, Silo 0.54);
+     * {@link #amber}), so the dust takes the glowing sky's hue as the reference does (1 Mt wall from 600 m: saturation 0.42–0.53,
+     * 0.30 at the fog's share; Silo 0.54–0.62);
      * the light's brightness is unchanged, only its tint.
      */
     public static float[] amberTint(Vec3 cam, float partial) {

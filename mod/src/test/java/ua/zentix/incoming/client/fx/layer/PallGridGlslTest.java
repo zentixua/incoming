@@ -44,6 +44,23 @@ class PallGridGlslTest {
         }
     }
 
+    /**
+     * The march rounds the wanted step to the grid, not {@code span / floor(span / step)}: that ratio is a sawtooth across the
+     * screen, and rounded to powers of two it put neighbouring pixels on two grids (ribs and a toothed edge along the 1 Mt head).
+     */
+    @Test
+    void headStepIsOneForTheWholeWall() {
+        String march;
+        try (InputStream in = PallGridGlslTest.class.getResourceAsStream("/assets/incoming/shaders/include/fx_pall.glsl")) {
+            assertNotNull(in);
+            march = new String(in.readAllBytes(), StandardCharsets.UTF_8).replaceAll("//[^\n]*", "");
+        } catch (IOException ex) {
+            throw new IllegalStateException(ex);
+        }
+        assertTrue(march.contains("fineStep[k] = pallGridStep(fineStep[k] / fit);"), "head step: the wall's wanted step over the budget share");
+        assertFalse(march.matches("(?s).*pallGridStep\\([^;]*floor\\(.*"), "no floor()ed step count inside a grid step");
+    }
+
     /** The pall's bounds the ordinary march spans stay put while the pall grows within a quarter octave, at most a fifth wider. */
     @Test
     void marchBoundsStayPutWhileThePallGrows() {

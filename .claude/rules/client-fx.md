@@ -1158,7 +1158,8 @@ paths:
   (`PuffGeometry.faceLight/flatLight`); `fx.vsh` restores light and transforms directions at vertices, retaining the
   36-byte format. No fragment basis derivatives/normalization. Ambient is a hemisphere dome (`fx.fsh` `skyDome`: sky over the upper half, ground reflection `PALL_LAND` under it,
   equal to the six-side mean in uniform light, `SkyDomeGlslTest`); while a fireball lights the air the dome's tint follows the amber fog
-  and sky (`FxAmber`, `NukeSky.amberTint`: same share as `NukeSky.fogColor`), and up to `BALL_DOME` (0.6, presentation) of a fireball's
+  and sky (`FxAmber`, `NukeSky.amberTint`: presentation, share 2 × `NukeSky.amber`, four times the fog's:
+  `NukeSky.fogColor` takes half of it; the pall's diffuse sky light takes the same tint, `NukePall.light`), and up to `BALL_DOME` (0.6, presentation) of a fireball's
   light on a puff arrives as that dome's diffuse light instead of a beam by sides (none without an amber sky: conventional blasts keep the
   beam; during a nuclear show the share applies to every frame fireball, the dome's light being the nuclear sky's): backlit dust has lit
   tops, not dark cores under bright rims. Frame fireballs

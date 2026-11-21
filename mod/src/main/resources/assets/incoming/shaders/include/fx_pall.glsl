@@ -1938,14 +1938,17 @@ void main() {
         vec4 want = max(leave - enter, vec4(0.0)) / max(fineStep, vec4(1.0));
         float wanted = want.x + want.y + want.z + want.w + stormWant;
         float fit = wanted > n ? n / wanted : 1.0;
-        if (stormWant >= 1.0) storm.z = pallGridStep((storm.y - storm.x) / max(floor(stormWant * fit), 1.0));
+        // the grid step rounds the wanted step itself, never span / floor(span / step): that ratio is a sawtooth across the
+        // screen, and its rounding to powers of two flipped neighbouring pixels between two grids (ribs and a toothed edge
+        // along the head); the head's step is one for the whole wall unless the frame's budget binds
+        if (stormWant >= 1.0) storm.z = pallGridStep((storm.y - storm.x) / max(stormWant * fit, 1.0));
         for (int k = 0; k < 4; k++) {
             if (leave[k] <= enter[k]) {
                 enter[k] = 1e9;
                 leave[k] = 1e9;
                 continue;
             }
-            fineStep[k] = pallGridStep((leave[k] - enter[k]) / max(floor(want[k] * fit), 1.0));
+            fineStep[k] = pallGridStep(fineStep[k] / fit);
         }
     }
     // pall: i steps taken (with wall-head steps, up to 2·steps + 16), base ordinary boundaries behind, nextBase next boundary
