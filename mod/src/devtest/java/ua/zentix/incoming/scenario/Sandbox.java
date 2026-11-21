@@ -222,6 +222,19 @@ final class Sandbox {
     private final java.util.Set<Integer> knownNukes = new java.util.HashSet<>();
     private Vec3 firstSeen = Vec3.ZERO;
     private double closest = Double.MAX_VALUE;
+    /**
+     * {@code INCOMING_SANDBOX_SITE=n}: every near take at near site n, so a first take lets distant LODs (Distant Horizons)
+     * build around it and the next one films them; 0 — a fresh site each take.
+     */
+    private static final int FIXED_SITE = fixedSite(System.getenv("INCOMING_SANDBOX_SITE"));
+
+    static int fixedSite(String env) {
+        if (env == null || env.isBlank()) return 0;
+        int n = Integer.parseInt(env.trim());
+        if (n < 0 || n > NEAR_RUNS) throw new IllegalArgumentException("INCOMING_SANDBOX_SITE 0–" + NEAR_RUNS + ": " + env);
+        return n;
+    }
+
     /** Nuke near the camera: how many runs there were (site — {@link #nearSite}). */
     private int nearRuns;
     /**
@@ -791,7 +804,7 @@ final class Sandbox {
                     // the previous detonation near the camera is forgotten: this one's number and game time are the
                     // same ({@link #NEAR_ID})
                     clear();
-                    nearRuns = nearRuns % NEAR_RUNS + 1;
+                    nearRuns = FIXED_SITE > 0 ? FIXED_SITE : nearRuns % NEAR_RUNS + 1;
                     site = nearSite(nearRuns);
                 } else {
                     freshX += c.verb() == SandboxCommand.Verb.NUKE ? NUKE_STEP : REAL_STEP;

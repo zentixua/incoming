@@ -157,7 +157,8 @@ with Iris.
   client 35, ruins preceded visual front). Differences from full scenario: oaks have regular block canopies
   (scenario `place feature` random shapes), flat grass ground. Fresh location each run, but threshold scatter
   (`BlockResponse.jitterAt`, position hash) identical there (x shift k·2¹⁶, z k·2¹⁰ cancel in
-  `Long.hashCode(BlockPos.asLong())`), same detonation ID (9000: scenario detonation seed), same detonation game time
+  `Long.hashCode(BlockPos.asLong())`; `INCOMING_SANDBOX_SITE=n` at `start` keeps every near take at site n, so with
+  `start dh` a first take lets Distant Horizons build LODs there and the next films them), same detonation ID (9000: scenario detonation seed), same detonation game time
   (6000: world wind is game-time function `Wind.at`; epicenter ground loads immediately, detonation same tick
   rather than deferred; world clock rewound, previously scheduled old-effect block ticks wait longer, `clear`
   removes them), so same blocks break in same wind; other position-based randomness (trail noise, debris sampling)
