@@ -218,6 +218,25 @@ public final class PallField {
         return reach;
     }
 
+    /**
+     * Inputs of the young dust wall ({@code DustWallPass}, a presentation model; physics only as these inputs): for node j of
+     * n at ground radius j/(n − 1) of {@link #reach} (blocks), the game front's arrival (model seconds since the burst), the
+     * dust layer top at age {@code settleS} model seconds, when the wall has settled (blocks; the slow rise over the hot ground
+     * afterwards is the pall's), and the layer's vertical optical depth at age {@code handoffS}, where the pall takes the wall
+     * over ({@link DustModel.Column#depth}; how much dust was lofted there). 4 numbers per node.
+     */
+    public void young(double settleS, double handoffS, int n, float[] out) {
+        double hob = Math.max(0, d.hobMetres());
+        for (int j = 0; j < n; j++) {
+            double rb = j / (n - 1.0) * reach, slant = Math.hypot(d.metres(rb), hob);
+            DustModel.Column c = columns[Math.min(BINS - 1, Math.max(0, (int) (rb / reach * BINS)))];
+            out[4 * j] = (float) (d.arrivalTicks(d.blocks(slant)) / (20.0 * d.scale()));
+            out[4 * j + 1] = (float) Math.max(d.blocks(c.height(settleS)), MIN_TOP_BLOCKS);
+            out[4 * j + 2] = (float) c.depth(handoffS);
+            out[4 * j + 3] = 0;
+        }
+    }
+
     /** Ground ignition-zone radius, blocks (0 — no fires): haze above it, firestorm inside ({@link FireStorm}). */
     double fireReach() {
         return fireReach;

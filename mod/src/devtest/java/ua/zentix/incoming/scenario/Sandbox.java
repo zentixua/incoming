@@ -160,6 +160,8 @@ final class Sandbox {
     private int freshX;
     /** Camera: distance, height above ground, bearing from the point, height of the look point. */
     private double camDist = 60, camHeight = 10, camBearing = 90, camLook = 8;
+    /** Camera turn after facing the point, degrees of yaw ({@code cam}'s fifth number; 180 — looking away from it). */
+    private double camTurn;
     private boolean overlay;
     /** Zoom ×k ({@code zoom}): 1 — none. */
     private double zoom = 1;
@@ -436,6 +438,7 @@ final class Sandbox {
                 camHeight = c.number(1, camHeight);
                 camBearing = c.number(2, camBearing);
                 camLook = c.number(3, camLook);
+                camTurn = c.number(4, 0);
                 placeCamera();
                 finish("ok");
             }
@@ -1602,7 +1605,7 @@ final class Sandbox {
         if (paceLast != 0) {
             double frame = (now - paceLast) / 1e9;
             paceFrameS = paceFrameS == 0 ? frame : paceFrameS * 0.7 + frame * 0.3;
-            pace(1 / (FRAMES_PER_TICK * paceFrameS));
+            pace(1 / (FRAMES_PER_TICK * paceFrameS), true);
         }
         paceLast = now;
     }
@@ -1612,15 +1615,27 @@ final class Sandbox {
         return (armed != null && armed.times.length > 0) || (capture != null && capture.next < capture.times.length);
     }
 
-    /** World rate, ticks/s (CPU renderer only; 20 restores); command only on a change of more than a tenth. */
     private void pace(double rate) {
+        pace(rate, false);
+    }
+
+    /**
+     * World rate, ticks/s (20 restores); command only on a change of more than a tenth. A rate from measured frame times
+     * applies on any renderer: a GPU take with a frame every 1/30 s writes each PNG on the render thread, and unpaced its
+     * effect runs several times ahead of the frames' seconds; preset rates (arming) only on the CPU renderer.
+     */
+    private void pace(double rate, boolean measured) {
         // render thread: the GL context answers only there, and only after the window exists
         if (soft == null) soft = ua.zentix.incoming.client.fx.layer.GpuWatch.software(com.mojang.blaze3d.platform.GlUtil.getRenderer());
-        if (!soft) return;
+        if (!soft && !measured && rate < 20) return;
         double r = Math.max(1, Math.min(20, rate));
+        if (r == 20) {
+            // leaving the pacing window: the next due frame measures afresh, not across the idle gap
+            paceLast = 0;
+            paceFrameS = 0;
+        }
         if (r < 20 && Math.abs(r - paceRate) <= paceRate * 0.1) return;
         if (r == 20 && paceRate == 20) return;
-        if (r == 20) paceLast = 0;
         paceRate = r;
         // the manager itself, not /tick rate: the command's feedback would print into the frames' chat
         Incoming.LOG.info("SANDBOX tick rate {}", String.format(Locale.ROOT, "%.1f", r));
@@ -1682,6 +1697,7 @@ final class Sandbox {
         double y = GROUND + 1 + camHeight;
         String me = Minecraft.getInstance().player.getGameProfile().getName();
         server(String.format(Locale.ROOT, "tp %s %.2f %.2f %.2f facing %.2f %.2f %.2f", me, eye.x, y - 1.62, eye.z, site.x, GROUND + 1 + camLook, site.z));
+        if (camTurn != 0) server(String.format(Locale.ROOT, "execute as %s at @s run tp @s ~ ~ ~ ~%.2f ~", me, camTurn));
         placePane(eye, y);
         placeMob(eye);
     }

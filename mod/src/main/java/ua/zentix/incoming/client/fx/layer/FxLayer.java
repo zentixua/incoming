@@ -133,6 +133,14 @@ public final class FxLayer {
             Incoming.LOG.error("Nuclear dust pall shaders failed to load: no dust pall", ex);
         }
         try {
+            e.registerShader(new ShaderInstance(e.getResourceProvider(), Incoming.id("fx_dustwall"), DefaultVertexFormat.POSITION), s -> DustWallPass.march = s);
+            e.registerShader(new ShaderInstance(e.getResourceProvider(), Incoming.id("fx_dustwall_resolve"), DefaultVertexFormat.POSITION), s -> DustWallPass.resolve = s);
+            e.registerShader(new ShaderInstance(e.getResourceProvider(), Incoming.id("fx_dustwall_composite"), DefaultVertexFormat.POSITION), s -> DustWallPass.composite = s);
+        } catch (IOException ex) {
+            DustWallPass.march = DustWallPass.resolve = DustWallPass.composite = null;
+            Incoming.LOG.error("Nuclear dust wall shaders failed to load: the pall draws the young wall", ex);
+        }
+        try {
             e.registerShader(new ShaderInstance(e.getResourceProvider(), Incoming.id("fx_pall_foot"), DefaultVertexFormat.POSITION), s -> PallPass.footLighting = s);
         } catch (IOException ex) {
             PallPass.footLighting = null;
@@ -190,6 +198,8 @@ public final class FxLayer {
     private static GpuTimer GPU = new GpuTimer();
     /** Heat shimmer and fire light pass ({@link HeatPass}) on the GPU — inside {@link #GPU}. */
     private static GpuTimer HEAT = new GpuTimer();
+    /** Young dust wall pass ({@link DustWallPass}) on the GPU — inside {@link #GPU}. */
+    private static final GpuTimer WALL = new GpuTimer();
 
     /** Once per client tick (not while paused): the per-second frame time summary. */
     public static void tick() {
@@ -202,6 +212,7 @@ public final class FxLayer {
             PallPass.second();
             GPU.second();
             HEAT.second();
+            WALL.second();
             FxBloom.second();
             LayerTimes.second();
             frameNanos = frameMax = cleanMax = cleanCpu = 0;
@@ -369,6 +380,14 @@ public final class FxLayer {
             boolean pallDrawn = pall != null && scene >= 0 && PallPass.draw(pall, scene, VIEW, e.getProjectionMatrix(), view.camera(),
                     FOG.haze(view.range(), HAZE));
             if (!pallDrawn) PallPass.reset();
+            // young dust wall: its own pass over the pall (the pall handed its young dust over, PallPass.Frame.young)
+            if (pallDrawn && pall.dustWall.active) {
+                int timedWall = WALL.begin();
+                DustWallPass.draw(pall.dustWall, pall.quality, scene, VIEW, e.getProjectionMatrix());
+                WALL.end(timedWall);
+            } else {
+                DustWallPass.idle();
+            }
             // clouds whose volume did not fit (pall frame not drawn) are drawn as quads from the next frame
             SmokeGrid.drawn(pall == null || pall.smoke == null || pallDrawn && SmokePass.filled());
             PallPass.Frame front = pallDrawn ? pall : PallPass.empty();
@@ -520,8 +539,8 @@ public final class FxLayer {
      */
     public static String describeTiming() {
         return String.format(Locale.ROOT, "quads %d, %.3f ms (longest in the second %.3f; without GC %.3f, CPU %.3f; frames with GC %d), "
-                + "GPU %.3f ms (longest %.3f, %d frames; heat pass %.3f, longest %.3f, %d frames — %s; %s), depth: %s; %s", lastQuads, lastMean, lastMax,
-                lastClean, Math.max(0, lastCleanCpu), lastCollected, GPU.lastMean, GPU.lastMax, GPU.lastFrames, HEAT.lastMean, HEAT.lastMax,
+                + "GPU %.3f ms (longest %.3f, %d frames; dust wall %.3f, longest %.3f, %d frames; heat pass %.3f, longest %.3f, %d frames — %s; %s), depth: %s; %s", lastQuads, lastMean, lastMax,
+                lastClean, Math.max(0, lastCleanCpu), lastCollected, GPU.lastMean, GPU.lastMax, GPU.lastFrames, WALL.lastMean, WALL.lastMax, WALL.lastFrames, HEAT.lastMean, HEAT.lastMax,
                 HEAT.lastFrames, HeatPass.describe(), FxBloom.describe(), SceneDepth.describe(), LayerTimes.describe() + "; " + HalfPass.describe());
     }
 
