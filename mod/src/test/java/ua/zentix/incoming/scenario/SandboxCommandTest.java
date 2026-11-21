@@ -86,6 +86,9 @@ class SandboxCommandTest {
         assertEquals(4, c.number(2, 0));
         assertThrows(IllegalArgumentException.class, () -> SandboxCommand.parse("shots a 1,0.5"));
         assertThrows(IllegalArgumentException.class, () -> SandboxCommand.parse("shots ../x 1"));
+        // "." and ".." are directory names too: the take would replace fx/out or fx itself
+        assertThrows(IllegalArgumentException.class, () -> SandboxCommand.parse("shots . none 2"));
+        assertThrows(IllegalArgumentException.class, () -> SandboxCommand.parse("shots .. none 2"));
         // before the start of the effect - not earlier than −10 s (for nuke ... near the beginning is the arrival of the front to the houses)
         assertArrayEquals(new double[]{-0.5, 0.1, 1}, SandboxCommand.parse("shots wall -0.5,0.1,1 3").times());
         assertThrows(IllegalArgumentException.class, () -> SandboxCommand.parse("shots wall -11,0 3"));
