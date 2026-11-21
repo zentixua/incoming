@@ -2022,12 +2022,14 @@ void main() {
     // the young layer's top (soft lumps, pallLumpTop) found by refinement: the ordinary steps are hundreds of metres at a kilometre
     // (1 Mt: 240–350 m against lumps of 120–170 m with ±60 m relief — the relief averaged out into a plain, and per-sample noise read
     // as grain boiling with the jitter); the first ordinary step that meets matter after an empty one is re-marched from that empty
-    // sample in steps of a third of a lump, YOUNG_FINE of them, then the ordinary steps go on
+    // sample in steps of a twelfth of a lump, YOUNG_FINE of them, then the ordinary steps go on
     const int YOUNG_FINE = 16;
     float fineYoung = 1e9, prevTa = -1.0;
     if (PallSlot0[1].w >= 0.5) fineYoung = min(fineYoung, PallSlot0[3].y);
     if (PallSlot1[1].w >= 0.5) fineYoung = min(fineYoung, PallSlot1[3].y);
-    if (fineYoung < 1e8) fineYoung *= 2.5 / (3.0 * PALL_LUMP_TEXEL);
+    // a twelfth of a lump (1 Mt: ~14 m): the first sample's depth under an opaque top changes with the frame's jitter by at most
+    // this — a third of a lump (~50 m) flickered the young layer at 6 s (fine change 23.8 levels/s against 16.6 before)
+    if (fineYoung < 1e8) fineYoung *= 2.5 / (12.0 * PALL_LUMP_TEXEL);
     int fineLeft = 0;
     float fineSize = 1e9;
     bool refined = false, prevEmpty = false, firstFine = false;
