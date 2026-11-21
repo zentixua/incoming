@@ -133,6 +133,7 @@ only on dry fuel the light reaches: hay, dead bushes, wool, carpets, beds, banne
 behind glass. Wood does not catch from the flash. Where the climate is dry (desert, savanna, badlands), the grass is
 dry and burns as a field. The blast wave blows out some of these fires: none below 2 psi, half above 5 psi. A city
 burns from the fires lit through its windows; open green country around it does not.
+The wave sweeps away any remaining wisps of smoke from flash-heated surfaces as it reaches them.
 
 With the default ground burst, the dust column joins the mushroom cap. With an explicitly selected air burst
 at the standard burst height, the column starts rising later, with a billowing upper edge, and stays below the

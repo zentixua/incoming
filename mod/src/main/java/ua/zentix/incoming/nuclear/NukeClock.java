@@ -19,6 +19,8 @@ import ua.zentix.incoming.util.WorldClock;
 public final class NukeClock {
     /** Show length, real seconds: the clock is real time until then. */
     public static final double SHOW_S = 20 * 60;
+    /** Show length in game ticks, shared by the server and replay reconstruction. */
+    public static final long SHOW_TICKS = (long) (SHOW_S * 20);
     /** Real seconds over which the clock joins the world clock after the show (no visible jump in fire or smoke). */
     public static final double RAMP_S = 60;
 
