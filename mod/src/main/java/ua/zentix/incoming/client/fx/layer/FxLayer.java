@@ -458,6 +458,18 @@ public final class FxLayer {
      * toward the horizon), at night from the moon — 0.5 (⚠ estimate), in rain — a fifth (clouds scatter).
      */
     private static void sun(ShaderInstance s, ClientLevel level, float partial) {
+        float[] sun = sunLight(level, partial, SUN);
+        s.safeGetUniform("FxSun").set(sun[0], sun[1], sun[2], sun[3]);
+    }
+
+    /** {@link #sun}'s scratch (render thread). */
+    private static final float[] SUN = new float[4];
+
+    /**
+     * {@link #sun} into {@code into}: x, y, z toward the sun (moon at night), w — share of direct light; returns
+     * {@code into}.
+     */
+    public static float[] sunLight(ClientLevel level, float partial, float[] into) {
         float a = level.getTimeOfDay(partial) * net.minecraft.util.Mth.TWO_PI;
         float x = -net.minecraft.util.Mth.sin(a), y = net.minecraft.util.Mth.cos(a);
         float key = y >= 0 ? DAY_DIRECT : 0.5f;
@@ -466,7 +478,22 @@ public final class FxLayer {
             y = -y;
         }
         key *= net.minecraft.util.Mth.clamp(y / 0.1f, 0, 1) * (1 - 0.8f * level.getRainLevel(partial));
-        s.safeGetUniform("FxSun").set(x, y, 0f, key);
+        into[0] = x;
+        into[1] = y;
+        into[2] = 0;
+        into[3] = key;
+        return into;
+    }
+
+    /**
+     * {@link #sunLight} by day; at night w = 0. The puffs' shadow in their own cloud ({@code SmokePuffs.sunThrough})
+     * takes only the sun: the vertex colour carries it, and by night it would also dim the fireballs' light on the
+     * smoke's far side, which the shader adds per pixel.
+     */
+    public static float[] daySun(ClientLevel level, float partial, float[] into) {
+        sunLight(level, partial, into);
+        if (net.minecraft.util.Mth.cos(level.getTimeOfDay(partial) * net.minecraft.util.Mth.TWO_PI) < 0) into[3] = 0;
+        return into;
     }
 
     /**

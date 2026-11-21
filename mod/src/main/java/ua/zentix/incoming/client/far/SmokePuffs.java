@@ -2930,8 +2930,13 @@ public final class SmokePuffs {
                 if (lying > 0) out.puff6Flat(px + ox, py + oy, pz + oz, rh * grow * k, rh * grow * k,
                         Math.min(rh, rw * d / Math.max(Math.abs(py), 1e-3)) * ua.zentix.incoming.client.fx.layer.FxQuads.SOFT, clubAngle(hj), sprite,
                         (float) (frame - f0), py < 0 ? 0 : (spray ? sprayShade : shade), cr, cg, cb, opticalShare(sub * last, lying));
-                if (lying < 1) out.puff6(px + ox, py + oy, pz + oz, rh * grow * k, rv * grow * k, sprite, (float) (frame - f0), spray ? sprayShade : shade,
-                        cr, cg, cb, opticalShare(sub * last, 1 - lying));
+                if (lying < 1) {
+                    // the sun's share that reaches this puff through the rest of its cloud (the puff's own shadow is in
+                    // its maps): the cloud's far side from the sun keeps only the sky's light
+                    float sunlit = (float) cloudSun(ox, oy, oz, k * rh, k * rw, sh, sv, ks + kd + kw, light, view.sun(), clusterBlend(many));
+                    out.puff6(px + ox, py + oy, pz + oz, rh * grow * k, rv * grow * k, sprite, (float) (frame - f0), spray ? sprayShade : shade,
+                            cr * sunlit, cg * sunlit, cb * sunlit, opticalShare(sub * last, 1 - lying));
+                }
             }
             return fill;
         }
@@ -3117,6 +3122,30 @@ public final class SmokePuffs {
                     cr, cg, cb, shade, age, h, shown, TUBE_CLUSTER, true, tx / len, ty / len, tz / len, tube);
         }
         return drawn;
+    }
+
+    /**
+     * Sky light on a cluster puff at (ox, oy, oz) from the middle of its Gaussian (σ: sh horizontally, sv vertically,
+     * attenuation of the whole mass ext, m²) against a lone puff: 1 − w + w·e^(−k·τ), w — the direct share of sky light
+     * ({@code sun[3]}, 0 at night), τ — thickness toward the sun through the Gaussian from the puff's sun-side edge
+     * (the puff's radii rh, rw: its own shadow is in its maps), k — the mix's two-stream attenuation ({@link #shade}:
+     * white droplets and alumina pass the light on, soot does not). The cluster's puffs all carry the same maps, so
+     * without this the whole cloud is lit as one puff: the side away from the sun as bright as the side toward it
+     * (a black cloud evenly grey, player frame f_10-22). A lone puff (cluster share 0) is the whole Gaussian and keeps
+     * 1. Line through a Gaussian from a point: τ = ext·e^(−b²/2)·erfc(q/√2)/(4π·sh²·sv·|ŝ|) in σ-scaled axes (q — the
+     * point's offset along the scaled sun direction ŝ, b — across it).
+     */
+    static double cloudSun(double ox, double oy, double oz, double rh, double rw, double sh, double sv, double ext, double k, float[] sun,
+                           double cluster) {
+        double w = sun[3] * cluster;
+        if (!(w > 0) || !(ext > 0)) return 1;
+        double sx = sun[0] / sh, sy = sun[1] / sv, sz = sun[2] / sh;
+        double a = Math.sqrt(sx * sx + sy * sy + sz * sz);
+        double ux = (ox + sun[0] * rh) / sh, uy = (oy + sun[1] * rw) / sv, uz = (oz + sun[2] * rh) / sh;
+        double q = (ux * sx + uy * sy + uz * sz) / a;
+        double b2 = Math.max(0, ux * ux + uy * uy + uz * uz - q * q);
+        double tau = ext * Math.exp(-0.5 * b2) * (1 - SmokeGrid.erf(q * SQRT_HALF)) / (4 * Math.PI * sh * sh * sv * a);
+        return 1 - w + w * Math.exp(-k * tau);
     }
 
     /**

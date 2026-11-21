@@ -29,7 +29,17 @@ import ua.zentix.incoming.entity.StrikeProjectile;
  * @param air     air from eye ({@link Sight.Air}: haze thins with altitude), from visibility range and eye height
  */
 public record FarView(Vec3 camera, Vector3f forward, Vector3f left, Vector3f up, float partial, double far, double pixel, double edge,
-                      float ambient, double exposure, Vector3f sky, double range, double world, double clouds, float rain, Sight.Air air) {
+                      float ambient, double exposure, Vector3f sky, double range, double world, double clouds, float rain, Sight.Air air,
+                      float[] sun) {
+    /** No direct sun on the puffs (tests, views without a world). */
+    static final float[] NO_SUN = {0, 1, 0, 0};
+
+    /** View without direct sun ({@link #NO_SUN}). */
+    public FarView(Vec3 camera, Vector3f forward, Vector3f left, Vector3f up, float partial, double far, double pixel, double edge,
+                   float ambient, double exposure, Vector3f sky, double range, double world, double clouds, float rain, Sight.Air air) {
+        this(camera, forward, left, up, partial, far, pixel, edge, ambient, exposure, sky, range, world, clouds, rain, air, NO_SUN);
+    }
+
     /**
      * Skylight in noon-white-wall units (day 1, night ~8·10⁻⁴): eye adapts to it without fire
      * ({@link Sight#adapted}: ambient^{@value Sight#ADAPT}).
@@ -45,7 +55,7 @@ public record FarView(Vec3 camera, Vector3f forward, Vector3f left, Vector3f up,
 
     /** Same view with frame eye adaptation exposure ({@link Sight#exposure}: fire at eye in this frame). */
     public FarView exposed(double exposure) {
-        return new FarView(camera, forward, left, up, partial, far, pixel, edge, ambient, exposure, sky, range, world, clouds, rain, air);
+        return new FarView(camera, forward, left, up, partial, far, pixel, edge, ambient, exposure, sky, range, world, clouds, rain, air, sun);
     }
 
     /**
