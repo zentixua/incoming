@@ -2661,8 +2661,8 @@ public final class SmokePuffs {
                 // the sun through the rest of the tube's section ({@link #sunThrough}; ⚠ the spot as a ball of the whole
                 // tube's thickness across the axis: the place does not carry the axis, and the sun's path along it
                 // is longer)
-                float sunlit = (float) sunlit(Math.pow(sunThrough(ox, oy, oz, k * rh, k * rv, sh, sv, 2 * Math.PI * sh * sv * edgeTau, shade * BAKED_K,
-                        view.sun()), clusterBlend(many)), view.sun());
+                float sunlit = (float) sootSun(Math.pow(sunThrough(ox, oy, oz, k * rh, k * rv, sh, sv, 2 * Math.PI * sh * sv * edgeTau, shade * BAKED_K,
+                        view.sun()), clusterBlend(many)), view.sun(), cg, -(px + ox), -(py + oy), -(pz + oz));
                 out.puff6(px + ox, py + oy, pz + oz, rh * grow * k, rv * grow * k, FxAtlas.puff6(f0, mirror), (float) (frame - f0), (float) shade,
                         sr * sunlit, sg * sunlit, sb * sunlit, sub * last);
             }
@@ -2919,7 +2919,8 @@ public final class SmokePuffs {
             // (FarView.sky), with the puff's scatter; its tint (at night — lilac) — in the shader only for sky light,
             // not for fire (FxSkyTint)
             float lit = (float) ((0.88 + 0.24 * unit(h)) * view.skyLight());
-            float cr = thick(ks, kd, kw, dr) * lit, cg = thick(ks, kd, kw, dg) * lit, cb = thick(ks, kd, kw, db) * lit;
+            float grey = thick(ks, kd, kw, dg);
+            float cr = thick(ks, kd, kw, dr) * lit, cg = grey * lit, cb = thick(ks, kd, kw, db) * lit;
             double light = shade(ks, kd, kw, dg);
             // the sun through the rest of its source's cloud, from this Gaussian's sun-side edge ({@link #envelopes}):
             // its own matter is in its maps and its cluster's rule below
@@ -2989,8 +2990,8 @@ public final class SmokePuffs {
                 if (lying < 1) {
                     // the sun's share that reaches this puff through the rest of its cloud (the puff's own shadow is in
                     // its maps): the cloud's far side from the sun keeps only the sky's light
-                    float sunlit = (float) sunlit(cloud * Math.pow(sunThrough(ox, oy, oz, k * rh, k * rw, sh, sv, ks + kd + kw, light, view.sun()),
-                            clusterBlend(many)), view.sun());
+                    float sunlit = (float) sootSun(cloud * Math.pow(sunThrough(ox, oy, oz, k * rh, k * rw, sh, sv, ks + kd + kw, light, view.sun()),
+                            clusterBlend(many)), view.sun(), grey, -(px + ox), -(py + oy), -(pz + oz));
                     out.puff6(px + ox, py + oy, pz + oz, rh * grow * k, rv * grow * k, sprite, (float) (frame - f0), spray ? sprayShade : shade,
                             cr * sunlit, cg * sunlit, cb * sunlit, opticalShare(sub * last, 1 - lying));
                 }
@@ -3213,6 +3214,27 @@ public final class SmokePuffs {
     static double sunlit(double t, float[] sun) {
         return 1 - sun[3] + sun[3] * t;
     }
+
+    /**
+     * presentation: the sun on dark smoke ×{@value #SOOT_SUN} — the sunlit tops of a black cloud grey against its
+     * near-black core, as in footage of oil fires (1_1: lit billow tops sRGB 115–125 over a core of 33–41). A thick
+     * soot layer reflects R∞ ≈ 0.065 of the sky's light ({@link #thick}), so its sunlit tops stayed at ~110 and the
+     * cloud read as one flat grey mass. Only the sun that reaches the puff (t, {@link #sunThrough}) and the part of
+     * its face the eye sees lit (phase φ = (1 + cos θ)/2, θ between the sun and the puff-to-eye direction: a
+     * back-lit puff shows its shadowed side) are lifted, by the matter's darkness (thick-layer colour c from soot's
+     * to white: white smoke keeps its light). Facts (size, mass, colour of the matter) do not change.
+     */
+    static double sootSun(double t, float[] sun, double c, double ex, double ey, double ez) {
+        double n = Math.sqrt(ex * ex + ey * ey + ez * ez);
+        double phase = n > 0 ? 0.5 * (1 + (ex * sun[0] + ey * sun[1] + ez * sun[2]) / n) : 0.5;
+        double dark = Math.clamp((1 - c) / (1 - SOOT_COLOUR), 0, 1);
+        return 1 - sun[3] + sun[3] * t * (1 + (SOOT_SUN - 1) * dark * phase);
+    }
+
+    /** {@link #sootSun}'s gain on the sun (presentation). */
+    static final double SOOT_SUN = 2;
+    /** Thick-layer colour of pure soot ({@link #thick}). */
+    static final double SOOT_COLOUR = thick(SmokeGrid.SOOT_W, SmokeGrid.SOOT_G);
 
     /**
      * Color of the substance of a trail with single-scattering albedo albedo (up to delta-Eddington, asymmetry
