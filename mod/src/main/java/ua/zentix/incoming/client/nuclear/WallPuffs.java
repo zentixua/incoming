@@ -46,9 +46,11 @@ public final class WallPuffs implements SmokeGrid.Source {
     /**
      * Billow σ per cell: neighbours overlap into one mass; larger widens every billow's quad and the frame's fill past the
      * SmokePuffs budget (16 screens), whose merging then regroups billows from frame to frame (0.4 gave 19.5 screens and a
-     * pop at the passage).
+     * pop at the passage; 0.33 left gaps).
      */
-    static final double SIGMA = 0.33;
+    static final double SIGMA = 0.37;
+    /** Horizontal σ of a torn-up sheet (rolls) per cell: rows one cell apart close over the ground. */
+    static final double SHEET = 0.45;
     /** Per-billow scatter of the frame (life share) and of the size (share). */
     static final double SCATTER_FRAME = 0.18, SCATTER_SIZE = 0.3;
     /** Front band: rows of wall-height cells behind the front; it starts where tier cells exceed this many band cells. */
@@ -290,7 +292,7 @@ public final class WallPuffs implements SmokeGrid.Source {
             // far cells are wider than the wall is tall: a roll of wall-height billows along the front, not one flattened lump
             // a freshly torn-up sheet is lower than wide: flat billows at least a quarter cell across (thin round ones strung along
             // the roll read as beads)
-            double sv = SIGMA * ROUND * topH * size, sg = Math.max(sv, 0.75 * SIGMA * cell * size), half = Math.max(0, 0.5 * cell * (0.6 + 0.8 * k1) - sg);
+            double sv = SIGMA * ROUND * topH * size, sg = Math.max(sv, SHEET * cell * size), half = Math.max(0, 0.5 * cell * (0.6 + 0.8 * k1) - sg);
             out.segment(x + 0.5 * lean * ux, y + Math.max(sv, 0.5 * topH), z + 0.5 * lean * uz, -uz * half, 0, ux * half, sg, sv, 0, mass, 0,
                     dustR, dustG, dustB, CloudModel.T_AIR_K, 0);
         }
