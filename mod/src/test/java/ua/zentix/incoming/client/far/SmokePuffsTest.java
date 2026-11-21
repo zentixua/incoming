@@ -137,19 +137,19 @@ class SmokePuffsTest {
     }
 
     /**
-     * Veil softness to world ({@link SmokePuffs.Veil#soft}): vertex fades linearly toward world ({@code fx.fsh}: (world − 2 blocks) /
-     * softness); its opacity share before world at S is (1 − e^(−τ(S)))/(1 − e^(−τ)), τ(S) ray optical depth to S (here
-     * numerical from Gaussian density). Over 3…120 m, ramp differs from share by at most 0.4, closer than old veil without softness
-     * (fully covered everything beyond 2 blocks): eye along dense SAM trail (σ 5 m, transverse depth 2.7: half
-     * opacity already at 3 m), distant dense clump at 60 m (house before it at 20 m gets less than 0.2 veil), and thin
-     * haze. ⚠ Linear ramp from 2 blocks cannot be more accurate than ~0.35 for eye-local matter or narrow distant clump.
+     * Veil before the world ({@link SmokePuffs.Veil#before}, {@code fx.fsh} {@code veilBefore}): the share of a vertex's
+     * opacity in front of a world point at S must be within 0.2 of (1 − e^(−τ(S)))/(1 − e^(−τ)), τ(S) the ray's optical depth to S (here
+     * numerical from the Gaussian density), and the world's transmittance e^(−τ(S)) within 20 % where it still shows
+     * (above 0.05: fainter contrast is below the 8-bit frame step on most blocks): eye along a dense SAM trail (σ 5 m, transverse depth 2.7), a distant dense clump at 60 m (a house in
+     * front of it at 20 m gets less than 0.2 of the veil), thin haze, and the eye inside a broad dense dust cloud (σ 20 m,
+     * 0.3/m at the eye: a block at 3 m keeps e^(−0.9) of its contrast, not the whole veil — the flat screen inside dust),
+     * and light haze at the eye with a dense clump ahead (a wall between them keeps its colour).
      */
     @Test
     void veilFadesToTheWorldWhereItsMatterIs() {
         net.minecraft.world.phys.Vec3 eye = new net.minecraft.world.phys.Vec3(0, 100, 0);
         FarView view = SmokeFillTest.view(eye, new org.joml.Vector3f(0, 0, 1));
         double sigma = 5, tube = 2.7 * Math.sqrt(2 * Math.PI) * sigma;
-        java.util.List<double[]> cases = new java.util.ArrayList<>();
         // tube along z through eye, Gaussians every 2 m
         java.util.List<double[]> trail = new java.util.ArrayList<>();
         for (double z = -150; z <= 150; z += 2) trail.add(new double[]{0, 0, z, sigma, sigma, tube * 2});
@@ -157,7 +157,18 @@ class SmokePuffsTest {
         java.util.List<double[]> far = java.util.List.of(new double[]{0, 0, 60, 8, 8, 3 * 2 * Math.PI * 64});
         // thin haze: broad Gaussian around eye, center optical depth ~0.2
         java.util.List<double[]> thin = java.util.List.of(new double[]{0, 0, 30, 40, 20, 0.2 * 2 * Math.PI * 40 * 20});
-        for (java.util.List<double[]> gs : java.util.List.of(trail, far, thin)) {
+        // the eye 5 m off the middle of a broad dense dust cloud: extinction 0.3/m at its middle
+        java.util.List<double[]> dust = java.util.List.of(new double[]{3, -2, 4, 20, 12, 0.3 * Math.pow(2 * Math.PI, 1.5) * 400 * 12});
+        // review #716 r2: the tail of light haze centred 5 m behind the eye and a dense clump (σ 2 m, depth 3) at 40 m: a
+        // wall at 30 m keeps its colour (one shared profile widened to 18 m put the clump's matter in front of it)
+        java.util.List<double[]> detached = java.util.List.of(new double[]{0, 0, -5, 10, 10, 0.01 * Math.pow(2 * Math.PI, 1.5) * 1000},
+                new double[]{0, 0, 40, 2, 2, 3 * 2 * Math.PI * 4});
+        // review #716 r3: the eye at the edge (2.5 σ) of a cloud 10 m ahead (σ 4 m, depth 4 through its middle)
+        java.util.List<double[]> edge = java.util.List.of(new double[]{0, 0, 10, 4, 4, 4 * 2 * Math.PI * 16});
+        // review #716 r4: a small cloud centred at the eye (σ 5 m, depth 2 ahead): the even part around the eye is the
+        // representation's worst case (a wall at 6.25 m T 0.137 against 0.206)
+        java.util.List<double[]> centred = java.util.List.of(new double[]{0, 0, 0, 5, 5, 4 * 2 * Math.PI * 25});
+        for (java.util.List<double[]> gs : java.util.List.of(trail, far, thin, dust, detached, edge, centred)) {
             double[] packed = new double[gs.size() * SmokePuffs.VEIL_FIELDS];
             for (int c = 0; c < gs.size(); c++) {
                 double[] g = gs.get(c);
@@ -169,8 +180,8 @@ class SmokePuffsTest {
             SmokePuffs.Veil veil = new SmokePuffs.Veil();
             veil.fill(view, packed, gs.size());
             int k = SmokePuffs.Veil.index(SmokePuffs.Veil.N / 2, SmokePuffs.Veil.N / 2);
-            double soft = veil.soft[k], total = veil.tau[k], worst = 0, at = 0, old = 0, house = 0;
-            // forward ray (z) optical depth from Gaussian density in 0.05 m steps; check every meter from 3 to 120
+            double total = veil.tau[k], worst = 0, at = 0, house = 0, worstT = 0, atT = 0;
+            // forward ray (z) optical depth from Gaussian density in 0.05 m steps; check every meter from 1 to 120
             double tau = 0;
             for (int step = 0; step < 2400; step++) {
                 double z = (step + 0.5) * 0.05;
@@ -180,21 +191,63 @@ class SmokePuffsTest {
                             * Math.exp(-0.5 * ((dx * dx + dz * dz) / (g[3] * g[3]) + dy * dy / (g[4] * g[4])));
                 }
                 double s = (step + 1) * 0.05;
-                if (s < 3 || (step + 1) % 20 != 0) continue;
-                double share = -Math.expm1(-tau) / -Math.expm1(-total), ramp = Math.clamp((s - SmokePuffs.VEIL_AT) / soft, 0, 1);
-                old = Math.max(old, 1 - share);
-                if (Math.abs(s - 20) < 1e-6) house = ramp;
-                if (Math.abs(share - ramp) > worst) {
-                    worst = Math.abs(share - ramp);
+                if (s < 1 || (step + 1) % 20 != 0) continue;
+                double share = -Math.expm1(-tau) / -Math.expm1(-total), drawn = veil.before(k, s);
+                if (Math.abs(s - 20) < 1e-6) house = drawn;
+                if (Math.abs(share - drawn) > worst) {
+                    worst = Math.abs(share - drawn);
                     at = s;
                 }
+                // the world's transmittance through the drawn veil against the law, where the world still shows
+                double law = Math.exp(-tau), shown = 1 - drawn * SmokePuffs.Veil.byteAlpha(veil.alpha(k));
+                if (law > 0.05 && Math.abs(shown / law - 1) > worstT) {
+                    worstT = Math.abs(shown / law - 1);
+                    atT = s;
+                }
             }
-            String got = String.format(java.util.Locale.ROOT, "optical depth %.2f, softness %.1f: ramp differs from share before world by %.2f at %.0f m (without softness %.2f), at 20 m %.2f",
-                    total, soft, worst, at, old, house);
-            System.out.println("VEIL " + got);
-            assertTrue(worst <= 0.4 && worst < old, got);
+            String got = String.format(java.util.Locale.ROOT,
+                    "optical depth %.2f: share before world off by %.2f at %.0f m, transmittance off by %.0f %% at %.0f m, at 20 m %.2f",
+                    total, worst, at, 100 * worstT, atT, house);
+            System.out.println("VEIL " + got + String.format(java.util.Locale.ROOT, " near %.2f (width %.2f), ahead %.2f ± %.2f, alpha %.4f", veil.near[k], veil.nearWidth[k], veil.middle[k], veil.width[k], veil.alpha(k)));
+            assertTrue(worst <= 0.2 && worstT <= 0.35, got);
             if (gs == far) assertTrue(house < 0.2, got);
+            if (gs == detached) assertTrue(veil.before(k, 30) * SmokePuffs.Veil.byteAlpha(veil.alpha(k)) < 0.1, got);
         }
+    }
+
+    /** The veil leaves the hand at the pall's distance ({@code pall.glsl} {@code PALL_HAND}). */
+    @Test
+    void veilHandIsThePallHand() throws java.io.IOException {
+        try (java.io.InputStream in = SmokePuffsTest.class.getResourceAsStream("/assets/incoming/shaders/include/pall.glsl")) {
+            java.util.regex.Matcher m = java.util.regex.Pattern.compile("const float PALL_HAND = ([0-9.]+);")
+                    .matcher(new String(in.readAllBytes(), java.nio.charset.StandardCharsets.UTF_8));
+            assertTrue(m.find(), "PALL_HAND");
+            assertEquals(SmokePuffs.HAND, Double.parseDouble(m.group(1)), 1e-9);
+        }
+    }
+
+    /**
+     * The veil's matter along a ray moves continuously as the eye moves (review r1 of the Beer–Lambert veil: a switch
+     * between "eye inside" and "matter ahead" moved the whole of a clump's depth to the eye for a 1 cm step, a wall's
+     * transmittance 0.93 → 0.55): thin haze at the eye plus a dense clump ahead, the eye stepped through the band where
+     * the two shapes blend; a wall at 20 m changes its transmittance by less than 0.02 per 5 cm step.
+     */
+    @Test
+    void veilMatterMovesContinuouslyWithTheEye() {
+        FarView view = SmokeFillTest.view(new net.minecraft.world.phys.Vec3(0, 100, 0), new org.joml.Vector3f(0, 0, 1));
+        int k = SmokePuffs.Veil.index(SmokePuffs.Veil.N / 2, SmokePuffs.Veil.N / 2);
+        double was = Double.NaN, worst = 0;
+        for (double back = 0; back <= 60; back += 0.05) {
+            // haze around the eye (σ 30 m), clump of depth 2 at 40 m ahead; the eye walks back from the clump
+            double[] g = {0, 0, 5 - back, 30, 15, 0.02 * Math.pow(2 * Math.PI, 1.5) * 900 * 15, 0.8, 0.8, 0.8, 1,
+                    0, 0, 40 + back, 6, 6, 2 * 2 * Math.PI * 36, 0.8, 0.8, 0.8, 1};
+            SmokePuffs.Veil veil = new SmokePuffs.Veil();
+            veil.fill(view, g, 2);
+            double t = 1 - veil.before(k, 20) * SmokePuffs.Veil.byteAlpha(veil.alpha(k));
+            if (!Double.isNaN(was)) worst = Math.max(worst, Math.abs(t - was));
+            was = t;
+        }
+        assertTrue(worst < 0.02, "largest step of the wall's transmittance per 5 cm: " + worst);
     }
 
     /**

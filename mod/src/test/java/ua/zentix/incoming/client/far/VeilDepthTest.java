@@ -19,7 +19,7 @@ class VeilDepthTest {
 
         // The mesh stays near the eye for scene-depth sampling. Its colour must blend at the smoke,
         // behind a club at 16 m and in front of one at 315 m; a fixed key of 2 erased the near texture.
-        assertEquals(SmokePuffs.VEIL_AT, veil.place(centre, centre, 2), 1e-6);
+        assertEquals(SmokePuffs.MESH_AT, veil.place(centre, centre, 2), 1e-6);
         assertTrue(depth > 60 && depth < 90, "sort depth = " + depth);
         assertEquals(depth, veil.copy().depth());
     }

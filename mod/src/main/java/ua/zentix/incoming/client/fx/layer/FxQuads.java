@@ -103,6 +103,7 @@ public final class FxQuads {
         this.up = up;
         n = 0;
         nearest = opacity = emit = 0;
+        veiling = false;
         probe = 0;
         part = Part.OTHER;
         glows = false;
@@ -130,6 +131,36 @@ public final class FxQuads {
         nearest = SOFT_TEXELS;
         opacity = 0;
     }
+
+    /**
+     * The next vertices are the veil of matter at the eye ({@code SmokePuffs.Veil}, {@code fx.fsh} {@code veilBefore}:
+     * Beer–Lambert share before the world, the white sprite, open-sky light): {@code near} — the share of the ray's depth
+     * in the matter around the eye ({@code Normal.z}); their light word and softness carry where the matter lies
+     * ({@code SmokePuffs.Veil.packed}, {@code nearWidth}). {@link #endVeil} returns the previous mode.
+     */
+    public void veil(float near) {
+        if (!veiling) {
+            veilNearest = nearest;
+            veilOpacity = opacity;
+            veiling = true;
+        }
+        nearest = VEIL;
+        opacity = (byte) Math.round(Mth.clamp(near, 0, 1) * 127);
+    }
+
+    /** After the veil's quads: the texture mode before {@link #veil}. */
+    public void endVeil() {
+        if (!veiling) return;
+        nearest = veilNearest;
+        opacity = veilOpacity;
+        veiling = false;
+    }
+
+    private boolean veiling;
+    private byte veilNearest, veilOpacity;
+
+    /** {@code Normal.y} of the veil ({@link #veil}): in the plain-texture band of {@code fx.fsh} (−0.1…0.25). */
+    static final byte VEIL = 25;
 
     /** Texture-mode byte ({@code Normal.y}) of the next quads. */
     public byte textureMode() {
