@@ -34,7 +34,11 @@ public final class WallPuffs implements SmokeGrid.Source {
     static final double CELL = 16, PER_DISTANCE = 0.12;
     static final int TIERS = 9;
     /** Rise time constant, s; hump: extra height share (±{@link #HUMP_SPREAD} along the front), its time and width, s. */
-    static final double RISE_S = 0.12, HUMP = 0.42, HUMP_SPREAD = 0.12, HUMP_AT = 0.32, HUMP_W = 0.28;
+    static final double RISE_S = 0.16, HUMP = 0.53, HUMP_SPREAD = 0.1, HUMP_AT = 0.48, HUMP_W = 0.22;
+    /** Freshly torn-up dust is thin at first: opacity builds over this e-fold, s. */
+    static final double TORN_S = 0.12;
+    /** Tier cross-fade half-width, octaves. */
+    static final double BLEND = 0.12;
     /** Unevenness of the settled top along and behind the front (±), and its scale, m. */
     static final double UNEVEN = 0.22, UNEVEN_M = 230;
     /** Young dust is denser than the settled layer: extra optical depth share decaying over {@link #DENSE_S}. */
@@ -48,7 +52,7 @@ public final class WallPuffs implements SmokeGrid.Source {
     /** Front band: rows of wall-height cells behind the front; it starts where tier cells exceed this many band cells. */
     static final double FRONT_ROWS = 6, FRONT_FROM = 1.2;
     /** Dust-impact frame by age: life share from, span, e-fold s. */
-    static final double FRAME_FROM = 0.12, FRAME_SPAN = 0.7, FRAME_S = 3;
+    static final double FRAME_FROM = 0.02, FRAME_SPAN = 0.8, FRAME_S = 3;
     /** Curl: the top is thrown outward by the wind behind the front, then pulled back (share of the top). */
     static final double CURL = 0.45, CURL_S = 0.45, BACK = 0.12;
 
@@ -130,6 +134,26 @@ public final class WallPuffs implements SmokeGrid.Source {
         return (a0 + (a1 - a0) * fu) + ((b0 + (b1 - b0) * fu) - (a0 + (a1 - a0) * fu)) * fv;
     }
 
+    /**
+     * Mass share of a tier at {@code x} = log2(eye distance / its own distance): one tier per octave, neighbours cross-faded
+     * only over ±{@link #BLEND} octave at the boundary (shares sum to one). A whole-octave cross-fade emitted every place twice:
+     * 2500–3000 billows, a 4–6.5 ms off-thread plan, over the 3 ms the frame waits for it, so the dust moved every other frame.
+     */
+    static double tierWeight(double x, boolean first, boolean last) {
+        if (x < 0 && first || x > 0 && last) return 1;
+        return 1 - smooth(0.5 - BLEND, 0.5 + BLEND, Math.abs(x));
+    }
+
+    /**
+     * Wall top over its settled height {@code h} at {@code age} s (presentation): the torn-up dust starts low at the contact
+     * line, rises into the hump ({@code hump} extra share) and settles back by ~1 s.
+     */
+    static double top(double age, double h, double hump) {
+        double rise = 1 - Math.exp(-age / RISE_S);
+        double bump = hump * Math.exp(-(age - HUMP_AT) * (age - HUMP_AT) / (2 * HUMP_W * HUMP_W));
+        return h * rise * rise * (1 + bump);
+    }
+
     private static double smooth(double e0, double e1, double x) {
         double t = Math.clamp((x - e0) / (e1 - e0), 0, 1);
         return t * t * (3 - 2 * t);
@@ -161,7 +185,8 @@ public final class WallPuffs implements SmokeGrid.Source {
     private boolean emitAll(double seconds, SmokeGrid.Sink out) {
         if (gone) return false;
         Detonation d = a.d;
-        double t = a.ticks(0) + (seconds - SmokeGrid.seconds(0)) * 20;
+        // render time: the frame's partial tick (the grid clock's fraction), as the pall and mushroom take it
+        double t = a.ticks((float) Math.clamp((seconds - SmokeGrid.seconds(0)) * 20, 0, 1));
         double outer = front(t), inner = front(t - 20 * YOUNG_S);
         drawn = 0;
         if (outer <= 0 || inner >= a.pall.reach()) return false;
@@ -178,7 +203,7 @@ public final class WallPuffs implements SmokeGrid.Source {
         for (int k = 0; k < TIERS; k++) {
             double cell = cell0 * (1L << k);
             // tier k weight peaks at eye distance cell / PER_DISTANCE, triangle in log2 distance (tiers sum to one)
-            double dk = cell / PER_DISTANCE, near = k == 0 ? 0 : dk * 0.5, far = k == TIERS - 1 ? Double.MAX_VALUE : dk * 2;
+            double dk = cell / PER_DISTANCE, near = k == 0 ? 0 : dk * Math.pow(2, -0.5 - BLEND), far = k == TIERS - 1 ? Double.MAX_VALUE : dk * Math.pow(2, 0.5 + BLEND);
             double reach = Math.min(far, 4 * a.pall.reach());
             long i0 = (long) Math.floor((ex - gx - reach) / cell), i1 = (long) Math.ceil((ex - gx + reach) / cell);
             long j0 = (long) Math.floor((ez - gz - reach) / cell), j1 = (long) Math.ceil((ez - gz + reach) / cell);
@@ -190,8 +215,7 @@ public final class WallPuffs implements SmokeGrid.Source {
                     if (r > outer + cell || r < inner - cell) continue;
                     double vx = px - ex, vz = pz - ez, dist = Math.hypot(vx, vz);
                     double w;
-                    if (dist < dk) w = k == 0 ? 1 : smooth(0, 1, Math.log(dist / near) / Math.log(2));
-                    else w = k == TIERS - 1 ? 1 : 1 - smooth(0, 1, Math.log(dist / dk) / Math.log(2));
+                    w = tierWeight(Math.log(dist / dk) / Math.log(2), k == 0, k == TIERS - 1);
                     if (w <= 0.01) continue;
                     // outside 60° of the horizontal gaze (the frame is ±43° at the judging zoom), farther than two cells: not seen
                     if (dist > 2 * cell && (vx * lx + vz * lz) < 0.5 * dist) continue;
@@ -250,9 +274,7 @@ public final class WallPuffs implements SmokeGrid.Source {
         double n1 = noise(x, z, UNEVEN_M * metre, seed + 101), n2 = noise(x, z, 0.6 * UNEVEN_M * metre, seed + 202);
         double h = settled * (1 + UNEVEN * 2 * (n1 - 0.5));
         double hump = HUMP + HUMP_SPREAD * 2 * (n2 - 0.5);
-        double rise = 1 - Math.exp(-age / RISE_S);
-        double bump = hump * Math.exp(-(age - HUMP_AT) * (age - HUMP_AT) / (2 * HUMP_W * HUMP_W));
-        double topH = Math.max(h * rise * (1 + bump), 0.5 * metre);
+        double topH = Math.max(top(age, h, hump), 0.5 * metre);
         // curl: top thrown outward by the post-front wind, then back with the negative phase
         double throwOut = CURL * (Math.exp(-age / CURL_S) - Math.exp(-age / 0.06)) - BACK * Math.exp(-(age - 2.2) * (age - 2.2) / 1.2);
         double lean = throwOut * topH;
@@ -263,7 +285,7 @@ public final class WallPuffs implements SmokeGrid.Source {
         // billow's visible edge (√(2 ln(τ/0.05)) σ) and with it the frame's fill
         tauV = Math.min(tauV, OPAQUE);
         double area = cell * cell / (metre * metre);
-        double mass = tauV * area / dustK * w * fade * Math.min(1, age / 0.05);
+        double mass = tauV * area / dustK * w * fade * (1 - Math.exp(-age / TORN_S));
         if (mass <= 0) return;
         // the dust-impact frames play with the billow's age: young billows are the impact's first frames (torn up, growing),
         // older ones its later, calmer frames (presentation); the frame is what makes billows turn over
