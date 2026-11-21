@@ -286,6 +286,16 @@ public final class PallField {
     }
 
     /**
+     * presentation (fx_pall: the drawn young dust and head only; the law and its profile are unchanged): their top is drawn as an entrainment
+     * zone, not a skin (Stull 1988: a zone some 0.2–0.4 of the layer deep where it mixes with the air above) — a dilute share {@code TAIL}
+     * (est.) of the drawn column thins from 0.45 of the top to {@code TAIL_TOP} (the approved animation's haze over the core, ×1.45). In dust
+     * some 100 optical depths deep the view went opaque in the top fifth of the layer — a sharp skin that read as a solid surface (a sheet,
+     * dunes, gravel; judge on c2); the tail's few optical depths lie above it. Copies {@code PALL_TAIL}, {@code PALL_TAIL_TOP}; the pall's
+     * and the head's drawn bounds take {@code TAIL_TOP}.
+     */
+    public static final double TAIL = 0.06, TAIL_TOP = 1.45;
+
+    /**
      * Column above a point at pall height {@code x} — integral of {@link #profile} from x to top, in height fractions: used by the shader
      * for shadow and sky light inside pall. Approximation (test checks against its integral: error below 0.01).
      */

@@ -80,7 +80,9 @@ class PallFloorsGlslTest {
                 "PALL_SEE_NEAR", (double) PallPass.SEE_NEAR,
                 "PALL_LIT_TAU", (double) PallPass.LIT_TAU,
                 "PALL_MIX_S", ua.zentix.incoming.nuclear.model.DustModel.RISE_S,
-                "PALL_SALTATION_S", ua.zentix.incoming.nuclear.model.DustModel.SALTATION_S);
+                "PALL_SALTATION_S", ua.zentix.incoming.nuclear.model.DustModel.SALTATION_S,
+                "PALL_TAIL", ua.zentix.incoming.client.nuclear.PallField.TAIL,
+                "PALL_TAIL_TOP", ua.zentix.incoming.client.nuclear.PallField.TAIL_TOP);
         for (var e : copies.entrySet()) {
             java.util.regex.Matcher m = java.util.regex.Pattern.compile("const float " + e.getKey() + " = ([0-9.]+);").matcher(src);
             assertTrue(m.find(), e.getKey());

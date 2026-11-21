@@ -91,7 +91,21 @@ struct PallAt {
     float wet;
     // how much the dust layer is mixed (PallField.mixed): tufts of the young layer spread out (pallMixed)
     float mixed;
+    // dust density at the ground here (the dust row × edge, after water): the drawn tail's base (PALL_TAIL)
+    float base;
 };
+
+// presentation (PallField.TAIL, TAIL_TOP; the drawn young dust and head only): a dilute share of the drawn column thinning from 0.45 of the
+// top to PALL_TAIL_TOP of it — the top an entrainment zone, not a skin
+const float PALL_TAIL = 0.06;
+const float PALL_TAIL_TOP = 1.45;
+// its shape by height (1 at the ground, 0 at PALL_TAIL_TOP); PALL_TAIL_NORM = ∫ pallProfile / ∫ shape over the top (0.548 / 0.95), so the
+// tail and the core scaled by 1 / (1 + PALL_TAIL) keep the column
+const float PALL_TAIL_NORM = 0.5768;
+float pallTailShape(float x) {
+    if (x <= 0.0) return 1.0;
+    return 1.0 - smoothstep(0.45, PALL_TAIL_TOP, x);
+}
 
 // share of density at the ground at height x of the pall (PallField.profile)
 float pallProfile(float x) {
@@ -212,6 +226,7 @@ PallAt pallField(sampler2D table, sampler2D ground, mat4 S, vec4 G, vec4 W, vec3
     a.dense = (sd + ss + sg) / max(S[3].x, 1e-6);
     a.wet = wet;
     a.mixed = dust.a;
+    a.base = sd;
     return a;
 }
 
@@ -630,7 +645,7 @@ const float PALL_LUMP_TEXEL = 15.4;
 // the young top's relief (pallTopRelief): lumps and billows at a third of a lump (weights PALL_LUMP_W, 1 − it), the top between
 // PALL_RELIEF_LO and PALL_RELIEF_HI of the law's (lead 14:15: the top at the 4.5 km ring of 1 Mt stays within ~85–90 m — the hump's
 // peak is the law's top, the relief rises it by at most PALL_RELIEF = HI − 1, the bounds' share, PallField.LUMP_AMP, PallLumpsTest)
-const float PALL_LUMP_W = 0.7;
+const float PALL_LUMP_W = 1.0;
 const float PALL_RELIEF_LO = 0.75;
 const float PALL_RELIEF_HI = 1.10;
 const float PALL_RELIEF = 0.10;
@@ -761,7 +776,7 @@ float pallWallFade(float u) {
 float pallWallInside(float s, float z, float len, float top, float lag) {
     if (s < -1.0) return 0.0;
     if (s > PALL_WALL_HANDOFF_TO * len + lag) return 0.0;
-    if (z > top * (1.0 + PALL_RELIEF)) return 0.0;
+    if (z > top * (1.0 + PALL_RELIEF) * PALL_TAIL_TOP) return 0.0;
     if (z < -0.5 * top) return 0.0;
     return 1.0;
 }
@@ -846,7 +861,7 @@ vec4 pallWallSpans(mat4 S, mat4 V, vec4 G, vec3 dir, float ta, float tb) {
     vec2 c = S[0].xy;
     float top = V[0].z, outer = V[0].x + 1.0, inner = max(V[0].x - PALL_WALL_HANDOFF_TO * V[0].y - V[1].y, 0.0);
     // by height: the relief map (without it — the ground under the epicenter) with the head
-    float lo = S[0].z + min(G.y, 0.0) - 0.5 * top, hi = S[0].z + max(G.z, 0.0) + top * (1.0 + PALL_RELIEF);
+    float lo = S[0].z + min(G.y, 0.0) - 0.5 * top, hi = S[0].z + max(G.z, 0.0) + top * (1.0 + PALL_RELIEF) * PALL_TAIL_TOP;
     if (abs(dir.y) > 1e-6) {
         float y0 = lo / dir.y, y1 = hi / dir.y;
         ta = max(ta, min(y0, y1));

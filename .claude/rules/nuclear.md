@@ -264,7 +264,7 @@ Ruins and everything in `nuclear/world/` are in `nuclear-world.md`.
   slow turnover until the layer has mixed), rising a little; the same fetch as the existing warp (`warpNoise`, `wallNoise`); dust age
   from `PallField.mixed` (pall) or phase share (head). The noise coordinate is not stretched along the flow: a stretched coordinate
   makes its gaps as long as its billows, and the layer opens into black voids. Streaks along the flow are a density detail instead
-  (`pallStreak`: 1 ± 0.55, never zero, `PALL_STREAK_ALONG` 28 long, `_UP` 5 tall, `_ACROSS` 4.5 wide), on the young layer's dry
+  (`pallStreak`: 1 ± 0.275, never zero, `PALL_STREAK_ALONG` 28 long, `_UP` 5 tall, `_ACROSS` 4.5 wide), on the young layer's dry
   dust and the head, fading as the layer mixes and below the pixel footprint. Wisps (`pallWisp`): in half of the `PALL_WISP_CELL` (60) cells of the
   young layer the top rises in a narrow plume (σ 8) by up to `PALL_WISP_RISE` (0.6) of itself 0–8 s after the local phase, gone by
   `PALL_WISP_END` (14 s); a multiplier on the top like the bumps with the dust thinned by the same factor, so the plume is the

@@ -217,8 +217,8 @@ float hgDisc(float g, float c, float mu0) {
 // Coarse-noise tile warp (tile fractions): tile repeats every tile blocks, visible as bands from above; smooth warp
 // up to one sixth of a tile over two tiles breaks repetition (more stretches billows into bands), preserving value
 // distribution (same noise elsewhere, mean billow shape remains 1)
-// presentation (Artem's approved animation): fibrous streaks along the radial flow on young dust — a density multiplier 1 ± 0.55
-// (0.45…1.55, mean 1: it never opens the layer) of a noise PALL_STREAK_ALONG long along the flow, PALL_STREAK_UP tall and about
+// presentation (Artem's approved animation): fibrous streaks along the radial flow on young dust — a density multiplier 1 ± 0.275
+// (0.725…1.275, mean 1: it never opens the layer; soft: a stronger contrast read as raked sand and glints) of a noise PALL_STREAK_ALONG long along the flow, PALL_STREAK_UP tall and about
 // PALL_STREAK_ACROSS across it at any distance from ground zero: the angular frequency is the radius over the width, in octaves
 // blended by the radius (each 1–2 × the width; one frequency for all radii made them 0.5 m wide at 4.5 km — sub-pixel, aliasing
 // into stipple and shimmer). The angle enters through the direction, so there is no seam. rel — from ground zero, up — above
@@ -232,7 +232,7 @@ float pallStreak(vec2 rel, float up) {
     vec2 e = rel / r;
     float l = log2(max(r / PALL_STREAK_ACROSS, 1.0)), l0 = floor(l);
     float n = mix(pallStreakAt(e, r, up, exp2(l0)), pallStreakAt(e, r, up, exp2(l0 + 1.0)), l - l0);
-    return 1.0 + 1.1 * (n - 0.5);
+    return 1.0 + 0.55 * (n - 0.5);
 }
 
 // One relief octave at rel (blocks from ground zero, less the drift; the head: its dust origin): the noise tile's R and B channels at
@@ -453,6 +453,9 @@ float wallAt(mat4 V, WallAt h, float fine, float dense) {
     // the relief in the head's top: its density at the height z / relief, divided by it (column kept)
     float relief = pallTopRelief(o.xz, gLumpTile, gLumpTime, gLumpCone);
     float m = pallWallMean(s, h.z / relief, h.P.x, h.P.y) / relief;
+    // presentation: the head's top an entrainment zone (PALL_TAIL), as the young layer's: a dilute share above its core, the core scaled
+    float local = max(h.P.y * pallWallTop(u), 0.001);
+    m = (m + PALL_TAIL * PALL_TAIL_NORM * pallWallMean(s, 0.0, h.P.x, h.P.y) / relief * pallTailShape(h.z / relief / local)) / (1.0 + PALL_TAIL);
     if (m <= 0.0) return 0.0;
     float shape = 1.0;
     // presentation: the head's streaks along the flow (pallStreak), while resolved
@@ -601,6 +604,10 @@ void slot(mat4 S, mat4 V, sampler2D ground, vec4 R, vec4 W, vec4 G, vec4 H, vec3
     f.sigma.x /= wisp;
     f.column.x /= wisp;
     f.slab.x /= wisp;
+    // presentation: the young dust's top an entrainment zone, not a skin (PALL_TAIL): a dilute share of the drawn column above the core
+    // up to PALL_TAIL_TOP of the top, the core scaled alike (column kept); old pall as the law draws it
+    float tail = PALL_TAIL * (1.0 - f.mixed);
+    if (tail > 0.0) f.sigma.x = (f.sigma.x + tail * PALL_TAIL_NORM * f.base / wisp * pallTailShape(f.height.x)) / (1.0 + tail);
     // Dust lifted out of the flat layer by inflow has the same material and billows. Its light is computed here too,
     // including self-shadowing: above the old top it does not become flat gray fill.
     if (inflow.w > 0.0 && length(inflow.xz - S[0].xy) < 1.0) {
