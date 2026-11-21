@@ -130,6 +130,7 @@ public final class Incoming {
         NeoForge.EVENT_BUS.addListener(LegacyMigration::onServerStarted);
         NeoForge.EVENT_BUS.addListener(LegacyMigration::onEntityJoin);
         NeoForge.EVENT_BUS.addListener(CraterFalls::onEntityJoin);
+        NeoForge.EVENT_BUS.addListener(CraterFalls::onEntityTick);
         NeoForge.EVENT_BUS.addListener(ua.zentix.incoming.nuclear.MobPanic::onJoin);
 
         NeoForge.EVENT_BUS.addListener(NuclearStrikes::onChunkLoad);

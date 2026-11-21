@@ -158,12 +158,15 @@ paths:
   explosions removed, without the nuclear cascade through structure the spans did not hold before the strike
   (nuclear-world.md). `StagedExplosion` records each removal with its old state in the strike's `BlastArea` (`removed`;
   only a block that actually changed; craft blocks and the crater are not recorded: the crater digs natural ground,
-  which stands as an arch). `WorkGameTests.recordBlasts` skips the collapse's zero-radius `Detonate`.
+  which stands as an arch). `StrikeRemovals` journals impact and fall removals by chunk while the collapses overlap.
+  Each chunk snapshot pins its journal at copy time and restores the first old state of each open or overlapping loss.
+  The journal prunes records whose source no longer overlaps an open impact, in bounded steps.
+  `WorkGameTests.recordBlasts` skips the collapse's zero-radius `Detonate`.
   - Admission: one of `StrikeSupport.MAX_SOLVES` server-wide slots before any work (`slotFree` is tested before the
     area's readiness, so a backlog costs no readiness scans); a slot covers snapshots, the queued or running solve and
     its result until the fall ends or is cancelled, freed once, also when a queued solve is cancelled before it runs.
   - Snapshots of every chunk within `Collapse.C` of a removal and its neighbors, in 5 ms portions of bounded units
-    (`StrikeSupport.unit`): 512 removals indexed or checked, 512 unready chunks skipped, one chunk's copy without
+    (`StrikeSupport.unit`): 512 removals indexed, read from the journal or checked, 512 unready chunks skipped, one chunk's copy without
     publication (0.1–0.2 ms at 21 sections, linear in height), one section's distinct states (`ChunkShot.states`;
     vanilla `getAll` collects ids in an `IntArraySet`: 1.6–6.6 ms a section of 1024–4096 states, 34–138 ms a whole
     dense chunk), 16 states into the property table (removal states included). GameTest `snapshotStepsStayInTheirSlice`
@@ -178,8 +181,9 @@ paths:
   - The fall is a second job (`Fall`), queued when the solve starts (`UnitQueue` cancels a job unready
     `GIVE_UP_TICKS` after queueing). It writes once the Sable origin chunk is loaded (`NuclearTickets.ORIGIN`,
     requested when the collapse takes its slot). Preparation in timed portions: the holes the solve used are checked;
-    claim handlers get `ExplosionEvent.Detonate` events of 1024 positions, attributed to the strike's projectile and
-    damage source, without entities; a kept load-bearing block keeps the whole plan standing.
+    claim handlers get `ExplosionEvent.Detonate` events of up to 1024 positions, attributed to the strike's projectile and
+    damage source, without entities. Candidates in a shared support window also go through each peer impact whose
+    losses it used. A kept load-bearing block keeps the whole plan standing (`overlappingHolesKeepBothClaimContexts`).
   - Stale plans: a removal holding a load-bearing block again, or a load-bearing block in a watch cell or hole beside a
     position about to fall, means the world changed under the plan (a support built while it was solved or fell);
     what is left of it is dropped and a new collapse over the strike's removals plus what already fell decides again
@@ -188,8 +192,8 @@ paths:
   - Writes, 5 ms portions (every candidate, kept or not, checks the clock): blocks changed since the snapshot stay;
     only where the chunk and its eight neighbors are ready, never into the plot grid; a non-vanilla block entity needs
     chunks ready `MODDED_REACH` around (its removal may follow chains, as in `RuinPlan.neighbourRadius`).
-  - Storage: a block holding items (vanilla `Container`, or the item-handler capability from no side or any face)
-    drops as a vanilla explosion drops it (`Block.dropResources` with its block entity: a shulker box keeps its
+  - Storage: a vanilla `Container` or a block with the item-handler capability from no side or any face
+    drops even when empty (`Block.dropResources` with its block entity: a shulker box keeps its name and
     contents in the item) and is removed without clearing (`ColumnScar.replaceKeeping`), so its own `onRemove` spills
     what it keeps (chest; Create vault, depot, saw: many Create block entities are `Clearable`, and the saw's handler
     gives nothing out); it lands as no rubble; an unrolled loot table stays unrolled. GameTest `storageContentsSurvive`.
@@ -197,7 +201,8 @@ paths:
     `vaultCapacity` spawns its whole contents in one removal.
   - Rubble: falls as vanilla falling blocks while `CraterFalls.room` allows, otherwise lands at once where it would
     rest, spread by `Debris.spread`; fluid ticks and landings in their own portions; rubble lands in claimed land as
-    vanilla falling sand does. One `S2C.Collapse` (dust, rumble) for the fallen load-bearing blocks
+    vanilla falling sand does. With `world.debris_stay` off, live rubble disappears on landing and direct landing
+    skips placement. One `S2C.Collapse` (dust, rumble) for the fallen load-bearing blocks
     (`StrikeSupport.MATERIAL` m³ a block).
   - Telemetry: impact kind `COLLAPSE` in the slow-impact-tick line and the strike summary; the `Impact series summary`
     line ends with blocks fallen and the longest collapse unit; replans, stops and claim-kept plans log one INFO line.

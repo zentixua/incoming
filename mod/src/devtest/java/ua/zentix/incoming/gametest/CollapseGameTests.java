@@ -35,11 +35,11 @@ public final class CollapseGameTests {
     private CollapseGameTests() {}
 
     /** Platform top (relative): ground blocks up to this height. */
-    private static final int GROUND = 11;
+    static final int GROUND = 11;
     private static int holders;
     private static boolean debris, fire;
 
-    private static void quiet(GameTestHelper h) {
+    static void quiet(GameTestHelper h) {
         if (holders++ == 0) {
             debris = IncomingConfig.SERVER.debrisStay.get();
             fire = IncomingConfig.SERVER.fire.get();
@@ -55,7 +55,7 @@ public final class CollapseGameTests {
     }
 
     /** Solid ground: the air layer under the platform and the platform up to {@link #GROUND}. */
-    private static void ground(GameTestHelper h) {
+    static void ground(GameTestHelper h) {
         ServerLevel level = h.getLevel();
         for (BlockPos p : BlockPos.betweenClosed(new BlockPos(0, 0, 0), new BlockPos(63, GROUND, 63))) {
             BlockPos a = h.absolutePos(p);

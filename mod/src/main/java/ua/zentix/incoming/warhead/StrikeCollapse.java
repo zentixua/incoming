@@ -1,6 +1,7 @@
 package ua.zentix.incoming.warhead;
 
 import it.unimi.dsi.fastutil.longs.Long2BooleanOpenHashMap;
+import it.unimi.dsi.fastutil.longs.LongIterator;
 import it.unimi.dsi.fastutil.longs.LongOpenHashSet;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
@@ -19,7 +20,6 @@ import net.minecraft.world.level.material.FluidState;
 import net.minecraft.world.phys.Vec3;
 import net.neoforged.neoforge.capabilities.Capabilities;
 import net.neoforged.neoforge.event.EventHooks;
-import net.neoforged.neoforge.items.IItemHandler;
 import net.neoforged.neoforge.network.PacketDistributor;
 import org.jetbrains.annotations.Nullable;
 import ua.zentix.incoming.Incoming;
@@ -27,6 +27,7 @@ import ua.zentix.incoming.IncomingConfig;
 import ua.zentix.incoming.compat.SubLevels;
 import ua.zentix.incoming.net.S2C;
 import ua.zentix.incoming.nuclear.world.ColumnScar;
+import ua.zentix.incoming.nuclear.world.StrikeRemovals;
 import ua.zentix.incoming.nuclear.world.StrikeSupport;
 import ua.zentix.incoming.strike.ImpactCost;
 import ua.zentix.incoming.strike.StrikeWorld;
@@ -86,13 +87,14 @@ final class StrikeCollapse implements UnitQueue.Job {
     @Nullable
     private StrikeSupport.Result result;
     /** Positions claim handlers kept ({@link #prepare}). */
-    private LongOpenHashSet kept = new LongOpenHashSet();
+    private final LongOpenHashSet kept = new LongOpenHashSet();
     /** Preparation cursors: removals checked for a support built back, fall positions offered to claim handlers. */
     @Nullable
-    private long[] holes;
-    private int holesChecked, offered;
+    private LongIterator holes;
+    private int offered, peerWindow, peerSource, peerOffered;
     private boolean prepared;
     private int next, nextFluid;
+    private boolean sent;
     /** Rubble that lands without a live falling block: source and state. */
     private final List<Landing> landings = new ArrayList<>();
     private int landed;
@@ -108,7 +110,7 @@ final class StrikeCollapse implements UnitQueue.Job {
      * replans; every job of the chain ended (tests).
      */
     static final class Stats {
-        int dropped, live, placed, changed, solved, portions, largestPortion, replans;
+        int dropped, live, direct, placed, changed, solved, portions, largestPortion, replans;
         boolean finished;
         /** Jobs of the chain not yet ended. */
         private int open;
@@ -154,7 +156,7 @@ final class StrikeCollapse implements UnitQueue.Job {
             if (removedAt.isEmpty() || !IncomingConfig.SERVER.blockDamage.get()) return true;
             // the slot first: a waiting collapse holds nothing but its strike area
             if (!StrikeSupport.tryReserve()) return false;
-            support = new StrikeSupport(level, removedAt, removedWas);
+            support = new StrikeSupport(level, removedAt, removedWas, area.collapseSource());
             // the fall's writes need the Sable origin chunk loaded (Fall#ready): requested now, loaded while this solves
             if (ua.zentix.incoming.compat.SableTerrain.present()) ua.zentix.incoming.nuclear.world.NuclearTickets.holdOrigin(level, true);
         }
@@ -277,7 +279,7 @@ final class StrikeCollapse implements UnitQueue.Job {
 
     /**
      * Solve arrived (ordered on the worker), in timed portions: abandoned if a removal the solve used holds a
-     * load-bearing block again; claim handlers keep their positions ({@link #OFFER_UNIT} a unit); then dust and rumble.
+     * load-bearing block again; claim handlers keep their positions ({@link #OFFER_UNIT} a unit).
      */
     private void prepare(ServerLevel level) {
         if (result == null && beforeFall != null) {
@@ -298,50 +300,52 @@ final class StrikeCollapse implements UnitQueue.Job {
                 return;
             }
             stats.solved += result.solved();
-            holes = support.lostPositions().toLongArray();
+            holes = support.lostPositions().iterator();
         }
         LongSupplier watch = watch(level);
         long start = watch.getAsLong();
         // a support built back into the hole while the solve ran: the plan no longer describes the world
-        while (holesChecked < holes.length) {
-            BlockPos at = BlockPos.of(holes[holesChecked++]);
+        for (int i = 0; holes.hasNext(); i++) {
+            BlockPos at = BlockPos.of(holes.nextLong());
             if (Terrain.ready(level, at) && StrikeSupport.bearing(level.getBlockState(at))) {
                 // the solve decides again whether what it holds up still lacks support
                 replan(level, "a removed block is back at " + at.toShortString());
                 prepared = true;
                 return;
             }
-            if ((holesChecked & 63) == 0 && watch.getAsLong() - start >= PORTION_NANOS) return;
+            if ((i & 63) == 63 && watch.getAsLong() - start >= PORTION_NANOS) return;
         }
         long[] all = result.at();
         if (offered < all.length) {
             // protection (claims) as for the blast itself: handlers filter the positions of an explosion's Detonate; a
             // zero-radius explosion without entities, so no handler reads it as a new blast (blackout, damage)
             int end = Math.min(all.length, offered + OFFER_UNIT);
-            Explosion e = after.isEmpty() ? new Explosion(level, null, centre.x, centre.y, centre.z, 0f, false, Explosion.BlockInteraction.DESTROY_WITH_DECAY)
+            StrikeRemovals.Source source = area.collapseSource();
+            Explosion e = source != null ? source.explosion(level)
                     : after.getFirst().attributed(level, centre);
-            List<BlockPos> list = e.getToBlow();
-            for (int i = offered; i < end; i++) list.add(BlockPos.of(all[i]));
-            EventHooks.onExplosionDetonate(level, e, new ArrayList<>(), 0);
-            LongOpenHashSet allowed = new LongOpenHashSet(list.size());
-            for (BlockPos p : list) allowed.add(p.asLong());
-            for (int i = offered; i < end; i++) {
-                if (allowed.contains(all[i])) continue;
-                // a protected load-bearing block stays, and the solve dropped what it holds up with it: the plan no
-                // longer describes the world, nothing falls (protection wins over the collapse)
-                if (StrikeSupport.bearing(result.was()[i])) {
-                    Incoming.LOG.info("Collapse at {} kept standing: claim protection keeps load-bearing {}",
-                            BlockPos.containing(centre).toShortString(), BlockPos.of(all[i]).toShortString());
-                    result = emptyResult();
-                    prepared = true;
-                    return;
-                }
-                kept.add(all[i]);
-            }
+            if (!allow(level, e, null, offered, end)) return;
             offered = end;
-            if (offered < all.length) return;
+            if (offered < all.length || !result.peerClaims().isEmpty()) return;
+        }
+        if (peerWindow < result.peerClaims().size()) {
+            StrikeSupport.PeerClaims peer = result.peerClaims().get(peerWindow);
+            int end = Math.min(peer.indices().length, peerOffered + OFFER_UNIT);
+            if (!allow(level, peer.sources().get(peerSource).explosion(level), peer.indices(), peerOffered, end)) return;
+            peerOffered = end;
+            if (end < peer.indices().length) return;
+            peerOffered = 0;
+            if (++peerSource < peer.sources().size()) return;
+            peerSource = 0;
+            if (++peerWindow < result.peerClaims().size()) return;
         }
         prepared = true;
+        if (result.peerClaims().isEmpty()) announce(level);
+    }
+
+    /** One dust and rumble packet for a plan that actually removes blocks. */
+    private void announce(ServerLevel level) {
+        if (sent) return;
+        sent = true;
         Vec3 base = result.base();
         if (base != null) {
             GroundMaterial m = result.common() == null ? null : GroundMaterial.of(result.common());
@@ -349,6 +353,30 @@ final class StrikeCollapse implements UnitQueue.Job {
             PacketDistributor.sendToPlayersNear(level, null, base.x, base.y, base.z, IncomingConfig.SERVER.farRange.get(),
                     new S2C.Collapse(base, (m == null ? GroundMaterial.BRICK : m).ordinal(), (float) (result.mass() * StrikeSupport.MATERIAL)));
         }
+    }
+
+    /** Claim handlers may keep any candidate. A kept bearing block invalidates the whole support plan. */
+    private boolean allow(ServerLevel level, Explosion e, @Nullable int[] indices, int from, int end) {
+        long[] all = result.at();
+        List<BlockPos> list = e.getToBlow();
+        for (int i = from; i < end; i++) list.add(BlockPos.of(all[indices == null ? i : indices[i]]));
+        EventHooks.onExplosionDetonate(level, e, new ArrayList<>(), 0);
+        LongOpenHashSet allowed = new LongOpenHashSet(list.size());
+        for (BlockPos p : list) allowed.add(p.asLong());
+        for (int i = from; i < end; i++) {
+            int index = indices == null ? i : indices[i];
+            long at = all[index];
+            if (allowed.contains(at)) continue;
+            if (StrikeSupport.bearing(result.was()[index])) {
+                Incoming.LOG.info("Collapse at {} kept standing: claim protection keeps load-bearing {}",
+                        BlockPos.containing(centre).toShortString(), BlockPos.of(at).toShortString());
+                result = emptyResult();
+                prepared = true;
+                return false;
+            }
+            kept.add(at);
+        }
+        return true;
     }
 
     private static StrikeSupport.Result emptyResult() {
@@ -420,14 +448,20 @@ final class StrikeCollapse implements UnitQueue.Job {
                 break;
             } else {
                 boolean item = remove(level, p, st, result.to()[i]);
+                announce(level);
                 droppedAt.add(at[i]);
                 droppedWas.add(st);
+                StrikeRemovals.Source source = area.collapseSource();
+                if (source != null) source.record(at[i], st);
                 stats.dropped++;
                 n++;
                 BlockState rubble = item ? null : result.rubble()[i];
                 if (rubble != null) {
                     if (falls.room(level, p)) drop(level, p, rubble, m);
-                    else landings.add(new Landing(p, rubble));
+                    else {
+                        landings.add(new Landing(p, rubble));
+                        stats.direct++;
+                    }
                 }
             }
             if (watch.getAsLong() - start >= PORTION_NANOS) break;
@@ -470,7 +504,7 @@ final class StrikeCollapse implements UnitQueue.Job {
     private static final Direction[] SIDES = {null, Direction.DOWN, Direction.UP, Direction.NORTH, Direction.SOUTH, Direction.WEST, Direction.EAST};
 
     /**
-     * Remove a fallen block as the game removes a broken one, so nothing it holds is lost: a block entity holding items
+     * Remove a fallen block as the game removes a broken one, so nothing it holds is lost: a storage block entity
      * (a vanilla {@link Container}, or the loader's item-handler capability from any side) drops as a vanilla explosion
      * drops it ({@link Block#dropResources} with its block entity: a shulker box keeps its contents in the item), then the
      * block's own removal ({@code onRemove}) spills what it keeps inside: a chest's contents, a Create vault's or depot's,
@@ -483,23 +517,22 @@ final class StrikeCollapse implements UnitQueue.Job {
         boolean item = false;
         if (st.hasBlockEntity()) {
             BlockEntity be = level.getBlockEntity(p);
-            if (be instanceof RandomizableContainer r && r.getLootTable() != null) r.setLootTable(null);
-            else if (be != null && holdsItems(level, p, st, be)) {
+            if (be != null && isStorage(level, p, st, be)) {
                 Block.dropResources(st, level, p, be);
                 item = true;
             }
+            // Loot can be copied to the item as a component. Prevent onRemove from rolling it into loose items.
+            if (be instanceof RandomizableContainer r && r.getLootTable() != null) r.setLootTable(null);
         }
         ColumnScar.replaceKeeping(level, p, st, to);
         return item;
     }
 
-    /** Whether a block entity holds items: a vanilla {@link Container}, or an item handler from any of {@link #SIDES}. */
-    static boolean holdsItems(ServerLevel level, BlockPos p, BlockState st, BlockEntity be) {
-        if (be instanceof Container c) return !c.isEmpty();
+    /** Storage can be empty and still carry item components, such as a custom name. */
+    private static boolean isStorage(ServerLevel level, BlockPos p, BlockState st, BlockEntity be) {
+        if (be instanceof Container) return true;
         for (Direction side : SIDES) {
-            IItemHandler items = level.getCapability(Capabilities.ItemHandler.BLOCK, p, st, be, side);
-            if (items == null) continue;
-            for (int i = 0; i < items.getSlots(); i++) if (!items.getStackInSlot(i).isEmpty()) return true;
+            if (level.getCapability(Capabilities.ItemHandler.BLOCK, p, st, be, side) != null) return true;
         }
         return false;
     }
@@ -517,7 +550,7 @@ final class StrikeCollapse implements UnitQueue.Job {
         int fall = from.getY() - rest(level, from.getX(), from.getY(), from.getZ(), m);
         double[] off = StrikeSupport.spread(from.getX(), from.getY(), from.getZ(), fall);
         FallingBlockEntity e = FallingBlockEntity.fall(level, from, rubble);
-        e.dropItem = false;
+        CraterFalls.markRubble(e);
         double ticks = fallTicks(Math.max(1, fall));
         e.setDeltaMovement(off[0] / ticks, 0, off[1] / ticks);
         stats.live++;
@@ -540,6 +573,10 @@ final class StrikeCollapse implements UnitQueue.Job {
 
     /** Rubble without a live falling block, in timed portions, after every fall is out of the way. */
     private int land(ServerLevel level) {
+        if (!CraterFalls.rubbleStays()) {
+            landed = landings.size();
+            return 0;
+        }
         LongSupplier watch = watch(level);
         long start = watch.getAsLong();
         int n = 0;
