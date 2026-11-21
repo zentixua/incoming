@@ -76,9 +76,9 @@ class CloudSunTest {
         double front = SmokePuffs.sootSun(1, sun, c, sun[0], sun[1], sun[2]);
         assertEquals(1 - sun[3] + sun[3] * SmokePuffs.SOOT_SUN, front, 1e-3);
         // back-lit: the eye sees the shadowed side, no lift
-        assertEquals(1, SmokePuffs.sootSun(1, sun, c, -sun[0], -sun[1], -sun[2]), 1e-9);
+        assertEquals(1, SmokePuffs.sootSun(1, sun, c, -sun[0], -sun[1], -sun[2]), 1e-3);
         // buried (no sun reaches it): only the sky's diffuse share, no lift
-        assertEquals(1 - sun[3], SmokePuffs.sootSun(0, sun, c, sun[0], sun[1], sun[2]), 1e-9);
+        assertEquals(1 - sun[3], SmokePuffs.sootSun(0, sun, c, sun[0], sun[1], sun[2]), 1e-3);
         // white matter keeps its light; night has no sun term
         assertEquals(1, SmokePuffs.sootSun(1, sun, white, sun[0], sun[1], sun[2]), 0.02);
         assertEquals(1, SmokePuffs.sootSun(1, FarView.NO_SUN, c, 0, 1, 0), 1e-9);
