@@ -95,6 +95,9 @@ uniform mat4 PrevViewProj;
 uniform vec4 PallReproject;
 // vertical dust depth at eye: x above, y below to ground (NukePall.tick); with PallFrame.w determines ray reach (pallClip)
 uniform vec2 PallEyeTau;
+// eye inside the young dust of the passing wall (PallPass.Frame.inside): x — 0..1, gates the light floor (pall.glsl: pallLitDepth); y —
+// unused (the drawn share of that dust is applied to its slot at upload, NukePall.KEEP)
+uniform vec2 PallInside;
 // firestorm (client/nuclear/FireStorm, pall.glsl): slot fire maps (R flame, G column smoke, B G × risen share;
 // mips aggregate sources), fire slots, storm bounds (denser ray steps there); frame whirls (up to four, per column:
 // base/core radius; height/strength/seconds/swirl; tilt/flame/seed — PallPass.Frame)
@@ -214,9 +217,13 @@ float hgDisc(float g, float c, float mu0) {
 // Coarse-noise tile warp (tile fractions): tile repeats every tile blocks, visible as bands from above; smooth warp
 // up to one sixth of a tile over two tiles breaks repetition (more stretches billows into bands), preserving value
 // distribution (same noise elsewhere, mean billow shape remains 1)
-vec3 warpAt(mat4 S, vec3 p) {
+vec3 warpNoise(mat4 S, vec3 p) {
     vec3 q = vec3(p.x - S[0].x - S[1].x, 0.0, p.z - S[0].y - S[1].y) / S[3].y;
-    vec2 w = texture(PallNoise, q * 0.07 + vec3(0.31, 0.5, 0.67)).rg - 0.5;
+    return texture(PallNoise, q * 0.07 + vec3(0.31, 0.5, 0.67)).rgb - 0.5;
+}
+
+vec3 warpAt(mat4 S, vec3 p) {
+    vec3 w = warpNoise(S, p);
     return vec3(w.x, 0.0, w.y) * 0.3;
 }
 
@@ -346,55 +353,23 @@ struct Sample {
     float shadeDown;
     // local pall billows (coarse × fine, mean 1): also billow wide storm smoke — same air mass
     float clumps;
+    // dry dust part of sigma (dust row and wall head, not spray, haze or surge): the inside light floor's share (gLitGate)
+    float dry;
+    // presentation (the young field, youngDust): its glow toward the ball and backlit rim, linear light × extinction × albedo
+    vec3 glow;
 };
 
 Sample emptySample() {
-    return Sample(0.0, vec3(0.0), 0.0, vec3(0.0), 0.0, 0.0, vec3(0.0), 0.0, 0.0, vec3(0.0), 0.0, 0.0, 0.0, vec3(0.0), 0.0, 0.0, 0.0, 0.0, 1.0);
+    return Sample(0.0, vec3(0.0), 0.0, vec3(0.0), 0.0, 0.0, vec3(0.0), 0.0, 0.0, vec3(0.0), 0.0, 0.0, 0.0, vec3(0.0), 0.0, 0.0, 0.0, 0.0, 1.0, 0.0, vec3(0.0));
 }
 
 // ---------------------------------------------------------------- dust-layer head (pall.glsl: pallWall*)
 
-// Head billows at q in tile V[2].w, in dust coordinates (pallWallOrigin): (x, y) tile channels 0..1 (billows, fine edges,
-// uniform as tile), z fine billows (multiplier, mean 1; fine is their share, as pall). Coarse-noise warp as pall (warpAt):
-// on a kilometers-wide ring, repetition from above appears as a grid
-vec3 wallNoise(vec3 q, float fine) {
-    vec2 w = texture(PallNoise, q * 0.07 + vec3(0.31, 0.5, 0.67)).rg - 0.5;
-    q += vec3(w.x, 0.0, w.y) * 0.3;
-    vec2 n = textureLod(PallNoise, q, 0.0).rg;
-    float detail = fine > 0.0 ? fineAt(q) : 1.0;
-    return vec3(n, mix(1.0, detail, fine));
-}
-
-// Head billows at one eddy scale: noise in dust coordinates (pallWallOrigin), turned in eddies of diameter size (pallWallRoll),
-// density multiplier (pallShape × fine billows, mean 1)
-float wallBillows(mat4 V, WallAt h, float ph, float size, float fine, float fill, vec3 offset) {
-    vec3 o = pallWallRoll(pallWallOrigin(h.rel, h.z, ph, h.P.y, V[1].x), h.rel / max(length(h.rel), 1e-3), size,
-            pallWallRollAngle(ph, V[1].x, size));
-    vec3 n = wallNoise(o / size + offset, fine);
-    return pallShape(n.xy, fill) * n.z;
-}
-
-// Head at h (pallWallAt) with billows: extinction, 1/block. Billows as pall (pallShape: mean 1, dense dust more continuous —
-// fill by density relative to dense, thinner toward wedge top), fine billows within while resolved (fine; 0 for shadow
-// billows). Noise at dust origin (pallWallOrigin): billows form behind front where dust was lifted and stay there, turning in the
-// layer's eddies. Eddies are the size of the layer here (Kuhl §3), not of the thickest layer near ground zero (the tile V[2].w:
-// 79 m for 15 kt, where the layer 1 km out is 16–29 m): the noise octave tile/2^k with k = log2(tile / local top), fixed scales so
-// billows stay where they were lofted and only their mix changes as the layer deepens; two octaves near a boundary. Thinner than
-// tile/11 (the toe right behind the front, a few metres): eddies finer than any octave — their mean, an even sheet of fresh dust
-// (18.11: tile-sized holes in a layer metres thick read as a translucent shell)
-float wallAt(mat4 V, WallAt h, float fine, float dense) {
-    float s = h.s - h.P.z;
-    float m = pallWallMean(s, h.z, h.P.x, h.P.y);
-    if (m <= 0.0 || h.P.w <= 0.0) return 0.0;
-    float u = s / max(h.P.x, 0.001), ph = u * V[2].x, tile = max(V[2].w, 1.0);
-    float local = h.P.y * pallWallTop(u);
-    float fill = clamp(h.P.w * m / max(dense, 1e-6) * 3.0, 0.0, 1.0) * (1.0 - smoothstep(0.4, 1.0, h.z / max(local, 0.001)));
-    float k = log2(tile / max(local, 1e-3)), resolved = 1.0 - smoothstep(3.5, 4.0, k);
-    if (resolved <= 0.0) return h.P.w * m;
-    float k0 = floor(clamp(k, 0.0, 3.0)), b = k >= 3.0 ? 0.0 : smoothstep(0.35, 0.65, max(k, 0.0) - k0), size = tile * exp2(-k0);
-    float shape = b < 1.0 ? wallBillows(V, h, ph, size, fine, fill, vec3(0.618034, 0.414214, 0.732051)) : 0.0;
-    if (b > 0.0) shape = mix(shape, wallBillows(V, h, ph, 0.5 * size, fine, fill, vec3(0.381966, 0.585786, 0.267949)), b);
-    return h.P.w * m * mix(1.0, shape, resolved);
+// Head at h (pallWallAt): extinction, 1/block — the law's mean (over land the young field draws the dust: youngDust; the head draws
+// its spray)
+float wallAt(mat4 V, WallAt h) {
+    if (h.P.w <= 0.0) return 0.0;
+    return h.P.w * pallWallMean(h.s - h.P.z, h.z, h.P.x, h.P.y);
 }
 
 // point h shifted by v (blocks): same underlying water/terrain/hard ground, own extinction (edge to wedge end, 0 outside bounds),
@@ -409,11 +384,16 @@ WallAt wallMove(mat4 V, WallAt h, vec3 v) {
     return m;
 }
 
-// Mean head depth (no billows) from h along unit v over len, n steps
+// the pixel's jitter for the head's light chords (set with gJitter): fixed sample fractions along a chord toward the fireball,
+// radial across the hump's rise and sink, stepped the light as the point moved outward — rings about ground zero at 1 Mt
+float gChordJitter = 0.5;
+
+
+// Mean head depth (no billows) from h along unit v over len, n steps (samples at the pixel's jitter within each)
 float wallChord(mat4 V, WallAt h, vec3 v, float len, int n) {
     float sum = 0.0, ds = len / float(n);
     for (int i = 0; i < n; i++) {
-        WallAt m = wallMove(V, h, v * ((float(i) + 0.5) * ds));
+        WallAt m = wallMove(V, h, v * ((float(i) + gChordJitter) * ds));
         sum += m.P.w * pallWallMean(m.s - m.P.z, m.z, m.P.x, m.P.y);
     }
     return sum * ds;
@@ -425,7 +405,7 @@ float wallChordNear(mat4 V, WallAt h, vec3 v, float len, int n) {
     float sum = 0.0, nn = float(n * n);
     for (int i = 0; i < n; i++) {
         float a = float(i * i) / nn, b = float((i + 1) * (i + 1)) / nn;
-        WallAt m = wallMove(V, h, v * (0.5 * (a + b) * len));
+        WallAt m = wallMove(V, h, v * (mix(a, b, gChordJitter) * len));
         sum += m.P.w * pallWallMean(m.s - m.P.z, m.z, m.P.x, m.P.y) * (b - a);
     }
     return sum * len;
@@ -441,9 +421,10 @@ float wallChordNear(mat4 V, WallAt h, vec3 v, float len, int n) {
 // billows: neighbor-billow shadow toward keyDir, otherwise flat head), not the column above point.
 // smoke is the soot share in the dust there, as in the pall (pallField: fire zone × fire growth): dust lofted seconds after the
 // flash carries next to no soot
-void wall(mat4 V, WallAt h, vec3 keyDir, vec3 sunDir, vec3 lightDir, float smoke, float cone, bool pall, float dense, inout Sample s) {
-    float tile = max(V[2].w, 1.0), fine = 1.0 - smoothstep(0.5, 1.0, cone * 32.0 / tile);
-    float hd = wallAt(V, h, fine, dense);
+void wall(mat4 V, WallAt h, vec3 keyDir, vec3 sunDir, vec3 lightDir, float smoke, float cone, bool pall, float share, inout Sample s) {
+    // the shadow samples' reach: a tenth of the head's top
+    float tile = 0.1 * V[0].z;
+    float hd = share * wallAt(V, h);
     // neither head nor slot pall here — no light needed
     if (hd <= 0.0 && !pall) return;
     float hm = h.P.w * pallWallMean(h.s - h.P.z, h.z, h.P.x, h.P.y);
@@ -453,7 +434,7 @@ void wall(mat4 V, WallAt h, vec3 keyDir, vec3 sunDir, vec3 lightDir, float smoke
         WallAt h1 = wallMove(V, h, keyDir * (0.06 * tile)), h2 = wallMove(V, h, keyDir * (0.2 * tile));
         float m1 = h1.P.w * pallWallMean(h1.s - h1.P.z, h1.z, h1.P.x, h1.P.y);
         float m2 = h2.P.w * pallWallMean(h2.s - h2.P.z, h2.z, h2.P.x, h2.P.y);
-        dev = ((hd - hm) * 0.03 + (wallAt(V, h1, 0.0, dense) - m1) * 0.1 + (wallAt(V, h2, 0.0, dense) - m2) * 0.17) * tile;
+        dev = share * ((hd / share - hm) * 0.03 + (wallAt(V, h1) - m1) * 0.1 + (wallAt(V, h2) - m2) * 0.17) * tile;
         dev = clamp(dev, -3.0, 6.0);
     }
     // mean head depth above point (to local wedge top), toward leading edge (where wedge stays above point), below point
@@ -464,10 +445,13 @@ void wall(mat4 V, WallAt h, vec3 keyDir, vec3 sunDir, vec3 lightDir, float smoke
     float up = wallChord(V, h, vec3(0.0, 1.0, 0.0), max(h.P.y * pallWallTop(s0 / max(h.P.x, 0.001)) - h.z, 0.0), 4);
     float side = wallChord(V, h, vec3(out1.x, 0.0, out1.y), max(s0 - h.P.x * pow(clamp(h.z / max(h.P.y, 0.001), 0.0, 1.0), 1.2), 0.0), 4);
     float down = wallChord(V, h, vec3(0.0, -1.0, 0.0), max(h.z, 0.0), 2);
+    up *= share;
+    side *= share;
+    down *= share;
     float depth = min(up, side);
     float sunLen = sunDir.y > 0.05 ? min(reach, toTop / sunDir.y) : reach;
     float capLen = lightDir.y > 0.05 ? min(reach, toTop / lightDir.y) : reach;
-    float toSun = wallChordNear(V, h, sunDir, sunLen, 4), toCap = wallChordNear(V, h, lightDir, capLen, 4);
+    float toSun = share * wallChordNear(V, h, sunDir, sunLen, 4), toCap = share * wallChordNear(V, h, lightDir, capLen, 4);
     // dust of the soil lofted here (sand share; debris dust over hard ground, its share of the soil's mass at this wedge share — as
     // pallWallDensity), soot as the pall's
     float uw = clamp(s0 / max(h.P.x, 0.001), 0.0, 1.0);
@@ -485,8 +469,208 @@ void wall(mat4 V, WallAt h, vec3 keyDir, vec3 sunDir, vec3 lightDir, float smoke
     s.shadeUp += dev * max(keyDir.y, 0.0);
     s.shadeDown += dev * max(-keyDir.y, 0.0);
     s.sigma += hd;
+    s.dry += hd * (1.0 - h.wet);
     s.albedo += hd * w;
     s.phase += hd * g;
+}
+
+// ---------------------------------------------------------------- young dust: the approved v6 field (pall.glsl: PALL_YOUNG_*)
+
+// presentation (lead 21.11 15:20; Artem's approved v6 animation, 20.11 — approved-v6 shader and PARAMS.md): the dust from the front back
+// to where the layer has mixed is the approved field — a dense core that rises behind the front, overshoots into a hump and settles, a
+// haze of fines over it, soft lumps of ~170 m, eddies turning behind the front, a bulk slosh, fibrous streaks along the radial flow, a
+// frayed top and rising wisps — scaled to the law: its height to the law's top (the hump's peak PALL_PEAK_SHARE of it, the deviation
+// Artem approved), its density to the law's column (a drawn share PALL_YOUNG_SHARE: the law's tens of optical depths drew a hard skin;
+// the approved field's few read as dust), its billows to the slot's noise tile (1 Mt: the animation's sizes). Ages are seconds since the
+// front passed (its ground speed, BlastWall.speed). Value noise as the animation's: no tile, so no repetition. Numbers as in the
+// animation unless marked
+float youngHash(vec3 p) {
+    p = fract(p * 0.3183099 + 0.1);
+    p *= 17.0;
+    return fract(p.x * p.y * p.z * (p.x + p.y + p.z));
+}
+
+// the animation's value noise — smoothstepped interpolation of lattice values, one lattice cell per unit — in one fetch: the noise tile's
+// white-noise channel (VolumeNoise A) at the cell's corner plus the smoothstepped offset, which the texture's linear filter interpolates
+// (the animation hashed eight corners per call: ~35 calls a sample made the pall pass 2–5 times its cost, silo take v6e)
+float youngNoise(vec3 x) {
+    vec3 i = floor(x), f = fract(x);
+    f = f * f * (3.0 - 2.0 * f);
+    return texture(PallNoise, (i + f + 0.5) / PALL_NOISE_N).a;
+}
+
+// each octave turned by a fixed rotation as well as scaled: the lattice tile repeats every PALL_NOISE_N cells, and turned octaves never
+// line their repeats up
+const mat3 YOUNG_TURN = mat3(0.00, 0.80, 0.60, -0.80, 0.36, -0.48, -0.60, -0.48, 0.64);
+
+float youngFbm2(vec3 p) {
+    return 0.6667 * (0.5 * youngNoise(p) + 0.25 * youngNoise(YOUNG_TURN * p * 2.07 + vec3(1.7, 9.2, 3.1))) + 0.1667;
+}
+
+// detail finer than the pixel footprint fades to its mean (f: octave frequency × footprint; Nyquist at 0.5)
+float youngLod(float f) {
+    return 1.0 - smoothstep(0.4, 0.85, f);
+}
+
+float youngFbmL(vec3 p, float fq) {
+    float a = 0.5, s = 0.0, fr = 1.0;
+    for (int i = 0; i < 4; i++) {
+        float k = youngLod(fq * fr), n = 0.5;
+        if (k > 0.0) n = mix(0.5, youngNoise(p), k);
+        s += a * n;
+        p = YOUNG_TURN * p * 2.07 + vec3(1.7, 9.2, 3.1);
+        a *= 0.5;
+        fr *= 2.07;
+    }
+    return s;
+}
+
+float youngFbm2L(vec3 p, float fq) {
+    float k0 = youngLod(fq), k1 = youngLod(fq * 2.07), n0 = 0.5, n1 = 0.5;
+    if (k0 > 0.0) n0 = mix(0.5, youngNoise(p), k0);
+    if (k1 > 0.0) n1 = mix(0.5, youngNoise(YOUNG_TURN * p * 2.07 + vec3(1.7, 9.2, 3.1)), k1);
+    return 0.6667 * (0.5 * n0 + 0.25 * n1) + 0.1667;
+}
+
+// The young field of one slot: front from ground zero (blocks) and its ground speed (blocks/s), the animation's layer height here
+// (its HPK·strength: PALL_PEAK_SHARE / (1 + PALL_WALL_HUMP) of the law's top), density scale (1/block; the animation's 0.11·strength),
+// billow size (1 at 1 Mt), seconds since detonation (slow drifts), the pixel footprint (blocks)
+struct Young {
+    float R;
+    float U;
+    float hk;
+    float rho;
+    float size;
+    float t;
+    float fp;
+};
+
+// rising wisps: in half of the cells a narrow plume rises out of the layer 0.6–8.6 s after the front, fading over ~14 s
+float youngWisps(Young y, vec3 q, float top) {
+    float cellSize = 60.0 * y.size;
+    vec2 cell = floor(q.xz / cellSize);
+    float h1 = youngHash(vec3(cell, 1.0)), h2 = youngHash(vec3(cell, 2.0)), h3 = youngHash(vec3(cell, 3.0)), h4 = youngHash(vec3(cell, 4.0));
+    if (h1 > 0.5) return 0.0;
+    vec2 c = (cell + 0.5) * cellSize + (vec2(h2, h3) - 0.5) * (28.0 * y.size);
+    float tb = (y.R - length(c)) / y.U - (0.6 + h4 * 8.0);
+    if (tb < 0.0) return 0.0;
+    float dxz = length(q.xz - c), w = (3.0 + 4.0 * h1) * y.size;
+    float dz = w * 5.0 * (1.0 - exp(-tb / 5.0));
+    float yl = 0.7 * top + dz, rl = (7.0 + 1.2 * tb) * y.size + 0.3 * dz;
+    return (40.0 * y.size * y.size / (rl * rl) + 0.12) * (1.0 - smoothstep(0.0, 1.0, length(vec2(dxz, (q.y - yl) * 1.1)) / rl)) * smoothstep(0.0, 1.2, tb) * exp(-tb / 14.0);
+}
+
+// streaks stretched along the radial flow (28 m along, 5 m tall, 4.5 m across): polar coordinates about ground zero, the angle taken
+// from two branches with their seams on opposite sides, blended away from each seam (the animation's single branch has a seam behind
+// ground zero, out of its view)
+float youngStreak(Young y, vec3 pw, float ph) {
+    float shown = youngLod(y.fp / (2.2 * y.size)), ral = length(pw.xz), k = ral / (4.5 * y.size);
+    if (shown <= 0.0 || ral < 1e-3) return 0.5;
+    vec2 b = vec2(ral / (28.0 * y.size), (pw.y - 0.5 * ph * y.size) / (5.0 * y.size));
+    float th = atan(pw.z, pw.x), w = smoothstep(0.75, 0.9, abs(th) / 3.14159265);
+    float s = 0.0;
+    if (w < 1.0) s = (1.0 - w) * youngFbm2(vec3(b, th * k));
+    if (w > 0.0) s += w * youngFbm2(vec3(b + vec2(0.0, 31.7), atan(-pw.z, -pw.x) * k));
+    return mix(0.5, s, shown);
+}
+
+// Density at q (x, z from ground zero, y above the relief; blocks), 1/block; lite — the mean field for light chords (no eddies, wisps,
+// billows or streaks; lumps kept)
+float youngDens(Young y, vec3 q, bool lite) {
+    float r = length(q.xz);
+    float a0 = (y.R - r) / y.U;
+    if (a0 < 0.0) return 0.0;
+    float c0, h0;
+    pallYoungTops(a0, y.hk, c0, h0);
+    float top0 = max(c0, h0), pl = 0.0;
+    if (!lite && q.y > top0 * 0.5) {
+        float wisp = youngWisps(y, q, top0), k = youngLod(y.fp / (8.0 * y.size)), n = 0.5;
+        if (wisp > 0.0 && k > 0.0) n = mix(0.5, youngNoise(q / (8.0 * y.size) + vec3(0.0, -y.t * 0.6, 0.0)), k);
+        pl = 0.05 * wisp * (0.4 + 1.2 * n);
+    }
+    float yn0 = q.y / max(top0, 1.0);
+    if (yn0 > 1.6) return y.rho * pl / 0.11;
+    // the crest leans back toward ground zero
+    float a = a0 - 34.0 * y.size * yn0 * yn0 * clamp(a0 / 0.7, 0.0, 1.0) / y.U;
+    if (a < 0.0) return y.rho * pl / 0.11;
+    float core, haze;
+    pallYoungTops(a, y.hk, core, haze);
+    // eddies behind the front: energy decays over ~8 s, the violent first seconds over ~4 s; their phase is the integral of the energy,
+    // so they keep turning after the front has gone
+    float E = exp(-a / 8.0), Ef = exp(-a / 4.0);
+    float A = 0.3 + 0.7 * E + 0.6 * Ef, ph = 8.0 * (1.0 - E) + 0.25 * a + 3.5 * (1.0 - Ef);
+    vec3 pw = q;
+    float n = 0.5, fs = 0.5;
+    if (!lite) {
+        vec3 b = q / (vec3(32.0, 20.0, 32.0) * y.size);
+        float fw = y.fp / (20.0 * y.size);
+        vec3 w = vec3(youngFbm2L(b + vec3(0.0, ph * 0.15, 0.0), fw), youngFbm2L(b + vec3(5.2, 1.3 - ph * 0.14, 2.8), fw),
+                youngFbm2L(b + vec3(2.1, 7.7, ph * 0.15), fw)) - 0.5;
+        // the ground keeps feeding dust: eddies never sweep it bare
+        pw += w * (vec3(55.0, 38.0, 55.0) * y.size * A * smoothstep(0.0, 0.45 * core, q.y));
+        // the whole lofted mass sloshes: carried outward by the wind, then pulled back by the negative phase; the top moves more than
+        // the bottom, so it rolls (presentation, amplitude est.)
+        vec2 rdir = q.xz / max(r, 1.0);
+        float yy = clamp(q.y / max(core, 1.0), 0.0, 1.5);
+        float sl = (18.0 * exp(-a / 3.0) * sin(1.3 * a + 0.4) + 6.0 * sin(0.45 * a + youngFbm2(q / (90.0 * y.size)) * 6.0)) * yy * y.size;
+        pw.xz -= rdir * sl;
+        pw.y += 6.0 * y.size * Ef * sin(1.7 * a + youngFbm2(q / (60.0 * y.size) + 3.0) * 6.0) * yy;
+        // billows fixed in the air mass: the rising, settling top reveals and hides them, it does not slide through them
+        n = youngFbmL(vec3(pw.x, pw.y - 0.9 * ph * y.size, pw.z) / (vec3(20.0, 13.0, 20.0) * y.size), y.fp / (13.0 * y.size));
+        fs = youngStreak(y, pw, ph);
+    }
+    // big soft lumps of the lofted mass, ~170 m: ±30 % on the fresh head at the front, ±45 % behind it
+    float lb = youngFbm2(vec3(pw.xz / (170.0 * y.size), 0.0) + vec3(0.0, 0.06 * a + 0.02 * y.t, 0.0));
+    core *= 1.0 + mix(0.66, 1.0, smoothstep(1.0, 5.0, a)) * (0.9 * smoothstep(0.2, 0.8, lb) - 0.45);
+    // frayed, streaky top edge
+    float yr = q.y / core;
+    float z = mix(yr, pw.y / core + (n - 0.5) * 1.5 + (fs - 0.5) * 0.55, smoothstep(0.0, 0.6, yr));
+    float head = 1.0 + 0.7 * exp(-a / 1.1);
+    // the fines' haze over the core: thinner per metre but it stays; thicker and higher over the lumps
+    float hz = max(haze * (0.7 + 0.6 * lb), 0.5);
+    float zh = mix(q.y / hz, pw.y / hz + (n - 0.5) * 1.8, smoothstep(0.0, 0.6, q.y / hz));
+    float d = (1.0 - smoothstep(0.55, 1.05, z)) * (0.25 + 0.75 * exp(-max(a - 1.0, 0.0) / 6.0)) * head * (0.8 + 0.4 * lb)
+            + 0.07 * (0.1 + 1.8 * smoothstep(0.3, 0.7, lb)) * (1.0 - smoothstep(0.45, 1.05, zh));
+    return y.rho * (d * smoothstep(0.0, 0.12, a) * (0.3 + 1.4 * n) * (0.45 + 1.1 * fs) + pl / 0.11);
+}
+
+// Young dust at q (youngDens) times share, accumulated in s.
+// presentation (lead 21.11: the animation's light ported with its density, PARAMS.md): the young dust is lit as in the animation, not by the
+// pall's two-stream light — a key light (the ball, or the sun while brighter) reaches it through the young dust within 21 m toward it (1.6 ×
+// that depth: the lumps shade their own lee), more of it higher up (the lower layer under the rest), with a floor of 0.08; its colour runs
+// from the animation's dark (0.16, 0.09, 0.05) to its lit (1, 0.66, 0.36), and looked at toward the key light it glows with forward
+// scattering (0.5, 0.28, 0.1; the cosine's 5th power) with a backlit rim on its thin edges (1, 0.72, 0.42 × 1.6; 10th power). Colours are the
+// animation's display colours in linear light, at the key light's brightness times the thick dust's reflectance (PALL_YOUNG_REFLECT: the
+// pall's dust colour, so fully lit young dust is as bright as the lit pall; soot and sand scale it by their albedo). The pall's light
+// filled every lee of the young field (its darkest tenth 0.85, 0.64, 0.44 against the animation's 0.49, 0.29, 0.13) and whitened it (78 %
+// of the approaching wall clipped against 50 %; silo take v6d). The young dust still shades other matter by its column (s.tau, s.slab).
+// cap — the ball's light here (pallBallLight), view — the view ray's direction
+void youngDust(Young y, vec3 q, vec3 sunDir, vec3 lightDir, vec3 cap, vec3 view, vec3 w, float share, inout Sample s) {
+    float own = youngDens(y, q, false), sd = share * own;
+    if (sd <= 1e-7) return;
+    vec3 sun = vec3(0.0);
+    if (PallSunTop.r + PallSunTop.g + PallSunTop.b > 0.0) sun = PallSunLight;
+    float ball = dot(cap, PALL_LUMA), day = dot(sun, PALL_LUMA);
+    vec3 keyDir = lightDir;
+    if (day > ball) keyDir = sunDir;
+    float near = 0.0;
+    for (int k = 1; k < 4; k++) near += youngDens(y, q + keyDir * (7.0 * y.size * float(k)), true);
+    float lit = exp(-near * 7.0 * y.size * 1.6) * (0.55 + 0.45 * smoothstep(0.0, 40.0 * y.size, q.y)) + 0.08;
+    float thin = 1.0 - smoothstep(0.0, 0.06 * y.rho / 0.11, own);
+    float c = max(dot(view, keyDir), 0.0), c2 = c * c, c5 = c2 * c2 * c;
+    vec3 tone = mix(PALL_YOUNG_DARK, PALL_YOUNG_LIT, lit) + c5 * PALL_YOUNG_FORWARD + (1.6 * c5 * c5 * lit * thin) * PALL_YOUNG_RIM;
+    float bright = (ball + day) * PALL_YOUNG_REFLECT * dot(w, PALL_LUMA) / dot(PALL_DUST_W, PALL_LUMA) / dot(PALL_YOUNG_LIT, PALL_LUMA);
+    s.glow += sd * bright * tone;
+    // its column for the light of other matter here (haze, spray): above the point and below it, each by its mean field halfway
+    float toTop = max(2.3 * y.hk - q.y, 0.0), below = max(q.y, 0.0);
+    float up = share * toTop * youngDens(y, q + vec3(0.0, 0.5 * toTop, 0.0), true);
+    float down = share * below * youngDens(y, q - vec3(0.0, 0.5 * below, 0.0), true);
+    s.tau += up;
+    s.slab += up + down;
+    s.slabAlbedo += (up + down) * w;
+    s.slabPhase += (up + down) * PALL_DUST_G;
+    s.sigma += sd;
+    s.dry += sd;
 }
 
 // Slot cap center (CloudPuffs.pallLight): above epicenter at H.w, downwind (S[2].xy) by G.z, as mushroom body
@@ -514,6 +698,16 @@ void slot(mat4 S, mat4 V, sampler2D ground, vec4 R, vec4 W, vec4 G, vec4 H, vec3
     // ground height; no map, epicenter ground
     float floorUp = pallRelief(ground, S, R, p.xz);
     PallAt f = pallField(Sampler1, ground, S, R, W, p, floorUp, topBumps(S, p));
+    WallAt head = pallWallAt(ground, S, V, R, W, p, floorUp);
+    // the young dry dust is the approved field (youngDust), the law's pall takes over as the layer mixes (PALL_YOUNG_MIX_*): its dry
+    // dust here and above is drawn at the law's share; spray, haze and the surge stay the law's (pallYoungScale, as pallFieldDrawn)
+    vec4 young = pallYoungScale(Sampler1, S, V, head.rel, f.mixed, f.base, f.top, head.hard);
+    // dust lofted from water is spray: the row's source water where it holds dust, the head's water at its own place
+    float wet = f.base > 0.0 ? f.wet : head.wet;
+    float youngDry = (1.0 - young.x) * (1.0 - wet);
+    f.sigma.x *= young.x;
+    f.column.x *= young.x;
+    f.slab.x *= young.x;
     // Dust lifted out of the flat layer by inflow has the same material and billows. Its light is computed here too,
     // including self-shadowing: above the old top it does not become flat gray fill.
     if (inflow.w > 0.0 && length(inflow.xz - S[0].xy) < 1.0) {
@@ -535,7 +729,6 @@ void slot(mat4 S, mat4 V, sampler2D ground, vec4 R, vec4 W, vec4 G, vec4 H, vec3
             f.slab.z += total * f.wet;
         }
     }
-    WallAt head = pallWallAt(ground, S, V, R, W, p, floorUp);
     vec3 dustW = f.dustW;
     s.tau += f.column.x + f.column.y + f.column.z;
     s.slab += f.slab.x + f.slab.y + f.slab.z;
@@ -572,10 +765,27 @@ void slot(mat4 S, mat4 V, sampler2D ground, vec4 R, vec4 W, vec4 G, vec4 H, vec3
     vec3 keyDir = mix(sunDir, keyLight, key);
     keyDir /= max(length(keyDir), 1e-3);
     bool pall = f.sigma.x + f.sigma.y + f.sigma.z > 1e-7;
-    if (head.P.w > 0.0) wall(V, head, keyDir, sunDir, lightDir, f.smoke, cone, pall, S[3].x, s);
+    // the head's dry dust is the young field; over water it draws its spray (pallWallSpray: the wet share's own geometry and density)
+    if (head.P.w > 0.0 && head.wet > 0.0) wall(V, pallWallSpray(V, head), keyDir, sunDir, lightDir, f.smoke, cone, pall, head.wet, s);
+    // no dust inside the fireball (the head and the dust row exclude the ground fireball; the young field's taller shape reached into it)
+    if (youngDry > 0.0) youngDry *= smoothstep(1.0, 1.05, toLen / max(G.x, 1e-3));
+    if (youngDry > 0.0) {
+        Young y;
+        y.R = V[0].x;
+        y.U = V[2].w;
+        y.hk = young.y;
+        y.rho = young.z;
+        y.size = young.w;
+        y.t = S[3].z;
+        y.fp = cone;
+        youngDust(y, vec3(head.rel.x, head.z, head.rel.y), sunDir, lightDir, cap, dir, dustW, youngDry, s);
+    }
     if (!pall) return;
     float fill = clamp(f.dense * 3.0, 0.0, 1.0) * (1.0 - smoothstep(0.4, 1.0, f.height.x));
-    vec3 warp = warpAt(S, p);
+    // young dust: still moving (pall.glsl: pallYoung; age from PallField.mixed)
+    vec3 wn = warpNoise(S, p);
+    float age = -PALL_MIX_S * log(max(1.0 - f.mixed, 1e-4));
+    vec3 warp = vec3(wn.x, 0.0, wn.y) * 0.3 + pallYoung(vec2(p.x - S[0].x - S[1].x, p.z - S[0].y - S[1].y) / S[3].y, wn, age);
     vec4 flow = carpetFlowAt(S, p);
     vec3 uvA, uvB;
     float phaseBlend;
@@ -585,8 +795,16 @@ void slot(mat4 S, mat4 V, sampler2D ground, vec4 R, vec4 W, vec4 G, vec4 H, vec3
     // mean 1, no sample)
     float tile = S[3].y, fine = 1.0 - smoothstep(0.5, 1.0, cone * 32.0 / tile);
     // young layer patches disperse as it mixes (pallMixed): old pall is an even blanket from above
-    float raw = carpetCoarse(S, uvA, uvB, phaseBlend, fill), detail = fine > 0.0 ? carpetFine(uvA, uvB, phaseBlend) : 1.0;
-    float coarse = pallMixed(raw, f.mixed), shape = pallMixed(raw * mix(1.0, detail, fine), f.mixed);
+    // the mixed pall's billows (not fetched while the dust is young)
+    float raw = 1.0, detail = 1.0;
+    if (f.mixed > 0.01) {
+        raw = carpetCoarse(S, uvA, uvB, phaseBlend, fill);
+        if (fine > 0.0) detail = carpetFine(uvA, uvB, phaseBlend);
+    }
+    // presentation (Artem 21.11): the young layer is one mass with the head — soft lumps of its top (pallLumpTop), fine detail only
+    // the streaks; the mixed pall's billows take over as it mixes (PallField.mixed)
+    // (its relief is the top's: pallLumpTop; the young density is even)
+    float coarse = mix(1.0, pallMixed(raw, f.mixed), f.mixed), shape = mix(1.0, pallMixed(raw * mix(1.0, detail, fine), f.mixed), f.mixed);
     s.clumps = shape;
     float d = f.sigma.x * shape, h = f.sigma.y * mix(1.0, shape, 0.5), m = f.sigma.z * shape;
     // Local/neighbor billow shadow: depth toward key light relative to mean (clumpShade). Density is coarse × fine;
@@ -596,12 +814,13 @@ void slot(mat4 S, mat4 V, sampler2D ground, vec4 R, vec4 W, vec4 G, vec4 H, vec3
     // distinguish local billow edge from depth, producing blotches instead of lit/shaded sides. Shadow noise samples:
     // two coarse (two channels each), one fine only while resolved
     float sigmaShade = f.sigma.x + f.sigma.z;
-    float clump = clumpShade(coarse, pallMixed(carpetCoarse(S, uvA + lightUv * 0.06, uvB + lightUv * 0.06, phaseBlend, fill), f.mixed),
-            pallMixed(carpetCoarse(S, uvA + lightUv * 0.22, uvB + lightUv * 0.22, phaseBlend, fill), f.mixed)) * sigmaShade * tile;
-    if (fine > 0.0) {
-        clump += fine * clumpShade(pallMixed(detail, f.mixed), pallMixed(carpetFine(uvA + lightUv * 0.015, uvB + lightUv * 0.015, phaseBlend), f.mixed),
-                pallMixed(carpetFine(uvA + lightUv * 0.055, uvB + lightUv * 0.055, phaseBlend), f.mixed)) * sigmaShade * coarse * (0.25 * tile);
+    float old = f.mixed > 0.01 ? clumpShade(pallMixed(raw, f.mixed), pallMixed(carpetCoarse(S, uvA + lightUv * 0.06, uvB + lightUv * 0.06, phaseBlend, fill), f.mixed),
+            pallMixed(carpetCoarse(S, uvA + lightUv * 0.22, uvB + lightUv * 0.22, phaseBlend, fill), f.mixed)) * tile : 0.0;
+    if (fine > 0.0 && f.mixed > 0.01) {
+        old += fine * clumpShade(pallMixed(detail, f.mixed), pallMixed(carpetFine(uvA + lightUv * 0.015, uvB + lightUv * 0.015, phaseBlend), f.mixed),
+                pallMixed(carpetFine(uvA + lightUv * 0.055, uvB + lightUv * 0.055, phaseBlend), f.mixed)) * pallMixed(raw, f.mixed) * (0.25 * tile);
     }
+    float clump = f.mixed * old * sigmaShade;
     // shadow per light weighted by alignment with key light
     s.shadeSun += clump * max(dot(keyDir, sunDir), 0.0);
     s.shadeCap += clump * max(dot(keyDir, lightDir), 0.0);
@@ -609,6 +828,7 @@ void slot(mat4 S, mat4 V, sampler2D ground, vec4 R, vec4 W, vec4 G, vec4 H, vec3
     s.shadeDown += clump * max(-keyDir.y, 0.0);
     vec3 sc = d * dustW + h * PALL_HAZE_W + m * PALL_MIST_W;
     s.sigma += d + h + m;
+    s.dry += d;
     s.albedo += sc;
     s.phase += (d + h) * PALL_DUST_G + m * PALL_MIST_G;
     if (f.fire > 0.0) s.fire += sc * pallFlame(PallBase, f.fire * PallFireLight, PallFireLight / max(PallFireLight.r, 1e-4));
@@ -630,19 +850,23 @@ float slabGround(Sample s) {
 // Diffuse pall light at point from above (sun strength sun, ball, sky), I0 + c·I1 per channel (pallDiffuse; excluding
 // point albedo), at depth shifted by billow shadow toward it. Solution linear in sources: ball uses its own solution
 // at its own depth (capDeep, wall head), only while not vanishingly small
+// light floor weight at the point being lit (pallSource): the eye's young-dust gate within PALL_SEE_NEAR of the eye, times the
+// sample's dry dust share (spray, haze, surge and storm smoke keep the law's light)
+float gLitGate = 0.0;
+
 vec3 scattered(Sample s, float c, vec3 sun) {
     float slab = max(s.slab, s.tau);
     vec4 w = slabMatter(s);
     float g = w.a, ground = slabGround(s);
     float muS = max(PallSun.y, 0.12);
-    float top = clamp(s.tau + s.shadeUp, 0.0, slab);
+    float top = clamp(pallLitDepth(s.tau + s.shadeUp, gLitGate), 0.0, slab);
     vec3 d = vec3(pallDiffuse(w.r, g, top, slab, ground, muS, sun.r, 1.0, 0.0, PallSkyLight.r, 0.0, c),
             pallDiffuse(w.g, g, top, slab, ground, muS, sun.g, 1.0, 0.0, PallSkyLight.g, 0.0, c),
             pallDiffuse(w.b, g, top, slab, ground, muS, sun.b, 1.0, 0.0, PallSkyLight.b, 0.0, c));
     float capI = s.cap.r + s.cap.g + s.cap.b;
     if (capI > 1e-5) {
         float muC = clamp(s.capUp / capI, 0.12, 1.0);
-        float slabC = slab + s.capDeep, topC = clamp(s.tau + s.capDeep + s.shadeUp, 0.0, slabC);
+        float slabC = slab + s.capDeep, topC = clamp(pallLitDepth(s.tau + s.capDeep + s.shadeUp, gLitGate), 0.0, slabC);
         d += vec3(pallDiffuse(w.r, g, topC, slabC, ground, muS, 0.0, muC, s.cap.r, 0.0, 0.0, c),
                 pallDiffuse(w.g, g, topC, slabC, ground, muS, 0.0, muC, s.cap.g, 0.0, 0.0, c),
                 pallDiffuse(w.b, g, topC, slabC, ground, muS, 0.0, muC, s.cap.b, 0.0, 0.0, c));
@@ -1093,6 +1317,7 @@ vec4 pallSource(vec3 p, float cone, vec4 inflow, out vec3 dustLight) {
     // Henyey–Greenstein phase (sphere mean 1, beam strength on white wall — hence ¼). Sun above pall first passes mushrooms
     // on its ray (shadow map, as world in fx_pall_composite): dust under cap is shadowed, as is cap-covered stem (mushSunTau)
     vec3 sun = pallSunAt(p);
+    gLitGate = PallInside.x * (1.0 - smoothstep(PALL_SEE_NEAR, 2.0 * PALL_SEE_NEAR, length(p))) * clamp(s.dry / max(s.sigma, 1e-7), 0.0, 1.0);
     vec3 field = scattered(s, g * mv, sun);
     vec3 beams = sun * (0.25 * hg(g, c) * exp(-max(s.tau / muS + s.shadeSun, 0.0)));
     float capI = s.cap.r + s.cap.g + s.cap.b;
@@ -1120,7 +1345,7 @@ vec4 pallSource(vec3 p, float cone, vec4 inflow, out vec3 dustLight) {
     vec3 fire = min(below + under * (glow + s.fire / max(s.albedo, vec3(1e-7))) + around, gFlame);
     vec3 lamps = pallLampsAt(p);
     dustLight = w * (field + beams + fire + lamps);
-    vec3 emit = s.albedo * (field + beams + fire + lamps);
+    vec3 emit = s.albedo * (field + beams + fire + lamps) + s.glow;
     // firestorm column smoke (soot) in same light and self-shadow: direct light attenuated by column depth toward sun,
     // diffuse as e^(−kτ) of soot (sunward side and billow tops bright, opposite side and bottom dark: volumetric column,
     // not flat gray stripe); fire glow below
@@ -1133,17 +1358,21 @@ vec4 pallSource(vec3 p, float cone, vec4 inflow, out vec3 dustLight) {
     return vec4(emit, st);
 }
 
-void pallStep(float ta, float ds, float grid, inout vec3 light, inout float transmit, inout float haze) {
+// One pall step from ta over ds: 0 — no matter at ta, 1 — integrated, 2 — refused: matter at ta and the step longer than refine
+// (> 0): the caller re-marches from the previous, empty sample in finer steps, so a surface is found where it is, not a long step late
+int pallStep(float ta, float ds, float grid, float refine, inout vec3 light, inout float transmit, inout float haze) {
     passesBefore(ta, light, transmit, haze);
     vec3 p = gDir * ta;
     float open = pallOpenHere(p);
-    if (open <= 0.0) return;
+    if (open <= 0.0) return 0;
     float cone = max(ta * gPixel, 0.35 * grid);
     vec3 dustLight;
     vec4 matter = pallSource(p, cone, vec4(0.0), dustLight);
-    if (matter.w <= 1e-7) return;
+    if (matter.w <= 1e-7) return 0;
+    if (refine > 0.0 && ds > refine) return 2;
     float tr = exp(-matter.w * open * ds);
     passMatter(ta, matter.rgb * (1.0 - tr) / matter.w, tr, light, transmit, haze);
+    return 1;
 }
 
 // Mean mushroom m depth from eye-relative p along v over len, four samples (MUSH_AT); parts selects cap, stem, skirt,
@@ -1742,6 +1971,7 @@ void whirlSetup(vec3 dir, float scene, float at) {
         slot(PallSlot0, PallWall0, Sampler5, PallGround0, PallWater0, PallGlow0, PallHot0, mid, sunDir, dir, 1e9, vec4(0.0), m);
         slot(PallSlot1, PallWall1, Sampler6, PallGround1, PallWater1, PallGlow1, PallHot1, mid, sunDir, dir, 1e9, vec4(0.0), m);
         vec3 sun = pallSunAt(mid);
+        gLitGate = PallInside.x * (1.0 - smoothstep(PALL_SEE_NEAR, 2.0 * PALL_SEE_NEAR, length(mid))) * clamp(m.dry / max(m.sigma, 1e-7), 0.0, 1.0);
         vec3 lit = scattered(m, PALL_SOOT_G * gMv, sun) + sun * (gSootSun * exp(-m.tau / gMuS));
         float g0 = storm(Sampler3, PallSlot0, PallFire0, mid, 0.0, 1.0).y, g1 = storm(Sampler4, PallSlot1, PallFire1, mid, 0.0, 1.0).y;
         vec3 strongest = g0 >= g1 ? PallFire0[3].rgb : PallFire1[3].rgb;
@@ -1787,6 +2017,7 @@ void main() {
     vec2 span = pallBox(dir, PallMin, PallMax);
     float jitter = fract(texelFetch(Sampler2, ivec2(mod(low, 64.0)), 0).r + PallFrame.x * 0.618034);
     gJitter = jitter;
+    gChordJitter = jitter;
     float clip = dir.y >= 0.0 ? pallClip(PallFrame.w, PallEyeTau.x, dir.y) : pallClip(PallFrame.w, PallEyeTau.y, -dir.y);
     // and no closer than half a billow tile: clipping uses mean depth, but eye may lie in a gap (noise cell quarter tile).
     // In dense dust (meters of visibility), a ray clipped inside a gap never reached its walls, leaving sky visible through
@@ -1858,6 +2089,8 @@ void main() {
     // pall steps denser near eye (along); the dust wall head and the storm frame add finer grids of their own
     // dust wall head: ray intervals (entry, exit), grid step below; storm frame: (entry, exit, grid step)
     vec4 enter = vec4(1e9), leave = vec4(1e9), fineStep = vec4(1.0);
+    // the head's surface step: a quarter of its wanted step, the same for every pixel (refinement inside a head interval)
+    vec4 surfStep = vec4(0.03 * PallWall0[0].z, 0.03 * PallWall0[0].z, 0.03 * PallWall1[0].z, 0.03 * PallWall1[0].z);
     vec3 storm = vec3(1e9, 1e9, 1.0);
     if (t1 > t0) {
         // storm frame: half the steps across it (columns are smaller than a whole-pall step), counting the ordinary steps
@@ -1888,12 +2121,33 @@ void main() {
                 leave[k] = 1e9;
                 continue;
             }
-            fineStep[k] = (leave[k] - enter[k]) / max(floor(want[k] * fit), 1.0);
+            // the head's interval is filled from its entry with the steps it may take, a step continuous across pixels (the last
+            // one cut at the exit): a whole step count (span / floor(want)) jumps by one along contours of equal span, and the
+            // hump's sloped top showed each jump as a ring about ground zero at 1 Mt (sandbox runs rings/rings2); a grid anchored at
+            // the eye with a power-of-two step aliased the thin head flank into ribs and a toothed edge (rib/rib2)
+            fineStep[k] = (leave[k] - enter[k]) / max(want[k] * fit, 1.0);
         }
     }
     // pall: i steps taken (with wall-head steps, up to 2·steps + 16), base ordinary boundaries behind, nextBase next boundary
     int i = 0, base = 0, pallSteps = 2 * steps + 16;
     float ta = 1e9, nextBase = 1e9, lastBase = 1e9;
+    // the young layer's top (youngDust) found by refinement: the ordinary steps are hundreds of metres at a kilometre
+    // (1 Mt: 240–350 m against lumps of 120–170 m with ±60 m relief — the relief averaged out into a plain, and per-sample noise read
+    // as grain boiling with the jitter); the first ordinary step that meets matter after an empty one is re-marched from that empty
+    // sample in steps of a twelfth of a lump, YOUNG_FINE of them, then the ordinary steps go on
+    const int YOUNG_FINE = 16;
+    float fineYoung = 1e9, prevTa = -1.0;
+    if (PallSlot0[1].w >= 0.5) fineYoung = min(fineYoung, PallSlot0[3].y);
+    if (PallSlot1[1].w >= 0.5) fineYoung = min(fineYoung, PallSlot1[3].y);
+    // the young field's finest billow height (13 m at 1 Mt, youngDens): the first sample's depth under its top changes with the frame's
+    // jitter by at most this — a third of a lump (~50 m) flickered the young layer at 6 s (fine change 23.8 levels/s against 16.6 before)
+    if (fineYoung < 1e8) fineYoung *= 13.0 / PALL_YOUNG_TILE;
+    int fineLeft = 0;
+    float fineSize = 1e9;
+    bool refined = false, prevEmpty = false, firstFine = false;
+    // ordinary steps span the pall's bounds, which NukePall snaps to quarter octaves (PallPass.snapBounds): fixed in the world
+    // between snaps while the ray's start (the near volume's end) and its cutoff hold; as the head nears the eye the near volume
+    // backs up and these boundaries move
     if (t1 > t0) {
         ta = along(jitter / n, t0, t1);
         lastBase = ta;
@@ -1923,7 +2177,8 @@ void main() {
         if (s1 > s0) ts = s0 + jitter * min(smokeCell(dir * s0), 0.25 * (s1 - s0));
     }
     for (int it = 0; it < pallSteps + mSteps + sSteps + sEmpty; it++) {
-        bool pallLeft = i < pallSteps && ta < t1;
+        // the pall ends once the ray is opaque: nothing behind it reaches the eye
+        bool pallLeft = i < pallSteps && ta < t1 && transmit >= 0.003;
         // mushroom behind a ray nearly opaque to itself is invisible even in haze (light weighted by transmit)
         bool mushLeft = mk < mSteps && tm < m1 && transmit >= 0.005;
         bool smokeLeft = sk < sSteps && se < sEmpty && ts < s1 && transmit >= 0.005;
@@ -1949,11 +2204,12 @@ void main() {
         } else if (pallLeft && (!mushLeft || ta <= tm)) {
             // step end: ordinary boundary or head/storm interval entry; inside, nearest of its grid boundary (or exit) and ordinary
             // boundary: near eye ordinary steps are denser, preserving nearby dust as wall passes through viewer
-            float next = nextBase, grid = nextBase - lastBase;
+            float next = nextBase, grid = nextBase - lastBase, surf = fineYoung;
             bool dense = false;
             for (int k = 0; k < 4; k++) {
                 if (!dense && enter[k] <= ta && ta < leave[k]) {
                     dense = true;
+                    surf = max(surfStep[k], 0.05);
                     grid = min(grid, fineStep[k]);
                     float j = floor((ta - enter[k]) / fineStep[k] - jitter + 1e-3) + 1.0;
                     next = min(next, min(enter[k] + (j + jitter) * fineStep[k], leave[k]));
@@ -1975,15 +2231,47 @@ void main() {
                 }
                 if (storm.x > ta) next = min(next, storm.x);
             }
+            if (fineLeft > 0) {
+                // the first fine step is the pixel's jitter share of one: fine samples at fixed spacing from the same start slice a
+                // smooth top into concentric bands; decorrelated per pixel, the frames accumulate them away
+                float first = 1.0;
+                if (firstFine) first = max(jitter, 0.05);
+                next = min(next, ta + first * fineSize);
+                grid = min(grid, fineSize);
+            }
             next = min(next, t1);
             for (int k = 0; k < steps && nextBase <= next + 1e-4; k++) {
                 base += 1;
                 lastBase = nextBase;
                 nextBase = along((float(base) + 1.0 + jitter) / n, t0, t1);
             }
-            if (next > ta) pallStep(ta, next - ta, grid, light, transmit, haze);
+            // the first sample in matter lies at most a refinement step under its top, whatever the step there: in a layer opaque
+            // within one step the pixel is the light at that sample, half a step deep on average — a step varying with the frame's
+            // budget share (fit) across the screen showed as rings about ground zero on the 1 Mt head (instrumented take dbg: the
+            // first-hit step correlates +0.67…+0.75 with the rings, its brightness +0.77…+0.82)
+            bool refine = !refined && prevEmpty && surf < 1e8;
+            int took = next > ta ? pallStep(ta, next - ta, grid, refine ? 1.5 * surf : 0.0, light, transmit, haze) : 0;
             i += 1;
-            ta = next;
+            if (took == 2) {
+                // matter met by a long step after an empty sample: back to that sample, finely
+                refined = true;
+                fineLeft = YOUNG_FINE;
+                fineSize = surf;
+                firstFine = true;
+                ta = prevTa;
+                prevEmpty = false;
+            } else {
+                if (fineLeft > 0) {
+                    fineLeft -= 1;
+                    firstFine = false;
+                }
+                prevEmpty = took == 0;
+                // every entry into matter is refined, not only the ray's first (a later entry took the step there: ripples and
+                // flicker that followed the jittered step)
+                if (took == 0 && fineLeft == 0) refined = false;
+                prevTa = ta;
+                ta = next;
+            }
             if (i >= pallSteps || ta >= t1) ta = 1e9;
         } else {
             float cone = max(tm * gPixel, 0.35 * dsMin);

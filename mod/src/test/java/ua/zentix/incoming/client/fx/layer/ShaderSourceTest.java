@@ -135,7 +135,7 @@ class ShaderSourceTest {
     @Test
     void pallKnowsWhereTheOpenAirIs() throws IOException, URISyntaxException {
         Path core = Path.of(ShaderSourceTest.class.getResource("/assets/incoming/shaders/core").toURI()), include = core.resolveSibling("include");
-        assertTrue(body(Files.readString(core.resolveSibling("include").resolve("fx_pall.glsl")), "void pallStep(").contains("pallOpenHere("), "fx_pall: pallStep without pallOpen");
+        assertTrue(body(Files.readString(core.resolveSibling("include").resolve("fx_pall.glsl")), "int pallStep(").contains("pallOpenHere("), "fx_pall: pallStep without pallOpen");
         assertTrue(body(Files.readString(include.resolve("pall_front.glsl")), "float pallThrough(").contains("pallOpenHere("), "pall_front: pallThrough without pallOpen");
         assertTrue(body(Files.readString(core.resolve("fx_pall_composite.fsh")), "void main(").contains("pallOpenHere("), "fx_pall_composite: shadow without pallOpen");
     }
@@ -247,7 +247,7 @@ class ShaderSourceTest {
     void inflowAndCarpetUseOneLightingSource() throws IOException, URISyntaxException {
         Path core = Path.of(ShaderSourceTest.class.getResource("/assets/incoming/shaders/core").toURI());
         String pall = Files.readString(core.resolveSibling("include").resolve("fx_pall.glsl"));
-        String layer = blankComments(body(pall, "void pallStep(")), stem = blankComments(body(pall, "vec4 mushAt("));
+        String layer = blankComments(body(pall, "int pallStep(")), stem = blankComments(body(pall, "vec4 mushAt("));
         assertTrue(layer.contains("pallSource(p, cone, vec4(0.0), dustLight)"));
         assertFalse(stem.contains("pallSource("), "the mushroom step has no built-in pall calculation");
         assertTrue(stem.contains("mushFootLight(k, m, q)"));

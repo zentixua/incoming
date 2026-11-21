@@ -201,11 +201,12 @@ class BlastWallTest {
     @Test
     void wedgeLaws() {
         assertEquals(0, BlastWall.top(0));
-        assertEquals(1, BlastWall.top(1), 1e-12);
-        assertEquals(1, BlastWall.top(3), 1e-12);
+        // the hump at the front (not physical, BlastWall.hump) still stands a little above the law at the wedge end, gone by 1.2 wedges
+        assertEquals(BlastWall.hump(1), BlastWall.top(1), 1e-12);
+        assertEquals(BlastWall.hump(3), BlastWall.top(3), 1e-12);
         assertEquals(0, BlastWall.shape(0));
-        assertEquals(1, BlastWall.shape(1), 1e-12);
-        assertEquals(1, BlastWall.shape(2), 1e-12);
+        assertEquals(1 / BlastWall.hump(1), BlastWall.shape(1), 1e-12);
+        assertEquals(1 / BlastWall.hump(2), BlastWall.shape(2), 1e-12);
         double peak = 0, at = 0;
         for (double u = 0.001; u <= 1; u += 0.001) {
             assertEquals(DustModel.lifted(u), BlastWall.shape(u) * BlastWall.top(u), 1e-9, "pole not raised, u = " + u);
@@ -214,7 +215,7 @@ class BlastWallTest {
                 at = u;
             }
         }
-        assertEquals(2.6, peak, 0.15, "thickest at the edge");
+        assertEquals(2.6, peak * BlastWall.hump(at), 0.15, "thickest at the edge");
         assertTrue(at > 0.05 && at < 0.2, "the thickest on " + at);
         assertEquals(1, BlastWall.handoff(1), 1e-12);
         assertEquals(0, BlastWall.handoff(BlastWall.HANDOFF_TO), 1e-12);
@@ -255,7 +256,7 @@ class BlastWallTest {
      *  dust itself ({@link BlastWall#origin}, phase fraction - wedge fraction × {@code slot[8]}): at a place on the ground, while the head passes it
      *  (from the edge to the end of the transition to the pall), the billows place in the noise shifts less than half the path of the front during this time;
      *  across ring noise does not add up and is compressed no more than 1 + U/V times (U is the wind behind the front, V is the front in the game: at
-     *  slow wave 0,2 - up to ~2,6); there is only one noise tile for the entire blast (growing headlong would move the billows along the ground).
+     *  slow wave 0,2 - up to ~2,6); slot[11] is the front's ground speed (the young field's dust age behind it).
      * The previous noise (in the tile at the front) traveled with the front - the shift would be along its entire path. Air 15 kt on 592 m on
      *  real and slow wave, ground 15 kt and 1 kt.
      */
@@ -269,24 +270,25 @@ class BlastWallTest {
             BlastWall w = new BlastWall(d, false);
             String burst = d.yieldKt() + " kt on " + d.hobMetres() + " m, wave " + d.wave() + ": ";
             float[] slot = new float[BlastWall.SLOT];
-            double tile = -1, squeeze = 0;
+            double squeeze = 0, prevEdge = Double.NaN;
             int places = 0;
             for (double place : new double[] {300, 800, 1400, 2500}) {
                 double first = Double.NaN, last = Double.NaN, minO = Double.MAX_VALUE, maxO = -Double.MAX_VALUE;
                 for (double t = 0.01; t < 120; t += 0.01) {
                     if (!w.slot(t, slot) || slot[3] <= 0) continue;
-                    if (tile < 0) tile = slot[11];
-                    assertEquals(tile, slot[11], 0, burst + t + " s: head noise tile changes");
+                    // the young field's age behind the front (fx_pall: youngDust): slot[11] is the front's ground speed, blocks/s
+                    if (!Double.isNaN(prevEdge) && place == 300 && d == GROUND) assertEquals(slot[0] - prevEdge, 0.01 * slot[11], 0.05 * 0.01 * slot[11] + 0.05, burst + t + " s: front speed");
+                    prevEdge = place == 300 ? slot[0] : Double.NaN;
                     double s = slot[0] - place;
                     if (s < 0 || s > BlastWall.HANDOFF_TO * slot[1]) continue;
                     if (Double.isNaN(first)) first = slot[0];
                     last = slot[0];
                     for (double z : new double[] {0, 0.5 * slot[2], slot[2]}) {
-                        double o = BlastWall.origin(place, 0, z, s / slot[1] * slot[8], slot[2], slot[4])[0];
+                        double o = BlastWall.origin(place, 0, z, s / slot[1] * slot[8], slot[2], d.blocks(w.carried(t)))[0];
                         minO = Math.min(minO, o);
                         maxO = Math.max(maxO, o);
                         // the neighboring place is a meter closer to the epicenter: the noise does not add up, it is compressed to the extent of the wind against the front
-                        double near = BlastWall.origin(place - 1, 0, z, (s + 1) / slot[1] * slot[8], slot[2], slot[4])[0];
+                        double near = BlastWall.origin(place - 1, 0, z, (s + 1) / slot[1] * slot[8], slot[2], d.blocks(w.carried(t)))[0];
                         assertTrue(o - near > 0, burst + place + " blocks, " + t + " s: noise collapsed");
                         squeeze = Math.max(squeeze, o - near);
                     }
@@ -309,7 +311,8 @@ class BlastWallTest {
         float[] slot = new float[BlastWall.SLOT];
         for (double t = 1; t < 10; t += 1) {
             if (!w.slot(t, slot) || slot[3] <= 0) continue;
-            assertTrue(slot[4] > 1 && slot[4] < 60, t + " s: air path " + slot[4]);
+            double path = air.blocks(w.carried(t));
+            assertTrue(path > 1 && path < 60, t + " s: air path " + path);
         }
     }
 
@@ -333,9 +336,6 @@ class BlastWallTest {
         assertEquals(sigmas[1] / ref, s[15], 1e-6);
         assertEquals(sigmas[2] / GROUND.scale(), s[7], 1e-6);
         assertEquals(1, Math.max(Math.max(s[14], s[15]), s[7] / s[3]), 1e-6, "scale - largest");
-        // tile - at the largest top of the layer by the end of the phase: no smaller than at the top of the wedge now (constant -
-        // headCloudsStayWhereTheDustWasLifted)
-        assertTrue(s[11] >= BlastWall.TILE * s[2] - 1e-3, "tile " + s[11] + " smaller than a wedge " + s[2]);
         // the top of the wedge is tens of meters, like the dust layer at the end of the wave phase (Kuhl, GRABLE)
         assertTrue(GROUND.metres(s[2]) > 25 && GROUND.metres(s[2]) < 80, "top of the wedge " + GROUND.metres(s[2]) + " m");
         assertEquals(0, s[18], "wilson cloud in dry air");
@@ -362,13 +362,14 @@ class BlastWallTest {
         assertTrue(w.slot(4, s));
         double head = s[0], len = s[1], top = s[2], k = s[3];
         assertEquals(0, BlastWall.sigma(s, head + 2, 0, 0.1, 0));
-        assertEquals(0, BlastWall.sigma(s, head - len, 0, 1.01 * top, 0));
+        assertEquals(0, BlastWall.sigma(s, head - len, 0, 1.01 * top * BlastWall.hump(1), 0));
         assertEquals(0, BlastWall.sigma(s, head - 0.1 * len, 0, 0.3 * top, 0), "at the edge above the wedge");
         // densest at the ground in the front part of the wedge (lifted in a thin layer), not at the very edge: dust there is still rising
         // (saltation develops behind the front, BlastWall.develop)
-        double peak = 0, at = 0, end = BlastWall.sigma(s, head - len, 0, 0.02 * top, 0);
+        double peak = 0, at = 0, end = BlastWall.sigma(s, head - len, 0, 0.02 * top, 0) * BlastWall.hump(1);
+        // the law's ground density: the hump (not physical) spreads the same column higher, so the ground density is divided by it
         for (double u = 0.002; u <= 1; u += 0.002) {
-            double v = BlastWall.sigma(s, head - u * len, 0, 0.02 * top, 0);
+            double v = BlastWall.sigma(s, head - u * len, 0, 0.02 * top, 0) * BlastWall.hump(u);
             if (v > peak) {
                 peak = v;
                 at = u;
@@ -376,7 +377,7 @@ class BlastWallTest {
         }
         // 15 kt at 4 s: 1.4 times the end at a third of the wedge (without development — 2.6 times at a tenth)
         assertTrue(peak > 1.25 * end && at < 0.5, "it’s not thicker near the edge: " + peak / end + " at " + at);
-        assertTrue(at > 0.01 && BlastWall.sigma(s, head - 0.002 * len, 0, 0.02 * top, 0) < 0.8 * peak,
+        assertTrue(at > 0.01 && BlastWall.sigma(s, head - 0.002 * len, 0, 0.02 * top, 0) * BlastWall.hump(0.002) < 0.8 * peak,
                 "full density right at the edge (a perfect ring at the foot): peak at " + at);
         assertEquals(0, BlastWall.sigma(s, head - 1.6 * len, 0, 0.1 * top, 0));
         double prev = 0;
@@ -593,43 +594,6 @@ class BlastWallTest {
             rows.append(String.format(java.util.Locale.ROOT, " %.0f kt: from %.2f;", kt, hi));
         }
         System.out.println("Wilson cloud forms from relative humidity" + rows);
-    }
-
-    /**
-     * The head's dust rolls in eddies of the layer's size (18.11, Artem: the lofted dust curls in successive rolls): the billow pattern turns about
-     * horizontal axes on concentric rings of eddies, by the eddies' turn over the wind's path (σ_u ≈ 2.5 u*, u* ≈ 0.04 U; × the presentation
-     * gain), top outward while the wave's wind blows outward, back toward ground zero as it reverses. Only the pattern turns: an eddy's rim
-     * and everything outside it stay put (no seams between eddies), a point never leaves its eddy, and the turn is zero at the front.
-     */
-    @Test
-    void headDustRollsInItsEddies() {
-        double size = 40, carried = 30;
-        assertEquals(0, BlastWall.rollAngle(0, carried, size), 0, "no turn at the front");
-        double peak = BlastWall.rollAngle(1, carried, size);
-        assertEquals(BlastWall.ROLL_GAIN * BlastWall.EDDY * carried / size, peak, 1e-12, "full wind path at phase end");
-        assertTrue(peak > 1 && peak < Math.PI / 2, "about a quarter turn at phase end: " + peak);
-        assertTrue(BlastWall.rollAngle(2, carried, size) < peak, "rolls back as the wind reverses");
-        double[] q = new double[3];
-        // outward along +x; an eddy spans [0, 40) along, 0..40 high, centre (20, 20)
-        BlastWall.roll(20, 20, 0, 1, 0, size, peak, q);
-        assertEquals(20, q[0], 1e-9, "centre stays");
-        assertEquals(20, q[1], 1e-9, "centre stays");
-        BlastWall.roll(20, 39.9, 0, 1, 0, size, peak, q);
-        assertEquals(20, q[0], 0.01, "rim stays");
-        BlastWall.roll(20, 60, 0, 1, 0, size, peak, q);
-        assertEquals(60, q[1], 0, "above the eddies — unchanged");
-        // the top of the eddy samples dust from further in: the pattern turns top outward
-        BlastWall.roll(20, 30, 0, 1, 0, size, peak, q);
-        assertTrue(q[0] < 20, "top outward: sample from inside " + q[0]);
-        assertTrue(Math.hypot(q[0] - 20, q[1] - 20) <= 10 + 1e-9, "stays in its eddy");
-        BlastWall.roll(20, 30, 0, 1, 0, size, -peak, q);
-        assertTrue(q[0] > 20, "rolling back: sample from outside " + q[0]);
-        // continuous across neighbouring eddies
-        double[] a = new double[3], b = new double[3];
-        BlastWall.roll(39.999, 20, 0, 1, 0, size, peak, a);
-        BlastWall.roll(40.001, 20, 0, 1, 0, size, peak, b);
-        assertEquals(a[0], b[0], 0.01);
-        assertEquals(a[1], b[1], 0.01);
     }
 
     /** The vertical thickness of the head ({@link BlastWall#tau}) is the integral of its weakening along the height. */

@@ -325,7 +325,7 @@ public final class NukeDust {
                 if (chunk == null) continue;
                 m.set(bx, chunk.getHeight(Heightmap.Types.MOTION_BLOCKING, bx & 15, bz & 15), bz);
                 BlockState cover = chunk.getBlockState(m);
-                if (litter(cover)) Fragments.torn(level, cover, m, Fragments.Kind.LEAF, p.x, Math.max(p.y, m.getY() + 1.2), p.z, air[0], 0, air[2], 0,
+                if (litter(cover) && litterAt(p.y, m.getY())) Fragments.torn(level, cover, m, Fragments.Kind.LEAF, p.x, Math.max(p.y, m.getY() + 1.2), p.z, air[0], 0, air[2], 0,
                         wind, 0, false);
             } else if (puffs && RANDOM.nextDouble() < inHead(a, GUST_WALL, p)) {
                 // brown dust and gray smoke billows are the wall passing through the player (wall color, with light); over
@@ -377,6 +377,18 @@ public final class NukeDust {
         return String.format(java.util.Locale.ROOT, "debris packets %d, places %d, torn chunk %d board %d pane %d leaf %d (alive %d), dust streaks %d;%s",
                 packets, places, TORN[0], TORN[1], TORN[2], TORN[3], Fragments.alive(), streaks, live);
     }
+
+    /**
+     * Ground litter around the player starts within {@link #LITTER_UP} blocks of its ground: a player on the ground sees it fly past; an eye
+     * high above the ground has no litter at its height (5 psi lifts scraps a few metres, LIFT_MAX of their path; spawned at a 120 m eye,
+     * hundreds of leaves hung around it).
+     */
+    static boolean litterAt(double y, int ground) {
+        return y - ground <= LITTER_UP;
+    }
+
+    /** Height above its ground up to which ground litter starts around the player, blocks (a standing eye with the spawn spread, +6). */
+    static final double LITTER_UP = 8;
 
     static void reset() {
         veil = veilTarget = veilWanted = 0;

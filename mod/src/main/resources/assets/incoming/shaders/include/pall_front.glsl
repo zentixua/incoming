@@ -36,7 +36,7 @@ float pallOpenHere(vec3 p) {
     return pallOpen(PallOpen, PallOpenAt, PallOpenWrap, Sampler10, PallSlot1, PallGround1, p);
 }
 
-// Slot wall head before point on [t0, t1]: transmitted share per ray span (pallWallSpans)
+// Slot wall head's spray before point on [t0, t1]: transmitted share per ray span (pallWallSpans; its dry dust is in pallFieldDrawn)
 float pallWallThrough(sampler2D ground, mat4 S, mat4 V, vec4 G, vec4 W, vec3 dir, float t0, float t1) {
     vec4 spans = pallWallSpans(S, V, G, dir, t0, t1);
     float through = 1.0;
@@ -70,11 +70,11 @@ float pallThrough(vec3 dir, float len) {
         vec3 q = dir * t;
         // full depth of all matter, like volume ray (mist also attenuates what lies behind)
         if (PallSlot0[1].w > 0.5) {
-            PallAt f = pallField(Sampler5, Sampler9, PallSlot0, PallGround0, PallWater0, q, pallRelief(Sampler9, PallSlot0, PallGround0, q.xz), 1.0);
+            PallAt f = pallFieldDrawn(Sampler5, Sampler9, PallSlot0, PallWall0, PallGround0, PallWater0, q, pallRelief(Sampler9, PallSlot0, PallGround0, q.xz));
             tau += (f.sigma.x + f.sigma.y + f.sigma.z) * ds;
         }
         if (PallSlot1[1].w > 0.5) {
-            PallAt f = pallField(Sampler5, Sampler10, PallSlot1, PallGround1, PallWater1, q, pallRelief(Sampler10, PallSlot1, PallGround1, q.xz), 1.0);
+            PallAt f = pallFieldDrawn(Sampler5, Sampler10, PallSlot1, PallWall1, PallGround1, PallWater1, q, pallRelief(Sampler10, PallSlot1, PallGround1, q.xz));
             tau += (f.sigma.x + f.sigma.y + f.sigma.z) * ds;
         }
         through *= exp(-tau * pallOpenHere(q));

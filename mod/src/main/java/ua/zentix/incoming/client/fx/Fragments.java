@@ -227,6 +227,28 @@ public final class Fragments {
         return LIVE.size();
     }
 
+    /**
+     * Probe line (sandbox, scenarios): live pieces by kind and by height against the eye at {@code eyeY} — above it, within 20 blocks below,
+     * lower — with the highest above the eye and the nearest horizontal distance, blocks.
+     */
+    public static String describe(double eyeY, double eyeX, double eyeZ) {
+        int[] kinds = new int[Kind.values().length];
+        int above = 0, near = 0, low = 0;
+        double top = Double.NEGATIVE_INFINITY, closest = Double.POSITIVE_INFINITY;
+        for (Fragment f : LIVE.items()) {
+            if (!f.isAlive()) continue;
+            kinds[f.kind.ordinal()]++;
+            double up = f.at(1) - eyeY;
+            if (up > 0) above++;
+            else if (up > -20) near++;
+            else low++;
+            top = Math.max(top, up);
+            closest = Math.min(closest, Math.hypot(f.at(0) - eyeX, f.at(2) - eyeZ));
+        }
+        return String.format(java.util.Locale.ROOT, "pieces chunk %d board %d pane %d leaf %d; above the eye %d, 0–20 below %d, lower %d; highest %+.0f, nearest %.0f",
+                kinds[0], kinds[1], kinds[2], kinds[3], above, near, low, top, closest);
+    }
+
     /** Client tick (unpaused): remove departed pieces from the count. */
     public static void tick() {
         tick++;
@@ -261,10 +283,17 @@ public final class Fragments {
         private boolean stuck;
         /** {@link Fragments#tick} tick when the piece last ticked (stops when the engine discards it). */
         private long ticked = Fragments.tick;
+        private final Kind kind;
+
+        /** Position along axis 0 (x), 1 (y), 2 (z), blocks. */
+        double at(int axis) {
+            return axis == 0 ? x : axis == 1 ? y : z;
+        }
 
         Fragment(ClientLevel level, BlockState state, BlockPos from, Kind kind, double x, double y, double z, double vx, double vy, double vz,
                  float size, double terminalMps, Wind wind, int delay, int life, boolean edge) {
             super(level, x, y, z);
+            this.kind = kind;
             this.delay = delay;
             this.wind = wind;
             float len = switch (kind) {

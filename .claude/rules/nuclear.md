@@ -163,7 +163,7 @@ Ruins and everything in `nuclear/world/` are in `nuclear-world.md`.
   (`FarTerrain.sand`), `pallDustW`/`PallField.sandShare` mix reference `DUST` with desert `SAND` (AERONET ω, Dubovik 2002,
   `NukePall.SAND_OMEGA`) by mass, debris over hard ground stays `DUST`; soot share is the table's fire zone × `FireStorm.growth`
   (`PallField.smoke`), for head and pall alike (18.11: a 0.77 constant in the head made a black disk out to the ignition range). From above, pall is one blanket (18.10 complaint: golden/dark patches
-  from altitude): young-layer patches (noise with gaps, `pallShape`) mix over one layer-eddy turnover (`PallField.mixed`,
+  from altitude): the young layer is the soft lump field (never a gap); the mixed pall's patches (noise with gaps, `pallShape`) take over through one layer-eddy turnover (`PallField.mixed`,
   e-fold over `DustModel.RISE_S`, dust-row fourth channel) to fluctuations `MIXED` = 0.2 of mean (`clumps`, `pallMixed`;
   Willis and Deardorff 1976, (est.)), while thermals make the top bumpy, top not holes: `topD` × (1 ± `BUMPS` = 0.3,
   entrainment zone, Stull 1988, (est.); `topBumps` in `fx_pall`, last `pallField` parameter, 1 without noise). Light in
@@ -221,19 +221,28 @@ Ruins and everything in `nuclear/world/` are in `nuclear-world.md`.
   `pallWallTop/Shape/Fade/Mean` (`PallGlslTest`). Head noise uses dust coordinates (`BlastWall.origin`, copy
   `pallWallOrigin`): position minus post-front wind path (`carried`: air path over local positive phase, U·t₊/e by
   Friedlander, tens of meters for 15 kt at 592 m; phase share `carriedShare` = u·e^(1−u)); air stationary at ground,
-  1/7 boundary-layer law above, upward 0.02–0.08 of path (Kuhl §3.4). Billows form where front lofted dust and stay there;
-  against the departing front, edge dust goes up/back, rolling the wall. The pattern also turns in eddies on concentric rings resting on
-  the ground (`pallWallRoll`/`BlastWall.roll`, angle `rollAngle` = `EDDY` 0.2 × wind path × `carriedShare` / eddy size: top
-  outward with the wave's wind, back as it reverses; × `ROLL_GAIN` 8, presentation, turn zero at eddy rims). Eddies are the local
-  layer's size, not the tile's (the tile is the thickest layer's, near ground zero: 79 m for 15 kt where the layer 1 km out is
-  16–29 m): the octave tile/2^k nearest the local top (`wallBillows`, fixed scales, two near a boundary); thinner than tile/11
-  (toe) billows give way to their mean: tile-sized holes in a metres-thick sheet read as a translucent shell at the front (18.11).
-  Close-up check 19.11 (sandbox, side view along the front): the head is a thin ramp (15 kt 1.5 km: top 37 m over a 291 m
-  wedge), its turn lasts the head's life (0.9–3.6 s) — texture churn, not a wall rolling over itself; the tall translucent
-  sheet above it in the first seconds is the Wilson shell (`pallWilson`), not dust. Noise tile (`TILE` of maximum phase-end layer
-  top) is fixed per detonation: a tile growing with the head, like old noise in a tile rotated by wall angle at front,
-  moved billows over ground at front speed — dust “spread from epicenter” (18.10 complaint,
-  `BlastWallTest.headCloudsStayWhereTheDustWasLifted`). Cartesian coordinates, no tiled circumference or noise phases.
+  1/7 boundary-layer law above, upward 0.02–0.08 of path (Kuhl §3.4). The young dry dust — head and the layer behind it — is drawn as
+  Artem's approved v6 animation (`youngDust`/`youngDens` in `fx_pall`): the
+  animation's core with rise, hump and settle, fines haze, ~170 m lumps, eddy warp with decaying energy, bulk slosh, polar
+  streaks (two atan branches blended away from their seams), frayed top and rising wisps, its value noise (no tile, no
+  repetition) and its footprint fade. Scaled to the law: layer height
+  `PALL_PEAK_SHARE`/(1 + `PALL_WALL_HUMP`) of the law's top at the strength-1 ring (`BlastWall.ringTop`, wall slot [4]) times the
+  animation's wind strength (`pallYoungStrength`, Z = r/(1000·size), at most 2: not physical, the law's top falls toward ground zero),
+  density `PALL_YOUNG_SHARE` 0.05 of the law's column over it (0.11/m at the 4.5 km ring of 1 Mt, `PallYoungTest`), billow sizes by
+  the slot tile over `PALL_YOUNG_TILE`, ages (R − r)/U with the front's ground speed U (`BlastWall.speed`, wall slot [11]). Its own
+  light (presentation): key light through the field within 21 m, height ambient, the animation's colours, forward glow and rim into
+  `Sample.glow`. Value noise: one fetch of the noise tile's white-noise channel A at smoothstepped coordinates, octaves turned. The
+  law's dry dust takes over from `PallField.mixed` 0.25 to 0.5 (`PALL_YOUNG_MIX_*`); the head draws only its spray (`pallWallSpray`);
+  no young dust inside the fireball. Readers without the march's noise (layer quads, probes, composite) take `pallFieldDrawn` (the
+  young field's mean) and the head's spray. Bounds: `PallField.YOUNG_REACH` 2.2 of the ring top. The near volume ends where a ray enters
+  the young layer (`youngEntry`; at once for an eye inside it within the front): its cells faded the billows to a flat haze. Single features drawn on the law's opaque layer (lumps in its
+  top, an entrainment tail, a streak multiplier, wisps lifting its top) do not reach the approved look: the field is ported whole. The march finds tops by refinement: a step that meets matter after an empty sample re-marches from
+  it in fixed small steps (head: a quarter of its wanted step; young layer: its finest billow height, 13 m at 1 Mt), the first
+  one jittered: a layer opaque within one step shows the light at its first sample, so that sample's depth must not follow
+  the step — a step varying with the budget share drew rings about ground zero on the head (instrumented take, `PALL_DEBUG`),
+  ordinary steps of 240–350 m at 1–2 km averaged the young relief into a plain, and a 50 m refinement step flickered it. The
+  pall loop ends once the ray is opaque. Cartesian coordinates, no tiled circumference or noise phases
+  (`BlastWallTest.headCloudsStayWhereTheDustWasLifted`).
   Rays sample the head more densely (`pallWallSpans`: ring from dust edge to 1.5 wedges and terrain-map height layer,
   step one eighth its height, at most `steps` extra steps). Same light as pall, light-path depth follows wedge shape
   (`wall` in `fx_pall`, copy `NukePall.dustLight`): diffuse uses the lesser mean-head depth above point (to local wedge
@@ -248,6 +257,36 @@ Ruins and everything in `nuclear/world/` are in `nuclear-world.md`.
   in clear weather (70 %) and rain; not biome downfall): ray traversal is an event, like tornado (`pallWilson`, `wilsonLight`). Camera pall
   (`NukePall.tick`: sound, ray range) also uses mean head (`BlastWall.sigma`). Fallback camera dust (`NukeDust.front`,
   when pall is not drawn) uses head `BlastWall.wall`, in its light (`NukePall.dustColor`, below).
+- Hump at the front (not physical, Artem 21.11, guide deviation list; the head's shape, so spray heads over water take it too): the
+  head's top stands up to `BlastWall.HUMP` (0.38) above the
+  law's near a third of the wedge and sinks back by 1.2 wedges, then the heavy core settles: the top sinks to `1 − CORE_SINK` (0.5)
+  of the law's from half a wedge to three and comes back as the layer mixes (10–40 wedges; `BlastWall.hump`, copy `pallWallHump`,
+  the pall's dust row through `PallField.dust`); `shape` and the dust row divide by the same factor, so the column (and every reader
+  of it) keeps the law's matter (`DustWallHumpTest`). The head's
+  billows are the volume's own: rows of effects-layer puffs on top of it read as concentric bands at 1 Mt and engulf an elevated camera.
+- Young dust keeps moving after the front (presentation, `pallYoung`, `pallTurbReach` in `pall.glsl`; Artem's approved animation): its
+  billow pattern is displaced along its turbulent path (eddies at ~0.1 of the post-front wind, decaying over `PALL_TURB_S` 8 s, then a
+  slow turnover until the layer has mixed), rising a little; the same fetch as the existing warp (`warpNoise`, `wallNoise`); dust age
+  from `PallField.mixed` (pall) or phase share (head). The noise coordinate is not stretched along the flow: a stretched coordinate
+  makes its gaps as long as its billows, and the layer opens into black voids. The young dry dust's own motion is the v6 field's
+  (above); this warp moves the mixed pall's billows.
+- Ray samples: the ordinary steps span the pall's bounds, snapped to quarter octaves (`PallPass.snapBounds`), so they stay put
+  while the wall and pall grow (they move when the near volume's end or the ray cutoff moves, as the head nears the eye); the
+  head's interval is filled from its entry with the steps it may take, as the storm frame's. A head grid anchored at the eye
+  with a power-of-two step aliased the thin 1 Mt head flank into ribs and a toothed edge (`PallGridGlslTest`); the dust
+  texture stays fixed in the air (noise in dust coordinates) and the frame jitter accumulates.
+- Inside the passing wall (presentation, `PallPass.SEE`, `LIT_TAU`, copy `pallLitDepth`): each view's frame first computes its eye
+  medium (`NukePall.eyeMedium`, before the mushroom and slot tables): while that eye is in a detonation's young dry dust (dust row
+  and wall head only, `PallField.dust`/`dustTau`: not spray, fire haze or surge; `NukePall.young`: fading out 60–120 s after the
+  front passed; times the eye's open sky, so shade and tunnels keep the law), that detonation's dry dust is drawn at `SEE` (0.12)
+  of the law: its slot at upload (dust row and wall-head scale, `NukePall.KEEP`) and the stem foot's layer (`MushroomField.foot`),
+  so every reader (march, near volume, composite repair, layer quads, probes, foot) sees one medium; the ray cutoff takes the
+  drawn medium itself (`Frame.eyeDust`: only the thinned dust changes). Diffuse light within `SEE_NEAR` of the eye saturates at
+  the light `LIT_TAU` under the layer top (`gLitGate`), weighted by the sample's dry dust share (`Sample.dry`). The law's young
+  layer allows a few metres and is night inside (15 kt at 1.6 km: 89–98 % black frames); the reference is a bright warm
+  curtain. Known limits: a second detonation's old dry pall within 80 blocks of an eye in young dust also gets the light
+  floor; the near volume's history blends the share over about ten frames as the gate opens (`VOLUME_CURRENT` 0.1). Sound,
+  ash and the veil keep the law (`PallFloorsGlslTest`, `PallFieldTest.dustIsTheDustRowOnly`).
 - Visible shock front and shimmer over sphere/storm use distortion pass `HeatPass` (`client/nuclear/NukeHeat`,
   `client-fx.md`): sphere `frontRadius` while beyond the fireball; compression thickness `ShockOptics.DECAY_SHARE` of
   in-game positive-phase length (`frontRadius − phaseEndRadius`); absent beyond dust-wall edge, shock fades from

@@ -43,33 +43,13 @@ public final class BlastWall {
     }
 
     /**
-     * Head-billow noise tile is a fraction of the layer top at wave phase end ({@link DustModel.Column#first}, maximum over
-     * distance): billows (quarter tile) are about a fifth of it; layer eddies match layer thickness (Kuhl §3). One tile per detonation
-     * for its lifetime: noise uses dust coordinates, and a tile growing with the head would move billows along the ground.
-     */
-    static final double TILE = 0.9;
-    /**
      * Air displacement behind the front over the local positive phase, fraction of U·t₊ (U — wind immediately behind the front): particle speed
      * follows Friedlander u(t) = U(1 − t/t₊)e^(−t/t₊), ∫₀^t₊ = U·t₊/e (Glasstone &amp; Dolan §3.57: decay shape; decay
      * coefficient 1 for weak distant waves; closer to ground zero decay is steeper and displacement smaller — upper estimate).
      */
     static final double CARRY = Math.exp(-1);
-    /**
-     * Eddy turn of the head's dust layer per block of wind path behind the front, per eddy diameter: eddies of the layer's size ({@link #TILE})
-     * spin at the turbulent velocity σ_u ≈ 2.5 u* (Panofsky &amp; Dutton 1984, neutral surface layer) on their radius, u* ≈ 0.04 U
-     * (Schlichting rough plate a few hundred metres behind the front, {@code DustModel.friction}): Ω = 5 u* / D, angle = 0.2 · (wind path)/D.
-     * Sense from the shear: wind faster aloft than at the ground — the top rolls outward while the wave's wind blows outward, back toward ground
-     * zero when it reverses ({@link #carriedShare}).
-     */
-    static final double EDDY = 0.2;
     /** Deepest negative phase of a nuclear blast wave, kPa: never more than about 4 psi below ambient (Glasstone &amp; Dolan 1977, §3.05). */
     static final double UNDER_MAX_KPA = BlastModel.kpa(4);
-    /**
-     * presentation: the eddies turn this many times faster than {@link #EDDY} — at the physical rate a 1 Mt head 5 km out turns 0.1 rad in its
-     * seconds of life, which no one sees from kilometres; at this gain about a quarter turn out and back. Where dust is, its amount and its
-     * height are unchanged: only the billow pattern turns.
-     */
-    static final double ROLL_GAIN = 8;
     /** Head hands over to pall from the wedge end (fraction of its length) to this fraction ({@link #handoff}). */
     static final double HANDOFF_FROM = 1, HANDOFF_TO = 1.5;
     /** No head when its extinction is below this, 1/m (visibility 4 km). */
@@ -104,8 +84,8 @@ public final class BlastWall {
     private final double lastPositive;
     /** The negative phase condenses water: a Wilson cloud exists ({@link #condenses}). */
     private final boolean humid;
-    /** Head-billow noise tile, m ({@link #TILE}). */
-    private final double tileM;
+    /** The law's layer top at the young field's strength-1 ring ({@link #ringTop}), m. */
+    private final double ringTopM;
 
     public BlastWall(Detonation d) {
         this(d, condenses(d, humidity()));
@@ -130,7 +110,23 @@ public final class BlastWall {
             if (i > 0) phaseEnd[i] = Math.max(phaseEnd[i], phaseEnd[i - 1]);
         }
         lastPositive = positive;
-        tileM = TILE * first;
+        DustModel.Column ring = DustModel.column(RING_Z * Math.cbrt(d.yieldKt() * 1e6), hob, d.yieldKt(), d.surface(), d.visibility(), DustModel.Surface.REFERENCE);
+        ringTopM = ring.height(ring.positive());
+    }
+
+    /**
+     * Scaled ground distance of the young field's strength-1 ring, m/kg^(1/3) (fx_pall: youngDust — the approved animation's wind strength
+     * (u / 75 m/s)^1.5 is 1 at Z 4.5: the ~5 psi ring, 4.5 km at 1 Mt; pallYoungStrength).
+     */
+    static final double RING_Z = 4.5;
+
+    /**
+     * The law's layer top at the young field's strength-1 ring once its positive phase has passed, m: the young layer's drawn height there
+     * (PALL_PEAK_SHARE of it at the hump's peak) scales by the animation's strength elsewhere; its reach ({@link PallField#YOUNG_REACH})
+     * bounds the drawn young dust.
+     */
+    double ringTop() {
+        return ringTopM;
     }
 
     /**
@@ -194,6 +190,16 @@ public final class BlastWall {
         if (t <= 0) return 0;
         double front = d.metres(d.frontRadius(t * 20 * d.scale()));
         return Math.sqrt(Math.max(0, front * front - hob * hob));
+    }
+
+    /**
+     * Ground speed of the front at time t (model seconds), m/s: the young dust's age at a distance s behind it is about s over this
+     * (fx_pall: youngDust; the front slows, so dust far behind reads a few per cent older — the approved animation's R ∝ t^0.8 gives
+     * +8 % at half the radius).
+     */
+    double speed(double t) {
+        double dt = 0.02;
+        return (shock(t + dt) - shock(Math.max(0, t - dt))) / (t + dt - Math.max(0, t - dt));
     }
 
     /** Dust leading edge on ground at time t (model seconds), m: the game front itself — dust rises right behind it. */
@@ -293,35 +299,6 @@ public final class BlastWall {
         return new double[] {rx - rx / len * x, z - x * (0.02 + 0.06 * zr), rz - rz / len * x};
     }
 
-    /**
-     * Eddy turn of head dust (radians, positive — top outward) at phase fraction {@code phase} since the front: {@link #EDDY} × {@link #ROLL_GAIN} ×
-     * wind path so far ({@code carried} × {@link #carriedShare}) / eddy diameter {@code size} (blocks). Copy {@code pallWallRollAngle}.
-     */
-    static double rollAngle(double phase, double carried, double size) {
-        return ROLL_GAIN * EDDY * carried * carriedShare(phase) / Math.max(size, 1);
-    }
-
-    /**
-     * Dust-coordinate point (x, height, z: {@link #origin}) turned within its eddy, into {@code into}: eddies of diameter {@code size} side by side
-     * along the ground outward ({@code outX}, {@code outZ} — unit), resting on it; the turn {@code angle} is full at an eddy's centre and falls to
-     * zero at its rim (squared), so neighbouring eddies meet without a seam and dust outside them stays. Copy {@code pallWallRoll}.
-     */
-    static void roll(double x, double y, double z, double outX, double outZ, double size, double angle, double[] into) {
-        double along = x * outX + z * outZ, half = 0.5 * size;
-        double centre = size * (Math.floor(along / size) + 0.5), dx = along - centre, dy = y - half;
-        double r = Math.sqrt(dx * dx + dy * dy) / half;
-        into[0] = x;
-        into[1] = y;
-        into[2] = z;
-        if (r >= 1) return;
-        double a = angle * (1 - r) * (1 - r), c = Math.cos(a), sn = Math.sin(a);
-        // the pattern turns by a (top outward); the point samples where its dust came from: turned back
-        double ex = c * dx - sn * dy, ey = sn * dx + c * dy;
-        into[0] = x + outX * (ex - dx);
-        into[1] = half + ey;
-        into[2] = z + outZ * (ex - dx);
-    }
-
     /** Wind immediately behind the front along the ground at ground distance {@code groundM} from ground zero, m/s. */
     double wind(double groundM) {
         return d.groundWind(d.blocks(Math.max(0, groundM)));
@@ -385,11 +362,11 @@ public final class BlastWall {
      * <ul>
      *     <li>[0..3] — dust leading edge from ground zero, wedge length, top at its end; extinction scale (1/block; 0 — no
      *     head);</li>
-     *     <li>[4..7] — dust displacement with wind behind the front ({@link #carried(double)}); spray over water: lag behind dust
+     *     <li>[4..7] — the law's layer top at the young field's strength-1 ring ({@link #ringTop}); spray over water: lag behind dust
      *     edge, top fraction, extinction (1/block);</li>
      *     <li>[8..11] — phase fraction elapsed at wedge end ({@link #backAge}: wedge fraction u means phase fraction u × this);
      *     saltation e-folds over the wedge length (dust age at its end over {@link DustModel#SALTATION_S}) and the share of dust
-     *     rising at once ({@link #develop}); billow noise tile ({@link #TILE});</li>
+     *     rising at once ({@link #develop}); the front's ground speed ({@link #speed}, blocks per model second);</li>
      *     <li>[12..15] — dust over hard ground relative to soil ({@link #pavedShare}) at leading edge and wedge end; ground dust
      *     extinction at wave phase end, at leading edge and wedge end — fractions of scale.</li>
      * </ul>
@@ -408,7 +385,7 @@ public final class BlastWall {
             into[1] = (float) d.blocks(len);
             into[2] = (float) d.blocks(top);
             into[3] = (float) (ref / d.scale());
-            into[4] = (float) d.blocks(carried(t));
+            into[4] = (float) d.blocks(ringTopM);
             // over water, spray: lower than dust (crest stripping height), behind dust edge by front travel over SPRAY_LAG, but also
             // outside the ground fireball: closer to the front there
             double u = wind(Math.max(0, head - 0.5 * len)), ball = underBall(t);
@@ -421,10 +398,10 @@ public final class BlastWall {
             into[8] = (float) age;
             into[9] = (float) (age * HobBlast.positivePhaseSeconds(back, hob, d.yieldKt()) / DustModel.SALTATION_S);
             into[10] = (float) clamped(prompt, Math.max(0, head - 0.5 * len));
+            // the young dust's age behind the front (fx_pall: youngDust — the approved v6 field): the front's ground speed, blocks per model second
+            into[11] = (float) d.blocks(speed(t));
             into[12] = (float) pavedShare(head);
             into[13] = (float) pavedShare(back);
-            // shader tile at least one block
-            into[11] = (float) Math.max(1, d.blocks(tileM));
             into[14] = (float) (s[0] / ref);
             into[15] = (float) (s[1] / ref);
         }
@@ -466,9 +443,34 @@ public final class BlastWall {
 
     // ---------------------------------------------------------------- wedge laws (shared with shader: pallWall* in pall.glsl)
 
-    /** Wedge top at fraction u of its length behind the edge, fraction of end top: u^(5/6) (Kuhl); full behind the wedge. Copy {@code pallWallTop}. */
+    /**
+     * not physical (Artem's approved animation 21.11, guide deviation list): a low hump runs along the front — the dust's top stands up to
+     * {@code HUMP} above the law's near a third of the local positive phase behind the front and sinks back by 1.2 phases — and then the
+     * heavy core settles: the top sinks to {@code 1 − CORE_SINK} of the law's from half a phase to three phases, coming back up as the
+     * layer mixes (10–40 phases). While the dust is young the whole is drawn lower and denser: scaled so the hump's peak is
+     * {@code PEAK_SHARE} of the law's top (Artem 21.11: "like a haboob, denser and much lower", a layer of ~45–80 m at the 4.5 km ring of
+     * 1 Mt; the law's wedge top there is 132–154 m: peak ~85 m, the layer under it ~62 m, the settled core ~31 m; the approved animation's
+     * 58 m layer and ~80 m peak under the 120 m camera); the scale returns to 1 as the layer mixes. The column is unchanged ({@link #shape} and the pall's dust row divide
+     * by the same factor), so every reader keeps the law's matter. The animation: +38 % sinking from ~0.75 s, the core to half by ~4.5 s.
+     */
+    static final double HUMP = 0.38, CORE_SINK = 0.5, PEAK_SHARE = 0.62;
+
+    /**
+     * The presentation factor on the dust's top at phase share v since the front (wedge fraction u for the head, age over the local positive
+     * phase for the pall, {@code PallField}): the hump times the core's settle. Copy {@code pallWallHump}.
+     */
+    public static double hump(double v) {
+        double mixed = smooth(10, 40, v);
+        return (1 + HUMP * smooth(0, 0.3, v) * (1 - smooth(0.3, 1.2, v))) * (1 - CORE_SINK * smooth(0.5, 3, v) * (1 - mixed))
+                * (1 + (PEAK_SHARE / (1 + HUMP) - 1) * (1 - mixed));
+    }
+
+    /**
+     * Wedge top at fraction u of its length behind the edge, fraction of end top: u^(5/6) (Kuhl); full behind the wedge; with the hump
+     * ({@link #hump}). Copy {@code pallWallTop}.
+     */
     static double top(double u) {
-        return Math.pow(Mth.clamp(u, 0, 1), 5 / 6.0);
+        return Math.pow(Mth.clamp(u, 0, 1), 5 / 6.0) * hump(u);
     }
 
     /**
@@ -479,7 +481,7 @@ public final class BlastWall {
     static double shape(double u) {
         if (u <= 0) return 0;
         double x = Math.min(u, 1);
-        return DustModel.lifted(x) / Math.pow(Math.max(x, 1e-4), 5 / 6.0);
+        return DustModel.lifted(x) / Math.pow(Math.max(x, 1e-4), 5 / 6.0) / hump(u);
     }
 
     /** Head share behind the wedge: from {@link #HANDOFF_FROM} to {@link #HANDOFF_TO} of its length, hand over to pall. Copy {@code pallWallFade}. */
@@ -568,7 +570,8 @@ public final class BlastWall {
         double s = slot[0] - Math.hypot(relX, relZ), len = slot[1];
         double full = slot[2] * (1 + (slot[6] - 1) * wet), back = slot[5] * wet;
         double here = full * top((s - back) / Math.max(len, 0.001));
-        return simpson(slot, relX, relZ, Math.max(from, -0.5 * full), Math.min(to, 0), wet, hard)
+        // below the ground the head reaches half its local top (pallWallMean): the steps cover that, not half the wedge's end top
+        return simpson(slot, relX, relZ, Math.max(from, -0.5 * here), Math.min(to, 0), wet, hard)
                 + simpson(slot, relX, relZ, Math.max(from, 0), Math.min(to, here), wet, hard);
     }
 
@@ -580,7 +583,7 @@ public final class BlastWall {
         return sum * h / 3;
     }
 
-    static double smooth(double e0, double e1, double x) {
+    public static double smooth(double e0, double e1, double x) {
         double f = Mth.clamp((x - e0) / (e1 - e0), 0, 1);
         return f * f * (3 - 2 * f);
     }

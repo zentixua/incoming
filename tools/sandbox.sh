@@ -127,6 +127,18 @@ json.dump(frames, open(sys.argv[2], "w"))
 PY
 }
 
+# second the sound of a frame take starts from: its first frame's (without a time of day, `130@12500`) if before the effect, else 0
+first_second() {
+  local f=${1%%,*}
+  f=${f%%@*}
+  awk -v f="$f" 'BEGIN { if (f < 0) print f; else print 0 }'
+}
+
+# a frame take ($1 capture.json) whose world ran slower than 20 ticks/s at some point (its sound is not real-time)
+slowed() {
+  python3 -c 'import json,sys; sys.exit(0 if json.load(open(sys.argv[1])).get("rate", 20) < 20 else 1)' "$1"
+}
+
 # a sound-only take's capture.json ($1) as the shot's ($2), named $3
 renamed_capture() {
   python3 - "$1" "$2" "$3" <<'PY'
@@ -191,6 +203,10 @@ OPT
 
 start() {
   local size=1280x720 opts=() pack wait= fresh= gpu= sodium=
+  # a fixed near site (Sandbox.FIXED_SITE): checked here, not in the client's class initialisation
+  if [ -n "${INCOMING_SANDBOX_SITE:-}" ] && ! [[ $INCOMING_SANDBOX_SITE =~ ^[0-9]{1,3}$ && $((10#$INCOMING_SANDBOX_SITE)) -le 450 ]]; then
+    echo "INCOMING_SANDBOX_SITE: 0–450, not \"$INCOMING_SANDBOX_SITE\"" >&2; exit 2
+  fi
   while [ $# -gt 0 ]; do
     case "$1" in
       --wait) wait=--wait ;;
@@ -389,8 +405,9 @@ shot() {
   local out="$FX/out/$name" limit=${FX_LIMIT:-3600}
   # Java's split drops trailing empty fields: "600," is "600", so the deadline below must read the same last frame
   while [[ $at == *, ]]; do at=${at%,}; done
-  if [ "$(cat "$FX/renderer" 2>/dev/null)" = soft ]; then
-    # a paced take runs down to 1 tick/s: the last frame's second may take 20 wall seconds per game second
+  if [ "$(cat "$FX/renderer" 2>/dev/null)" = soft ] || [ "$at" != none ]; then
+    # a paced take (CPU renderer, or dense GPU frames) runs down to 1 tick/s: the last frame's second may take 20 wall
+    # seconds per game second
     limit=$(awk -v l="${at##*,}" -v b="$limit" 'BEGIN { printf "%d", b + (l > 0 ? l : 0) * 20 }')
   fi
   if [ "$(cat "$FX/renderer" 2>/dev/null)" = soft ] && [ "$wav" != 0 ]; then
@@ -403,7 +420,7 @@ shot() {
     local take from=0
     mkdir -p "$FX/out"
     take=$(basename "$(mktemp -d "$FX/out/.wav-$name-XXXXXX")") || exit 1
-    [ "$at" != none ] && awk -v f="${at%%,*}" 'BEGIN { exit !(f < 0) }' && from=${at%%,*}
+    [ "$at" != none ] && from=$(first_second "$at")
     if [ "$at" != none ]; then
       fx "shots $name $at 0" || exit 1
       FX_LIMIT=$limit fx "$effect" || exit 1
@@ -426,7 +443,22 @@ shot() {
   else
     fx "shots $name $at $wav" || exit 1
     FX_LIMIT=$limit fx "$effect" || exit 1
-    cut_wav "$out/capture.json" "$out/$name.wav" || { echo "no WAV" >&2; exit 1; }
+    if [ "$wav" != 0 ] && slowed "$out/capture.json"; then
+      # GPU take slowed by its frames (dense frames, each PNG written on the render thread: Sandbox.paceFrame): its sound
+      # is not real-time, so it comes from a second take at 20 ticks/s, as on the CPU renderer
+      local take from=0
+      take=$(basename "$(mktemp -d "$FX/out/.wav-$name-XXXXXX")") || exit 1
+      from=$(first_second "$at")
+      fx clear || exit 1
+      fx "shots $take none@$from $wav" || exit 1
+      fx "$effect" || { rm -rf "${FX:?}/out/$take"; exit 1; }
+      if ! cut_wav "$FX/out/$take/capture.json" "$out/$name.wav" || ! audio_into "$FX/out/$take/capture.json" "$out/capture.json"; then
+        echo "sound take: no WAV ($FX/out/$take kept)" >&2; exit 1
+      fi
+      rm -rf "${FX:?}/out/$take"
+    else
+      cut_wav "$out/capture.json" "$out/$name.wav" || { echo "no WAV" >&2; exit 1; }
+    fi
   fi
   [ "$at" = none ] || ls "$out"/*.png | sed 's/^/frame: /'
   echo "from command to last frame and audio: $(since "$t0") s"

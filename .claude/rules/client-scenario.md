@@ -158,7 +158,9 @@ with Iris.
   client 35, ruins preceded visual front). Differences from full scenario: oaks have regular block canopies
   (scenario `place feature` random shapes), flat grass ground. Fresh location each run, but threshold scatter
   (`BlockResponse.jitterAt`, position hash) identical there (x shift k·2¹⁶, z k·2¹⁰ cancel in
-  `Long.hashCode(BlockPos.asLong())`), same detonation ID (9000: scenario detonation seed), same detonation game time
+  `Long.hashCode(BlockPos.asLong())`; `INCOMING_SANDBOX_SITE=n` at `start` keeps every near take at site n, so with
+  `start dh` a first take lets Distant Horizons build LODs there and the next films them; the next take rebuilds the houses
+  but keeps what the first broke farther out, so warm up with a small yield), same detonation ID (9000: scenario detonation seed), same detonation game time
   (6000: world wind is game-time function `Wind.at`; epicenter ground loads immediately, detonation same tick
   rather than deferred; world clock rewound, previously scheduled old-effect block ticks wait longer, `clear`
   removes them), so same blocks break in same wind; other position-based randomness (trail noise, debris sampling)
@@ -213,13 +215,16 @@ times and the pall's budget are not frame costs: frame cost belongs to the GPU a
 - llvmpipe draws 3–10 frames/s: a frame lands up to 0.3 s after its tick. While shot frames are due, the sandbox slows
   the world (`Sandbox.paceFrame`: `tickRateManager().setTickRate` for two frames per tick, not `/tick rate`, whose
   feedback prints into the frame's chat), so frames land within 0.02 s of their second (`blast drone` at 0.1, 0.5, 1 and 3 s:
-  ages 0.102, 0.521, 1.005, 3.009 s; unpaced 0.163, 0.524, 1.292, 3.061 s). Pacing follows the armed take, not the
+  ages 0.102, 0.521, 1.005, 3.009 s; unpaced 0.163, 0.524, 1.292, 3.061 s). The measured rate applies on the GPU too: a
+  frame every 1/30 s writes each 2560-wide PNG on the render thread (~0.12 s), and unpaced its effect would run several
+  times ahead of the frames' seconds; a GPU at 40+ frames/s stays at 20 ticks/s, and only the CPU renderer starts a take
+  slowed (`SOFT_START_RATE`). `capture.json` `rate` is the take's slowest world rate. Pacing follows the armed take, not the
   current rate: effects that `clear` first (`nuke … near`) and fast stretches that raised the rate keep it. Only the
   last `Sandbox.PACE_LEAD` (2 s) before a due frame is slowed; farther the world runs at 20 ticks/s (paced whole, a
   nuke frame at 130 s took tens of minutes at 1–3 frames/s). `shots` takes a time of day per frame
   (`<seconds>@<day time>`, e.g. `130@12500,130.5@12550`): a dusk strip in one take; the `SANDBOX shot` line logs it. A slowed
-  take's sound is not real-time: `shot` records sound in a second take of the same effect at 20 ticks/s from the first
-  frame's second (`shots .wav-<name>-XXXXXX none@<s> <wav>`, a fresh `mktemp` staging directory), cuts the WAV from it and writes
+  take's sound is not real-time: on the CPU renderer, and on the GPU when `rate` < 20, `shot` records sound in a second take of the same effect at 20 ticks/s from the first
+  frame's second if before the effect, else from 0 (`first_second`: a time of day dropped; `shots .wav-<name>-XXXXXX none@<s> <wav>`, a fresh `mktemp` staging directory), cuts the WAV from it and writes
   its timing into the frames' `capture.json` (`audio.take`); the effect's deadline grows by 20 s per game second.
 - Frame comparisons between takes: a plain `nuke` detonates at the take's game time and the world wind is a function of it
   (`Wind.at`), so main and branch takes in different orders drift the cloud by pixels; equality claims (noon/night) need

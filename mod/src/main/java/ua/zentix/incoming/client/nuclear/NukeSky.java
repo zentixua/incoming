@@ -54,6 +54,24 @@ public final class NukeSky {
         return (float) Math.min(1, lit);
     }
 
+    /** Amber of the fireball-lit sky: the fog's display colour ({@link #fogColor}) and its linear value. */
+    private static final float[] AMBER_DISPLAY = {1f, 0.6f, 0.3f},
+            AMBER = {1f, (float) Math.pow(AMBER_DISPLAY[1], 2.2), (float) Math.pow(AMBER_DISPLAY[2], 2.2)};
+
+    /**
+     * Diffuse sky light on airborne matter while a fireball lights the air: its linear tint (luma 1) and its share; no detonation — share 0.
+     * presentation (the reference's warm ochre dust, Silo S3E09): the share is up to four times the fog's ({@link #fogColor}: half of
+     * {@link #amber}), so the dust takes the glowing sky's hue as the reference does (1 Mt wall from 600 m: saturation 0.42–0.53,
+     * 0.30 at the fog's share; Silo 0.54–0.62);
+     * the light's brightness is unchanged, only its tint.
+     */
+    public static float[] amberTint(Vec3 cam, float partial) {
+        float amber = 0;
+        for (ClientNuclear.Active a : ClientNuclear.detonations()) amber = Math.max(amber, amber(a, cam, partial));
+        float luma = 0.2126f * AMBER[0] + 0.7152f * AMBER[1] + 0.0722f * AMBER[2];
+        return new float[] {AMBER[0] / luma, AMBER[1] / luma, AMBER[2] / luma, Math.min(1f, 2f * amber)};
+    }
+
     public static void fogColor(ViewportEvent.ComputeFogColor e) {
         if (ua.zentix.incoming.client.fx.layer.FxViews.skipped()) return;
         float rain = viewRain(e.getCamera().getPosition(), (float) e.getPartialTick());
@@ -75,9 +93,9 @@ public final class NukeSky {
             dust = Math.max(dust, (float) (0.45 * near * Math.exp(-t / 45) * CloudPuffs.smooth(0.5, 4, t)));
         }
         // amber glare while the ball and mushroom glow
-        r = Mth.lerp(amber * 0.5f, r, 1f);
-        g = Mth.lerp(amber * 0.5f, g, 0.6f);
-        b = Mth.lerp(amber * 0.5f, b, 0.3f);
+        r = Mth.lerp(amber * 0.5f, r, AMBER_DISPLAY[0]);
+        g = Mth.lerp(amber * 0.5f, g, AMBER_DISPLAY[1]);
+        b = Mth.lerp(amber * 0.5f, b, AMBER_DISPLAY[2]);
         r = Mth.lerp(dust, r, 0.62f);
         g = Mth.lerp(dust, g, 0.38f);
         b = Mth.lerp(dust, b, 0.2f);

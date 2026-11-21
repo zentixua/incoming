@@ -86,7 +86,7 @@ class PallGlslTest {
             String at = "u = " + u;
             assertEquals(DustModel.lifted(u), lifted.call(Map.of("s", u)), 1e-6, at);
             assertEquals(BlastWall.top(u), top.call(Map.of("u", u)), 1e-6, at);
-            assertEquals(BlastWall.shape(u), shape.call(Map.of("u", u)), 1e-6, at);
+            assertEquals(BlastWall.shape(u), shape.call(Map.of("u", u)), 1e-6 * Math.max(1, BlastWall.shape(u)), at);
             assertEquals(BlastWall.handoff(u), fade.call(Map.of("u", u)), 1e-9, at);
         }
         for (double len : new double[]{3, 25, 300}) {
@@ -348,19 +348,13 @@ class PallGlslTest {
                 "return vec3(rel.x - out1.x * x, z - x * (0.02 + 0.06 * zr), rel.y - out1.y * x);"}) {
             assertTrue(origin.contains(law), "head dust place - not like in Java: no \"" + law + "»");
         }
-        String wall = body(read("include/fx_pall.glsl"), "float wallAt(");
-        String flat = wall.replaceAll("\\s+", " ");
-        String billows = body(read("include/fx_pall.glsl"), "float wallBillows(").replaceAll("\\s+", " ");
-        assertTrue(billows.contains("vec3 o = pallWallRoll(pallWallOrigin(h.rel, h.z, ph, h.P.y, V[1].x), h.rel / max(length(h.rel), 1e-3), size, "
-                + "pallWallRollAngle(ph, V[1].x, size));") && billows.contains("vec3 n = wallNoise(o / size + offset, fine);"),
-                "head noise - not in dust coordinates, turning in its eddies");
-        assertTrue(flat.contains("float u = s / max(h.P.x, 0.001), ph = u * V[2].x, tile = max(V[2].w, 1.0);"), "head phase share or tile");
-        // eddies the layer's size: the octave of the tile matching the local layer top (fixed scales: billows stay where lofted); thinner
-        // than tile/11 (the toe right behind the front) — their mean: no holes in a sheet metres thick (18.11: a translucent band at the front)
-        assertTrue(flat.contains("float local = h.P.y * pallWallTop(u);")
-                && flat.contains("float k = log2(tile / max(local, 1e-3)), resolved = 1.0 - smoothstep(3.5, 4.0, k);")
-                && flat.contains("float k0 = floor(clamp(k, 0.0, 3.0)), b = k >= 3.0 ? 0.0 : smoothstep(0.35, 0.65, max(k, 0.0) - k0), size = tile * exp2(-k0);")
-                && flat.contains("return h.P.w * m * mix(1.0, shape, resolved);"), "head eddies - not the local layer's size, or toe billows not their mean");
+        // over land the young field draws the head's dust (youngDust: the approved v6 field); the head draws its spray by the law's mean
+        String flat = body(read("include/fx_pall.glsl"), "float wallAt(").replaceAll("\\s+", " ");
+        assertTrue(flat.contains("return h.P.w * pallWallMean(h.s - h.P.z, h.z, h.P.x, h.P.y);"), "the head's spray: the law's mean");
+        String slot = body(read("include/fx_pall.glsl"), "void slot(").replaceAll("\\s+", " ");
+        assertTrue(slot.contains("if (head.P.w > 0.0 && head.wet > 0.0) wall(V, pallWallSpray(V, head)") && slot.contains("youngDust(y, vec3(head.rel.x, head.z, head.rel.y)"),
+                "the head: spray by the law, dust by the young field");
+        assertTrue(!read("include/fx_pall.glsl").contains("wallBillows"), "the head's own billow octaves");
     }
 
     /**
@@ -383,7 +377,10 @@ class PallGlslTest {
         assertTrue(f.contains("float topD = max(dust.g, 1.0) * bumps,"), "the bumps are not the top of the layer");
         assertTrue(f.contains("a.mixed = dust.a;"), "confusion - not from the table");
         String fx = read("include/fx_pall.glsl");
+        // the top bumps (the young dust's wisps are the young field's: youngDust)
         assertTrue(fx.contains("pallField(Sampler1, ground, S, R, W, p, floorUp, topBumps(S, p));"), "pall beam - without top bumps");
+        assertTrue(fx.contains("f.sigma.x *= young.x;") && fx.contains("f.column.x *= young.x;") && fx.contains("f.slab.x *= young.x;"),
+                "the young field takes the law's dry dust here and above by its share, never adding to it");
         assertTrue(body(fx, "float topBumps(").contains("return 1.0 + PALL_BUMPS * (2.0 * n - 1.0);"), "tubercles - not 1 ± PALL_BUMPS");
     }
 
@@ -549,29 +546,13 @@ class PallGlslTest {
     @Test
     void headSootIsThePallsSoot() {
         String fx = read("include/fx_pall.glsl").replaceAll("\\s+", " ");
-        assertTrue(fx.contains("if (head.P.w > 0.0) wall(V, head, keyDir, sunDir, lightDir, f.smoke, cone, pall, S[3].x, s);"), "head soot - not the pall's");
+        assertTrue(fx.contains("if (head.P.w > 0.0 && head.wet > 0.0) wall(V, pallWallSpray(V, head), keyDir, sunDir, lightDir, f.smoke, cone, pall, head.wet, s);")
+                && fx.contains("youngDust(y, vec3(head.rel.x, head.z, head.rel.y), sunDir, lightDir, cap, dir, dustW, youngDry, s);"), "head soot - not the pall's");
         String wall = body(read("include/fx_pall.glsl"), "void wall(").replaceAll("\\s+", " ");
         assertTrue(wall.contains("vec3 w = mix(pallDustW(h.sand, h.hard, V[3].x + (V[3].y - V[3].x) * uw, smoke), PALL_MIST_W, h.wet);"),
                 "head dust - not the soil's with the pall's soot");
         assertTrue(!wall.contains("0.77"), "a constant soot share in the head");
         assertTrue(fx.contains("float burn = pallBurn(r, 0.0, G.y, G.w)"), "fire light below - not the slot's fire flame");
-    }
-
-    /** The head's eddy turn and roll ({@code pallWallRollAngle}, {@code pallWallRoll}) are {@link BlastWall#rollAngle}, {@link BlastWall#roll}. */
-    @Test
-    void headRollIsTheJavaLaw() {
-        assertEquals(BlastWall.ROLL_GAIN * BlastWall.EDDY, scalar(GLSL, "PALL_WALL_ROLL"), 1e-7);
-        GlslFunction angle = GlslFunction.parse(GLSL, "pallWallRollAngle");
-        for (double ph : new double[]{0, 0.3, 1, 1.4, 3}) {
-            assertEquals(BlastWall.rollAngle(ph, 30, 40), angle.call(Map.of("ph", ph, "carried", 30.0, "size", 40.0,
-                    "PALL_WALL_ROLL", BlastWall.ROLL_GAIN * BlastWall.EDDY)), 1e-9, ph + " phase");
-        }
-        String roll = body(GLSL, "vec3 pallWallRoll(").replaceAll("\\s+", " ");
-        for (String law : new String[]{"float dx = along - size * (floor(along / size) + 0.5), dy = q.y - rim;",
-                "float a = angle * (1.0 - r) * (1.0 - r), c = cos(a), sn = sin(a);", "float ex = c * dx - sn * dy, ey = sn * dx + c * dy;",
-                "return vec3(q.x + out1.x * (ex - dx), rim + ey, q.z + out1.y * (ex - dx));"}) {
-            assertTrue(roll.contains(law), "pallWallRoll - not BlastWall.roll: no " + law);
-        }
     }
 
     /**
@@ -771,7 +752,7 @@ class PallGlslTest {
         String march = read("include/fx_pall.glsl"), composite = read("core/fx_pall_composite.fsh");
         assertTrue(march.contains("vec3 fire = min(below + under * (glow + s.fire / max(s.albedo, vec3(1e-7))) + around, gFlame);"),
                 "fire at a point - one amount under the flame limit");
-        assertTrue(march.contains("vec3 emit = s.albedo * (field + beams + fire + lamps);"), "point light - scattered, beams, fire and lamps");
+        assertTrue(march.contains("vec3 emit = s.albedo * (field + beams + fire + lamps) + s.glow;"), "point light - scattered, beams, fire and lamps, the young field's glow");
         assertTrue(march.contains("vec3 lamps = pallLampsAt(p);"), "lamps once per point, by the window's block light");
         assertTrue(march.contains("+ min(below * exp(-gSootK * self) + (0.5 + 0.75 * PALL_SOOT_G * mv) * glow + around, gFlame);"),
                 "fire on the smoke of the storm - one sum under the flame limit");

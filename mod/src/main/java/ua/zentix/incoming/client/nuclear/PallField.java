@@ -286,6 +286,15 @@ public final class PallField {
     }
 
     /**
+     * presentation (lead 21.11, Artem's approved v6 field; fx_pall: youngDust): the young dust's drawn field — the approved animation's core,
+     * fines haze, lumps, eddies and wisps, its height the animation's strength law scaled to the law's top at the strength-1 ring
+     * ({@link BlastWall#ringTop}) — reaches at most this share of that top: the layer at most 0.9 of it (strength 2, the hump's peak at
+     * PALL_PEAK_SHARE), its cutoff at 1.6 of the haze top, wisps and lean above. The bounds of the pall, the head's spans and the near
+     * volume's end. Copy {@code PALL_YOUNG_REACH}.
+     */
+    public static final double YOUNG_REACH = 2.2;
+
+    /**
      * Column above a point at pall height {@code x} — integral of {@link #profile} from x to top, in height fractions: used by the shader
      * for shadow and sky light inside pall. Approximation (test checks against its integral: error below 0.01).
      */
@@ -357,6 +366,7 @@ public final class PallField {
         return (ticks - arrival[i]) / (20.0 * d.scale());
     }
 
+
     /** Table rows per detonation: dust, spray, haze, in order. */
     public static final int ROWS = 3;
     static final int DUST_ROW = 0, SPRAY_ROW = 1, HAZE_ROW = 2;
@@ -405,7 +415,8 @@ public final class PallField {
      */
     void dust(int i, double ticks, double[] out) {
         double age = seconds(i, ticks), depth = columns[i].depth(age);
-        out[1] = Math.max(d.blocks(columns[i].height(age)), MIN_TOP_BLOCKS);
+        // not physical (BlastWall.hump): the hump and the heavy core's settle shape the top; the column stays the law's
+        out[1] = Math.max(d.blocks(columns[i].height(age)) * BlastWall.hump(age / columns[i].positive()), MIN_TOP_BLOCKS);
         // profile column is column(0) of top: vertical optical depth exactly matches the layer, even at minimum top
         out[0] = depth < GONE_DEPTH ? 0 : depth / (column(0) * out[1]) * pallShare(i, ticks);
         out[2] = fire[i] * FireStorm.growth(clockSeconds(ticks));
@@ -612,6 +623,22 @@ public final class PallField {
         return l[1] * profile(h / l[7]) + l[5] * profile(h / l[6]);
     }
 
+    /** Dry dust component of {@link #sigma} (the dust row only: no spray, fire haze or base surge), 1/block. */
+    public double dust(double dx, double dz, double above, double floorUp, double ticks, Water water) {
+        double[] l = new double[LAYERS];
+        layers(dx, dz, ticks, water, l);
+        return l[0] * profile((above - Math.max(floorUp, 0)) / l[2]);
+    }
+
+    /** Dry dust component of {@link #tau} (the dust row only). */
+    public double dustTau(double dx, double dz, double from, double to, double floorUp, double ticks, Water water) {
+        if (!(to > from)) return 0;
+        double[] l = new double[LAYERS];
+        layers(dx, dz, ticks, water, l);
+        double lift = Math.max(floorUp, 0);
+        return l[0] * between(from - lift, to - lift, l[2]);
+    }
+
     /**
      * Vertical pall optical depth above point (dx, dz), from {@code from} to {@code to} (blocks above ground zero,
      * {@code to} may be infinite): height integral of {@link #sigma}. Dust above eye and below it down to ground sets
@@ -646,12 +673,17 @@ public final class PallField {
      * ({@code MushroomField.foot}).
      */
     public void footLayer(double r, double ticks, Water water, double[] out) {
+        footLayer(r, ticks, water, 1, out);
+    }
+
+    /** {@link #footLayer} with the dry dust drawn at share {@code keep} ({@code NukePall.keep}: the slot's dust row is scaled alike). */
+    public void footLayer(double r, double ticks, Water water, double keep, double[] out) {
         double[] l = footScratch;
         double sigma = 0, top = 0;
         for (int k = 0; k < 4; k++) {
             layers(k == 0 ? r : k == 1 ? -r : 0, k == 2 ? r : k == 3 ? -r : 0, ticks, water, l);
-            sigma += l[0] + l[1];
-            top += l[0] * l[2] + l[1] * l[7];
+            sigma += l[0] * keep + l[1];
+            top += l[0] * keep * l[2] + l[1] * l[7];
         }
         out[0] = sigma / 4;
         out[1] = sigma > 0 ? top / sigma : 1;

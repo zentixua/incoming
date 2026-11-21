@@ -33,6 +33,11 @@ final class FarthestPool<T> {
         this.remove = remove;
     }
 
+    /** Listed pieces (evicted ones are dead until the next purge). */
+    List<T> items() {
+        return live;
+    }
+
     /** Occupied slot count. */
     int size() {
         return live.size() - evicted;

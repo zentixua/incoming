@@ -124,9 +124,9 @@ final class Sandbox {
     private final Path inbox = dir.resolve("inbox");
     private boolean started, ready;
     private int tick = -1;
-    /** CPU renderer (Mesa llvmpipe, tools/soft_gl.sh): frames pace the world ({@link #paceFrame}). */
+    /** CPU renderer (Mesa llvmpipe, tools/soft_gl.sh): the world starts slowed when frames are armed ({@link #SOFT_START_RATE}). */
     private Boolean soft;
-    /** Frames per tick while frames are due on a CPU renderer: a frame lands within half a tick of its second. */
+    /** Frames per tick while frames are due: a frame lands within half a tick of its second. */
     private static final double FRAMES_PER_TICK = 2;
     /** Seconds before a due frame from which the CPU renderer's world is slowed ({@link #paceFrame}). */
     private static final double PACE_LEAD = 2;
@@ -222,6 +222,19 @@ final class Sandbox {
     private final java.util.Set<Integer> knownNukes = new java.util.HashSet<>();
     private Vec3 firstSeen = Vec3.ZERO;
     private double closest = Double.MAX_VALUE;
+    /**
+     * {@code INCOMING_SANDBOX_SITE=n}: every near take at near site n, so a first take lets distant LODs (Distant Horizons)
+     * build around it and the next one films them; 0 — a fresh site each take.
+     */
+    private static final int FIXED_SITE = fixedSite(System.getenv("INCOMING_SANDBOX_SITE"));
+
+    static int fixedSite(String env) {
+        if (env == null || env.isBlank()) return 0;
+        int n = Integer.parseInt(env.trim());
+        if (n < 0 || n > NEAR_RUNS) throw new IllegalArgumentException("INCOMING_SANDBOX_SITE 0–" + NEAR_RUNS + ": " + env);
+        return n;
+    }
+
     /** Nuke near the camera: how many runs there were (site — {@link #nearSite}). */
     private int nearRuns;
     /**
@@ -245,6 +258,8 @@ final class Sandbox {
         double audioFrom;
         /** Time of day of each frame, −1: unchanged ({@link SandboxCommand#dayTimes}); index of the frame whose time is set. */
         long[] days = new long[0];
+        /** Slowest world rate while this take was armed or capturing, ticks/s: below 20 its sound is not real-time. */
+        double slowest = 20;
         int daySet = -1;
         final List<String> frames = new ArrayList<>();
 
@@ -821,7 +836,7 @@ final class Sandbox {
                     // the previous detonation near the camera is forgotten: this one's number and game time are the
                     // same ({@link #NEAR_ID})
                     clear();
-                    nearRuns = nearRuns % NEAR_RUNS + 1;
+                    nearRuns = FIXED_SITE > 0 ? FIXED_SITE : nearRuns % NEAR_RUNS + 1;
                     site = nearSite(nearRuns);
                 } else {
                     freshX += c.verb() == SandboxCommand.Verb.NUKE ? NUKE_STEP : REAL_STEP;
@@ -1580,6 +1595,9 @@ final class Sandbox {
             Incoming.LOG.error("SANDBOX frame {} not written", to, ex);
         }
         cap.frames.add(String.format(Locale.ROOT, "{\"t\": %.2f, \"age\": %.3f, \"file\": \"%s\", \"fps\": %d}", t, age, file, mc.getFps()));
+        var eyeAt = mc.gameRenderer.getMainCamera().getPosition();
+        Incoming.LOG.info("SANDBOX pieces {}: {}; near: {}", file, ua.zentix.incoming.client.fx.Fragments.describe(eyeAt.y, eyeAt.x, eyeAt.z),
+                ua.zentix.incoming.client.nuclear.NukeDust.describe());
         Incoming.LOG.info("SANDBOX shot {} age {} s (t = 0 at {}) fps {} day time {}; layer: {}; smoke: {}; flight: {}; air: {}; pall: {}", file, String.format(Locale.ROOT, "%.3f", age), clock, mc.getFps(),
                 mc.level.getDayTime() % 24000,
                 ua.zentix.incoming.client.fx.layer.FxLayer.describeTiming(), ua.zentix.incoming.client.far.FarRenderer.describeSmoke(),
@@ -1591,10 +1609,10 @@ final class Sandbox {
     }
 
     /**
-     * CPU renderer (llvmpipe: 3–5 frames/s inside smoke): ticks would run ahead of frames, and a frame meant for second 1.0
-     * came 0.29 s late. While frames are due the world runs at {@code /tick rate} giving about {@link #FRAMES_PER_TICK} frames
-     * per tick from the measured frame time (the client follows a slower server rate); game time, physics and effects
-     * are the same, only wall time stretches. GPU renderers are left at 20 ticks/s.
+     * Slow renderers (llvmpipe: 3–5 frames/s inside smoke; any renderer writing a frame every 1/30 s): ticks would run ahead
+     * of frames, and a frame meant for second 1.0 came 0.29 s late. While frames are due the world runs at {@code /tick rate}
+     * giving about {@link #FRAMES_PER_TICK} frames per tick from the measured frame time (the client follows a slower server
+     * rate); game time, physics and effects are the same, only wall time stretches. A GPU at 40+ frames/s stays at 20.
      */
     private void paceFrame() {
         if (!paced()) return;
@@ -1602,7 +1620,7 @@ final class Sandbox {
         if (paceLast != 0) {
             double frame = (now - paceLast) / 1e9;
             paceFrameS = paceFrameS == 0 ? frame : paceFrameS * 0.7 + frame * 0.3;
-            pace(1 / (FRAMES_PER_TICK * paceFrameS));
+            pace(1 / (FRAMES_PER_TICK * paceFrameS), true);
         }
         paceLast = now;
     }
@@ -1612,16 +1630,31 @@ final class Sandbox {
         return (armed != null && armed.times.length > 0) || (capture != null && capture.next < capture.times.length);
     }
 
-    /** World rate, ticks/s (CPU renderer only; 20 restores); command only on a change of more than a tenth. */
     private void pace(double rate) {
+        pace(rate, false);
+    }
+
+    /**
+     * World rate, ticks/s (20 restores); command only on a change of more than a tenth. A rate from measured frame times
+     * applies on any renderer: a GPU take with a frame every 1/30 s writes each PNG on the render thread (0.1–0.15 s per
+     * frame), and unpaced its effect runs several times ahead of the frames' seconds; preset rates (arming,
+     * {@link #SOFT_START_RATE}) only on the CPU renderer.
+     */
+    private void pace(double rate, boolean measured) {
         // render thread: the GL context answers only there, and only after the window exists
         if (soft == null) soft = ua.zentix.incoming.client.fx.layer.GpuWatch.software(com.mojang.blaze3d.platform.GlUtil.getRenderer());
-        if (!soft) return;
+        if (!soft && !measured && rate < 20) return;
         double r = Math.max(1, Math.min(20, rate));
+        if (r == 20) {
+            // leaving the pacing window: the next due frame measures afresh, not across the idle gap
+            paceLast = 0;
+            paceFrameS = 0;
+        }
         if (r < 20 && Math.abs(r - paceRate) <= paceRate * 0.1) return;
         if (r == 20 && paceRate == 20) return;
-        if (r == 20) paceLast = 0;
         paceRate = r;
+        Capture take = capture != null ? capture : armed;
+        if (take != null) take.slowest = Math.min(take.slowest, r);
         // the manager itself, not /tick rate: the command's feedback would print into the frames' chat
         Incoming.LOG.info("SANDBOX tick rate {}", String.format(Locale.ROOT, "%.1f", r));
         onServer(false, srv -> srv.tickRateManager().setTickRate((float) r));
@@ -1752,10 +1785,10 @@ final class Sandbox {
 
     private String json(Capture c) {
         return String.format(Locale.ROOT, "{\"name\": \"%s\", \"effect\": \"%s\", \"site\": [%.1f, %.1f, %.1f], \"camera\": [%.1f, %.1f, %.1f, %.1f], "
-                        + "\"audio\": {\"file\": \"%s\", \"start\": %d, \"from\": %.2f, \"seconds\": %.2f}, \"clock\": \"t = 0 at %s\", \"frames\": [%s]}\n",
+                        + "\"audio\": {\"file\": \"%s\", \"start\": %d, \"from\": %.2f, \"seconds\": %.2f}, \"clock\": \"t = 0 at %s\", \"rate\": %.1f, \"frames\": [%s]}\n",
                 c.name, lastEffect, site.x, site.y, site.z, camDist, camHeight, camBearing, camLook,
                 FMLPaths.GAMEDIR.get().resolve("audio.wav").toAbsolutePath(), c.audioStart, (c.audioTick - effectTick) / 20.0, c.wavSeconds,
-                clock, String.join(", ", c.frames));
+                clock, c.slowest, String.join(", ", c.frames));
     }
 
     private static void write(Path file, String text) {
