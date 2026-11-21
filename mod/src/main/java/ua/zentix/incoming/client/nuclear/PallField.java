@@ -287,10 +287,12 @@ public final class PallField {
 
     /**
      * presentation (lead 21.11, Artem's approved v6 field; fx_pall: youngDust): the young dust's drawn field — the approved animation's core,
-     * fines haze, lumps, eddies and wisps scaled to the law's top ({@link #lawTop}) — reaches at most this share of the law's top (its
-     * cutoff at 1.6 of the haze top, wisps above the core): the bounds of the pall and the head.
+     * fines haze, lumps, eddies and wisps, its height the animation's strength law scaled to the law's top at the strength-1 ring
+     * ({@link BlastWall#ringTop}) — reaches at most this share of that top: the layer at most 0.9 of it (strength 2, the hump's peak at
+     * PALL_PEAK_SHARE), its cutoff at 1.6 of the haze top, wisps and lean above. The bounds of the pall, the head's spans and the near
+     * volume's end. Copy {@code PALL_YOUNG_REACH}.
      */
-    public static final double YOUNG_TOP = 1.05;
+    public static final double YOUNG_REACH = 2.2;
 
     /**
      * Column above a point at pall height {@code x} — integral of {@link #profile} from x to top, in height fractions: used by the shader
@@ -422,16 +424,6 @@ public final class PallField {
     }
 
     /**
-     * Node i dust layer's top by the law, blocks, without the drawn hump ({@link BlastWall#hump}): its height once the local positive phase
-     * has passed (at the front it is the top the dust is lofted to). The young dust's field (fx_pall: youngDust) is scaled to it; the
-     * pall's bounds take it ({@link #YOUNG_TOP}).
-     */
-    double lawTop(int i, double ticks) {
-        double age = Math.max(seconds(i, ticks), columns[i].positive());
-        return Math.max(d.blocks(columns[i].height(age)), MIN_TOP_BLOCKS);
-    }
-
-    /**
      * Layer mixing {@code afterS} model seconds after wave phase, 0..1: patches and gaps in the young layer
      * (torn by boundary-layer eddies near the front) disperse over a layer-eddy turnover h/w*. The layer rises over heated ground at
      * speed w* over {@link DustModel#RISE_S} to height h — this is the eddy turnover time (est.) (w* = 1.5–4 m/s,
@@ -452,15 +444,14 @@ public final class PallField {
     /**
      * Node i spray over water: water-level extinction (1/block; where water lies beneath pall, excluding spray still in wall head),
      * spray top (blocks, {@link #sprayTop}); node i dust over hard ground relative to soil ({@link #paved}, read with the dust where it
-     * was lofted — the row has room), and the dust layer's law top once its positive phase has passed ({@link #lawTop}; the row has room).
-     * Separate layer: spray does not mix with dust and is lower.
+     * was lofted — the row has room), 0. Separate layer: spray does not mix with dust and is lower.
      */
     void spray(int i, double ticks, double[] out) {
         double age = seconds(i, ticks);
         out[0] = spray[i] <= 0 ? 0 : perBlock(SIGMA_SPRAY) * spray[i] * sprayEnvelope(age) * pallShare(i, ticks);
         out[1] = Math.max(sprayTop(sprayFrom[i], age), 1);
         out[2] = paved[i];
-        out[3] = (float) lawTop(i, ticks);
+        out[3] = 0;
     }
 
     /** Dust over ground with hard share {@code hard} relative to soil at node i: copy of {@code pallField} (spray row, b). */

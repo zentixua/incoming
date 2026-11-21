@@ -607,13 +607,13 @@ float pallLitDepth(float tau, float gate) {
 }
 
 // presentation (lead 21.11; Artem's approved v6 field — fx_pall: youngDust): the young dry dust is drawn as the approved animation's field.
-// PALL_YOUNG_RISE — its lofting time constant, s; PALL_YOUNG_TOP — its reach in shares of the law's top (copy PallField.YOUNG_TOP: the
-// bounds); PALL_YOUNG_TILE — the slot noise tile at 1 Mt, blocks (NukePall.TILE_M × ∛(1000/15)): the animation's billow sizes there;
+// PALL_YOUNG_RISE — its lofting time constant, s; PALL_YOUNG_REACH — its reach in shares of the law's top at the strength-1 ring (copy
+// PallField.YOUNG_REACH: the bounds); PALL_YOUNG_TILE — the slot noise tile at 1 Mt, blocks (NukePall.TILE_M × ∛(1000/15)): the animation's billow sizes there;
 // PALL_YOUNG_SHARE — the drawn share of the law's column (the law's ~100 optical depths at the 4.5 km ring of 1 Mt drew a hard skin;
 // the animation's 0.11/m: PallYoungTest); the law's pall takes over as the layer mixes, from PALL_YOUNG_MIX_FROM to PALL_YOUNG_MIX_TO
 // (PallField.mixed: 17–42 s after the local phase, est.: the animation's dust is approved to ~25 s)
 const float PALL_YOUNG_RISE = 0.4;
-const float PALL_YOUNG_TOP = 1.05;
+const float PALL_YOUNG_REACH = 2.2;
 const float PALL_YOUNG_TILE = 1038.0;
 // lattice cells of the noise tile along each axis (copy VolumeNoise.SIZE)
 const float PALL_NOISE_N = 64.0;
@@ -758,7 +758,7 @@ float pallWallFade(float u) {
 float pallWallInside(float s, float z, float len, float top, float lag) {
     if (s < -1.0) return 0.0;
     if (s > PALL_WALL_HANDOFF_TO * len + lag) return 0.0;
-    if (z > top * PALL_YOUNG_TOP) return 0.0;
+    if (z > top) return 0.0;
     if (z < -0.5 * top) return 0.0;
     return 1.0;
 }
@@ -834,6 +834,73 @@ WallAt pallWallAt(sampler2D ground, mat4 S, mat4 V, vec4 G, vec4 W, vec3 p, floa
     return h;
 }
 
+// ---------------------------------------------------------------- the young field's scale (fx_pall: youngDust) and its mean
+
+// The animation's wind strength at ground distance r (blocks): Kinney–Graham overpressure of a surface burst at scaled distance
+// Z = r / (1000 · size) (size — the slot's billow size, 1 at 1 Mt: the cube root of yield), Rankine–Hugoniot wind u, (u / 75 m/s)^1.5,
+// at most 2 — 1 at the ~5 psi ring (4.5 km at 1 Mt). not physical (lead 21.11, Artem's approved v6): the young layer's drawn height
+// scales with it (youngTops) where the law's top falls toward ground zero
+float pallYoungStrength(float r, float size) {
+    float z = max(r / (1000.0 * size), 0.2);
+    float x = 808.0 * (1.0 + (z / 4.5) * (z / 4.5)) / sqrt((1.0 + (z / 0.048) * (z / 0.048)) * (1.0 + (z / 0.32) * (z / 0.32)) * (1.0 + (z / 1.35) * (z / 1.35)));
+    float u = 343.0 * (5.0 * x / 7.0) / sqrt(1.0 + 6.0 * x / 7.0);
+    return clamp(pow(u / 75.0, 1.5), 0.0, 2.0);
+}
+
+// The young field at rel (from ground zero, blocks) of slot S, V: x — the law's share of the dry dust there (1: no young field), y —
+// the young layer's height (the animation's HPK · strength: PALL_PEAK_SHARE / (1 + PALL_WALL_HUMP) of the law's top at the strength-1
+// ring — the wall slot's V[1].x, BlastWall.ringTop — times pallYoungStrength), z — its density scale (1/block: PALL_YOUNG_SHARE of the law's column over that height), w — billow
+// size. mixed, base, top — the dust row's mixing, ground density and top here (pallField); hard — hard ground under the head
+vec4 pallYoungScale(sampler2D table, mat4 S, mat4 V, vec2 rel, float mixed, float base, float top, float hard) {
+    if (V[0].w <= 0.0 || V[2].w <= 0.0) return vec4(1.0, 1.0, 0.0, 1.0);
+    float law = smoothstep(PALL_YOUNG_MIX_FROM, PALL_YOUNG_MIX_TO, mixed);
+    float r = length(rel), u = (V[0].x - r) / max(V[0].y, 0.001), fade = 0.0;
+    if (u > -0.01) fade = pallWallFade(u);
+    float soil = 1.0 + hard * (V[3].y - 1.0);
+    float tau = (fade * V[0].w * V[3].w * soil * V[0].z + base * top) * pallColumn(0.0);
+    float size = S[3].y / PALL_YOUNG_TILE;
+    float hk = PALL_PEAK_SHARE / (1.0 + PALL_WALL_HUMP) * max(V[1].x, 1.0) * max(pallYoungStrength(r, size), 0.05);
+    return vec4(law, hk, PALL_YOUNG_SHARE * tau / hk, size);
+}
+
+// core and fines-haze tops of young dust a seconds behind the front, layer height hk, blocks (the animation's tops, physical variant
+// with hump and surge)
+void pallYoungTops(float a, float hk, out float core, out float haze) {
+    float up = hk * (1.0 - exp(-a / PALL_YOUNG_RISE));
+    core = max(up * (1.0 + PALL_WALL_HUMP * exp(-max(a - 0.75, 0.0) / 0.8)) * (1.0 - PALL_CORE_SINK * smoothstep(0.6, 4.5, a)), 0.5);
+    haze = up * (1.0 + 0.2 * (1.0 - exp(-a / 12.0)));
+}
+
+// The young field's mean (its billows, streaks, lumps and eddies at their means; no wisps) at height z above the relief, a seconds behind
+// the front, for y = pallYoungScale: what the noiseless readers (layer quads, probes, the composite) take for the drawn young dust
+float pallYoungMean(vec4 y, float a, float z) {
+    if (a <= 0.0 || y.z <= 0.0) return 0.0;
+    float core, haze;
+    pallYoungTops(a, y.y, core, haze);
+    float d = (1.0 - smoothstep(0.55, 1.05, z / core)) * (0.25 + 0.75 * exp(-max(a - 1.0, 0.0) / 6.0)) * (1.0 + 0.7 * exp(-a / 1.1))
+            + 0.07 * (1.0 - smoothstep(0.45, 1.05, z / max(haze, 0.5)));
+    return y.z * d * smoothstep(0.0, 0.12, a);
+}
+
+// The pall as drawn (pallField with the young dry dust as the young field's mean, its column and slab by one mean sample each way):
+// for the readers without the march's noise. V — the slot's wall
+PallAt pallFieldDrawn(sampler2D table, sampler2D ground, mat4 S, mat4 V, vec4 G, vec4 W, vec3 p, float floorUp) {
+    PallAt f = pallField(table, ground, S, G, W, p, floorUp, 1.0);
+    vec2 rel = p.xz - S[0].xy;
+    vec4 y = pallYoungScale(table, S, V, rel, f.mixed, f.base, f.top, 0.0);
+    f.sigma.x *= y.x;
+    f.column.x *= y.x;
+    f.slab.x *= y.x;
+    if (y.x >= 1.0) return f;
+    float dry = (1.0 - y.x) * (1.0 - f.wet), a = (V[0].x - length(rel)) / V[2].w, z = p.y - S[0].z - floorUp;
+    float toTop = max(2.3 * y.y - z, 0.0), below = max(z, 0.0);
+    float up = toTop * pallYoungMean(y, a, z + 0.5 * toTop), down = below * pallYoungMean(y, a, 0.5 * z);
+    f.sigma.x += dry * pallYoungMean(y, a, z);
+    f.column.x += dry * up;
+    f.slab.x += dry * (up + down);
+    return f;
+}
+
 // Segments of the ray dir from the eye on [ta, tb] where the head of the slot may be: the ring from the leading edge of the dust to one
 // and a half lengths of the wedge beyond it (with the spray), by height — from the bottom of the relief map to its top with the head.
 // (x, y) and (z, w) — entry and exit; exit ≤ entry — misses
@@ -843,7 +910,7 @@ vec4 pallWallSpans(mat4 S, mat4 V, vec4 G, vec3 dir, float ta, float tb) {
     vec2 c = S[0].xy;
     float top = V[0].z, outer = V[0].x + 1.0, inner = max(V[0].x - PALL_WALL_HANDOFF_TO * V[0].y - V[1].y, 0.0);
     // by height: the relief map (without it — the ground under the epicenter) with the head
-    float lo = S[0].z + min(G.y, 0.0) - 0.5 * top, hi = S[0].z + max(G.z, 0.0) + top * PALL_YOUNG_TOP;
+    float lo = S[0].z + min(G.y, 0.0) - 0.5 * top, hi = S[0].z + max(G.z, 0.0) + max(top, V[1].x * PALL_YOUNG_REACH);
     if (abs(dir.y) > 1e-6) {
         float y0 = lo / dir.y, y1 = hi / dir.y;
         ta = max(ta, min(y0, y1));
@@ -867,7 +934,22 @@ vec4 pallWallSpans(mat4 S, mat4 V, vec4 G, vec3 dir, float ta, float tb) {
     return spans;
 }
 
-// Thickness of the head of the slot without noise on the ray segment [ta, tb] (dir from the eye), steps steps on each of its segments
+// The head's spray at h (pallWallAt): the wet share's own geometry and extinction (lag behind the dust edge, lower top, spray density);
+// its dry dust is the young field's (fx_pall: youngDust, pallFieldDrawn), weighted by the caller with h.wet
+WallAt pallWallSpray(mat4 V, WallAt h) {
+    WallAt w = h;
+    w.wet = 1.0;
+    if (h.wet <= 0.0) {
+        w.P.w = 0.0;
+        return w;
+    }
+    float lag = V[1].y;
+    w.P = vec4(V[0].y, V[0].z * V[1].z, lag, pallWallInside(h.s, h.z, V[0].y, V[0].z, V[1].y) * pallWallDensity(h.s - lag, V[0].y, V[0].w,
+            V[3].z, V[3].w, V[1].w, 1.0, V[2].y, V[2].z, V[3].x, V[3].y, h.hard));
+    return w;
+}
+
+// Thickness of the head's spray of the slot without noise on the ray segment [ta, tb] (dir from the eye), steps steps on each of its segments
 // (pallWallSpans): what the head covers in front of the square of the layer (fx.vsh). The floor — the relief of the map under each point
 float pallWallTau(sampler2D ground, mat4 S, mat4 V, vec4 G, vec4 W, vec3 dir, float ta, float tb, int steps) {
     vec4 spans = pallWallSpans(S, V, G, dir, ta, tb);
@@ -879,8 +961,8 @@ float pallWallTau(sampler2D ground, mat4 S, mat4 V, vec4 G, vec4 W, vec3 dir, fl
         for (int i = 0; i < steps; i++) {
             vec3 q = dir * (sp.x + (float(i) + 0.5) * ds);
             float floorUp = pallRelief(ground, S, G, q.xz);
-            WallAt h = pallWallAt(ground, S, V, G, W, q, floorUp);
-            if (h.P.w > 0.0) tau += h.P.w * pallWallMean(h.s - h.P.z, h.z, h.P.x, h.P.y) * ds;
+            WallAt h = pallWallAt(ground, S, V, G, W, q, floorUp), w = pallWallSpray(V, h);
+            if (w.P.w > 0.0) tau += h.wet * w.P.w * pallWallMean(w.s - w.P.z, w.z, w.P.x, w.P.y) * ds;
         }
     }
     return tau;
@@ -1024,14 +1106,16 @@ vec4 froxelNear(sampler2D sum, vec4 F, vec2 pixel, float z) {
 // thinner head; the rays march it per pixel from here (fx_pall), behind the volume's own part of the ray (froxelNear up to
 // this depth), so the order along the ray stays: near air, the head, the pall behind it. Every reader of the volume and the
 // rays takes the same boundary: the composite, the reduced-frame mix and the march
-// Where ray dir (from the eye) enters the young field's layer from above (fx_pall: youngDust), at most far: the eye above its reach
-// (PALL_YOUNG_TOP of the head's law top over the map's highest relief) and the ray going down. The young field's billows need the
-// rays' pixel footprint: in the near volume's cells (many pixels wide) they faded to a flat haze under an eye 120 m up once the head
-// had passed (silo takes v6b–v6d, +2…+8 s); an eye inside the layer keeps the near volume (the murk around it)
+// Where ray dir (from the eye) enters the young field's layer (fx_pall: youngDust), at most far: the young field's billows need the rays'
+// pixel footprint — in the near volume's cells (many pixels wide) they faded to a flat haze under an eye 120 m up once the head had
+// passed (silo takes v6b–v6d, +2…+8 s). An eye above the layer's reach (PALL_YOUNG_REACH of the ring top over the map's highest
+// relief): where a downward ray crosses it; an eye within that band inside the front: at once (0), so the split moves continuously as
+// the eye descends into the layer (an all-or-nothing switch at the plane moved the whole near volume between the passes in one frame)
 float youngEntry(mat4 S, mat4 V, vec4 G, vec3 dir, float far) {
-    if (V[0].w <= 0.0 || S[1].w < 0.5 || dir.y >= -1e-4) return far;
-    float hi = S[0].z + max(G.z, 0.0) + V[0].z * PALL_YOUNG_TOP;
-    if (hi >= 0.0) return far;
+    if (V[0].w <= 0.0 || V[2].w <= 0.0 || S[1].w < 0.5) return far;
+    float hi = S[0].z + max(G.z, 0.0) + V[1].x * PALL_YOUNG_REACH;
+    if (hi >= 0.0) return length(S[0].xy) < V[0].x ? 0.0 : far;
+    if (dir.y >= -1e-4) return far;
     return min(far, hi / dir.y);
 }
 

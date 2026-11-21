@@ -222,16 +222,20 @@ Ruins and everything in `nuclear/world/` are in `nuclear-world.md`.
   `pallWallOrigin`): position minus post-front wind path (`carried`: air path over local positive phase, U·t₊/e by
   Friedlander, tens of meters for 15 kt at 592 m; phase share `carriedShare` = u·e^(1−u)); air stationary at ground,
   1/7 boundary-layer law above, upward 0.02–0.08 of path (Kuhl §3.4). The young dry dust — head and the layer behind it — is drawn as
-  Artem's approved v6 animation (20.11; `youngDust`/`youngDens` in `fx_pall`): the
+  Artem's approved v6 animation (`youngDust`/`youngDens` in `fx_pall`): the
   animation's core with rise, hump and settle, fines haze, ~170 m lumps, eddy warp with decaying energy, bulk slosh, polar
   streaks (two atan branches blended away from their seams), frayed top and rising wisps, its value noise (no tile, no
-  repetition) and its footprint fade. Scaled to the law: layer height `PALL_PEAK_SHARE`/(1 + `PALL_WALL_HUMP`) of the law's top
-  (`PallField.lawTop`, spray row channel a), density `PALL_YOUNG_SHARE` 0.05 of the law's column over it (0.11/m at the 4.5 km
-  ring of 1 Mt, `PallYoungTest`: the law's ~100 optical depths drew a hard skin), billow sizes by the slot tile over
-  `PALL_YOUNG_TILE`, ages (R − r)/U with the front's ground speed U (`BlastWall.speed`, wall slot [11]). Light as the head's:
-  mean-field chords (lumps kept) up, to the front face, down and toward sun and ball. The law's dry dust here and above takes
-  over from `PallField.mixed` 0.25 to 0.5 (`PALL_YOUNG_MIX_*`); over water the head draws its spray by the law's mean.
-  Bounds: `PallField.YOUNG_TOP` 1.05 of the law's top. Single features drawn on the law's opaque layer (lumps in its
+  repetition) and its footprint fade. Scaled to the law: layer height
+  `PALL_PEAK_SHARE`/(1 + `PALL_WALL_HUMP`) of the law's top at the strength-1 ring (`BlastWall.ringTop`, wall slot [4]) times the
+  animation's wind strength (`pallYoungStrength`, Z = r/(1000·size), at most 2: not physical, the law's top falls toward ground zero),
+  density `PALL_YOUNG_SHARE` 0.05 of the law's column over it (0.11/m at the 4.5 km ring of 1 Mt, `PallYoungTest`), billow sizes by
+  the slot tile over `PALL_YOUNG_TILE`, ages (R − r)/U with the front's ground speed U (`BlastWall.speed`, wall slot [11]). Its own
+  light (presentation): key light through the field within 21 m, height ambient, the animation's colours, forward glow and rim into
+  `Sample.glow`. Value noise: one fetch of the noise tile's white-noise channel A at smoothstepped coordinates, octaves turned. The
+  law's dry dust takes over from `PallField.mixed` 0.25 to 0.5 (`PALL_YOUNG_MIX_*`); the head draws only its spray (`pallWallSpray`);
+  no young dust inside the fireball. Readers without the march's noise (layer quads, probes, composite) take `pallFieldDrawn` (the
+  young field's mean) and the head's spray. Bounds: `PallField.YOUNG_REACH` 2.2 of the ring top. The near volume ends where a ray enters
+  the young layer (`youngEntry`; at once for an eye inside it within the front): its cells faded the billows to a flat haze. Single features drawn on the law's opaque layer (lumps in its
   top, an entrainment tail, a streak multiplier, wisps lifting its top) do not reach the approved look: the field is ported whole. The march finds tops by refinement: a step that meets matter after an empty sample re-marches from
   it in fixed small steps (head: a quarter of its wanted step; young layer: its finest billow height, 13 m at 1 Mt), the first
   one jittered: a layer opaque within one step shows the light at its first sample, so that sample's depth must not follow

@@ -54,7 +54,7 @@ class PallGridGlslTest {
         assertTrue(march.contains("if (fineYoung < 1e8) fineYoung *= 13.0 / PALL_YOUNG_TILE;"), "the young layer's surface step: its finest billow height");
         assertTrue(march.contains("if (firstFine) first = max(jitter, 0.05);") && march.contains("next = min(next, ta + first * fineSize);"), "the first fine step jittered");
         assertTrue(march.contains("bool pallLeft = i < pallSteps && ta < t1 && transmit >= 0.003;"), "the pall ends once opaque");
-        assertTrue(march.contains("const int PALL_DEBUG = 0;"), "the product carries no debug output");
+        assertFalse(march.contains("PALL_DEBUG"), "the product carries no debug output");
     }
 
     /** The pall's bounds the ordinary march spans stay put while the pall grows within a quarter octave, at most a fifth wider. */

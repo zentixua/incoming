@@ -84,6 +84,8 @@ public final class BlastWall {
     private final double lastPositive;
     /** The negative phase condenses water: a Wilson cloud exists ({@link #condenses}). */
     private final boolean humid;
+    /** The law's layer top at the young field's strength-1 ring ({@link #ringTop}), m. */
+    private final double ringTopM;
 
     public BlastWall(Detonation d) {
         this(d, condenses(d, humidity()));
@@ -108,6 +110,23 @@ public final class BlastWall {
             if (i > 0) phaseEnd[i] = Math.max(phaseEnd[i], phaseEnd[i - 1]);
         }
         lastPositive = positive;
+        DustModel.Column ring = DustModel.column(RING_Z * Math.cbrt(d.yieldKt() * 1e6), hob, d.yieldKt(), d.surface(), d.visibility(), DustModel.Surface.REFERENCE);
+        ringTopM = ring.height(ring.positive());
+    }
+
+    /**
+     * Scaled ground distance of the young field's strength-1 ring, m/kg^(1/3) (fx_pall: youngDust — the approved animation's wind strength
+     * (u / 75 m/s)^1.5 is 1 at Z 4.5: the ~5 psi ring, 4.5 km at 1 Mt; pallYoungStrength).
+     */
+    static final double RING_Z = 4.5;
+
+    /**
+     * The law's layer top at the young field's strength-1 ring once its positive phase has passed, m: the young layer's drawn height there
+     * (PALL_PEAK_SHARE of it at the hump's peak) scales by the animation's strength elsewhere; its reach ({@link PallField#YOUNG_REACH})
+     * bounds the drawn young dust.
+     */
+    double ringTop() {
+        return ringTopM;
     }
 
     /**
@@ -343,7 +362,7 @@ public final class BlastWall {
      * <ul>
      *     <li>[0..3] — dust leading edge from ground zero, wedge length, top at its end; extinction scale (1/block; 0 — no
      *     head);</li>
-     *     <li>[4..7] — dust displacement with wind behind the front ({@link #carried(double)}); spray over water: lag behind dust
+     *     <li>[4..7] — the law's layer top at the young field's strength-1 ring ({@link #ringTop}); spray over water: lag behind dust
      *     edge, top fraction, extinction (1/block);</li>
      *     <li>[8..11] — phase fraction elapsed at wedge end ({@link #backAge}: wedge fraction u means phase fraction u × this);
      *     saltation e-folds over the wedge length (dust age at its end over {@link DustModel#SALTATION_S}) and the share of dust
@@ -366,7 +385,7 @@ public final class BlastWall {
             into[1] = (float) d.blocks(len);
             into[2] = (float) d.blocks(top);
             into[3] = (float) (ref / d.scale());
-            into[4] = (float) d.blocks(carried(t));
+            into[4] = (float) d.blocks(ringTopM);
             // over water, spray: lower than dust (crest stripping height), behind dust edge by front travel over SPRAY_LAG, but also
             // outside the ground fireball: closer to the front there
             double u = wind(Math.max(0, head - 0.5 * len)), ball = underBall(t);

@@ -284,11 +284,11 @@ class BlastWallTest {
                     if (Double.isNaN(first)) first = slot[0];
                     last = slot[0];
                     for (double z : new double[] {0, 0.5 * slot[2], slot[2]}) {
-                        double o = BlastWall.origin(place, 0, z, s / slot[1] * slot[8], slot[2], slot[4])[0];
+                        double o = BlastWall.origin(place, 0, z, s / slot[1] * slot[8], slot[2], d.blocks(w.carried(t)))[0];
                         minO = Math.min(minO, o);
                         maxO = Math.max(maxO, o);
                         // the neighboring place is a meter closer to the epicenter: the noise does not add up, it is compressed to the extent of the wind against the front
-                        double near = BlastWall.origin(place - 1, 0, z, (s + 1) / slot[1] * slot[8], slot[2], slot[4])[0];
+                        double near = BlastWall.origin(place - 1, 0, z, (s + 1) / slot[1] * slot[8], slot[2], d.blocks(w.carried(t)))[0];
                         assertTrue(o - near > 0, burst + place + " blocks, " + t + " s: noise collapsed");
                         squeeze = Math.max(squeeze, o - near);
                     }
@@ -311,7 +311,8 @@ class BlastWallTest {
         float[] slot = new float[BlastWall.SLOT];
         for (double t = 1; t < 10; t += 1) {
             if (!w.slot(t, slot) || slot[3] <= 0) continue;
-            assertTrue(slot[4] > 1 && slot[4] < 60, t + " s: air path " + slot[4]);
+            double path = air.blocks(w.carried(t));
+            assertTrue(path > 1 && path < 60, t + " s: air path " + path);
         }
     }
 

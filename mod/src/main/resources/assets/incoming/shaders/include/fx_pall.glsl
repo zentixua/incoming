@@ -388,10 +388,6 @@ WallAt wallMove(mat4 V, WallAt h, vec3 v) {
 // radial across the hump's rise and sink, stepped the light as the point moved outward — rings about ground zero at 1 Mt
 float gChordJitter = 0.5;
 
-// PALL_DEBUG (probe only, 0 in the product): the head's terms at the ray's first sample that meets matter, written as the pixel
-const int PALL_DEBUG = 0;
-bool gDbgFrozen = false;
-float gDbgUp = 0.0, gDbgToCap = 0.0, gDbgDev = 0.0, gDbgCapDeep = 0.0, gDbgHd = 0.0;
 
 // Mean head depth (no billows) from h along unit v over len, n steps (samples at the pixel's jitter within each)
 float wallChord(mat4 V, WallAt h, vec3 v, float len, int n) {
@@ -440,10 +436,6 @@ void wall(mat4 V, WallAt h, vec3 keyDir, vec3 sunDir, vec3 lightDir, float smoke
         float m2 = h2.P.w * pallWallMean(h2.s - h2.P.z, h2.z, h2.P.x, h2.P.y);
         dev = share * ((hd / share - hm) * 0.03 + (wallAt(V, h1) - m1) * 0.1 + (wallAt(V, h2) - m2) * 0.17) * tile;
         dev = clamp(dev, -3.0, 6.0);
-        if (PALL_DEBUG > 0 && !gDbgFrozen) {
-            gDbgDev = dev;
-            gDbgHd = hd;
-        }
     }
     // mean head depth above point (to local wedge top), toward leading edge (where wedge stays above point), below point
     // to terrain (ground/fires there; head below map only a coarse-map margin); toward light through whole head but no
@@ -460,10 +452,6 @@ void wall(mat4 V, WallAt h, vec3 keyDir, vec3 sunDir, vec3 lightDir, float smoke
     float sunLen = sunDir.y > 0.05 ? min(reach, toTop / sunDir.y) : reach;
     float capLen = lightDir.y > 0.05 ? min(reach, toTop / lightDir.y) : reach;
     float toSun = share * wallChordNear(V, h, sunDir, sunLen, 4), toCap = share * wallChordNear(V, h, lightDir, capLen, 4);
-    if (PALL_DEBUG > 0 && !gDbgFrozen) {
-        gDbgUp = up;
-        gDbgToCap = toCap;
-    }
     // dust of the soil lofted here (sand share; debris dust over hard ground, its share of the soil's mass at this wedge share — as
     // pallWallDensity), soot as the pall's
     float uw = clamp(s0 / max(h.P.x, 0.001), 0.0, 1.0);
@@ -527,7 +515,9 @@ float youngLod(float f) {
 float youngFbmL(vec3 p, float fq) {
     float a = 0.5, s = 0.0, fr = 1.0;
     for (int i = 0; i < 4; i++) {
-        s += a * mix(0.5, youngNoise(p), youngLod(fq * fr));
+        float k = youngLod(fq * fr), n = 0.5;
+        if (k > 0.0) n = mix(0.5, youngNoise(p), k);
+        s += a * n;
         p = YOUNG_TURN * p * 2.07 + vec3(1.7, 9.2, 3.1);
         a *= 0.5;
         fr *= 2.07;
@@ -536,12 +526,11 @@ float youngFbmL(vec3 p, float fq) {
 }
 
 float youngFbm2L(vec3 p, float fq) {
-    return 0.6667 * (0.5 * mix(0.5, youngNoise(p), youngLod(fq)) + 0.25 * mix(0.5, youngNoise(YOUNG_TURN * p * 2.07 + vec3(1.7, 9.2, 3.1)), youngLod(fq * 2.07)))
-            + 0.1667;
+    float k0 = youngLod(fq), k1 = youngLod(fq * 2.07), n0 = 0.5, n1 = 0.5;
+    if (k0 > 0.0) n0 = mix(0.5, youngNoise(p), k0);
+    if (k1 > 0.0) n1 = mix(0.5, youngNoise(YOUNG_TURN * p * 2.07 + vec3(1.7, 9.2, 3.1)), k1);
+    return 0.6667 * (0.5 * n0 + 0.25 * n1) + 0.1667;
 }
-
-// the young field's footprint at the ray's sample (pallStep), blocks; < 0 — the caller's cone
-float gYoungFp = -1.0;
 
 // The young field of one slot: front from ground zero (blocks) and its ground speed (blocks/s), the animation's layer height here
 // (its HPK·strength: PALL_PEAK_SHARE / (1 + PALL_WALL_HUMP) of the law's top), density scale (1/block; the animation's 0.11·strength),
@@ -556,13 +545,6 @@ struct Young {
     float fp;
 };
 
-// core and fines-haze tops of dust a seconds behind the front, blocks (the animation's tops, physical variant with hump and surge)
-void youngTops(float a, float hk, out float core, out float haze) {
-    float up = hk * (1.0 - exp(-a / PALL_YOUNG_RISE));
-    core = max(up * (1.0 + PALL_WALL_HUMP * exp(-max(a - 0.75, 0.0) / 0.8)) * (1.0 - PALL_CORE_SINK * smoothstep(0.6, 4.5, a)), 0.5);
-    haze = up * (1.0 + 0.2 * (1.0 - exp(-a / 12.0)));
-}
-
 // rising wisps: in half of the cells a narrow plume rises out of the layer 0.6–8.6 s after the front, fading over ~14 s
 float youngWisps(Young y, vec3 q, float top) {
     float cellSize = 60.0 * y.size;
@@ -575,20 +557,21 @@ float youngWisps(Young y, vec3 q, float top) {
     float dxz = length(q.xz - c), w = (3.0 + 4.0 * h1) * y.size;
     float dz = w * 5.0 * (1.0 - exp(-tb / 5.0));
     float yl = 0.7 * top + dz, rl = (7.0 + 1.2 * tb) * y.size + 0.3 * dz;
-    return (40.0 * y.size * y.size / (rl * rl) + 0.12) * smoothstep(1.0, 0.0, length(vec2(dxz, (q.y - yl) * 1.1)) / rl) * smoothstep(0.0, 1.2, tb) * exp(-tb / 14.0);
+    return (40.0 * y.size * y.size / (rl * rl) + 0.12) * (1.0 - smoothstep(0.0, 1.0, length(vec2(dxz, (q.y - yl) * 1.1)) / rl)) * smoothstep(0.0, 1.2, tb) * exp(-tb / 14.0);
 }
 
 // streaks stretched along the radial flow (28 m along, 5 m tall, 4.5 m across): polar coordinates about ground zero, the angle taken
 // from two branches with their seams on opposite sides, blended away from each seam (the animation's single branch has a seam behind
 // ground zero, out of its view)
 float youngStreak(Young y, vec3 pw, float ph) {
-    float ral = length(pw.xz), k = ral / (4.5 * y.size);
+    float shown = youngLod(y.fp / (2.2 * y.size)), ral = length(pw.xz), k = ral / (4.5 * y.size);
+    if (shown <= 0.0 || ral < 1e-3) return 0.5;
     vec2 b = vec2(ral / (28.0 * y.size), (pw.y - 0.5 * ph * y.size) / (5.0 * y.size));
     float th = atan(pw.z, pw.x), w = smoothstep(0.75, 0.9, abs(th) / 3.14159265);
     float s = 0.0;
     if (w < 1.0) s = (1.0 - w) * youngFbm2(vec3(b, th * k));
     if (w > 0.0) s += w * youngFbm2(vec3(b + vec2(0.0, 31.7), atan(-pw.z, -pw.x) * k));
-    return mix(0.5, s, youngLod(y.fp / (2.2 * y.size)));
+    return mix(0.5, s, shown);
 }
 
 // Density at q (x, z from ground zero, y above the relief; blocks), 1/block; lite — the mean field for light chords (no eddies, wisps,
@@ -598,10 +581,12 @@ float youngDens(Young y, vec3 q, bool lite) {
     float a0 = (y.R - r) / y.U;
     if (a0 < 0.0) return 0.0;
     float c0, h0;
-    youngTops(a0, y.hk, c0, h0);
+    pallYoungTops(a0, y.hk, c0, h0);
     float top0 = max(c0, h0), pl = 0.0;
     if (!lite && q.y > top0 * 0.5) {
-        pl = 0.05 * youngWisps(y, q, top0) * (0.4 + 1.2 * mix(0.5, youngNoise(q / (8.0 * y.size) + vec3(0.0, -y.t * 0.6, 0.0)), youngLod(y.fp / (8.0 * y.size))));
+        float wisp = youngWisps(y, q, top0), k = youngLod(y.fp / (8.0 * y.size)), n = 0.5;
+        if (wisp > 0.0 && k > 0.0) n = mix(0.5, youngNoise(q / (8.0 * y.size) + vec3(0.0, -y.t * 0.6, 0.0)), k);
+        pl = 0.05 * wisp * (0.4 + 1.2 * n);
     }
     float yn0 = q.y / max(top0, 1.0);
     if (yn0 > 1.6) return y.rho * pl / 0.11;
@@ -609,7 +594,7 @@ float youngDens(Young y, vec3 q, bool lite) {
     float a = a0 - 34.0 * y.size * yn0 * yn0 * clamp(a0 / 0.7, 0.0, 1.0) / y.U;
     if (a < 0.0) return y.rho * pl / 0.11;
     float core, haze;
-    youngTops(a, y.hk, core, haze);
+    pallYoungTops(a, y.hk, core, haze);
     // eddies behind the front: energy decays over ~8 s, the violent first seconds over ~4 s; their phase is the integral of the energy,
     // so they keep turning after the front has gone
     float E = exp(-a / 8.0), Ef = exp(-a / 4.0);
@@ -644,8 +629,8 @@ float youngDens(Young y, vec3 q, bool lite) {
     // the fines' haze over the core: thinner per metre but it stays; thicker and higher over the lumps
     float hz = max(haze * (0.7 + 0.6 * lb), 0.5);
     float zh = mix(q.y / hz, pw.y / hz + (n - 0.5) * 1.8, smoothstep(0.0, 0.6, q.y / hz));
-    float d = smoothstep(1.05, 0.55, z) * (0.25 + 0.75 * exp(-max(a - 1.0, 0.0) / 6.0)) * head * (0.8 + 0.4 * lb)
-            + 0.07 * (0.1 + 1.8 * smoothstep(0.3, 0.7, lb)) * smoothstep(1.05, 0.45, zh);
+    float d = (1.0 - smoothstep(0.55, 1.05, z)) * (0.25 + 0.75 * exp(-max(a - 1.0, 0.0) / 6.0)) * head * (0.8 + 0.4 * lb)
+            + 0.07 * (0.1 + 1.8 * smoothstep(0.3, 0.7, lb)) * (1.0 - smoothstep(0.45, 1.05, zh));
     return y.rho * (d * smoothstep(0.0, 0.12, a) * (0.3 + 1.4 * n) * (0.45 + 1.1 * fs) + pl / 0.11);
 }
 
@@ -715,20 +700,14 @@ void slot(mat4 S, mat4 V, sampler2D ground, vec4 R, vec4 W, vec4 G, vec4 H, vec3
     PallAt f = pallField(Sampler1, ground, S, R, W, p, floorUp, topBumps(S, p));
     WallAt head = pallWallAt(ground, S, V, R, W, p, floorUp);
     // the young dry dust is the approved field (youngDust), the law's pall takes over as the layer mixes (PALL_YOUNG_MIX_*): its dry
-    // dust here and above is drawn at the law's share; spray, haze and the surge stay the law's
-    float law = V[0].w > 0.0 && V[2].w > 0.0 ? smoothstep(PALL_YOUNG_MIX_FROM, PALL_YOUNG_MIX_TO, f.mixed) : 1.0;
-    float youngDry = 0.0, youngTau = 0.0;
-    if (law < 1.0) {
-        // the law's column here (dust lofted at this distance): the head's at its wedge end while the head holds it, the pall's row
-        float r = length(head.rel), u = (V[0].x - r) / max(V[0].y, 0.001), fade = u > -0.01 ? pallWallFade(u) : 0.0;
-        float soil = 1.0 + head.hard * (V[3].y - 1.0);
-        youngTau = (fade * V[0].w * V[3].w * soil * V[0].z + f.base * f.top) * pallColumn(0.0);
-        youngDry = 1.0 - law;
-        if (W.w > 0.5) youngDry *= 1.0 - pallWater(ground, R, head.rel);
-    }
-    f.sigma.x *= law;
-    f.column.x *= law;
-    f.slab.x *= law;
+    // dust here and above is drawn at the law's share; spray, haze and the surge stay the law's (pallYoungScale, as pallFieldDrawn)
+    vec4 young = pallYoungScale(Sampler1, S, V, head.rel, f.mixed, f.base, f.top, head.hard);
+    // dust lofted from water is spray: the row's source water where it holds dust, the head's water at its own place
+    float wet = f.base > 0.0 ? f.wet : head.wet;
+    float youngDry = (1.0 - young.x) * (1.0 - wet);
+    f.sigma.x *= young.x;
+    f.column.x *= young.x;
+    f.slab.x *= young.x;
     // Dust lifted out of the flat layer by inflow has the same material and billows. Its light is computed here too,
     // including self-shadowing: above the old top it does not become flat gray fill.
     if (inflow.w > 0.0 && length(inflow.xz - S[0].xy) < 1.0) {
@@ -786,18 +765,19 @@ void slot(mat4 S, mat4 V, sampler2D ground, vec4 R, vec4 W, vec4 G, vec4 H, vec3
     vec3 keyDir = mix(sunDir, keyLight, key);
     keyDir /= max(length(keyDir), 1e-3);
     bool pall = f.sigma.x + f.sigma.y + f.sigma.z > 1e-7;
-    // the head is the young field over land; over water its spray (wall: the head's wet share)
-    if (head.P.w > 0.0 && head.wet > 0.0) wall(V, head, keyDir, sunDir, lightDir, f.smoke, cone, pall, head.wet, s);
+    // the head's dry dust is the young field; over water it draws its spray (pallWallSpray: the wet share's own geometry and density)
+    if (head.P.w > 0.0 && head.wet > 0.0) wall(V, pallWallSpray(V, head), keyDir, sunDir, lightDir, f.smoke, cone, pall, head.wet, s);
+    // no dust inside the fireball (the head and the dust row exclude the ground fireball; the young field's taller shape reached into it)
+    if (youngDry > 0.0) youngDry *= smoothstep(1.0, 1.05, toLen / max(G.x, 1e-3));
     if (youngDry > 0.0) {
-        float lawTop = texture(Sampler1, vec2(min(length(head.rel) / S[0].w, 1.0), S[3].w)).a;
         Young y;
         y.R = V[0].x;
         y.U = V[2].w;
-        y.hk = PALL_PEAK_SHARE / (1.0 + PALL_WALL_HUMP) * max(lawTop, 1.0);
-        y.rho = PALL_YOUNG_SHARE * youngTau / y.hk;
-        y.size = S[3].y / PALL_YOUNG_TILE;
+        y.hk = young.y;
+        y.rho = young.z;
+        y.size = young.w;
         y.t = S[3].z;
-        y.fp = gYoungFp >= 0.0 ? gYoungFp : cone;
+        y.fp = cone;
         youngDust(y, vec3(head.rel.x, head.z, head.rel.y), sunDir, lightDir, cap, dir, dustW, youngDry, s);
     }
     if (!pall) return;
@@ -1380,30 +1360,16 @@ vec4 pallSource(vec3 p, float cone, vec4 inflow, out vec3 dustLight) {
 
 // One pall step from ta over ds: 0 — no matter at ta, 1 — integrated, 2 — refused: matter at ta and the step longer than refine
 // (> 0): the caller re-marches from the previous, empty sample in finer steps, so a surface is found where it is, not a long step late
-float gDbgT = 0.0, gDbgDs = 0.0, gDbgSig = 0.0, gDbgLum = 0.0;
-int gDbgStep = 0;
 int pallStep(float ta, float ds, float grid, float refine, inout vec3 light, inout float transmit, inout float haze) {
     passesBefore(ta, light, transmit, haze);
     vec3 p = gDir * ta;
     float open = pallOpenHere(p);
     if (open <= 0.0) return 0;
     float cone = max(ta * gPixel, 0.35 * grid);
-    // the young field's billows fade below the pixel, and far away (0.8–2.5 km) below half a step (the animation's rule: detail finer than
-    // the step there decorrelates every frame); the step near the eye stays a sampling matter (a step's share faded every billow into a
-    // flat haze)
-    gYoungFp = max(ta * gPixel, 0.35 * grid * smoothstep(800.0, 2500.0, ta));
     vec3 dustLight;
     vec4 matter = pallSource(p, cone, vec4(0.0), dustLight);
-    gYoungFp = -1.0;
     if (matter.w <= 1e-7) return 0;
     if (refine > 0.0 && ds > refine) return 2;
-    if (PALL_DEBUG > 0 && !gDbgFrozen) {
-        gDbgFrozen = true;
-        gDbgT = ta;
-        gDbgDs = ds;
-        gDbgSig = matter.w;
-        gDbgLum = dot(matter.rgb / matter.w, vec3(0.2126, 0.7152, 0.0722));
-    }
     float tr = exp(-matter.w * open * ds);
     passMatter(ta, matter.rgb * (1.0 - tr) / matter.w, tr, light, transmit, haze);
     return 1;
@@ -2286,7 +2252,6 @@ void main() {
             bool refine = !refined && prevEmpty && surf < 1e8;
             int took = next > ta ? pallStep(ta, next - ta, grid, refine ? 1.5 * surf : 0.0, light, transmit, haze) : 0;
             i += 1;
-            if (PALL_DEBUG > 0 && gDbgFrozen && gDbgStep == 0) gDbgStep = i;
             if (took == 2) {
                 // matter met by a long step after an empty sample: back to that sample, finely
                 refined = true;
@@ -2369,9 +2334,6 @@ void main() {
     // or pall-free pixel without history (fx_pall_resolve)
     // float32 fraction sum may exceed 1 by an ulp — pallValid would reject the pixel
     vec4 res = vec4(shown, min(transmit, 1.0));
-    if (PALL_DEBUG == 1) res = vec4(fract(gDbgT / 25.0), gDbgDs / 100.0, float(gDbgStep) / 72.0, 0.0);
-    if (PALL_DEBUG == 2) res = vec4(gDbgSig * 2.0, gDbgLum * 0.5, 0.5 + gDbgDev * 0.1, 0.0);
-    if (PALL_DEBUG == 3) res = vec4(gDbgUp / 20.0, gDbgToCap / 40.0, gDbgHd * 2.0, 0.0);
     fragColor = pallValid(res) ? res : vec4(0.0, 0.0, 0.0, -1.0);
 }
 
