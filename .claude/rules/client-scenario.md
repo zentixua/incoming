@@ -223,7 +223,7 @@ times and the pall's budget are not frame costs: frame cost belongs to the GPU a
   nuke frame at 130 s took tens of minutes at 1–3 frames/s). `shots` takes a time of day per frame
   (`<seconds>@<day time>`, e.g. `130@12500,130.5@12550`): a dusk strip in one take; the `SANDBOX shot` line logs it. A slowed
   take's sound is not real-time: on the CPU renderer, and on the GPU when `rate` < 20, `shot` records sound in a second take of the same effect at 20 ticks/s from the first
-  frame's second (`shots .wav-<name>-XXXXXX none@<s> <wav>`, a fresh `mktemp` staging directory), cuts the WAV from it and writes
+  frame's second if before the effect, else from 0 (`first_second`: a time of day dropped; `shots .wav-<name>-XXXXXX none@<s> <wav>`, a fresh `mktemp` staging directory), cuts the WAV from it and writes
   its timing into the frames' `capture.json` (`audio.take`); the effect's deadline grows by 20 s per game second.
 - Frame comparisons between takes: a plain `nuke` detonates at the take's game time and the world wind is a function of it
   (`Wind.at`), so main and branch takes in different orders drift the cloud by pixels; equality claims (noon/night) need

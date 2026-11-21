@@ -266,7 +266,7 @@ Ruins and everything in `nuclear/world/` are in `nuclear-world.md`.
   `PALL_WISP_END` (14 s); a multiplier on the top like the bumps with the dust thinned by the same factor, so the plume is the
   layer's own column lifted, never added dust or a separate puff (layer puffs read as balls); column readers without wisps
   (composite repair, front transmittance) see the same column at the law's height. The pall's bounds include the rise (`PallField.WISP_RISE`, `PallFloorsGlslTest.wispRiseIsTheBoundsCopy`).
-- Ray samples are world-anchored: the head and storm grids use a power-of-two step from the eye (`pallGridStep`, `pallGridNext`), the
+- Ray samples are world-anchored: the head grid uses a power-of-two step from the eye (`pallGridStep`, `pallGridNext`), the
   pall bounds the ordinary steps span snap to quarter octaves (`PallPass.snapBounds`); samples sliding with the front read as boiling
   dust (`PallGridGlslTest`). The head's step (`pallHeadStep`) is the wall's wanted step (0.12 of its top) on that grid while
   the frame's budget allows, growing continuously as a ray's budget share binds; never `span / floor(span / step)` or a power

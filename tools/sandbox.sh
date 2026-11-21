@@ -203,7 +203,7 @@ OPT
 start() {
   local size=1280x720 opts=() pack wait= fresh= gpu=
   # a fixed near site (Sandbox.FIXED_SITE): checked here, not in the client's class initialisation
-  if [ -n "${INCOMING_SANDBOX_SITE:-}" ] && ! [[ $INCOMING_SANDBOX_SITE =~ ^[0-9]+$ && $INCOMING_SANDBOX_SITE -le 450 ]]; then
+  if [ -n "${INCOMING_SANDBOX_SITE:-}" ] && ! [[ $INCOMING_SANDBOX_SITE =~ ^[0-9]{1,3}$ && $((10#$INCOMING_SANDBOX_SITE)) -le 450 ]]; then
     echo "INCOMING_SANDBOX_SITE: 0–450, not \"$INCOMING_SANDBOX_SITE\"" >&2; exit 2
   fi
   while [ $# -gt 0 ]; do
