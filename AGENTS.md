@@ -142,9 +142,9 @@ defense, `launcher/`, `grid/` blackout, `sound/`, `client/`, `work/` tick budget
   radar or damage models. Shared class laws (inertia/bank, altitude-speed trade, gravity/drag/wind for unpowered,
   `guidance/`); game numbers in `WeaponSpec.Handling`, `Ballistic`, marked “not physical”.
 - **Fix causes, not outcomes; never glue** (Artem, 21.11). Correct the producing model, not its output; one law per
-  class; weapon-specific numbers in spec, not constants or weapon `switch`. One phenomenon on screen = one model: where
-  a real law and the wanted look disagree, build one presentation model for the look with physics only as its visible
-  inputs (where, when, how much, wind), never a law plus look corrections on its result. Review: glue is serious.
+  class; weapon numbers in spec. One phenomenon on screen = one model: where a law and the wanted look disagree, the
+  look wins: one presentation model, physics only as visible inputs (where, when, how much, wind), never a law plus
+  look fixes on it. Model handoff = crossfade; if the seam shows, the new model owns it all. Review: glue is serious.
 - **Configure causes, not consequences.** Player sets conditions, world computes consequences. Four setting kinds:
   world rules (phenomena, permissions, salvos, flight time, real-product choices: nuclear yield 1–15 kt, burst height);
   map time/distance scale (`GAME` default, `REAL`, `CUSTOM`); performance (one work budget/tick, quality); convenience.
