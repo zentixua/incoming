@@ -2611,8 +2611,13 @@ public final class SmokePuffs {
                 int f0 = (int) frame;
                 float last = j == count - 1 ? (float) (many - (count - 1)) : 1;
                 boolean mirror = vary ? (hj >>> 40 & 1) == 1 : (j & 1) == 1;
-                out.puff6(px + ox, py + oy, pz + oz, rh * grow * k, rv * grow * k, FxAtlas.puff6(f0, mirror), (float) (frame - f0), (float) shade, sr,
-                        sg, sb, sub * last);
+                // the sun through the rest of the tube's section ({@link #cloudSun}; ⚠ the spot as a ball of the whole
+                // tube's thickness across the axis: the place does not carry the axis, and the sun's path along it
+                // is longer)
+                float sunlit = (float) cloudSun(ox, oy, oz, k * rh, k * rv, sh, sv, 2 * Math.PI * sh * sv * edgeTau, shade * BAKED_K, view.sun(),
+                        clusterBlend(many));
+                out.puff6(px + ox, py + oy, pz + oz, rh * grow * k, rv * grow * k, FxAtlas.puff6(f0, mirror), (float) (frame - f0), (float) shade,
+                        sr * sunlit, sg * sunlit, sb * sunlit, sub * last);
             }
         }
 
