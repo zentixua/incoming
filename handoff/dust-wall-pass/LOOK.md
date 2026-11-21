@@ -12,6 +12,14 @@ or its unimportant details. ACCEPTANCE.md's judging scene and order stay.
 4. The dust reads as one natural mass, like real dust (a haboob front, lower and denser): billows, uneven, no repeating
    pattern, no holes, no rippling, not liquid metal, not water.
 
+## One model, no glue (Artem, 21.11 17:47)
+The young wall (front to ~10 s behind it) is ONE model built for this look, like the animation: its own hump, rise,
+settle and height. Do not run the mod's dust-height law and then override its result with look corrections (the #707
+path: law top up to ~160 m, then hump 0.62 of the law's top, "core settles, not physical", v6 field scaled to the law).
+Physics enters only as inputs that the screen shows: front position and time, where dust is born and how much (ground
+type), wind direction and its decay, overall scale plausible. Mark the model once as presentation/not physical in code
+and the guide. Behind it, hand over to the existing pall (physics) for the long haze.
+
 ## Physics vs presentation
 - Physics (mod laws, unchanged): where and when dust is born, how much, layer height, what falls and what stays, wind drift.
   Coarse dust falls; fines stay as a low haze that thins slowly and drifts with the wind. Billowing is violent in the first
