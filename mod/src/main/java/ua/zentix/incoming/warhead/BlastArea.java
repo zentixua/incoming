@@ -6,10 +6,13 @@ import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.TicketType;
 import net.minecraft.util.Mth;
 import net.minecraft.world.level.ChunkPos;
+import net.minecraft.world.level.Explosion;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.phys.Vec3;
+import org.jetbrains.annotations.Nullable;
 import ua.zentix.incoming.Incoming;
 import ua.zentix.incoming.compat.DhUpdates;
+import ua.zentix.incoming.nuclear.world.StrikeRemovals;
 import ua.zentix.incoming.strike.AreaLoader;
 import ua.zentix.incoming.strike.ImpactCost;
 import ua.zentix.incoming.strike.StrikeWorld;
@@ -73,6 +76,7 @@ final class BlastArea {
      */
     private final it.unimi.dsi.fastutil.longs.LongArrayList removedAt = new it.unimi.dsi.fastutil.longs.LongArrayList();
     private final List<BlockState> removedWas = new ArrayList<>();
+    private @Nullable StrikeRemovals.Source collapseSource;
 
     private record Queued(StagedExplosion explosion, long tick) {}
 
@@ -164,14 +168,23 @@ final class BlastArea {
     /** Explosion hit {@code was} at {@code pos}: record it if the block is gone (TNT primed, a block that withstands stays). */
     void removed(ServerLevel level, BlockPos pos, BlockState was) {
         if (level.getBlockState(pos) == was) return;
-        removedAt.add(pos.asLong());
-        removedWas.add(was);
+        recordRemoved(pos.asLong(), was);
     }
 
-    /** Tests: a removal made outside the strike's explosions. */
     void recordRemoved(long pos, BlockState was) {
         removedAt.add(pos);
         removedWas.add(was);
+        if (collapseSource != null) collapseSource.record(pos, was);
+    }
+
+    void trackCollapse(ServerLevel level, List<StagedExplosion> blasts, Vec3 at) {
+        collapseSource = StrikeWorld.get(level).collapseRemovals().source(l -> blasts.isEmpty()
+                ? new Explosion(l, null, at.x, at.y, at.z, 0f, false, Explosion.BlockInteraction.DESTROY_WITH_DECAY)
+                : blasts.getFirst().attributed(l, at));
+    }
+
+    @Nullable StrikeRemovals.Source collapseSource() {
+        return collapseSource;
     }
 
     /** Positions removed so far ({@link #removed}); live list, read by the collapse pass. */
@@ -200,6 +213,7 @@ final class BlastArea {
     /** Holder releases area; last removes ticket/closes falling. */
     void release(ServerLevel level) {
         if (holders <= 0 || --holders > 0) return;
+        if (collapseSource != null) collapseSource.close();
         StrikeWorld.get(level).areas().release(level, area());
         CraterFalls.get(level).close(level, key);
         // Distant Horizons LOD: crater now, later falls when area stops falling.

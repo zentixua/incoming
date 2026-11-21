@@ -15,7 +15,9 @@ import net.minecraft.world.level.block.FallingBlock;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.phys.Vec3;
 import net.neoforged.neoforge.event.entity.EntityJoinLevelEvent;
+import net.neoforged.neoforge.event.tick.EntityTickEvent;
 import org.jetbrains.annotations.Nullable;
+import ua.zentix.incoming.IncomingConfig;
 import ua.zentix.incoming.registry.ModAttachments;
 
 import java.util.ArrayList;
@@ -39,6 +41,7 @@ import java.util.UUID;
  * ModAttachments#CRATER_FALLS}.
  */
 public final class CraterFalls {
+    private static final String COLLAPSE_RUBBLE = "incoming:collapse_rubble";
     /** Live falling blocks starting within blast area. */
     public static final int LIVE_CAP = 48;
     /** Live falling blocks across all world areas: widely dispersed salvo areas do not overlap. */
@@ -92,6 +95,23 @@ public final class CraterFalls {
         BlockPos from = falling.getStartPos();
         if (falling.time != 0 || !from.equals(falling.blockPosition()) || !level.getBlockState(from).isAir()) return;
         if (get(level).settle(level, falling, from)) event.setCanceled(true);
+    }
+
+    /** Vanilla keeps the falling-block picture while suppressing placement and item drops on impact. */
+    static void markRubble(FallingBlockEntity falling) {
+        falling.addTag(COLLAPSE_RUBBLE);
+        falling.dropItem = false;
+        if (!rubbleStays()) falling.disableDrop();
+    }
+
+    public static void onEntityTick(EntityTickEvent.Pre event) {
+        // Config can reload while a block is airborne (including after an unload and reload).
+        if (event.getEntity() instanceof FallingBlockEntity falling && falling.level() instanceof ServerLevel
+                && falling.getTags().contains(COLLAPSE_RUBBLE) && !rubbleStays()) falling.disableDrop();
+    }
+
+    static boolean rubbleStays() {
+        return IncomingConfig.SERVER.debrisStay.get();
     }
 
     /**
