@@ -28,6 +28,8 @@ public final class WallPuffs implements SmokeGrid.Source {
     public static final boolean ON = !"false".equals(System.getProperty("incoming.wallPuffs"));
     /** Young wall span behind the front, s; the pall fades in over the last {@link #HANDOFF_S}. */
     public static final double YOUNG_S = 10, HANDOFF_S = 2.5;
+    /** Age at which the wall has settled, s: its height is the layer's then (input of scale). */
+    static final double SETTLED_S = 1;
     /** Finest cell, m, and cell size per metre of eye distance. */
     static final double CELL = 16, PER_DISTANCE = 0.12;
     static final int TIERS = 9;
@@ -56,10 +58,13 @@ public final class WallPuffs implements SmokeGrid.Source {
         dustG = SmokeGrid.dustAlbedo((float) NukePall.DUST[1]);
         dustB = SmokeGrid.dustAlbedo((float) NukePall.DUST[2]);
         dustK = SmokeGrid.dustK(dustR, dustG, dustB);
-        double model = YOUNG_S / a.d.scale();
+        // scale inputs: the lofted layer's height when the hump has settled ({@link #SETTLED_S}: the dusty boundary layer, Kuhl —
+        // 58 m at 4.5 km from 1 Mt) and its density at the hand-over (the pall continues it; its later rise over flash-heated
+        // ground is the pall's own law, cross-faded over the hand-over band)
+        double settledAt = SETTLED_S / a.d.scale(), handover = YOUNG_S / a.d.scale();
         for (int i = 0; i < PallField.BINS; i++) {
-            top[i] = Math.max(a.d.blocks(a.pall.layer(i).height(model)), PallField.MIN_TOP_BLOCKS);
-            tau[i] = a.pall.layer(i).depth(model);
+            top[i] = Math.max(a.d.blocks(a.pall.layer(i).height(settledAt)), PallField.MIN_TOP_BLOCKS);
+            tau[i] = a.pall.layer(i).depth(handover);
         }
     }
 
@@ -191,7 +196,7 @@ public final class WallPuffs implements SmokeGrid.Source {
         double area = cell * cell / (metre * metre);
         double mass = tauV * area / dustK * w * fade * Math.min(1, age / 0.05);
         if (mass <= 0) return;
-        double sh = 0.62 * cell, sv = Math.min(sh, 0.35 * topH);
+        double sh = 0.5 * cell, sv = Math.min(sh, 0.35 * topH);
         double half = Math.max(0, 0.5 * topH - sv);
         double cy = y + Math.max(sv, 0.5 * topH);
         out.segment(x + 0.5 * lean * ux, cy, z + 0.5 * lean * uz, 0.5 * lean * ux, half, 0.5 * lean * uz, sh, sv, 0, mass, 0,
