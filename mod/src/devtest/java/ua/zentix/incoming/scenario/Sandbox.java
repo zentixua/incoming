@@ -160,6 +160,8 @@ final class Sandbox {
     private int freshX;
     /** Camera: distance, height above ground, bearing from the point, height of the look point. */
     private double camDist = 60, camHeight = 10, camBearing = 90, camLook = 8;
+    /** Camera turn after facing the point, degrees of yaw ({@code cam}'s fifth number; 180 — looking away from it). */
+    private double camTurn;
     private boolean overlay;
     /** Zoom ×k ({@code zoom}): 1 — none. */
     private double zoom = 1;
@@ -436,6 +438,7 @@ final class Sandbox {
                 camHeight = c.number(1, camHeight);
                 camBearing = c.number(2, camBearing);
                 camLook = c.number(3, camLook);
+                camTurn = c.number(4, 0);
                 placeCamera();
                 finish("ok");
             }
@@ -1694,6 +1697,7 @@ final class Sandbox {
         double y = GROUND + 1 + camHeight;
         String me = Minecraft.getInstance().player.getGameProfile().getName();
         server(String.format(Locale.ROOT, "tp %s %.2f %.2f %.2f facing %.2f %.2f %.2f", me, eye.x, y - 1.62, eye.z, site.x, GROUND + 1 + camLook, site.z));
+        if (camTurn != 0) server(String.format(Locale.ROOT, "execute as %s at @s run tp @s ~ ~ ~ ~%.2f ~", me, camTurn));
         placePane(eye, y);
         placeMob(eye);
     }

@@ -18,6 +18,8 @@
         { "name": "DwSkyLight", "type": "float", "count": 3, "values": [ 0.0, 0.0, 0.0 ] },
         { "name": "DwGroundLight", "type": "float", "count": 3, "values": [ 0.0, 0.0, 0.0 ] },
         { "name": "DwAlbedo", "type": "float", "count": 3, "values": [ 0.8, 0.8, 0.8 ] },
-        { "name": "DwWind", "type": "float", "count": 4, "values": [ 0.0, 0.0, 0.0, 0.0 ] }
+        { "name": "DwBulk", "type": "float", "count": 3, "values": [ 0.6, 0.53, 0.45 ] },
+        { "name": "DwWind", "type": "float", "count": 4, "values": [ 0.0, 0.0, 0.0, 0.0 ] },
+        { "name": "DwFrame", "type": "float", "count": 2, "values": [ 0.0, 160.0 ] }
     ]
 }

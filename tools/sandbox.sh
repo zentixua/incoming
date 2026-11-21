@@ -22,7 +22,7 @@
 #                                          each waits for its result
 #   tools/sandbox.sh swap                  build changes (Gradle), hot swap classes, reload resources
 #                                          if changed; code 3: hot swap failed, restart required
-#   tools/sandbox.sh shot <name> '<effect>' [--at 0.1,0.5,1,3|none] [--wav 4] [--cam 'range height azimuth look'] [--time day|night]
+#   tools/sandbox.sh shot <name> '<effect>' [--at 0.1,0.5,1,3|none] [--wav 4] [--cam 'range height azimuth look [turn]'] [--time day|night]
 #                        [--overlay] [--no-swap]
 #                                          swap, then the effect with frames at these seconds and audio: <name>_*.png, <name>.wav,
 #                                          capture.json; finishes with seconds from the command to the last frame.

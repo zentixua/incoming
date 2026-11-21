@@ -57,8 +57,9 @@ import java.util.Locale;
  *       mob must stay hidden by it (with a shader pack entities reach the depth late);</li>
  *   <li>{@code graphics fast|fancy|fabulous} — the client's graphics mode (Fabulous: translucent terrain, particles, clouds and
  *       weather in their own targets);</li>
- *   <li>{@code cam <distance> [height] [azimuth°] [look]} — where the camera is: distance from the point, height above the ground, azimuth
- *       from the point (0 — south, 90 — west, as the player's turn), height of the look point above the ground;</li>
+ *   <li>{@code cam <distance> [height] [azimuth°] [look] [turn°]} — where the camera is: distance from the point, height above the
+ *       ground, azimuth from the point (0 — south, 90 — west, as the player's turn), height of the look point above the ground, and a
+ *       yaw turn after facing the point (180 — looking away from it);</li>
  *   <li>{@code stance stand|fly} — a standing player (body sway) or a flying observer (by default);</li>
  *   <li>{@code weather clear|rain} — weather for checking condensation in humid air;</li>
  *   <li>{@code collapse on|off} — the server's collapse setting: the same strike with and without what lost support falling;</li>
@@ -205,7 +206,7 @@ record SandboxCommand(Verb verb, List<String> args) {
                 if (!args.isEmpty() && (number(0) < 1 || number(0) > 32)) throw new IllegalArgumentException("fire side 1–32");
             }
             case CAM -> {
-                need(1, 4);
+                need(1, 5);
                 for (int i = 0; i < args.size(); i++) number(i);
             }
             case TIME -> {

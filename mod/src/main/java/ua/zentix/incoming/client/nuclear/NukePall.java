@@ -339,8 +339,12 @@ public final class NukePall {
         }
         w.ring[0] = (float) front;
         w.ring[1] = (float) inner;
-        w.ring[2] = (float) (top * 1.55 * 1.6 + 40);
+        w.ring[2] = (float) (top * ua.zentix.incoming.client.fx.layer.DustWallPass.TOP_OVER_LAYER + 6);
         w.ring[3] = (float) a.pall.reach();
+        // the settled layer top at the eye's radius (the history reprojects through it)
+        double x = Math.min(Math.hypot(w.eye[0], w.eye[2]) / Math.max(w.ring[3], 1), 1) * (n - 1);
+        int j0 = (int) Math.min(Math.floor(x), n - 2);
+        w.layerTop = (float) (w.table[4 * j0 + 1] + (x - j0) * (w.table[4 * (j0 + 1) + 1] - w.table[4 * j0 + 1]));
         // fireball: slot 0's ball light (CloudPuffs.pallLight): radius, drift along the wind, height, black-body light × exposure
         double cos = Math.cos(d.windDir()), sin = Math.sin(d.windDir());
         w.ball[0] = (float) (cos * f.glow0.z);
@@ -353,7 +357,9 @@ public final class NukePall {
         w.skyLight.set(f.skyLight);
         float up = Math.max(f.sun.y, 0);
         w.groundLight.set(f.sunLight).mul(up).add(f.skyLight).mul((float) GROUND_BOUNCE);
-        w.albedo.set(0.8687934f, 0.8099112f, 0.7286264f);
+        // the reference soil's dust (the pall's PALL_DUST_W) and its bulk colour
+        w.albedo.set((float) DUST_W[0], (float) DUST_W[1], (float) DUST_W[2]);
+        w.bulk.set((float) DUST[0], (float) DUST[1], (float) DUST[2]);
         double wind = d.blocks(d.windSpeed());
         w.windX = (float) (cos * wind);
         w.windZ = (float) (sin * wind);
