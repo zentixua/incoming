@@ -77,8 +77,8 @@ public final class DustWallPass {
 
     static int steps(PallPass.Quality q) {
         return switch (q) {
-            case HIGH -> 160;
-            case MEDIUM -> 120;
+            case HIGH -> 128;
+            case MEDIUM -> 104;
             default -> 96;
         };
     }

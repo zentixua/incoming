@@ -130,10 +130,11 @@ final class Sandbox {
     private static final double FRAMES_PER_TICK = 2;
     /**
      * Frames per tick while frames are due on a GPU: a frame is taken at the first render whose age reaches its second, so
-     * it lands within 1/8 tick (6 ms) of it; at whole ticks a 30 fps take's frames advanced 25–28 ms with a 45–145 ms jump
+     * it lands within a few milliseconds of it, also after a frame that wrote its PNG (~0.1 s on the render thread); at whole
+     * ticks a 30 fps take's frames advanced 25–28 ms with a 45–145 ms jump
      * every half second, and every moving thing in the clip lurched at ~2 Hz.
      */
-    private static final double GPU_FRAMES_PER_TICK = 8;
+    private static final double GPU_FRAMES_PER_TICK = 24;
     /** Seconds before a due frame from which the CPU renderer's world is slowed ({@link #paceFrame}). */
     private static final double PACE_LEAD = 2;
     /** Rate from arming to the first measured frames (≈ 2 frames per tick at 4 frames/s, the smoke-filled llvmpipe rate). */

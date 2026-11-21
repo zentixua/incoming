@@ -181,9 +181,10 @@ float dwDensity(vec3 q, bool coarse) {
     // at 25 m/s: fixed in the ground, the front would sweep each 30 m lump in two frames and the face would boil
     float yn = clamp(q.y / top0, 0.0, 1.5);
     float bf = 0.42;
-    if (!coarse && a0 < 4.0) {
+    // (light paths too: the lumps shade each other under the low sun, or a sunlit face reads flat)
+    if (a0 < 4.0) {
         vec3 hf = vec3(atan(q.z, q.x) * DwRing.x / 30.0, q.y / 22.0, (DwRing.x - r + 25.0 * DwEye.w) / 30.0);
-        bf = dwBillow(hf + vec3(3.7, 0.0, 9.1), 1.0 / 22.0);
+        bf = dwBillow(hf + vec3(3.7, 0.0, 9.1), coarse ? 0.0 : 1.0 / 22.0);
     }
     float a = DwEye.w - dwNode(r + (40.0 * yn * yn + 100.0 * max(bf - 0.3, 0.0)) * exp(-a0 / 1.5)).x;
     if (a <= 0.0) return 0.0;
