@@ -53,10 +53,12 @@ public final class DustWallPass {
      * {@code DW_HAZE}; the ray's slab top, {@code DwRing.z}).
      */
     public static final double TOP_OVER_LAYER = 1.6 * 1.25 * 1.3;
-    /** Weight of the current frame in the wall's history ({@code fx_dustwall_resolve}): about seven frames averaged. */
-    private static final float HISTORY = 0.15f;
+    /** Weight of the current frame in the wall's history ({@code fx_dustwall_resolve}): about ten frames averaged. */
+    private static final float HISTORY = 0.1f;
     /** An eye that moved farther than this between frames (teleport) restarts the history, blocks. */
     private static final double JUMP = 64;
+    /** Diagnostics: {@code -Dincoming.dustwall.history=false} lays each frame's march without the history. */
+    private static final boolean HISTORY_ON = !"false".equals(System.getProperty("incoming.dustwall.history"));
     /** Table nodes ({@code DW_NODES}). */
     public static final int NODES = 32;
     /**
@@ -130,7 +132,7 @@ public final class DustWallPass {
         // secondary views (camera mods) draw without history and leave the primary view's alone
         boolean primary = !FxViews.secondary();
         float dx = f.eye[0] - PREVIOUS_EYE[0], dy = f.eye[1] - PREVIOUS_EYE[1], dz = f.eye[2] - PREVIOUS_EYE[2];
-        boolean past = history && dx * dx + dy * dy + dz * dz < JUMP * JUMP;
+        boolean past = HISTORY_ON && history && dx * dx + dy * dy + dz * dz < JUMP * JUMP;
         VIEW_PROJECTION.set(projection).mul(view);
         VIEW_PROJECTION.invert(INVERSE);
         view.positiveZ(FORWARD).negate();
@@ -332,6 +334,11 @@ public final class DustWallPass {
     static void reset() {
         failed = false;
         history = false;
+    }
+
+    /** The pass's state for the timing log: resolution, step cap, history. */
+    public static String describe() {
+        return String.format(java.util.Locale.ROOT, "1/%d, history %s, frame %d", div, history && HISTORY_ON ? "on" : "off", frame);
     }
 
     /** No wall this frame: the next one starts its history afresh. */

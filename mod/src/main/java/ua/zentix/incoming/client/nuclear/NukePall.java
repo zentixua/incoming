@@ -922,10 +922,10 @@ public final class NukePall {
         // the node nearest the eye's radius
         double r = Math.hypot(w.eye[0], w.eye[2]);
         int j = (int) Math.round(Math.min(r / Math.max(w.ring[3], 1), 1) * (ua.zentix.incoming.client.fx.layer.DustWallPass.NODES - 1));
-        return String.format(java.util.Locale.ROOT, "t %.2f s, front %.0f, inner %.0f, pall whole to %.0f fades to %.0f, envelope %.0f, reach %.0f; "
+        return String.format(java.util.Locale.ROOT, "pass %s; t %.2f s, front %.0f, inner %.0f, pall whole to %.0f fades to %.0f, envelope %.0f, reach %.0f; "
                         + "at the eye's radius %.0f: arrival %.2f s, layer %.1f blocks, sigma %.4f; ball at %.0f %.0f %.0f r %.0f light %.3g %.3g %.3g; "
                         + "sun %.2f %.2f light %.3f %.3f %.3f, sky %.3f %.3f %.3f, ground %.3f %.3f %.3f; wind %.2f %.2f",
-                w.eye[3], w.ring[0], w.ring[1], f.young.x, f.young.y, w.ring[2], w.ring[3], r, w.table[4 * j], w.table[4 * j + 1], w.table[4 * j + 2],
+                ua.zentix.incoming.client.fx.layer.DustWallPass.describe(), w.eye[3], w.ring[0], w.ring[1], f.young.x, f.young.y, w.ring[2], w.ring[3], r, w.table[4 * j], w.table[4 * j + 1], w.table[4 * j + 2],
                 w.ball[0], w.ball[1], w.ball[2], w.ball[3], w.ballLight.x, w.ballLight.y, w.ballLight.z, w.sunDir.x, w.sunDir.y,
                 w.sunLight.x, w.sunLight.y, w.sunLight.z, w.skyLight.x, w.skyLight.y, w.skyLight.z, w.groundLight.x, w.groundLight.y, w.groundLight.z,
                 w.windX, w.windZ);

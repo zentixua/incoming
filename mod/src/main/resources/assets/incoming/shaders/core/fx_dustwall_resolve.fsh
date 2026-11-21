@@ -6,7 +6,7 @@
 // offset along each ray moves every frame, and each pixel averages its last frames (exponential, current weight
 // DwHistory.x), taken from where its dust was a frame ago. The dust's place for reprojection is where the ray meets the
 // wall's settled layer top (DwHistory.y above the eye; the world behind the pixel if nearer): exact for turning, close for
-// moving (the wall is hundreds of metres away). History is clamped to the current 3 × 3 neighbourhood (mean ± 1.25 σ):
+// moving (the wall is hundreds of metres away). History is clamped to the current 3 × 3 neighbourhood (mean ± 1.5 σ):
 // where the wall really changed (the front passing, a roof edge), the old frames give way within a frame; where only the
 // sample offsets differ, they average into stable dust instead of a per-frame shimmer.
 uniform sampler2D Sampler0;
@@ -58,6 +58,6 @@ void main() {
         fragColor = cur;
         return;
     }
-    h = clamp(h, m1 - 1.25 * sd, m1 + 1.25 * sd);
+    h = clamp(h, m1 - 1.5 * sd, m1 + 1.5 * sd);
     fragColor = mix(h, cur, DwHistory.x);
 }
