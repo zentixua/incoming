@@ -151,11 +151,12 @@ For the first seconds a thin white condensation shell stands over the wave: the 
 point (Minecraft air is humid enough for it in clear weather and in rain).
 The dust has the colour of the ground it comes from: grey-brown over grass, fields and forest, pale tan over sand. Right
 behind the wave it is clean dust; smoke darkens it only as the fires under it grow, over minutes, and only burning
-fires light it orange from below. The wall and the dust behind it read as one mass: its top rises and dips in broad, soft
-lumps lit from above, with a low hump that runs along the front and sinks back within seconds; then the wall's dense core
-settles to about half its height, and within a minute or two the haze rises back to full height. Behind the front the dust
-keeps moving for several seconds: it streams outward in fine streaks and thin plumes rise from its top here and there, then
-it settles into a slowly drifting haze. While the fireball lights the sky, the dust glows a warm
+fires light it orange from below. The wall and the dust behind it read as one mass: a dense core under a thinner haze of
+fine dust, its top frayed and rising and dipping in broad, soft lumps lit from above, with a low hump that runs along the
+front and sinks back within seconds; then the wall's dense core settles to about half its height, and within a minute or two
+the haze rises back to full height. Behind the front the dust keeps moving for several seconds: big rolls turn inside it,
+the whole mass surges outward and back, it streams outward in fine streaks and thin plumes rise from its top here and there,
+then it settles into a slowly drifting haze. While the fireball lights the sky, the dust glows a warm
 ochre. Inside the passing wall the air is a warm, glowing murk: nearby houses and trees stay
 visible and fade with distance, and the air clears as the dust thins.
 Burns, radiation and falling debris can still hurt you after the flash, so stay under cover and watch your dose.

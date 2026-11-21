@@ -1595,6 +1595,9 @@ final class Sandbox {
             Incoming.LOG.error("SANDBOX frame {} not written", to, ex);
         }
         cap.frames.add(String.format(Locale.ROOT, "{\"t\": %.2f, \"age\": %.3f, \"file\": \"%s\", \"fps\": %d}", t, age, file, mc.getFps()));
+        var eyeAt = mc.gameRenderer.getMainCamera().getPosition();
+        Incoming.LOG.info("SANDBOX pieces {}: {}; near: {}", file, ua.zentix.incoming.client.fx.Fragments.describe(eyeAt.y, eyeAt.x, eyeAt.z),
+                ua.zentix.incoming.client.nuclear.NukeDust.describe());
         Incoming.LOG.info("SANDBOX shot {} age {} s (t = 0 at {}) fps {} day time {}; layer: {}; smoke: {}; flight: {}; air: {}; pall: {}", file, String.format(Locale.ROOT, "%.3f", age), clock, mc.getFps(),
                 mc.level.getDayTime() % 24000,
                 ua.zentix.incoming.client.fx.layer.FxLayer.describeTiming(), ua.zentix.incoming.client.far.FarRenderer.describeSmoke(),

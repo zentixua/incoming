@@ -618,6 +618,13 @@ const float PALL_YOUNG_TILE = 1038.0;
 const float PALL_YOUNG_SHARE = 0.05;
 const float PALL_YOUNG_MIX_FROM = 0.25;
 const float PALL_YOUNG_MIX_TO = 0.5;
+// the young field's glow toward the ball and backlit rim (fx_pall: youngDust), shares of the ball's light on a facing white wall: the
+// animation's 0.5 and 1.6 of its full light, times a beam's phase at 25° off the ball (0.25 · HG(0.375, 0.9) = 0.68)
+const float PALL_YOUNG_GLOW = 0.34;
+const float PALL_YOUNG_RIM = 1.1;
+// their colours: the animation's, normalised to unit luma (PALL_LUMA): forward glow (0.5, 0.28, 0.1), rim (1, 0.72, 0.42)
+const vec3 PALL_YOUNG_GLOW_TINT = vec3(1.5935, 0.8924, 0.3187);
+const vec3 PALL_YOUNG_RIM_TINT = vec3(1.3195, 0.9500, 0.5542);
 
 // presentation (Artem 21.11: the lifted dust keeps moving for seconds after the front, never freezing): the billow pattern of young
 // dust is displaced along its turbulent path — eddies of the dusty layer move at σ_u ≈ 2.5 u* ≈ 0.1 of the wind behind the front

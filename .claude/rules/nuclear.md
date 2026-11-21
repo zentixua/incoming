@@ -221,18 +221,19 @@ Ruins and everything in `nuclear/world/` are in `nuclear-world.md`.
   `pallWallTop/Shape/Fade/Mean` (`PallGlslTest`). Head noise uses dust coordinates (`BlastWall.origin`, copy
   `pallWallOrigin`): position minus post-front wind path (`carried`: air path over local positive phase, U·t₊/e by
   Friedlander, tens of meters for 15 kt at 592 m; phase share `carriedShare` = u·e^(1−u)); air stationary at ground,
-  1/7 boundary-layer law above, upward 0.02–0.08 of path (Kuhl §3.4). The head and the young layer behind it are one mass
-  (Artem 21.11, Silo S3E09 frame c): their relief is one soft lump field (`pallLumps`: the noise tile's R and B channels at one
-  texel per 1/`PALL_LUMP_TEXEL` 15.4 of the pall's noise tile — 1 Mt: 67 m texels, lumps from ~120 m over kilometre swells —
-  density factor 1 ± `PALL_LUMP_AMP` 0.45 over ±2 σ of the production tile, mean kept, never zero, `PallLumpsTest`), at the
-  head's dust origin and at the young layer's place (ground zero less the drift), turning over by `PALL_LUMP_TURN` texels a
-  second. In the head the lumps scale its density; in the young layer they raise and lower its top (`pallLumpTop`, density
-  divided alike: column kept; `PallField.LUMP_AMP` in the bounds) with relief shading toward the key light; the mixed pall's
-  billows take over as it mixes. Fine detail is only the streaks (`pallStreak`, 3–6 m across at any radius). The head's own
-  layer-height billow octaves and eddy rolls are not drawn: at 1 Mt from 600 m they were 64 px cells (Silo 142–256 px)
-  changing in place at 7.6/s (the pall alone 1.0/s) with density zeros (6.7 % near black at 4 s) and a paler band at the
-  handoff (probe run pl). The march finds tops by refinement: a step that meets matter after an empty sample re-marches from
-  it in fixed small steps (head: a quarter of its wanted step; young layer: a twelfth of a lump, ~14 m at 1 Mt), the first
+  1/7 boundary-layer law above, upward 0.02–0.08 of path (Kuhl §3.4). The young dry dust — head and the layer behind it — is drawn as
+  Artem's approved v6 animation (20.11; `youngDust`/`youngDens` in `fx_pall`): the
+  animation's core with rise, hump and settle, fines haze, ~170 m lumps, eddy warp with decaying energy, bulk slosh, polar
+  streaks (two atan branches blended away from their seams), frayed top and rising wisps, its value noise (no tile, no
+  repetition) and its footprint fade. Scaled to the law: layer height `PALL_PEAK_SHARE`/(1 + `PALL_WALL_HUMP`) of the law's top
+  (`PallField.lawTop`, spray row channel a), density `PALL_YOUNG_SHARE` 0.05 of the law's column over it (0.11/m at the 4.5 km
+  ring of 1 Mt, `PallYoungTest`: the law's ~100 optical depths drew a hard skin), billow sizes by the slot tile over
+  `PALL_YOUNG_TILE`, ages (R − r)/U with the front's ground speed U (`BlastWall.speed`, wall slot [11]). Light as the head's:
+  mean-field chords (lumps kept) up, to the front face, down and toward sun and ball. The law's dry dust here and above takes
+  over from `PallField.mixed` 0.25 to 0.5 (`PALL_YOUNG_MIX_*`); over water the head draws its spray by the law's mean.
+  Bounds: `PallField.YOUNG_TOP` 1.05 of the law's top. Single features drawn on the law's opaque layer (lumps in its
+  top, an entrainment tail, a streak multiplier, wisps lifting its top) do not reach the approved look: the field is ported whole. The march finds tops by refinement: a step that meets matter after an empty sample re-marches from
+  it in fixed small steps (head: a quarter of its wanted step; young layer: its finest billow height, 13 m at 1 Mt), the first
   one jittered: a layer opaque within one step shows the light at its first sample, so that sample's depth must not follow
   the step — a step varying with the budget share drew rings about ground zero on the head (instrumented take, `PALL_DEBUG`),
   ordinary steps of 240–350 m at 1–2 km averaged the young relief into a plain, and a 50 m refinement step flickered it. The
@@ -263,13 +264,8 @@ Ruins and everything in `nuclear/world/` are in `nuclear-world.md`.
   billow pattern is displaced along its turbulent path (eddies at ~0.1 of the post-front wind, decaying over `PALL_TURB_S` 8 s, then a
   slow turnover until the layer has mixed), rising a little; the same fetch as the existing warp (`warpNoise`, `wallNoise`); dust age
   from `PallField.mixed` (pall) or phase share (head). The noise coordinate is not stretched along the flow: a stretched coordinate
-  makes its gaps as long as its billows, and the layer opens into black voids. Streaks along the flow are a density detail instead
-  (`pallStreak`: 1 ± 0.275, never zero, `PALL_STREAK_ALONG` 28 long, `_UP` 5 tall, `_ACROSS` 4.5 wide), on the young layer's dry
-  dust and the head, fading as the layer mixes and below the pixel footprint. Wisps (`pallWisp`): in half of the `PALL_WISP_CELL` (60) cells of the
-  young layer the top rises in a narrow plume (σ 8) by up to `PALL_WISP_RISE` (0.6) of itself 0–8 s after the local phase, gone by
-  `PALL_WISP_END` (14 s); a multiplier on the top like the bumps with the dust thinned by the same factor, so the plume is the
-  layer's own column lifted, never added dust or a separate puff (layer puffs read as balls); column readers without wisps
-  (composite repair, front transmittance) see the same column at the law's height. The pall's bounds include the rise (`PallField.WISP_RISE`, `PallFloorsGlslTest.wispRiseIsTheBoundsCopy`).
+  makes its gaps as long as its billows, and the layer opens into black voids. The young dry dust's own motion is the v6 field's
+  (above); this warp moves the mixed pall's billows.
 - Ray samples: the ordinary steps span the pall's bounds, snapped to quarter octaves (`PallPass.snapBounds`), so they stay put
   while the wall and pall grow (they move when the near volume's end or the ray cutoff moves, as the head nears the eye); the
   head's interval is filled from its entry with the steps it may take, as the storm frame's. A head grid anchored at the eye

@@ -547,7 +547,7 @@ class PallGlslTest {
     void headSootIsThePallsSoot() {
         String fx = read("include/fx_pall.glsl").replaceAll("\\s+", " ");
         assertTrue(fx.contains("if (head.P.w > 0.0 && head.wet > 0.0) wall(V, head, keyDir, sunDir, lightDir, f.smoke, cone, pall, head.wet, s);")
-                && fx.contains("youngDust(y, vec3(head.rel.x, head.z, head.rel.y), sunDir, lightDir, dustW, youngDry, s);"), "head soot - not the pall's");
+                && fx.contains("youngDust(y, vec3(head.rel.x, head.z, head.rel.y), sunDir, lightDir, cap, dir, dustW, youngDry, s);"), "head soot - not the pall's");
         String wall = body(read("include/fx_pall.glsl"), "void wall(").replaceAll("\\s+", " ");
         assertTrue(wall.contains("vec3 w = mix(pallDustW(h.sand, h.hard, V[3].x + (V[3].y - V[3].x) * uw, smoke), PALL_MIST_W, h.wet);"),
                 "head dust - not the soil's with the pall's soot");
@@ -752,7 +752,7 @@ class PallGlslTest {
         String march = read("include/fx_pall.glsl"), composite = read("core/fx_pall_composite.fsh");
         assertTrue(march.contains("vec3 fire = min(below + under * (glow + s.fire / max(s.albedo, vec3(1e-7))) + around, gFlame);"),
                 "fire at a point - one amount under the flame limit");
-        assertTrue(march.contains("vec3 emit = s.albedo * (field + beams + fire + lamps);"), "point light - scattered, beams, fire and lamps");
+        assertTrue(march.contains("vec3 emit = s.albedo * (field + beams + fire + lamps) + s.glow;"), "point light - scattered, beams, fire and lamps, the young field's glow");
         assertTrue(march.contains("vec3 lamps = pallLampsAt(p);"), "lamps once per point, by the window's block light");
         assertTrue(march.contains("+ min(below * exp(-gSootK * self) + (0.5 + 0.75 * PALL_SOOT_G * mv) * glow + around, gFlame);"),
                 "fire on the smoke of the storm - one sum under the flame limit");

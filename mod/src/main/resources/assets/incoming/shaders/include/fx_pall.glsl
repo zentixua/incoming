@@ -355,10 +355,12 @@ struct Sample {
     float clumps;
     // dry dust part of sigma (dust row and wall head, not spray, haze or surge): the inside light floor's share (gLitGate)
     float dry;
+    // presentation (the young field, youngDust): its glow toward the ball and backlit rim, linear light × extinction × albedo
+    vec3 glow;
 };
 
 Sample emptySample() {
-    return Sample(0.0, vec3(0.0), 0.0, vec3(0.0), 0.0, 0.0, vec3(0.0), 0.0, 0.0, vec3(0.0), 0.0, 0.0, 0.0, vec3(0.0), 0.0, 0.0, 0.0, 0.0, 1.0, 0.0);
+    return Sample(0.0, vec3(0.0), 0.0, vec3(0.0), 0.0, 0.0, vec3(0.0), 0.0, 0.0, vec3(0.0), 0.0, 0.0, 0.0, vec3(0.0), 0.0, 0.0, 0.0, 0.0, 1.0, 0.0, vec3(0.0));
 }
 
 // ---------------------------------------------------------------- dust-layer head (pall.glsl: pallWall*)
@@ -531,6 +533,9 @@ float youngFbm2L(vec3 p, float fq) {
     return 0.6667 * (0.5 * mix(0.5, youngNoise(p), youngLod(fq)) + 0.25 * mix(0.5, youngNoise(p * 2.07 + vec3(1.7, 9.2, 3.1)), youngLod(fq * 2.07))) + 0.1667;
 }
 
+// the young field's footprint at the ray's sample (pallStep), blocks; < 0 — the caller's cone
+float gYoungFp = -1.0;
+
 // The young field of one slot: front from ground zero (blocks) and its ground speed (blocks/s), the animation's layer height here
 // (its HPK·strength: PALL_PEAK_SHARE / (1 + PALL_WALL_HUMP) of the law's top), density scale (1/block; the animation's 0.11·strength),
 // billow size (1 at 1 Mt), seconds since detonation (slow drifts), the pixel footprint (blocks)
@@ -650,9 +655,27 @@ float youngChord(Young y, vec3 q, vec3 v, float len, int n) {
 // Young dust at q (youngDens) times share, accumulated in s with its light as the head's (wall): diffuse light under the smaller depth
 // to the top or the front face, beams from the sun and the ball through the depth toward them to where they leave the layer (shadows of
 // the lumps and the hump on themselves and on what lies behind them)
-void youngDust(Young y, vec3 q, vec3 sunDir, vec3 lightDir, vec3 w, float share, inout Sample s) {
-    float sd = share * youngDens(y, q, false);
+//
+// presentation (the animation's light, PARAMS.md): dust looked at toward the ball glows with its forward scattering (the forward peak the
+// delta-Eddington light leaves to the direct beam; the animation's 0.5 of full light at the ball's direction, falling as the cosine's 5th
+// power), and its thin edges toward the ball show a backlit rim (Mie, 1.6 of full light, cosine's 10th power), lit as far as the ball
+// reaches them within 21 m (the animation's self-shadow: 1.6 × that depth, brighter higher up), in the animation's warm colours. cap — the
+// ball's light here (pallBallLight),
+// view — the view ray's direction
+void youngDust(Young y, vec3 q, vec3 sunDir, vec3 lightDir, vec3 cap, vec3 view, vec3 w, float share, inout Sample s) {
+    float own = youngDens(y, q, false), sd = share * own;
     if (sd <= 1e-7) return;
+    float c = max(dot(view, lightDir), 0.0);
+    if (c > 0.0 && cap.r + cap.g + cap.b > 1e-5) {
+        float near = 0.0;
+        for (int k = 1; k < 4; k++) near += youngDens(y, q + lightDir * (7.0 * y.size * float(k)), true);
+        float lit = exp(-near * 7.0 * y.size * 1.6) * (0.55 + 0.45 * smoothstep(0.0, 40.0 * y.size, q.y)) + 0.08;
+        float thin = 1.0 - smoothstep(0.0, 0.06 * y.rho / 0.11, own);
+        float c2 = c * c, c5 = c2 * c2 * c;
+        // the animation's colours (forward glow 0.5, 0.28, 0.1; rim 1, 0.72, 0.42) at the brightness of the ball's light on this dust
+        float light = dot(cap * w, PALL_LUMA);
+        s.glow += sd * light * (PALL_YOUNG_GLOW * c5 * PALL_YOUNG_GLOW_TINT + PALL_YOUNG_RIM * c5 * c5 * lit * thin * PALL_YOUNG_RIM_TINT);
+    }
     float reach = 4.0 * y.hk, toTop = max(2.3 * y.hk - q.y, 0.0), r = length(q.xz);
     vec2 out1 = q.xz / max(r, 1e-3);
     float up = share * youngChord(y, q, vec3(0.0, 1.0, 0.0), toTop, 3);
@@ -786,8 +809,8 @@ void slot(mat4 S, mat4 V, sampler2D ground, vec4 R, vec4 W, vec4 G, vec4 H, vec3
         y.rho = PALL_YOUNG_SHARE * youngTau / y.hk;
         y.size = S[3].y / PALL_YOUNG_TILE;
         y.t = S[3].z;
-        y.fp = cone;
-        youngDust(y, vec3(head.rel.x, head.z, head.rel.y), sunDir, lightDir, dustW, youngDry, s);
+        y.fp = gYoungFp >= 0.0 ? gYoungFp : cone;
+        youngDust(y, vec3(head.rel.x, head.z, head.rel.y), sunDir, lightDir, cap, dir, dustW, youngDry, s);
     }
     if (!pall) return;
     float fill = clamp(f.dense * 3.0, 0.0, 1.0) * (1.0 - smoothstep(0.4, 1.0, f.height.x));
@@ -1354,7 +1377,7 @@ vec4 pallSource(vec3 p, float cone, vec4 inflow, out vec3 dustLight) {
     vec3 fire = min(below + under * (glow + s.fire / max(s.albedo, vec3(1e-7))) + around, gFlame);
     vec3 lamps = pallLampsAt(p);
     dustLight = w * (field + beams + fire + lamps);
-    vec3 emit = s.albedo * (field + beams + fire + lamps);
+    vec3 emit = s.albedo * (field + beams + fire + lamps) + s.glow;
     // firestorm column smoke (soot) in same light and self-shadow: direct light attenuated by column depth toward sun,
     // diffuse as e^(−kτ) of soot (sunward side and billow tops bright, opposite side and bottom dark: volumetric column,
     // not flat gray stripe); fire glow below
@@ -1377,8 +1400,13 @@ int pallStep(float ta, float ds, float grid, float refine, inout vec3 light, ino
     float open = pallOpenHere(p);
     if (open <= 0.0) return 0;
     float cone = max(ta * gPixel, 0.35 * grid);
+    // the young field's billows fade below the pixel, and far away (0.8–2.5 km) below half a step (the animation's rule: detail finer than
+    // the step there decorrelates every frame); the step near the eye stays a sampling matter (a step's share faded every billow into a
+    // flat haze)
+    gYoungFp = max(ta * gPixel, 0.35 * grid * smoothstep(800.0, 2500.0, ta));
     vec3 dustLight;
     vec4 matter = pallSource(p, cone, vec4(0.0), dustLight);
+    gYoungFp = -1.0;
     if (matter.w <= 1e-7) return 0;
     if (refine > 0.0 && ds > refine) return 2;
     if (PALL_DEBUG > 0 && !gDbgFrozen) {
