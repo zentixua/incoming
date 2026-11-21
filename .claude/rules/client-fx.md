@@ -1212,9 +1212,12 @@ paths:
   metre-sized cubes and soap (`SmokeGridTest.gridRefusesWhatItsCellDoesNotResolve`, `conventionalCloudsAreNotVolume`).
   The grid is three cascades 64³ around the eye (2, 8, 32 m), the filling and the ray march — as before.
 - A cloud's puffs all carry the same six-way maps, so the cloud-scale shadow toward the sun is separate and O(n): each
-  source's pending upright `SMOKE` Gaussians form one soot envelope Gaussian (`SmokePuffs.Draw.envelopes`, before LOD
-  thinning), and each such puff takes the sun through it from its own sun-side edge (`SmokePuffs.sunThrough`, soot's
-  two-stream k; tubes across their axis, `tubeThrough`, the mix's k). Ejecta, crushed dust and flat ground layers
+  source's pending `SMOKE` soot (flat layers by 1 − flatness) forms one envelope Gaussian (`SmokePuffs.Draw.envelopes`),
+  and each pending Gaussian takes the sun through it from its own sun-side edge (`shadeHeld`, `SmokePuffs.sunThrough`,
+  soot's two-stream k) into held field 17 before any LOD merge; merges blend it by attenuation (`absorb`): taken on the
+  merged puff, a trace of another source's mass switched its envelope (share 0 → 1). Cluster puffs share their
+  Gaussian's share. Tubes: across their axis (`tubeThrough`, the mix's k), soot's share from the tube's matter
+  (`P_SOOT`), never from colour (dark dirt is not soot). Ejecta, crushed dust and flat ground layers
   neither cast nor take it: with the ball in one moment-matched Gaussian the skirt under it went black. The sky's
   diffuse light is not shadowed by the envelope (one path through it blacked a back-lit ball out, core sRGB 22 → 4). The share, with the
   `presentation:` soot gain (`sootSun`), rides the `Emit` byte of baked puffs (`FxQuads.sixWay(mix, shade, sun)`, ×100;
