@@ -22,13 +22,12 @@ import java.util.List;
  * run 19.11.2026). A whole chunk costs the client about 0.55 ms (decode, light from the packet, Voxy and Sodium once
  * per chunk; same run, world load).
  * <p>
- * The whole chunk is sent after the server's light engine has finished this chunk's checks (the light fence: the
- * engine's wait completes on its thread, the send runs on the chunk cache's main-thread queue after the section light
- * marks the engine queued there, as {@code work/BlockLighting} does), so it carries the ruins' own light: a packet built
- * on the write tick would show the new blocks in the old light until the light updates arrive. Until it arrives the
- * client keeps the chunk as it was, old blocks in their old light: while it waits, vanilla's own light broadcast for the
- * chunk is held ({@link #onLevelTickPre}), since that light is computed over the new blocks (the chunk's own checks, or a
- * ruined neighbour's light reaching into it) and would light the old ones as ruins for a tick or more.
+ * A whole chunk waits for light because a packet built on the write tick could show new blocks in old light.
+ * Consecutive ruin writes share one pending send, fenced by the light checks of the latest write. The fence completes
+ * on the light thread and the send runs on the chunk cache's main-thread queue, after the section light marks queued
+ * there. An earlier fence could send newer blocks in older light. While a delivery waits, vanilla's light broadcast
+ * for that chunk is held for up to {@link #HOLD_LIMIT} ticks per hold ({@link #onLevelTickPre}). Light from the
+ * chunk's new blocks or from a ruined neighbour could otherwise reach the client's old blocks.
  */
 public final class RuinDelivery {
     /** Client render-thread cost of one whole chunk from the server, ns (host pack, wave-hitch run 19.11.2026). */
@@ -49,6 +48,29 @@ public final class RuinDelivery {
 
     /** Statistics for the ruin summary line (server thread). */
     static long wholeChunks, wholePositions, deltaChunks, deltaPositions, lagTicksSum, lagTicksMax, gone, held, expired;
+
+    /** One pending whole-chunk delivery, owned by the server thread. */
+    static final class PendingWhole {
+        private final LevelChunk chunk;
+        private final long firstWrite;
+        private long holdSince;
+        private long revision;
+        private long positions;
+        private boolean holding = true;
+
+        private PendingWhole(LevelChunk chunk, long firstWrite) {
+            this.chunk = chunk;
+            this.firstWrite = firstWrite;
+            this.holdSince = firstWrite;
+        }
+
+        private void expireHold(long now) {
+            if (holding && now - holdSince >= HOLD_LIMIT) {
+                holding = false;
+                expired++;
+            }
+        }
+    }
 
     private RuinDelivery() {}
 
@@ -76,29 +98,41 @@ public final class RuinDelivery {
     }
 
     /**
-     * Send the chunk whole to its viewers once the light engine has finished its pending work for it (server thread;
-     * the chunk's sections and light checks are already written and queued).
+     * Fence this revision of a pending whole-chunk delivery (server thread; the chunk's sections and light checks
+     * are already written and queued). Only the latest revision can serialize the live chunk.
      */
     static void wholeAfterLight(ServerLevel level, LevelChunk chunk, int positions) {
         ChunkPos pos = chunk.getPos();
+        long key = pos.toLong();
+        NuclearWorld world = NuclearWorld.get(level);
+        PendingWhole pending = world.wholeWaiting.get(key);
         long written = level.getGameTime();
-        NuclearWorld w = NuclearWorld.get(level);
-        w.wholeWaiting.addTo(pos.toLong(), 1);
-        w.wholeSince.putIfAbsent(pos.toLong(), written);
+        if (pending == null || pending.chunk != chunk) {
+            pending = new PendingWhole(chunk, written);
+            world.wholeWaiting.put(key, pending);
+        }
+        pending.expireHold(written);
+        if (!pending.holding) {
+            pending.holdSince = written;
+            pending.holding = true;
+        }
+        pending.positions += positions;
+        long revision = ++world.wholeRevision;
+        pending.revision = revision;
         var main = level.getChunkSource().chunkMap.mainThreadExecutor;
         level.getChunkSource().getLightEngine().waitForPendingTasks(pos.x, pos.z)
-                .thenRunAsync(() -> send(level, pos, positions, written), main::tell);
+                .thenRunAsync(() -> send(level, pos, revision), main::tell);
     }
 
-    private static void send(ServerLevel level, ChunkPos pos, int positions, long written) {
-        NuclearWorld w = NuclearWorld.get(level);
-        if (w.wholeWaiting.addTo(pos.toLong(), -1) <= 1) {
-            w.wholeWaiting.remove(pos.toLong());
-            w.wholeSince.remove(pos.toLong());
-        }
+    private static void send(ServerLevel level, ChunkPos pos, long revision) {
+        var waiting = NuclearWorld.get(level).wholeWaiting;
+        long key = pos.toLong();
+        PendingWhole pending = waiting.get(key);
+        if (pending == null || pending.revision != revision) return;
+        waiting.remove(key);
         LevelChunk chunk = level.getChunkSource().getChunkNow(pos.x, pos.z);
-        ChunkHolder holder = level.getChunkSource().chunkMap.getVisibleChunkIfPresent(pos.toLong());
-        if (chunk == null || holder == null) {
+        ChunkHolder holder = level.getChunkSource().chunkMap.getVisibleChunkIfPresent(key);
+        if (chunk != pending.chunk || holder == null) {
             // unloaded meanwhile: a player who loads it again gets it as it is now
             gone++;
             return;
@@ -107,9 +141,9 @@ public final class RuinDelivery {
         if (players.isEmpty()) return;
         var packet = new ClientboundLevelChunkWithLightPacket(chunk, level.getLightEngine(), null, null);
         for (ServerPlayer p : players) p.connection.send(packet);
-        long lag = level.getGameTime() - written;
+        long lag = level.getGameTime() - pending.firstWrite;
         wholeChunks++;
-        wholePositions += positions;
+        wholePositions += pending.positions;
         lagTicksSum += lag;
         lagTicksMax = Math.max(lagTicksMax, lag);
     }
@@ -123,16 +157,21 @@ public final class RuinDelivery {
         NuclearWorld w = NuclearWorld.get(level);
         if (w.wholeWaiting.isEmpty()) return;
         long now = level.getGameTime();
-        for (var it = w.wholeSince.long2LongEntrySet().fastIterator(); it.hasNext(); ) {
+        for (var it = w.wholeWaiting.long2ObjectEntrySet().fastIterator(); it.hasNext(); ) {
             var en = it.next();
-            if (now - en.getLongValue() > HOLD_LIMIT) {
-                w.wholeWaiting.remove(en.getLongKey());
-                it.remove();
-                expired++;
+            PendingWhole pending = en.getValue();
+            long key = en.getLongKey();
+            pending.expireHold(now);
+            if (!pending.holding) {
+                // The latest fence can still deliver the blocks after the vanilla light broadcast resumes.
+                if (level.getChunkSource().getChunkNow(ChunkPos.getX(key), ChunkPos.getZ(key)) != pending.chunk) {
+                    it.remove();
+                    gone++;
+                }
                 continue;
             }
-            ChunkHolder holder = level.getChunkSource().chunkMap.getVisibleChunkIfPresent(en.getLongKey());
-            if (holder != null && hold(holder)) held++;
+            ChunkHolder holder = level.getChunkSource().chunkMap.getVisibleChunkIfPresent(key);
+            if (holder != null && holder.getTickingChunk() == pending.chunk && hold(holder)) held++;
         }
     }
 
@@ -147,6 +186,12 @@ public final class RuinDelivery {
     /** Whether the chunk waits to go whole (GameTests). */
     public static boolean waiting(ServerLevel level, ChunkPos pos) {
         return NuclearWorld.get(level).wholeWaiting.containsKey(pos.toLong());
+    }
+
+    /** A further ruin write to the same live chunk joins its pending whole delivery, regardless of size. */
+    static boolean waiting(ServerLevel level, LevelChunk chunk) {
+        PendingWhole pending = NuclearWorld.get(level).wholeWaiting.get(chunk.getPos().toLong());
+        return pending != null && pending.chunk == chunk;
     }
 
     /** Summary line part; resets the counters. */
