@@ -51,11 +51,11 @@ const float DW_FADE = 6.0;
 // presentation exposure of the wall's light (Silo S3E09 dust band: display luma median ~0.35)
 const float DW_EXPOSURE = 0.2;
 // head timing, seconds of age (presentation): rise e-fold at the contact line, hump hold, width of the hump's fall
-const float DW_RISE = 0.12, DW_HOLD = 0.3, DW_FALL = 0.4;
+const float DW_RISE = 0.12, DW_HOLD = 0.25, DW_FALL = 0.3;
 // most the bulges, the billowed surface and its soft edge (DW_HAZE) lift the dust over its envelope, shares (the ray bound,
 // dwBound)
 // (the visible top of the layer behind the hump stays near the settled height: bulges, billows and the soft edge together
-// lift it by at most ~1.3, the hump's own crest reaches 1.3–1.5 of the layer; a layer lifted by bulges, billows and a haze
+// lift it by at most ~1.3, the hump's own crest reaches 1.4–1.6 of the layer; a layer lifted by bulges, billows and a haze
 // cap as high as the hump hid the crest)
 const float DW_BULGE = 0.08, DW_BILLOW = 0.1, DW_HAZE = 1.2;
 
@@ -112,10 +112,10 @@ float dwFbm2(vec3 p, float fq) {
     return 0.6667 * mix(0.5, dwNoise3(p), dwLod(fq)) + 0.3333 * mix(0.5, dwNoise3(p * 2.07 + vec3(1.7, 9.2, 3.1)), dwLod(fq * 2.07));
 }
 
-// hump of the head over the settled layer along the front: 1.38–1.58 of the envelope (its visible crest 1.3–1.5x the layer
+// hump of the head over the settled layer along the front: 1.55–1.75 of the envelope (its visible crest 1.4–1.6x the layer
 // behind), lumps ~200 m along the front that stay with their bearing as the front runs out and change slowly
 float dwHump(vec2 xz) {
-    return 1.38 + 0.2 * smoothstep(0.3, 0.7, dwNoise3(vec3(atan(xz.y, xz.x) * 4500.0 / 190.0, 33.4, 0.1 * DwEye.w)));
+    return 1.55 + 0.2 * smoothstep(0.3, 0.7, dwNoise3(vec3(atan(xz.y, xz.x) * 4500.0 / 190.0, 33.4, 0.1 * DwEye.w)));
 }
 
 // the dust envelope at age a (s since the front passed) over settled height h with hump k (presentation): born at zero on
@@ -145,6 +145,11 @@ vec3 dwAir(vec3 q, float a, float r, float top, out float ph) {
     float yy = clamp(q.y / max(top, 1.0), 0.0, 1.5);
     // carried out by the post-shock wind (~60 m over its first seconds), then drifting back with the negative phase
     pw.xz -= rdir * (60.0 * (1.0 - exp(-a / 1.2)) * exp(-a / 6.0) + 8.0 * sin(0.45 * a)) * yy;
+    // residual turbulence behind the front: neighbouring parcels circle on slow orbits (20 m, 5 m/s; phases varying over
+    // ~150 m), so the settled dust keeps swirling and drifting sideways as real dust does, never frozen, without the
+    // endless shear a steady flow field would stretch it into
+    float sw = 6.2832 * dwNoise3(vec3(q.xz / 150.0, 71.3));
+    pw.xz -= 20.0 * vec2(cos(0.25 * a + sw), sin(0.25 * a + sw)) * (1.0 - exp(-a / 1.5)) * (0.6 + 0.4 * yy);
     pw.xz -= DwWind.xy * a;
     return pw;
 }
@@ -184,7 +189,7 @@ float dwBound(vec3 q) {
     if (a < 0.0 || n0.z <= 0.0) return -1.0;
     // the envelope here (an older point inward is no higher: the hump is at the front) lifted by the bulges, billows and edge;
     // 1.6: the largest hump, for the forward lean of the crest
-    float env = a < 1.5 ? n0.y * 1.6 : dwEnvelope(a, n0.y, 1.6);
+    float env = a < 1.5 ? n0.y * 1.8 : dwEnvelope(a, n0.y, 1.8);
     return env * (1.0 + DW_BULGE) * DW_HAZE + 6.0;
 }
 

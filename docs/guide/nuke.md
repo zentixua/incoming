@@ -153,7 +153,7 @@ point (Minecraft air is humid enough for it in clear weather and in rain).
 The dust has the colour of the ground it comes from: grey-brown over grass, fields and forest, pale tan over sand. Right
 behind the wave it is clean dust; smoke darkens it only as the fires under it grow, over minutes, and only burning
 fires light it orange from below. The dust billows in lumps and eddies, hardest while the wave's wind blows and back as it
-reverses, then calms to the slow roll of a dust storm and drifts with the wind.
+reverses, then calms to the slow roll of a dust storm: it keeps swirling a little and drifts with the wind.
 Burns, radiation and falling debris can still hurt you after the flash, so stay under cover and watch your dose.
 
 ![A dust wave approaches beneath the mushroom cloud at dusk](../media/blast-wave-dusk-hq.jpg)

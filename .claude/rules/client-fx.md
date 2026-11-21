@@ -907,7 +907,7 @@ paths:
 - The young dust wall (front to `DustWallPass.SPAN` 24 model s behind it) is its own ray-marched pass, one presentation
   model (`include/dustwall.glsl`, `DustWallPass`, `NukePall.youngWall`, inputs `PallField.young`): a dust envelope born
   on the contact line as a ramp leaning back (never ahead of the front: dust there is cut by the ring, a seam), a
-  hump of 1.38–1.58 over the settled layer held 0.3 s and gone within ~1 s (`DustWallGlslTest`), billows and bulges
+  hump whose crest is 1.4–1.6 of the settled layer, back to the layer within 0.5–1 s (`DustWallGlslTest`), billows and bulges
   fixed in the air, head lumps riding with the front (fixed in the ground, the front sweeps each 30 m lump in two frames:
   boiling), light from the fireball, sun and sky with multiply scattered light in the soil's bulk colour (no
   near-black). The pall hands its young dust, head and eye dust over across `PallYoung` (a crossfade over `FADE`) only

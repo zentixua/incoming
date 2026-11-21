@@ -13,8 +13,8 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
  * The young dust wall's presentation model ({@code shaders/include/dustwall.glsl}, {@link DustWallPass}): its copies in Java
- * match the shader, and its head keeps the look Artem set (LOOK.md, 21.11): born at zero on the contact line, a crest 1.3–1.5x
- * the layer behind it, settled to the layer within about a second.
+ * match the shader, and its head keeps the look Artem set (21.11): born at zero on the contact line, a crest 1.4–1.6x the
+ * layer behind it, settled back to the layer within 0.5–1 s behind the crest.
  */
 class DustWallGlslTest {
     private static final Path GLSL = Path.of("src/main/resources/assets/incoming/shaders/include/dustwall.glsl");
@@ -36,9 +36,9 @@ class DustWallGlslTest {
         assertEquals(DustWallPass.SPAN, constant(s, "DW_SPAN"), 1e-9);
         assertEquals(DustWallPass.FADE, constant(s, "DW_FADE"), 1e-9);
         assertEquals(DustWallPass.NODES, (int) constant(s, "DW_NODES"));
-        // the ray's slab top over the layer: the bound over the largest hump (dwHump: 1.38 + 0.2), the bulges and the haze over them
-        assertEquals(DustWallPass.TOP_OVER_LAYER, 1.6 * (1 + constant(s, "DW_BULGE")) * constant(s, "DW_HAZE"), 1e-9);
-        assertTrue(s.contains("return 1.38 + 0.2 * smoothstep"), "dwHump spans 1.38–1.58, under the bound 1.6");
+        // the ray's slab top over the layer: the bound over the largest hump (dwHump: 1.55 + 0.2), the bulges and the haze over them
+        assertEquals(DustWallPass.TOP_OVER_LAYER, 1.8 * (1 + constant(s, "DW_BULGE")) * constant(s, "DW_HAZE"), 1e-9);
+        assertTrue(s.contains("return 1.55 + 0.2 * smoothstep"), "dwHump spans 1.55–1.75, under the bound 1.8");
     }
 
     /** {@code dwEnvelope} (same formula): the dust top at age a over a settled layer h = 1 with hump k. */
@@ -54,7 +54,7 @@ class DustWallGlslTest {
         assertTrue(s.contains("return h * (1.0 - exp(-a / DW_RISE)) * (1.0 + (k - 1.0) * exp(-x * x));"),
                 "dwEnvelope is the formula this test evaluates");
         double rise = constant(s, "DW_RISE"), hold = constant(s, "DW_HOLD"), fall = constant(s, "DW_FALL");
-        for (double k : new double[] {1.38, 1.58}) {
+        for (double k : new double[] {1.55, 1.75}) {
             assertEquals(0, envelope(0, k, rise, hold, fall), 1e-12, "born at zero on the contact line");
             double peak = 0, peakAge = 0;
             for (double a = 0; a < 3; a += 0.005) {
@@ -64,10 +64,11 @@ class DustWallGlslTest {
                     peakAge = a;
                 }
             }
-            assertTrue(peak >= 1.3 - 1e-3 && peak <= 1.5 + 1e-3, "crest " + peak + "x the layer at hump " + k);
+            assertTrue(peak >= 1.4 - 1e-3 && peak <= 1.6 + 1e-3, "crest " + peak + "x the layer at hump " + k);
             assertTrue(peakAge < 0.5, "the crest stands right behind the contact line: " + peakAge + " s");
-            // settled: within 5 % of the layer one second after the front
-            assertTrue(Math.abs(envelope(1.0, k, rise, hold, fall) - 1) < 0.05, "settled within a second at hump " + k);
+            // settled back to the layer (not to the ground) within 0.5–1 s behind the crest: within 5 % by 0.8 s
+            assertTrue(Math.abs(envelope(0.8, k, rise, hold, fall) - 1) < 0.05, "settled by 0.8 s at hump " + k);
+            assertTrue(Math.abs(envelope(1.0, k, rise, hold, fall) - 1) < 0.01, "settled by 1 s at hump " + k);
         }
     }
 }
