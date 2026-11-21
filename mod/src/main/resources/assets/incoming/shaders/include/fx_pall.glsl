@@ -1957,7 +1957,11 @@ void main() {
                 leave[k] = 1e9;
                 continue;
             }
-            fineStep[k] = pallHeadStep(fineStep[k], fit);
+            // the head's interval is filled from its entry with the steps it may take: a grid anchored at the eye with a
+            // power-of-two step (up to twice the wanted one) aliased the thin head flank into ribs and a toothed edge at 1 Mt
+            // (sandbox variants rib/rib2); the dust texture stays fixed in the air (noise in dust coordinates) and the
+            // frame jitter accumulates
+            fineStep[k] = (leave[k] - enter[k]) / max(floor(want[k] * fit), 1.0);
         }
     }
     // pall: i steps taken (with wall-head steps, up to 2·steps + 16), base ordinary boundaries behind, nextBase next boundary
@@ -1965,7 +1969,7 @@ void main() {
     float ta = 1e9, nextBase = 1e9, lastBase = 1e9;
     // ordinary steps span the pall's bounds, which NukePall snaps to quarter octaves (PallPass.snapBounds): fixed in the world
     // between snaps while the ray's start (the near volume's end) and its cutoff hold; as the head nears the eye the near volume
-    // backs up and these boundaries move (the head's own grid stays put)
+    // backs up and these boundaries move
     if (t1 > t0) {
         ta = along(jitter / n, t0, t1);
         lastBase = ta;
@@ -2027,7 +2031,8 @@ void main() {
                 if (!dense && enter[k] <= ta && ta < leave[k]) {
                     dense = true;
                     grid = min(grid, fineStep[k]);
-                    next = min(next, min(pallGridNext(ta, fineStep[k], jitter), leave[k]));
+                    float j = floor((ta - enter[k]) / fineStep[k] - jitter + 1e-3) + 1.0;
+                    next = min(next, min(enter[k] + (j + jitter) * fineStep[k], leave[k]));
                 }
             }
             if (!dense && storm.x <= ta && ta < storm.y) {

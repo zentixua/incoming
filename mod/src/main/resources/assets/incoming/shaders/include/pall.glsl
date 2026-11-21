@@ -644,25 +644,6 @@ vec3 pallYoung(vec2 rel, vec3 w, float age) {
     return vec3(h.x, -(0.1 + 0.2 * (w.z + 0.5)) * reach, h.y);
 }
 
-// World-anchored ray grids (Artem/lead 21.11): sample boundaries are fixed in the world for a fixed eye, never relative to the moving
-// front or to a march start that grows every frame — sliding samples read as boiling dust. A grid step snaps up to a power of two and
-// its boundaries are multiples of it from the eye; the ordinary march spans the pall's bounds, snapped to quarter octaves in Java
-// (PallPass.snapBounds) (the per-frame jitter of the step fraction stays: fx_pall_resolve accumulates frames)
-float pallGridStep(float want) {
-    return pow(2.0, -floor(-log2(max(want, 1e-3))));
-}
-
-// The head's step on one ray: the wall's wanted step (0.12 of its top) on the eye's power-of-two grid while the frame's
-// budget allows it; where the ray's share of the budget (fit < 1) needs a coarser step, want / fit, growing from that grid
-// step without a jump. Never a step from the ray's own span (span / floor(span / step) is a sawtooth across the screen) or a
-// power of two of a per-ray quantity: both put neighbouring pixels on different grids (ribs, a toothed edge, octave lines)
-float pallHeadStep(float want, float fit) {
-    return max(pallGridStep(want), want / max(fit, 1e-3));
-}
-
-float pallGridNext(float t, float step, float jitter) {
-    return (floor(t / step - jitter + 1e-3) + 1.0 + jitter) * step;
-}
 
 float pallDiffuse(float w, float g, float tau, float tc, float ground, float mu1, float f1, float mu2, float f2, float top, float bottom, float c) {
     float q = 1.0 - w * g;

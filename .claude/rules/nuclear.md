@@ -266,13 +266,11 @@ Ruins and everything in `nuclear/world/` are in `nuclear-world.md`.
   `PALL_WISP_END` (14 s); a multiplier on the top like the bumps with the dust thinned by the same factor, so the plume is the
   layer's own column lifted, never added dust or a separate puff (layer puffs read as balls); column readers without wisps
   (composite repair, front transmittance) see the same column at the law's height. The pall's bounds include the rise (`PallField.WISP_RISE`, `PallFloorsGlslTest.wispRiseIsTheBoundsCopy`).
-- Ray samples are world-anchored: the head grid uses a power-of-two step from the eye (`pallGridStep`, `pallGridNext`), the
-  pall bounds the ordinary steps span snap to quarter octaves (`PallPass.snapBounds`); samples sliding with the front read as boiling
-  dust (`PallGridGlslTest`). The head's step (`pallHeadStep`) is the wall's wanted step (0.12 of its top) on that grid while
-  the frame's budget allows, growing continuously as a ray's budget share binds; never `span / floor(span / step)` or a power
-  of two of a per-ray quantity: both put neighbouring pixels on different grids (ribs, a toothed edge, octave lines). The
-  ordinary steps move when the near volume's end or the ray cutoff moves (the head nearing the eye); the storm frame keeps
-  its entry-based grid. Per-frame jitter of the step fraction stays: `fx_pall_resolve` accumulates frames.
+- Ray samples: the ordinary steps span the pall's bounds, snapped to quarter octaves (`PallPass.snapBounds`), so they stay put
+  while the wall and pall grow (they move when the near volume's end or the ray cutoff moves, as the head nears the eye); the
+  head's interval is filled from its entry with the steps it may take, as the storm frame's. A head grid anchored at the eye
+  with a power-of-two step aliased the thin 1 Mt head flank into ribs and a toothed edge (`PallGridGlslTest`); the dust
+  texture stays fixed in the air (noise in dust coordinates) and the frame jitter accumulates.
 - Inside the passing wall (presentation, `PallPass.SEE`, `LIT_TAU`, copy `pallLitDepth`): each view's frame first computes its eye
   medium (`NukePall.eyeMedium`, before the mushroom and slot tables): while that eye is in a detonation's young dry dust (dust row
   and wall head only, `PallField.dust`/`dustTau`: not spray, fire haze or surge; `NukePall.young`: fading out 60–120 s after the
