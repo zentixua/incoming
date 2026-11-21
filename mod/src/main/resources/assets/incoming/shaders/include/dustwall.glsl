@@ -177,9 +177,9 @@ float dwDensity(vec3 q, bool coarse) {
     // so the hump overhangs a nose that is still being torn up from the ground; gone as the hump settles
     float yn = clamp(q.y / top0, 0.0, 1.5);
     // the young head billows forward and back as well as up: its face is cauliflower, not a smooth cut (lumps ~30 m,
-    // ±25 m at the front, gone as the head settles); the lumps sit in the ground-fixed air of the head
+    // ±20–40 m at the front, gone as the head settles); the lumps sit in the ground-fixed air of the head
     float bf = coarse || a0 > 4.0 ? 0.42 : dwBillow(q / vec3(30.0, 22.0, 30.0) + vec3(3.7, 0.0, 9.1), 1.0 / 22.0);
-    float a = DwEye.w - dwNode(max(r - 30.0 * yn * yn * exp(-a0 / 1.2) + 60.0 * (bf - 0.42) * exp(-a0 / 1.5), 0.0)).x;
+    float a = DwEye.w - dwNode(max(r - 30.0 * yn * yn * exp(-a0 / 1.2) + 120.0 * (bf - 0.42) * exp(-a0 / 1.5), 0.0)).x;
     if (a <= 0.0) return 0.0;
     float top = dwEnvelope(a, h, k), ph;
     vec3 pw = dwAir(q, a, r, top, coarse, ph);
@@ -241,12 +241,12 @@ vec3 dwLight(vec3 q, vec3 rd) {
     vec3 lb = normalize(DwBall.xyz - q);
     float taub = dwShadow(q, lb), taus = dwShadow(q, DwSunDir);
     float depth = max(gDwSurf - q.y, 0.0) * gDwSigma;
-    float ms = 0.22 + 0.33 * exp(-0.12 * depth);
+    float ms = 0.3 + 0.3 * exp(-0.12 * depth);
     float sunUp = smoothstep(-0.05, 0.05, DwSunDir.y);
     vec3 single = dwBallLight(q) * (0.3 * min(dwPhase(dot(rd, lb)), 6.0) * exp(-taub))
             + DwSunLight * (0.3 * min(dwPhase(dot(rd, DwSunDir)), 6.0) * exp(-taus)) * sunUp;
     vec3 multiple = dwBallLight(q) * ms * (0.45 + 0.55 * exp(-0.25 * taub)) + DwSunLight * ms * (0.45 + 0.55 * exp(-0.25 * taus)) * sunUp
-            + DwSkyLight * (0.12 + 0.3 * exp(-0.3 * depth));
+            + DwSkyLight * (0.06 + 0.3 * exp(-0.3 * depth));
     return DW_EXPOSURE * (DwAlbedo * single + DwBulk * multiple + DwBulk * DwGroundLight);
 }
 
