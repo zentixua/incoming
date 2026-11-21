@@ -90,6 +90,7 @@ public final class WallPuffs implements SmokeGrid.Source {
     /** Client tick: one source per land detonation while its young wall lives. */
     static void tick(ClientNuclear.Active a) {
         if (!ON || a.pall == null || WALLS.containsKey(a)) return;
+        a.pall.youngWall(true);
         WallPuffs w = new WallPuffs(a);
         WALLS.put(a, w);
         SmokeGrid.add(w);
