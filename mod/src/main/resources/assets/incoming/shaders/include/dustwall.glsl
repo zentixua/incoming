@@ -96,9 +96,9 @@ float dwFbm2(vec3 p, float fq) {
 }
 
 // hump of the head over the settled layer along the front: 1.38–1.58 of the envelope (its visible crest 1.3–1.5x the layer
-// behind), world-fixed lumps ~200 m
+// behind), lumps ~200 m along the front that stay with their bearing as the front runs out and change slowly
 float dwHump(vec2 xz) {
-    return 1.38 + 0.2 * smoothstep(0.3, 0.7, dwNoise3(vec3(xz / 190.0, 33.4)));
+    return 1.38 + 0.2 * smoothstep(0.3, 0.7, dwNoise3(vec3(atan(xz.y, xz.x) * 4500.0 / 190.0, 33.4, 0.1 * DwEye.w)));
 }
 
 // the dust envelope at age a (s since the front passed) over settled height h with hump k (presentation): born at zero on
@@ -177,8 +177,14 @@ float dwDensity(vec3 q, bool coarse) {
     // so the hump overhangs a nose that is still being torn up from the ground; gone as the hump settles
     float yn = clamp(q.y / top0, 0.0, 1.5);
     // the young head billows forward and back as well as up: its face is cauliflower, not a smooth cut (lumps ~30 m,
-    // ±20–40 m at the front, gone as the head settles); the lumps sit in the ground-fixed air of the head
-    float bf = coarse || a0 > 4.0 ? 0.42 : dwBillow(q / vec3(30.0, 22.0, 30.0) + vec3(3.7, 0.0, 9.1), 1.0 / 22.0);
+    // ±20–40 m at the front, gone as the head settles). The lumps ride with the head (coordinates along the front, height
+    // and distance behind it) and roll back over it at 25 m/s: fixed in the ground, the front would sweep each 30 m lump
+    // in two frames and the face would boil
+    float bf = 0.42;
+    if (!coarse && a0 < 4.0) {
+        vec3 hf = vec3(atan(q.z, q.x) * DwRing.x / 30.0, q.y / 22.0, (DwRing.x - r + 25.0 * DwEye.w) / 30.0);
+        bf = dwBillow(hf + vec3(3.7, 0.0, 9.1), 1.0 / 22.0);
+    }
     float a = DwEye.w - dwNode(max(r - 30.0 * yn * yn * exp(-a0 / 1.2) + 120.0 * (bf - 0.42) * exp(-a0 / 1.5), 0.0)).x;
     if (a <= 0.0) return 0.0;
     float top = dwEnvelope(a, h, k), ph;
