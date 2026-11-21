@@ -341,6 +341,8 @@ done
 if command -v dbus-run-session >/dev/null; then
   out=$(INCOMING_GPU_KWIN=no-such-kwin timeout 120 python3 "$ROOT/tools/probes/shared-game-stop.py" "$ROOT" 2>&1) && ok "probe shared-game-stop" || bad "probe shared-game-stop: $out"
 fi
+# an exclusive GPU client (shader pack, LOD mods, camera feeds) refuses to start beside Artem's game
+out=$(timeout 60 python3 "$ROOT/tools/probes/exclusive-client-yields.py" "$ROOT" 2>&1) && ok "probe exclusive-client-yields" || bad "probe exclusive-client-yields: $out"
 
 # a running client's GPU samples go to the load log under its owner, one per renewal; a job's CPU goes there at its stop
 lease_take wave /x/wt-wave >/dev/null 2>&1

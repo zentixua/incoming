@@ -48,6 +48,11 @@ final class HalfPass {
     @Nullable
     static ShaderInstance depthShader, composite;
     private static int accum = -1, accumFbo = -1, depth = -1, depthFbo = -1, width, height, ring;
+    /**
+     * The see-through surface of each half-resolution pixel (RGBA8, {@code see.glsl}): taken from the frame pixel its
+     * distances come from ({@code fx_half_depth}), so smoke at a window's edge takes the tint of the place it is hidden by.
+     */
+    private static int glass = -1;
     /** Tile cut textures (a ring: the one written this frame is not one a previous frame may still read). */
     private static int[] cuts = {-1, -1, -1}, cutW = new int[3], cutH = new int[3];
     private static FloatBuffer cutData = MemoryUtil.memAllocFloat(1);
@@ -175,6 +180,11 @@ final class HalfPass {
         }
     }
 
+    /** The half-resolution see-through surfaces ({@link #glass}); −1 — none made. */
+    static int glass() {
+        return glass;
+    }
+
     /** The half pass can run this frame (shaders loaded, targets not failed, world distance present). */
     private static boolean usable(int scene, int w, int h) {
         return !failed && depthShader != null && composite != null && scene >= 0 && w >= 4 && h >= 4;
@@ -189,14 +199,17 @@ final class HalfPass {
             if (accum < 0) {
                 accum = GlStateManager._genTexture();
                 depth = GlStateManager._genTexture();
+                glass = GlStateManager._genTexture();
                 accumFbo = GlStateManager.glGenFramebuffers();
                 depthFbo = GlStateManager.glGenFramebuffers();
                 for (int i = 0; i < cuts.length; i++) cuts[i] = GlStateManager._genTexture();
                 for (int i = 0; i < rects.length; i++) rects[i] = GlStateManager._genTexture();
             }
             texture(accum, GL30.GL_RGBA16F, GL11.GL_RGBA, hw, hh);
-            texture(depth, GL30.GL_R32F, GL11.GL_RED, hw, hh);
-            boolean ok = attach(accumFbo, accum) && attach(depthFbo, depth);
+            // r: world distance (the soft edge), g: to the nearest surface, see-through or not (the composite's key)
+            texture(depth, GL30.GL_RG32F, GL30.GL_RG, hw, hh);
+            texture(glass, GL11.GL_RGBA8, GL11.GL_RGBA, hw, hh);
+            boolean ok = attach(accumFbo, accum) && attach(depthFbo, depth, glass);
             GlStateManager._glBindFramebuffer(GL30.GL_DRAW_FRAMEBUFFER, draw);
             if (!ok) {
                 Incoming.LOG.error("Effects layer: half-resolution smoke target {}×{} not created, smoke at full resolution", hw, hh);
@@ -213,6 +226,7 @@ final class HalfPass {
         RenderSystem.disableBlend();
         int was = RenderSystem.getShaderTexture(1);
         RenderSystem.setShaderTexture(1, scene);
+        SceneDepth.bindSee(depthShader);
         fullScreen(depthShader);
         RenderSystem.setShaderTexture(1, was);
         GlStateManager._glBindFramebuffer(GL30.GL_DRAW_FRAMEBUFFER, accumFbo);
@@ -234,8 +248,17 @@ final class HalfPass {
     }
 
     private static boolean attach(int fbo, int texture) {
+        return attach(fbo, texture, -1);
+    }
+
+    /** Framebuffer fbo draws into texture and (≥ 0) second into its second attachment. */
+    private static boolean attach(int fbo, int texture, int second) {
         GlStateManager._glBindFramebuffer(GL30.GL_DRAW_FRAMEBUFFER, fbo);
         GlStateManager._glFramebufferTexture2D(GL30.GL_DRAW_FRAMEBUFFER, GlConst.GL_COLOR_ATTACHMENT0, GlConst.GL_TEXTURE_2D, texture, 0);
+        if (second >= 0) {
+            GlStateManager._glFramebufferTexture2D(GL30.GL_DRAW_FRAMEBUFFER, GL30.GL_COLOR_ATTACHMENT1, GlConst.GL_TEXTURE_2D, second, 0);
+            org.lwjgl.opengl.GL20.glDrawBuffers(new int[]{GL30.GL_COLOR_ATTACHMENT0, GL30.GL_COLOR_ATTACHMENT1});
+        }
         return GL30.glCheckFramebufferStatus(GL30.GL_DRAW_FRAMEBUFFER) == GlConst.GL_FRAMEBUFFER_COMPLETE;
     }
 
@@ -534,6 +557,7 @@ final class HalfPass {
         private int accumFbo = -1;
         private int depth = -1;
         private int depthFbo = -1;
+        private int glass = -1;
         private int width;
         private int height;
         private int ring;
@@ -556,7 +580,7 @@ final class HalfPass {
         private boolean planned;
 
         void close() {
-            FxViews.textures(accum, depth); FxViews.textures(cuts); FxViews.textures(rects);
+            FxViews.textures(accum, depth, glass); FxViews.textures(cuts); FxViews.textures(rects);
             FxViews.framebuffers(accumFbo, depthFbo);
             org.lwjgl.system.MemoryUtil.memFree(cutData); org.lwjgl.system.MemoryUtil.memFree(rectData);
         }
@@ -571,6 +595,9 @@ final class HalfPass {
             int olddepth = HalfPass.depth;
             HalfPass.depth = depth;
             depth = olddepth;
+            int oldglass = HalfPass.glass;
+            HalfPass.glass = glass;
+            glass = oldglass;
             int olddepthFbo = HalfPass.depthFbo;
             HalfPass.depthFbo = depthFbo;
             depthFbo = olddepthFbo;

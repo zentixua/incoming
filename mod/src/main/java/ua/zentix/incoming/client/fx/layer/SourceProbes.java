@@ -95,6 +95,7 @@ public final class SourceProbes {
         RenderSystem.setShader(() -> s);
         RenderSystem.setShaderTexture(0, scene);
         PallPass.bindFront(s, pall, pallDrawn, scene);
+        SceneDepth.bindSee(s);
         s.safeGetUniform("SourceView").set(view);
         s.safeGetUniform("SourceProj").set(projection);
         s.safeGetUniform("ProbeSize").set((float) WIDTH, (float) rows);

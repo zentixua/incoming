@@ -4,6 +4,7 @@
 #moj_import <incoming:mushroom.glsl>
 #moj_import <incoming:smoke.glsl>
 #moj_import <incoming:scene.glsl>
+#moj_import <incoming:see.glsl>
 
 // Pall onto frame (client/fx/layer/PallPass): ONE, SRC_ALPHA blending, pall light plus world behind, attenuated
 // and shadowed by pall/mushrooms. Pall frame is downsampled: four nearest pixels weighted by world-distance
@@ -73,6 +74,10 @@ uniform mat4 PallBallLight;
 uniform sampler2D Sampler9;
 uniform vec3 PallOpenSky;
 uniform vec4 PallFaceShade;
+// see-through surface in front of the world (see.glsl): its own light and transmittance (SceneDepth.bindSee: own texture unit),
+// its distance in Sampler1 (g); FxSee 1 — present this frame
+uniform sampler2D FxGlass;
+uniform float FxSee;
 
 // as in fx_pall: per-channel brightness; above white (by luma), add this share of excess as white to all channels
 const vec3 LUMA = vec3(0.2126, 0.7152, 0.0722);
@@ -297,11 +302,42 @@ vec4 upsample(ivec2 full, ivec2 fullSize, ivec2 lowSize, float depth, vec3 dir, 
 // above white toward white (CROSS, like matter light in fx_pall), no brighter than 1 with the same hue
 vec3 ballLitWorld(ivec2 full, vec3 n, float kept, vec3 added) {
     vec3 world = texelFetch(Sampler9, full, 0).rgb, open = PallOpenSky * faceShade(PallFaceShade, n);
+    // a see-through surface in front of the lit world: its own light X stays, the world behind it W = (frame − X) / T is
+    // relit and seen through it (see.glsl)
+    vec4 glass = vec4(0.0, 0.0, 0.0, 1.0);
+    if (FxSee > 0.5 && seeBehind(pallScene(texelFetch(Sampler1, full, 0).r), pallScene(texelFetch(Sampler1, full, 0).g))) {
+        glass = texelFetch(FxGlass, full, 0);
+        world = clamp((world - glass.rgb) / max(glass.a, 1.0 / 255.0), 0.0, 1.0);
+    }
     vec3 lit = vec3(relit(world.r, kept, open.r, added.r), relit(world.g, kept, open.g, added.g),
             relit(world.b, kept, open.b, added.b));
     lit += vec3(CROSS * max(dot(lit, LUMA) - 1.0, 0.0));
     vec3 shown = vec3(pallDisplay(lit.r), pallDisplay(lit.g), pallDisplay(lit.b));
-    return shown / max(max(max(shown.r, shown.g), shown.b), 1.0);
+    return glass.rgb + glass.a * (shown / max(max(max(shown.r, shown.g), shown.b), 1.0));
+}
+
+// The pall on this pixel's ray up to a see-through surface at view-axis distance surface: the near volume up to it
+// (froxelNear, exact as the composite takes it to the world), and beyond the volume's end the rays' pall from there to the
+// world (rays) cut at the surface by the noiseless field and the conventional smoke's mean field, light in the same ratio
+// to opacity (as upsample does). Mushrooms are not in it: one between the eye and a window counts as behind the window. Light and
+// transmittance never exceed the whole ray's (laid): the part in front of the surface is a part of it.
+vec4 mediumTo(float surface, ivec2 full, vec3 dir, float nearEnd, vec4 rays, vec4 laid) {
+    vec4 beyond = vec4(0.0, 0.0, 0.0, 1.0);
+    if (surface > nearEnd && 1.0 - rays.a > 0.0) {
+        float axis = max(dot(dir, PallForward), 1e-3), a = nearEnd / axis, b = surface / axis;
+        // the rays march the pall fields, the wall heads and conventional smoke (fx_pall): all of them up to the surface
+        float depth = pallTau(dir, a, b);
+        if (smokeOn()) {
+            vec2 span = pallBox(dir, SmokeMin, SmokeMax);
+            float t0 = max(span.x, a), t1 = min(span.y, b);
+            if (t1 > t0) depth += smokeTau(dir * t0, dir, t1 - t0, 6);
+        }
+        float tau = max(exp(-depth), rays.a);
+        beyond = vec4(rays.rgb * clamp((1.0 - tau) / max(1.0 - rays.a, 1e-4), 0.0, 1.0), tau);
+    }
+    vec4 front = beyond;
+    if (PallFroxel.z > 0.0) front = froxelOver(froxelNear(Sampler11, PallFroxel, vec2(full) + 0.5, min(surface, nearEnd)), beyond);
+    return vec4(min(front.rgb, max(laid.rgb, vec3(0.0))), max(front.a, laid.a));
 }
 
 void main() {
@@ -333,7 +369,7 @@ void main() {
         nearEnd = froxelEnd(PallFroxel, dir0, max(dot(dir0, PallForward), 1e-3), PallSlot0, PallWall0, PallGround0, PallSlot1,
                 PallWall1, PallGround1);
     }
-    vec4 pall = upsample(full, fullSize, lowSize, depth, dir0, nearEnd);
+    vec4 pall = upsample(full, fullSize, lowSize, depth, dir0, nearEnd), rays = pall;
     // near pall in front of the rays, at this pixel's own depth: a block's edge cuts the volume at the block, with no ray of
     // another place and no history from it (the halos and trails of screen-space accumulation); world behind the volume's
     // end, sky — all of it up to there
@@ -362,6 +398,9 @@ void main() {
     }
     // world only: shadow would paint patches on void below horizon
     bool balls = PallBalls[0].w > 0.0;
+    // a fireball brightens the world behind the pall: the whole pixel is written, the pall over this ball-lit world
+    vec3 ballLit = vec3(0.0);
+    bool whole = false;
     if (depth < 1e8 && (PallSun.w > 0.0 || balls) && pall.a > 0.005) {
         vec2 ndc = (vec2(full) + 0.5) / vec2(fullSize) * 2.0 - 1.0;
         vec4 farPoint = InvViewProj * vec4(ndc, 1.0, 1.0);
@@ -388,12 +427,27 @@ void main() {
         }
         if (dot(added, LUMA) > 1e-6) {
             // brighter world: full pixel, pall plus ball-lit world behind (alpha 0, blending ignores frame)
-            vec3 shown = ballLitWorld(full, n, kept, added);
-            pall = vec4(pall.rgb + pall.a * shown, 0.0);
+            ballLit = ballLitWorld(full, n, kept, added);
+            whole = true;
         } else {
             pall.a *= kept;
         }
     }
     // accumulated pall always valid (fx_pall_resolve), but no input may damage frame world after it
-    fragColor = pallValid(pall) ? pall : vec4(0.0, 0.0, 0.0, 1.0);
+    vec4 laid = pallValid(pall) ? pall : vec4(0.0, 0.0, 0.0, 1.0);
+    // a see-through surface in front of the world: the pall in front of it is laid as it is; the pall behind it, its shadow,
+    // flames and the ball's light on the world behind reach the eye as that world does, under the surface (see.glsl)
+    if (FxSee > 0.5 && pallValid(pall)) {
+        float surface = pallScene(texelFetch(Sampler1, full, 0).g);
+        if (seeBehind(depth, surface)) {
+            vec4 front = mediumTo(surface, full, dir0, nearEnd, rays, laid);
+            vec4 g = texelFetch(FxGlass, full, 0);
+            laid.rgb = vec3(seeMediumLight(laid.r, laid.a, front.r, front.a, g.r, g.a),
+                    seeMediumLight(laid.g, laid.a, front.g, front.a, g.g, g.a), seeMediumLight(laid.b, laid.a, front.b, front.a, g.b, g.a));
+        }
+    }
+    // brighter world: pall plus the ball-lit world behind it (alpha 0, blending ignores frame); the lit pixel holds the
+    // surface over the world, as the frame did
+    if (whole && pallValid(pall)) laid = vec4(laid.rgb + laid.a * ballLit, 0.0);
+    fragColor = laid;
 }

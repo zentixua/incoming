@@ -458,6 +458,14 @@ final class Sandbox {
                 onServer(false, s -> ua.zentix.incoming.IncomingConfig.SERVER.collapse.set(on));
                 finish("ok");
             }
+            case GRAPHICS -> {
+                String g = c.args().getFirst();
+                mc.options.graphicsMode().set(g.equals("fast") ? net.minecraft.client.GraphicsStatus.FAST
+                        : g.equals("fancy") ? net.minecraft.client.GraphicsStatus.FANCY : net.minecraft.client.GraphicsStatus.FABULOUS);
+                // as the video settings screen does: Fabulous targets made or dropped, chunks rebuilt
+                mc.levelRenderer.allChanged();
+                finish("ok");
+            }
             case WEATHER -> {
                 boolean rain = c.args().getFirst().equals("rain");
                 onServer(false, s -> s.overworld().setWeatherParameters(rain ? 0 : 6000, rain ? 6000 : 0, rain, false));
@@ -530,6 +538,18 @@ final class Sandbox {
                                 s.getX() + house[1], GROUND + house[0], s.getZ() + house[1], c.args().get(2)));
                     }
                 }
+                finish("ok");
+            }
+            case PANE -> {
+                pane = c.args().getFirst().equals("off") ? null : c.args().getFirst();
+                paneDistance = c.number(1, SandboxCommand.PANE_DISTANCE);
+                placeCamera();
+                finish("ok");
+            }
+            case MOB -> {
+                mob = c.args().getFirst().equals("off") ? null : c.args().getFirst();
+                mobDistance = c.number(1, 15);
+                placeCamera();
                 finish("ok");
             }
             case HUD -> {
@@ -632,6 +652,18 @@ final class Sandbox {
         // effects that clear first (nuke … near) keep an armed sound-only take quiet
         if (armed == null) quiet(false);
     }
+
+    /** Mob in front of the camera ({@code mob}): entity type, distance; null — none. */
+    @Nullable
+    private String mob;
+    private double mobDistance = 15;
+
+    /** Wall across the view ({@code pane}): block, distance in front of the camera; null — none. */
+    @Nullable
+    private String pane;
+    private double paneDistance = SandboxCommand.PANE_DISTANCE;
+    /** The wall standing now: x0 y0 z0 x1 y1 z1; null — none. */
+    private int @Nullable [] paneBox;
 
     /** House under the point ({@code house}): height and half-width, in blocks; 0 — no house. */
     private final int[] house = new int[2];
@@ -1650,6 +1682,38 @@ final class Sandbox {
         double y = GROUND + 1 + camHeight;
         String me = Minecraft.getInstance().player.getGameProfile().getName();
         server(String.format(Locale.ROOT, "tp %s %.2f %.2f %.2f facing %.2f %.2f %.2f", me, eye.x, y - 1.62, eye.z, site.x, GROUND + 1 + camLook, site.z));
+        placePane(eye, y);
+        placeMob(eye);
+    }
+
+    /** The {@code mob}: the previous one gone (clear kills it too), a new one on the ground toward the point. */
+    private void placeMob(Vec3 eye) {
+        server("kill @e[tag=sandbox_mob]");
+        if (mob == null) return;
+        double dx = site.x - eye.x, dz = site.z - eye.z, len = Math.max(Math.hypot(dx, dz), 1e-6);
+        float yaw = (float) Math.toDegrees(Math.atan2(-dx, dz)) + 180;
+        server(String.format(Locale.ROOT, "summon minecraft:%s %.2f %d %.2f {NoAI:1b,Invulnerable:1b,Silent:1b,PersistenceRequired:1b,Tags:[\"sandbox_mob\"],Rotation:[%.1ff,0f]}",
+                mob, eye.x + dx / len * mobDistance, GROUND + 1, eye.z + dz / len * mobDistance, yaw));
+    }
+
+    /**
+     * The {@code pane} wall in front of the eye toward the point: across the main horizontal axis of the view, wide and high
+     * enough to fill the frame (the field of view at that distance and a margin); the previous wall is removed.
+     */
+    private void placePane(Vec3 eye, double y) {
+        if (paneBox != null) {
+            int[] b = paneBox;
+            server(String.format(Locale.ROOT, "fill %d %d %d %d %d %d minecraft:air", b[0], b[1], b[2], b[3], b[4], b[5]));
+            paneBox = null;
+        }
+        if (pane == null) return;
+        double dx = site.x - eye.x, dz = site.z - eye.z, len = Math.max(Math.hypot(dx, dz), 1e-6);
+        int cx = (int) Math.floor(eye.x + dx / len * paneDistance), cz = (int) Math.floor(eye.z + dz / len * paneDistance);
+        int half = (int) Math.ceil(Math.max(8, paneDistance * 3)), top = (int) Math.floor(y) + half;
+        int[] b = Math.abs(dz) >= Math.abs(dx) ? new int[]{cx - half, GROUND + 1, cz, cx + half, top, cz}
+                : new int[]{cx, GROUND + 1, cz - half, cx, top, cz + half};
+        server(String.format(Locale.ROOT, "fill %d %d %d %d %d %d minecraft:%s", b[0], b[1], b[2], b[3], b[4], b[5], pane));
+        paneBox = b;
     }
 
     private void server(String command) {

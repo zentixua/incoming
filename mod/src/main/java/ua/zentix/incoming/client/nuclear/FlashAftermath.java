@@ -38,6 +38,7 @@ import ua.zentix.incoming.util.Palettes;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
+import java.util.function.DoubleUnaryOperator;
 
 /**
  * What the flash does to its surroundings in the first seconds, before the wave (live only — never spawned from a replay seek):
@@ -87,13 +88,13 @@ public final class FlashAftermath {
      * Live detonation: EMP and smoke wisps. {@code blackout} is the radius in which the server blacks out the grid ({@code Blackouts.nukeRadius}); 0 —
      * no blackout (disabled in settings), so lamps do not short out: otherwise they would "burn out" yet stay lit.
      */
-    static void detonation(Detonation d, double blackout) {
+    static void detonation(Detonation d, DoubleUnaryOperator clock, double blackout) {
         ClientLevel level = Minecraft.getInstance().level;
         if (level == null) return;
         lastArcs = 0;
         puffs = 0;
         if (blackout > 0) Effects.add(new Emp(d, blackout, level));
-        Effects.add(new Smoke(d));
+        Effects.add(new Smoke(d, clock));
     }
 
     // ---------------------------------------------------------------- EMP
@@ -278,14 +279,16 @@ public final class FlashAftermath {
     /** Grid probes: emit pyrolysis smoke where light heated a surface above threshold and the wave has not arrived. */
     private static final class Smoke implements Effects.Effect {
         private final Detonation d;
+        private final DoubleUnaryOperator clock;
         private final double reach;
         /** Probe cells (x, z cell indices packed), nearest to the eye first; null until the first tick. */
         private long[] cells;
         private Puffs smoke;
         private int probed;
 
-        Smoke(Detonation d) {
+        Smoke(Detonation d, DoubleUnaryOperator clock) {
             this.d = d;
+            this.clock = clock;
             double lo = 0, hi = Math.max(1, d.ruinRadius());
             for (int i = 0; i < 30; i++) {
                 double r = (lo + hi) / 2;
@@ -296,18 +299,21 @@ public final class FlashAftermath {
         }
 
         @Override
-        public boolean tick(ClientLevel level, int t) {
-            if (reach <= 0 || cells != null && probed >= cells.length) {
+        public boolean tick(ClientLevel level, int effectTick) {
+            double age = clock.applyAsDouble(0);
+            if (!Double.isFinite(age) || reach <= 0 || cells != null && probed >= cells.length) {
                 if (smoke != null) smoke.close();
                 return false;
             }
             Vec3 cam = Minecraft.getInstance().gameRenderer.getMainCamera().getPosition();
             if (smoke == null) {
-                smoke = new Puffs(FarBlasts.air(level, cam), 0.71f, 0.68f, 0.65f, d.seed());
+                // The grid supplies the frame's tick fraction. The front supplies the age at that fraction.
+                smoke = new Puffs(FarBlasts.air(level, cam), 0.71f, 0.68f, 0.65f, d.seed(),
+                        seconds -> clock.applyAsDouble((seconds - SmokeGrid.seconds(0)) * 20) / 20);
                 SmokeGrid.add(smoke);
                 cells = cells(cam);
             }
-            double area = SMOKE_CELL * SMOKE_CELL, now = SmokeGrid.seconds(0), pulse = FireballModel.pulseSeconds(d.yieldKt());
+            double area = SMOKE_CELL * SMOKE_CELL, pulse = FireballModel.pulseSeconds(d.yieldKt());
             BlockPos.MutableBlockPos m = new BlockPos.MutableBlockPos();
             // light comes from the fireball, not the burst point (a surface burst's point lies on the ground)
             Vec3 ball = ThermalShadow.aim(d);
@@ -317,8 +323,7 @@ public final class FlashAftermath {
                 RandomSource rnd = RandomSource.create(d.seed() ^ 0x5307E ^ cell * 0x9E3779B97F4A7C15L);
                 int x = Mth.floor((cx + rnd.nextDouble()) * SMOKE_CELL), z = Mth.floor((cz + rnd.nextDouble()) * SMOKE_CELL);
                 double dist = Math.hypot(x + 0.5 - d.burst().x, z + 0.5 - d.burst().z);
-                double wave = d.arrivalTicks(dist);
-                if (dist > reach || t >= wave) continue;
+                if (dist > reach) continue;
                 int top = level.getHeight(Heightmap.Types.MOTION_BLOCKING, x, z) - 1;
                 if (top <= level.getMinBuildHeight()) continue;
                 Direction face = Direction.UP;
@@ -328,6 +333,9 @@ public final class FlashAftermath {
                     face = Direction.getNearest(d.burst().x - x - 0.5, 0, d.burst().z - z - 0.5);
                     y = top - rnd.nextInt(8);
                 }
+                Vec3 at = FlashChar.front(x, y, z, face);
+                double wave = d.arrivalTicks(d.burst().distanceTo(at));
+                if (age >= wave) continue;
                 BlockState st = level.getBlockState(m.set(x, y, z));
                 FlashPyrolysis.Bed bed = bed(level, st, m, face);
                 if (bed == null) continue;
@@ -335,7 +343,6 @@ public final class FlashAftermath {
                 if (!ahead.isAir() && !ahead.canBeReplaced()) continue;
                 double cos = FlashChar.incidence(ball, x, y, z, face);
                 if (cos <= 0) continue;
-                Vec3 at = FlashChar.front(x, y, z, face);
                 double q = d.fluence(at) * cos;
                 if (!Fragility.possible(q, SMOKE_Q, SMOKE_BETA)) continue;
                 q *= ThermalShadow.share(level, d, at);
@@ -344,8 +351,8 @@ public final class FlashAftermath {
                 double volatiles = FlashPyrolysis.volatiles(bed, q, pulse) * area;
                 if (volatiles <= 0) continue;
                 double absorbed = FlashPyrolysis.ABSORB * q * FlashPyrolysis.CAL_CM2 * area;
-                smoke.add(at.x, at.y, at.z, now, TO_AIR * absorbed, SMOKE_K_GAS, 0.5 * SMOKE_CELL, 0, SMOKE_YIELD * volatiles, SMOKE_K,
-                        now + (wave - t) / 20);
+                smoke.add(at.x, at.y, at.z, age / 20, TO_AIR * absorbed, SMOKE_K_GAS, 0.5 * SMOKE_CELL, 0, SMOKE_YIELD * volatiles, SMOKE_K,
+                        wave / 20);
                 puffs++;
             }
             return true;
