@@ -71,6 +71,9 @@ out float sixKey;
 // share of the direct light that reaches the puff through the rest of its cloud, with the presentation gain on dark smoke
 // (SmokePuffs.sootSun): byte Emit / 100 of a baked puff (FxQuads.sixWay), which never glows
 out float sixSun;
+// share of the sky's diffuse light that reaches the puff through the cloud above it (SmokePuffs.sunThrough upward): byte
+// Normal.x of a baked puff (FxQuads.sixWay), whose Minecraft fog is always 0
+out float sixSky;
 out vec3 sixBall;
 out vec3 sixKeyDir;
 // world up in the puff's map axes: sky light comes from above, the ground's reflection from below (fx.fsh: skyDome)
@@ -213,6 +216,7 @@ void main() {
     vertexColor = vec4(Color.rgb * light.rgb, Color.a) * seen;
     sixKey = 0.0;
     sixSun = 1.0;
+    sixSky = 1.0;
     sixBall = vec3(0.0);
     sixKeyDir = vec3(0.0, 1.0, 0.0);
     sixUpDir = vec3(0.0, 1.0, 0.0);
@@ -225,6 +229,7 @@ void main() {
         vec4 axes = puffAxes(UV2, Position.y);
         sixKey = FxSun.w;
         sixSun = Emit / 100.0;
+        sixSky = Normal.x;
         sixKeyDir = puffDirection(normalize(FxSun.xyz), axes, UV2.y < 0);
         sixBallDir = puffDirection(bd, axes, UV2.y < 0);
         sixUpDir = puffDirection(vec3(0.0, 1.0, 0.0), axes, UV2.y < 0);
@@ -234,7 +239,7 @@ void main() {
     viewDistance = -view.z / unfold;
     worldPos = Position / unfold;
     softness = float(max(UV1.x, 0)) / 16.0;
-    fog = Normal.x;
+    fog = six ? 0.0 : Normal.x;
     nearest = Normal.y;
     opacity = Normal.z;
     emitGain = 0.0;

@@ -98,4 +98,14 @@ class CloudSunTest {
         assertEquals(1, SmokePuffs.sootShare(SmokePuffs.SOOT_COLOUR), 1e-6, "a fire plume's soot");
         assertTrue(SmokePuffs.sootShare(SmokePuffs.thick(SmokeGrid.DROP_W, SmokeGrid.DROP_G)) < 0.05, "a white trail");
     }
+
+    @Test
+    void skyLightReachesTheTopNotTheCore() {
+        // a dense soot cloud: the top puff sees the sky, the one in its lower middle does not (the sky's light from
+        // above, FarView.ZENITH)
+        double sh = 15, sv = 15, ext = SmokeGrid.SOOT_K * 4.0, r = 0.3 * SmokePuffs.edge(ext / (2 * Math.PI * sh * sv)) * sh;
+        double top = SmokePuffs.sunThrough(0, 2 * sv, 0, r, r, sh, sv, ext, SOOT, FarView.ZENITH);
+        double core = SmokePuffs.sunThrough(0, -0.5 * sv, 0, r, r, sh, sv, ext, SOOT, FarView.ZENITH);
+        assertTrue(top > 0.9 && core < 0.05, "top " + top + ", core " + core);
+    }
 }

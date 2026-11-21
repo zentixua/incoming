@@ -38,6 +38,9 @@ public record FarView(Vec3 camera, Vector3f forward, Vector3f left, Vector3f up,
     public record Sun(float x, float y, float z, float w) {
     }
 
+    /** Straight up: the path of the sky's diffuse light into a cloud ({@code SmokePuffs.sunThrough}). */
+    static final Sun ZENITH = new Sun(0, 1, 0, 1);
+
     /** No direct sun on the puffs (tests, views without a world). */
     static final Sun NO_SUN = new Sun(0, 1, 0, 0);
 

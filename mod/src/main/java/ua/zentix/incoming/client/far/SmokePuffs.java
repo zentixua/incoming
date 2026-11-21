@@ -45,17 +45,17 @@ public final class SmokePuffs {
                        float r, float g, float b, float a);
 
         /**
-         * {@link #puff6} with the share of the direct light that reaches the puff through the rest of its cloud
-         * ({@link SmokePuffs#sootSun}; 1 — a lone puff in open air).
+         * {@link #puff6} with the shares of the direct light (sun, {@link SmokePuffs#sootSun}) and of the sky's diffuse
+         * light (sky) that reach the puff through the rest of its cloud (1 and 1 — a lone puff in open air).
          */
         default void puff6(double dx, double dy, double dz, double halfA, double halfB, FxAtlas.Sprite sprite, float mix, float shade, float r, float g,
-                           float b, float a, float sun) {
+                           float b, float a, float sun, float sky) {
             puff6(dx, dy, dz, halfA, halfB, sprite, mix, shade, r, g, b, a);
         }
 
-        /** {@link #puff6Flat} with the share of the direct light that reaches it ({@link #puff6(double, double, double, double, double, FxAtlas.Sprite, float, float, float, float, float, float, float)}). */
+        /** {@link #puff6Flat} with the shares of the direct and the sky's light that reach it (as {@link #puff6}). */
         default void puff6Flat(double dx, double dy, double dz, double halfA, double halfB, double soft, double angle, FxAtlas.Sprite sprite, float mix,
-                               float shade, float r, float g, float b, float a, float sun) {
+                               float shade, float r, float g, float b, float a, float sun, float sky) {
             puff6Flat(dx, dy, dz, halfA, halfB, soft, angle, sprite, mix, shade, r, g, b, a);
         }
 
@@ -1059,14 +1059,15 @@ public final class SmokePuffs {
         @Override
         public void puff6(double dx, double dy, double dz, double halfA, double halfB, FxAtlas.Sprite sprite, float mix, float shade, float r,
                           float g, float b, float a) {
-            puff6(dx, dy, dz, halfA, halfB, sprite, mix, shade, r, g, b, a, 1);
+            puff6(dx, dy, dz, halfA, halfB, sprite, mix, shade, r, g, b, a, 1, 1);
         }
 
         @Override
         public void puff6(double dx, double dy, double dz, double halfA, double halfB, FxAtlas.Sprite sprite, float mix, float shade, float r,
-                          float g, float b, float a, float sun) {
+                          float g, float b, float a, float sun, float sky) {
             int o = next(sprite);
             calls[o + 14] = sun;
+            calls[o + 15] = sky;
             double[] c = calls;
             c[o] = PUFF;
             c[o + 1] = dx;
@@ -1085,14 +1086,15 @@ public final class SmokePuffs {
         @Override
         public void puff6Flat(double dx, double dy, double dz, double halfA, double halfB, double soft, double angle, FxAtlas.Sprite sprite,
                               float mix, float shade, float r, float g, float b, float a) {
-            puff6Flat(dx, dy, dz, halfA, halfB, soft, angle, sprite, mix, shade, r, g, b, a, 1);
+            puff6Flat(dx, dy, dz, halfA, halfB, soft, angle, sprite, mix, shade, r, g, b, a, 1, 1);
         }
 
         @Override
         public void puff6Flat(double dx, double dy, double dz, double halfA, double halfB, double soft, double angle, FxAtlas.Sprite sprite,
-                              float mix, float shade, float r, float g, float b, float a, float sun) {
+                              float mix, float shade, float r, float g, float b, float a, float sun, float sky) {
             int o = next(sprite);
             calls[o + 14] = sun;
+            calls[o + 15] = sky;
             double[] c = calls;
             c[o] = FLAT;
             c[o + 1] = dx;
@@ -1164,10 +1166,10 @@ public final class SmokePuffs {
                 int o = k * STRIDE;
                 int kind = (int) c[o];
                 if (kind == PUFF) out.puff6(c[o + 1] + ox, c[o + 2] + oy, c[o + 3] + oz, c[o + 4], c[o + 5], sprites[k], (float) c[o + 6],
-                        (float) c[o + 7], (float) c[o + 8], (float) c[o + 9], (float) c[o + 10], (float) c[o + 11], (float) c[o + 14]);
+                        (float) c[o + 7], (float) c[o + 8], (float) c[o + 9], (float) c[o + 10], (float) c[o + 11], (float) c[o + 14], (float) c[o + 15]);
                 else if (kind == FLAT) out.puff6Flat(c[o + 1] + ox, c[o + 2] + oy, c[o + 3] + oz, c[o + 4], c[o + 5], c[o + 12], c[o + 13],
                         sprites[k], (float) c[o + 6], (float) c[o + 7], (float) c[o + 8], (float) c[o + 9], (float) c[o + 10], (float) c[o + 11],
-                        (float) c[o + 14]);
+                        (float) c[o + 14], (float) c[o + 15]);
                 else {
                     joint[0] = (float) c[o + 16];
                     joint[1] = (float) c[o + 17];
@@ -2690,10 +2692,11 @@ public final class SmokePuffs {
                 int f0 = (int) frame;
                 float last = j == count - 1 ? (float) (many - (count - 1)) : 1;
                 boolean mirror = vary ? (hj >>> 40 & 1) == 1 : (j & 1) == 1;
-                // the sun through the rest of the tube's section from the puff's sun-side edge ({@link #tubeThrough})
+                // the sun through the rest of the tube's section from the puff's sun-side edge ({@link #tubeThrough}); the
+                // sky's light reaches a column from its sides (kept whole)
                 float sunlit = (float) sootSun(tubeThrough(ox, oy, oz, k * rh, sh, edgeTau, ax, ay, az, shade * BAKED_K, view.sun()), sootShare(cg));
                 out.puff6(px + ox, py + oy, pz + oz, rh * grow * k, rv * grow * k, FxAtlas.puff6(f0, mirror), (float) (frame - f0), (float) shade,
-                        sr, sg, sb, sub * last, sunlit);
+                        sr, sg, sb, sub * last, sunlit, 1);
             }
         }
 
@@ -3014,11 +3017,13 @@ public final class SmokePuffs {
                 // ray's path in the layer down to the ground (rw / sin e), not the half-size
                 float sunlit = (float) sootSun(sunThrough(ex + ox, ey + oy, ez + oz, k * rh, k * rw, env[e + 3], env[e + 4], env[e + 5], light, view.sun()),
                         ks / (ks + kd + kw));
+                // the sky's diffuse light through the cloud above the puff (⚠ one path, straight up, for the dome)
+                float skylit = (float) sunThrough(ex + ox, ey + oy, ez + oz, k * rh, k * rw, env[e + 3], env[e + 4], env[e + 5], light, FarView.ZENITH);
                 if (lying > 0) out.puff6Flat(px + ox, py + oy, pz + oz, rh * grow * k, rh * grow * k,
                         Math.min(rh, rw * d / Math.max(Math.abs(py), 1e-3)) * ua.zentix.incoming.client.fx.layer.FxQuads.SOFT, clubAngle(hj), sprite,
-                        (float) (frame - f0), py < 0 ? 0 : (spray ? sprayShade : shade), cr, cg, cb, opticalShare(sub * last, lying), sunlit);
+                        (float) (frame - f0), py < 0 ? 0 : (spray ? sprayShade : shade), cr, cg, cb, opticalShare(sub * last, lying), sunlit, skylit);
                 if (lying < 1) out.puff6(px + ox, py + oy, pz + oz, rh * grow * k, rv * grow * k, sprite, (float) (frame - f0), spray ? sprayShade : shade,
-                        cr, cg, cb, opticalShare(sub * last, 1 - lying), sunlit);
+                        cr, cg, cb, opticalShare(sub * last, 1 - lying), sunlit, skylit);
             }
             return fill;
         }

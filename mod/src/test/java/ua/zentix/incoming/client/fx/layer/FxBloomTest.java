@@ -334,12 +334,15 @@ class FxBloomTest {
         assertTrue(fsh.contains("if (FxGlowPass.x > 0.5 && scene < viewDistance * 0.999 - 0.05) discard;"), "what is behind the world does not glow");
         assertTrue(fsh.contains("float scene = pallScene(texture(Sampler1, frag / ScreenSize).r);"), "distance to the world — at the frame pixel, not the pass");
         assertTrue(fsh.contains("glow = color.rgb * emitGain;"), "spot: colour — linear light");
-        assertTrue(vsh.contains("if (Emit > " + (FxBloom.SPOT - 0.5) + ")"), "spot — from " + FxBloom.SPOT);
+        assertTrue(vsh.contains("if (!six && Emit > " + (FxBloom.SPOT - 0.5) + ")"), "spot — from " + FxBloom.SPOT);
         assertTrue(vsh.contains("vertexColor = vec4(Color.rgb * bloomMag(float(UV2.x)), bloomMag(float(UV2.y)));"), "spot: light and covered share — in UV2");
         assertTrue(vsh.contains("Normal.y < -0.5 || Emit > " + (FxBloom.SPOT - 0.5) + " ? vec4(1.0)"), "spot: UV2 — not a lightmap");
         assertTrue(vsh.contains("emitGain = bloomGain(Emit - " + (double) FxBloom.EMITTER + ");"), "over-exposure of the glowing");
-        assertTrue(vsh.contains("if ((Emit > " + (FxBloom.SPOT - 0.5) + " && !glowPass) || (Emit > " + (FxBloom.SKIP - 0.5) + " && Emit < "
-                + (FxBloom.SKIP + 0.5) + " && glowPass)) gl_Position = vec4(2.0, 2.0, 2.0, 1.0);"), "spot — only in the pass, its square — only in the layer");
+        assertTrue(vsh.contains("} else if (!six && Emit > " + (FxBloom.SKIP + 0.5) + ") {"), "a baked puff's Emit byte is its sun share, never glow");
+        assertTrue(vsh.contains("sixSun = Emit / " + (double) FxQuads.SUN_STEP + ";"), "sun share of a baked puff (FxQuads.sixWay)");
+        assertTrue(vsh.contains("sixSky = Normal.x;") && vsh.contains("fog = six ? 0.0 : Normal.x;"), "sky share in a baked puff's fog byte");
+        assertTrue(vsh.contains("if (!six && ((Emit > " + (FxBloom.SPOT - 0.5) + " && !glowPass) || (Emit > " + (FxBloom.SKIP - 0.5) + " && Emit < "
+                + (FxBloom.SKIP + 0.5) + " && glowPass))) gl_Position = vec4(2.0, 2.0, 2.0, 1.0);"), "spot — only in the pass, its square — only in the layer");
     }
 
     /**

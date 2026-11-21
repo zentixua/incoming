@@ -1211,6 +1211,14 @@ paths:
   (`SmokeGrid.RESOLVE`): in 3.5.0 the clouds of ordinary weapons went into it, and an 8–32 m cell smeared the cloud into
   metre-sized cubes and soap (`SmokeGridTest.gridRefusesWhatItsCellDoesNotResolve`, `conventionalCloudsAreNotVolume`).
   The grid is three cascades 64³ around the eye (2, 8, 32 m), the filling and the ray march — as before.
+- A cloud's puffs all carry the same six-way maps, so the cloud-scale shadow toward the sun is separate and O(n): each
+  source's pending Gaussians form one envelope Gaussian (`SmokePuffs.Draw.envelopes`, before LOD thinning), and each
+  puff takes the sun through it from its own sun-side edge (`SmokePuffs.sunThrough`; tubes across their axis,
+  `tubeThrough`), attenuated by the mix's two-stream k (soot shadows, droplets pass light). The share, with the
+  `presentation:` soot gain (`sootSun`), rides the `Emit` byte of baked puffs (`FxQuads.sixWay(mix, shade, sun)`, ×100;
+  baked puffs never glow, and `fx.vsh` reads `Emit` as glow only outside the puff band) and multiplies only `sixKey·key`
+  in `fx.fsh`: never put it in the vertex colour, which also carries the diffuse sky and the fireballs' light. By day
+  only (`FxLayer.daySun`); pair integrals between puffs are not used (`CloudSunTest`).
 - Six-way atlas filtering computes one isotropic LOD from the original perspective UV derivatives and reuses it
   with `textureLod` for all maps; keep `frameInset` unchanged (`PuffAtlasEdgeGlslTest`). Repeated `textureGrad` on
   world-oriented planes was the measured GPU cost: the same-VBO far replay changed one FX draw from 1.52 to 0.92 ms,
