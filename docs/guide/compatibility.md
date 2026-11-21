@@ -16,6 +16,7 @@ On a server, install the same Incoming version for everyone.
 | LOD Server Support | Server terrain on the targeting map, even without Voxy | Server and clients; for a local world, open it to LAN |
 | Iris | Nuclear effects with shaders | Clients only |
 | Flashback | Recording and replaying strikes | Clients only |
+| Vista and other in-game camera and screen mods | Strikes, smoke and the mushroom cloud on in-game screens (up to four at a time, with low cloud detail) | Clients only |
 
 Explosions, smoke, trails and the nuclear cloud stay visible behind stained and tinted glass, ice, slime, honey and water,
 tinted by them as the world behind them is. With a shader pack, and in camera views from other mods, these blocks hide
