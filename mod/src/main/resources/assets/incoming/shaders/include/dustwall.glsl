@@ -259,10 +259,10 @@ vec3 dwLight(vec3 q, vec3 rd, float s) {
     float tau = 1.6 * (dwDensity(q + lb * 6.0, true) * 9.0 + dwDensity(q + lb * 18.0, true) * 15.0
             + dwDensity(q + lb * 42.0, true) * 30.0 + dwDensity(q + lb * 85.0, true) * 45.0);
     float low = 0.55 + 0.45 * smoothstep(0.0, 40.0, q.y);
-    float orders = 0.3 * min(dwPhase(dot(rd, lb)), 3.0) * exp(-tau) + 0.06 * exp(-tau * 0.3) + 0.03 * exp(-tau * 0.1);
+    float orders = 0.3 * min(dwPhase(dot(rd, lb)), 3.0) * exp(-tau) + 0.1 * exp(-tau * 0.3) + 0.07 * exp(-tau * 0.08);
     vec3 L = dwBallLight(q) * orders * low;
     // the sun lights the top: depth below the local surface along the sun stands in for its own light path
-    float sunOrders = 0.3 * min(dwPhase(dot(rd, DwSunDir)), 3.0) * exp(-tau * 0.8) + 0.06 * exp(-tau * 0.25) + 0.03 * exp(-tau * 0.08);
+    float sunOrders = 0.3 * min(dwPhase(dot(rd, DwSunDir)), 3.0) * exp(-tau * 0.8) + 0.1 * exp(-tau * 0.25) + 0.07 * exp(-tau * 0.06);
     L += DwSunLight * sunOrders * low;
     L += DwSkyLight * 0.25 * (0.4 + 0.6 * smoothstep(0.0, 40.0, q.y)) * exp(-tau * 0.05) + DwGroundLight;
     // presentation: the wall is exposed like the reference footage of a fireball-lit dust front (dark matte body,
