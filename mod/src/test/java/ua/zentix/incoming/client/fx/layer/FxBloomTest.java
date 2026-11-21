@@ -340,7 +340,6 @@ class FxBloomTest {
         assertTrue(vsh.contains("emitGain = bloomGain(Emit - " + (double) FxBloom.EMITTER + ");"), "over-exposure of the glowing");
         assertTrue(vsh.contains("} else if (!six && Emit > " + (FxBloom.SKIP + 0.5) + ") {"), "a baked puff's Emit byte is its sun share, never glow");
         assertTrue(vsh.contains("sixSun = Emit / " + (double) FxQuads.SUN_STEP + ";"), "sun share of a baked puff (FxQuads.sixWay)");
-        assertTrue(vsh.contains("sixSky = Normal.x;") && vsh.contains("fog = six ? 0.0 : Normal.x;"), "sky share in a baked puff's fog byte");
         assertTrue(vsh.contains("if (!six && ((Emit > " + (FxBloom.SPOT - 0.5) + " && !glowPass) || (Emit > " + (FxBloom.SKIP - 0.5) + " && Emit < "
                 + (FxBloom.SKIP + 0.5) + " && glowPass))) gl_Position = vec4(2.0, 2.0, 2.0, 1.0);"), "spot — only in the pass, its square — only in the layer");
     }

@@ -103,7 +103,6 @@ public final class FxQuads {
         this.up = up;
         n = 0;
         nearest = opacity = emit = sixSun = 0;
-        sixSky = -1;
         veiling = false;
         probe = 0;
         part = Part.OTHER;
@@ -201,27 +200,23 @@ public final class FxQuads {
      * in {@code Normal.y} within the band of baked puffs (−0.4…−0.1), {@link #SHADE_STEPS} steps.
      */
     public void sixWay(float mix, float shade) {
-        sixWay(mix, shade, 1, 1);
+        sixWay(mix, shade, 1);
     }
 
     /**
-     * The same with the shares of the direct light ({@code SmokePuffs.sootSun}: 0 … {@link #SUN_MAX}) and of the sky's
-     * diffuse light (0 … 1) that reach the puff through the rest of its cloud: the first in the {@code Emit} byte,
-     * ×{@link #SUN_STEP} (a baked puff never glows, and {@code fx.vsh} reads the byte as glow only outside the puff band),
-     * the second in the fog byte {@code Normal.x} (a baked puff's Minecraft fog is always 0).
+     * The same with the share of the direct light that reaches the puff ({@code SmokePuffs.sootSun}: 0 … {@link
+     * #SUN_MAX}): in the {@code Emit} byte, ×{@link #SUN_STEP} — a baked puff never glows, and {@code fx.vsh} reads the
+     * byte as glow only outside the puff band.
      */
-    public void sixWay(float mix, float shade, float sun, float sky) {
+    public void sixWay(float mix, float shade, float sun) {
         nearest = (byte) (mix < 0 ? 0 : -13 - Math.round(Mth.clamp(shade / SHADE_MAX, 0, 1) * SHADE_STEPS));
         opacity = mix < 0 ? 0 : (byte) Math.round(Mth.clamp(mix, 0, 1) * 127);
         sixSun = mix < 0 ? 0 : (byte) Math.round(Mth.clamp(sun, 0, SUN_MAX) * SUN_STEP);
-        sixSky = mix < 0 ? -1 : (byte) Math.round(Mth.clamp(sky, 0, 1) * 127);
     }
 
     /** Steps of the direct-light share per unit in the {@code Emit} byte of a baked puff, and its largest value. */
     public static final float SUN_STEP = 100, SUN_MAX = 2.55f;
 
-    /** The sky-light share byte of the next baked puffs ({@link #sixWay(float, float, float, float)}); −1 — not a puff. */
-    private byte sixSky = -1;
     private byte sixSun;
 
     /** Greatest degree of the puffs' map shadow (soot — ~1.3) and steps in the byte band −13…−50 ({@code fx.fsh}). */
@@ -333,7 +328,7 @@ public final class FxQuads {
         MemoryUtil.memPutShort(p + 26, (short) Mth.clamp(Math.round(unfold * Short.MAX_VALUE), 1, Short.MAX_VALUE));
         MemoryUtil.memPutShort(p + 28, (short) (light & 0xFFFF));
         MemoryUtil.memPutShort(p + 30, (short) (light >>> 16 & 0xFFFF));
-        MemoryUtil.memPutByte(p + 32, sixSky >= 0 ? sixSky : (byte) Math.round(Mth.clamp(fog, 0, 1) * 127));
+        MemoryUtil.memPutByte(p + 32, (byte) Math.round(Mth.clamp(fog, 0, 1) * 127));
         MemoryUtil.memPutByte(p + 33, nearest);
         MemoryUtil.memPutByte(p + 34, opacity);
         MemoryUtil.memPutByte(p + 35, emit != 0 ? emit : sixSun);

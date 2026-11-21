@@ -45,17 +45,17 @@ public final class SmokePuffs {
                        float r, float g, float b, float a);
 
         /**
-         * {@link #puff6} with the shares of the direct light (sun, {@link SmokePuffs#sootSun}) and of the sky's diffuse
-         * light (sky) that reach the puff through the rest of its cloud (1 and 1 — a lone puff in open air).
+         * {@link #puff6} with the share of the direct light that reaches the puff through the rest of its cloud
+         * ({@link SmokePuffs#sootSun}; 1 — a lone puff in open air).
          */
         default void puff6(double dx, double dy, double dz, double halfA, double halfB, FxAtlas.Sprite sprite, float mix, float shade, float r, float g,
-                           float b, float a, float sun, float sky) {
+                           float b, float a, float sun) {
             puff6(dx, dy, dz, halfA, halfB, sprite, mix, shade, r, g, b, a);
         }
 
-        /** {@link #puff6Flat} with the shares of the direct and the sky's light that reach it (as {@link #puff6}). */
+        /** {@link #puff6Flat} with the share of the direct light that reaches it (as {@link #puff6}). */
         default void puff6Flat(double dx, double dy, double dz, double halfA, double halfB, double soft, double angle, FxAtlas.Sprite sprite, float mix,
-                               float shade, float r, float g, float b, float a, float sun, float sky) {
+                               float shade, float r, float g, float b, float a, float sun) {
             puff6Flat(dx, dy, dz, halfA, halfB, soft, angle, sprite, mix, shade, r, g, b, a);
         }
 
@@ -1059,15 +1059,14 @@ public final class SmokePuffs {
         @Override
         public void puff6(double dx, double dy, double dz, double halfA, double halfB, FxAtlas.Sprite sprite, float mix, float shade, float r,
                           float g, float b, float a) {
-            puff6(dx, dy, dz, halfA, halfB, sprite, mix, shade, r, g, b, a, 1, 1);
+            puff6(dx, dy, dz, halfA, halfB, sprite, mix, shade, r, g, b, a, 1);
         }
 
         @Override
         public void puff6(double dx, double dy, double dz, double halfA, double halfB, FxAtlas.Sprite sprite, float mix, float shade, float r,
-                          float g, float b, float a, float sun, float sky) {
+                          float g, float b, float a, float sun) {
             int o = next(sprite);
             calls[o + 14] = sun;
-            calls[o + 15] = sky;
             double[] c = calls;
             c[o] = PUFF;
             c[o + 1] = dx;
@@ -1086,15 +1085,14 @@ public final class SmokePuffs {
         @Override
         public void puff6Flat(double dx, double dy, double dz, double halfA, double halfB, double soft, double angle, FxAtlas.Sprite sprite,
                               float mix, float shade, float r, float g, float b, float a) {
-            puff6Flat(dx, dy, dz, halfA, halfB, soft, angle, sprite, mix, shade, r, g, b, a, 1, 1);
+            puff6Flat(dx, dy, dz, halfA, halfB, soft, angle, sprite, mix, shade, r, g, b, a, 1);
         }
 
         @Override
         public void puff6Flat(double dx, double dy, double dz, double halfA, double halfB, double soft, double angle, FxAtlas.Sprite sprite,
-                              float mix, float shade, float r, float g, float b, float a, float sun, float sky) {
+                              float mix, float shade, float r, float g, float b, float a, float sun) {
             int o = next(sprite);
             calls[o + 14] = sun;
-            calls[o + 15] = sky;
             double[] c = calls;
             c[o] = FLAT;
             c[o + 1] = dx;
@@ -1166,10 +1164,10 @@ public final class SmokePuffs {
                 int o = k * STRIDE;
                 int kind = (int) c[o];
                 if (kind == PUFF) out.puff6(c[o + 1] + ox, c[o + 2] + oy, c[o + 3] + oz, c[o + 4], c[o + 5], sprites[k], (float) c[o + 6],
-                        (float) c[o + 7], (float) c[o + 8], (float) c[o + 9], (float) c[o + 10], (float) c[o + 11], (float) c[o + 14], (float) c[o + 15]);
+                        (float) c[o + 7], (float) c[o + 8], (float) c[o + 9], (float) c[o + 10], (float) c[o + 11], (float) c[o + 14]);
                 else if (kind == FLAT) out.puff6Flat(c[o + 1] + ox, c[o + 2] + oy, c[o + 3] + oz, c[o + 4], c[o + 5], c[o + 12], c[o + 13],
                         sprites[k], (float) c[o + 6], (float) c[o + 7], (float) c[o + 8], (float) c[o + 9], (float) c[o + 10], (float) c[o + 11],
-                        (float) c[o + 14], (float) c[o + 15]);
+                        (float) c[o + 14]);
                 else {
                     joint[0] = (float) c[o + 16];
                     joint[1] = (float) c[o + 17];
@@ -1552,9 +1550,10 @@ public final class SmokePuffs {
             for (int i = 0; i < holding; i++) {
                 if (merged[i]) continue;
                 int o = i * FIELDS, e = (int) held[o + 12] * ENV;
-                // a flat layer at the ground (the dust skirt under a rising ball) is not part of the cloud's volume:
-                // in one Gaussian with the ball it filled the space between them and blacked the skirt out
-                double w = matter(o) * (1 - flat(held[o + 3], held[o + 4]));
+                // the shadow is soot's (it absorbs; dust and droplets pass the light on), of the cloud's own smoke: a
+                // flat layer at the ground or the crushed-dust skirt in one Gaussian with the ball filled the space
+                // between them and blacked the skirt out
+                double w = shadows(o) ? SmokeGrid.SOOT_K * held[o + 5] : 0;
                 if (!(w > 0)) continue;
                 double x = held[o], y = held[o + 1], z = held[o + 2];
                 m[e] += w * x;
@@ -1577,10 +1576,12 @@ public final class SmokePuffs {
             }
         }
 
-        /** Attenuation of the whole mass of pending puff o, m² (as {@link #blob}). */
-        private double matter(int o) {
-            return SmokeGrid.SOOT_K * held[o + 5] + SmokeGrid.dustK((float) held[o + 8], (float) held[o + 9], (float) held[o + 10]) * held[o + 6]
-                    + SmokeGrid.DROP_K * held[o + 7];
+        /**
+         * Pending puff o is the cloud's own upright smoke ({@link SmokeGrid.Look#SMOKE}, not a flat layer): it casts
+         * and takes the cloud's shadow; ejecta, crushed dust and ground layers keep their light.
+         */
+        private boolean shadows(int o) {
+            return LOOKS[(int) held[o + 15]] == SmokeGrid.Look.SMOKE && flat(held[o + 3], held[o + 4]) < 1;
         }
 
         /**
@@ -2694,11 +2695,10 @@ public final class SmokePuffs {
                 int f0 = (int) frame;
                 float last = j == count - 1 ? (float) (many - (count - 1)) : 1;
                 boolean mirror = vary ? (hj >>> 40 & 1) == 1 : (j & 1) == 1;
-                // the sun through the rest of the tube's section from the puff's sun-side edge ({@link #tubeThrough}); the
-                // sky's light reaches a column from its sides (kept whole)
+                // the sun through the rest of the tube's section from the puff's sun-side edge ({@link #tubeThrough})
                 float sunlit = (float) sootSun(tubeThrough(ox, oy, oz, k * rh, sh, edgeTau, ax, ay, az, shade * BAKED_K, view.sun()), sootShare(cg));
                 out.puff6(px + ox, py + oy, pz + oz, rh * grow * k, rv * grow * k, FxAtlas.puff6(f0, mirror), (float) (frame - f0), (float) shade,
-                        sr, sg, sb, sub * last, sunlit, 1);
+                        sr, sg, sb, sub * last, sunlit);
             }
         }
 
@@ -2958,7 +2958,8 @@ public final class SmokePuffs {
             // the source's cloud as one Gaussian ({@link #envelopes}): each puff takes the sun through it from its own
             // sun-side edge (its own matter is in its maps)
             int e = ctx * ENV;
-            double ex = x - env[e], ey = y - env[e + 1], ez = z - env[e + 2], open = flat(sh, sv);
+            double ex = x - env[e], ey = y - env[e + 1], ez = z - env[e + 2];
+            double open = look == SmokeGrid.Look.SMOKE ? flat(sh, sv) : 1;
             float shade = (float) (light / BAKED_K), sprayShade = (float) (light / SPRAY_K);
             float shown = (float) (a * vis * point[1] * air * outside * (1 - whole));
             // cluster: the larger the Gaussian on screen, the more puffs and the smaller they are (the 128-pixel frame
@@ -3018,15 +3019,12 @@ public final class SmokePuffs {
                 // level 0; the balls' light is per pixel, fx.fsh); from below — as usual. Softness at the terrain — the
                 // ray's path in the layer down to the ground (rw / sin e), not the half-size
                 float sunlit = (float) sootSun(open + (1 - open) * sunThrough(ex + ox, ey + oy, ez + oz, k * rh, k * rw, env[e + 3], env[e + 4], env[e + 5],
-                        light, view.sun()), ks / (ks + kd + kw));
-                // the sky's diffuse light through the cloud above the puff (⚠ one path, straight up, for the dome)
-                float skylit = (float) (open + (1 - open) * sunThrough(ex + ox, ey + oy, ez + oz, k * rh, k * rw, env[e + 3], env[e + 4], env[e + 5], light,
-                        FarView.ZENITH));
+                        SOOT_SHADOW, view.sun()), ks / (ks + kd + kw));
                 if (lying > 0) out.puff6Flat(px + ox, py + oy, pz + oz, rh * grow * k, rh * grow * k,
                         Math.min(rh, rw * d / Math.max(Math.abs(py), 1e-3)) * ua.zentix.incoming.client.fx.layer.FxQuads.SOFT, clubAngle(hj), sprite,
-                        (float) (frame - f0), py < 0 ? 0 : (spray ? sprayShade : shade), cr, cg, cb, opticalShare(sub * last, lying), sunlit, skylit);
+                        (float) (frame - f0), py < 0 ? 0 : (spray ? sprayShade : shade), cr, cg, cb, opticalShare(sub * last, lying), sunlit);
                 if (lying < 1) out.puff6(px + ox, py + oy, pz + oz, rh * grow * k, rv * grow * k, sprite, (float) (frame - f0), spray ? sprayShade : shade,
-                        cr, cg, cb, opticalShare(sub * last, 1 - lying), sunlit, skylit);
+                        cr, cg, cb, opticalShare(sub * last, 1 - lying), sunlit);
             }
             return fill;
         }
@@ -3226,7 +3224,7 @@ public final class SmokePuffs {
      * Share of the sun's light that reaches a puff at (ox, oy, oz) from the middle of its cloud's Gaussian (σ: sh
      * horizontally, sv vertically, attenuation of the whole mass ext, m²) from the puff's sun-side edge — where the ray
      * from its middle toward the sun leaves its ellipsoid of radii rh (horizontally) and rw (vertically): within it
-     * the puff's own maps shade it. e^(−k·τ), τ — thickness toward the sun ({@code sun}), k — the mix's two-stream
+     * the puff's own maps shade it. e^(−k·τ), τ — thickness toward the sun ({@code sun}), k — two-stream
      * attenuation per unit thickness ({@link #shade}; ⚠ a bounded proxy of a beam's attenuation in absorbing matter:
      * the light scattered forward by droplets and alumina goes on, soot absorbs it — for droplets at τ 10 it gives
      * 0.79 where a bare beam would give e^(−10)). The puffs of one cloud all carry the same maps, so without it the
@@ -3275,6 +3273,9 @@ public final class SmokePuffs {
         double t = tau * Math.exp(-0.5 * b2) * (1 - SmokeGrid.erf(q * SQRT_HALF)) / (2 * across);
         return Math.exp(-k * t);
     }
+
+    /** Two-stream attenuation of soot per unit of its thickness: the envelope's shadow is soot's ({@code Draw.envelopes}). */
+    static final double SOOT_SHADOW = twoStream(SmokeGrid.SOOT_W, SmokeGrid.SOOT_G);
 
     /** Least share of the sun's direction across a tube's axis ({@link #tubeThrough}). */
     static final double TUBE_ALONG = 0.2;
