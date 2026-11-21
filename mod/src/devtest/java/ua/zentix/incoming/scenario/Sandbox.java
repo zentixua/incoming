@@ -1602,7 +1602,7 @@ final class Sandbox {
         if (paceLast != 0) {
             double frame = (now - paceLast) / 1e9;
             paceFrameS = paceFrameS == 0 ? frame : paceFrameS * 0.7 + frame * 0.3;
-            pace(1 / (FRAMES_PER_TICK * paceFrameS));
+            pace(1 / (FRAMES_PER_TICK * paceFrameS), true);
         }
         paceLast = now;
     }
@@ -1612,15 +1612,27 @@ final class Sandbox {
         return (armed != null && armed.times.length > 0) || (capture != null && capture.next < capture.times.length);
     }
 
-    /** World rate, ticks/s (CPU renderer only; 20 restores); command only on a change of more than a tenth. */
     private void pace(double rate) {
+        pace(rate, false);
+    }
+
+    /**
+     * World rate, ticks/s (20 restores); command only on a change of more than a tenth. A rate from measured frame times
+     * applies on any renderer: a GPU take with a frame every 1/30 s writes each PNG on the render thread, and unpaced its
+     * effect runs several times ahead of the frames' seconds; preset rates (arming) only on the CPU renderer.
+     */
+    private void pace(double rate, boolean measured) {
         // render thread: the GL context answers only there, and only after the window exists
         if (soft == null) soft = ua.zentix.incoming.client.fx.layer.GpuWatch.software(com.mojang.blaze3d.platform.GlUtil.getRenderer());
-        if (!soft) return;
+        if (!soft && !measured && rate < 20) return;
         double r = Math.max(1, Math.min(20, rate));
+        if (r == 20) {
+            // leaving the pacing window: the next due frame measures afresh, not across the idle gap
+            paceLast = 0;
+            paceFrameS = 0;
+        }
         if (r < 20 && Math.abs(r - paceRate) <= paceRate * 0.1) return;
         if (r == 20 && paceRate == 20) return;
-        if (r == 20) paceLast = 0;
         paceRate = r;
         // the manager itself, not /tick rate: the command's feedback would print into the frames' chat
         Incoming.LOG.info("SANDBOX tick rate {}", String.format(Locale.ROOT, "%.1f", r));
