@@ -72,8 +72,11 @@ paths:
   chunk uses background generator, pending answer world bottom); projectile orders 1024-block route survey once/sec
   (`surveyAhead`); target-approach straight line `Autopilot.Sightline`, if blocked (`Craft.clearAlong`: block cells in
   ready chunks, beyond/outside world survey terrain top, `Terrain.underRelief`), do not attack; missile stays in
-  pop-up, Shahed cruises without climbing (climb raises nose, preventing timely dive along same line over obstacle),
-  at most `DIVE_MARGIN` nose-turn paths; no moving-target lead, Artem's decision 21.10); unit test
+  pop-up, Shahed cruises without climbing (climb raises nose, preventing timely dive along same line over obstacle).
+  The dive deadline compares remaining horizontal range with the horizontal distance traveled in `DIVE_MARGIN`
+  nose-turn times. Slant range can grow during pop-up while the projectile runs out of room to dive.
+  `MissileBuildingGameTests` checks first-pass roof contact for covered points and hits at exposed points.
+  No moving-target lead (Artem, 21.10). Unit test
   `AutopilotPropertiesTest` checks 10 000 random model-terrain flight scenarios.
 
 ## Pitfalls
