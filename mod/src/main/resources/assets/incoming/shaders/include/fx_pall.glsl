@@ -502,15 +502,21 @@ float youngHash(vec3 p) {
     return fract(p.x * p.y * p.z * (p.x + p.y + p.z));
 }
 
+// the animation's value noise — smoothstepped interpolation of lattice values, one lattice cell per unit — in one fetch: the noise tile's
+// white-noise channel (VolumeNoise A) at the cell's corner plus the smoothstepped offset, which the texture's linear filter interpolates
+// (the animation hashed eight corners per call: ~35 calls a sample made the pall pass 2–5 times its cost, silo take v6e)
 float youngNoise(vec3 x) {
     vec3 i = floor(x), f = fract(x);
     f = f * f * (3.0 - 2.0 * f);
-    return mix(mix(mix(youngHash(i), youngHash(i + vec3(1.0, 0.0, 0.0)), f.x), mix(youngHash(i + vec3(0.0, 1.0, 0.0)), youngHash(i + vec3(1.0, 1.0, 0.0)), f.x), f.y),
-            mix(mix(youngHash(i + vec3(0.0, 0.0, 1.0)), youngHash(i + vec3(1.0, 0.0, 1.0)), f.x), mix(youngHash(i + vec3(0.0, 1.0, 1.0)), youngHash(i + vec3(1.0)), f.x), f.y), f.z);
+    return texture(PallNoise, (i + f + 0.5) / PALL_NOISE_N).a;
 }
 
+// each octave turned by a fixed rotation as well as scaled: the lattice tile repeats every PALL_NOISE_N cells, and turned octaves never
+// line their repeats up
+const mat3 YOUNG_TURN = mat3(0.00, 0.80, 0.60, -0.80, 0.36, -0.48, -0.60, -0.48, 0.64);
+
 float youngFbm2(vec3 p) {
-    return 0.6667 * (0.5 * youngNoise(p) + 0.25 * youngNoise(p * 2.07 + vec3(1.7, 9.2, 3.1))) + 0.1667;
+    return 0.6667 * (0.5 * youngNoise(p) + 0.25 * youngNoise(YOUNG_TURN * p * 2.07 + vec3(1.7, 9.2, 3.1))) + 0.1667;
 }
 
 // detail finer than the pixel footprint fades to its mean (f: octave frequency × footprint; Nyquist at 0.5)
@@ -522,7 +528,7 @@ float youngFbmL(vec3 p, float fq) {
     float a = 0.5, s = 0.0, fr = 1.0;
     for (int i = 0; i < 4; i++) {
         s += a * mix(0.5, youngNoise(p), youngLod(fq * fr));
-        p = p * 2.07 + vec3(1.7, 9.2, 3.1);
+        p = YOUNG_TURN * p * 2.07 + vec3(1.7, 9.2, 3.1);
         a *= 0.5;
         fr *= 2.07;
     }
@@ -530,7 +536,8 @@ float youngFbmL(vec3 p, float fq) {
 }
 
 float youngFbm2L(vec3 p, float fq) {
-    return 0.6667 * (0.5 * mix(0.5, youngNoise(p), youngLod(fq)) + 0.25 * mix(0.5, youngNoise(p * 2.07 + vec3(1.7, 9.2, 3.1)), youngLod(fq * 2.07))) + 0.1667;
+    return 0.6667 * (0.5 * mix(0.5, youngNoise(p), youngLod(fq)) + 0.25 * mix(0.5, youngNoise(YOUNG_TURN * p * 2.07 + vec3(1.7, 9.2, 3.1)), youngLod(fq * 2.07)))
+            + 0.1667;
 }
 
 // the young field's footprint at the ray's sample (pallStep), blocks; < 0 — the caller's cone
@@ -642,20 +649,7 @@ float youngDens(Young y, vec3 q, bool lite) {
     return y.rho * (d * smoothstep(0.0, 0.12, a) * (0.3 + 1.4 * n) * (0.45 + 1.1 * fs) + pl / 0.11);
 }
 
-// Mean young depth from q along unit v over len, n samples denser near q (squared boundaries; at the pixel's jitter within each)
-float youngChord(Young y, vec3 q, vec3 v, float len, int n) {
-    float sum = 0.0, nn = float(n * n);
-    for (int i = 0; i < n; i++) {
-        float a = float(i * i) / nn, b = float((i + 1) * (i + 1)) / nn;
-        sum += youngDens(y, q + v * (mix(a, b, gChordJitter) * len), true) * (b - a);
-    }
-    return sum * len;
-}
-
-// Young dust at q (youngDens) times share, accumulated in s with its light as the head's (wall): diffuse light under the smaller depth
-// to the top or the front face, beams from the sun and the ball through the depth toward them to where they leave the layer (shadows of
-// the lumps and the hump on themselves and on what lies behind them)
-//
+// Young dust at q (youngDens) times share, accumulated in s.
 // presentation (lead 21.11: the animation's light ported with its density, PARAMS.md): the young dust is lit as in the animation, not by the
 // pall's two-stream light — a key light (the ball, or the sun while brighter) reaches it through the young dust within 21 m toward it (1.6 ×
 // that depth: the lumps shade their own lee), more of it higher up (the lower layer under the rest), with a floor of 0.08; its colour runs
@@ -682,10 +676,10 @@ void youngDust(Young y, vec3 q, vec3 sunDir, vec3 lightDir, vec3 cap, vec3 view,
     vec3 tone = mix(PALL_YOUNG_DARK, PALL_YOUNG_LIT, lit) + c5 * PALL_YOUNG_FORWARD + (1.6 * c5 * c5 * lit * thin) * PALL_YOUNG_RIM;
     float bright = (ball + day) * PALL_YOUNG_REFLECT * dot(w, PALL_LUMA) / dot(PALL_DUST_W, PALL_LUMA) / dot(PALL_YOUNG_LIT, PALL_LUMA);
     s.glow += sd * bright * tone;
-    // its column for the light of other matter here (haze, spray): above the point, and the whole layer
-    float toTop = max(2.3 * y.hk - q.y, 0.0);
-    float up = share * youngChord(y, q, vec3(0.0, 1.0, 0.0), toTop, 3);
-    float down = share * youngChord(y, q, vec3(0.0, -1.0, 0.0), max(q.y, 0.0), 2);
+    // its column for the light of other matter here (haze, spray): above the point and below it, each by its mean field halfway
+    float toTop = max(2.3 * y.hk - q.y, 0.0), below = max(q.y, 0.0);
+    float up = share * toTop * youngDens(y, q + vec3(0.0, 0.5 * toTop, 0.0), true);
+    float down = share * below * youngDens(y, q - vec3(0.0, 0.5 * below, 0.0), true);
     s.tau += up;
     s.slab += up + down;
     s.slabAlbedo += (up + down) * w;

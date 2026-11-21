@@ -615,6 +615,8 @@ float pallLitDepth(float tau, float gate) {
 const float PALL_YOUNG_RISE = 0.4;
 const float PALL_YOUNG_TOP = 1.05;
 const float PALL_YOUNG_TILE = 1038.0;
+// lattice cells of the noise tile along each axis (copy VolumeNoise.SIZE)
+const float PALL_NOISE_N = 64.0;
 const float PALL_YOUNG_SHARE = 0.05;
 const float PALL_YOUNG_MIX_FROM = 0.25;
 const float PALL_YOUNG_MIX_TO = 0.5;

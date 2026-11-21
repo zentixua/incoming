@@ -1200,7 +1200,7 @@ public final class PallPass {
             GL11.glTexParameteri(GL12.GL_TEXTURE_3D, GL12.GL_TEXTURE_WRAP_R, GL11.GL_REPEAT);
             buf.clear();
             buf.put(data[0]).flip();
-            GL12.glTexImage3D(GL12.GL_TEXTURE_3D, 0, GL11.GL_RGB8, n, n, n, 0, GL11.GL_RGB, GL11.GL_UNSIGNED_BYTE, buf);
+            GL12.glTexImage3D(GL12.GL_TEXTURE_3D, 0, GL11.GL_RGBA8, n, n, n, 0, GL11.GL_RGBA, GL11.GL_UNSIGNED_BYTE, buf);
             GL11.glBindTexture(GL12.GL_TEXTURE_3D, 0);
             GlStateManager._activeTexture(unit);
 

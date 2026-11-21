@@ -18,12 +18,16 @@ public final class VolumeNoise {
     /** Tile side, voxels. */
     public static final int SIZE = 64;
     /** Channels per voxel (R, G, B). */
-    public static final int CHANNELS = 3;
+    public static final int CHANNELS = 4;
     /** Perlin and Worley cells per tile at the first octave. */
     private static final int BASE_CELLS = 4;
     private VolumeNoise() {}
 
-    /** Tile {@code size}³: {@link #CHANNELS} bytes per voxel (R, G, B), x fastest, then y, then z. */
+    /**
+     * Tile {@code size}³: {@link #CHANNELS} bytes per voxel (R, G, B, A), x fastest, then y, then z. A is white noise — an independent
+     * uniform value per voxel: the lattice of the young dust's value noise (fx_pall: youngNoise; read at smoothstepped coordinates, the
+     * hardware filter gives the value noise of one lattice cell per voxel in one fetch).
+     */
     public static byte[] generate(int size, long seed) {
         Random random = new Random(seed);
         int[] perm = new int[512];
@@ -69,6 +73,9 @@ public final class VolumeNoise {
         equalize(r, out, 0);
         equalize(g, out, 1);
         equalize(b, out, 2);
+        double[] white = new double[r.length];
+        for (int i = 0; i < white.length; i++) white[i] = random.nextDouble();
+        equalize(white, out, 3);
         return out;
     }
 
