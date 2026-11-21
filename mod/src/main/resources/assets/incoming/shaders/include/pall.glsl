@@ -607,7 +607,9 @@ float pallLitDepth(float tau, float gate) {
 // keeps turning slowly (PALL_TURB_SLOW tiles/s, est.) until the layer has mixed (PALL_MIX_S). The noise is not stretched along the flow:
 // a stretched coordinate makes its gaps as long as its billows, and the layer opened into black voids; PALL_MIX_S is DustModel.RISE_S (PallField.mixed: 1 − e^(−age/60 s))
 // presentation (Artem's approved animation; fx_pall: pallWisp): wisp cells, plume width (σ), the top's rise share (copy
-// PallField.WISP_RISE: the pall's bounds), lifetime after the local phase ended, blocks and seconds
+// PallField.WISP_RISE: the pall's bounds), lifetime after the local phase ended, blocks and seconds; a plume rises over
+// PALL_WISP_RISE_S (est., the animation's wisps)
+const float PALL_WISP_RISE_S = 5.0;
 const float PALL_WISP_CELL = 60.0;
 const float PALL_WISP_WIDTH = 8.0;
 const float PALL_WISP_RISE = 0.6;
@@ -616,6 +618,12 @@ const float PALL_WISP_END = 14.0;
 const float PALL_STREAK_ALONG = 28.0;
 const float PALL_STREAK_UP = 5.0;
 const float PALL_STREAK_ACROSS = 4.5;
+// presentation (est.): streak strength decays from full toward a 0.35 floor with this e-folding time after the first
+// second behind the front, s (the approved animation's streaks fade within seconds as the layer turns over)
+const float PALL_STREAK_FADE = 4.0;
+// presentation (est.): distance from ground zero, in noise tiles, at which a streak is PALL_STREAK_ACROSS wide (nearer they are
+// narrower, farther wider: a fan along the radial flow)
+const float PALL_STREAK_AT = 40.0;
 const float PALL_TURB_S = 8.0;
 const float PALL_TURB_REACH = 1.2;
 const float PALL_TURB_SLOW = 0.015;
@@ -642,6 +650,14 @@ vec3 pallYoung(vec2 rel, vec3 w, float age) {
 // (PallPass.snapBounds) (the per-frame jitter of the step fraction stays: fx_pall_resolve accumulates frames)
 float pallGridStep(float want) {
     return pow(2.0, -floor(-log2(max(want, 1e-3))));
+}
+
+// The head's step on one ray: the wall's wanted step (0.12 of its top) on the eye's power-of-two grid while the frame's
+// budget allows it; where the ray's share of the budget (fit < 1) needs a coarser step, want / fit, growing from that grid
+// step without a jump. Never a step from the ray's own span (span / floor(span / step) is a sawtooth across the screen) or a
+// power of two of a per-ray quantity: both put neighbouring pixels on different grids (ribs, a toothed edge, octave lines)
+float pallHeadStep(float want, float fit) {
+    return max(pallGridStep(want), want / max(fit, 1e-3));
 }
 
 float pallGridNext(float t, float step, float jitter) {

@@ -12,7 +12,7 @@ import static org.junit.jupiter.api.Assertions.*;
 
 /**
  * The pall's presentation floors inside the passing wall ({@link PallPass#SEE}, {@link PallPass#LIT_TAU}): the shader copies
- * ({@code pallSeen}, {@code pallLitDepth} in {@code pall.glsl}) are the Java laws, and without the eye inside young dust (gate 0) the image
+ * ({@code pallLitDepth} in {@code pall.glsl}) are the Java laws, and without the eye inside young dust (gate 0) the image
  * keeps the law's dust and its dark interior.
  */
 class PallFloorsGlslTest {
@@ -70,5 +70,21 @@ class PallFloorsGlslTest {
         java.util.regex.Matcher m = java.util.regex.Pattern.compile("const float PALL_WISP_RISE = ([0-9.]+);").matcher(read());
         assertTrue(m.find());
         assertEquals(ua.zentix.incoming.client.nuclear.PallField.WISP_RISE, Double.parseDouble(m.group(1)), 1e-9);
+    }
+
+    /** The shader's copies of Java constants are the Java values (a drifted copy draws a different medium than the Java readers see). */
+    @Test
+    void shaderCopiesAreTheJavaValues() {
+        String src = read();
+        java.util.Map<String, Double> copies = java.util.Map.of(
+                "PALL_SEE_NEAR", (double) PallPass.SEE_NEAR,
+                "PALL_LIT_TAU", (double) PallPass.LIT_TAU,
+                "PALL_MIX_S", ua.zentix.incoming.nuclear.model.DustModel.RISE_S,
+                "PALL_SALTATION_S", ua.zentix.incoming.nuclear.model.DustModel.SALTATION_S);
+        for (var e : copies.entrySet()) {
+            java.util.regex.Matcher m = java.util.regex.Pattern.compile("const float " + e.getKey() + " = ([0-9.]+);").matcher(src);
+            assertTrue(m.find(), e.getKey());
+            assertEquals(e.getValue(), Double.parseDouble(m.group(1)), 1e-9, e.getKey());
+        }
     }
 }

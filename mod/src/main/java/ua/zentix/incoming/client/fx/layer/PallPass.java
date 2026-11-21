@@ -89,18 +89,19 @@ public final class PallPass {
     public static final int ROWS = 6;
     /**
      * presentation: while the eye is inside the young dust of the passing wall ({@link Frame#inside}), that detonation's dry dust is drawn at
-     * {@link #SEE} of the law's extinction (applied to its slot at upload, {@code NukePall.KEEP}: every reader of the slot sees one medium),
-     * and diffuse light inside the dust within {@link #SEE_NEAR} blocks of the eye saturates at the light {@link #LIT_TAU} under the layer's top: the reference's view inside the passing wall is a bright warm
+     * {@link #SEE} of the law's extinction (per view, applied to its slot at upload and to the stem foot, {@code NukePall.KEEP}: every
+     * reader sees one medium; the ray cutoff takes the same medium, {@code NukePall.eyeMedium}), and diffuse light on that dust within
+     * {@link #SEE_NEAR} blocks of the eye saturates at the light {@link #LIT_TAU} under the layer's top (weighted by the sample's dry dust share): the reference's view inside the passing wall is a bright warm
      * curtain with near things in it and depth fading with distance, while the law's young layer allows a few metres (15 kt at 1.6 km:
      * 1/block, 4 m) and its tens of optical depths are night. A constant share keeps the law's billows and its clearing with time
-     * (15 kt at 1.6 km: 1/block at the passing head draws 33 m, 0.58 → 0.37/block over 5–40 s draws 56 → 88 m). Image only: sound, ash and the veil keep the law; spray, haze, other detonations
-     * and old pall (the gate closes a minute after the front passed the eye) keep it too. Copies in {@code pall.glsl} ({@code PALL_SEE_NEAR}, {@code PALL_LIT_TAU}, {@code pallLitDepth}).
+     * (15 kt at 1.6 km: 1/block at the passing head draws 33 m, 0.58 → 0.37/block over 5–40 s draws 56 → 88 m). Image only: sound, ash and the veil keep the law; spray, haze, surge, other
+     * detonations and old pall (the gate closes a minute after the front passed the eye) keep it too. Copies in {@code pall.glsl} ({@code PALL_SEE_NEAR}, {@code PALL_LIT_TAU}, {@code pallLitDepth}).
      */
     public static final float SEE = 0.12f, SEE_NEAR = 40, LIT_TAU = 3;
 
-    /** Eye extinction for the ray clip (pallClip): the image's, scaled by {@link #SEE} while the eye is inside the young dust. */
+    /** Eye extinction for the ray clip (pallClip): the drawn medium at this view's eye ({@code NukePall.eyeMedium}). */
     static float eyeSigma(Frame f) {
-        return (float) (f.eyeDust.x * keep(f.inside));
+        return f.eyeDust.x;
     }
 
     /** Share of the law's dry dust drawn while the eye is inside young dust by {@code gate} ({@code NukePall.KEEP}). */
@@ -458,8 +459,8 @@ public final class PallPass {
         /** Thin pall screen colour (rgb) — for layer quads before particles; w — 1 if pall exists. */
         public final Vector4f ambient = new Vector4f();
         /**
-         * Eye dust: local extinction (1/block), vertical optical depths above the eye and below it to ground — ray range
-         * ({@code pallClip} in {@code fx_pall}: nothing visible beyond ray depth 12). Zeroes — no ray cutoff.
+         * Eye dust as drawn ({@code NukePall.eyeMedium}): local extinction (1/block), vertical optical depths above the eye and below
+         * it to ground — ray range ({@code pallClip} in {@code fx_pall}: nothing visible beyond ray depth 12). Zeroes — no ray cutoff.
          */
         public final Vector3f eyeDust = new Vector3f();
         /** Eye inside the young dust of the passing wall, 0..1 ({@code NukePall.young}): gates the presentation floors ({@link PallPass#SEE}). */
@@ -878,8 +879,7 @@ public final class PallPass {
             // step jitter advances once per interleave cycle: each ray pixel takes the next value of the sequence
             m.safeGetUniform("PallFrame").set((float) ((frame / (n * n)) % 4096), step.steps, factor, eyeSigma(f));
             m.safeGetUniform("PallInterleave").set(n, ox, oy, 0f);
-            float keepEye = (float) keep(f.inside);
-            m.safeGetUniform("PallEyeTau").set(f.eyeDust.y * keepEye, f.eyeDust.z * keepEye);
+            m.safeGetUniform("PallEyeTau").set(f.eyeDust.y, f.eyeDust.z);
             m.safeGetUniform("PallInside").set(f.inside, 1f);
             m.safeGetUniform("PallFire0").set(fireSlot0);
             m.safeGetUniform("PallFire1").set(fireSlot1);

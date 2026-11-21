@@ -54,8 +54,9 @@ public final class NukeSky {
         return (float) Math.min(1, lit);
     }
 
-    /** Amber of the fireball-lit sky, linear and normalised to luma 1 (fog colour {@link #fogColor}). */
-    private static final float[] AMBER = {1f, (float) Math.pow(0.6, 2.2), (float) Math.pow(0.3, 2.2)};
+    /** Amber of the fireball-lit sky: the fog's display colour ({@link #fogColor}) and its linear value. */
+    private static final float[] AMBER_DISPLAY = {1f, 0.6f, 0.3f},
+            AMBER = {1f, (float) Math.pow(AMBER_DISPLAY[1], 2.2), (float) Math.pow(AMBER_DISPLAY[2], 2.2)};
 
     /**
      * Diffuse sky light on airborne matter while a fireball lights the air: its linear tint (luma 1) and its share; no detonation — share 0.
@@ -92,9 +93,9 @@ public final class NukeSky {
             dust = Math.max(dust, (float) (0.45 * near * Math.exp(-t / 45) * CloudPuffs.smooth(0.5, 4, t)));
         }
         // amber glare while the ball and mushroom glow
-        r = Mth.lerp(amber * 0.5f, r, 1f);
-        g = Mth.lerp(amber * 0.5f, g, 0.6f);
-        b = Mth.lerp(amber * 0.5f, b, 0.3f);
+        r = Mth.lerp(amber * 0.5f, r, AMBER_DISPLAY[0]);
+        g = Mth.lerp(amber * 0.5f, g, AMBER_DISPLAY[1]);
+        b = Mth.lerp(amber * 0.5f, b, AMBER_DISPLAY[2]);
         r = Mth.lerp(dust, r, 0.62f);
         g = Mth.lerp(dust, g, 0.38f);
         b = Mth.lerp(dust, b, 0.2f);

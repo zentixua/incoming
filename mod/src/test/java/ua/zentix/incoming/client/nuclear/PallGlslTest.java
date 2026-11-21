@@ -383,8 +383,11 @@ class PallGlslTest {
         assertTrue(f.contains("float topD = max(dust.g, 1.0) * bumps,"), "the bumps are not the top of the layer");
         assertTrue(f.contains("a.mixed = dust.a;"), "confusion - not from the table");
         String fx = read("include/fx_pall.glsl");
-        // the top bumps, and the wisps of young dust (presentation, pallWisp) on top of them
-        assertTrue(fx.contains("pallField(Sampler1, ground, S, R, W, p, floorUp, topBumps(S, p) * pallWisp(S, p));"), "pall beam - without top bumps");
+        // the top bumps, and the wisps of young dust (presentation, pallWisp) on top of them; a wisp keeps the column: the
+        // dust it lifts thins by the same factor (review: +45 % column in a wisp cell 8 s after the phase)
+        assertTrue(fx.contains("pallField(Sampler1, ground, S, R, W, p, floorUp, topBumps(S, p) * wisp);"), "pall beam - without top bumps");
+        assertTrue(fx.contains("float wisp = pallWisp(S, p);") && fx.contains("f.sigma.x /= wisp;") && fx.contains("f.column.x /= wisp;")
+                && fx.contains("f.slab.x /= wisp;"), "a wisp redistributes the column, never adds dust");
         assertTrue(body(fx, "float topBumps(").contains("return 1.0 + PALL_BUMPS * (2.0 * n - 1.0);"), "tubercles - not 1 ± PALL_BUMPS");
     }
 

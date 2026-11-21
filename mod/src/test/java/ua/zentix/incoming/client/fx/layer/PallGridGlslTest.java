@@ -45,11 +45,28 @@ class PallGridGlslTest {
     }
 
     /**
-     * The march rounds the wanted step to the grid, not {@code span / floor(span / step)}: that ratio is a sawtooth across the
-     * screen, and rounded to powers of two it put neighbouring pixels on two grids (ribs and a toothed edge along the 1 Mt head).
+     * The head's step on a ray never jumps between neighbouring rays: on the eye's power-of-two grid while the budget is free,
+     * growing continuously where a ray's budget share binds. A step from the ray's own span (span / floor(span / step)) or a
+     * power of two of a per-ray share put neighbouring pixels on different grids: ribs, a toothed edge, octave lines (review:
+     * two rays 0.043° apart asking 15.996 and 16.009 steps snapped to grids 16 and 32).
      */
     @Test
-    void headStepIsOneForTheWholeWall() {
+    void headStepIsContinuousAcrossRays() {
+        String src = read();
+        GlslFunction head = GlslFunction.parse(src, "pallHeadStep"), grid = GlslFunction.parse(src, "pallGridStep");
+        for (double want = 3; want < 40; want *= 1.13) {
+            assertEquals(grid.call(Map.of("want", want)), head.call(Map.of("want", want, "fit", 1.0)), 0.0, "free budget: the world grid");
+            double prev = head.call(Map.of("want", want, "fit", 1.0));
+            for (double fit = 1; fit > 0.02; fit -= 0.0005) {
+                double s = head.call(Map.of("want", want, "fit", fit));
+                assertTrue(s >= want / fit - 1e-9, "within the ray's budget share");
+                assertTrue(Math.abs(s - prev) <= prev * 0.03, "no jump at fit " + fit + ": " + prev + " → " + s);
+                prev = s;
+            }
+        }
+        // the reviewer's pair: one wall, the rays' shares of a 22-step budget 16/15.996 and 16/16.009 of the wanted step
+        double w = 6, a = head.call(Map.of("want", w, "fit", 15.996 / 16)), b = head.call(Map.of("want", w, "fit", 16.009 / 16));
+        assertEquals(a, b, a * 0.002);
         String march;
         try (InputStream in = PallGridGlslTest.class.getResourceAsStream("/assets/incoming/shaders/include/fx_pall.glsl")) {
             assertNotNull(in);
@@ -57,8 +74,7 @@ class PallGridGlslTest {
         } catch (IOException ex) {
             throw new IllegalStateException(ex);
         }
-        assertTrue(march.contains("fineStep[k] = pallGridStep(fineStep[k] / fit);"), "head step: the wall's wanted step over the budget share");
-        assertFalse(march.matches("(?s).*pallGridStep\\([^;]*floor\\(.*"), "no floor()ed step count inside a grid step");
+        assertTrue(march.contains("fineStep[k] = pallHeadStep(fineStep[k], fit);"), "the march takes the head step from pallHeadStep");
     }
 
     /** The pall's bounds the ordinary march spans stay put while the pall grows within a quarter octave, at most a fifth wider. */

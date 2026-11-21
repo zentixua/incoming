@@ -650,17 +650,22 @@ public final class MushroomField {
      * airburst after the ball downdraft subsides). Without stem dust or pall, no inflow (share 0).
      */
     static void foot(ClientNuclear.Active a, MushroomModel.Shape s, float partial, double[] out) {
-        foot(a.d, a.pall, NukePall.water(a), s, a.ticks(partial), out);
+        foot(a.d, a.pall, NukePall.water(a), s, a.ticks(partial), NukePall.keep(a), out);
     }
 
     /** Same for detonation {@code d} with pall {@code pall} and water beneath it {@code water} at {@code ticks} (client ticks). */
     static void foot(Detonation d, PallField pall, PallField.Water water, MushroomModel.Shape s, double ticks, double[] out) {
+        foot(d, pall, water, s, ticks, 1, out);
+    }
+
+    /** Same with the dry dust drawn at share {@code keep} ({@code NukePall.keep}): the foot reads the layer the pall slot draws. */
+    static void foot(Detonation d, PallField pall, PallField.Water water, MushroomModel.Shape s, double ticks, double keep, double[] out) {
         out[0] = 1;
         out[1] = out[2] = out[3] = out[4] = 0;
         if (s.stemTau() <= 0 || !pall.visible(ticks)) return;
         double hob = Math.max(0, d.hobMetres()), y = d.yieldKt(), t = s.t();
         double wall = MushroomModel.stemRadius(0, s.stemR(), MushroomModel.dustFlare(s));
-        pall.footLayer(d.blocks(wall), ticks, water, LAYER_AT);
+        pall.footLayer(d.blocks(wall), ticks, water, keep, LAYER_AT);
         double from = HobBlast.arrivalSeconds(wall, hob, y) + DustModel.stemFrom(hob, y, FireballModel.maxRadius(y, d.surface()));
         if (t <= from || LAYER_AT[0] <= 0) return;
         out[0] = LAYER_AT[1];

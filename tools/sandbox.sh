@@ -126,6 +126,13 @@ json.dump(frames, open(sys.argv[2], "w"))
 PY
 }
 
+# second the sound of a frame take starts from: its first frame's (without a time of day, `130@12500`) if before the effect, else 0
+first_second() {
+  local f=${1%%,*}
+  f=${f%%@*}
+  awk -v f="$f" 'BEGIN { if (f < 0) print f; else print 0 }'
+}
+
 # a frame take ($1 capture.json) whose world ran slower than 20 ticks/s at some point (its sound is not real-time)
 slowed() {
   python3 -c 'import json,sys; sys.exit(0 if json.load(open(sys.argv[1])).get("rate", 20) < 20 else 1)' "$1"
@@ -195,6 +202,10 @@ OPT
 
 start() {
   local size=1280x720 opts=() pack wait= fresh= gpu=
+  # a fixed near site (Sandbox.FIXED_SITE): checked here, not in the client's class initialisation
+  if [ -n "${INCOMING_SANDBOX_SITE:-}" ] && ! [[ $INCOMING_SANDBOX_SITE =~ ^[0-9]+$ && $INCOMING_SANDBOX_SITE -le 450 ]]; then
+    echo "INCOMING_SANDBOX_SITE: 0–450, not \"$INCOMING_SANDBOX_SITE\"" >&2; exit 2
+  fi
   while [ $# -gt 0 ]; do
     case "$1" in
       --wait) wait=--wait ;;
@@ -404,7 +415,7 @@ shot() {
     local take from=0
     mkdir -p "$FX/out"
     take=$(basename "$(mktemp -d "$FX/out/.wav-$name-XXXXXX")") || exit 1
-    [ "$at" != none ] && awk -v f="${at%%,*}" 'BEGIN { exit !(f < 0) }' && from=${at%%,*}
+    [ "$at" != none ] && from=$(first_second "$at")
     if [ "$at" != none ]; then
       fx "shots $name $at 0" || exit 1
       FX_LIMIT=$limit fx "$effect" || exit 1
@@ -432,7 +443,7 @@ shot() {
       # is not real-time, so it comes from a second take at 20 ticks/s, as on the CPU renderer
       local take from=0
       take=$(basename "$(mktemp -d "$FX/out/.wav-$name-XXXXXX")") || exit 1
-      awk -v f="${at%%,*}" 'BEGIN { exit !(f < 0) }' && from=${at%%,*}
+      from=$(first_second "$at")
       fx clear || exit 1
       fx "shots $take none@$from $wav" || exit 1
       fx "$effect" || { rm -rf "${FX:?}/out/$take"; exit 1; }

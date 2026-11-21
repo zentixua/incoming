@@ -248,7 +248,8 @@ Ruins and everything in `nuclear/world/` are in `nuclear-world.md`.
   in clear weather (70 %) and rain; not biome downfall): ray traversal is an event, like tornado (`pallWilson`, `wilsonLight`). Camera pall
   (`NukePall.tick`: sound, ray range) also uses mean head (`BlastWall.sigma`). Fallback camera dust (`NukeDust.front`,
   when pall is not drawn) uses head `BlastWall.wall`, in its light (`NukePall.dustColor`, below).
-- Hump at the front (not physical, Artem 21.11, guide deviation list): the head's top stands up to `BlastWall.HUMP` (0.38) above the
+- Hump at the front (not physical, Artem 21.11, guide deviation list; the head's shape, so spray heads over water take it too): the
+  head's top stands up to `BlastWall.HUMP` (0.38) above the
   law's near a third of the wedge and sinks back by 1.2 wedges, then the heavy core settles: the top sinks to `1 − CORE_SINK` (0.5)
   of the law's from half a wedge to three and comes back as the layer mixes (10–40 wedges; `BlastWall.hump`, copy `pallWallHump`,
   the pall's dust row through `PallField.dust`); `shape` and the dust row divide by the same factor, so the column (and every reader
@@ -259,24 +260,31 @@ Ruins and everything in `nuclear/world/` are in `nuclear-world.md`.
   slow turnover until the layer has mixed), rising a little; the same fetch as the existing warp (`warpNoise`, `wallNoise`); dust age
   from `PallField.mixed` (pall) or phase share (head). The noise coordinate is not stretched along the flow: a stretched coordinate
   makes its gaps as long as its billows, and the layer opens into black voids. Streaks along the flow are a density detail instead
-  (`pallStreak`: 1 ± 0.55, never zero, `PALL_STREAK_ALONG` 28 long, `_UP` 5 tall, `_ACROSS` 4.5 wide), on the young layer and the
-  head, fading as the layer mixes and below the pixel footprint. Wisps (`pallWisp`): in half of the `PALL_WISP_CELL` (60) cells of the
+  (`pallStreak`: 1 ± 0.55, never zero, `PALL_STREAK_ALONG` 28 long, `_UP` 5 tall, `_ACROSS` 4.5 wide), on the young layer's dry
+  dust and the head, fading as the layer mixes and below the pixel footprint. Wisps (`pallWisp`): in half of the `PALL_WISP_CELL` (60) cells of the
   young layer the top rises in a narrow plume (σ 8) by up to `PALL_WISP_RISE` (0.6) of itself 0–8 s after the local phase, gone by
-  `PALL_WISP_END` (14 s); a multiplier on the top like the bumps, so the plume is the layer's own dust, never a separate puff (layer
-  puffs read as balls). The pall's bounds include the rise (`PallField.WISP_RISE`, `PallFloorsGlslTest.wispRiseIsTheBoundsCopy`).
+  `PALL_WISP_END` (14 s); a multiplier on the top like the bumps with the dust thinned by the same factor, so the plume is the
+  layer's own column lifted, never added dust or a separate puff (layer puffs read as balls); column readers without wisps
+  (composite repair, front transmittance) see the same column at the law's height. The pall's bounds include the rise (`PallField.WISP_RISE`, `PallFloorsGlslTest.wispRiseIsTheBoundsCopy`).
 - Ray samples are world-anchored: the head and storm grids use a power-of-two step from the eye (`pallGridStep`, `pallGridNext`), the
   pall bounds the ordinary steps span snap to quarter octaves (`PallPass.snapBounds`); samples sliding with the front read as boiling
-  dust (`PallGridGlslTest`). The head's step rounds its wanted step (0.12 of the head's top over the budget share), never
-  `span / floor(span / step)`: that ratio is a sawtooth across the screen, and rounded it puts neighbouring pixels on two grids
-  (ribs and a toothed edge along the head). Per-frame jitter of the step fraction stays: `fx_pall_resolve` accumulates frames.
-- Inside the passing wall (presentation, `PallPass.SEE`, `LIT_TAU`, copy `pallLitDepth`): while the eye is in a detonation's young dry
-  dust (`NukePall.young`: dust at the eye less spray and mist, fading out 60–120 s after the front passed it), that detonation's dry dust
-  is drawn at `SEE` (0.12) of the law by scaling its slot at upload (dust row and wall-head scale, `NukePall.KEEP`), so every reader of
-  the slot (march, near volume, composite repair, layer quads, probes) sees one medium; the ray clip takes the same share; diffuse light
-  within `SEE_NEAR` of the eye saturates at the light `LIT_TAU` under the layer top (`gLitGate`). The law's young layer allows a few
-  metres and is night inside (15 kt at 1.6 km: 89–98 % black frames); the reference is a bright warm curtain. Known limit: a second
-  detonation's old pall within 80 blocks of an eye in young dust also gets the light floor. Sound, ash and the veil keep the law
-  (`PallFloorsGlslTest`).
+  dust (`PallGridGlslTest`). The head's step (`pallHeadStep`) is the wall's wanted step (0.12 of its top) on that grid while
+  the frame's budget allows, growing continuously as a ray's budget share binds; never `span / floor(span / step)` or a power
+  of two of a per-ray quantity: both put neighbouring pixels on different grids (ribs, a toothed edge, octave lines). The
+  ordinary steps move when the near volume's end or the ray cutoff moves (the head nearing the eye); the storm frame keeps
+  its entry-based grid. Per-frame jitter of the step fraction stays: `fx_pall_resolve` accumulates frames.
+- Inside the passing wall (presentation, `PallPass.SEE`, `LIT_TAU`, copy `pallLitDepth`): each view's frame first computes its eye
+  medium (`NukePall.eyeMedium`, before the mushroom and slot tables): while that eye is in a detonation's young dry dust (dust row
+  and wall head only, `PallField.dust`/`dustTau`: not spray, fire haze or surge; `NukePall.young`: fading out 60–120 s after the
+  front passed; times the eye's open sky, so shade and tunnels keep the law), that detonation's dry dust is drawn at `SEE` (0.12)
+  of the law: its slot at upload (dust row and wall-head scale, `NukePall.KEEP`) and the stem foot's layer (`MushroomField.foot`),
+  so every reader (march, near volume, composite repair, layer quads, probes, foot) sees one medium; the ray cutoff takes the
+  drawn medium itself (`Frame.eyeDust`: only the thinned dust changes). Diffuse light within `SEE_NEAR` of the eye saturates at
+  the light `LIT_TAU` under the layer top (`gLitGate`), weighted by the sample's dry dust share (`Sample.dry`). The law's young
+  layer allows a few metres and is night inside (15 kt at 1.6 km: 89–98 % black frames); the reference is a bright warm
+  curtain. Known limits: a second detonation's old dry pall within 80 blocks of an eye in young dust also gets the light
+  floor; the near volume's history blends the share over about ten frames as the gate opens (`VOLUME_CURRENT` 0.1). Sound,
+  ash and the veil keep the law (`PallFloorsGlslTest`, `PallFieldTest.dustIsTheDustRowOnly`).
 - Visible shock front and shimmer over sphere/storm use distortion pass `HeatPass` (`client/nuclear/NukeHeat`,
   `client-fx.md`): sphere `frontRadius` while beyond the fireball; compression thickness `ShockOptics.DECAY_SHARE` of
   in-game positive-phase length (`frontRadius − phaseEndRadius`); absent beyond dust-wall edge, shock fades from

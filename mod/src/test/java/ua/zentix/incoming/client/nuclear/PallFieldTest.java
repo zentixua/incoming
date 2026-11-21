@@ -240,6 +240,26 @@ class PallFieldTest {
      * Above the hill, the layer rises from its slope (the dust is picked up by the wind from it): a point in 40 blocks above the ground under the epicenter on the
      *  hill in 38 - as in 2 blocks above level ground; in the valley - as it was (dust flows there from the ground under the epicenter).
      */
+    /**
+     * The dry dust the inside floors thin ({@code NukePall.eyeMedium}) is the dust row alone, never more than sigma − mist (which
+     * also holds fire haze); its vertical depth is the height integral of it.
+     */
+    @Test
+    void dustIsTheDustRowOnly() {
+        PallField p = new PallField(HIROSHIMA);
+        for (double minutes : new double[] {2, 10, 30}) {
+            double ticks = HIROSHIMA.arrivalTicks(600) + 20 * 60 * minutes;
+            for (double x = 100; x < 3000; x += 150) {
+                double sigma = p.sigma(x, 0, 5, 0, ticks, PallField.Water.DRY), mist = p.mist(x, 0, 5, 0, ticks, PallField.Water.DRY);
+                double dust = p.dust(x, 0, 5, 0, ticks, PallField.Water.DRY);
+                assertTrue(dust >= 0 && dust <= sigma - mist + 1e-12, x + " m, " + minutes + " min");
+                double ds = 0.25, sum = 0;
+                for (double h = 5 + ds / 2; h < 400; h += ds) sum += p.dust(x, 0, h, 0, ticks, PallField.Water.DRY) * ds;
+                assertEquals(sum, p.dustTau(x, 0, 5, 400, 0, ticks, PallField.Water.DRY), Math.max(1e-6, sum * 1e-3));
+            }
+        }
+    }
+
     @Test
     void layerFollowsHillsNotValleys() {
         PallField p = new PallField(GROUND);

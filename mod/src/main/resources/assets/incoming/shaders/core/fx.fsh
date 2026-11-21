@@ -70,9 +70,10 @@ uniform vec3 FxSixLight;
 uniform vec3 FxSkyTint;
 // sky lit by a fireball (NukeSky.amberTint): linear tint of its diffuse light (luma 1), w — its share in the dome's light
 uniform vec4 FxAmber;
-// presentation: while a fireball lights the air (the sky turns amber, FxAmber.w up to ½), up to this share of its light on a puff comes
+// presentation: while a fireball lights the air (the sky turns amber, FxAmber.w up to 1), up to this share of its light on a puff comes
 // as the dome's diffuse light (the fireball-lit sky and cap above the puff) rather than as a beam by sides: a backlit dust wall has lit
-// tops, not dark cores under bright rims. No amber sky (conventional blasts) — the beam alone, as before
+// tops, not dark cores under bright rims. No amber sky (conventional blasts) — the beam alone. During a nuclear show the share
+// applies to every frame fireball, conventional ones included: the dome's light is the nuclear sky's
 const float BALL_DOME = 0.6;
 
 // Layer pass — colour; glow pass (FxBloom, FxGlowPass.x = 1) — emission that reaches the eye: rgb — linear light

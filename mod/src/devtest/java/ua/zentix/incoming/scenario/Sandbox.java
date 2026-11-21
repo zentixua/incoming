@@ -1610,9 +1610,13 @@ final class Sandbox {
         if (soft == null) soft = ua.zentix.incoming.client.fx.layer.GpuWatch.software(com.mojang.blaze3d.platform.GlUtil.getRenderer());
         if (!soft && !measured && rate < 20) return;
         double r = Math.max(1, Math.min(20, rate));
+        if (r == 20) {
+            // leaving the pacing window: the next due frame measures afresh, not across the idle gap
+            paceLast = 0;
+            paceFrameS = 0;
+        }
         if (r < 20 && Math.abs(r - paceRate) <= paceRate * 0.1) return;
         if (r == 20 && paceRate == 20) return;
-        if (r == 20) paceLast = 0;
         paceRate = r;
         Capture take = capture != null ? capture : armed;
         if (take != null) take.slowest = Math.min(take.slowest, r);

@@ -616,6 +616,22 @@ public final class PallField {
         return l[1] * profile(h / l[7]) + l[5] * profile(h / l[6]);
     }
 
+    /** Dry dust component of {@link #sigma} (the dust row only: no spray, fire haze or base surge), 1/block. */
+    public double dust(double dx, double dz, double above, double floorUp, double ticks, Water water) {
+        double[] l = new double[LAYERS];
+        layers(dx, dz, ticks, water, l);
+        return l[0] * profile((above - Math.max(floorUp, 0)) / l[2]);
+    }
+
+    /** Dry dust component of {@link #tau} (the dust row only). */
+    public double dustTau(double dx, double dz, double from, double to, double floorUp, double ticks, Water water) {
+        if (!(to > from)) return 0;
+        double[] l = new double[LAYERS];
+        layers(dx, dz, ticks, water, l);
+        double lift = Math.max(floorUp, 0);
+        return l[0] * between(from - lift, to - lift, l[2]);
+    }
+
     /**
      * Vertical pall optical depth above point (dx, dz), from {@code from} to {@code to} (blocks above ground zero,
      * {@code to} may be infinite): height integral of {@link #sigma}. Dust above eye and below it down to ground sets
@@ -650,12 +666,17 @@ public final class PallField {
      * ({@code MushroomField.foot}).
      */
     public void footLayer(double r, double ticks, Water water, double[] out) {
+        footLayer(r, ticks, water, 1, out);
+    }
+
+    /** {@link #footLayer} with the dry dust drawn at share {@code keep} ({@code NukePall.keep}: the slot's dust row is scaled alike). */
+    public void footLayer(double r, double ticks, Water water, double keep, double[] out) {
         double[] l = footScratch;
         double sigma = 0, top = 0;
         for (int k = 0; k < 4; k++) {
             layers(k == 0 ? r : k == 1 ? -r : 0, k == 2 ? r : k == 3 ? -r : 0, ticks, water, l);
-            sigma += l[0] + l[1];
-            top += l[0] * l[2] + l[1] * l[7];
+            sigma += l[0] * keep + l[1];
+            top += l[0] * keep * l[2] + l[1] * l[7];
         }
         out[0] = sigma / 4;
         out[1] = sigma > 0 ? top / sigma : 1;
