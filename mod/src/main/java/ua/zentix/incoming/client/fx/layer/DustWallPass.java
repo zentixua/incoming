@@ -55,7 +55,7 @@ public final class DustWallPass {
      * Highest the young dust reaches over its settled layer height (copies: the largest hump 1.6, {@code DW_BULGE},
      * {@code DW_HAZE}; the ray's slab top, {@code DwRing.z}).
      */
-    public static final double TOP_OVER_LAYER = 1.6 * 1.25 * 1.3;
+    public static final double TOP_OVER_LAYER = 1.6 * 1.08 * 1.2;
     /** Weight of the current frame in the wall's history ({@code fx_dustwall_resolve}): about ten frames averaged. */
     private static final float HISTORY = 0.1f;
     /** An eye that moved farther than this between frames (teleport) restarts the history, blocks. */
