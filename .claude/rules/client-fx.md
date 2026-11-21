@@ -28,35 +28,37 @@ paths:
   the ordinary renderer. Vista/Moonlight are scenario-only runtime mods; no production dependency or camera-mod mixin.
 - See-through blocks (`fx/layer/SeeThrough`, `include/see.glsl`): by `AFTER_LEVEL` translucent terrain (stained/tinted
   glass and panes, ice, slime, honey, water, portal) has written depth; tested against it, the layer loses everything
-  behind a window. Cutout blocks (glass, glass panes, leaves, bars) write no depth in their holes. The primary view copies
-  only while the layer drew the previous frame and something was drawn between the two stages in a recent frame
-  (`SeeThrough.Drawn`: an `ANY_SAMPLES_PASSED` query per frame, read only when available, never waited for; a window
-  coming into view is looked through from its second frame): the copies and their passes cost +0.6–0.7 ms of GPU at
-  2560×1600 with 100 strikes (scene bench, +18–22%), all of it bandwidth, and a view with no translucent terrain pays
-  none of it. Fast/Fancy and Sodium (`BLEND`) copy depth and colour at
-  `AFTER_BLOCK_ENTITIES`, clear the frame's alpha, and copy depth and colour again at `AFTER_TRANSLUCENT_BLOCKS`
-  (translucent blending leaves coverage 1 − T in alpha; X = after − T·before). Later passes (lines, translucent entities,
-  particles, clouds, weather) blend alpha with ONE, ZERO and are not in the copies; where they wrote depth they hide the
-  layer as before. Fabulous copies the main depth at `AFTER_TRANSLUCENT_BLOCKS` (still opaque) and reads vanilla's
-  translucent target (X, 1 − T, its depth): by `AFTER_LEVEL` the transparency chain's final blit has replaced the main
-  depth, so a Fabulous frame without the copy loses the layer's occlusion (sandbox `graphics fabulous`, `std_near`). A shader pack and secondary views stay `NONE`: the main path, hidden behind
-  translucent blocks. `fx_depth` writes the distance texture as RG32F (r: what hides the layer; g: the nearest surface,
-  see-through or not; equal without see-through), `FxGlass` (X, T in RGBA8; own unit 16) and the layer's hardware depth (`hard`);
-  the layer draws through `SceneDepth.bindLayer` (frame colour + `hard`). One surface per pixel (vanilla Fabulous keeps
-  one): a fragment behind it is laid as T·light + opacity·X; the pall composite splits its medium at the surface
-  (`mediumTo`: near volume to the surface, the rays cut there by the noiseless field and the smoke's mean field); heat
-  shimmer bends only air in front of it; flash and fireball light relight the world behind it, W = (frame − X)/T, never the
-  surface's own light; probes take T; the water decal and the half-resolution upsampler key on g (its reduction keeps one
-  frame pixel's pair). A surface with no coverage (a boat's water mask) or full coverage hides the layer as on main. Exact compositing: `SeeThroughGlslTest`.
-  Readers of the surface's distance use g of the distance texture they already sample: the pall composite is at 16
-  samplers, the minimum a GL implementation must allow. Limits: smoke between two separate panes takes both tints, a
-  mushroom between the eye and a window counts as behind it, two coplanar panes mix across half a half-resolution pixel,
-  an opaque vanilla particle behind a pane hides the layer at the pane, beyond the near volume (256 m) the pall split
-  shares the rays' light by extinction (dark smoke in front of a far pane with lit smoke behind it: 0.25 against 0.20),
-  the relight of a world behind a surface infers it from the composited frame (exact for the surface alone; with pall or
-  rain in front of the pane 0.30 against 0.22, the error main has for any pixel under pall), a pane
+  behind a window. Cutout blocks (glass, glass panes, leaves, bars) write no depth in their holes. Fast/Fancy and Sodium
+  (`BLEND`): at `AFTER_BLOCK_ENTITIES` copy the opaque depth and the colour and clear the frame's alpha; translucent
+  blending leaves coverage 1 − T in alpha; at `AFTER_TRANSLUCENT_BLOCKS` one pass (`fx_see`) writes X = after − T·before
+  and T into `SeeThrough.glass` (RGBA8) only where coverage is partial; fully covered pixels (opaque particles, the mod's
+  block fragments, drawn there in Fast/Fancy) and uncovered ones (depth only: a boat's water mask) stay (0, 0, 0, 0) and
+  hide the layer as on main. Fabulous copies the main depth at `AFTER_TRANSLUCENT_BLOCKS` (still opaque) and runs `fx_see`
+  on vanilla's translucent target (X, 1 − T); by `AFTER_LEVEL` the transparency chain's final blit has replaced the main
+  depth, so a Fabulous frame without the copy loses the layer's occlusion (sandbox `graphics fabulous`, `std_near`). A
+  shader pack and secondary views stay `NONE`: the main path, hidden behind translucent blocks. The copies cost GPU
+  bandwidth (+0.6–0.7 ms at 2560×1600 with 100 strikes, scene bench): they run only while the layer drew the previous
+  frame, something was drawn between the stages (`Drawn` query) and `fx_see` found a partly covered pixel in a recent
+  frame (`SURFACES` query; without one, every fourth frame captures to look). Queries are read only when available, never
+  waited for: a window coming into view is looked through within four frames. `fx_depth` writes the distance texture as
+  RG32F (r: what hides the layer; g: the nearest surface, see-through or not; equal without see-through) and the layer's
+  hardware depth (`hard`); the layer draws through `SceneDepth.bindLayer` (frame colour + `hard`); `FxGlass` (own unit 16)
+  is `SeeThrough.glass`. One surface per pixel (vanilla Fabulous keeps one): a fragment behind it is laid as
+  T·light + opacity·X; the pall composite splits its medium at the surface (`mediumTo`: near volume to the surface, the
+  rays cut there by the noiseless field and the smoke's mean field); heat shimmer bends only air in front of it; flash and
+  fireball light relight the world behind it, W = (frame − X)/T, never the surface's own light; probes take T; the water
+  decal and the half-resolution upsampler key on g (its reduction keeps one frame pixel's pair). Exact compositing:
+  `SeeThroughGlslTest`. Readers of the surface's distance use g of the distance texture they already sample: the pall
+  composite is at 16 samplers, the minimum a GL implementation must allow. Limits: smoke between two separate panes takes
+  both tints, a mushroom between the eye and a window counts as behind it, two coplanar panes mix across half a
+  half-resolution pixel, an opaque vanilla particle behind a pane hides the layer at the pane, a vanilla particle drawn
+  after translucent terrain in front of a pane is looked through with the pane's tint, beyond the near volume (256 m) the
+  pall split shares the rays' light by extinction (dark smoke in front of a far pane with lit smoke behind it: 0.25
+  against 0.20), the relight of a world behind a surface infers it from the composited frame (exact for the surface
+  alone; with pall or rain in front of the pane 0.30 against 0.22, the error main has for any pixel under pall), a pane
   under dense pall in front of it keeps its unattenuated X behind opaque smoke, piston-moved glass is not a surface, and
-  the first frame of an effect is tested against the world's depth. Checks: `tools/see_through_check.sh` (sandbox `pane`), `tools/see_through_gl.py` (the shaders on llvmpipe).
+  the first frame of an effect is tested against the world's depth. Checks: `tools/see_through_check.sh` (sandbox
+  `pane`), `tools/see_through_gl.py` (the shaders on llvmpipe).
 - Under Iris the first-person hand is in world depth at `AFTER_LEVEL` (Iris draws it inside the world pass with the depth
   range × 0.125, `HandRenderer.DEPTH`), so the layer reads it as world 0.09–0.115 m away; vanilla draws it after the layer.
   The pall skips those pixels (`pallHand`, `PALL_HAND` 0.12 m in `pall.glsl`, `PallHandTest`): resolve writes them invalid

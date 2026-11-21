@@ -104,6 +104,12 @@ public final class FxLayer {
             Incoming.LOG.error("Scene depth shader failed to load: smoke has no soft edges and is not hidden by Distant Horizons LODs", ex);
         }
         try {
+            e.registerShader(new ShaderInstance(e.getResourceProvider(), Incoming.id("fx_see"), DefaultVertexFormat.POSITION), s -> SeeThrough.shader = s);
+        } catch (IOException ex) {
+            SeeThrough.shader = null;
+            Incoming.LOG.error("See-through shader failed to load: effects behind stained glass, ice and water stay hidden by them", ex);
+        }
+        try {
             e.registerShader(new ShaderInstance(e.getResourceProvider(), Incoming.id("fx_probe"), SourceProbes.FORMAT), s -> SourceProbes.shader = s);
         } catch (IOException ex) {
             SourceProbes.shader = null;

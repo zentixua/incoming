@@ -142,19 +142,34 @@ def read(w, h, attachment=0, fmt=g.GL_RGBA):
     return np.frombuffer(raw, dtype=np.float32).reshape((h, w, -1))
 
 
-def depth_cases(program):
-    # Two identical 50% glass pixels, with an opaque particle drawing between capture
-    # and terrain on the second one. Third pixel is a depth-only draw (boat mask).
-    # The fourth is an ordinary opaque pixel and the fifth tests a later occluder.
-    target(5, 1, [(g.GL_RG32F, g.GL_RG), (g.GL_RGBA16, g.GL_RGBA)], depth=True)
+def depth_cases(see, program):
+    """fx_see after translucent terrain, then fx_depth at the layer: which pixels are looked through and which hide it."""
+    # frame after translucent terrain (alpha: its coverage) and before it: a 50% pane; an opaque particle drawn before the
+    # pane (coverage 1); a depth-only boat mask (coverage 0); the opaque world; a pane with a vanilla particle drawn later
+    after = [(0.7, 0.7, 0.7, 0.5), (0.4, 0.4, 0.4, 1.0), (0.8, 0.8, 0.8, 0.0), (0.8, 0.8, 0.8, 0.0), (0.7, 0.7, 0.7, 0.5)]
+    before = [(0.8, 0.8, 0.8, 0.0)] * 5
+    target(5, 1, [(g.GL_RGBA8, g.GL_RGBA)])
+    g.glClearColor(0, 0, 0, 0)
+    g.glClear(g.GL_COLOR_BUFFER_BIT)
+    g.glUseProgram(see)
+    bind(see, 0, texture(g.GL_RGBA8, g.GL_RGBA, 5, 1, after))
+    bind(see, 1, texture(g.GL_RGBA8, g.GL_RGBA, 5, 1, before))
+    g.glUniform4f(loc(see, "See"), 1, 0, 0, 0)
+    query = int(np.ravel(g.glGenQueries(1))[0])
+    g.glBeginQuery(g.GL_SAMPLES_PASSED, query)
+    quad(see)
+    g.glEndQuery(g.GL_SAMPLES_PASSED)
+    glass = read(5, 1)[0]
+    samples = int(np.ravel(g.glGetQueryObjectuiv(query, g.GL_QUERY_RESULT))[0])
+    glass_tex = g.glGetFramebufferAttachmentParameteriv(g.GL_FRAMEBUFFER, g.GL_COLOR_ATTACHMENT0, g.GL_FRAMEBUFFER_ATTACHMENT_OBJECT_NAME)
+    check(samples == 2 and abs(glass[0, 3] - 0.5) < 0.01 and abs(glass[0, 0] - 0.3) < 0.01,
+          f"fx_see writes only partly covered pixels, X = after - T*before ({samples} samples, X {glass[0, 0]:.3f}, T {glass[0, 3]:.3f})")
+
+    target(5, 1, [(g.GL_RG32F, g.GL_RG)], depth=True)
     g.glUseProgram(program)
-    bind(program, 0, texture(g.GL_R32F, g.GL_RED, 5, 1, [.9]*5))
-    bind(program, 2, texture(g.GL_R32F, g.GL_RED, 5, 1, [.2, .2, .2, .9, .2]))
-    bind(program, 3, texture(g.GL_R32F, g.GL_RED, 5, 1, [.2, .2, .2, .9, .1]))
-    captured = [(0.6, 0.6, 0.6, 0.5), (0.4, 0.4, 0.4, 1.0), (0.8, 0.8, 0.8, 0.0),
-                (0.8, 0.8, 0.8, 0.0), (0.6, 0.6, 0.6, 0.5)]
-    bind(program, 4, texture(g.GL_RGBA8, g.GL_RGBA, 5, 1, captured))
-    bind(program, 5, texture(g.GL_RGBA8, g.GL_RGBA, 5, 1, [(0.8, 0.8, 0.8, 0.0)]*5))
+    bind(program, 0, texture(g.GL_R32F, g.GL_RED, 5, 1, [.9] * 5))
+    bind(program, 2, texture(g.GL_R32F, g.GL_RED, 5, 1, [.2, .2, .2, .9, .1]))
+    bind(program, 3, glass_tex)
     # Synthetic inverse projection with output depth in 0..100.
     inv = np.array([[1, 0, 0, 0], [0, 1, 0, 0], [0, 0, -50, -50], [0, 0, 0, 1]], dtype=np.float32)
     g.glUniformMatrix4fv(loc(program, "InvProj"), 1, True, inv)
@@ -163,16 +178,16 @@ def depth_cases(program):
     g.glDepthFunc(g.GL_ALWAYS)
     quad(program)
     distances = read(5, 1)[0, :, :2]
-    through = read(5, 1, attachment=1)[0, :, 3]
     hard = np.frombuffer(g.glReadPixels(0, 0, 5, 1, g.GL_DEPTH_COMPONENT, g.GL_FLOAT), dtype=np.float32)
-    labels = ["control pane", "pane + pre-terrain opaque particle", "no pane + depth-only mask",
-              "control opaque", "pane + later foreground depth"]
+    labels = ["pane", "opaque particle before translucent terrain", "depth-only mask", "opaque world",
+              "pane with a particle drawn later"]
     for i, label in enumerate(labels):
-        print(f"{label}: r/g={distances[i].round(2)} T={through[i]:.3f} hard={hard[i]:.3f}")
-    check(abs(through[0] - 0.5) < 0.01 and np.isclose(hard[0], .9), "a pane is looked through, tinted by T")
+        print(f"{label}: r/g={distances[i].round(2)} hard={hard[i]:.3f}")
+    check(np.isclose(hard[0], .9) and distances[0, 1] < distances[0, 0], "a pane is looked through")
     check(np.isclose(hard[1], .2), "a fully covered pixel hides the layer at the surface, as on main")
     check(np.isclose(hard[2], .2), "a depth-only surface (boat water mask) hides the layer, as on main")
-    check(np.isclose(hard[3], .9) and np.isclose(hard[4], .1), "opaque world and later depth writers hide the layer")
+    check(np.isclose(hard[3], .9), "the opaque world hides the layer")
+    print(f"limit: a particle drawn after translucent terrain in front of a pane is looked through with the pane's tint (hard {hard[4]:.3f})")
     g.glDisable(g.GL_DEPTH_TEST)
 
 
@@ -315,7 +330,7 @@ void main() {
 
 context()
 programs = {}
-for name in ("fx_depth", "fx_half_depth", "fx_half_composite", "fx_pall_composite", "fx", "fx_heat", "fx_probe", "fx_water"):
+for name in ("fx_see", "fx_depth", "fx_half_depth", "fx_half_composite", "fx_pall_composite", "fx", "fx_heat", "fx_probe", "fx_water"):
     p = link(name)
     programs[name] = p
     active = [g.glGetActiveUniform(p, i)[0].decode()
@@ -324,7 +339,7 @@ for name in ("fx_depth", "fx_half_depth", "fx_half_composite", "fx_pall_composit
     print(f"{name}: {len(active)} active samplers")
     if name == "fx_pall_composite":
         check(len(active) <= 16, "the pall composite stays within 16 fragment samplers")
-depth_cases(programs["fx_depth"])
+depth_cases(programs["fx_see"], programs["fx_depth"])
 half_cases(programs["fx_half_depth"], programs["fx_half_composite"])
 half_edges()
 far_smoke_in_front()

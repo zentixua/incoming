@@ -8,14 +8,10 @@
 // tints what lies behind it. Without them all depth samplers hold the world's depth: the main path exactly.
 uniform sampler2D Sampler0;
 uniform sampler2D Sampler1;
-// depth with translucent terrain (BLEND — its copy after it; Fabulous — the translucent target's)
+// depth with translucent terrain (BLEND — the world's now; Fabulous — the translucent target's)
 uniform sampler2D Sampler2;
-// depth now (BLEND: what was drawn after translucent terrain and hides the layer as before; Fabulous — as Sampler2)
+// the see-through surfaces (SeeThrough, fx_see): own light X (rgb), transmittance T (a); T 0 — covered, not see-through
 uniform sampler2D Sampler3;
-// the frame after translucent terrain (BLEND), the translucent target's colour (Fabulous)
-uniform sampler2D Sampler4;
-// the frame before translucent terrain (BLEND)
-uniform sampler2D Sampler5;
 
 uniform mat4 InvProj;
 uniform mat4 LodInvProj;
@@ -31,9 +27,7 @@ uniform vec4 See;
 const float PINNED = 1.0 - 2.0 / 16777215.0;
 
 // r: the distance that hides the layer; g: to the nearest surface, see-through or not (the world's where there is none)
-layout(location = 0) out vec4 fragColor;
-// the see-through surface's own light X (rgb) and transmittance T (a), see.glsl; (0, 0, 0, 1) — none
-layout(location = 1) out vec4 fragGlass;
+out vec4 fragColor;
 
 float along(mat4 inverseProjection, vec2 ndc, float z) {
     vec4 view = inverseProjection * vec4(ndc, z, 1.0);
@@ -69,34 +63,20 @@ void main() {
     float depth = texelFetch(Sampler0, px, 0).r;
     float dist = worldAt(uv, ndc, depth);
     float surface = dist, hard = depth;
-    vec4 glass = vec4(0.0, 0.0, 0.0, 1.0);
     if (See.x > 0.5) {
-        float near = texelFetch(Sampler2, px, 0).r, now = texelFetch(Sampler3, px, 0).r;
-        if (now < near) {
-            // drawn after translucent terrain (lines, translucent entities, particles): it hides the layer, as before
-            dist = surface = worldAt(uv, ndc, now);
-            hard = now;
-        } else {
-            float seen = worldAt(uv, ndc, near);
-            if (seen < dist * 0.9995 - 0.005) {
-                vec4 after = texelFetch(Sampler4, px, 0);
-                float through = 1.0 - after.a;
-                // BLEND: the frame was X + T·before; Fabulous: the target holds X itself
-                vec3 own = See.x < 1.5 ? max(after.rgb - through * texelFetch(Sampler5, px, 0).rgb, vec3(0.0)) : after.rgb;
-                if (through < 0.5 / 255.0 || through > 1.0 - 0.5 / 255.0) {
-                    // a fully covering surface (an opaque particle), or one that wrote depth and no colour (a boat's water
-                    // mask): the world here, it hides the layer as before
-                    dist = seen;
-                    hard = near;
-                } else {
-                    glass = vec4(own, through);
-                }
-                surface = seen;
+        float near = texelFetch(Sampler2, px, 0).r;
+        float seen = worldAt(uv, ndc, near);
+        if (seen < dist * 0.9995 - 0.005) {
+            surface = seen;
+            // not a see-through surface (fully covered, depth only, or drawn after translucent terrain): it hides the
+            // layer as the world does
+            if (texelFetch(Sampler3, px, 0).a < 0.5 / 255.0) {
+                dist = seen;
+                hard = near;
             }
         }
     }
     fragColor = vec4(dist, surface, 0.0, 1.0);
-    fragGlass = glass;
-    // the layer's hardware depth: the opaque world, and what hides the layer drawn after it
+    // the layer's hardware depth: the opaque world, and what hides the layer in front of it
     gl_FragDepth = hard;
 }

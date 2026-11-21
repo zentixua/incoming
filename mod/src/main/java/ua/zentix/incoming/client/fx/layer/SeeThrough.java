@@ -16,27 +16,27 @@ import ua.zentix.incoming.Incoming;
  * See-through blocks in front of the effects layer: stained and tinted glass, ice, water, slime, honey, a nether portal hide
  * nothing behind them, they tint it. The layer draws after the world ({@code AFTER_LEVEL}), when translucent terrain has
  * already written its depth: tested against that depth, the mushroom, smoke and fire behind a window would vanish. So the
- * opaque world's depth is copied before translucent terrain and the frame's translucent surface after it. {@link SceneDepth}
- * turns them into the distance the layer is hidden by and the nearest translucent surface with how it lays the world under
- * it: the frame there is {@code X + T·world}, the surface's own light X and the share T it lets through. A layer fragment
- * behind the surface is laid as {@code T·light + opacity·X} ({@code see.glsl}): exactly the surface laid over the layer laid
- * over the world. One surface per pixel, as vanilla Fabulous: a second pane behind the first tints the layer as if it stood
- * in front of it.
+ * opaque world's depth is copied before translucent terrain, and right after it one pass ({@code fx_see}) records where
+ * translucent terrain partly covers a pixel, with its own light X and the share T it lets through: the frame there is
+ * {@code X + T·world}. {@link SceneDepth} turns them into the distance the layer is hidden by and the nearest surface. A
+ * layer fragment behind the surface is laid as {@code T·light + opacity·X} ({@code see.glsl}): exactly the surface laid
+ * over the layer laid over the world. One surface per pixel, as vanilla Fabulous: a second pane behind the first tints the
+ * layer as if it stood in front of it.
  * <p>
  * Where X and T come from depends on who draws translucent terrain:
  * <ul>
  *   <li>{@link Mode#BLEND} (vanilla Fast/Fancy, Sodium): at {@code AFTER_BLOCK_ENTITIES} the opaque depth and the frame's
  *       colour are copied and its alpha cleared to 0; translucent blending (SRC_ALPHA, ONE_MINUS_SRC_ALPHA; alpha ONE,
- *       ONE_MINUS_SRC_ALPHA) then leaves its coverage 1 − T in alpha. At {@code AFTER_TRANSLUCENT_BLOCKS} the depth and
- *       colour are copied again: X = after − T·before. What is drawn later (lines, translucent entities, particles, clouds,
- *       weather) blends alpha its own way and is not in these copies: where it wrote depth it hides the layer as before;</li>
- *   <li>{@link Mode#FABULOUS}: vanilla draws translucent terrain into its own target from zero, which holds X (rgb),
- *       1 − T (alpha) and the surface depth; the main depth at {@code AFTER_TRANSLUCENT_BLOCKS} is the opaque world.</li>
+ *       ONE_MINUS_SRC_ALPHA) then leaves its coverage 1 − T in alpha, and at {@code AFTER_TRANSLUCENT_BLOCKS} X = after −
+ *       T·before. What is drawn later (lines, translucent entities, particles, clouds, weather) blends alpha its own way
+ *       and comes after the pass;</li>
+ *   <li>{@link Mode#FABULOUS}: vanilla draws translucent terrain into its own target from zero, which holds X (rgb) and
+ *       1 − T (alpha); the main depth at {@code AFTER_TRANSLUCENT_BLOCKS} is the opaque world.</li>
  * </ul>
  * A shader pack composites translucent geometry in its own passes, and a camera mod's view draws into its own target: there
  * the layer keeps the world's depth ({@link Mode#NONE}), hidden behind translucent blocks as before. The copies are made
- * only while the layer drew in the previous frame: without effects the frame costs nothing, and the first frame of an
- * effect is tested against the world's depth.
+ * only while the layer drew in the previous frame and a see-through surface is on screen ({@link Drawn} queries, never
+ * waited for): without effects or windows the frame costs nothing.
  */
 public final class SeeThrough {
     /** Who lays translucent terrain on the frame, and so where its transmittance is read. */
@@ -49,10 +49,22 @@ public final class SeeThrough {
         }
     }
 
-    /** Depth copies: the opaque world, and (BLEND) with translucent terrain; in the source's own internal format. */
-    private static final Copy OPAQUE = new Copy(), SURFACE = new Copy();
-    /** Frame colour before and after translucent terrain ({@link Mode#BLEND}). */
-    private static final Copy BEFORE = new Copy(), AFTER = new Copy();
+    /** Copy of the opaque world's depth, in the source's own internal format. */
+    private static final Copy OPAQUE = new Copy();
+    /** Frame colour before translucent terrain ({@link Mode#BLEND}). */
+    private static final Copy BEFORE = new Copy();
+    /**
+     * The see-through surfaces of the frame ({@code fx_see}): own light X (rgb) and transmittance T (a) where translucent
+     * terrain partly covers a pixel; (0, 0, 0, 0) elsewhere, read as fully covered: the layer is hidden there, as on main.
+     */
+    private static final Copy GLASS = new Copy();
+    /** {@code fx_see}: the surfaces from the frame after translucent terrain. */
+    @Nullable
+    static net.minecraft.client.renderer.ShaderInstance shader;
+    /** Frames between captures that look for a see-through surface while none is on screen. */
+    private static final int PROBE = 4;
+    private static int probe;
+    private static final int[] VIEWPORT = new int[4];
     /** Read framebuffer with the world's depth or colour attached for the copies. */
     private static int source = -1;
     /** The layer drew in the last primary frame: copy for this one. */
@@ -86,13 +98,15 @@ public final class SeeThrough {
             DRAWN.end();
             return;
         }
-        // whether anything is drawn between the two stages (translucent terrain): without it no surface can stand in front of
-        // the layer and the copies are skipped; the answer is a frame old (never waited for), so a window coming into view
-        // is looked through from its second frame
+        // the copies run only while a see-through surface is on screen: anything drawn between the two stages (DRAWN:
+        // translucent terrain, but also Fast/Fancy's solid particles, the mod's own block fragments among them), and a
+        // partly covering pixel in the last captured frame (SURFACES, from the surface pass). Without the second, every
+        // PROBE-th frame captures to look for one. The answers are a frame or two old and never waited for: a window coming
+        // into view is looked through within PROBE frames
         if (first) {
-            boolean seen = DRAWN.seen();
+            boolean drawn = DRAWN.seen(), surfaces = SURFACES.seen();
             DRAWN.begin();
-            if (!seen) return;
+            if (!drawn || !surfaces && ++probe % PROBE != 0) return;
         } else {
             DRAWN.end();
         }
@@ -108,6 +122,8 @@ public final class SeeThrough {
             if (fabulous) {
                 if (first) return;
                 if (!copyDepth(OPAQUE, world, w, h)) return;
+                RenderTarget t = translucent();
+                if (t == null || t.getColorTextureId() <= 0 || !surfaces(t.getColorTextureId(), -1, w, h, 2f)) return;
                 mode = Mode.FABULOUS;
                 captured = check("Fabulous depth copy");
             } else if (first) {
@@ -124,9 +140,9 @@ public final class SeeThrough {
                 GlStateManager._colorMask(MASK.get(0) != 0, MASK.get(1) != 0, MASK.get(2) != 0, MASK.get(3) != 0);
                 started = check("copy before translucent terrain");
             } else {
-                if (!copyDepth(SURFACE, world, w, h) || !copyColour(AFTER, colour, w, h)) return;
+                if (!surfaces(colour, BEFORE.texture, w, h, 1f)) return;
                 mode = Mode.BLEND;
-                captured = check("copy after translucent terrain");
+                captured = check("see-through surfaces");
             }
         } finally {
             GlStateManager._glBindFramebuffer(GL30.GL_DRAW_FRAMEBUFFER, draw);
@@ -164,6 +180,51 @@ public final class SeeThrough {
             formatHeight = h;
         }
         return worldFormat;
+    }
+
+    /**
+     * The see-through surfaces at {@code AFTER_TRANSLUCENT_BLOCKS}, one full-screen pass into {@link #GLASS}: BLEND from the
+     * frame now ({@code after}, coverage in its alpha) and the copy before translucent terrain, Fabulous from vanilla's
+     * translucent target ({@code before} −1). Only partly covered pixels are written, under a {@link #SURFACES} query.
+     */
+    private static boolean surfaces(int after, int before, int w, int h, float kind) {
+        net.minecraft.client.renderer.ShaderInstance s = shader;
+        if (s == null) return false;
+        if (!GLASS.ensure(GL11.GL_RGBA8, w, h)) return fail("see-through surface framebuffer incomplete");
+        GL11.glGetIntegerv(GL11.GL_VIEWPORT, VIEWPORT);
+        boolean blend = GL11.glIsEnabled(GL11.GL_BLEND), depthTest = GL11.glIsEnabled(GL11.GL_DEPTH_TEST);
+        int t0 = com.mojang.blaze3d.systems.RenderSystem.getShaderTexture(0), t1 = com.mojang.blaze3d.systems.RenderSystem.getShaderTexture(1);
+        GlStateManager._glBindFramebuffer(GL30.GL_DRAW_FRAMEBUFFER, GLASS.fbo);
+        com.mojang.blaze3d.systems.RenderSystem.viewport(0, 0, w, h);
+        GL11.glGetFloatv(GL11.GL_COLOR_CLEAR_VALUE, CLEAR);
+        GL11.glGetBooleanv(GL11.GL_COLOR_WRITEMASK, MASK);
+        GlStateManager._colorMask(true, true, true, true);
+        GL11.glClearColor(0, 0, 0, 0);
+        GL11.glClear(GL11.GL_COLOR_BUFFER_BIT);
+        GL11.glClearColor(CLEAR[0], CLEAR[1], CLEAR[2], CLEAR[3]);
+        com.mojang.blaze3d.systems.RenderSystem.disableBlend();
+        com.mojang.blaze3d.systems.RenderSystem.disableDepthTest();
+        com.mojang.blaze3d.systems.RenderSystem.setShader(() -> s);
+        com.mojang.blaze3d.systems.RenderSystem.setShaderTexture(0, after);
+        com.mojang.blaze3d.systems.RenderSystem.setShaderTexture(1, before > 0 ? before : after);
+        s.safeGetUniform("See").set(kind, 0f, 0f, 0f);
+        com.mojang.blaze3d.vertex.BufferBuilder b = com.mojang.blaze3d.vertex.Tesselator.getInstance()
+                .begin(com.mojang.blaze3d.vertex.VertexFormat.Mode.QUADS, com.mojang.blaze3d.vertex.DefaultVertexFormat.POSITION);
+        b.addVertex(-1, -1, 0);
+        b.addVertex(1, -1, 0);
+        b.addVertex(1, 1, 0);
+        b.addVertex(-1, 1, 0);
+        com.mojang.blaze3d.vertex.MeshData mesh = b.build();
+        SURFACES.begin();
+        if (mesh != null) com.mojang.blaze3d.vertex.BufferUploader.drawWithShader(mesh);
+        SURFACES.end();
+        GlStateManager._colorMask(MASK.get(0) != 0, MASK.get(1) != 0, MASK.get(2) != 0, MASK.get(3) != 0);
+        com.mojang.blaze3d.systems.RenderSystem.setShaderTexture(0, t0);
+        com.mojang.blaze3d.systems.RenderSystem.setShaderTexture(1, t1);
+        if (blend) com.mojang.blaze3d.systems.RenderSystem.enableBlend();
+        if (depthTest) com.mojang.blaze3d.systems.RenderSystem.enableDepthTest();
+        com.mojang.blaze3d.systems.RenderSystem.viewport(VIEWPORT[0], VIEWPORT[1], VIEWPORT[2], VIEWPORT[3]);
+        return true;
     }
 
     /** The frame's colour into {@code to}. */
@@ -204,17 +265,9 @@ public final class SeeThrough {
         return OPAQUE.texture;
     }
 
-    /** {@link Mode#BLEND}: the depth with translucent terrain, the frame before and after it. */
-    static int surface() {
-        return SURFACE.texture;
-    }
-
-    static int before() {
-        return BEFORE.texture;
-    }
-
-    static int after() {
-        return AFTER.texture;
+    /** The frame's see-through surfaces ({@link #GLASS}). */
+    static int glass() {
+        return GLASS.texture;
     }
 
     /** {@link Mode#FABULOUS}: vanilla's translucent target (colour X, alpha 1 − T, depth); null — none. */
@@ -237,7 +290,8 @@ public final class SeeThrough {
 
     /** {@code describe} line part: the mode of the last frame. */
     static String describe() {
-        return broken ? "broken" : mode.name().toLowerCase(java.util.Locale.ROOT) + (DRAWN.last ? "" : " (nothing translucent drawn)");
+        return broken ? "broken" : mode.name().toLowerCase(java.util.Locale.ROOT) + (!DRAWN.last ? " (nothing drawn before translucent terrain)"
+                : SURFACES.last ? "" : " (no see-through surface, looking every " + PROBE + " frames)");
     }
 
     /**
@@ -291,7 +345,8 @@ public final class SeeThrough {
         }
     }
 
-    private static final Drawn DRAWN = new Drawn();
+    /** Anything drawn between the stages, and partly covered pixels in the surface pass ({@link #surfaces}). */
+    private static final Drawn DRAWN = new Drawn(), SURFACES = new Drawn();
 
     /** A frame-sized copy: texture and its draw framebuffer. */
     private static final class Copy {

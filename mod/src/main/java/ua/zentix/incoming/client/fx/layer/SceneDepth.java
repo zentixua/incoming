@@ -50,11 +50,11 @@ public final class SceneDepth {
     private static int[] FBOS = {-1, -1}, TEXTURES = {-1, -1};
     private static int fbo = -1, texture = -1, width, height, current;
     /**
-     * See-through surfaces ({@link SeeThrough}): the nearest translucent surface's own light and transmittance (RGBA8,
-     * {@code see.glsl}), and the layer's hardware depth (the opaque world and what hides the layer drawn after it); one each,
-     * attached to both framebuffers. The distance to the surface is the second channel of the distance texture.
+     * The layer's hardware depth with see-through surfaces ({@link SeeThrough}): the opaque world and what hides the layer in
+     * front of it, attached to both framebuffers. The distance to the nearest surface is the distance texture's second
+     * channel; the surface's own light and transmittance are {@link SeeThrough#glass}.
      */
-    private static int glass = -1, hard = -1;
+    private static int hard = -1;
     /** Framebuffer the layer draws through: the frame's colour with {@link #hard}; the colour texture it was made for. */
     private static int layerFbo = -1, layerColour = -1, layerDraw = -1, layerRead = -1;
     /** This frame looks through see-through surfaces. */
@@ -97,12 +97,9 @@ public final class SceneDepth {
         if (mode == SeeThrough.Mode.FABULOUS && (translucent == null || translucent.getDepthTextureId() <= 0 || translucent.getColorTextureId() <= 0)) {
             mode = SeeThrough.Mode.NONE;
         }
-        boolean blend = mode == SeeThrough.Mode.BLEND, fabulous = translucent != null && mode == SeeThrough.Mode.FABULOUS;
+        boolean fabulous = translucent != null && mode == SeeThrough.Mode.FABULOUS;
         int opaque = mode == SeeThrough.Mode.NONE ? depth : SeeThrough.opaque();
-        int surfaceDepth = blend ? SeeThrough.surface() : fabulous ? translucent.getDepthTextureId() : depth;
-        int now = blend ? depth : surfaceDepth;
-        int after = blend ? SeeThrough.after() : fabulous ? translucent.getColorTextureId() : depth;
-        int before = blend ? SeeThrough.before() : depth;
+        int surfaceDepth = fabulous ? translucent.getDepthTextureId() : depth;
         boolean sized = FBOS[0] >= 0 && w == width && h == height;
         if (!ensure(w, h)) return -1;
         current = 1 - current;
@@ -124,9 +121,7 @@ public final class SceneDepth {
         RenderSystem.setShaderTexture(0, opaque);
         RenderSystem.setShaderTexture(1, lod ? LOD.texture : depth);
         RenderSystem.setShaderTexture(2, surfaceDepth);
-        RenderSystem.setShaderTexture(3, now);
-        RenderSystem.setShaderTexture(4, after);
-        RenderSystem.setShaderTexture(5, before);
+        RenderSystem.setShaderTexture(3, mode == SeeThrough.Mode.NONE ? idle() : SeeThrough.glass());
         s.safeGetUniform("InvProj").set(projection.invert(INVERSE));
         s.safeGetUniform("LodInvProj").set(lod ? LOD.inverseProjection : INVERSE);
         s.safeGetUniform("LodDepth").set(lod ? 1f : 0f, LOD.negativeOneToOne ? 1f : 0f, LOD.empty, lod && LOD.pinsWorldDepth ? 1f : 0f);
@@ -315,7 +310,7 @@ public final class SceneDepth {
 
     /** The see-through surface's own light and transmittance ({@code see.glsl}: FxGlass). */
     static int glass() {
-        return glass;
+        return SeeThrough.glass();
     }
 
     /** Own texture unit of {@code FxGlass} (Minecraft's 12 named samplers and units 12–15 are taken). */
@@ -330,7 +325,7 @@ public final class SceneDepth {
     static void bindSee(ShaderInstance s) {
         int unit = GlStateManager._getActiveTexture();
         GlStateManager._activeTexture(GL13.GL_TEXTURE0 + GLASS_UNIT);
-        GL11.glBindTexture(GL11.GL_TEXTURE_2D, see ? glass : idle());
+        GL11.glBindTexture(GL11.GL_TEXTURE_2D, see ? SeeThrough.glass() : idle());
         GlStateManager._activeTexture(unit);
         int program = GL11.glGetInteger(GL20.GL_CURRENT_PROGRAM);
         ProgramManager.glUseProgram(s.getId());
@@ -346,7 +341,7 @@ public final class SceneDepth {
     static void glassUnit(int texture) {
         int unit = GlStateManager._getActiveTexture();
         GlStateManager._activeTexture(GL13.GL_TEXTURE0 + GLASS_UNIT);
-        GL11.glBindTexture(GL11.GL_TEXTURE_2D, !see ? idle() : texture >= 0 ? texture : glass);
+        GL11.glBindTexture(GL11.GL_TEXTURE_2D, !see ? idle() : texture >= 0 ? texture : SeeThrough.glass());
         GlStateManager._activeTexture(unit);
     }
 
@@ -429,7 +424,6 @@ public final class SceneDepth {
         height = h;
         // the colour the layer framebuffer was made for no longer matches the new depth size
         layerColour = -1;
-        glass = image(glass, GL11.GL_RGBA8, GL11.GL_RGBA, GL11.GL_UNSIGNED_BYTE, w, h);
         hard = image(hard, GL30.GL_DEPTH_COMPONENT32F, GL11.GL_DEPTH_COMPONENT, GL11.GL_FLOAT, w, h);
         for (int i = 0; i < 2; i++) {
             if (!ensureOne(i, w, h)) {
@@ -461,9 +455,8 @@ public final class SceneDepth {
         int previous = GlStateManager._getInteger(GL30.GL_DRAW_FRAMEBUFFER_BINDING);
         GlStateManager._glBindFramebuffer(GlConst.GL_FRAMEBUFFER, fb);
         GlStateManager._glFramebufferTexture2D(GlConst.GL_FRAMEBUFFER, GlConst.GL_COLOR_ATTACHMENT0, GlConst.GL_TEXTURE_2D, tex, 0);
-        GlStateManager._glFramebufferTexture2D(GlConst.GL_FRAMEBUFFER, GL30.GL_COLOR_ATTACHMENT1, GlConst.GL_TEXTURE_2D, glass, 0);
         GlStateManager._glFramebufferTexture2D(GlConst.GL_FRAMEBUFFER, GlConst.GL_DEPTH_ATTACHMENT, GlConst.GL_TEXTURE_2D, hard, 0);
-        GL20.glDrawBuffers(new int[]{GL30.GL_COLOR_ATTACHMENT0, GL30.GL_COLOR_ATTACHMENT1});
+        GL20.glDrawBuffers(new int[]{GL30.GL_COLOR_ATTACHMENT0});
         boolean ok = GlStateManager.glCheckFramebufferStatus(GlConst.GL_FRAMEBUFFER) == GlConst.GL_FRAMEBUFFER_COMPLETE;
         GlStateManager._glBindFramebuffer(GlConst.GL_FRAMEBUFFER, previous);
         return ok;
@@ -473,7 +466,7 @@ public final class SceneDepth {
     public static final class ViewState {
         private int[] FBOS = {-1, -1};
         private int[] TEXTURES = {-1, -1};
-        private int glass = -1, hard = -1, layerFbo = -1, layerColour = -1;
+        private int hard = -1, layerFbo = -1, layerColour = -1;
         private boolean see;
         private int fbo = -1;
         private int texture = -1;
@@ -490,11 +483,11 @@ public final class SceneDepth {
 
         void close() {
             FxViews.textures(TEXTURES); FxViews.framebuffers(FBOS);
-            FxViews.textures(glass, hard); FxViews.framebuffers(layerFbo);
+            FxViews.textures(hard); FxViews.framebuffers(layerFbo);
         }
 
         public void swap() {
-            int t = SceneDepth.glass; SceneDepth.glass = glass; glass = t;
+            int t;
             t = SceneDepth.hard; SceneDepth.hard = hard; hard = t;
             t = SceneDepth.layerFbo; SceneDepth.layerFbo = layerFbo; layerFbo = t;
             t = SceneDepth.layerColour; SceneDepth.layerColour = layerColour; layerColour = t;
