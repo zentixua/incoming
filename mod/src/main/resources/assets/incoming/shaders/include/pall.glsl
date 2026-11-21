@@ -618,13 +618,13 @@ const float PALL_YOUNG_TILE = 1038.0;
 const float PALL_YOUNG_SHARE = 0.05;
 const float PALL_YOUNG_MIX_FROM = 0.25;
 const float PALL_YOUNG_MIX_TO = 0.5;
-// the young field's glow toward the ball and backlit rim (fx_pall: youngDust), shares of the ball's light on a facing white wall: the
-// animation's 0.5 and 1.6 of its full light, times a beam's phase at 25° off the ball (0.25 · HG(0.375, 0.9) = 0.68)
-const float PALL_YOUNG_GLOW = 0.34;
-const float PALL_YOUNG_RIM = 1.1;
-// their colours: the animation's, normalised to unit luma (PALL_LUMA): forward glow (0.5, 0.28, 0.1), rim (1, 0.72, 0.42)
-const vec3 PALL_YOUNG_GLOW_TINT = vec3(1.5935, 0.8924, 0.3187);
-const vec3 PALL_YOUNG_RIM_TINT = vec3(1.3195, 0.9500, 0.5542);
+// the young field's light (fx_pall: youngDust): the animation's dark, lit, forward-glow and rim colours in linear light, and the thick
+// dust's reflectance (linear luma of the pall's DUST colour, 0.60, 0.53, 0.45)
+const vec3 PALL_YOUNG_DARK = vec3(0.0220, 0.0085, 0.0039);
+const vec3 PALL_YOUNG_LIT = vec3(1.0, 0.3931, 0.1065);
+const vec3 PALL_YOUNG_FORWARD = vec3(0.2140, 0.0637, 0.0100);
+const vec3 PALL_YOUNG_RIM = vec3(1.0, 0.4770, 0.1473);
+const float PALL_YOUNG_REFLECT = 0.2537;
 
 // presentation (Artem 21.11: the lifted dust keeps moving for seconds after the front, never freezing): the billow pattern of young
 // dust is displaced along its turbulent path — eddies of the dusty layer move at σ_u ≈ 2.5 u* ≈ 0.1 of the wind behind the front
@@ -1022,10 +1022,21 @@ vec4 froxelNear(sampler2D sum, vec4 F, vec2 pixel, float z) {
 // thinner head; the rays march it per pixel from here (fx_pall), behind the volume's own part of the ray (froxelNear up to
 // this depth), so the order along the ray stays: near air, the head, the pall behind it. Every reader of the volume and the
 // rays takes the same boundary: the composite, the reduced-frame mix and the march
+// Where ray dir (from the eye) enters the young field's layer from above (fx_pall: youngDust), at most far: the eye above its reach
+// (PALL_YOUNG_TOP of the head's law top over the map's highest relief) and the ray going down. The young field's billows need the
+// rays' pixel footprint: in the near volume's cells (many pixels wide) they faded to a flat haze under an eye 120 m up once the head
+// had passed (silo takes v6b–v6d, +2…+8 s); an eye inside the layer keeps the near volume (the murk around it)
+float youngEntry(mat4 S, mat4 V, vec4 G, vec3 dir, float far) {
+    if (V[0].w <= 0.0 || S[1].w < 0.5 || dir.y >= -1e-4) return far;
+    float hi = S[0].z + max(G.z, 0.0) + V[0].z * PALL_YOUNG_TOP;
+    if (hi >= 0.0) return far;
+    return min(far, hi / dir.y);
+}
+
 float froxelEnd(vec4 F, vec3 dir, float axis, mat4 S0, mat4 V0, vec4 G0, mat4 S1, mat4 V1, vec4 G1) {
     float far = F.z / axis;
     vec4 h0 = pallWallSpans(S0, V0, G0, dir, 0.0, far), h1 = pallWallSpans(S1, V1, G1, dir, 0.0, far);
-    float a = far;
+    float a = min(youngEntry(S0, V0, G0, dir, far), youngEntry(S1, V1, G1, dir, far));
     if (h0.y > h0.x) {
         a = min(a, h0.x);
     } else if (h0.w > h0.z) {

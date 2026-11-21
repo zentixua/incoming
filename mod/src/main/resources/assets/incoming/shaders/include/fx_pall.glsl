@@ -656,48 +656,42 @@ float youngChord(Young y, vec3 q, vec3 v, float len, int n) {
 // to the top or the front face, beams from the sun and the ball through the depth toward them to where they leave the layer (shadows of
 // the lumps and the hump on themselves and on what lies behind them)
 //
-// presentation (the animation's light, PARAMS.md): dust looked at toward the ball glows with its forward scattering (the forward peak the
-// delta-Eddington light leaves to the direct beam; the animation's 0.5 of full light at the ball's direction, falling as the cosine's 5th
-// power), and its thin edges toward the ball show a backlit rim (Mie, 1.6 of full light, cosine's 10th power), lit as far as the ball
-// reaches them within 21 m (the animation's self-shadow: 1.6 × that depth, brighter higher up), in the animation's warm colours. cap — the
-// ball's light here (pallBallLight),
-// view — the view ray's direction
+// presentation (lead 21.11: the animation's light ported with its density, PARAMS.md): the young dust is lit as in the animation, not by the
+// pall's two-stream light — a key light (the ball, or the sun while brighter) reaches it through the young dust within 21 m toward it (1.6 ×
+// that depth: the lumps shade their own lee), more of it higher up (the lower layer under the rest), with a floor of 0.08; its colour runs
+// from the animation's dark (0.16, 0.09, 0.05) to its lit (1, 0.66, 0.36), and looked at toward the key light it glows with forward
+// scattering (0.5, 0.28, 0.1; the cosine's 5th power) with a backlit rim on its thin edges (1, 0.72, 0.42 × 1.6; 10th power). Colours are the
+// animation's display colours in linear light, at the key light's brightness times the thick dust's reflectance (PALL_YOUNG_REFLECT: the
+// pall's dust colour, so fully lit young dust is as bright as the lit pall; soot and sand scale it by their albedo). The pall's light
+// filled every lee of the young field (its darkest tenth 0.85, 0.64, 0.44 against the animation's 0.49, 0.29, 0.13) and whitened it (78 %
+// of the approaching wall clipped against 50 %; silo take v6d). The young dust still shades other matter by its column (s.tau, s.slab).
+// cap — the ball's light here (pallBallLight), view — the view ray's direction
 void youngDust(Young y, vec3 q, vec3 sunDir, vec3 lightDir, vec3 cap, vec3 view, vec3 w, float share, inout Sample s) {
     float own = youngDens(y, q, false), sd = share * own;
     if (sd <= 1e-7) return;
-    float c = max(dot(view, lightDir), 0.0);
-    if (c > 0.0 && cap.r + cap.g + cap.b > 1e-5) {
-        float near = 0.0;
-        for (int k = 1; k < 4; k++) near += youngDens(y, q + lightDir * (7.0 * y.size * float(k)), true);
-        float lit = exp(-near * 7.0 * y.size * 1.6) * (0.55 + 0.45 * smoothstep(0.0, 40.0 * y.size, q.y)) + 0.08;
-        float thin = 1.0 - smoothstep(0.0, 0.06 * y.rho / 0.11, own);
-        float c2 = c * c, c5 = c2 * c2 * c;
-        // the animation's colours (forward glow 0.5, 0.28, 0.1; rim 1, 0.72, 0.42) at the brightness of the ball's light on this dust
-        float light = dot(cap * w, PALL_LUMA);
-        s.glow += sd * light * (PALL_YOUNG_GLOW * c5 * PALL_YOUNG_GLOW_TINT + PALL_YOUNG_RIM * c5 * c5 * lit * thin * PALL_YOUNG_RIM_TINT);
-    }
-    float reach = 4.0 * y.hk, toTop = max(2.3 * y.hk - q.y, 0.0), r = length(q.xz);
-    vec2 out1 = q.xz / max(r, 1e-3);
+    vec3 sun = vec3(0.0);
+    if (PallSunTop.r + PallSunTop.g + PallSunTop.b > 0.0) sun = PallSunLight;
+    float ball = dot(cap, PALL_LUMA), day = dot(sun, PALL_LUMA);
+    vec3 keyDir = lightDir;
+    if (day > ball) keyDir = sunDir;
+    float near = 0.0;
+    for (int k = 1; k < 4; k++) near += youngDens(y, q + keyDir * (7.0 * y.size * float(k)), true);
+    float lit = exp(-near * 7.0 * y.size * 1.6) * (0.55 + 0.45 * smoothstep(0.0, 40.0 * y.size, q.y)) + 0.08;
+    float thin = 1.0 - smoothstep(0.0, 0.06 * y.rho / 0.11, own);
+    float c = max(dot(view, keyDir), 0.0), c2 = c * c, c5 = c2 * c2 * c;
+    vec3 tone = mix(PALL_YOUNG_DARK, PALL_YOUNG_LIT, lit) + c5 * PALL_YOUNG_FORWARD + (1.6 * c5 * c5 * lit * thin) * PALL_YOUNG_RIM;
+    float bright = (ball + day) * PALL_YOUNG_REFLECT * dot(w, PALL_LUMA) / dot(PALL_DUST_W, PALL_LUMA) / dot(PALL_YOUNG_LIT, PALL_LUMA);
+    s.glow += sd * bright * tone;
+    // its column for the light of other matter here (haze, spray): above the point, and the whole layer
+    float toTop = max(2.3 * y.hk - q.y, 0.0);
     float up = share * youngChord(y, q, vec3(0.0, 1.0, 0.0), toTop, 3);
-    float side = share * youngChord(y, q, vec3(out1.x, 0.0, out1.y), min(max(y.R - r, 0.0) + 1.0, reach), 3);
     float down = share * youngChord(y, q, vec3(0.0, -1.0, 0.0), max(q.y, 0.0), 2);
-    float depth = min(up, side);
-    float sunLen = reach, capLen = reach, toSun = 0.0;
-    if (sunDir.y > 0.05) sunLen = min(reach, toTop / sunDir.y);
-    if (lightDir.y > 0.05) capLen = min(reach, toTop / lightDir.y);
-    if (PallSunTop.r + PallSunTop.g + PallSunTop.b > 0.0) toSun = share * youngChord(y, q, sunDir, sunLen, 3);
-    float toCap = share * youngChord(y, q, lightDir, capLen, 3);
-    s.tau += depth;
-    s.slab += depth + down;
-    s.slabAlbedo += (depth + down) * w;
-    s.slabPhase += (depth + down) * PALL_DUST_G;
-    s.shadeSun += toSun - depth / max(sunDir.y, 0.12);
-    s.shadeCap += toCap - depth / clamp(lightDir.y, 0.12, 1.0);
-    s.capDeep += min(toCap, up + max(toCap - up / clamp(lightDir.y, 0.12, 1.0), 0.0)) - depth;
+    s.tau += up;
+    s.slab += up + down;
+    s.slabAlbedo += (up + down) * w;
+    s.slabPhase += (up + down) * PALL_DUST_G;
     s.sigma += sd;
     s.dry += sd;
-    s.albedo += sd * w;
-    s.phase += sd * PALL_DUST_G;
 }
 
 // Slot cap center (CloudPuffs.pallLight): above epicenter at H.w, downwind (S[2].xy) by G.z, as mushroom body
