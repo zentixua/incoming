@@ -394,6 +394,9 @@ public final class FxLayer {
             float skyLuma = Math.max(view.skyLight(), 1e-3f);
             s.safeGetUniform("FxSkyTint").set((float) Math.pow(view.sky().x() / skyLuma, 2.2), (float) Math.pow(view.sky().y() / skyLuma, 2.2),
                     (float) Math.pow(view.sky().z() / skyLuma, 2.2));
+            // the sky lit by a fireball (NukeSky: the fog and sky turn amber) lights the puffs from above in the same colour
+            float[] amber = ua.zentix.incoming.client.nuclear.NukeSky.amberTint(view.camera(), view.partial());
+            s.safeGetUniform("FxAmber").set(amber[0], amber[1], amber[2], amber[3]);
             // particles and ribbons take world light from the light map: at its sky share — the substance's tint in air
             // (FarView.sky)
             Vector3f fix = FarView.fix(view.sky(), FarView.lightmap(light, SKY_MAP), SKY_FIX);

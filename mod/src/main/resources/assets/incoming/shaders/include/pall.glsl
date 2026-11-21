@@ -588,6 +588,56 @@ float pallBeamMu(float k, float mu) {
 // the top and e^(−k(tc − τ)) from the bottom — without overflow in a thick layer; k ≥ 10⁻³ — so that the matrix is not degenerate
 // even for a non-absorbing fog (k = 0).
 // A beam that fades the same way as scattered light (kμ = 1) — with a shifted cosine (pallBeamMu): it does not divide by 0.
+// presentation (copies of PallPass.SEE_NEAR, LIT_TAU, PallPass.litDepth): while the eye is inside the young dust of the passing wall
+// (PallInside.x) diffuse light inside the dust within PALL_SEE_NEAR blocks of the eye (tapering out over as many again) saturates at the
+// light PALL_LIT_TAU under the layer's top (the law's tens of optical depths are night); the drawn share of that dust itself is applied
+// to its slot at upload (NukePall.KEEP)
+const float PALL_SEE_NEAR = 40.0;
+const float PALL_LIT_TAU = 3.0;
+
+// Optical depth under the layer top used for diffuse light, with the light floor at weight gate: saturates at PALL_LIT_TAU
+float pallLitDepth(float tau, float gate) {
+    return mix(tau, PALL_LIT_TAU * (1.0 - exp(-tau / PALL_LIT_TAU)), gate);
+}
+
+// presentation (Artem 21.11: the lifted dust keeps moving for seconds after the front, never freezing): the billow pattern of young
+// dust is displaced along its turbulent path — eddies of the dusty layer move at σ_u ≈ 2.5 u* ≈ 0.1 of the wind behind the front
+// (Panofsky & Dutton 1984; Schlichting rough plate, BlastWall.EDDY) and die out over PALL_TURB_S as the wind decays — so the total path
+// saturates (PALL_TURB_REACH noise tiles, est., about twice the physical path so it reads from afar); after the eddies die the pattern
+// keeps turning slowly (PALL_TURB_SLOW tiles/s, est.) until the layer has mixed (PALL_MIX_S). The noise is not stretched along the flow:
+// a stretched coordinate makes its gaps as long as its billows, and the layer opened into black voids; PALL_MIX_S is DustModel.RISE_S (PallField.mixed: 1 − e^(−age/60 s))
+const float PALL_TURB_S = 8.0;
+const float PALL_TURB_REACH = 1.2;
+const float PALL_TURB_SLOW = 0.015;
+const float PALL_MIX_S = 60.0;
+const float PALL_SALTATION_S = 0.25;
+
+// Turbulent displacement of young dust's billow pattern after age s, noise tiles: grows at the eddy speed, saturates as it decays
+float pallTurbReach(float age) {
+    return PALL_TURB_REACH * (1.0 - exp(-max(age, 0.0) / PALL_TURB_S)) + PALL_TURB_SLOW * clamp(age, 0.0, PALL_MIX_S);
+}
+
+// Billow-pattern offset (noise tiles) for a point at rel from ground zero (tile units): the turbulent path after age s along the
+// low-frequency noise w (−½…½): mostly along the radial flow, a third across it, and a little upward (the dust boils up)
+vec3 pallYoung(vec2 rel, vec3 w, float age) {
+    vec2 e = rel / max(length(rel), 1e-3);
+    float reach = pallTurbReach(age);
+    vec2 h = (e * w.x + vec2(-e.y, e.x) * (0.3 * w.y)) * reach;
+    return vec3(h.x, -(0.1 + 0.2 * (w.z + 0.5)) * reach, h.y);
+}
+
+// World-anchored ray grids (Artem/lead 21.11): sample boundaries are fixed in the world for a fixed eye, never relative to the moving
+// front or to a march start that grows every frame — sliding samples read as boiling dust. A grid step snaps up to a power of two and
+// its boundaries are multiples of it from the eye; the ordinary march spans the pall's bounds, snapped to quarter octaves in Java
+// (PallPass.snapBounds) (the per-frame jitter of the step fraction stays: fx_pall_resolve accumulates frames)
+float pallGridStep(float want) {
+    return pow(2.0, -floor(-log2(max(want, 1e-3))));
+}
+
+float pallGridNext(float t, float step, float jitter) {
+    return (floor(t / step - jitter + 1e-3) + 1.0 + jitter) * step;
+}
+
 float pallDiffuse(float w, float g, float tau, float tc, float ground, float mu1, float f1, float mu2, float f2, float top, float bottom, float c) {
     float q = 1.0 - w * g;
     float k = sqrt(max(3.0 * (1.0 - w) * q, 1e-6));
@@ -636,8 +686,13 @@ float pallLifted(float s) {
 }
 
 // Top of the wedge by the share u of its length behind the edge, share of the top at the end (BlastWall.top): u^(5/6), behind the wedge — all
+// not physical (BlastWall.HUMP, hump): a low hump along the front, column unchanged (pallWallShape divides by it)
+const float PALL_WALL_HUMP = 0.38;
+float pallWallHump(float u) {
+    return 1.0 + PALL_WALL_HUMP * smoothstep(0.0, 0.3, u) * (1.0 - smoothstep(0.3, 1.2, u));
+}
 float pallWallTop(float u) {
-    return pow(clamp(u, 0.0, 1.0), 0.8333333);
+    return pow(clamp(u, 0.0, 1.0), 0.8333333) * pallWallHump(u);
 }
 
 // Share of the path of dust with the wind behind the front for the share u of the positive phase (BlastWall.carriedShare): u·e^(1 − u);
@@ -682,7 +737,7 @@ vec3 pallWallRoll(vec3 q, vec2 out1, float size, float angle) {
 float pallWallShape(float u) {
     if (u <= 0.0) return 0.0;
     float x = min(u, 1.0);
-    return pallLifted(x) / pow(max(x, 0.0001), 0.8333333);
+    return pallLifted(x) / pow(max(x, 0.0001), 0.8333333) / pallWallHump(u);
 }
 
 // Where the head behind the wedge passes to the pall, in lengths of the wedge from the leading edge of the dust (BlastWall.HANDOFF_FROM,
@@ -700,7 +755,7 @@ float pallWallFade(float u) {
 float pallWallInside(float s, float z, float len, float top, float lag) {
     if (s < -1.0) return 0.0;
     if (s > PALL_WALL_HANDOFF_TO * len + lag) return 0.0;
-    if (z > top) return 0.0;
+    if (z > top * (1.0 + PALL_WALL_HUMP)) return 0.0;
     if (z < -0.5 * top) return 0.0;
     return 1.0;
 }
@@ -785,7 +840,7 @@ vec4 pallWallSpans(mat4 S, mat4 V, vec4 G, vec3 dir, float ta, float tb) {
     vec2 c = S[0].xy;
     float top = V[0].z, outer = V[0].x + 1.0, inner = max(V[0].x - PALL_WALL_HANDOFF_TO * V[0].y - V[1].y, 0.0);
     // by height: the relief map (without it — the ground under the epicenter) with the head
-    float lo = S[0].z + min(G.y, 0.0) - 0.5 * top, hi = S[0].z + max(G.z, 0.0) + top;
+    float lo = S[0].z + min(G.y, 0.0) - 0.5 * top, hi = S[0].z + max(G.z, 0.0) + top * (1.0 + PALL_WALL_HUMP);
     if (abs(dir.y) > 1e-6) {
         float y0 = lo / dir.y, y1 = hi / dir.y;
         ta = max(ta, min(y0, y1));

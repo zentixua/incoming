@@ -352,7 +352,7 @@ class PallGlslTest {
         String flat = wall.replaceAll("\\s+", " ");
         String billows = body(read("include/fx_pall.glsl"), "float wallBillows(").replaceAll("\\s+", " ");
         assertTrue(billows.contains("vec3 o = pallWallRoll(pallWallOrigin(h.rel, h.z, ph, h.P.y, V[1].x), h.rel / max(length(h.rel), 1e-3), size, "
-                + "pallWallRollAngle(ph, V[1].x, size));") && billows.contains("vec3 n = wallNoise(o / size + offset, fine);"),
+                + "pallWallRollAngle(ph, V[1].x, size));") && billows.contains("vec3 n = wallNoise(o / size + offset, fine, age);"),
                 "head noise - not in dust coordinates, turning in its eddies");
         assertTrue(flat.contains("float u = s / max(h.P.x, 0.001), ph = u * V[2].x, tile = max(V[2].w, 1.0);"), "head phase share or tile");
         // eddies the layer's size: the octave of the tile matching the local layer top (fixed scales: billows stay where lofted); thinner

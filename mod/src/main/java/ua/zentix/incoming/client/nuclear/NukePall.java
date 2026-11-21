@@ -73,6 +73,20 @@ public final class NukePall {
             | FrustumIntersection.PLANE_MASK_NY | FrustumIntersection.PLANE_MASK_PY | FrustumIntersection.PLANE_MASK_NZ;
     /** Camera extinction (1/block), its mist component, and muffling 0..1 for the sound thread. */
     private static volatile float sigma, mist, muffle;
+    /** Eye inside young dust, 0..1 ({@link #young}). */
+    private static volatile float young;
+    /**
+     * presentation: share of each detonation's dry dust drawn while the eye is inside its young dust ({@link #young}, {@code PallPass.SEE}):
+     * applied to the slot's dust row and wall-head scale at upload ({@link #slot}), so the march, its near volume, the composite's repair,
+     * layer quads and probes all see the same medium; spray, haze and other detonations keep the law.
+     */
+    private static final java.util.Map<ClientNuclear.Active, Float> KEEP = new java.util.IdentityHashMap<>();
+
+    /** Drawn share of {@code a}'s dry dust this frame (1 — the law). */
+    static float keep(ClientNuclear.Active a) {
+        Float k = KEEP.get(a);
+        return k == null ? 1f : k;
+    }
     /** Vertical dust optical depth at camera, above and below down to ground (pall and wall head): ray reach ({@link #frame}). */
     private static volatile float tauUp, tauDown;
     private static volatile double earX, earY, earZ;
@@ -103,12 +117,14 @@ public final class NukePall {
         FireStorms.tick(all);
         if (all.isEmpty()) {
             unmuffle();
-            sigma = mist = tauUp = tauDown = 0;
+            sigma = mist = tauUp = tauDown = young = 0;
+            KEEP.clear();
             NukeAsh.tick(level, cam, 0, 0, null);
             return;
         }
         PallPass.prepare();
-        double s = 0, wet = 0, densest = 0, dust = 0, headMax = 0, headWet = 0, up = 0, down = 0;
+        KEEP.keySet().removeIf(k -> !all.contains(k));
+        double s = 0, wet = 0, densest = 0, dust = 0, headMax = 0, headWet = 0, up = 0, down = 0, inside = 0;
         // ash and wind from the detonation with densest camera pall; screen veil from the densest wall head
         ClientNuclear.Active nearest = null, headAt = null;
         for (ClientNuclear.Active a : all) {
@@ -145,7 +161,14 @@ public final class NukePall {
             }
             s += here;
             // over water, head is spray
-            wet += head * wetHere + (pall ? a.pall.mist(dx, dz, eye, floor, ticks, water) : 0);
+            double mistHere = head * wetHere + (pall ? a.pall.mist(dx, dz, eye, floor, ticks, water) : 0);
+            wet += mistHere;
+            // the floors are for the passing wall's dust only: not spray or mist
+            double gate = young(a, cam, Math.max(0, here - mistHere));
+            inside = Math.max(inside, gate);
+            float k = (float) PallPass.keep(gate);
+            if (k < 1) KEEP.put(a, k);
+            else KEEP.remove(a);
             dust = Math.max(dust, a.pall.ashRate(dx, dz, ticks, water));
         }
         // no underground dust: at eye use outdoor-air fraction, like the pall ray (sky light / 15, fx/layer/OpenAir; all air in a
@@ -155,6 +178,7 @@ public final class NukePall {
         wet *= open;
         headMax *= open;
         sigma = (float) s;
+        young = (float) (inside * open);
         mist = (float) wet;
         tauUp = (float) up;
         tauDown = (float) down;
@@ -191,6 +215,8 @@ public final class NukePall {
     }
 
     static void reset() {
+        young = 0;
+        KEEP.clear();
         unmuffle();
         sigma = mist = tauUp = tauDown = 0;
         PallPass.reset();
@@ -242,6 +268,7 @@ public final class NukePall {
         openSky(level, f.openSky, f.faceShade);
         double open = 0.2126 * PallLight.linear(f.openSky.x) + 0.7152 * PallLight.linear(f.openSky.y) + 0.0722 * PallLight.linear(f.openSky.z);
         f.ballsLit = MushroomField.balls(all, eye, partial, air, f.exposure, open, f.balls, f.ballLight);
+        f.inside = 0;
         List<ClientNuclear.Active> visible = new ArrayList<>();
         if (q != PallPass.Quality.OFF) for (ClientNuclear.Active a : all) if (visible(a, partial)) visible.add(a);
         if (visible.isEmpty() && f.mushroomCount == 0 && !f.ballsLit) return null;
@@ -279,36 +306,65 @@ public final class NukePall {
         FireStorms.frame(SLOTTED, k, eye, partial, frustum, Float.isNaN(clouds) ? 1e6f : (float) (clouds - eye.y), f);
         // ray reach from eye dust and optical depth above and below it (pallClip); disabled pall is not rendered, and
         // does not hide the mushroom behind it
+        f.inside = 0;
         if (q == PallPass.Quality.OFF) f.eyeDust.zero();
-        else if (ua.zentix.incoming.client.fx.layer.FxViews.secondary()) eyeDust(level, eye, partial, f.eyeDust);
-        else f.eyeDust.set(sigma, tauUp, tauDown);
+        else if (ua.zentix.incoming.client.fx.layer.FxViews.secondary()) f.inside = eyeDust(level, eye, partial, f.eyeDust);
+        else {
+            f.eyeDust.set(sigma, tauUp, tauDown);
+            f.inside = young;
+        }
         return f;
     }
 
     /** Optical medium at a camera; never updates the player's ash, hearing or dust veil. */
-    private static void eyeDust(ClientLevel level, Vec3 camera, float partial, Vector3f out) {
-        double extinction = 0, up = 0, down = 0;
+    private static float eyeDust(ClientLevel level, Vec3 camera, float partial, Vector3f out) {
+        double extinction = 0, up = 0, down = 0, inside = 0;
         for (ClientNuclear.Active active : ClientNuclear.detonations()) {
+            double dry = 0;
             Detonation d = active.d;
             double ticks = active.ticks(partial), dx = camera.x - d.burst().x, dz = camera.z - d.burst().z;
             double eye = camera.y - d.groundY(), floor = active.ground.at(camera.x, camera.z);
             if (active.wall.slot(active.seconds(partial), WALL) && WALL[3] > 0) {
                 double wet = active.ground.hasWater() ? active.ground.water(camera.x, camera.z) : 0;
                 double hard = active.ground.hasHard() ? active.ground.hard(camera.x, camera.z) : 0;
-                extinction += BlastWall.sigma(WALL, dx, dz, eye - floor, wet, hard);
+                double head = BlastWall.sigma(WALL, dx, dz, eye - floor, wet, hard);
+                extinction += head;
+                dry += head * (1 - wet);
                 up += BlastWall.tau(WALL, dx, dz, eye - floor, Double.POSITIVE_INFINITY, wet, hard);
                 down += BlastWall.tau(WALL, dx, dz, 0, eye - floor, wet, hard);
             }
             if (active.pall.visible(ticks)) {
                 PallField.Water water = water(active);
-                extinction += active.pall.sigma(dx, dz, eye, floor, ticks, water);
+                double pall = active.pall.sigma(dx, dz, eye, floor, ticks, water);
+                extinction += pall;
+                dry += Math.max(0, pall - active.pall.mist(dx, dz, eye, floor, ticks, water));
                 up += active.pall.tau(dx, dz, eye, Double.POSITIVE_INFINITY, floor, ticks, water);
                 down += active.pall.tau(dx, dz, floor, eye, floor, ticks, water);
             }
+            inside = Math.max(inside, young(active, camera, dry));
         }
         double open = level.dimensionType().hasSkyLight() ? level.getBrightness(LightLayer.SKY, BlockPos.containing(camera)) / 15.0 : 1;
         out.set((float) (extinction * open), (float) up, (float) down);
+        return (float) (inside * open);
     }
+
+    /**
+     * How far the eye at {@code cam} is inside the young dust of {@code a} (extinction {@code here} per block there), 0..1: dust present
+     * (full from {@link #YOUNG_SIGMA}) and less than a minute since the front passed the eye, fading out over the next minute. Gates the
+     * pall's presentation floors inside the passing wall ({@code PallPass.SEE}, {@code LIT_TAU}); old pall keeps the law's dark interior.
+     */
+    static double young(ClientNuclear.Active a, Vec3 cam, double here) {
+        if (here <= 0) return 0;
+        double age = (a.ticks(0) - a.d.arrivalTicks(cam.distanceTo(a.d.burst()))) / 20.0;
+        return Math.min(1, here / YOUNG_SIGMA) * (1 - BlastWall.smooth(YOUNG_S, 2 * YOUNG_S, age));
+    }
+
+    /**
+     * presentation (est.): eye dust extinction at which the eye counts as inside the wall (0.05/block: 80 m visibility, the thinnest dust the
+     * floors could change), and how long after the front passed the eye the floors hold (a minute: the passing wall and the young layer
+     * behind it; then a minute's fade back to the law's dark interior), s.
+     */
+    static final double YOUNG_SIGMA = 0.05, YOUNG_S = 60;
 
     /**
      * Pall-pass frame without the nuke, for conventional explosion smoke ({@code client/fx/smoke/BlastClouds}): air, sun, sky,
@@ -399,6 +455,9 @@ public final class NukePall {
         double ticks = a.ticks(partial);
         boolean water = a.ground.hasWater();
         p.row(ticks, a.ground.hasLand(), water, ROW);
+        // presentation: the eye inside this detonation's young dust sees its dry dust at the drawn share (KEEP)
+        float keep = keep(a);
+        if (keep < 1) for (int i = 0; i < PallPass.WIDTH; i++) ROW[4 * (PallField.DUST_ROW * PallPass.WIDTH + i)] *= keep;
         double top = 1;
         boolean any = false;
         for (int i = 0; i < PallField.ROWS * PallPass.WIDTH; i++) {
@@ -413,6 +472,7 @@ public final class NukePall {
         // dust wall: head and Wilson cloud in the same volume
         double seconds = a.seconds(partial);
         boolean wall = a.wall.slot(seconds, WALL);
+        if (keep < 1) WALL[3] *= keep;
         any |= wall;
         if (!any) return false;
         p.drift(ticks, DRIFT);
@@ -421,12 +481,14 @@ public final class NukePall {
         // bounds: dust drift and haze plume in any direction from ground zero; valleys below it over full height; above
         // hills the layer starts at their slopes (pallField); wall head follows map terrain (pallWallSpans), Wilson cloud
         // surrounds the detonation point
-        float r = (float) Math.max(p.extent(ticks), Math.max(a.wall.reach(seconds) + 1, a.wall.wilsonReach(seconds)));
+        // bounds snapped up to quarter octaves: the ray's ordinary steps span them (fx_pall: along), so they stay put in the world while
+        // the wall and pall grow, moving only at a snap (samples sliding with the front read as boiling dust)
+        float r = (float) PallPass.snapBounds(Math.max(p.extent(ticks), Math.max(a.wall.reach(seconds) + 1, a.wall.wilsonReach(seconds))));
         LO.set(cx - r, (float) (ground - top), cz - r);
         HI.set(cx + r, (float) (ground + Math.max(a.ground.high(), 0) + top * (1 + PallField.BUMPS) * 1.05), cz + r);
         if (WALL[3] > 0) {
             LO.y = Math.min(LO.y, ground + Math.min(a.ground.low(), 0) - 0.5f * WALL[2]);
-            HI.y = Math.max(HI.y, ground + Math.max(a.ground.high(), 0) + WALL[2]);
+            HI.y = Math.max(HI.y, ground + Math.max(a.ground.high(), 0) + WALL[2] * (float) (1 + BlastWall.HUMP));
         }
         if (WALL[18] > 0) HI.y = Math.max(HI.y, (float) (ground + WALL[19] + a.wall.wilsonReach(seconds)));
         CULL.set(LO.x, Math.min(LO.y, bottom), LO.z);
@@ -464,7 +526,12 @@ public final class NukePall {
     private static void light(ClientLevel level, Vec3 eye, float partial, PallPass.Frame f) {
         sky(level, eye, partial, litTop(partial), SKY);
         f.sun.set(SKY.sx, SKY.sy, 0, SKY.day);
-        f.skyLight.set(SKY.sky[0], SKY.sky[1], SKY.sky[2]);
+        // the sky lit by a fireball turns amber (NukeSky: fog and sky colour); its light on the dust follows in the same share, as on the
+        // effects layer's puffs (FxAmber): without it a backlit wall under a blue sky reads cold grey-blue beside the amber sky
+        float[] amber = NukeSky.amberTint(eye, partial);
+        double luma = 0.2126 * SKY.sky[0] + 0.7152 * SKY.sky[1] + 0.0722 * SKY.sky[2];
+        f.skyLight.set(SKY.sky[0] + amber[3] * (float) (amber[0] * luma - SKY.sky[0]), SKY.sky[1] + amber[3] * (float) (amber[1] * luma - SKY.sky[1]),
+                SKY.sky[2] + amber[3] * (float) (amber[2] * luma - SKY.sky[2]));
         f.sunLight.set(SKY.sun[0], SKY.sun[1], SKY.sun[2]);
         f.sunTop.set(SKY.top[0], SKY.top[1], SKY.top[2], SKY.eyeUp);
         // airlight: the sky vanilla draws behind distant matter, without its sun, moon and stars (fx_pall: pallAirLight)

@@ -151,7 +151,11 @@ point (Minecraft air is humid enough for it in clear weather and in rain).
 The dust has the colour of the ground it comes from: grey-brown over grass, fields and forest, pale tan over sand. Right
 behind the wave it is clean dust; smoke darkens it only as the fires under it grow, over minutes, and only burning
 fires light it orange from below. The dust churns in eddies about as tall as the wall, turning outward while the wave's
-wind blows and back as it reverses; the turning is shown faster than in reality so that it can be seen from afar.
+wind blows and back as it reverses; the turning is shown faster than in reality so that it can be seen from afar. Lit,
+rolling billows mark the top of the wall, with a low hump that runs along the front and sinks back within seconds. Behind the
+front the dust keeps moving for several seconds: it streams outward, rolls and boils up, then settles into a slowly drifting
+haze. Inside the passing wall the air is a warm, glowing murk: nearby houses and trees stay
+visible and fade with distance, and the air clears as the dust thins.
 Burns, radiation and falling debris can still hurt you after the flash, so stay under cover and watch your dose.
 
 ![A dust wave approaches beneath the mushroom cloud at dusk](../media/blast-wave-dusk-hq.jpg)

@@ -1157,7 +1157,11 @@ paths:
   the actual plane and clump UV axes. Two `UV2` shorts carry the basis instead of constant `FULL_BRIGHT`
   (`PuffGeometry.faceLight/flatLight`); `fx.vsh` restores light and transforms directions at vertices, retaining the
   36-byte format. No fragment basis derivatives/normalization. Ambient is a hemisphere dome (`fx.fsh` `skyDome`: sky over the upper half, ground reflection `PALL_LAND` under it,
-  equal to the six-side mean in uniform light, `SkyDomeGlslTest`); frame fireballs
+  equal to the six-side mean in uniform light, `SkyDomeGlslTest`); while a fireball lights the air the dome's tint follows the amber fog
+  and sky (`FxAmber`, `NukeSky.amberTint`: same share as `NukeSky.fogColor`), and up to `BALL_DOME` (0.6, presentation) of a fireball's
+  light on a puff arrives as that dome's diffuse light instead of a beam by sides (none without an amber sky: conventional blasts keep the
+  beam; during a nuclear show the share applies to every frame fireball, the dome's light being the nuclear sky's): backlit dust has lit
+  tops, not dark cores under bright rims. Frame fireballs
   (`FxLights`) use the maps and cannot exceed on-screen fire in the same
   to the same extent as for `balls` (illuminance × the sky's light `FxAmbient`: otherwise at night the fire would barely
   light the smoke); the shadow in the maps — of the bake's matter (`bake.py`: ω 0.55, g 0.55), of the puff's mixture —

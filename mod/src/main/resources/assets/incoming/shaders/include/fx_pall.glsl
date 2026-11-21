@@ -95,6 +95,9 @@ uniform mat4 PrevViewProj;
 uniform vec4 PallReproject;
 // vertical dust depth at eye: x above, y below to ground (NukePall.tick); with PallFrame.w determines ray reach (pallClip)
 uniform vec2 PallEyeTau;
+// eye inside the young dust of the passing wall (PallPass.Frame.inside): x — 0..1, gates the light floor (pall.glsl: pallLitDepth); y —
+// unused (the drawn share of that dust is applied to its slot at upload, NukePall.KEEP)
+uniform vec2 PallInside;
 // firestorm (client/nuclear/FireStorm, pall.glsl): slot fire maps (R flame, G column smoke, B G × risen share;
 // mips aggregate sources), fire slots, storm bounds (denser ray steps there); frame whirls (up to four, per column:
 // base/core radius; height/strength/seconds/swirl; tilt/flame/seed — PallPass.Frame)
@@ -214,9 +217,13 @@ float hgDisc(float g, float c, float mu0) {
 // Coarse-noise tile warp (tile fractions): tile repeats every tile blocks, visible as bands from above; smooth warp
 // up to one sixth of a tile over two tiles breaks repetition (more stretches billows into bands), preserving value
 // distribution (same noise elsewhere, mean billow shape remains 1)
-vec3 warpAt(mat4 S, vec3 p) {
+vec3 warpNoise(mat4 S, vec3 p) {
     vec3 q = vec3(p.x - S[0].x - S[1].x, 0.0, p.z - S[0].y - S[1].y) / S[3].y;
-    vec2 w = texture(PallNoise, q * 0.07 + vec3(0.31, 0.5, 0.67)).rg - 0.5;
+    return texture(PallNoise, q * 0.07 + vec3(0.31, 0.5, 0.67)).rgb - 0.5;
+}
+
+vec3 warpAt(mat4 S, vec3 p) {
+    vec3 w = warpNoise(S, p);
     return vec3(w.x, 0.0, w.y) * 0.3;
 }
 
@@ -357,9 +364,9 @@ Sample emptySample() {
 // Head billows at q in tile V[2].w, in dust coordinates (pallWallOrigin): (x, y) tile channels 0..1 (billows, fine edges,
 // uniform as tile), z fine billows (multiplier, mean 1; fine is their share, as pall). Coarse-noise warp as pall (warpAt):
 // on a kilometers-wide ring, repetition from above appears as a grid
-vec3 wallNoise(vec3 q, float fine) {
-    vec2 w = texture(PallNoise, q * 0.07 + vec3(0.31, 0.5, 0.67)).rg - 0.5;
-    q += vec3(w.x, 0.0, w.y) * 0.3;
+vec3 wallNoise(vec3 q, float fine, float age) {
+    vec3 w = texture(PallNoise, q * 0.07 + vec3(0.31, 0.5, 0.67)).rgb - 0.5;
+    q += vec3(w.x, 0.0, w.y) * 0.3 + pallYoung(q.xz, w, age);
     vec2 n = textureLod(PallNoise, q, 0.0).rg;
     float detail = fine > 0.0 ? fineAt(q) : 1.0;
     return vec3(n, mix(1.0, detail, fine));
@@ -370,7 +377,10 @@ vec3 wallNoise(vec3 q, float fine) {
 float wallBillows(mat4 V, WallAt h, float ph, float size, float fine, float fill, vec3 offset) {
     vec3 o = pallWallRoll(pallWallOrigin(h.rel, h.z, ph, h.P.y, V[1].x), h.rel / max(length(h.rel), 1e-3), size,
             pallWallRollAngle(ph, V[1].x, size));
-    vec3 n = wallNoise(o / size + offset, fine);
+    // presentation: stretched along the flow and moving with the layer's eddies since the front passed (pall.glsl: pallYoung); dust age
+    // is the phase share ph × the local positive phase (V[2].y saltation e-folds × SALTATION_S over the back's phase share V[2].x)
+    float age = ph * V[2].y * PALL_SALTATION_S / max(V[2].x, 1e-3);
+    vec3 n = wallNoise(o / size + offset, fine, age);
     return pallShape(n.xy, fill) * n.z;
 }
 
@@ -575,7 +585,10 @@ void slot(mat4 S, mat4 V, sampler2D ground, vec4 R, vec4 W, vec4 G, vec4 H, vec3
     if (head.P.w > 0.0) wall(V, head, keyDir, sunDir, lightDir, f.smoke, cone, pall, S[3].x, s);
     if (!pall) return;
     float fill = clamp(f.dense * 3.0, 0.0, 1.0) * (1.0 - smoothstep(0.4, 1.0, f.height.x));
-    vec3 warp = warpAt(S, p);
+    // young dust: stretched along the flow and still moving (pall.glsl: pallYoung; age from PallField.mixed)
+    vec3 wn = warpNoise(S, p);
+    float age = -PALL_MIX_S * log(max(1.0 - f.mixed, 1e-4));
+    vec3 warp = vec3(wn.x, 0.0, wn.y) * 0.3 + pallYoung(vec2(p.x - S[0].x - S[1].x, p.z - S[0].y - S[1].y) / S[3].y, wn, age);
     vec4 flow = carpetFlowAt(S, p);
     vec3 uvA, uvB;
     float phaseBlend;
@@ -630,19 +643,22 @@ float slabGround(Sample s) {
 // Diffuse pall light at point from above (sun strength sun, ball, sky), I0 + c·I1 per channel (pallDiffuse; excluding
 // point albedo), at depth shifted by billow shadow toward it. Solution linear in sources: ball uses its own solution
 // at its own depth (capDeep, wall head), only while not vanishingly small
+// light floor weight at the point being lit (pallSource): the eye's young-dust gate, tapered with the near dust (pallKeep's range)
+float gLitGate = 0.0;
+
 vec3 scattered(Sample s, float c, vec3 sun) {
     float slab = max(s.slab, s.tau);
     vec4 w = slabMatter(s);
     float g = w.a, ground = slabGround(s);
     float muS = max(PallSun.y, 0.12);
-    float top = clamp(s.tau + s.shadeUp, 0.0, slab);
+    float top = clamp(pallLitDepth(s.tau + s.shadeUp, gLitGate), 0.0, slab);
     vec3 d = vec3(pallDiffuse(w.r, g, top, slab, ground, muS, sun.r, 1.0, 0.0, PallSkyLight.r, 0.0, c),
             pallDiffuse(w.g, g, top, slab, ground, muS, sun.g, 1.0, 0.0, PallSkyLight.g, 0.0, c),
             pallDiffuse(w.b, g, top, slab, ground, muS, sun.b, 1.0, 0.0, PallSkyLight.b, 0.0, c));
     float capI = s.cap.r + s.cap.g + s.cap.b;
     if (capI > 1e-5) {
         float muC = clamp(s.capUp / capI, 0.12, 1.0);
-        float slabC = slab + s.capDeep, topC = clamp(s.tau + s.capDeep + s.shadeUp, 0.0, slabC);
+        float slabC = slab + s.capDeep, topC = clamp(pallLitDepth(s.tau + s.capDeep + s.shadeUp, gLitGate), 0.0, slabC);
         d += vec3(pallDiffuse(w.r, g, topC, slabC, ground, muS, 0.0, muC, s.cap.r, 0.0, 0.0, c),
                 pallDiffuse(w.g, g, topC, slabC, ground, muS, 0.0, muC, s.cap.g, 0.0, 0.0, c),
                 pallDiffuse(w.b, g, topC, slabC, ground, muS, 0.0, muC, s.cap.b, 0.0, 0.0, c));
@@ -1093,6 +1109,7 @@ vec4 pallSource(vec3 p, float cone, vec4 inflow, out vec3 dustLight) {
     // Henyey–Greenstein phase (sphere mean 1, beam strength on white wall — hence ¼). Sun above pall first passes mushrooms
     // on its ray (shadow map, as world in fx_pall_composite): dust under cap is shadowed, as is cap-covered stem (mushSunTau)
     vec3 sun = pallSunAt(p);
+    gLitGate = PallInside.x * (1.0 - smoothstep(PALL_SEE_NEAR, 2.0 * PALL_SEE_NEAR, length(p)));
     vec3 field = scattered(s, g * mv, sun);
     vec3 beams = sun * (0.25 * hg(g, c) * exp(-max(s.tau / muS + s.shadeSun, 0.0)));
     float capI = s.cap.r + s.cap.g + s.cap.b;
@@ -1742,6 +1759,7 @@ void whirlSetup(vec3 dir, float scene, float at) {
         slot(PallSlot0, PallWall0, Sampler5, PallGround0, PallWater0, PallGlow0, PallHot0, mid, sunDir, dir, 1e9, vec4(0.0), m);
         slot(PallSlot1, PallWall1, Sampler6, PallGround1, PallWater1, PallGlow1, PallHot1, mid, sunDir, dir, 1e9, vec4(0.0), m);
         vec3 sun = pallSunAt(mid);
+        gLitGate = PallInside.x * (1.0 - smoothstep(PALL_SEE_NEAR, 2.0 * PALL_SEE_NEAR, length(mid)));
         vec3 lit = scattered(m, PALL_SOOT_G * gMv, sun) + sun * (gSootSun * exp(-m.tau / gMuS));
         float g0 = storm(Sampler3, PallSlot0, PallFire0, mid, 0.0, 1.0).y, g1 = storm(Sampler4, PallSlot1, PallFire1, mid, 0.0, 1.0).y;
         vec3 strongest = g0 >= g1 ? PallFire0[3].rgb : PallFire1[3].rgb;
@@ -1881,19 +1899,20 @@ void main() {
         vec4 want = max(leave - enter, vec4(0.0)) / max(fineStep, vec4(1.0));
         float wanted = want.x + want.y + want.z + want.w + stormWant;
         float fit = wanted > n ? n / wanted : 1.0;
-        if (stormWant >= 1.0) storm.z = (storm.y - storm.x) / max(floor(stormWant * fit), 1.0);
+        if (stormWant >= 1.0) storm.z = pallGridStep((storm.y - storm.x) / max(floor(stormWant * fit), 1.0));
         for (int k = 0; k < 4; k++) {
             if (leave[k] <= enter[k]) {
                 enter[k] = 1e9;
                 leave[k] = 1e9;
                 continue;
             }
-            fineStep[k] = (leave[k] - enter[k]) / max(floor(want[k] * fit), 1.0);
+            fineStep[k] = pallGridStep((leave[k] - enter[k]) / max(floor(want[k] * fit), 1.0));
         }
     }
     // pall: i steps taken (with wall-head steps, up to 2·steps + 16), base ordinary boundaries behind, nextBase next boundary
     int i = 0, base = 0, pallSteps = 2 * steps + 16;
     float ta = 1e9, nextBase = 1e9, lastBase = 1e9;
+    // ordinary steps span the pall's bounds, which NukePall snaps to quarter octaves (PallPass.snapBounds): fixed in the world between snaps
     if (t1 > t0) {
         ta = along(jitter / n, t0, t1);
         lastBase = ta;
@@ -1955,15 +1974,13 @@ void main() {
                 if (!dense && enter[k] <= ta && ta < leave[k]) {
                     dense = true;
                     grid = min(grid, fineStep[k]);
-                    float j = floor((ta - enter[k]) / fineStep[k] - jitter + 1e-3) + 1.0;
-                    next = min(next, min(enter[k] + (j + jitter) * fineStep[k], leave[k]));
+                    next = min(next, min(pallGridNext(ta, fineStep[k], jitter), leave[k]));
                 }
             }
             if (!dense && storm.x <= ta && ta < storm.y) {
                 dense = true;
                 grid = min(grid, storm.z);
-                float j = floor((ta - storm.x) / storm.z - jitter + 1e-3) + 1.0;
-                next = min(next, min(storm.x + (j + jitter) * storm.z, storm.y));
+                next = min(next, min(pallGridNext(ta, storm.z, jitter), storm.y));
                 // a head starting inside the storm frame takes over at its entry
                 for (int k = 0; k < 4; k++) {
                     if (enter[k] > ta) next = min(next, enter[k]);

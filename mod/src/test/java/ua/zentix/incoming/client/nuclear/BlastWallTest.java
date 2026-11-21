@@ -201,10 +201,11 @@ class BlastWallTest {
     @Test
     void wedgeLaws() {
         assertEquals(0, BlastWall.top(0));
-        assertEquals(1, BlastWall.top(1), 1e-12);
+        // the hump at the front (not physical, BlastWall.hump) still stands a little above the law at the wedge end, gone by 1.2 wedges
+        assertEquals(BlastWall.hump(1), BlastWall.top(1), 1e-12);
         assertEquals(1, BlastWall.top(3), 1e-12);
         assertEquals(0, BlastWall.shape(0));
-        assertEquals(1, BlastWall.shape(1), 1e-12);
+        assertEquals(1 / BlastWall.hump(1), BlastWall.shape(1), 1e-12);
         assertEquals(1, BlastWall.shape(2), 1e-12);
         double peak = 0, at = 0;
         for (double u = 0.001; u <= 1; u += 0.001) {
@@ -214,7 +215,7 @@ class BlastWallTest {
                 at = u;
             }
         }
-        assertEquals(2.6, peak, 0.15, "thickest at the edge");
+        assertEquals(2.6, peak * BlastWall.hump(at), 0.15, "thickest at the edge");
         assertTrue(at > 0.05 && at < 0.2, "the thickest on " + at);
         assertEquals(1, BlastWall.handoff(1), 1e-12);
         assertEquals(0, BlastWall.handoff(BlastWall.HANDOFF_TO), 1e-12);
@@ -362,13 +363,14 @@ class BlastWallTest {
         assertTrue(w.slot(4, s));
         double head = s[0], len = s[1], top = s[2], k = s[3];
         assertEquals(0, BlastWall.sigma(s, head + 2, 0, 0.1, 0));
-        assertEquals(0, BlastWall.sigma(s, head - len, 0, 1.01 * top, 0));
+        assertEquals(0, BlastWall.sigma(s, head - len, 0, 1.01 * top * BlastWall.hump(1), 0));
         assertEquals(0, BlastWall.sigma(s, head - 0.1 * len, 0, 0.3 * top, 0), "at the edge above the wedge");
         // densest at the ground in the front part of the wedge (lifted in a thin layer), not at the very edge: dust there is still rising
         // (saltation develops behind the front, BlastWall.develop)
         double peak = 0, at = 0, end = BlastWall.sigma(s, head - len, 0, 0.02 * top, 0);
+        // the law's ground density: the hump (not physical) spreads the same column higher, so the ground density is divided by it
         for (double u = 0.002; u <= 1; u += 0.002) {
-            double v = BlastWall.sigma(s, head - u * len, 0, 0.02 * top, 0);
+            double v = BlastWall.sigma(s, head - u * len, 0, 0.02 * top, 0) * BlastWall.hump(u);
             if (v > peak) {
                 peak = v;
                 at = u;
@@ -376,7 +378,7 @@ class BlastWallTest {
         }
         // 15 kt at 4 s: 1.4 times the end at a third of the wedge (without development — 2.6 times at a tenth)
         assertTrue(peak > 1.25 * end && at < 0.5, "it’s not thicker near the edge: " + peak / end + " at " + at);
-        assertTrue(at > 0.01 && BlastWall.sigma(s, head - 0.002 * len, 0, 0.02 * top, 0) < 0.8 * peak,
+        assertTrue(at > 0.01 && BlastWall.sigma(s, head - 0.002 * len, 0, 0.02 * top, 0) * BlastWall.hump(0.002) < 0.8 * peak,
                 "full density right at the edge (a perfect ring at the foot): peak at " + at);
         assertEquals(0, BlastWall.sigma(s, head - 1.6 * len, 0, 0.1 * top, 0));
         double prev = 0;

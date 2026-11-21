@@ -88,6 +88,39 @@ public final class PallPass {
     /** Table rows: dust, spray and haze for two detonations. */
     public static final int ROWS = 6;
     /**
+     * presentation: while the eye is inside the young dust of the passing wall ({@link Frame#inside}), that detonation's dry dust is drawn at
+     * {@link #SEE} of the law's extinction (applied to its slot at upload, {@code NukePall.KEEP}: every reader of the slot sees one medium),
+     * and diffuse light inside the dust within {@link #SEE_NEAR} blocks of the eye saturates at the light {@link #LIT_TAU} under the layer's top: the reference's view inside the passing wall is a bright warm
+     * curtain with near things in it and depth fading with distance, while the law's young layer allows a few metres (15 kt at 1.6 km:
+     * 1/block, 4 m) and its tens of optical depths are night. A constant share keeps the law's billows and its clearing with time
+     * (15 kt at 1.6 km: 1/block at the passing head draws 33 m, 0.58 → 0.37/block over 5–40 s draws 56 → 88 m). Image only: sound, ash and the veil keep the law; spray, haze, other detonations
+     * and old pall (the gate closes a minute after the front passed the eye) keep it too. Copies in {@code pall.glsl} ({@code PALL_SEE_NEAR}, {@code PALL_LIT_TAU}, {@code pallLitDepth}).
+     */
+    public static final float SEE = 0.12f, SEE_NEAR = 40, LIT_TAU = 3;
+
+    /** Eye extinction for the ray clip (pallClip): the image's, scaled by {@link #SEE} while the eye is inside the young dust. */
+    static float eyeSigma(Frame f) {
+        return (float) (f.eyeDust.x * keep(f.inside));
+    }
+
+    /** Share of the law's dry dust drawn while the eye is inside young dust by {@code gate} ({@code NukePall.KEEP}). */
+    public static double keep(double gate) {
+        return 1 + gate * (SEE - 1);
+    }
+
+    /**
+     * Pall bounds radius {@code r} (blocks) snapped up to a quarter octave: the ray's ordinary steps span the bounds ({@code fx_pall}:
+     * {@code along}), so they stay fixed in the world while the wall and pall grow and move only at a snap; at most a fifth wider.
+     */
+    public static double snapBounds(double r) {
+        return r <= 1 ? r : Math.pow(2, Math.ceil(4 * Math.log(r) / Math.log(2) - 1e-9) / 4);
+    }
+
+    /** Optical depth under the layer top used for diffuse light, saturating at {@link #LIT_TAU} with weight {@code gate} (copy {@code pallLitDepth}). */
+    static double litDepth(double tau, double gate) {
+        return tau + gate * (LIT_TAU * (1 - Math.exp(-tau / LIT_TAU)) - tau);
+    }
+    /**
      * 3D noise texture unit: after the twelve 2D units bound by {@code ShaderInstance}
      * ({@code Sampler0}–{@code Sampler11}).
      */
@@ -429,6 +462,8 @@ public final class PallPass {
          * ({@code pallClip} in {@code fx_pall}: nothing visible beyond ray depth 12). Zeroes — no ray cutoff.
          */
         public final Vector3f eyeDust = new Vector3f();
+        /** Eye inside the young dust of the passing wall, 0..1 ({@code NukePall.young}): gates the presentation floors ({@link PallPass#SEE}). */
+        public float inside;
         public Quality quality = Quality.MEDIUM;
         /** Slot firestorms. */
         public final Fire fire0 = new Fire(), fire1 = new Fire();
@@ -841,9 +876,11 @@ public final class PallPass {
             m.safeGetUniform("PallHot1").set(f.hot1.x, f.hot1.y, f.hot1.z, f.hot1.w);
             m.safeGetUniform("PallGlowOnSmoke").set(f.glowOnSmoke);
             // step jitter advances once per interleave cycle: each ray pixel takes the next value of the sequence
-            m.safeGetUniform("PallFrame").set((float) ((frame / (n * n)) % 4096), step.steps, factor, f.eyeDust.x);
+            m.safeGetUniform("PallFrame").set((float) ((frame / (n * n)) % 4096), step.steps, factor, eyeSigma(f));
             m.safeGetUniform("PallInterleave").set(n, ox, oy, 0f);
-            m.safeGetUniform("PallEyeTau").set(f.eyeDust.y, f.eyeDust.z);
+            float keepEye = (float) keep(f.inside);
+            m.safeGetUniform("PallEyeTau").set(f.eyeDust.y * keepEye, f.eyeDust.z * keepEye);
+            m.safeGetUniform("PallInside").set(f.inside, 1f);
             m.safeGetUniform("PallFire0").set(fireSlot0);
             m.safeGetUniform("PallFire1").set(fireSlot1);
             m.safeGetUniform("PallFireMin").set(f.fireMin.x, f.fireMin.y, f.fireMin.z);
@@ -873,7 +910,7 @@ public final class PallPass {
                 // the previous medium volume in place of world distances (the volume knows no world); the point in each cell
                 // moves every frame
                 RenderSystem.setShaderTexture(0, VOLUME[volumeLatest]);
-                m.safeGetUniform("PallFrame").set((float) (frame % 4096), step.steps, factor, f.eyeDust.x);
+                m.safeGetUniform("PallFrame").set((float) (frame % 4096), step.steps, factor, eyeSigma(f));
                 m.safeGetUniform("PallFroxelFrame").set(w, h, VOLUME_CURRENT, volumePast ? 1f : 0f);
                 m.safeGetUniform("PrevViewProj").set(PREVIOUS);
                 m.safeGetUniform("PallReproject").set(dx, dy, dz, volumePast ? 1f : 0f);

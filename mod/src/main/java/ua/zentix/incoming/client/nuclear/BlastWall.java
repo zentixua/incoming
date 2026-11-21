@@ -466,9 +466,24 @@ public final class BlastWall {
 
     // ---------------------------------------------------------------- wedge laws (shared with shader: pallWall* in pall.glsl)
 
-    /** Wedge top at fraction u of its length behind the edge, fraction of end top: u^(5/6) (Kuhl); full behind the wedge. Copy {@code pallWallTop}. */
+    /**
+     * not physical (Artem 21.11, guide deviation list): a low hump runs along the front — the head's top stands up to this share above the
+     * law's top near a third of the wedge behind the front and sinks back to it by 1.2 wedges ({@link #hump}); the column is unchanged
+     * ({@link #shape} is divided by the same factor). The approved animation: +38 %, sinking from ~0.75 s after the front.
+     */
+    static final double HUMP = 0.38;
+
+    /** The hump's factor on the head's top at wedge fraction u: 1 + {@link #HUMP} rising over 0–0.3, sinking over 0.3–1.2. Copy {@code pallWallHump}. */
+    static double hump(double u) {
+        return 1 + HUMP * smooth(0, 0.3, u) * (1 - smooth(0.3, 1.2, u));
+    }
+
+    /**
+     * Wedge top at fraction u of its length behind the edge, fraction of end top: u^(5/6) (Kuhl); full behind the wedge; with the hump
+     * ({@link #hump}). Copy {@code pallWallTop}.
+     */
     static double top(double u) {
-        return Math.pow(Mth.clamp(u, 0, 1), 5 / 6.0);
+        return Math.pow(Mth.clamp(u, 0, 1), 5 / 6.0) * hump(u);
     }
 
     /**
@@ -479,7 +494,7 @@ public final class BlastWall {
     static double shape(double u) {
         if (u <= 0) return 0;
         double x = Math.min(u, 1);
-        return DustModel.lifted(x) / Math.pow(Math.max(x, 1e-4), 5 / 6.0);
+        return DustModel.lifted(x) / Math.pow(Math.max(x, 1e-4), 5 / 6.0) / hump(u);
     }
 
     /** Head share behind the wedge: from {@link #HANDOFF_FROM} to {@link #HANDOFF_TO} of its length, hand over to pall. Copy {@code pallWallFade}. */
@@ -526,7 +541,7 @@ public final class BlastWall {
     static double sigma(float[] slot, double relX, double relZ, double up, double wet, double hard) {
         if (slot[3] <= 0) return 0;
         double s = slot[0] - Math.hypot(relX, relZ), len = slot[1], top = slot[2];
-        if (s < -1 || s > HANDOFF_TO * len + slot[5] || up > top || up < -0.5 * top) return 0;
+        if (s < -1 || s > HANDOFF_TO * len + slot[5] || up > top * (1 + HUMP) || up < -0.5 * top) return 0;
         double back = slot[5] * wet, at = s - back;
         double k = density(slot, at, wet, hard);
         return k * mean(at, up, len, top * (1 + (slot[6] - 1) * wet));

@@ -68,6 +68,12 @@ uniform vec4 FxSix;
 uniform vec3 FxSixLight;
 // tint of sky light at puffs (FarView.sky against its brightness, linear): the puff's vertex colour carries only the brightness
 uniform vec3 FxSkyTint;
+// sky lit by a fireball (NukeSky.amberTint): linear tint of its diffuse light (luma 1), w — its share in the dome's light
+uniform vec4 FxAmber;
+// presentation: while a fireball lights the air (the sky turns amber, FxAmber.w up to ½), up to this share of its light on a puff comes
+// as the dome's diffuse light (the fireball-lit sky and cap above the puff) rather than as a beam by sides: a backlit dust wall has lit
+// tops, not dark cores under bright rims. No amber sky (conventional blasts) — the beam alone, as before
+const float BALL_DOME = 0.6;
 
 // Layer pass — colour; glow pass (FxBloom, FxGlowPass.x = 1) — emission that reaches the eye: rgb — linear light
 // (white screen — 1) with premultiplied alpha, alpha — the same as the colour's. Blending is the same: smoke in front of fire dims the emission
@@ -309,9 +315,11 @@ void main() {
         vec3 tilt = vec3(a.r - b.r, a.g - b.g, b.b - a.b);
         float diffuse = pow(max(skyDome(a.r + a.g + a.b + b.r + b.g + b.b, dot(sixUpDir, tilt)) / FxSixLight.z, 1e-6), shade);
         // the direct light only that reaches the puff through the rest of its cloud (SmokePuffs.sunThrough) — the diffuse sky
-        // and fireball light stay whole
-        float sky = sixKey * sixSun * key + (1.0 - sixKey) * diffuse;
-        vec3 fire = sixBall * pow(max(sixLight(a.rgb, b, sixBallDir) / FxSixLight.z, 1e-6), shade);
+        // and fireball light stay whole; while a fireball lights the air the dome's diffuse light takes its amber (FxAmber)
+        vec3 tint = mix(FxSkyTint, FxAmber.rgb, FxAmber.w);
+        vec3 sky = FxSkyTint * sixKey * sixSun * key + tint * (1.0 - sixKey) * diffuse;
+        float dome = BALL_DOME * min(1.0, 2.0 * FxAmber.w);
+        vec3 fire = sixBall * ((1.0 - dome) * pow(max(sixLight(a.rgb, b, sixBallDir) / FxSixLight.z, 1e-6), shade) + dome * diffuse);
         // a puff lying on the horizontal (shadow exponent 0 — the top of the layer lit from above): the balls' light — in this pixel
         if (-nearest * 127.0 - 13.0 < 0.5) {
             vec3 bd;
@@ -319,7 +327,7 @@ void main() {
         }
         // sky tint (at night — the lilac light of the moon) — only for sky light: the vertex colour carries its brightness, and the puff's fire
         // has its own (the tint on the fire turned the dust around a ball pink at night)
-        sixLit = pow(max(FxSkyTint * sky + fire, vec3(0.0)), vec3(1.0 / 2.2));
+        sixLit = pow(max(sky + fire, vec3(0.0)), vec3(1.0 / 2.2));
         tex = vec4(vec3(a.a), a.a);
     } else if (nearest > 0.55) {
         tex = fireFrames(texCoord0, dx, dy, opacity);
