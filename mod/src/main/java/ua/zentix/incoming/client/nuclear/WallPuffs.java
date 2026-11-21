@@ -41,6 +41,8 @@ public final class WallPuffs implements SmokeGrid.Source {
     static final double DENSE = 1.6, DENSE_S = 2.5;
     /** Vertical optical depth of a billow column at most (presentation: opaque already). */
     static final double OPAQUE = 6;
+    /** Dust-impact frame by age: life share from, span, e-fold s. */
+    static final double FRAME_FROM = 0.12, FRAME_SPAN = 0.7, FRAME_S = 3;
     /** Curl: the top is thrown outward by the wind behind the front, then pulled back (share of the top). */
     static final double CURL = 0.45, CURL_S = 0.45, BACK = 0.12;
 
@@ -147,7 +149,6 @@ public final class WallPuffs implements SmokeGrid.Source {
         }
         double metre = d.blocks(1), cell0 = CELL * metre, hobB = d.blocks(Math.max(0, d.hobMetres()));
         long seed = d.seed();
-        out.look(SmokeGrid.Look.EJECTA, FxAtlas.lifeFrame(SmokeGrid.Look.EJECTA, 0.35));
         for (int k = 0; k < TIERS; k++) {
             double cell = cell0 * (1L << k);
             // tier k weight peaks at eye distance cell / PER_DISTANCE, triangle in log2 distance (tiers sum to one)
@@ -201,6 +202,9 @@ public final class WallPuffs implements SmokeGrid.Source {
         double area = cell * cell / (metre * metre);
         double mass = tauV * area / dustK * w * fade * Math.min(1, age / 0.05);
         if (mass <= 0) return;
+        // the dust-impact frames play with the billow's age: young billows are the impact's first frames (torn up, growing),
+        // older ones its later, calmer frames (presentation); the frame is what makes billows turn over
+        out.look(SmokeGrid.Look.EJECTA, FxAtlas.lifeFrame(SmokeGrid.Look.EJECTA, FRAME_FROM + FRAME_SPAN * (1 - Math.exp(-age / FRAME_S))));
         double sh = 0.4 * cell, sv = Math.min(sh, 0.35 * topH);
         double half = Math.max(0, 0.5 * topH - sv);
         double cy = y + Math.max(sv, 0.5 * topH);
