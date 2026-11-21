@@ -27,10 +27,19 @@ a model of its own where the presentation matters, not the physics. Maximum chan
       not the shared pall renderer;
    B. soft particles with real-dust flipbook textures (CC0/compatible license), born at the contact line, hump, settle.
    Iterate shaders in a fast harness (seconds per try); the game only for confirmation takes.
+   Before any look tuning:
+   - Measure the Silo scene's base FPS on the RTX 4060 at the highest preset (wall off) and turn "up to 20 FPS" into a
+     frame-time limit in ms (about 6-7 ms at ~60 FPS; #707's port cost 10-16 ms). Record it in the PR.
+   - Probe A states its ray step and resolution against the billow size (13-20 m) as a number. The shared pall renderer
+     (half resolution, 28 steps over 12 km) cannot resolve them; that was #707's root cause.
+   - Probe A keeps SPEC.md's sampling rules: samples on a world-fixed grid, texture fixed in the air (they cured
+     "boiling" in the sketch).
 4. For each probe: frames at 1, 2, 4, 6, 8 s and a short 30 fps clip in the judging view, side by side with
    silo-texture-c; frame cost on the highest preset.
 5. Independent check of both clips by a fresh session that built neither, against LOOK.md (four traits, never-glue)
-   and the Silo frame. Only a "yes" clip goes on; a "no" gets one fix round inside the timebox.
+   and the Silo frame, judged by eye beside silo-texture-c and haboob footage; numbers inform, never decide (#707
+   passed number judges while Artem saw tiling at once). Only a "yes" clip goes on; a "no" gets one fix round inside
+   the timebox.
 6. Gate at 4 h: if neither probe shows the four traits, stop and write report.md with frames and the measured cause;
    no tuning rounds.
 7. Write report.md (clip and frame paths, FPS cost per probe, check verdicts) and DONE. Artem picks A or B from the clips;
