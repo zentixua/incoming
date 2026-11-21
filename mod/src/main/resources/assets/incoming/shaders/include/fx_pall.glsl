@@ -235,27 +235,40 @@ float pallStreak(vec2 rel, float up) {
     return 1.0 + 1.1 * (n - 0.5);
 }
 
-// Soft lumps of the young dust at rel (blocks from ground zero, less the drift; the head: its dust origin) for the pall's noise
-// tile (blocks) at time t (s): density multiplier, mean 1 (pall.glsl: PALL_LUMP_*)
-float pallLumps(vec2 rel, float tile, float t) {
-    vec2 q = rel * (PALL_LUMP_TEXEL / (64.0 * tile));
-    vec3 n = texture(PallNoise, vec3(q.x + 0.29, 0.37 + t * (PALL_LUMP_TURN / 64.0), q.y + 0.61)).rgb;
-    return 1.0 + PALL_LUMP_AMP * clamp((0.5 * (n.r + n.b) - PALL_LUMP_MEAN) / (2.0 * PALL_LUMP_SD), -1.0, 1.0);
+// One relief octave at rel (blocks from ground zero, less the drift; the head: its dust origin): the noise tile's R and B channels at
+// k × the lump texel's frequency, normalised to −1…1 over ±2 σ (pall.glsl: PALL_LUMP_MEAN, PALL_LUMP_SD; mean 0), turning over k times
+// faster (smaller billows renew sooner)
+float pallReliefOctave(vec2 rel, float tile, float t, float k, vec2 off) {
+    vec2 q = rel * (k * PALL_LUMP_TEXEL / (64.0 * tile));
+    vec3 n = texture(PallNoise, vec3(q.x + off.x, 0.37 + off.y + t * (k * PALL_LUMP_TURN / 64.0), q.y + off.y)).rgb;
+    return clamp((0.5 * (n.r + n.b) - PALL_LUMP_MEAN) / (2.0 * PALL_LUMP_SD), -1.0, 1.0);
+}
+
+// The young dust's top as a share of the law's, between PALL_RELIEF_LO and PALL_RELIEF_HI: soft lumps with billows at a third of a lump
+// on them — a billowing top like a haboob's; the billows fade below the pixel footprint (cone, blocks: a billow under about eight
+// pixels across would read as cells and shimmer); the column stays the law's (the density is divided alike). In a layer tens of
+// optical depths thick the relief has to be in the top: a density modulation moved the visible surface by nothing (the approaching
+// head read as a smooth sheet with hard edges: edge p99 0.032–0.046 against Silo's 0.013–0.017)
+float pallTopRelief(vec2 rel, float tile, float t, float cone) {
+    float billow = 2.5 * tile / (3.0 * PALL_LUMP_TEXEL), shown = (1.0 - PALL_LUMP_W) * (1.0 - smoothstep(0.5, 1.0, cone * 8.0 / billow));
+    float o = (PALL_LUMP_W * pallReliefOctave(rel, tile, t, 1.0, vec2(0.29, 0.61)) + shown * pallReliefOctave(rel, tile, t, 3.0, vec2(0.71, 0.13)))
+            / (PALL_LUMP_W + shown);
+    return mix(PALL_RELIEF_LO, PALL_RELIEF_HI, 0.5 + 0.5 * o);
 }
 
 // presentation (Artem 21.11: relief from large soft rises and dips; approved v6: lumps of the core's height): the young layer's top
-// rises and dips with the soft lumps (pallLumps at the dust's place: from ground zero less the drift), its density divided alike so
+// rises and dips with its relief (pallTopRelief at the dust's place: from ground zero less the drift), its density divided alike so
 // the column stays the law's (a density modulation of a layer tens of optical depths thick moves its visible surface by nothing:
 // a featureless plain); fading out as the layer mixes (PallField.mixed). The pall's bounds include it (PallField.LUMP_AMP)
-float pallLumpTop(mat4 S, vec3 p) {
+float pallLumpTop(mat4 S, vec3 p, float cone) {
     vec2 q = p.xz - S[0].xy;
     float mixed = texture(Sampler1, vec2(min(length(q) / S[0].w, 1.0), S[2].z)).a;
     if (mixed >= 0.99) return 1.0;
-    return mix(pallLumps(q - S[1].xy, S[3].y, S[3].z), 1.0, mixed);
+    return mix(pallTopRelief(q - S[1].xy, S[3].y, S[3].z, cone), 1.0, mixed);
 }
 
 // the slot's pall noise tile and time for the head's lumps (wallAt), set by slot() before its head: head and layer share one field
-float gLumpTile = 1.0, gLumpTime = 0.0;
+float gLumpTile = 1.0, gLumpTime = 0.0, gLumpCone = 0.0;
 
 // presentation (Artem's approved animation): wisps — in half of the PALL_WISP_CELL cells of the young layer the top stretches up in a
 // narrow plume (σ PALL_WISP_WIDTH) by up to PALL_WISP_RISE of itself, starting 0–8 s after the local phase ended (PallField.mixed:
@@ -426,7 +439,7 @@ Sample emptySample() {
 // ---------------------------------------------------------------- dust-layer head (pall.glsl: pallWall*)
 
 // Head at h (pallWallAt) with its relief: extinction, 1/block. The head and the young layer behind it are one mass (Artem 21.11):
-// the head's density takes the young layer's soft lumps (pallLumps, mean 1, never zero) at its dust origin (pallWallOrigin: where
+// the head's top takes the young layer's relief (pallTopRelief: lumps, billows, frays; column kept) at its dust origin (pallWallOrigin: where
 // the front lofted it, carried by the post-front air since), so its relief stays where the dust is and meets the layer behind it
 // without a seam; fine detail is only the streaks along the flow (pallStreak), faded below the pixel footprint (fine: the share
 // resolved; 0 for shadow samples). The head's own layer-height billows (eddy octaves turned in rolls) are not drawn: at 1 Mt from
@@ -434,11 +447,14 @@ Sample emptySample() {
 // of the dust near black at 4 s), a paler band with a hard line at the handoff
 float wallAt(mat4 V, WallAt h, float fine, float dense) {
     float s = h.s - h.P.z;
-    float m = pallWallMean(s, h.z, h.P.x, h.P.y);
-    if (m <= 0.0 || h.P.w <= 0.0) return 0.0;
+    if (h.P.w <= 0.0) return 0.0;
     float u = s / max(h.P.x, 0.001), ph = u * V[2].x;
     vec3 o = pallWallOrigin(h.rel, h.z, ph, h.P.y, V[1].x);
-    float shape = pallLumps(o.xz, gLumpTile, gLumpTime);
+    // the relief in the head's top: its density at the height z / relief, divided by it (column kept)
+    float relief = pallTopRelief(o.xz, gLumpTile, gLumpTime, gLumpCone);
+    float m = pallWallMean(s, h.z / relief, h.P.x, h.P.y) / relief;
+    if (m <= 0.0) return 0.0;
+    float shape = 1.0;
     // presentation: the head's streaks along the flow (pallStreak), while resolved
     if (fine > 0.0) shape *= mix(1.0, pallStreak(h.rel, h.z), fine);
     return h.P.w * m * shape;
@@ -498,7 +514,7 @@ float wallChordNear(mat4 V, WallAt h, vec3 v, float len, int n) {
 // smoke is the soot share in the dust there, as in the pall (pallField: fire zone × fire growth): dust lofted seconds after the
 // flash carries next to no soot
 void wall(mat4 V, WallAt h, vec3 keyDir, vec3 sunDir, vec3 lightDir, float smoke, float cone, bool pall, float dense, inout Sample s) {
-    // the lumps' size (2.5 texels, pallLumps) sets the shadow samples' reach; streaks resolved while wider than the pixel footprint
+    // the lumps' size (2.5 texels, pallTopRelief) sets the shadow samples' reach; streaks resolved while wider than the pixel footprint
     float tile = 2.5 * gLumpTile / PALL_LUMP_TEXEL, fine = 1.0 - smoothstep(0.5, 1.0, cone / PALL_STREAK_ACROSS);
     float hd = wallAt(V, h, fine, dense);
     // neither head nor slot pall here — no light needed
@@ -580,7 +596,7 @@ void slot(mat4 S, mat4 V, sampler2D ground, vec4 R, vec4 W, vec4 G, vec4 H, vec3
     // ground height; no map, epicenter ground
     float floorUp = pallRelief(ground, S, R, p.xz);
     // a wisp and the lumps lift the layer's own column: its dust thins by the same factor, so the column (sd · top) is the law's
-    float wisp = pallWisp(S, p) * pallLumpTop(S, p);
+    float wisp = pallWisp(S, p) * pallLumpTop(S, p, cone);
     PallAt f = pallField(Sampler1, ground, S, R, W, p, floorUp, topBumps(S, p) * wisp);
     f.sigma.x /= wisp;
     f.column.x /= wisp;
@@ -645,6 +661,7 @@ void slot(mat4 S, mat4 V, sampler2D ground, vec4 R, vec4 W, vec4 G, vec4 H, vec3
     bool pall = f.sigma.x + f.sigma.y + f.sigma.z > 1e-7;
     gLumpTile = S[3].y;
     gLumpTime = S[3].z;
+    gLumpCone = cone;
     if (head.P.w > 0.0) wall(V, head, keyDir, sunDir, lightDir, f.smoke, cone, pall, S[3].x, s);
     if (!pall) return;
     float fill = clamp(f.dense * 3.0, 0.0, 1.0) * (1.0 - smoothstep(0.4, 1.0, f.height.x));
@@ -690,7 +707,7 @@ void slot(mat4 S, mat4 V, sampler2D ground, vec4 R, vec4 W, vec4 G, vec4 H, vec3
     float lump = 2.5 * tile / PALL_LUMP_TEXEL, top0 = f.height.x > 1e-3 ? (p.y - S[0].z - max(floorUp, 0.0)) / f.height.x : 0.0;
     float young = 0.0;
     if (f.mixed < 0.99 && top0 > 0.0) {
-        float l0 = pallLumpTop(S, p), l1 = pallLumpTop(S, p + keyDir * (0.06 * lump)), l2 = pallLumpTop(S, p + keyDir * (0.22 * lump));
+        float l0 = pallLumpTop(S, p, cone), l1 = pallLumpTop(S, p + keyDir * (0.06 * lump), cone), l2 = pallLumpTop(S, p + keyDir * (0.22 * lump), cone);
         young = clamp((0.4 * (l1 - l0) + 0.6 * (l2 - l0)) / max(l0, 0.1), -0.3, 0.6) * top0 * f.sigma.x;
     }
     float old = f.mixed > 0.01 ? clumpShade(pallMixed(raw, f.mixed), pallMixed(carpetCoarse(S, uvA + lightUv * 0.06, uvB + lightUv * 0.06, phaseBlend, fill), f.mixed),
@@ -2122,7 +2139,9 @@ void main() {
             if (fineLeft > 0) {
                 // the first fine step is the pixel's jitter share of one: fine samples at fixed spacing from the same start slice a
                 // smooth top into concentric bands; decorrelated per pixel, the frames accumulate them away
-                next = min(next, ta + (firstFine ? max(jitter, 0.05) : 1.0) * fineSize);
+                float first = 1.0;
+                if (firstFine) first = max(jitter, 0.05);
+                next = min(next, ta + first * fineSize);
                 grid = min(grid, fineSize);
             }
             next = min(next, t1);
@@ -2153,6 +2172,9 @@ void main() {
                     firstFine = false;
                 }
                 prevEmpty = took == 0;
+                // every entry into matter is refined, not only the ray's first (a later entry took the step there: ripples and
+                // flicker that followed the jittered step)
+                if (took == 0 && fineLeft == 0) refined = false;
                 prevTa = ta;
                 ta = next;
             }

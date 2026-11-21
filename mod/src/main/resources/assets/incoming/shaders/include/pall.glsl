@@ -621,14 +621,19 @@ const float PALL_STREAK_ACROSS = 4.5;
 // presentation (est.): streak strength decays from full toward a 0.35 floor with this e-folding time after the first
 // second behind the front, s (the approved animation's streaks fade within seconds as the layer turns over)
 const float PALL_STREAK_FADE = 4.0;
-// presentation (Artem 21.11 with Silo S3E09 frame c; approved v6 lumps 150–300 m): the young dust — head and the layer behind it —
-// is one mass whose relief is soft lumps: the noise tile's billow and dome channels (R, B in equal parts) at one texel per
-// 1/PALL_LUMP_TEXEL of the pall's noise tile (1 Mt: 67 m texels, trilinear: lumps from ~120 m over kilometre swells), density
-// 1 ± PALL_LUMP_AMP over ±2 σ of the channels (the production tile: mean PALL_LUMP_MEAN, σ PALL_LUMP_SD, PallLumpsTest; the
-// lumps' mean 0.999), never zero — a zero opened holes lit by the mean column above, black voids; turning over by
-// PALL_LUMP_TURN texels a second (a lump renews in about ten seconds: no boiling)
+// presentation (Artem 21.11 with Silo S3E09 frame c and a haboob's material; approved v6 lumps 150–300 m): the young dust — head and
+// the layer behind it — is one mass whose relief is in its top (pallTopRelief): the noise tile's billow and dome channels (R, B in equal
+// parts) at one texel per 1/PALL_LUMP_TEXEL of the pall's noise tile (1 Mt: 67 m texels; lumps from ~120 m over kilometre swells), with
+// billows at a third and frays at a ninth of a lump, each octave normalised over ±2 σ of the channels (the production tile: mean
+// PALL_LUMP_MEAN, σ PALL_LUMP_SD, PallLumpsTest), turning over by PALL_LUMP_TURN texels a second (a lump renews in about ten seconds)
 const float PALL_LUMP_TEXEL = 15.4;
-const float PALL_LUMP_AMP = 0.45;
+// the young top's relief (pallTopRelief): lumps and billows at a third of a lump (weights PALL_LUMP_W, 1 − it), the top between
+// PALL_RELIEF_LO and PALL_RELIEF_HI of the law's (lead 14:15: the top at the 4.5 km ring of 1 Mt stays within ~85–90 m — the hump's
+// peak is the law's top, the relief rises it by at most PALL_RELIEF = HI − 1, the bounds' share, PallField.LUMP_AMP, PallLumpsTest)
+const float PALL_LUMP_W = 0.7;
+const float PALL_RELIEF_LO = 0.75;
+const float PALL_RELIEF_HI = 1.10;
+const float PALL_RELIEF = 0.10;
 const float PALL_LUMP_MEAN = 0.5;
 const float PALL_LUMP_SD = 0.1735;
 const float PALL_LUMP_TURN = 0.25;
@@ -705,9 +710,11 @@ float pallLifted(float s) {
 // (pallWallShape divides by it)
 const float PALL_WALL_HUMP = 0.38;
 const float PALL_CORE_SINK = 0.5;
+const float PALL_PEAK_SHARE = 0.62;
 float pallWallHump(float u) {
+    float mixed = smoothstep(10.0, 40.0, u);
     return (1.0 + PALL_WALL_HUMP * smoothstep(0.0, 0.3, u) * (1.0 - smoothstep(0.3, 1.2, u)))
-            * (1.0 - PALL_CORE_SINK * smoothstep(0.5, 3.0, u) * (1.0 - smoothstep(10.0, 40.0, u)));
+            * (1.0 - PALL_CORE_SINK * smoothstep(0.5, 3.0, u) * (1.0 - mixed)) * (1.0 + (PALL_PEAK_SHARE / (1.0 + PALL_WALL_HUMP) - 1.0) * (1.0 - mixed));
 }
 float pallWallTop(float u) {
     return pow(clamp(u, 0.0, 1.0), 0.8333333) * pallWallHump(u);
@@ -754,7 +761,7 @@ float pallWallFade(float u) {
 float pallWallInside(float s, float z, float len, float top, float lag) {
     if (s < -1.0) return 0.0;
     if (s > PALL_WALL_HANDOFF_TO * len + lag) return 0.0;
-    if (z > top * (1.0 + PALL_WALL_HUMP)) return 0.0;
+    if (z > top * (1.0 + PALL_RELIEF)) return 0.0;
     if (z < -0.5 * top) return 0.0;
     return 1.0;
 }
@@ -839,7 +846,7 @@ vec4 pallWallSpans(mat4 S, mat4 V, vec4 G, vec3 dir, float ta, float tb) {
     vec2 c = S[0].xy;
     float top = V[0].z, outer = V[0].x + 1.0, inner = max(V[0].x - PALL_WALL_HANDOFF_TO * V[0].y - V[1].y, 0.0);
     // by height: the relief map (without it — the ground under the epicenter) with the head
-    float lo = S[0].z + min(G.y, 0.0) - 0.5 * top, hi = S[0].z + max(G.z, 0.0) + top * (1.0 + PALL_WALL_HUMP);
+    float lo = S[0].z + min(G.y, 0.0) - 0.5 * top, hi = S[0].z + max(G.z, 0.0) + top * (1.0 + PALL_RELIEF);
     if (abs(dir.y) > 1e-6) {
         float y0 = lo / dir.y, y1 = hi / dir.y;
         ta = max(ta, min(y0, y1));

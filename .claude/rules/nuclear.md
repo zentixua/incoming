@@ -163,7 +163,7 @@ Ruins and everything in `nuclear/world/` are in `nuclear-world.md`.
   (`FarTerrain.sand`), `pallDustW`/`PallField.sandShare` mix reference `DUST` with desert `SAND` (AERONET ω, Dubovik 2002,
   `NukePall.SAND_OMEGA`) by mass, debris over hard ground stays `DUST`; soot share is the table's fire zone × `FireStorm.growth`
   (`PallField.smoke`), for head and pall alike (18.11: a 0.77 constant in the head made a black disk out to the ignition range). From above, pall is one blanket (18.10 complaint: golden/dark patches
-  from altitude): young-layer patches (noise with gaps, `pallShape`) mix over one layer-eddy turnover (`PallField.mixed`,
+  from altitude): the young layer is the soft lump field (never a gap); the mixed pall's patches (noise with gaps, `pallShape`) take over through one layer-eddy turnover (`PallField.mixed`,
   e-fold over `DustModel.RISE_S`, dust-row fourth channel) to fluctuations `MIXED` = 0.2 of mean (`clumps`, `pallMixed`;
   Willis and Deardorff 1976, (est.)), while thermals make the top bumpy, top not holes: `topD` × (1 ± `BUMPS` = 0.3,
   entrainment zone, Stull 1988, (est.); `topBumps` in `fx_pall`, last `pallField` parameter, 1 without noise). Light in
@@ -221,19 +221,23 @@ Ruins and everything in `nuclear/world/` are in `nuclear-world.md`.
   `pallWallTop/Shape/Fade/Mean` (`PallGlslTest`). Head noise uses dust coordinates (`BlastWall.origin`, copy
   `pallWallOrigin`): position minus post-front wind path (`carried`: air path over local positive phase, U·t₊/e by
   Friedlander, tens of meters for 15 kt at 592 m; phase share `carriedShare` = u·e^(1−u)); air stationary at ground,
-  1/7 boundary-layer law above, upward 0.02–0.08 of path (Kuhl §3.4). Billows form where front lofted dust and stay there;
-  against the departing front, edge dust goes up/back, rolling the wall. The pattern also turns in eddies on concentric rings resting on
-  the ground (`pallWallRoll`/`BlastWall.roll`, angle `rollAngle` = `EDDY` 0.2 × wind path × `carriedShare` / eddy size: top
-  outward with the wave's wind, back as it reverses; × `ROLL_GAIN` 8, presentation, turn zero at eddy rims). Eddies are the local
-  layer's size, not the tile's (the tile is the thickest layer's, near ground zero: 79 m for 15 kt where the layer 1 km out is
-  16–29 m): the octave tile/2^k nearest the local top (`wallBillows`, fixed scales, two near a boundary); thinner than tile/11
-  (toe) billows give way to their mean: tile-sized holes in a metres-thick sheet read as a translucent shell at the front (18.11).
-  Close-up check 19.11 (sandbox, side view along the front): the head is a thin ramp (15 kt 1.5 km: top 37 m over a 291 m
-  wedge), its turn lasts the head's life (0.9–3.6 s) — texture churn, not a wall rolling over itself; the tall translucent
-  sheet above it in the first seconds is the Wilson shell (`pallWilson`), not dust. Noise tile (`TILE` of maximum phase-end layer
-  top) is fixed per detonation: a tile growing with the head, like old noise in a tile rotated by wall angle at front,
-  moved billows over ground at front speed — dust “spread from epicenter” (18.10 complaint,
-  `BlastWallTest.headCloudsStayWhereTheDustWasLifted`). Cartesian coordinates, no tiled circumference or noise phases.
+  1/7 boundary-layer law above, upward 0.02–0.08 of path (Kuhl §3.4). The head and the young layer behind it are one mass
+  (Artem 21.11, Silo S3E09 frame c): their relief is one soft lump field (`pallLumps`: the noise tile's R and B channels at one
+  texel per 1/`PALL_LUMP_TEXEL` 15.4 of the pall's noise tile — 1 Mt: 67 m texels, lumps from ~120 m over kilometre swells —
+  density factor 1 ± `PALL_LUMP_AMP` 0.45 over ±2 σ of the production tile, mean kept, never zero, `PallLumpsTest`), at the
+  head's dust origin and at the young layer's place (ground zero less the drift), turning over by `PALL_LUMP_TURN` texels a
+  second. In the head the lumps scale its density; in the young layer they raise and lower its top (`pallLumpTop`, density
+  divided alike: column kept; `PallField.LUMP_AMP` in the bounds) with relief shading toward the key light; the mixed pall's
+  billows take over as it mixes. Fine detail is only the streaks (`pallStreak`, 3–6 m across at any radius). The head's own
+  layer-height billow octaves and eddy rolls are not drawn: at 1 Mt from 600 m they were 64 px cells (Silo 142–256 px)
+  changing in place at 7.6/s (the pall alone 1.0/s) with density zeros (6.7 % near black at 4 s) and a paler band at the
+  handoff (probe run pl). The march finds tops by refinement: a step that meets matter after an empty sample re-marches from
+  it in fixed small steps (head: a quarter of its wanted step; young layer: a twelfth of a lump, ~14 m at 1 Mt), the first
+  one jittered: a layer opaque within one step shows the light at its first sample, so that sample's depth must not follow
+  the step — a step varying with the budget share drew rings about ground zero on the head (instrumented take, `PALL_DEBUG`),
+  ordinary steps of 240–350 m at 1–2 km averaged the young relief into a plain, and a 50 m refinement step flickered it. The
+  pall loop ends once the ray is opaque. Cartesian coordinates, no tiled circumference or noise phases
+  (`BlastWallTest.headCloudsStayWhereTheDustWasLifted`).
   Rays sample the head more densely (`pallWallSpans`: ring from dust edge to 1.5 wedges and terrain-map height layer,
   step one eighth its height, at most `steps` extra steps). Same light as pall, light-path depth follows wedge shape
   (`wall` in `fx_pall`, copy `NukePall.dustLight`): diffuse uses the lesser mean-head depth above point (to local wedge

@@ -86,7 +86,7 @@ class PallGlslTest {
             String at = "u = " + u;
             assertEquals(DustModel.lifted(u), lifted.call(Map.of("s", u)), 1e-6, at);
             assertEquals(BlastWall.top(u), top.call(Map.of("u", u)), 1e-6, at);
-            assertEquals(BlastWall.shape(u), shape.call(Map.of("u", u)), 1e-6, at);
+            assertEquals(BlastWall.shape(u), shape.call(Map.of("u", u)), 1e-6 * Math.max(1, BlastWall.shape(u)), at);
             assertEquals(BlastWall.handoff(u), fade.call(Map.of("u", u)), 1e-9, at);
         }
         for (double len : new double[]{3, 25, 300}) {
@@ -352,9 +352,10 @@ class PallGlslTest {
         // high-frequency cells, no black voids)
         String flat = body(read("include/fx_pall.glsl"), "float wallAt(").replaceAll("\\s+", " ");
         assertTrue(flat.contains("vec3 o = pallWallOrigin(h.rel, h.z, ph, h.P.y, V[1].x);")
-                && flat.contains("float shape = pallLumps(o.xz, gLumpTile, gLumpTime);")
+                && flat.contains("float relief = pallTopRelief(o.xz, gLumpTile, gLumpTime, gLumpCone);")
+                && flat.contains("float m = pallWallMean(s, h.z / relief, h.P.x, h.P.y) / relief;")
                 && flat.contains("if (fine > 0.0) shape *= mix(1.0, pallStreak(h.rel, h.z), fine);")
-                && flat.contains("return h.P.w * m * shape;"), "head relief - not the shared lumps at the dust origin");
+                && flat.contains("return h.P.w * m * shape;"), "head relief - not the shared relief in its top at the dust origin");
         assertTrue(!read("include/fx_pall.glsl").contains("wallBillows"), "the head's own billow octaves");
     }
 
@@ -381,7 +382,7 @@ class PallGlslTest {
         // the top bumps, and the wisps of young dust (presentation, pallWisp) on top of them; a wisp keeps the column: the
         // dust it lifts thins by the same factor (review: +45 % column in a wisp cell 8 s after the phase)
         assertTrue(fx.contains("pallField(Sampler1, ground, S, R, W, p, floorUp, topBumps(S, p) * wisp);"), "pall beam - without top bumps");
-        assertTrue(fx.contains("float wisp = pallWisp(S, p) * pallLumpTop(S, p);") && fx.contains("f.sigma.x /= wisp;") && fx.contains("f.column.x /= wisp;")
+        assertTrue(fx.contains("float wisp = pallWisp(S, p) * pallLumpTop(S, p, cone);") && fx.contains("f.sigma.x /= wisp;") && fx.contains("f.column.x /= wisp;")
                 && fx.contains("f.slab.x /= wisp;"), "a wisp or a lump redistributes the column, never adds dust");
         assertTrue(body(fx, "float topBumps(").contains("return 1.0 + PALL_BUMPS * (2.0 * n - 1.0);"), "tubercles - not 1 ± PALL_BUMPS");
     }

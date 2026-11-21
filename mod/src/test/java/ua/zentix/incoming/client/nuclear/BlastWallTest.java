@@ -364,7 +364,7 @@ class BlastWallTest {
         assertEquals(0, BlastWall.sigma(s, head - 0.1 * len, 0, 0.3 * top, 0), "at the edge above the wedge");
         // densest at the ground in the front part of the wedge (lifted in a thin layer), not at the very edge: dust there is still rising
         // (saltation develops behind the front, BlastWall.develop)
-        double peak = 0, at = 0, end = BlastWall.sigma(s, head - len, 0, 0.02 * top, 0);
+        double peak = 0, at = 0, end = BlastWall.sigma(s, head - len, 0, 0.02 * top, 0) * BlastWall.hump(1);
         // the law's ground density: the hump (not physical) spreads the same column higher, so the ground density is divided by it
         for (double u = 0.002; u <= 1; u += 0.002) {
             double v = BlastWall.sigma(s, head - u * len, 0, 0.02 * top, 0) * BlastWall.hump(u);

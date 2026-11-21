@@ -417,17 +417,22 @@ public final class BlastWall {
      * not physical (Artem's approved animation 21.11, guide deviation list): a low hump runs along the front — the dust's top stands up to
      * {@code HUMP} above the law's near a third of the local positive phase behind the front and sinks back by 1.2 phases — and then the
      * heavy core settles: the top sinks to {@code 1 − CORE_SINK} of the law's from half a phase to three phases, coming back up as the
-     * layer mixes (10–40 phases). The column is unchanged ({@link #shape} and the pall's dust row divide by the same factor), so every
-     * reader keeps the law's matter. The animation: +38 % sinking from ~0.75 s, the core to half by ~4.5 s.
+     * layer mixes (10–40 phases). While the dust is young the whole is drawn lower and denser: scaled so the hump's peak is
+     * {@code PEAK_SHARE} of the law's top (Artem 21.11: "like a haboob, denser and much lower", a layer of ~45–80 m at the 4.5 km ring of
+     * 1 Mt; the law's wedge top there is 132–154 m: peak ~85 m, the layer under it ~62 m, the settled core ~31 m; the approved animation's
+     * 58 m layer and ~80 m peak under the 120 m camera); the scale returns to 1 as the layer mixes. The column is unchanged ({@link #shape} and the pall's dust row divide
+     * by the same factor), so every reader keeps the law's matter. The animation: +38 % sinking from ~0.75 s, the core to half by ~4.5 s.
      */
-    static final double HUMP = 0.38, CORE_SINK = 0.5;
+    static final double HUMP = 0.38, CORE_SINK = 0.5, PEAK_SHARE = 0.62;
 
     /**
      * The presentation factor on the dust's top at phase share v since the front (wedge fraction u for the head, age over the local positive
      * phase for the pall, {@code PallField}): the hump times the core's settle. Copy {@code pallWallHump}.
      */
     public static double hump(double v) {
-        return (1 + HUMP * smooth(0, 0.3, v) * (1 - smooth(0.3, 1.2, v))) * (1 - CORE_SINK * smooth(0.5, 3, v) * (1 - smooth(10, 40, v)));
+        double mixed = smooth(10, 40, v);
+        return (1 + HUMP * smooth(0, 0.3, v) * (1 - smooth(0.3, 1.2, v))) * (1 - CORE_SINK * smooth(0.5, 3, v) * (1 - mixed))
+                * (1 + (PEAK_SHARE / (1 + HUMP) - 1) * (1 - mixed));
     }
 
     /**
@@ -493,7 +498,7 @@ public final class BlastWall {
     static double sigma(float[] slot, double relX, double relZ, double up, double wet, double hard) {
         if (slot[3] <= 0) return 0;
         double s = slot[0] - Math.hypot(relX, relZ), len = slot[1], top = slot[2];
-        if (s < -1 || s > HANDOFF_TO * len + slot[5] || up > top * (1 + HUMP) || up < -0.5 * top) return 0;
+        if (s < -1 || s > HANDOFF_TO * len + slot[5] || up > top * (1 + PallField.LUMP_AMP) || up < -0.5 * top) return 0;
         double back = slot[5] * wet, at = s - back;
         double k = density(slot, at, wet, hard);
         return k * mean(at, up, len, top * (1 + (slot[6] - 1) * wet));
@@ -535,7 +540,8 @@ public final class BlastWall {
         double s = slot[0] - Math.hypot(relX, relZ), len = slot[1];
         double full = slot[2] * (1 + (slot[6] - 1) * wet), back = slot[5] * wet;
         double here = full * top((s - back) / Math.max(len, 0.001));
-        return simpson(slot, relX, relZ, Math.max(from, -0.5 * full), Math.min(to, 0), wet, hard)
+        // below the ground the head reaches half its local top (pallWallMean): the steps cover that, not half the wedge's end top
+        return simpson(slot, relX, relZ, Math.max(from, -0.5 * here), Math.min(to, 0), wet, hard)
                 + simpson(slot, relX, relZ, Math.max(from, 0), Math.min(to, here), wet, hard);
     }
 

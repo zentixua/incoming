@@ -497,7 +497,7 @@ public final class NukePall {
         HI.set(cx + r, (float) (ground + Math.max(a.ground.high(), 0) + top * (1 + PallField.BUMPS) * (1 + PallField.WISP_RISE) * (1 + PallField.LUMP_AMP) * 1.05), cz + r);
         if (WALL[3] > 0) {
             LO.y = Math.min(LO.y, ground + Math.min(a.ground.low(), 0) - 0.5f * WALL[2]);
-            HI.y = Math.max(HI.y, ground + Math.max(a.ground.high(), 0) + WALL[2] * (float) (1 + BlastWall.HUMP));
+            HI.y = Math.max(HI.y, ground + Math.max(a.ground.high(), 0) + WALL[2] * (float) (1 + PallField.LUMP_AMP));
         }
         if (WALL[18] > 0) HI.y = Math.max(HI.y, (float) (ground + WALL[19] + a.wall.wilsonReach(seconds)));
         CULL.set(LO.x, Math.min(LO.y, bottom), LO.z);
