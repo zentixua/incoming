@@ -1,0 +1,355 @@
+<!doctype html>
+<meta charset="utf-8">
+<title>Волна и мгла: варианты</title>
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="claude:viewport-fit-sides" content="cover">
+<style>
+/* Four stacked cinemascope stages of the same scene; dark single look by choice (film frames). */
+:root{--bg:#14100d;--panel:#1f1914;--fg:#efe6dc;--muted:#b5a594;--accent:#e0874a;--line:#3a2e25;color-scheme:dark;
+ --font-ui:"Inter",system-ui,-apple-system,"Segoe UI",Roboto,sans-serif}
+html,body{background:var(--bg);color:var(--fg);font-family:var(--font-ui);margin:0}
+.wrap{max-width:1100px;margin:0 auto;padding:16px max(16px,env(safe-area-inset-right,0px)) 48px max(16px,env(safe-area-inset-left,0px));display:grid;gap:22px}
+h1{font-size:20px;margin:0;font-weight:600}
+h2{font-size:16px;margin:0 0 8px;font-weight:600}
+.var p{margin:8px 0 0;max-width:75ch;line-height:1.5}
+.stage{position:relative;width:100%;aspect-ratio:2.4/1;background:#000;border-radius:6px;overflow:hidden}
+canvas{width:100%;height:100%;display:block}
+.hud{position:absolute;left:12px;top:10px;right:12px;font-size:13px;color:#fff;text-shadow:0 1px 3px #000;font-variant-numeric:tabular-nums;pointer-events:none}
+.note{color:var(--muted);font-size:13px}
+button{font:inherit;font-size:14px;padding:8px 14px;border-radius:6px;border:1px solid var(--line);background:var(--panel);color:var(--fg);cursor:pointer;justify-self:start}
+button[aria-pressed="true"]{background:var(--accent);border-color:var(--accent);color:#1a0f08;font-weight:600}
+button:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+</style>
+<div class="wrap">
+  <h1>Волна и мгла за ней: шесть вариантов</h1>
+  <p class="note" style="margin:0;max-width:75ch">Одна сцена во всех вариантах: 1 Мт, наземный взрыв, камера в 120 м над лесом в 4,5 км от центра (около 5 psi, ветер за фронтом ~75 м/с), ракурс как в 19:39. Фронт идёт с игровой скоростью 0,35, подъём и оседание пыли в реальном времени. Анимация идёт только у варианта, который сейчас на экране; цикл 40 с.</p>
+  <div style="display:flex;gap:8px;flex-wrap:wrap"><button id="restart">Запустить заново</button><span class="note" style="align-self:center">Скорость фронта:</span><button class="spd" data-k="0.35" aria-pressed="false">0,35 (сейчас на серверах)</button><button class="spd" data-k="0.5" aria-pressed="true">0,50</button><button class="spd" data-k="1" aria-pressed="false">как в жизни</button></div>
+  <div style="display:flex;gap:14px;flex-wrap:wrap;align-items:center;margin-top:6px" class="note"><label>Размер клубов <input id="sz" type="range" min="0.6" max="1.8" step="0.05" value="1"> <b id="szo">1,00</b></label><label>Скорость изменения клубов <input id="sp" type="range" min="0.3" max="2" step="0.05" value="1"> <b id="spo">1,00</b></label><span>для мелкой доводки: больше размер = клубов меньше и они крупнее</span></div>
+  <section class="var">
+    <h2>6. Пятый + то, что видно на съёмках испытаний (предложение)</h2>
+    <div class="stage"><canvas id="cv_v6"></canvas><div class="hud" id="hud_v6"></div></div>
+    <p>Волна и мгла те же, что в пятом. Добавлено три явления, которые есть в жизни. Вспышка обжигает лес: на 4,5 км от 1 Мт листва чернеет и дымится, поэтому ещё до волны над лесом встают дымки, а волна потом рвёт их и забирает в стену. Пыльный слой отбрасывает тень на землю перед собой: свет идёт от огненного шара, поэтому стена темнит землю ещё до прихода. Тонкие края пыли подсвечены огненным шаром сзади, получается светлая кромка.</p>
+    <p class="note">Физика: обжиг и дым от светового импульса, тень от слоя, рассеяние света пылью вперёд. Оценка: сколько дыма и как быстро он поднимается.</p>
+  </section>
+  <section class="var">
+    <h2>5. Физика + небольшой горб + живая неровная мгла (новый фаворит)</h2>
+    <div class="stage"><canvas id="cv_v5"></canvas><div class="hud" id="hud_v5"></div></div>
+    <p>Как четвёртый, но голова у фронта примерно на 40 % выше слоя и через ~1 с слегка проседает. Вдоль фронта её высота меняется умеренно, примерно ±30 %; сильнее неровность становится только за фронтом. Сразу за фронтом мгла бурлит сильнее всего и ходит массой: ветер сначала несёт её от взрыва, потом слабый обратный ветер тянет назад, верх перекатывается сильнее низа. Слой неровный: большие мягкие бугры и провалы по 150–300 м, где-то гуще, где-то реже, местами поднимается дымка. Через несколько секунд успокаивается, но не замирает.</p>
+    <p class="note">Физика: высота, сроки, порядок оседания, вынос и обратный ветер. Подача: размах бурления и неровности (на глаз под сериал), горб и прозрачность верхней дымки.</p>
+  </section>
+  <section class="var">
+    <h2>1. Как в 19:39</h2>
+    <div class="stage"><canvas id="cv_v1"></canvas><div class="hud" id="hud_v1"></div></div>
+    <p>Тот вариант, который ты хвалил, без изменений по сути. Горб встаёт за долю секунды и оседает за 2–3 с. После прохода мгла замирает.</p>
+    <p class="note">Физика: где и когда рождается пыль, её высота. Не по физике: так быстро тяжёлое не падает (гравий падает около 6 м/с), и в жизни мгла за волной не замирает.</p>
+  </section>
+  <section class="var">
+    <h2>2. 19:39 + живая мгла</h2>
+    <div class="stage"><canvas id="cv_v2"></canvas><div class="hud" id="hud_v2"></div></div>
+    <p>То же, плюс мгла за волной клубится и медленно успокаивается, из неё поднимаются лёгкие струйки.</p>
+    <p class="note">Живость и струйки: подача в пределах правдоподобного. Быстрое оседание горба осталось из 19:39, оно на грани физики.</p>
+  </section>
+  <section class="var">
+    <h2>3. 19:39 + сильно живая мгла</h2>
+    <div class="stage"><canvas id="cv_v3"></canvas><div class="hud" id="hud_v3"></div></div>
+    <p>То же, но клубится и струится сильнее, как в самые бурные секунды в сериале.</p>
+    <p class="note">Сила вихрей на верхней границе правдоподобного, дальше будет похоже на кипящий суп.</p>
+  </section>
+  <section class="var">
+    <h2>4. Физика + живость</h2>
+    <div class="stage"><canvas id="cv_v4"></canvas><div class="hud" id="hud_v4"></div></div>
+    <p>Стена встаёт за ~1 с. Тяжёлое ядро (гравий, песок) оседает за 5–8 с, а лёгкая мгла остаётся сверху и медленно растёт над горячей землёй. Живость как во втором-третьем варианте.</p>
+    <p class="note">Всё по физике: высота, сроки, порядок оседания. Подача только в живости и свете.</p>
+  </section>
+</div>
+<script id="fs" type="x-shader/x-fragment">#version 300 es
+precision highp float;
+out vec4 o;
+uniform vec2 uRes; uniform float uT; uniform float uSeed; uniform int uSteps;
+uniform vec3 uCam; uniform vec3 uF; uniform vec3 uR; uniform vec3 uU; uniform float uTan;
+uniform vec2 uG; uniform float uD; uniform float uArr;
+// variant knobs
+uniform float uPhys;   // 0: 19:39 hump (fast settle), 1: two-part physical settle (heavy core falls, fines haze stays and rises)
+uniform float uTurb;   // eddy strength behind the front (0 = frozen 19:39)
+uniform float uWisp;   // small jets / rising wisps out of the layer
+uniform float uRise;   // lofting time constant, s
+uniform float uHump;   // physical variant: overshoot of the freshly lofted head that sags back
+uniform float uExtra;  // flash smoke ahead of the front, dust shadow on the ground, backlit rim
+uniform float uSize;   // billow size factor (1 = tuned default)
+uniform float uSpd;    // billow change-rate factor (1 = tuned default)
+uniform float uSurge;  // bulk slosh of the dust mass: outflow, then the negative-phase backflow
+
+float hash(vec3 p){p=fract(p*0.3183099+.1);p*=17.0;return fract(p.x*p.y*p.z*(p.x+p.y+p.z));}
+float noise(vec3 x){vec3 i=floor(x),f=fract(x);f=f*f*(3.-2.*f);
+ return mix(mix(mix(hash(i),hash(i+vec3(1,0,0)),f.x),mix(hash(i+vec3(0,1,0)),hash(i+vec3(1,1,0)),f.x),f.y),
+            mix(mix(hash(i+vec3(0,0,1)),hash(i+vec3(1,0,1)),f.x),mix(hash(i+vec3(0,1,1)),hash(i+vec3(1,1,1)),f.x),f.y),f.z);}
+float fbm(vec3 p){float a=.5,s=0.;for(int i=0;i<4;i++){s+=a*noise(p);p=p*2.07+vec3(1.7,9.2,3.1);a*=.5;}return s;}
+float fbm2(vec3 p){return 0.6667*(0.5*noise(p)+0.25*noise(p*2.07+vec3(1.7,9.2,3.1)))+0.1667;}
+// footprint filtering: only detail smaller than one pixel fades to its mean (it cannot be shown, only shimmer);
+// everything a pixel can show stays exactly as tuned
+float gFP=0.;   // world size of one pixel at the sample, m
+float lod(float f){return 1.-smoothstep(0.4,0.85,f);}   // f: octave frequency times footprint (Nyquist at 0.5)
+float fbmL(vec3 p,float fq){float a=.5,s=0.,fr=1.;for(int i=0;i<4;i++){float k=lod(fq*fr);s+=a*mix(0.5,noise(p),k);p=p*2.07+vec3(1.7,9.2,3.1);a*=.5;fr*=2.07;}return s;}
+float fbm2L(vec3 p,float fq){return 0.6667*(0.5*mix(0.5,noise(p),lod(fq))+0.25*mix(0.5,noise(p*2.07+vec3(1.7,9.2,3.1)),lod(fq*2.07)))+0.1667;}
+
+float Rf(float t){return t<=0.?0.:uD*pow(t/uArr,0.8);}
+float Tof(float r){return uArr*pow(max(r,0.)/uD,1.25);}
+// strength of the post-shock wind relative to the camera ring (~5 psi), Kinney-Graham 1 Mt surface burst
+float strength(float r){
+ float Z=max(r,200.)/1000.;   // W^(1/3) = 1000 for 1e9 kg TNT
+ float x=808.*(1.+(Z/4.5)*(Z/4.5))/sqrt((1.+(Z/0.048)*(Z/0.048))*(1.+(Z/0.32)*(Z/0.32))*(1.+(Z/1.35)*(Z/1.35)));
+ float u=343.*(5.*x/7.)/sqrt(1.+6.*x/7.);
+ return clamp(pow(u/75.,1.5),0.,2.);
+}
+const float HPK=58.;   // hump height at the camera ring, m (19:39 value; physical layer 45-80 m)
+
+// heights of the dense core and the light haze for dust of age a, m
+void tops(float a,float st,out float core,out float haze){
+ float up=HPK*st*(1.-exp(-a/uRise));
+ if(uPhys<0.5){ core=max(up*(0.32+0.68*exp(-a/1.3)),0.5); haze=0.; return; }
+ // physical: the heavy part (gravel, coarse sand) falls at 2-6 m/s after the positive phase; fines stay up and the
+ // layer slowly rises over the flash-heated ground (mod law ~55 -> ~82 m in 30 s)
+ // the freshly lofted head overshoots and the heavy part sags back within a few seconds
+ core=max(up*(1.+uHump*0.38*exp(-max(a-0.75,0.)/0.8))*(1.-0.5*smoothstep(mix(1.,0.6,uHump),mix(9.,4.5,uHump),a)),0.5);   // heavy core sinks right after the head passes: ~7 m/s, gravel fall speed (G&D soil, est.)
+ haze=up*(1.+(0.45-0.25*uSurge)*(1.-exp(-a/12.)));   // the surge variant keeps the haze top under the 120 m camera, as in the series
+}
+
+float wisps(vec3 p,float top,float st){
+ vec2 cell=floor(p.xz/60.);
+ float h1=hash(vec3(cell,1.)),h2=hash(vec3(cell,2.)),h3=hash(vec3(cell,3.)),h4=hash(vec3(cell,4.));
+ if(h1>0.5) return 0.;
+ vec2 c=(cell+0.5)*60.+(vec2(h2,h3)-0.5)*28.;
+ float tb=uT-Tof(length(c-uG))-(0.6+h4*8.);
+ if(tb<0.) return 0.;
+ float base=top*0.7;
+ float dxz=length(p.xz-c);
+ float w=(3.+4.*h1)*min(st,1.4);
+ float dz=w*5.*(1.-exp(-tb/5.));
+ float yl=base+dz; float Rl=7.+0.3*dz+1.2*tb;
+ return (40./(Rl*Rl)+0.12)*smoothstep(1.,0.,length(vec2(dxz,(p.y-yl)*1.1))/Rl)*smoothstep(0.,1.2,tb)*exp(-tb/14.);
+}
+
+bool LITE=false;
+float dens(vec3 p){
+ float r=length(p.xz-uG); float R=Rf(uT);
+ if(r>R+30.) return 0.;
+ float a0=uT-Tof(r); if(a0<0.) return 0.;
+ float st=strength(r); if(st<0.02) return 0.;
+ float c0,h0; tops(a0,st,c0,h0);
+ float top0=max(c0,h0);
+ float pl=0.;
+ if(!LITE&&uWisp>0.&&p.y>top0*0.5) pl=uWisp*0.05*wisps(p,top0,st)*(0.4+1.2*mix(0.5,noise(p/8.+vec3(0.,-uT*0.6,0.)),lod(gFP/8.)));
+ float yn0=p.y/max(top0,1.); if(yn0>1.6) return pl;
+ float lean=34.*yn0*yn0*clamp(a0/0.7,0.,1.);      // top leans back toward ground zero
+ float a=uT-Tof(r+lean); if(a<0.) return pl;
+ float core,haze; tops(a,st,core,haze);
+ // eddies behind the front: energy decays over ~8 s with a weak floor over the hot ground; their phase is the
+ // integral of the energy, so they keep turning after the front has gone
+ float E=exp(-a/8.);
+ float Ef=exp(-a/4.);                              // the violent first seconds right behind the front
+ float A=uTurb*(0.3+0.7*E+0.6*uSurge*Ef);
+ float ph=uTurb*(8.*(1.-E)+0.25*a)+uSurge*(3.5*(1.-Ef));
+ vec3 pw=p;
+ if(A>0.&&!LITE){
+   vec3 b=p/(vec3(32.,20.,32.)*uSize);
+   float fw2=gFP/(20.*uSize);
+   vec3 w=vec3(fbm2L(b+vec3(0.,ph*0.15*uSpd,0.),fw2),fbm2L(b+vec3(5.2,1.3-ph*0.14*uSpd,2.8),fw2),fbm2L(b+vec3(2.1,7.7,ph*0.15*uSpd),fw2))-0.5;   // slow turnover: big rolls, no boiling
+   float gnd=smoothstep(0.,0.45*core,p.y);   // the ground keeps feeding dust: eddies never sweep it bare
+   pw+=w*vec3(55.,38.,55.)*A*gnd;
+   if(uSurge>0.){
+     // the whole lofted mass sloshes: carried outward by the wind, then pulled back by the negative phase;
+     // the top moves more than the bottom, so it rolls (presentation, amplitude est.)
+     vec2 rdir=(p.xz-uG)/max(r,1.);
+     float yy=clamp(p.y/max(core,1.),0.,1.5);
+     float sl=uSurge*(18.*exp(-a/3.)*sin(1.3*a+0.4)+6.*sin(0.45*a+fbm2(p/90.)*6.))*yy;
+     pw.xz-=rdir*sl; pw.y+=uSurge*6.*Ef*sin(1.7*a+fbm2(p/60.+3.)*6.)*yy;
+   }
+ }
+ float yt=pw.y;   // texture fixed in the air mass: the rising, settling top reveals and hides it, it does not slide through it
+ vec3 q=vec3(pw.x,yt-uTurb*0.9*uSpd*ph,pw.z)/(vec3(20.,13.,20.)*uSize)+vec3(0.,0.,uT*0.05*(1.-min(uTurb,1.)));
+ float n=LITE?0.5:fbmL(q,gFP/(13.*uSize));
+ float fs=0.5;
+ if(!LITE){
+   vec2 rv=pw.xz-uG; float ral=length(rv); float rac=atan(rv.y,rv.x)*ral;
+   vec3 sq=vec3(ral/28.,(yt-0.5*uSpd*ph)/5.,rac/4.5);
+   fs=mix(0.5,fbm2(sq),lod(gFP/2.2));
+ }
+ float Lb=uSurge>0.? fbm2(vec3(pw.xz/170.,0.)+vec3(0.,0.06*a+0.02*uT,0.)) : 0.5;
+ // big soft lumps of the lofted mass: moderate on the fresh head at the front (+-30 %), full behind it (+-45 %)
+ if(uSurge>0.) core*=1.+mix(0.66,1.,smoothstep(1.,5.,a))*(0.9*smoothstep(0.2,0.8,Lb)-0.45);
+ float yr=p.y/core;
+ float z=mix(yr,pw.y/core+(n-0.5)*1.5+(fs-0.5)*0.55,smoothstep(0.,0.6,yr));   // frayed, streaky top edge
+ float prof=smoothstep(1.05,0.55,z);
+ float amt=0.35+0.65*exp(-max(a-1.,0.)/4.);    // dust that reached the ground again (19:39 value)
+ float head=1.+0.7*exp(-a/1.1);
+ float d=prof*amt*head;
+ if(uPhys>0.5){
+   // haze of fines over the core: thinner per metre, but it stays (fines carry most of the dimming)
+   // soft large-scale unevenness: thicker in places, thinner in others, the haze top higher here and lower there;
+   // it is carried by the same eddies, so it moves as one mass (scale 150-300 m, no sharp edges)
+   float L1=Lb;
+   float hz=haze*(0.7+0.6*L1);
+   float zh=mix(p.y/hz,pw.y/hz+(n-0.5)*1.8,smoothstep(0.,0.6,p.y/hz));
+   float hd=uSurge>0.? 0.07*(0.1+1.8*smoothstep(0.3,0.7,L1)) : 0.32;
+   d=prof*(0.25+0.75*exp(-max(a-1.,0.)/6.))*head*(uSurge>0.?0.8+0.4*L1:1.)+hd*smoothstep(1.05,0.45,zh);
+ }
+ return 0.11*min(st,1.6)*d*smoothstep(0.,0.12,a)*(0.3+1.4*n)*(0.45+1.1*fs)+pl;
+}
+
+vec3 ldir;
+vec3 skyCol(vec3 rd){
+ vec3 c=mix(vec3(0.93,0.62,0.32),vec3(0.42,0.27,0.17),smoothstep(0.0,0.22,rd.y));
+ float g=max(dot(rd,ldir),0.);
+ return c+vec3(1.0,0.55,0.2)*pow(g,30.)*0.9+vec3(0.6,0.35,0.15)*pow(g,4.)*0.35;
+}
+float fireball(vec3 rd,float t,out vec3 fc){
+ vec3 gz=vec3(uG.x,0.,uG.y)-uCam; float dist=length(gz.xz);
+ float hc=4200.*(1.-exp(-t/28.)); float capR=350.+30.*t; float stemW=140.+6.*t;   // ~1 Mt cloud rise in the first half minute (est.)
+ vec3 c=vec3(uG.x,hc,uG.y)-uCam; vec3 cd=normalize(c);
+ float ang=acos(clamp(dot(rd,cd),-1.,1.)); float capA=capR/length(c);
+ float nn=fbm(rd*400.+vec3(0.,-t*0.3,t*0.2));
+ float cap=smoothstep(capA*1.05,capA*0.65,ang+(nn-.5)*capA*0.6);
+ vec3 bd=normalize(gz);
+ float az=abs(atan(rd.x,rd.z)-atan(bd.x,bd.z));
+ float elev=asin(rd.y), eTop=asin(cd.y), eBot=asin(bd.y);
+ float sw=stemW/dist;
+ float stem=step(eBot,elev)*step(elev,eTop)*smoothstep(sw*1.2,sw*0.5,az+(nn-.5)*sw*0.7);
+ float glow=exp(-t/10.)*0.8+0.2;
+ fc=mix(vec3(0.5,0.25,0.1),vec3(1.0,0.75,0.32),glow*(0.4+0.9*nn))*1.5;
+ return max(cap,stem*0.9);
+}
+
+void main(){
+ vec2 uv=(gl_FragCoord.xy/uRes)*2.-1.; float asp=uRes.x/uRes.y;
+ vec3 rd=normalize(uF+uv.x*uTan*uR+uv.y*uTan/asp*uU);
+ ldir=normalize(vec3(uG.x,600.,uG.y)-uCam);
+ if(uExtra>0.) ldir=normalize(vec3(uG.x,max(600.,4200.*(1.-exp(-uT/28.))),uG.y)-uCam);   // light comes from the rising fireball
+ vec3 acc=vec3(0.); float trans=1.;
+ float tg=rd.y<-1e-4? uCam.y/(-rd.y) : 1e9;
+ float YT=HPK*2.2+60.;
+ float tmax=min(tg,9000.); if(rd.y>1e-4) tmax=min(tmax,(YT-uCam.y)/rd.y);
+ float t0=rd.y<0.? max(0.,(uCam.y-YT)/(-rd.y)) : (uCam.y<YT?0.:1e9);
+ float tIn=1e9;
+ // dust exists only inside the front circle: clip the march to it
+ { vec2 oc=uCam.xz-uG; vec2 d2=rd.xz; float A2=dot(d2,d2); float Rc=Rf(uT)+40.;
+   float B=dot(oc,d2), C=dot(oc,oc)-Rc*Rc, disc=B*B-A2*C;
+   if(disc<0.||A2<1e-8){t0=1e9;} else { float sq=sqrt(disc); tIn=max(0.,(-B-sq)/A2); t0=max(t0,(-B-sq)/A2); tmax=min(tmax,(-B+sq)/A2); } }
+ if(t0<tmax){
+   // interleaved gradient noise: a fixed per-pixel offset (no shimmer), shifted by the sub-sample seed
+   float jit=fract(52.9829189*fract(dot(gl_FragCoord.xy,vec2(0.06711056,0.00583715)))+uSeed);
+   // samples sit on a fixed world grid along each ray (geometric steps from the camera), so they do not slide when the
+   // front circle (and with it the march start and span) grows every frame; sliding samples through fine noise read as
+   // boiling. K: step / distance, set by the step budget so the grid reaches 9 km
+   float K=log(9000./30.)/float(uSteps); float tb=1.5/K;
+   float t=t0<tb? floor(t0/1.5)*1.5 : tb*pow(1.+K,floor(log(t0/tb)/log(1.+K)));
+   for(int i=0;i<200;i++){
+     if(i>=uSteps) break;
+     float dt=max(1.5,t*K);
+     vec3 p=uCam+rd*(t+dt*jit);
+     if(p.y<0.) break;
+     gFP=max(t*2.*uTan/uRes.x,dt*0.35*smoothstep(800.,2500.,t));   // one pixel; far away (>0.8-2.5 km) also half a step:
+     // detail finer than the step along the ray decorrelates every frame there and reads as boiling; near detail untouched
+     float d=dens(p);
+     if(d>0.0004){
+       float sd=0.; LITE=true; for(int k=1;k<4;k++){sd+=dens(p+ldir*float(k)*7.);} LITE=false;
+       float lit=exp(-sd*7.*1.6)*(0.55+0.45*smoothstep(0.,40.,p.y))+0.08;
+       float fw=pow(max(dot(rd,ldir),0.),5.);
+       vec3 c=mix(vec3(0.16,0.09,0.05),vec3(1.0,0.66,0.36),lit)+vec3(0.5,0.28,0.1)*fw;
+       // backlit rim: thin edges toward the fireball glow (forward scattering by dust, Mie)
+       c+=uExtra*vec3(1.,.72,.42)*pow(max(dot(rd,ldir),0.),10.)*lit*1.6*(1.-smoothstep(0.,0.06,d));
+       float al=1.-exp(-d*dt);
+       acc+=trans*al*c; trans*=1.-al;
+       if(trans<0.01) break;
+     }
+     t+=dt; if(t>tmax) break;
+   }
+ }
+ vec3 col;
+ if(tg<14000.){
+   vec3 p=uCam+rd*tg;
+   float crowns=fbm(vec3(p.xz/6.,0.)); float patches=fbm(vec3(p.xz/240.,3.));
+   vec3 g=mix(vec3(0.09,0.10,0.04),vec3(0.32,0.30,0.12),crowns*0.75+patches*0.45);
+   g*=0.5+0.7*crowns; g+=vec3(0.12,0.06,0.02);
+   if(uExtra>0.){
+     // shadow of the dust on the ground ahead of it and darkening under it (light toward the fireball)
+     float tau=0.; LITE=true; for(int k=1;k<8;k++){tau+=dens(p+ldir*float(k)*14.)*14.;} LITE=false;
+     g*=mix(0.3,1.,exp(-tau*0.9));
+     // flash-scorched canopy: dark char where the flash fell (ahead of and under the wave)
+     float sc=smoothstep(0.,1.5,uT)*smoothstep(0.45,0.7,fbm(vec3(p.xz/35.,7.)));
+     g=mix(g,vec3(0.06,0.05,0.04),0.5*sc);
+   }
+   col=mix(g,vec3(0.74,0.5,0.29),1.-exp(-tg/4000.));
+ } else {
+   col=skyCol(rd); vec3 fc; float h=uT>0.?fireball(rd,uT,fc):0.; col=mix(col,fc,clamp(h,0.,1.));
+ }
+ col=acc+trans*col;
+ if(uExtra>0.&&uT>0.3&&rd.y<0.){
+   // smoke from the flash-scorched forest between the camera and the front: rises ~1.5 m/s from smouldering
+   // stands (thermal fluence here ~30 cal/cm2 chars and ignites foliage, G&D ch.7, est.); the wave tears it into the wall
+   float tEnd=min(min(tg,tIn),6000.); float tS=max(0.,(uCam.y-60.)/(-rd.y));
+   if(tS<tEnd){
+     float Hs=min(1.5*uT,40.); vec3 sacc=vec3(0.); float str=1.; float ds=(tEnd-tS)/24.;
+     float jj=fract(52.9829189*fract(dot(gl_FragCoord.xy,vec2(0.06711056,0.00583715)))+uSeed);
+     for(int k=0;k<24;k++){
+       vec3 p=uCam+rd*(tS+ds*(float(k)+jj));
+       if(p.y>Hs+15.||p.y<0.) continue;
+       float m=smoothstep(0.5,0.72,fbm(vec3(p.xz/35.,7.)));
+       float n=fbm(vec3(p.x/12.,p.y/9.-uT*0.25,p.z/12.));
+       float sd=0.008*m*smoothstep(Hs+12.,0.,p.y+(n-.5)*14.)*(0.3+1.4*n);
+       float al=1.-exp(-sd*ds);
+       vec3 sc2=mix(vec3(0.42,0.38,0.34),vec3(0.95,0.82,0.66),0.45+0.55*pow(max(dot(rd,ldir),0.),3.));
+       sacc+=str*al*sc2; str*=1.-al;
+     }
+     col=sacc+str*col;
+   }
+ }
+ float fl=uT<0.?0.:exp(-uT*2.2); col+=vec3(1.,0.95,0.85)*fl*0.9;
+ o=vec4(col/(1.+col*0.15),1.);
+}
+</script>
+<script>
+const VARS={v1:{phys:0,turb:0,wisp:0,rise:0.16},v2:{phys:0,turb:0.55,wisp:0.6,rise:0.16},v3:{phys:0,turb:1.0,wisp:1.0,rise:0.16},v4:{phys:1,turb:0.8,wisp:0.8,rise:0.5,hump:0,surge:0},v5:{phys:1,turb:1.0,wisp:1.0,rise:0.4,hump:1,surge:1},v6:{phys:1,turb:1.0,wisp:1.0,rise:0.4,hump:1,surge:1,extra:1}};
+const D=4500, AZ=-27*Math.PI/180, CAMY=120, PITCH=-6*Math.PI/180, HFOV=78*Math.PI/180;
+const ARR1=21.8*0.35; let ARR=ARR1/0.5;   // ARR1: arrival at 4.5 km at real speed   // ARR: game-speed (0.35) arrival at 4.5 km
+const G=[D*Math.sin(AZ),D*Math.cos(AZ)];const cp=Math.cos(PITCH),sp=Math.sin(PITCH);
+const q=new URLSearchParams(location.search);const fixedT=q.has('t')?parseFloat(q.get('t')):null;const only=q.get('v');
+const fmt=(x,d)=>x.toLocaleString('ru-RU',{maximumFractionDigits:d,minimumFractionDigits:d});
+let T0=performance.now();
+function run(id){
+ const V=VARS[id];const cv=document.getElementById('cv_'+id),hud=document.getElementById('hud_'+id);
+ const gl=cv.getContext('webgl2',{antialias:false,preserveDrawingBuffer:true});
+ if(!gl){hud.textContent='Нужен браузер с WebGL 2';return;}
+ const vs='#version 300 es\nin vec2 p;void main(){gl_Position=vec4(p,0.,1.);}';
+ const sh=(type,src)=>{const s=gl.createShader(type);gl.shaderSource(s,src.trim());gl.compileShader(s);if(!gl.getShaderParameter(s,gl.COMPILE_STATUS))throw new Error(gl.getShaderInfoLog(s));return s;};
+ const pr=gl.createProgram();gl.attachShader(pr,sh(gl.VERTEX_SHADER,vs));gl.attachShader(pr,sh(gl.FRAGMENT_SHADER,document.getElementById('fs').textContent));gl.linkProgram(pr);gl.useProgram(pr);
+ const b=gl.createBuffer();gl.bindBuffer(gl.ARRAY_BUFFER,b);gl.bufferData(gl.ARRAY_BUFFER,new Float32Array([-1,-1,3,-1,-1,3]),gl.STATIC_DRAW);
+ const loc=gl.getAttribLocation(pr,'p');gl.enableVertexAttribArray(loc);gl.vertexAttribPointer(loc,2,gl.FLOAT,false,0,0);
+ const U=n=>gl.getUniformLocation(pr,n);
+ gl.uniform3f(U('uCam'),0,CAMY,0);gl.uniform3fv(U('uF'),[0,sp,cp]);gl.uniform3fv(U('uR'),[1,0,0]);gl.uniform3fv(U('uU'),[0,cp,-sp]);
+ gl.uniform1f(U('uTan'),Math.tan(HFOV/2));gl.uniform2f(U('uG'),G[0],G[1]);gl.uniform1f(U('uD'),D);gl.uniform1f(U('uArr'),ARR);
+ gl.uniform1f(U('uPhys'),V.phys);gl.uniform1f(U('uTurb'),V.turb);gl.uniform1f(U('uWisp'),V.wisp);gl.uniform1f(U('uRise'),V.rise);gl.uniform1f(U('uHump'),V.hump||0);gl.uniform1f(U('uSurge'),V.surge||0);gl.uniform1f(U('uExtra'),V.extra||0);
+ let scale=0.7,steps=150,visible=true,frames=0,fpsT=performance.now();
+ new IntersectionObserver(e=>{visible=e[0].isIntersecting;}).observe(cv);
+ const resize=()=>{const r=cv.getBoundingClientRect();const dpr=Math.min(2,window.devicePixelRatio||1);cv.width=Math.max(320,Math.round(r.width*dpr*scale));cv.height=Math.round(cv.width/2.4);gl.viewport(0,0,cv.width,cv.height);};
+ resize();addEventListener('resize',resize);
+ function frame(now){
+  requestAnimationFrame(frame);
+  if(!visible&&fixedT===null)return;
+  let t=fixedT!==null?fixedT:(now-T0)/1000%40.8-0.8;
+  gl.uniform2f(U('uRes'),cv.width,cv.height);gl.uniform1f(U('uT'),t);gl.uniform1f(U('uArr'),ARR);gl.uniform1i(U('uSteps'),steps);gl.uniform1f(U('uSeed'),0);gl.uniform1f(U('uSize'),SIZE);gl.uniform1f(U('uSpd'),SPD);
+  gl.drawArrays(gl.TRIANGLES,0,3);
+  frames++;if(now-fpsT>500){const fps=frames*1000/(now-fpsT);frames=0;fpsT=now;
+   // keep it smooth: drop resolution first, then march steps; raise them back when there is headroom
+   if(fps<30){if(scale>0.35){scale=Math.max(0.35,scale*0.85);resize();}else if(steps>90)steps-=20;}
+   else if(fps>55){if(steps<150)steps+=10;else if(scale<0.9){scale=Math.min(0.9,scale*1.08);resize();}}}
+  const R=t<=0?0:D*Math.pow(t/ARR,0.8);
+  hud.textContent=`t = ${fmt(Math.max(0,t),1)} с · ${R<D?'фронт до камеры '+fmt((D-R)/1000,2)+' км':'фронт прошёл камеру '+fmt(Math.max(0,t-ARR),1)+' с назад'}`;
+ }
+ requestAnimationFrame(frame);
+}
+for(const id of ['v6','v5','v1','v2','v3','v4']){if(only&&only!==id){document.getElementById('cv_'+id).closest('section').style.display='none';continue;}run(id);}
+document.getElementById('restart').onclick=()=>{T0=performance.now();};
+let SIZE=1,SPD=1;
+for(const [id,set] of [['sz',v=>SIZE=v],['sp',v=>SPD=v]]){const el=document.getElementById(id),o=document.getElementById(id+'o');el.oninput=()=>{set(parseFloat(el.value));o.textContent=parseFloat(el.value).toFixed(2).replace('.',',');};}
+document.querySelectorAll('.spd').forEach(bt=>bt.onclick=()=>{ARR=ARR1/parseFloat(bt.dataset.k);document.querySelectorAll('.spd').forEach(x=>x.setAttribute('aria-pressed',x===bt));T0=performance.now();});
+</script>
