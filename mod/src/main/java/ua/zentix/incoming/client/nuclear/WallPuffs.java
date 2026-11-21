@@ -43,6 +43,8 @@ public final class WallPuffs implements SmokeGrid.Source {
     static final double OPAQUE = 6;
     /** Cells wider than this many wall heights draw a roll along the front instead of one billow column. */
     static final double ROUND = 1.25;
+    /** Per-billow scatter of the frame (life share) and of the size (share). */
+    static final double SCATTER_FRAME = 0.18, SCATTER_SIZE = 0.3;
     /** Dust-impact frame by age: life share from, span, e-fold s. */
     static final double FRAME_FROM = 0.12, FRAME_SPAN = 0.7, FRAME_S = 3;
     /** Curl: the top is thrown outward by the wind behind the front, then pulled back (share of the top). */
@@ -206,17 +208,22 @@ public final class WallPuffs implements SmokeGrid.Source {
         if (mass <= 0) return;
         // the dust-impact frames play with the billow's age: young billows are the impact's first frames (torn up, growing),
         // older ones its later, calmer frames (presentation); the frame is what makes billows turn over
-        out.look(SmokeGrid.Look.EJECTA, FxAtlas.lifeFrame(SmokeGrid.Look.EJECTA, FRAME_FROM + FRAME_SPAN * (1 - Math.exp(-age / FRAME_S))));
+        // each billow its own: frame phase and size scatter (no two neighbours alike, no beads at the cell step)
+        long hx = Math.round(x * 7.0), hz = Math.round(z * 7.0);
+        double k1 = hash(hx, hz, seed + 404), k2 = hash(hx, hz, seed + 505);
+        double life = FRAME_FROM + FRAME_SPAN * (1 - Math.exp(-age / FRAME_S)) + SCATTER_FRAME * (2 * k1 - 1);
+        out.look(SmokeGrid.Look.EJECTA, FxAtlas.lifeFrame(SmokeGrid.Look.EJECTA, Math.clamp(life, 0, 1)));
+        double size = 1 + SCATTER_SIZE * (2 * k2 - 1);
         if (cell <= ROUND * topH) {
             // a column of round billows from the ground to the top (several per wall height near the eye)
-            double sh = 0.4 * cell, sv = Math.min(sh, 0.35 * topH);
+            double sh = 0.4 * cell * size, sv = Math.min(sh, 0.35 * topH);
             double half = Math.max(0, 0.5 * topH - sv);
             double cy = y + Math.max(sv, 0.5 * topH);
             out.segment(x + 0.5 * lean * ux, cy, z + 0.5 * lean * uz, 0.5 * lean * ux, half, 0.5 * lean * uz, sh, sv, 0, mass, 0,
                     dustR, dustG, dustB, CloudModel.T_AIR_K, 0);
         } else {
             // far cells are wider than the wall is tall: a roll of wall-height billows along the front, not one flattened lump
-            double sg = 0.4 * ROUND * topH, half = Math.max(0, 0.5 * cell - sg);
+            double sg = 0.4 * ROUND * topH * size, half = Math.max(0, 0.5 * cell * (0.6 + 0.8 * k1) - sg);
             out.segment(x + 0.5 * lean * ux, y + Math.max(sg, 0.5 * topH), z + 0.5 * lean * uz, -uz * half, 0, ux * half, sg, sg, 0, mass, 0,
                     dustR, dustG, dustB, CloudModel.T_AIR_K, 0);
         }
