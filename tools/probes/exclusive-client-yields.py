@@ -76,7 +76,7 @@ with tempfile.TemporaryDirectory(prefix="incoming-review720-gpu-") as directory:
         if proc.poll() is None:
             proc.kill()
             proc.communicate()
-    started = "STARTED" in out
+    started = "STARTED" in out or proc.returncode != 75 or "Artem's game is running" not in err
     print(f"{'FAIL' if started else 'PASS'} host starts during lease wait: exit {proc.returncode}, "
-          f"compositor stub {'ran' if started else 'did not run'}")
+          f"compositor stub {'ran' if 'STARTED' in out else 'did not run'}, diagnostic {'given' if 'Artem' in err else 'missing'}")
     sys.exit(int(deleted or started))
