@@ -1019,8 +1019,7 @@ public final class RuinPlan {
         }
         PHASES[2] += System.nanoTime() - t;
         t = System.nanoTime();
-        // chunk viewers get a few changes as section packets the same tick (like setBlock), a heavily ruined chunk whole
-        // after its light (RuinDelivery)
+        // Small changes go as section packets unless a pending whole delivery will carry this write too.
         ChunkHolder holder = level.getChunkSource().chunkMap.getVisibleChunkIfPresent(pos.toLong());
         List<ServerPlayer> players = holder == null ? List.of() : RuinDelivery.viewers(holder);
         boolean watched = !players.isEmpty(), ticking = watched && holder.getTickingChunk() != null;
@@ -1030,7 +1029,7 @@ public final class RuinPlan {
             if (out != null) changed += out.size();
             for (int k = 0; k < n; k++) if (fireWas[k] != states[(burning[k] >>> STATE_SHIFT) & STATE_MASK]) changed++;
         }
-        boolean whole = ticking && RuinDelivery.whole(changed);
+        boolean whole = (ticking && RuinDelivery.whole(changed)) || RuinDelivery.waiting(level, chunk);
         boolean sections = ticking && !whole;
         if (sections) {
             RuinDelivery.deltas(changed);
@@ -1108,7 +1107,7 @@ public final class RuinPlan {
             }
         }
         // viewed but non-ticking chunk (view edge): send full chunk via vanilla
-        if (watched && !ticking) {
+        if (watched && !ticking && !whole) {
             for (ServerPlayer p : players) p.connection.chunkSender.markChunkPendingToSend(chunk);
         }
         // after the block entities: the whole chunk carries them too
