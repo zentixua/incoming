@@ -104,6 +104,12 @@ public final class FxLayer {
             Incoming.LOG.error("Scene depth shader failed to load: smoke has no soft edges and is not hidden by Distant Horizons LODs", ex);
         }
         try {
+            e.registerShader(new ShaderInstance(e.getResourceProvider(), Incoming.id("fx_see"), DefaultVertexFormat.POSITION), s -> SeeThrough.shader = s);
+        } catch (IOException ex) {
+            SeeThrough.shader = null;
+            Incoming.LOG.error("See-through shader failed to load: effects behind stained glass, ice and water stay hidden by them", ex);
+        }
+        try {
             e.registerShader(new ShaderInstance(e.getResourceProvider(), Incoming.id("fx_probe"), SourceProbes.FORMAT), s -> SourceProbes.shader = s);
         } catch (IOException ex) {
             SourceProbes.shader = null;
@@ -204,6 +210,11 @@ public final class FxLayer {
     }
 
     public static void render(RenderLevelStageEvent e) {
+        // before and after translucent terrain: the opaque world and the see-through surfaces for the layer to look through them
+        if (e.getStage() == RenderLevelStageEvent.Stage.AFTER_BLOCK_ENTITIES || e.getStage() == RenderLevelStageEvent.Stage.AFTER_TRANSLUCENT_BLOCKS) {
+            SeeThrough.capture(e);
+            return;
+        }
         if (e.getStage() != RenderLevelStageEvent.Stage.AFTER_ENTITIES && e.getStage() != RenderLevelStageEvent.Stage.AFTER_LEVEL) return;
         if (FxViews.secondary(e.getCamera())) {
             if (e.getStage() == RenderLevelStageEvent.Stage.AFTER_ENTITIES) {
@@ -238,6 +249,7 @@ public final class FxLayer {
         try {
             draw(e);
         } finally {
+            SeeThrough.endFrame();
             LodDepth.endFrame();
             ua.zentix.incoming.client.render.PlumeRenderer.endFrame();
         }
@@ -331,8 +343,10 @@ public final class FxLayer {
         lastQuads = QUADS.size();
         if (QUADS.size() == 0 && pall == null && !WaterDecal.active() && !hot) {
             PallPass.reset();
+            SeeThrough.drew(false);
             return;
         }
+        SeeThrough.drew(true);
         // probe (LayerTimes): time marks at pass boundaries; a drain frame — with a drain for each and with the quad
         // parts
         boolean drained = LayerTimes.begin();
@@ -340,12 +354,15 @@ public final class FxLayer {
         LayerTimes.mark(LayerTimes.Pass.MODELS);
         int scene = SceneDepth.update(e.getProjectionMatrix());
         LayerTimes.mark(LayerTimes.Pass.DEPTH);
+        // from here the layer is hidden by the opaque world, not by see-through blocks in front of it
+        SceneDepth.bindLayer();
         LightTexture light = mc.gameRenderer.lightTexture();
         FarDraw.begin(e, view.camera());
         // a drain frame costs one more pass of quads and stalls: it does not run during the layer
         int timed = drained ? -1 : GPU.begin();
         try {
-            // water decal — under the pall and the quads: dust, spray and smoke over water lie on it
+            // water decal — under the pall and the quads: dust, spray and smoke over water lie on it (on the water's own top,
+            // the nearest surface: fx_water reads the distance texture's g)
             if (WaterDecal.active()) WaterDecal.draw(e, view, scene, FOG);
             LayerTimes.mark(LayerTimes.Pass.WATER);
             // pall — before the quads: they lie on it with their own share of pall in front of them (fx.vsh)
@@ -381,6 +398,7 @@ public final class FxLayer {
             // pall, dust wall and mushrooms in front of the quad (pall_front.glsl): table, terrain and water maps,
             // frame mushrooms
             PallPass.bindFront(s, front, pallDrawn, atlas);
+            SceneDepth.bindSee(s);
             light.turnOnLightLayer();
             s.safeGetUniform("FxFogColor").set(FOG.color[0], FOG.color[1], FOG.color[2], FOG.color[3]);
             s.safeGetUniform("FxScene").set(scene >= 0 ? 1f : 0f);
@@ -429,6 +447,7 @@ public final class FxLayer {
         } finally {
             light.turnOffLightLayer();
             SmokePass.unbind();
+            SceneDepth.unbindLayer();
             FarDraw.end();
         }
         long spent = System.nanoTime() - start;

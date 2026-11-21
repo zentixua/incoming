@@ -738,6 +738,7 @@ public final class HeatPass {
         s.safeGetUniform("HeatFrontChemical").set(f.frontNuke[0] ? 0f : 1f, f.frontNuke[1] ? 0f : 1f);
         s.safeGetUniform("HeatFrame").set(f.frontAny() ? 1f : 0f, (float) pixel, f.lit() ? 1f : 0f, f.hotAny() ? 1f : 0f);
         s.safeGetUniform("HeatReach").set(area.whole ? 1e9f : HeatArea.SHIFT_REACH);
+        SceneDepth.bindSee(s);
         boolean drawn = quads(s, area, 0, area.count, copyW, copyH, 0);
         RenderSystem.enableDepthTest();
         return drawn;

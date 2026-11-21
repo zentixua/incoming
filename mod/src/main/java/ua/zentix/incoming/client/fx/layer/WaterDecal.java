@@ -178,7 +178,7 @@ public final class WaterDecal {
     }
 
     /** Iris shader pack currently renders the world. */
-    private static boolean shaderPack() {
+    static boolean shaderPack() {
         if (!packChecked) {
             packChecked = true;
             packInUse = irisPackInUse();
