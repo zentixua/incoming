@@ -39,6 +39,8 @@ public final class WallPuffs implements SmokeGrid.Source {
     static final double UNEVEN = 0.22, UNEVEN_M = 230;
     /** Young dust is denser than the settled layer: extra optical depth share decaying over {@link #DENSE_S}. */
     static final double DENSE = 1.6, DENSE_S = 2.5;
+    /** Vertical optical depth of a billow column at most (presentation: opaque already). */
+    static final double OPAQUE = 6;
     /** Curl: the top is thrown outward by the wind behind the front, then pulled back (share of the top). */
     static final double CURL = 0.45, CURL_S = 0.45, BACK = 0.12;
 
@@ -193,10 +195,13 @@ public final class WallPuffs implements SmokeGrid.Source {
         // density: young dust denser, then the layer's own; fades out as the pall takes over
         double fade = 1 - smooth(YOUNG_S - HANDOFF_S, YOUNG_S, age);
         double tauV = depth * (1 + DENSE * Math.exp(-age / DENSE_S)) * (0.75 + 0.5 * noise(x, z, 0.4 * UNEVEN_M * metre, seed + 303));
+        // presentation: a billow only has to be opaque; optical depth beyond OPAQUE never reaches the screen but widens every
+        // billow's visible edge (√(2 ln(τ/0.05)) σ) and with it the frame's fill
+        tauV = Math.min(tauV, OPAQUE);
         double area = cell * cell / (metre * metre);
         double mass = tauV * area / dustK * w * fade * Math.min(1, age / 0.05);
         if (mass <= 0) return;
-        double sh = 0.5 * cell, sv = Math.min(sh, 0.35 * topH);
+        double sh = 0.4 * cell, sv = Math.min(sh, 0.35 * topH);
         double half = Math.max(0, 0.5 * topH - sv);
         double cy = y + Math.max(sv, 0.5 * topH);
         out.segment(x + 0.5 * lean * ux, cy, z + 0.5 * lean * uz, 0.5 * lean * ux, half, 0.5 * lean * uz, sh, sv, 0, mass, 0,
