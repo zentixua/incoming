@@ -1980,11 +1980,11 @@ void main() {
                 leave[k] = 1e9;
                 continue;
             }
-            // the head's interval is filled from its entry with the steps it may take: a grid anchored at the eye with a
-            // power-of-two step (up to twice the wanted one) aliased the thin head flank into ribs and a toothed edge at 1 Mt
-            // (sandbox variants rib/rib2); the dust texture stays fixed in the air (noise in dust coordinates) and the
-            // frame jitter accumulates
-            fineStep[k] = (leave[k] - enter[k]) / max(floor(want[k] * fit), 1.0);
+            // the head's interval is filled from its entry with the steps it may take, a step continuous across pixels (the last
+            // one cut at the exit): a whole step count (span / floor(want)) jumps by one along contours of equal span, and the
+            // hump's sloped top showed each jump as a ring about ground zero at 1 Mt (sandbox runs rings/rings2); a grid anchored at
+            // the eye with a power-of-two step aliased the thin head flank into ribs and a toothed edge (rib/rib2)
+            fineStep[k] = (leave[k] - enter[k]) / max(want[k] * fit, 1.0);
         }
     }
     // pall: i steps taken (with wall-head steps, up to 2·steps + 16), base ordinary boundaries behind, nextBase next boundary

@@ -24,11 +24,14 @@ class PallGridGlslTest {
         }
     }
 
-    /** The head's steps fill its interval from the entry at its wanted count; no eye-anchored power-of-two grid. */
+    /**
+     * The head's steps fill its interval from the entry with a step continuous across pixels; no whole step count (a count jumping by one
+     * along contours of equal span showed as rings about ground zero on the hump's sloped top) and no eye-anchored power-of-two grid.
+     */
     @Test
     void headIsFilledFromItsEntry() {
         String march = read("fx_pall.glsl"), law = read("pall.glsl");
-        assertTrue(march.contains("fineStep[k] = (leave[k] - enter[k]) / max(floor(want[k] * fit), 1.0);"), "the head's step fills its interval");
+        assertTrue(march.contains("fineStep[k] = (leave[k] - enter[k]) / max(want[k] * fit, 1.0);"), "the head's step: continuous, no whole count");
         assertTrue(march.contains("next = min(next, min(enter[k] + (j + jitter) * fineStep[k], leave[k]));"), "boundaries counted from the entry");
         assertFalse(march.contains("pallGridNext") || law.contains("pallGridStep") || march.contains("log2(max(want"), "no eye-anchored power-of-two head grid");
     }
