@@ -33,6 +33,8 @@ const int DW_NODES = 32;
 // seconds of wall behind the front this model draws; the pall draws what is older (handoff over the last DW_FADE s)
 const float DW_SPAN = 10.0;
 const float DW_FADE = 2.5;
+// presentation exposure of the wall's light (Silo S3E09 dust band: display luma median 0.21–0.26)
+const float DW_EXPOSURE = 0.2;
 
 // pixel footprint at the sample, blocks (set by the march)
 float gDwFoot = 0.0;
@@ -219,7 +221,7 @@ float dwDensity(vec3 q, bool coarse) {
     float Lb = dwFbm2(vec3(pw.xz / 170.0, 0.0) + vec3(0.0, 0.06 * a + 0.02 * DwEye.w, 0.0), 0.0);
     core *= 1.0 + mix(0.66, 1.0, smoothstep(1.0, 5.0, a)) * (0.9 * smoothstep(0.2, 0.8, Lb) - 0.45);
     float yr = q.y / core;
-    float z = mix(yr, pw.y / core + (n - 0.5) * 1.5 + (fs - 0.5) * 0.55, smoothstep(0.0, 0.6, yr));
+    float z = mix(yr, pw.y / core + (n - 0.5) * 1.9 + (fs - 0.5) * 0.55, smoothstep(0.0, 0.6, yr));
     float prof = smoothstep(1.05, 0.55, z);
     float head = 1.0 + 0.7 * exp(-a / 1.1);
     float hz = haze * (0.7 + 0.6 * Lb);
@@ -242,23 +244,30 @@ vec3 dwBallLight(vec3 q) {
     return DwBallLight * min(DwBall.w * DwBall.w / max(dot(d, d), 1.0), 1.0);
 }
 
-// light of a dust sample at q with extinction s (presentation): the fireball's light through three samples toward it
-// (dense dust is dark inside, lit on the side facing the ball), forward scattering toward the ball and a backlit rim on
-// thin edges, sun and sky from above, ground bounce
+// light of a dust sample at q with extinction s (presentation): the fireball's and the sun's light through three samples
+// toward the ball (dense dust is dark inside, lit on the side facing the ball), shared by three scattering orders (single:
+// a forward-peaked dust phase, so edges toward the ball glow; then two diffuse orders along ever thinner paths, so the
+// shaded body stays warm dust-brown, never black or sky-blue); sky from above, ground bounce from below
+float dwPhase(float c) {
+    // dual Henyey–Greenstein, g 0.6 forward / −0.2 back, × 4π (1 for isotropic)
+    float f = (1.0 - 0.36) / pow(1.36 - 1.2 * c, 1.5), k = (1.0 - 0.04) / pow(1.04 + 0.4 * c, 1.5);
+    return 0.75 * f + 0.25 * k;
+}
 vec3 dwLight(vec3 q, vec3 rd, float s) {
     vec3 lb = normalize(dwBallAt() - q);
-    float sd = 0.0;
-    for (int k = 1; k < 4; k++) sd += dwDensity(q + lb * float(k) * 7.0, true);
-    float lit = exp(-sd * 7.0 * 1.6) * (0.55 + 0.45 * smoothstep(0.0, 40.0, q.y));
-    float c = max(dot(rd, lb), 0.0);
-    vec3 L = dwBallLight(q) * (lit * (1.0 + 0.9 * pow(c, 5.0)) + 1.6 * pow(c, 10.0) * lit * (1.0 - smoothstep(0.0, 0.06, s)));
-    float sunLit = exp(-sd * 7.0 * 0.8);
-    L += DwSunLight * sunLit * (0.6 + 0.4 * max(dot(rd, DwSunDir), 0.0));
-    // multiple scattering (presentation): light diffused deep into the mass along a much thinner path, so the shaded
-    // body stays a warm dark brown, never black
-    L += dwBallLight(q) * 0.22 * exp(-sd * 7.0 * 0.2) + DwSunLight * 0.12 * exp(-sd * 7.0 * 0.15);
-    L += DwSkyLight * (0.5 + 0.5 * smoothstep(0.0, 40.0, q.y)) + DwGroundLight;
-    return DwAlbedo * L;
+    // depth toward the ball over 90 m: a low fireball throws billow shadows of a hundred metres across the top
+    float tau = 1.6 * (dwDensity(q + lb * 6.0, true) * 9.0 + dwDensity(q + lb * 18.0, true) * 15.0
+            + dwDensity(q + lb * 42.0, true) * 30.0 + dwDensity(q + lb * 85.0, true) * 45.0);
+    float low = 0.55 + 0.45 * smoothstep(0.0, 40.0, q.y);
+    float orders = 0.3 * min(dwPhase(dot(rd, lb)), 3.0) * exp(-tau) + 0.06 * exp(-tau * 0.3) + 0.03 * exp(-tau * 0.1);
+    vec3 L = dwBallLight(q) * orders * low;
+    // the sun lights the top: depth below the local surface along the sun stands in for its own light path
+    float sunOrders = 0.3 * min(dwPhase(dot(rd, DwSunDir)), 3.0) * exp(-tau * 0.8) + 0.06 * exp(-tau * 0.25) + 0.03 * exp(-tau * 0.08);
+    L += DwSunLight * sunOrders * low;
+    L += DwSkyLight * 0.25 * (0.4 + 0.6 * smoothstep(0.0, 40.0, q.y)) * exp(-tau * 0.05) + DwGroundLight;
+    // presentation: the wall is exposed like the reference footage of a fireball-lit dust front (dark matte body,
+    // lit crests), not like a white wall facing the ball
+    return DW_EXPOSURE * DwAlbedo * L;
 }
 
 const float DW_K = 0.0045, DW_S = 1.5;

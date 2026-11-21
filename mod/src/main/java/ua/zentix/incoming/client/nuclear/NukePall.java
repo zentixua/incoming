@@ -285,6 +285,12 @@ public final class NukePall {
         if (q == PallPass.Quality.OFF) f.eyeDust.zero();
         else if (ua.zentix.incoming.client.fx.layer.FxViews.secondary()) eyeDust(level, eye, partial, f.eyeDust);
         else f.eyeDust.set(sigma, tauUp, tauDown);
+        // the young wall's pass draws the dust at an eye inside its ring: the pall's eye dust (the law's head there) gives way
+        if (f.dustWall.active && f.young.y > f.young.x) {
+            double r = Math.hypot(f.dustWall.eye[0], f.dustWall.eye[2]);
+            float keep = (float) (1 - BlastWall.smooth(f.young.x, f.young.y, r));
+            f.eyeDust.mul(keep);
+        }
         return f;
     }
 
