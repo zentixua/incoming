@@ -43,12 +43,6 @@ public final class WallPuffs implements SmokeGrid.Source {
     static final double OPAQUE = 6;
     /** Cells wider than this many wall heights draw a roll along the front instead of one billow column. */
     static final double ROUND = 1.25;
-    /**
-     * Billow σ per cell: neighbours overlap into one mass; larger widens every billow's quad and the frame's fill past the
-     * SmokePuffs budget (16 screens), whose merging then regroups billows from frame to frame (0.4 gave 19.5 screens and a
-     * pop at the passage).
-     */
-    static final double SIGMA = 0.33;
     /** Per-billow scatter of the frame (life share) and of the size (share). */
     static final double SCATTER_FRAME = 0.18, SCATTER_SIZE = 0.3;
     /** Front band: rows of wall-height cells behind the front; it starts where tier cells exceed this many band cells. */
@@ -281,7 +275,7 @@ public final class WallPuffs implements SmokeGrid.Source {
         double size = 1 + SCATTER_SIZE * (2 * k2 - 1);
         if (cell <= ROUND * topH) {
             // a column of round billows from the ground to the top (several per wall height near the eye)
-            double sh = SIGMA * cell * size, sv = Math.min(sh, 0.35 * topH);
+            double sh = 0.4 * cell * size, sv = Math.min(sh, 0.35 * topH);
             double half = Math.max(0, 0.5 * topH - sv);
             double cy = y + Math.max(sv, 0.5 * topH);
             out.segment(x + 0.5 * lean * ux, cy, z + 0.5 * lean * uz, 0.5 * lean * ux, half, 0.5 * lean * uz, sh, sv, 0, mass, 0,
@@ -290,7 +284,7 @@ public final class WallPuffs implements SmokeGrid.Source {
             // far cells are wider than the wall is tall: a roll of wall-height billows along the front, not one flattened lump
             // a freshly torn-up sheet is lower than wide: flat billows at least a quarter cell across (thin round ones strung along
             // the roll read as beads)
-            double sv = SIGMA * ROUND * topH * size, sg = Math.max(sv, 0.75 * SIGMA * cell * size), half = Math.max(0, 0.5 * cell * (0.6 + 0.8 * k1) - sg);
+            double sv = 0.4 * ROUND * topH * size, sg = Math.max(sv, 0.3 * cell * size), half = Math.max(0, 0.5 * cell * (0.6 + 0.8 * k1) - sg);
             out.segment(x + 0.5 * lean * ux, y + Math.max(sv, 0.5 * topH), z + 0.5 * lean * uz, -uz * half, 0, ux * half, sg, sv, 0, mass, 0,
                     dustR, dustG, dustB, CloudModel.T_AIR_K, 0);
         }
