@@ -129,7 +129,8 @@ behind a low rise still burns. A wall, house or hill close by (up to about 40 bl
 ground behind it; terrain farther away does not, so the trace behind distant hills is stronger than in reality.
 
 Green grass, leaves and flowers char, steam and smoke in the flash but do not keep burning, as in real tests. Fire stays
-only on dry fuel the light reaches: hay, dead bushes, wool, carpets, beds, banners and books, in the open or indoors
+only on dry fuel the light reaches: hay bales, dried kelp blocks, dead bushes, scaffolding,
+bookshelves and lecterns, wool, carpets, beds and banners, in the open or indoors
 behind glass. Wood does not catch from the flash. Where the climate is dry (desert, savanna, badlands), the grass is
 dry and burns as a field. The blast wave blows out some of these fires: none below 2 psi, half above 5 psi. A city
 burns from the fires lit through its windows; open green country around it does not.

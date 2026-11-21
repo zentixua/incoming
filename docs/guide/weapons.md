@@ -465,7 +465,8 @@ pieces are particles. A burning piece in flight leaves puffs of grey-black wood 
 drift away, and its flame lights the smoke around it. The bomb's blast is drawn the same way: a
 breach gives the cloud of the part of the charge that went into the air, a deeper blast a smaller cloud from the mouth of
 the hole; the dust of the impact and of a caved-in pit stays low and drifts.
-Smoke and dust puffs right beside you stay soft and smooth, without square pixels at their edges.
+Smoke and dust puffs right beside you stay soft and smooth, without square pixels at their edges. Inside a thick cloud,
+nearby blocks stay visible and farther ones fade by the cloud's density.
 
 Fuel left in a crater keeps burning, and so does the oil of a substation the strike knocked out. Over them a column of
 black smoke rises, leans downwind and stretches out with it; a bigger fire sends it higher. Burning craters of a salvo
