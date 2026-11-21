@@ -1541,7 +1541,7 @@ public final class SmokePuffs {
 
         /**
          * Each source's cloud as one Gaussian of the same mass and moments (as {@link #absorb}: middle by attenuation,
-         * spread of the middles plus each one's σ²), from the frame's pending puffs before merging: the clumps' shadow on
+         * spread of the middles plus each one's σ²), from the frame's pending upright puffs ({@link #flat}) before merging: the clumps' shadow on
          * one another toward the sun ({@link #sunThrough}) in one pass, without pairs (before the LOD thinning, which can
          * merge puffs of different sources).
          */
@@ -1552,7 +1552,9 @@ public final class SmokePuffs {
             for (int i = 0; i < holding; i++) {
                 if (merged[i]) continue;
                 int o = i * FIELDS, e = (int) held[o + 12] * ENV;
-                double w = matter(o);
+                // a flat layer at the ground (the dust skirt under a rising ball) is not part of the cloud's volume:
+                // in one Gaussian with the ball it filled the space between them and blacked the skirt out
+                double w = matter(o) * (1 - flat(held[o + 3], held[o + 4]));
                 if (!(w > 0)) continue;
                 double x = held[o], y = held[o + 1], z = held[o + 2];
                 m[e] += w * x;
@@ -2956,7 +2958,7 @@ public final class SmokePuffs {
             // the source's cloud as one Gaussian ({@link #envelopes}): each puff takes the sun through it from its own
             // sun-side edge (its own matter is in its maps)
             int e = ctx * ENV;
-            double ex = x - env[e], ey = y - env[e + 1], ez = z - env[e + 2];
+            double ex = x - env[e], ey = y - env[e + 1], ez = z - env[e + 2], open = flat(sh, sv);
             float shade = (float) (light / BAKED_K), sprayShade = (float) (light / SPRAY_K);
             float shown = (float) (a * vis * point[1] * air * outside * (1 - whole));
             // cluster: the larger the Gaussian on screen, the more puffs and the smaller they are (the 128-pixel frame
@@ -3015,10 +3017,11 @@ public final class SmokePuffs {
                 // facing the camera, light from the side and behind), the light of sun, sky and fire is full (shade
                 // level 0; the balls' light is per pixel, fx.fsh); from below — as usual. Softness at the terrain — the
                 // ray's path in the layer down to the ground (rw / sin e), not the half-size
-                float sunlit = (float) sootSun(sunThrough(ex + ox, ey + oy, ez + oz, k * rh, k * rw, env[e + 3], env[e + 4], env[e + 5], light, view.sun()),
-                        ks / (ks + kd + kw));
+                float sunlit = (float) sootSun(open + (1 - open) * sunThrough(ex + ox, ey + oy, ez + oz, k * rh, k * rw, env[e + 3], env[e + 4], env[e + 5],
+                        light, view.sun()), ks / (ks + kd + kw));
                 // the sky's diffuse light through the cloud above the puff (⚠ one path, straight up, for the dome)
-                float skylit = (float) sunThrough(ex + ox, ey + oy, ez + oz, k * rh, k * rw, env[e + 3], env[e + 4], env[e + 5], light, FarView.ZENITH);
+                float skylit = (float) (open + (1 - open) * sunThrough(ex + ox, ey + oy, ez + oz, k * rh, k * rw, env[e + 3], env[e + 4], env[e + 5], light,
+                        FarView.ZENITH));
                 if (lying > 0) out.puff6Flat(px + ox, py + oy, pz + oz, rh * grow * k, rh * grow * k,
                         Math.min(rh, rw * d / Math.max(Math.abs(py), 1e-3)) * ua.zentix.incoming.client.fx.layer.FxQuads.SOFT, clubAngle(hj), sprite,
                         (float) (frame - f0), py < 0 ? 0 : (spray ? sprayShade : shade), cr, cg, cb, opticalShare(sub * last, lying), sunlit, skylit);
@@ -3034,7 +3037,12 @@ public final class SmokePuffs {
      * quad in one frame.
      */
     static double lyingShare(double sh, double sv, double dy, double d) {
-        return smoothstep(2.5, 3.5, sh / sv) * smoothstep(0.7, 1.3, sh * Math.abs(dy) / Math.max(sv * d, 1e-12));
+        return flat(sh, sv) * smoothstep(0.7, 1.3, sh * Math.abs(dy) / Math.max(sv * d, 1e-12));
+    }
+
+    /** How flat a Gaussian (σh, σh, σv) is: a layer (dust at the ground) from σh/σv 2.5 to 3.5. */
+    static double flat(double sh, double sv) {
+        return smoothstep(2.5, 3.5, sh / sv);
     }
 
     static float opticalShare(float alpha, double share) {
