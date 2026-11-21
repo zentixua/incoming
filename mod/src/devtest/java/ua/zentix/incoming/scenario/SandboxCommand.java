@@ -245,7 +245,8 @@ record SandboxCommand(Verb verb, List<String> args) {
             }
             case SHOTS -> {
                 need(2, 3);
-                if (!args.getFirst().matches("[A-Za-z0-9_.-]+")) throw new IllegalArgumentException("name — letters, digits, _ . -");
+                // one directory under fx/out, as sandbox.sh checks: "." or ".." would point the take's replacement at fx/out or fx
+                if (!args.getFirst().matches("[A-Za-z0-9_][A-Za-z0-9_.-]*")) throw new IllegalArgumentException("name — letters, digits, _ . - (not starting with a dot)");
                 times();
                 if (args.size() > 2 && (number(2) < 0 || number(2) > 120)) throw new IllegalArgumentException("sound 0–120 s");
             }

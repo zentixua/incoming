@@ -133,7 +133,8 @@ with Iris.
   sandbox daylight cycle disabled, so previous shot's night would persist. `time` sends client time immediately,
   ends once client receives it (no receipt in 2 s: `error`): server normally sends every 20 ticks; an effect
   immediately after command previously spent first second in old light.
-  `--at none`: sound only (WAV and the take's `capture.json`; the shot's directory is replaced once the WAV exists).
+  `--at none`: sound only (WAV and the take's `capture.json`; the shot's directory is replaced once the WAV exists). A shot
+  name is its output directory: any take under that name, frames or sound only, replaces it; reuse a name only to redo that take.
   Shot names: one directory name (letters, digits, `_ . -`). A take without frames (`shots <name> none… <s>`, also the CPU frame
   shot's separate sound take) runs in a 160×90 window at 20 fps (`Sandbox.quiet`: `glfwRestoreWindow` first, the
   nested compositor keeps a maximized window's size; a frame take's `ok armed` and the sound take's result wait until the
