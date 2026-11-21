@@ -92,10 +92,11 @@ class CloudSunTest {
 
     @Test
     void gainOnlyOnTheSunThatReachesSoot() {
-        assertEquals(SmokePuffs.SOOT_SUN, SmokePuffs.sootSun(1, 1), 1e-9, "sunlit soot");
-        assertEquals(0, SmokePuffs.sootSun(0, 1), 0, "buried soot: no direct light, no lift");
-        assertEquals(1, SmokePuffs.sootSun(1, 0), 0, "white smoke and dust keep their light");
+        assertEquals(SmokePuffs.SOOT_SUN, SmokePuffs.sootSun(1, 1, SUN), 1e-9, "sunlit soot");
+        assertEquals(0, SmokePuffs.sootSun(0, 1, SUN), 0, "buried soot: no direct light, no lift");
+        assertEquals(1, SmokePuffs.sootSun(1, 0, SUN), 0, "white smoke and dust keep their light");
         assertEquals(1, SmokePuffs.sootShare(SmokePuffs.SOOT_COLOUR), 1e-6, "a fire plume's soot");
         assertTrue(SmokePuffs.sootShare(SmokePuffs.thick(SmokeGrid.DROP_W, SmokeGrid.DROP_G)) < 0.05, "a white trail");
+        assertEquals(1, SmokePuffs.sootSun(1, 1, FarView.NO_SUN), 0, "night: the moon's direct light is not lifted");
     }
 }

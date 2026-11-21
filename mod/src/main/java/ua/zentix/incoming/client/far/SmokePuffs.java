@@ -1394,6 +1394,8 @@ public final class SmokePuffs {
          * attenuation of the whole mass — {@link #ENV} numbers per source context.
          */
         private double[] env = new double[8 * ENV];
+        /** Each source's first pending puff ({@link #envelopes}: moments about it). */
+        private double[] origin = new double[8 * 3];
         /** Non-null while this instance plans a frame for the planner: its draw calls and veil go there. */
         @Nullable
         Recording record;
@@ -1539,23 +1541,32 @@ public final class SmokePuffs {
 
         /**
          * Each source's cloud as one Gaussian of the same mass and moments (as {@link #absorb}: middle by attenuation,
-         * spread of the middles plus each one's σ²), from the frame's pending upright puffs ({@link #flat}) before merging: the clumps' shadow on
+         * spread of the middles plus each one's σ²), from the soot of the frame's pending smoke puffs before merging: the clumps' shadow on
          * one another toward the sun ({@link #sunThrough}) in one pass, without pairs (before the LOD thinning, which can
          * merge puffs of different sources).
          */
         private void envelopes() {
-            if (env.length < contexts * ENV) env = new double[Math.max(2 * contexts, 8) * ENV];
+            if (env.length < contexts * ENV) {
+                env = new double[Math.max(2 * contexts, 8) * ENV];
+                origin = new double[env.length / ENV * 3];
+            }
             java.util.Arrays.fill(env, 0, contexts * ENV, 0);
             double[] m = env;
             for (int i = 0; i < holding; i++) {
                 if (merged[i]) continue;
                 int o = i * FIELDS, e = (int) held[o + 12] * ENV;
-                // the shadow is soot's (it absorbs; dust and droplets pass the light on), of the cloud's own smoke: a
-                // flat layer at the ground or the crushed-dust skirt in one Gaussian with the ball filled the space
-                // between them and blacked the skirt out
-                double w = shadows(o) ? SmokeGrid.SOOT_K * held[o + 5] : 0;
+                // the shadow is soot's (it absorbs; dust and droplets pass the light on), of the cloud's own smoke: the
+                // crushed-dust skirt in one Gaussian with the ball filled the space between them and blacked the skirt out
+                double w = LOOKS[(int) held[o + 15]] == SmokeGrid.Look.SMOKE ? SmokeGrid.SOOT_K * held[o + 5] : 0;
                 if (!(w > 0)) continue;
-                double x = held[o], y = held[o + 1], z = held[o + 2];
+                // moments about the source's first puff: at world coordinates of millions the variance of a small puff
+                // was lost to cancellation
+                if (!(m[e + 5] > 0)) {
+                    origin[3 * (e / ENV)] = held[o];
+                    origin[3 * (e / ENV) + 1] = held[o + 1];
+                    origin[3 * (e / ENV) + 2] = held[o + 2];
+                }
+                double x = held[o] - origin[3 * (e / ENV)], y = held[o + 1] - origin[3 * (e / ENV) + 1], z = held[o + 2] - origin[3 * (e / ENV) + 2];
                 m[e] += w * x;
                 m[e + 1] += w * y;
                 m[e + 2] += w * z;
@@ -1568,20 +1579,12 @@ public final class SmokePuffs {
                 double w = m[e + 5];
                 if (!(w > 0)) continue;
                 double x = m[e] / w, y = m[e + 1] / w, z = m[e + 2] / w;
-                m[e] = x;
-                m[e + 1] = y;
-                m[e + 2] = z;
+                m[e] = x + origin[3 * c];
+                m[e + 1] = y + origin[3 * c + 1];
+                m[e + 2] = z + origin[3 * c + 2];
                 m[e + 3] = Math.sqrt(Math.max(m[e + 3] / w - 0.5 * (x * x + z * z), 1e-6));
                 m[e + 4] = Math.sqrt(Math.max(m[e + 4] / w - y * y, 1e-6));
             }
-        }
-
-        /**
-         * Pending puff o is the cloud's own upright smoke ({@link SmokeGrid.Look#SMOKE}, not a flat layer): it casts
-         * and takes the cloud's shadow; ejecta, crushed dust and ground layers keep their light.
-         */
-        private boolean shadows(int o) {
-            return LOOKS[(int) held[o + 15]] == SmokeGrid.Look.SMOKE && flat(held[o + 3], held[o + 4]) < 1;
         }
 
         /**
@@ -2696,7 +2699,7 @@ public final class SmokePuffs {
                 float last = j == count - 1 ? (float) (many - (count - 1)) : 1;
                 boolean mirror = vary ? (hj >>> 40 & 1) == 1 : (j & 1) == 1;
                 // the sun through the rest of the tube's section from the puff's sun-side edge ({@link #tubeThrough})
-                float sunlit = (float) sootSun(tubeThrough(ox, oy, oz, k * rh, sh, edgeTau, ax, ay, az, shade * BAKED_K, view.sun()), sootShare(cg));
+                float sunlit = (float) sootSun(tubeThrough(ox, oy, oz, k * rh, sh, edgeTau, ax, ay, az, shade * BAKED_K, view.sun()), sootShare(cg), view.sun());
                 out.puff6(px + ox, py + oy, pz + oz, rh * grow * k, rv * grow * k, FxAtlas.puff6(f0, mirror), (float) (frame - f0), (float) shade,
                         sr, sg, sb, sub * last, sunlit);
             }
@@ -3019,7 +3022,7 @@ public final class SmokePuffs {
                 // level 0; the balls' light is per pixel, fx.fsh); from below — as usual. Softness at the terrain — the
                 // ray's path in the layer down to the ground (rw / sin e), not the half-size
                 float sunlit = (float) sootSun(open + (1 - open) * sunThrough(ex + ox, ey + oy, ez + oz, k * rh, k * rw, env[e + 3], env[e + 4], env[e + 5],
-                        SOOT_SHADOW, view.sun()), ks / (ks + kd + kw));
+                        SOOT_SHADOW, view.sun()), ks / (ks + kd + kw), view.sun());
                 if (lying > 0) out.puff6Flat(px + ox, py + oy, pz + oz, rh * grow * k, rh * grow * k,
                         Math.min(rh, rw * d / Math.max(Math.abs(py), 1e-3)) * ua.zentix.incoming.client.fx.layer.FxQuads.SOFT, clubAngle(hj), sprite,
                         (float) (frame - f0), py < 0 ? 0 : (spray ? sprayShade : shade), cr, cg, cb, opticalShare(sub * last, lying), sunlit);
@@ -3268,7 +3271,8 @@ public final class SmokePuffs {
         px -= pa * ax;
         py -= pa * ay;
         pz -= pa * az;
-        double q = (px * sx + py * sy + pz * sz) / (Math.max(Math.sqrt(sx * sx + sy * sy + sz * sz), 1e-9) * sigma);
+        // over the clamped length, not the unit direction: a sun near the axis gives q → 0 from either side
+        double q = (px * sx + py * sy + pz * sz) / (across * sigma);
         double b2 = Math.max(0, (px * px + py * py + pz * pz) / (sigma * sigma) - q * q);
         double t = tau * Math.exp(-0.5 * b2) * (1 - SmokeGrid.erf(q * SQRT_HALF)) / (2 * across);
         return Math.exp(-k * t);
@@ -3294,7 +3298,8 @@ public final class SmokePuffs {
      * of the matter's attenuation (white smoke and dust keep their light). Facts (size, mass, colour of the matter) do
      * not change.
      */
-    static double sootSun(double t, double soot) {
+    static double sootSun(double t, double soot, FarView.Sun sun) {
+        if (!(sun.w() > 0)) return 1;
         return t * (1 + (SOOT_SUN - 1) * Math.clamp(soot, 0, 1));
     }
 
