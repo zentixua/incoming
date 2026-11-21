@@ -127,11 +127,12 @@ float dwFbm2(vec3 p, float fq) {
 }
 
 // heights of the dense core and of the fines haze over it for dust of age a with settled layer height h, blocks
-// (presentation): born at the contact line, rises with 0.4 s, a hump of hump × the layer held 0.3 s that settles with
-// e-fold 0.33 s (about a second); the haze of fines stays and rises slowly over the hot ground
+// (presentation): born at the contact line and torn up within ~0.4 s (rise e-fold 0.18 s), overshooting into a hump of
+// hump × the layer that holds to 0.45 s and settles with e-fold 0.3 s (about a second to the layer); the haze of fines
+// stays and rises slowly over the hot ground
 void dwTops(float a, float h, float hump, out float core, out float haze) {
-    float up = h * (1.0 - exp(-max(a, 0.0) / 0.4));
-    core = max(up * (1.0 + (hump - 1.0) * exp(-max(a - 0.3, 0.0) / 0.33)), 0.5);
+    float up = h * (1.0 - exp(-max(a, 0.0) / 0.18));
+    core = max(up * (1.0 + (hump - 1.0) * exp(-max(a - 0.45, 0.0) / 0.3)), 0.5);
     haze = up * (1.0 + 0.2 * (1.0 - exp(-a / 12.0)));
 }
 
@@ -222,7 +223,9 @@ float dwDensity(vec3 q, bool coarse) {
     float Lb = dwFbm2(vec3(pw.xz / 170.0, 0.0) + vec3(0.0, 0.06 * a + 0.02 * DwEye.w, 0.0), 0.0);
     core *= 1.0 + mix(0.66, 1.0, smoothstep(1.0, 5.0, a)) * (0.9 * smoothstep(0.2, 0.8, Lb) - 0.45);
     float yr = q.y / core;
-    float z = mix(yr, pw.y / core + (n - 0.5) * 1.9 + (fs - 0.5) * 0.55, smoothstep(0.0, 0.6, yr));
+    // the youngest dust is torn: tufts and gaps at the contact line, merging into one mass within half a second
+    float torn = 1.0 + 1.6 * exp(-a / 0.25);
+    float z = mix(yr, pw.y / core + ((n - 0.5) * 1.9 + (fs - 0.5) * 0.8) * torn, smoothstep(0.0, 0.6 / torn, yr));
     float prof = smoothstep(1.05, 0.55, z);
     float head = 1.0 + 0.7 * exp(-a / 1.1);
     float hz = haze * (0.7 + 0.6 * Lb);
@@ -260,12 +263,12 @@ vec3 dwLight(vec3 q, vec3 rd, float s) {
     float tau = 1.6 * (dwDensity(q + lb * 8.0, true) * 14.0 + dwDensity(q + lb * 26.0, true) * 26.0
             + dwDensity(q + lb * 70.0, true) * 55.0);
     float low = 0.55 + 0.45 * smoothstep(0.0, 40.0, q.y);
-    float orders = 0.3 * min(dwPhase(dot(rd, lb)), 3.0) * exp(-tau) + 0.1 * exp(-tau * 0.3) + 0.07 * exp(-tau * 0.08);
+    float orders = 0.3 * min(dwPhase(dot(rd, lb)), 3.0) * exp(-tau) + 0.16 * exp(-tau * 0.3) + 0.12 * exp(-tau * 0.08);
     vec3 L = dwBallLight(q) * orders * low;
     // the sun lights the top: depth below the local surface along the sun stands in for its own light path
-    float sunOrders = 0.3 * min(dwPhase(dot(rd, DwSunDir)), 3.0) * exp(-tau * 0.8) + 0.1 * exp(-tau * 0.25) + 0.07 * exp(-tau * 0.06);
+    float sunOrders = 0.3 * min(dwPhase(dot(rd, DwSunDir)), 3.0) * exp(-tau * 0.8) + 0.16 * exp(-tau * 0.25) + 0.12 * exp(-tau * 0.06);
     L += DwSunLight * sunOrders * low;
-    L += DwSkyLight * 0.25 * (0.4 + 0.6 * smoothstep(0.0, 40.0, q.y)) * exp(-tau * 0.05) + DwGroundLight;
+    L += DwSkyLight * 0.4 * (0.4 + 0.6 * smoothstep(0.0, 40.0, q.y)) * exp(-tau * 0.05) + DwGroundLight;
     // presentation: the wall is exposed like the reference footage of a fireball-lit dust front (dark matte body,
     // lit crests), not like a white wall facing the ball
     return DW_EXPOSURE * DwAlbedo * L;
