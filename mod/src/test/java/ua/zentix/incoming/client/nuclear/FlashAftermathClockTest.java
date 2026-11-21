@@ -9,6 +9,7 @@ import net.minecraft.core.BlockPos;
 import net.minecraft.server.Bootstrap;
 import net.minecraft.util.RandomSource;
 import net.minecraft.world.level.block.Blocks;
+import net.minecraft.world.level.dimension.DimensionType;
 import net.minecraft.world.phys.Vec3;
 import net.neoforged.fml.loading.LoadingModList;
 import org.junit.jupiter.api.AfterEach;
@@ -20,6 +21,7 @@ import ua.zentix.incoming.client.fx.Effects;
 import ua.zentix.incoming.client.fx.smoke.CloudModel;
 import ua.zentix.incoming.client.fx.smoke.Puffs;
 import ua.zentix.incoming.client.fx.smoke.SmokeGrid;
+import ua.zentix.incoming.net.S2C;
 import ua.zentix.incoming.nuclear.Detonation;
 import ua.zentix.incoming.nuclear.world.ThermalShadow;
 
@@ -88,6 +90,44 @@ class FlashAftermathClockTest {
         // The horizontal front has passed at age 5. The sampled face is reached at age 30.
         var clock = new ClientNuclear.AgeClock(6, false);
         assertEquals(1, probeHay(clock, new Vec3(0, 664, 0), distance -> distance < 400 ? 5 : 30, 6).size());
+    }
+
+    @Test
+    void wispClockFollowsTheSameDetonationAcrossSync() {
+        Minecraft client = mock(Minecraft.class);
+        ClientLevel level = mock(ClientLevel.class);
+        client.level = level;
+        when(level.dimensionType()).thenReturn(mock(DimensionType.class));
+        long burstTick = 100;
+        Detonation det = new Detonation(1, new Vec3(0, 64, 0), 64, 15, true, burstTick, 0, 5, 20_000, 0, 1, false, 1);
+        S2C.NukeSync empty = new S2C.NukeSync(List.of(), List.of());
+        try (var minecraft = mockStatic(Minecraft.class); var flash = mockStatic(FlashAftermath.class);
+             var water = mockStatic(NukeWater.class); var light = mockStatic(NukeLight.class);
+             var echoes = mockConstruction(NukeEchoes.class)) {
+            minecraft.when(Minecraft::getInstance).thenReturn(client);
+            when(level.getGameTime()).thenReturn(burstTick);
+            try {
+                ClientNuclear.detonation(new S2C.NukeDetonation(det, 0, 1), true);
+                water.verify(() -> NukeWater.resolve(any(), eq(level)));
+                light.verify(() -> NukeLight.detonation(level));
+                assertEquals(1, echoes.constructed().size());
+                var clock = ArgumentCaptor.forClass(DoubleUnaryOperator.class);
+                flash.verify(() -> FlashAftermath.detonation(eq(det), clock.capture(), eq(0.0)));
+                DoubleUnaryOperator age = clock.getValue();
+                assertEquals(0, age.applyAsDouble(0), 1e-9);
+
+                when(level.getGameTime()).thenReturn(burstTick + 6);
+                ClientNuclear.sync(new S2C.NukeSync(List.of(det.withWave(det.wave())), List.of()));
+                assertEquals(6, age.applyAsDouble(0), 1e-9);
+
+                ClientNuclear.sync(new S2C.NukeSync(List.of(det.withWave(0.5f)), List.of()));
+                assertEquals(Double.POSITIVE_INFINITY, age.applyAsDouble(0));
+                ClientNuclear.sync(empty);
+                assertEquals(Double.POSITIVE_INFINITY, age.applyAsDouble(0));
+            } finally {
+                ClientNuclear.sync(empty);
+            }
+        }
     }
 
     private static Puffs probeHay(ClientNuclear.AgeClock clock, Vec3 burst, DoubleUnaryOperator arrival, int effectTick)

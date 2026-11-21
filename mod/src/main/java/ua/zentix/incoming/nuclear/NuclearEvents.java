@@ -18,6 +18,8 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
 
+import static ua.zentix.incoming.nuclear.NukeClock.SHOW_TICKS;
+
 /**
  * Dimension nuclear events (saved in the world): detonations that have occurred — server and clients derive destruction,
  * cloud and fallout from them — and scheduled ICBM strikes (flight is a timer, not an entity: survives server restarts
@@ -30,9 +32,6 @@ public final class NuclearEvents extends SavedData {
      * times by then. Destruction is remembered longer ({@link #past}): a chunk first loaded a month later is still destroyed.
      */
     public static final double FORGET_AFTER_S = 7 * 24 * 3600;
-    /** Game ticks of the show ({@link NukeClock#SHOW_S}). */
-    static final long SHOW_TICKS = (long) (NukeClock.SHOW_S * 20);
-
     /**
      * World-clock readings ({@link ua.zentix.incoming.util.WorldClock}) of a detonation: at the burst and at its show's end
      * (NaN — the show is not over). They set its clock ({@link NukeClock}) and when its bodies were exposed.

@@ -75,12 +75,9 @@ public final class ClientNuclear {
                 @Nullable FireStorm storm, @Nullable PallGround ground) {
             this.d = d;
             this.live = live;
-            // live: the packet is the server's first anchor (age 0 at send); past (entry, seek): the level clock's estimate
-            // until the server's next anchor, which the clock takes whole
+            // Live: the packet is the server's first anchor. Entry or seek: age starts from the level's game time.
             long start = live ? 0 : Math.max(0, clientNow - d.gameTime());
             this.clock = new AgeClock(start, live, live && ua.zentix.incoming.client.replay.Replay.active());
-            // A replay can seek back into a show whose end is still cached from later in the recording.
-            if (!live && start + TIME_SYNC_TICKS >= NukeClock.SHOW_S * 20 && SHOW_ENDS.containsKey(d.id())) clock.ended();
             this.puffs = puffs;
             this.wall = wall;
             this.water = water;
@@ -208,7 +205,10 @@ public final class ClientNuclear {
             anchor = start;
             shown = start;
             streamed = live;
-            estimated = !live;
+            // A seek can see the last stream anchor before its show-end packet. The recording's last time
+            // packet can be up to one sync interval behind the seek position.
+            over = !live && start >= NukeClock.SHOW_TICKS - TIME_SYNC_TICKS;
+            estimated = !live && !over;
             recent.add(new double[]{0, start});
         }
 

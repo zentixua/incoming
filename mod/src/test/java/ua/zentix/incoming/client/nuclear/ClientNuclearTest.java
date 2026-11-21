@@ -168,7 +168,7 @@ class ClientNuclearTest {
 
     @Test
     void postShowSeekDoesNotRewindToTheSnapshotAnchor() {
-        long lastShowTick = (long) (20 * NukeClock.SHOW_S) - 1;
+        long lastShowTick = NukeClock.SHOW_TICKS - 1;
         long seekAge = lastShowTick + 400;
         var clock = new ClientNuclear.AgeClock(seekAge, false);
         // The snapshot has both the end of the show and its last per-tick anchor.
@@ -177,6 +177,29 @@ class ClientNuclearTest {
         assertEquals(seekAge, clock.shown(), 1e-9);
         clock.tick();
         assertEquals(seekAge + 1, clock.shown(), 1e-9);
+    }
+
+    @Test
+    void staleAnchorBeforeShowEndPacketDoesNotRewindAPostShowSeek() {
+        long lastShowTick = NukeClock.SHOW_TICKS - 1;
+        long seekAge = lastShowTick + 20 * 60 * 60;
+        var clock = new ClientNuclear.AgeClock(seekAge, false);
+        clock.anchor(lastShowTick); // Snapshot NukeTick arrives first.
+        clock.ended();              // Snapshot NukeClock arrives second.
+        assertEquals(seekAge, clock.shown(), 1e-9);
+        clock.tick();
+        assertEquals(seekAge + 1, clock.shown(), 1e-9);
+    }
+
+    @Test
+    void reconstructedShowUsesTheTimePacketToleranceAtTheEnd() {
+        long boundary = NukeClock.SHOW_TICKS - ClientNuclear.TIME_SYNC_TICKS;
+        var within = new ClientNuclear.AgeClock(boundary, false);
+        within.anchor(NukeClock.SHOW_TICKS - 1);
+        assertEquals(boundary, within.shown(), 1e-9);
+        var before = new ClientNuclear.AgeClock(boundary - 1, false);
+        before.anchor(boundary - 2);
+        assertEquals(boundary - 2, before.shown(), 1e-9);
     }
 
     /**

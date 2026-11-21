@@ -448,8 +448,9 @@ Ruins and everything in `nuclear/world/` are in `nuclear-world.md`.
   count). Without a stream (after the show, `ended`; in a Flashback replay, a live burst with no per-tick anchor within
   `PROBE` 1 s is a recording made before them; a live server's late first anchor only holds the burst at `LEAD`) it follows own time, uncapped; tick-time callers ask the tick's own age (`ticks(0)`: a partial ahead
   advances the clock past every frame of the tick, review of #678); a past detonation
-  (entry, seek) with a running show takes the first anchor whole. Ended shows ignore stream anchors, including stale
-  anchors kept in Flashback snapshots. #668's law (at most one tick past the anchor, whole-tick steps) held
+  (entry, seek) with a running show takes the first anchor whole. The reconstructed age classifies the show at
+  `NukeClock.SHOW_TICKS`, allowing one time-packet interval for lag. Ended shows ignore stream anchors in either
+  Flashback snapshot packet order. #668's law (at most one tick past the anchor, whole-tick steps) held
   40–43 % of frames up to 149 ms on a 1 Mt rig: the wall moved in 20 Hz steps (19.11). Own ticks alone lagged the server
   31–55 ticks in the full host pack. `ClientNuclearTest`: recorded rig anchor streams (`age-clock/J3.txt`, `J6.txt`) with
   jitter, lagging server, heavy client, alternating delays, server stall and backward anchor, client freeze, no stream,
