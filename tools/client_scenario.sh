@@ -73,7 +73,6 @@ set -euo pipefail
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 RUN="$ROOT/mod/run/scenario"
 mkdir -p "$RUN"
-rm -rf "$RUN/screenshots"
 cat > "$RUN/alsoft.conf" <<CONF
 [general]
 drivers = wave
@@ -134,6 +133,13 @@ for opt in "${@:2}"; do
 done
 # shader packs, LOD mods and TV feeds need the GPU alone; everything else is vanilla (shared GPU slot or CPU)
 [ -n "${INCOMING_SHADERS:-}${INCOMING_DH:-}${INCOMING_VOXY:-}${INCOMING_LSS:-}${INCOMING_VISTA:-}" ] && GPU=1
+# an exclusive client never starts beside Artem's game (nested_kwin.sh checks again at admission); a refused run keeps the
+# previous run's frames
+if [ -n "$GPU" ]; then
+  source "$ROOT/tools/gpu_lease.sh"
+  artem_playing && { echo "Artem's game is running — leaving the GPU free" >&2; exit 75; }
+fi
+rm -rf "$RUN/screenshots"
 export JAVA_HOME="${JAVA_HOME:-$HOME/.var/app/org.prismlauncher.PrismLauncher/data/PrismLauncher/java/java-runtime-delta}"
 cd "$ROOT/mod"
 if [ -z "$GPU" ]; then

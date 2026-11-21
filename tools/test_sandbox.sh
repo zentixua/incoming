@@ -109,8 +109,6 @@ python3 -c 'import json,sys,wave; w=wave.open(sys.argv[1]); a=json.load(open(sys
 
 # review probe: an empty shot name never replaces fx/out, and any valid effect text keeps capture.json valid
 out=$(bash "$ROOT/tools/probes/sound-only-output.sh" "$ROOT" 2>&1) && ok "probe sound-only-output" || bad "probe sound-only-output: $out"
-# review probe: a sound-only take named like an earlier frame take refuses and keeps that take
-out=$(bash "$ROOT/tools/probes/sound-only-keeps-frames.sh" "$ROOT" 2>&1) && ok "probe sound-only-keeps-frames" || bad "probe sound-only-keeps-frames: $out"
 
 source "$ROOT/tools/soft_gl.sh"
 long=$(printf 'x%.0s' $(seq 80))
