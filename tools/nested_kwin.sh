@@ -70,6 +70,8 @@ if [ -n "${INCOMING_GPU_SHARED:-}" ]; then
       kwin_wayland --virtual --no-lockscreen --xwayland --socket "$SOCKET" --width "$WIDTH" --height "$HEIGHT" \
       --exit-with-session "$COMMAND"
 fi
+# an exclusive GPU client (shader pack, LOD mods, camera feeds) never starts beside Artem's game
+artem_playing && { echo "Artem's game is running — leaving the GPU free" >&2; exit 75; }
 owner="${INCOMING_GPU_OWNER:-$(lease_owner "$ROOT")}"
 # client lock first (otherwise refusal would leave a newly acquired lease for 10 min), then lease
 # (with INCOMING_GPU_WAIT, lease queue waits for running client: lease_take)

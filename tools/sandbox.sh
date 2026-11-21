@@ -382,6 +382,10 @@ shot() {
   fx "time $time" || exit 1
   fx "overlay $overlay" || exit 1
   local out="$FX/out/$name" limit=${FX_LIMIT:-3600}
+  # a sound-only take replaces its shot's directory: never one that holds another take's frames (pick a fresh name)
+  if [ "$at" = none ] && compgen -G "$FX/out/$name/*.png" >/dev/null; then
+    echo "shot $name holds frames: a sound-only take would replace them; use another name" >&2; exit 2
+  fi
   # Java's split drops trailing empty fields: "600," is "600", so the deadline below must read the same last frame
   while [[ $at == *, ]]; do at=${at%,}; done
   if [ "$(cat "$FX/renderer" 2>/dev/null)" = soft ]; then
