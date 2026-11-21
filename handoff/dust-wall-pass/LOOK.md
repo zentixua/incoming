@@ -12,6 +12,13 @@ or its unimportant details. ACCEPTANCE.md's judging scene and order stay.
 4. The dust reads as one natural mass, like real dust (a haboob front, lower and denser): billows, uneven, no repeating
    pattern, no holes, no rippling, not liquid metal, not water.
 
+## Artem's requirement (21.11 17:50, permanent): never glue what does not fit
+One phenomenon on screen = one model. When a real-life law and the wanted look pull apart, do not combine them (law
+underneath + look corrections on top of its output). Build one model for the look, the way studios do (presentation
+first); physics enters only as inputs the screen shows (where, when, how much, wind). Sign of glue: a correction applied
+to a law's result inside the same effect ("hump = 0.62 of the law's top", "settles, not physical" over a physical sag).
+On seeing it: stop and rebuild as one model. Reviewers report it as serious.
+
 ## One model, no glue (Artem, 21.11 17:47)
 The young wall (front to ~10 s behind it) is ONE model built for this look, like the animation: its own hump, rise,
 settle and height. Do not run the mod's dust-height law and then override its result with look corrections (the #707
