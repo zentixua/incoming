@@ -31,7 +31,7 @@ public final class WallPuffs implements SmokeGrid.Source {
     /** Age at which the wall has settled, s: its height is the layer's then (input of scale). */
     static final double SETTLED_S = 1;
     /** Finest cell, m, and cell size per metre of eye distance. */
-    static final double CELL = 16, PER_DISTANCE = 0.18;
+    static final double CELL = 16, PER_DISTANCE = 0.12;
     static final int TIERS = 9;
     /** Rise time constant, s; hump: extra height share (±{@link #HUMP_SPREAD} along the front), its time and width, s. */
     static final double RISE_S = 0.12, HUMP = 0.42, HUMP_SPREAD = 0.12, HUMP_AT = 0.32, HUMP_W = 0.28;
