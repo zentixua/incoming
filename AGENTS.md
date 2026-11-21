@@ -48,6 +48,12 @@ instructions: work in a worktree from `origin/main`.
 - **Act as the engineer, finish without questions** (Artem, 04.11): Artem sets goals as a player; we decide how and
   take obvious engineering steps without waiting. Once the applicable checks pass, merge your PR after green Итог and
   review (workflow below). Ask only about goal changes or irreversible choices.
+- **An approved target is the decision** (Artem, 21.11): once Artem approves a look or behaviour (a frame, a clip, an
+  animation), everything inside it is ours to decide: how to build it, how close each detail gets, physics versus
+  marked presentation where the approved target already shows the choice, and doing better than the target. A conflict
+  between a law and the approved look is resolved toward the approved look as a marked `presentation:` deviation. Never
+  stop for a question his approval already answers; a mission writes BLOCKED only for a new goal or an irreversible
+  choice, and otherwise records its decision with the reason in the PR and carries on.
 - **Plans are targets, not decisions** (Artem, 03.11, 20.11): a clearly better way found mid-work, even a fundamental
   rewrite of an existing feature, is taken without asking and recorded in the PR. Limits stay: the concept below, real
   size/shape and public steps by Artem's word.
