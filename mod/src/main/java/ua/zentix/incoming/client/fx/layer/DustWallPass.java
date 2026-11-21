@@ -14,6 +14,7 @@ import net.minecraft.client.Minecraft;
 import net.minecraft.client.renderer.ShaderInstance;
 import org.joml.Matrix4f;
 import org.joml.Vector3f;
+import org.joml.Vector4f;
 import org.lwjgl.opengl.GL11;
 import org.lwjgl.opengl.GL12;
 import org.lwjgl.opengl.GL13;
@@ -30,7 +31,9 @@ import java.util.Random;
  * ({@code include/dustwall.glsl}): one presentation model (presentation, not physical) of the wall's birth at the contact line,
  * small uneven hump, settling, billows, their motion and light; the physics enters only as its inputs ({@link Frame}: the game
  * front, where and how much dust is lofted, the pall's layer height, wind, fireball, sun and sky light). Older dust is the
- * pall's ({@link PallPass}), which takes the wall over across the last {@link #FADE} seconds ({@link Frame#young}), a crossfade.
+ * pall's ({@link PallPass}), which takes the wall over across the last {@link #FADE} seconds ({@link PallPass.Frame#young}), a crossfade.
+ * Only in the primary view, on land, with one detonation in the pall's slots ({@code NukePall.youngWall}): elsewhere the pall
+ * draws the whole wall as before.
  * <p>
  * Drawn at 1/{@code div} resolution per axis ({@link #div}) into its own RGBA16F target (light premultiplied, alpha
  * transmittance) with a sample offset along each ray that moves every frame, then averaged over frames at that resolution
@@ -59,15 +62,18 @@ public final class DustWallPass {
     private static final double JUMP = 64;
     /** Diagnostics: {@code -Dincoming.dustwall.history=false} lays each frame's march without the history. */
     private static final boolean HISTORY_ON = !"false".equals(System.getProperty("incoming.dustwall.history"));
-    /** Table nodes ({@code DW_NODES}). */
-    public static final int NODES = 32;
+    /**
+     * Table nodes ({@code DW_NODES}): arrival is read between nodes linearly, and 1 Mt reaches 26 km; at 128 nodes the wall
+     * starts within 0.03 s of the game front's arrival anywhere (DustWallInputsTest), well inside its 0.12 s rise.
+     */
+    public static final int NODES = 128;
     /**
      * Resolution divisor per axis and the march's step cap by dust quality ({@link PallPass.Quality}): at HIGH billows of
      * 15–100 m stay several low-resolution pixels wide in the judging view; lower settings trade detail for frame time.
      */
     static int div(PallPass.Quality q) {
         Integer forced = Integer.getInteger("incoming.dustwall.div");
-        if (forced != null) return forced;
+        if (forced != null) return Math.max(1, Math.min(16, forced));
         return switch (q) {
             case HIGH -> 4;
             case MEDIUM -> 5;
@@ -87,13 +93,16 @@ public final class DustWallPass {
     private static final int NOISE_UNIT = 12;
 
     public static ShaderInstance march, resolve, composite;
-    private static int lattice = -1, target = -1, fbo = -1, table = -1, width, height, div;
+    private static int lattice = -1, target = -1, fbo = -1, table = -1, width, height, div, fullW, fullH;
     /** History pair ({@code fx_dustwall_resolve}): the latest is {@link #latest}. */
     private static final int[] HISTORY_TEX = {-1, -1}, HISTORY_FBO = {-1, -1};
     private static int latest;
     private static boolean failed, history;
     private static long frame;
     private static final float[] PREVIOUS_EYE = new float[3];
+    /** The detonation and its clock in the history: another detonation or a jump of the clock (replay seek) restarts it. */
+    private static Object previousSource;
+    private static float previousTime;
     private static final Matrix4f VIEW_PROJECTION = new Matrix4f(), INVERSE = new Matrix4f(), PREVIOUS = new Matrix4f();
     private static final Vector3f FORWARD = new Vector3f();
     private static final FloatBuffer TABLE = MemoryUtil.memAllocFloat(NODES * 4);
@@ -119,20 +128,35 @@ public final class DustWallPass {
         public float windX, windZ;
         /** The settled layer top at the eye's radius from ground zero's ground point, blocks (history reprojection). */
         public float layerTop;
+        /** The detonation this wall belongs to (history continuity). */
+        public Object source;
     }
 
-    /** Lays the young wall over the frame; false — not drawn. {@code scene}: the world-distance texture ({@link SceneDepth}). */
-    static boolean draw(Frame f, PallPass.Quality quality, int scene, Matrix4f view, Matrix4f projection) {
+    /**
+     * All three programs loaded and no target failure: the pall may hand its young wall over this frame ({@code
+     * NukePall.youngWall} asks before it sets {@code PallYoung}).
+     */
+    public static boolean ready() {
+        return march != null && resolve != null && composite != null && !failed;
+    }
+
+    /**
+     * Lays the young wall of {@code pall} over the frame; false — not drawn. {@code scene}: the world-distance texture
+     * ({@link SceneDepth}). Primary view only (NukePall hands the wall over only there).
+     */
+    static boolean draw(PallPass.Frame pall, int scene, Matrix4f view, Matrix4f projection) {
+        Frame f = pall.dustWall;
         ShaderInstance m = march, r = resolve, c = composite;
-        if (!f.active || m == null || r == null || c == null || scene < 0 || failed) return false;
+        if (!f.active || !ready() || scene < 0 || FxViews.secondary()) return false;
         Minecraft mc = Minecraft.getInstance();
         int w = FxViews.width(mc.getMainRenderTarget().width), h = FxViews.height(mc.getMainRenderTarget().height);
-        int d = div(quality);
+        int d = div(pall.quality);
         if (!targets(w, h, d)) return false;
-        // secondary views (camera mods) draw without history and leave the primary view's alone
-        boolean primary = !FxViews.secondary();
         float dx = f.eye[0] - PREVIOUS_EYE[0], dy = f.eye[1] - PREVIOUS_EYE[1], dz = f.eye[2] - PREVIOUS_EYE[2];
-        boolean past = HISTORY_ON && history && dx * dx + dy * dy + dz * dz < JUMP * JUMP;
+        // the same detonation, its clock running on (not a replay seek), the eye not teleported
+        float since = f.eye[3] - previousTime;
+        boolean past = HISTORY_ON && history && f.source == previousSource && since >= 0 && since < 0.5f
+                && dx * dx + dy * dy + dz * dz < JUMP * JUMP;
         VIEW_PROJECTION.set(projection).mul(view);
         VIEW_PROJECTION.invert(INVERSE);
         view.positiveZ(FORWARD).negate();
@@ -150,7 +174,15 @@ public final class DustWallPass {
             m.safeGetUniform("InvViewProj").set(INVERSE);
             m.safeGetUniform("PallForward").set(FORWARD.x, FORWARD.y, FORWARD.z);
             m.safeGetUniform("DwDiv").set((float) d);
-            m.safeGetUniform("DwFrame").set((float) (frame % 4096), (float) steps(quality));
+            m.safeGetUniform("DwFrame").set((float) (frame % 4096), (float) steps(pall.quality));
+            // the slot's terrain map and the outdoor-air window: the dust lies on the local ground, never indoors
+            int ground = PallPass.groundMap(0);
+            Vector4f g = PallPass.groundParams(pall, 0);
+            RenderSystem.setShaderTexture(3, ground >= 0 ? ground : table);
+            m.safeGetUniform("PallSlot0").set(pall.slot0);
+            m.safeGetUniform("PallGround0").set(g.x, g.y, g.z, g.w);
+            m.safeGetUniform("DwRelief").set(g.x > 0 ? g.y : 0f, g.x > 0 ? g.z : 0f);
+            OpenAir.bind(m, true);
             upload(f.table);
             RenderSystem.setShaderTexture(2, table);
             m.safeGetUniform("DwEye").set(f.eye[0], f.eye[1], f.eye[2], f.eye[3]);
@@ -165,11 +197,9 @@ public final class DustWallPass {
             m.safeGetUniform("DwBulk").set(f.bulk.x, f.bulk.y, f.bulk.z);
             m.safeGetUniform("DwWind").set(f.windX, f.windZ, 0f, 0f);
             fullScreen(m, () -> Uniform.uploadInteger(Uniform.glGetUniformLocation(m.getId(), "DwNoise"), NOISE_UNIT), true);
-            // averaged over frames at the same resolution into the other history target; secondary views (camera mods) lay
-            // their march as it is and leave the primary view's history alone
-            int shown = target;
-            if (primary) {
-                int next = 1 - latest;
+            // averaged over frames at the same resolution into the other history target
+            int next = 1 - latest;
+            {
                 GlStateManager._glBindFramebuffer(GL30.GL_DRAW_FRAMEBUFFER, HISTORY_FBO[next]);
                 RenderSystem.setShaderTexture(0, target);
                 RenderSystem.setShaderTexture(1, HISTORY_TEX[latest]);
@@ -182,9 +212,10 @@ public final class DustWallPass {
                 r.safeGetUniform("DwHistory").set(HISTORY, f.layerTop - f.eye[1]);
                 fullScreen(r, null, false);
                 latest = next;
-                shown = HISTORY_TEX[next];
                 PREVIOUS.set(VIEW_PROJECTION);
                 System.arraycopy(f.eye, 0, PREVIOUS_EYE, 0, 3);
+                previousSource = f.source;
+                previousTime = f.eye[3];
                 history = true;
                 frame++;
             }
@@ -194,9 +225,10 @@ public final class DustWallPass {
             RenderSystem.enableBlend();
             RenderSystem.blendFuncSeparate(GlStateManager.SourceFactor.ONE, GlStateManager.DestFactor.SRC_ALPHA,
                     GlStateManager.SourceFactor.ZERO, GlStateManager.DestFactor.ONE);
-            RenderSystem.setShaderTexture(0, shown);
+            RenderSystem.setShaderTexture(0, HISTORY_TEX[next]);
             RenderSystem.setShaderTexture(1, scene);
             c.safeGetUniform("DwDiv").set((float) d);
+            SceneDepth.bindSee(c);
             fullScreen(c, null, false);
         } finally {
             GlStateManager._glBindFramebuffer(GL30.GL_DRAW_FRAMEBUFFER, main);
@@ -231,7 +263,7 @@ public final class DustWallPass {
     private static boolean targets(int w, int h, int d) {
         int lw = Math.max(1, (w + d - 1) / d), lh = Math.max(1, (h + d - 1) / d);
         if (lattice < 0) lattice = lattice();
-        if (target >= 0 && lw == width && lh == height && d == div) return true;
+        if (target >= 0 && w == fullW && h == fullH && d == div) return true;
         int draw = GlStateManager._getInteger(GL30.GL_DRAW_FRAMEBUFFER_BINDING);
         if (target < 0) {
             target = GlStateManager._genTexture();
@@ -252,6 +284,8 @@ public final class DustWallPass {
         }
         width = lw;
         height = lh;
+        fullW = w;
+        fullH = h;
         div = d;
         history = false;
         return true;
@@ -330,8 +364,8 @@ public final class DustWallPass {
         }
     }
 
-    /** Forget the failure and the history (resource reload keeps GL objects; the context outlives them). */
-    static void reset() {
+    /** Forget the failure and the history (shaders reloaded; GL objects stay, the context outlives them). */
+    public static void reset() {
         failed = false;
         history = false;
     }
@@ -341,7 +375,7 @@ public final class DustWallPass {
         return String.format(java.util.Locale.ROOT, "1/%d, history %s, frame %d", div, history && HISTORY_ON ? "on" : "off", frame);
     }
 
-    /** No wall this frame: the next one starts its history afresh. */
+    /** No wall this frame in the primary view: the next one starts its history afresh. */
     static void idle() {
         if (!FxViews.secondary()) history = false;
     }

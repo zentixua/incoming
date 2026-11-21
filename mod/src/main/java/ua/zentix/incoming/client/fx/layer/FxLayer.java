@@ -136,6 +136,7 @@ public final class FxLayer {
             e.registerShader(new ShaderInstance(e.getResourceProvider(), Incoming.id("fx_dustwall"), DefaultVertexFormat.POSITION), s -> DustWallPass.march = s);
             e.registerShader(new ShaderInstance(e.getResourceProvider(), Incoming.id("fx_dustwall_resolve"), DefaultVertexFormat.POSITION), s -> DustWallPass.resolve = s);
             e.registerShader(new ShaderInstance(e.getResourceProvider(), Incoming.id("fx_dustwall_composite"), DefaultVertexFormat.POSITION), s -> DustWallPass.composite = s);
+            DustWallPass.reset();
         } catch (IOException ex) {
             DustWallPass.march = DustWallPass.resolve = DustWallPass.composite = null;
             Incoming.LOG.error("Nuclear dust wall shaders failed to load: the pall draws the young wall", ex);
@@ -383,7 +384,7 @@ public final class FxLayer {
             // young dust wall: its own pass over the pall (the pall handed its young dust over, PallPass.Frame.young)
             if (pallDrawn && pall.dustWall.active) {
                 int timedWall = WALL.begin();
-                DustWallPass.draw(pall.dustWall, pall.quality, scene, VIEW, e.getProjectionMatrix());
+                DustWallPass.draw(pall, scene, VIEW, e.getProjectionMatrix());
                 WALL.end(timedWall);
             } else {
                 DustWallPass.idle();

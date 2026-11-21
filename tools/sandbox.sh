@@ -389,12 +389,14 @@ shot() {
   local out="$FX/out/$name" limit=${FX_LIMIT:-3600}
   # Java's split drops trailing empty fields: "600," is "600", so the deadline below must read the same last frame
   while [[ $at == *, ]]; do at=${at%,}; done
-  if [ "$(cat "$FX/renderer" 2>/dev/null)" = soft ]; then
-    # a paced take runs down to 1 tick/s: the last frame's second may take 20 wall seconds per game second
+  if [ "$at" != none ]; then
+    # a paced frame take (any renderer, Sandbox.paceFrame) runs down to 1 tick/s: the last frame's second may take 20 wall
+    # seconds per game second
     limit=$(awk -v l="${at##*,}" -v b="$limit" 'BEGIN { printf "%d", b + (l > 0 ? l : 0) * 20 }')
   fi
-  if [ "$(cat "$FX/renderer" 2>/dev/null)" = soft ] && [ "$wav" != 0 ]; then
-    # CPU renderer: the frame take slows the world (Sandbox.paceFrame), so its sound is not real-time; sound comes from a
+  if [ "$wav" != 0 ] && { [ "$at" != none ] || [ "$(cat "$FX/renderer" 2>/dev/null)" = soft ]; }; then
+    # a frame take slows the world on any renderer (Sandbox.paceFrame: CPU frames are slow, GPU frames land at their exact
+    # second), so its sound is not real-time; sound comes from a
     # second take of the same effect at 20 ticks/s without frames, from the same second (frames before a front included),
     # in a staging directory of its own; its timing replaces the frame take's empty audio block in capture.json
     # staging created here, atomically and fresh: never an existing shot's directory; the first frame's second passed as

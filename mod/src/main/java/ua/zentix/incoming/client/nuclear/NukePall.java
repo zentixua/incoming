@@ -271,7 +271,10 @@ public final class NukePall {
         if (k == 0 && f.mushroomCount == 0 && !f.ballsLit) return null;
         f.young.zero();
         f.dustWall.active = false;
-        if (k > 0 && ua.zentix.incoming.client.fx.layer.DustWallPass.march != null) youngWall(SLOTTED[0], eye, partial, f);
+        // the young wall's own pass: primary view, one detonation in the slots, no water under its pall (spray and the base
+        // surge stay the pall's), all its programs ready; otherwise the pall draws the whole wall
+        if (k == 1 && f.water0.w < 0.5 && ua.zentix.incoming.client.fx.layer.DustWallPass.ready()
+                && !ua.zentix.incoming.client.fx.layer.FxViews.secondary()) youngWall(SLOTTED[0], eye, partial, f);
         // without pall use zero bounds: the ray cannot enter (inverted bounds would span the entire ray)
         if (k == 0) {
             f.min.zero();
@@ -323,20 +326,28 @@ public final class NukePall {
         if (front <= 1) return;
         ua.zentix.incoming.client.fx.layer.DustWallPass.Frame w = f.dustWall;
         double inner = d.blocks(a.wall.shock(t - span)), whole = d.blocks(a.wall.shock(t - span + fade));
-        f.young.set((float) inner, (float) Math.max(inner + 1, whole), 0, 0);
         float gx = (float) (d.burst().x - eye.x), gz = (float) (d.burst().z - eye.z), gy = (float) (d.groundY() - eye.y);
         w.eye[0] = -gx;
         w.eye[1] = -gy;
         w.eye[2] = -gz;
         w.eye[3] = (float) t;
         int n = ua.zentix.incoming.client.fx.layer.DustWallPass.NODES;
-        a.pall.young(YOUNG_SETTLE_S, span, n, w.table);
-        double top = 0;
+        a.pall.young(t, YOUNG_SETTLE_S, span, n, w.table);
+        double top = 0, reach = a.pall.reach();
+        boolean any = false;
         for (int j = 0; j < n; j++) {
             double depth = w.table[4 * j + 2];
             w.table[4 * j + 2] = depth < PallField.GONE_DEPTH ? 0f : (float) (YOUNG_SIGMA * Math.min(1.6, Math.sqrt(depth / YOUNG_FULL_DEPTH)));
-            if (w.table[4 * j + 2] > 0) top = Math.max(top, w.table[4 * j + 1]);
+            if (w.table[4 * j + 2] > 0) {
+                top = Math.max(top, w.table[4 * j + 1]);
+                double rj = j / (n - 1.0) * reach;
+                // a node of the young ring (one node of margin: the table is read between nodes)
+                any |= rj >= inner - reach / (n - 1.0) && rj <= front + reach / (n - 1.0);
+            }
         }
+        // no lofted dust left in the young ring (it has run past the dust field): no pass, the pall keeps everything
+        if (!any) return;
+        f.young.set((float) inner, (float) Math.max(inner + 1, whole), 0, 0);
         w.ring[0] = (float) front;
         w.ring[1] = (float) inner;
         w.ring[2] = (float) (top * ua.zentix.incoming.client.fx.layer.DustWallPass.TOP_OVER_LAYER + 6);
@@ -363,6 +374,7 @@ public final class NukePall {
         double wind = d.blocks(d.windSpeed());
         w.windX = (float) (cos * wind);
         w.windZ = (float) (sin * wind);
+        w.source = a;
         w.active = true;
     }
 
@@ -398,6 +410,9 @@ public final class NukePall {
      */
     public static PallPass.Frame lightFrame(ClientLevel level, Vec3 eye, float partial) {
         PallPass.Frame f = FRAME;
+        // no detonation: no young wall (the shared frame keeps the last nuclear frame's inputs otherwise)
+        f.young.zero();
+        f.dustWall.active = false;
         double range = Sight.range(level.getRainLevel(partial), level.getThunderLevel(partial));
         Sight.Air a = Sight.Air.at(eye.y - ua.zentix.incoming.client.fx.layer.WaterDecal.SEA_LEVEL, range);
         f.air.set((float) a.haze(), (float) a.clean(), (float) a.weather(), (float) (1 / Sight.HAZE_HEIGHT));

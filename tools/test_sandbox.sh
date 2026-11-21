@@ -2,7 +2,8 @@
 # Effects sandbox check without a client (CI, "Остановка проверок"): `shot` sets time before the effect, not after
 # (23.10: 0,1 and 0,5 s "night" frames were daytime), separately for each shot (without --time, day); `shaders` and `dh`
 # without their mods in the sandbox directory refuse with a message, rather than capturing without Iris or DH (23.10: FX captured "under Iris" without Iris);
-# on a CPU renderer `shot` records sound in its own unslowed take, `--at none` only that take; CPU client memory ceiling, admission, GL environment
+# a frame take with sound records the sound in its own unslowed take (frames are paced on any renderer), `--at none` only
+# that take; CPU client memory ceiling, admission, GL environment
 # and socket naming (tools/soft_gl.sh).
 set -uo pipefail
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
@@ -19,18 +20,19 @@ fx() { echo "$1" >> "$tmp/fx.log"; }
 swap() { echo swap >> "$tmp/fx.log"; }
 eval "$(declare -f cut_wav | sed '1s/^cut_wav/real_cut_wav/')"
 cut_wav() { :; }
-( shot n1 'blast drone' --time night --no-swap ) >/dev/null 2>&1
-( shot n2 'flight missile' --at 0.5 --wav 2 ) >/dev/null 2>&1
+# (no sound: a frame take with sound runs a second take, checked below)
+( shot n1 'blast drone' --time night --wav 0 --no-swap ) >/dev/null 2>&1
+( shot n2 'flight missile' --at 0.5 --wav 0 ) >/dev/null 2>&1
 want='clear
 time night
 overlay off
-shots n1 0.1,0.5,1,2,4 4
+shots n1 0.1,0.5,1,2,4 0
 blast drone
 swap
 clear
 time day
 overlay off
-shots n2 0.5 2
+shots n2 0.5 0
 flight missile'
 [ "$(cat "$tmp/fx.log")" = "$want" ] && ok "shot: time before effect, default day without --time" || bad "shot command order:
 $(cat "$tmp/fx.log")"
@@ -104,8 +106,14 @@ rm -rf "$FX/out"; : > "$tmp/fx.log"
 python3 -c 'import json,sys,wave; w=wave.open(sys.argv[1]); a=json.load(open(sys.argv[2])); sys.exit(0 if abs(w.getnframes()/w.getframerate()-2)<0.01 and a["frames"]==[] and a["audio"]["seconds"]==2 else 1)' \
   "$FX/out/n7/n7.wav" "$FX/out/n7/capture.json" 2>/dev/null && ok "CPU sound-only shot: WAV and capture.json" || bad "CPU sound-only shot output: $(ls "$FX/out" "$FX/out/n7" 2>&1 | tr '\n' ' ')"
 : > "$tmp/fx.log"; echo gpu > "$FX/renderer"
+# GPU frames are paced too (Sandbox.paceFrame): frames and sound in separate takes, as on a CPU renderer
 ( shot n4 'blast drone' --at 0.5 --wav 2 --no-swap ) >/dev/null 2>&1
-[ "$(grep -c '^shots' "$tmp/fx.log")" = 1 ] && grep -qx 'shots n4 0.5 2' "$tmp/fx.log" && ok "GPU shot: one take with sound" || bad "GPU shot: $(tr '\n' ';' < "$tmp/fx.log")"
+grep -qx 'shots n4 0.5 0' "$tmp/fx.log" && [ "$(grep -cE '^shots \.wav-n4-[A-Za-z0-9]+ none@0 2$' "$tmp/fx.log")" = 1 ] \
+  && ok "GPU shot: frames take without sound, then a sound take" || bad "GPU shot: $(tr '\n' ';' < "$tmp/fx.log")"
+# sound only on a GPU: nothing is paced, one take with sound
+: > "$tmp/fx.log"
+( shot n8 'blast drone' --at none --wav 2 --no-swap ) >/dev/null 2>&1
+[ "$(grep -c '^shots' "$tmp/fx.log")" = 1 ] && grep -qx 'shots n8 none 2' "$tmp/fx.log" && ok "GPU sound-only shot: one take" || bad "GPU sound-only shot: $(tr '\n' ';' < "$tmp/fx.log")"
 
 # review probe: an empty shot name never replaces fx/out, and any valid effect text keeps capture.json valid
 out=$(bash "$ROOT/tools/probes/sound-only-output.sh" "$ROOT" 2>&1) && ok "probe sound-only-output" || bad "probe sound-only-output: $out"

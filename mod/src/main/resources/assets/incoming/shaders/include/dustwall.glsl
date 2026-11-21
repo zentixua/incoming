@@ -30,8 +30,21 @@ uniform vec3 DwAlbedo;
 uniform vec3 DwBulk;
 // (wind x, z, blocks/s; 0; 0)
 uniform vec4 DwWind;
+// lowest and highest ground of the terrain map under the wall, blocks above ground zero's ground point (0, 0: no map)
+uniform vec2 DwRelief;
 
-const int DW_NODES = 32;
+
+// the ground under ground point xz and the share of open air at q (both from ground zero's ground point): the pall's terrain
+// map and outdoor-air window, defined before this file by its user from eye-relative points (fx_dustwall.fsh: dwFloorEye,
+// dwOpenEye over pallRelief, pallOpen); dust lies on the local ground and never indoors
+float dwFloor(vec2 xz) {
+    return dwFloorEye(xz - DwEye.xz);
+}
+float dwOpen(vec3 q) {
+    return dwOpenEye(q - DwEye.xyz);
+}
+
+const int DW_NODES = 128;
 // seconds of wall behind the front this model draws; the pall draws what is older (crossfade over the last DW_FADE s)
 const float DW_SPAN = 24.0;
 const float DW_FADE = 6.0;
@@ -115,7 +128,7 @@ float dwEnvelope(float a, float h, float k) {
 // seconds e-fold 4 s); eddies 32 × 20 m turn with phase = integral of their energy: violent while the wave's wind
 // blows, then at the speed of real dust fronts (haboob drone footage: a 16-pixel patch decorrelates at ~0.45/s); the whole mass sloshes out with the wind and back with the
 // negative phase, the top more (rolls); the world wind drifts it all
-vec3 dwAir(vec3 q, float a, float r, float top, bool coarse, out float ph) {
+vec3 dwAir(vec3 q, float a, float r, float top, out float ph) {
     float E = exp(-a / 8.0), Ef = exp(-a / 4.0);
     float A = 0.3 + 0.7 * E + 0.6 * Ef;
     ph = 0.5 * (8.0 * (1.0 - E) + 0.25 * a) + 3.5 * (1.0 - Ef);
@@ -138,7 +151,8 @@ float dwBulge(vec3 pw, float a) {
     return clamp((L - 0.5) * mix(1.8, 3.0, smoothstep(1.0, 5.0, a)), -DW_BULGE, DW_BULGE);
 }
 
-// the smooth dust top over ground point xz (no billows; the light's shadow surface), blocks; 0 where no young dust
+// the smooth dust top over ground point xz (no billows; the light's shadow surface), blocks above the local ground; 0 where
+// no young dust
 float dwTopAt(vec2 xz) {
     float r = length(xz);
     if (r > DwRing.x + 2.0 || r < DwRing.y - 50.0) return 0.0;
@@ -146,11 +160,11 @@ float dwTopAt(vec2 xz) {
     float a = DwEye.w - n0.x;
     if (a <= 0.0 || n0.z <= 0.0) return 0.0;
     float top = dwEnvelope(a, n0.y, dwHump(xz)), ph;
-    vec3 pw = dwAir(vec3(xz.x, 0.6 * top, xz.y), a, r, top, true, ph);
+    vec3 pw = dwAir(vec3(xz.x, 0.6 * top, xz.y), a, r, top, ph);
     return top * (1.0 + dwBulge(pw, a));
 }
 
-// highest the dust can reach above a point (blocks), below 0 where no young dust is
+// highest the dust can reach above the local ground at a point (blocks), below 0 where no young dust is
 float dwBound(vec3 q) {
     float r = length(q.xz);
     if (r > DwRing.x + 2.0 || r < DwRing.y - 50.0) return -1.0;
@@ -164,8 +178,10 @@ float dwBound(vec3 q) {
 }
 
 // dust extinction (1/block) at q; coarse: light paths (the billows' two first octaves, no streaks, no fine octaves)
-float dwDensity(vec3 q, bool coarse) {
+float dwDensity(vec3 g, bool coarse) {
     if (!coarse) gDwSigma = 0.0;
+    // heights above the local ground
+    vec3 q = vec3(g.x, g.y - dwFloor(g.xz), g.z);
     float r = length(q.xz);
     if (r > DwRing.x + 2.0 || r < DwRing.y - 50.0) return 0.0;
     vec4 n0 = dwNode(r);
@@ -189,7 +205,7 @@ float dwDensity(vec3 q, bool coarse) {
     float a = DwEye.w - dwNode(r + (40.0 * yn * yn + 100.0 * max(bf - 0.3, 0.0)) * exp(-a0 / 1.5)).x;
     if (a <= 0.0) return 0.0;
     float top = dwEnvelope(a, h, k), ph;
-    vec3 pw = dwAir(q, a, r, top, coarse, ph);
+    vec3 pw = dwAir(q, a, r, top, ph);
     top *= 1.0 + dwBulge(pw, a);
     // texture fixed in the air mass: billows of ~20 × 13 m and finer, the rising and settling top reveals and hides them
     vec3 tq = vec3(pw.x, pw.y - 0.45 * ph, pw.z) / vec3(20.0, 13.0, 20.0);
@@ -208,14 +224,15 @@ float dwDensity(vec3 q, bool coarse) {
     float surf = top * (1.0 + clamp(((bl - 0.42) * 0.5 + (n - 0.5) * 0.35 + (fs - 0.5) * 0.15) * torn, -DW_BILLOW, DW_BILLOW));
     if (!coarse) gDwSurf = surf;
     float edge = 0.12 * top + 3.0;
-    float prof = smoothstep(surf + 0.4 * edge, surf - edge, q.y);
+    float prof = 1.0 - smoothstep(surf - edge, surf + 0.4 * edge, q.y);
     // fines haze over the core, thin, rising slowly over the hot ground
     float hz = top * (1.15 + 0.15 * (1.0 - exp(-a / 12.0)));
-    float haze = 0.06 * smoothstep(hz, top * 0.8, q.y) * (0.4 + 1.2 * n);
+    float haze = 0.06 * (1.0 - smoothstep(top * 0.8, hz, q.y)) * (0.4 + 1.2 * n);
     // coarse dust falls back (the core thins over seconds, fines stay); the young head is denser
     float amt = (0.45 + 0.55 * exp(-max(a - 1.0, 0.0) / 8.0)) * (1.0 + 0.5 * exp(-a / 1.1));
-    float fade = 1.0 - smoothstep(DW_SPAN - DW_FADE, DW_SPAN, a);
+    float fade = 1.0 - smoothstep(DW_SPAN - DW_FADE, DW_SPAN, a0);
     float sigma = n0.z * amt * fade;
+    if (!coarse) sigma *= dwOpen(g);
     if (!coarse) gDwSigma = sigma;
     return sigma * smoothstep(0.0, 0.08, a) * (prof * (0.5 + 1.0 * n) * (0.7 + 0.6 * fs) + haze);
 }
@@ -237,7 +254,7 @@ float dwPhase(float c) {
 // and bulges throw long shadows)
 float dwShadow(vec3 q, vec3 l) {
     vec3 p = q + l * 70.0;
-    return max(dwTopAt(p.xz) - p.y, 0.0) * gDwSigma * 0.8 + dwDensity(q + l * 12.0, true) * 26.0;
+    return max(dwTopAt(p.xz) - (p.y - dwFloor(p.xz)), 0.0) * gDwSigma * 0.8 + dwDensity(q + l * 12.0, true) * 26.0;
 }
 
 // light of a dust sample at q (presentation, follows the light on ground-coloured dust): single scattering of the fireball
@@ -245,9 +262,9 @@ float dwShadow(vec3 q, vec3 l) {
 // and takes on the soil's bulk colour (dense dust is darker inside but stays warm dust-coloured, never black); sky light
 // enters from the top, ground bounce from below
 vec3 dwLight(vec3 q, vec3 rd) {
-    vec3 lb = normalize(DwBall.xyz - q);
+    vec3 lb = normalize(DwBall.xyz - q + vec3(0.0, 1e-3, 0.0));
     float taub = dwShadow(q, lb), taus = dwShadow(q, DwSunDir);
-    float depth = max(gDwSurf - q.y, 0.0) * gDwSigma;
+    float depth = max(gDwSurf - (q.y - dwFloor(q.xz)), 0.0) * gDwSigma;
     float ms = 0.3 + 0.3 * exp(-0.12 * depth);
     float sunUp = smoothstep(-0.05, 0.05, DwSunDir.y);
     // thin dust toward the fireball glows (forward peak: the crest's rim against the ball); the low sun lights the faces
@@ -270,31 +287,35 @@ float dwGridK(float t) {
 }
 
 // march of one ray from the eye (direction rd, unit) up to tEnd blocks (the world behind the pixel); jitter in [0, 1);
-// foot: pixel size per block of distance. Returns premultiplied light and transmittance; depth (out): the distance the
-// ray's dust sits at, weighted by what it shows (the history reprojects by it), 0 for none.
+// foot: pixel size per block of distance. Returns premultiplied light and transmittance.
 // Samples sit on a grid fixed along the ray from the eye (geometric steps from the eye, independent of where the
-// wall's span starts), so they do not slide through the texture as the front grows.
-vec4 dwMarch(vec3 rd, float tEnd, float jitter, float foot, int maxSteps, out float depth) {
-    depth = 0.0;
+// wall's span starts), so they do not slide through the texture as the front grows; every sample and span ends at tEnd.
+vec4 dwMarch(vec3 rd, float tEnd, float jitter, float foot, int maxSteps) {
     vec3 eye = DwEye.xyz;
-    float top = DwRing.z;
-    // vertical slab [0, top]
+    // vertical slab from the lowest ground to the envelope top over the highest
+    float lo = DwRelief.x - 1.0, hi = DwRelief.y + DwRing.z;
     float t0 = 0.0, t1 = tEnd;
     if (abs(rd.y) < 1e-5) {
-        if (eye.y > top || eye.y < 0.0) return vec4(0.0, 0.0, 0.0, 1.0);
+        if (eye.y > hi || eye.y < lo) return vec4(0.0, 0.0, 0.0, 1.0);
     } else {
-        float ta = (top - eye.y) / rd.y, tb = -eye.y / rd.y;
+        float ta = (hi - eye.y) / rd.y, tb = (lo - eye.y) / rd.y;
         t0 = max(t0, min(ta, tb));
         t1 = min(t1, max(ta, tb));
     }
-    // annulus [inner, front]: clip to the outer circle (inner is skipped by the density's early return)
+    // annulus [inner, front]: clip to the outer circle (inner is skipped by the density's early return); a vertical ray
+    // stays at its own radius
     vec2 oc = eye.xz;
-    float A = dot(rd.xz, rd.xz), Bq = dot(oc, rd.xz), C = dot(oc, oc) - (DwRing.x + 4.0) * (DwRing.x + 4.0);
-    float disc = Bq * Bq - A * C;
-    if (disc < 0.0 || A < 1e-10) return vec4(0.0, 0.0, 0.0, 1.0);
-    float sq = sqrt(disc);
-    t0 = max(t0, (-Bq - sq) / A);
-    t1 = min(t1, (-Bq + sq) / A);
+    float R = DwRing.x + 4.0;
+    float A = dot(rd.xz, rd.xz), Bq = dot(oc, rd.xz), C = dot(oc, oc) - R * R;
+    if (A < 1e-10) {
+        if (C > 0.0) return vec4(0.0, 0.0, 0.0, 1.0);
+    } else {
+        float disc = Bq * Bq - A * C;
+        if (disc < 0.0) return vec4(0.0, 0.0, 0.0, 1.0);
+        float sq = sqrt(disc);
+        t0 = max(t0, (-Bq - sq) / A);
+        t1 = min(t1, (-Bq + sq) / A);
+    }
     if (t0 >= t1) return vec4(0.0, 0.0, 0.0, 1.0);
     // sample grid fixed along the ray from the eye: 2.5-block steps to 2.5/K blocks, then geometric (step K × distance:
     // 5.5 m at 1 km, 22 m at 4 km); the history averages the moving offset within each step
@@ -302,11 +323,11 @@ vec4 dwMarch(vec3 rd, float tEnd, float jitter, float foot, int maxSteps, out fl
     // n: cells to the next sample (strides grow over empty air); kLast: the last sampled cell
     float n = 1.0, kLast = k - 1.0;
     vec3 light = vec3(0.0), c = vec3(0.0);
-    float T = 1.0, wsum = 0.0;
+    float T = 1.0;
     for (int i = 0; i < 400; i++) {
         float t = dwGridT(k);
-        if (i >= maxSteps || t > t1 || T < 0.02) break;
-        float dt = dwGridT(k + 1.0) - t;
+        if (i >= maxSteps || t >= t1 || T < 0.02) break;
+        float dt = min(dwGridT(k + 1.0), t1) - t;
         float tt = t + dt * jitter;
         vec3 q = eye + rd * tt;
         float bound = dwBound(q);
@@ -315,11 +336,12 @@ vec4 dwMarch(vec3 rd, float tEnd, float jitter, float foot, int maxSteps, out fl
             kLast = k; k += n; n = min(n * 2.0, 16.0);
             continue;
         }
-        if (q.y > bound) {
+        float hq = q.y - dwFloor(q.xz);
+        if (hq > bound) {
             if (rd.y < 0.0) {
-                // above the dust here: down to its bound, onto the next grid cell
+                // above the dust here: down to its bound, onto the next grid cell (a stride that lands in dust backs up)
                 kLast = k;
-                k = max(k + 1.0, ceil(dwGridK(t + (q.y - bound) / -rd.y)));
+                k = max(k + 1.0, ceil(dwGridK(t + (hq - bound) / -rd.y)));
                 n = 1.0;
             } else {
                 kLast = k; k += n; n = min(n * 2.0, 8.0);
@@ -338,19 +360,15 @@ vec4 dwMarch(vec3 rd, float tEnd, float jitter, float foot, int maxSteps, out fl
             c = dwLight(q, rd);
             // the thin fines haze over the dense top: two cells per sample (at grazing views a 20–30 m haze layer is
             // hundreds of metres of ray)
-            float cells = q.y > gDwSurf + 2.0 ? 2.0 : 1.0;
-            float span = dwGridT(k + cells) - t;
+            float cells = hq > gDwSurf + 2.0 ? 2.0 : 1.0;
+            float span = min(dwGridT(k + cells), t1) - t;
             float al = exp(-s * span);
-            float w = T * (1.0 - al);
-            light += w * c;
-            depth += w * tt;
-            wsum += w;
+            light += T * (1.0 - al) * c;
             T *= al;
             kLast = k + cells - 1.0; k += cells; n = 1.0;
         } else {
             kLast = k; k += n; n = min(n * 2.0, 8.0);
         }
     }
-    depth = wsum > 1e-4 ? depth / wsum : 0.0;
     return vec4(light, T);
 }
