@@ -40,7 +40,7 @@ const float DW_EXPOSURE = 0.2;
 // head timing, seconds of age (presentation): rise e-fold at the contact line, hump hold, width of the hump's fall
 const float DW_RISE = 0.12, DW_HOLD = 0.3, DW_FALL = 0.4;
 // most the billowed surface and the bulges lift the dust over its envelope, shares (the ray bound, dwBound)
-const float DW_BULGE = 0.25, DW_BILLOW = 0.3, DW_HAZE = 1.3;
+const float DW_BULGE = 0.25, DW_BILLOW = 0.16, DW_HAZE = 1.3;
 
 // pixel footprint at the sample, blocks (set by the march)
 float gDwFoot = 0.0;
@@ -95,10 +95,10 @@ float dwFbm2(vec3 p, float fq) {
     return 0.6667 * mix(0.5, dwNoise3(p), dwLod(fq)) + 0.3333 * mix(0.5, dwNoise3(p * 2.07 + vec3(1.7, 9.2, 3.1)), dwLod(fq * 2.07));
 }
 
-// hump of the head over the settled layer along the front: 1.35–1.6 of the envelope (its visible crest 1.3–1.5x the layer
+// hump of the head over the settled layer along the front: 1.38–1.58 of the envelope (its visible crest 1.3–1.5x the layer
 // behind), world-fixed lumps ~200 m
 float dwHump(vec2 xz) {
-    return 1.35 + 0.25 * smoothstep(0.3, 0.7, dwNoise3(vec3(xz / 190.0, 33.4)));
+    return 1.38 + 0.2 * smoothstep(0.3, 0.7, dwNoise3(vec3(xz / 190.0, 33.4)));
 }
 
 // the dust envelope at age a (s since the front passed) over settled height h with hump k (presentation): born at zero on
@@ -185,16 +185,17 @@ float dwDensity(vec3 q, bool coarse) {
     vec3 tq = vec3(pw.x, pw.y - 0.45 * ph, pw.z) / vec3(20.0, 13.0, 20.0);
     float n = coarse ? dwFbm2(tq, 0.0) : dwFbm(tq, 1.0 / 13.0);
     // cauliflower lumps of the top, ~35 m and finer, in the same air
-    float bl = dwBillow(vec3(pw.x, pw.y - 0.3 * ph, pw.z) / vec3(34.0, 22.0, 34.0) + 11.0, coarse ? 1e3 : 1.0 / 22.0);
+    float bl = coarse ? 0.42 : dwBillow(vec3(pw.x, pw.y - 0.3 * ph, pw.z) / vec3(34.0, 22.0, 34.0) + 11.0, 1.0 / 22.0);
     // fibrous streaks combed along the radial wind, ~28 m along, 4.5 m across
     float fs = 0.5;
     if (!coarse) {
         float ral = length(pw.xz);
         fs = mix(0.5, dwFbm2(vec3(ral / 28.0, (pw.y - 0.25 * ph) / 5.0, atan(pw.z, pw.x) * ral / 4.5), 0.0), dwLod(1.0 / 2.2));
     }
-    // the billowed surface: rises and dips by the texture (cauliflower billows, ragged where the dust is young)
-    float torn = 1.0 + 0.6 * exp(-a / 0.25);
-    float surf = top * (1.0 + clamp(((bl - 0.42) * 0.9 + (n - 0.5) * 0.6 + (fs - 0.5) * 0.3) * torn, -DW_BILLOW, DW_BILLOW));
+    // the billowed surface: rises and dips by the texture (cauliflower billows, ragged where the dust is young), within
+    // ±DW_BILLOW of the top: the hump's excess (+30–50 %) stays well above the billows, so the crest reads as a crest
+    float torn = 1.0 + 0.5 * exp(-a / 0.25);
+    float surf = top * (1.0 + clamp(((bl - 0.42) * 0.5 + (n - 0.5) * 0.35 + (fs - 0.5) * 0.15) * torn, -DW_BILLOW, DW_BILLOW));
     if (!coarse) gDwSurf = surf;
     float edge = 0.12 * top + 3.0;
     float prof = smoothstep(surf + 0.4 * edge, surf - edge, q.y);
@@ -221,12 +222,14 @@ float dwPhase(float c) {
     return 0.75 * f + 0.25 * k;
 }
 
-// optical depth toward a light in direction l from q: the billows over the next ~35 m (two coarse density taps: lit tops,
-// shaded undersides) and the smooth top ~80 m away (the hump and bulges throw long shadows)
-float dwShadow(vec3 q, vec3 l) {
+// optical depth toward a light in direction l from q under the smooth top ~80 m away (the hump and bulges throw long
+// shadows); near: also the billows over the next ~35 m (two coarse density taps: lit tops, shaded undersides)
+float dwShadow(vec3 q, vec3 l, bool near) {
     vec3 p = q + l * 80.0;
-    float far = max(dwTopAt(p.xz) - p.y, 0.0) * gDwSigma * 0.8;
-    return dwDensity(q + l * 6.0, true) * 10.0 + dwDensity(q + l * 22.0, true) * 24.0 + far;
+    float tau = max(dwTopAt(p.xz) - p.y, 0.0) * gDwSigma * 0.8;
+    if (near) tau += dwDensity(q + l * 6.0, true) * 10.0 + dwDensity(q + l * 22.0, true) * 24.0;
+    else tau += max(gDwSurf - q.y, 0.0) / max(l.y, 0.2) * gDwSigma * 0.5;
+    return tau;
 }
 
 // light of a dust sample at q (presentation, follows the light on ground-coloured dust): single scattering of the fireball
@@ -235,7 +238,8 @@ float dwShadow(vec3 q, vec3 l) {
 // enters from the top, ground bounce from below
 vec3 dwLight(vec3 q, vec3 rd) {
     vec3 lb = normalize(DwBall.xyz - q);
-    float taub = dwShadow(q, lb), taus = dwShadow(q, DwSunDir);
+    // the billows' own shading follows the fireball, the key light; the low sun's only by the depth under the surface
+    float taub = dwShadow(q, lb, true), taus = dwShadow(q, DwSunDir, false);
     float depth = max(gDwSurf - q.y, 0.0) * gDwSigma;
     float ms = 0.22 + 0.33 * exp(-0.12 * depth);
     float sunUp = smoothstep(-0.05, 0.05, DwSunDir.y);
@@ -246,7 +250,7 @@ vec3 dwLight(vec3 q, vec3 rd) {
     return DW_EXPOSURE * (DwAlbedo * single + DwBulk * multiple + DwBulk * DwGroundLight);
 }
 
-const float DW_K = 0.0045, DW_S = 1.5;
+const float DW_K = 0.0055, DW_S = 2.5;
 float dwGridT(float k) {
     float kb = 1.0 / DW_K;
     return k < kb ? k * DW_S : DW_S / DW_K * pow(1.0 + DW_K, k - kb);
@@ -283,7 +287,8 @@ vec4 dwMarch(vec3 rd, float tEnd, float jitter, float foot, int maxSteps, out fl
     t0 = max(t0, (-Bq - sq) / A);
     t1 = min(t1, (-Bq + sq) / A);
     if (t0 >= t1) return vec4(0.0, 0.0, 0.0, 1.0);
-    // sample grid fixed along the ray from the eye: 1.5-block steps to 1.5/K blocks, then geometric (step K × distance)
+    // sample grid fixed along the ray from the eye: 2.5-block steps to 2.5/K blocks, then geometric (step K × distance:
+    // 5.5 m at 1 km, 22 m at 4 km); the history averages the moving offset within each step
     float k = floor(dwGridK(t0));
     // n: cells to the next sample (strides grow over empty air); kLast: the last sampled cell
     float n = 1.0, kLast = k - 1.0;
@@ -324,13 +329,17 @@ vec4 dwMarch(vec3 rd, float tEnd, float jitter, float foot, int maxSteps, out fl
             // light every other cell of the fixed grid (the light changes over metres, the step is ~metres)
             if (lit < 0.0 || fract(k * 0.5) < 0.25) c = dwLight(q, rd);
             lit = 1.0;
-            float al = exp(-s * dt);
+            // the thin fines haze over the dense top: two cells per sample (at grazing views a 20–30 m haze layer is
+            // hundreds of metres of ray)
+            float cells = q.y > gDwSurf + 2.0 ? 2.0 : 1.0;
+            float span = dwGridT(k + cells) - t;
+            float al = exp(-s * span);
             float w = T * (1.0 - al);
             light += w * c;
             depth += w * tt;
             wsum += w;
             T *= al;
-            kLast = k; k += 1.0; n = 1.0;
+            kLast = k + cells - 1.0; k += cells; n = 1.0;
         } else {
             kLast = k; k += n; n = min(n * 2.0, 8.0);
         }

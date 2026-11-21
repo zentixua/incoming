@@ -144,15 +144,16 @@ cloud turns golden, then red, and the edge of the earth's shadow climbs the stem
 while after sunset on the ground.
 
 A ground burst leaves a crater and radioactive fallout downwind. Over water, spray takes the place of the dust wall.
-The wall rises from the ground right behind the wave and thickens over a second or two. Bare earth, fields and forests
+The wave tears the dust up from the ground exactly where it touches it; the dust curls over a small, uneven crest about
+one and a half times the height of the layer behind it and settles to that layer within about a second. Bare earth, fields and forests
 throw up thick dust; rock, roads, roofs and snow give only the dust of broken buildings, so there the wall is lower and
 thinner and the dust left behind is lighter.
 For the first seconds a thin white condensation shell stands over the wave: the air behind it expands and cools below its dew
 point (Minecraft air is humid enough for it in clear weather and in rain).
 The dust has the colour of the ground it comes from: grey-brown over grass, fields and forest, pale tan over sand. Right
 behind the wave it is clean dust; smoke darkens it only as the fires under it grow, over minutes, and only burning
-fires light it orange from below. The dust churns in eddies about as tall as the wall, turning outward while the wave's
-wind blows and back as it reverses; the turning is shown faster than in reality so that it can be seen from afar.
+fires light it orange from below. The dust billows in lumps and eddies, hardest while the wave's wind blows and back as it
+reverses, then calms to the slow roll of a dust storm and drifts with the wind.
 Burns, radiation and falling debris can still hurt you after the flash, so stay under cover and watch your dose.
 
 ![A dust wave approaches beneath the mushroom cloud at dusk](../media/blast-wave-dusk-hq.jpg)

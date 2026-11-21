@@ -130,7 +130,7 @@ public final class DustWallPass {
         // secondary views (camera mods) draw without history and leave the primary view's alone
         boolean primary = !FxViews.secondary();
         float dx = f.eye[0] - PREVIOUS_EYE[0], dy = f.eye[1] - PREVIOUS_EYE[1], dz = f.eye[2] - PREVIOUS_EYE[2];
-        boolean past = primary && history && dx * dx + dy * dy + dz * dz < JUMP * JUMP;
+        boolean past = history && dx * dx + dy * dy + dz * dz < JUMP * JUMP;
         VIEW_PROJECTION.set(projection).mul(view);
         VIEW_PROJECTION.invert(INVERSE);
         view.positiveZ(FORWARD).negate();
@@ -163,21 +163,24 @@ public final class DustWallPass {
             m.safeGetUniform("DwBulk").set(f.bulk.x, f.bulk.y, f.bulk.z);
             m.safeGetUniform("DwWind").set(f.windX, f.windZ, 0f, 0f);
             fullScreen(m, () -> Uniform.uploadInteger(Uniform.glGetUniformLocation(m.getId(), "DwNoise"), NOISE_UNIT), true);
-            // averaged over frames at the same resolution into the other history target
-            int next = primary ? 1 - latest : latest;
-            GlStateManager._glBindFramebuffer(GL30.GL_DRAW_FRAMEBUFFER, HISTORY_FBO[next]);
-            RenderSystem.setShaderTexture(0, target);
-            RenderSystem.setShaderTexture(1, HISTORY_TEX[latest]);
-            RenderSystem.setShaderTexture(2, scene);
-            r.safeGetUniform("InvViewProj").set(INVERSE);
-            r.safeGetUniform("PrevViewProj").set(PREVIOUS);
-            r.safeGetUniform("PallForward").set(FORWARD.x, FORWARD.y, FORWARD.z);
-            r.safeGetUniform("DwDiv").set((float) d);
-            r.safeGetUniform("DwReproject").set(dx, dy, dz, past ? 1f : 0f);
-            r.safeGetUniform("DwHistory").set(HISTORY, f.layerTop - f.eye[1]);
-            fullScreen(r, null, false);
+            // averaged over frames at the same resolution into the other history target; secondary views (camera mods) lay
+            // their march as it is and leave the primary view's history alone
+            int shown = target;
             if (primary) {
+                int next = 1 - latest;
+                GlStateManager._glBindFramebuffer(GL30.GL_DRAW_FRAMEBUFFER, HISTORY_FBO[next]);
+                RenderSystem.setShaderTexture(0, target);
+                RenderSystem.setShaderTexture(1, HISTORY_TEX[latest]);
+                RenderSystem.setShaderTexture(2, scene);
+                r.safeGetUniform("InvViewProj").set(INVERSE);
+                r.safeGetUniform("PrevViewProj").set(PREVIOUS);
+                r.safeGetUniform("PallForward").set(FORWARD.x, FORWARD.y, FORWARD.z);
+                r.safeGetUniform("DwDiv").set((float) d);
+                r.safeGetUniform("DwReproject").set(dx, dy, dz, past ? 1f : 0f);
+                r.safeGetUniform("DwHistory").set(HISTORY, f.layerTop - f.eye[1]);
+                fullScreen(r, null, false);
                 latest = next;
+                shown = HISTORY_TEX[next];
                 PREVIOUS.set(VIEW_PROJECTION);
                 System.arraycopy(f.eye, 0, PREVIOUS_EYE, 0, 3);
                 history = true;
@@ -189,7 +192,7 @@ public final class DustWallPass {
             RenderSystem.enableBlend();
             RenderSystem.blendFuncSeparate(GlStateManager.SourceFactor.ONE, GlStateManager.DestFactor.SRC_ALPHA,
                     GlStateManager.SourceFactor.ZERO, GlStateManager.DestFactor.ONE);
-            RenderSystem.setShaderTexture(0, HISTORY_TEX[next]);
+            RenderSystem.setShaderTexture(0, shown);
             RenderSystem.setShaderTexture(1, scene);
             c.safeGetUniform("DwDiv").set((float) d);
             fullScreen(c, null, false);
