@@ -359,6 +359,8 @@ public final class PallField {
 
     /** presentation: wisps stretch the young layer's top by up to this share of itself (copy {@code PALL_WISP_RISE}): the pall's bounds. */
     public static final double WISP_RISE = 0.6;
+    /** presentation: the young layer's top rises by up to this share with its soft lumps (copy {@code PALL_LUMP_AMP}): the pall's bounds. */
+    public static final double LUMP_AMP = 0.45;
 
     /** Table rows per detonation: dust, spray, haze, in order. */
     public static final int ROWS = 3;

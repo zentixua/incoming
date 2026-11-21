@@ -621,9 +621,17 @@ const float PALL_STREAK_ACROSS = 4.5;
 // presentation (est.): streak strength decays from full toward a 0.35 floor with this e-folding time after the first
 // second behind the front, s (the approved animation's streaks fade within seconds as the layer turns over)
 const float PALL_STREAK_FADE = 4.0;
-// presentation (est.): distance from ground zero, in noise tiles, at which a streak is PALL_STREAK_ACROSS wide (nearer they are
-// narrower, farther wider: a fan along the radial flow)
-const float PALL_STREAK_AT = 40.0;
+// presentation (Artem 21.11 with Silo S3E09 frame c; approved v6 lumps 150–300 m): the young dust — head and the layer behind it —
+// is one mass whose relief is soft lumps: the noise tile's billow and dome channels (R, B in equal parts) at one texel per
+// 1/PALL_LUMP_TEXEL of the pall's noise tile (1 Mt: 67 m texels, trilinear: lumps from ~120 m over kilometre swells), density
+// 1 ± PALL_LUMP_AMP over ±2 σ of the channels (the production tile: mean PALL_LUMP_MEAN, σ PALL_LUMP_SD, PallLumpsTest; the
+// lumps' mean 0.999), never zero — a zero opened holes lit by the mean column above, black voids; turning over by
+// PALL_LUMP_TURN texels a second (a lump renews in about ten seconds: no boiling)
+const float PALL_LUMP_TEXEL = 15.4;
+const float PALL_LUMP_AMP = 0.45;
+const float PALL_LUMP_MEAN = 0.5;
+const float PALL_LUMP_SD = 0.1735;
+const float PALL_LUMP_TURN = 0.25;
 const float PALL_TURB_S = 8.0;
 const float PALL_TURB_REACH = 1.2;
 const float PALL_TURB_SLOW = 0.015;
@@ -723,25 +731,6 @@ vec3 pallWallOrigin(vec2 rel, float z, float u, float top, float carried) {
     return vec3(rel.x - out1.x * x, z - x * (0.02 + 0.06 * zr), rel.y - out1.y * x);
 }
 
-// Eddy turn of head dust, rad (BlastWall.rollAngle): positive — the top rolls outward; eddies of diameter size spin at σ_u ≈ 2.5 u*,
-// u* ≈ 0.04 U (BlastWall.EDDY), over the wind path so far (carried × pallWallCarried: out with the wave's wind, back as it reverses).
-// presentation: ×8 the physical rate (BlastWall.ROLL_GAIN) — only the billow pattern turns, not where dust is or how much
-const float PALL_WALL_ROLL = 1.6;
-float pallWallRollAngle(float ph, float carried, float size) {
-    return PALL_WALL_ROLL * carried * pallWallCarried(ph) / max(size, 1.0);
-}
-
-// Dust-coordinate point q (pallWallOrigin: x, height, z) turned within its eddy (BlastWall.roll): eddies of diameter size side by side
-// along the ground outward (out1), resting on it; the turn is full at the centre and zero at the rim — no seams between eddies
-vec3 pallWallRoll(vec3 q, vec2 out1, float size, float angle) {
-    float along = dot(q.xz, out1), rim = 0.5 * size;
-    float dx = along - size * (floor(along / size) + 0.5), dy = q.y - rim;
-    float r = length(vec2(dx, dy)) / rim;
-    if (r >= 1.0) return q;
-    float a = angle * (1.0 - r) * (1.0 - r), c = cos(a), sn = sin(a);
-    float ex = c * dx - sn * dy, ey = sn * dx + c * dy;
-    return vec3(q.x + out1.x * (ex - dx), rim + ey, q.z + out1.y * (ex - dx));
-}
 
 // Density at the ground by the share u of the wedge against its density at its end (BlastWall.shape): the lifted part in the layer of the top pallWallTop
 float pallWallShape(float u) {
