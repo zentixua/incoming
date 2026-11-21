@@ -45,7 +45,7 @@ public final class DustWallPass {
     /** Table nodes ({@code DW_NODES}). */
     public static final int NODES = 32;
     /** Resolution divisor per axis: billows of 15–100 m stay several low-resolution pixels wide in the judging view. */
-    static final int DIV = Integer.getInteger("incoming.dustwall.div", 3);
+    static final int DIV = Integer.getInteger("incoming.dustwall.div", 4);
     /** Value-noise lattice side ({@code DW_LATTICE}). */
     private static final int LATTICE = 128;
     private static final int NOISE_UNIT = 12;

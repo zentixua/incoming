@@ -339,7 +339,7 @@ public final class NukePall {
         }
         w.ring[0] = (float) front;
         w.ring[1] = (float) inner;
-        w.ring[2] = (float) (top * 1.55 * 1.45 * 1.6 + 45);
+        w.ring[2] = (float) (top * 1.55 * 1.6 + 40);
         w.ring[3] = (float) a.pall.reach();
         // fireball: slot 0's ball light (CloudPuffs.pallLight): radius, drift along the wind, height, black-body light × exposure
         double cos = Math.cos(d.windDir()), sin = Math.sin(d.windDir());

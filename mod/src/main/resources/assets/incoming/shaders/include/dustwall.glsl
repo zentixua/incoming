@@ -157,7 +157,8 @@ float dwBound(vec3 q) {
     if (r > DwRing.x + 2.0 || r < DwRing.y - 50.0) return -1.0;
     vec4 n0 = dwNode(r);
     if (DwEye.w < n0.x || n0.z <= 0.0) return -1.0;
-    return n0.y * 1.55 * 1.45 * 1.6 + 45.0;
+    // the density ends 1.6 tops above the ground (dwDensity: yn0), the top at most the 1.55 hump; plus rising wisps
+    return n0.y * 1.55 * 1.6 + 40.0;
 }
 
 // dust extinction (1/block) at q; coarse: light paths (no wisps, no streaks, no fine octaves)
@@ -256,8 +257,8 @@ float dwPhase(float c) {
 vec3 dwLight(vec3 q, vec3 rd, float s) {
     vec3 lb = normalize(dwBallAt() - q);
     // depth toward the ball over 90 m: a low fireball throws billow shadows of a hundred metres across the top
-    float tau = 1.6 * (dwDensity(q + lb * 6.0, true) * 9.0 + dwDensity(q + lb * 18.0, true) * 15.0
-            + dwDensity(q + lb * 42.0, true) * 30.0 + dwDensity(q + lb * 85.0, true) * 45.0);
+    float tau = 1.6 * (dwDensity(q + lb * 8.0, true) * 14.0 + dwDensity(q + lb * 26.0, true) * 26.0
+            + dwDensity(q + lb * 70.0, true) * 55.0);
     float low = 0.55 + 0.45 * smoothstep(0.0, 40.0, q.y);
     float orders = 0.3 * min(dwPhase(dot(rd, lb)), 3.0) * exp(-tau) + 0.1 * exp(-tau * 0.3) + 0.07 * exp(-tau * 0.08);
     vec3 L = dwBallLight(q) * orders * low;
