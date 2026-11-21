@@ -216,7 +216,11 @@ times and the pall's budget are not frame costs: frame cost belongs to the GPU a
   ages 0.102, 0.521, 1.005, 3.009 s; unpaced 0.163, 0.524, 1.292, 3.061 s). Pacing follows the armed take, not the
   current rate: effects that `clear` first (`nuke … near`) and fast stretches that raised the rate keep it. Only the
   last `Sandbox.PACE_LEAD` (2 s) before a due frame is slowed; farther the world runs at 20 ticks/s (paced whole, a
-  nuke frame at 130 s took tens of minutes at 1–3 frames/s). `shots` takes a time of day per frame
+  nuke frame at 130 s took tens of minutes at 1–3 frames/s). A frame is taken at the first render whose age (tick +
+  partial tick) reaches its second, never at a tick boundary: at whole ticks a GPU 30 fps clip advanced 25–28 ms per
+  frame with a 45–145 ms jump every half second (each PNG write stalls the render thread ~0.1 s while game time runs),
+  and everything moving lurched at ~2 Hz, read as flicker. GPU takes slow the world to `GPU_FRAMES_PER_TICK` (24)
+  renders per tick; check `capture.json` ages (steps of 1/30 s) before judging motion in a clip. `shots` takes a time of day per frame
   (`<seconds>@<day time>`, e.g. `130@12500,130.5@12550`): a dusk strip in one take; the `SANDBOX shot` line logs it. A slowed
   take's sound is not real-time: `shot` records sound in a second take of the same effect at 20 ticks/s from the first
   frame's second (`shots .wav-<name>-XXXXXX none@<s> <wav>`, a fresh `mktemp` staging directory), cuts the WAV from it and writes
