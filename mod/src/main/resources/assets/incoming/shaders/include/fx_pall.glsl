@@ -456,11 +456,20 @@ WallAt wallMove(mat4 V, WallAt h, vec3 v) {
     return m;
 }
 
-// Mean head depth (no billows) from h along unit v over len, n steps
+// the pixel's jitter for the head's light chords (set with gJitter): fixed sample fractions along a chord toward the fireball,
+// radial across the hump's rise and sink, stepped the light as the point moved outward — rings about ground zero at 1 Mt
+float gChordJitter = 0.5;
+
+// PALL_DEBUG (probe only, 0 in the product): the head's terms at the ray's first sample that meets matter, written as the pixel
+const int PALL_DEBUG = 0;
+bool gDbgFrozen = false;
+float gDbgUp = 0.0, gDbgToCap = 0.0, gDbgDev = 0.0, gDbgCapDeep = 0.0, gDbgHd = 0.0;
+
+// Mean head depth (no billows) from h along unit v over len, n steps (samples at the pixel's jitter within each)
 float wallChord(mat4 V, WallAt h, vec3 v, float len, int n) {
     float sum = 0.0, ds = len / float(n);
     for (int i = 0; i < n; i++) {
-        WallAt m = wallMove(V, h, v * ((float(i) + 0.5) * ds));
+        WallAt m = wallMove(V, h, v * ((float(i) + gChordJitter) * ds));
         sum += m.P.w * pallWallMean(m.s - m.P.z, m.z, m.P.x, m.P.y);
     }
     return sum * ds;
@@ -472,7 +481,7 @@ float wallChordNear(mat4 V, WallAt h, vec3 v, float len, int n) {
     float sum = 0.0, nn = float(n * n);
     for (int i = 0; i < n; i++) {
         float a = float(i * i) / nn, b = float((i + 1) * (i + 1)) / nn;
-        WallAt m = wallMove(V, h, v * (0.5 * (a + b) * len));
+        WallAt m = wallMove(V, h, v * (mix(a, b, gChordJitter) * len));
         sum += m.P.w * pallWallMean(m.s - m.P.z, m.z, m.P.x, m.P.y) * (b - a);
     }
     return sum * len;
@@ -503,6 +512,10 @@ void wall(mat4 V, WallAt h, vec3 keyDir, vec3 sunDir, vec3 lightDir, float smoke
         float m2 = h2.P.w * pallWallMean(h2.s - h2.P.z, h2.z, h2.P.x, h2.P.y);
         dev = ((hd - hm) * 0.03 + (wallAt(V, h1, 0.0, dense) - m1) * 0.1 + (wallAt(V, h2, 0.0, dense) - m2) * 0.17) * tile;
         dev = clamp(dev, -3.0, 6.0);
+        if (PALL_DEBUG > 0 && !gDbgFrozen) {
+            gDbgDev = dev;
+            gDbgHd = hd;
+        }
     }
     // mean head depth above point (to local wedge top), toward leading edge (where wedge stays above point), below point
     // to terrain (ground/fires there; head below map only a coarse-map margin); toward light through whole head but no
@@ -516,6 +529,10 @@ void wall(mat4 V, WallAt h, vec3 keyDir, vec3 sunDir, vec3 lightDir, float smoke
     float sunLen = sunDir.y > 0.05 ? min(reach, toTop / sunDir.y) : reach;
     float capLen = lightDir.y > 0.05 ? min(reach, toTop / lightDir.y) : reach;
     float toSun = wallChordNear(V, h, sunDir, sunLen, 4), toCap = wallChordNear(V, h, lightDir, capLen, 4);
+    if (PALL_DEBUG > 0 && !gDbgFrozen) {
+        gDbgUp = up;
+        gDbgToCap = toCap;
+    }
     // dust of the soil lofted here (sand share; debris dust over hard ground, its share of the soil's mass at this wedge share — as
     // pallWallDensity), soot as the pall's
     float uw = clamp(s0 / max(h.P.x, 0.001), 0.0, 1.0);
@@ -1222,6 +1239,8 @@ vec4 pallSource(vec3 p, float cone, vec4 inflow, out vec3 dustLight) {
 
 // One pall step from ta over ds: 0 — no matter at ta, 1 — integrated, 2 — refused: matter at ta and the step longer than refine
 // (> 0): the caller re-marches from the previous, empty sample in finer steps, so a surface is found where it is, not a long step late
+float gDbgT = 0.0, gDbgDs = 0.0, gDbgSig = 0.0, gDbgLum = 0.0;
+int gDbgStep = 0;
 int pallStep(float ta, float ds, float grid, float refine, inout vec3 light, inout float transmit, inout float haze) {
     passesBefore(ta, light, transmit, haze);
     vec3 p = gDir * ta;
@@ -1232,6 +1251,13 @@ int pallStep(float ta, float ds, float grid, float refine, inout vec3 light, ino
     vec4 matter = pallSource(p, cone, vec4(0.0), dustLight);
     if (matter.w <= 1e-7) return 0;
     if (refine > 0.0 && ds > refine) return 2;
+    if (PALL_DEBUG > 0 && !gDbgFrozen) {
+        gDbgFrozen = true;
+        gDbgT = ta;
+        gDbgDs = ds;
+        gDbgSig = matter.w;
+        gDbgLum = dot(matter.rgb / matter.w, vec3(0.2126, 0.7152, 0.0722));
+    }
     float tr = exp(-matter.w * open * ds);
     passMatter(ta, matter.rgb * (1.0 - tr) / matter.w, tr, light, transmit, haze);
     return 1;
@@ -1879,6 +1905,7 @@ void main() {
     vec2 span = pallBox(dir, PallMin, PallMax);
     float jitter = fract(texelFetch(Sampler2, ivec2(mod(low, 64.0)), 0).r + PallFrame.x * 0.618034);
     gJitter = jitter;
+    gChordJitter = jitter;
     float clip = dir.y >= 0.0 ? pallClip(PallFrame.w, PallEyeTau.x, dir.y) : pallClip(PallFrame.w, PallEyeTau.y, -dir.y);
     // and no closer than half a billow tile: clipping uses mean depth, but eye may lie in a gap (noise cell quarter tile).
     // In dense dust (meters of visibility), a ray clipped inside a gap never reached its walls, leaving sky visible through
@@ -1950,6 +1977,8 @@ void main() {
     // pall steps denser near eye (along); the dust wall head and the storm frame add finer grids of their own
     // dust wall head: ray intervals (entry, exit), grid step below; storm frame: (entry, exit, grid step)
     vec4 enter = vec4(1e9), leave = vec4(1e9), fineStep = vec4(1.0);
+    // the head's surface step: a quarter of its wanted step, the same for every pixel (refinement inside a head interval)
+    vec4 surfStep = vec4(0.03 * PallWall0[0].z, 0.03 * PallWall0[0].z, 0.03 * PallWall1[0].z, 0.03 * PallWall1[0].z);
     vec3 storm = vec3(1e9, 1e9, 1.0);
     if (t1 > t0) {
         // storm frame: half the steps across it (columns are smaller than a whole-pall step), counting the ordinary steps
@@ -2000,6 +2029,7 @@ void main() {
     if (PallSlot1[1].w >= 0.5) fineYoung = min(fineYoung, PallSlot1[3].y);
     if (fineYoung < 1e8) fineYoung *= 2.5 / (3.0 * PALL_LUMP_TEXEL);
     int fineLeft = 0;
+    float fineSize = 1e9;
     bool refined = false, prevEmpty = false, firstFine = false;
     // ordinary steps span the pall's bounds, which NukePall snaps to quarter octaves (PallPass.snapBounds): fixed in the world
     // between snaps while the ray's start (the near volume's end) and its cutoff hold; as the head nears the eye the near volume
@@ -2060,11 +2090,12 @@ void main() {
         } else if (pallLeft && (!mushLeft || ta <= tm)) {
             // step end: ordinary boundary or head/storm interval entry; inside, nearest of its grid boundary (or exit) and ordinary
             // boundary: near eye ordinary steps are denser, preserving nearby dust as wall passes through viewer
-            float next = nextBase, grid = nextBase - lastBase;
+            float next = nextBase, grid = nextBase - lastBase, surf = fineYoung;
             bool dense = false;
             for (int k = 0; k < 4; k++) {
                 if (!dense && enter[k] <= ta && ta < leave[k]) {
                     dense = true;
+                    surf = max(surfStep[k], 0.05);
                     grid = min(grid, fineStep[k]);
                     float j = floor((ta - enter[k]) / fineStep[k] - jitter + 1e-3) + 1.0;
                     next = min(next, min(enter[k] + (j + jitter) * fineStep[k], leave[k]));
@@ -2086,11 +2117,11 @@ void main() {
                 }
                 if (storm.x > ta) next = min(next, storm.x);
             }
-            if (!dense && fineLeft > 0) {
+            if (fineLeft > 0) {
                 // the first fine step is the pixel's jitter share of one: fine samples at fixed spacing from the same start slice a
                 // smooth top into concentric bands; decorrelated per pixel, the frames accumulate them away
-                next = min(next, ta + (firstFine ? max(jitter, 0.05) : 1.0) * fineYoung);
-                grid = min(grid, fineYoung);
+                next = min(next, ta + (firstFine ? max(jitter, 0.05) : 1.0) * fineSize);
+                grid = min(grid, fineSize);
             }
             next = min(next, t1);
             for (int k = 0; k < steps && nextBase <= next + 1e-4; k++) {
@@ -2098,18 +2129,24 @@ void main() {
                 lastBase = nextBase;
                 nextBase = along((float(base) + 1.0 + jitter) / n, t0, t1);
             }
-            bool refine = !dense && !refined && prevEmpty && fineYoung < 1e8;
-            int took = next > ta ? pallStep(ta, next - ta, grid, refine ? 1.5 * fineYoung : 0.0, light, transmit, haze) : 0;
+            // the first sample in matter lies at most a refinement step under its top, whatever the step there: in a layer opaque
+            // within one step the pixel is the light at that sample, half a step deep on average — a step varying with the frame's
+            // budget share (fit) across the screen showed as rings about ground zero on the 1 Mt head (instrumented take dbg: the
+            // first-hit step correlates +0.67…+0.75 with the rings, its brightness +0.77…+0.82)
+            bool refine = !refined && prevEmpty && surf < 1e8;
+            int took = next > ta ? pallStep(ta, next - ta, grid, refine ? 1.5 * surf : 0.0, light, transmit, haze) : 0;
             i += 1;
+            if (PALL_DEBUG > 0 && gDbgFrozen && gDbgStep == 0) gDbgStep = i;
             if (took == 2) {
                 // matter met by a long step after an empty sample: back to that sample, finely
                 refined = true;
                 fineLeft = YOUNG_FINE;
+                fineSize = surf;
                 firstFine = true;
                 ta = prevTa;
                 prevEmpty = false;
             } else {
-                if (!dense && fineLeft > 0) {
+                if (fineLeft > 0) {
                     fineLeft -= 1;
                     firstFine = false;
                 }
@@ -2179,6 +2216,9 @@ void main() {
     // or pall-free pixel without history (fx_pall_resolve)
     // float32 fraction sum may exceed 1 by an ulp — pallValid would reject the pixel
     vec4 res = vec4(shown, min(transmit, 1.0));
+    if (PALL_DEBUG == 1) res = vec4(fract(gDbgT / 25.0), gDbgDs / 100.0, float(gDbgStep) / 72.0, 0.0);
+    if (PALL_DEBUG == 2) res = vec4(gDbgSig * 2.0, gDbgLum * 0.5, 0.5 + gDbgDev * 0.1, 0.0);
+    if (PALL_DEBUG == 3) res = vec4(gDbgUp / 20.0, gDbgToCap / 40.0, gDbgHd * 2.0, 0.0);
     fragColor = pallValid(res) ? res : vec4(0.0, 0.0, 0.0, -1.0);
 }
 
