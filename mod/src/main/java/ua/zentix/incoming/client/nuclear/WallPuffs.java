@@ -149,6 +149,16 @@ public final class WallPuffs implements SmokeGrid.Source {
 
     @Override
     public boolean emit(double seconds, SmokeGrid.Sink out) {
+        long t0 = System.nanoTime();
+        boolean any = emitAll(seconds, out);
+        emitMs = 0.9 * emitMs + 0.1 * (System.nanoTime() - t0) * 1e-6;
+        return any;
+    }
+
+    /** Mean client-thread time of {@link #emit}, ms (scenario line). */
+    private double emitMs;
+
+    private boolean emitAll(double seconds, SmokeGrid.Sink out) {
         if (gone) return false;
         Detonation d = a.d;
         double t = a.ticks(0) + (seconds - SmokeGrid.seconds(0)) * 20;
@@ -287,8 +297,8 @@ public final class WallPuffs implements SmokeGrid.Source {
         double ex = SmokeGrid.eyeX() - a.d.burst().x, ez = SmokeGrid.eyeZ() - a.d.burst().z, r = Math.hypot(ex, ez);
         double age = (t - a.d.arrivalTicks(Math.hypot(r, a.d.blocks(Math.max(0, a.d.hobMetres()))))) / 20;
         layer(r, lay);
-        return String.format(java.util.Locale.ROOT, "wall puffs: front %.0f inner %.0f, eye r %.0f age %.2f s, layer top %.1f tau %.1f, drawn %d",
-                front(t), front(t - 20 * YOUNG_S), r, age, lay[0], lay[1], drawn);
+        return String.format(java.util.Locale.ROOT, "wall puffs: front %.0f inner %.0f, eye r %.0f age %.2f s, layer top %.1f tau %.1f, drawn %d, emit %.2f ms",
+                front(t), front(t - 20 * YOUNG_S), r, age, lay[0], lay[1], drawn, emitMs);
     }
 
     static String describeAll() {
