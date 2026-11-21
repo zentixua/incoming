@@ -145,10 +145,17 @@ public final class FarSprites implements SmokePuffs.Out {
      */
     public void puff6(double dx, double dy, double dz, double halfA, double halfB, FxAtlas.Sprite sprite, float mix, float shade, float r, float g,
                       float b, float a) {
+        puff6(dx, dy, dz, halfA, halfB, sprite, mix, shade, r, g, b, a, 1);
+    }
+
+    /** {@link #puff6} with the share of the direct light that reaches it ({@code SmokePuffs.sootSun}). */
+    @Override
+    public void puff6(double dx, double dy, double dz, double halfA, double halfB, FxAtlas.Sprite sprite, float mix, float shade, float r, float g,
+                      float b, float a, float sun) {
         if (a < 0.002f) return;
         double d = Math.sqrt(dx * dx + dy * dy + dz * dz), unfold = FarDraw.fold(d, far);
         FxQuads.Part was = out.part(FxQuads.Part.CLUBS);
-        out.sixWay(mix, shade);
+        out.sixWay(mix, shade, sun);
         out.facePosition((float) (dx * unfold), (float) (dy * unfold), (float) (dz * unfold), (float) d, (float) (halfA * unfold),
                 (float) (halfB * unfold), sprite, Math.min(1, r * a), Math.min(1, g * a), Math.min(1, b * a), Math.min(1, a),
                 (float) Math.max(halfA, halfB) * FxQuads.SOFT, (float) unfold, LightTexture.FULL_BRIGHT, 0);
@@ -165,10 +172,17 @@ public final class FarSprites implements SmokePuffs.Out {
      */
     public void puff6Flat(double dx, double dy, double dz, double halfA, double halfB, double soft, double angle, FxAtlas.Sprite sprite, float mix, float shade,
                           float r, float g, float b, float a) {
+        puff6Flat(dx, dy, dz, halfA, halfB, soft, angle, sprite, mix, shade, r, g, b, a, 1);
+    }
+
+    /** {@link #puff6Flat} with the share of the direct light that reaches it ({@code SmokePuffs.sootSun}). */
+    @Override
+    public void puff6Flat(double dx, double dy, double dz, double halfA, double halfB, double soft, double angle, FxAtlas.Sprite sprite, float mix, float shade,
+                          float r, float g, float b, float a, float sun) {
         if (a < 0.002f) return;
         double d = Math.sqrt(dx * dx + dy * dy + dz * dz), unfold = FarDraw.fold(d, far);
         FxQuads.Part was = out.part(FxQuads.Part.CLUBS);
-        out.sixWay(mix, shade);
+        out.sixWay(mix, shade, sun);
         out.flat((float) (dx * unfold), (float) (dy * unfold), (float) (dz * unfold), (float) d, (float) (halfA * unfold), (float) (halfB * unfold),
                 angle, sprite, Math.min(1, r * a), Math.min(1, g * a), Math.min(1, b * a), Math.min(1, a),
                 (float) soft, (float) unfold, LightTexture.FULL_BRIGHT, 0);

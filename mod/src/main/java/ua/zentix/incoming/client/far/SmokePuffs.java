@@ -44,6 +44,21 @@ public final class SmokePuffs {
         void puff6Flat(double dx, double dy, double dz, double halfA, double halfB, double soft, double angle, FxAtlas.Sprite sprite, float mix, float shade,
                        float r, float g, float b, float a);
 
+        /**
+         * {@link #puff6} with the share of the direct light that reaches the puff through the rest of its cloud
+         * ({@link SmokePuffs#sootSun}; 1 — a lone puff in open air).
+         */
+        default void puff6(double dx, double dy, double dz, double halfA, double halfB, FxAtlas.Sprite sprite, float mix, float shade, float r, float g,
+                           float b, float a, float sun) {
+            puff6(dx, dy, dz, halfA, halfB, sprite, mix, shade, r, g, b, a);
+        }
+
+        /** {@link #puff6Flat} with the share of the direct light that reaches it ({@link #puff6(double, double, double, double, double, FxAtlas.Sprite, float, float, float, float, float, float, float)}). */
+        default void puff6Flat(double dx, double dy, double dz, double halfA, double halfB, double soft, double angle, FxAtlas.Sprite sprite, float mix,
+                               float shade, float r, float g, float b, float a, float sun) {
+            puff6Flat(dx, dy, dz, halfA, halfB, soft, angle, sprite, mix, shade, r, g, b, a);
+        }
+
         /** Veil of the substance at the eye on screen ({@link Veil}) with world light `light` (packed). */
         void veil(Veil veil, int light);
 
@@ -1044,7 +1059,14 @@ public final class SmokePuffs {
         @Override
         public void puff6(double dx, double dy, double dz, double halfA, double halfB, FxAtlas.Sprite sprite, float mix, float shade, float r,
                           float g, float b, float a) {
+            puff6(dx, dy, dz, halfA, halfB, sprite, mix, shade, r, g, b, a, 1);
+        }
+
+        @Override
+        public void puff6(double dx, double dy, double dz, double halfA, double halfB, FxAtlas.Sprite sprite, float mix, float shade, float r,
+                          float g, float b, float a, float sun) {
             int o = next(sprite);
+            calls[o + 14] = sun;
             double[] c = calls;
             c[o] = PUFF;
             c[o + 1] = dx;
@@ -1063,7 +1085,14 @@ public final class SmokePuffs {
         @Override
         public void puff6Flat(double dx, double dy, double dz, double halfA, double halfB, double soft, double angle, FxAtlas.Sprite sprite,
                               float mix, float shade, float r, float g, float b, float a) {
+            puff6Flat(dx, dy, dz, halfA, halfB, soft, angle, sprite, mix, shade, r, g, b, a, 1);
+        }
+
+        @Override
+        public void puff6Flat(double dx, double dy, double dz, double halfA, double halfB, double soft, double angle, FxAtlas.Sprite sprite,
+                              float mix, float shade, float r, float g, float b, float a, float sun) {
             int o = next(sprite);
+            calls[o + 14] = sun;
             double[] c = calls;
             c[o] = FLAT;
             c[o + 1] = dx;
@@ -1135,9 +1164,10 @@ public final class SmokePuffs {
                 int o = k * STRIDE;
                 int kind = (int) c[o];
                 if (kind == PUFF) out.puff6(c[o + 1] + ox, c[o + 2] + oy, c[o + 3] + oz, c[o + 4], c[o + 5], sprites[k], (float) c[o + 6],
-                        (float) c[o + 7], (float) c[o + 8], (float) c[o + 9], (float) c[o + 10], (float) c[o + 11]);
+                        (float) c[o + 7], (float) c[o + 8], (float) c[o + 9], (float) c[o + 10], (float) c[o + 11], (float) c[o + 14]);
                 else if (kind == FLAT) out.puff6Flat(c[o + 1] + ox, c[o + 2] + oy, c[o + 3] + oz, c[o + 4], c[o + 5], c[o + 12], c[o + 13],
-                        sprites[k], (float) c[o + 6], (float) c[o + 7], (float) c[o + 8], (float) c[o + 9], (float) c[o + 10], (float) c[o + 11]);
+                        sprites[k], (float) c[o + 6], (float) c[o + 7], (float) c[o + 8], (float) c[o + 9], (float) c[o + 10], (float) c[o + 11],
+                        (float) c[o + 14]);
                 else {
                     joint[0] = (float) c[o + 16];
                     joint[1] = (float) c[o + 17];
@@ -1510,7 +1540,8 @@ public final class SmokePuffs {
         /**
          * Each source's cloud as one Gaussian of the same mass and moments (as {@link #absorb}: middle by attenuation,
          * spread of the middles plus each one's σ²), from the frame's pending puffs before merging: the clumps' shadow on
-         * one another toward the sun ({@link #sunThrough}) in one pass, without pairs.
+         * one another toward the sun ({@link #sunThrough}) in one pass, without pairs (before the LOD thinning, which can
+         * merge puffs of different sources).
          */
         private void envelopes() {
             if (env.length < contexts * ENV) env = new double[Math.max(2 * contexts, 8) * ENV];
@@ -1559,8 +1590,8 @@ public final class SmokePuffs {
             // Merges of sources not drawn this frame are not kept.
             merges.values().removeIf(m -> m.frame != frame);
             frame++;
-            thin();
             envelopes();
+            thin();
             if (blobEntry.length < holding) blobEntry = new int[2 * holding];
             if (placeEntry.length < placeCount) placeEntry = new int[2 * placeCount];
             java.util.Arrays.fill(blobEntry, 0, holding, -1);
@@ -2569,7 +2600,7 @@ public final class SmokePuffs {
             current = ~p;
             club(placeView[c], placeOut[c], places[o], places[o + 1], places[o + 2], places[o + 3], places[o + 4], places[o + 5], places[o + 6],
                     (float) places[o + 7], (float) places[o + 8], (float) places[o + 9], places[o + 10], places[o + 11], placeSeed[p], places[o + 12],
-                    (int) places[o + 13], places[o + 14] > 0.5, places[o + P_AIR]);
+                    (int) places[o + 13], places[o + 14] > 0.5, places[o + P_AIR], places[o + 15], places[o + 16], places[o + 17]);
         }
 
         /**
@@ -2586,7 +2617,8 @@ public final class SmokePuffs {
          * ({@link FarView#air}). In the plan pass — only the plan record.
          */
         private void club(FarView view, Out out, double px, double py, double pz, double sigma, double tau, double edgeTau, double along,
-                          float cr, float cg, float cb, double shade, double age, long h, double vis, int most, boolean vary, double air) {
+                          float cr, float cg, float cb, double shade, double age, long h, double vis, int most, boolean vary, double air, double ax,
+                          double ay, double az) {
             double sh = sigma, sv = sigma;
             double a = 1 - Math.exp(-tau);
             if (a < 0.004) return;
@@ -2658,13 +2690,10 @@ public final class SmokePuffs {
                 int f0 = (int) frame;
                 float last = j == count - 1 ? (float) (many - (count - 1)) : 1;
                 boolean mirror = vary ? (hj >>> 40 & 1) == 1 : (j & 1) == 1;
-                // the sun through the rest of the tube's section ({@link #sunThrough}; ⚠ the spot as a ball of the whole
-                // tube's thickness across the axis: the place does not carry the axis, and the sun's path along it
-                // is longer)
-                float sunlit = (float) sootSun(Math.pow(sunThrough(ox, oy, oz, k * rh, k * rv, sh, sv, 2 * Math.PI * sh * sv * edgeTau, shade * BAKED_K,
-                        view.sun()), clusterBlend(many)), view.sun(), cg, -(px + ox), -(py + oy), -(pz + oz));
+                // the sun through the rest of the tube's section from the puff's sun-side edge ({@link #tubeThrough})
+                float sunlit = (float) sootSun(tubeThrough(ox, oy, oz, k * rh, sh, edgeTau, ax, ay, az, shade * BAKED_K, view.sun()), sootShare(cg));
                 out.puff6(px + ox, py + oy, pz + oz, rh * grow * k, rv * grow * k, FxAtlas.puff6(f0, mirror), (float) (frame - f0), (float) shade,
-                        sr * sunlit, sg * sunlit, sb * sunlit, sub * last);
+                        sr, sg, sb, sub * last, sunlit);
             }
         }
 
@@ -2919,13 +2948,12 @@ public final class SmokePuffs {
             // (FarView.sky), with the puff's scatter; its tint (at night — lilac) — in the shader only for sky light,
             // not for fire (FxSkyTint)
             float lit = (float) ((0.88 + 0.24 * unit(h)) * view.skyLight());
-            float grey = thick(ks, kd, kw, dg);
-            float cr = thick(ks, kd, kw, dr) * lit, cg = grey * lit, cb = thick(ks, kd, kw, db) * lit;
+            float cr = thick(ks, kd, kw, dr) * lit, cg = thick(ks, kd, kw, dg) * lit, cb = thick(ks, kd, kw, db) * lit;
             double light = shade(ks, kd, kw, dg);
-            // the sun through the rest of its source's cloud, from this Gaussian's sun-side edge ({@link #envelopes}):
-            // its own matter is in its maps and its cluster's rule below
+            // the source's cloud as one Gaussian ({@link #envelopes}): each puff takes the sun through it from its own
+            // sun-side edge (its own matter is in its maps)
             int e = ctx * ENV;
-            double cloud = sunThrough(x - env[e], y - env[e + 1], z - env[e + 2], rh, rw, env[e + 3], env[e + 4], env[e + 5], light, view.sun());
+            double ex = x - env[e], ey = y - env[e + 1], ez = z - env[e + 2];
             float shade = (float) (light / BAKED_K), sprayShade = (float) (light / SPRAY_K);
             float shown = (float) (a * vis * point[1] * air * outside * (1 - whole));
             // cluster: the larger the Gaussian on screen, the more puffs and the smaller they are (the 128-pixel frame
@@ -2984,17 +3012,13 @@ public final class SmokePuffs {
                 // facing the camera, light from the side and behind), the light of sun, sky and fire is full (shade
                 // level 0; the balls' light is per pixel, fx.fsh); from below — as usual. Softness at the terrain — the
                 // ray's path in the layer down to the ground (rw / sin e), not the half-size
+                float sunlit = (float) sootSun(sunThrough(ex + ox, ey + oy, ez + oz, k * rh, k * rw, env[e + 3], env[e + 4], env[e + 5], light, view.sun()),
+                        ks / (ks + kd + kw));
                 if (lying > 0) out.puff6Flat(px + ox, py + oy, pz + oz, rh * grow * k, rh * grow * k,
                         Math.min(rh, rw * d / Math.max(Math.abs(py), 1e-3)) * ua.zentix.incoming.client.fx.layer.FxQuads.SOFT, clubAngle(hj), sprite,
-                        (float) (frame - f0), py < 0 ? 0 : (spray ? sprayShade : shade), cr, cg, cb, opticalShare(sub * last, lying));
-                if (lying < 1) {
-                    // the sun's share that reaches this puff through the rest of its cloud (the puff's own shadow is in
-                    // its maps): the cloud's far side from the sun keeps only the sky's light
-                    float sunlit = (float) sootSun(cloud * Math.pow(sunThrough(ox, oy, oz, k * rh, k * rw, sh, sv, ks + kd + kw, light, view.sun()),
-                            clusterBlend(many)), view.sun(), grey, -(px + ox), -(py + oy), -(pz + oz));
-                    out.puff6(px + ox, py + oy, pz + oz, rh * grow * k, rv * grow * k, sprite, (float) (frame - f0), spray ? sprayShade : shade,
-                            cr * sunlit, cg * sunlit, cb * sunlit, opticalShare(sub * last, 1 - lying));
-                }
+                        (float) (frame - f0), py < 0 ? 0 : (spray ? sprayShade : shade), cr, cg, cb, opticalShare(sub * last, lying), sunlit);
+                if (lying < 1) out.puff6(px + ox, py + oy, pz + oz, rh * grow * k, rv * grow * k, sprite, (float) (frame - f0), spray ? sprayShade : shade,
+                        cr, cg, cb, opticalShare(sub * last, 1 - lying), sunlit);
             }
             return fill;
         }
@@ -3186,20 +3210,23 @@ public final class SmokePuffs {
     static final int ENV = 6;
 
     /**
-     * Share of the sun's light that reaches a point at (ox, oy, oz) from the middle of a Gaussian (σ: sh horizontally,
-     * sv vertically, attenuation of the whole mass ext, m²) from its sun-side edge (radii rh, rw: what lies within them
-     * is shaded by the puff's own maps): e^(−k·τ), τ — thickness toward the sun ({@code sun}: x, y, z), k — the mix's
-     * two-stream attenuation ({@link #shade}: white droplets and alumina pass the light on, soot does not). The
-     * puffs of one cloud all carry the same maps, so without it the whole cloud is lit as one puff: the side away from
-     * the sun as bright as the side toward it (a black cloud evenly grey, player frame f_10-22). A line through a
-     * Gaussian from a point: τ = ext·e^(−b²/2)·erfc(q/√2)/(4π·sh²·sv·|ŝ|) in σ-scaled axes (q — the point's offset
-     * along the scaled sun direction ŝ, b — across it).
+     * Share of the sun's light that reaches a puff at (ox, oy, oz) from the middle of its cloud's Gaussian (σ: sh
+     * horizontally, sv vertically, attenuation of the whole mass ext, m²) from the puff's sun-side edge — where the ray
+     * from its middle toward the sun leaves its ellipsoid of radii rh (horizontally) and rw (vertically): within it
+     * the puff's own maps shade it. e^(−k·τ), τ — thickness toward the sun ({@code sun}), k — the mix's two-stream
+     * attenuation per unit thickness ({@link #shade}; ⚠ a bounded proxy of a beam's attenuation in absorbing matter:
+     * the light scattered forward by droplets and alumina goes on, soot absorbs it — for droplets at τ 10 it gives
+     * 0.79 where a bare beam would give e^(−10)). The puffs of one cloud all carry the same maps, so without it the
+     * whole cloud is lit as one puff: the side away from the sun as bright as the side toward it (a black cloud evenly
+     * grey, player frame f_10-22). A line through a Gaussian from a point: τ = ext·e^(−b²/2)·erfc(q/√2)/(4π·sh²·sv·|ŝ|)
+     * in σ-scaled axes (q — the point's offset along the scaled sun direction ŝ, b — across it).
      */
-    static double sunThrough(double ox, double oy, double oz, double rh, double rw, double sh, double sv, double ext, double k, float[] sun) {
-        if (!(ext > 0) || !(sh > 0) || !(sv > 0)) return 1;
-        double sx = sun[0] / sh, sy = sun[1] / sv, sz = sun[2] / sh;
+    static double sunThrough(double ox, double oy, double oz, double rh, double rw, double sh, double sv, double ext, double k, FarView.Sun sun) {
+        if (!(sun.w() > 0) || !(ext > 0) || !(sh > 0) || !(sv > 0)) return 1;
+        double sx = sun.x() / sh, sy = sun.y() / sv, sz = sun.z() / sh;
         double a = Math.sqrt(sx * sx + sy * sy + sz * sz);
-        double ux = (ox + sun[0] * rh) / sh, uy = (oy + sun[1] * rw) / sv, uz = (oz + sun[2] * rh) / sh;
+        double edge = rh > 0 && rw > 0 ? 1 / Math.sqrt(sq(sun.x() / rh) + sq(sun.y() / rw) + sq(sun.z() / rh)) : 0;
+        double ux = (ox + sun.x() * edge) / sh, uy = (oy + sun.y() * edge) / sv, uz = (oz + sun.z() * edge) / sh;
         double q = (ux * sx + uy * sy + uz * sz) / a;
         double b2 = Math.max(0, ux * ux + uy * uy + uz * uz - q * q);
         double tau = ext * Math.exp(-0.5 * b2) * (1 - SmokeGrid.erf(q * SQRT_HALF)) / (4 * Math.PI * sh * sh * sv * a);
@@ -3207,28 +3234,62 @@ public final class SmokePuffs {
     }
 
     /**
-     * Sky light on a puff that the sun reaches by share t, against a lone puff in open air: 1 − w + w·t, w — the
-     * direct share of sky light ({@code sun[3]}; 0 at night: the vertex colour would also dim the fireballs' light on
-     * the smoke, which the shader adds per pixel).
+     * {@link #sunThrough} for a tube (axis (ax, ay, az), section σ, thickness across the axis tau): a 2-D Gaussian
+     * across the axis, τ = tau·e^(−b²/2)·erfc(q/√2)/(2·|s⊥|), s⊥ — the sun's direction across the axis; from the puff's
+     * sun-side edge r. Along the axis the piece is finite: |s⊥| is not taken below {@value #TUBE_ALONG} (⚠ a sun
+     * along the axis, est.).
      */
-    static double sunlit(double t, float[] sun) {
-        return 1 - sun[3] + sun[3] * t;
+    static double tubeThrough(double ox, double oy, double oz, double r, double sigma, double tau, double ax, double ay, double az, double k,
+                              FarView.Sun sun) {
+        if (!(sun.w() > 0) || !(tau > 0) || !(sigma > 0)) return 1;
+        double an = Math.sqrt(ax * ax + ay * ay + az * az);
+        if (an > 0) {
+            ax /= an;
+            ay /= an;
+            az /= an;
+        }
+        double along = sun.x() * ax + sun.y() * ay + sun.z() * az;
+        double sx = sun.x() - along * ax, sy = sun.y() - along * ay, sz = sun.z() - along * az;
+        double across = Math.max(Math.sqrt(sx * sx + sy * sy + sz * sz), TUBE_ALONG);
+        double po = ox * ax + oy * ay + oz * az;
+        double px = ox - po * ax + sun.x() * r, py = oy - po * ay + sun.y() * r, pz = oz - po * az + sun.z() * r;
+        double pa = px * ax + py * ay + pz * az;
+        px -= pa * ax;
+        py -= pa * ay;
+        pz -= pa * az;
+        double q = (px * sx + py * sy + pz * sz) / (Math.max(Math.sqrt(sx * sx + sy * sy + sz * sz), 1e-9) * sigma);
+        double b2 = Math.max(0, (px * px + py * py + pz * pz) / (sigma * sigma) - q * q);
+        double t = tau * Math.exp(-0.5 * b2) * (1 - SmokeGrid.erf(q * SQRT_HALF)) / (2 * across);
+        return Math.exp(-k * t);
+    }
+
+    /** Least share of the sun's direction across a tube's axis ({@link #tubeThrough}). */
+    static final double TUBE_ALONG = 0.2;
+
+    private static double sq(double v) {
+        return v * v;
     }
 
     /**
-     * presentation: the sun on dark smoke ×{@value #SOOT_SUN} — the sunlit tops of a black cloud grey against its
-     * near-black core, as in footage of oil fires (1_1: lit billow tops sRGB 115–125 over a core of 33–41). A thick
-     * soot layer reflects R∞ ≈ 0.065 of the sky's light ({@link #thick}), so its sunlit tops stayed at ~110 and the
-     * cloud read as one flat grey mass. Only the sun that reaches the puff (t, {@link #sunThrough}) and the part of
-     * its face the eye sees lit (phase φ = (1 + cos θ)/2, θ between the sun and the puff-to-eye direction: a
-     * back-lit puff shows its shadowed side) are lifted, by the matter's darkness (thick-layer colour c from soot's
-     * to white: white smoke keeps its light). Facts (size, mass, colour of the matter) do not change.
+     * Share of the direct light on a puff that the sun reaches by share t ({@link #sunThrough}): the shader multiplies
+     * only the puff's direct term by it ({@code fx.fsh}, {@code sixSun}); the sky's diffuse light and the fireballs'
+     * stay whole. presentation: the sun on dark smoke ×{@value #SOOT_SUN} — the sunlit tops of a black cloud grey
+     * against its near-black core, as in footage of oil fires (1_1: lit billow tops sRGB 115–125 over a core of
+     * 33–41). A thick soot layer reflects R∞ ≈ 0.065 of the sky's light ({@link #thick}), so its sunlit tops stayed
+     * at ~110 and the cloud read as one flat grey mass. Only the sun that reaches the puff is lifted, by soot's share
+     * of the matter's attenuation (white smoke and dust keep their light). Facts (size, mass, colour of the matter) do
+     * not change.
      */
-    static double sootSun(double t, float[] sun, double c, double ex, double ey, double ez) {
-        double n = Math.sqrt(ex * ex + ey * ey + ez * ez);
-        double phase = n > 0 ? 0.5 * (1 + (ex * sun[0] + ey * sun[1] + ez * sun[2]) / n) : 0.5;
-        double dark = Math.clamp((1 - c) / (1 - SOOT_COLOUR), 0, 1);
-        return 1 - sun[3] + sun[3] * t * (1 + (SOOT_SUN - 1) * dark * phase);
+    static double sootSun(double t, double soot) {
+        return t * (1 + (SOOT_SUN - 1) * Math.clamp(soot, 0, 1));
+    }
+
+    /**
+     * Soot's share of a tube's matter from its thick-layer colour c (the tube carries only its colour): 1 at pure soot's
+     * colour, 0 at white.
+     */
+    static double sootShare(double c) {
+        return Math.clamp((1 - c) / (1 - SOOT_COLOUR), 0, 1);
     }
 
     /** {@link #sootSun}'s gain on the sun (presentation). */

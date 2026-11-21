@@ -102,7 +102,7 @@ public final class FxQuads {
         this.left = left;
         this.up = up;
         n = 0;
-        nearest = opacity = emit = 0;
+        nearest = opacity = emit = sixSun = 0;
         veiling = false;
         probe = 0;
         part = Part.OTHER;
@@ -200,9 +200,24 @@ public final class FxQuads {
      * in {@code Normal.y} within the band of baked puffs (−0.4…−0.1), {@link #SHADE_STEPS} steps.
      */
     public void sixWay(float mix, float shade) {
+        sixWay(mix, shade, 1);
+    }
+
+    /**
+     * The same with the share of the direct light that reaches the puff ({@code SmokePuffs.sootSun}: 0 … {@link
+     * #SUN_MAX}): in the {@code Emit} byte, ×{@link #SUN_STEP} — a baked puff never glows, and {@code fx.vsh} reads the
+     * byte as glow only outside the puff band.
+     */
+    public void sixWay(float mix, float shade, float sun) {
         nearest = (byte) (mix < 0 ? 0 : -13 - Math.round(Mth.clamp(shade / SHADE_MAX, 0, 1) * SHADE_STEPS));
         opacity = mix < 0 ? 0 : (byte) Math.round(Mth.clamp(mix, 0, 1) * 127);
+        sixSun = mix < 0 ? 0 : (byte) Math.round(Mth.clamp(sun, 0, SUN_MAX) * SUN_STEP);
     }
+
+    /** Steps of the direct-light share per unit in the {@code Emit} byte of a baked puff, and its largest value. */
+    public static final float SUN_STEP = 100, SUN_MAX = 2.55f;
+
+    private byte sixSun;
 
     /** Greatest degree of the puffs' map shadow (soot — ~1.3) and steps in the byte band −13…−50 ({@code fx.fsh}). */
     public static final float SHADE_MAX = 1.5f;
@@ -316,7 +331,7 @@ public final class FxQuads {
         MemoryUtil.memPutByte(p + 32, (byte) Math.round(Mth.clamp(fog, 0, 1) * 127));
         MemoryUtil.memPutByte(p + 33, nearest);
         MemoryUtil.memPutByte(p + 34, opacity);
-        MemoryUtil.memPutByte(p + 35, emit);
+        MemoryUtil.memPutByte(p + 35, emit != 0 ? emit : sixSun);
         if (emit != 0) {
             glows = true;
             emits[n - 1] = true;

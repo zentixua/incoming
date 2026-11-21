@@ -486,14 +486,13 @@ public final class FxLayer {
     }
 
     /**
-     * {@link #sunLight} by day; at night w = 0. The puffs' shadow in their own cloud ({@code SmokePuffs.sunThrough})
-     * takes only the sun: the vertex colour carries it, and by night it would also dim the fireballs' light on the
-     * smoke's far side, which the shader adds per pixel.
+     * {@link #sunLight} by day; at night none (w = 0). The puffs' shadow in their own cloud ({@code
+     * SmokePuffs.sunThrough}) is the sun's: the moon's direct share (0.5) stays a lone puff's.
      */
-    public static float[] daySun(ClientLevel level, float partial, float[] into) {
-        sunLight(level, partial, into);
-        if (net.minecraft.util.Mth.cos(level.getTimeOfDay(partial) * net.minecraft.util.Mth.TWO_PI) < 0) into[3] = 0;
-        return into;
+    public static ua.zentix.incoming.client.far.FarView.Sun daySun(ClientLevel level, float partial) {
+        float[] s = sunLight(level, partial, new float[4]);
+        boolean day = net.minecraft.util.Mth.cos(level.getTimeOfDay(partial) * net.minecraft.util.Mth.TWO_PI) >= 0;
+        return new ua.zentix.incoming.client.far.FarView.Sun(s[0], s[1], s[2], day ? s[3] : 0);
     }
 
     /**

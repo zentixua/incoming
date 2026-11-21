@@ -103,7 +103,7 @@ public final class FarRenderer {
         return new FarView(eye, basis[0], basis[1], basis[2], partial,
                 FarView.depthFar(), pixel, edge, ambient, exposure, FarView.sky(mc.gameRenderer.lightTexture(), level, partial, new org.joml.Vector3f()), range, ua.zentix.incoming.client.fx.layer.FxViews.world(mc.options.getEffectiveRenderDistance() * 16.0),
                 level.effects().getCloudHeight(), level.getRainLevel(partial), Sight.Air.at(eye.y - WaterDecal.SEA_LEVEL, range),
-                ua.zentix.incoming.client.fx.layer.FxLayer.daySun(level, partial, new float[4]));
+                ua.zentix.incoming.client.fx.layer.FxLayer.daySun(level, partial));
     }
 
     /**
