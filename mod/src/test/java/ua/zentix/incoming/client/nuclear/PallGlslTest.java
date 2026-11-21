@@ -800,7 +800,8 @@ class PallGlslTest {
         assertTrue(composite.contains("if (PallLamps > 0.5) kept = pallKeepLamps(kept, Sampler10, pallSurfaceLevel(PallOpen, PallOpenAt, PallOpenWrap, air), 15.0 * open);"),
                 "torches and lamps keep their share of a pixel's light under the shadow");
         assertTrue(composite.contains("pall.a *= kept;"), "without the light of the balls, the shadow is a multiplier of the world in mixing");
-        assertTrue(composite.contains("pall = vec4(pall.rgb + pall.a * shown, 0.0);"), "world in the light of balls - behind the pall, the whole pixel");
+        assertTrue(composite.contains("if (whole && pallValid(pall)) laid = vec4(laid.rgb + laid.a * ballLit, 0.0);"),
+                "world in the light of balls - behind the pall, the whole pixel");
         assertEquals(scalar(GLSL, "PALL_CROSS"), scalar(composite, "CROSS"), "overexposure to white - like a substance");
         assertArrayEquals(vec3(GLSL, "PALL_LUMA"), vec3(composite, "LUMA"));
     }

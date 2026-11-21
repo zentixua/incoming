@@ -1025,6 +1025,7 @@ public final class PallPass {
         c.safeGetUniform("PallFaceShade").set(f.faceShade.x, f.faceShade.y, f.faceShade.z, f.faceShade.w);
         OpenAir.bind(c, open);
         SmokePass.bind(c, f.smoke);
+        SceneDepth.bindSee(c);
         // surface flame flickers by 3D noise
         quad(c, true);
         RenderSystem.enableDepthTest();

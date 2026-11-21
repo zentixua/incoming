@@ -58,11 +58,12 @@ import java.util.List;
  * sections in place (like {@code setBlock}; never replace by reading into section, see pitfalls); column heightmaps and
  * sky sources from plan (different live “before” value means column changed since plan: rescan entire chunk),
  * section emptiness to light engine; light checks (highest changed column point, new/removed blocks beneath
- * surviving top, new/removed light sources) in one light-engine task. Chunk viewers
- * receive same-tick section packets ({@code ChunkHolder.blockChanged}, like {@code setBlock}); Distant Horizons
- * LODs queued same tick ({@link DhUpdates}). Block entities/POIs not changed this way: world
- * changes them afterward ({@link ColumnScar#replace}: {@code onRemove} and consequences, no inventory drops, deferred
- * data removed). Queue places trunks in neighboring chunks after their ruins. Fires applied with
+ * surviving top, new/removed light sources) in one light-engine task. Chunk viewers receive same-tick section
+ * packets for small writes ({@code ChunkHolder.blockChanged}, like {@code setBlock}), or a whole chunk after the
+ * latest write's light checks when a whole delivery is pending ({@link RuinDelivery}). Distant Horizons LODs are
+ * queued in the same tick ({@link DhUpdates}). Block entities/POIs change through the world afterward
+ * ({@link ColumnScar#replace}: {@code onRemove} and consequences, no inventory drops, deferred data removed).
+ * Queue places trunks in neighboring chunks after their ruins. Fires applied with
  * ruins (without {@code setBlock}: wall/tree fire does not wake neighbors), only fire tick scheduled.
  */
 public final class RuinPlan {
@@ -1019,8 +1020,7 @@ public final class RuinPlan {
         }
         PHASES[2] += System.nanoTime() - t;
         t = System.nanoTime();
-        // chunk viewers get a few changes as section packets the same tick (like setBlock), a heavily ruined chunk whole
-        // after its light (RuinDelivery)
+        // Small changes go as section packets unless a pending whole delivery will carry this write too.
         ChunkHolder holder = level.getChunkSource().chunkMap.getVisibleChunkIfPresent(pos.toLong());
         List<ServerPlayer> players = holder == null ? List.of() : RuinDelivery.viewers(holder);
         boolean watched = !players.isEmpty(), ticking = watched && holder.getTickingChunk() != null;
@@ -1030,7 +1030,7 @@ public final class RuinPlan {
             if (out != null) changed += out.size();
             for (int k = 0; k < n; k++) if (fireWas[k] != states[(burning[k] >>> STATE_SHIFT) & STATE_MASK]) changed++;
         }
-        boolean whole = ticking && RuinDelivery.whole(changed);
+        boolean whole = (ticking && RuinDelivery.whole(changed)) || RuinDelivery.waiting(level, chunk);
         boolean sections = ticking && !whole;
         if (sections) {
             RuinDelivery.deltas(changed);
@@ -1108,7 +1108,7 @@ public final class RuinPlan {
             }
         }
         // viewed but non-ticking chunk (view edge): send full chunk via vanilla
-        if (watched && !ticking) {
+        if (watched && !ticking && !whole) {
             for (ServerPlayer p : players) p.connection.chunkSender.markChunkPendingToSend(chunk);
         }
         // after the block entities: the whole chunk carries them too

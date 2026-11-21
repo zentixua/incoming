@@ -70,6 +70,8 @@ if [ -n "${INCOMING_GPU_SHARED:-}" ]; then
       kwin_wayland --virtual --no-lockscreen --xwayland --socket "$SOCKET" --width "$WIDTH" --height "$HEIGHT" \
       --exit-with-session "$COMMAND"
 fi
+# an exclusive GPU client (shader pack, LOD mods, camera feeds) never starts beside Artem's game
+artem_playing && { echo "Artem's game is running — leaving the GPU free" >&2; exit 75; }
 owner="${INCOMING_GPU_OWNER:-$(lease_owner "$ROOT")}"
 # client lock first (otherwise refusal would leave a newly acquired lease for 10 min), then lease
 # (with INCOMING_GPU_WAIT, lease queue waits for running client: lease_take)
@@ -79,6 +81,8 @@ lease_take "$owner" "$ROOT" ${INCOMING_GPU_WAIT:+--wait} || exit 75
 # own lease but own session client still running: INCOMING_GPU_WAIT waits for it
 while [ -n "${INCOMING_GPU_WAIT:-}" ] && gpu_client_busy >/dev/null; do sleep 10; done
 gpu_client_hold "$owner" "$ROOT" "$COMMAND" || exit 75
+# Artem's game may have started while this client waited for the lease: check again before the compositor starts
+if artem_playing; then lease_release "$owner" >/dev/null 2>&1; echo "Artem's game is running — leaving the GPU free" >&2; exit 75; fi
 mkdir -p "$HOME_DIR/config" "$HOME_DIR/data" "$HOME_DIR/cache" "$HOME_DIR/state"
 exec env -u DISPLAY -u WAYLAND_DISPLAY -u DBUS_SESSION_BUS_ADDRESS \
     XDG_CONFIG_HOME="$HOME_DIR/config" XDG_DATA_HOME="$HOME_DIR/data" \

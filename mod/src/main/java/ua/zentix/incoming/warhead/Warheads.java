@@ -206,6 +206,7 @@ public final class Warheads {
     public static CollapseProbe testCollapse(ServerLevel level, Vec3 centre, double reach, it.unimi.dsi.fastutil.longs.LongArrayList removedAt,
                                              List<BlockState> removedWas, LongSupplier clock) {
         BlastArea area = BlastArea.hold(level, centre, reach);
+        area.trackCollapse(level, List.of(), centre);
         for (int i = 0; i < removedAt.size(); i++) area.recordRemoved(removedAt.getLong(i), removedWas.get(i));
         StrikeCollapse job = new StrikeCollapse(area, List.of(), centre);
         area.release(level);
@@ -229,6 +230,14 @@ public final class Warheads {
         /** Blocks the collapse dropped. */
         public int fell() {
             return job.stats.dropped;
+        }
+
+        public int liveRubble() {
+            return job.stats.live;
+        }
+
+        public int directRubble() {
+            return job.stats.direct;
         }
 
         public int portions() {
@@ -617,6 +626,7 @@ public final class Warheads {
             // hull is not world obstacle.
             main = spec.charge() > 0 ? List.of(charge(level, area, pos, spec.charge(),
                     onCraft ? SlabBreach.Placement.NONE : SlabBreach.Placement.SURFACE, axis, direct, owner)) : List.of();
+            if (!onCraft && IncomingConfig.SERVER.collapse.get()) area.trackCollapse(level, main, pos);
         }
 
         /** Explosion on Sable craft. */
@@ -738,6 +748,7 @@ public final class Warheads {
             if (below > 0) blasts.add(charge(level, area, pos, below, SlabBreach.Placement.BURIED, null, direct, owner));
             if (law.breaches() && air > 0) blasts.add(charge(level, area, top.add(0, 0.5, 0), air, SlabBreach.Placement.NONE, null, direct, owner));
             main = List.copyOf(blasts);
+            if (law.breaches() && IncomingConfig.SERVER.collapse.get()) area.trackCollapse(level, main, pos);
         }
 
         @Override

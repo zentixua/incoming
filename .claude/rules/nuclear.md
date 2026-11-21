@@ -305,7 +305,8 @@ Ruins and everything in `nuclear/world/` are in `nuclear-world.md`.
   land; unknown cells use epicenter conditions (`NukeWater.under`: distant sea burst does not burn sea); seen cells
   remain seen. `NukeAfter` weighs model fire and secondaries by `fuelAt`. Flash pyrolysis smoke (`FlashAftermath.Smoke`):
   world-anchored 12-block grid around the eye, all directions, nearest first; volatiles bounded by bed load and moisture
-  (`FlashPyrolysis`), 19.11 complaint: opaque billow at the crosshair.
+  (`FlashPyrolysis`), 19.11 complaint: opaque billow at the crosshair. The shown age gates emission and puff expiry
+  at front arrival, measured from the burst to the sampled face in 3D (`FlashAftermathClockTest`).
   Server fires disabled (`nuclear.fires`, `fires_per_detonation` = 0) means no fire zone (`PallField`: no haze or glow),
   storm or roar: `Detonation.fires` (settings at detonation, in detonation packet; absent field defaults yes). Black rain
   needs fires and `Detonation.rain` (`nuclear.black_rain` at detonation, same packet rule): off, `BlackRainModel` gets no
@@ -484,7 +485,9 @@ Ruins and everything in `nuclear/world/` are in `nuclear-world.md`.
   count). Without a stream (after the show, `ended`; in a Flashback replay, a live burst with no per-tick anchor within
   `PROBE` 1 s is a recording made before them; a live server's late first anchor only holds the burst at `LEAD`) it follows own time, uncapped; tick-time callers ask the tick's own age (`ticks(0)`: a partial ahead
   advances the clock past every frame of the tick, review of #678); a past detonation
-  (entry, seek) takes the first anchor whole. #668's law (at most one tick past the anchor, whole-tick steps) held
+  (entry, seek) with a running show takes the first anchor whole. The reconstructed age classifies the show at
+  `NukeClock.SHOW_TICKS`, allowing one time-packet interval for lag. Ended shows ignore stream anchors in either
+  Flashback snapshot packet order. #668's law (at most one tick past the anchor, whole-tick steps) held
   40–43 % of frames up to 149 ms on a 1 Mt rig: the wall moved in 20 Hz steps (19.11). Own ticks alone lagged the server
   31–55 ticks in the full host pack. `ClientNuclearTest`: recorded rig anchor streams (`age-clock/J3.txt`, `J6.txt`) with
   jitter, lagging server, heavy client, alternating delays, server stall and backward anchor, client freeze, no stream,

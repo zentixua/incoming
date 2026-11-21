@@ -4,7 +4,10 @@ import it.unimi.dsi.fastutil.ints.IntArrayList;
 import it.unimi.dsi.fastutil.longs.Long2ObjectMap;
 import it.unimi.dsi.fastutil.longs.Long2ObjectOpenHashMap;
 import it.unimi.dsi.fastutil.longs.LongArrayList;
+import it.unimi.dsi.fastutil.longs.LongIterator;
 import it.unimi.dsi.fastutil.longs.LongOpenHashSet;
+import it.unimi.dsi.fastutil.longs.LongSet;
+import it.unimi.dsi.fastutil.longs.LongSets;
 import it.unimi.dsi.fastutil.objects.Reference2IntOpenHashMap;
 import net.minecraft.core.BlockPos;
 import net.minecraft.server.level.ServerLevel;
@@ -15,7 +18,10 @@ import org.jetbrains.annotations.Nullable;
 import ua.zentix.incoming.compat.SubLevels;
 
 import java.util.ArrayList;
+import java.util.HashSet;
+import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.LongSupplier;
@@ -23,7 +29,7 @@ import java.util.function.LongSupplier;
 /**
  * The ruin support law ({@link Collapse}: what lost support falls) for a conventional strike. The strike's explosions
  * removed some blocks; every chunk within {@link Collapse#C} of a removal is solved in its own window, exactly as a
- * nuclear chunk is, over the world as it stood (live snapshots with the removals put back,
+ * nuclear chunk is, over the world as it stood (live snapshots with overlapping impacts' removals put back,
  * {@link RuinWindow#restoring}) and with the removals as the window chunks' fractures. Result: positions the law drops
  * (beyond the strike's own removals) in the order to drop them, their states, what lands as rubble, fluid beside them.
  * <p>
@@ -52,11 +58,15 @@ public final class StrikeSupport {
     private static final AtomicInteger SOLVES = new AtomicInteger();
 
     private final ServerLevel level;
+    private final int generation = Blast.generation;
+    private final @Nullable StrikeRemovals.Source source;
     /** The strike's removals (positions, states before), indexed into {@link #removed} by {@link #index}. */
     private final LongArrayList removedAt;
     private final List<BlockState> removedWas;
-    /** Removals indexed so far, position → state before (first state of a position removed twice). */
+    /** Removals visible in each copied chunk, position → first state before removal. */
     private final Long2ObjectOpenHashMap<BlockState> removed = new Long2ObjectOpenHashMap<>();
+    private final Long2ObjectOpenHashMap<StrikeRemovals.Source> owners = new Long2ObjectOpenHashMap<>();
+    private final Long2ObjectOpenHashMap<LinkedHashSet<StrikeRemovals.Source>> repeatOwners = new Long2ObjectOpenHashMap<>();
     /** Removal states already queued for the property table. */
     private final it.unimi.dsi.fastutil.objects.ReferenceOpenHashSet<BlockState> removedKinds = new it.unimi.dsi.fastutil.objects.ReferenceOpenHashSet<>();
     private final LongOpenHashSet solveSet = new LongOpenHashSet();
@@ -72,6 +82,7 @@ public final class StrikeSupport {
     /** Snapshot whose sections are being published ({@link ChunkShot#sectionStates}), the next section. */
     @Nullable
     private ChunkShot publishing;
+    private @Nullable StrikeRemovals.Cursor removals;
     private int section;
     /** States found in published sections, to put into the property table ({@link ChunkShot#ensure}). */
     private final java.util.ArrayList<BlockState> pending = new java.util.ArrayList<>();
@@ -79,8 +90,7 @@ public final class StrikeSupport {
     /** Removals the snapshot still shows empty ({@link #check}): the solve's losses of support. */
     private final Long2ObjectOpenHashMap<BlockState> losses = new Long2ObjectOpenHashMap<>();
     @Nullable
-    private long[] checking;
-    private int checked;
+    private LongIterator checking;
     /** Measurement: work units done ({@link #snapshot}). */
     private int units;
     /**
@@ -88,8 +98,10 @@ public final class StrikeSupport {
      * is abandoned ({@link #cancel}): snapshots, a queued or running solve and its result all count. Released once.
      */
     private final java.util.concurrent.atomic.AtomicBoolean released = new java.util.concurrent.atomic.AtomicBoolean();
-    /** Removals the solve used ({@link #start}): those the snapshot still showed empty. */
-    private it.unimi.dsi.fastutil.longs.LongSet lost = it.unimi.dsi.fastutil.longs.LongSets.EMPTY_SET;
+    /** Captured input stays available until claim handlers agree on which impacts may contribute to the plan. */
+    private @Nullable Long2ObjectMap<ChunkShot> captured;
+    private @Nullable Blast.PropsView capturedProps;
+    private final Set<StrikeRemovals.Source> excluded = new HashSet<>();
     @Nullable
     private CompletableFuture<Result> solving;
 
@@ -126,9 +138,15 @@ public final class StrikeSupport {
      * @param removedWas states before removal, parallel
      */
     public StrikeSupport(ServerLevel level, LongArrayList removedAt, List<BlockState> removedWas) {
+        this(level, removedAt, removedWas, null);
+    }
+
+    public StrikeSupport(ServerLevel level, LongArrayList removedAt, List<BlockState> removedWas,
+                         @Nullable StrikeRemovals.Source source) {
         this.level = level;
         this.removedAt = removedAt;
         this.removedWas = removedWas;
+        this.source = source;
     }
 
     /** Whether a slot is free now (a cheap test before a waiting collapse checks its area; {@link #tryReserve} takes it). */
@@ -136,8 +154,8 @@ public final class StrikeSupport {
         return SOLVES.get() < MAX_SOLVES;
     }
 
-    /** Positions the strike removed. */
-    public int removedCount() {
+    /** Distinct removals recorded in the snapshots, including peers' removals. */
+    public int recordedRemovals() {
         return removed.size();
     }
 
@@ -151,9 +169,30 @@ public final class StrikeSupport {
         return units;
     }
 
-    /** Removals the solve took as lost support ({@link BlockPos#asLong}), for the check before the fall. */
-    public it.unimi.dsi.fastutil.longs.LongSet lostPositions() {
-        return lost;
+    /** Whether only a peer recorded the hole, for stale-plan diagnostics. */
+    public boolean peerLoss(long at) {
+        var repeat = repeatOwners.get(at);
+        return source != null && owners.get(at) != source && (repeat == null || !repeat.contains(source));
+    }
+
+    /** A peer whose load-bearing candidates are protected cannot contribute fractures to this plan. */
+    public boolean excludePeer(StrikeRemovals.Source peer) {
+        return excluded.add(peer);
+    }
+
+    public boolean excludedPeer(StrikeRemovals.Source peer) {
+        return excluded.contains(peer);
+    }
+
+    /** Recompute support on the same snapshots before any write, with rejected peers' fractures omitted. */
+    public void retryClaims() {
+        submit();
+    }
+
+    /** Claim preparation has finished and no further solve needs this capture. */
+    public void releaseCapture() {
+        captured = null;
+        capturedProps = null;
     }
 
     /**
@@ -177,6 +216,10 @@ public final class StrikeSupport {
 
     /** One bounded unit of {@link #snapshot}; returns snapshots taken (0 or 1). */
     private int unit() {
+        if (generation != Blast.generation) {
+            solving = CompletableFuture.completedFuture(Result.EMPTY);
+            return 0;
+        }
         if (solve == null) {
             index();
             return 0;
@@ -194,7 +237,12 @@ public final class StrikeSupport {
             publishing.sectionStates(section++, pending::add);
             return 0;
         }
+        if (removals != null && removals.hasNext()) {
+            readRemovals(removals);
+            return 0;
+        }
         publishing = null;
+        removals = null;
         for (int skipped = 0; taken < needed.length && skipped < INDEX_UNIT; skipped++) {
             long c = needed[taken++];
             ChunkPos pos = new ChunkPos(c);
@@ -203,6 +251,7 @@ public final class StrikeSupport {
             ChunkShot shot = ChunkShot.take(chunk, null, null, false, false);
             shots.put(c, shot);
             publishing = shot;
+            if (source != null) removals = source.snapshot(c);
             section = 0;
             return 1;
         }
@@ -215,10 +264,10 @@ public final class StrikeSupport {
         int end = Math.min(removedAt.size(), indexed + INDEX_UNIT);
         for (; indexed < end; indexed++) {
             long at = removedAt.getLong(indexed);
-            BlockState was = removedWas.get(indexed);
-            if (removed.putIfAbsent(at, was) != null) continue;
-            // into the property table by the bounded ensure units, not inside a check unit
-            if (removedKinds.add(was)) pending.add(was);
+            if (source == null) {
+                BlockState was = removedWas.get(indexed);
+                if (removed.putIfAbsent(at, was) == null) publishRemoval(was);
+            }
             int x = BlockPos.getX(at), z = BlockPos.getZ(at);
             for (int cx = (x - REACH) >> 4; cx <= (x + REACH) >> 4; cx++) {
                 for (int cz = (z - REACH) >> 4; cz <= (z + REACH) >> 4; cz++) solveSet.add(ChunkPos.asLong(cx, cz));
@@ -237,22 +286,39 @@ public final class StrikeSupport {
         this.solve = solve;
     }
 
+    /** Read only the records visible at the chunk's snapshot, oldest state first. */
+    private void readRemovals(StrikeRemovals.Cursor cursor) {
+        for (int i = 0; i < INDEX_UNIT && cursor.hasNext(); i++) {
+            StrikeRemovals.Entry entry = cursor.step();
+            if (entry == null) continue;
+            if (removed.putIfAbsent(entry.at, entry.was) == null) {
+                owners.put(entry.at, entry.source);
+                publishRemoval(entry.was);
+            } else if (entry.source != owners.get(entry.at)) {
+                repeatOwners.computeIfAbsent(entry.at, key -> new LinkedHashSet<>()).add(entry.source);
+            }
+        }
+    }
+
+    private void publishRemoval(BlockState was) {
+        if (removedKinds.add(was)) pending.add(was);
+    }
+
     /**
      * Up to {@link #CHECK_UNIT} removals against the snapshots: one the snapshot no longer shows empty (a block put back,
      * a support built in the hole since the blast) is no loss of support. After the last, start the solve.
      */
     private void check() {
-        if (checking == null) checking = removed.keySet().toLongArray();
+        if (checking == null) checking = removed.keySet().iterator();
         int minY = level.getMinBuildHeight(), maxY = level.getMaxBuildHeight();
-        int end = Math.min(checking.length, checked + CHECK_UNIT);
-        for (; checked < end; checked++) {
-            long at = checking[checked];
+        for (int i = 0; i < CHECK_UNIT && checking.hasNext(); i++) {
+            long at = checking.nextLong();
             int x = BlockPos.getX(at), y = BlockPos.getY(at), z = BlockPos.getZ(at);
             ChunkShot s = shots.get(ChunkPos.asLong(x >> 4, z >> 4));
             if (s != null && y >= minY && y < maxY && Blast.props(s.raw(x & 15, y, z & 15)).bearing()) continue;
             losses.put(at, removed.get(at));
         }
-        if (checked == checking.length) start();
+        if (!checking.hasNext()) start();
     }
 
     /** All snapshots taken and the solve submitted. */
@@ -278,32 +344,29 @@ public final class StrikeSupport {
     public void cancel() {
         if (solving != null) solving.cancel(false);
         shots.clear();
+        releaseCapture();
         release();
     }
 
     private void start() {
-        // a datapack reload between snapshot portions reset the property table: earlier snapshots' states are gone
-        // from the table the worker would read; the strike leaves no collapse rather than a half-read one
-        boolean fresh = true;
-        for (ChunkShot s : shots.values()) fresh &= s.fresh();
-        Long2ObjectOpenHashMap<BlockState> lost = losses;
-        int minY = level.getMinBuildHeight(), maxY = level.getMaxBuildHeight();
-        // a datapack reload after the removals' states were published and before the first snapshot leaves fresh
-        // snapshots and a table without those states: their few distinct kinds again
-        for (BlockState st : removedKinds) ChunkShot.ensure(st);
-        Blast.PropsView view = Blast.publish();
-        Long2ObjectOpenHashMap<ChunkShot> shots = new Long2ObjectOpenHashMap<>(this.shots);
-        this.shots.clear();
-        long[] solve = this.solve;
-        this.checking = null;
-        this.lost = lost.keySet();
-        if (!fresh || lost.isEmpty()) {
+        checking = null;
+        if (losses.isEmpty()) {
             solving = CompletableFuture.completedFuture(Result.EMPTY);
             return;
         }
+        captured = new Long2ObjectOpenHashMap<>(shots);
+        capturedProps = Blast.publish();
+        shots.clear();
+        submit();
+    }
+
+    private void submit() {
+        int minY = level.getMinBuildHeight(), maxY = level.getMaxBuildHeight();
+        Long2ObjectMap<ChunkShot> snapshots = captured;
+        Blast.PropsView view = capturedProps;
         java.util.function.Supplier<Result> task = () -> {
             try {
-                return solve(solve, shots, lost, view, minY, maxY);
+                return solve(solve, snapshots, view, minY, maxY);
             } finally {
                 // this worker's traversal buffers (a tall window: megabytes) are not kept between strikes
                 Collapse.releaseBuffers();
@@ -321,32 +384,55 @@ public final class StrikeSupport {
      * Any thread: the law in each chunk's window; changes beyond the strike's own removals, ordered for the fall:
      * non-load-bearing first (attachments, leaves, water), load-bearing bottom-up.
      */
-    static Result solve(long[] solve, Long2ObjectMap<ChunkShot> shots, Long2ObjectMap<BlockState> removed, Blast.PropsView view, int minY, int maxY) {
+    private Result solve(long[] solve, Long2ObjectMap<ChunkShot> shots, Blast.PropsView view, int minY, int maxY) {
         // removals as fractures of their chunks (Blast keys: section, y, z, x; sorted)
         Long2ObjectOpenHashMap<IntArrayList> byChunk = new Long2ObjectOpenHashMap<>();
-        for (long at : removed.keySet()) {
+        Long2ObjectOpenHashMap<LinkedHashSet<StrikeRemovals.Source>> peers = new Long2ObjectOpenHashMap<>();
+        LongSet fractured = excluded.isEmpty() ? losses.keySet() : new LongOpenHashSet();
+        for (long at : losses.keySet()) {
             int x = BlockPos.getX(at), y = BlockPos.getY(at), z = BlockPos.getZ(at);
             if (y < minY || y >= maxY) continue;
-            byChunk.computeIfAbsent(ChunkPos.asLong(x >> 4, z >> 4), k -> new IntArrayList())
+            StrikeRemovals.Source owner = owners.get(at);
+            var repeats = repeatOwners.get(at);
+            boolean ownerAllowed = !excluded.contains(owner);
+            boolean anotherAllowed = false;
+            long chunk = ChunkPos.asLong(x >> 4, z >> 4);
+            if (ownerAllowed && owner != null && owner != source) peers.computeIfAbsent(chunk, k -> new LinkedHashSet<>()).add(owner);
+            if (repeats != null) {
+                for (StrikeRemovals.Source repeat : repeats) {
+                    if (excluded.contains(repeat)) continue;
+                    anotherAllowed = true;
+                    if (repeat != source) peers.computeIfAbsent(chunk, k -> new LinkedHashSet<>()).add(repeat);
+                }
+            }
+            if (!ownerAllowed && !anotherAllowed) continue;
+            if (!excluded.isEmpty()) fractured.add(at);
+            byChunk.computeIfAbsent(chunk, k -> new IntArrayList())
                     .add((y - minY) >> 4 << RuinPlan.SECTION_SHIFT | (y & 15) << 8 | (z & 15) << 4 | x & 15);
         }
         LongArrayList at = new LongArrayList();
         List<BlockState> was = new ArrayList<>(), to = new ArrayList<>();
         LongArrayList fluid = new LongArrayList();
         LongOpenHashSet watch = new LongOpenHashSet();
+        Long2ObjectOpenHashMap<PeerWindow> peerWindows = new Long2ObjectOpenHashMap<>();
         int solved = 0;
         for (long c : solve) {
             ChunkPos centre = new ChunkPos(c);
             if (shots.get(c) == null) continue;
             ChunkShot[] window = new ChunkShot[9];
             for (int k = 0; k < 9; k++) window[k] = shots.get(ChunkPos.asLong(centre.x + k % 3 - 1, centre.z + k / 3 - 1));
-            RuinWindow w = RuinWindow.restoring(centre, minY, maxY, window, view, removed);
+            // Rejected peers' old blocks remain in the support graph. Their holes add no fractures to this plan.
+            RuinWindow w = RuinWindow.restoring(centre, minY, maxY, window, view, losses);
             Blast[] blasts = new Blast[9];
             boolean any = false;
+            LinkedHashSet<StrikeRemovals.Source> sources = new LinkedHashSet<>();
             for (int k = 0; k < 9; k++) {
                 if (window[k] == null) continue;
-                IntArrayList keys = byChunk.get(ChunkPos.asLong(centre.x + k % 3 - 1, centre.z + k / 3 - 1));
+                long chunk = ChunkPos.asLong(centre.x + k % 3 - 1, centre.z + k / 3 - 1);
+                IntArrayList keys = byChunk.get(chunk);
                 if (keys == null) continue;
+                var origins = peers.get(chunk);
+                if (origins != null) sources.addAll(origins);
                 int[] sorted = keys.toIntArray();
                 java.util.Arrays.sort(sorted);
                 blasts[k] = new Blast(w.stamp(), minY, sorted, List.of(), List.of());
@@ -354,10 +440,11 @@ public final class StrikeSupport {
             }
             if (!any) continue;
             Collapse col = Collapse.solve(w, blasts);
+            if (!sources.isEmpty()) peerWindows.put(c, new PeerWindow(List.copyOf(sources), new IntArrayList()));
             solved++;
             for (var e : col.changes.long2ObjectEntrySet()) {
                 long p = e.getLongKey();
-                if (removed.containsKey(p)) continue;
+                if (losses.containsKey(p)) continue;
                 at.add(p);
                 was.add(w.get(BlockPos.getX(p) - w.x0, BlockPos.getY(p), BlockPos.getZ(p) - w.z0));
                 to.add(e.getValue());
@@ -365,7 +452,7 @@ public final class StrikeSupport {
                 for (net.minecraft.core.Direction d : net.minecraft.core.Direction.values()) {
                     long q = BlockPos.offset(p, d);
                     int qy = BlockPos.getY(q);
-                    if (qy < minY || qy >= maxY || removed.containsKey(q) || col.changes.containsKey(q)) continue;
+                    if (qy < minY || qy >= maxY || losses.containsKey(q) || col.changes.containsKey(q)) continue;
                     if (!view.get(w.get(BlockPos.getX(q) - w.x0, qy, BlockPos.getZ(q) - w.z0)).bearing()) watch.add(q);
                 }
             }
@@ -392,6 +479,8 @@ public final class StrikeSupport {
             pos[k] = p;
             states[k] = st;
             into[k] = to.get(i);
+            PeerWindow peer = peerWindows.get(ChunkPos.asLong(BlockPos.getX(p) >> 4, BlockPos.getZ(p) >> 4));
+            if (peer != null) peer.indices.add(k);
             if (!bearing[i]) continue;
             int x = BlockPos.getX(p), y = BlockPos.getY(p), z = BlockPos.getZ(p);
             Blast.Props props = view.get(st);
@@ -411,9 +500,18 @@ public final class StrikeSupport {
                 common = e.getKey();
             }
         }
+        List<PeerClaims> claims = new ArrayList<>();
+        for (PeerWindow peer : peerWindows.values()) {
+            if (!peer.indices.isEmpty()) claims.add(new PeerClaims(peer.sources, peer.indices.toIntArray()));
+        }
         return new Result(pos, states, into, rubble, fluid.toLongArray(), watch, solved, mass,
-                mass > 0 ? new net.minecraft.world.phys.Vec3(sx / mass, base, sz / mass) : null, common);
+                mass > 0 ? new net.minecraft.world.phys.Vec3(sx / mass, base, sz / mass) : null, common, List.copyOf(claims), fractured);
     }
+
+    private record PeerWindow(List<StrikeRemovals.Source> sources, IntArrayList indices) {}
+
+    /** Additional claim contexts for candidates in a window with overlapping losses. */
+    public record PeerClaims(List<StrikeRemovals.Source> sources, int[] indices) {}
 
     /**
      * Positions the law drops in fall order ({@link BlockPos#asLong}), their states as the world stood, what replaces them
@@ -423,9 +521,10 @@ public final class StrikeSupport {
      */
     public record Result(long[] at, BlockState[] was, BlockState[] to, @Nullable BlockState[] rubble, long[] fluidTicks,
                          it.unimi.dsi.fastutil.longs.LongSet watch, int solved,
-                         int mass, net.minecraft.world.phys.@Nullable Vec3 base, @Nullable BlockState common) {
+                         int mass, net.minecraft.world.phys.@Nullable Vec3 base, @Nullable BlockState common,
+                         List<PeerClaims> peerClaims, LongSet lostPositions) {
         public static final Result EMPTY = new Result(new long[0], new BlockState[0], new BlockState[0], new BlockState[0], new long[0],
-                it.unimi.dsi.fastutil.longs.LongSets.EMPTY_SET, 0, 0, null, null);
+                LongSets.EMPTY_SET, 0, 0, null, null, List.of(), LongSets.EMPTY_SET);
     }
 
     /**

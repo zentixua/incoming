@@ -3,6 +3,7 @@ package ua.zentix.incoming.client.fx.smoke;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
+import java.util.function.DoubleUnaryOperator;
 
 /**
  * Smoke in brief puffs — client cloud source (drawn by baked effects-layer billows, {@code far/SmokePuffs}): each
@@ -40,10 +41,12 @@ public final class Puffs implements SmokeGrid.Source {
     private final CloudModel.Air air;
     private final float dustR, dustG, dustB;
     private final long seed;
+    private final DoubleUnaryOperator clock;
+    private final boolean closeWhenQuiet;
     private final List<Puff> puffs = new ArrayList<>();
     /** No more new puffs (source exhausted or left world). */
     private boolean closed;
-    /** Grid clock of last puff: no new ones beyond {@link #QUIET} exhausts source itself (debris fell or vanished). */
+    /** Source time of last puff: no new ones beyond {@link #QUIET} exhausts source itself (debris fell or vanished). */
     private double lastFed = Double.NaN;
     static final double QUIET = 1;
     private boolean gone;
@@ -53,11 +56,26 @@ public final class Puffs implements SmokeGrid.Source {
      * @param albedo smouldering-aerosol screen colour (soot has its own black): albedo from {@link SmokeGrid#dustAlbedo}
      */
     public Puffs(CloudModel.Air air, float albedoR, float albedoG, float albedoB, long seed) {
+        this(air, albedoR, albedoG, albedoB, seed, DoubleUnaryOperator.identity(), true);
+    }
+
+    /**
+     * Source that explicitly calls {@link #close()} when it finishes feeding puffs.
+     * @param clock converts grid seconds to source seconds for puff growth and expiry
+     */
+    public Puffs(CloudModel.Air air, float albedoR, float albedoG, float albedoB, long seed, DoubleUnaryOperator clock) {
+        this(air, albedoR, albedoG, albedoB, seed, clock, false);
+    }
+
+    private Puffs(CloudModel.Air air, float albedoR, float albedoG, float albedoB, long seed,
+                  DoubleUnaryOperator clock, boolean closeWhenQuiet) {
         this.air = air;
         this.dustR = SmokeGrid.dustAlbedo(albedoR);
         this.dustG = SmokeGrid.dustAlbedo(albedoG);
         this.dustB = SmokeGrid.dustAlbedo(albedoB);
         this.seed = seed;
+        this.clock = clock;
+        this.closeWhenQuiet = closeWhenQuiet;
     }
 
     /** Thermal from buoyancy of {@code heat}, J, with initial {@code kelvin} temperature and radius at least {@code r0}. */
@@ -71,9 +89,9 @@ public final class Puffs implements SmokeGrid.Source {
     }
 
     /**
-     * Puff at (x, y, z) at {@code seconds} (grid clock): {@code heat}, J, gas at {@code kelvin} in sphere at least
+     * Puff at (x, y, z) at {@code seconds} on the source clock: {@code heat}, J, gas at {@code kelvin} in sphere at least
      * {@code r0} m; {@code soot}, kg; smouldering {@code aerosol}, kg, with extinction {@code k} m²/kg; visible
-     * until at most {@code until} (grid clock; nuclear wave sweeps away wisps), NaN — no deadline.
+     * until at most {@code until} on the same clock (nuclear wave sweeps away wisps), NaN — no deadline.
      */
     public void add(double x, double y, double z, double seconds, double heat, double kelvin, double r0, double soot, double aerosol, double k,
                     double until) {
@@ -123,10 +141,11 @@ public final class Puffs implements SmokeGrid.Source {
     @Override
     public boolean emit(double seconds, SmokeGrid.Sink out) {
         if (gone) return false;
-        if (!Double.isNaN(lastFed) && seconds - lastFed > QUIET) closed = true;
-        puffs.removeIf(p -> seconds - p.born >= p.life || !Double.isNaN(p.until) && seconds >= p.until);
+        double now = clock.applyAsDouble(seconds);
+        if (closeWhenQuiet && now - lastFed > QUIET) closed = true;
+        puffs.removeIf(p -> now - p.born >= p.life || !Double.isNaN(p.until) && now >= p.until);
         for (Puff p : puffs) {
-            double t = Math.max(0, seconds - p.born);
+            double t = Math.max(0, now - p.born);
             Thermal th = p.thermal;
             // puff still dense at lifetime limit fades over final tenth of life (like blast cloud)
             double fade = p.life < CloudModel.LIFE_MAX ? 1 : Math.min(1, (p.life - t) / (0.1 * p.life));
@@ -152,6 +171,6 @@ public final class Puffs implements SmokeGrid.Source {
         if (puffs.isEmpty()) return 2;
         Puff p = puffs.getLast();
         Thermal th = p.thermal;
-        return th.sigmaH(Math.max(0, seconds - p.born)) / Math.max(th.sigmaH(0), 1e-6);
+        return th.sigmaH(Math.max(0, clock.applyAsDouble(seconds) - p.born)) / Math.max(th.sigmaH(0), 1e-6);
     }
 }

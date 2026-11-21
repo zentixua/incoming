@@ -151,7 +151,7 @@ public class RemoteScreen extends Screen {
                 if (validYield) commit(loadout.withNuke(loadout.nuke().withYield(value.getAsInt())));
                 readiness();
             });
-            validYield = n.yieldKt() <= cap;
+            validYield = true;
             nuke.add(new Cell(yield, List.of(Component.literal("1000 kt"))));
             if (warhead.chooseBurst()) {
                 Component air = Component.translatable("incoming.remote.burst.air"), ground = Component.translatable("incoming.remote.burst.ground");
@@ -446,7 +446,9 @@ public class RemoteScreen extends Screen {
      */
     @Nullable
     Component orderMissing() {
-        return loadout.nuclear() && !validYield ? Component.translatable("incoming.remote.fire.no_yield", IncomingConfig.SERVER.nukeMaxYield.get()) : null;
+        if (!loadout.nuclear()) return null;
+        int cap = IncomingConfig.SERVER.nukeMaxYield.get();
+        return !validYield || loadout.nuke().yieldKt() > cap ? Component.translatable("incoming.remote.fire.no_yield", cap) : null;
     }
 
     /** Fire's state follows {@link #missing}: also on typing the yield, which does not rebuild the screen. */

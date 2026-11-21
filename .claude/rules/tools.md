@@ -45,15 +45,23 @@ Prism: `~/.var/app/org.prismlauncher.PrismLauncher/data/PrismLauncher/` (`tools/
                                            its Gradle step and another Gradle run in the same tree (GameTest) collide on
                                            downloadAssets: start the second after the client's launch script exists;
                                            scenarios and what each captures: in the script header
-    sandbox.sh start|fx|swap|shot|restart|stop|jbr ← effects sandbox (vanilla: shared GPU slot or CPU, unless shaders/dh/gpu): a client with only the mod (+ Iris with a shaderpack, DH) in a
+    sandbox.sh start|fx|swap|shot|restart|stop|jbr ← effects sandbox (vanilla: shared GPU slot or CPU, unless shaders/sodium/dh/gpu): a client with only the mod (+ Iris with a shaderpack, Sodium without one, DH) in a
                                            flat world, an effect by the /fx command in seconds, hot code swap and
                                            resource reload without a new client, frames and WAV in one command (`shot`; `--at none`
                                            sound only, its take in a 160×90 window at 20 fps);
                                            a nuke at the camera: `nuke 15 near`; how to work: client-scenario.md,
                                            “Effects sandbox”; check without a client: test_sandbox.sh (CI)
+    see_through_check.sh [graphics] [start options] ← regression check of effects behind see-through blocks: a blast seen
+                                           through a sandbox `pane` of each translucent block and stone, visible share 2 s
+                                           after it by see_through.py, fails outside its bounds; run it on changes to the
+                                           effects layer's depth or composites (SceneDepth, SeeThrough, fx_depth, see.glsl)
+    see_through.py <dir> [--min/--max case=share] [--sheet] ← the visible share per pane case of those frames, and a sheet
+    see_through_gl.py                    ← the see-through shaders on Mesa llvmpipe without a game: sampler counts (the pall
+                                           composite within 16), fx_depth on synthetic captures, the half-resolution
+                                           pair, the pall split with smoke in front of a far pane; exit 1 on a failed check
     nested_kwin.sh                       ← nested KWin for the client: no window and no host sound, its own D-Bus bus without starting services
                                            (nested_kwin_bus.conf) and XDG directories; takes the GPU lease and the client lock
-                                           (gpu_lease.sh); exit 75 means whoever holds the GPU; with INCOMING_SOFT=1 a CPU session
+                                           (gpu_lease.sh); exit 75 means whoever holds the GPU or Artem's game running (an exclusive client never starts beside it); with INCOMING_SOFT=1 a CPU session
                                            (soft_gl.sh): no lease or lock, socket wayland-incoming-soft-…; with INCOMING_GPU_SHARED=1
                                            a vanilla client on a shared GPU slot (its caller's slot lock, socket wayland-incoming-shared-…)
     soft_gl.sh                           ← vanilla clients, sourced: vanilla_display (shared GPU slot, else CPU at once), CPU rendering (Mesa llvmpipe): GL vendor/thread/heap

@@ -7,7 +7,8 @@
 // mixed-resolution particle renderers): where the four nearest half-resolution samples lie at this pixel's depth,
 // bilinear; where they straddle a silhouette, the sample whose world distance is nearest this pixel's (the
 // checkerboard depth, fx_half_depth, holds both sides), so smoke neither bleeds over a roof edge nor leaves a gap
-// behind it.
+// behind it. The distances are to the nearest surface: a see-through window's edge is a silhouette too, since the smoke
+// behind it carries the window's tint (fx.fsh) and the smoke beside it does not.
 // A sample from a tile with another split (the sorted place of its last full-resolution quad, HalfPass) holds another
 // set of the layer's quads: it is not mixed in.
 // half-resolution smoke (rgb premultiplied light, a transmittance), its world distances, the frame's world distance,
@@ -25,7 +26,8 @@ const float SAME = 0.1;
 
 void main() {
     ivec2 low = textureSize(Sampler0, 0);
-    float here = pallScene(texelFetch(Sampler2, ivec2(gl_FragCoord.xy), 0).r);
+    // the distance to the nearest surface (g; the world's where no see-through surface lies in front of it)
+    float here = pallScene(texelFetch(Sampler2, ivec2(gl_FragCoord.xy), 0).g);
     // this pixel's place among the half-resolution sample centres
     vec2 at = gl_FragCoord.xy * 0.5 - 0.5;
     ivec2 base = ivec2(floor(at));
@@ -39,7 +41,7 @@ void main() {
         ivec2 o = ivec2(k & 1, k >> 1), t = clamp(base + o, ivec2(0), low - 1);
         // the pixel's own sample is always among the four
         if (texelFetch(Sampler3, ivec2((vec2(t) + 0.5) * 2.0 / HalfTile), 0).r != cut) continue;
-        float d = texelFetch(Sampler1, t, 0).r;
+        float d = texelFetch(Sampler1, t, 0).g;
         vec4 v = texelFetch(Sampler0, t, 0);
         float off = abs(d - here) / max(min(d, here), 1e-3);
         if (here >= 1e8 && d >= 1e8) off = 0.0;

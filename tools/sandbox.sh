@@ -4,7 +4,7 @@
 # hot swap, resources through reload, without a new client. Scenario: Sandbox (mod/src/devtest); commands:
 # SandboxCommand; client directory: mod/run/sandbox; frames and audio: mod/run/sandbox/fx/out/<name>/.
 #
-#   tools/sandbox.sh start [shaders] [dh] [gpu] [--wait] [--size 1280x720]   background client (laptop job
+#   tools/sandbox.sh start [shaders|sodium] [dh] [gpu] [--wait] [--size 1280x720]   background client (laptop job
 #                                          sandbox-<tree>), returns when the world is ready.
 #                                          Default (no shaders, no dh): vanilla, on a shared GPU slot when one is free
 #                                          (tools/gpu_lease.sh: up to 3 vanilla clients, none while the lease is held or
@@ -12,6 +12,7 @@
 #                                          the CPU (Mesa llvmpipe, tools/soft_gl.sh: also while Artem plays, lowest CPU
 #                                          priority); no lease, any number of trees at once; refused (75) only when memory
 #                                          is short. Frames are the vanilla picture; fps and GPU times are not frame costs.
+#                                          sodium: Sodium and Iris without a shader pack, on the GPU alone.
 #                                          shaders, dh or gpu: on the GPU alone: takes its session GPU lease (tools/gpu_lease.sh);
 #                                          held by another session: exit 75 with "GPU held by …" (--wait joins the lease
 #                                          queue in arrival order, refused when the queue is full); no Iris and Sodium
@@ -201,7 +202,7 @@ OPT
 }
 
 start() {
-  local size=1280x720 opts=() pack wait= fresh= gpu=
+  local size=1280x720 opts=() pack wait= fresh= gpu= sodium=
   # a fixed near site (Sandbox.FIXED_SITE): checked here, not in the client's class initialisation
   if [ -n "${INCOMING_SANDBOX_SITE:-}" ] && ! [[ $INCOMING_SANDBOX_SITE =~ ^[0-9]{1,3}$ && $((10#$INCOMING_SANDBOX_SITE)) -le 450 ]]; then
     echo "INCOMING_SANDBOX_SITE: 0–450, not \"$INCOMING_SANDBOX_SITE\"" >&2; exit 2
@@ -210,6 +211,7 @@ start() {
     case "$1" in
       --wait) wait=--wait ;;
       shaders) export INCOMING_SHADERS=1 ;;
+      sodium) export INCOMING_SHADERS=1; sodium=1 ;;
       dh) export INCOMING_DH=1 ;;
       gpu) gpu=1 ;;
       soft) ;;
@@ -271,7 +273,10 @@ file = $RUN/audio.wav
 CONF
   client_options "$RUN/options.txt"
   mkdir -p "$RUN/config"
-  if [ -n "${INCOMING_SHADERS:-}" ]; then
+  if [ -n "$sodium" ]; then
+    # Sodium's renderer with Iris loaded and no shader pack (the vanilla picture through Sodium)
+    printf 'enableShaders=false\ndisableUpdateMessage=true\n' > "$RUN/config/iris.properties"
+  elif [ -n "${INCOMING_SHADERS:-}" ]; then
     local MC; MC="$(python3 "$ROOT/tools/paths.py" MC)"
     pack="$(sed -n 's/^shaderPack=//p' "$MC/config/iris.properties" 2>/dev/null)"
     # Without the shader pack the sandbox would silently run without it: frames "under Iris" would lack the pack

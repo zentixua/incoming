@@ -13,6 +13,7 @@
         }
     ],
     "uniforms": [
+        { "name": "FxSee", "type": "float", "count": 1, "values": [ 0.0 ] },
         {
             "name": "InvViewProj",
             "type": "matrix4x4",
