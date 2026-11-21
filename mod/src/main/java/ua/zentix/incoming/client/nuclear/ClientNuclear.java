@@ -418,6 +418,7 @@ public final class ClientNuclear {
         }
         for (S2C.NukeWarning w : p.warnings()) WARNINGS.put(w.strikeId(), w);
         NukeDust.reset();
+        WallPuffs.reset();
         NukePall.reset();
         NukeLight.reset();
     }
@@ -442,6 +443,7 @@ public final class ClientNuclear {
         NukeFlash.reset();
         Deafness.reset();
         NukeDust.reset();
+        WallPuffs.reset();
         NukePall.reset();
         NukeLight.reset();
     }
@@ -499,6 +501,7 @@ public final class ClientNuclear {
         NukeSky.reset();
         Deafness.reset();
         NukeDust.reset();
+        WallPuffs.reset();
         NukePall.reset();
         NukeLight.reset();
     }
@@ -554,6 +557,7 @@ public final class ClientNuclear {
             if (heights != null) a.storm.track(a.ticks(0) / 20.0, heights);
             NukeWater.tick(a, level, eye);
             NukeDust.front(a, eye);
+            WallPuffs.tick(a);
             if (a.ticks(0) > lifeTicks(a.d) && a.clockSeconds(0) > a.d.blackRainEndSeconds() && !a.pall.visible(a.ticks(0))) {
                 a.sounds.stop();
                 it.remove();
@@ -567,6 +571,7 @@ public final class ClientNuclear {
         NukeFlash.tick();
         Deafness.tick(level);
         NukeDust.tick();
+        WallPuffs.clean();
         NukePall.tick(level, eye);
         SoundFilters.loops();
         Geiger.tick();

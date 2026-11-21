@@ -394,7 +394,15 @@ public final class PallField {
     private double pallShare(int i, double ticks) {
         double t = ticks / (20.0 * d.scale());
         if (d.metres(radius(i)) < FireballModel.groundRadius(t, Math.max(0, d.hobMetres()), d.yieldKt(), d.surface())) return 0;
+        // probe B: the young wall is drawn by WallPuffs (presentation) up to its age; the pall takes the layer over from there
+        if (WallPuffs.ON) return smoothstepAge((ticks - arrival[i]) / 20.0);
         return 1 - BlastWall.handoff(seconds(i, ticks) / columns[i].positive());
+    }
+
+    /** Pall share behind the young wall ({@link WallPuffs}): in over its last {@link WallPuffs#HANDOFF_S} seconds. */
+    private static double smoothstepAge(double age) {
+        double x = Math.clamp((age - (WallPuffs.YOUNG_S - WallPuffs.HANDOFF_S)) / WallPuffs.HANDOFF_S, 0, 1);
+        return x * x * (3 - 2 * x);
     }
 
     /**

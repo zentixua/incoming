@@ -413,6 +413,8 @@ public final class NukePall {
         // dust wall: head and Wilson cloud in the same volume
         double seconds = a.seconds(partial);
         boolean wall = a.wall.slot(seconds, WALL);
+        // probe B: the young wall is WallPuffs; the head is not drawn (the Wilson cloud stays)
+        if (WallPuffs.ON) WALL[3] = 0;
         any |= wall;
         if (!any) return false;
         p.drift(ticks, DRIFT);
