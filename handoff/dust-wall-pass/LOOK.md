@@ -7,8 +7,11 @@ or its unimportant details. ACCEPTANCE.md's judging scene and order stay.
 ## The look (his words, condensed)
 1. The front tears dust up from the ground exactly where it touches the ground: the dust is visibly born at the contact
    line, not appearing ready-made.
-2. It curls over a small hump: hump 1.3–1.5x the height of the layer behind it, uneven along the front.
-3. It settles right behind the hump, in about 1 s or a little less (supersedes SPEC.md item 3's 0.6–4.5 s sag).
+2. It curls over a small hump: hump about 1.4–1.6x the height of the layer behind it (Artem 21.11 21:59), uneven
+   along the front.
+3. It settles right behind the hump back to about 1x, in 0.5–1 s (not to the ground; supersedes SPEC.md item 3's
+   0.6–4.5 s sag). After that it never freezes: residual eddies keep it turning and drifting a little, sideways too,
+   as real dust does behind a passed front. Density, motion, turbulence: take real dust's properties.
 4. The dust reads as one natural mass, like real dust (a haboob front, lower and denser): billows, uneven, no repeating
    pattern, no holes, no rippling, not liquid metal, not water.
 
