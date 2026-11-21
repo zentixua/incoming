@@ -9,6 +9,7 @@ import net.neoforged.neoforge.event.tick.LevelTickEvent;
 import org.jetbrains.annotations.Nullable;
 import ua.zentix.incoming.Incoming;
 import ua.zentix.incoming.entity.StrikeProjectile;
+import ua.zentix.incoming.nuclear.world.StrikeRemovals;
 import ua.zentix.incoming.nuclear.world.WorkClock;
 import ua.zentix.incoming.registry.ModAttachments;
 import ua.zentix.incoming.work.UnitQueue;
@@ -38,6 +39,7 @@ public final class StrikeWorld {
     private final FlightLog flightLog = new FlightLog();
     /** Impact work units: {@link WorkScheduler.Lane#IMPACT} lane of shared tick budget. */
     private final UnitQueue impacts = new UnitQueue();
+    private final StrikeRemovals collapseRemovals = new StrikeRemovals();
     /** Approach-strip areas ({@link FlightTickets#holdApproach}): center → projectiles whose strips cross it. */
     private final Map<ChunkPos, Set<UUID>> approach = new HashMap<>();
     /**
@@ -82,6 +84,10 @@ public final class StrikeWorld {
      */
     public UnitQueue impacts() {
         return impacts;
+    }
+
+    public StrikeRemovals collapseRemovals() {
+        return collapseRemovals;
     }
 
     /** This world's impact lane: work units while clock permits. */
