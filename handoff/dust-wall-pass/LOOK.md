@@ -28,7 +28,7 @@ and the guide. Behind it, hand over to the existing pall (physics) for the long 
 
 ## Settings he chose
 - Judging view: as in Silo, 4.5 km from ground zero, 120 m above ground, low sun. Other views only "nothing broken".
-- Colour by light: warm amber from the fireball at dusk as in Silo; by day grey-brown in the ground's colour.
+- Colour: not his choice (17:48); it follows the light (fireball, sun, sky) on ground-coloured dust.
 - Frame cost: one wall may cost up to 20 FPS on his PC (RTX 4060) at the highest preset; lower presets for weaker PCs;
   the 100-strike bench limit still holds.
 - References: Silo frame (../reference/silo-texture-*.png, Artem's complaint frames) for the scene; haboob footage for the
@@ -41,3 +41,15 @@ and the guide. Behind it, hand over to the existing pall (physics) for the long 
 2. Two short clips in the judging view beside the Silo frame go to Artem; he picks one.
 3. Only the picked one is finished; a clip to Artem every 2–3 h; fix only what he names.
 4. Frame cost, review, merge. Nothing is merged that does not look like the clip he approved.
+
+## Safeguards (Artem, 21.11 17:50: maximum guarantees)
+- First take: the judging camera's first frame matches the Silo frame (horizon, ground-zero position) before anything else.
+- Shader iteration in the fast harness (seconds), the game only for confirmation takes.
+- Trial gate at 4 h: if neither A nor B looks like the four traits, stop and report with frames; no tuning rounds.
+- Before any clip reaches Artem, an independent check (a fresh session that did not build it) compares it with LOOK.md and
+  the Silo frame; only "yes" goes to him.
+- 3 rounds without a measured shift toward the look, or a timebox overrun: stop, root cause from data, then decide.
+- Merge only: looks like the clip he approved, highest preset within 20 FPS, 100-strike bench in budget, review clean.
+
+## Release (Artem, 21.11 17:48)
+3.14.0 ships with the 3.13 dust wall; this new wall goes into 3.14.1. No release pressure on this work.
