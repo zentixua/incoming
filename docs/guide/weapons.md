@@ -91,8 +91,8 @@ A blast is the warhead's charge in TNT, not a game explosion power. Everything f
   out more wall than they can span, and the part of the building above comes down right after the blast, in its dust.
   A hit on a roof corner takes out the corner, not the house. Overlapping hits can bring a roof down together by
   cutting several points of its support. About one fallen block in eight lands at the foot as rubble of its own
-  material, spread a little around. You see those blocks fall and the rest turns to dust. With `world.debris_stay` off,
-  falling rubble disappears on landing. Fallen chests, barrels, shulker boxes and modded storage such as Create
+  material, spread a little around. You see those blocks fall, and dust rises over the parts that collapse.
+  With `world.debris_stay` off, falling rubble disappears on landing. Fallen chests, barrels, shulker boxes and modded storage such as Create
   vaults or depots drop as when broken, even when empty.
   Shulker boxes keep their name and contents. The world setting `world.collapse` turns collapse off.
 - **Fire** starts only from fuel and burning debris. The Shahed and the missile still carry fuel; three quarters of it

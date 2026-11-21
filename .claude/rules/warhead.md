@@ -204,8 +204,10 @@ paths:
   - Rubble: falls as vanilla falling blocks while `CraterFalls.room` allows, otherwise lands at once where it would
     rest, spread by `Debris.spread`; fluid ticks and landings in their own portions; rubble lands in claimed land as
     vanilla falling sand does. With `world.debris_stay` off, live rubble disappears on landing and direct landing
-    skips placement. One `S2C.Collapse` (dust, rumble) for the fallen load-bearing blocks
-    (`StrikeSupport.MATERIAL` m³ a block). In shared plans the packet uses only the blocks the fall actually removed.
+    skips placement. A single strike sends `S2C.Collapse` for its fall. A shared plan sends one packet per chunk over
+    the load-bearing blocks it actually removed there (`StrikeSupport.MATERIAL` m³ a block). Packet sends share the
+    fall deadline. GameTest `everyCollapsedHouseReceivesDustOverItsFootprint` watches the 100-house salvo away from the
+    platform grid.
   - Telemetry: impact kind `COLLAPSE` in the slow-impact-tick line and the strike summary; the `Impact series summary`
     line ends with blocks fallen and the longest collapse unit. Replan and stop lines identify refilled peer holes.
   - GameTest batch `collapse`: missile and drone in a flat, drone on a roof corner (the law's fixed point: with

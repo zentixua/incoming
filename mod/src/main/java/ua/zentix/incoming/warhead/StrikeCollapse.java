@@ -1,6 +1,7 @@
 package ua.zentix.incoming.warhead;
 
 import it.unimi.dsi.fastutil.longs.Long2BooleanOpenHashMap;
+import it.unimi.dsi.fastutil.longs.Long2ObjectLinkedOpenHashMap;
 import it.unimi.dsi.fastutil.longs.LongIterator;
 import it.unimi.dsi.fastutil.longs.LongOpenHashSet;
 import it.unimi.dsi.fastutil.objects.Reference2IntOpenHashMap;
@@ -96,7 +97,7 @@ final class StrikeCollapse implements UnitQueue.Job {
     private boolean claimsChanged;
     private boolean prepared;
     private int next, nextFluid;
-    private @Nullable Dust sharedDust;
+    private @Nullable Long2ObjectLinkedOpenHashMap<Dust> sharedDust;
     /** Rubble that lands without a live falling block: source and state. */
     private final List<Landing> landings = new ArrayList<>();
     private int landed;
@@ -120,7 +121,7 @@ final class StrikeCollapse implements UnitQueue.Job {
 
     private record Landing(BlockPos from, BlockState state) {}
 
-    /** Material removed by this fall from a shared plan. Other falls can consume candidates between portions. */
+    /** Material this fall removed in one chunk. Other falls can consume candidates between portions. */
     private static final class Dust {
         private final Reference2IntOpenHashMap<BlockState> kinds = new Reference2IntOpenHashMap<>();
         private int blocks, bottom = Integer.MAX_VALUE, most;
@@ -267,6 +268,10 @@ final class StrikeCollapse implements UnitQueue.Job {
             } else if (next < result.at().length) {
                 n = fall(level);
                 more = true;
+            } else if (sharedDust != null && !sharedDust.isEmpty()) {
+                LongSupplier watch = watch(level);
+                announceShared(level, watch, watch.getAsLong());
+                more = true;
             } else if (nextFluid < result.fluidTicks().length) {
                 fluid(level);
                 more = true;
@@ -280,7 +285,6 @@ final class StrikeCollapse implements UnitQueue.Job {
 
         @Override
         public void end(ServerLevel level) {
-            announceShared(level);
             support.cancel();
             if (Incoming.LOG.isDebugEnabled()) {
                 Incoming.LOG.debug("Collapse at {}: recorded removals with peers {}, chunks {}, solved {}, fell {} (falling {}, landed at once {}), stayed {}, replans {}",
@@ -325,7 +329,7 @@ final class StrikeCollapse implements UnitQueue.Job {
             }
             stats.solved += result.solved();
             holes = result.lostPositions().iterator();
-            if (sharedDust == null && !result.peerClaims().isEmpty()) sharedDust = new Dust();
+            if (sharedDust == null && !result.peerClaims().isEmpty()) sharedDust = new Long2ObjectLinkedOpenHashMap<>();
         }
         LongSupplier watch = watch(level);
         long start = watch.getAsLong();
@@ -396,11 +400,13 @@ final class StrikeCollapse implements UnitQueue.Job {
         if (sharedDust == null) announce(level, result.base(), result.common(), result.mass());
     }
 
-    private void announceShared(ServerLevel level) {
-        Dust dust = sharedDust;
-        if (dust == null || dust.blocks == 0) return;
-        announce(level, new Vec3(dust.x / dust.blocks, dust.bottom, dust.z / dust.blocks), dust.common, dust.blocks);
-        sharedDust = null;
+    /** Each local cloud starts over its chunk's fallen material. Packet fan-out shares the fall deadline. */
+    private void announceShared(ServerLevel level, LongSupplier watch, long start) {
+        while (!sharedDust.isEmpty()) {
+            Dust dust = sharedDust.removeFirst();
+            announce(level, new Vec3(dust.x / dust.blocks, dust.bottom, dust.z / dust.blocks), dust.common, dust.blocks);
+            if (watch.getAsLong() - start >= PORTION_NANOS) return;
+        }
     }
 
     private void announce(ServerLevel level, @Nullable Vec3 base, @Nullable BlockState common, int mass) {
@@ -505,7 +511,10 @@ final class StrikeCollapse implements UnitQueue.Job {
                 break;
             } else {
                 boolean item = remove(level, p, st, result.to()[i]);
-                if (sharedDust != null && StrikeSupport.bearing(st)) sharedDust.add(p, st);
+                if (sharedDust != null && StrikeSupport.bearing(st)) {
+                    long chunk = ChunkPos.asLong(p.getX() >> 4, p.getZ() >> 4);
+                    sharedDust.computeIfAbsent(chunk, key -> new Dust()).add(p, st);
+                }
                 droppedAt.add(at[i]);
                 droppedWas.add(st);
                 StrikeRemovals.Source source = area.collapseSource();
@@ -527,7 +536,8 @@ final class StrikeCollapse implements UnitQueue.Job {
             stats.portions++;
             stats.largestPortion = Math.max(stats.largestPortion, n);
         }
-        if (next >= result.at().length) announceShared(level);
+        if (next >= result.at().length && sharedDust != null && !sharedDust.isEmpty()
+                && watch.getAsLong() - start < PORTION_NANOS) announceShared(level, watch, start);
         return n;
     }
 
