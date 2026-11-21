@@ -57,6 +57,8 @@ in float sixKey;
 in vec3 sixBall;
 in vec3 sixKeyDir;
 in vec3 sixUpDir;
+// share of the direct light that reaches the puff (fx.vsh)
+in float sixSun;
 in vec3 sixBallDir;
 in vec3 worldPos;
 // glow (FxBloom): how many times brighter than shown the light is; 0 — does not glow
@@ -311,7 +313,9 @@ void main() {
         float key = pow(max(sixLight(a.rgb, b, sixKeyDir) / FxSixLight.z, 1e-6), shade);
         vec3 tilt = vec3(a.r - b.r, a.g - b.g, b.b - a.b);
         float diffuse = pow(max(skyDome(a.r + a.g + a.b + b.r + b.g + b.b, dot(sixUpDir, tilt)) / FxSixLight.z, 1e-6), shade);
-        float sky = sixKey * key + (1.0 - sixKey) * diffuse;
+        // the direct light only that reaches the puff through the rest of its cloud (SmokePuffs.sunThrough) — the diffuse sky
+        // and fireball light stay whole
+        float sky = sixKey * sixSun * key + (1.0 - sixKey) * diffuse;
         vec3 fire = sixBall * pow(max(sixLight(a.rgb, b, sixBallDir) / FxSixLight.z, 1e-6), shade);
         // a puff lying on the horizontal (shadow exponent 0 — the top of the layer lit from above): the balls' light — in this pixel
         if (-nearest * 127.0 - 13.0 < 0.5) {

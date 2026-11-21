@@ -44,6 +44,21 @@ public final class SmokePuffs {
         void puff6Flat(double dx, double dy, double dz, double halfA, double halfB, double soft, double angle, FxAtlas.Sprite sprite, float mix, float shade,
                        float r, float g, float b, float a);
 
+        /**
+         * {@link #puff6} with the share of the direct light that reaches the puff through the rest of its cloud
+         * ({@link SmokePuffs#sootSun}; 1 — a lone puff in open air).
+         */
+        default void puff6(double dx, double dy, double dz, double halfA, double halfB, FxAtlas.Sprite sprite, float mix, float shade, float r, float g,
+                           float b, float a, float sun) {
+            puff6(dx, dy, dz, halfA, halfB, sprite, mix, shade, r, g, b, a);
+        }
+
+        /** {@link #puff6Flat} with the share of the direct light that reaches it (as {@link #puff6}). */
+        default void puff6Flat(double dx, double dy, double dz, double halfA, double halfB, double soft, double angle, FxAtlas.Sprite sprite, float mix,
+                               float shade, float r, float g, float b, float a, float sun) {
+            puff6Flat(dx, dy, dz, halfA, halfB, soft, angle, sprite, mix, shade, r, g, b, a);
+        }
+
         /** Veil of the substance at the eye on screen ({@link Veil}) with world light `light` (packed). */
         void veil(Veil veil, int light);
 
@@ -55,9 +70,10 @@ public final class SmokePuffs {
      * Numbers per waiting puff: place, σh, σv, soot, dust, droplets, dust albedo (3), number, source, smoke share
      * (opacity of the puff that is not the fire body, {@link #smokeShare}), whether this is a segment puff (1 — its own
      * frame, reflection and wander, as with tube puffs), the puff's look ({@link SmokeGrid.Look}, number) and its frame
-     * (for a look that is not {@code SMOKE}).
+     * (for a look that is not {@code SMOKE}), and the share of the direct sun that reaches it through its source's cloud
+     * ({@code Draw.shadeHeld}; 1 until the plan).
      */
-    static final int FIELDS = 17;
+    static final int FIELDS = 18;
     /**
      * Puffs of one source whose centers are closer than this share of the smaller σ (horizontally and vertically) — one
      * Gaussian with the same mass and moments: their sum from one Gaussian barely differs (for two equal ones at
@@ -127,8 +143,10 @@ public final class SmokePuffs {
         double w = wa + wb;
         if (!(w > 0)) return;
         double fa = wa / w, fb = wb / w;
-        // smoke share — average by what is visible (attenuation)
+        // smoke share and the share of the sun that reaches it — averages by what is visible (attenuation): a merge of
+        // a trace changes the light by a trace
         held[a + 13] = fa * held[a + 13] + fb * held[b + 13];
+        held[a + 17] = fa * held[a + 17] + fb * held[b + 17];
         // source look (puff frame, grain, visibility, frame of its own look) — that of the one with more substance
         if (wb > wa) {
             held[a + 11] = held[b + 11];
@@ -206,7 +224,7 @@ public final class SmokePuffs {
      * axis, piece of axis, color (3), shadow level, puff frame, visible share, puffs in the cluster, whether its own
      * frame, axis (3), look, substance, haze of air before it.
      */
-    static final int PLACE_FIELDS = 21, P_CONTEXT = 18, P_MATERIAL = 19, P_AIR = 20;
+    static final int PLACE_FIELDS = 22, P_CONTEXT = 18, P_MATERIAL = 19, P_AIR = 20, P_SOOT = 21;
     /** Numbers per waiting ribbon segment ({@code Draw.holdRibbon}). */
     static final int RIBBON_FIELDS = 21;
     /** Substances of spots in the frame — no more than (more — spots do not merge). */
@@ -1044,7 +1062,14 @@ public final class SmokePuffs {
         @Override
         public void puff6(double dx, double dy, double dz, double halfA, double halfB, FxAtlas.Sprite sprite, float mix, float shade, float r,
                           float g, float b, float a) {
+            puff6(dx, dy, dz, halfA, halfB, sprite, mix, shade, r, g, b, a, 1);
+        }
+
+        @Override
+        public void puff6(double dx, double dy, double dz, double halfA, double halfB, FxAtlas.Sprite sprite, float mix, float shade, float r,
+                          float g, float b, float a, float sun) {
             int o = next(sprite);
+            calls[o + 14] = sun;
             double[] c = calls;
             c[o] = PUFF;
             c[o + 1] = dx;
@@ -1063,7 +1088,14 @@ public final class SmokePuffs {
         @Override
         public void puff6Flat(double dx, double dy, double dz, double halfA, double halfB, double soft, double angle, FxAtlas.Sprite sprite,
                               float mix, float shade, float r, float g, float b, float a) {
+            puff6Flat(dx, dy, dz, halfA, halfB, soft, angle, sprite, mix, shade, r, g, b, a, 1);
+        }
+
+        @Override
+        public void puff6Flat(double dx, double dy, double dz, double halfA, double halfB, double soft, double angle, FxAtlas.Sprite sprite,
+                              float mix, float shade, float r, float g, float b, float a, float sun) {
             int o = next(sprite);
+            calls[o + 14] = sun;
             double[] c = calls;
             c[o] = FLAT;
             c[o + 1] = dx;
@@ -1135,9 +1167,10 @@ public final class SmokePuffs {
                 int o = k * STRIDE;
                 int kind = (int) c[o];
                 if (kind == PUFF) out.puff6(c[o + 1] + ox, c[o + 2] + oy, c[o + 3] + oz, c[o + 4], c[o + 5], sprites[k], (float) c[o + 6],
-                        (float) c[o + 7], (float) c[o + 8], (float) c[o + 9], (float) c[o + 10], (float) c[o + 11]);
+                        (float) c[o + 7], (float) c[o + 8], (float) c[o + 9], (float) c[o + 10], (float) c[o + 11], (float) c[o + 14]);
                 else if (kind == FLAT) out.puff6Flat(c[o + 1] + ox, c[o + 2] + oy, c[o + 3] + oz, c[o + 4], c[o + 5], c[o + 12], c[o + 13],
-                        sprites[k], (float) c[o + 6], (float) c[o + 7], (float) c[o + 8], (float) c[o + 9], (float) c[o + 10], (float) c[o + 11]);
+                        sprites[k], (float) c[o + 6], (float) c[o + 7], (float) c[o + 8], (float) c[o + 9], (float) c[o + 10], (float) c[o + 11],
+                        (float) c[o + 14]);
                 else {
                     joint[0] = (float) c[o + 16];
                     joint[1] = (float) c[o + 17];
@@ -1305,8 +1338,12 @@ public final class SmokePuffs {
             float cr = thick(ks, kdust, 0, albedoR), cg = thick(ks, kdust, 0, albedoG), cb = thick(ks, kdust, 0, albedoB);
             float tone = FarFlightView.TONE;
             double shade = shade(ks, kdust, 0, albedoG) / BAKED_K;
+            // soot's share of the tube's attenuation for the sun's gain on its puffs ({@link #sootSun}): its colour
+            // does not tell dark dirt from soot (review r2)
+            placeSoot = ks / (ks + kdust);
             int drawn = FarFlightView.line(view, out, a, b, cr * tone, cg * tone, cb * tone, cr, cg, cb, shade, sigma0,
                     mix(seed * 0x9E3779B97F4A7C15L + at), TUBES + contexts - 1, joint);
+            placeSoot = 0;
             if (drawn != FarFlightView.RIBBON) joint[0] = Float.NaN;
         }
 
@@ -1359,6 +1396,15 @@ public final class SmokePuffs {
          */
         private double[] ctxVis = new double[8];
         private int contexts, ctx;
+        /**
+         * Each source's cloud as one Gaussian ({@link #envelopes}): middle (x, y, z), σ horizontally and vertically,
+         * attenuation of the whole mass — {@link #ENV} numbers per source context.
+         */
+        private double[] env = new double[8 * ENV];
+        /** Soot's share of the tube piece being laid ({@link #tube}; other trails — 0): into its places, {@link #P_SOOT}. */
+        private double placeSoot;
+        /** Each source's first pending puff ({@link #envelopes}: moments about it). */
+        private double[] origin = new double[8 * 3];
         /** Non-null while this instance plans a frame for the planner: its draw calls and veil go there. */
         @Nullable
         Recording record;
@@ -1449,6 +1495,7 @@ public final class SmokePuffs {
             held[o + 14] = vary ? 1 : 0;
             held[o + 15] = look.ordinal();
             held[o + 16] = lookFrame;
+            held[o + 17] = 1;
         }
 
         /**
@@ -1503,6 +1550,78 @@ public final class SmokePuffs {
         }
 
         /**
+         * Each source's cloud as one Gaussian of the same mass and moments (as {@link #absorb}: middle by attenuation,
+         * spread of the middles plus each one's σ²), from the soot of the frame's pending smoke puffs before merging: the clumps' shadow on
+         * one another toward the sun ({@link #sunThrough}) in one pass, without pairs (before the LOD thinning, which can
+         * merge puffs of different sources).
+         */
+        private void envelopes() {
+            if (env.length < contexts * ENV) {
+                env = new double[Math.max(2 * contexts, 8) * ENV];
+                origin = new double[env.length / ENV * 3];
+            }
+            java.util.Arrays.fill(env, 0, contexts * ENV, 0);
+            double[] m = env;
+            for (int i = 0; i < holding; i++) {
+                if (merged[i]) continue;
+                int o = i * FIELDS, e = (int) held[o + 12] * ENV;
+                // the shadow is soot's (it absorbs; dust and droplets pass the light on), of the cloud's own upright smoke
+                // (a flat layer by its flatness): the crushed-dust skirt in one Gaussian with the ball filled the space
+                // between them and blacked the skirt out
+                double w = LOOKS[(int) held[o + 15]] == SmokeGrid.Look.SMOKE ? SmokeGrid.SOOT_K * held[o + 5] * (1 - flat(held[o + 3], held[o + 4])) : 0;
+                if (!(w > 0)) continue;
+                // moments about the source's first puff: at world coordinates of millions the variance of a small puff
+                // was lost to cancellation
+                if (!(m[e + 5] > 0)) {
+                    origin[3 * (e / ENV)] = held[o];
+                    origin[3 * (e / ENV) + 1] = held[o + 1];
+                    origin[3 * (e / ENV) + 2] = held[o + 2];
+                }
+                double x = held[o] - origin[3 * (e / ENV)], y = held[o + 1] - origin[3 * (e / ENV) + 1], z = held[o + 2] - origin[3 * (e / ENV) + 2];
+                m[e] += w * x;
+                m[e + 1] += w * y;
+                m[e + 2] += w * z;
+                m[e + 3] += w * (0.5 * (x * x + z * z) + held[o + 3] * held[o + 3]);
+                m[e + 4] += w * (y * y + held[o + 4] * held[o + 4]);
+                m[e + 5] += w;
+            }
+            for (int c = 0; c < contexts; c++) {
+                int e = c * ENV;
+                double w = m[e + 5];
+                if (!(w > 0)) continue;
+                double x = m[e] / w, y = m[e + 1] / w, z = m[e + 2] / w;
+                m[e] = x + origin[3 * c];
+                m[e + 1] = y + origin[3 * c + 1];
+                m[e + 2] = z + origin[3 * c + 2];
+                m[e + 3] = Math.sqrt(Math.max(m[e + 3] / w - 0.5 * (x * x + z * z), 1e-6));
+                m[e + 4] = Math.sqrt(Math.max(m[e + 4] / w - y * y, 1e-6));
+            }
+        }
+
+        /**
+         * Each pending Gaussian's share of the direct sun through its source's cloud ({@link #envelopes}), from its own
+         * sun-side edge, before the LOD merges ({@link #thin}, {@link #mergeLevel}): they blend it by attenuation like
+         * every other field ({@link #absorb}). Taken on the merged puff, a trace of another source's mass switched the
+         * envelope it was lit by (sun share 0 → 1 between two frames, review r2). Cluster puffs share their Gaussian's
+         * share. Ejecta, crushed dust and flat layers keep the open sun ({@link #flat}).
+         */
+        private void shadeHeld() {
+            for (int i = 0; i < holding; i++) {
+                if (merged[i]) continue;
+                int o = i * FIELDS, c = (int) held[o + 12], e = c * ENV;
+                FarView.Sun sun = ctxView[c].sun();
+                double sh = held[o + 3], sv = held[o + 4];
+                double open = LOOKS[(int) held[o + 15]] == SmokeGrid.Look.SMOKE ? flat(sh, sv) : 1;
+                double ext = SmokeGrid.SOOT_K * held[o + 5] + SmokeGrid.dustK((float) held[o + 8], (float) held[o + 9], (float) held[o + 10]) * held[o + 6]
+                        + SmokeGrid.DROP_K * held[o + 7];
+                double edge = edge(ext / (2 * Math.PI * sh * sv));
+                held[o + 17] = open >= 1 || !(sun.w() > 0) ? 1
+                        : open + (1 - open) * sunThrough(held[o] - env[e], held[o + 1] - env[e + 1], held[o + 2] - env[e + 2], edge * sh, edge * sv,
+                        env[e + 3], env[e + 4], env[e + 5], SOOT_SHADOW, sun);
+            }
+        }
+
+        /**
          * Plan of the frame: pending puffs of the last source merged, the cloud puff limit, and each puff and place's
          * quads.
          */
@@ -1513,6 +1632,8 @@ public final class SmokePuffs {
             // Merges of sources not drawn this frame are not kept.
             merges.values().removeIf(m -> m.frame != frame);
             frame++;
+            envelopes();
+            shadeHeld();
             thin();
             if (blobEntry.length < holding) blobEntry = new int[2 * holding];
             if (placeEntry.length < placeCount) placeEntry = new int[2 * placeCount];
@@ -2356,7 +2477,7 @@ public final class SmokePuffs {
             lookFrame = held[o + 16];
             current = i;
             blob(held[o], held[o + 1], held[o + 2], held[o + 3], held[o + 4], held[o + 5], held[o + 6], held[o + 7], (float) held[o + 8],
-                    (float) held[o + 9], (float) held[o + 10], (int) held[o + 11], held[o + 13], held[o + 14] > 0.5);
+                    (float) held[o + 9], (float) held[o + 10], (int) held[o + 11], held[o + 13], held[o + 14] > 0.5, held[o + 17]);
         }
 
         /**
@@ -2405,6 +2526,7 @@ public final class SmokePuffs {
             places[o + P_CONTEXT] = ctx;
             places[o + P_MATERIAL] = material(cr, cg, cb, shade);
             places[o + P_AIR] = air;
+            places[o + P_SOOT] = placeSoot;
             placeSeed[placeCount] = h;
             placeTube[placeCount] = tube;
             placeGone[placeCount] = false;
@@ -2522,7 +2644,7 @@ public final class SmokePuffs {
             current = ~p;
             club(placeView[c], placeOut[c], places[o], places[o + 1], places[o + 2], places[o + 3], places[o + 4], places[o + 5], places[o + 6],
                     (float) places[o + 7], (float) places[o + 8], (float) places[o + 9], places[o + 10], places[o + 11], placeSeed[p], places[o + 12],
-                    (int) places[o + 13], places[o + 14] > 0.5, places[o + P_AIR]);
+                    (int) places[o + 13], places[o + 14] > 0.5, places[o + P_AIR], places[o + 15], places[o + 16], places[o + 17], places[o + P_SOOT]);
         }
 
         /**
@@ -2539,7 +2661,8 @@ public final class SmokePuffs {
          * ({@link FarView#air}). In the plan pass — only the plan record.
          */
         private void club(FarView view, Out out, double px, double py, double pz, double sigma, double tau, double edgeTau, double along,
-                          float cr, float cg, float cb, double shade, double age, long h, double vis, int most, boolean vary, double air) {
+                          float cr, float cg, float cb, double shade, double age, long h, double vis, int most, boolean vary, double air, double ax,
+                          double ay, double az, double soot) {
             double sh = sigma, sv = sigma;
             double a = 1 - Math.exp(-tau);
             if (a < 0.004) return;
@@ -2611,8 +2734,10 @@ public final class SmokePuffs {
                 int f0 = (int) frame;
                 float last = j == count - 1 ? (float) (many - (count - 1)) : 1;
                 boolean mirror = vary ? (hj >>> 40 & 1) == 1 : (j & 1) == 1;
-                out.puff6(px + ox, py + oy, pz + oz, rh * grow * k, rv * grow * k, FxAtlas.puff6(f0, mirror), (float) (frame - f0), (float) shade, sr,
-                        sg, sb, sub * last);
+                // the sun through the rest of the tube's section from the puff's sun-side edge ({@link #tubeThrough})
+                float sunlit = (float) sootSun(tubeThrough(ox, oy, oz, k * rh, sh, edgeTau, ax, ay, az, shade * BAKED_K, view.sun()), soot, view.sun());
+                out.puff6(px + ox, py + oy, pz + oz, rh * grow * k, rv * grow * k, FxAtlas.puff6(f0, mirror), (float) (frame - f0), (float) shade,
+                        sr, sg, sb, sub * last, sunlit);
             }
         }
 
@@ -2809,7 +2934,7 @@ public final class SmokePuffs {
          * of the center, as with tube puffs ({@link Draw#club}). Returns the fill, in screens.
          */
         private double blob(double x, double y, double z, double sh, double sv, double soot, double dust, double water, float dr, float dg, float db,
-                            int id, double smoke, boolean vary) {
+                            int id, double smoke, boolean vary, double sunShare) {
             Vec3 eye = view.camera();
             // on screen — projection of the Gaussian by the view angle (thickness along the ray and the square's
             // height); in the world — its σ (scatter of puffs of the cluster, edge for terrain and for the eye inside)
@@ -2869,6 +2994,8 @@ public final class SmokePuffs {
             float lit = (float) ((0.88 + 0.24 * unit(h)) * view.skyLight());
             float cr = thick(ks, kd, kw, dr) * lit, cg = thick(ks, kd, kw, dg) * lit, cb = thick(ks, kd, kw, db) * lit;
             double light = shade(ks, kd, kw, dg);
+            // the share of the sun through its source's cloud ({@link #shadeHeld}), with the soot gain
+            float sunlit = (float) sootSun(sunShare, ks / (ks + kd + kw), view.sun());
             float shade = (float) (light / BAKED_K), sprayShade = (float) (light / SPRAY_K);
             float shown = (float) (a * vis * point[1] * air * outside * (1 - whole));
             // cluster: the larger the Gaussian on screen, the more puffs and the smaller they are (the 128-pixel frame
@@ -2929,9 +3056,9 @@ public final class SmokePuffs {
                 // ray's path in the layer down to the ground (rw / sin e), not the half-size
                 if (lying > 0) out.puff6Flat(px + ox, py + oy, pz + oz, rh * grow * k, rh * grow * k,
                         Math.min(rh, rw * d / Math.max(Math.abs(py), 1e-3)) * ua.zentix.incoming.client.fx.layer.FxQuads.SOFT, clubAngle(hj), sprite,
-                        (float) (frame - f0), py < 0 ? 0 : (spray ? sprayShade : shade), cr, cg, cb, opticalShare(sub * last, lying));
+                        (float) (frame - f0), py < 0 ? 0 : (spray ? sprayShade : shade), cr, cg, cb, opticalShare(sub * last, lying), sunlit);
                 if (lying < 1) out.puff6(px + ox, py + oy, pz + oz, rh * grow * k, rv * grow * k, sprite, (float) (frame - f0), spray ? sprayShade : shade,
-                        cr, cg, cb, opticalShare(sub * last, 1 - lying));
+                        cr, cg, cb, opticalShare(sub * last, 1 - lying), sunlit);
             }
             return fill;
         }
@@ -2942,7 +3069,12 @@ public final class SmokePuffs {
      * quad in one frame.
      */
     static double lyingShare(double sh, double sv, double dy, double d) {
-        return smoothstep(2.5, 3.5, sh / sv) * smoothstep(0.7, 1.3, sh * Math.abs(dy) / Math.max(sv * d, 1e-12));
+        return flat(sh, sv) * smoothstep(0.7, 1.3, sh * Math.abs(dy) / Math.max(sv * d, 1e-12));
+    }
+
+    /** How flat a Gaussian (σh, σh, σv) is: a layer (dust at the ground) from σh/σv 2.5 to 3.5. */
+    static double flat(double sh, double sv) {
+        return smoothstep(2.5, 3.5, sh / sv);
     }
 
     static float opticalShare(float alpha, double share) {
@@ -3118,6 +3250,92 @@ public final class SmokePuffs {
         }
         return drawn;
     }
+
+    /** Numbers per source's cloud Gaussian ({@code Draw.envelopes}). */
+    static final int ENV = 6;
+
+    /**
+     * Share of the sun's light that reaches a puff at (ox, oy, oz) from the middle of its cloud's Gaussian (σ: sh
+     * horizontally, sv vertically, attenuation of the whole mass ext, m²) from the puff's sun-side edge — where the ray
+     * from its middle toward the sun leaves its ellipsoid of radii rh (horizontally) and rw (vertically): within it
+     * the puff's own maps shade it. e^(−k·τ), τ — thickness toward the sun ({@code sun}), k — two-stream
+     * attenuation per unit thickness ({@link #shade}; ⚠ a bounded proxy of a beam's attenuation in absorbing matter:
+     * the light scattered forward by droplets and alumina goes on, soot absorbs it — for droplets at τ 10 it gives
+     * 0.79 where a bare beam would give e^(−10)). The puffs of one cloud all carry the same maps, so without it the
+     * whole cloud is lit as one puff: the side away from the sun as bright as the side toward it (a black cloud evenly
+     * grey, player frame f_10-22). A line through a Gaussian from a point: τ = ext·e^(−b²/2)·erfc(q/√2)/(4π·sh²·sv·|ŝ|)
+     * in σ-scaled axes (q — the point's offset along the scaled sun direction ŝ, b — across it).
+     */
+    static double sunThrough(double ox, double oy, double oz, double rh, double rw, double sh, double sv, double ext, double k, FarView.Sun sun) {
+        if (!(sun.w() > 0) || !(ext > 0) || !(sh > 0) || !(sv > 0)) return 1;
+        double sx = sun.x() / sh, sy = sun.y() / sv, sz = sun.z() / sh;
+        double a = Math.sqrt(sx * sx + sy * sy + sz * sz);
+        double edge = rh > 0 && rw > 0 ? 1 / Math.sqrt(sq(sun.x() / rh) + sq(sun.y() / rw) + sq(sun.z() / rh)) : 0;
+        double ux = (ox + sun.x() * edge) / sh, uy = (oy + sun.y() * edge) / sv, uz = (oz + sun.z() * edge) / sh;
+        double q = (ux * sx + uy * sy + uz * sz) / a;
+        double b2 = Math.max(0, ux * ux + uy * uy + uz * uz - q * q);
+        double tau = ext * Math.exp(-0.5 * b2) * (1 - SmokeGrid.erf(q * SQRT_HALF)) / (4 * Math.PI * sh * sh * sv * a);
+        return Math.exp(-k * tau);
+    }
+
+    /**
+     * {@link #sunThrough} for a tube (axis (ax, ay, az), section σ, thickness across the axis tau): a 2-D Gaussian
+     * across the axis, τ = tau·e^(−b²/2)·erfc(q/√2)/(2·|s⊥|), s⊥ — the sun's direction across the axis; from the puff's
+     * sun-side edge r. Along the axis the piece is finite: |s⊥| is not taken below {@value #TUBE_ALONG} (⚠ a sun
+     * along the axis, est.).
+     */
+    static double tubeThrough(double ox, double oy, double oz, double r, double sigma, double tau, double ax, double ay, double az, double k,
+                              FarView.Sun sun) {
+        if (!(sun.w() > 0) || !(tau > 0) || !(sigma > 0)) return 1;
+        double an = Math.sqrt(ax * ax + ay * ay + az * az);
+        if (an > 0) {
+            ax /= an;
+            ay /= an;
+            az /= an;
+        }
+        double along = sun.x() * ax + sun.y() * ay + sun.z() * az;
+        double sx = sun.x() - along * ax, sy = sun.y() - along * ay, sz = sun.z() - along * az;
+        double across = Math.max(Math.sqrt(sx * sx + sy * sy + sz * sz), TUBE_ALONG);
+        double po = ox * ax + oy * ay + oz * az;
+        double px = ox - po * ax + sun.x() * r, py = oy - po * ay + sun.y() * r, pz = oz - po * az + sun.z() * r;
+        double pa = px * ax + py * ay + pz * az;
+        px -= pa * ax;
+        py -= pa * ay;
+        pz -= pa * az;
+        // over the clamped length, not the unit direction: a sun near the axis gives q → 0 from either side
+        double q = (px * sx + py * sy + pz * sz) / (across * sigma);
+        double b2 = Math.max(0, (px * px + py * py + pz * pz) / (sigma * sigma) - q * q);
+        double t = tau * Math.exp(-0.5 * b2) * (1 - SmokeGrid.erf(q * SQRT_HALF)) / (2 * across);
+        return Math.exp(-k * t);
+    }
+
+    /** Two-stream attenuation of soot per unit of its thickness: the envelope's shadow is soot's ({@code Draw.envelopes}). */
+    static final double SOOT_SHADOW = twoStream(SmokeGrid.SOOT_W, SmokeGrid.SOOT_G);
+
+    /** Least share of the sun's direction across a tube's axis ({@link #tubeThrough}). */
+    static final double TUBE_ALONG = 0.2;
+
+    private static double sq(double v) {
+        return v * v;
+    }
+
+    /**
+     * Share of the direct light on a puff that the sun reaches by share t ({@link #sunThrough}): the shader multiplies
+     * only the puff's direct term by it ({@code fx.fsh}, {@code sixSun}); the sky's diffuse light and the fireballs'
+     * stay whole. presentation: the sun on dark smoke ×{@value #SOOT_SUN} — the sunlit tops of a black cloud grey
+     * against its near-black core, as in footage of oil fires (1_1: lit billow tops sRGB 115–125 over a core of
+     * 33–41). A thick soot layer reflects R∞ ≈ 0.065 of the sky's light ({@link #thick}), so its sunlit tops stayed
+     * at ~110 and the cloud read as one flat grey mass. Only the sun that reaches the puff is lifted, by soot's share
+     * of the matter's attenuation (white smoke and dust keep their light). Facts (size, mass, colour of the matter) do
+     * not change.
+     */
+    static double sootSun(double t, double soot, FarView.Sun sun) {
+        if (!(sun.w() > 0)) return 1;
+        return t * (1 + (SOOT_SUN - 1) * Math.clamp(soot, 0, 1));
+    }
+
+    /** {@link #sootSun}'s gain on the sun (presentation). */
+    static final double SOOT_SUN = 2;
 
     /**
      * Color of the substance of a trail with single-scattering albedo albedo (up to delta-Eddington, asymmetry
