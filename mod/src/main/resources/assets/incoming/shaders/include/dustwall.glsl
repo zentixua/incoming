@@ -112,13 +112,13 @@ float dwEnvelope(float a, float h, float k) {
 // the air mass the dust rides in: position the lofted air at q (age a, radius r, envelope top) came from — the texture is
 // fixed in it, so motion carries billows and does not slide them through the dust (presentation). The post-shock wind
 // whirls it hardest in the first seconds and calms with the wind (eddy energy e-fold 8 s, floor 30 %, violent first
-// seconds e-fold 4 s); eddies 32 × 20 m turn with phase = integral of their energy, at the speed of real dust fronts
-// (haboob footage: a 16-pixel patch decorrelates at ~0.45/s); the whole mass sloshes out with the wind and back with the
+// seconds e-fold 4 s); eddies 32 × 20 m turn with phase = integral of their energy: violent while the wave's wind
+// blows, then at the speed of real dust fronts (haboob drone footage: a 16-pixel patch decorrelates at ~0.45/s); the whole mass sloshes out with the wind and back with the
 // negative phase, the top more (rolls); the world wind drifts it all
 vec3 dwAir(vec3 q, float a, float r, float top, bool coarse, out float ph) {
     float E = exp(-a / 8.0), Ef = exp(-a / 4.0);
     float A = 0.3 + 0.7 * E + 0.6 * Ef;
-    ph = 0.5 * (8.0 * (1.0 - E) + 0.25 * a + 3.5 * (1.0 - Ef));
+    ph = 0.5 * (8.0 * (1.0 - E) + 0.25 * a) + 3.5 * (1.0 - Ef);
     vec3 b = q / vec3(32.0, 20.0, 32.0);
     // one octave: a second one shears the 20 m billows into marbled, liquid-looking swirls
     vec3 w = vec3(dwNoise3(b + vec3(0.0, ph * 0.15, 0.0)), dwNoise3(b + vec3(5.2, 1.3 - ph * 0.14, 2.8)),
@@ -131,10 +131,11 @@ vec3 dwAir(vec3 q, float a, float r, float top, bool coarse, out float ph) {
     return pw;
 }
 
-// bulges and dips of the mass in the air (≈110 m lumps): small on the fresh head, larger once it has settled
+// bulges and dips of the mass in the air: ≈110 m lumps over ≈300 m swells, small on the fresh head, larger once it has
+// settled (the settled field varies in large shape, not in one lump size)
 float dwBulge(vec3 pw, float a) {
-    float L = dwFbm2(vec3(pw.xz / 110.0, 0.37), 0.0);
-    return clamp((L - 0.5) * mix(1.6, 2.6, smoothstep(1.0, 5.0, a)), -DW_BULGE, DW_BULGE);
+    float L = 0.55 * dwFbm2(vec3(pw.xz / 110.0, 0.37), 0.0) + 0.45 * dwNoise3(vec3(pw.xz / 300.0, 7.1));
+    return clamp((L - 0.5) * mix(1.8, 3.0, smoothstep(1.0, 5.0, a)), -DW_BULGE, DW_BULGE);
 }
 
 // the smooth dust top over ground point xz (no billows; the light's shadow surface), blocks; 0 where no young dust
@@ -173,19 +174,18 @@ float dwDensity(vec3 q, bool coarse) {
     float h = n0.y, k = dwHump(q.xz);
     float top0 = max(dwEnvelope(a0, h, k), 1.0);
     if (q.y > top0 * (1.0 + DW_BULGE) * DW_HAZE + 6.0) return 0.0;
-    // the crest curls forward over the contact line: higher up, the dust has the profile of a point a little inward (older),
-    // so the hump overhangs a nose that is still being torn up from the ground; gone as the hump settles
+    // the dust is born on the contact line and rises while the front runs on: higher up it has the profile of a point a
+    // little outward (younger), so the face is a ramp from the ground up into the crest, leaning back, never ahead of the
+    // front. The young head billows: its face is cut back by cauliflower lumps (~30 m, up to ~35 m deep, gone as the head
+    // settles) that ride with the head (coordinates along the front, height and distance behind it) and roll back over it
+    // at 25 m/s: fixed in the ground, the front would sweep each 30 m lump in two frames and the face would boil
     float yn = clamp(q.y / top0, 0.0, 1.5);
-    // the young head billows forward and back as well as up: its face is cauliflower, not a smooth cut (lumps ~30 m,
-    // ±20–40 m at the front, gone as the head settles). The lumps ride with the head (coordinates along the front, height
-    // and distance behind it) and roll back over it at 25 m/s: fixed in the ground, the front would sweep each 30 m lump
-    // in two frames and the face would boil
     float bf = 0.42;
     if (!coarse && a0 < 4.0) {
         vec3 hf = vec3(atan(q.z, q.x) * DwRing.x / 30.0, q.y / 22.0, (DwRing.x - r + 25.0 * DwEye.w) / 30.0);
         bf = dwBillow(hf + vec3(3.7, 0.0, 9.1), 1.0 / 22.0);
     }
-    float a = DwEye.w - dwNode(max(r - 30.0 * yn * yn * exp(-a0 / 1.2) + 120.0 * (bf - 0.42) * exp(-a0 / 1.5), 0.0)).x;
+    float a = DwEye.w - dwNode(r + (40.0 * yn * yn + 100.0 * max(bf - 0.3, 0.0)) * exp(-a0 / 1.5)).x;
     if (a <= 0.0) return 0.0;
     float top = dwEnvelope(a, h, k), ph;
     vec3 pw = dwAir(q, a, r, top, coarse, ph);
@@ -249,8 +249,10 @@ vec3 dwLight(vec3 q, vec3 rd) {
     float depth = max(gDwSurf - q.y, 0.0) * gDwSigma;
     float ms = 0.3 + 0.3 * exp(-0.12 * depth);
     float sunUp = smoothstep(-0.05, 0.05, DwSunDir.y);
-    vec3 single = dwBallLight(q) * (0.3 * min(dwPhase(dot(rd, lb)), 6.0) * exp(-taub))
-            + DwSunLight * (0.3 * min(dwPhase(dot(rd, DwSunDir)), 6.0) * exp(-taus)) * sunUp;
+    // thin dust toward the fireball glows (forward peak: the crest's rim against the ball); the low sun lights the faces
+    // turned to it
+    vec3 single = dwBallLight(q) * (0.4 * min(dwPhase(dot(rd, lb)), 10.0) * exp(-taub))
+            + DwSunLight * (0.5 * min(dwPhase(dot(rd, DwSunDir)), 6.0) * exp(-taus)) * sunUp;
     vec3 multiple = dwBallLight(q) * ms * (0.45 + 0.55 * exp(-0.25 * taub)) + DwSunLight * ms * (0.45 + 0.55 * exp(-0.25 * taus)) * sunUp
             + DwSkyLight * (0.06 + 0.3 * exp(-0.3 * depth));
     return DW_EXPOSURE * (DwAlbedo * single + DwBulk * multiple + DwBulk * DwGroundLight);

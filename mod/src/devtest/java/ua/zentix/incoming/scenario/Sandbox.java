@@ -128,6 +128,12 @@ final class Sandbox {
     private Boolean soft;
     /** Frames per tick while frames are due on a CPU renderer: a frame lands within half a tick of its second. */
     private static final double FRAMES_PER_TICK = 2;
+    /**
+     * Frames per tick while frames are due on a GPU: a frame is taken at the first render whose age reaches its second, so
+     * it lands within 1/8 tick (6 ms) of it; at whole ticks a 30 fps take's frames advanced 25–28 ms with a 45–145 ms jump
+     * every half second, and every moving thing in the clip lurched at ~2 Hz.
+     */
+    private static final double GPU_FRAMES_PER_TICK = 8;
     /** Seconds before a due frame from which the CPU renderer's world is slowed ({@link #paceFrame}). */
     private static final double PACE_LEAD = 2;
     /** Rate from arming to the first measured frames (≈ 2 frames per tick at 4 frames/s, the smoke-filled llvmpipe rate). */
@@ -1563,7 +1569,8 @@ final class Sandbox {
             mc.level.setDayTime(day);
             onServer(false, s -> s.overworld().setDayTime(day));
         }
-        if (tick < effectTick + Math.round(t * 20) || !fullSize(mc)) {
+        // the first render whose age reaches the frame's second (at whole ticks frames jittered by a render interval)
+        if ((tick - effectTick + partial) / 20.0 < t - 1e-4 || !fullSize(mc)) {
             // far from the next frame the world runs at full rate: pacing a whole 130 s take on llvmpipe (1–3 frames/s
             // with a mushroom in view) stretches it to tens of minutes; the last PACE_LEAD seconds settle the rate
             if (effectTick + Math.round(t * 20) - tick > PACE_LEAD * 20) pace(20);
@@ -1605,7 +1612,7 @@ final class Sandbox {
         if (paceLast != 0) {
             double frame = (now - paceLast) / 1e9;
             paceFrameS = paceFrameS == 0 ? frame : paceFrameS * 0.7 + frame * 0.3;
-            pace(1 / (FRAMES_PER_TICK * paceFrameS), true);
+            pace(1 / ((Boolean.TRUE.equals(soft) ? FRAMES_PER_TICK : GPU_FRAMES_PER_TICK) * paceFrameS), true);
         }
         paceLast = now;
     }
