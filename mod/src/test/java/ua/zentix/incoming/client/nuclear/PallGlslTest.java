@@ -348,14 +348,12 @@ class PallGlslTest {
                 "return vec3(rel.x - out1.x * x, z - x * (0.02 + 0.06 * zr), rel.y - out1.y * x);"}) {
             assertTrue(origin.contains(law), "head dust place - not like in Java: no \"" + law + "»");
         }
-        // the head's relief is the young layer's lumps at its dust origin, fine detail only the streaks (Artem 21.11: one mass, no
-        // high-frequency cells, no black voids)
+        // over land the young field draws the head's dust (youngDust: the approved v6 field); the head draws its spray by the law's mean
         String flat = body(read("include/fx_pall.glsl"), "float wallAt(").replaceAll("\\s+", " ");
-        assertTrue(flat.contains("vec3 o = pallWallOrigin(h.rel, h.z, ph, h.P.y, V[1].x);")
-                && flat.contains("float relief = pallTopRelief(o.xz, gLumpTile, gLumpTime, gLumpCone);")
-                && flat.contains("float m = pallWallMean(s, h.z / relief, h.P.x, h.P.y) / relief;")
-                && flat.contains("if (fine > 0.0) shape *= mix(1.0, pallStreak(h.rel, h.z), fine);")
-                && flat.contains("return h.P.w * m * shape;"), "head relief - not the shared relief in its top at the dust origin");
+        assertTrue(flat.contains("return h.P.w * pallWallMean(h.s - h.P.z, h.z, h.P.x, h.P.y);"), "the head's spray: the law's mean");
+        String slot = body(read("include/fx_pall.glsl"), "void slot(").replaceAll("\\s+", " ");
+        assertTrue(slot.contains("if (head.P.w > 0.0 && head.wet > 0.0) wall(") && slot.contains("youngDust(y, vec3(head.rel.x, head.z, head.rel.y)"),
+                "the head: spray by the law, dust by the young field");
         assertTrue(!read("include/fx_pall.glsl").contains("wallBillows"), "the head's own billow octaves");
     }
 
@@ -379,11 +377,10 @@ class PallGlslTest {
         assertTrue(f.contains("float topD = max(dust.g, 1.0) * bumps,"), "the bumps are not the top of the layer");
         assertTrue(f.contains("a.mixed = dust.a;"), "confusion - not from the table");
         String fx = read("include/fx_pall.glsl");
-        // the top bumps, and the wisps of young dust (presentation, pallWisp) on top of them; a wisp keeps the column: the
-        // dust it lifts thins by the same factor (review: +45 % column in a wisp cell 8 s after the phase)
-        assertTrue(fx.contains("pallField(Sampler1, ground, S, R, W, p, floorUp, topBumps(S, p) * wisp);"), "pall beam - without top bumps");
-        assertTrue(fx.contains("float wisp = pallWisp(S, p) * pallLumpTop(S, p, cone);") && fx.contains("f.sigma.x /= wisp;") && fx.contains("f.column.x /= wisp;")
-                && fx.contains("f.slab.x /= wisp;"), "a wisp or a lump redistributes the column, never adds dust");
+        // the top bumps (the young dust's wisps are the young field's: youngDust)
+        assertTrue(fx.contains("pallField(Sampler1, ground, S, R, W, p, floorUp, topBumps(S, p));"), "pall beam - without top bumps");
+        assertTrue(fx.contains("f.sigma.x *= law;") && fx.contains("f.column.x *= law;") && fx.contains("f.slab.x *= law;"),
+                "the young field takes the law's dry dust here and above by its share, never adding to it");
         assertTrue(body(fx, "float topBumps(").contains("return 1.0 + PALL_BUMPS * (2.0 * n - 1.0);"), "tubercles - not 1 ± PALL_BUMPS");
     }
 
@@ -549,7 +546,8 @@ class PallGlslTest {
     @Test
     void headSootIsThePallsSoot() {
         String fx = read("include/fx_pall.glsl").replaceAll("\\s+", " ");
-        assertTrue(fx.contains("if (head.P.w > 0.0) wall(V, head, keyDir, sunDir, lightDir, f.smoke, cone, pall, S[3].x, s);"), "head soot - not the pall's");
+        assertTrue(fx.contains("if (head.P.w > 0.0 && head.wet > 0.0) wall(V, head, keyDir, sunDir, lightDir, f.smoke, cone, pall, head.wet, s);")
+                && fx.contains("youngDust(y, vec3(head.rel.x, head.z, head.rel.y), sunDir, lightDir, dustW, youngDry, s);"), "head soot - not the pall's");
         String wall = body(read("include/fx_pall.glsl"), "void wall(").replaceAll("\\s+", " ");
         assertTrue(wall.contains("vec3 w = mix(pallDustW(h.sand, h.hard, V[3].x + (V[3].y - V[3].x) * uw, smoke), PALL_MIST_W, h.wet);"),
                 "head dust - not the soil's with the pall's soot");

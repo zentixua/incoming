@@ -256,7 +256,7 @@ class BlastWallTest {
      *  dust itself ({@link BlastWall#origin}, phase fraction - wedge fraction × {@code slot[8]}): at a place on the ground, while the head passes it
      *  (from the edge to the end of the transition to the pall), the billows place in the noise shifts less than half the path of the front during this time;
      *  across ring noise does not add up and is compressed no more than 1 + U/V times (U is the wind behind the front, V is the front in the game: at
-     *  slow wave 0,2 - up to ~2,6); there is only one noise tile for the entire blast (growing headlong would move the billows along the ground).
+     *  slow wave 0,2 - up to ~2,6); slot[11] is the front's ground speed (the young field's dust age behind it).
      * The previous noise (in the tile at the front) traveled with the front - the shift would be along its entire path. Air 15 kt on 592 m on
      *  real and slow wave, ground 15 kt and 1 kt.
      */
@@ -270,14 +270,15 @@ class BlastWallTest {
             BlastWall w = new BlastWall(d, false);
             String burst = d.yieldKt() + " kt on " + d.hobMetres() + " m, wave " + d.wave() + ": ";
             float[] slot = new float[BlastWall.SLOT];
-            double tile = -1, squeeze = 0;
+            double squeeze = 0, prevEdge = Double.NaN;
             int places = 0;
             for (double place : new double[] {300, 800, 1400, 2500}) {
                 double first = Double.NaN, last = Double.NaN, minO = Double.MAX_VALUE, maxO = -Double.MAX_VALUE;
                 for (double t = 0.01; t < 120; t += 0.01) {
                     if (!w.slot(t, slot) || slot[3] <= 0) continue;
-                    if (tile < 0) tile = slot[11];
-                    assertEquals(tile, slot[11], 0, burst + t + " s: head noise tile changes");
+                    // the young field's age behind the front (fx_pall: youngDust): slot[11] is the front's ground speed, blocks/s
+                    if (!Double.isNaN(prevEdge) && place == 300 && d == GROUND) assertEquals(slot[0] - prevEdge, 0.01 * slot[11], 0.05 * 0.01 * slot[11] + 0.05, burst + t + " s: front speed");
+                    prevEdge = place == 300 ? slot[0] : Double.NaN;
                     double s = slot[0] - place;
                     if (s < 0 || s > BlastWall.HANDOFF_TO * slot[1]) continue;
                     if (Double.isNaN(first)) first = slot[0];

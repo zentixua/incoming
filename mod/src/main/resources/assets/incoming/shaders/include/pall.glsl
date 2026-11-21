@@ -91,21 +91,11 @@ struct PallAt {
     float wet;
     // how much the dust layer is mixed (PallField.mixed): tufts of the young layer spread out (pallMixed)
     float mixed;
-    // dust density at the ground here (the dust row × edge, after water): the drawn tail's base (PALL_TAIL)
+    // dust density at the ground here (the dust row × edge, after water) and the row's top without bumps (blocks): the law's column for
+    // the young field (fx_pall: youngDust)
     float base;
+    float top;
 };
-
-// presentation (PallField.TAIL, TAIL_TOP; the drawn young dust and head only): a dilute share of the drawn column thinning from 0.45 of the
-// top to PALL_TAIL_TOP of it — the top an entrainment zone, not a skin
-const float PALL_TAIL = 0.06;
-const float PALL_TAIL_TOP = 1.45;
-// its shape by height (1 at the ground, 0 at PALL_TAIL_TOP); PALL_TAIL_NORM = ∫ pallProfile / ∫ shape over the top (0.548 / 0.95), so the
-// tail and the core scaled by 1 / (1 + PALL_TAIL) keep the column
-const float PALL_TAIL_NORM = 0.5768;
-float pallTailShape(float x) {
-    if (x <= 0.0) return 1.0;
-    return 1.0 - smoothstep(0.45, PALL_TAIL_TOP, x);
-}
 
 // share of density at the ground at height x of the pall (PallField.profile)
 float pallProfile(float x) {
@@ -227,6 +217,7 @@ PallAt pallField(sampler2D table, sampler2D ground, mat4 S, vec4 G, vec4 W, vec3
     a.wet = wet;
     a.mixed = dust.a;
     a.base = sd;
+    a.top = max(dust.g, 1.0);
     return a;
 }
 
@@ -615,43 +606,25 @@ float pallLitDepth(float tau, float gate) {
     return mix(tau, PALL_LIT_TAU * (1.0 - exp(-tau / PALL_LIT_TAU)), gate);
 }
 
+// presentation (lead 21.11; Artem's approved v6 field — fx_pall: youngDust): the young dry dust is drawn as the approved animation's field.
+// PALL_YOUNG_RISE — its lofting time constant, s; PALL_YOUNG_TOP — its reach in shares of the law's top (copy PallField.YOUNG_TOP: the
+// bounds); PALL_YOUNG_TILE — the slot noise tile at 1 Mt, blocks (NukePall.TILE_M × ∛(1000/15)): the animation's billow sizes there;
+// PALL_YOUNG_SHARE — the drawn share of the law's column (the law's ~100 optical depths at the 4.5 km ring of 1 Mt drew a hard skin;
+// the animation's 0.11/m: PallYoungTest); the law's pall takes over as the layer mixes, from PALL_YOUNG_MIX_FROM to PALL_YOUNG_MIX_TO
+// (PallField.mixed: 17–42 s after the local phase, est.: the animation's dust is approved to ~25 s)
+const float PALL_YOUNG_RISE = 0.4;
+const float PALL_YOUNG_TOP = 1.05;
+const float PALL_YOUNG_TILE = 1038.0;
+const float PALL_YOUNG_SHARE = 0.05;
+const float PALL_YOUNG_MIX_FROM = 0.25;
+const float PALL_YOUNG_MIX_TO = 0.5;
+
 // presentation (Artem 21.11: the lifted dust keeps moving for seconds after the front, never freezing): the billow pattern of young
 // dust is displaced along its turbulent path — eddies of the dusty layer move at σ_u ≈ 2.5 u* ≈ 0.1 of the wind behind the front
 // (Panofsky & Dutton 1984; Schlichting rough plate, BlastWall.EDDY) and die out over PALL_TURB_S as the wind decays — so the total path
 // saturates (PALL_TURB_REACH noise tiles, est., about twice the physical path so it reads from afar); after the eddies die the pattern
 // keeps turning slowly (PALL_TURB_SLOW tiles/s, est.) until the layer has mixed (PALL_MIX_S). The noise is not stretched along the flow:
 // a stretched coordinate makes its gaps as long as its billows, and the layer opened into black voids; PALL_MIX_S is DustModel.RISE_S (PallField.mixed: 1 − e^(−age/60 s))
-// presentation (Artem's approved animation; fx_pall: pallWisp): wisp cells, plume width (σ), the top's rise share (copy
-// PallField.WISP_RISE: the pall's bounds), lifetime after the local phase ended, blocks and seconds; a plume rises over
-// PALL_WISP_RISE_S (est., the animation's wisps)
-const float PALL_WISP_RISE_S = 5.0;
-const float PALL_WISP_CELL = 60.0;
-const float PALL_WISP_WIDTH = 8.0;
-const float PALL_WISP_RISE = 0.6;
-const float PALL_WISP_END = 14.0;
-// presentation (Artem's approved animation: streaks 28 m along the flow, 5 m tall, 4.5 m across; fx_pall: pallStreak)
-const float PALL_STREAK_ALONG = 28.0;
-const float PALL_STREAK_UP = 5.0;
-const float PALL_STREAK_ACROSS = 4.5;
-// presentation (est.): streak strength decays from full toward a 0.35 floor with this e-folding time after the first
-// second behind the front, s (the approved animation's streaks fade within seconds as the layer turns over)
-const float PALL_STREAK_FADE = 4.0;
-// presentation (Artem 21.11 with Silo S3E09 frame c and a haboob's material; approved v6 lumps 150–300 m): the young dust — head and
-// the layer behind it — is one mass whose relief is in its top (pallTopRelief): the noise tile's billow and dome channels (R, B in equal
-// parts) at one texel per 1/PALL_LUMP_TEXEL of the pall's noise tile (1 Mt: 67 m texels; lumps from ~120 m over kilometre swells), with
-// billows at a third and frays at a ninth of a lump, each octave normalised over ±2 σ of the channels (the production tile: mean
-// PALL_LUMP_MEAN, σ PALL_LUMP_SD, PallLumpsTest), turning over by PALL_LUMP_TURN texels a second (a lump renews in about ten seconds)
-const float PALL_LUMP_TEXEL = 15.4;
-// the young top's relief (pallTopRelief): lumps and billows at a third of a lump (weights PALL_LUMP_W, 1 − it), the top between
-// PALL_RELIEF_LO and PALL_RELIEF_HI of the law's (lead 14:15: the top at the 4.5 km ring of 1 Mt stays within ~85–90 m — the hump's
-// peak is the law's top, the relief rises it by at most PALL_RELIEF = HI − 1, the bounds' share, PallField.LUMP_AMP, PallLumpsTest)
-const float PALL_LUMP_W = 1.0;
-const float PALL_RELIEF_LO = 0.75;
-const float PALL_RELIEF_HI = 1.10;
-const float PALL_RELIEF = 0.10;
-const float PALL_LUMP_MEAN = 0.5;
-const float PALL_LUMP_SD = 0.1735;
-const float PALL_LUMP_TURN = 0.25;
 const float PALL_TURB_S = 8.0;
 const float PALL_TURB_REACH = 1.2;
 const float PALL_TURB_SLOW = 0.015;
@@ -776,7 +749,7 @@ float pallWallFade(float u) {
 float pallWallInside(float s, float z, float len, float top, float lag) {
     if (s < -1.0) return 0.0;
     if (s > PALL_WALL_HANDOFF_TO * len + lag) return 0.0;
-    if (z > top * (1.0 + PALL_RELIEF) * PALL_TAIL_TOP) return 0.0;
+    if (z > top * PALL_YOUNG_TOP) return 0.0;
     if (z < -0.5 * top) return 0.0;
     return 1.0;
 }
@@ -861,7 +834,7 @@ vec4 pallWallSpans(mat4 S, mat4 V, vec4 G, vec3 dir, float ta, float tb) {
     vec2 c = S[0].xy;
     float top = V[0].z, outer = V[0].x + 1.0, inner = max(V[0].x - PALL_WALL_HANDOFF_TO * V[0].y - V[1].y, 0.0);
     // by height: the relief map (without it — the ground under the epicenter) with the head
-    float lo = S[0].z + min(G.y, 0.0) - 0.5 * top, hi = S[0].z + max(G.z, 0.0) + top * (1.0 + PALL_RELIEF) * PALL_TAIL_TOP;
+    float lo = S[0].z + min(G.y, 0.0) - 0.5 * top, hi = S[0].z + max(G.z, 0.0) + top * PALL_YOUNG_TOP;
     if (abs(dir.y) > 1e-6) {
         float y0 = lo / dir.y, y1 = hi / dir.y;
         ta = max(ta, min(y0, y1));

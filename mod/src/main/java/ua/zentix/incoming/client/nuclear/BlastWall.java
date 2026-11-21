@@ -173,6 +173,16 @@ public final class BlastWall {
         return Math.sqrt(Math.max(0, front * front - hob * hob));
     }
 
+    /**
+     * Ground speed of the front at time t (model seconds), m/s: the young dust's age at a distance s behind it is about s over this
+     * (fx_pall: youngDust; the front slows, so dust far behind reads a few per cent older — the approved animation's R ∝ t^0.8 gives
+     * +8 % at half the radius).
+     */
+    double speed(double t) {
+        double dt = 0.02;
+        return (shock(t + dt) - shock(Math.max(0, t - dt))) / (t + dt - Math.max(0, t - dt));
+    }
+
     /** Dust leading edge on ground at time t (model seconds), m: the game front itself — dust rises right behind it. */
     double head(double t) {
         return shock(t);
@@ -337,7 +347,7 @@ public final class BlastWall {
      *     edge, top fraction, extinction (1/block);</li>
      *     <li>[8..11] — phase fraction elapsed at wedge end ({@link #backAge}: wedge fraction u means phase fraction u × this);
      *     saltation e-folds over the wedge length (dust age at its end over {@link DustModel#SALTATION_S}) and the share of dust
-     *     rising at once ({@link #develop}); free (0);</li>
+     *     rising at once ({@link #develop}); the front's ground speed ({@link #speed}, blocks per model second);</li>
      *     <li>[12..15] — dust over hard ground relative to soil ({@link #pavedShare}) at leading edge and wedge end; ground dust
      *     extinction at wave phase end, at leading edge and wedge end — fractions of scale.</li>
      * </ul>
@@ -369,9 +379,10 @@ public final class BlastWall {
             into[8] = (float) age;
             into[9] = (float) (age * HobBlast.positivePhaseSeconds(back, hob, d.yieldKt()) / DustModel.SALTATION_S);
             into[10] = (float) clamped(prompt, Math.max(0, head - 0.5 * len));
+            // the young dust's age behind the front (fx_pall: youngDust — the approved v6 field): the front's ground speed, blocks per model second
+            into[11] = (float) d.blocks(speed(t));
             into[12] = (float) pavedShare(head);
             into[13] = (float) pavedShare(back);
-            into[11] = 0;
             into[14] = (float) (s[0] / ref);
             into[15] = (float) (s[1] / ref);
         }
@@ -498,7 +509,7 @@ public final class BlastWall {
     static double sigma(float[] slot, double relX, double relZ, double up, double wet, double hard) {
         if (slot[3] <= 0) return 0;
         double s = slot[0] - Math.hypot(relX, relZ), len = slot[1], top = slot[2];
-        if (s < -1 || s > HANDOFF_TO * len + slot[5] || up > top * (1 + PallField.LUMP_AMP) || up < -0.5 * top) return 0;
+        if (s < -1 || s > HANDOFF_TO * len + slot[5] || up > top || up < -0.5 * top) return 0;
         double back = slot[5] * wet, at = s - back;
         double k = density(slot, at, wet, hard);
         return k * mean(at, up, len, top * (1 + (slot[6] - 1) * wet));

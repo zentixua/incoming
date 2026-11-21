@@ -474,6 +474,9 @@ public final class NukePall {
             any |= ROW[4 * i] > 0;
             top = Math.max(top, ROW[4 * i + 1]);
         }
+        // the young dust's field reaches YOUNG_TOP of the law's top (spray row, channel a)
+        double young = 0;
+        for (int i = PallField.SPRAY_ROW * PallPass.WIDTH; i < (PallField.SPRAY_ROW + 1) * PallPass.WIDTH; i++) young = Math.max(young, ROW[4 * i + 3]);
         if (p.surge(ticks, SURGE)) {
             any = true;
             top = Math.max(top, SURGE[1]);
@@ -494,10 +497,10 @@ public final class NukePall {
         // the wall and pall grow, moving only at a snap (samples sliding with the front read as boiling dust)
         float r = (float) PallPass.snapBounds(Math.max(p.extent(ticks), Math.max(a.wall.reach(seconds) + 1, a.wall.wilsonReach(seconds))));
         LO.set(cx - r, (float) (ground - top), cz - r);
-        HI.set(cx + r, (float) (ground + Math.max(a.ground.high(), 0) + top * (1 + PallField.BUMPS) * (1 + PallField.WISP_RISE) * (1 + PallField.LUMP_AMP) * PallField.TAIL_TOP * 1.05), cz + r);
+        HI.set(cx + r, (float) (ground + Math.max(a.ground.high(), 0) + Math.max(top * (1 + PallField.BUMPS), young * PallField.YOUNG_TOP) * 1.05), cz + r);
         if (WALL[3] > 0) {
             LO.y = Math.min(LO.y, ground + Math.min(a.ground.low(), 0) - 0.5f * WALL[2]);
-            HI.y = Math.max(HI.y, ground + Math.max(a.ground.high(), 0) + WALL[2] * (float) ((1 + PallField.LUMP_AMP) * PallField.TAIL_TOP));
+            HI.y = Math.max(HI.y, ground + Math.max(a.ground.high(), 0) + WALL[2] * (float) PallField.YOUNG_TOP);
         }
         if (WALL[18] > 0) HI.y = Math.max(HI.y, (float) (ground + WALL[19] + a.wall.wilsonReach(seconds)));
         CULL.set(LO.x, Math.min(LO.y, bottom), LO.z);

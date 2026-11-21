@@ -286,14 +286,11 @@ public final class PallField {
     }
 
     /**
-     * presentation (fx_pall: the drawn young dust and head only; the law and its profile are unchanged): their top is drawn as an entrainment
-     * zone, not a skin (Stull 1988: a zone some 0.2–0.4 of the layer deep where it mixes with the air above) — a dilute share {@code TAIL}
-     * (est.) of the drawn column thins from 0.45 of the top to {@code TAIL_TOP} (the approved animation's haze over the core, ×1.45). In dust
-     * some 100 optical depths deep the view went opaque in the top fifth of the layer — a sharp skin that read as a solid surface (a sheet,
-     * dunes, gravel; judge on c2); the tail's few optical depths lie above it. Copies {@code PALL_TAIL}, {@code PALL_TAIL_TOP}; the pall's
-     * and the head's drawn bounds take {@code TAIL_TOP}.
+     * presentation (lead 21.11, Artem's approved v6 field; fx_pall: youngDust): the young dust's drawn field — the approved animation's core,
+     * fines haze, lumps, eddies and wisps scaled to the law's top ({@link #lawTop}) — reaches at most this share of the law's top (its
+     * cutoff at 1.6 of the haze top, wisps above the core): the bounds of the pall and the head.
      */
-    public static final double TAIL = 0.06, TAIL_TOP = 1.45;
+    public static final double YOUNG_TOP = 1.05;
 
     /**
      * Column above a point at pall height {@code x} — integral of {@link #profile} from x to top, in height fractions: used by the shader
@@ -367,10 +364,6 @@ public final class PallField {
         return (ticks - arrival[i]) / (20.0 * d.scale());
     }
 
-    /** presentation: wisps stretch the young layer's top by up to this share of itself (copy {@code PALL_WISP_RISE}): the pall's bounds. */
-    public static final double WISP_RISE = 0.6;
-    /** presentation: the young dust's top rises by up to this share with its relief (copy {@code PALL_RELIEF}): the bounds of the pall and the head. */
-    public static final double LUMP_AMP = 0.10;
 
     /** Table rows per detonation: dust, spray, haze, in order. */
     public static final int ROWS = 3;
@@ -429,6 +422,16 @@ public final class PallField {
     }
 
     /**
+     * Node i dust layer's top by the law, blocks, without the drawn hump ({@link BlastWall#hump}): its height once the local positive phase
+     * has passed (at the front it is the top the dust is lofted to). The young dust's field (fx_pall: youngDust) is scaled to it; the
+     * pall's bounds take it ({@link #YOUNG_TOP}).
+     */
+    double lawTop(int i, double ticks) {
+        double age = Math.max(seconds(i, ticks), columns[i].positive());
+        return Math.max(d.blocks(columns[i].height(age)), MIN_TOP_BLOCKS);
+    }
+
+    /**
      * Layer mixing {@code afterS} model seconds after wave phase, 0..1: patches and gaps in the young layer
      * (torn by boundary-layer eddies near the front) disperse over a layer-eddy turnover h/w*. The layer rises over heated ground at
      * speed w* over {@link DustModel#RISE_S} to height h — this is the eddy turnover time (est.) (w* = 1.5–4 m/s,
@@ -449,14 +452,15 @@ public final class PallField {
     /**
      * Node i spray over water: water-level extinction (1/block; where water lies beneath pall, excluding spray still in wall head),
      * spray top (blocks, {@link #sprayTop}); node i dust over hard ground relative to soil ({@link #paved}, read with the dust where it
-     * was lofted — the row has room), 0. Separate layer: spray does not mix with dust and is lower.
+     * was lofted — the row has room), and the dust layer's law top once its positive phase has passed ({@link #lawTop}; the row has room).
+     * Separate layer: spray does not mix with dust and is lower.
      */
     void spray(int i, double ticks, double[] out) {
         double age = seconds(i, ticks);
         out[0] = spray[i] <= 0 ? 0 : perBlock(SIGMA_SPRAY) * spray[i] * sprayEnvelope(age) * pallShare(i, ticks);
         out[1] = Math.max(sprayTop(sprayFrom[i], age), 1);
         out[2] = paved[i];
-        out[3] = 0;
+        out[3] = (float) lawTop(i, ticks);
     }
 
     /** Dust over ground with hard share {@code hard} relative to soil at node i: copy of {@code pallField} (spray row, b). */

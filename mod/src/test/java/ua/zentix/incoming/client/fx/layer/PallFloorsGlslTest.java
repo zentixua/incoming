@@ -64,14 +64,6 @@ class PallFloorsGlslTest {
         assertEquals(0, reach.call(Map.of("age", 0.0)), 1e-9);
     }
 
-    /** The pall's bounds make room for the wisps: the shader's rise share is the Java copy NukePall's bounds use. */
-    @Test
-    void wispRiseIsTheBoundsCopy() {
-        java.util.regex.Matcher m = java.util.regex.Pattern.compile("const float PALL_WISP_RISE = ([0-9.]+);").matcher(read());
-        assertTrue(m.find());
-        assertEquals(ua.zentix.incoming.client.nuclear.PallField.WISP_RISE, Double.parseDouble(m.group(1)), 1e-9);
-    }
-
     /** The shader's copies of Java constants are the Java values (a drifted copy draws a different medium than the Java readers see). */
     @Test
     void shaderCopiesAreTheJavaValues() {
@@ -81,8 +73,7 @@ class PallFloorsGlslTest {
                 "PALL_LIT_TAU", (double) PallPass.LIT_TAU,
                 "PALL_MIX_S", ua.zentix.incoming.nuclear.model.DustModel.RISE_S,
                 "PALL_SALTATION_S", ua.zentix.incoming.nuclear.model.DustModel.SALTATION_S,
-                "PALL_TAIL", ua.zentix.incoming.client.nuclear.PallField.TAIL,
-                "PALL_TAIL_TOP", ua.zentix.incoming.client.nuclear.PallField.TAIL_TOP);
+                "PALL_YOUNG_TOP", ua.zentix.incoming.client.nuclear.PallField.YOUNG_TOP);
         for (var e : copies.entrySet()) {
             java.util.regex.Matcher m = java.util.regex.Pattern.compile("const float " + e.getKey() + " = ([0-9.]+);").matcher(src);
             assertTrue(m.find(), e.getKey());
