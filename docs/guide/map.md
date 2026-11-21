@@ -21,6 +21,7 @@ console (target On map, then Open targeting map…).
 
 The strike uses the weapon, count and spread set on the [console](designator.md#console). The map shows your
 projectiles in flight, your teammates, and other players where they were last [spotted](rules.md#spotting).
+If the saved nuclear yield exceeds the current world's limit, FIRE is disabled and its tooltip shows the limit.
 
 ## Route
 

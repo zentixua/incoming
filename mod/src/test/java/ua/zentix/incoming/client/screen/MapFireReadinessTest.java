@@ -14,6 +14,8 @@ import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 import ua.zentix.incoming.IncomingConfig;
 import ua.zentix.incoming.client.map.MapTarget;
 import ua.zentix.incoming.strike.Loadout;
@@ -27,6 +29,7 @@ import java.util.List;
 import java.util.Map;
 
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.mockito.Mockito.*;
 
 /** The map's Fire follows the remote's order readiness: an invalid yield keeps it inactive, as on the remote. */
@@ -74,6 +77,33 @@ class MapFireReadinessTest {
             canFire.setAccessible(true);
             assertFalse((boolean) canFire.invoke(map), "map enables Fire while RemoteScreen.fire immediately returns");
         } finally {
+            MapTarget.reset();
+        }
+    }
+
+    @ParameterizedTest
+    @ValueSource(ints = {0, 1})
+    void mapShortcutChecksTheSavedYieldAgainstTheCurrentWorldCap(int aboveCap) throws Exception {
+        int cap = IncomingConfig.SERVER.nukeMaxYield.get();
+        Loadout saved = Loadout.DEFAULT.withWeapon(WeaponType.NUKE).withMode(TargetMode.MAP);
+        Field detached = RemoteScreen.class.getDeclaredField("detached");
+        detached.setAccessible(true);
+        Object previous = detached.get(null);
+        Minecraft client = mock(Minecraft.class);
+        client.level = mock(ClientLevel.class);
+        when(client.level.dimension()).thenReturn(Level.OVERWORLD);
+        when(client.level.dimensionType()).thenReturn(mock(DimensionType.class));
+        try (var minecraft = mockStatic(Minecraft.class)) {
+            detached.set(null, saved.withNuke(saved.nuke().withYield(cap + aboveCap)));
+            minecraft.when(Minecraft::getInstance).thenReturn(client);
+            MapTarget.set(client.level, new MapTarget.Place(20, 20));
+            // The map key constructs the remote without initializing its editor.
+            MapScreen map = new MapScreen(new RemoteScreen());
+            Method canFire = MapScreen.class.getDeclaredMethod("canFire");
+            canFire.setAccessible(true);
+            assertEquals(aboveCap == 0, canFire.invoke(map), "saved yield " + (cap + aboveCap) + ", cap " + cap);
+        } finally {
+            detached.set(null, previous);
             MapTarget.reset();
         }
     }
