@@ -47,7 +47,7 @@ instructions: work in a worktree from `origin/main`.
   aside (`deploy.sh` uses `incoming-backup/`).
 - **Act as the engineer, finish without questions** (Artem, 04.11): Artem sets goals as a player; we decide how and
   take obvious engineering steps without waiting. Once the applicable checks pass, merge your PR after green Итог and
-  review (workflow below). Ask only about goal changes or irreversible choices.
+  review (workflow below). Ask Artem only what team.md reserves for his word.
 - **Plans are targets, not decisions** (Artem, 03.11, 20.11): a clearly better way found mid-work, even a fundamental
   rewrite of an existing feature, is taken without asking and recorded in the PR. Limits: the concept below, public
   steps by Artem's word.
