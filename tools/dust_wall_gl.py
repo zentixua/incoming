@@ -392,4 +392,5 @@ turning_case()
 period_case()
 # the render contract (march, resolve, composite together): its own script, the same exit rule
 contract = subprocess.run([sys.executable, str(Path(__file__).resolve().with_name("dust_wall_contract_gl.py"))])
-sys.exit(bool(gl["FAILED"]) or contract.returncode != 0)
+warmup = subprocess.run([sys.executable, str(harness.with_name("nuclear_volume_warmup_gl.py"))])
+sys.exit(bool(gl["FAILED"]) or contract.returncode != 0 or warmup.returncode != 0)

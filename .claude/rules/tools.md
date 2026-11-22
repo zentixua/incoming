@@ -59,6 +59,8 @@ Prism: `~/.var/app/org.prismlauncher.PrismLauncher/data/PrismLauncher/` (`tools/
     see_through_gl.py                    ← the see-through shaders on Mesa llvmpipe without a game: sampler counts (the pall
                                            composite within 16), fx_depth on synthetic captures, the half-resolution
                                            pair, the pall split with smoke in front of a far pane; exit 1 on a failed check
+    nuclear_volume_warmup_gl.py           ← Mesa first eligible foot and wall draws with the shader cache disabled; cold argument
+                                           skips preparation for the control. The warm case also runs under dust_wall_gl.py
     dust_wall_gl.py                      ← the young nuclear dust wall's shaders on Mesa llvmpipe (see_through_gl.py's
                                            harness): thin foreground, hand and pane in its composite, history at a new
                                            occluder and on an uneven lattice, the march at the world's edge, straight down

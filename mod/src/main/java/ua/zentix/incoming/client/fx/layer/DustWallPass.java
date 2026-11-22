@@ -35,7 +35,7 @@ import java.util.Random;
  * Only in the primary view, on land, with one detonation in the pall's slots ({@code NukePall.youngWall}): elsewhere the pall
  * draws the whole wall as before.
  * <p>
- * Drawn at 1/{@code div} resolution per axis ({@link #div}) into its own RGBA16F target (light premultiplied, alpha
+ * Drawn at 1/{@code div} resolution per axis ({@link PallPass.Step#wallDiv()}) into its own RGBA16F target (light premultiplied, alpha
  * transmittance) with a sample offset along each ray that moves every frame, then averaged over frames at that resolution
  * ({@code fx_dustwall_resolve}: reprojected history clamped to the current neighbourhood), then laid on the frame with
  * depth-aware upsampling against the world distance ({@code fx_dustwall_composite}). The flicker of a fixed per-pixel offset
@@ -67,27 +67,9 @@ public final class DustWallPass {
      * starts within 0.03 s of the game front's arrival anywhere (DustWallInputsTest), well inside its 0.12 s rise.
      */
     public static final int NODES = 128;
-    /**
-     * Resolution divisor per axis and the march's step cap by dust quality ({@link PallPass.Quality}): at HIGH billows of
-     * 15–100 m stay several low-resolution pixels wide in the judging view; lower settings trade detail for frame time.
-     */
-    static int div(PallPass.Quality q) {
-        Integer forced = Integer.getInteger("incoming.dustwall.div");
-        if (forced != null) return Math.max(1, Math.min(16, forced));
-        return switch (q) {
-            case HIGH -> 4;
-            case MEDIUM -> 5;
-            default -> 6;
-        };
-    }
+    private static final Integer FORCED_DIV = Integer.getInteger("incoming.dustwall.div");
+    static final GpuTimer GPU = new GpuTimer();
 
-    static int steps(PallPass.Quality q) {
-        return switch (q) {
-            case HIGH -> 128;
-            case MEDIUM -> 104;
-            default -> 96;
-        };
-    }
     /** Value-noise lattice side ({@code DW_LATTICE}). */
     private static final int LATTICE = 128;
     private static final int NOISE_UNIT = 12;
@@ -138,40 +120,40 @@ public final class DustWallPass {
         public final Vector3f sandAlbedo = new Vector3f(), sandBulk = new Vector3f();
     }
 
-    /**
-     * All three programs loaded and no target failure: the pall may hand its young wall over this frame ({@code
-     * NukePall.youngWall} asks before it sets {@code PallYoung}).
-     */
-    public static boolean ready() {
+    private static boolean supported() {
         return march != null && resolve != null && composite != null && !failed;
     }
 
-    /**
-     * {@link #ready} with its targets in place at this view's size for {@code quality} (allocated here, before the pall hands
-     * the wall over: a target failing only in {@link #draw} left the frame without either wall). Render thread.
-     */
-    public static boolean prepare(PallPass.Quality quality) {
-        if (!ready()) return false;
+    /** Allocate the real march and history targets before the pall can hand over its wall. */
+    static boolean prepare(PallPass.Detail detail) {
+        if (!supported()) return false;
         Minecraft mc = Minecraft.getInstance();
-        return targets(FxViews.width(mc.getMainRenderTarget().width), FxViews.height(mc.getMainRenderTarget().height), div(quality));
+        int divisor = PallPass.LADDER[detail.level].wallDiv();
+        if (FORCED_DIV != null) {
+            // A diagnostic override can request finer sampling only while the controller is at the chosen setting.
+            int minimum = detail.floored || detail.level > detail.ceiling ? divisor : 1;
+            divisor = Math.clamp(FORCED_DIV, minimum, 16);
+        }
+        return targets(FxViews.width(mc.getMainRenderTarget().width), FxViews.height(mc.getMainRenderTarget().height), divisor);
+    }
+
+    /** The pall may hand over its wall once this view has drawn the programs on the prepared targets. */
+    public static boolean ready() {
+        return supported() && target >= 0 && PallPass.available();
     }
 
     /**
-     * Lays the young wall of {@code pall} over the frame; false — not drawn. {@code scene}: the world-distance texture
+     * Lays the young wall of {@code pall} over the frame. {@code scene}: the world-distance texture
      * ({@link SceneDepth}). Primary view only (NukePall hands the wall over only there).
      */
-    static boolean draw(PallPass.Frame pall, int scene, Matrix4f view, Matrix4f projection) {
+    static void draw(PallPass.Frame pall, int scene, Matrix4f view, Matrix4f projection, PallPass.Step step, boolean warming) {
         Frame f = pall.dustWall;
         ShaderInstance m = march, r = resolve, c = composite;
-        if (!f.active || !ready() || scene < 0 || FxViews.secondary()) return false;
-        Minecraft mc = Minecraft.getInstance();
-        int w = FxViews.width(mc.getMainRenderTarget().width), h = FxViews.height(mc.getMainRenderTarget().height);
-        int d = div(pall.quality);
-        if (!targets(w, h, d)) return false;
+        int timed = warming ? -1 : GPU.begin();
         float dx = f.eye[0] - PREVIOUS_EYE[0], dy = f.eye[1] - PREVIOUS_EYE[1], dz = f.eye[2] - PREVIOUS_EYE[2];
         // the same detonation, its clock running on (not a replay seek), the eye not teleported
         float since = f.eye[3] - previousTime;
-        boolean past = HISTORY_ON && history && f.source == previousSource && since >= 0 && since < f.clockJump
+        boolean past = !warming && HISTORY_ON && history && f.source == previousSource && since >= 0 && since < f.clockJump
                 && dx * dx + dy * dy + dz * dz < JUMP * JUMP;
         VIEW_PROJECTION.set(projection).mul(view);
         VIEW_PROJECTION.invert(INVERSE);
@@ -189,12 +171,12 @@ public final class DustWallPass {
             RenderSystem.setShaderTexture(1, scene);
             m.safeGetUniform("InvViewProj").set(INVERSE);
             m.safeGetUniform("PallForward").set(FORWARD.x, FORWARD.y, FORWARD.z);
-            m.safeGetUniform("DwDiv").set((float) d);
-            m.safeGetUniform("DwFrame").set((float) (frame % 4096), (float) steps(pall.quality));
+            m.safeGetUniform("DwDiv").set((float) div);
+            m.safeGetUniform("DwFrame").set((float) (frame % 4096), (float) step.wallSteps());
             // the slot's terrain map and the outdoor-air window: the dust lies on the local ground, never indoors
             int ground = PallPass.groundMap(0);
             Vector4f g = PallPass.groundParams(pall, 0);
-            RenderSystem.setShaderTexture(3, ground >= 0 ? ground : table);
+            RenderSystem.setShaderTexture(3, ground >= 0 ? ground : PallPass.table());
             m.safeGetUniform("PallSlot0").set(pall.slot0);
             m.safeGetUniform("PallGround0").set(g.x, g.y, g.z, g.w);
             m.safeGetUniform("DwRelief").set(g.x > 0 ? g.y : 0f, g.x > 0 ? g.z : 0f);
@@ -234,7 +216,7 @@ public final class DustWallPass {
                 r.safeGetUniform("InvViewProj").set(INVERSE);
                 r.safeGetUniform("PrevViewProj").set(PREVIOUS);
                 r.safeGetUniform("PallForward").set(FORWARD.x, FORWARD.y, FORWARD.z);
-                r.safeGetUniform("DwDiv").set((float) d);
+                r.safeGetUniform("DwDiv").set((float) div);
                 r.safeGetUniform("DwReproject").set(dx, dy, dz, past ? 1f : 0f);
                 r.safeGetUniform("DwHistory").set(HISTORY, f.layerTop - f.eye[1]);
                 fullScreen(r, null, false);
@@ -243,8 +225,8 @@ public final class DustWallPass {
                 System.arraycopy(f.eye, 0, PREVIOUS_EYE, 0, 3);
                 previousSource = f.source;
                 previousTime = f.eye[3];
-                history = true;
-                frame++;
+                history = !warming;
+                if (!warming) frame++;
             }
             // laid on the frame: light adds, the frame is multiplied by the transmittance
             GlStateManager._glBindFramebuffer(GL30.GL_DRAW_FRAMEBUFFER, main);
@@ -254,7 +236,7 @@ public final class DustWallPass {
                     GlStateManager.SourceFactor.ZERO, GlStateManager.DestFactor.ONE);
             RenderSystem.setShaderTexture(0, HISTORY_TEX[next]);
             RenderSystem.setShaderTexture(1, scene);
-            c.safeGetUniform("DwDiv").set((float) d);
+            c.safeGetUniform("DwDiv").set((float) div);
             SceneDepth.bindSee(c);
             fullScreen(c, null, false);
         } finally {
@@ -263,7 +245,7 @@ public final class DustWallPass {
             RenderSystem.defaultBlendFunc();
             RenderSystem.enableDepthTest();
         }
-        return true;
+        GPU.end(timed);
     }
 
     /** The per-node table (DW_NODES × 1, RGBA32F) for this frame. */
@@ -306,6 +288,7 @@ public final class DustWallPass {
         GlStateManager._glBindFramebuffer(GL30.GL_DRAW_FRAMEBUFFER, draw);
         if (!ok) {
             Incoming.LOG.error("Nuclear dust wall: targets {}×{} not created, no young wall pass", lw, lh);
+            fullW = fullH = 0;
             failed = true;
             return false;
         }

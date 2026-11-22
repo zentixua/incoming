@@ -38,10 +38,12 @@ import ua.zentix.incoming.compat.FlashbackReplay;
 import java.nio.ByteBuffer;
 import java.nio.FloatBuffer;
 import java.util.Arrays;
+import java.util.List;
 import java.util.Locale;
 import java.util.concurrent.CancellationException;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionException;
+import java.util.function.Supplier;
 
 /**
  * Post-shock pall as a volume, in three effects layer passes (before particle quads):
@@ -162,7 +164,7 @@ public final class PallPass {
      * n × n block, the others keep their reprojected history ({@code fx_pall_resolve}): a still frame is the same,
      * changes reach every pixel within n² frames.
      */
-    record Step(int factor, int steps, int interleave) {
+    record Step(int factor, int steps, int interleave, int wallDiv, int wallSteps) {
         /** Relative frame cost: rays — pixels / (factor · interleave)², each with its steps. */
         double cost() {
             return steps / (double) (factor * factor * interleave * interleave);
@@ -183,8 +185,12 @@ public final class PallPass {
      * rays per frame (n = 3, 4) drew the cellular lattice that burns in when the view stands still (each untraced pixel pulled
      * toward its block's bounds for n² frames; Artem 08.11, measured |dL| ×4.3 from n = 1 to the floor).
      */
-    static final Step[] LADDER = {new Step(2, 48, 1), new Step(2, 36, 1), new Step(2, 28, 1), new Step(2, 22, 1),
-            new Step(2, 64, 2), new Step(2, 48, 2), new Step(2, 36, 2), new Step(2, 28, 2), new Step(2, 22, 2)};
+    // Wall rungs interpolate between the three preset pictures (4/128, 5/104, 6/96).
+    static final Step[] LADDER = {
+            new Step(2, 48, 1, 4, 128), new Step(2, 36, 1, 4, 116), new Step(2, 28, 1, 5, 104),
+            new Step(2, 22, 1, 5, 102), new Step(2, 64, 2, 5, 100), new Step(2, 48, 2, 5, 98),
+            new Step(2, 36, 2, 6, 98), new Step(2, 28, 2, 6, 97), new Step(2, 22, 2, 6, 96)
+    };
 
     /**
      * Ray pixel of each n × n block per frame, in turn (n = 1–2): far apart in consecutive frames (ordered dither), so a
@@ -198,7 +204,7 @@ public final class PallPass {
      * fit; headroom — one rung up if its estimated cost is at most {@link #UP_SHARE} of budget for two consecutive windows and
      * {@link #HOLD_NS} has passed since the last change (four times longer after an increase immediately followed by a decrease).
      * Estimates scale only the rays' time with the rung ({@link Step#cost}): the near volume, its sums, the accumulation and the
-     * composite do not depend on the rung (laptop 08.11: 5–9 ms of HIGH's 18), and scaling them too kept a dropped rung down for
+     * pall composite do not depend on the rung (laptop 08.11: 5–9 ms of HIGH's 18), and scaling them too kept a dropped rung down for
      * minutes. No higher than the setting and no lower than the last rung; pinned ({@link #pin}) — setting rung, unaffected by
      * measurements. No world or OpenGL — unit test.
      */
@@ -484,6 +490,15 @@ public final class PallPass {
          */
         public final float[] mushrooms = new float[MushroomField.WIDTH * MushroomField.ROWS * 4];
         public int mushroomCount;
+
+        private boolean hasLitFoot() {
+            for (int k = 0; k < mushroomCount; k++) {
+                int at = k * MushroomField.WIDTH * 4;
+                if (mushrooms[at + MushroomField.FOOT * 4 + 2] > 0 && mushrooms[at + 11 * 4 + 3] > 0) return true;
+            }
+            return false;
+        }
+
         /** Apparent light brightness multiplier under frame skylight ({@code Sight.adapted}): mushroom glow. */
         public float exposure = 1, bodyExposure = 1;
         /**
@@ -516,6 +531,15 @@ public final class PallPass {
     /** Mushroom mean depth grid ({@code fx_mush_taus}): cells across x and z and height layers per mushroom, two blocks each. */
     static final int MUSH_TAU_N = 48;
     private static final Frame EMPTY = new Frame();
+    private static final Frame WARMUP = new Frame();
+
+    // Exercise the optional draws with a blank mushroom row (mushOn is false) and an empty wall.
+    // Both composites use the live frame format and blend state and contribute zero opacity.
+    static {
+        WARMUP.mushroomCount = 1;
+        WARMUP.ballsLit = true;
+        WARMUP.dustWall.ring[3] = 1;
+    }
     private static Detail DETAIL = new Detail();
     /** Noise failed (background error): no pall until restart. */
     private static boolean failed;
@@ -605,11 +629,16 @@ public final class PallPass {
     }
 
     /**
-     * Pall can be drawn: shaders compiled and noise has not failed (also true before noise is ready: it will arrive). Otherwise —
+     * Pall can be drawn with prepared programs and textures. Until preparation completes, the
      * screen veil shows the wall head at the eye ({@code NukeDust.veil}).
      */
     public static boolean available() {
-        return !failed && !gpuOff() && march != null && resolve != null && composite != null && froxel != null && froxelSum != null && mix != null;
+        return supported() && prepared.programs(false);
+    }
+
+    private static boolean supported() {
+        return !failed && !gpuOff() && march != null && resolve != null && composite != null
+                && froxel != null && froxelSum != null && mix != null;
     }
 
     /** Noise prepared in background on world entry ({@code IncomingClient}; and first detonation): no pall or mushroom until ready. */
@@ -684,22 +713,11 @@ public final class PallPass {
         return TEXTURES[3];
     }
 
-    /**
-     * Draw frame pall into the current frame (after world, before layer quads); false — failed (no shaders, noise not
-     * ready). {@code view} — frame view from {@code eye}, {@code scene} — world distances ({@link SceneDepth}),
-     * {@code haze} — air haze and Minecraft fog ({@link FxFrame.Fog#haze}): world shadow fades through them.
-     */
-    static boolean draw(Frame f, int scene, Matrix4f view, Matrix4f projection, Vec3 eye, Vector4f haze) {
-        // the watchdog turned the volume off for the session: no pass at all, also no warm-up for a new view
-        if (gpuOff()) return false;
-        long preparing = cold() ? System.nanoTime() : 0;
-        ShaderInstance m = march, r = resolve, c = composite, sh = shadow, fl = footLighting, mt = mushTaus, fv = froxel, fs = froxelSum,
-                mx = mix;
-        if (m == null || r == null || c == null || fv == null || fs == null || mx == null || f.quality == Quality.OFF || !upload()) return false;
-        Minecraft mc = Minecraft.getInstance();
-        int w = FxViews.width(mc.getMainRenderTarget().width), h = FxViews.height(mc.getMainRenderTarget().height);
-        if (FxViews.secondary()) f.quality = Quality.LOW;
-        DETAIL.setting(f.quality);
+    /** Select this view's rung before collecting the frame, so the handoff and all draws use the same resources. */
+    static void beginFrame(Quality setting) {
+        if (!supported()) return;
+        Quality quality = FxViews.secondary() || setting == Quality.OFF ? Quality.LOW : setting;
+        DETAIL.setting(quality);
         if (DETAIL.pin(SCENARIO || FxViews.secondary() || FlashbackReplay.exporting())) {
             Step at = LADDER[Math.max(0, DETAIL.level)];
             if (DETAIL.pinned) {
@@ -711,9 +729,38 @@ public final class PallPass {
         }
         if (timer()) poll(System.nanoTime());
         latch();
+        if (gpuOff()) return;
+        WARMUP.quality = quality;
+        // Resizes and setting/rung changes belong to the view, even with no detonation in sight.
+        if (!FxViews.secondary() && !cold()) DustWallPass.prepare(DETAIL);
+    }
+
+    static Frame warmupFrame() {
+        return WARMUP;
+    }
+
+    /**
+     * Draw frame pall into the current frame (after world, before layer quads); false — failed (no shaders, noise not
+     * ready). {@code view} — frame view from {@code eye}, {@code scene} — world distances ({@link SceneDepth}),
+     * {@code haze} — air haze and Minecraft fog ({@link FxFrame.Fog#haze}): world shadow fades through them.
+     */
+    static boolean draw(Frame f, int scene, Matrix4f view, Matrix4f projection, Vec3 eye, Vector4f haze) {
+        // the watchdog turned the volume off for the session: no pass at all, also no warm-up for a new view
         if (gpuOff()) return false;
+        boolean warming = f == WARMUP;
+        long preparing = warming ? System.nanoTime() : 0;
+        ShaderInstance m = march, r = resolve, c = composite, sh = shadow, fl = footLighting, mt = mushTaus, fv = froxel, fs = froxelSum,
+                mx = mix;
+        if (m == null || r == null || c == null || fv == null || fs == null || mx == null || f.quality == Quality.OFF || !upload()) return false;
+        Minecraft mc = Minecraft.getInstance();
+        int w = FxViews.width(mc.getMainRenderTarget().width), h = FxViews.height(mc.getMainRenderTarget().height);
+        if (FxViews.secondary()) f.quality = Quality.LOW;
         Step step = LADDER[DETAIL.level];
         if (!ensure(w, h, step.factor, step.interleave) || !volume(w, h, f.quality.tile)) return false;
+        if (warming) {
+            history = volumeHistory = false;
+            WARMUP.dustWall.active = !FxViews.secondary() && DustWallPass.prepare(DETAIL);
+        }
         boolean open = mc.level != null && OpenAir.update(mc.level, eye);
         // torches, lamps and light carried by entities in the window (OpenAir, MovingLight): dust glows around them, the shadow
         // leaves their light (pall.glsl: pallLampLight, pallKeepLamps) by Minecraft's own lightmap
@@ -727,7 +774,7 @@ public final class PallPass {
         GlStateManager._pixelStore(GL11.GL_UNPACK_SKIP_PIXELS, 0);
         GL11.glTexSubImage2D(GL11.GL_TEXTURE_2D, 0, 0, 0, WIDTH, ROWS, GL11.GL_RGBA, GL11.GL_FLOAT, tableBuffer);
         // mushroom shadow while the sun lights some height, if map exists; otherwise no tiles (zero texels): composite skips the map
-        boolean shade = sh != null && shadowMap >= 0 && f.sunUp() && f.mushroomCount > 0;
+        boolean shade = sh != null && shadowMap >= 0 && (warming || f.sunUp()) && f.mushroomCount > 0;
         if (!shade) {
             for (int k = 0; k < MushroomField.MUSHROOMS; k++) {
                 int at = (k * MushroomField.WIDTH + MushroomField.SHADOW_RECT) * 4;
@@ -759,7 +806,7 @@ public final class PallPass {
         frame++;
         int n = interleave, phase = ORDER[n - 1][(int) (frame % (n * n))];
         float ox = phase % n, oy = phase / n;
-        int timing = begin();
+        int timing = warming ? -1 : begin();
 
         int previous = GlStateManager._getInteger(GL30.GL_DRAW_FRAMEBUFFER_BINDING);
         GL11.glGetIntegerv(GL11.GL_VIEWPORT, VIEWPORT);
@@ -781,23 +828,16 @@ public final class PallPass {
             quad(sh, false);
         }
 
-        boolean litFoot = false;
-        if (fl != null && footMap >= 0) {
-            for (int k = 0; k < f.mushroomCount; k++) {
-                int at = k * MushroomField.WIDTH * 4;
-                if (f.mushrooms[at + MushroomField.FOOT * 4 + 2] > 0 && f.mushrooms[at + 11 * 4 + 3] > 0) litFoot = true;
-            }
-        }
+        boolean litFoot = fl != null && footMap >= 0 && (warming || f.hasLitFoot());
         // base light in a separate small table; main pass only samples it
         // shared source textures and parameters: same pallSource, without a second inlined ray call
         // mushroom mean depths: one grid per frame, read by every mushroom ray step (fx_mush_taus)
-        // also while the march is cold (the empty warm-up frame, FxLayer): the program compiles before the flash, not on it
-        boolean bake = mt != null && tauMap >= 0 && (f.mushroomCount > 0 || cold()), grid = bake && f.mushroomCount > 0;
+        boolean grid = mt != null && tauMap >= 0 && f.mushroomCount > 0;
         // near volume: the medium of every cell (pass 2), then the pall seen to each slice (fx_pall_froxel_sum); rays last
         int volumeNext = 1 - volumeLatest;
         boolean volumePast = history && volumeHistory;
         for (int pass = 0; pass < 4; pass++) {
-            if (pass == 0 && !litFoot || pass == 1 && !bake) continue;
+            if (pass == 0 && !litFoot || pass == 1 && !grid) continue;
             m = pass == 0 ? fl : pass == 1 ? mt : pass == 2 ? fv : march;
             if (pass == 0) {
                 GlStateManager._glBindFramebuffer(GlConst.GL_FRAMEBUFFER, footFbo);
@@ -1001,26 +1041,64 @@ public final class PallPass {
         // surface flame flickers by 3D noise
         quad(c, true);
         RenderSystem.enableDepthTest();
+        if (f.dustWall.active) {
+            DustWallPass.draw(f, scene, view, projection, step, warming);
+        } else {
+            DustWallPass.idle();
+        }
         end(timing);
 
         PREVIOUS.set(VIEW_PROJECTION);
         previousEye = eye;
         history = true;
         drawn++;
-        prepared = march;
-        preparedProgram = march.getId();
-        if (preparing != 0) Incoming.LOG.info("Nuclear volume shaders prepared in {} ms", (System.nanoTime() - preparing) / 1_000_000);
+        if (warming) {
+            GL11.glFinish();
+            prepared.programs(true);
+            reset();
+            if (!FxViews.secondary()) {
+                long ms = (System.nanoTime() - preparing) / 1_000_000;
+                if (shade && litFoot && grid && f.dustWall.active) {
+                    Incoming.LOG.info("Nuclear volume shaders prepared in {} ms", ms);
+                } else {
+                    Incoming.LOG.info("Nuclear volume preparation finished in {} ms with unavailable passes (shadow {}, foot {}, tau {}, wall {})",
+                            ms, shade, litFoot, grid, f.dustWall.active);
+                }
+            }
+        }
         return true;
     }
 
-    /** Last program drawn with the actual pass resources; no world references. */
-    @Nullable
-    private static ShaderInstance prepared;
-    private static int preparedProgram = -1;
+    /** Reload replaces shader instances; Veil may also replace any linked program in place. */
+    private static Prepared prepared = new Prepared();
 
-    /** Resource reloads replace the shader; runtime recompilation can replace its GL program in place. */
+    private static final class Prepared {
+        private static final List<Supplier<ShaderInstance>> PROGRAMS = List.of(
+                () -> march, () -> resolve, () -> composite, () -> shadow, () -> footLighting,
+                () -> mushTaus, () -> froxel, () -> froxelSum, () -> mix,
+                () -> FxViews.secondary() ? null : DustWallPass.march,
+                () -> FxViews.secondary() ? null : DustWallPass.resolve,
+                () -> FxViews.secondary() ? null : DustWallPass.composite);
+        private final ShaderInstance[] shaders = new ShaderInstance[PROGRAMS.size()];
+        private final int[] ids = new int[shaders.length];
+
+        boolean programs(boolean remember) {
+            for (int i = 0; i < shaders.length; i++) {
+                ShaderInstance shader = PROGRAMS.get(i).get();
+                int id = shader == null ? -1 : shader.getId();
+                if (remember) {
+                    shaders[i] = shader;
+                    ids[i] = id;
+                } else if (shaders[i] != shader || ids[i] != id) {
+                    return false;
+                }
+            }
+            return true;
+        }
+    }
+
     static boolean cold() {
-        return !failed && !gpuOff() && march != null && (prepared != march || preparedProgram != march.getId());
+        return supported() && !prepared.programs(false);
     }
 
     /** Full-frame quad with custom shader; ray pass also binds 3D noise at its own texture unit. */
@@ -1540,7 +1618,7 @@ public final class PallPass {
         Step step = LADDER[Math.max(0, DETAIL.level)];
         Step top = LADDER[Math.max(0, DETAIL.ceiling)];
         String gpu = timer < 0 ? "gpu n/a" : String.format(Locale.ROOT,
-                "gpu %.2f ms (longest %.2f, budget %.1f; preparation %.2f, near volume %.2f + sums %.2f, rays %.2f, accumulation %.2f, composite %.2f)",
+                "gpu %.2f ms (longest %.2f, budget %.1f; preparation %.2f, near volume %.2f + sums %.2f, rays %.2f, accumulation %.2f, composite + wall %.2f)",
                 lastGpuMean, lastGpuMax, DETAIL.budget, LAST_PART[0], LAST_PART[1], LAST_PART[2], LAST_PART[3], LAST_PART[4], LAST_PART[5]);
         return String.format(Locale.ROOT, "%d frames, %d×%d, near volume %d×%d×%d to %.0f blocks, detail %s (step %d of %d, setting %s, %s, %d changes), %s; %s",
                 lastDrawn, lowW, lowH, volumeW / VOLUME_COLUMNS, volumeH / (VOLUME_SLICES / VOLUME_COLUMNS), VOLUME_SLICES, VOLUME_FAR, step.describe(), DETAIL.level, LADDER.length - 1, top.describe(),
@@ -1631,7 +1709,7 @@ public final class PallPass {
         private int gpuFrames;
         private int drawn;
         private int lastDrawn;
-        private ShaderInstance prepared;
+        private Prepared prepared = new Prepared();
 
         void close() {
             FxViews.textures(TEXTURES); FxViews.textures(VOLUME); FxViews.textures(FIRE); FxViews.textures(GROUND);
@@ -1843,7 +1921,7 @@ public final class PallPass {
             int oldlastDrawn = PallPass.lastDrawn;
             PallPass.lastDrawn = lastDrawn;
             lastDrawn = oldlastDrawn;
-            ShaderInstance oldprepared = PallPass.prepared;
+            Prepared oldprepared = PallPass.prepared;
             PallPass.prepared = prepared;
             prepared = oldprepared;
         }

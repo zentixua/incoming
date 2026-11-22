@@ -23,6 +23,8 @@ Each player has their own, stored in `config/incoming-client.toml`.
 | Muffle distant and hidden strikes | on | distant strikes lose high tones, hidden ones sound muffled, and inside the dust pall all distant sounds are muffled |
 | Hints already shown | empty | first-use hints this game has already shown or whose action you have already used, such as the console hint the first time you hold a designator; clear the list to see them again |
 
+The mushroom cloud and dust wall prepare when you enter the world and when you reload resources. On a slow graphics card, the advancing dust wall can drop to the lowest detail for the rest of the session.
+
 The mod's sounds follow the Ambient/Environment volume slider.
 
 ## Keys

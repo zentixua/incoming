@@ -1,0 +1,244 @@
+package ua.zentix.incoming.client.fx.layer;
+
+import com.mojang.blaze3d.pipeline.RenderTarget;
+import com.mojang.blaze3d.platform.GlConst;
+import com.mojang.blaze3d.platform.GlStateManager;
+import com.mojang.blaze3d.platform.GlUtil;
+import com.mojang.blaze3d.shaders.Uniform;
+import com.mojang.blaze3d.systems.RenderSystem;
+import com.mojang.blaze3d.vertex.BufferBuilder;
+import com.mojang.blaze3d.vertex.BufferUploader;
+import com.mojang.blaze3d.vertex.MeshData;
+import com.mojang.blaze3d.vertex.Tesselator;
+import net.minecraft.client.Minecraft;
+import net.minecraft.client.gui.Gui;
+import net.minecraft.client.renderer.GameRenderer;
+import net.minecraft.client.renderer.LightTexture;
+import net.minecraft.client.renderer.ShaderInstance;
+import net.minecraft.client.renderer.texture.DynamicTexture;
+import net.minecraft.world.phys.Vec3;
+import org.joml.Matrix4f;
+import org.joml.Vector4f;
+import org.junit.jupiter.api.Test;
+import org.lwjgl.opengl.GL;
+import org.lwjgl.opengl.GLCapabilities;
+import org.lwjgl.opengl.GL11;
+import org.lwjgl.opengl.GL12;
+import org.lwjgl.opengl.GL15;
+import org.lwjgl.opengl.GL30;
+import org.lwjgl.opengl.GL33;
+import org.mockito.MockedStatic;
+import ua.zentix.incoming.client.nuclear.NukeBallSurface;
+import ua.zentix.incoming.compat.FlashbackReplay;
+
+import java.lang.reflect.Field;
+import java.lang.reflect.Modifier;
+import java.nio.ByteBuffer;
+import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.atomic.AtomicInteger;
+
+import static org.junit.jupiter.api.Assertions.*;
+import static org.mockito.Mockito.*;
+
+/** Run the production submission path with GL calls recorded on a synthetic GPU timeline. */
+class NuclearVolumeBudgetTest {
+    private final List<String> draws = new ArrayList<>();
+    private final Map<Integer, Long> timestamps = new HashMap<>();
+    private final List<Runnable> restore = new ArrayList<>();
+    private String bound;
+    private long gpuNs, wallDrawNs = 100_000_000L;
+
+    private void replace(Class<?> type, Object owner, String name, Object value) throws ReflectiveOperationException {
+        Field field = type.getDeclaredField(name);
+        field.setAccessible(true);
+        Object old = field.get(owner);
+        field.set(owner, value);
+        restore.addFirst(() -> {
+            try {
+                field.set(owner, old);
+            } catch (IllegalAccessException ex) {
+                throw new AssertionError(ex);
+            }
+        });
+    }
+
+    private void saveWallResources() throws ReflectiveOperationException {
+        for (Field field : DustWallPass.class.getDeclaredFields()) {
+            field.setAccessible(true);
+            if (!Modifier.isFinal(field.getModifiers())) {
+                replace(DustWallPass.class, null, field.getName(), field.get(null));
+            } else if (field.get(null) instanceof int[] array) {
+                int[] saved = array.clone();
+                restore.add(() -> System.arraycopy(saved, 0, array, 0, array.length));
+            }
+        }
+    }
+
+    private ShaderInstance shader(Class<?> owner, String field, String name) throws ReflectiveOperationException {
+        ShaderInstance s = mock(ShaderInstance.class);
+        when(s.safeGetUniform(anyString())).thenReturn(mock(Uniform.class));
+        doAnswer(call -> { bound = name; return null; }).when(s).apply();
+        replace(owner, null, field, s);
+        return s;
+    }
+
+    private void client(MockedStatic<Minecraft> minecraft) throws ReflectiveOperationException {
+        Minecraft mc = mock(Minecraft.class);
+        minecraft.when(Minecraft::getInstance).thenReturn(mc);
+        RenderTarget main = mock(RenderTarget.class);
+        main.width = main.height = 12;
+        when(mc.getMainRenderTarget()).thenReturn(main);
+        GameRenderer renderer = mock(GameRenderer.class);
+        replace(Minecraft.class, mc, "gameRenderer", renderer);
+        LightTexture light = mock(LightTexture.class);
+        when(renderer.lightTexture()).thenReturn(light);
+        replace(LightTexture.class, light, "lightTexture", mock(DynamicTexture.class));
+        replace(Minecraft.class, mc, "gui", mock(Gui.class, RETURNS_DEEP_STUBS));
+    }
+
+    private static void draw(PallPass.Frame frame) {
+        assertTrue(PallPass.draw(frame, 8, new Matrix4f(), new Matrix4f(), Vec3.ZERO, new Vector4f()));
+    }
+
+    @Test
+    @SuppressWarnings("try") // The scoped static mocks isolate GL and Minecraft even without stubbing individual calls.
+    void preparationAndTheFirstBurstUseTheSamePassesAndBudget() throws ReflectiveOperationException {
+        PallPass.ViewState storage = new PallPass.ViewState();
+        try (var minecraft = mockStatic(Minecraft.class); var state = mockStatic(GlStateManager.class);
+             var gl11 = mockStatic(GL11.class); var gl12 = mockStatic(GL12.class);
+             var gl = mockStatic(GL.class); var gl15 = mockStatic(GL15.class); var gl30 = mockStatic(GL30.class); var gl33 = mockStatic(GL33.class);
+             var glUtil = mockStatic(GlUtil.class); var render = mockStatic(RenderSystem.class);
+             var uniforms = mockStatic(Uniform.class); var tess = mockStatic(Tesselator.class);
+             var uploader = mockStatic(BufferUploader.class); var air = mockStatic(OpenAir.class);
+             var smoke = mockStatic(SmokePass.class); var ball = mockStatic(NukeBallSurface.class);
+             var depth = mockStatic(SceneDepth.class); var replay = mockStatic(FlashbackReplay.class)) {
+            storage.swap();
+            try {
+                saveWallResources();
+                client(minecraft);
+                replace(PallPass.class, null, "watch", null);
+                CompletableFuture<byte[][]> noise = new CompletableFuture<>();
+                replace(PallPass.class, null, "textures", noise);
+                glUtil.when(GlUtil::getRenderer).thenReturn("Test hardware");
+                AtomicInteger ids = new AtomicInteger(100);
+                state.when(GlStateManager::_genTexture).thenAnswer(call -> ids.incrementAndGet());
+                state.when(GlStateManager::glGenFramebuffers).thenAnswer(call -> ids.incrementAndGet());
+                state.when(() -> GlStateManager.glCheckFramebufferStatus(anyInt())).thenReturn(GlConst.GL_FRAMEBUFFER_COMPLETE);
+                gl30.when(() -> GL30.glCheckFramebufferStatus(anyInt())).thenReturn(GlConst.GL_FRAMEBUFFER_COMPLETE);
+                // Unique query ids, all results ready. Poll reads the timestamps recorded between actual draws.
+                GLCapabilities caps = mock(GLCapabilities.class);
+                replace(GLCapabilities.class, caps, "OpenGL33", true);
+                gl.when(GL::getCapabilities).thenReturn(caps);
+                gl15.when(() -> GL15.glGetQueryi(anyInt(), anyInt())).thenReturn(64);
+                gl15.when(GL15::glGenQueries).thenAnswer(call -> ids.incrementAndGet());
+                PallPass.Detail detail = spy(new PallPass.Detail());
+                replace(PallPass.class, null, "DETAIL", detail);
+                gl33.when(() -> GL33.glQueryCounter(anyInt(), anyInt())).thenAnswer(call -> {
+                    timestamps.put(call.getArgument(0), gpuNs);
+                    return null;
+                });
+                gl15.when(() -> GL15.glGetQueryObjecti(anyInt(), anyInt())).thenReturn(1);
+                gl33.when(() -> GL33.glGetQueryObjecti64(anyInt(), anyInt())).thenAnswer(call -> timestamps.get(call.getArgument(0)));
+                Tesselator t = mock(Tesselator.class);
+                tess.when(Tesselator::getInstance).thenReturn(t);
+                BufferBuilder builder = mock(BufferBuilder.class);
+                when(t.begin(any(), any())).thenReturn(builder);
+                when(builder.build()).thenReturn(mock(MeshData.class));
+                uploader.when(() -> BufferUploader.draw(any())).thenAnswer(call -> {
+                    draws.add(bound);
+                    // The rest of the pall costs 5 ms; the wall time is split across all three draws.
+                    if (bound.equals("composite")) gpuNs += 5_000_000L;
+                    if (bound.startsWith("wall.")) gpuNs += wallDrawNs;
+                    return null;
+                });
+                for (String name : List.of("march", "froxel", "froxelSum", "footLighting", "mushTaus", "shadow", "resolve", "mix", "composite")) {
+                    shader(PallPass.class, name, name);
+                }
+                for (String name : List.of("march", "resolve", "composite")) shader(DustWallPass.class, name, "wall." + name);
+                Uniform divisor = mock(Uniform.class), frame = mock(Uniform.class);
+                when(DustWallPass.march.safeGetUniform("DwDiv")).thenReturn(divisor);
+                when(DustWallPass.march.safeGetUniform("DwFrame")).thenReturn(frame);
+                List<String> all = List.of("shadow", "footLighting", "mushTaus", "froxel", "froxelSum", "march",
+                        "resolve", "mix", "composite", "wall.march", "wall.resolve", "wall.composite");
+                PallPass.beginFrame(PallPass.Quality.HIGH);
+                assertFalse(PallPass.available());
+                assertFalse(PallPass.draw(PallPass.warmupFrame(), 8, new Matrix4f(), new Matrix4f(), Vec3.ZERO, new Vector4f()));
+                assertTrue(draws.isEmpty());
+                noise.complete(new byte[][] {{0}, {0}});
+                draw(PallPass.warmupFrame());
+                assertEquals(all, draws);
+                assertTrue(DustWallPass.ready());
+                gl12.verify(() -> GL12.glTexImage3D(eq(GL12.GL_TEXTURE_3D), eq(0), eq(GL30.GL_R8), eq(128), eq(128), eq(128),
+                        eq(0), eq(GL11.GL_RED), eq(GL11.GL_UNSIGNED_BYTE), any(ByteBuffer.class)));
+                state.verify(() -> GlStateManager._texImage2D(eq(GL11.GL_TEXTURE_2D), eq(0), eq(GL30.GL_RGBA16F),
+                        eq(3), eq(3), eq(0), eq(GL11.GL_RGBA), eq(GL11.GL_FLOAT), isNull()), times(3));
+                gl11.verify(GL11::glFinish);
+
+                // Recompile just the foot program in place, as a resource manager can do.
+                when(PallPass.footLighting.getId()).thenReturn(9);
+                assertFalse(PallPass.available());
+                assertFalse(DustWallPass.ready());
+                draws.clear();
+                PallPass.beginFrame(PallPass.Quality.HIGH);
+                draw(PallPass.warmupFrame());
+                assertEquals(all, draws);
+
+                draws.clear();
+                state.clearInvocations();
+                gl12.clearInvocations();
+                PallPass.Frame burst = new PallPass.Frame();
+                burst.quality = PallPass.Quality.HIGH;
+                burst.dustWall.active = true;
+                PallPass.beginFrame(burst.quality);
+                draw(burst);
+                assertEquals(all.subList(all.indexOf("froxel"), all.size()), draws);
+                state.verify(GlStateManager::_genTexture, never());
+                state.verify(() -> GlStateManager._texImage2D(anyInt(), anyInt(), anyInt(), anyInt(), anyInt(), anyInt(),
+                        anyInt(), anyInt(), any()), never());
+                gl12.verifyNoInteractions();
+                // Negligible CPU submission in the audit's hardware timeline.
+                replace(PallPass.class, null, "SUBMIT", new long[4]);
+                PallPass.beginFrame(burst.quality);
+                assertEquals(GpuWatch.State.FLOOR, PallPass.watch().state());
+                assertEquals(305, PallPass.watch().cause(), 0);
+                wallDrawNs = 400_000_000L;
+                draw(burst);
+                verify(divisor).set(6f);
+                verify(frame).set(anyFloat(), eq(96f));
+                replace(PallPass.class, null, "SUBMIT", new long[4]);
+                PallPass.beginFrame(burst.quality);
+                verify(detail).sample(eq(1205d), anyDouble(), anyInt(), anyLong());
+                assertEquals(1205, PallPass.watch().cause(), 0);
+                assertEquals(GpuWatch.State.OFF, PallPass.watch().state());
+            } finally {
+                restore.forEach(Runnable::run);
+                storage.swap();
+                storage.close();
+            }
+        }
+    }
+
+    @Test
+    void wallBudgetUsesEveryRungAndPreservesThePresetPictures() {
+        PallPass.Detail detail = new PallPass.Detail();
+        int preceding = Integer.MAX_VALUE;
+        for (PallPass.Step step : PallPass.LADDER) {
+            int work = 3600 * step.wallSteps() / (step.wallDiv() * step.wallDiv());
+            assertTrue(work < preceding);
+            preceding = work;
+        }
+        for (PallPass.Quality q : List.of(PallPass.Quality.LOW, PallPass.Quality.MEDIUM, PallPass.Quality.HIGH)) {
+            detail.setting(q);
+            PallPass.Step step = PallPass.LADDER[detail.level];
+            assertEquals(switch (q) { case HIGH -> 4; case MEDIUM -> 5; default -> 6; }, step.wallDiv());
+            assertEquals(switch (q) { case HIGH -> 128; case MEDIUM -> 104; default -> 96; }, step.wallSteps());
+        }
+        detail.floor();
+        assertEquals(6, PallPass.LADDER[detail.level].wallDiv());
+        assertEquals(96, PallPass.LADDER[detail.level].wallSteps());
+    }
+}

@@ -69,13 +69,13 @@ paths:
   without reading textures; full-resolution depth coverage/readback is opt-in through `incoming.nukeDiag`.
   Polling the ordinary line with Voxy used to synchronize with the GPU and scan millions of floats, injecting
   pauses into the scene bench. `SceneDepthTelemetryTest` exercises a valid-sized LOD frame without a GL context.
-- The first nuclear ray draw can spend seconds compiling in the driver (NVIDIA, cold shader cache).
-  `FxLayer` submits an empty `PallPass.Frame` on world entry until the real pass completes: noise builds
-  asynchronously, so a single attempt in the layer's first frame is insufficient. `PallPass.cold` tracks the
-  actual shader instance and compiled GL program ID: Veil can recompile a program in place, while a
-  resource reload replaces the instance. Use the real pass resources/state;
-  a one-pixel dummy pass with placeholder textures did not remove the first-flash compilation stall.
-  Check a fresh process with the driver cache disabled; a second detonation cannot verify this fix.
+- World entry and resource reload exercise all available nuclear volume programs on their production targets before
+  the first burst. The warm-up frame has one disabled mushroom row with foot lighting enabled and an empty wall.
+  It draws the foot, mushroom depth and shadow maps, both froxel passes, ray, resolve, mix, composite and, in the
+  primary view, the wall march, resolve and composite. The completion log follows the GPU drain. The veil and
+  conventional smoke quads cover preparation while background textures are pending. Each view tracks both the shader
+  instances and their GL IDs (Veil can recompile in place). See `NuclearVolumeBudgetTest` and
+  `tools/nuclear_volume_warmup_gl.py` (Mesa with the driver cache disabled).
 - Drivers differ where GL leaves behaviour undefined (#656: a nuke froze an RX 6600 XT while sound went on; the RTX 4060
   laptop shows 0 GL errors and ≤ 13.8 ms of pall GPU per frame in the same scene). Module globals start with a value
   (`ShaderSourceTest.everyGlobalStartsWithAValue`: NVIDIA zeroes registers, others do not; Mesa found 20 in `fx_pall.glsl`).
@@ -83,8 +83,8 @@ paths:
   messages per nuke scenario). `GpuWatch` acts on one pall frame far past any budget: ≥ 250 ms GPU holds the detail at
   its floor, ≥ 1 s turns the volume off for the session with one chat line (`incoming.pall.gpu_off`). It takes GPU time
   minus the render thread's time between the pair's stamps (`PallPass.SUBMIT`): a cold-cache driver compile idles the
-  GPU between stamps for seconds. Software renderers (llvmpipe) are not watched. The watch belongs to the session, not
-  to a view: it lives outside `PallPass.ViewState` (a view's own timer init once replaced it, re-enabling OFF), OFF also
+  GPU between stamps for seconds. Software renderers (llvmpipe) are not watched. The interval includes the young wall through its composite.
+  The wall divisor and step cap follow the effective pall rung. The watch belongs to the session, not to a view: it lives outside `PallPass.ViewState` (a view's own timer init once replaced it, re-enabling OFF), OFF also
   stops the cold warm-up (`cold`, `draw`), and FLOOR is a latch each view's detail takes at its next sample or draw
   (`PallPass.latch`; a per-view floor on the transition alone left the other views at HIGH), `PallWatchViewsTest`.
   Second-compiler check without a GPU:
