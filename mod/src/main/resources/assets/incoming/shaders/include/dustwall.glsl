@@ -54,7 +54,7 @@ const int DW_NODES = 128;
 const float DW_SPAN = 24.0;
 const float DW_FADE = 6.0;
 // presentation exposure of the wall's light (Silo S3E09 dust band: display luma median ~0.35)
-const float DW_EXPOSURE = 0.18;
+const float DW_EXPOSURE = 0.2;
 // head timing, seconds of age (presentation): rise e-fold at the contact line, hump hold, width of the hump's fall
 const float DW_RISE = 0.12, DW_HOLD = 0.25, DW_FALL = 0.3;
 // most the bulges, the billowed surface and its soft edge (DW_HAZE) lift the dust over its envelope, shares (the ray bound,
@@ -178,16 +178,15 @@ float dwBulge(vec3 pw, float a) {
 }
 
 // the smooth dust top over ground point xz (no billows; the light's shadow surface), blocks above the local ground; 0 where
-// no young dust. hump: with the head's hump (the low sun's shadow of the crest falls behind it, a dark line that reads as
-// the crest); without it for the fireball, whose shadow of the hump would sweep over the near dust at the front's speed (lit
-// patches sliding at the passage)
-float dwTopAt(vec2 xz, bool hump) {
+// no young dust
+float dwTopAt(vec2 xz) {
     float r = length(xz);
     if (r > DwRing.x + 2.0 || r < DwRing.y - 50.0) return 0.0;
     vec4 n0 = dwNode(r);
     float a = DwEye.w - n0.x;
     if (a <= 0.0 || n0.z <= 0.0) return 0.0;
-    float top = dwEnvelope(a, n0.y, hump ? dwHump(xz) : 1.0), ph;
+    // without the hump: its shadow would sweep over the near dust at the front's speed (lit patches sliding at the passage)
+    float top = dwEnvelope(a, n0.y, 1.0), ph;
     vec3 pw = dwAir(vec3(xz.x, 0.6 * top, xz.y), a, r, top, ph);
     return top * (1.0 + dwBulge(pw, a));
 }
@@ -244,15 +243,8 @@ float dwDensity(vec3 g, bool coarse) {
     // texture fixed in the air mass: billows of ~20 × 13 m and finer, the rising and settling top reveals and hides them
     vec3 tq = vec3(pw.x, pw.y - 0.45 * ph, pw.z) / vec3(20.0, 13.0, 20.0);
     float n = coarse ? dwFbm2(tq, 0.0) : dwFbm(tq, 1.0 / 13.0);
-    // the young head's own texture rides with it (along the front, height, distance behind it rolling back at 25 m/s) and
-    // hands over to the air's within 0.5–1.5 s: fixed in the air, the face's detail swept by the 470 m/s front would be
-    // new every frame (the face shimmered); behind the head the dust stays where it was lofted
-    float headTex = 1.0 - smoothstep(0.5, 1.5, a0);
-    vec3 hc = vec3(atan(q.z, q.x) * DwRing.x, q.y, DwRing.x - r + 25.0 * DwEye.w);
-    if (headTex > 0.0 && !coarse) n = mix(n, dwFbm(hc / vec3(20.0, 13.0, 20.0) + 41.0, 1.0 / 13.0), headTex);
     // cauliflower lumps of the top, ~35 m and finer, in the same air
     float bl = coarse ? 0.42 : dwBillow(vec3(pw.x, pw.y - 0.3 * ph, pw.z) / vec3(34.0, 22.0, 34.0) + 11.0, 1.0 / 22.0);
-    if (headTex > 0.0 && !coarse) bl = mix(bl, dwBillow(hc / vec3(34.0, 22.0, 34.0) + 53.0, 1.0 / 22.0), headTex);
     // fibrous streaks combed along the radial wind, ~28 m along, 4.5 m across
     float fs = 0.5;
     if (!coarse) {
@@ -299,9 +291,9 @@ float dwPhase(float c) {
 // optical depth toward a light in direction l from q: the billows over the next ~25 m (one coarse density tap: lit tops,
 // shaded undersides, the face toward a low light lit through its short way out) and the smooth top ~70 m away (the hump
 // and bulges throw long shadows)
-float dwShadow(vec3 q, vec3 l, bool hump) {
+float dwShadow(vec3 q, vec3 l) {
     vec3 p = q + l * 70.0;
-    return max(dwTopAt(p.xz, hump) - (p.y - dwFloor(p.xz)), 0.0) * gDwSigma * 0.8 + dwDensity(q + l * 12.0, true) * 26.0;
+    return max(dwTopAt(p.xz) - (p.y - dwFloor(p.xz)), 0.0) * gDwSigma * 0.8 + dwDensity(q + l * 12.0, true) * 26.0;
 }
 
 // light of a dust sample at q (presentation, follows the light on ground-coloured dust): single scattering of the fireball
@@ -310,18 +302,15 @@ float dwShadow(vec3 q, vec3 l, bool hump) {
 // enters from the top, ground bounce from below
 vec3 dwLight(vec3 q, vec3 rd) {
     vec3 lb = normalize(DwBall.xyz - q + vec3(0.0, 1e-3, 0.0));
-    float taub = dwShadow(q, lb, false), taus = dwShadow(q, DwSunDir, true);
+    float taub = dwShadow(q, lb), taus = dwShadow(q, DwSunDir);
     float depth = max(gDwSurf - (q.y - dwFloor(q.xz)), 0.0) * gDwSigma;
     float ms = 0.3 + 0.3 * exp(-0.12 * depth);
     float sunUp = smoothstep(-0.05, 0.05, DwSunDir.y);
     // thin dust toward the fireball glows (forward peak: the crest's rim against the ball); the low sun lights the faces
     // turned to it
-    // presentation: the low sun's share on the dust is lifted 1.5x, so faces turned to it read as sunlit dust beside the
-    // fireball-lit tops (the game's fireball is ~6x the sun at 4.5 km)
-    vec3 sun = 1.5 * DwSunLight * sunUp;
     vec3 single = dwBallLight(q) * (0.4 * min(dwPhase(dot(rd, lb)), 6.0) * exp(-taub))
-            + sun * (0.5 * min(dwPhase(dot(rd, DwSunDir)), 6.0) * exp(-taus));
-    vec3 multiple = dwBallLight(q) * ms * (0.45 + 0.55 * exp(-0.25 * taub)) + sun * ms * (0.45 + 0.55 * exp(-0.25 * taus))
+            + DwSunLight * (0.5 * min(dwPhase(dot(rd, DwSunDir)), 6.0) * exp(-taus)) * sunUp;
+    vec3 multiple = dwBallLight(q) * ms * (0.45 + 0.55 * exp(-0.25 * taub)) + DwSunLight * ms * (0.45 + 0.55 * exp(-0.25 * taus)) * sunUp
             + DwSkyLight * (0.04 + 0.22 * exp(-0.3 * depth));
     vec3 albedo = mix(DwAlbedo, DwSandAlbedo, gDwSand), bulk = mix(DwBulk, DwSandBulk, gDwSand);
     return DW_EXPOSURE * (albedo * single + bulk * multiple + bulk * DwGroundLight);
