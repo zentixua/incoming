@@ -311,12 +311,13 @@ public final class NukePall {
      */
     private static final double YOUNG_SETTLE_S = 1.0;
     /**
-     * The young wall's layer drawn taller than the dust law's (presentation, not physical; Artem 22.11): ×75/58, so that
-     * at 4.5 km from a 1 Mt surface burst the settled layer stands ~75 blocks high and its crest (1.4–1.6 of it) tops out at
-     * a 120-block camera's height, on the horizon line as in the Silo frame; over the law's 58 m the crest could not read
-     * from there, and a crest above the camera popped through it as it passed.
+     * The young wall's layer drawn taller than the dust law's (presentation, not physical; owner's call 22.11 under Artem's
+     * "crest up to about camera height"): ×68/58, so that at 4.5 km from a 1 Mt surface burst the settled layer stands ~68
+     * blocks high and its crest (1.4–1.6 of it, 95–110 blocks) reads just under the horizon line of a 120-block camera.
+     * Higher, the crest's ragged top stood on the horizon line, redrawn every frame as the front swept the air (approach
+     * coherence 0.62 against 0.81 at the law's height), and popped through the camera as it passed.
      */
-    static final double YOUNG_PRESENT_HEIGHT = 75.0 / 58.0;
+    static final double YOUNG_PRESENT_HEIGHT = 68.0 / 58.0;
     /** Ground bounce under the wall: share of sun and sky light the burnt ground returns (est.). */
     private static final double GROUND_BOUNCE = 0.1;
 
