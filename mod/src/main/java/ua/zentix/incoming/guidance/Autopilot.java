@@ -82,8 +82,8 @@ public final class Autopilot {
     // ---------------------------------------------------------------- straight target approach
 
     /**
-     * Time margin to turn the nose toward the target (game number, not physical): with an obstructed straight line,
-     * commit to the attack this many nose-turn times before overflight ({@link Sightline}).
+     * Path margin to turn the nose toward the target (game number, not physical): with an obstructed straight line,
+     * commit to the attack once this many nose-turn paths of slant range remain ({@link #mustCommit}).
      */
     static final double DIVE_MARGIN = 1.5;
     /**
@@ -93,20 +93,31 @@ public final class Autopilot {
     static final int SIGHT_RECHECK = 4;
 
     /**
-     * Horizontal travel while the nose turns from its current pitch toward {@code aim}, with pitch angular-speed limit
-     * {@code rate} °/tick and acceleration {@code accel} °/tick²: angular acceleration and braking,
-     * with a plateau at the limit for large angles. A target behind (beyond the plane across heading) has a line
-     * past vertical: 180° − angle below horizon.
+     * Ticks for the nose to turn from its current pitch to the line to {@code aim}, with pitch angular-speed limit
+     * {@code rate} °/tick and acceleration {@code accel} °/tick²: angular acceleration and braking, with a plateau at
+     * the limit for large angles. A target behind (beyond the plane across heading) has a line past vertical:
+     * 180° − angle below horizon.
      */
-    private static double horizontalTurnDistance(Craft c, Vec3 aim, Bearing toAim, double rate, double accel) {
+    private static double turnTicks(Craft c, Vec3 aim, Bearing toAim, double rate, double accel) {
         Vec3 pos = c.position(), f = c.flight().forward();
         boolean behind = (aim.x - pos.x) * f.x + (aim.z - pos.z) * f.z < 0;
         double los = behind ? 180 - toAim.pitch() : toAim.pitch();
         double turn = Math.max(0, los - c.flight().pitch());
-        double ticks = turn <= rate * rate / accel
+        return turn <= rate * rate / accel
                 ? 2 * Math.sqrt(turn / accel)
                 : turn / rate + rate / accel;
-        return c.speed() * f.horizontalDistance() * ticks;
+    }
+
+    /**
+     * The attack can wait no longer: the aim is within {@link #DIVE_MARGIN} nose-turn paths (slant range against slant
+     * travel), or the craft would pass over it before its nose could turn to it (horizontal range against horizontal
+     * travel in one turn time). The second deadline matters high above the aim, where the slant range never falls to
+     * the first: a pop-up climbing over the aim (its slant range grows even as it passes over).
+     */
+    static boolean mustCommit(Craft c, Vec3 aim, Bearing toAim, double rate, double accel) {
+        double ticks = turnTicks(c, aim, toAim, rate, accel);
+        return toAim.distance() <= c.speed() * ticks * DIVE_MARGIN
+                || toAim.horizontal() <= c.speed() * c.flight().forward().horizontalDistance() * ticks;
     }
 
     /**
@@ -114,8 +125,8 @@ public final class Autopilot {
      * to target ({@link Craft#clearAlong} — ready chunks only), do not attack until it
      * opens. Missile climbs in a pop-up; if line closes during dive (target behind a slope), return
      * to pop-up ({@link MissileAutopilot}); Shahed continues at cruise altitude ({@link DroneAutopilot}: climbing
-     * hurts its approach). Once horizontal room to turn the nose runs out ({@link #DIVE_MARGIN}), commit to the
-     * attack even with the obstruction in the way.
+     * hurts its approach). Once the attack can wait no longer ({@link #mustCommit}), commit to it even with the
+     * obstruction in the way.
      */
     public static final class Sightline {
         private boolean blocked;
@@ -130,13 +141,12 @@ public final class Autopilot {
 
         /**
          * Straight line to {@code aim} is blocked except for last {@code margin} blocks at target (fuze reaches them), and
-         * there is still enough horizontal room to turn the nose with attack limits {@code rate}, {@code accel}:
-         * do not attack. The slant range can grow throughout a masked pop-up even as the projectile passes over
-         * the aim point. Measure the line once per {@link #SIGHT_RECHECK} ticks.
+         * the attack can still wait ({@link #mustCommit}, attack limits {@code rate}, {@code accel}): do not attack.
+         * Measure the line once per {@link #SIGHT_RECHECK} ticks.
          */
         public boolean masked(Craft c, Vec3 aim, Bearing toAim, double margin, double rate, double accel) {
             if (committed) return false;
-            if (toAim.horizontal() <= horizontalTurnDistance(c, aim, toAim, rate, accel) * DIVE_MARGIN) {
+            if (mustCommit(c, aim, toAim, rate, accel)) {
                 committed = true;
                 return false;
             }

@@ -73,8 +73,10 @@ paths:
   (`surveyAhead`); target-approach straight line `Autopilot.Sightline`, if blocked (`Craft.clearAlong`: block cells in
   ready chunks, beyond/outside world survey terrain top, `Terrain.underRelief`), do not attack; missile stays in
   pop-up, Shahed cruises without climbing (climb raises nose, preventing timely dive along same line over obstacle).
-  The dive deadline compares remaining horizontal range with an estimate of the horizontal distance traveled in `DIVE_MARGIN`
-  nose-turn times. Slant range can grow during pop-up while the projectile runs out of room to dive.
+  The attack is forced (`Autopilot.mustCommit`) when the slant range falls to `DIVE_MARGIN` nose-turn paths, or when
+  the craft would pass over the aim within one turn time (horizontal range against horizontal travel, an estimate at
+  the current speed): high above the aim, as in a pop-up climbing over it, the slant range never falls to the first.
+  `DroneDiveTest` pins every Shahed city layout as a hit, so a change to this shared law cannot move the Shahed silently.
   `MissileBuildingGameTests` checks first-pass roof contact for covered points and hits at exposed points.
   No moving-target lead (Artem, 21.10). Unit test
   `AutopilotPropertiesTest` checks 10 000 random model-terrain flight scenarios.

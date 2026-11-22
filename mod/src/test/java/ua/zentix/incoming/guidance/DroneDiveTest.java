@@ -15,19 +15,11 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
  * Shahed pike above the city: a high-rise on the pike line between the cruise and the target (houses with a height of 42–68 above the target
  *  for 54–190 blocks before it). Shahed goes over the city
  *  at the height of the relief +18 and begins a dive only when the straight line to the target is clear or the nose otherwise will not have time to turn
- *  to the target, and flies to it. A house closer than 45 blocks to the target is not always avoided by a dive from a cruise above it (the highest is
- * no: the straight line is cleared steeper than Shahed manages to turn, and it flies past the target); such flights are only in conclusion.
+ *  to the target, and flies to it. Every layout here, the house 20 blocks before the target included, ends in a hit: a
+ *  change to the shared dive deadline ({@link Autopilot.Sightline}) that moves a Shahed into the house fails here.
  */
 class DroneDiveTest {
     private static final double GROUND = 64;
-    /** The dive does not go around the house closer to the target (see class description). */
-    private static final double NEAREST = 45;
-
-    @Test
-    void preservesOpenPointBehindCityBuilding() {
-        String outcome = strike(30, 20);
-        assertTrue(outcome.startsWith("hit"), outcome);
-    }
 
     @Test
     void divesPastTowerOnDiveLine() {
@@ -37,7 +29,7 @@ class DroneDiveTest {
             for (double before : new double[] {20, 30, 45, 54, 70, 90, 130, 190}) {
                 String end = strike(height, before);
                 all.append(String.format(Locale.ROOT, "%n house %.0f to %.0f to destination: %s", height, before, end));
-                if (before >= NEAREST && !end.startsWith("hit")) {
+                if (!end.startsWith("hit")) {
                     misses.add(String.format(Locale.ROOT, "house with height %.0f in %.0f blocks to goal: %s", height, before, end));
                 }
             }
