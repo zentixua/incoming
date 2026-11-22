@@ -325,7 +325,7 @@ vec3 ballLitWorld(ivec2 full, vec3 n, float kept, vec3 added) {
 // The pall on this pixel's ray up to a see-through surface at view-axis distance surface: the near volume up to it
 // (froxelNear, exact as the composite takes it to the world), and beyond the volume's end the rays' pall from there to the
 // world (rays) cut at the surface by the noiseless field and the conventional smoke's mean field, light in the same ratio
-// to opacity (as upsample does). With the young wall active the split includes mushroom extinction on the same interval. Light and
+// to opacity (as upsample does). The mushroom contributes extinction on the same interval. Light and
 // transmittance never exceed the whole ray's (laid): the part in front of the surface is a part of it.
 vec4 mediumTo(float surface, ivec2 full, vec3 dir, float nearEnd, vec4 rays, vec4 laid) {
     vec4 beyond = vec4(0.0, 0.0, 0.0, 1.0);
@@ -338,8 +338,7 @@ vec4 mediumTo(float surface, ivec2 full, vec3 dir, float nearEnd, vec4 rays, vec
             float t0 = max(span.x, a), t1 = min(span.y, b);
             if (t1 > t0) depth += smokeTau(dir * t0, dir, t1 - t0, 6);
         }
-        float tau = exp(-depth);
-        if (PallYoung.w > 0.0) tau *= mushTransmitRange(Sampler7, dir, a, b, 8);
+        float tau = exp(-depth) * mushTransmitRange(Sampler7, dir, a, b, 8);
         tau = max(tau, rays.a);
         beyond = vec4(rays.rgb * clamp((1.0 - tau) / max(1.0 - rays.a, 1e-4), 0.0, 1.0), tau);
     }

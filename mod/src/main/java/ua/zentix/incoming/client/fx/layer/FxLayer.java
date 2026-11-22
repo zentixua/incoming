@@ -135,10 +135,10 @@ public final class FxLayer {
         try {
             e.registerShader(new ShaderInstance(e.getResourceProvider(), Incoming.id("fx_dustwall"), DefaultVertexFormat.POSITION), s -> DustWallPass.march = s);
             e.registerShader(new ShaderInstance(e.getResourceProvider(), Incoming.id("fx_dustwall_resolve"), DefaultVertexFormat.POSITION), s -> DustWallPass.resolve = s);
-            e.registerShader(new ShaderInstance(e.getResourceProvider(), Incoming.id("fx_dustwall_composite"), DefaultVertexFormat.POSITION), s -> DustWallPass.composite = s);
+            e.registerShader(new ShaderInstance(e.getResourceProvider(), Incoming.id("fx_dustwall_pack"), DefaultVertexFormat.POSITION), s -> DustWallPass.pack = s);
             DustWallPass.reset();
         } catch (IOException ex) {
-            DustWallPass.march = DustWallPass.resolve = DustWallPass.composite = null;
+            DustWallPass.march = DustWallPass.resolve = DustWallPass.pack = null;
             Incoming.LOG.error("Nuclear dust wall shaders failed to load: the pall draws the young wall", ex);
         }
         try {

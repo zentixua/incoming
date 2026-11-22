@@ -7,7 +7,9 @@ import ua.zentix.incoming.client.fx.layer.PallPass;
 import ua.zentix.incoming.nuclear.Detonation;
 
 import java.lang.reflect.Method;
-import java.util.Locale;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.util.Map;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNull;
@@ -15,7 +17,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
-class Rel314HandoffTest {
+class DustWallHandoffTest {
     /** Drive the real Java handoff and compare the support of its two shader masks on a tangent ray. */
     @Test
     void thePallKeepsItsHeadOutsideTheWallTable() throws Exception {
@@ -39,22 +41,16 @@ class Rel314HandoffTest {
         handoff.invoke(null, a, new Vec3(x, 65, 0), 0f, frame);
         assertTrue(frame.dustWall.active);
         assertEquals(reach, frame.young.w, 0.001, "last supported radius of the handoff");
-        double original = 0;
-        int samples = 0;
+        var shader = Files.readString(Path.of("src/main/resources/assets/incoming/shaders/include/wall_ownership.glsl"));
+        var share = GlslFunction.parse(shader, "wallShare");
+        double tau = 0;
         for (int z = -300; z < 300; z++) {
             double r = Math.hypot(x, z + .5);
-            assertTrue(r > reach);
-            double sigma = BlastWall.sigma(head, x, z + .5, 1, 0);
-            if (sigma > 0) samples++;
-            original += sigma;
-            assertTrue(r >= frame.young.w, "the pall owns this head sample");
+            double replacement = share.call(Map.of("ring.x", (double) frame.young.x, "ring.y", (double) frame.young.y,
+                    "ring.z", (double) frame.young.z, "ring.w", (double) frame.young.w, "r", r));
+            tau += (1 - replacement) * BlastWall.sigma(head, x, z + .5, 1, 0);
         }
-        String evidence = String.format(Locale.ROOT,
-                "t %.3f, front %.2f, table %.2f, tangent x %.2f, %d head samples, original head T %.6f",
-                t, front, reach, x, samples, Math.exp(-original));
-        System.out.println(evidence);
-        assertTrue(samples > 0, evidence);
-        assertEquals(0.233159, Math.exp(-original), 1e-5, evidence);
+        assertEquals(0.233159, Math.exp(-tau), 1e-5, "head transmitted along the tangent with the active wall handoff");
     }
 
     @Test

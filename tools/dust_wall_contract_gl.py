@@ -76,10 +76,10 @@ def march(program, scene, frame):
     return light, depth
 
 
-def composite(program, scene, samples, glass=None, cloud=None, rays=None, mushroom=None, layer_frame=False):
+def composite(program, scene, samples, glass=None, cloud=None, rays=None, mushroom=None, layer_frame=False, young=True):
     # Run the shipped pack and resolve before the full-resolution pall composite.
     light, depth = samples
-    pack = link("fx_dustwall_composite")
+    pack = link("fx_dustwall_pack")
     target(2 * low, low, [rgba])
     g.glUseProgram(pack)
     bind(pack, 0, texture(*rgba, low, low, light))
@@ -110,7 +110,7 @@ def composite(program, scene, samples, glass=None, cloud=None, rays=None, mushro
         bind(program, 7, texture(*rgba, 20, 4, mushroom))
     for name in ("SmokeGrid", "PallNoise", "PallOpen"):
         g.glUniform1i(loc(program, name), 13)
-    g.glUniform4f(loc(program, "PallYoung"), 0, 1, 0, 800)
+    g.glUniform4f(loc(program, "PallYoung"), 0, 1, 0, 800 if young else 0)
     g.glUniform4f(loc(program, "PallFrame"), 0, 0, 4, 0)
     g.glUniformMatrix4fv(loc(program, "InvViewProj"), 1, True, np.linalg.inv(projection).astype(np.float32))
     g.glUniform3f(loc(program, "PallForward"), 0, 0, -1)
@@ -153,11 +153,12 @@ def jitter_occluder(march_program, composite_program):
     check(a > 0.8 and b > 0.8 and abs(a - b) < 0.03,
           "opaque pixel remains foreground at both R2 phases")
 
-    close = make_scene(np.where(np.arange(size) < 3, 10, 10.75))
-    light, span = march(march_program, close, 1)
-    last = span[1, 0, 1] / (1.0 - light[1, 0, 3])
-    print(f"depth at lattice centre 10, jittered depth 10.75, last dusty point {last:.4f}")
-    check(0 < last <= 10.001, "jitter cannot move dust past the centre's opaque surface")
+    # Jitter on a continuous slope marches to the sampled depth in both directions.
+    for depths in (10 + .25 * np.arange(size), 11 - .25 * np.arange(size)):
+        light, span = march(march_program, make_scene(depths), 1)
+        last = span[1, 0, 1] / (1.0 - light[1, 0, 3])
+        print(f"depth at lattice centre {depths[2]}, jittered depth {depths[3]}, last dusty point {last:.4f}")
+        check(abs(last - depths[3]) < .001, "a continuous surface ends the jittered ray at its own depth")
 
 
 def history_occluder(far=0.10, here=20, far_depth=100, enabled=1, sparse=False):
@@ -231,11 +232,60 @@ def mixed_depth(march_program, program):
     depths[:, 4] = 100
     result = composite(program, make_scene(depths), slab(101, 109, .25))[6, 4, 3]
     check(result > .999, "dust nine blocks behind a foreground edge stays behind")
+    result = composite(program, make_scene(depths), slab(91, 109, .25))[6, 4, 3]
+    check(abs(result - .5) < .001, f"only the foreground half of a crossing tap contributes: T={result:.5f}")
+
+
+def fragment_program(source):
+    return namespace["compileProgram"](
+        namespace["compileShader"]((namespace["CORE"] / "fx_dustwall.vsh").read_text(), g.GL_VERTEX_SHADER),
+        namespace["compileShader"](namespace["expand"](source), g.GL_FRAGMENT_SHADER), validate=False)
+
+
+def offscreen_dust():
+    # Both the quad vertex shader and the light probe call this function for their endpoint.
+    program = fragment_program("""#version 150
+#moj_import <incoming:pall.glsl>
+#moj_import <incoming:pall_front.glsl>
+uniform vec3 Endpoint;
+uniform sampler2D Scene;
+out vec4 fragColor;
+void main() {
+    fragColor = vec4(pallThrough(Scene, normalize(Endpoint), length(Endpoint)));
+}
+""")
+    target(1, 1, [rgba])
+    g.glUseProgram(program)
+    slot = np.zeros((4, 4), dtype=np.float32)
+    slot[:, 0] = (100, 0, 0, 800)
+    slot[3, 1] = 1
+    slot[2, 2], slot[3, 2] = .25, .75  # soil and haze rows
+    g.glUniformMatrix4fv(loc(program, "PallSlot0"), 1, True, slot)
+    g.glUniformMatrix4fv(loc(program, "DwViewProj"), 1, True, projection)
+    g.glUniform3f(loc(program, "PallMin"), -100, -100, -100)
+    g.glUniform3f(loc(program, "PallMax"), 100, 100, 100)
+    g.glUniform4f(loc(program, "PallAmbient"), 0, 0, 0, 1)
+    g.glUniform1f(loc(program, "DwDiv"), 4)
+    g.glUniform1i(loc(program, "PallOpen"), 13)
+    bind(program, 0, make_scene(100))
+    g.glUniform1i(loc(program, "Scene"), 0)
+    bind(program, 5, texture(*rgba, 1, 2, [(.02, 10, 0, 0), (0, 10, 0, 0)]))
+    bind(program, 10, texture(*rgba, low * 2, low, np.concatenate(slab(1, 15, .25), axis=1)))
+    for point, visible in [((0, 0, -20), True), ((1, 0, -20), False), ((0, 0, 20), False)]:
+        g.glUniform3f(loc(program, "Endpoint"), *point)
+        values = []
+        for reach in (0, 800):
+            g.glUniform4f(loc(program, "PallYoung"), 0, 1, 0, reach)
+            quad(program)
+            values.append(read(1, 1)[0, 0, 0])
+        field, active = values
+        check(.5 < field < .8 and abs(active - (.25 if visible else field)) < .001,
+              f"light/quad at {point}: field T={field:.4f}, active T={active:.4f}")
 
 
 def ownership():
     # Exercise the actual head and field functions across both handoffs and the ball footprint.
-    src = namespace["expand"]("""#version 150
+    program = fragment_program("""#version 150
 #moj_import <incoming:pall.glsl>
 uniform vec4 Ring;
 uniform float Radius;
@@ -256,9 +306,6 @@ void main() {
     fragColor = vec4(wallShare(Ring, Radius), head.P.w, f.sigma.x, f.sigma.y + f.sigma.z);
 }
 """)
-    program = namespace["compileProgram"](
-        namespace["compileShader"]((namespace["CORE"] / "fx_dustwall.vsh").read_text(), g.GL_VERTEX_SHADER),
-        namespace["compileShader"](src, g.GL_FRAGMENT_SHADER), validate=False)
     target(1, 1, [rgba])
     g.glUseProgram(program)
     g.glUniform4f(loc(program, "Ring"), 100, 200, 0, 2435.89)
@@ -317,6 +364,11 @@ def foreground_volume(march_program, program):
         dim = composite(program, scene, samples, rays=dark, mushroom=caps)[6, 6, 0]
         layer = composite(program, scene, samples, rays=behind, mushroom=caps, layer_frame=True)[1, 1, 0]
         check(abs(bright - layer) < 1e-4, "layer quads and the display use the same ordered medium")
+        glass = texture(*rgba, size, size, [(.4, .4, .4, .5)] * (size * size))
+        red = [composite(program, make_scene(400, 100), slab(0, 0, 1), glass, rays=dark, mushroom=caps,
+                         young=young)[6, 6, 0] for young in (True, False)]
+        expected_red = 0 if distance < 100 else .4
+        check(np.allclose(red, expected_red, atol=.001), f"cap at {distance} through glass: wall on/off {red}")
         gain = (bright - dim) / .6
         check(abs(gain - expected) < .01, f"cap at {distance}: contrast {gain:.6f}, expected {expected:.6f}")
 
@@ -452,6 +504,7 @@ def main():
     composite_program = link("fx_pall_composite")
     cases = {
         "ownership": ownership,
+        "offscreen": offscreen_dust,
         "post": lambda: mixed_depth(march_setup(), composite_program),
         "volume": lambda: foreground_volume(march_setup(), composite_program),
         "jitter": lambda: jitter_occluder(march_setup(), composite_program),

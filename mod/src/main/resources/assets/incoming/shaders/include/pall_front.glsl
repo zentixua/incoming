@@ -35,12 +35,15 @@ uniform mat4 DwViewProj;
 uniform float DwDiv;
 uniform vec4 PallYoung;
 
-float youngThrough(sampler2D scene, vec3 p) {
+float youngThrough(sampler2D scene, vec3 p, out vec4 ring) {
+    // Outside the atlas the field and head still supply all the extinction.
+    ring = vec4(0.0);
     if (PallYoung.w <= 0.0) return 1.0;
     vec4 clip = DwViewProj * vec4(p, 1.0);
     if (clip.w <= 0.0) return 1.0;
     vec2 uv = clip.xy / clip.w * 0.5 + 0.5;
     if (any(lessThan(uv, vec2(0.0))) || any(greaterThanEqual(uv, vec2(1.0)))) return 1.0;
+    ring = PallYoung;
     ivec2 size = textureSize(scene, 0);
     vec2 pixel = uv * vec2(size);
     float here = pallScene(texelFetch(scene, ivec2(pixel), 0).r);
@@ -54,14 +57,14 @@ float pallOpenHere(vec3 p) {
 }
 
 // Slot wall head before point on [t0, t1]: transmitted share per ray span (pallWallSpans)
-float pallWallThrough(sampler2D ground, mat4 S, mat4 V, vec4 G, vec4 W, vec3 dir, float t0, float t1) {
+float pallWallThrough(sampler2D ground, mat4 S, mat4 V, vec4 G, vec4 W, vec3 dir, float t0, float t1, vec4 ring) {
     vec4 spans = pallWallSpans(S, V, G, dir, t0, t1);
     float through = 1.0;
     for (int k = 0; k < 2; k++) {
         vec2 sp = k == 0 ? spans.xy : spans.zw;
         if (sp.y <= sp.x) continue;
         // wall head is also outdoor-air matter (as in pall ray, fx_pall: pallStep)
-        float tau = pallWallTau(ground, S, V, G, W, dir, sp.x, sp.y, 4, PallYoung) * pallOpenHere(dir * (0.5 * (sp.x + sp.y)));
+        float tau = pallWallTau(ground, S, V, G, W, dir, sp.x, sp.y, 4, ring) * pallOpenHere(dir * (0.5 * (sp.x + sp.y)));
         through *= exp(-tau);
     }
     return through;
@@ -80,7 +83,8 @@ float pallThrough(sampler2D scene, vec3 dir, float len) {
     if (PallAmbient.w < 0.5) return 1.0;
     vec2 span = pallBox(dir, PallMin, PallMax);
     float t0 = span.x, t1 = min(span.y, len);
-    float through = youngThrough(scene, dir * len);
+    vec4 ring;
+    float through = youngThrough(scene, dir * len, ring);
     if (t1 <= t0) return through;
     float ds = (t1 - t0) / 6.0;
     for (int i = 0; i < 6; i++) {
@@ -89,17 +93,16 @@ float pallThrough(sampler2D scene, vec3 dir, float len) {
         // full depth of all matter, like volume ray (mist also attenuates what lies behind)
         if (PallSlot0[1].w > 0.5) {
             PallAt f = pallField(Sampler5, Sampler9, PallSlot0, PallGround0, PallWater0, q, pallRelief(Sampler9, PallSlot0, PallGround0, q.xz), 1.0);
-            pallHandoff(f, PallYoung, PallSlot0, q);
+            pallHandoff(f, ring, PallSlot0, q);
             tau += (f.sigma.x + f.sigma.y + f.sigma.z) * ds;
         }
         if (PallSlot1[1].w > 0.5) {
             PallAt f = pallField(Sampler5, Sampler10, PallSlot1, PallGround1, PallWater1, q, pallRelief(Sampler10, PallSlot1, PallGround1, q.xz), 1.0);
-            pallHandoff(f, PallYoung, PallSlot1, q);
             tau += (f.sigma.x + f.sigma.y + f.sigma.z) * ds;
         }
         through *= exp(-tau * pallOpenHere(q));
     }
-    return through * pallWallThrough(Sampler9, PallSlot0, PallWall0, PallGround0, PallWater0, dir, t0, t1)
-            * pallWallThrough(Sampler10, PallSlot1, PallWall1, PallGround1, PallWater1, dir, t0, t1)
+    return through * pallWallThrough(Sampler9, PallSlot0, PallWall0, PallGround0, PallWater0, dir, t0, t1, ring)
+            * pallWallThrough(Sampler10, PallSlot1, PallWall1, PallGround1, PallWater1, dir, t0, t1, vec4(0.0))
             * pallWilsonThrough(PallSlot0, PallWilson0, dir, t1) * pallWilsonThrough(PallSlot1, PallWilson1, dir, t1);
 }

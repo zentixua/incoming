@@ -72,8 +72,8 @@ float gDwSurf = 0.0, gDwSigma = 0.0, gDwSand = 0.0;
 float gDwSwell = 0.0;
 
 vec4 dwNode(float r) {
-    float x = clamp(r / max(DwRing.w, 1.0), 0.0, 1.0) * float(DW_NODES - 1);
-    int i = int(min(floor(x), float(DW_NODES - 2)));
+    float x = clamp(r / max(DwRing.w, 1.0), 0.0, 1.0) * (DW_NODES - 1.0);
+    int i = int(min(floor(x), DW_NODES - 2.0));
     return mix(texelFetch(Sampler2, ivec2(i, 0), 0), texelFetch(Sampler2, ivec2(i + 1, 0), 0), x - float(i));
 }
 

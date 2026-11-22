@@ -1,6 +1,6 @@
 {
     "vertex": "incoming:fx_dustwall",
-    "fragment": "incoming:fx_dustwall_composite",
+    "fragment": "incoming:fx_dustwall_pack",
     "samplers": [
         { "name": "Sampler0" },
         { "name": "Sampler1" }

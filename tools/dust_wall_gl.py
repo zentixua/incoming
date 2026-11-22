@@ -5,7 +5,7 @@
 
     uv run tools/dust_wall_gl.py
 
-Links fx_dustwall, fx_dustwall_resolve and fx_dustwall_composite and checks (exit 1 on a failure): the composite keeps a
+Links fx_dustwall, fx_dustwall_resolve and fx_dustwall_pack and checks (exit 1 on a failure): the composite keeps a
 thin foreground and the first-person hand its low-resolution taps missed, and lays dust behind a see-through pane through
 it, and lays no dust from behind a foreground surface; the resolve drops history at a new occluder, behind a ceiling that
 moved in, with no history, and reads the previous frame on the march lattice when the frame width is not a multiple of the
@@ -338,7 +338,7 @@ def link_after_veil(name, java, classpath):
 
 
 context()
-programs = {name: link("fx_dustwall" + name) for name in ("", "_resolve", "_composite")}
+programs = {name: link("fx_dustwall" + name) for name in ("", "_resolve", "_pack")}
 for name, p in programs.items():
     print(f"Linked fx_dustwall{name}, {g.glGetProgramiv(p, g.GL_ACTIVE_UNIFORMS)} active uniforms")
     if len(sys.argv) == 3:
@@ -354,6 +354,9 @@ resolve_cases(programs["_resolve"])
 march_cases()
 turning_case()
 period_case()
-# the render contract (march, resolve, composite together): its own script, the same exit rule
-contract = subprocess.run([sys.executable, str(Path(__file__).resolve().with_name("dust_wall_contract_gl.py"))])
-sys.exit(bool(gl["FAILED"]) or contract.returncode != 0)
+# The full pass contract and its camera-motion and screen-edge regressions use llvmpipe.
+failed = bool(gl["FAILED"])
+for script in ("dust_wall_contract_gl.py", "review730_history_motion_probe.py", "review730_screen_edge_probe.py"):
+    run = subprocess.run([sys.executable, str(Path(__file__).with_name(script))])
+    failed |= run.returncode != 0
+sys.exit(failed)

@@ -5,11 +5,29 @@ struct WallLayer {
     vec3 depth;
 };
 
-// A farther tap is usable only when all its occupied dust is in front of the
-// surface. The atlas stores its last depth multiplied by the opacity.
-bool wallTapBefore(vec4 span, float here) {
+// Fraction of the optical thickness up to z. The march supplies both endpoints;
+// inside a crossing the interval is treated as one homogeneous layer.
+float wallFraction(vec3 span, float z) {
+    return clamp((z - span.x) / max(span.y - span.x, 1e-4), 0.0, 1.0);
+}
+
+vec4 wallTo(WallLayer wall, float z) {
+    float fraction = wallFraction(wall.depth, z);
+    float t = exp(log(max(wall.light.a, 1e-7)) * fraction);
+    return vec4(wall.light.rgb * ((1.0 - t) / max(1.0 - wall.light.a, 1e-6)), t);
+}
+
+// Keep the part of a tap in front of the opaque surface. Depths in the atlas
+// are opacity-weighted, so clipping must change both halves together.
+void wallCut(inout vec4 light, inout vec4 span, float surface) {
     float cover = 1.0 - span.a;
-    return cover <= 0.0 || (span.y > 0.0 && span.y <= here * cover);
+    if (cover <= 0.0 || span.y <= surface * cover) return;
+    vec3 depth = span.rgb / cover;
+    float fraction = wallFraction(depth, surface);
+    light = wallTo(WallLayer(light, depth), surface);
+    // Preserve the relative position of the representative depth in the shortened interval.
+    depth.yz = mix(vec2(depth.x), depth.yz, fraction);
+    span = vec4(depth * (1.0 - light.a), light.a);
 }
 
 WallLayer wallLayer(sampler2D atlas, sampler2D scene, vec2 pixel, float here, float div) {
@@ -33,11 +51,9 @@ WallLayer wallLayer(sampler2D atlas, sampler2D scene, vec2 pixel, float here, fl
         if (!pallValid(v) || !pallValid(span)) continue;
         vec2 tent = max(1.5 - abs(vec2(c) - at), vec2(0.0));
         float w = tent.x * tent.y;
+        wallCut(v, span, here);
         float cover = 1.0 - v.a;
         vec3 z = span.rgb / max(1.0 - span.a, 1e-6);
-        // A farther tap can contribute only if its entire dust path ends before
-        // this surface. This also protects close depth classes at a thin edge.
-        if (there > here && !wallTapBefore(span, here)) continue;
         if (pallSamePlace(there, here)) {
             sum += w * v;
             depths += w * cover * z;
@@ -60,18 +76,6 @@ WallLayer wallLayer(sampler2D atlas, sampler2D scene, vec2 pixel, float here, fl
         wall.light.rgb = pallShown(max(wall.light.rgb, vec3(0.0)), cover);
     }
     return wall;
-}
-
-// Fraction of the optical thickness up to z. The march supplies both endpoints;
-// inside a crossing the interval is treated as one homogeneous layer.
-float wallFraction(vec3 span, float z) {
-    return clamp((z - span.x) / max(span.y - span.x, 1e-4), 0.0, 1.0);
-}
-
-vec4 wallTo(WallLayer wall, float z) {
-    float fraction = wallFraction(wall.depth, z);
-    float t = exp(log(max(wall.light.a, 1e-7)) * fraction);
-    return vec4(wall.light.rgb * ((1.0 - t) / max(1.0 - wall.light.a, 1e-6)), t);
 }
 
 // Place the wall between the measured foreground of a pall ray and the rest.

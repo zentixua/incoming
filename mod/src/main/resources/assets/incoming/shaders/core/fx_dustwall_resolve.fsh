@@ -72,7 +72,8 @@ void main() {
     vec2 ndc = at / vec2(size) * 2.0 - 1.0;
     vec4 farPoint = InvViewProj * vec4(ndc, 1.0, 1.0);
     vec3 dir = normalize(farPoint.xyz / farPoint.w);
-    float world = here / max(dot(dir, PallForward), 1e-3);
+    float axis = max(dot(dir, PallForward), 1e-3);
+    float world = here / axis;
     float t = dir.y < -1e-3 && DwHistory.y < 0.0 ? DwHistory.y / dir.y : 2000.0;
     t = clamp(min(t, world), 1.0, 30000.0);
     vec4 clip = PrevViewProj * vec4(dir * t + DwReproject.xyz, 1.0);
@@ -86,9 +87,19 @@ void main() {
         fragColor = cur;
         return;
     }
+    // Along this ray the previous view depth is origin + distance * previousAxis.
+    // The anchor can be on the dust top, well in front of the opaque surface.
+    float origin = (PrevViewProj * vec4(DwReproject.xyz, 1.0)).w;
+    float previousAxis = (PrevViewProj * vec4(dir, 0.0)).w;
+    if (previousAxis <= 1e-3) {
+        fragColor = cur;
+        return;
+    }
+    float expected = here >= 1e8 ? 1e9 : origin + previousAxis * world;
+    float before = expected;
     if (DwPrevScene > 0.5) {
-        float before = pallScene(texelFetch(Sampler3, ivec2(prevPixel), 0).r);
-        if (!pallSamePlace(before, here)) {
+        before = pallScene(texelFetch(Sampler3, ivec2(prevPixel), 0).r);
+        if (!pallSamePlace(before, expected)) {
             fragColor = cur;
             return;
         }
@@ -105,10 +116,15 @@ void main() {
         float w = mix(1.0 - fr.x, fr.x, float(o.x)) * mix(1.0 - fr.y, fr.y, float(o.y));
         if (DwPrevScene > 0.5) {
             float was = pallScene(texelFetch(Sampler3, ivec2(min((vec2(c) + 0.5) * DwDiv, vec2(size) - 0.5)), 0).r);
-            if (!pallSamePlace(was, here)) continue;
-            if (was > here && !wallTapBefore(texelFetch(Sampler1, c + ivec2(low.x, 0), 0), here)) continue;
+            if (!pallSamePlace(was, before)) continue;
         }
-        hs += w * valid(texelFetch(Sampler1, c + offset, 0));
+        vec4 light = valid(texelFetch(Sampler1, c, 0));
+        vec4 span = valid(texelFetch(Sampler1, c + ivec2(low.x, 0), 0));
+        wallCut(light, span, min(before, expected));
+        // Blend depth moments in the current eye's coordinates too.
+        span.rgb = max((span.rgb - origin * (1.0 - span.a)) * (axis / previousAxis), vec3(0.0));
+        vec4 sampleValue = offset.x == 0 ? light : span;
+        hs += w * sampleValue;
         ws += w;
     }
     if (ws < 1e-4) {

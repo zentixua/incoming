@@ -50,7 +50,7 @@ paths:
   decal and the half-resolution upsampler key on g (its reduction keeps one frame pixel's pair). Exact compositing:
   `SeeThroughGlslTest`. Readers of the surface's distance use g of the distance texture they already sample: the pall
   composite is at 16 samplers, the minimum a GL implementation must allow. Limits: smoke between two separate panes takes
-  both tints, a mushroom between the eye and a window counts as behind it, two coplanar panes mix across half a
+  both tints, mushroom extinction at the pane uses its mean field, two coplanar panes mix across half a
   half-resolution pixel, an opaque vanilla particle behind a pane hides the layer at the pane, a vanilla particle drawn
   after translucent terrain in front of a pane is looked through with the pane's tint, beyond the near volume (256 m) the
   pall split shares the rays' light by extinction (dark smoke in front of a far pane with lit smoke behind it: 0.25
@@ -936,8 +936,10 @@ paths:
   fixed offset sparkles along the far top where 9–18 m steps cross the moving billowed surface. Light paths see the large shapes only: a shadow tap
   reading the fine texture or the head's front-riding lumps re-shaded the approaching face every frame. The march records its occupied view depths and opacity-weighted distance. The pall composite inserts its resolved light
   at that distance, reconstructs the medium in front from the near volume and far fields, and splits the occupied
-  interval at glass. The wall, quads and source probes read the same low-resolution atlas. Mixed-depth pixels reject
-  farther taps carrying dust behind the pixel. Cost at HIGH
+  interval at glass. As for a pane, the far field assigns light in proportion to extinction: dark smoke in front of the
+  wall can receive some light from a bright mushroom behind it. Quads and source probes use the atlas on screen and
+  the full dust field outside it. Each tap contributes only its dust in front of the pixel's depth, including where
+  one continuous surface crosses several depth samples. Cost at HIGH
   (1/4 resolution, 128 steps, 2560×1600, RTX 4060): ~1–2 ms approaching, ~5–7 ms after the passage; the ray bound must stay
   under a 120 m camera, or every near-eye ray marches fine steps through empty air. Shader checks without a
   game: `tools/dust_wall_gl.py`.

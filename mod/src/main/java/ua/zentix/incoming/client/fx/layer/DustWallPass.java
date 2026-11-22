@@ -91,7 +91,7 @@ public final class DustWallPass {
     private static final int LATTICE = 128;
     private static final int NOISE_UNIT = 12;
 
-    public static ShaderInstance march, resolve, composite;
+    public static ShaderInstance march, resolve, pack;
     private static int lattice = -1, target = -1, fbo = -1, table = -1, width, height, div, fullW, fullH;
     /** History pair ({@code fx_dustwall_resolve}): the latest is {@link #latest}. */
     private static final int[] HISTORY_TEX = {-1, -1}, HISTORY_FBO = {-1, -1};
@@ -151,7 +151,7 @@ public final class DustWallPass {
      * NukePall.youngWall} asks before it sets {@code PallYoung}).
      */
     public static boolean ready() {
-        return march != null && resolve != null && composite != null && !failed;
+        return march != null && resolve != null && pack != null && !failed;
     }
 
     /**
@@ -170,7 +170,7 @@ public final class DustWallPass {
      */
     static boolean draw(PallPass.Frame pall, int scene, Matrix4f view, Matrix4f projection) {
         Frame f = pall.dustWall;
-        ShaderInstance m = march, r = resolve, c = composite;
+        ShaderInstance m = march, r = resolve;
         if (!f.active || !ready() || scene < 0 || FxViews.secondary()) return false;
         Minecraft mc = Minecraft.getInstance();
         int w = FxViews.width(mc.getMainRenderTarget().width), h = FxViews.height(mc.getMainRenderTarget().height);
@@ -235,7 +235,7 @@ public final class DustWallPass {
             GlStateManager._viewport(0, 0, 2 * width, height);
             RenderSystem.setShaderTexture(0, target);
             RenderSystem.setShaderTexture(1, bounds);
-            fullScreen(c, null, false);
+            fullScreen(pack, null, false);
             // averaged over frames at the same resolution into the other history target
             int next = 1 - latest;
             {

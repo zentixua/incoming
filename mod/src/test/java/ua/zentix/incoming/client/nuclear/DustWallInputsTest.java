@@ -2,6 +2,8 @@ package ua.zentix.incoming.client.nuclear;
 
 import net.minecraft.world.phys.Vec3;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 import ua.zentix.incoming.client.fx.layer.DustWallPass;
 import ua.zentix.incoming.nuclear.Detonation;
 import ua.zentix.incoming.nuclear.model.FireballModel;
@@ -71,11 +73,13 @@ class DustWallInputsTest {
     }
 
     /**
-     * A low-altitude tangent crossing lofted soil samples both the pall field and the interpolated wall table.
+     * Tangent through the interior and the #724 review fixture at 2378.6 blocks, where nodes
+     * below GONE_DEPTH still carry visible lofted soil.
      */
-    @Test
-    void wallDrawsWhateverThePallHandsOver() {
-        double t = 18.1, x = 2250;
+    @ParameterizedTest
+    @ValueSource(doubles = {2250, 2378.6})
+    void wallDrawsWhateverThePallHandsOver(double x) {
+        double t = 18.1;
         var detonation = new Detonation(1, new Vec3(0, 64, 0), 64, 1, true, 0, 0, 0, 20_000, 7, 1, false, 0.35f);
         var field = new PallField(detonation);
         int nodes = DustWallPass.NODES;

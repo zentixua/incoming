@@ -371,6 +371,7 @@ public final class NukePall {
         if (!any) return;
         // the fireball's ground footprint: the pass draws no dust there, the pall keeps its own
         w.cut = (float) d.blocks(a.wall.underBall(t));
+        assert f.slot1.m13() == 0 : "The wall atlas uses the empty second slot's texture unit";
         f.young.set((float) inner, (float) Math.max(inner + 1, whole), w.cut, (float) reach);
         w.ring[0] = (float) front;
         w.ring[1] = (float) inner;
