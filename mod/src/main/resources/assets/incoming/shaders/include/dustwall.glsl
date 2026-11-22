@@ -197,9 +197,10 @@ float dwPuff(vec3 pw, float top, float a) {
     if (h1 < 0.56) return 0.0;
     float born = 1.0 + 8.0 * h2, age = a - born;
     if (age <= 0.0) return 0.0;
-    vec2 c = (cell + 0.5) * 70.0 + (vec2(h2, h1) - 0.5) * 30.0;
+    // (each puff stays inside its own cell: grown past it, it was cut by the cell's edges into rectangles with seams)
+    vec2 c = (cell + 0.5) * 70.0 + (vec2(h2, h1) - 0.5) * 16.0;
     float rise = 0.45 * top * (1.0 - exp(-age / 2.5)) * (h1 - 0.4) * 2.5;
-    float radius = 10.0 + 5.0 * age;
+    float radius = min(10.0 + 4.0 * age, 26.0);
     vec2 d = vec2(length(pw.xz - c), (pw.y - top * 0.9 - rise) * 1.3);
     return 0.5 * exp(-age / 6.0) * (1.0 - smoothstep(0.5, 1.0, length(d) / radius)) * smoothstep(0.0, 1.0, age);
 }
