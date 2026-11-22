@@ -31,23 +31,26 @@ context, link, target, texture, bind, quad, read, loc, check = (
 )
 
 
-def image(w, h, alphas):
-    return texture(g.GL_RGBA16F, g.GL_RGBA, w, h, [(0, 0, 0, a) for a in alphas])
-
-
 def scene(w, h, depths):
     return texture(g.GL_RG32F, g.GL_RG, w, h, [(d, d) for d in depths])
 
 
-def resolve(p, w, h, current, past, depths, history=1, before=None):
+def resolve(p, w, h, current, past, depths, history=1, before=None, previous_div=4, read_span=False):
     size = ((w + 3) // 4, (h + 3) // 4)
-    target(*size, [(g.GL_RGBA32F, g.GL_RGBA)])
+    past_size = ((w + previous_div - 1) // previous_div, (h + previous_div - 1) // previous_div)
+    target(2 * size[0], size[1], [(g.GL_RGBA32F, g.GL_RGBA)])
     g.glUseProgram(p)
-    def atlas(values):
-        tile = np.asarray(values).reshape(size[1], size[0])
-        return image(2 * size[0], size[1], np.tile(tile, (1, 2)).ravel())
-    bind(p, 0, atlas(current))
-    bind(p, 1, atlas(past))
+
+    def atlas(shape, values):
+        tile = np.asarray(values).reshape(shape[1], shape[0])
+        light = np.zeros((*tile.shape, 4), np.float32)
+        light[:, :, 3] = tile
+        span = light.copy()
+        span[:, :, :3] = (1 - tile[:, :, None]) * np.array([2, 6, 4])
+        return texture(g.GL_RGBA16F, g.GL_RGBA, 2 * shape[0], shape[1], np.concatenate((light, span), axis=1))
+
+    bind(p, 0, atlas(size, current))
+    bind(p, 1, atlas(past_size, past))
     g.glTexParameteri(g.GL_TEXTURE_2D, g.GL_TEXTURE_MIN_FILTER, g.GL_LINEAR)
     g.glTexParameteri(g.GL_TEXTURE_2D, g.GL_TEXTURE_MAG_FILTER, g.GL_LINEAR)
     bind(p, 2, scene(w, h, depths))
@@ -56,12 +59,15 @@ def resolve(p, w, h, current, past, depths, history=1, before=None):
     g.glUniformMatrix4fv(loc(p, "InvViewProj"), 1, True, np.linalg.inv(proj).astype(np.float32))
     g.glUniform3f(loc(p, "PallForward"), 0, 0, -1)
     g.glUniform1f(loc(p, "DwDiv"), 4)
+    g.glUniform1f(loc(p, "DwPrevDiv"), previous_div)
     g.glUniform4f(loc(p, "DwReproject"), 0, 0, 0, history)
     g.glUniform2f(loc(p, "DwHistory"), 0.1, 10)
     # the previous frame's world distances (SceneDepth.previous); none given: the same as now
     bind(p, 3, scene(w, h, before if before is not None else depths))
     g.glUniform1f(loc(p, "DwPrevScene"), 1)
     quad(p)
+    if read_span:
+        return read(2 * size[0], size[1])[:, size[0]:]
     return read(*size)[:, :, 3]
 
 
@@ -79,6 +85,13 @@ def resolve_cases(p):
     result = resolve(p, 9, 4, [0, 0.5, 1], [0, 0.5, 1], [100.0] * 36)
     check(abs(result[0, 1] - 0.5) < 1e-5, f"stationary 9-pixel view reprojection: T={result[0, 1]:.4f}, expected 0.5")
     check(abs(result[0, 2] - 1) < 1e-5, f"stationary 9-pixel view, last column (sample at 8.5): T={result[0, 2]:.4f}, expected 1")
+    # 13 full pixels: three old cells at divisor 5, four new at divisor 4. At x=6 the old
+    # centres at 2.5 and 7.5 contribute 30/70. The depth moments live three columns after light.
+    for span in (False, True):
+        result = resolve(p, 13, 4, [0, 1, 0, 1], [0, 1, 0], [100.0] * 52, previous_div=5, read_span=span)
+        expected = (.54, 1.62, 1.08, .73) if span else .73
+        check(np.allclose(result[0, 1], expected, atol=1e-4),
+              f"divisor change keeps {'depth moments' if span else 'light'}: {result[0, 1]}, expected {expected}")
     # a ceiling moved in front of all nine samples (now 20 blocks, before 100): no dust from behind it
     cur = [0.25] * 9
     cur[4] = 1.0
@@ -356,7 +369,8 @@ turning_case()
 period_case()
 # The full pass contract and its camera-motion and screen-edge regressions use llvmpipe.
 failed = bool(gl["FAILED"])
-for script in ("dust_wall_contract_gl.py", "review730_history_motion_probe.py", "review730_screen_edge_probe.py"):
+for script in ("dust_wall_contract_gl.py", "review730_history_motion_probe.py", "review730_screen_edge_probe.py",
+               "nuclear_volume_warmup_gl.py"):
     run = subprocess.run([sys.executable, str(Path(__file__).with_name(script))])
     failed |= run.returncode != 0
 sys.exit(failed)

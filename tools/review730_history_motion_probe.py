@@ -42,6 +42,7 @@ def resolve(history_end, prev_depth=20.05, here=20.0, forward=0.05, yaw=0.0):
     g.glUniformMatrix4fv(loc(p, "InvViewProj"), 1, True, np.linalg.inv(projection).astype(np.float32))
     g.glUniform3f(loc(p, "PallForward"), 0, 0, -1)
     g.glUniform1f(loc(p, "DwDiv"), 4)
+    g.glUniform1f(loc(p, "DwPrevDiv"), 4)
     # this eye minus the previous eye: moved forward (−z) by `forward`
     g.glUniform4f(loc(p, "DwReproject"), 0, 0, -forward, 1)
     g.glUniform2f(loc(p, "DwHistory"), 0.1, 10)

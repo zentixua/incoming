@@ -69,13 +69,16 @@ paths:
   without reading textures; full-resolution depth coverage/readback is opt-in through `incoming.nukeDiag`.
   Polling the ordinary line with Voxy used to synchronize with the GPU and scan millions of floats, injecting
   pauses into the scene bench. `SceneDepthTelemetryTest` exercises a valid-sized LOD frame without a GL context.
-- The first nuclear ray draw can spend seconds compiling in the driver (NVIDIA, cold shader cache).
-  `FxLayer` submits an empty `PallPass.Frame` on world entry until the real pass completes: noise builds
-  asynchronously, so a single attempt in the layer's first frame is insufficient. `PallPass.cold` tracks the
-  actual shader instance and compiled GL program ID: Veil can recompile a program in place, while a
-  resource reload replaces the instance. Use the real pass resources/state;
-  a one-pixel dummy pass with placeholder textures did not remove the first-flash compilation stall.
-  Check a fresh process with the driver cache disabled; a second detonation cannot verify this fix.
+- Resource loading exercises one nuclear volume program per primary loading frame. A disabled mushroom row with
+  foot lighting enabled and an empty wall use the production targets, texture formats and blend states. The primary
+  view also stages in-place program replacements detected by shader instance and GL ID. Secondary views reuse
+  the shared programs with their own targets and histories. The completion log follows the primary GPU drain.
+  Dust OFF prepares only the mushroom and pall programs. With dust enabled, the lattice and wall targets are ready
+  before handoff. The march writes two RGBA16F attachments. The pack and both history targets are twice the march width.
+  The shared composite warms the unblended layer target and blended display in separate loading frames. Terrain and fire maps upload when a real frame supplies them.
+  Verify first use in a fresh process with the driver cache disabled. A second detonation uses compiled programs;
+  a one-pixel dummy pass with placeholder textures misses first-use specialization on the real targets.
+  See `NuclearVolumeBudgetTest` and `tools/nuclear_volume_warmup_gl.py`.
 - Drivers differ where GL leaves behaviour undefined (#656: a nuke froze an RX 6600 XT while sound went on; the RTX 4060
   laptop shows 0 GL errors and ≤ 13.8 ms of pall GPU per frame in the same scene). Module globals start with a value
   (`ShaderSourceTest.everyGlobalStartsWithAValue`: NVIDIA zeroes registers, others do not; Mesa found 20 in `fx_pall.glsl`).
@@ -83,8 +86,8 @@ paths:
   messages per nuke scenario). `GpuWatch` acts on one pall frame far past any budget: ≥ 250 ms GPU holds the detail at
   its floor, ≥ 1 s turns the volume off for the session with one chat line (`incoming.pall.gpu_off`). It takes GPU time
   minus the render thread's time between the pair's stamps (`PallPass.SUBMIT`): a cold-cache driver compile idles the
-  GPU between stamps for seconds. Software renderers (llvmpipe) are not watched. The watch belongs to the session, not
-  to a view: it lives outside `PallPass.ViewState` (a view's own timer init once replaced it, re-enabling OFF), OFF also
+  GPU between stamps for seconds. Software renderers (llvmpipe) are not watched. The interval includes the young wall through its composite.
+  The wall divisor and step cap follow the effective pall rung. The watch belongs to the session, not to a view: it lives outside `PallPass.ViewState` (a view's own timer init once replaced it, re-enabling OFF), OFF also
   stops the cold warm-up (`cold`, `draw`), and FLOOR is a latch each view's detail takes at its next sample or draw
   (`PallPass.latch`; a per-view floor on the transition alone left the other views at HIGH), `PallWatchViewsTest`.
   Second-compiler check without a GPU:
@@ -785,18 +788,16 @@ paths:
   Detail also keeps a budget per setting (`PallPass.Quality.budget`: LOW 7, MEDIUM 15, HIGH 24 ms on the GPU,
   `PallPass.Detail`): if the half-second average is longer for two windows in a row (one window over 1.25 budgets is
   enough), it drops to a step of `PallPass.LADDER` estimated to fit; it goes up a step if the estimate for that step is at
-  most 0.9 of the budget for two windows in a row and 3 s after the last change. Estimates scale only the rays' time (the
-  `rays` part of the timestamps) by `Step.cost`: the near volume, sums, accumulation and composite do not depend on the
-  step (laptop 08.11: 5–9 ms of HIGH's 18). Scaling the whole time, plus a drop on a single window 0.04 ms over, kept
+  most 0.9 of the budget for two windows in a row and 3 s after the last change. Estimates scale pall rays and wall march by their respective samples per frame, and wall pack and resolve by pixel count.
+  Composites and the other passes have fixed resolution (laptop 08.11: 5–9 ms of HIGH's 18). Scaling the whole time, plus a drop on a single window 0.04 ms over, kept
   MEDIUM at the floor and HIGH two steps down for over a minute at the cost of their own step
   (`PallDetailTest.oneWindowOverBudgetKeepsTheRung`, `fixedPassesDoNotKeepDetailDown`). It is never above the setting and
   never below LOW (half frame, 22 steps, interleave 2): rungs with interleave 3–4 drew the lattice that burns in on a
-  still view. Budgets follow Artem's 08.11 rule (picture first, the setting fits the PC): at his laptop's times
-  (RTX 4060 Laptop, 2560×1600, 150 kt firestorm, froxel near volume, rung free: LOW ≤ 6.1, MEDIUM ≤ 12.5, HIGH ≤ 19.2 ms
-  looking up) each setting keeps its rung with a fifth of headroom (`PallDetailTest.settingsHoldTheirRungAtMeasuredTimes`;
-  at a sixth MEDIUM and HIGH still lost a rung or two looking up). The `SCENARIO pall` line splits GPU time into preparation,
-  near volume, sums, rays, accumulation and composite (timestamps per measured frame; each part's share is an estimate,
-  the exact split needs `glFinish` between parts).
+  still view. The budget calibration uses pall-only GPU times on the RTX 4060 Laptop at 2560×1600 in a 150 kt
+  firestorm (LOW ≤ 6.1, MEDIUM ≤ 12.5, HIGH ≤ 19.2 ms looking up). Measure combined load during the passage
+  with adaptive detail enabled. The INFO line records each rung transition and its window mean. The timing
+  summary includes separate wall march, pack and resolve intervals followed by the shared composites. On a divisor change the wall resolves
+  against the last image on its original sample lattice, then reuses that storage for the next output.
   Near volume (froxels, the standard fog-the-camera-stands-in method: Wronski AC4 2014, Frostbite): the pall nearer than
   `VOLUME_FAR` 256 blocks along the view axis is a screen-aligned volume of 64 exponential slices, each slice a tile of a
   2D RGBA16F atlas (GL 3.2, no 3D render targets); cells 16/12/8 full-frame pixels wide for LOW/MEDIUM/HIGH
