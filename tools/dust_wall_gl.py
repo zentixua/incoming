@@ -286,9 +286,10 @@ void main() {
 
 
 def period_case():
-    """No repeating pieces along the wall: its lower edge (where the dust 3 blocks up begins behind the front) and its top
-    (the highest dust 100 blocks behind the front) along a 60 degree arc at 4.5 km; the strongest autocorrelation peak of
-    each profile's slope magnitude past its first trough (to 600 m) stays low (one value per noise cell, flat inside, drew a staircase repeating every cell)."""
+    """No staircase along the wall: its lower edge (where the dust 3 blocks up begins behind the front) and its top (the
+    highest dust 100 blocks behind the front) along a 60 degree arc at 4.5 km vary (std over 1 m) and their slope is
+    near-normal (kurtosis under 6): one value per noise cell, flat inside with a step to the next, gives a heavy-tailed
+    slope (flat runs and sudden steps). A smooth periodic profile is not caught here: the seeds' noise has no period."""
     core, expand = gl["CORE"], gl["expand"]
     src = expand("""#version 150
 float dwFloorEye(vec2 xz) { return 0.0; }

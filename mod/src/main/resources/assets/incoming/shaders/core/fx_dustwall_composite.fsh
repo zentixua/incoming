@@ -42,7 +42,7 @@ void main() {
         float tent = max(1.5 - abs(d.x), 0.0) * max(1.5 - abs(d.y), 0.0) + 1e-6;
         nearest = min(nearest, there);
         // the same place: within 3 % (a sample 10 % farther carried dust from behind a foreground surface)
-        if (abs(there - here) <= 0.03 * max(min(there, here), 1.0) + 0.5) {
+        if (pallSamePlace(there, here)) {
             sum += tent * v;
             weights += tent;
         }

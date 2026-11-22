@@ -7,8 +7,11 @@
 
 Cases: jitter (the march's in-pixel offset keeps an opaque foreground pixel foreground), history (a history sample whose
 previous depth is another place contributes nothing), terrain (the relief stops the march where the scene has no depth),
-weather (distant dust fades into the airlight in a thunderstorm), pane (dust in front of a see-through surface: a known
+weather (distant dust fades into the airlight in a thunderstorm), history2 (one depth rule: a
+history sample the composite would reject contributes nothing; a clear pixel stays clear), relief (the relief map stops no
+ray inside the drawn world, and hides dust behind a ridge past it), fog (a hazed wall shows the fog's colour), pane (dust in front of a see-through surface: a known
 limit, reported, not checked). Run by tools/dust_wall_gl.py."""
+import inspect
 from pathlib import Path
 import sys
 
@@ -197,6 +200,87 @@ def weather_haze(march_program, composite_program):
     check(abs(actual - sky) < 0.01, "distant dust fades into thunderstorm airlight")
 
 
+# review round 4 (#724): one depth rule across the passes, the relief only where the scene has no depth, bright fog
+def history_cases():
+    source = inspect.getsource(history_occluder)
+    source = source.replace("def history_occluder(far=0.10):", "def resolve_variant(far=0.10, far_depth=109, enabled=1):")
+    source = source.replace("current[:, :, 3] = 0.25", "current[::2, ::2, 3] = 0.25\n    current[1, :, 3] = 1.0\n    current[::2, 1, 3] = 1.0")
+    source = source.replace("make_scene(20.0)", "make_scene(100.0)").replace("20.0, 100.0", "100.0, far_depth")
+    source = source.replace('"DwReproject"), 0, 0, 0, 1', '"DwReproject"), 0, 0, 0, enabled')
+    adapted = globals().copy()
+    exec(source, adapted)
+    resolve = adapted["resolve_variant"]
+    shipped = history_occluder(1.0)
+    dusty = resolve()
+    clear = resolve(far=1.0)
+    incompatible = resolve(far_depth=120)
+    current = resolve(enabled=0)
+    print(f"R3 fixture with all history clear: T={shipped:.5f} (current T=1)")
+    print(f"100-block surface, history taps at 109: T={dusty:.5f}, clear far taps T={clear:.5f}, "
+          f"rejected 120-block taps T={incompatible:.5f}, current only T={current:.5f}")
+    check(abs(shipped - 1.0) < 1e-4, "a clear accepted history and clear current ray stay clear")
+    check(abs(dusty - incompatible) < 1e-4, "history does not mix a depth class the composite rejects")
+
+
+def bind_relief(program, eye_z, eye_y, heights):
+    g.glUseProgram(program)
+    slot = np.zeros((4, 4), dtype=np.float32)
+    slot[:, 0] = (0, -eye_z, -eye_y, 1024)
+    slot[3, 1] = 1
+    hi = max(heights.values(), default=0)
+    g.glUniformMatrix4fv(loc(program, "PallSlot0"), 1, True, slot)
+    g.glUniform4f(loc(program, "PallGround0"), 1024, 0, hi, 16)
+    g.glUniform2f(loc(program, "DwRelief"), 0, hi)
+    rows = [(heights.get(-1016 + 16 * j, 0), 0, 0, 0) for j in range(128)]
+    bind(program, 3, texture(*rgba, 1, 128, rows))
+    g.glTexParameteri(g.GL_TEXTURE_2D, g.GL_TEXTURE_MIN_FILTER, g.GL_LINEAR)
+    g.glTexParameteri(g.GL_TEXTURE_2D, g.GL_TEXTURE_MAG_FILTER, g.GL_LINEAR)
+
+
+def relief_cases():
+    program = march_setup()
+    g.glUniform4f(loc(program, "DwEye"), 0, 9, 0, 10)
+    bind_relief(program, 0, 9, {8: 32, -8: 32})
+    # The near coarse cells describe nearby roofs. Scene depth describes the actual ray through a street/opening.
+    coarse = march(program, make_scene(180), 2)[1, 1, 3]
+    bind_relief(program, 0, 9, {})
+    open_street = march(program, make_scene(180), 2)[1, 1, 3]
+    print(f"drawn opening along a street, depth 180: coarse nearby roofs T={coarse:.5f}, open-ray T={open_street:.5f}")
+    check(abs(coarse - open_street) < 0.01, "coarse map cannot stop a ray inside the drawn world")
+
+    # Eye outside the ring. The ridge is past the drawn chunks but before the first possible dust.
+    g.glUniform4f(loc(program, "DwEye"), 0, 9, 1000, 10)
+    g.glUniform4f(loc(program, "DwRing"), 450, 0, 100, 800)
+    bind_relief(program, 1000, 9, {584: 32, 600: 32, 616: 32})
+    sky = march(program, make_scene(1e9), 2)[1, 1, 3]
+    depth = march(program, make_scene(380), 2)[1, 1, 3]
+    print(f"eye outside ring, ridge at ~400, first dust after 548: sky depth T={sky:.5f}, drawn ridge T={depth:.5f}")
+    check(abs(sky - depth) < 0.01, "relief in front of the dust span still hides it")
+
+
+def bright_air():
+    mp = march_setup()
+    comp = link("fx_dustwall_composite")
+    g.glUseProgram(mp)
+    g.glUniform4f(loc(mp, "DwEye"), 0, 9, 0, 10)
+    g.glUniform4f(loc(mp, "DwRing"), 3500, 2500, 100, 3500)
+    g.glUniform3f(loc(mp, "DwSkyLight"), 0.2, 0.2, 0.2)
+    g.glUniform4f(loc(mp, "PallAir"), 0, 0, 3.912 / 1000, 1 / 1200)
+    # Vanilla default biome fog at noon and 32 chunks, rain/thunder both 1, fully scaled Night Vision.
+    fog = np.array([192 / 255 * 0.5 / 0.6, 216 / 255 * 0.5 / 0.6, 1.0])
+    g.glUniform4f(loc(mp, "PallAirFog"), *fog, 512)
+    g.glUniform3f(loc(mp, "PallAirSky"), *fog)
+    scene = make_scene(1e9)
+    samples = march(mp, scene, 2)
+    laid = composite(comp, scene, samples)[6, 6]
+    shown = laid[:3] + laid[3] * fog
+    print(f"bright fog, weather air T<={np.exp(-3.912 * 2450 / 1000):.6f}, wall T={laid[3]:.5f}, "
+          f"fog RGB={np.round(fog, 5)}, composite RGB={np.round(shown, 5)}")
+    low = fog <= 0.9
+    check(np.max(abs(fog - shown)[low]) < 0.01, "fully hazed dust blends to the fog (channels up to 0.9)")
+    check(np.all(shown[~low] > 0.9), "a fog channel over 0.9 shows over 0.9 (the film shoulder's limit: not exact)")
+
+
 def main():
     context()
     composite_program = link("fx_dustwall_composite")
@@ -206,6 +290,9 @@ def main():
         "pane": lambda: pane_order(composite_program),
         "terrain": lambda: terrain_occluder(march_setup()),
         "weather": lambda: weather_haze(march_setup(), composite_program),
+        "history2": history_cases,
+        "relief": relief_cases,
+        "fog": bright_air,
     }
     for name in names or cases:
         cases[name]()

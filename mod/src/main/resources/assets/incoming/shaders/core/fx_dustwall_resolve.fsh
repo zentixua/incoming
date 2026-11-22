@@ -57,7 +57,7 @@ void main() {
         if (k == 4) continue;
         ivec2 c = clamp(p + ivec2(k % 3 - 1, k / 3 - 1), ivec2(0), low - 1);
         float there = pallScene(texelFetch(Sampler2, ivec2(min((vec2(c) + 0.5) * DwDiv, vec2(size) - 0.5)), 0).r);
-        if (abs(there - here) > 0.1 * max(min(there, here), 1.0)) continue;
+        if (!pallSamePlace(there, here)) continue;
         vec4 v = valid(texelFetch(Sampler0, c, 0));
         m1 += v;
         m2 += v * v;
@@ -84,7 +84,7 @@ void main() {
     }
     if (DwPrevScene > 0.5) {
         float before = pallScene(texelFetch(Sampler3, ivec2(prevPixel), 0).r);
-        if (abs(before - here) > 0.1 * max(min(before, here), 1.0)) {
+        if (!pallSamePlace(before, here)) {
             fragColor = cur;
             return;
         }
@@ -101,7 +101,7 @@ void main() {
         float w = mix(1.0 - fr.x, fr.x, float(o.x)) * mix(1.0 - fr.y, fr.y, float(o.y));
         if (DwPrevScene > 0.5) {
             float was = pallScene(texelFetch(Sampler3, ivec2(min((vec2(c) + 0.5) * DwDiv, vec2(size) - 0.5)), 0).r);
-            if (abs(was - here) > 0.1 * max(min(was, here), 1.0)) w = 0.0;
+            if (!pallSamePlace(was, here)) w = 0.0;
         }
         hs += w * valid(texelFetch(Sampler1, c, 0));
         ws += w;
@@ -110,6 +110,8 @@ void main() {
         fragColor = cur;
         return;
     }
-    vec4 h = clamp(hs / ws, m1 - 1.5 * sd, m1 + 1.5 * sd);
+    // to the neighbourhood's range, which always holds this pixel's own sample (a clear pixel among dusty neighbours was
+    // pulled toward their dust)
+    vec4 h = clamp(hs / ws, min(m1 - 1.5 * sd, cur), max(m1 + 1.5 * sd, cur));
     fragColor = mix(h, cur, DwHistory.x);
 }

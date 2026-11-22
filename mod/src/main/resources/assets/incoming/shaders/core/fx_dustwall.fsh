@@ -37,6 +37,7 @@ vec2 dwSoilAt(vec2 xz) {
 // the frame air between the eye and the dust (pall.glsl, as the pall's): its transmittance to t along a ray of vertical
 // share dy, and its own light along rd in the march's linear light (the composite shows it through pallShown, so a fully
 // hazed ray shows the airlight itself, as the pall's haze share does)
+uniform float PallFloorFrom;
 uniform vec4 PallAir;
 uniform vec3 PallAirSky;
 uniform vec4 PallAirFog;
@@ -44,7 +45,8 @@ float dwAirT(float t, float dy) {
     return pallAir(PallAir, t, dy);
 }
 vec3 dwAirLight(vec3 rd) {
-    return pallLinear3(pallAirLightOf(rd, PallAirSky, PallAirFog));
+    // (the film shoulder cannot be inverted near white: a channel over 0.9 shows at ~0.92 under full haze, a known limit)
+    return pallLinear3(unshoulder(min(pallAirLightOf(rd, PallAirSky, PallAirFog), vec3(0.9))));
 }
 
 #moj_import <incoming:dustwall.glsl>
@@ -67,13 +69,17 @@ void main() {
     // ... within the centre's depth class: the resolve and composite classify the sample by the centre's depth (an offset
     // across a foreground edge put the background's dust onto the foreground)
     float d0 = pallScene(texelFetch(Sampler1, ivec2(centre), 0).r), d1 = pallScene(texelFetch(Sampler1, ivec2(at), 0).r);
-    if (abs(d1 - d0) > 0.03 * min(d0, d1) + 0.5) at = centre;
+    if (!pallSamePlace(d0, d1)) at = centre;
     vec2 ndc = at / vec2(size) * 2.0 - 1.0;
     vec4 farPoint = InvViewProj * vec4(ndc, 1.0, 1.0);
     vec3 dir = normalize(farPoint.xyz / farPoint.w);
     float axis = pallScene(texelFetch(Sampler1, ivec2(at), 0).r);
     float tEnd = axis / max(dot(dir, PallForward), 1e-3);
     float jitter = fract(52.9829189 * fract(dot(floor(gl_FragCoord.xy), vec2(0.06711056, 0.00583715))) + DwFrame.x * 0.618034);
+    // no world behind the pixel (beyond the drawn chunks, between LODs): the ray ends on the relief map traced from the eye,
+    // as the pall's (pallFloor); where the world is drawn its depth alone ends the ray (the coarse map stood over open
+    // streets and hid the dust down them)
+    if (axis >= 1e8) tEnd = min(tEnd, pallFloor(Sampler3, PallSlot0, PallGround0, dir, PallFloorFrom, 1e6, 24, jitter));
     // pixel size per block of distance at this resolution
     vec4 side = InvViewProj * vec4(ndc + vec2(2.0 * DwDiv / float(size.x), 0.0), 1.0, 1.0);
     float foot = length(normalize(side.xyz / side.w) - dir);

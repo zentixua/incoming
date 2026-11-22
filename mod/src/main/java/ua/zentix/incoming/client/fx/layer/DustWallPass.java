@@ -216,6 +216,7 @@ public final class DustWallPass {
             m.safeGetUniform("DwCut").set(f.cut);
             m.safeGetUniform("DwWind").set(f.windX, f.windZ, 0f, 0f);
             m.safeGetUniform("PallAir").set(pall.air.x, pall.air.y, pall.air.z, pall.air.w);
+            m.safeGetUniform("PallFloorFrom").set(pall.floorFrom);
             m.safeGetUniform("PallAirSky").set(pall.airSky.x, pall.airSky.y, pall.airSky.z);
             m.safeGetUniform("PallAirFog").set(pall.airFog.x, pall.airFog.y, pall.airFog.z, pall.airFog.w);
             fullScreen(m, () -> Uniform.uploadInteger(Uniform.glGetUniformLocation(m.getId(), "DwNoise"), NOISE_UNIT), true);

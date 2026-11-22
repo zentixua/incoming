@@ -922,15 +922,20 @@ paths:
   near-black). The pall hands its young dust, head and eye dust over across `PallYoung` (a crossfade over `FADE`) only
   when the pass can draw it: all three programs ready, primary view, one detonation in the slots, no water under the
   pall (spray and surge stay the pall's), lofted dust left in the young ring. The dust lies on the pall's terrain map
-  (`pallRelief`) and never indoors (`pallOpen`), none under the fireball's ground footprint. Flicker is fixed in time,
+  (`pallRelief`) and never indoors (`pallOpen`), none under the fireball's ground footprint (the pall keeps its own dust
+  there, `PallYoung.z`). Where the scene has no depth the ray ends on the relief traced from the eye (`pallFloor`, as the
+  pall's); where the world is drawn its depth alone ends it. The march, resolve and composite judge "the same place" by one
+  rule (`pallSamePlace`: a looser rule in one pass let dust from behind a foreground edge through another). The frame air
+  (haze, weather) lies in front of the dust as for the pall (`pallAir`, `pallAirLightOf`). Flicker is fixed in time,
   not by blur: the sample grid is fixed along each ray from the eye, its offset moves every frame, the ray moves within its
   march pixel every frame (a quarter-resolution silhouette otherwise draws a staircase of 4-pixel rows), and
   `fx_dustwall_resolve` averages ~10 frames (reprojected through the settled layer top, read on the march lattice,
-  clamped to the depth-alike 3 × 3 neighbourhood, restarted on another detonation, a clock jump or a view resize); a
+  each history sample checked against the previous depth, clamped to the depth-alike 3 × 3 neighbourhood with the pixel's
+  own sample, restarted on another detonation, a clock jump or a view resize); a
   fixed offset sparkles along the far top where 9–18 m steps cross the moving billowed surface. Light paths see the large shapes only: a shadow tap
   reading the fine texture or the head's front-riding lumps re-shaded the approaching face every frame. The composite keeps
   thin foreground and the hand its taps missed and lays dust behind a see-through pane through it. Cost at HIGH
-  (1/4 resolution, 128 steps, 2560×1600, RTX 4060): ~1 ms approaching, ~5 ms after the passage; the ray bound must stay
+  (1/4 resolution, 128 steps, 2560×1600, RTX 4060): ~1–2 ms approaching, ~5–7 ms after the passage; the ray bound must stay
   under a 120 m camera, or every near-eye ray marches fine steps through empty air. Shader checks without a
   game: `tools/dust_wall_gl.py`.
 - The nuke's fire storm is in the same pall passes (`client/nuclear/FireStorm`, `FireStorms`): at the blast slot the

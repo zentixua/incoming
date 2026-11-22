@@ -79,6 +79,12 @@ vec3 pallAirLightOf(vec3 dir, vec3 sky, vec4 fog) {
     return mix(sky, fog.rgb, d < fog.w ? smoothstep(0.0, fog.w, d) : 1.0);
 }
 
+// Two world distances behind pixels are the same place: within 3 % and half a block (the young dust wall's march, resolve
+// and composite judge it alike; a looser rule in one pass let dust from behind a foreground edge through another)
+bool pallSamePlace(float a, float b) {
+    return abs(a - b) <= 0.03 * max(min(a, b), 1.0) + 0.5;
+}
+
 // albedo of the ground under the pall: land and water (PallLight.LAND, SEA)
 const float PALL_LAND = 0.2;
 const float PALL_SEA = 0.06;

@@ -226,16 +226,23 @@ float dwPuff(vec3 pw, float top, float a) {
     // (each puff stays inside its own cell: grown past it, it was cut by the cell's edges into rectangles with seams)
     vec2 c = (cell + 0.5) * 110.0 + (vec2(h2, h1) - 0.5) * 20.0;
     float rise = 0.35 * top * (1.0 - exp(-age / 6.0)) * (h1 - 0.4) * 1.7;
-    float radius = min(14.0 + 4.0 * age, 36.0);
+    // (no wider than the layer leaves room under the ray's bound: a thin layer's tongue was cut flat)
+    float radius = min(min(14.0 + 4.0 * age, 36.0), 0.43 * top + 7.0);
     vec2 d = vec2(length(pw.xz - c), (pw.y - top * 0.9 - rise) * 1.2);
     return 0.8 * exp(-age / 15.0) * (1.0 - smoothstep(0.5, 1.0, length(d) / radius)) * smoothstep(0.0, 1.0, age);
 }
 
 // the smooth dust top over ground point xz (no billows; the light's shadow surface), blocks above the local ground; 0 where
 // no young dust
+// share of the dust the input table supports at radius r: whole inside its reach, fading over its last node spacing, none
+// past it (the last node's dust otherwise stood out to the ring's end, beyond any dust the pall had)
+float dwInTable(float r) {
+    return 1.0 - smoothstep(DwRing.w * (1.0 - 1.0 / float(DW_NODES - 1)), DwRing.w, r);
+}
+
 float dwTopAt(vec2 xz) {
     float r = length(xz);
-    if (r > DwRing.x + 2.0 || r < DwRing.y - 50.0) return 0.0;
+    if (r > min(DwRing.x + 2.0, DwRing.w) || r < DwRing.y - 50.0) return 0.0;
     vec4 n0 = dwNode(r);
     float a = DwEye.w - n0.x;
     if (a <= 0.0 || n0.z <= 0.0) return 0.0;
@@ -248,7 +255,7 @@ float dwTopAt(vec2 xz) {
 // highest the dust can reach above the local ground at a point (blocks), below 0 where no young dust is
 float dwBound(vec3 q) {
     float r = length(q.xz);
-    if (r > DwRing.x + 2.0 || r < max(DwRing.y - 50.0, DwCut)) return -1.0;
+    if (r > min(DwRing.x + 2.0, DwRing.w) || r < max(DwRing.y - 50.0, DwCut)) return -1.0;
     vec4 n0 = dwNode(r);
     float a = DwEye.w - n0.x;
     if (a < 0.0 || n0.z <= 0.0) return -1.0;
@@ -278,8 +285,8 @@ float dwDensity(vec3 g, bool coarse) {
     float s1 = seed.x, s2 = seed.y;
     float delay = 0.12 * clamp(1.6 * s2 - 0.55, 0.0, 1.0) * (0.6 + 0.8 * s1);
     float h = n0.y * mix(0.88, 1.02, s2), k = dwHump(seed.z);
-    float top0 = max(dwEnvelope(a0, h, k), 1.0);
-    if (q.y > top0 * (1.0 + DW_BULGE) * DW_HAZE + 6.0) return 0.0;
+    float top0 = max(dwEnvelope(a0, h, k), 1.0), ceiling = top0 * (1.0 + DW_BULGE) * DW_HAZE + 6.0;
+    if (q.y > ceiling) return 0.0;
     // higher up the dust has the profile of a point a little outward (younger): the face is a ramp from the ground up
     // into the crest, leaning back, never ahead of the front
     float yn = clamp(q.y / top0, 0.0, 1.5);
@@ -323,7 +330,7 @@ float dwDensity(vec3 g, bool coarse) {
     // over hard ground only debris dust (the pall's own reading: PallField.paved of the soil's mass), sand pales it
     vec2 soil = dwSoilAt(q.xz);
     float paved = 1.0 + soil.x * (n0.w - 1.0);
-    float sigma = n0.z * amt * fade * paved * mix(0.75, 1.25, 0.55 * s1 + 0.45 * s2);
+    float sigma = n0.z * amt * fade * paved * mix(0.75, 1.25, 0.55 * s1 + 0.45 * s2) * dwInTable(r);
     if (!coarse) {
         sigma *= dwOpen(g);
         gDwSand = clamp(soil.y / max(paved, 1e-6), 0.0, 1.0);
@@ -333,7 +340,7 @@ float dwDensity(vec3 g, bool coarse) {
     // shelf); here and there a puff lifted above the top that thins into the veil and drifts with the wind
     float strat = 1.25 - 0.5 * clamp(q.y / max(top, 1.0), 0.0, 1.0);
     float veil = (1.0 - smoothstep(surf, surf * 1.12 + 4.0, q.y)) * smoothstep(surf * 0.8, surf, q.y) * 0.03;
-    float puff = coarse || q.y < top * 0.8 ? 0.0 : dwPuff(pw, top, a);
+    float puff = coarse || q.y < top * 0.8 ? 0.0 : dwPuff(vec3(pw.x, q.y, pw.z), top, a) * (1.0 - smoothstep(ceiling - 8.0, ceiling, q.y));
     // the lowest metres thin to the ground (soft where no terrain stands under the dust)
     return sigma * smoothstep(0.0, 0.08, a) * smoothstep(0.0, 3.0, q.y)
             * (prof * strat * (0.5 + 1.0 * n) * (0.7 + 0.6 * fs) + (veil + puff) * (0.6 + 0.8 * n));
@@ -438,17 +445,13 @@ vec4 dwMarch(vec3 rd, float tEnd, float jitter, float foot, int maxSteps) {
         float dt = min(dwGridT(k + 1.0), t1) - t;
         float tt = t + dt * jitter;
         vec3 q = eye + rd * tt;
-        // the ground stops the ray where the scene has none (beyond the drawn chunks, holes in distant terrain): the
-        // relief map, as the pall's own march (a ridge past the draw distance hid nothing behind it)
-        float fl = dwFloor(q.xz);
-        if (q.y < fl - 2.0) break;
         float bound = dwBound(q);
         if (bound < 0.0) {
             // no young dust at this radius: long strides
             kLast = k; k += n; n = min(n * 2.0, 16.0);
             continue;
         }
-        float hq = q.y - fl;
+        float hq = q.y - dwFloor(q.xz);
         if (hq > bound) {
             if (rd.y < 0.0) {
                 // above the dust here: down to its bound over the highest ground of the map (rising ground ahead may lift the
