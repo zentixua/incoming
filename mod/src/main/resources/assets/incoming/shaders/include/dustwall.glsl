@@ -258,12 +258,13 @@ float dwDensity(vec3 g, bool coarse) {
     float a = DwEye.w - dwNode(r + cleft + (40.0 * yn * yn + 70.0 * max(bf - 0.3, 0.0) * smoothstep(0.2, 0.6, yn)) * exp(-a0 / 1.5)).x;
     if (a <= 0.0) return 0.0;
     float top = dwEnvelope(a, h, k), ph;
-    // shear rolls on the head (Kelvin–Helmholtz): bands ~70 m apart across the head, riding with the front and rolling back
-    // over it at 20 m/s, in patches along the front, breaking down behind it (presentation)
-    if (!coarse && a0 < 6.0) {
+    // shear rolls on the head (Kelvin–Helmholtz): bands ~200 m apart (a few head heights) across the head, riding with the
+    // front and rolling back over it at 20 m/s, in patches along the front, breaking down within ~0.5 s behind it
+    // (presentation; 70 m bands swept past a fixed eye by the 470 m/s front pulsed its dust at ~7 Hz)
+    if (!coarse && a0 < 3.0) {
         float along = atan(q.z, q.x) * DwRing.x;
         float patchy = smoothstep(0.35, 0.7, dwNoise3(vec3(along / 160.0, 12.9, 0.05 * DwEye.w)));
-        top *= 1.0 + 0.12 * patchy * sin(6.2832 * (DwRing.x - r + 20.0 * DwEye.w) / 70.0) * exp(-a0 / 1.0);
+        top *= 1.0 + 0.08 * patchy * sin(6.2832 * (DwRing.x - r + 20.0 * DwEye.w) / 200.0) * exp(-a0 / 0.5);
     }
     vec3 pw = dwAir(q, a, r, top, ph);
     float swell = dwBulge(pw, a);
@@ -372,7 +373,7 @@ vec3 dwLight(vec3 q, vec3 rd) {
     return DW_EXPOSURE * (albedo * single + bulk * multiple + bulk * DwGroundLight);
 }
 
-const float DW_K = 0.008, DW_S = 4.5;
+const float DW_K = 0.0065, DW_S = 3.5;
 float dwGridT(float k) {
     float kb = 1.0 / DW_K;
     return k < kb ? k * DW_S : DW_S / DW_K * pow(1.0 + DW_K, k - kb);
@@ -413,9 +414,9 @@ vec4 dwMarch(vec3 rd, float tEnd, float jitter, float foot, int maxSteps) {
         t1 = min(t1, (-Bq + sq) / A);
     }
     if (t0 >= t1) return vec4(0.0, 0.0, 0.0, 1.0);
-    // sample grid fixed along the ray from the eye: 4.5-block steps to 4.5/K blocks, then geometric (step K × distance:
-    // 8 m at 1 km, 32 m at 4 km); the history averages the moving offset within each step (with history, flicker and the
-    // approach's coherence match a 2.5-block grid, at two thirds of the cost)
+    // sample grid fixed along the ray from the eye: 3.5-block steps to 3.5/K blocks, then geometric (step K × distance:
+    // 6.5 m at 1 km, 26 m at 4 km); the history averages the moving offset within each step (a coarser grid, averaged,
+    // lost the billows' fine detail)
     float k = floor(dwGridK(t0));
     // n: cells to the next sample (strides grow over empty air); kLast: the last sampled cell
     float n = 1.0, kLast = k - 1.0;
