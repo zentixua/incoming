@@ -54,14 +54,14 @@ const int DW_NODES = 128;
 const float DW_SPAN = 24.0;
 const float DW_FADE = 6.0;
 // presentation exposure of the wall's light (Silo S3E09 dust band: display luma median ~0.35)
-const float DW_EXPOSURE = 0.2;
+const float DW_EXPOSURE = 0.22;
 // head timing, seconds of age (presentation): rise e-fold at the contact line, hump hold, width of the hump's fall
 const float DW_RISE = 0.12, DW_HOLD = 0.25, DW_FALL = 0.3;
 // most the bulges, the billowed surface and its soft edge (DW_HAZE) lift the dust over its envelope, shares (the ray bound,
 // dwBound)
 // (the top behind the head is uneven at several scales, no cap: swells up to ±DW_BULGE of the layer at 150–400 m, billows,
 // rising puffs and a thin veil; on the head the swells are small, so its crest, 1.4–1.6 of the layer, still stands out)
-const float DW_BULGE = 0.32, DW_BILLOW = 0.15, DW_HAZE = 1.2;
+const float DW_BULGE = 0.25, DW_BILLOW = 0.15, DW_HAZE = 1.2;
 
 // pixel footprint at the sample, blocks (set by the march)
 float gDwFoot = 0.0;
@@ -178,14 +178,15 @@ float dwSoft(float x) {
 }
 
 // swells and sags of the mass in the air (Silo: higher here, lower there): domain-warped ≈350 m swells carrying ≈120 m
-// lumps, up to ±DW_BULGE of the layer behind the head, a third of that on the head (its crest stays readable); they
+// lumps, up to ±DW_BULGE of the layer behind the head, a fifth of that on the head, growing in over 1.5–4 s (the crest
+// stands out of a layer near its mean right behind it); they
 // swell and sag slowly as the dust settles
 float dwBulge(vec3 pw, float a) {
     vec2 p = pw.xz / 220.0;
     float w = dwNoise3(vec3(p * 0.4, 4.4)) - 0.5;
     p += 0.8 * vec2(w, -w);
     float L = 0.6 * dwNoise3(vec3(p, 7.1 + 0.02 * a)) + 0.4 * dwNoise3(vec3(pw.xz / 90.0, 0.37 + 0.03 * a));
-    return DW_BULGE * dwSoft((L - 0.5) * 4.0) * mix(0.33, 1.0, smoothstep(0.8, 2.5, a));
+    return DW_BULGE * dwSoft((L - 0.5) * 4.0) * mix(0.2, 1.0, smoothstep(1.5, 4.0, a));
 }
 
 // a buoyant puff above the top: about one 70 m cell in four lifts a rounded column of dust ~45 % of the layer above the
@@ -307,7 +308,7 @@ float dwDensity(vec3 g, bool coarse) {
     // settles: the head sweeps through the air at the front's speed and, seen on the horizon line, an air-fixed ragged
     // top was redrawn every frame; in-game approach coherence 0.617 -> 0.731)
     float surf = top * (1.0 + DW_BILLOW * dwSoft(((bl - 0.42) * 3.0 + (n - 0.5) * 2.0) * torn) * smoothstep(0.6, 1.5, a0)
-            + 0.12 * (bf - 0.42));
+            + 0.12 * (bf - 0.42) * (1.0 - smoothstep(0.6, 1.5, a0)));
     if (!coarse) gDwSurf = surf;
     // a soft top: billow tops thin out over ~a quarter of the layer (an opaque top popped where dips passed in and out of
     // view at grazing angles)
