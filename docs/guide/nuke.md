@@ -144,8 +144,10 @@ cloud turns golden, then red, and the edge of the earth's shadow climbs the stem
 while after sunset on the ground.
 
 A ground burst leaves a crater and radioactive fallout downwind. Over water, spray takes the place of the dust wall.
-The wave tears the dust up from the ground exactly where it touches it; the dust curls over a small, uneven crest about
-one and a half times the height of the layer behind it and settles to that layer within about a second. Bare earth, fields and forests
+The wave tears the dust up from the ground exactly where it touches it: every spot raises its own dust, a little more or
+less, a little earlier or later than its neighbours, and that dust shoots up and stays where it was torn up while the
+wave runs on. Each spot's dust rises to about one and a half times the height of the layer and settles back to it within
+about a second, so a small, uneven crest runs just behind the wave. Bare earth, fields and forests
 throw up thick dust; rock, roads, roofs and snow give only the dust of broken buildings, so there the wall is lower and
 thinner and the dust left behind is lighter.
 For the first seconds a thin white condensation shell stands over the wave: the air behind it expands and cools below its dew
