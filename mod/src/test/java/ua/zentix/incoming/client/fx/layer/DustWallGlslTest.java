@@ -73,19 +73,21 @@ class DustWallGlslTest {
     }
 
     /**
-     * The billow texture (n, bl) and the billowed top live in the air the dust was raised in, at every age. A texture riding
-     * with the front (its distance-behind-the-front coordinate {@code DwRing.x - r}) crosses a fixed eye in one or two frames
-     * at 470 m/s as the front passes under it: the lower frame fluttered (harness passage second difference 2.7 against 1.1).
+     * The billow texture (n, bl) lives in the air the dust was raised in, except on the thin approaching face (its first
+     * 0.35 s of age at most), where it rides with the front. Riding with the front deeper into the head, it crosses a fixed
+     * eye in one or two frames at 470 m/s as the front passes under it: the lower frame fluttered (harness passage second
+     * difference 2.7 against 1.1).
      */
     @Test
-    void billowTextureIsFixedInTheAir() throws IOException {
+    void billowTextureRidesWithTheFrontOnlyOnTheFace() throws IOException {
         String s = glsl();
         Matcher n = Pattern.compile("\\bfloat n = [^;]*;").matcher(s), bl = Pattern.compile("\\bfloat bl = [^;]*;").matcher(s);
         assertTrue(n.find() && bl.find(), "texture lines in dwDensity");
         assertTrue(n.group().contains("tq") && bl.group().contains("pw."), "n and bl sample the air (tq, pw)");
-        int from = s.indexOf("float n = "), to = s.indexOf("if (!coarse) gDwSurf = surf;");
-        String texture = s.substring(from, to);
-        assertTrue(!texture.contains("DwRing.x - r") && !texture.contains("n = mix(") && !texture.contains("bl = mix("),
-                "no front-riding texture or crossfade between the air's texture and the billowed top");
+        Matcher face = Pattern.compile("float headTex = 1\\.0 - smoothstep\\(([0-9.]+), ([0-9.]+), a0\\);").matcher(s);
+        assertTrue(face.find(), "the face's texture fades out by age");
+        assertTrue(Double.parseDouble(face.group(2)) <= 0.35, "the face's texture is gone by 0.35 s: " + face.group(2));
+        String surface = s.substring(s.indexOf("float billow = "), s.indexOf("if (!coarse) gDwSurf = surf;"));
+        assertTrue(!surface.contains("smoothstep") && !surface.contains("bf"), "the billowed top is the texture's at every age");
     }
 }

@@ -909,8 +909,10 @@ paths:
   on the contact line as a ramp leaning back (never ahead of the front: dust there is cut by the ring, a seam), a
   hump whose crest is 1.4–1.6 of the settled layer (drawn ×68/58 of the law's, `NukePall.YOUNG_PRESENT_HEIGHT`:
   the crest just under a 120 m camera's horizon at 4.5 km from 1 Mt; on the horizon line its ragged top flickered), back to the layer within 0.5–1 s (`DustWallGlslTest`), billows and bulges
-  fixed in the air at every age (a texture riding with the front crosses a fixed eye in one or two frames as the front
-  passes under it: the view down flutters; `DustWallGlslTest`), the face's notches cut by head lumps riding with the front
+  fixed in the air behind the thin approaching face (a texture riding with the front deeper into the head crosses a
+  fixed eye in one or two frames as the front passes under it: the view down flutters; `DustWallGlslTest`), the face's
+  texture riding with the front (air-fixed, the face sweeps through new air every frame), the young head's envelope
+  averaged over a film shutter (`DW_SHUTTER`, motion blur), the face's notches cut by head lumps riding with the front
   (fixed in the ground, the front sweeps each 30 m lump in two frames: boiling), light from the fireball, sun and sky with multiply scattered light in the soil's bulk colour (no
   near-black). The pall hands its young dust, head and eye dust over across `PallYoung` (a crossfade over `FADE`) only
   when the pass can draw it: all three programs ready, primary view, one detonation in the slots, no water under the
