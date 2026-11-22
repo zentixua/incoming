@@ -193,6 +193,15 @@ public final class NukePall {
     static void reset() {
         unmuffle();
         sigma = mist = tauUp = tauDown = 0;
+        java.util.Arrays.fill(SLOTTED, null);
+        FRAME.dustWall.source = null;
+        FRAME.dustWall.active = false;
+        FRAME.young.zero();
+        FRAME.ground0.clear();
+        FRAME.ground1.clear();
+        FRAME.fire0.clear();
+        FRAME.fire1.clear();
+        ua.zentix.incoming.client.fx.layer.DustWallPass.clearHistory();
         PallPass.reset();
         NukeAsh.reset();
     }
@@ -287,14 +296,8 @@ public final class NukePall {
         // ray reach from eye dust and optical depth above and below it (pallClip); disabled pall is not rendered, and
         // does not hide the mushroom behind it
         if (q == PallPass.Quality.OFF) f.eyeDust.zero();
-        else if (ua.zentix.incoming.client.fx.layer.FxViews.secondary()) eyeDust(level, eye, partial, f.eyeDust);
+        else if (f.dustWall.active || ua.zentix.incoming.client.fx.layer.FxViews.secondary()) eyeDust(level, eye, partial, f);
         else f.eyeDust.set(sigma, tauUp, tauDown);
-        // the young wall's pass draws the dust at an eye inside its ring: the pall's eye dust (the law's head there) gives way
-        if (f.dustWall.active && f.young.y > f.young.x) {
-            double r = Math.hypot(f.dustWall.eye[0], f.dustWall.eye[2]);
-            float keep = (float) (1 - BlastWall.smooth(f.young.x, f.young.y, r));
-            f.eyeDust.mul(keep);
-        }
         return f;
     }
 
@@ -368,7 +371,8 @@ public final class NukePall {
         if (!any) return;
         // the fireball's ground footprint: the pass draws no dust there, the pall keeps its own
         w.cut = (float) d.blocks(a.wall.underBall(t));
-        f.young.set((float) inner, (float) Math.max(inner + 1, whole), w.cut, 0);
+        assert f.slot1.m13() == 0 : "The wall atlas uses the empty second slot's texture unit";
+        f.young.set((float) inner, (float) whole, w.cut, (float) reach);
         w.ring[0] = (float) front;
         w.ring[1] = (float) inner;
         w.ring[2] = (float) (top * ua.zentix.incoming.client.fx.layer.DustWallPass.TOP_OVER_LAYER + 6);
@@ -404,28 +408,36 @@ public final class NukePall {
     }
 
     /** Optical medium at a camera; never updates the player's ash, hearing or dust veil. */
-    private static void eyeDust(ClientLevel level, Vec3 camera, float partial, Vector3f out) {
+    private static void eyeDust(ClientLevel level, Vec3 camera, float partial, PallPass.Frame f) {
         double extinction = 0, up = 0, down = 0;
+        f.eyeLofted.zero();
         for (ClientNuclear.Active active : ClientNuclear.detonations()) {
             Detonation d = active.d;
             double ticks = active.ticks(partial), dx = camera.x - d.burst().x, dz = camera.z - d.burst().z;
             double eye = camera.y - d.groundY(), floor = active.ground.at(camera.x, camera.z);
+            boolean owned = f.dustWall.active && active == f.dustWall.source;
             if (active.wall.slot(active.seconds(partial), WALL) && WALL[3] > 0) {
                 double wet = active.ground.hasWater() ? active.ground.water(camera.x, camera.z) : 0;
                 double hard = active.ground.hasHard() ? active.ground.hard(camera.x, camera.z) : 0;
-                extinction += BlastWall.sigma(WALL, dx, dz, eye - floor, wet, hard);
-                up += BlastWall.tau(WALL, dx, dz, eye - floor, Double.POSITIVE_INFINITY, wet, hard);
-                down += BlastWall.tau(WALL, dx, dz, 0, eye - floor, wet, hard);
+                double s = BlastWall.sigma(WALL, dx, dz, eye - floor, wet, hard);
+                double above = BlastWall.tau(WALL, dx, dz, eye - floor, Double.POSITIVE_INFINITY, wet, hard);
+                double below = BlastWall.tau(WALL, dx, dz, 0, eye - floor, wet, hard);
+                extinction += s;
+                up += above;
+                down += below;
+                if (owned) f.eyeLofted.add((float) s, (float) above, (float) below);
             }
             if (active.pall.visible(ticks)) {
                 PallField.Water water = water(active);
+                if (owned) active.pall.addLoftedEye(dx, dz, eye, floor, ticks, water, f.eyeLofted);
                 extinction += active.pall.sigma(dx, dz, eye, floor, ticks, water);
                 up += active.pall.tau(dx, dz, eye, Double.POSITIVE_INFINITY, floor, ticks, water);
                 down += active.pall.tau(dx, dz, floor, eye, floor, ticks, water);
             }
         }
         double open = level.dimensionType().hasSkyLight() ? level.getBrightness(LightLayer.SKY, BlockPos.containing(camera)) / 15.0 : 1;
-        out.set((float) (extinction * open), (float) up, (float) down);
+        f.eyeLofted.x *= (float) open;
+        f.eyeDust.set((float) (extinction * open), (float) up, (float) down);
     }
 
     /**

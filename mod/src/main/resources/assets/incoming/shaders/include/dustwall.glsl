@@ -1,4 +1,4 @@
-// Young nuclear dust wall (client/fx/layer/DustWallPass): from the front to DW_SPAN seconds behind it, one presentation
+// Young nuclear dust wall (client/fx/layer/DustWallPass): from the front to DustWallPass.SPAN seconds behind it, one presentation
 // model (presentation, not physical): a dense dust top over the ground (its envelope: born at zero on the contact line, a
 // small uneven hump, settled within about a second) filled with matte, billowed dust, and its light.
 // Physics enters only as inputs the screen shows (DustWallPass.Frame): where the front is and when it passed a radius
@@ -11,8 +11,9 @@
 uniform sampler3D DwNoise;
 // (eye x, y, z from ground zero's ground point; seconds since the burst on the detonation clock)
 uniform vec4 DwEye;
-// (front radius now; inner radius of the young wall: the front DW_SPAN seconds ago; envelope top, blocks; table reach)
+// (front radius now; inner radius of the young wall: the front DustWallPass.SPAN seconds ago; envelope top, blocks; table reach)
 uniform vec4 DwRing;
+uniform vec4 PallYoung;
 // table (DW_NODES × 1, RGBA32F): node i at radius i / (DW_NODES − 1) × reach: (front arrival, s since burst; settled layer
 // height, blocks; lofted dust extinction, 1/block; dust over hard ground relative to soil, PallField.paved)
 uniform sampler2D Sampler2;
@@ -49,10 +50,7 @@ float dwOpen(vec3 q) {
     return dwOpenEye(q - DwEye.xyz);
 }
 
-const int DW_NODES = 128;
-// seconds of wall behind the front this model draws; the pall draws what is older (crossfade over the last DW_FADE s)
-const float DW_SPAN = 24.0;
-const float DW_FADE = 6.0;
+#moj_import <incoming:wall_ownership.glsl>
 // presentation exposure of the wall's light (Silo S3E09 dust band: display luma median ~0.35)
 const float DW_EXPOSURE = 0.22;
 // head timing, seconds of age (presentation): rise e-fold at the contact line, hump hold, width of the hump's fall
@@ -63,7 +61,9 @@ const float DW_RISE = 0.12, DW_HOLD = 0.25, DW_FALL = 0.3;
 // rising puffs and a thin veil; on the head the swells are small, so its crest, 1.4–1.6 of the layer, still stands out)
 const float DW_BULGE = 0.35, DW_BILLOW = 0.15, DW_HAZE = 1.2;
 
-// pixel footprint at the sample, blocks (set by the march)
+// First and last occupied distances and the sum of distances weighted by visible opacity.
+vec3 gDwDepth = vec3(0.0);
+// Pixel footprint at the sample, blocks.
 float gDwFoot = 0.0;
 // set by dwDensity at its sample: the billowed dust surface above it, its full extinction and its share of sand (the light
 // reads them)
@@ -72,8 +72,8 @@ float gDwSurf = 0.0, gDwSigma = 0.0, gDwSand = 0.0;
 float gDwSwell = 0.0;
 
 vec4 dwNode(float r) {
-    float x = clamp(r / max(DwRing.w, 1.0), 0.0, 1.0) * float(DW_NODES - 1);
-    int i = int(min(floor(x), float(DW_NODES - 2)));
+    float x = clamp(r / max(DwRing.w, 1.0), 0.0, 1.0) * (DW_NODES - 1.0);
+    int i = int(min(floor(x), DW_NODES - 2.0));
     return mix(texelFetch(Sampler2, ivec2(i, 0), 0), texelFetch(Sampler2, ivec2(i + 1, 0), 0), x - float(i));
 }
 
@@ -234,12 +234,6 @@ float dwPuff(vec3 pw, float top, float a) {
 
 // the smooth dust top over ground point xz (no billows; the light's shadow surface), blocks above the local ground; 0 where
 // no young dust
-// share of the dust the input table supports at radius r: whole inside its reach, fading over its last node spacing, none
-// past it (the last node's dust otherwise stood out to the ring's end, beyond any dust the pall had)
-float dwInTable(float r) {
-    return 1.0 - smoothstep(DwRing.w * (1.0 - 1.0 / float(DW_NODES - 1)), DwRing.w, r);
-}
-
 float dwTopAt(vec2 xz) {
     float r = length(xz);
     if (r > min(DwRing.x + 2.0, DwRing.w) || r < DwRing.y - 50.0) return 0.0;
@@ -313,7 +307,8 @@ float dwDensity(vec3 g, bool coarse) {
     float fs = 0.5;
     if (!coarse) {
         float ral = length(pw.xz);
-        fs = mix(0.5, dwFbm2(vec3(ral / 28.0, (yc - 0.25 * ph) / 5.0, atan(pw.z, pw.x) * ral / 4.5), 0.0), dwLod(1.0 / 2.2));
+        float angle = pw.x == 0.0 ? sign(pw.z) * 1.57079633 : atan(pw.z, pw.x);
+        fs = mix(0.5, dwFbm2(vec3(ral / 28.0, (yc - 0.25 * ph) / 5.0, angle * ral / 4.5), 0.0), dwLod(1.0 / 2.2));
     }
     // the billowed surface: rises and dips by the texture (cauliflower billows, ragged where the dust is young), within
     // DW_BILLOW of the top: the hump's excess (+30–50 %) stays well above the billows, so the crest reads as a crest
@@ -326,11 +321,11 @@ float dwDensity(vec3 g, bool coarse) {
     float prof = 1.0 - smoothstep(surf - edge, surf + 0.4 * edge, q.y);
     // coarse dust falls back (the core thins over seconds, fines stay); the young head is denser
     float amt = (0.45 + 0.55 * exp(-max(a - 1.0, 0.0) / 8.0)) * (1.0 + 0.5 * exp(-a / 1.1));
-    float fade = 1.0 - smoothstep(DW_SPAN - DW_FADE, DW_SPAN, a0);
+    float fade = wallShare(PallYoung, r);
     // over hard ground only debris dust (the pall's own reading: PallField.paved of the soil's mass), sand pales it
     vec2 soil = dwSoilAt(q.xz);
     float paved = 1.0 + soil.x * (n0.w - 1.0);
-    float sigma = n0.z * amt * fade * paved * mix(0.75, 1.25, 0.55 * s1 + 0.45 * s2) * dwInTable(r);
+    float sigma = n0.z * amt * fade * paved * mix(0.75, 1.25, 0.55 * s1 + 0.45 * s2);
     if (!coarse) {
         sigma *= dwOpen(g);
         gDwSand = clamp(soil.y / max(paved, 1e-6), 0.0, 1.0);
@@ -481,6 +476,9 @@ vec4 dwMarch(vec3 rd, float tEnd, float jitter, float foot, int maxSteps) {
             float al = exp(-s * span), air = dwAirT(tt, rd.y);
             // the air between the eye and the dust (haze, weather) shows its own light in front of it, as for the pall
             light += T * (1.0 - al) * (air * c + (1.0 - air) * airLight);
+            if (T == 1.0) gDwDepth.x = max(t, t0);
+            gDwDepth.y = t + span;
+            gDwDepth.z += (T * (1.0 - al)) * tt;
             T *= al;
             kLast = k + cells - 1.0; k += cells; n = 1.0;
         } else {

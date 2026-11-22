@@ -16,6 +16,7 @@
         { "name": "Sampler11" }
     ],
     "uniforms": [
+        { "name": "PallEyeLofted", "type": "float", "count": 3, "values": [ 0.0, 0.0, 0.0 ] },
         { "name": "PallLamps", "type": "float", "count": 1, "values": [0.0] },
         { "name": "PallFootReady", "type": "int", "count": 1, "values": [0] },
         { "name": "PallTauReady", "type": "int", "count": 1, "values": [0] },

@@ -26,6 +26,7 @@ import org.lwjgl.opengl.GLCapabilities;
 import org.lwjgl.opengl.GL11;
 import org.lwjgl.opengl.GL12;
 import org.lwjgl.opengl.GL15;
+import org.lwjgl.opengl.GL20;
 import org.lwjgl.opengl.GL30;
 import org.lwjgl.opengl.GL33;
 import org.mockito.MockedStatic;
@@ -148,7 +149,7 @@ class NuclearVolumeBudgetTest {
         PallPass.ViewState storage = new PallPass.ViewState();
         try (var minecraft = mockStatic(Minecraft.class); var state = mockStatic(GlStateManager.class);
              var gl11 = mockStatic(GL11.class); var gl12 = mockStatic(GL12.class);
-             var gl = mockStatic(GL.class); var gl15 = mockStatic(GL15.class); var gl30 = mockStatic(GL30.class); var gl33 = mockStatic(GL33.class);
+             var gl = mockStatic(GL.class); var gl15 = mockStatic(GL15.class); var gl20 = mockStatic(GL20.class); var gl30 = mockStatic(GL30.class); var gl33 = mockStatic(GL33.class);
              var glUtil = mockStatic(GlUtil.class); var render = mockStatic(RenderSystem.class);
              var uniforms = mockStatic(Uniform.class); var tess = mockStatic(Tesselator.class);
              var uploader = mockStatic(BufferUploader.class); var air = mockStatic(OpenAir.class);
@@ -188,17 +189,33 @@ class NuclearVolumeBudgetTest {
                 BufferBuilder builder = mock(BufferBuilder.class);
                 when(t.begin(any(), any())).thenReturn(builder);
                 when(builder.build()).thenReturn(mock(MeshData.class));
+                int[] viewport = new int[2];
+                state.when(() -> GlStateManager._viewport(anyInt(), anyInt(), anyInt(), anyInt())).thenAnswer(call -> {
+                    viewport[0] = call.getArgument(2);
+                    viewport[1] = call.getArgument(3);
+                    return null;
+                });
                 uploader.when(() -> BufferUploader.draw(any())).thenAnswer(call -> {
                     draws.add(bound);
                     // The rest of the pall costs 5 ms; the wall time is split across all three draws.
                     if (bound.equals("composite")) gpuNs += 5_000_000L;
-                    if (bound.startsWith("wall.")) gpuNs += wallDrawNs;
+                    if (bound.startsWith("wall.")) {
+                        int side = (12 + DustWallPass.divisor() - 1) / DustWallPass.divisor();
+                        assertArrayEquals(new int[] {bound.equals("wall.march") ? side : 2 * side, side}, viewport);
+                        gpuNs += wallDrawNs;
+                    }
                     return null;
                 });
                 for (String name : List.of("march", "froxel", "froxelSum", "footLighting", "mushTaus", "shadow", "resolve", "mix", "composite")) {
                     shader(PallPass.class, name, name);
                 }
-                for (String name : List.of("march", "resolve", "composite")) shader(DustWallPass.class, name, "wall." + name);
+                for (String name : List.of("march", "pack", "resolve")) shader(DustWallPass.class, name, "wall." + name);
+                Uniform layer = mock(Uniform.class);
+                when(PallPass.composite.safeGetUniform("PallLayerFrame")).thenReturn(layer);
+                AtomicInteger layerMode = new AtomicInteger();
+                doAnswer(call -> { layerMode.set(call.getArgument(0)); return null; }).when(layer).set(anyInt());
+                doAnswer(call -> { bound = layerMode.get() == 1 ? "layer" : "composite"; return null; })
+                        .when(PallPass.composite).apply();
                 Uniform divisor = mock(Uniform.class), frame = mock(Uniform.class), previousDiv = mock(Uniform.class);
                 Uniform reproject = mock(Uniform.class);
                 when(DustWallPass.resolve.safeGetUniform("DwPrevDiv")).thenReturn(previousDiv);
@@ -206,7 +223,7 @@ class NuclearVolumeBudgetTest {
                 when(DustWallPass.march.safeGetUniform("DwDiv")).thenReturn(divisor);
                 when(DustWallPass.march.safeGetUniform("DwFrame")).thenReturn(frame);
                 List<String> all = List.of("shadow", "footLighting", "mushTaus", "froxel", "froxelSum", "march",
-                        "resolve", "mix", "composite", "wall.march", "wall.resolve", "wall.composite");
+                        "resolve", "mix", "composite", "wall.march", "wall.pack", "wall.resolve", "layer", "composite");
                 PallPass.beginFrame(PallPass.Quality.HIGH);
                 assertFalse(PallPass.available());
                 assertFalse(PallPass.draw(PallPass.warmupFrame(), 8, new Matrix4f(), new Matrix4f(), Vec3.ZERO, new Vector4f()));
@@ -222,16 +239,27 @@ class NuclearVolumeBudgetTest {
                 gl12.verify(() -> GL12.glTexImage3D(eq(GL12.GL_TEXTURE_3D), eq(0), eq(GL30.GL_R8), eq(128), eq(128), eq(128),
                         eq(0), eq(GL11.GL_RED), eq(GL11.GL_UNSIGNED_BYTE), any(ByteBuffer.class)));
                 state.verify(() -> GlStateManager._texImage2D(eq(GL11.GL_TEXTURE_2D), eq(0), eq(GL30.GL_RGBA16F),
-                        eq(3), eq(3), eq(0), eq(GL11.GL_RGBA), eq(GL11.GL_FLOAT), isNull()), times(3));
+                        eq(3), eq(3), eq(0), eq(GL11.GL_RGBA), eq(GL11.GL_FLOAT), isNull()), times(2));
+                state.verify(() -> GlStateManager._texImage2D(eq(GL11.GL_TEXTURE_2D), eq(0), eq(GL30.GL_RGBA16F),
+                        eq(6), eq(3), eq(0), eq(GL11.GL_RGBA), eq(GL11.GL_FLOAT), isNull()), times(3));
+                gl20.verify(() -> GL20.glDrawBuffers(new int[] {GL30.GL_COLOR_ATTACHMENT0, GL30.GL_COLOR_ATTACHMENT1}));
                 gl11.verify(GL11::glFinish, times(2));
 
-                // Recompile just the foot program in place, as a resource manager can do.
-                when(PallPass.footLighting.getId()).thenReturn(9);
+                // A changed pall program also invalidates the shared preparation.
+                when(PallPass.footLighting.getId()).thenReturn(8);
+                assertFalse(PallPass.available());
+                when(PallPass.footLighting.getId()).thenReturn(0);
+                assertTrue(PallPass.available());
+
+                // An in-place relink can reverse the two GLSL 150 output locations.
+                when(DustWallPass.march.getId()).thenReturn(9);
+                gl30.when(() -> GL30.glGetFragDataLocation(9, "fragColor")).thenReturn(1);
                 assertFalse(PallPass.available());
                 assertFalse(DustWallPass.ready());
                 draws.clear();
                 PallPass.beginFrame(PallPass.Quality.HIGH);
                 loadOnSeparateFrames(render, all);
+                gl20.verify(() -> GL20.glDrawBuffers(new int[] {GL30.GL_COLOR_ATTACHMENT1, GL30.GL_COLOR_ATTACHMENT0}));
 
                 gl33.verify(() -> GL33.glQueryCounter(anyInt(), anyInt()), never());
                 assertTrue(timestamps.isEmpty(), "loading frames must never issue a GPU time sample");
@@ -261,7 +289,8 @@ class NuclearVolumeBudgetTest {
                 PallPass.beginFrame(burst.quality);
                 assertEquals(GpuWatch.State.WATCHING, PallPass.watch().state());
                 draw(burst);
-                assertEquals(all.subList(all.indexOf("froxel"), all.size()), draws);
+                assertEquals(List.of("froxel", "froxelSum", "march", "resolve",
+                        "wall.march", "wall.pack", "wall.resolve", "layer", "composite"), draws);
                 state.verify(GlStateManager::_genTexture, never());
                 state.verify(() -> GlStateManager._texImage2D(anyInt(), anyInt(), anyInt(), anyInt(), anyInt(), anyInt(),
                         anyInt(), anyInt(), any()), never());
@@ -280,7 +309,7 @@ class NuclearVolumeBudgetTest {
                 verify(frame).set(anyFloat(), eq(96f));
                 replace(PallPass.class, null, "SUBMIT", new long[4]);
                 PallPass.beginFrame(burst.quality);
-                verify(detail).sample(eq(1205d), eq(0d), eq(400d), eq(400d), anyInt(), anyLong());
+                verify(detail).sample(eq(1205d), eq(0d), eq(400d), eq(800d), anyInt(), anyLong());
                 assertEquals(1205, PallPass.watch().cause(), 0);
                 assertEquals(GpuWatch.State.OFF, PallPass.watch().state());
             } finally {

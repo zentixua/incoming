@@ -5,9 +5,10 @@
 Each run starts in a fresh llvmpipe process with the driver cache disabled.
 
 The Java submission order, allocation, reload and watchdog checks live in NuclearVolumeBudgetTest.
-This timing fixture uses a 3x3 empty foot atlas region, a 3x3 march/history and a 12x12 composite.
+This timing fixture uses a 3x3 empty foot atlas region, two 3x3 march attachments, 6x3 pack/history atlases and a 12x12 display.
 Linking and resource allocation are outside the measured interval. No game or hardware GPU.
 """
+from dataclasses import dataclass
 import json
 import os
 import sys
@@ -22,12 +23,24 @@ import dust_wall_contract_gl as h
 g = h.g
 
 
-def framebuffer(width, fmt):
-    h.target(width, width, [(fmt, g.GL_RGBA)])
-    name = g.glGetIntegerv(g.GL_DRAW_FRAMEBUFFER_BINDING)
-    colour = g.glGetFramebufferAttachmentParameteriv(g.GL_FRAMEBUFFER, g.GL_COLOR_ATTACHMENT0,
-                                                      g.GL_FRAMEBUFFER_ATTACHMENT_OBJECT_NAME)
-    return name, colour
+@dataclass
+class Target:
+    fbo: int
+    textures: list
+    width: int
+    height: int
+
+    def bind(self):
+        g.glBindFramebuffer(g.GL_FRAMEBUFFER, self.fbo)
+        g.glViewport(0, 0, self.width, self.height)
+
+
+def framebuffer(width, height, fmt, count=1):
+    h.target(width, height, [(fmt, g.GL_RGBA)] * count)
+    fbo = g.glGetIntegerv(g.GL_DRAW_FRAMEBUFFER_BINDING)
+    textures = [g.glGetFramebufferAttachmentParameteriv(g.GL_FRAMEBUFFER, g.GL_COLOR_ATTACHMENT0 + i,
+                g.GL_FRAMEBUFFER_ATTACHMENT_OBJECT_NAME) for i in range(count)]
+    return Target(fbo, textures, width, height)
 
 
 def volume(p, unit, name, side):
@@ -43,7 +56,10 @@ def volume(p, unit, name, side):
 
 PALL = ("fx_mush_shadow", "fx_pall_foot", "fx_mush_taus", "fx_pall_froxel", "fx_pall_froxel_sum",
         "fx_pall", "fx_pall_resolve", "fx_pall_mix", "fx_pall_composite")
-WALL = ("fx_dustwall", "fx_dustwall_resolve", "fx_dustwall_composite")
+MARCH, PACK, RESOLVE = WALL = ("fx_dustwall", "fx_dustwall_pack", "fx_dustwall_resolve")
+LAYER, DISPLAY = "wall layer composite", "wall display composite"
+STAGES = (*PALL, *WALL, LAYER, DISPLAY)
+BURST = (*PALL[:7], *WALL, LAYER, DISPLAY)
 
 
 def defaults(program, name):
@@ -68,15 +84,19 @@ def main(mode):
     scene = h.make_scene(100)
     empty = h.texture(*h.rgba, 128, 4, np.zeros((4, 128, 4), np.float32))
     dusty = h.texture(*h.rgba, 128, 1, [(0, 20, .11, .3)] * 128)
-    screen = framebuffer(h.size, g.GL_RGBA8)
-    targets = {}
-    for name in programs:
-        if name.endswith("composite"):
-            targets[name] = screen
-        else:
-            fmt = g.GL_RGBA32F if name == "fx_pall_foot" else g.GL_RGBA16F
-            targets[name] = framebuffer(h.low, fmt)
-    previous = h.texture(g.GL_RGBA16F, g.GL_RGBA, h.low, h.low)
+    screen = framebuffer(h.size, h.size, g.GL_RGBA8)
+    targets = {name: framebuffer(h.low, h.low, g.GL_RGBA32F if name == "fx_pall_foot" else g.GL_RGBA16F)
+               for name in PALL[:-1]}
+    targets[PALL[-1]] = targets[DISPLAY] = screen
+    targets[LAYER] = targets["fx_pall_mix"]
+    targets[MARCH] = framebuffer(h.low, h.low, g.GL_RGBA16F, count=2)
+    colour = g.glGetFragDataLocation(programs[MARCH], "fragColor")
+    bounds = g.glGetFragDataLocation(programs[MARCH], "wallDepth")
+    assert {colour, bounds} == {0, 1}
+    g.glDrawBuffers(2, [g.GL_COLOR_ATTACHMENT0 + (slot != colour) for slot in range(2)])
+    for name in (PACK, RESOLVE):
+        targets[name] = framebuffer(2 * h.low, h.low, g.GL_RGBA16F)
+    previous = h.texture(g.GL_RGBA16F, g.GL_RGBA, 2 * h.low, h.low)
     # The same offscreen pipeline and formats in every schedule. The matrices and sizes are explicit
     # so that the froxels and the empty mushroom execute a valid, bounded first draw.
     march = programs[WALL[0]]
@@ -100,14 +120,12 @@ def main(mode):
     g.glActiveTexture(g.GL_TEXTURE0 + 16)
     g.glBindTexture(g.GL_TEXTURE_2D, empty)
 
-    def draw(name, preparing):
+    def draw(stage, preparing):
+        name = PALL[-1] if stage in (LAYER, DISPLAY) else stage
         program = programs[name]
         g.glUseProgram(program)
-        composite = name.endswith("composite")
-        width = h.size if composite else h.low
-        g.glBindFramebuffer(g.GL_FRAMEBUFFER, targets[name][0])
-        g.glViewport(0, 0, width, width)
-        if composite:
+        targets[stage].bind()
+        if targets[stage] is screen:
             g.glEnable(g.GL_BLEND)
             g.glBlendFuncSeparate(g.GL_ONE, g.GL_SRC_ALPHA, g.GL_ZERO, g.GL_ONE)
         else:
@@ -120,24 +138,32 @@ def main(mode):
             h.bind(program, 1, scene)
             h.bind(program, 2, empty if preparing else dusty)
             h.bind(program, 3, empty)
-        elif name == WALL[1]:
-            for unit, tex in enumerate((targets[WALL[0]][1], previous, scene, scene)):
+        elif name == PACK:
+            for unit, tex in enumerate(targets[MARCH].textures):
                 h.bind(program, unit, tex)
-        elif name == WALL[2]:
-            h.bind(program, 0, targets[WALL[1]][1])
-            h.bind(program, 1, scene)
+        elif name == RESOLVE:
+            for unit, tex in enumerate((targets[PACK].textures[0], previous, scene, scene)):
+                h.bind(program, unit, tex)
         else:
             for unit in range(12):
                 h.bind(program, unit, empty)
             if name in ("fx_pall", "fx_pall_froxel", "fx_pall_foot"):
                 h.bind(program, 0, scene)
             if name in ("fx_pall", "fx_pall_froxel"):
-                h.bind(program, 9, targets["fx_pall_foot"][1])
-                h.bind(program, 10, targets["fx_mush_taus"][1])
+                h.bind(program, 9, targets["fx_pall_foot"].textures[0])
+                h.bind(program, 10, targets["fx_mush_taus"].textures[0])
             if name in ("fx_pall_froxel_sum", "fx_pall_resolve", "fx_pall_mix", "fx_pall_composite"):
                 source = {"fx_pall_froxel_sum": "fx_pall_froxel", "fx_pall_resolve": "fx_pall",
                           "fx_pall_mix": "fx_pall_resolve", "fx_pall_composite": "fx_pall_resolve"}
-                h.bind(program, 0, targets[source[name]][1])
+                h.bind(program, 0, targets[source[name]].textures[0])
+            if name == PALL[-1]:
+                h.bind(program, 1, scene)
+                h.bind(program, 11, targets["fx_pall_froxel_sum"].textures[0])
+                g.glUniform1i(h.loc(program, "PallLayerFrame"), int(stage == LAYER))
+                wall = stage in (LAYER, DISPLAY)
+                g.glUniform4f(h.loc(program, "PallYoung"), 0, 1, 0, int(wall))
+                if wall:
+                    h.bind(program, 4, targets[RESOLVE].textures[0])
         h.quad(program)
 
     def frame(names, preparing):
@@ -150,22 +176,45 @@ def main(mode):
     g.glFinish()
     preparation = []
     if mode == "batch":
-        preparation.append(frame(programs, True))
+        preparation.append(frame(STAGES, True))
     elif mode != "cold":
-        for name in programs:
+        for name in STAGES:
             preparation.append(frame((name,), True))
             print(f"  loading frame {name}: {preparation[-1]:.2f} ms", flush=True)
-    first = frame(programs, False)
+    first = frame(BURST, False)
     print(f"{mode}: longest preparation frame {max(preparation, default=0):.2f} ms, "
           f"first eligible volume frame {first:.2f} ms", flush=True)
     assert g.glGetError() == g.GL_NO_ERROR
-    g.glBindFramebuffer(g.GL_FRAMEBUFFER, targets[WALL[1]][0])
-    assert h.read(h.low, h.low)[1, 1, 3] < .99, "eligible frame must actually produce dust"
+    def check_atlas(preparing):
+        targets[MARCH].bind()
+        light, depth = (h.read(h.low, h.low, i) for i in range(2))
+        assert np.isfinite(light).all() and np.isfinite(depth).all()
+        if preparing:
+            assert np.all(light == (0, 0, 0, 1)) and np.all(depth == (0, 0, 0, 1))
+        else:
+            assert light[1, 1, 3] < .99 and depth[1, 1, 1] > 0
+        for name in (PACK, RESOLVE):
+            targets[name].bind()
+            assert np.array_equal(h.read(2 * h.low, h.low), np.concatenate((light, depth), axis=1)), name
+
+    check_atlas(False)
     if preparation:
-        # Relative to this process's cold compiler. Even one omitted costly first use must be visible.
-        # Wall composite is the cheapest of the four previously missed passes.
-        limit = min(preparation[-3:]) if mode == "staged" else preparation[0]
+        # Compare to cold first use of the volume march and resolve in this process.
+        limit = min(preparation[STAGES.index(s)] for s in (MARCH, RESOLVE)) if mode == "staged" else preparation[0]
         assert first < limit / 2, f"first eligible frame still pays cold first-use cost: {first:.2f} ms"
+
+    for label, distance in (("world", 100), ("sky", 0), ("near", .5)):
+        scene = h.make_scene(distance)
+        screen.bind()
+        g.glClearColor(.3, .5, .7, .8)
+        g.glClear(g.GL_COLOR_BUFFER_BIT)
+        before = h.read(h.size, h.size).copy()
+        frame(STAGES, True)
+        check_atlas(True)
+        screen.bind()
+        assert np.array_equal(before, h.read(h.size, h.size)), label
+        print(f"  empty warm-up over {label}: both march outputs and atlas halves transparent, RGBA8 unchanged")
+    assert g.glGetError() == g.GL_NO_ERROR
 
 
 if __name__ == "__main__":

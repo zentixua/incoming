@@ -1,6 +1,7 @@
 #version 150
 
 #moj_import <incoming:pall.glsl>
+#moj_import <incoming:wall_layer.glsl>
 
 // Young dust wall temporal accumulation (client/fx/layer/DustWallPass), at the march's resolution: the march's sample
 // offset along each ray moves every frame, and each pixel averages its last frames (exponential, current weight
@@ -45,7 +46,10 @@ float lattice(float x, float size, float n) {
 
 void main() {
     ivec2 p = ivec2(gl_FragCoord.xy), low = textureSize(Sampler0, 0), size = textureSize(Sampler2, 0);
-    vec4 cur = valid(texelFetch(Sampler0, p, 0));
+    low.x /= 2; // light and depth halves use the same spatial lattice
+    ivec2 offset = ivec2(p.x >= low.x ? low.x : 0, 0);
+    p -= offset;
+    vec4 cur = valid(texelFetch(Sampler0, p + offset, 0));
     if (DwReproject.w < 0.5) {
         fragColor = cur;
         return;
@@ -60,7 +64,7 @@ void main() {
         ivec2 c = clamp(p + ivec2(k % 3 - 1, k / 3 - 1), ivec2(0), low - 1);
         float there = pallScene(texelFetch(Sampler2, ivec2(min((vec2(c) + 0.5) * DwDiv, vec2(size) - 0.5)), 0).r);
         if (!pallSamePlace(there, here)) continue;
-        vec4 v = valid(texelFetch(Sampler0, c, 0));
+        vec4 v = valid(texelFetch(Sampler0, c + offset, 0));
         m1 += v;
         m2 += v * v;
         count += 1.0;
@@ -70,7 +74,8 @@ void main() {
     vec2 ndc = at / vec2(size) * 2.0 - 1.0;
     vec4 farPoint = InvViewProj * vec4(ndc, 1.0, 1.0);
     vec3 dir = normalize(farPoint.xyz / farPoint.w);
-    float world = here / max(dot(dir, PallForward), 1e-3);
+    float axis = max(dot(dir, PallForward), 1e-3);
+    float world = here / axis;
     float t = dir.y < -1e-3 && DwHistory.y < 0.0 ? DwHistory.y / dir.y : 2000.0;
     t = clamp(min(t, world), 1.0, 30000.0);
     vec4 clip = PrevViewProj * vec4(dir * t + DwReproject.xyz, 1.0);
@@ -84,14 +89,25 @@ void main() {
         fragColor = cur;
         return;
     }
+    // Along this ray the previous view depth is origin + distance * previousAxis.
+    // The anchor can be on the dust top, well in front of the opaque surface.
+    float origin = (PrevViewProj * vec4(DwReproject.xyz, 1.0)).w;
+    float previousAxis = (PrevViewProj * vec4(dir, 0.0)).w;
+    if (previousAxis <= 1e-3) {
+        fragColor = cur;
+        return;
+    }
+    float expected = here >= 1e8 ? 1e9 : origin + previousAxis * world;
+    float before = expected;
     if (DwPrevScene > 0.5) {
-        float before = pallScene(texelFetch(Sampler3, ivec2(prevPixel), 0).r);
-        if (!pallSamePlace(before, here)) {
+        before = pallScene(texelFetch(Sampler3, ivec2(prevPixel), 0).r);
+        if (!pallSamePlace(before, expected)) {
             fragColor = cur;
             return;
         }
     }
     ivec2 past = textureSize(Sampler1, 0);
+    past.x /= 2;
     vec2 l = vec2(lattice(prevPixel.x, float(size.x), float(past.x)), lattice(prevPixel.y, float(size.y), float(past.y)));
     // the four history samples around it, each only where the previous frame saw the same distance (a bilinear read took
     // dust clipped by a far background into a pixel whose previous depth was the foreground's)
@@ -104,9 +120,15 @@ void main() {
         float w = mix(1.0 - fr.x, fr.x, float(o.x)) * mix(1.0 - fr.y, fr.y, float(o.y));
         if (DwPrevScene > 0.5) {
             float was = pallScene(texelFetch(Sampler3, ivec2(min((vec2(c) + 0.5) * DwPrevDiv, vec2(size) - 0.5)), 0).r);
-            if (!pallSamePlace(was, here)) w = 0.0;
+            if (!pallSamePlace(was, before)) continue;
         }
-        hs += w * valid(texelFetch(Sampler1, c, 0));
+        vec4 light = valid(texelFetch(Sampler1, c, 0));
+        vec4 span = valid(texelFetch(Sampler1, c + ivec2(past.x, 0), 0));
+        wallCut(light, span, min(before, expected));
+        // Blend depth moments in the current eye's coordinates too.
+        span.rgb = max((span.rgb - origin * (1.0 - span.a)) * (axis / previousAxis), vec3(0.0));
+        vec4 sampleValue = offset.x == 0 ? light : span;
+        hs += w * sampleValue;
         ws += w;
     }
     if (ws < 1e-4) {

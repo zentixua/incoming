@@ -60,7 +60,7 @@ Prism: `~/.var/app/org.prismlauncher.PrismLauncher/data/PrismLauncher/` (`tools/
                                            composite within 16), fx_depth on synthetic captures, the half-resolution
                                            pair, the pall split with smoke in front of a far pane; exit 1 on a failed check
     nuclear_volume_warmup_gl.py           ← Mesa cold-cache nuclear volume timings for all twelve programs: batch (one frame), staged
-                                           (one program per loading frame), cold (unprepared burst). dust_wall_gl.py runs staged
+                                           (one draw per loading frame, including both wall composite targets), cold (unprepared burst). dust_wall_gl.py runs staged
     dust_wall_gl.py                      ← the young nuclear dust wall's shaders on Mesa llvmpipe (see_through_gl.py's
                                            harness): thin foreground, hand and pane in its composite, history at a new
                                            occluder and on an uneven lattice, the march at the world's edge, straight down

@@ -1,3 +1,5 @@
+#moj_import <incoming:wall_ownership.glsl>
+
 // Pall after the blast wave (client/nuclear/PallField — laws, client/fx/layer/PallPass — passes): the field of one
 // detonation from a radius table. Shared by the volume (fx_pall) and the squares of the effects layer (fx.vsh: what the pall
 // covers in front of a particle). Numbers and laws are copies of PallField and VolumeNoise.shape (PallGlslTest computes
@@ -234,6 +236,17 @@ PallAt pallField(sampler2D table, sampler2D ground, mat4 S, vec4 G, vec4 W, vec3
     a.wet = wet;
     a.mixed = dust.a;
     return a;
+}
+
+// Only lofted soil is replaced. The shared field still supplies total mass for
+// lighting the world, and the other media retain their density and column.
+float pallHandoff(inout PallAt f, vec4 ring, mat4 slot, vec3 p) {
+    float share = wallShare(ring, length(p.xz - slot[0].xy));
+    float keep = 1.0 - share;
+    f.sigma.x *= keep;
+    f.column.x *= keep;
+    f.slab.x *= keep;
+    return share;
 }
 
 // Unevenness of the top of the dust layer (PallField.BUMPS): the top above the point — (1 ± it) of the table's top
@@ -777,7 +790,7 @@ struct WallAt {
 // epicenter (blocks), ground, G, W — relief and water maps of the slot and their numbers, water of the slot (the map is read for
 // water only if it is under the pall). Attenuation of dust — from the edge toward the end of the wedge (dust lifted closer to the
 // epicenter — of its own density); spray — its own
-WallAt pallWallAt(sampler2D ground, mat4 S, mat4 V, vec4 G, vec4 W, vec3 p, float floorUp) {
+WallAt pallWallAt(sampler2D ground, mat4 S, mat4 V, vec4 G, vec4 W, vec3 p, float floorUp, vec4 ring) {
     WallAt h;
     h.rel = p.xz - S[0].xy;
     h.s = V[0].x - length(h.rel);
@@ -794,6 +807,7 @@ WallAt pallWallAt(sampler2D ground, mat4 S, mat4 V, vec4 G, vec4 W, vec3 p, floa
     float lag = V[1].y * h.wet;
     h.P = vec4(V[0].y, V[0].z * mix(1.0, V[1].z, h.wet), lag, pallWallDensity(h.s - lag, V[0].y, V[0].w, V[3].z, V[3].w, V[1].w, h.wet,
             V[2].y, V[2].z, V[3].x, V[3].y, h.hard));
+    h.P.w *= 1.0 - wallShare(ring, length(h.rel));
     return h;
 }
 
@@ -832,7 +846,7 @@ vec4 pallWallSpans(mat4 S, mat4 V, vec4 G, vec3 dir, float ta, float tb) {
 
 // Thickness of the head of the slot without noise on the ray segment [ta, tb] (dir from the eye), steps steps on each of its segments
 // (pallWallSpans): what the head covers in front of the square of the layer (fx.vsh). The floor — the relief of the map under each point
-float pallWallTau(sampler2D ground, mat4 S, mat4 V, vec4 G, vec4 W, vec3 dir, float ta, float tb, int steps) {
+float pallWallTau(sampler2D ground, mat4 S, mat4 V, vec4 G, vec4 W, vec3 dir, float ta, float tb, int steps, vec4 ring) {
     vec4 spans = pallWallSpans(S, V, G, dir, ta, tb);
     float tau = 0.0;
     for (int k = 0; k < 2; k++) {
@@ -842,7 +856,7 @@ float pallWallTau(sampler2D ground, mat4 S, mat4 V, vec4 G, vec4 W, vec3 dir, fl
         for (int i = 0; i < steps; i++) {
             vec3 q = dir * (sp.x + (float(i) + 0.5) * ds);
             float floorUp = pallRelief(ground, S, G, q.xz);
-            WallAt h = pallWallAt(ground, S, V, G, W, q, floorUp);
+            WallAt h = pallWallAt(ground, S, V, G, W, q, floorUp, ring);
             if (h.P.w > 0.0) tau += h.P.w * pallWallMean(h.s - h.P.z, h.z, h.P.x, h.P.y) * ds;
         }
     }

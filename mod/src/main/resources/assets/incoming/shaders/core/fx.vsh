@@ -29,6 +29,7 @@ in vec3 Normal;
 in float Emit;
 // x: 1 — glow pass (FxBloom); y — how many times the pass pixel is larger than the frame pixel
 uniform vec2 FxGlowPass;
+uniform sampler2D Sampler1;
 // Half-resolution split (HalfPass): x — 1 clips each quad to its rectangle for this pass (an empty one drops it), HalfRect
 // texel (quad % 1024, quad / 1024 + y) — NDC x0, y0, x1, y1; quad = vertex / 4, the sorted place. HalfRect is on its own
 // texture unit (bound by the layer: the 12 named samplers are taken)
@@ -162,7 +163,7 @@ float pall(vec3 p) {
     float len = length(p);
     if (PallAmbient.w < 0.5 || len < 1e-3) return 1.0;
     vec3 dir = p / len;
-    return pallThrough(dir, len) * mushTransmit(Sampler11, dir, len, 6) * smokeThrough(dir, len);
+    return pallThrough(Sampler1, dir, len) * mushTransmit(Sampler11, dir, len, 6) * smokeThrough(dir, len);
 }
 
 void main() {
