@@ -264,9 +264,9 @@ float dwDensity(vec3 g, bool coarse) {
     top *= 1.0 + dwBulge(pw, a);
     // texture fixed in the air mass: billows of ~20 × 13 m and finer, the rising and settling top reveals and hides them
     vec3 tq = vec3(pw.x, pw.y - 0.45 * ph, pw.z) / vec3(20.0, 13.0, 20.0);
-    // (light paths see the dust's large shapes only: fine texture and the head's lumps riding with the front made the
+    // (light paths see the billows' two first octaves but not the head's lumps riding with the front: those made the
     // shadow toward the fireball, and the face's shade with it, change every frame: the approaching face shimmered)
-    float n = coarse ? 0.5 : dwFbm(tq, 1.0 / 13.0);
+    float n = coarse ? dwFbm2(tq, 0.0) : dwFbm(tq, 1.0 / 13.0);
     // cauliflower lumps of the top, ~35 m and finer, in the same air
     float bl = coarse ? 0.42 : dwBillow(vec3(pw.x, pw.y - 0.3 * ph, pw.z) / vec3(34.0, 22.0, 34.0) + 11.0, 1.0 / 22.0);
     // the young dust is combed along the radial post-shock wind: its texture (still fixed in the air) is stretched ~150 m
@@ -357,7 +357,7 @@ vec3 dwLight(vec3 q, vec3 rd) {
     return DW_EXPOSURE * (albedo * single + bulk * multiple + bulk * DwGroundLight);
 }
 
-const float DW_K = 0.0055, DW_S = 2.5;
+const float DW_K = 0.008, DW_S = 4.5;
 const int DW_HEAD_SAMPLES = 2;
 float dwGridT(float k) {
     float kb = 1.0 / DW_K;
@@ -399,8 +399,9 @@ vec4 dwMarch(vec3 rd, float tEnd, float jitter, float foot, int maxSteps) {
         t1 = min(t1, (-Bq + sq) / A);
     }
     if (t0 >= t1) return vec4(0.0, 0.0, 0.0, 1.0);
-    // sample grid fixed along the ray from the eye: 2.5-block steps to 2.5/K blocks, then geometric (step K × distance:
-    // 5.5 m at 1 km, 22 m at 4 km); the history averages the moving offset within each step
+    // sample grid fixed along the ray from the eye: 4.5-block steps to 4.5/K blocks, then geometric (step K × distance:
+    // 8 m at 1 km, 32 m at 4 km); the history averages the moving offset within each step (with history, flicker and the
+    // approach's coherence match a 2.5-block grid, at two thirds of the cost)
     float k = floor(dwGridK(t0));
     // n: cells to the next sample (strides grow over empty air); kLast: the last sampled cell
     float n = 1.0, kLast = k - 1.0;
