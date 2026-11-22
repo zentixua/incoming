@@ -909,11 +909,14 @@ paths:
   on the contact line as a ramp leaning back (never ahead of the front: dust there is cut by the ring, a seam), a
   hump whose crest is 1.4–1.6 of the settled layer (drawn ×68/58 of the law's, `NukePall.YOUNG_PRESENT_HEIGHT`:
   the crest just under a 120 m camera's horizon at 4.5 km from 1 Mt; on the horizon line its ragged top flickered), back to the layer within 0.5–1 s (`DustWallGlslTest`), billows and bulges
-  fixed in the air across the ground and carried in height by the dust's own envelope (born at the ground, rising into
-  the crest and settling with it; riding with the front, texture slides outward at its speed and flutters as the front
-  passes under the eye; sliced at fixed heights, the 470 m/s head is new air every frame; `DustWallGlslTest`), the head's eddies, gusts and evolution on a slowed clock (`dwClock`), features along the front at bearing × a fixed arc
-  (`DW_ARC`; × the front's current radius they slid along the front at ~700 m/s: the ring turned), the face's notches cut by head lumps riding with the front
-  (fixed in the ground, the front sweeps each 30 m lump in two frames: boiling), light from the fireball, sun and sky with multiply scattered light in the soil's bulk colour (no
+  fixed in the air across the ground and carried in height by the dust's own column. One model, per-point birth (LOOK
+  Trait 0): the front is a line of births; each ground point's seed (world-fixed noise) sets its birth delay after the
+  front's arrival, amount, column height and overshoot, its column rises, overshoots and settles by its own age and stays
+  where it was born (a small outward push, decaying eddies turning either way, the wind). Nothing rides with the front or
+  is placed by bearing × the front's radius: texture riding out with it slides at its speed and flutters as the front
+  passes under the eye, a ramp shared by every point reads as one mass carried out from the centre, features placed by
+  bearing × the current radius slide along the front (`DustWallGlslTest`, the turning and births checks in
+  `tools/dust_wall_gl.py`); light from the fireball, sun and sky with multiply scattered light in the soil's bulk colour (no
   near-black). The pall hands its young dust, head and eye dust over across `PallYoung` (a crossfade over `FADE`) only
   when the pass can draw it: all three programs ready, primary view, one detonation in the slots, no water under the
   pall (spray and surge stay the pall's), lofted dust left in the young ring. The dust lies on the pall's terrain map

@@ -101,5 +101,7 @@ class DustWallGlslTest {
         String s = glsl();
         assertTrue(!Pattern.compile("atan\\([^)]*\\) \\* DwRing").matcher(s).find(), "no bearing × the front's radius");
         assertTrue(s.contains("hand * sin("), "residual orbits turn either way");
+        // LOOK Trait 0: nothing is placed by its distance behind the front (that coordinate rides out at the front's speed)
+        assertTrue(!s.contains("DwRing.x - r"), "no feature rides with the front");
     }
 }

@@ -11,7 +11,8 @@ it, and lays no dust from behind a foreground surface; the resolve drops history
 moved in, with no history, and reads the previous frame on the march lattice when the frame width is not a multiple of the
 divisor (its last column too); the march stops at the world behind the pixel, a straight-down ray sees the layer as a
 slightly tilted one does, the layer lies on the local ground (a valley), a ray over rising ground does not skip it, no
-dust lies inside the fireball's ground footprint, and the head does not turn around ground zero. Optional arguments: a Java 21
+dust lies inside the fireball's ground footprint, and the head does not turn around ground zero
+nor ride out with the front. Optional arguments: a Java 21
 executable and the Veil parser classpath to link the programs after Veil's parse and print as well (VeilPrintProbe.java
 beside this script is not shipped; ShaderSourceTest covers Veil in the build)."""
 import json
@@ -220,10 +221,13 @@ float dwOpenEye(vec3 p) { return 1.0; }
 vec2 dwSoilAt(vec2 xz) { return vec2(0.0); }
 #moj_import <incoming:dustwall.glsl>
 uniform float Radius;
+uniform float Radial;
 out vec4 fragColor;
 void main() {
-    float b = radians(-110.0 + 40.0 * gl_FragCoord.x / 2048.0);
-    fragColor = vec4(dwDensity(vec3(Radius * cos(b), 25.0, Radius * sin(b)), false), 0.0, 0.0, 1.0);
+    float f = gl_FragCoord.x / 2048.0;
+    // an arc 80 blocks behind the front, 25 blocks up; or a radial line through the head 0-300 blocks behind it, 40 up
+    float b = Radial > 0.5 ? radians(-90.0) : radians(-110.0 + 40.0 * f), rr = Radial > 0.5 ? Radius - 300.0 * f : Radius;
+    fragColor = vec4(dwDensity(vec3(rr * cos(b), Radial > 0.5 ? 40.0 : 25.0, rr * sin(b)), false), 0.0, 0.0, 1.0);
 }
 """)
     p = gl["compileProgram"](gl["compileShader"]((core / "fx_dustwall.vsh").read_text(), g.GL_VERTEX_SHADER),
@@ -244,15 +248,21 @@ void main() {
     g.glTexImage3D(g.GL_TEXTURE_3D, 0, g.GL_R32F, 128, 128, 128, 0, g.GL_RED, g.GL_FLOAT, lattice)
     g.glUniform1i(loc(p, "DwNoise"), 12)
     g.glUniform4f(loc(p, "DwBall"), 0, 1200, 0, 1700)
-    arcs = []
+    arcs, lines = [], []
     for t in (arrive, arrive + 0.02):
         front = 4500 * (t / arrive) ** 0.8
         # the eye far off (the head's own texture is drawn away from the eye)
         g.glUniform4f(loc(p, "DwEye"), 0, 120, 4500, t)
         g.glUniform4f(loc(p, "DwRing"), front, 0, 400, reach)
         g.glUniform1f(loc(p, "Radius"), front - 80)
+        g.glUniform1f(loc(p, "Radial"), 0)
         quad(p)
         arcs.append(read(2048, 1)[0, :, 0].copy())
+        # the radial line at a fixed place on the ground (the front at the first instant)
+        g.glUniform1f(loc(p, "Radius"), 4500.0)
+        g.glUniform1f(loc(p, "Radial"), 1)
+        quad(p)
+        lines.append(read(2048, 1)[0, :, 0].copy())
     a, b = (x - x.mean() for x in arcs)
     shifts = range(-40, 41)
     corr = [np.corrcoef(a[100:-100], np.roll(b, -k)[100:-100])[0, 1] for k in shifts]
@@ -260,6 +270,12 @@ void main() {
     metres = best * np.radians(40.0) * (4500 - 80) / 2048
     print(f"turning: the head's arc moves {metres:+.1f} m along the front in 0.02 s (correlation {max(corr):.3f})")
     check(abs(metres) < 2.0, f"the head turns around ground zero: {metres:+.1f} m along the front in 0.02 s, expected ~0")
+    # LOOK Trait 0: the head's dust stays where it was torn up (a small outward push), nothing rides out with the front
+    a, b = (x - x.mean() for x in lines)
+    corr = [np.corrcoef(a[100:-100], np.roll(b, -k)[100:-100])[0, 1] for k in shifts]
+    out = -shifts[int(np.argmax(corr))] * 300.0 / 2048 / 0.02
+    print(f"births: the head's dust 40 blocks up moves {out:+.0f} m/s outward (correlation {max(corr):.3f})")
+    check(abs(out) < 60.0, f"the head's dust rides out with the front: {out:+.0f} m/s, expected tens of m/s at most")
 
 
 def link_after_veil(name, java, classpath):

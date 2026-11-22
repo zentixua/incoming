@@ -57,10 +57,6 @@ const float DW_FADE = 6.0;
 const float DW_EXPOSURE = 0.22;
 // head timing, seconds of age (presentation): rise e-fold at the contact line, hump hold, width of the hump's fall
 const float DW_RISE = 0.12, DW_HOLD = 0.25, DW_FALL = 0.3;
-// the head's coordinate along the front: bearing × a fixed arc radius (m), so its lobes, clefts, rolls and lumps keep their
-// bearing as the ring runs out. Bearing × the front's current radius slid every feature along the front at bearing × the
-// front's speed (~600–740 m/s across the judging view): the ring read as turning around ground zero and the far head churned
-const float DW_ARC = 4500.0;
 // most the bulges, the billowed surface and its soft edge (DW_HAZE) lift the dust over its envelope, shares (the ray bound,
 // dwBound)
 // (the top behind the head is uneven at several scales, no cap: swells up to ±DW_BULGE of the layer at 150–400 m, billows,
@@ -123,11 +119,10 @@ float dwFbm2(vec3 p, float fq) {
     return 0.6667 * mix(0.5, dwNoise3(p), dwLod(fq)) + 0.3333 * mix(0.5, dwNoise3(p * 2.07 + vec3(1.7, 9.2, 3.1)), dwLod(fq * 2.07));
 }
 
-// hump of the head over the settled layer along the front: 1.54–1.76 of the envelope (its visible crest ~1.4–1.6x the layer
-// behind), lobes ~120 m along the front over ~400 m swells, staying with their bearing as the front runs out
+// overshoot of a ground point's column over the settled layer: 1.54–1.76 of the envelope (its visible crest ~1.4–1.6x the
+// layer behind), from the point's own ground (world-fixed, ~60 m patches over ~200 m), so the hump is uneven along the front
 float dwHump(vec2 xz) {
-    float b = atan(xz.y, xz.x) * DW_ARC;
-    return 1.54 + 0.22 * smoothstep(0.25, 0.75, 0.6 * dwNoise3(vec3(b / 120.0, 33.4, 0.04 * DwEye.w)) + 0.4 * dwNoise3(vec3(b / 400.0, 5.5, 0.0)));
+    return 1.54 + 0.22 * smoothstep(0.25, 0.75, 0.6 * dwNoise3(vec3(xz / 60.0, 33.4)) + 0.4 * dwNoise3(vec3(xz / 200.0, 5.5)));
 }
 
 // the dust envelope at age a (s since the front passed) over settled height h with hump k (presentation): born at zero on
@@ -163,8 +158,9 @@ vec3 dwAir(vec3 q, float a, float r, float top, out float ph) {
     vec3 pw = q + w * vec3(40.0, 26.0, 40.0) * A * smoothstep(0.0, 0.45 * max(top, 1.0), q.y);
     vec2 rdir = q.xz / max(r, 1.0);
     float yy = clamp(q.y / max(top, 1.0), 0.0, 1.5);
-    // carried out by the post-shock wind (~60 m over its first seconds), then drifting back with the negative phase
-    pw.xz -= rdir * (60.0 * (1.0 - exp(-a / 1.2)) * exp(-a / 6.0) + 8.0 * sin(0.45 * a)) * yy;
+    // a small push out by the post-shock wind (~25 m over its first seconds, the dust stays near where it was torn up),
+    // then drifting back with the negative phase
+    pw.xz -= rdir * (25.0 * (1.0 - exp(-a / 1.2)) * exp(-a / 6.0) + 8.0 * sin(0.45 * a)) * yy;
     // residual turbulence behind the front: neighbouring parcels circle on slow orbits (20 m, 5 m/s; phases varying over
     // ~150 m), so the settled dust keeps swirling and drifting sideways as real dust does, never frozen, without the
     // endless shear a steady flow field would stretch it into; they turn either way (sense and ellipse from the phase field,
@@ -175,7 +171,7 @@ vec3 dwAir(vec3 q, float a, float r, float top, out float ph) {
     // changes over a few seconds, strongest just after the front and calming over ~6 s (presentation)
     vec2 gp = q.xz / 220.0 + vec2(0.0, 0.35 * a);
     vec2 gust = vec2(dwNoise3(vec3(gp, 3.3)), dwNoise3(vec3(gp + 7.7, 9.1))) - 0.5;
-    pw.xz -= gust * 70.0 * (1.0 - exp(-a / 0.8)) * exp(-a / 6.0) * (0.5 + 0.5 * yy);
+    pw.xz -= gust * 30.0 * (1.0 - exp(-a / 0.8)) * exp(-a / 6.0) * (0.5 + 0.5 * yy);
     pw.xz -= DwWind.xy * a;
     return pw;
 }
@@ -250,35 +246,23 @@ float dwDensity(vec3 g, bool coarse) {
     vec4 n0 = dwNode(r);
     float a0 = DwEye.w - n0.x;
     if (a0 < 0.0 || n0.z <= 0.0) return 0.0;
-    float h = n0.y, k = dwHump(q.xz);
+    // One model, per-point birth (LOOK Trait 0): the front is a line of births running over the ground. Each ground point
+    // tears up its own dust when the front reaches it: its seed (world-fixed, ~30 m and ~90 m) sets its birth a little
+    // after the front's arrival (lagging patches open clefts in the front line), how much it raises, its column's height
+    // and overshoot; its column rises, overshoots and settles by its own age and stays where it was born. Nothing rides
+    // with the front: a ramp surface shared by every point read as one mass carried out from the centre
+    // (light paths take the mean point: their shade is smooth)
+    float s1 = coarse ? 0.5 : dwNoise3(vec3(q.xz / 30.0, 17.3)), s2 = coarse ? 0.5 : dwNoise3(vec3(q.xz / 90.0, 29.1));
+    float delay = 0.10 * smoothstep(0.5, 0.85, s2) + 0.04 * s1;
+    float h = n0.y * mix(0.88, 1.02, s2), k = dwHump(q.xz);
     float top0 = max(dwEnvelope(a0, h, k), 1.0);
     if (q.y > top0 * (1.0 + DW_BULGE) * DW_HAZE + 6.0) return 0.0;
-    // the dust is born on the contact line and rises while the front runs on: higher up it has the profile of a point a
-    // little outward (younger), so the face is a ramp from the ground up into the crest, leaning back, never ahead of the
-    // front. The young head billows: its face is cut back by cauliflower lumps (~30 m, up to ~35 m deep, gone as the head
-    // settles) that ride with the head (coordinates along the front, height and distance behind it) and roll back over it
-    // at 25 m/s: fixed in the ground, the front would sweep each 30 m lump in two frames and the face would boil
+    // higher up the dust has the profile of a point a little outward (younger): the face is a ramp from the ground up
+    // into the crest, leaning back, never ahead of the front
     float yn = clamp(q.y / top0, 0.0, 1.5);
-    float bf = 0.42;
-    if (a0 < 8.0) {
-        vec3 hf = vec3(atan(q.z, q.x) * DW_ARC / 30.0, q.y / 22.0, (DwRing.x - r + 25.0 * DwEye.w) / 30.0);
-        bf = coarse ? 0.42 : dwBillow(hf + vec3(3.7, 0.0, 9.1), 1.0 / 22.0);
-    }
-    // (the lumps cut the upper face only: cut to the ground they opened holes through the base that the moving front
-    // swept across the ray steps, popping from frame to frame)
-    // clefts between the head's lobes: the front line itself is cut back by up to ~50 m in notches ~150 m along it
-    float cleft = 50.0 * smoothstep(0.55, 0.85, dwNoise3(vec3(atan(q.z, q.x) * DW_ARC / 150.0, 61.7, 0.02 * DwEye.w)));
-    float a = DwEye.w - dwNode(r + cleft + (40.0 * yn * yn + 70.0 * max(bf - 0.3, 0.0) * smoothstep(0.2, 0.6, yn)) * exp(-a0 / 1.5)).x;
+    float a = DwEye.w - dwNode(r + 40.0 * yn * yn * exp(-a0 / 1.5)).x - delay;
     if (a <= 0.0) return 0.0;
     float top = dwEnvelope(a, h, k), env = top, ph;
-    // shear rolls on the head (Kelvin–Helmholtz): bands ~200 m apart (a few head heights) across the head, riding with the
-    // front and rolling back over it at 8 m/s, in patches along the front, breaking down within ~0.5 s behind it
-    // (presentation; 70 m bands swept past a fixed eye by the 470 m/s front pulsed its dust at ~7 Hz)
-    if (!coarse && a0 < 3.0) {
-        float along = atan(q.z, q.x) * DW_ARC;
-        float patchy = smoothstep(0.35, 0.7, dwNoise3(vec3(along / 160.0, 12.9, 0.02 * DwEye.w)));
-        top *= 1.0 + 0.08 * patchy * sin(6.2832 * (DwRing.x - r + 8.0 * DwEye.w) / 200.0) * exp(-a0 / 0.5);
-    }
     vec3 pw = dwAir(q, dwClock(a, q.xz), r, top, ph);
     float swell = dwBulge(pw, a);
     if (!coarse) gDwSwell = swell;
@@ -316,7 +300,7 @@ float dwDensity(vec3 g, bool coarse) {
     // over hard ground only debris dust (the pall's own reading: PallField.paved of the soil's mass), sand pales it
     vec2 soil = dwSoilAt(q.xz);
     float paved = 1.0 + soil.x * (n0.w - 1.0);
-    float sigma = n0.z * amt * fade * paved;
+    float sigma = n0.z * amt * fade * paved * mix(0.75, 1.25, 0.55 * s1 + 0.45 * s2);
     if (!coarse) {
         sigma *= dwOpen(g);
         gDwSand = clamp(soil.y / max(paved, 1e-6), 0.0, 1.0);
