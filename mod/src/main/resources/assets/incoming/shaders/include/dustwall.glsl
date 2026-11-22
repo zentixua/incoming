@@ -72,6 +72,8 @@ float gDwSurf = 0.0, gDwSigma = 0.0, gDwSand = 0.0;
 // set by dwDensity: the sample is in the young head (sampled twice per step: it moves across the steps at the front's speed,
 // faster than the history follows)
 bool gDwHead = false;
+// set by dwDensity: the sample's dust is older than 2 s (calm, settled: its light changes slowly along the ray)
+bool gDwOld = false;
 
 vec4 dwNode(float r) {
     float x = clamp(r / max(DwRing.w, 1.0), 0.0, 1.0) * float(DW_NODES - 1);
@@ -231,7 +233,10 @@ float dwDensity(vec3 g, bool coarse) {
     // (the lumps cut the upper face only: cut to the ground they opened holes through the base that the moving front
     // swept across the ray steps, popping from frame to frame)
     float a = DwEye.w - dwNode(r + (40.0 * yn * yn + 70.0 * max(bf - 0.3, 0.0) * smoothstep(0.2, 0.6, yn)) * exp(-a0 / 1.5)).x;
-    if (!coarse) gDwHead = a0 < 1.5;
+    if (!coarse) {
+        gDwHead = a0 < 1.5;
+        gDwOld = a0 > 2.0;
+    }
     if (a <= 0.0) return 0.0;
     float top = dwEnvelope(a, h, k), ph;
     vec3 pw = dwAir(q, a, r, top, ph);
@@ -369,7 +374,7 @@ vec4 dwMarch(vec3 rd, float tEnd, float jitter, float foot, int maxSteps) {
     // n: cells to the next sample (strides grow over empty air); kLast: the last sampled cell
     float n = 1.0, kLast = k - 1.0;
     vec3 light = vec3(0.0), c = vec3(0.0);
-    float T = 1.0;
+    float T = 1.0, lit = -1.0;
     for (int i = 0; i < 400; i++) {
         float t = dwGridT(k);
         if (i >= maxSteps || t >= t1 || T < 0.02) break;
@@ -414,7 +419,10 @@ vec4 dwMarch(vec3 rd, float tEnd, float jitter, float foot, int maxSteps) {
                 kLast = k - 1.0;
                 continue;
             }
-            c = dwLight(q, rd);
+            // light at every sample in the young dust; in the settled dust every other grid cell (the history averages the
+            // fixed grid's two parities; the light there changes over tens of metres)
+            if (!gDwOld || lit < 0.0 || fract(k * 0.5) < 0.25) c = dwLight(q, rd);
+            lit = 1.0;
             // the thin soft edge over the dense top: two cells per sample (at grazing views a 15–25 m edge is hundreds of
             // metres of ray)
             float cells = hq > gDwSurf + 2.0 ? 2.0 : 1.0;
