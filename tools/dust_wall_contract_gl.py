@@ -76,7 +76,8 @@ def march(program, scene, frame):
     return light, depth
 
 
-def composite(program, scene, samples, glass=None, cloud=None, rays=None, mushroom=None, layer_frame=False, young=True):
+def composite(program, scene, samples, glass=None, cloud=None, rays=None, mushroom=None, layer_frame=False,
+              young=True, haze=0, smoke_span=None, ground_origin=(100, 0)):
     # Run the shipped pack and resolve before the full-resolution pall composite.
     light, depth = samples
     pack = link("fx_dustwall_pack")
@@ -106,10 +107,35 @@ def composite(program, scene, samples, glass=None, cloud=None, rays=None, mushro
     bind(program, 0, texture(*rgba, low, low, empty_ray if rays is None else rays))
     bind(program, 1, scene)
     bind(program, 4, atlas)
+    slot = np.zeros((4, 4), dtype=np.float32)
+    if haze:
+        # The wall and the ground haze below its surface belong to the same dry burst.
+        slot[:, 0] = (*ground_origin, 0, 800)
+        slot[3, 1] = 1
+        slot[2, 2], slot[3, 2] = .25, .75
+        bind(program, 2, texture(*rgba, 1, 2, [(0, 10, 0, 0), (haze, 100, 0, 0)]))
+    g.glUniformMatrix4fv(loc(program, "PallSlot0"), 1, True, slot)
     if mushroom is not None:
         bind(program, 7, texture(*rgba, 20, 4, mushroom))
     for name in ("SmokeGrid", "PallNoise", "PallOpen"):
         g.glUniform1i(loc(program, name), 13)
+    cascade = np.zeros((4, 4), dtype=np.float32)
+    if smoke_span is not None:
+        near, far = smoke_span
+        lo, hi = np.zeros_like(cascade), np.zeros_like(cascade)
+        lo[:, 0], hi[:, 0] = (-20, -20, -far, 1), (20, 20, -near, 0)
+        cascade[:, 0], cascade[0, 3] = (-20, -20, -far, 1), 1
+        g.glUniform3f(loc(program, "SmokeMin"), *lo[:3, 0])
+        g.glUniform3f(loc(program, "SmokeMax"), *hi[:3, 0])
+        for name, matrix in (("SmokeLo", lo), ("SmokeHi", hi)):
+            g.glUniformMatrix4fv(loc(program, name), 1, True, matrix)
+        g.glUniform1i(loc(program, "SmokeGrid"), 14)
+        g.glActiveTexture(g.GL_TEXTURE0 + 14)
+        g.glBindTexture(g.GL_TEXTURE_3D, g.glGenTextures(1))
+        g.glTexParameteri(g.GL_TEXTURE_3D, g.GL_TEXTURE_MIN_FILTER, g.GL_NEAREST)
+        g.glTexImage3D(g.GL_TEXTURE_3D, 0, g.GL_R32F, 1, 1, 1, 0, g.GL_RED, g.GL_FLOAT,
+                       np.ones(1, dtype=np.float32))
+    g.glUniformMatrix4fv(loc(program, "SmokeCascade"), 1, True, cascade)
     g.glUniform4f(loc(program, "PallYoung"), 0, 1, 0, 800 if young else 0)
     g.glUniform4f(loc(program, "PallFrame"), 0, 0, 4, 0)
     g.glUniformMatrix4fv(loc(program, "InvViewProj"), 1, True, np.linalg.inv(projection).astype(np.float32))
@@ -319,7 +345,7 @@ void main() {
         check(np.allclose([wall, head, soil, other], [expected, 1 - expected, 1 - expected, .5], atol=2e-5),
               f"radius {radius:.2f}: wall {wall:.5f}, head {head:.5f}, soil {soil:.5f}, haze and mist {other:.3f}")
     g.glUniform4f(loc(program, "Ring"), 0, 1, 200, edge)
-    for radius, expected in ((190, 0), (200, 0), (220, .5), (240, 1)):
+    for radius, expected in ((160, 0), (180, .5), (200, 1), (220, 1), (240, 1)):
         g.glUniform1f(loc(program, "Radius"), radius)
         quad(program)
         check(abs(read(1, 1)[0, 0, 0] - expected) < 1e-5, f"fireball footprint at {radius}")
@@ -372,6 +398,35 @@ def foreground_volume(march_program, program):
         check(np.allclose(red, expected_red, atol=.001), f"cap at {distance} through glass: wall on/off {red}")
         gain = (bright - dim) / .6
         check(abs(gain - expected) < .01, f"cap at {distance}: contrast {gain:.6f}, expected {expected:.6f}")
+
+    # The dark basal layer at ground zero backs the young surface. A detached cap
+    # at 70 still occludes that same surface, including when the backing is opaque.
+    base = composite(program, scene, samples, rays=dark)[6, 6, 0]
+    backed = composite(program, scene, samples, rays=dark, haze=.5)[6, 6, 0]
+    caps[0, 0] = (0, -70, -20, 1)
+    cap = composite(program, scene, samples, rays=dark, mushroom=caps, haze=.5)[6, 6, 0]
+    check(base > .05 and abs(base - backed) < .001, f"wall over its opaque basal layer: {backed:.5f} vs {base:.5f}")
+    check(cap < .001, f"opaque cap in front of wall and basal layer: {cap:.5f}")
+
+    # Only the soil supplied by this wall enters its backing. The same dust from
+    # a different burst, or opaque matter in the stem itself, stays in front.
+    stem = caps.copy()
+    stem[0, 4, 1] = 0                  # no cap
+    stem[0, 6] = (80, 15, 0, 0)        # stem height, radius, flare, core optical depth
+    stem[0, 10, 2] = 40                # cap bottom
+    stem[0, 11, 3] = 65                # inflow merge height
+    stem[0, 19] = (15, 2, 1, 80)       # layer height, density, carried share, rise
+    for origin, core, expected in (((0, -70), 0, base), ((100, 0), 0, 0), ((0, -70), 20, 0)):
+        stem[0, 6, 3] = core
+        shown = composite(program, scene, samples, rays=dark, mushroom=stem, haze=.5, ground_origin=origin)[6, 6, 0]
+        check(abs(shown - expected) < .001,
+              f"stem inflow at (0, -70), ground at {origin}, core depth {core}: {shown:.5f} vs {expected:.5f}")
+
+    # A smoke grid in front retains its measured near-volume light even over
+    # the same burst's dusty ground. Moving the cloud behind the wall exposes it.
+    for span, expected in (((22, 38), 0.0), ((280, 300), base)):
+        shown = composite(program, scene, samples, rays=dark, haze=.5, smoke_span=span)[6, 6, 0]
+        check(abs(shown - expected) < .001, f"smoke at {span} over the basal layer: {shown:.5f} vs {expected:.5f}")
 
 
 def terrain_occluder(march_program):

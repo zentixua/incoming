@@ -240,11 +240,13 @@ PallAt pallField(sampler2D table, sampler2D ground, mat4 S, vec4 G, vec4 W, vec3
 
 // Only lofted soil is replaced. The shared field still supplies total mass for
 // lighting the world, and the other media retain their density and column.
-void pallHandoff(inout PallAt f, vec4 ring, mat4 slot, vec3 p) {
-    float keep = 1.0 - wallShare(ring, length(p.xz - slot[0].xy));
+float pallHandoff(inout PallAt f, vec4 ring, mat4 slot, vec3 p) {
+    float share = wallShare(ring, length(p.xz - slot[0].xy));
+    float keep = 1.0 - share;
     f.sigma.x *= keep;
     f.column.x *= keep;
     f.slab.x *= keep;
+    return share;
 }
 
 // Unevenness of the top of the dust layer (PallField.BUMPS): the top above the point — (1 ± it) of the table's top

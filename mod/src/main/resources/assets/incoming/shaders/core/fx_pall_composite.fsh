@@ -187,20 +187,22 @@ float pallOpenHere(vec3 p) {
 // Noiseless pall depth on eye ray dir over [ta, tb]: six steps through both slot fields plus wall head (like pall
 // before layer quads, pall_front.glsl: pallThrough), scaled by outdoor-air share (pallOpen); no Wilson cloud
 // (thin shell lasting seconds)
-float pallTau(vec3 dir, float ta, float tb) {
-    float tau = 0.0, ds = (tb - ta) / 6.0;
+vec2 pallDepth(vec3 dir, float ta, float tb) {
+    vec2 tau = vec2(0.0);
+    float ds = (tb - ta) / 6.0;
     for (int i = 0; i < 6; i++) {
         vec3 q = dir * (ta + (float(i) + 0.5) * ds);
-        float s = 0.0;
+        vec2 s = vec2(0.0);
         if (PallSlot0[1].w > 0.5) {
             PallAt f = pallField(Sampler2, Sampler5, PallSlot0, PallGround0, PallWater0, q, pallRelief(Sampler5, PallSlot0, PallGround0, q.xz), 1.0);
-            pallHandoff(f, PallYoung, PallSlot0, q);
-            s += f.sigma.x + f.sigma.y + f.sigma.z;
+            float share = pallHandoff(f, PallYoung, PallSlot0, q);
+            s.y = share * (f.sigma.x + f.sigma.y);
+            s.x += f.sigma.x + f.sigma.y + f.sigma.z;
         }
         if (PallSlot1[1].w > 0.5) {
             PallAt f = pallField(Sampler2, Sampler6, PallSlot1, PallGround1, PallWater1, q, pallRelief(Sampler6, PallSlot1, PallGround1, q.xz), 1.0);
             pallHandoff(f, PallYoung, PallSlot1, q);
-            s += f.sigma.x + f.sigma.y + f.sigma.z;
+            s.x += f.sigma.x + f.sigma.y + f.sigma.z;
         }
         tau += s * pallOpenHere(q) * ds;
     }
@@ -213,10 +215,14 @@ float pallTau(vec3 dir, float ta, float tb) {
             vec2 sp = j == 0 ? spans.xy : spans.zw;
             if (sp.y <= sp.x) continue;
             float wall = k == 0 ? pallWallTau(Sampler5, S, V, G, W, dir, sp.x, sp.y, 4, PallYoung) : pallWallTau(Sampler6, S, V, G, W, dir, sp.x, sp.y, 4, PallYoung);
-            tau += wall * pallOpenHere(dir * (0.5 * (sp.x + sp.y)));
+            tau.x += wall * pallOpenHere(dir * (0.5 * (sp.x + sp.y)));
         }
     }
     return tau;
+}
+
+float pallTau(vec3 dir, float ta, float tb) {
+    return pallDepth(dir, ta, tb).x;
 }
 
 // Full-frame pixel whose center pall-frame pixel t ray crossed (fx_pall: floor((t + 0.5)·factor)),
@@ -322,29 +328,50 @@ vec3 ballLitWorld(ivec2 full, vec3 n, float kept, vec3 added) {
     return glass.rgb + glass.a * (shown / max(max(max(shown.r, shown.g), shown.b), 1.0));
 }
 
+// Total optical depth and the ground component rendered behind its own young surface.
+// Other mushrooms, suspended mist, conventional smoke and the head outside the wall table
+// supply foreground extinction even on a ray through the wall owner's ground layer.
+vec2 mediumDepth(vec3 dir, float start, float end) {
+    vec2 depth = pallDepth(dir, start, end) + mushDepthRange(Sampler7, dir, start, end, 8, PallSlot0[0].xy);
+    if (smokeOn()) {
+        vec2 span = pallBox(dir, SmokeMin, SmokeMax);
+        float a = max(span.x, start), b = min(span.y, end);
+        if (b > a) depth.x += smokeTau(dir * a, dir, b - a, 6);
+    }
+    return depth;
+}
+
 // The pall on this pixel's ray up to a see-through surface at view-axis distance surface: the near volume up to it
 // (froxelNear, exact as the composite takes it to the world), and beyond the volume's end the rays' pall from there to the
 // world (rays) cut at the surface by the noiseless field and the conventional smoke's mean field, light in the same ratio
 // to opacity (as upsample does). The mushroom contributes extinction on the same interval. Light and
 // transmittance never exceed the whole ray's (laid): the part in front of the surface is a part of it.
-vec4 mediumTo(float surface, ivec2 full, vec3 dir, float nearEnd, vec4 rays, vec4 laid) {
+vec4 mediumTo(float surface, ivec2 full, vec3 dir, float nearEnd, vec4 rays, vec4 laid, bool wall) {
+    vec2 depths = vec2(0.0);
+    float axis = max(dot(dir, PallForward), 1e-3);
     vec4 beyond = vec4(0.0, 0.0, 0.0, 1.0);
     if (surface > nearEnd && 1.0 - rays.a > 0.0) {
-        float axis = max(dot(dir, PallForward), 1e-3), a = nearEnd / axis, b = surface / axis;
-        // the rays march the pall fields, the wall heads and conventional smoke (fx_pall): all of them up to the surface
-        float depth = pallTau(dir, a, b);
-        if (smokeOn()) {
-            vec2 span = pallBox(dir, SmokeMin, SmokeMax);
-            float t0 = max(span.x, a), t1 = min(span.y, b);
-            if (t1 > t0) depth += smokeTau(dir * t0, dir, t1 - t0, 6);
-        }
-        float tau = exp(-depth) * mushTransmitRange(Sampler7, dir, a, b, 8);
+        depths = mediumDepth(dir, nearEnd / axis, surface / axis);
+        float tau = exp(-depths.x);
         tau = max(tau, rays.a);
         beyond = vec4(rays.rgb * clamp((1.0 - tau) / max(1.0 - rays.a, 1e-4), 0.0, 1.0), tau);
     }
     vec4 front = beyond;
     if (PallFroxel.z > 0.0) front = froxelOver(froxelNear(Sampler11, PallFroxel, vec2(full) + 0.5, min(surface, nearEnd)), beyond);
-    return vec4(min(front.rgb, max(laid.rgb, vec3(0.0))), max(front.a, laid.a));
+    front = vec4(min(front.rgb, max(laid.rgb, vec3(0.0))), max(front.a, laid.a));
+    if (wall && front.a < 1.0 && PallSlot0[1].w > 0.5) {
+        // Across the radial handoff, use the independent media's transmission up
+        // to the first occupied wall sample. The rest of the ground medium still
+        // appears through the surface's remaining transmission.
+        float ownership = wallShare(PallYoung, length((dir * (surface / axis)).xz - PallSlot0[0].xy));
+        if (ownership <= 0.0) return front;
+        if (nearEnd > 0.0) depths += mediumDepth(dir, 0.0, min(surface, nearEnd) / axis);
+        float through = exp(-max(depths.x - depths.y, 0.0));
+        float t = mix(front.a, max(front.a, through), ownership);
+        front.rgb *= (1.0 - t) / (1.0 - front.a);
+        front.a = t;
+    }
+    return front;
 }
 
 void main() {
@@ -398,7 +425,7 @@ void main() {
         wall = wallLayer(Sampler4, Sampler1, vec2(full) + 0.5, depth, DwDiv);
         if (wall.light.a < 1.0) {
             if (air.a < 1.0 || any(greaterThan(air.rgb, vec3(0.0))))
-                beforeWall = mediumTo(wall.depth.z, full, dir0, nearEnd, rays, air);
+                beforeWall = mediumTo(wall.depth.x, full, dir0, nearEnd, rays, air, true);
             pall = insertWall(air, beforeWall, wall.light);
         }
     }
@@ -469,10 +496,10 @@ void main() {
     if (FxSee > 0.5 && pallValid(pall)) {
         float surface = pallScene(texelFetch(Sampler1, full, 0).g);
         if (seeBehind(depth, surface)) {
-            vec4 front = mediumTo(surface, full, dir0, nearEnd, rays, wall.light.a < 1.0 ? air : laid);
+            vec4 front = mediumTo(surface, full, dir0, nearEnd, rays, wall.light.a < 1.0 ? air : laid, false);
             if (wall.light.a < 1.0) {
                 vec4 nearWall = wallTo(wall, surface);
-                vec4 before = surface >= wall.depth.z ? beforeWall : front;
+                vec4 before = surface >= wall.depth.x ? beforeWall : front;
                 front = insertWall(front, before, nearWall);
             }
             vec4 g = texelFetch(FxGlass, full, 0);

@@ -3,7 +3,7 @@
 const float DW_NODES = 128.0;
 float wallFootprint(float cut, float r) {
     if (cut <= 0.0) return 1.0;
-    return smoothstep(cut, cut + 40.0, r);
+    return smoothstep(cut - 40.0, cut, r);
 }
 
 float wallShare(vec4 ring, float r) {

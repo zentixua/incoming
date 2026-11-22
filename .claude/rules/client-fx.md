@@ -924,7 +924,7 @@ paths:
   when the pass can draw it: all three programs ready, primary view, one detonation in the slots, no water under the
   pall (spray and surge stay the pall's), lofted dust left in the young ring. The dust lies on the pall's terrain map
   (`pallRelief`) and never indoors (`pallOpen`), none under the fireball's ground footprint (the pall keeps its own dust
-  there, `PallYoung.z`). The last table spacing fades back to the pall head. One radial share in
+  there, fading across the inner 40 blocks of the footprint's rim, `PallYoung.z`). The last table spacing fades back to the pall head. One radial share in
   `wall_ownership.glsl` governs the wall, lofted soil, head and the corresponding part of the eye ray limit. Where the scene has no depth the ray ends on the relief traced from the eye (`pallFloor`, as the
   pall's); where the world is drawn its depth alone ends it. The march, resolve and composite judge "the same place" by one
   rule (`pallSamePlace`: a looser rule in one pass let dust from behind a foreground edge through another). The frame air
@@ -935,9 +935,9 @@ paths:
   each history sample checked against the previous depth, clamped to the depth-alike 3 × 3 neighbourhood with the pixel's
   own sample, restarted on another detonation, a clock jump or a view resize); a
   fixed offset sparkles along the far top where 9–18 m steps cross the moving billowed surface. Light paths see the large shapes only: a shadow tap
-  reading the fine texture or the head's front-riding lumps re-shaded the approaching face every frame. The march records its occupied view depths and opacity-weighted distance. The pall composite inserts its resolved light
-  at that distance, reconstructs the medium in front from the near volume and far fields, and splits the occupied
-  interval at glass. As for a pane, the far field assigns light in proportion to extinction: dark smoke in front of the
+  reading the fine texture or the head's front-riding lumps re-shaded the approaching face every frame. The march records its occupied view depths and opacity-weighted distance. The pall composite reconstructs the foreground up to the first occupied depth and splits the interval at glass.
+  Where the young surface owns the ground layer, its haze and the soil lifted from it into the stem form the
+  background of that surface. Detached mushroom matter and conventional smoke keep their foreground extinction. As for a pane, the far field assigns light in proportion to extinction: dark smoke in front of the
   wall can receive some light from a bright mushroom behind it. Quads and source probes use the atlas on screen and
   the full dust field outside it. Each tap contributes only its dust in front of the pixel's depth, including where
   one continuous surface crosses several depth samples. Cost at HIGH
