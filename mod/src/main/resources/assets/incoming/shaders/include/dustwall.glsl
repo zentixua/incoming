@@ -167,9 +167,9 @@ vec3 dwAir(vec3 q, float a, float r, float top, out float ph) {
     pw.xz -= rdir * (60.0 * (1.0 - exp(-a / 1.2)) * exp(-a / 6.0) + 8.0 * sin(0.45 * a)) * yy;
     // residual turbulence behind the front: neighbouring parcels circle on slow orbits (20 m, 5 m/s; phases varying over
     // ~150 m), so the settled dust keeps swirling and drifting sideways as real dust does, never frozen, without the
-    // endless shear a steady flow field would stretch it into; they turn either way (sense and ellipse from a ~150 m field
-    // of zero mean): orbits of one sense everywhere read as the whole mass turning around ground zero
-    float sw = 6.2832 * dwNoise3(vec3(q.xz / 150.0, 71.3)), hand = 2.0 * dwNoise3(vec3(q.xz / 150.0, 23.9)) - 1.0;
+    // endless shear a steady flow field would stretch it into; they turn either way (sense and ellipse from the phase field,
+    // zero mean): orbits of one sense everywhere read as the whole mass turning around ground zero
+    float sw = 6.2832 * dwNoise3(vec3(q.xz / 150.0, 71.3)), hand = sin(3.0 * sw);
     pw.xz -= 20.0 * vec2(cos(0.25 * a + sw), hand * sin(0.25 * a + sw)) * (1.0 - exp(-a / 1.5)) * (0.6 + 0.4 * yy);
     // gusts right behind the front: the hit air keeps surging forward and sideways in ~200 m gust cells whose push
     // changes over a few seconds, strongest just after the front and calming over ~6 s (presentation)
@@ -283,13 +283,6 @@ float dwDensity(vec3 g, bool coarse) {
     float swell = dwBulge(pw, a);
     if (!coarse) gDwSwell = swell;
     top *= 1.0 + swell;
-    // texture fixed in the air mass: billows of ~20 × 13 m and finer, the rising and settling top reveals and hides them
-    vec3 tq = vec3(pw.x, pw.y - 0.45 * ph, pw.z) / vec3(20.0, 13.0, 20.0);
-    // (light paths see the billows' two first octaves but not the head's lumps riding with the front: those made the
-    // shadow toward the fireball, and the face's shade with it, change every frame: the approaching face shimmered)
-    float n = coarse ? dwFbm2(tq, 0.0) : dwFbm(tq, 1.0 / 13.0);
-    // cauliflower lumps of the top, ~35 m and finer, in the same air
-    float bl = coarse ? 0.42 : dwBillow(vec3(pw.x, pw.y - 0.3 * ph, pw.z) / vec3(34.0, 22.0, 34.0) + 11.0, 1.0 / 22.0);
     // Distance-aware frame for the head's texture. The face and crest run at 470 m/s through the air: an air-fixed texture
     // on them is new air every frame, the far head churned (Artem on take 23; in-game far detail change per 0.1 s 0.25
     // against take 11's 0.20). Away from the eye the head (its first 0.3–0.8 s) carries the texture with it, rolling back
@@ -298,6 +291,16 @@ float dwDensity(vec3 g, bool coarse) {
     // fluttered: harness passage d2 2.7 against 1.1). The handover lies in a band fixed to the eye (300–900 m) that a head
     // point crosses in ~1.3 s, never within a few frames
     float headTex = (1.0 - smoothstep(0.3, 0.8, a0)) * smoothstep(300.0, 900.0, length(q.xz - DwEye.xz));
+    vec3 tq = vec3(pw.x, pw.y - 0.45 * ph, pw.z) / vec3(20.0, 13.0, 20.0);
+    float n = 0.5, bl = 0.42;
+    if (headTex < 1.0) {
+        // texture fixed in the air mass: billows of ~20 × 13 m and finer, the rising and settling top reveals and hides
+        // them (light paths see the billows' two first octaves but not the head's lumps riding with the front: those
+        // made the shadow toward the fireball, and the face's shade with it, change every frame: the face shimmered)
+        n = coarse ? dwFbm2(tq, 0.0) : dwFbm(tq, 1.0 / 13.0);
+        // cauliflower lumps of the top, ~35 m and finer, in the same air
+        if (!coarse) bl = dwBillow(vec3(pw.x, pw.y - 0.3 * ph, pw.z) / vec3(34.0, 22.0, 34.0) + 11.0, 1.0 / 22.0);
+    }
     if (headTex > 0.0) {
         vec3 hc = vec3(atan(q.z, q.x) * DW_ARC, q.y, DwRing.x - r + 10.0 * DwEye.w);
         vec3 hq3 = hc / vec3(20.0, 13.0, 20.0) + 41.0;

@@ -81,8 +81,8 @@ class DustWallGlslTest {
     @Test
     void billowTextureRidesWithTheFrontOnlyAwayFromTheEye() throws IOException {
         String s = glsl();
-        Matcher n = Pattern.compile("\\bfloat n = [^;]*;").matcher(s), bl = Pattern.compile("\\bfloat bl = [^;]*;").matcher(s);
-        assertTrue(n.find() && bl.find(), "texture lines in dwDensity");
+        Matcher n = Pattern.compile("\\bn = coarse \\? [^;]*;").matcher(s), bl = Pattern.compile("\\bbl = dwBillow\\([^;]*;").matcher(s);
+        assertTrue(n.find() && bl.find(), "the air's texture lines in dwDensity");
         assertTrue(n.group().contains("tq") && bl.group().contains("pw."), "n and bl sample the air (tq, pw)");
         Matcher head = Pattern.compile("float headTex = \\(1\\.0 - smoothstep\\([0-9.]+, ([0-9.]+), a0\\)\\) \\* smoothstep\\(([0-9.]+), ([0-9.]+), length\\(q\\.xz - DwEye\\.xz\\)\\);").matcher(s);
         assertTrue(head.find(), "the head's texture weight: by age and by distance from the eye");
