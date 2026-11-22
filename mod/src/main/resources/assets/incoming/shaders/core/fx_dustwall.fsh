@@ -45,7 +45,10 @@ out vec4 fragColor;
 
 void main() {
     ivec2 size = textureSize(Sampler1, 0);
-    vec2 at = min((floor(gl_FragCoord.xy) + 0.5) * DwDiv, vec2(size) - 0.5);
+    // the ray moves within its march pixel every frame (R2 sequence) and the history averages it: a quarter-resolution
+    // silhouette (the wall's lower edge, nearly level) drew a staircase of identical 4-pixel rows
+    vec2 sub = fract(vec2(0.7548777, 0.5698403) * DwFrame.x) - 0.5;
+    vec2 at = clamp((floor(gl_FragCoord.xy) + 0.5 + sub) * DwDiv, vec2(0.5), vec2(size) - 0.5);
     vec2 ndc = at / vec2(size) * 2.0 - 1.0;
     vec4 farPoint = InvViewProj * vec4(ndc, 1.0, 1.0);
     vec3 dir = normalize(farPoint.xyz / farPoint.w);

@@ -111,9 +111,10 @@ uniform mat4 PallWhirlLean;
 // frame world ends no closer than PallFloorFrom horizontal blocks from eye
 uniform sampler2D Sampler5;
 uniform sampler2D Sampler6;
-// young dust wall drawn by its own pass (DustWallPass, presentation model): per slot (xy — slot 0, zw — slot 1) the radius
-// from ground zero, blocks, inside which the pall's own dust and head are whole, and the radius beyond which this pass
-// alone draws (the front some seconds ago); equal — the pall draws everything
+// young dust wall drawn by its own pass (DustWallPass, presentation model; slot 0 only, one detonation): x the radius from
+// ground zero, blocks, inside which the pall's own dust and head are whole, y the radius beyond which the pass alone draws
+// (the front some seconds ago), z the fireball's ground footprint, where the pass draws no dust and the pall keeps its own;
+// x = y — the pall draws everything
 uniform vec4 PallYoung;
 uniform vec4 PallGround0;
 uniform vec4 PallGround1;
@@ -512,11 +513,15 @@ vec3 pallBallLight(vec4 G, vec4 H, float d) {
 
 // Add slot pall at p to s; V slot dust wall; ground, R slot terrain/water map and parameters; W slot water;
 // G, H slot dust-wall light (PallGlow, PallHot); dir view ray; cone smallest resolved size here (blocks)
-void slot(mat4 S, mat4 V, sampler2D ground, vec4 R, vec4 W, vec4 G, vec4 H, vec3 p, vec3 sunDir, vec3 dir, float cone, vec4 inflow, vec2 young, inout Sample s) {
+void slot(mat4 S, mat4 V, sampler2D ground, vec4 R, vec4 W, vec4 G, vec4 H, vec3 p, vec3 sunDir, vec3 dir, float cone, vec4 inflow, vec3 young, inout Sample s) {
     if (S[1].w < 0.5) return;
     // the young wall's dust is the dust-wall pass's: the pall hands its lofted dust over across [young.x, young.y]; haze of
     // fires, mist and the stem's inflow stay the pall's
-    float keep = young.y > young.x ? 1.0 - smoothstep(young.x, young.y, length(p.xz - S[0].xy)) : 1.0;
+    float rg = length(p.xz - S[0].xy);
+    float keep = young.y > young.x ? 1.0 - smoothstep(young.x, young.y, rg) : 1.0;
+    // under the fireball the pass draws no dust: the pall keeps its own there from the start (hidden until the handover
+    // ring reached it ~18 s after the burst, the dust around the stem's foot burst in like a second explosion)
+    if (young.z > 0.0) keep = max(keep, 1.0 - smoothstep(young.z - 40.0, young.z, rg));
     // layer floor is local terrain (PallGround map): valley pall is still a slab, fires/ground at its bottom, not epicenter
     // ground height; no map, epicenter ground
     float floorUp = pallRelief(ground, S, R, p.xz);
@@ -1074,8 +1079,8 @@ vec4 pallSource(vec3 p, float cone, vec4 inflow, out vec3 dustLight) {
     vec3 dir = gDir, sunDir = gSun;
     float muS = gMuS, c = gC, mv = gMv;
     Sample s = emptySample();
-    slot(PallSlot0, PallWall0, Sampler5, PallGround0, PallWater0, PallGlow0, PallHot0, p, sunDir, dir, cone, inflow, PallYoung.xy, s);
-    slot(PallSlot1, PallWall1, Sampler6, PallGround1, PallWater1, PallGlow1, PallHot1, p, sunDir, dir, cone, inflow, PallYoung.zw, s);
+    slot(PallSlot0, PallWall0, Sampler5, PallGround0, PallWater0, PallGlow0, PallHot0, p, sunDir, dir, cone, inflow, PallYoung.xyz, s);
+    slot(PallSlot1, PallWall1, Sampler6, PallGround1, PallWater1, PallGlow1, PallHot1, p, sunDir, dir, cone, inflow, vec3(0.0), s);
     vec3 f0 = vec3(0.0), f1 = vec3(0.0);
     vec2 around0 = vec2(0.0), around1 = vec2(0.0);
     if (all(greaterThanEqual(p, PallFireMin)) && all(lessThanEqual(p, PallFireMax))) {
@@ -1752,8 +1757,8 @@ void whirlSetup(vec3 dir, float scene, float at) {
         if (sp.y <= sp.x || (at >= 0.0 && (at < sp.x || at > sp.y))) continue;
         vec3 mid = dir * (0.5 * (sp.x + sp.y));
         Sample m = emptySample();
-        slot(PallSlot0, PallWall0, Sampler5, PallGround0, PallWater0, PallGlow0, PallHot0, mid, sunDir, dir, 1e9, vec4(0.0), PallYoung.xy, m);
-        slot(PallSlot1, PallWall1, Sampler6, PallGround1, PallWater1, PallGlow1, PallHot1, mid, sunDir, dir, 1e9, vec4(0.0), PallYoung.zw, m);
+        slot(PallSlot0, PallWall0, Sampler5, PallGround0, PallWater0, PallGlow0, PallHot0, mid, sunDir, dir, 1e9, vec4(0.0), PallYoung.xyz, m);
+        slot(PallSlot1, PallWall1, Sampler6, PallGround1, PallWater1, PallGlow1, PallHot1, mid, sunDir, dir, 1e9, vec4(0.0), vec3(0.0), m);
         vec3 sun = pallSunAt(mid);
         vec3 lit = scattered(m, PALL_SOOT_G * gMv, sun) + sun * (gSootSun * exp(-m.tau / gMuS));
         float g0 = storm(Sampler3, PallSlot0, PallFire0, mid, 0.0, 1.0).y, g1 = storm(Sampler4, PallSlot1, PallFire1, mid, 0.0, 1.0).y;

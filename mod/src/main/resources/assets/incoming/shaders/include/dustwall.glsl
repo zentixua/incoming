@@ -119,10 +119,20 @@ float dwFbm2(vec3 p, float fq) {
     return 0.6667 * mix(0.5, dwNoise3(p), dwLod(fq)) + 0.3333 * mix(0.5, dwNoise3(p * 2.07 + vec3(1.7, 9.2, 3.1)), dwLod(fq * 2.07));
 }
 
+// a ground point's seed (0..1, mean ~0.5): smooth noise over several scales from `scale` to a quarter of it, on a plane
+// oblique to the noise lattice and domain-warped, so no cell, row or period shows. One value per lattice cell (value
+// noise flattens at its nodes) laid the wall's birth line as a staircase of identical steps and scallops along the front
+float dwSeed(vec2 xz, float scale, float k) {
+    vec2 w = vec2(dwNoise3(vec3(xz / (3.0 * scale), k + 3.1)), dwNoise3(vec3(xz / (3.0 * scale), k + 8.7))) - 0.5;
+    vec2 p = (xz + w * 1.2 * scale) / scale;
+    vec3 o = vec3(p.x, p.y, 0.43 * p.x - 0.71 * p.y + k);
+    return 0.55 * dwNoise3(o) + 0.3 * dwNoise3(o * 2.03 + 5.3) + 0.15 * dwNoise3(o * 4.11 + 9.7);
+}
+
 // overshoot of a ground point's column over the settled layer: 1.54–1.76 of the envelope (its visible crest ~1.4–1.6x the
-// layer behind), from the point's own ground (world-fixed, ~60 m patches over ~200 m), so the hump is uneven along the front
+// layer behind), from the point's own ground (`dwSeed`, patches ~40–160 m), so the hump is uneven along the front
 float dwHump(vec2 xz) {
-    return 1.54 + 0.22 * smoothstep(0.25, 0.75, 0.6 * dwNoise3(vec3(xz / 60.0, 33.4)) + 0.4 * dwNoise3(vec3(xz / 200.0, 5.5)));
+    return 1.54 + 0.22 * smoothstep(0.25, 0.75, dwSeed(xz, 160.0, 33.4));
 }
 
 // the dust envelope at age a (s since the front passed) over settled height h with hump k (presentation): born at zero on
@@ -247,13 +257,13 @@ float dwDensity(vec3 g, bool coarse) {
     float a0 = DwEye.w - n0.x;
     if (a0 < 0.0 || n0.z <= 0.0) return 0.0;
     // One model, per-point birth (LOOK Trait 0): the front is a line of births running over the ground. Each ground point
-    // tears up its own dust when the front reaches it: its seed (world-fixed, ~30 m and ~90 m) sets its birth a little
+    // tears up its own dust when the front reaches it: its seed (world-fixed, `dwSeed`, ~15–60 and ~50–200 m) sets its birth a little
     // after the front's arrival (lagging patches open clefts in the front line), how much it raises, its column's height
     // and overshoot; its column rises, overshoots and settles by its own age and stays where it was born. Nothing rides
     // with the front: a ramp surface shared by every point read as one mass carried out from the centre
     // (light paths take the mean point: their shade is smooth)
-    float s1 = coarse ? 0.5 : dwNoise3(vec3(q.xz / 30.0, 17.3)), s2 = coarse ? 0.5 : dwNoise3(vec3(q.xz / 90.0, 29.1));
-    float delay = 0.10 * smoothstep(0.5, 0.85, s2) + 0.04 * s1;
+    float s1 = coarse ? 0.5 : dwSeed(q.xz, 60.0, 17.3), s2 = coarse ? 0.5 : dwSeed(q.xz, 200.0, 29.1);
+    float delay = 0.12 * clamp(1.6 * s2 - 0.55, 0.0, 1.0) * (0.6 + 0.8 * s1);
     float h = n0.y * mix(0.88, 1.02, s2), k = dwHump(q.xz);
     float top0 = max(dwEnvelope(a0, h, k), 1.0);
     if (q.y > top0 * (1.0 + DW_BULGE) * DW_HAZE + 6.0) return 0.0;

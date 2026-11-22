@@ -12,7 +12,8 @@ moved in, with no history, and reads the previous frame on the march lattice whe
 divisor (its last column too); the march stops at the world behind the pixel, a straight-down ray sees the layer as a
 slightly tilted one does, the layer lies on the local ground (a valley), a ray over rising ground does not skip it, no
 dust lies inside the fireball's ground footprint, and the head does not turn around ground zero
-nor ride out with the front. Optional arguments: a Java 21
+nor ride out with the front,
+and the wall's edges along the front do not repeat. Optional arguments: a Java 21
 executable and the Veil parser classpath to link the programs after Veil's parse and print as well (VeilPrintProbe.java
 beside this script is not shipped; ShaderSourceTest covers Veil in the build)."""
 import json
@@ -278,6 +279,74 @@ void main() {
     check(abs(out) < 60.0, f"the head's dust rides out with the front: {out:+.0f} m/s, expected tens of m/s at most")
 
 
+def period_case():
+    """No repeating pieces along the wall: its lower edge (where the dust 3 blocks up begins behind the front) and its top
+    (the highest dust 100 blocks behind the front) along a 60 degree arc at 4.5 km; the strongest autocorrelation peak of
+    each profile's slope magnitude past its first trough (to 600 m) stays low (one value per noise cell, flat inside, drew a staircase repeating every cell)."""
+    core, expand = gl["CORE"], gl["expand"]
+    src = expand("""#version 150
+float dwFloorEye(vec2 xz) { return 0.0; }
+float dwOpenEye(vec3 p) { return 1.0; }
+vec2 dwSoilAt(vec2 xz) { return vec2(0.0); }
+#moj_import <incoming:dustwall.glsl>
+uniform float Front;
+uniform float Upper;
+out vec4 fragColor;
+void main() {
+    float b = radians(-120.0 + 60.0 * gl_FragCoord.x / 2048.0);
+    vec2 d = vec2(cos(b), sin(b));
+    float edge = 0.0;
+    if (Upper > 0.5) {
+        for (int i = 0; i < 240; i++) {
+            float y = 240.0 - float(i);
+            if (dwDensity(vec3(d.x * (Front - 100.0), y, d.y * (Front - 100.0)), false) > 2e-3) { edge = y; break; }
+        }
+    } else {
+        for (int i = 0; i < 300; i++) {
+            float r = Front + 5.0 - float(i);
+            if (dwDensity(vec3(d.x * r, 3.0, d.y * r), false) > 2e-3) { edge = r - Front; break; }
+        }
+    }
+    fragColor = vec4(edge, 0.0, 0.0, 1.0);
+}
+""")
+    p = gl["compileProgram"](gl["compileShader"]((core / "fx_dustwall.vsh").read_text(), g.GL_VERTEX_SHADER),
+                             gl["compileShader"](src, g.GL_FRAGMENT_SHADER), validate=False)
+    target(2048, 1, [(g.GL_RGBA32F, g.GL_RGBA)])
+    g.glUseProgram(p)
+    reach, arrive = 9000.0, 7.63
+    nodes = [(arrive * (i / 127 * reach / 4500.0) ** 1.25, 68.0, 0.11, 0.0) for i in range(128)]
+    bind(p, 2, texture(g.GL_RGBA32F, g.GL_RGBA, 128, 1, nodes))
+    g.glActiveTexture(g.GL_TEXTURE0 + 12)
+    noise = g.glGenTextures(1)
+    g.glBindTexture(g.GL_TEXTURE_3D, noise)
+    for f in (g.GL_TEXTURE_MIN_FILTER, g.GL_TEXTURE_MAG_FILTER):
+        g.glTexParameteri(g.GL_TEXTURE_3D, f, g.GL_LINEAR)
+    for f in (g.GL_TEXTURE_WRAP_S, g.GL_TEXTURE_WRAP_T, g.GL_TEXTURE_WRAP_R):
+        g.glTexParameteri(g.GL_TEXTURE_3D, f, g.GL_REPEAT)
+    lattice = np.random.default_rng(7).random((128, 128, 128), dtype=np.float32)
+    g.glTexImage3D(g.GL_TEXTURE_3D, 0, g.GL_R32F, 128, 128, 128, 0, g.GL_RED, g.GL_FLOAT, lattice)
+    g.glUniform1i(loc(p, "DwNoise"), 12)
+    g.glUniform4f(loc(p, "DwBall"), 0, 1200, 0, 1700)
+    t = arrive + 1.0
+    front = 4500 * (t / arrive) ** 0.8
+    g.glUniform4f(loc(p, "DwEye"), 0, 120, 4500, t)
+    g.glUniform4f(loc(p, "DwRing"), front, 0, 400, reach)
+    g.glUniform1f(loc(p, "Front"), front)
+    step = np.radians(60.0) * front / 2048
+    for upper, name in ((0, "lower edge"), (1, "top")):
+        g.glUniform1f(loc(p, "Upper"), upper)
+        quad(p)
+        e = read(2048, 1)[0, :, 0].astype(np.float64)
+        # a staircase (one value per noise cell, flat inside, a step to the next) has a heavy-tailed slope: flat runs and
+        # sudden steps; smooth multi-scale noise has a near-normal slope (kurtosis ~3)
+        sl = np.diff(np.convolve(e, np.ones(3) / 3, "valid"))
+        sl = sl - sl.mean()
+        kurt = float((sl ** 4).mean() / max((sl ** 2).mean() ** 2, 1e-12))
+        print(f"period: the wall's {name} (std {e.std():.1f} m) slope kurtosis {kurt:.1f} over the arc")
+        check(kurt < 6.0, f"the wall's {name} steps like a staircase (slope kurtosis {kurt:.1f}), expected smooth noise (< 6)")
+
+
 def link_after_veil(name, java, classpath):
     core = gl["CORE"]
     setup = json.loads((core / f"{name}.json").read_text())
@@ -310,4 +379,5 @@ composite_cases(programs["_composite"])
 resolve_cases(programs["_resolve"])
 march_cases()
 turning_case()
+period_case()
 sys.exit(bool(gl["FAILED"]))

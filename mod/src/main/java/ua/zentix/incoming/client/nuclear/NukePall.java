@@ -356,7 +356,9 @@ public final class NukePall {
         }
         // no lofted dust left in the young ring (it has run past the dust field): no pass, the pall keeps everything
         if (!any) return;
-        f.young.set((float) inner, (float) Math.max(inner + 1, whole), 0, 0);
+        // the fireball's ground footprint: the pass draws no dust there, the pall keeps its own
+        w.cut = (float) d.blocks(a.wall.underBall(t));
+        f.young.set((float) inner, (float) Math.max(inner + 1, whole), w.cut, 0);
         w.ring[0] = (float) front;
         w.ring[1] = (float) inner;
         w.ring[2] = (float) (top * ua.zentix.incoming.client.fx.layer.DustWallPass.TOP_OVER_LAYER + 6);
@@ -384,9 +386,8 @@ public final class NukePall {
         w.windX = (float) (cos * wind);
         w.windZ = (float) (sin * wind);
         w.source = a;
-        // ten game ticks of the detonation clock; the fireball's ground footprint; sand's colours
+        // ten game ticks of the detonation clock; sand's colours
         w.clockJump = (float) (10 / (20.0 * d.scale()));
-        w.cut = (float) d.blocks(a.wall.underBall(t));
         w.sandAlbedo.set((float) SAND_W[0], (float) SAND_W[1], (float) SAND_W[2]);
         w.sandBulk.set((float) SAND[0], (float) SAND[1], (float) SAND[2]);
         w.active = true;

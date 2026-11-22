@@ -387,9 +387,9 @@ public final class PallPass {
     /** Frame pall — renderer input ({@code client/nuclear/NukePall#frame}). */
     public static final class Frame {
         /**
-         * Young dust wall drawn by its own pass ({@link DustWallPass}): per slot (xy — slot 0, zw — slot 1) the radius from ground
-         * zero, blocks, inside which the pall draws its dust and head whole, and the radius beyond which the pass alone draws them;
-         * zeroes — the pall draws everything.
+         * Young dust wall drawn by its own pass ({@link DustWallPass}, slot 0 only): x the radius from ground zero, blocks, inside
+         * which the pall draws its dust and head whole, y the radius beyond which the pass alone draws them, z the fireball's
+         * ground footprint, where the pass draws no dust and the pall keeps its own; zeroes — the pall draws everything.
          */
         public final Vector4f young = new Vector4f();
         /** The young wall's pass inputs ({@link DustWallPass}); inactive — no young wall this frame. */

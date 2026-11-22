@@ -921,7 +921,8 @@ paths:
   when the pass can draw it: all three programs ready, primary view, one detonation in the slots, no water under the
   pall (spray and surge stay the pall's), lofted dust left in the young ring. The dust lies on the pall's terrain map
   (`pallRelief`) and never indoors (`pallOpen`), none under the fireball's ground footprint. Flicker is fixed in time,
-  not by blur: the sample grid is fixed along each ray from the eye, its offset moves every frame, and
+  not by blur: the sample grid is fixed along each ray from the eye, its offset moves every frame, the ray moves within its
+  march pixel every frame (a quarter-resolution silhouette otherwise draws a staircase of 4-pixel rows), and
   `fx_dustwall_resolve` averages ~10 frames (reprojected through the settled layer top, read on the march lattice,
   clamped to the depth-alike 3 × 3 neighbourhood, restarted on another detonation, a clock jump or a view resize); a
   fixed offset sparkles along the far top where 9–18 m steps cross the moving billowed surface. Light paths see the large shapes only: a shadow tap
