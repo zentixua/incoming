@@ -48,6 +48,14 @@ public interface Craft {
      */
     double clearAlong(Vec3 to, double margin);
 
+    /**
+     * Something blocks the column straight above {@code aim}, from {@code margin} blocks over it (the fuze reaches those)
+     * up to the craft's height: a roof, a floor or ground over a buried aim. Such an aim is never seen from above, so a
+     * blocked line to it never opens; an uncovered aim's line opens at overflight at the latest. Read like
+     * {@link #clearAlong}.
+     */
+    boolean covered(Vec3 aim, double margin);
+
     /** Hold {@code desired} altitude ({@link AltitudeHold}) with flight-phase turns {@code a}. */
     default void holdAltitude(double desired, double gain, WeaponSpec.Handling h, WeaponSpec.Agility a) {
         altitude().hold(flight(), position().y, desired, gain, h, a);

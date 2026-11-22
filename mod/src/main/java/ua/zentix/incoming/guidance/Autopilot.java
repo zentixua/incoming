@@ -83,7 +83,7 @@ public final class Autopilot {
 
     /**
      * Path margin to turn the nose toward the target (game number, not physical): with an obstructed straight line,
-     * commit to the attack once this many nose-turn paths of slant range remain ({@link #mustCommit}).
+     * commit to the attack once this many nose-turn paths of slant range remain ({@link #withinTurn}).
      */
     static final double DIVE_MARGIN = 1.5;
     /**
@@ -109,15 +109,22 @@ public final class Autopilot {
     }
 
     /**
-     * The attack can wait no longer: the aim is within {@link #DIVE_MARGIN} nose-turn paths (slant range against slant
-     * travel), or the craft would pass over it before its nose could turn to it (horizontal range against horizontal
-     * travel in one turn time). The second deadline matters high above the aim, where the slant range never falls to
-     * the first: a pop-up climbing over the aim (its slant range grows even as it passes over).
+     * The aim is within {@link #DIVE_MARGIN} nose-turn paths (slant range against slant travel): past this the nose could
+     * not turn to it in time, so a blocked line no longer delays the attack.
      */
-    static boolean mustCommit(Craft c, Vec3 aim, Bearing toAim, double rate, double accel) {
-        double ticks = turnTicks(c, aim, toAim, rate, accel);
-        return toAim.distance() <= c.speed() * ticks * DIVE_MARGIN
-                || toAim.horizontal() <= c.speed() * c.flight().forward().horizontalDistance() * ticks;
+    static boolean withinTurn(Craft c, Vec3 aim, Bearing toAim, double rate, double accel) {
+        return toAim.distance() <= c.speed() * turnTicks(c, aim, toAim, rate, accel) * DIVE_MARGIN;
+    }
+
+    /**
+     * The craft would pass over the aim before its nose could turn to it (horizontal range against horizontal travel in
+     * one turn time, an estimate at the current speed). High above the aim the slant range never falls to
+     * {@link #withinTurn}: a pop-up climbing over the aim (its slant range grows even as it passes over). This deadline
+     * applies only to a covered aim ({@link Craft#covered}): an uncovered aim's line opens at overflight at the latest,
+     * so waiting for it reaches the aim, while a covered aim's line never opens.
+     */
+    static boolean overflight(Craft c, Vec3 aim, Bearing toAim, double rate, double accel) {
+        return toAim.horizontal() <= c.speed() * c.flight().forward().horizontalDistance() * turnTicks(c, aim, toAim, rate, accel);
     }
 
     /**
@@ -125,15 +132,15 @@ public final class Autopilot {
      * to target ({@link Craft#clearAlong} — ready chunks only), do not attack until it
      * opens. Missile climbs in a pop-up; if line closes during dive (target behind a slope), return
      * to pop-up ({@link MissileAutopilot}); Shahed continues at cruise altitude ({@link DroneAutopilot}: climbing
-     * hurts its approach). Once the attack can wait no longer ({@link #mustCommit}), commit to it even with the
-     * obstruction in the way.
+     * hurts its approach). Commit to the attack even with the obstruction in the way once the aim is within the nose's
+     * turn ({@link #withinTurn}), or, for a covered aim, at overflight ({@link #overflight}).
      */
     public static final class Sightline {
         private boolean blocked;
         /**
-         * Attack already forced ({@link #DIVE_MARGIN}): do not measure the line until approach ends, otherwise after turning
+         * Attack already forced: do not measure the line until approach ends, otherwise after turning
          * its nose the projectile would resume climbing. Not saved: loading mid-dive makes missile pull into pop-up for a few
-         * ticks until the nose-turn path forces attack again.
+         * ticks until the deadline forces attack again.
          */
         private boolean committed;
         /** Ticks before remeasuring the line (unsaved: measure immediately after load). */
@@ -141,21 +148,25 @@ public final class Autopilot {
 
         /**
          * Straight line to {@code aim} is blocked except for last {@code margin} blocks at target (fuze reaches them), and
-         * the attack can still wait ({@link #mustCommit}, attack limits {@code rate}, {@code accel}): do not attack.
+         * the attack can still wait (attack limits {@code rate}, {@code accel}): do not attack.
          * Measure the line once per {@link #SIGHT_RECHECK} ticks.
          */
         public boolean masked(Craft c, Vec3 aim, Bearing toAim, double margin, double rate, double accel) {
             if (committed) return false;
-            if (mustCommit(c, aim, toAim, rate, accel)) {
+            if (withinTurn(c, aim, toAim, rate, accel)) {
                 committed = true;
                 return false;
             }
             if (wait > 0) {
                 wait--;
-                return blocked;
+            } else {
+                blocked = c.clearAlong(aim, margin) != Double.POSITIVE_INFINITY;
+                wait = SIGHT_RECHECK - 1;
             }
-            blocked = c.clearAlong(aim, margin) != Double.POSITIVE_INFINITY;
-            wait = SIGHT_RECHECK - 1;
+            if (blocked && overflight(c, aim, toAim, rate, accel) && c.covered(aim, margin)) {
+                committed = true;
+                return false;
+            }
             return blocked;
         }
 

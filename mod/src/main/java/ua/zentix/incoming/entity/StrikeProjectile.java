@@ -190,6 +190,14 @@ public abstract class StrikeProjectile extends Entity implements IEntityWithComp
         public double clearAlong(Vec3 to, double margin) {
             return StrikeProjectile.this.clearAlong(level(), to, margin);
         }
+
+        @Override
+        public boolean covered(Vec3 aim, double margin) {
+            double top = position().y;
+            if (top <= aim.y + margin) return false;
+            return clearBetween(level(), new Vec3(aim.x, aim.y + margin, aim.z), new Vec3(aim.x, top, aim.z))
+                    != Double.POSITIVE_INFINITY;
+        }
     };
     /** Route to entry point; null — straight to target. */
     @Nullable
@@ -1310,7 +1318,11 @@ public abstract class StrikeProjectile extends Entity implements IEntityWithComp
         Vec3 from = position();
         double length = from.distanceTo(to);
         if (length <= margin) return Double.POSITIVE_INFINITY;
-        Vec3 end = from.lerp(to, (length - margin) / length);
+        return clearBetween(level, from, from.lerp(to, (length - margin) / length));
+    }
+
+    /** Blocks from {@code from} to the first blocked cell on the segment to {@code end}, read as {@link #clearAlong}. */
+    private double clearBetween(Level level, Vec3 from, Vec3 end) {
         Vec3 start = from;
         if (!virtual) {
             Vec3 ready = Terrain.readyUntil(level, from, end);

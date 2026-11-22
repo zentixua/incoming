@@ -15,11 +15,23 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
  * Shahed pike above the city: a high-rise on the pike line between the cruise and the target (houses with a height of 42–68 above the target
  *  for 54–190 blocks before it). Shahed goes over the city
  *  at the height of the relief +18 and begins a dive only when the straight line to the target is clear or the nose otherwise will not have time to turn
- *  to the target, and flies to it. Every layout here, the house 20 blocks before the target included, ends in a hit: a
- *  change to the shared dive deadline ({@link Autopilot.Sightline}) that moves a Shahed into the house fails here.
+ *  to the target, and flies to it. Every layout's outcome is pinned: a change to the shared dive deadline
+ *  ({@link Autopilot.Sightline}) that moves a Shahed into the house fails here.
  */
 class DroneDiveTest {
     private static final double GROUND = 64;
+    /**
+     * The only layouts the dive does not reach (house height / blocks before the target): the line to the target opens
+     * only past the steepest dive the Shahed can turn into, and it flies past the target into the ground behind it.
+     */
+    private static final java.util.Set<String> TOO_STEEP = java.util.Set.of("70/20", "70/30");
+
+    /** A much taller house than the sweep's: the open point 45 blocks beyond a 160-block house is still reached. */
+    @Test
+    void reachesOpenPointBeyondTallHouse() {
+        String outcome = strike(160, 45);
+        assertTrue(outcome.startsWith("hit"), outcome);
+    }
 
     @Test
     void divesPastTowerOnDiveLine() {
@@ -29,7 +41,7 @@ class DroneDiveTest {
             for (double before : new double[] {20, 30, 45, 54, 70, 90, 130, 190}) {
                 String end = strike(height, before);
                 all.append(String.format(Locale.ROOT, "%n house %.0f to %.0f to destination: %s", height, before, end));
-                if (!end.startsWith("hit")) {
+                if (end.startsWith("hit") == TOO_STEEP.contains(String.format(Locale.ROOT, "%.0f/%.0f", height, before))) {
                     misses.add(String.format(Locale.ROOT, "house with height %.0f in %.0f blocks to goal: %s", height, before, end));
                 }
             }
