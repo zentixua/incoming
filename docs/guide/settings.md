@@ -23,6 +23,8 @@ Each player has their own, stored in `config/incoming-client.toml`.
 | Muffle distant and hidden strikes | on | distant strikes lose high tones, hidden ones sound muffled, and inside the dust pall all distant sounds are muffled |
 | Hints already shown | empty | first-use hints this game has already shown or whose action you have already used, such as the console hint the first time you hold a designator; clear the list to see them again |
 
+The game prepares the mushroom cloud and dust wall while loading resources. If the graphics card spends at least 250 ms but less than one second drawing the nuclear dust in one frame, the entire dust volume, including the advancing wall and the pall behind it, drops to its lowest detail for the rest of the session. At one second or more, the nuclear volume turns off for the rest of the session.
+
 The mod's sounds follow the Ambient/Environment volume slider.
 
 ## Keys
