@@ -134,7 +134,7 @@ final class Sandbox {
      * ticks a 30 fps take's frames advanced 25–28 ms with a 45–145 ms jump
      * every half second, and every moving thing in the clip lurched at ~2 Hz.
      */
-    private static final double GPU_FRAMES_PER_TICK = 24;
+    private static final double GPU_FRAMES_PER_TICK = 48;
     /** Seconds before a due frame from which the CPU renderer's world is slowed ({@link #paceFrame}). */
     private static final double PACE_LEAD = 2;
     /** Rate from arming to the first measured frames (≈ 2 frames per tick at 4 frames/s, the smoke-filled llvmpipe rate). */

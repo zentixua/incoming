@@ -219,7 +219,7 @@ times and the pall's budget are not frame costs: frame cost belongs to the GPU a
   nuke frame at 130 s took tens of minutes at 1–3 frames/s). A frame is taken at the first render whose age (tick +
   partial tick) reaches its second, never at a tick boundary: at whole ticks a GPU 30 fps clip advanced 25–28 ms per
   frame with a 45–145 ms jump every half second (each PNG write stalls the render thread ~0.1 s while game time runs),
-  and everything moving lurched at ~2 Hz, read as flicker. GPU takes slow the world to `GPU_FRAMES_PER_TICK` (24)
+  and everything moving lurched at ~2 Hz, read as flicker. GPU takes slow the world to `GPU_FRAMES_PER_TICK` (48)
   renders per tick; check `capture.json` ages (steps of 1/30 s) before judging motion in a clip. `shots` takes a time of day per frame
   (`<seconds>@<day time>`, e.g. `130@12500,130.5@12550`): a dusk strip in one take; the `SANDBOX shot` line logs it. A slowed
   take's sound is not real-time: `shot` records sound in a second take of the same effect at 20 ticks/s from the first
