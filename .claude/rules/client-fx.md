@@ -945,7 +945,8 @@ paths:
   As for a pane, the far field assigns light in proportion to extinction: dark smoke in front of the
   wall can receive some light from a bright mushroom behind it. Quads and source probes use the atlas on screen and
   the full dust field outside it. Each tap contributes only its dust in front of the pixel's depth, including where
-  one continuous surface crosses several depth samples. Cost at HIGH
+  one continuous surface crosses several depth samples. In RGBA16F, one transmission step changes reconstructed depth
+  by about 5% at 1% opacity and 1% at 5% opacity. Cost at HIGH
   (1/4 resolution, 128 steps, 2560×1600, RTX 4060): ~1–2 ms approaching, ~5–7 ms after the passage; the ray bound must stay
   under a 120 m camera, or every near-eye ray marches fine steps through empty air. Shader checks without a
   game: `tools/dust_wall_gl.py`.

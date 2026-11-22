@@ -278,13 +278,7 @@ public final class NukePall {
         float bottom = (float) (level.getMinBuildHeight() - eye.y);
         for (int i = 0; i < visible.size() && k < 2; i++) if (slot(visible.get(i), k, eye, partial, frustum, bottom, f)) SLOTTED[k++] = visible.get(i);
         if (k == 0 && f.mushroomCount == 0 && !f.ballsLit) return null;
-        f.young.zero();
-        f.dustWall.active = false;
-        // the young wall's own pass: primary view, one detonation in the slots, no water under its pall (spray and the base
-        // surge stay the pall's), all its programs ready; otherwise the pall draws the whole wall
-        // (the primary view first: preparing for a secondary view's size resized the primary's targets and dropped its history)
-        if (k == 1 && f.water0.w < 0.5 && !ua.zentix.incoming.client.fx.layer.FxViews.secondary()
-                && ua.zentix.incoming.client.fx.layer.DustWallPass.ready()) youngWall(SLOTTED[0], eye, partial, f);
+        prepareYoungWall(k > 0 ? SLOTTED[0] : null, eye, partial, f);
         // without pall use zero bounds: the ray cannot enter (inverted bounds would span the entire ray)
         if (k == 0) {
             f.min.zero();
@@ -295,10 +289,21 @@ public final class NukePall {
         FireStorms.frame(SLOTTED, k, eye, partial, frustum, Float.isNaN(clouds) ? 1e6f : (float) (clouds - eye.y), f);
         // ray reach from eye dust and optical depth above and below it (pallClip); disabled pall is not rendered, and
         // does not hide the mushroom behind it
+        f.eyeLofted.zero();
         if (q == PallPass.Quality.OFF) f.eyeDust.zero();
         else if (f.dustWall.active || ua.zentix.incoming.client.fx.layer.FxViews.secondary()) eyeDust(level, eye, partial, f);
         else f.eyeDust.set(sigma, tauUp, tauDown);
         return f;
+    }
+
+    static void prepareYoungWall(ClientNuclear.Active primary, Vec3 eye, float partial, PallPass.Frame f) {
+        f.young.zero();
+        f.dustWall.active = false;
+        // the young wall's own pass: primary view, one detonation in the slots, no water under its pall (spray and the base
+        // surge stay the pall's), all its programs ready; otherwise the pall draws the whole wall
+        // (the primary view first: preparing for a secondary view's size resized the primary's targets and dropped its history)
+        if (primary != null && f.slot1.m13() == 0 && f.water0.w < 0.5 && !ua.zentix.incoming.client.fx.layer.FxViews.secondary()
+                && ua.zentix.incoming.client.fx.layer.DustWallPass.ready()) youngWall(primary, eye, partial, f);
     }
 
     /**
@@ -410,7 +415,6 @@ public final class NukePall {
     /** Optical medium at a camera; never updates the player's ash, hearing or dust veil. */
     private static void eyeDust(ClientLevel level, Vec3 camera, float partial, PallPass.Frame f) {
         double extinction = 0, up = 0, down = 0;
-        f.eyeLofted.zero();
         for (ClientNuclear.Active active : ClientNuclear.detonations()) {
             Detonation d = active.d;
             double ticks = active.ticks(partial), dx = camera.x - d.burst().x, dz = camera.z - d.burst().z;
@@ -487,6 +491,7 @@ public final class NukePall {
         f.min.zero();
         f.max.zero();
         f.eyeDust.zero();
+        f.eyeLofted.zero();
         return f;
     }
 

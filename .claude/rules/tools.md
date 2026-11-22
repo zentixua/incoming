@@ -65,6 +65,9 @@ Prism: `~/.var/app/org.prismlauncher.PrismLauncher/data/PrismLauncher/` (`tools/
                                            harness): thin foreground, hand and pane in its composite, history at a new
                                            occluder and on an uneven lattice, the march at the world's edge, straight down
                                            and on a valley floor; exit 1 on a failed check; run it on dust wall shader changes
+    dust_wall_contract_gl.py [checkout] [case ...] ← Mesa GL contracts for depth ordering, ownership and reprojection.
+                                           Use motion for camera translation/rotation and edge for slopes and convex corners.
+                                           dust_wall_gl.py runs every case.
     nested_kwin.sh                       ← nested KWin for the client: no window and no host sound, its own D-Bus bus without starting services
                                            (nested_kwin_bus.conf) and XDG directories; takes the GPU lease and the client lock
                                            (gpu_lease.sh); exit 75 means whoever holds the GPU or Artem's game running (an exclusive client never starts beside it); with INCOMING_SOFT=1 a CPU session

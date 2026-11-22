@@ -270,7 +270,8 @@ def far_smoke_in_front():
 void main() {
     // Smoke at 280 m is wholly in front of a pane at 300 m.
     vec4 rays = vec4(0.3, 0.3, 0.3, 0.5);
-    vec4 front = mediumTo(300.0, ivec2(0), vec3(0, 0, -1), 256.0, rays, rays, false);
+    vec3 dir = vec3(0, 0, -1);
+    vec4 front = mediumTo(300.0, ivec2(0), dir, 256.0, rays, rays, false, mediumSpans(dir));
     float frame = 0.1 + 0.5 * 0.6;
     float branch = seeMediumLight(rays.r, rays.a, front.r, front.a, 0.1, 0.5) + rays.a * frame;
     float exact = rays.r + rays.a * frame;

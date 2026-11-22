@@ -77,7 +77,7 @@ def march(program, scene, frame):
 
 
 def composite(program, scene, samples, glass=None, cloud=None, rays=None, mushroom=None, layer_frame=False,
-              young=True, haze=0, smoke_span=None, ground_origin=(100, 0)):
+              young=True, haze=0, smoke_span=None, ground_origin=(100, 0), ring=(0, 0, 0, 800)):
     # Run the shipped pack and resolve before the full-resolution pall composite.
     light, depth = samples
     pack = link("fx_dustwall_pack")
@@ -136,7 +136,7 @@ def composite(program, scene, samples, glass=None, cloud=None, rays=None, mushro
         g.glTexImage3D(g.GL_TEXTURE_3D, 0, g.GL_R32F, 1, 1, 1, 0, g.GL_RED, g.GL_FLOAT,
                        np.ones(1, dtype=np.float32))
     g.glUniformMatrix4fv(loc(program, "SmokeCascade"), 1, True, cascade)
-    g.glUniform4f(loc(program, "PallYoung"), 0, 0, 0, 800 if young else 0)
+    g.glUniform4f(loc(program, "PallYoung"), *(ring if young else (0, 0, 0, 0)))
     g.glUniform4f(loc(program, "PallFrame"), 0, 0, 4, 0)
     g.glUniformMatrix4fv(loc(program, "InvViewProj"), 1, True, np.linalg.inv(projection).astype(np.float32))
     g.glUniform3f(loc(program, "PallForward"), 0, 0, -1)
@@ -227,6 +227,76 @@ def history_taps():
     dusty, clear = history_occluder(0.10), history_occluder(1.0)
     print(f"history reprojection at previous x=7.96 (foreground to x=8): T={dusty:.5f}, far tap clear T={clear:.5f}")
     check(abs(dusty - clear) < 1e-4, "a history sample whose previous depth is another place contributes nothing")
+
+
+def motion_atlas(T, start, end):
+    T = np.asarray(T, dtype=np.float32)
+    light = np.zeros((low, low, 4), dtype=np.float32)
+    light[:, :, 3] = T
+    depth = np.zeros_like(light)
+    c = 1 - T
+    depth[:, :, 0], depth[:, :, 1], depth[:, :, 2], depth[:, :, 3] = c * start, c * end, c * (start + end) / 2, T
+    return np.concatenate((light, depth), axis=1)
+
+
+def motion_resolve(history_end, prev_depth=20.05, here=20.0, forward=0.05, yaw=0.0):
+    p = link("fx_dustwall_resolve")
+    target(2 * low, low, [rgba])
+    g.glUseProgram(p)
+    noise = np.where((np.add.outer(np.arange(low), np.arange(low)) % 2) == 0, 0.7, 0.5)
+    bind(p, 0, texture(*rgba, 2 * low, low, motion_atlas(noise, 0.5, here)))
+    bind(p, 1, texture(*rgba, 2 * low, low, motion_atlas(np.full((low, low), 0.4), 0.5, history_end)))
+    g.glTexParameteri(g.GL_TEXTURE_2D, g.GL_TEXTURE_MIN_FILTER, g.GL_LINEAR)
+    g.glTexParameteri(g.GL_TEXTURE_2D, g.GL_TEXTURE_MAG_FILTER, g.GL_LINEAR)
+    bind(p, 2, make_scene(here))
+    bind(p, 3, make_scene(prev_depth))
+    projection = np.array([[1, 0, 0, 0], [0, 1, 0, 0], [0, 0, -1.02, -0.2], [0, 0, -1, 0]], dtype=np.float32)
+    rotation = np.eye(4, dtype=np.float32)
+    rotation[0, 0] = rotation[2, 2] = np.cos(yaw)
+    rotation[0, 2], rotation[2, 0] = np.sin(yaw), -np.sin(yaw)
+    g.glUniformMatrix4fv(loc(p, "PrevViewProj"), 1, True, projection @ rotation)
+    g.glUniformMatrix4fv(loc(p, "InvViewProj"), 1, True, np.linalg.inv(projection).astype(np.float32))
+    g.glUniform3f(loc(p, "PallForward"), 0, 0, -1)
+    g.glUniform1f(loc(p, "DwDiv"), 4)
+    g.glUniform1f(loc(p, "DwPrevDiv"), 4)
+    # this eye minus the previous eye: moved forward (−z) by `forward`
+    g.glUniform4f(loc(p, "DwReproject"), 0, 0, -forward, 1)
+    g.glUniform2f(loc(p, "DwHistory"), 0.1, 10)
+    g.glUniform1f(loc(p, "DwPrevScene"), 1)
+    quad(p)
+    return read(2 * low, low)[1, 1, 3]
+
+
+def motion_case():
+    moving = motion_resolve(history_end=20.05)
+    control = motion_resolve(history_end=19.9)
+    # At the centre of the frame yaw changes previous view-axis depth by cos(yaw).
+    yaw = np.deg2rad(25)
+    previous = 20 * np.cos(yaw)
+    turning = motion_resolve(previous, prev_depth=previous, forward=0, yaw=yaw)
+    ceiling = motion_resolve(100, prev_depth=100)
+    print(f"Current T=0.7000, moving={moving:.4f}, control={control:.4f}, turning={turning:.4f}, new ceiling={ceiling:.4f}")
+    check(np.allclose([moving, control, turning, ceiling], [.4858, .4858, .4858, .7], atol=.001),
+          "translation and rotation preserve dust history until a new ceiling occludes it")
+
+
+def surface_rows(depths):
+    light, span = slab(.5, 100, .5)
+    # March centres are at rows 2, 6 and 10. Each ray contains dust up to its surface.
+    end = depths[2::4, None]
+    span[:, :, 1] = .5 * end
+    span[:, :, 2] = .5 * (.5 + end) / 2
+    result = composite(link("fx_pall_composite"), make_scene(depths[:, None]), (light, span))
+    return result[:, 6, 3]
+
+
+def edge_case():
+    rows = np.arange(size, dtype=np.float32)
+    plane = surface_rows(100 + .25 * rows)
+    corner = surface_rows(100 + .25 * abs(rows - 4))
+    print(f"Sloped ground T by row {np.round(plane, 4)}, convex corner T={corner[4]:.4f}")
+    check(np.allclose(plane, .5, atol=.004) and np.allclose(corner, .5, atol=.004),
+          "dust covers the sloped ground up to the frame edge and across the convex corner")
 
 
 def pane_order(composite_program):
@@ -493,6 +563,24 @@ def crossing_volume(program):
         check(abs(red - expected) < .002, f"crossing smoke at {z}, pane at 150: {red:.5f} vs {expected:.5f}")
 
 
+def froxel_split(program):
+    # The entry at 400 is beyond the froxel boundary at 256. Both endpoints
+    # lie in the fully owned annulus, but the ray crosses its hole at 190.
+    # The red-channel references use the separate near and far midpoint grids.
+    scene = make_scene(700)
+    samples = slab(400, 520, .45)
+    samples[0][:, :, :3] = .20
+    rays = np.broadcast_to((.25, .15, .07, .20), (low, low, 4))
+    for near, full, hole in ((None, .459109, .362131),
+                             ((.2, .08, .05, .68), .564671, .554769),
+                             ((.1, .1, .1, 1), .520762, .490396)):
+        cloud = None if near is None else np.broadcast_to(near, (64, 4))
+        for ring, expected in (((0, 0, 0, 800), full), ((45, 95, 0, 800), hole)):
+            red = composite(program, scene, samples, rays=rays, haze=.006, ground_origin=(0, -190),
+                            ring=ring, cloud=cloud)[6, 6, 0]
+            check(abs(red - expected) < 1e-5, f"wall entry beyond near volume {near}, ring {ring}: red {red:.6f}")
+
+
 def terrain_occluder(march_program):
     # Chunks end at 256, the relief map has a ridge ~600 blocks away,
     # and the only dust is on the far side in the valley behind it.
@@ -627,9 +715,12 @@ def main():
         "offscreen": offscreen_dust,
         "post": lambda: mixed_depth(march_setup(), composite_program),
         "crossing": lambda: crossing_volume(composite_program),
+        "split": lambda: froxel_split(composite_program),
         "volume": lambda: foreground_volume(march_setup(), composite_program),
         "jitter": lambda: jitter_occluder(march_setup(), composite_program),
         "history": history_taps,
+        "motion": motion_case,
+        "edge": edge_case,
         "pane": lambda: pane_order(composite_program),
         "terrain": lambda: terrain_occluder(march_setup()),
         "weather": lambda: weather_haze(march_setup(), composite_program),

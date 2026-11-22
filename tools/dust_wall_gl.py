@@ -369,8 +369,7 @@ turning_case()
 period_case()
 # The full pass contract and its camera-motion and screen-edge regressions use llvmpipe.
 failed = bool(gl["FAILED"])
-for script in ("dust_wall_contract_gl.py", "review730_history_motion_probe.py", "review730_screen_edge_probe.py",
-               "nuclear_volume_warmup_gl.py"):
+for script in ("dust_wall_contract_gl.py", "nuclear_volume_warmup_gl.py"):
     run = subprocess.run([sys.executable, str(Path(__file__).with_name(script))])
     failed |= run.returncode != 0
 sys.exit(failed)

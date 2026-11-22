@@ -509,13 +509,13 @@ vec3 pallBallLight(vec4 G, vec4 H, float d) {
 
 // Add slot pall at p to s; V slot dust wall; ground, R slot terrain/water map and parameters; W slot water;
 // G, H slot dust-wall light (PallGlow, PallHot); dir view ray; cone smallest resolved size here (blocks)
-void slot(mat4 S, mat4 V, sampler2D ground, vec4 R, vec4 W, vec4 G, vec4 H, vec3 p, vec3 sunDir, vec3 dir, float cone, vec4 inflow, inout Sample s) {
+void slot(mat4 S, vec4 ring, mat4 V, sampler2D ground, vec4 R, vec4 W, vec4 G, vec4 H, vec3 p, vec3 sunDir, vec3 dir, float cone, vec4 inflow, inout Sample s) {
     if (S[1].w < 0.5) return;
     // layer floor is local terrain (PallGround map): valley pall is still a slab, fires/ground at its bottom, not epicenter
     // ground height; no map, epicenter ground
     float floorUp = pallRelief(ground, S, R, p.xz);
     PallAt f = pallField(Sampler1, ground, S, R, W, p, floorUp, topBumps(S, p));
-    pallHandoff(f, PallYoung, S, p);
+    pallHandoff(f, ring, S, p);
     // Dust lifted out of the flat layer by inflow has the same material and billows. Its light is computed here too,
     // including self-shadowing: above the old top it does not become flat gray fill.
     if (inflow.w > 0.0 && length(inflow.xz - S[0].xy) < 1.0) {
@@ -537,7 +537,7 @@ void slot(mat4 S, mat4 V, sampler2D ground, vec4 R, vec4 W, vec4 G, vec4 H, vec3
             f.slab.z += total * f.wet;
         }
     }
-    WallAt head = pallWallAt(ground, S, V, R, W, p, floorUp, PallYoung);
+    WallAt head = pallWallAt(ground, S, V, R, W, p, floorUp, ring);
     vec3 dustW = f.dustW;
     s.tau += f.column.x + f.column.y + f.column.z;
     s.slab += f.slab.x + f.slab.y + f.slab.z;
@@ -1054,8 +1054,8 @@ vec4 pallSource(vec3 p, float cone, vec4 inflow, out vec3 dustLight) {
     vec3 dir = gDir, sunDir = gSun;
     float muS = gMuS, c = gC, mv = gMv;
     Sample s = emptySample();
-    slot(PallSlot0, PallWall0, Sampler5, PallGround0, PallWater0, PallGlow0, PallHot0, p, sunDir, dir, cone, inflow, s);
-    slot(PallSlot1, PallWall1, Sampler6, PallGround1, PallWater1, PallGlow1, PallHot1, p, sunDir, dir, cone, inflow, s);
+    slot(PallSlot0, PallYoung, PallWall0, Sampler5, PallGround0, PallWater0, PallGlow0, PallHot0, p, sunDir, dir, cone, inflow, s);
+    slot(PallSlot1, vec4(0.0), PallWall1, Sampler6, PallGround1, PallWater1, PallGlow1, PallHot1, p, sunDir, dir, cone, inflow, s);
     vec3 f0 = vec3(0.0), f1 = vec3(0.0);
     vec2 around0 = vec2(0.0), around1 = vec2(0.0);
     if (all(greaterThanEqual(p, PallFireMin)) && all(lessThanEqual(p, PallFireMax))) {
@@ -1732,8 +1732,8 @@ void whirlSetup(vec3 dir, float scene, float at) {
         if (sp.y <= sp.x || (at >= 0.0 && (at < sp.x || at > sp.y))) continue;
         vec3 mid = dir * (0.5 * (sp.x + sp.y));
         Sample m = emptySample();
-        slot(PallSlot0, PallWall0, Sampler5, PallGround0, PallWater0, PallGlow0, PallHot0, mid, sunDir, dir, 1e9, vec4(0.0), m);
-        slot(PallSlot1, PallWall1, Sampler6, PallGround1, PallWater1, PallGlow1, PallHot1, mid, sunDir, dir, 1e9, vec4(0.0), m);
+        slot(PallSlot0, PallYoung, PallWall0, Sampler5, PallGround0, PallWater0, PallGlow0, PallHot0, mid, sunDir, dir, 1e9, vec4(0.0), m);
+        slot(PallSlot1, vec4(0.0), PallWall1, Sampler6, PallGround1, PallWater1, PallGlow1, PallHot1, mid, sunDir, dir, 1e9, vec4(0.0), m);
         vec3 sun = pallSunAt(mid);
         vec3 lit = scattered(m, PALL_SOOT_G * gMv, sun) + sun * (gSootSun * exp(-m.tau / gMuS));
         float g0 = storm(Sampler3, PallSlot0, PallFire0, mid, 0.0, 1.0).y, g1 = storm(Sampler4, PallSlot1, PallFire1, mid, 0.0, 1.0).y;

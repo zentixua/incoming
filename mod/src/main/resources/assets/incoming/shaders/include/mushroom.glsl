@@ -737,6 +737,17 @@ vec2 mushDepthAt(Mush m, vec3 q, bool ownsStem) {
     return vec2(dot(sigma, vec4(1.0)), backing);
 }
 
+// Accumulate one body's clipped interval at its own midpoint spacing.
+void mushAddDepth(inout vec2 depth, Mush m, vec3 dir, vec2 span, int steps, vec2 owner) {
+    if (span.y <= span.x) return;
+    float ds = (span.y - span.x) / float(steps);
+    bool ownsStem = length(m.base.xz - owner) < 1.0;
+    for (int i = 0; i < steps; i++) {
+        vec3 q = mushLocal(m, dir * (span.x + (float(i) + 0.5) * ds));
+        depth += mushDepthAt(m, q, ownsStem) * ds;
+    }
+}
+
 // Integrated mushroom depth and the part supplied by the wall owner's lifted soil.
 vec2 mushDepthRange(sampler2D data, vec3 dir, float start, float len, int steps, vec2 owner) {
     vec2 depth = vec2(0.0);
@@ -746,12 +757,7 @@ vec2 mushDepthRange(sampler2D data, vec3 dir, float start, float len, int steps,
         vec2 span = mushSpan(m, dir);
         span.x = max(span.x, start);
         span.y = min(span.y, len);
-        if (span.y <= span.x) continue;
-        float ds = (span.y - span.x) / float(steps);
-        for (int i = 0; i < steps; i++) {
-            vec3 q = mushLocal(m, dir * (span.x + (float(i) + 0.5) * ds));
-            depth += mushDepthAt(m, q, length(m.base.xz - owner) < 1.0) * ds;
-        }
+        mushAddDepth(depth, m, dir, span, steps, owner);
     }
     return depth;
 }

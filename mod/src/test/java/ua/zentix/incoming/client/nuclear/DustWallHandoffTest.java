@@ -12,22 +12,21 @@ import java.nio.file.Path;
 import java.util.Map;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.mockStatic;
 import static org.mockito.Mockito.when;
 
 class DustWallHandoffTest {
     /** Drive the real Java handoff and compare the support of its two shader masks on a tangent ray. */
     @Test
     void thePallKeepsItsHeadOutsideTheWallTable() throws Exception {
-        var d = new Detonation(1, new Vec3(0, 64, 0), 64, 1, true, 0, 0, 0, 20_000, 7, 1, false, 0.35f);
-        var pall = new PallField(d);
-        var wall = new BlastWall(d, false);
-        var a = mock(ClientNuclear.Active.class);
-        setField(a, "d", d);
-        setField(a, "pall", pall);
-        setField(a, "wall", wall);
+        var a = youngBurst();
+        var d = a.d;
+        var pall = a.pall;
+        var wall = a.wall;
         Method handoff = NukePall.class.getDeclaredMethod("youngWall", ClientNuclear.Active.class, Vec3.class, float.class, PallPass.Frame.class);
         handoff.setAccessible(true);
         double reach = pall.reach();
@@ -55,6 +54,36 @@ class DustWallHandoffTest {
         handoff.invoke(null, a, new Vec3(x, 65, 0), 0f, frame);
         assertTrue(frame.dustWall.active);
         assertEquals(0f, frame.young.y, "the young wall owns the centre before the inner handoff starts");
+    }
+
+    @Test
+    void aSecondSlotClearsThePreviousFramesYoungWall() throws ReflectiveOperationException {
+        var a = youngBurst();
+        when(a.seconds(0)).thenReturn(8.0);
+        var frame = new PallPass.Frame();
+        try (var pass = mockStatic(DustWallPass.class)) {
+            pass.when(DustWallPass::ready).thenReturn(true);
+            for (int occupied : new int[]{1, 2}) {
+                frame.slot1.m13(0);
+                NukePall.prepareYoungWall(a, Vec3.ZERO, 0, frame);
+                assertTrue(frame.young.w > 0 && frame.dustWall.active);
+                frame.slot1.m13(occupied);
+                NukePall.prepareYoungWall(a, Vec3.ZERO, 0, frame);
+                assertEquals(0f, frame.young.w);
+                assertFalse(frame.dustWall.active);
+            }
+        }
+    }
+
+    private static ClientNuclear.Active youngBurst() throws ReflectiveOperationException {
+        var d = new Detonation(1, new Vec3(0, 64, 0), 64, 1, true, 0, 0, 0, 20_000, 7, 1, false, 0.35f);
+        var pall = new PallField(d);
+        var wall = new BlastWall(d, false);
+        var a = mock(ClientNuclear.Active.class);
+        setField(a, "d", d);
+        setField(a, "pall", pall);
+        setField(a, "wall", wall);
+        return a;
     }
 
     @Test
