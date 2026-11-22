@@ -59,10 +59,9 @@ const float DW_EXPOSURE = 0.2;
 const float DW_RISE = 0.12, DW_HOLD = 0.25, DW_FALL = 0.3;
 // most the bulges, the billowed surface and its soft edge (DW_HAZE) lift the dust over its envelope, shares (the ray bound,
 // dwBound)
-// (the visible top of the layer behind the hump stays near the settled height: bulges, billows and the soft edge together
-// lift it by at most ~1.3, the hump's own crest reaches 1.4–1.6 of the layer; a layer lifted by bulges, billows and a haze
-// cap as high as the hump hid the crest)
-const float DW_BULGE = 0.08, DW_BILLOW = 0.1, DW_HAZE = 1.2;
+// (the top behind the head is uneven at several scales, no cap: swells up to ±DW_BULGE of the layer at 150–400 m, billows,
+// rising puffs and a thin veil; on the head the swells are small, so its crest, 1.4–1.6 of the layer, still stands out)
+const float DW_BULGE = 0.22, DW_BILLOW = 0.15, DW_HAZE = 1.2;
 
 // pixel footprint at the sample, blocks (set by the march)
 float gDwFoot = 0.0;
@@ -145,7 +144,7 @@ float dwEnvelope(float a, float h, float k) {
 // negative phase, the top more (rolls); the world wind drifts it all
 vec3 dwAir(vec3 q, float a, float r, float top, out float ph) {
     float E = exp(-a / 8.0), Ef = exp(-a / 4.0);
-    float A = 0.3 + 0.7 * E + 0.6 * Ef;
+    float A = 0.3 + 0.7 * E + 0.9 * Ef;
     ph = 0.5 * (8.0 * (1.0 - E) + 0.25 * a) + 3.5 * (1.0 - Ef);
     vec3 b = q / vec3(32.0, 20.0, 32.0);
     // one octave: a second one shears the 20 m billows into marbled, liquid-looking swirls
@@ -161,6 +160,11 @@ vec3 dwAir(vec3 q, float a, float r, float top, out float ph) {
     // endless shear a steady flow field would stretch it into
     float sw = 6.2832 * dwNoise3(vec3(q.xz / 150.0, 71.3));
     pw.xz -= 20.0 * vec2(cos(0.25 * a + sw), sin(0.25 * a + sw)) * (1.0 - exp(-a / 1.5)) * (0.6 + 0.4 * yy);
+    // gusts right behind the front: the hit air keeps surging forward and sideways in ~200 m gust cells whose push
+    // changes over a few seconds, strongest just after the front and calming over ~6 s (presentation)
+    vec2 gp = q.xz / 220.0 + vec2(0.0, 0.35 * a);
+    vec2 gust = vec2(dwNoise3(vec3(gp, 3.3)), dwNoise3(vec3(gp + 7.7, 9.1))) - 0.5;
+    pw.xz -= gust * 70.0 * (1.0 - exp(-a / 0.8)) * exp(-a / 6.0) * (0.5 + 0.5 * yy);
     pw.xz -= DwWind.xy * a;
     return pw;
 }
@@ -170,11 +174,30 @@ float dwSoft(float x) {
     return x / sqrt(1.0 + x * x);
 }
 
-// bulges and dips of the mass in the air: ≈110 m lumps over ≈300 m swells, small on the fresh head, larger once it has
-// settled (the settled field varies in large shape, not in one lump size)
+// swells and sags of the mass in the air (Silo: higher here, lower there): domain-warped ≈350 m swells carrying ≈120 m
+// lumps, up to ±DW_BULGE of the layer behind the head, a third of that on the head (its crest stays readable); they
+// swell and sag slowly as the dust settles
 float dwBulge(vec3 pw, float a) {
-    float L = 0.55 * dwFbm2(vec3(pw.xz / 110.0, 0.37), 0.0) + 0.45 * dwNoise3(vec3(pw.xz / 300.0, 7.1));
-    return DW_BULGE * dwSoft((L - 0.5) * mix(5.0, 10.0, smoothstep(1.0, 5.0, a)));
+    vec2 p = pw.xz / 350.0;
+    float w = dwNoise3(vec3(p * 0.6, 4.4)) - 0.5;
+    p += 0.7 * vec2(w, -w);
+    float L = 0.6 * dwNoise3(vec3(p, 7.1 + 0.02 * a)) + 0.4 * dwNoise3(vec3(pw.xz / 120.0, 0.37 + 0.03 * a));
+    return DW_BULGE * dwSoft((L - 0.5) * 4.0) * mix(0.33, 1.0, smoothstep(0.8, 2.5, a));
+}
+
+// a buoyant puff above the top: about one 70 m cell in six lifts a rounded column of dust ~25 % of the layer above the
+// top, 1–9 s after the front, over ~4 s, thinning as it rises (presentation)
+float dwPuff(vec3 pw, float top, float a) {
+    vec2 cell = floor(pw.xz / 70.0);
+    float h1 = dwNoise3(vec3(cell * 1.37, 91.2)), h2 = dwNoise3(vec3(cell * 1.37 + 0.5, 47.7));
+    if (h1 < 0.62) return 0.0;
+    float born = 1.0 + 8.0 * h2, age = a - born;
+    if (age <= 0.0) return 0.0;
+    vec2 c = (cell + 0.5) * 70.0 + (vec2(h2, h1) - 0.5) * 30.0;
+    float rise = 0.25 * top * (1.0 - exp(-age / 2.5)) * (h1 - 0.4) * 2.5;
+    float radius = 10.0 + 5.0 * age;
+    vec2 d = vec2(length(pw.xz - c), (pw.y - top * 0.9 - rise) * 1.3);
+    return 0.5 * exp(-age / 6.0) * (1.0 - smoothstep(0.5, 1.0, length(d) / radius)) * smoothstep(0.0, 1.0, age);
 }
 
 // the smooth dust top over ground point xz (no billows; the light's shadow surface), blocks above the local ground; 0 where
@@ -266,7 +289,7 @@ float dwDensity(vec3 g, bool coarse) {
     // the billowed surface: rises and dips by the texture (cauliflower billows, ragged where the dust is young), within
     // DW_BILLOW of the top: the hump's excess (+30–50 %) stays well above the billows, so the crest reads as a crest
     float torn = 1.0 + 0.5 * exp(-a / 0.25);
-    float surf = top * (1.0 + DW_BILLOW * dwSoft(((bl - 0.42) * 4.0 + (n - 0.5) * 2.5) * torn));
+    float surf = top * (1.0 + DW_BILLOW * dwSoft(((bl - 0.42) * 3.0 + (n - 0.5) * 2.0) * torn));
     if (!coarse) gDwSurf = surf;
     // a soft top: billow tops thin out over ~a quarter of the layer (an opaque top popped where dips passed in and out of
     // view at grazing angles)
@@ -284,8 +307,14 @@ float dwDensity(vec3 g, bool coarse) {
         gDwSand = clamp(soil.y / max(paved, 1e-6), 0.0, 1.0);
     }
     if (!coarse) gDwSigma = sigma;
+    // coarse dust low and dense, finer above (stratified); a thin veil of fines over the uneven top (following it, no
+    // shelf); here and there a puff lifted above the top that thins into the veil and drifts with the wind
+    float strat = 1.25 - 0.5 * clamp(q.y / max(top, 1.0), 0.0, 1.0);
+    float veil = (1.0 - smoothstep(surf, surf * 1.12 + 4.0, q.y)) * smoothstep(surf * 0.8, surf, q.y) * 0.03;
+    float puff = coarse || q.y < top * 0.8 ? 0.0 : dwPuff(pw, top, a);
     // the lowest metres thin to the ground (soft where no terrain stands under the dust)
-    return sigma * smoothstep(0.0, 0.08, a) * smoothstep(0.0, 3.0, q.y) * prof * (0.5 + 1.0 * n) * (0.7 + 0.6 * fs);
+    return sigma * smoothstep(0.0, 0.08, a) * smoothstep(0.0, 3.0, q.y)
+            * (prof * strat * (0.5 + 1.0 * n) * (0.7 + 0.6 * fs) + (veil + puff) * (0.6 + 0.8 * n));
 }
 
 // light on a white wall facing the fireball at q (Lambertian sphere of radius DwBall.w, DwBallLight at its surface, R²/d²)
@@ -323,7 +352,7 @@ vec3 dwLight(vec3 q, vec3 rd) {
     vec3 single = dwBallLight(q) * (0.4 * min(dwPhase(dot(rd, lb)), 3.0) * exp(-taub))
             + DwSunLight * (0.5 * min(dwPhase(dot(rd, DwSunDir)), 6.0) * exp(-taus)) * sunUp;
     vec3 multiple = dwBallLight(q) * ms * (0.45 + 0.55 * exp(-0.25 * taub)) + DwSunLight * ms * (0.45 + 0.55 * exp(-0.25 * taus)) * sunUp
-            + DwSkyLight * (0.04 + 0.22 * exp(-0.3 * depth));
+            + DwSkyLight * (0.03 + 0.15 * exp(-0.3 * depth));
     vec3 albedo = mix(DwAlbedo, DwSandAlbedo, gDwSand), bulk = mix(DwBulk, DwSandBulk, gDwSand);
     return DW_EXPOSURE * (albedo * single + bulk * multiple + bulk * DwGroundLight);
 }
@@ -426,9 +455,9 @@ vec4 dwMarch(vec3 rd, float tEnd, float jitter, float foot, int maxSteps) {
             // fixed grid's two parities; the light there changes over tens of metres)
             if (!gDwOld || lit < 0.0 || fract(k * 0.5) < 0.25) c = dwLight(q, rd);
             lit = 1.0;
-            // the thin soft edge over the dense top: two cells per sample (at grazing views a 15–25 m edge is hundreds of
-            // metres of ray)
-            float cells = hq > gDwSurf + 2.0 ? 2.0 : 1.0;
+            // the thin soft edge, veil and puffs over the dense top: four cells per sample (at grazing views they are
+            // hundreds of metres of ray)
+            float cells = hq > gDwSurf + 2.0 ? 4.0 : 1.0;
             float span = min(dwGridT(k + cells), t1) - t;
             float al = exp(-s * span);
             light += T * (1.0 - al) * c;
