@@ -289,7 +289,11 @@ float dwDensity(vec3 g, bool coarse) {
     // the billowed surface: rises and dips by the texture (cauliflower billows, ragged where the dust is young), within
     // DW_BILLOW of the top: the hump's excess (+30–50 %) stays well above the billows, so the crest reads as a crest
     float torn = 1.0 + 0.5 * exp(-a / 0.25);
-    float surf = top * (1.0 + DW_BILLOW * dwSoft(((bl - 0.42) * 3.0 + (n - 0.5) * 2.0) * torn));
+    // (on the young head the top takes its shape from the lumps riding with the front, the air's billows join as it
+    // settles: the head sweeps through the air at the front's speed and, seen on the horizon line, an air-fixed ragged
+    // top was redrawn every frame; in-game approach coherence 0.617 -> 0.731)
+    float surf = top * (1.0 + DW_BILLOW * dwSoft(((bl - 0.42) * 3.0 + (n - 0.5) * 2.0) * torn) * smoothstep(0.6, 1.5, a0)
+            + 0.12 * (bf - 0.42));
     if (!coarse) gDwSurf = surf;
     // a soft top: billow tops thin out over ~a quarter of the layer (an opaque top popped where dips passed in and out of
     // view at grazing angles)
