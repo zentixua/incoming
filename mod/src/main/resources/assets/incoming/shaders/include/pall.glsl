@@ -1,3 +1,5 @@
+#moj_import <incoming:wall_ownership.glsl>
+
 // Pall after the blast wave (client/nuclear/PallField — laws, client/fx/layer/PallPass — passes): the field of one
 // detonation from a radius table. Shared by the volume (fx_pall) and the squares of the effects layer (fx.vsh: what the pall
 // covers in front of a particle). Numbers and laws are copies of PallField and VolumeNoise.shape (PallGlslTest computes
@@ -62,6 +64,27 @@ float pallAirDepth(float t, float dy, float haze, float clean, float weather, fl
 // the haze of the lower kilometers, not through 5 km of haze at ground level)
 float pallAir(vec4 air, float t, float dy) {
     return exp(-pallAirDepth(t, dy, air.x, air.y, air.z, air.w));
+}
+
+// Airlight along view direction dir, on screen: the air's own light in front of distant matter. It is the sky vanilla
+// draws there without its sun, moon and stars, computed from the frame's sky and fog colours, never sampled from the
+// frame (a sampled frame carries the sun and nearby blocks into the cap). Vanilla's sky (LevelRenderer.renderSky,
+// FogRenderer FOG_SKY): a disc 16 above the eye, radius 512, in the sky colour, fogged into the fog colour by its
+// cylinder distance, smoothstep from 0 to the render distance; the vertex distance runs 16 at the centre to 512 at the
+// rim, interpolated (the 45° fan's chords make the rim up to 8 % nearer, ignored); past the rim and below the horizon —
+// the clear colour, the fog colour. Copy — NukeExposure.airLight
+// (sky: vanilla's sky colour; fog: its fog colour, w the render distance)
+vec3 pallAirLightOf(vec3 dir, vec3 sky, vec4 fog) {
+    float across = length(dir.xz);
+    if (dir.y <= 0.0 || across * 16.0 >= 512.0 * dir.y) return fog.rgb;
+    float d = 16.0 + (512.0 - 16.0) * (16.0 * across / dir.y) / 512.0;
+    return mix(sky, fog.rgb, d < fog.w ? smoothstep(0.0, fog.w, d) : 1.0);
+}
+
+// Two world distances behind pixels are the same place: within 3 % and half a block (the young dust wall's march, resolve
+// and composite judge it alike; a looser rule in one pass let dust from behind a foreground edge through another)
+bool pallSamePlace(float a, float b) {
+    return abs(a - b) <= 0.03 * max(min(a, b), 1.0) + 0.5;
 }
 
 // albedo of the ground under the pall: land and water (PallLight.LAND, SEA)
@@ -213,6 +236,17 @@ PallAt pallField(sampler2D table, sampler2D ground, mat4 S, vec4 G, vec4 W, vec3
     a.wet = wet;
     a.mixed = dust.a;
     return a;
+}
+
+// Only lofted soil is replaced. The shared field still supplies total mass for
+// lighting the world, and the other media retain their density and column.
+float pallHandoff(inout PallAt f, vec4 ring, mat4 slot, vec3 p) {
+    float share = wallShare(ring, length(p.xz - slot[0].xy));
+    float keep = 1.0 - share;
+    f.sigma.x *= keep;
+    f.column.x *= keep;
+    f.slab.x *= keep;
+    return share;
 }
 
 // Unevenness of the top of the dust layer (PallField.BUMPS): the top above the point — (1 ± it) of the table's top
@@ -756,7 +790,7 @@ struct WallAt {
 // epicenter (blocks), ground, G, W — relief and water maps of the slot and their numbers, water of the slot (the map is read for
 // water only if it is under the pall). Attenuation of dust — from the edge toward the end of the wedge (dust lifted closer to the
 // epicenter — of its own density); spray — its own
-WallAt pallWallAt(sampler2D ground, mat4 S, mat4 V, vec4 G, vec4 W, vec3 p, float floorUp) {
+WallAt pallWallAt(sampler2D ground, mat4 S, mat4 V, vec4 G, vec4 W, vec3 p, float floorUp, vec4 ring) {
     WallAt h;
     h.rel = p.xz - S[0].xy;
     h.s = V[0].x - length(h.rel);
@@ -773,6 +807,7 @@ WallAt pallWallAt(sampler2D ground, mat4 S, mat4 V, vec4 G, vec4 W, vec3 p, floa
     float lag = V[1].y * h.wet;
     h.P = vec4(V[0].y, V[0].z * mix(1.0, V[1].z, h.wet), lag, pallWallDensity(h.s - lag, V[0].y, V[0].w, V[3].z, V[3].w, V[1].w, h.wet,
             V[2].y, V[2].z, V[3].x, V[3].y, h.hard));
+    h.P.w *= 1.0 - wallShare(ring, length(h.rel));
     return h;
 }
 
@@ -811,7 +846,7 @@ vec4 pallWallSpans(mat4 S, mat4 V, vec4 G, vec3 dir, float ta, float tb) {
 
 // Thickness of the head of the slot without noise on the ray segment [ta, tb] (dir from the eye), steps steps on each of its segments
 // (pallWallSpans): what the head covers in front of the square of the layer (fx.vsh). The floor — the relief of the map under each point
-float pallWallTau(sampler2D ground, mat4 S, mat4 V, vec4 G, vec4 W, vec3 dir, float ta, float tb, int steps) {
+float pallWallTau(sampler2D ground, mat4 S, mat4 V, vec4 G, vec4 W, vec3 dir, float ta, float tb, int steps, vec4 ring) {
     vec4 spans = pallWallSpans(S, V, G, dir, ta, tb);
     float tau = 0.0;
     for (int k = 0; k < 2; k++) {
@@ -821,7 +856,7 @@ float pallWallTau(sampler2D ground, mat4 S, mat4 V, vec4 G, vec4 W, vec3 dir, fl
         for (int i = 0; i < steps; i++) {
             vec3 q = dir * (sp.x + (float(i) + 0.5) * ds);
             float floorUp = pallRelief(ground, S, G, q.xz);
-            WallAt h = pallWallAt(ground, S, V, G, W, q, floorUp);
+            WallAt h = pallWallAt(ground, S, V, G, W, q, floorUp, ring);
             if (h.P.w > 0.0) tau += h.P.w * pallWallMean(h.s - h.P.z, h.z, h.P.x, h.P.y) * ds;
         }
     }

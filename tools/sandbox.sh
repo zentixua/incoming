@@ -22,7 +22,7 @@
 #                                          each waits for its result
 #   tools/sandbox.sh swap                  build changes (Gradle), hot swap classes, reload resources
 #                                          if changed; code 3: hot swap failed, restart required
-#   tools/sandbox.sh shot <name> '<effect>' [--at 0.1,0.5,1,3|none] [--wav 4] [--cam 'range height azimuth look'] [--time day|night]
+#   tools/sandbox.sh shot <name> '<effect>' [--at 0.1,0.5,1,3|none] [--wav 4] [--cam 'range height azimuth look [turn]'] [--time day|night]
 #                        [--overlay] [--no-swap]
 #                                          swap, then the effect with frames at these seconds and audio: <name>_*.png, <name>.wav,
 #                                          capture.json; finishes with seconds from the command to the last frame.
@@ -389,12 +389,14 @@ shot() {
   local out="$FX/out/$name" limit=${FX_LIMIT:-3600}
   # Java's split drops trailing empty fields: "600," is "600", so the deadline below must read the same last frame
   while [[ $at == *, ]]; do at=${at%,}; done
-  if [ "$(cat "$FX/renderer" 2>/dev/null)" = soft ]; then
-    # a paced take runs down to 1 tick/s: the last frame's second may take 20 wall seconds per game second
+  if [ "$at" != none ]; then
+    # a paced frame take (any renderer, Sandbox.paceFrame) runs down to 1 tick/s: the last frame's second may take 20 wall
+    # seconds per game second
     limit=$(awk -v l="${at##*,}" -v b="$limit" 'BEGIN { printf "%d", b + (l > 0 ? l : 0) * 20 }')
   fi
-  if [ "$(cat "$FX/renderer" 2>/dev/null)" = soft ] && [ "$wav" != 0 ]; then
-    # CPU renderer: the frame take slows the world (Sandbox.paceFrame), so its sound is not real-time; sound comes from a
+  if [ "$wav" != 0 ] && { [ "$at" != none ] || [ "$(cat "$FX/renderer" 2>/dev/null)" = soft ]; }; then
+    # a frame take slows the world on any renderer (Sandbox.paceFrame: CPU frames are slow, GPU frames land at their exact
+    # second), so its sound is not real-time; sound comes from a
     # second take of the same effect at 20 ticks/s without frames, from the same second (frames before a front included),
     # in a staging directory of its own; its timing replaces the frame take's empty audio block in capture.json
     # staging created here, atomically and fresh: never an existing shot's directory; the first frame's second passed as
@@ -402,8 +404,11 @@ shot() {
     # the take itself shrinks the window and frame limit (Sandbox.quiet): nobody looks at its frames
     local take from=0
     mkdir -p "$FX/out"
-    take=$(basename "$(mktemp -d "$FX/out/.wav-$name-XXXXXX")") || exit 1
-    [ "$at" != none ] && awk -v f="${at%%,*}" 'BEGIN { exit !(f < 0) }' && from=${at%%,*}
+    # (a name the client's `shots` accepts: letters, digits, _ . -, not starting with a dot)
+    take=$(basename "$(mktemp -d "$FX/out/_wav-$name-XXXXXX")") || exit 1
+    # the first frame's second without its time of day (`-0.5@12500`)
+    local first=${at%%,*}; first=${first%%@*}
+    [ "$at" != none ] && awk -v f="$first" 'BEGIN { exit !(f < 0) }' && from=$first
     if [ "$at" != none ]; then
       fx "shots $name $at 0" || exit 1
       FX_LIMIT=$limit fx "$effect" || exit 1

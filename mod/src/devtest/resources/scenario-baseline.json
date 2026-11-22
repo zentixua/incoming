@@ -3,34 +3,34 @@
     "bomber.point.hill.0": {
       "end": "entry",
       "tick": 521,
-      "x": 0.0,
-      "y": 0.5,
+      "x": -0.12,
+      "y": 1.0,
       "z": 0.0,
-      "hash": "42bef85f80bb5a3b"
+      "hash": "b81c0750956a3ffe"
     },
     "bomber.point.none.0": {
       "end": "entry",
       "tick": 276,
-      "x": 0.0,
-      "y": 0.5,
+      "x": -0.12,
+      "y": 1.0,
       "z": 0.0,
-      "hash": "b17feb53d39ccd94"
+      "hash": "96651fb6016f8619"
     },
     "bomber.point.quarry.0": {
       "end": "entry",
       "tick": 359,
-      "x": 0.0,
-      "y": 0.5,
+      "x": 0.25,
+      "y": 1.0,
       "z": 0.0,
-      "hash": "93a5fe71e94f5772"
+      "hash": "1c056c4d77b2e0ab"
     },
     "bomber.point.retarget.0": {
       "end": "entry",
       "tick": 331,
-      "x": -95.0,
-      "y": 0.5,
+      "x": -95.25,
+      "y": 1.0,
       "z": -145.5,
-      "hash": "d7f9683726f59b82"
+      "hash": "fe784a98552a4ad0"
     },
     "drone_far.mob.hill.0": {
       "end": "blast",

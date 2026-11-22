@@ -259,12 +259,18 @@ public final class OpenAir {
      * programs: different sampler types are forbidden only on the same unit within one program.
      */
     static void bind(ShaderInstance s, boolean on) {
+        bind(s, on, false);
+    }
+
+    static void bind(ShaderInstance s, boolean on, boolean warming) {
+        // Compile with the real RG8 window and its linear filtering even before a world can fill it.
+        boolean window = warming && ensure();
         on &= ready && texture >= 0;
         s.safeGetUniform("PallOpenAt").set((float) (x0 - eye.x), (float) (y0 - eye.y), (float) (z0 - eye.z), on ? 1f : 0f);
         s.safeGetUniform("PallOpenWrap").set((float) Math.floorMod(x0, SIZE_XZ), (float) Math.floorMod(y0, SIZE_Y), (float) Math.floorMod(z0, SIZE_XZ));
         int unit = GlStateManager._getActiveTexture();
         GlStateManager._activeTexture(GL13.GL_TEXTURE0 + UNIT);
-        GL11.glBindTexture(GL12.GL_TEXTURE_3D, on ? texture : Empty3D.texture());
+        GL11.glBindTexture(GL12.GL_TEXTURE_3D, on || window ? texture : Empty3D.texture());
         GlStateManager._activeTexture(unit);
         // unit index into the program itself on every bind: Veil recompiles shaders, resetting program
         // uniforms (a one-time unit assignment would vanish — window sampler on unit 0); restore current program

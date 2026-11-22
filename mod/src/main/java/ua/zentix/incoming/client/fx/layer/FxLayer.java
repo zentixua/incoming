@@ -133,6 +133,15 @@ public final class FxLayer {
             Incoming.LOG.error("Nuclear dust pall shaders failed to load: no dust pall", ex);
         }
         try {
+            e.registerShader(new ShaderInstance(e.getResourceProvider(), Incoming.id("fx_dustwall"), DefaultVertexFormat.POSITION), s -> DustWallPass.march = s);
+            e.registerShader(new ShaderInstance(e.getResourceProvider(), Incoming.id("fx_dustwall_resolve"), DefaultVertexFormat.POSITION), s -> DustWallPass.resolve = s);
+            e.registerShader(new ShaderInstance(e.getResourceProvider(), Incoming.id("fx_dustwall_pack"), DefaultVertexFormat.POSITION), s -> DustWallPass.pack = s);
+            DustWallPass.reset();
+        } catch (IOException ex) {
+            DustWallPass.march = DustWallPass.resolve = DustWallPass.pack = null;
+            Incoming.LOG.error("Nuclear dust wall shaders failed to load: the pall draws the young wall", ex);
+        }
+        try {
             e.registerShader(new ShaderInstance(e.getResourceProvider(), Incoming.id("fx_pall_foot"), DefaultVertexFormat.POSITION), s -> PallPass.footLighting = s);
         } catch (IOException ex) {
             PallPass.footLighting = null;
@@ -202,6 +211,7 @@ public final class FxLayer {
             PallPass.second();
             GPU.second();
             HEAT.second();
+            DustWallPass.GPU.second();
             FxBloom.second();
             LayerTimes.second();
             frameNanos = frameMax = cleanMax = cleanCpu = 0;
@@ -297,6 +307,7 @@ public final class FxLayer {
         heat.eye(FarRenderer.flamesAtEye());
         FarView view = sky.exposed(Sight.exposure(sky.ambient(), heat.atEye()));
         heat.exposure = view.exposure();
+        PallPass.beginFrame(NukePall.quality());
         boolean warmup = !warmed;
         // far-model atlas with all meshes in video memory, before the frame is collected (warm-up restarts the atlas)
         if (warmup) FarRenderer.warmup();
@@ -337,12 +348,12 @@ public final class FxLayer {
         PallPass.Frame pall = NukePall.frame(level, view.camera(), view.partial(), FRUSTUM);
         // ordinary blast smoke — in the same pass: with the nuke or without it
         pall = SmokeFrame.frame(level, view.camera(), view.partial(), pall);
-        // First draw can compile the ray program in the driver. Run the actual pass while entering
-        // the world (retry until background textures are ready), before the first nuclear flash.
-        if (pall == null && PallPass.cold()) pall = new PallPass.Frame();
+        // In-place recompilation can happen outside a resource reload. Stage it on primary frames as well.
+        if (!VolumeReload.active() && PallPass.cold()) pall = PallPass.warmupFrame();
         lastQuads = QUADS.size();
         if (QUADS.size() == 0 && pall == null && !WaterDecal.active() && !hot) {
             PallPass.reset();
+            DustWallPass.idle();
             SeeThrough.drew(false);
             return;
         }
@@ -367,8 +378,11 @@ public final class FxLayer {
             LayerTimes.mark(LayerTimes.Pass.WATER);
             // pall — before the quads: they lie on it with their own share of pall in front of them (fx.vsh)
             boolean pallDrawn = pall != null && scene >= 0 && PallPass.draw(pall, scene, VIEW, e.getProjectionMatrix(), view.camera(),
-                    FOG.haze(view.range(), HAZE));
-            if (!pallDrawn) PallPass.reset();
+                    FOG.haze(view.range(), HAZE)) && pall != PallPass.warmupFrame();
+            if (!pallDrawn) {
+                PallPass.reset();
+                DustWallPass.idle();
+            }
             // clouds whose volume did not fit (pall frame not drawn) are drawn as quads from the next frame
             SmokeGrid.drawn(pall == null || pall.smoke == null || pallDrawn && SmokePass.filled());
             PallPass.Frame front = pallDrawn ? pall : PallPass.empty();
@@ -520,8 +534,8 @@ public final class FxLayer {
      */
     public static String describeTiming() {
         return String.format(Locale.ROOT, "quads %d, %.3f ms (longest in the second %.3f; without GC %.3f, CPU %.3f; frames with GC %d), "
-                + "GPU %.3f ms (longest %.3f, %d frames; heat pass %.3f, longest %.3f, %d frames — %s; %s), depth: %s; %s", lastQuads, lastMean, lastMax,
-                lastClean, Math.max(0, lastCleanCpu), lastCollected, GPU.lastMean, GPU.lastMax, GPU.lastFrames, HEAT.lastMean, HEAT.lastMax,
+                + "GPU %.3f ms (longest %.3f, %d frames; dust wall %.3f, longest %.3f, %d frames; heat pass %.3f, longest %.3f, %d frames — %s; %s), depth: %s; %s", lastQuads, lastMean, lastMax,
+                lastClean, Math.max(0, lastCleanCpu), lastCollected, GPU.lastMean, GPU.lastMax, GPU.lastFrames, DustWallPass.GPU.lastMean, DustWallPass.GPU.lastMax, DustWallPass.GPU.lastFrames, HEAT.lastMean, HEAT.lastMax,
                 HEAT.lastFrames, HeatPass.describe(), FxBloom.describe(), SceneDepth.describe(), LayerTimes.describe() + "; " + HalfPass.describe());
     }
 

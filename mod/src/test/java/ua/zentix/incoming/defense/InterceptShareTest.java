@@ -288,5 +288,10 @@ class InterceptShareTest {
         public double clearAlong(Vec3 to, double margin) {
             return Double.POSITIVE_INFINITY;
         }
+
+        @Override
+        public boolean covered(Vec3 aim, double margin) {
+            return false;
+        }
     }
 }

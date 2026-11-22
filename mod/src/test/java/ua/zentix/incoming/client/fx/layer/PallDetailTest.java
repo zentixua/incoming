@@ -25,7 +25,7 @@ class PallDetailTest {
     private static void frames(PallPass.Detail d, double gpuMs, double rayMs, int frames, long[] clock) {
         for (int i = 0; i < frames; i++) {
             clock[0] += 16 * MS;
-            d.sample(gpuMs, rayMs, d.generation, clock[0]);
+            d.sample(gpuMs, rayMs, 0, 0, d.generation, clock[0]);
         }
     }
 
@@ -154,6 +154,23 @@ class PallDetailTest {
         assertEquals(level, d.level);
     }
 
+    @Test
+    void wallWorkChoosesTheFinestFittingRungInBothDirections() {
+        PallPass.Detail d = new PallPass.Detail();
+        d.setting(PallPass.Quality.HIGH);
+        long now = 0;
+        // 14 ms fixed, 8 ms pall rays, 6 ms wall march: rung 1 exceeds 24, rung 2 fits.
+        while (now < 1200 * MS) d.sample(28, 8, 6, 0, d.generation, now += 16 * MS);
+        assertEquals(2, d.level);
+        // 13 ms fixed, 4 ms pall rays, 3 ms wall resolve. At rung 1 these become 13 + 5.14 + 4.69,
+        // above the 21.6 ms promotion threshold. Treating the resolve as fixed would promote.
+        while (now < 10000 * MS) d.sample(20, 4, 0, 3, d.generation, now += 16 * MS);
+        assertEquals(2, d.level);
+        // The same guard must account for the march's larger step cap as well as its extra pixels.
+        while (now < 20000 * MS) d.sample(20, 4, 3, 0, d.generation, now += 16 * MS);
+        assertEquals(2, d.level);
+    }
+
     /**
      * Nailed (client script, video output): setting stage, no matter how long the frame lasts; lowered by the budget - immediately
      *  up to configuration. They released him - again according to the measurements, without those taken before.
@@ -178,7 +195,7 @@ class PallDetailTest {
         assertEquals(PallPass.Quality.MEDIUM.step(), d.level);
         d.setting(PallPass.Quality.HIGH);
         assertTrue(d.pin(false));
-        for (int i = 0; i < 100; i++) assertFalse(d.sample(150, 150, old, clock[0] += 16 * MS), "measurements before nailing do not count");
+        for (int i = 0; i < 100; i++) assertFalse(d.sample(150, 150, 0, 0, old, clock[0] += 16 * MS), "measurements before nailing do not count");
         assertEquals(high, d.level);
         frames(d, 2 * H, 40, clock);
         assertTrue(d.level > high, "released - again on budget");
@@ -195,7 +212,7 @@ class PallDetailTest {
         int before = d.generation;
         d.restart();
         assertEquals(medium, d.level);
-        for (int i = 0; i < 100; i++) assertFalse(d.sample(50, 50, before, clock[0] += 16 * MS));
+        for (int i = 0; i < 100; i++) assertFalse(d.sample(50, 50, 0, 0, before, clock[0] += 16 * MS));
         assertEquals(medium, d.level, "old couples don't count");
         frames(d, 50, 40, clock);
         assertTrue(d.level > medium, "new ones count");
@@ -205,10 +222,10 @@ class PallDetailTest {
     @Test
     void staleSamplesIgnored() {
         PallPass.Detail d = new PallPass.Detail();
-        assertFalse(d.sample(100, 100, d.generation, 0));
+        assertFalse(d.sample(100, 100, 0, 0, d.generation, 0));
         d.setting(PallPass.Quality.MEDIUM);
         int old = d.generation - 1;
-        for (int i = 0; i < 100; i++) assertFalse(d.sample(100, 100, old, i * 16 * MS));
+        for (int i = 0; i < 100; i++) assertFalse(d.sample(100, 100, 0, 0, old, i * 16 * MS));
         assertEquals(PallPass.Quality.MEDIUM.step(), d.level);
     }
 

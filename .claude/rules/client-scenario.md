@@ -216,7 +216,11 @@ times and the pall's budget are not frame costs: frame cost belongs to the GPU a
   ages 0.102, 0.521, 1.005, 3.009 s; unpaced 0.163, 0.524, 1.292, 3.061 s). Pacing follows the armed take, not the
   current rate: effects that `clear` first (`nuke … near`) and fast stretches that raised the rate keep it. Only the
   last `Sandbox.PACE_LEAD` (2 s) before a due frame is slowed; farther the world runs at 20 ticks/s (paced whole, a
-  nuke frame at 130 s took tens of minutes at 1–3 frames/s). `shots` takes a time of day per frame
+  nuke frame at 130 s took tens of minutes at 1–3 frames/s). A frame is taken at the first render whose age (tick +
+  partial tick) reaches its second, never at a tick boundary: at whole ticks a GPU 30 fps clip advanced 25–28 ms per
+  frame with a 45–145 ms jump every half second (each PNG write stalls the render thread ~0.1 s while game time runs),
+  and everything moving lurched at ~2 Hz, read as flicker. GPU takes slow the world to `GPU_FRAMES_PER_TICK` (48)
+  renders per tick; check `capture.json` ages (steps of 1/30 s) before judging motion in a clip. `shots` takes a time of day per frame
   (`<seconds>@<day time>`, e.g. `130@12500,130.5@12550`): a dusk strip in one take; the `SANDBOX shot` line logs it. A slowed
   take's sound is not real-time: `shot` records sound in a second take of the same effect at 20 ticks/s from the first
   frame's second (`shots .wav-<name>-XXXXXX none@<s> <wav>`, a fresh `mktemp` staging directory), cuts the WAV from it and writes
@@ -229,8 +233,10 @@ times and the pall's budget are not frame costs: frame cost belongs to the GPU a
   and wherever vanilla clouds drift (their offset follows client ticks): set `renderClouds:"false"` in the sandbox
   `options.txt` (every start makes sure the line exists, `client_options`) and cut the mask at the frame's own horizon.
   Every take states its second 0: `capture.json` `clock` and each `SANDBOX shot` line ("t = 0 at effect start", or for
-  `nuke … near` "front at the houses (burst N s earlier)"); read frame times against it. A CPU sandbox at `-Xmx3g` is OOM-killed at its ceiling after
-  about ten nuclear takes (server ruins and pall state accumulate): restart it every few nuclear takes.
+  `nuke … near` "front at the houses (burst N s earlier)"); read frame times against it. Server ruins and pall state accumulate with each nuclear take, and
+  the default heap (“Vanilla rendering”) can run out on the second one: for nuclear takes `export INCOMING_SOFT_HEAP=4g`
+  (or `5g`) before `start` and keep it set for every `restart` (a restart starts the client again from the current
+  environment), restarting between nuclear takes.
 - Mesa caches compiled shaders in `~/.cache/incoming-mesa-shaders`, shared by every tree: a cold llvmpipe compiles the
   nuclear volume shaders for 140 s (laptop) or 74 s (netcup) before `ready`; a cold blast's first frame takes seconds.
 - Measured 20.11 (flat sandbox, 1280×720, `blast drone`): laptop (16 threads, `LP_NUM_THREADS` 8) start 240 s cold,
