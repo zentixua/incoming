@@ -273,8 +273,9 @@ public final class NukePall {
         f.dustWall.active = false;
         // the young wall's own pass: primary view, one detonation in the slots, no water under its pall (spray and the base
         // surge stay the pall's), all its programs ready; otherwise the pall draws the whole wall
-        if (k == 1 && f.water0.w < 0.5 && ua.zentix.incoming.client.fx.layer.DustWallPass.prepare(q)
-                && !ua.zentix.incoming.client.fx.layer.FxViews.secondary()) youngWall(SLOTTED[0], eye, partial, f);
+        // (the primary view first: preparing for a secondary view's size resized the primary's targets and dropped its history)
+        if (k == 1 && f.water0.w < 0.5 && !ua.zentix.incoming.client.fx.layer.FxViews.secondary()
+                && ua.zentix.incoming.client.fx.layer.DustWallPass.prepare(q)) youngWall(SLOTTED[0], eye, partial, f);
         // without pall use zero bounds: the ray cannot enter (inverted bounds would span the entire ray)
         if (k == 0) {
             f.min.zero();
@@ -305,6 +306,15 @@ public final class NukePall {
     private static final double YOUNG_FULL_DEPTH = 20;
     /** Presentation dust extinction of the young wall where it is full, 1/block (the approved animation's 0.11 m⁻¹). */
     private static final double YOUNG_SIGMA = 0.11;
+
+    /**
+     * The young wall's presentation extinction for a node's lofted depth ({@link #YOUNG_SIGMA}, {@link #YOUNG_FULL_DEPTH}):
+     * continuous down to no dust, so the pall hands over all its lofted dust in the ring, thin dust too (a node below
+     * {@link PallField#GONE_DEPTH} drawn as none hid the pall's thin dust there with nothing in its place).
+     */
+    static float youngSigma(double depth) {
+        return depth <= 0 ? 0f : (float) (YOUNG_SIGMA * Math.min(1.6, Math.sqrt(depth / YOUNG_FULL_DEPTH)));
+    }
     /**
      * Age at which the young wall has settled behind its hump, model seconds (LOOK: about a second): its layer height is the
      * dust law's layer top at that age, the wall's own hump and settling ride on it.
@@ -346,8 +356,8 @@ public final class NukePall {
         boolean any = false;
         for (int j = 0; j < n; j++) {
             double depth = w.table[4 * j + 2];
-            w.table[4 * j + 2] = depth < PallField.GONE_DEPTH ? 0f : (float) (YOUNG_SIGMA * Math.min(1.6, Math.sqrt(depth / YOUNG_FULL_DEPTH)));
-            if (w.table[4 * j + 2] > 0) {
+            w.table[4 * j + 2] = youngSigma(depth);
+            if (depth >= PallField.GONE_DEPTH) {
                 top = Math.max(top, w.table[4 * j + 1]);
                 double rj = j / (n - 1.0) * reach;
                 // a node of the young ring (one node of margin: the table is read between nodes)

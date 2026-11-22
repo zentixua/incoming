@@ -989,18 +989,9 @@ float gTauEye = 0.0;
 int gSunK = -1;
 float gSunAt = 0.0, gSunNear = 0.0;
 
-// Airlight along view direction dir, on screen: the air's own light in front of distant matter. It is the sky vanilla
-// draws there without its sun, moon and stars, computed from the frame's sky and fog colours, never sampled from the
-// frame (a sampled frame carries the sun and nearby blocks into the cap). Vanilla's sky (LevelRenderer.renderSky,
-// FogRenderer FOG_SKY): a disc 16 above the eye, radius 512, in the sky colour, fogged into the fog colour by its
-// cylinder distance, smoothstep from 0 to the render distance; the vertex distance runs 16 at the centre to 512 at the
-// rim, interpolated (the 45° fan's chords make the rim up to 8 % nearer, ignored); past the rim and below the horizon —
-// the clear colour, the fog colour. Copy — NukeExposure.airLight
+// Airlight along view direction dir (pallAirLightOf, pall.glsl) from the frame's sky and fog colours
 vec3 pallAirLight(vec3 dir) {
-    float across = length(dir.xz);
-    if (dir.y <= 0.0 || across * 16.0 >= 512.0 * dir.y) return PallAirFog.rgb;
-    float d = 16.0 + (512.0 - 16.0) * (16.0 * across / dir.y) / 512.0;
-    return mix(PallAirSky, PallAirFog.rgb, d < PallAirFog.w ? smoothstep(0.0, PallAirFog.w, d) : 1.0);
+    return pallAirLightOf(dir, PallAirSky, PallAirFog);
 }
 
 // Add matter of opacity 1 − tr and light l (already × opacity) at eye distance t to ray. Air haze to t (pallAir) shows

@@ -64,6 +64,21 @@ float pallAir(vec4 air, float t, float dy) {
     return exp(-pallAirDepth(t, dy, air.x, air.y, air.z, air.w));
 }
 
+// Airlight along view direction dir, on screen: the air's own light in front of distant matter. It is the sky vanilla
+// draws there without its sun, moon and stars, computed from the frame's sky and fog colours, never sampled from the
+// frame (a sampled frame carries the sun and nearby blocks into the cap). Vanilla's sky (LevelRenderer.renderSky,
+// FogRenderer FOG_SKY): a disc 16 above the eye, radius 512, in the sky colour, fogged into the fog colour by its
+// cylinder distance, smoothstep from 0 to the render distance; the vertex distance runs 16 at the centre to 512 at the
+// rim, interpolated (the 45° fan's chords make the rim up to 8 % nearer, ignored); past the rim and below the horizon —
+// the clear colour, the fog colour. Copy — NukeExposure.airLight
+// (sky: vanilla's sky colour; fog: its fog colour, w the render distance)
+vec3 pallAirLightOf(vec3 dir, vec3 sky, vec4 fog) {
+    float across = length(dir.xz);
+    if (dir.y <= 0.0 || across * 16.0 >= 512.0 * dir.y) return fog.rgb;
+    float d = 16.0 + (512.0 - 16.0) * (16.0 * across / dir.y) / 512.0;
+    return mix(sky, fog.rgb, d < fog.w ? smoothstep(0.0, fog.w, d) : 1.0);
+}
+
 // albedo of the ground under the pall: land and water (PallLight.LAND, SEA)
 const float PALL_LAND = 0.2;
 const float PALL_SEA = 0.06;

@@ -90,7 +90,26 @@ void main() {
         }
     }
     vec2 l = vec2(lattice(prevPixel.x, float(size.x), float(low.x)), lattice(prevPixel.y, float(size.y), float(low.y)));
-    vec4 h = valid(texture(Sampler1, (l + 0.5) / vec2(low)));
-    h = clamp(h, m1 - 1.5 * sd, m1 + 1.5 * sd);
+    // the four history samples around it, each only where the previous frame saw the same distance (a bilinear read took
+    // dust clipped by a far background into a pixel whose previous depth was the foreground's)
+    vec2 f0 = floor(l), fr = l - f0;
+    vec4 hs = vec4(0.0);
+    float ws = 0.0;
+    for (int k = 0; k < 4; k++) {
+        ivec2 o = ivec2(k % 2, k / 2);
+        ivec2 c = clamp(ivec2(f0) + o, ivec2(0), low - 1);
+        float w = mix(1.0 - fr.x, fr.x, float(o.x)) * mix(1.0 - fr.y, fr.y, float(o.y));
+        if (DwPrevScene > 0.5) {
+            float was = pallScene(texelFetch(Sampler3, ivec2(min((vec2(c) + 0.5) * DwDiv, vec2(size) - 0.5)), 0).r);
+            if (abs(was - here) > 0.1 * max(min(was, here), 1.0)) w = 0.0;
+        }
+        hs += w * valid(texelFetch(Sampler1, c, 0));
+        ws += w;
+    }
+    if (ws < 1e-4) {
+        fragColor = cur;
+        return;
+    }
+    vec4 h = clamp(hs / ws, m1 - 1.5 * sd, m1 + 1.5 * sd);
     fragColor = mix(h, cur, DwHistory.x);
 }

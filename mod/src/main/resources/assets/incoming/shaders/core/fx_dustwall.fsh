@@ -1,7 +1,8 @@
 #version 150
 
 // Young dust wall march at 1/DwDiv resolution (client/fx/layer/DustWallPass): one ray per low-resolution pixel through
-// the centre of its frame pixel block; the world behind it (Sampler1, SceneDepth: r — what hides the layer) ends the ray.
+// its frame pixel block (an R2 offset within it every frame, kept in the centre's depth class); the world behind it
+// (Sampler1, SceneDepth: r — what hides the layer) or, where the scene has none, the relief map ends the ray.
 // Output: premultiplied linear light, transmittance. The sample offset along the ray moves every frame (golden-ratio
 // sequence over a fixed per-pixel start); fx_dustwall_resolve averages the frames in time.
 
@@ -33,6 +34,19 @@ vec2 dwSoilAt(vec2 xz) {
     return pallSoil(Sampler3, PallSlot0, PallGround0, xz);
 }
 
+// the frame air between the eye and the dust (pall.glsl, as the pall's): its transmittance to t along a ray of vertical
+// share dy, and its own light along rd in the march's linear light (the composite shows it through pallShown, so a fully
+// hazed ray shows the airlight itself, as the pall's haze share does)
+uniform vec4 PallAir;
+uniform vec3 PallAirSky;
+uniform vec4 PallAirFog;
+float dwAirT(float t, float dy) {
+    return pallAir(PallAir, t, dy);
+}
+vec3 dwAirLight(vec3 rd) {
+    return pallLinear3(pallAirLightOf(rd, PallAirSky, PallAirFog));
+}
+
 #moj_import <incoming:dustwall.glsl>
 
 uniform sampler2D Sampler1;
@@ -47,8 +61,13 @@ void main() {
     ivec2 size = textureSize(Sampler1, 0);
     // the ray moves within its march pixel every frame (R2 sequence) and the history averages it: a quarter-resolution
     // silhouette (the wall's lower edge, nearly level) drew a staircase of identical 4-pixel rows
+    vec2 centre = min((floor(gl_FragCoord.xy) + 0.5) * DwDiv, vec2(size) - 0.5);
     vec2 sub = fract(vec2(0.7548777, 0.5698403) * DwFrame.x) - 0.5;
-    vec2 at = clamp((floor(gl_FragCoord.xy) + 0.5 + sub) * DwDiv, vec2(0.5), vec2(size) - 0.5);
+    vec2 at = clamp(centre + sub * DwDiv, vec2(0.5), vec2(size) - 0.5);
+    // ... within the centre's depth class: the resolve and composite classify the sample by the centre's depth (an offset
+    // across a foreground edge put the background's dust onto the foreground)
+    float d0 = pallScene(texelFetch(Sampler1, ivec2(centre), 0).r), d1 = pallScene(texelFetch(Sampler1, ivec2(at), 0).r);
+    if (abs(d1 - d0) > 0.03 * min(d0, d1) + 0.5) at = centre;
     vec2 ndc = at / vec2(size) * 2.0 - 1.0;
     vec4 farPoint = InvViewProj * vec4(ndc, 1.0, 1.0);
     vec3 dir = normalize(farPoint.xyz / farPoint.w);

@@ -133,6 +133,8 @@ uniform vec2 Shelf;
 float dwFloorEye(vec2 xz) { return Shelf.y > 0.0 && xz.x > Shelf.x ? Shelf.y : Floor; }
 float dwOpenEye(vec3 p) { return 1.0; }
 vec2 dwSoilAt(vec2 xz) { return vec2(0.0); }
+float dwAirT(float t, float dy) { return 1.0; }
+vec3 dwAirLight(vec3 rd) { return vec3(0.0); }
 #moj_import <incoming:dustwall.glsl>
 uniform vec3 Dir;
 uniform float End;
@@ -212,23 +214,25 @@ void main() {
 
 
 def turning_case():
-    """No turning around ground zero: the head's dense extinction along an arc 80 blocks behind the front (bearing
-    -110..-70 deg, 25 blocks up), 0.02 s apart while the front runs out at 470 m/s, matches itself with no shift along the
+    """No turning around ground zero: the head's dense extinction along an arc on the ground 80 blocks behind the front
+    (bearing -110..-70 deg, 40 blocks up), 0.02 s apart while the front runs out at 470 m/s, matches itself with no shift along the
     arc. Features placed by bearing x the front's current radius slid along it at bearing x the front's speed (~15 m here)."""
     core, expand = gl["CORE"], gl["expand"]
     src = expand("""#version 150
 float dwFloorEye(vec2 xz) { return 0.0; }
 float dwOpenEye(vec3 p) { return 1.0; }
 vec2 dwSoilAt(vec2 xz) { return vec2(0.0); }
+float dwAirT(float t, float dy) { return 1.0; }
+vec3 dwAirLight(vec3 rd) { return vec3(0.0); }
 #moj_import <incoming:dustwall.glsl>
 uniform float Radius;
 uniform float Radial;
 out vec4 fragColor;
 void main() {
     float f = gl_FragCoord.x / 2048.0;
-    // an arc 80 blocks behind the front, 25 blocks up; or a radial line through the head 0-300 blocks behind it, 40 up
+    // an arc 80 blocks behind the front, or a radial line through the head 0-300 blocks behind it, 40 blocks up
     float b = Radial > 0.5 ? radians(-90.0) : radians(-110.0 + 40.0 * f), rr = Radial > 0.5 ? Radius - 300.0 * f : Radius;
-    fragColor = vec4(dwDensity(vec3(rr * cos(b), Radial > 0.5 ? 40.0 : 25.0, rr * sin(b)), false), 0.0, 0.0, 1.0);
+    fragColor = vec4(dwDensity(vec3(rr * cos(b), 40.0, rr * sin(b)), false), 0.0, 0.0, 1.0);
 }
 """)
     p = gl["compileProgram"](gl["compileShader"]((core / "fx_dustwall.vsh").read_text(), g.GL_VERTEX_SHADER),
@@ -255,7 +259,8 @@ void main() {
         # the eye far off (the head's own texture is drawn away from the eye)
         g.glUniform4f(loc(p, "DwEye"), 0, 120, 4500, t)
         g.glUniform4f(loc(p, "DwRing"), front, 0, 400, reach)
-        g.glUniform1f(loc(p, "Radius"), front - 80)
+        # a fixed arc on the ground, 80 blocks behind the front at the first instant (the dust is anchored where it was born)
+        g.glUniform1f(loc(p, "Radius"), 4500 - 80)
         g.glUniform1f(loc(p, "Radial"), 0)
         quad(p)
         arcs.append(read(2048, 1)[0, :, 0].copy())
@@ -270,6 +275,7 @@ void main() {
     best = shifts[int(np.argmax(corr))]
     metres = best * np.radians(40.0) * (4500 - 80) / 2048
     print(f"turning: the head's arc moves {metres:+.1f} m along the front in 0.02 s (correlation {max(corr):.3f})")
+    check(max(corr) > 0.4, f"the head's arc carries texture enough to measure turning (correlation {max(corr):.3f} > 0.4)")
     check(abs(metres) < 2.0, f"the head turns around ground zero: {metres:+.1f} m along the front in 0.02 s, expected ~0")
     # LOOK Trait 0: the head's dust stays where it was torn up (a small outward push), nothing rides out with the front
     a, b = (x - x.mean() for x in lines)
@@ -288,6 +294,8 @@ def period_case():
 float dwFloorEye(vec2 xz) { return 0.0; }
 float dwOpenEye(vec3 p) { return 1.0; }
 vec2 dwSoilAt(vec2 xz) { return vec2(0.0); }
+float dwAirT(float t, float dy) { return 1.0; }
+vec3 dwAirLight(vec3 rd) { return vec3(0.0); }
 #moj_import <incoming:dustwall.glsl>
 uniform float Front;
 uniform float Upper;
@@ -344,6 +352,7 @@ void main() {
         sl = sl - sl.mean()
         kurt = float((sl ** 4).mean() / max((sl ** 2).mean() ** 2, 1e-12))
         print(f"period: the wall's {name} (std {e.std():.1f} m) slope kurtosis {kurt:.1f} over the arc")
+        check(e.std() > 1.0, f"the wall's {name} varies along the front (std {e.std():.2f} m > 1)")
         check(kurt < 6.0, f"the wall's {name} steps like a staircase (slope kurtosis {kurt:.1f}), expected smooth noise (< 6)")
 
 
@@ -380,4 +389,6 @@ resolve_cases(programs["_resolve"])
 march_cases()
 turning_case()
 period_case()
-sys.exit(bool(gl["FAILED"]))
+# the render contract (march, resolve, composite together): its own script, the same exit rule
+contract = subprocess.run([sys.executable, str(Path(__file__).resolve().with_name("dust_wall_contract_gl.py"))])
+sys.exit(bool(gl["FAILED"]) or contract.returncode != 0)

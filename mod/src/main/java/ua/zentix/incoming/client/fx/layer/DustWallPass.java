@@ -117,7 +117,7 @@ public final class DustWallPass {
         public final float[] eye = new float[4];
         /** Front radius now; inner radius (the front {@link #SPAN} s ago); envelope top; table reach — blocks. */
         public final float[] ring = new float[4];
-        /** Per node: front arrival (model s since the burst), settled layer height (blocks), dust extinction (1/block), 0. */
+        /** Per node: front arrival (model s since the burst), settled layer height (blocks), dust extinction (1/block), paved share. */
         public final float[] table = new float[NODES * 4];
         /** Fireball centre from ground zero's ground point (blocks), its radius (blocks). */
         public final float[] ball = new float[4];
@@ -215,6 +215,9 @@ public final class DustWallPass {
             m.safeGetUniform("DwSandBulk").set(f.sandBulk.x, f.sandBulk.y, f.sandBulk.z);
             m.safeGetUniform("DwCut").set(f.cut);
             m.safeGetUniform("DwWind").set(f.windX, f.windZ, 0f, 0f);
+            m.safeGetUniform("PallAir").set(pall.air.x, pall.air.y, pall.air.z, pall.air.w);
+            m.safeGetUniform("PallAirSky").set(pall.airSky.x, pall.airSky.y, pall.airSky.z);
+            m.safeGetUniform("PallAirFog").set(pall.airFog.x, pall.airFog.y, pall.airFog.z, pall.airFog.w);
             fullScreen(m, () -> Uniform.uploadInteger(Uniform.glGetUniformLocation(m.getId(), "DwNoise"), NOISE_UNIT), true);
             // averaged over frames at the same resolution into the other history target
             int next = 1 - latest;

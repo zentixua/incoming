@@ -209,23 +209,26 @@ float dwBulge(vec3 pw, float a) {
     float w = dwNoise3(vec3(p * 0.4, 4.4)) - 0.5;
     p += 0.8 * vec2(w, -w);
     float L = 0.6 * dwNoise3(vec3(p, 7.1 + 0.08 * a)) + 0.4 * dwNoise3(vec3(pw.xz / 90.0, 0.37 + 0.12 * a));
-    return DW_BULGE * dwSoft((L - 0.5) * 4.0) * mix(0.2, 1.0, smoothstep(1.5, 4.0, a));
+    // hollows opening in the blanket: in patches ~160 m across the layer sinks by up to 40 % over 3–10 s behind the front,
+    // drifting slowly (presentation: the mass shifting as the blast wind reverses)
+    float hollow = smoothstep(0.62, 0.8, dwNoise3(vec3(pw.xz / 160.0, 2.2 + 0.03 * a))) * smoothstep(3.0, 10.0, a);
+    return DW_BULGE * dwSoft((L - 0.5) * 4.0) * mix(0.2, 1.0, smoothstep(1.5, 4.0, a)) - 0.4 * hollow;
 }
 
-// a buoyant puff above the top: about one 70 m cell in four lifts a rounded column of dust ~45 % of the layer above the
-// top, 1–15 s after the front, over ~6 s, thinning as it rises over ~15 s: tongues that keep lifting (presentation)
+// a buoyant tongue above the top: about one 110 m cell in three lifts a rounded column of dust up to ~35 % of the layer
+// above the top (inside the ray's bound), 1–15 s after the front, over ~6 s, thinning as it rises over ~15 s (presentation)
 float dwPuff(vec3 pw, float top, float a) {
-    vec2 cell = floor(pw.xz / 70.0);
+    vec2 cell = floor(pw.xz / 110.0);
     float h1 = dwNoise3(vec3(cell * 1.37, 91.2)), h2 = dwNoise3(vec3(cell * 1.37 + 0.5, 47.7));
-    if (h1 < 0.56) return 0.0;
+    if (h1 < 0.5) return 0.0;
     float born = 1.0 + 14.0 * h2, age = a - born;
     if (age <= 0.0) return 0.0;
     // (each puff stays inside its own cell: grown past it, it was cut by the cell's edges into rectangles with seams)
-    vec2 c = (cell + 0.5) * 70.0 + (vec2(h2, h1) - 0.5) * 16.0;
-    float rise = 0.45 * top * (1.0 - exp(-age / 4.0)) * (h1 - 0.4) * 2.5;
-    float radius = min(10.0 + 4.0 * age, 26.0);
-    vec2 d = vec2(length(pw.xz - c), (pw.y - top * 0.9 - rise) * 1.3);
-    return 0.5 * exp(-age / 15.0) * (1.0 - smoothstep(0.5, 1.0, length(d) / radius)) * smoothstep(0.0, 1.0, age);
+    vec2 c = (cell + 0.5) * 110.0 + (vec2(h2, h1) - 0.5) * 20.0;
+    float rise = 0.35 * top * (1.0 - exp(-age / 6.0)) * (h1 - 0.4) * 1.7;
+    float radius = min(14.0 + 4.0 * age, 36.0);
+    vec2 d = vec2(length(pw.xz - c), (pw.y - top * 0.9 - rise) * 1.2);
+    return 0.8 * exp(-age / 15.0) * (1.0 - smoothstep(0.5, 1.0, length(d) / radius)) * smoothstep(0.0, 1.0, age);
 }
 
 // the smooth dust top over ground point xz (no billows; the light's shadow surface), blocks above the local ground; 0 where
@@ -427,7 +430,7 @@ vec4 dwMarch(vec3 rd, float tEnd, float jitter, float foot, int maxSteps) {
     float k = floor(dwGridK(t0));
     // n: cells to the next sample (strides grow over empty air); kLast: the last sampled cell
     float n = 1.0, kLast = k - 1.0;
-    vec3 light = vec3(0.0), c = vec3(0.0);
+    vec3 light = vec3(0.0), c = vec3(0.0), airLight = dwAirLight(rd);
     float T = 1.0;
     for (int i = 0; i < 400; i++) {
         float t = dwGridT(k);
@@ -435,13 +438,17 @@ vec4 dwMarch(vec3 rd, float tEnd, float jitter, float foot, int maxSteps) {
         float dt = min(dwGridT(k + 1.0), t1) - t;
         float tt = t + dt * jitter;
         vec3 q = eye + rd * tt;
+        // the ground stops the ray where the scene has none (beyond the drawn chunks, holes in distant terrain): the
+        // relief map, as the pall's own march (a ridge past the draw distance hid nothing behind it)
+        float fl = dwFloor(q.xz);
+        if (q.y < fl - 2.0) break;
         float bound = dwBound(q);
         if (bound < 0.0) {
             // no young dust at this radius: long strides
             kLast = k; k += n; n = min(n * 2.0, 16.0);
             continue;
         }
-        float hq = q.y - dwFloor(q.xz);
+        float hq = q.y - fl;
         if (hq > bound) {
             if (rd.y < 0.0) {
                 // above the dust here: down to its bound over the highest ground of the map (rising ground ahead may lift the
@@ -468,8 +475,9 @@ vec4 dwMarch(vec3 rd, float tEnd, float jitter, float foot, int maxSteps) {
             // hundreds of metres of ray)
             float cells = hq > gDwSurf + 2.0 ? 4.0 : 1.0;
             float span = min(dwGridT(k + cells), t1) - t;
-            float al = exp(-s * span);
-            light += T * (1.0 - al) * c;
+            float al = exp(-s * span), air = dwAirT(tt, rd.y);
+            // the air between the eye and the dust (haze, weather) shows its own light in front of it, as for the pall
+            light += T * (1.0 - al) * (air * c + (1.0 - air) * airLight);
             T *= al;
             kLast = k + cells - 1.0; k += cells; n = 1.0;
         } else {
