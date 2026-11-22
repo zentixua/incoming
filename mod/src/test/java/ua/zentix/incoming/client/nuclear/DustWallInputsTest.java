@@ -71,25 +71,26 @@ class DustWallInputsTest {
     }
 
     /**
-     * The pall hands over its lofted dust in the young ring only where the wall draws dust (review of #724, round 3: a dry
-     * 1 kt surface burst at 18.1 s, a 600-block sightline tangent at 2,378.6 blocks: nodes just under GONE_DEPTH were drawn as
-     * none while the pall's own field held optical depth 0.113 there).
+     * A low-altitude tangent crossing lofted soil samples both the pall field and the interpolated wall table.
      */
     @Test
     void wallDrawsWhateverThePallHandsOver() {
-        double t = 18.1, x = 2378.6;
+        double t = 18.1, x = 2250;
         var detonation = new Detonation(1, new Vec3(0, 64, 0), 64, 1, true, 0, 0, 0, 20_000, 7, 1, false, 0.35f);
         var field = new PallField(detonation);
         int nodes = DustWallPass.NODES;
         var table = new float[nodes * 4];
         field.young(t, 1, DustWallPass.SPAN, nodes, table);
         double spacing = field.reach() / (nodes - 1);
+        int samples = 0;
         for (double z = -299.5; z < 300; z++) {
             double r = Math.hypot(x, z);
             int j = (int) (r / spacing);
             if (field.sigma(x, z, 4, 0, t * 20, PallField.Water.DRY) <= 0) continue;
+            samples++;
             assertTrue(NukePall.youngSigma(table[4 * j + 2]) > 0 || NukePall.youngSigma(table[4 * (j + 1) + 2]) > 0,
                     "the wall draws dust where the pall has it, at " + r);
         }
+        assertTrue(samples > 0, "tangent crosses lofted dust");
     }
 }

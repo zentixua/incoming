@@ -35,21 +35,20 @@ import java.util.Random;
  * Only in the primary view, on land, with one detonation in the pall's slots ({@code NukePall.youngWall}): elsewhere the pall
  * draws the whole wall as before.
  * <p>
- * Drawn at 1/{@code div} resolution per axis ({@link #div}) into its own RGBA16F target (light premultiplied, alpha
- * transmittance) with a sample offset along each ray that moves every frame, then averaged over frames at that resolution
- * ({@code fx_dustwall_resolve}: reprojected history clamped to the current neighbourhood), then laid on the frame with
- * depth-aware upsampling against the world distance ({@code fx_dustwall_composite}). The flicker of a fixed per-pixel offset
+ * The low-resolution march returns premultiplied light, transmission and the depth of the contributing dust.
+ * The two halves of its atlas share one temporal resolve. The pall composite samples that atlas at the world
+ * pixel and places the wall among its other volumes. The flicker of a fixed per-pixel offset
  * (sparkle along the far top, where 9–18 m steps cross a moving billowed surface) is a time problem: averaged in time it is
  * gone, with no spatial blur. Samples sit on a grid fixed along each ray from the eye, and the texture is fixed in the air
  * mass, so the pattern does not slide as the front grows.
  */
 public final class DustWallPass {
     /**
-     * Seconds of young wall behind the front this pass draws (copy: {@code DW_SPAN}): the model owns the whole visible wall in
+     * Seconds of young wall behind the front this pass draws: the model owns the whole visible wall in
      * the judging view (front passes a camera 4.5 km out, then 12 s), where the pall's law top would rise over a 120 m camera.
      */
     public static final double SPAN = 24;
-    /** Seconds over which the pall takes the wall over at its back, a crossfade (copy: {@code DW_FADE}). */
+    /** Seconds over which the pall takes the wall over at its back, a crossfade. */
     public static final double FADE = 6;
     /**
      * Highest the young dust reaches over its settled layer height (copies: the bound over the largest hump 1.8, {@code DW_BULGE},
@@ -96,6 +95,7 @@ public final class DustWallPass {
     private static int lattice = -1, target = -1, fbo = -1, table = -1, width, height, div, fullW, fullH;
     /** History pair ({@code fx_dustwall_resolve}): the latest is {@link #latest}. */
     private static final int[] HISTORY_TEX = {-1, -1}, HISTORY_FBO = {-1, -1};
+    private static int bounds = -1, packed = -1, packedFbo = -1;
     private static int latest;
     private static boolean failed, history;
     private static long frame;
@@ -109,6 +109,14 @@ public final class DustWallPass {
     private static final int[] VIEWPORT = new int[4];
 
     private DustWallPass() {}
+
+    static int atlas() {
+        return HISTORY_TEX[latest];
+    }
+
+    static int divisor() {
+        return div;
+    }
 
     /** Inputs of one young wall for a frame (eye-relative unless noted). */
     public static final class Frame {
@@ -157,7 +165,7 @@ public final class DustWallPass {
     }
 
     /**
-     * Lays the young wall of {@code pall} over the frame; false — not drawn. {@code scene}: the world-distance texture
+     * Builds the current wall atlas before the pall reads it. False means no wall was drawn. {@code scene}: the world-distance texture
      * ({@link SceneDepth}). Primary view only (NukePall hands the wall over only there).
      */
     static boolean draw(PallPass.Frame pall, int scene, Matrix4f view, Matrix4f projection) {
@@ -202,6 +210,7 @@ public final class DustWallPass {
             upload(f.table);
             RenderSystem.setShaderTexture(2, table);
             m.safeGetUniform("DwEye").set(f.eye[0], f.eye[1], f.eye[2], f.eye[3]);
+            m.safeGetUniform("PallYoung").set(pall.young.x, pall.young.y, pall.young.z, pall.young.w);
             m.safeGetUniform("DwRing").set(f.ring[0], f.ring[1], f.ring[2], f.ring[3]);
             m.safeGetUniform("DwBall").set(f.ball[0], f.ball[1], f.ball[2], f.ball[3]);
             m.safeGetUniform("DwBallLight").set(f.ballLight.x, f.ballLight.y, f.ballLight.z);
@@ -220,11 +229,18 @@ public final class DustWallPass {
             m.safeGetUniform("PallAirSky").set(pall.airSky.x, pall.airSky.y, pall.airSky.z);
             m.safeGetUniform("PallAirFog").set(pall.airFog.x, pall.airFog.y, pall.airFog.z, pall.airFog.w);
             fullScreen(m, () -> Uniform.uploadInteger(Uniform.glGetUniformLocation(m.getId(), "DwNoise"), NOISE_UNIT), true);
+            // Pack both simultaneous outputs into one atlas. The two halves share
+            // temporal weights, and all readers need only one texture unit.
+            GlStateManager._glBindFramebuffer(GL30.GL_DRAW_FRAMEBUFFER, packedFbo);
+            GlStateManager._viewport(0, 0, 2 * width, height);
+            RenderSystem.setShaderTexture(0, target);
+            RenderSystem.setShaderTexture(1, bounds);
+            fullScreen(c, null, false);
             // averaged over frames at the same resolution into the other history target
             int next = 1 - latest;
             {
                 GlStateManager._glBindFramebuffer(GL30.GL_DRAW_FRAMEBUFFER, HISTORY_FBO[next]);
-                RenderSystem.setShaderTexture(0, target);
+                RenderSystem.setShaderTexture(0, packed);
                 RenderSystem.setShaderTexture(1, HISTORY_TEX[latest]);
                 RenderSystem.setShaderTexture(2, scene);
                 // the previous frame's world distances: history only where it saw the same place
@@ -246,17 +262,6 @@ public final class DustWallPass {
                 history = true;
                 frame++;
             }
-            // laid on the frame: light adds, the frame is multiplied by the transmittance
-            GlStateManager._glBindFramebuffer(GL30.GL_DRAW_FRAMEBUFFER, main);
-            GlStateManager._viewport(VIEWPORT[0], VIEWPORT[1], VIEWPORT[2], VIEWPORT[3]);
-            RenderSystem.enableBlend();
-            RenderSystem.blendFuncSeparate(GlStateManager.SourceFactor.ONE, GlStateManager.DestFactor.SRC_ALPHA,
-                    GlStateManager.SourceFactor.ZERO, GlStateManager.DestFactor.ONE);
-            RenderSystem.setShaderTexture(0, HISTORY_TEX[next]);
-            RenderSystem.setShaderTexture(1, scene);
-            c.safeGetUniform("DwDiv").set((float) d);
-            SceneDepth.bindSee(c);
-            fullScreen(c, null, false);
         } finally {
             GlStateManager._glBindFramebuffer(GL30.GL_DRAW_FRAMEBUFFER, main);
             GlStateManager._viewport(VIEWPORT[0], VIEWPORT[1], VIEWPORT[2], VIEWPORT[3]);
@@ -295,14 +300,29 @@ public final class DustWallPass {
         if (target < 0) {
             target = GlStateManager._genTexture();
             fbo = GlStateManager.glGenFramebuffers();
+            bounds = GlStateManager._genTexture();
+            packed = GlStateManager._genTexture();
+            packedFbo = GlStateManager.glGenFramebuffers();
             for (int i = 0; i < 2; i++) {
                 HISTORY_TEX[i] = GlStateManager._genTexture();
                 HISTORY_FBO[i] = GlStateManager.glGenFramebuffers();
             }
         }
-        boolean ok = attach(fbo, target, lw, lh, GlConst.GL_NEAREST);
+        attach(fbo, bounds, lw, lh, GlConst.GL_NEAREST, GL30.GL_COLOR_ATTACHMENT1);
+        attach(fbo, target, lw, lh, GlConst.GL_NEAREST, GL30.GL_COLOR_ATTACHMENT0);
+        // GLSL 150 assigns the output locations at link time.
+        int colour = GL30.glGetFragDataLocation(march.getId(), "fragColor");
+        org.lwjgl.opengl.GL20.glDrawBuffers(colour == 0
+                ? new int[] {GL30.GL_COLOR_ATTACHMENT0, GL30.GL_COLOR_ATTACHMENT1}
+                : new int[] {GL30.GL_COLOR_ATTACHMENT1, GL30.GL_COLOR_ATTACHMENT0});
+        boolean ok = complete();
+        attach(packedFbo, packed, 2 * lw, lh, GlConst.GL_NEAREST, GL30.GL_COLOR_ATTACHMENT0);
+        ok &= complete();
         // history is read between its pixels when the view turns: linear
-        for (int i = 0; i < 2; i++) ok &= attach(HISTORY_FBO[i], HISTORY_TEX[i], lw, lh, GlConst.GL_LINEAR);
+        for (int i = 0; i < 2; i++) {
+            attach(HISTORY_FBO[i], HISTORY_TEX[i], 2 * lw, lh, GlConst.GL_LINEAR, GL30.GL_COLOR_ATTACHMENT0);
+            ok &= complete();
+        }
         GlStateManager._glBindFramebuffer(GL30.GL_DRAW_FRAMEBUFFER, draw);
         if (!ok) {
             Incoming.LOG.error("Nuclear dust wall: targets {}×{} not created, no young wall pass", lw, lh);
@@ -318,7 +338,7 @@ public final class DustWallPass {
         return true;
     }
 
-    private static boolean attach(int framebuffer, int texture, int w, int h, int filter) {
+    private static void attach(int framebuffer, int texture, int w, int h, int filter, int attachment) {
         GlStateManager._bindTexture(texture);
         GlStateManager._texParameter(GlConst.GL_TEXTURE_2D, GlConst.GL_TEXTURE_MIN_FILTER, filter);
         GlStateManager._texParameter(GlConst.GL_TEXTURE_2D, GlConst.GL_TEXTURE_MAG_FILTER, filter);
@@ -326,7 +346,10 @@ public final class DustWallPass {
         GlStateManager._texParameter(GlConst.GL_TEXTURE_2D, GlConst.GL_TEXTURE_WRAP_T, GlConst.GL_CLAMP_TO_EDGE);
         GlStateManager._texImage2D(GlConst.GL_TEXTURE_2D, 0, GL30.GL_RGBA16F, w, h, 0, GL11.GL_RGBA, GL11.GL_FLOAT, null);
         GlStateManager._glBindFramebuffer(GL30.GL_DRAW_FRAMEBUFFER, framebuffer);
-        GlStateManager._glFramebufferTexture2D(GL30.GL_DRAW_FRAMEBUFFER, GlConst.GL_COLOR_ATTACHMENT0, GlConst.GL_TEXTURE_2D, texture, 0);
+        GlStateManager._glFramebufferTexture2D(GL30.GL_DRAW_FRAMEBUFFER, attachment, GlConst.GL_TEXTURE_2D, texture, 0);
+    }
+
+    private static boolean complete() {
         return GL30.glCheckFramebufferStatus(GL30.GL_DRAW_FRAMEBUFFER) == GlConst.GL_FRAMEBUFFER_COMPLETE;
     }
 
@@ -394,6 +417,12 @@ public final class DustWallPass {
     /** Forget the failure and the history (shaders reloaded; GL objects stay, the context outlives them). */
     public static void reset() {
         failed = false;
+        fullW = 0; // relink can change the output locations
+        clearHistory();
+    }
+
+    public static void clearHistory() {
+        previousSource = null;
         history = false;
     }
 
@@ -404,6 +433,6 @@ public final class DustWallPass {
 
     /** No wall this frame in the primary view: the next one starts its history afresh. */
     static void idle() {
-        if (!FxViews.secondary()) history = false;
+        if (!FxViews.secondary()) clearHistory();
     }
 }

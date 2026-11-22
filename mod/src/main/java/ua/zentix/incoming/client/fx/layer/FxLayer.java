@@ -200,7 +200,7 @@ public final class FxLayer {
     /** Heat shimmer and fire light pass ({@link HeatPass}) on the GPU — inside {@link #GPU}. */
     private static GpuTimer HEAT = new GpuTimer();
     /** Young dust wall pass ({@link DustWallPass}) on the GPU — inside {@link #GPU}. */
-    private static final GpuTimer WALL = new GpuTimer();
+    static final GpuTimer WALL = new GpuTimer();
 
     /** Once per client tick (not while paused): the per-second frame time summary. */
     public static void tick() {
@@ -381,14 +381,7 @@ public final class FxLayer {
             boolean pallDrawn = pall != null && scene >= 0 && PallPass.draw(pall, scene, VIEW, e.getProjectionMatrix(), view.camera(),
                     FOG.haze(view.range(), HAZE));
             if (!pallDrawn) PallPass.reset();
-            // young dust wall: its own pass over the pall (the pall handed its young dust over, PallPass.Frame.young)
-            if (pallDrawn && pall.dustWall.active) {
-                int timedWall = WALL.begin();
-                DustWallPass.draw(pall, scene, VIEW, e.getProjectionMatrix());
-                WALL.end(timedWall);
-            } else {
-                DustWallPass.idle();
-            }
+            if (!pallDrawn) DustWallPass.idle();
             // clouds whose volume did not fit (pall frame not drawn) are drawn as quads from the next frame
             SmokeGrid.drawn(pall == null || pall.smoke == null || pallDrawn && SmokePass.filled());
             PallPass.Frame front = pallDrawn ? pall : PallPass.empty();

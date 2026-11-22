@@ -43,7 +43,10 @@ float lattice(float x, float size, float n) {
 
 void main() {
     ivec2 p = ivec2(gl_FragCoord.xy), low = textureSize(Sampler0, 0), size = textureSize(Sampler2, 0);
-    vec4 cur = valid(texelFetch(Sampler0, p, 0));
+    low.x /= 2; // light and depth halves use the same spatial lattice
+    ivec2 offset = ivec2(p.x >= low.x ? low.x : 0, 0);
+    p -= offset;
+    vec4 cur = valid(texelFetch(Sampler0, p + offset, 0));
     if (DwReproject.w < 0.5) {
         fragColor = cur;
         return;
@@ -58,7 +61,7 @@ void main() {
         ivec2 c = clamp(p + ivec2(k % 3 - 1, k / 3 - 1), ivec2(0), low - 1);
         float there = pallScene(texelFetch(Sampler2, ivec2(min((vec2(c) + 0.5) * DwDiv, vec2(size) - 0.5)), 0).r);
         if (!pallSamePlace(there, here)) continue;
-        vec4 v = valid(texelFetch(Sampler0, c, 0));
+        vec4 v = valid(texelFetch(Sampler0, c + offset, 0));
         m1 += v;
         m2 += v * v;
         count += 1.0;
@@ -103,7 +106,7 @@ void main() {
             float was = pallScene(texelFetch(Sampler3, ivec2(min((vec2(c) + 0.5) * DwDiv, vec2(size) - 0.5)), 0).r);
             if (!pallSamePlace(was, here)) w = 0.0;
         }
-        hs += w * valid(texelFetch(Sampler1, c, 0));
+        hs += w * valid(texelFetch(Sampler1, c + offset, 0));
         ws += w;
     }
     if (ws < 1e-4) {

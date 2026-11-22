@@ -5,6 +5,10 @@
 #moj_import <incoming:smoke.glsl>
 #moj_import <incoming:scene.glsl>
 #moj_import <incoming:see.glsl>
+#moj_import <incoming:wall_layer.glsl>
+uniform float DwDiv;
+uniform int PallLayerFrame;
+uniform vec4 PallYoung;
 
 // Pall onto frame (client/fx/layer/PallPass): ONE, SRC_ALPHA blending, pall light plus world behind, attenuated
 // and shadowed by pall/mushrooms. Pall frame is downsampled: four nearest pixels weighted by world-distance
@@ -190,10 +194,12 @@ float pallTau(vec3 dir, float ta, float tb) {
         float s = 0.0;
         if (PallSlot0[1].w > 0.5) {
             PallAt f = pallField(Sampler2, Sampler5, PallSlot0, PallGround0, PallWater0, q, pallRelief(Sampler5, PallSlot0, PallGround0, q.xz), 1.0);
+            pallHandoff(f, PallYoung, PallSlot0, q);
             s += f.sigma.x + f.sigma.y + f.sigma.z;
         }
         if (PallSlot1[1].w > 0.5) {
             PallAt f = pallField(Sampler2, Sampler6, PallSlot1, PallGround1, PallWater1, q, pallRelief(Sampler6, PallSlot1, PallGround1, q.xz), 1.0);
+            pallHandoff(f, PallYoung, PallSlot1, q);
             s += f.sigma.x + f.sigma.y + f.sigma.z;
         }
         tau += s * pallOpenHere(q) * ds;
@@ -206,7 +212,7 @@ float pallTau(vec3 dir, float ta, float tb) {
         for (int j = 0; j < 2; j++) {
             vec2 sp = j == 0 ? spans.xy : spans.zw;
             if (sp.y <= sp.x) continue;
-            float wall = k == 0 ? pallWallTau(Sampler5, S, V, G, W, dir, sp.x, sp.y, 4) : pallWallTau(Sampler6, S, V, G, W, dir, sp.x, sp.y, 4);
+            float wall = k == 0 ? pallWallTau(Sampler5, S, V, G, W, dir, sp.x, sp.y, 4, PallYoung) : pallWallTau(Sampler6, S, V, G, W, dir, sp.x, sp.y, 4, PallYoung);
             tau += wall * pallOpenHere(dir * (0.5 * (sp.x + sp.y)));
         }
     }
@@ -319,7 +325,7 @@ vec3 ballLitWorld(ivec2 full, vec3 n, float kept, vec3 added) {
 // The pall on this pixel's ray up to a see-through surface at view-axis distance surface: the near volume up to it
 // (froxelNear, exact as the composite takes it to the world), and beyond the volume's end the rays' pall from there to the
 // world (rays) cut at the surface by the noiseless field and the conventional smoke's mean field, light in the same ratio
-// to opacity (as upsample does). Mushrooms are not in it: one between the eye and a window counts as behind the window. Light and
+// to opacity (as upsample does). With the young wall active the split includes mushroom extinction on the same interval. Light and
 // transmittance never exceed the whole ray's (laid): the part in front of the surface is a part of it.
 vec4 mediumTo(float surface, ivec2 full, vec3 dir, float nearEnd, vec4 rays, vec4 laid) {
     vec4 beyond = vec4(0.0, 0.0, 0.0, 1.0);
@@ -332,7 +338,9 @@ vec4 mediumTo(float surface, ivec2 full, vec3 dir, float nearEnd, vec4 rays, vec
             float t0 = max(span.x, a), t1 = min(span.y, b);
             if (t1 > t0) depth += smokeTau(dir * t0, dir, t1 - t0, 6);
         }
-        float tau = max(exp(-depth), rays.a);
+        float tau = exp(-depth);
+        if (PallYoung.w > 0.0) tau *= mushTransmitRange(Sampler7, dir, a, b, 8);
+        tau = max(tau, rays.a);
         beyond = vec4(rays.rgb * clamp((1.0 - tau) / max(1.0 - rays.a, 1e-4), 0.0, 1.0), tau);
     }
     vec4 front = beyond;
@@ -343,13 +351,14 @@ vec4 mediumTo(float surface, ivec2 full, vec3 dir, float nearEnd, vec4 rays, vec
 void main() {
     ivec2 fullSize = textureSize(Sampler1, 0), lowSize = textureSize(Sampler0, 0);
     ivec2 full = ivec2(gl_FragCoord.xy);
+    if (PallLayerFrame != 0) full = rayPixel(full, fullSize);
     float depth = pallScene(texelFetch(Sampler1, clamp(full, ivec2(0), fullSize - 1), 0).r);
     // first-person hand under Iris (pallHand): left as vanilla draws it, after the layer — no dust, no shadow; a fireball still
     // lights it as it lights the world around (ballLight, with the pall overhead at the eye): a dark hand in a world the flash
     // made bright looked cut out of another scene
     if (pallHand(depth)) {
         fragColor = vec4(0.0, 0.0, 0.0, 1.0);
-        if (PallBalls[0].w > 0.0) {
+        if (PallLayerFrame == 0 && PallBalls[0].w > 0.0) {
             vec4 farHand = InvViewProj * vec4((vec2(full) + 0.5) / vec2(fullSize) * 2.0 - 1.0, 1.0, 1.0);
             vec3 dirHand = normalize(farHand.xyz / farHand.w);
             vec3 p = dirHand * (depth / max(dot(dirHand, PallForward), 1e-3));
@@ -369,13 +378,34 @@ void main() {
         nearEnd = froxelEnd(PallFroxel, dir0, max(dot(dir0, PallForward), 1e-3), PallSlot0, PallWall0, PallGround0, PallSlot1,
                 PallWall1, PallGround1);
     }
-    vec4 pall = upsample(full, fullSize, lowSize, depth, dir0, nearEnd), rays = pall;
+    vec4 rays;
+    if (PallLayerFrame != 0) rays = texelFetch(Sampler0, ivec2(gl_FragCoord.xy), 0);
+    else rays = upsample(full, fullSize, lowSize, depth, dir0, nearEnd);
+    vec4 pall = rays;
     // near pall in front of the rays, at this pixel's own depth: a block's edge cuts the volume at the block, with no ray of
     // another place and no history from it (the halos and trails of screen-space accumulation); world behind the volume's
     // end, sky — all of it up to there
     if (PallFroxel.z > 0.0) {
         vec4 near = froxelNear(Sampler11, PallFroxel, vec2(full) + 0.5, min(depth, nearEnd));
         pall = froxelOver(near, pall);
+    }
+    // Slot one is empty whenever the young wall owns dust. Its fire-map unit
+    // then carries the resolved wall atlas, keeping the fragment sampler count at 16.
+    WallLayer wall;
+    wall.light = vec4(0.0, 0.0, 0.0, 1.0);
+    wall.depth = vec3(0.0);
+    vec4 air = pall, beforeWall = vec4(0.0, 0.0, 0.0, 1.0);
+    if (PallYoung.w > 0.0) {
+        wall = wallLayer(Sampler4, Sampler1, vec2(full) + 0.5, depth, DwDiv);
+        if (wall.light.a < 1.0) {
+            if (air.a < 1.0 || any(greaterThan(air.rgb, vec3(0.0))))
+                beforeWall = mediumTo(wall.depth.z, full, dir0, nearEnd, rays, air);
+            pall = insertWall(air, beforeWall, wall.light);
+        }
+    }
+    if (PallLayerFrame != 0) {
+        fragColor = pall;
+        return;
     }
     if (PallFire0[0].x > 0.0 || PallFire1[0].x > 0.0) {
         vec2 ndc = (vec2(full) + 0.5) / vec2(fullSize) * 2.0 - 1.0;
@@ -440,7 +470,12 @@ void main() {
     if (FxSee > 0.5 && pallValid(pall)) {
         float surface = pallScene(texelFetch(Sampler1, full, 0).g);
         if (seeBehind(depth, surface)) {
-            vec4 front = mediumTo(surface, full, dir0, nearEnd, rays, laid);
+            vec4 front = mediumTo(surface, full, dir0, nearEnd, rays, wall.light.a < 1.0 ? air : laid);
+            if (wall.light.a < 1.0) {
+                vec4 nearWall = wallTo(wall, surface);
+                vec4 before = surface >= wall.depth.z ? beforeWall : front;
+                front = insertWall(front, before, nearWall);
+            }
             vec4 g = texelFetch(FxGlass, full, 0);
             laid.rgb = vec3(seeMediumLight(laid.r, laid.a, front.r, front.a, g.r, g.a),
                     seeMediumLight(laid.g, laid.a, front.g, front.a, g.g, g.a), seeMediumLight(laid.b, laid.a, front.b, front.a, g.b, g.a));

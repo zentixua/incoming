@@ -923,7 +923,8 @@ paths:
   when the pass can draw it: all three programs ready, primary view, one detonation in the slots, no water under the
   pall (spray and surge stay the pall's), lofted dust left in the young ring. The dust lies on the pall's terrain map
   (`pallRelief`) and never indoors (`pallOpen`), none under the fireball's ground footprint (the pall keeps its own dust
-  there, `PallYoung.z`). Where the scene has no depth the ray ends on the relief traced from the eye (`pallFloor`, as the
+  there, `PallYoung.z`). The last table spacing fades back to the pall head. One radial share in
+  `wall_ownership.glsl` governs the wall, lofted soil, head and the corresponding part of the eye ray limit. Where the scene has no depth the ray ends on the relief traced from the eye (`pallFloor`, as the
   pall's); where the world is drawn its depth alone ends it. The march, resolve and composite judge "the same place" by one
   rule (`pallSamePlace`: a looser rule in one pass let dust from behind a foreground edge through another). The frame air
   (haze, weather) lies in front of the dust as for the pall (`pallAir`, `pallAirLightOf`). Flicker is fixed in time,
@@ -933,8 +934,10 @@ paths:
   each history sample checked against the previous depth, clamped to the depth-alike 3 × 3 neighbourhood with the pixel's
   own sample, restarted on another detonation, a clock jump or a view resize); a
   fixed offset sparkles along the far top where 9–18 m steps cross the moving billowed surface. Light paths see the large shapes only: a shadow tap
-  reading the fine texture or the head's front-riding lumps re-shaded the approaching face every frame. The composite keeps
-  thin foreground and the hand its taps missed and lays dust behind a see-through pane through it. Cost at HIGH
+  reading the fine texture or the head's front-riding lumps re-shaded the approaching face every frame. The march records its occupied view depths and opacity-weighted distance. The pall composite inserts its resolved light
+  at that distance, reconstructs the medium in front from the near volume and far fields, and splits the occupied
+  interval at glass. The wall, quads and source probes read the same low-resolution atlas. Mixed-depth pixels reject
+  farther taps carrying dust behind the pixel. Cost at HIGH
   (1/4 resolution, 128 steps, 2560×1600, RTX 4060): ~1–2 ms approaching, ~5–7 ms after the passage; the ray bound must stay
   under a 120 m camera, or every near-eye ray marches fine steps through empty air. Shader checks without a
   game: `tools/dust_wall_gl.py`.

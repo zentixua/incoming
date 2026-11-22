@@ -714,12 +714,13 @@ vec3 mushBallCap(vec3 e, float adapt) {
 }
 
 // Mushroom k transmittance along ray dir over [0, len], noiseless (steps steps), for layer quads before particle
-float mushTransmit(sampler2D data, vec3 dir, float len, int steps) {
+float mushTransmitRange(sampler2D data, vec3 dir, float start, float len, int steps) {
     float through = 1.0;
     for (int k = 0; k < MUSHROOMS; k++) {
         if (!mushOn(data, k)) continue;
         Mush m = mushLoad(data, k);
         vec2 span = mushSpan(m, dir);
+        span.x = max(span.x, start);
         span.y = min(span.y, len);
         if (span.y <= span.x) continue;
         float ds = (span.y - span.x) / float(steps), tau = 0.0;
@@ -730,6 +731,10 @@ float mushTransmit(sampler2D data, vec3 dir, float len, int steps) {
         through *= exp(-tau);
     }
     return through;
+}
+
+float mushTransmit(sampler2D data, vec3 dir, float len, int steps) {
+    return mushTransmitRange(data, dir, 0.0, len, steps);
 }
 
 // ---------------------------------------------------------------- mushroom sunlight shadow (PallPass: fx_mush_shadow)

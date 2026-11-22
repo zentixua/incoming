@@ -58,6 +58,7 @@ uniform float DwDiv;
 // frame counter (wraps), and the march's step cap
 uniform vec2 DwFrame;
 out vec4 fragColor;
+out vec4 wallDepth;
 
 void main() {
     ivec2 size = textureSize(Sampler1, 0);
@@ -84,4 +85,6 @@ void main() {
     vec4 side = InvViewProj * vec4(ndc + vec2(2.0 * DwDiv / float(size.x), 0.0), 1.0, 1.0);
     float foot = length(normalize(side.xyz / side.w) - dir);
     fragColor = dwMarch(dir, min(tEnd, 30000.0), jitter, foot, int(DwFrame.y));
+    float cover = 1.0 - fragColor.a;
+    wallDepth = vec4(vec3(gDwDepth.xy * cover, gDwDepth.z) * max(dot(dir, PallForward), 1e-3), fragColor.a);
 }

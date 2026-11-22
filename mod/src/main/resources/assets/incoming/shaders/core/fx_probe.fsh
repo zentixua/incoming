@@ -90,7 +90,7 @@ void main() {
     // pall to source front, mushrooms to center excluding own cap (no pall/mushrooms in frame:
     // PallAmbient.w = 0)
     float len = length(center);
-    if (PallAmbient.w > 0.5 && len > radius) seen *= pallThrough(center / len, len - radius) * probeMush(Sampler11, center, radius)
+    if (PallAmbient.w > 0.5 && len > radius) seen *= pallThrough(Sampler0, center / len, len - radius) * probeMush(Sampler11, center, radius)
             * smokeThrough(center / len, len - radius);
     fragColor = vec4(seen, 0.0, 0.0, 1.0);
 }

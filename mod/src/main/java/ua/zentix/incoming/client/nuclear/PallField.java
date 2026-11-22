@@ -626,6 +626,16 @@ public final class PallField {
         return l[0] * profile(h / l[2]) + l[1] * profile(h / l[7]) + l[3] * profile(h / l[4]) + l[5] * profile(h / l[6]);
     }
 
+    /** Add the dry soil contribution alone to the eye extinction and its two vertical depths. */
+    void addLoftedEye(double dx, double dz, double eye, double floor, double ticks, Water water, org.joml.Vector3f out) {
+        double[] l = new double[LAYERS];
+        layers(dx, dz, ticks, water, l);
+        double base = Math.max(floor, 0), h = eye - base;
+        out.add((float) (l[0] * profile(h / l[2])),
+                (float) (l[0] * between(h, Double.POSITIVE_INFINITY, l[2])),
+                (float) (l[0] * between(floor - base, h, l[2])));
+    }
+
     /** Mist component of {@link #sigma}: spray and base surge, 1/block. */
     public double mist(double dx, double dz, double above, double floorUp, double ticks, Water water) {
         double[] l = new double[LAYERS];

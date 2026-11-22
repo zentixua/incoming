@@ -388,8 +388,8 @@ public final class PallPass {
     public static final class Frame {
         /**
          * Young dust wall drawn by its own pass ({@link DustWallPass}, slot 0 only): x the radius from ground zero, blocks, inside
-         * which the pall draws its dust and head whole, y the radius beyond which the pass alone draws them, z the fireball's
-         * ground footprint, where the pass draws no dust and the pall keeps its own; zeroes — the pall draws everything.
+         * which the pall draws its dust and head whole, y the end of the inner crossfade, z the fireball's
+         * ground footprint, w the end of the table. The last node interval fades back to the pall. Zero reach disables the handoff.
          */
         public final Vector4f young = new Vector4f();
         /** The young wall's pass inputs ({@link DustWallPass}); inactive — no young wall this frame. */
@@ -437,6 +437,8 @@ public final class PallPass {
          * ({@code pallClip} in {@code fx_pall}: nothing visible beyond ray depth 12). Zeroes — no ray cutoff.
          */
         public final Vector3f eyeDust = new Vector3f();
+        /** Portion of eyeDust belonging to slot zero's lofted soil and head. */
+        public final Vector3f eyeLofted = new Vector3f();
         public Quality quality = Quality.MEDIUM;
         /** Slot firestorms. */
         public final Fire fire0 = new Fire(), fire1 = new Fire();
@@ -657,6 +659,10 @@ public final class PallPass {
         RenderSystem.setShaderTexture(9, ground0 >= 0 ? ground0 : fallback);
         RenderSystem.setShaderTexture(10, ground1 >= 0 ? ground1 : fallback);
         RenderSystem.setShaderTexture(11, drawn ? mushrooms : fallback);
+        if (front.dustWall.active) RenderSystem.setShaderTexture(10, DustWallPass.atlas());
+        s.safeGetUniform("PallYoung").set(front.young.x, front.young.y, front.young.z, front.young.w);
+        s.safeGetUniform("DwDiv").set((float) DustWallPass.divisor());
+        s.safeGetUniform("DwViewProj").set(VIEW_PROJECTION);
         s.safeGetUniform("PallAir").set(front.air.x, front.air.y, front.air.z, front.air.w);
         s.safeGetUniform("PallSlot0").set(front.slot0);
         s.safeGetUniform("PallSlot1").set(front.slot1);
@@ -772,6 +778,19 @@ public final class PallPass {
         SmokePass.begin();
         if (f.smoke != null) SmokePass.fill(f.smoke);
 
+        if (f.dustWall.active) {
+            int timedWall = FxLayer.WALL.begin();
+            if (!DustWallPass.draw(f, scene, view, projection)) {
+                f.young.zero();
+                f.dustWall.active = false;
+            }
+            FxLayer.WALL.end(timedWall);
+            RenderSystem.disableDepthTest();
+            RenderSystem.disableBlend();
+        } else {
+            DustWallPass.idle();
+        }
+
         // 0. mushroom sun shadow map — frame mushroom tiles stacked vertically
         if (shade) {
             GlStateManager._glBindFramebuffer(GlConst.GL_FRAMEBUFFER, shadowFbo);
@@ -851,6 +870,7 @@ public final class PallPass {
             // step jitter advances once per interleave cycle: each ray pixel takes the next value of the sequence
             m.safeGetUniform("PallFrame").set((float) ((frame / (n * n)) % 4096), step.steps, factor, f.eyeDust.x);
             m.safeGetUniform("PallInterleave").set(n, ox, oy, 0f);
+            m.safeGetUniform("PallEyeLofted").set(f.eyeLofted.x, f.eyeLofted.y, f.eyeLofted.z);
             m.safeGetUniform("PallEyeTau").set(f.eyeDust.y, f.eyeDust.z);
             m.safeGetUniform("PallFire0").set(fireSlot0);
             m.safeGetUniform("PallFire1").set(fireSlot1);
@@ -933,22 +953,24 @@ public final class PallPass {
         quad(r, false);
         latest = next - 1;
         // the whole pall in front of the world at each reduced-frame pixel, for layer quads (frame())
-        GlStateManager._glBindFramebuffer(GlConst.GL_FRAMEBUFFER, FBOS[3]);
-        RenderSystem.setShaderTexture(0, TEXTURES[1 + latest]);
-        RenderSystem.setShaderTexture(1, scene);
-        RenderSystem.setShaderTexture(2, VOLUME[2]);
-        mx.safeGetUniform("PallFrame").set(0f, 0f, factor, 0f);
-        mx.safeGetUniform("PallFroxel").set(f.quality.tile, VOLUME_NEAR, VOLUME_FAR, 0f);
-        // where the near volume ends on each ray (froxelEnd: before a dust-wall head the rays take over)
-        mx.safeGetUniform("InvViewProj").set(INVERSE);
-        mx.safeGetUniform("PallForward").set(FORWARD.x, FORWARD.y, FORWARD.z);
-        mx.safeGetUniform("PallSlot0").set(f.slot0);
-        mx.safeGetUniform("PallSlot1").set(f.slot1);
-        mx.safeGetUniform("PallWall0").set(f.wall0);
-        mx.safeGetUniform("PallWall1").set(f.wall1);
-        mx.safeGetUniform("PallGround0").set(groundSlot0.x, groundSlot0.y, groundSlot0.z, groundSlot0.w);
-        mx.safeGetUniform("PallGround1").set(groundSlot1.x, groundSlot1.y, groundSlot1.z, groundSlot1.w);
-        quad(mx, false);
+        if (!f.dustWall.active) {
+            GlStateManager._glBindFramebuffer(GlConst.GL_FRAMEBUFFER, FBOS[3]);
+            RenderSystem.setShaderTexture(0, TEXTURES[1 + latest]);
+            RenderSystem.setShaderTexture(1, scene);
+            RenderSystem.setShaderTexture(2, VOLUME[2]);
+            mx.safeGetUniform("PallFrame").set(0f, 0f, factor, 0f);
+            mx.safeGetUniform("PallFroxel").set(f.quality.tile, VOLUME_NEAR, VOLUME_FAR, 0f);
+            // where the near volume ends on each ray (froxelEnd: before a dust-wall head the rays take over)
+            mx.safeGetUniform("InvViewProj").set(INVERSE);
+            mx.safeGetUniform("PallForward").set(FORWARD.x, FORWARD.y, FORWARD.z);
+            mx.safeGetUniform("PallSlot0").set(f.slot0);
+            mx.safeGetUniform("PallSlot1").set(f.slot1);
+            mx.safeGetUniform("PallWall0").set(f.wall0);
+            mx.safeGetUniform("PallWall1").set(f.wall1);
+            mx.safeGetUniform("PallGround0").set(groundSlot0.x, groundSlot0.y, groundSlot0.z, groundSlot0.w);
+            mx.safeGetUniform("PallGround1").set(groundSlot1.x, groundSlot1.y, groundSlot1.z, groundSlot1.w);
+            quad(mx, false);
+        }
         stamp(timing, 5);
 
         // 3. composite
@@ -963,7 +985,7 @@ public final class PallPass {
         RenderSystem.setShaderTexture(1, scene);
         RenderSystem.setShaderTexture(2, table);
         RenderSystem.setShaderTexture(3, fire0);
-        RenderSystem.setShaderTexture(4, fire1);
+        RenderSystem.setShaderTexture(4, f.dustWall.active ? DustWallPass.atlas() : fire1);
         RenderSystem.setShaderTexture(5, ground0);
         RenderSystem.setShaderTexture(6, ground1);
         RenderSystem.setShaderTexture(7, mushrooms);
@@ -971,6 +993,8 @@ public final class PallPass {
         RenderSystem.setShaderTexture(9, balls ? frameCopy : table);
         RenderSystem.setShaderTexture(10, lightmap);
         RenderSystem.setShaderTexture(11, VOLUME[2]);
+        c.safeGetUniform("PallYoung").set(f.young.x, f.young.y, f.young.z, f.young.w);
+        c.safeGetUniform("DwDiv").set((float) DustWallPass.divisor());
         c.safeGetUniform("PallFroxel").set(f.quality.tile, VOLUME_NEAR, VOLUME_FAR, 0f);
         c.safeGetUniform("PallLamps").set(lamps ? 1f : 0f);
         c.safeGetUniform("InvViewProj").set(INVERSE);
@@ -998,6 +1022,18 @@ public final class PallPass {
         OpenAir.bind(c, open);
         SmokePass.bind(c, f.smoke);
         SceneDepth.bindSee(c);
+        if (f.dustWall.active) {
+            // Layer quads need the same ordered medium as the display, without glass or world lighting.
+            GlStateManager._glBindFramebuffer(GlConst.GL_FRAMEBUFFER, FBOS[3]);
+            RenderSystem.viewport(0, 0, lowW, lowH);
+            RenderSystem.disableBlend();
+            c.safeGetUniform("PallLayerFrame").set(1);
+            quad(c, true);
+            GlStateManager._glBindFramebuffer(GlConst.GL_FRAMEBUFFER, previous);
+            RenderSystem.viewport(VIEWPORT[0], VIEWPORT[1], VIEWPORT[2], VIEWPORT[3]);
+            RenderSystem.enableBlend();
+        }
+        c.safeGetUniform("PallLayerFrame").set(0);
         // surface flame flickers by 3D noise
         quad(c, true);
         RenderSystem.enableDepthTest();

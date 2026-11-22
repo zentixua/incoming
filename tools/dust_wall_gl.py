@@ -39,53 +39,15 @@ def scene(w, h, depths):
     return texture(g.GL_RG32F, g.GL_RG, w, h, [(d, d) for d in depths])
 
 
-def composite_cases(p):
-    w, h = 12, 12
-    target(w, h, [(g.GL_RGBA32F, g.GL_RGBA)])
-    g.glUseProgram(p)
-    bind(p, 0, image(3, 3, [0.25] * 9))
-    data = [100.0] * (w * h)
-    data[4 * w + 4] = 2.0
-    data[4 * w + 5] = 0.10
-    bind(p, 1, scene(w, h, data))
-    g.glUniform1f(loc(p, "DwDiv"), 4)
-    quad(p)
-    result = read(w, h)
-    check(result[4, 4, 3] > 0.999, f"opaque foreground missed by low-res taps: T={result[4, 4, 3]:.4f}, expected 1")
-    check(result[4, 5, 3] > 0.999, f"Iris hand missed by low-res taps: T={result[4, 5, 3]:.4f}, expected 1")
-    # a foreground surface 100 blocks away, every tap behind it at 109 (dust in those 9 blocks): not laid over it
-    depth = [109.0] * (w * h)
-    depth[4 * w + 4] = 100.0
-    bind(p, 1, scene(w, h, depth))
-    quad(p)
-    r100 = read(w, h)[4, 4, 3]
-    check(r100 > 0.999, f"foreground at 100 blocks, taps at 109: T={r100:.4f}, expected 1")
-
-    # The r/g contract describes a pane one block away, with the dust behind it.
-    # Incoming's pane representation is X + Tpane*background, here .4 + .5*.8.
-    bind(p, 1, texture(g.GL_RG32F, g.GL_RG, w, h, [(100, 1)] * (w * h)))
-    g.glActiveTexture(g.GL_TEXTURE0 + 13)
-    glass = texture(g.GL_RGBA16F, g.GL_RGBA, w, h, [(0.4, 0.4, 0.4, 0.5)] * (w * h))
-    g.glActiveTexture(g.GL_TEXTURE0 + 13)
-    g.glBindTexture(g.GL_TEXTURE_2D, glass)
-    g.glUniform1i(loc(p, "FxGlass"), 13)
-    g.glUniform1f(loc(p, "FxSee"), 1)
-    g.glClearColor(0.8, 0.8, 0.8, 1.0)
-    g.glClear(g.GL_COLOR_BUFFER_BIT)
-    g.glEnable(g.GL_BLEND)
-    g.glBlendFuncSeparate(g.GL_ONE, g.GL_SRC_ALPHA, g.GL_ZERO, g.GL_ONE)
-    quad(p)
-    g.glDisable(g.GL_BLEND)
-    red = read(w, h)[4, 4, 0]
-    check(abs(red - 0.5) < 1e-3, f"dust behind a pane: RGB {red:.4f}, expected X + Tpane*Twall*background = 0.5")
-
-
 def resolve(p, w, h, current, past, depths, history=1, before=None):
     size = ((w + 3) // 4, (h + 3) // 4)
     target(*size, [(g.GL_RGBA32F, g.GL_RGBA)])
     g.glUseProgram(p)
-    bind(p, 0, image(*size, current))
-    bind(p, 1, image(*size, past))
+    def atlas(values):
+        tile = np.asarray(values).reshape(size[1], size[0])
+        return image(2 * size[0], size[1], np.tile(tile, (1, 2)).ravel())
+    bind(p, 0, atlas(current))
+    bind(p, 1, atlas(past))
     g.glTexParameteri(g.GL_TEXTURE_2D, g.GL_TEXTURE_MIN_FILTER, g.GL_LINEAR)
     g.glTexParameteri(g.GL_TEXTURE_2D, g.GL_TEXTURE_MAG_FILTER, g.GL_LINEAR)
     bind(p, 2, scene(w, h, depths))
@@ -156,6 +118,7 @@ void main() {
     g.glTexParameteri(g.GL_TEXTURE_3D, g.GL_TEXTURE_MAG_FILTER, g.GL_LINEAR)
     g.glTexImage3D(g.GL_TEXTURE_3D, 0, g.GL_R32F, 1, 1, 1, 0, g.GL_RED, g.GL_FLOAT, np.array([0.5], dtype=np.float32))
     g.glUniform1i(loc(p, "DwNoise"), 12)
+    g.glUniform4f(loc(p, "PallYoung"), 0, 1, 0, 300)
     g.glUniform4f(loc(p, "DwRing"), 300, 0, 65, 300)
     g.glUniform4f(loc(p, "DwBall"), 0, 10, 0, 1)
     g.glUniform3f(loc(p, "DwSunDir"), 0, 1, 0)
@@ -258,6 +221,7 @@ void main() {
         front = 4500 * (t / arrive) ** 0.8
         # the eye far off (the head's own texture is drawn away from the eye)
         g.glUniform4f(loc(p, "DwEye"), 0, 120, 4500, t)
+        g.glUniform4f(loc(p, "PallYoung"), 0, 1, 0, reach)
         g.glUniform4f(loc(p, "DwRing"), front, 0, 400, reach)
         # a fixed arc on the ground, 80 blocks behind the front at the first instant (the dust is anchored where it was born)
         g.glUniform1f(loc(p, "Radius"), 4500 - 80)
@@ -340,6 +304,7 @@ void main() {
     t = arrive + 1.0
     front = 4500 * (t / arrive) ** 0.8
     g.glUniform4f(loc(p, "DwEye"), 0, 120, 4500, t)
+    g.glUniform4f(loc(p, "PallYoung"), 0, 1, 0, reach)
     g.glUniform4f(loc(p, "DwRing"), front, 0, 400, reach)
     g.glUniform1f(loc(p, "Front"), front)
     step = np.radians(60.0) * front / 2048
@@ -385,7 +350,6 @@ for name, p in programs.items():
             check(False, f"Veil round trip for fx_dustwall{name}: {str(err)[:400]}")
         else:
             print(f"Linked fx_dustwall{name} after the Veil parser round trip")
-composite_cases(programs["_composite"])
 resolve_cases(programs["_resolve"])
 march_cases()
 turning_case()
