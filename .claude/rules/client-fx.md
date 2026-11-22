@@ -904,6 +904,40 @@ paths:
   (`pallAirLight`: vanilla's sky along the pixel from the sky/fog colours, added after `pallShown`), their opacity stays whole; quads and probes behind them take the real transmittance
   (`pall_front`, `fx_probe`, `mushTransmit` in `fx.vsh`): in rain the wall at 8 km does not stand as a dark ring on
   the horizon, and the sun quad never shows through it.
+- The young dust wall (front to `DustWallPass.SPAN` 24 model s behind it) is its own ray-marched pass, one presentation
+  model (`include/dustwall.glsl`, `DustWallPass`, `NukePall.youngWall`, inputs `PallField.young`): a dust envelope born
+  on the contact line as a ramp leaning back (never ahead of the front: dust there is cut by the ring, a seam), a
+  hump whose crest is 1.4–1.6 of the settled layer (drawn ×68/58 of the law's, `NukePall.YOUNG_PRESENT_HEIGHT`:
+  the crest just under a 120 m camera's horizon at 4.5 km from 1 Mt; on the horizon line its ragged top flickered), back to the layer within 0.5–1 s (`DustWallGlslTest`), billows and bulges
+  fixed in the air across the ground and carried in height by the dust's own column. One model, per-point birth (LOOK
+  Trait 0): the front is a line of births; each ground point's seed (world-fixed noise) sets its birth delay after the
+  front's arrival, amount, column height and overshoot, its column rises, overshoots and settles by its own age and stays
+  where it was born; behind the front one law of time since the passage per point moves it (the blast wind's outward
+  surge, the weaker longer reverse, the afterwind drawing low dust in, eddies turning either way decaying over ~25 s,
+  swells, tongues, the wind). Nothing rides with the front or
+  is placed by bearing × the front's radius: texture riding out with it slides at its speed and flutters as the front
+  passes under the eye, a ramp shared by every point reads as one mass carried out from the centre, features placed by
+  bearing × the current radius slide along the front (`DustWallGlslTest`, the turning and births checks in
+  `tools/dust_wall_gl.py`); light from the fireball, sun and sky with multiply scattered light in the soil's bulk colour (no
+  near-black). The pall hands its young dust, head and eye dust over across `PallYoung` (a crossfade over `FADE`) only
+  when the pass can draw it: all three programs ready, primary view, one detonation in the slots, no water under the
+  pall (spray and surge stay the pall's), lofted dust left in the young ring. The dust lies on the pall's terrain map
+  (`pallRelief`) and never indoors (`pallOpen`), none under the fireball's ground footprint (the pall keeps its own dust
+  there, `PallYoung.z`). Where the scene has no depth the ray ends on the relief traced from the eye (`pallFloor`, as the
+  pall's); where the world is drawn its depth alone ends it. The march, resolve and composite judge "the same place" by one
+  rule (`pallSamePlace`: a looser rule in one pass let dust from behind a foreground edge through another). The frame air
+  (haze, weather) lies in front of the dust as for the pall (`pallAir`, `pallAirLightOf`). Flicker is fixed in time,
+  not by blur: the sample grid is fixed along each ray from the eye, its offset moves every frame, the ray moves within its
+  march pixel every frame (a quarter-resolution silhouette otherwise draws a staircase of 4-pixel rows), and
+  `fx_dustwall_resolve` averages ~10 frames (reprojected through the settled layer top, read on the march lattice,
+  each history sample checked against the previous depth, clamped to the depth-alike 3 × 3 neighbourhood with the pixel's
+  own sample, restarted on another detonation, a clock jump or a view resize); a
+  fixed offset sparkles along the far top where 9–18 m steps cross the moving billowed surface. Light paths see the large shapes only: a shadow tap
+  reading the fine texture or the head's front-riding lumps re-shaded the approaching face every frame. The composite keeps
+  thin foreground and the hand its taps missed and lays dust behind a see-through pane through it. Cost at HIGH
+  (1/4 resolution, 128 steps, 2560×1600, RTX 4060): ~1–2 ms approaching, ~5–7 ms after the passage; the ray bound must stay
+  under a 120 m camera, or every near-eye ray marches fine steps through empty air. Shader checks without a
+  game: `tools/dust_wall_gl.py`.
 - The nuke's fire storm is in the same pall passes (`client/nuclear/FireStorm`, `FireStorms`): at the blast slot the
   fire map is RGBA16F by cells of 32 blocks (R — flame, G — smoke presentation, B — it × column rise), with mip levels.
   The levels are themselves clusters of sources (instead of the list of lamps `FxLights` or clusters per frame): glow at

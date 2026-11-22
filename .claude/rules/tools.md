@@ -59,6 +59,10 @@ Prism: `~/.var/app/org.prismlauncher.PrismLauncher/data/PrismLauncher/` (`tools/
     see_through_gl.py                    ← the see-through shaders on Mesa llvmpipe without a game: sampler counts (the pall
                                            composite within 16), fx_depth on synthetic captures, the half-resolution
                                            pair, the pall split with smoke in front of a far pane; exit 1 on a failed check
+    dust_wall_gl.py                      ← the young nuclear dust wall's shaders on Mesa llvmpipe (see_through_gl.py's
+                                           harness): thin foreground, hand and pane in its composite, history at a new
+                                           occluder and on an uneven lattice, the march at the world's edge, straight down
+                                           and on a valley floor; exit 1 on a failed check; run it on dust wall shader changes
     nested_kwin.sh                       ← nested KWin for the client: no window and no host sound, its own D-Bus bus without starting services
                                            (nested_kwin_bus.conf) and XDG directories; takes the GPU lease and the client lock
                                            (gpu_lease.sh); exit 75 means whoever holds the GPU or Artem's game running (an exclusive client never starts beside it); with INCOMING_SOFT=1 a CPU session
