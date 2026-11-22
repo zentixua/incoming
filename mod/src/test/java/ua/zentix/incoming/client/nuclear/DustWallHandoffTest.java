@@ -61,6 +61,8 @@ class DustWallHandoffTest {
         var a = youngBurst();
         when(a.seconds(0)).thenReturn(8.0);
         var frame = new PallPass.Frame();
+        frame.slot0.m13(1);
+        frame.water0.zero();
         try (var pass = mockStatic(DustWallPass.class)) {
             pass.when(DustWallPass::ready).thenReturn(true);
             for (int occupied : new int[]{1, 2}) {
