@@ -233,10 +233,10 @@ times and the pall's budget are not frame costs: frame cost belongs to the GPU a
   and wherever vanilla clouds drift (their offset follows client ticks): set `renderClouds:"false"` in the sandbox
   `options.txt` (every start makes sure the line exists, `client_options`) and cut the mask at the frame's own horizon.
   Every take states its second 0: `capture.json` `clock` and each `SANDBOX shot` line ("t = 0 at effect start", or for
-  `nuke … near` "front at the houses (burst N s earlier)"); read frame times against it. Server ruins and pall state accumulate with each nuclear take: at the
-  default heap (3 GB, ceiling 5 GB) a vanilla sandbox, on a shared GPU slot as on the CPU, can be OOM-killed on its second
-  take (`nuke 1 ground near 2507` then `nuke 15 ground near 2000`); for nuclear takes start it with
-  `INCOMING_SOFT_HEAP=4g` or `5g` and `restart` it between takes.
+  `nuke … near` "front at the houses (burst N s earlier)"); read frame times against it. Server ruins and pall state accumulate with each nuclear take, and
+  the default heap (“Vanilla rendering”) can run out on the second one: for nuclear takes `export INCOMING_SOFT_HEAP=4g`
+  (or `5g`) before `start` and keep it set for every `restart` (a restart starts the client again from the current
+  environment), restarting between nuclear takes.
 - Mesa caches compiled shaders in `~/.cache/incoming-mesa-shaders`, shared by every tree: a cold llvmpipe compiles the
   nuclear volume shaders for 140 s (laptop) or 74 s (netcup) before `ready`; a cold blast's first frame takes seconds.
 - Measured 20.11 (flat sandbox, 1280×720, `blast drone`): laptop (16 threads, `LP_NUM_THREADS` 8) start 240 s cold,
