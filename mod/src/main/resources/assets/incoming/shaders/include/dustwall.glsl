@@ -277,31 +277,20 @@ float dwDensity(vec3 g, bool coarse) {
     float n = coarse ? dwFbm2(tq, 0.0) : dwFbm(tq, 1.0 / 13.0);
     // cauliflower lumps of the top, ~35 m and finer, in the same air
     float bl = coarse ? 0.42 : dwBillow(vec3(pw.x, pw.y - 0.3 * ph, pw.z) / vec3(34.0, 22.0, 34.0) + 11.0, 1.0 / 22.0);
-    // One frame per feature: the young head's texture lives in the head's own frame (along the front, height, distance
-    // behind it rolling back at 25 m/s) and hands over to the air's over 0.6–1.5 s of age, for the light paths too. Fixed
-    // in the air, the head's detail was swept by the 470 m/s front and redrawn every frame (the approaching face and crest
-    // shimmered); anchored, every billow has one place to live and a continuous lifetime
-    float headTex = 1.0 - smoothstep(0.6, 1.5, a0);
-    if (headTex > 0.0) {
-        vec3 hc = vec3(atan(q.z, q.x) * DwRing.x, q.y, DwRing.x - r + 25.0 * DwEye.w);
-        vec3 hq3 = hc / vec3(20.0, 13.0, 20.0) + 41.0;
-        n = mix(n, coarse ? dwFbm2(hq3, 0.0) : dwFbm(hq3, 1.0 / 13.0), headTex);
-        if (!coarse) bl = mix(bl, dwBillow(hc / vec3(34.0, 22.0, 34.0) + 53.0, 1.0 / 22.0), headTex);
-    }
+    // One frame for the texture at every age: the air the dust was raised in. A head texture riding with the front (20–35 m
+    // features at 470 m/s, 15 m a frame) crossed a fixed eye in one or two frames as the front passed under it (the lower
+    // frame fluttered, harness passage d2 2.7 against 1.1 air-fixed), and its crossfade into the air's texture blurred the
+    // young dust and faded billows in where they stood
     // fibrous streaks combed along the radial wind, ~28 m along, 4.5 m across
     float fs = 0.5;
     if (!coarse) {
         float ral = length(pw.xz);
-        fs = mix(0.5, dwFbm2(vec3(ral / 28.0, (pw.y - 0.25 * ph) / 5.0, atan(pw.z, pw.x) * ral / 4.5), 0.0), dwLod(1.0 / 2.2) * (1.0 - headTex));
+        fs = mix(0.5, dwFbm2(vec3(ral / 28.0, (pw.y - 0.25 * ph) / 5.0, atan(pw.z, pw.x) * ral / 4.5), 0.0), dwLod(1.0 / 2.2));
     }
     // the billowed surface: rises and dips by the texture (cauliflower billows, ragged where the dust is young), within
     // DW_BILLOW of the top: the hump's excess (+30–50 %) stays well above the billows, so the crest reads as a crest
     float torn = 1.0 + 0.5 * exp(-a / 0.25);
-    // (on the young head the top takes its shape from the lumps riding with the front, the air's billows join as it
-    // settles: the head sweeps through the air at the front's speed and, seen on the horizon line, an air-fixed ragged
-    // top was redrawn every frame; in-game approach coherence 0.617 -> 0.731)
-    float surf = top * (1.0 + DW_BILLOW * dwSoft(((bl - 0.42) * 3.0 + (n - 0.5) * 2.0) * torn) * smoothstep(0.6, 1.5, a0)
-            + 0.12 * (bf - 0.42) * (1.0 - smoothstep(0.6, 1.5, a0)));
+    float surf = top * (1.0 + DW_BILLOW * dwSoft(((bl - 0.42) * 3.0 + (n - 0.5) * 2.0) * torn));
     if (!coarse) gDwSurf = surf;
     // a soft top: billow tops thin out over ~a quarter of the layer (an opaque top popped where dips passed in and out of
     // view at grazing angles)
