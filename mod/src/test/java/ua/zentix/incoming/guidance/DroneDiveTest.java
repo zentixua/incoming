@@ -24,6 +24,12 @@ class DroneDiveTest {
     private static final double NEAREST = 45;
 
     @Test
+    void preservesOpenPointBehindCityBuilding() {
+        String outcome = strike(30, 20);
+        assertTrue(outcome.startsWith("hit"), outcome);
+    }
+
+    @Test
     void divesPastTowerOnDiveLine() {
         List<String> misses = new ArrayList<>();
         StringBuilder all = new StringBuilder();
