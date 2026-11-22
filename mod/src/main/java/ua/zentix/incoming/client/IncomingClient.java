@@ -41,6 +41,7 @@ import ua.zentix.incoming.client.fx.GridEffects;
 import ua.zentix.incoming.client.fx.layer.FxAtlas;
 import ua.zentix.incoming.client.fx.layer.FxLayer;
 import ua.zentix.incoming.client.fx.layer.PallPass;
+import ua.zentix.incoming.client.fx.layer.VolumeReload;
 import ua.zentix.incoming.client.fx.particle.Fx;
 import ua.zentix.incoming.client.fx.particle.FxPool;
 import ua.zentix.incoming.client.hud.Alerts;
@@ -191,6 +192,7 @@ public final class IncomingClient {
         e.registerReloadListener(ua.zentix.incoming.client.nuclear.NukeBallSurface.INSTANCE);
         e.registerReloadListener(ua.zentix.incoming.client.sound.Envelopes.INSTANCE);
         e.registerReloadListener(Concussion.RELOAD);
+        e.registerReloadListener(VolumeReload.LISTENER);
     }
 
     private static void keys(RegisterKeyMappingsEvent e) {
@@ -309,7 +311,7 @@ public final class IncomingClient {
     }
 
     /**
-     * Nuclear mushroom volume noise builds in the background from world entry (~one second on one core, once per game launch):
+     * Request the background volume noise at world entry as well as resource load (~one second on one core, once per game launch):
      * the fireball is the mushroom volume from the first instant; without launch warning ({@code /incoming nuke now}),
      * it would otherwise have no body for its first second. Also once per launch, warm what detonation builds on the frame
      * thread ({@link ClientNuclear#warm}: dust wall and pall).

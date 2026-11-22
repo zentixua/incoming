@@ -130,6 +130,7 @@ def history_occluder(far=0.10):
     g.glUniformMatrix4fv(loc(program, "InvViewProj"), 1, True, np.linalg.inv(projection).astype(np.float32))
     g.glUniform3f(loc(program, "PallForward"), 0, 0, -1)
     g.glUniform1f(loc(program, "DwDiv"), 4)
+    g.glUniform1f(loc(program, "DwPrevDiv"), 4)
     g.glUniform4f(loc(program, "DwReproject"), 0, 0, 0, 1)
     g.glUniform2f(loc(program, "DwHistory"), 0.1, 10)
     g.glUniform1f(loc(program, "DwPrevScene"), 1)

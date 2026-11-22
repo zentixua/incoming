@@ -22,6 +22,8 @@ uniform mat4 InvViewProj;
 uniform mat4 PrevViewProj;
 uniform vec3 PallForward;
 uniform float DwDiv;
+// Divisor of the previous image, which can survive a change of detail.
+uniform float DwPrevDiv;
 // xyz: this eye minus the previous frame's eye, blocks; w: 1 if history exists
 uniform vec4 DwReproject;
 // x: weight of the current frame; y: the layer top's height relative to the eye, blocks
@@ -33,11 +35,11 @@ vec4 valid(vec4 v) {
     return pallValid(v) ? v : vec4(0.0, 0.0, 0.0, 1.0);
 }
 
-// lattice coordinate (in samples) of frame pixel coordinate x on one axis: sample i sits at min((i + 0.5) × DwDiv, size −
+// lattice coordinate (in samples) of frame pixel coordinate x on one axis: sample i sits at min((i + 0.5) × DwPrevDiv, size −
 // 0.5); between the last two samples, linear between their true places
 float lattice(float x, float size, float n) {
-    float a = (n - 1.5) * DwDiv, b = min((n - 0.5) * DwDiv, size - 0.5);
-    if (n < 2.0 || x <= a) return x / DwDiv - 0.5;
+    float a = (n - 1.5) * DwPrevDiv, b = min((n - 0.5) * DwPrevDiv, size - 0.5);
+    if (n < 2.0 || x <= a) return x / DwPrevDiv - 0.5;
     return n - 2.0 + (x - a) / max(b - a, 1e-3);
 }
 
@@ -89,7 +91,8 @@ void main() {
             return;
         }
     }
-    vec2 l = vec2(lattice(prevPixel.x, float(size.x), float(low.x)), lattice(prevPixel.y, float(size.y), float(low.y)));
+    ivec2 past = textureSize(Sampler1, 0);
+    vec2 l = vec2(lattice(prevPixel.x, float(size.x), float(past.x)), lattice(prevPixel.y, float(size.y), float(past.y)));
     // the four history samples around it, each only where the previous frame saw the same distance (a bilinear read took
     // dust clipped by a far background into a pixel whose previous depth was the foreground's)
     vec2 f0 = floor(l), fr = l - f0;
@@ -97,10 +100,10 @@ void main() {
     float ws = 0.0;
     for (int k = 0; k < 4; k++) {
         ivec2 o = ivec2(k % 2, k / 2);
-        ivec2 c = clamp(ivec2(f0) + o, ivec2(0), low - 1);
+        ivec2 c = clamp(ivec2(f0) + o, ivec2(0), past - 1);
         float w = mix(1.0 - fr.x, fr.x, float(o.x)) * mix(1.0 - fr.y, fr.y, float(o.y));
         if (DwPrevScene > 0.5) {
-            float was = pallScene(texelFetch(Sampler3, ivec2(min((vec2(c) + 0.5) * DwDiv, vec2(size) - 0.5)), 0).r);
+            float was = pallScene(texelFetch(Sampler3, ivec2(min((vec2(c) + 0.5) * DwPrevDiv, vec2(size) - 0.5)), 0).r);
             if (!pallSamePlace(was, here)) w = 0.0;
         }
         hs += w * valid(texelFetch(Sampler1, c, 0));

@@ -418,6 +418,19 @@ public final class SceneDepth {
     }
 
     /** Both textures and framebuffers sized to the game frame (recreated on window resize). */
+    /** The real world-distance target during a resource reload, before a world supplies depth. */
+    static int loadingScene(int w, int h) {
+        if (w <= 0 || h <= 0 || !ensure(w, h)) return -1;
+        int draw = GlStateManager._getInteger(GL30.GL_DRAW_FRAMEBUFFER_BINDING);
+        GlStateManager._glBindFramebuffer(GL30.GL_DRAW_FRAMEBUFFER, FBOS[current]);
+        GL30.glClearBufferfv(GL11.GL_COLOR, 0, SKY_DISTANCE);
+        GlStateManager._glBindFramebuffer(GL30.GL_DRAW_FRAMEBUFFER, draw);
+        lastOk = previousValid = see = false;
+        return TEXTURES[current];
+    }
+
+    private static final float[] SKY_DISTANCE = {1e9f, 1e9f, 0f, 0f};
+
     private static boolean ensure(int w, int h) {
         if (FBOS[0] >= 0 && w == width && h == height) return true;
         width = w;

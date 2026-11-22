@@ -80,7 +80,7 @@ public final class NukePall {
     private NukePall() {}
 
     /** Quality from player settings. */
-    static PallPass.Quality quality() {
+    public static PallPass.Quality quality() {
         return switch (IncomingConfig.CLIENT.nukeDustQuality.get()) {
             case OFF -> PallPass.Quality.OFF;
             case LOW -> PallPass.Quality.LOW;
@@ -275,7 +275,7 @@ public final class NukePall {
         // surge stay the pall's), all its programs ready; otherwise the pall draws the whole wall
         // (the primary view first: preparing for a secondary view's size resized the primary's targets and dropped its history)
         if (k == 1 && f.water0.w < 0.5 && !ua.zentix.incoming.client.fx.layer.FxViews.secondary()
-                && ua.zentix.incoming.client.fx.layer.DustWallPass.prepare(q)) youngWall(SLOTTED[0], eye, partial, f);
+                && ua.zentix.incoming.client.fx.layer.DustWallPass.ready()) youngWall(SLOTTED[0], eye, partial, f);
         // without pall use zero bounds: the ray cannot enter (inverted bounds would span the entire ray)
         if (k == 0) {
             f.min.zero();
