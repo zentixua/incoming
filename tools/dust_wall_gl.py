@@ -10,8 +10,8 @@ thin foreground and the first-person hand its low-resolution taps missed, and la
 it, and lays no dust from behind a foreground surface; the resolve drops history at a new occluder, behind a ceiling that
 moved in, with no history, and reads the previous frame on the march lattice when the frame width is not a multiple of the
 divisor (its last column too); the march stops at the world behind the pixel, a straight-down ray sees the layer as a
-slightly tilted one does, the layer lies on the local ground (a valley), a ray over rising ground does not skip it, and no
-dust lies inside the fireball's ground footprint. Optional arguments: a Java 21
+slightly tilted one does, the layer lies on the local ground (a valley), a ray over rising ground does not skip it, no
+dust lies inside the fireball's ground footprint, and the head does not turn around ground zero. Optional arguments: a Java 21
 executable and the Veil parser classpath to link the programs after Veil's parse and print as well (VeilPrintProbe.java
 beside this script is not shipped; ShaderSourceTest covers Veil in the build)."""
 import json
@@ -209,6 +209,59 @@ void main() {
     check(abs(cut[3] - 1) < 1e-5, f"ray inside the fireball's ground footprint: T={cut[3]:.4f}, expected 1")
 
 
+def turning_case():
+    """No turning around ground zero: the head's dense extinction along an arc 80 blocks behind the front (bearing
+    -110..-70 deg, 25 blocks up), 0.02 s apart while the front runs out at 470 m/s, matches itself with no shift along the
+    arc. Features placed by bearing x the front's current radius slid along it at bearing x the front's speed (~15 m here)."""
+    core, expand = gl["CORE"], gl["expand"]
+    src = expand("""#version 150
+float dwFloorEye(vec2 xz) { return 0.0; }
+float dwOpenEye(vec3 p) { return 1.0; }
+vec2 dwSoilAt(vec2 xz) { return vec2(0.0); }
+#moj_import <incoming:dustwall.glsl>
+uniform float Radius;
+out vec4 fragColor;
+void main() {
+    float b = radians(-110.0 + 40.0 * gl_FragCoord.x / 2048.0);
+    fragColor = vec4(dwDensity(vec3(Radius * cos(b), 25.0, Radius * sin(b)), false), 0.0, 0.0, 1.0);
+}
+""")
+    p = gl["compileProgram"](gl["compileShader"]((core / "fx_dustwall.vsh").read_text(), g.GL_VERTEX_SHADER),
+                             gl["compileShader"](src, g.GL_FRAGMENT_SHADER), validate=False)
+    target(2048, 1, [(g.GL_RGBA32F, g.GL_RGBA)])
+    g.glUseProgram(p)
+    reach, arrive = 9000.0, 7.63
+    nodes = [(arrive * (i / 127 * reach / 4500.0) ** 1.25, 68.0, 0.11, 0.0) for i in range(128)]
+    bind(p, 2, texture(g.GL_RGBA32F, g.GL_RGBA, 128, 1, nodes))
+    g.glActiveTexture(g.GL_TEXTURE0 + 12)
+    noise = g.glGenTextures(1)
+    g.glBindTexture(g.GL_TEXTURE_3D, noise)
+    for f in (g.GL_TEXTURE_MIN_FILTER, g.GL_TEXTURE_MAG_FILTER):
+        g.glTexParameteri(g.GL_TEXTURE_3D, f, g.GL_LINEAR)
+    for f in (g.GL_TEXTURE_WRAP_S, g.GL_TEXTURE_WRAP_T, g.GL_TEXTURE_WRAP_R):
+        g.glTexParameteri(g.GL_TEXTURE_3D, f, g.GL_REPEAT)
+    lattice = np.random.default_rng(7).random((128, 128, 128), dtype=np.float32)
+    g.glTexImage3D(g.GL_TEXTURE_3D, 0, g.GL_R32F, 128, 128, 128, 0, g.GL_RED, g.GL_FLOAT, lattice)
+    g.glUniform1i(loc(p, "DwNoise"), 12)
+    g.glUniform4f(loc(p, "DwBall"), 0, 1200, 0, 1700)
+    arcs = []
+    for t in (arrive, arrive + 0.02):
+        front = 4500 * (t / arrive) ** 0.8
+        # the eye far off (the head's own texture is drawn away from the eye)
+        g.glUniform4f(loc(p, "DwEye"), 0, 120, 4500, t)
+        g.glUniform4f(loc(p, "DwRing"), front, 0, 400, reach)
+        g.glUniform1f(loc(p, "Radius"), front - 80)
+        quad(p)
+        arcs.append(read(2048, 1)[0, :, 0].copy())
+    a, b = (x - x.mean() for x in arcs)
+    shifts = range(-40, 41)
+    corr = [np.corrcoef(a[100:-100], np.roll(b, -k)[100:-100])[0, 1] for k in shifts]
+    best = shifts[int(np.argmax(corr))]
+    metres = best * np.radians(40.0) * (4500 - 80) / 2048
+    print(f"turning: the head's arc moves {metres:+.1f} m along the front in 0.02 s (correlation {max(corr):.3f})")
+    check(abs(metres) < 2.0, f"the head turns around ground zero: {metres:+.1f} m along the front in 0.02 s, expected ~0")
+
+
 def link_after_veil(name, java, classpath):
     core = gl["CORE"]
     setup = json.loads((core / f"{name}.json").read_text())
@@ -240,4 +293,5 @@ for name, p in programs.items():
 composite_cases(programs["_composite"])
 resolve_cases(programs["_resolve"])
 march_cases()
+turning_case()
 sys.exit(bool(gl["FAILED"]))

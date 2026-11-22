@@ -93,4 +93,16 @@ class DustWallGlslTest {
         String surface = s.substring(s.indexOf("float surf = "), s.indexOf("if (!coarse) gDwSurf = surf;"));
         assertTrue(!surface.contains("smoothstep") && !surface.contains("bf"), "the billowed top is the texture's at every age");
     }
+
+    /**
+     * The head's coordinate along the front is bearing × a fixed arc radius: bearing × the front's current radius slid every
+     * feature along the front at bearing × the front's speed (~600–740 m/s), and the ring read as turning around ground zero
+     * (tools/dust_wall_gl.py measures the head's arc: no shift along the front).
+     */
+    @Test
+    void headFeaturesKeepTheirBearing() throws IOException {
+        String s = glsl();
+        assertTrue(!Pattern.compile("atan\\([^)]*\\) \\* DwRing").matcher(s).find(), "no bearing × the front's radius");
+        assertTrue(s.contains("hand * sin("), "residual orbits turn either way");
+    }
 }

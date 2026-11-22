@@ -912,7 +912,8 @@ paths:
   fixed in the air near the eye and behind the head, the head carrying its texture with the front only away from the eye
   (air-fixed on a 470 m/s head is new air every frame: the far head churns; riding with the front at the eye, it crosses
   the eye's rays in one or two frames as the front passes under it: the view down flutters; handover in a band fixed to
-  the eye, `DustWallGlslTest`), the head's eddies, gusts and evolution on a slowed clock (`dwClock`), the face's notches cut by head lumps riding with the front
+  the eye, `DustWallGlslTest`), the head's eddies, gusts and evolution on a slowed clock (`dwClock`), features along the front at bearing × a fixed arc
+  (`DW_ARC`; × the front's current radius they slid along the front at ~700 m/s: the ring turned), the face's notches cut by head lumps riding with the front
   (fixed in the ground, the front sweeps each 30 m lump in two frames: boiling), light from the fireball, sun and sky with multiply scattered light in the soil's bulk colour (no
   near-black). The pall hands its young dust, head and eye dust over across `PallYoung` (a crossfade over `FADE`) only
   when the pass can draw it: all three programs ready, primary view, one detonation in the slots, no water under the

@@ -57,6 +57,10 @@ const float DW_FADE = 6.0;
 const float DW_EXPOSURE = 0.22;
 // head timing, seconds of age (presentation): rise e-fold at the contact line, hump hold, width of the hump's fall
 const float DW_RISE = 0.12, DW_HOLD = 0.25, DW_FALL = 0.3;
+// the head's coordinate along the front: bearing × a fixed arc radius (m), so its lobes, clefts, rolls and lumps keep their
+// bearing as the ring runs out. Bearing × the front's current radius slid every feature along the front at bearing × the
+// front's speed (~600–740 m/s across the judging view): the ring read as turning around ground zero and the far head churned
+const float DW_ARC = 4500.0;
 // most the bulges, the billowed surface and its soft edge (DW_HAZE) lift the dust over its envelope, shares (the ray bound,
 // dwBound)
 // (the top behind the head is uneven at several scales, no cap: swells up to ±DW_BULGE of the layer at 150–400 m, billows,
@@ -122,7 +126,7 @@ float dwFbm2(vec3 p, float fq) {
 // hump of the head over the settled layer along the front: 1.54–1.76 of the envelope (its visible crest ~1.4–1.6x the layer
 // behind), lobes ~120 m along the front over ~400 m swells, staying with their bearing as the front runs out
 float dwHump(vec2 xz) {
-    float b = atan(xz.y, xz.x) * 4500.0;
+    float b = atan(xz.y, xz.x) * DW_ARC;
     return 1.54 + 0.22 * smoothstep(0.25, 0.75, 0.6 * dwNoise3(vec3(b / 120.0, 33.4, 0.04 * DwEye.w)) + 0.4 * dwNoise3(vec3(b / 400.0, 5.5, 0.0)));
 }
 
@@ -163,9 +167,10 @@ vec3 dwAir(vec3 q, float a, float r, float top, out float ph) {
     pw.xz -= rdir * (60.0 * (1.0 - exp(-a / 1.2)) * exp(-a / 6.0) + 8.0 * sin(0.45 * a)) * yy;
     // residual turbulence behind the front: neighbouring parcels circle on slow orbits (20 m, 5 m/s; phases varying over
     // ~150 m), so the settled dust keeps swirling and drifting sideways as real dust does, never frozen, without the
-    // endless shear a steady flow field would stretch it into
-    float sw = 6.2832 * dwNoise3(vec3(q.xz / 150.0, 71.3));
-    pw.xz -= 20.0 * vec2(cos(0.25 * a + sw), sin(0.25 * a + sw)) * (1.0 - exp(-a / 1.5)) * (0.6 + 0.4 * yy);
+    // endless shear a steady flow field would stretch it into; they turn either way (sense and ellipse from a ~150 m field
+    // of zero mean): orbits of one sense everywhere read as the whole mass turning around ground zero
+    float sw = 6.2832 * dwNoise3(vec3(q.xz / 150.0, 71.3)), hand = 2.0 * dwNoise3(vec3(q.xz / 150.0, 23.9)) - 1.0;
+    pw.xz -= 20.0 * vec2(cos(0.25 * a + sw), hand * sin(0.25 * a + sw)) * (1.0 - exp(-a / 1.5)) * (0.6 + 0.4 * yy);
     // gusts right behind the front: the hit air keeps surging forward and sideways in ~200 m gust cells whose push
     // changes over a few seconds, strongest just after the front and calming over ~6 s (presentation)
     vec2 gp = q.xz / 220.0 + vec2(0.0, 0.35 * a);
@@ -256,13 +261,13 @@ float dwDensity(vec3 g, bool coarse) {
     float yn = clamp(q.y / top0, 0.0, 1.5);
     float bf = 0.42;
     if (a0 < 8.0) {
-        vec3 hf = vec3(atan(q.z, q.x) * DwRing.x / 30.0, q.y / 22.0, (DwRing.x - r + 25.0 * DwEye.w) / 30.0);
+        vec3 hf = vec3(atan(q.z, q.x) * DW_ARC / 30.0, q.y / 22.0, (DwRing.x - r + 25.0 * DwEye.w) / 30.0);
         bf = coarse ? 0.42 : dwBillow(hf + vec3(3.7, 0.0, 9.1), 1.0 / 22.0);
     }
     // (the lumps cut the upper face only: cut to the ground they opened holes through the base that the moving front
     // swept across the ray steps, popping from frame to frame)
     // clefts between the head's lobes: the front line itself is cut back by up to ~50 m in notches ~150 m along it
-    float cleft = 50.0 * smoothstep(0.55, 0.85, dwNoise3(vec3(atan(q.z, q.x) * DwRing.x / 150.0, 61.7, 0.02 * DwEye.w)));
+    float cleft = 50.0 * smoothstep(0.55, 0.85, dwNoise3(vec3(atan(q.z, q.x) * DW_ARC / 150.0, 61.7, 0.02 * DwEye.w)));
     float a = DwEye.w - dwNode(r + cleft + (40.0 * yn * yn + 70.0 * max(bf - 0.3, 0.0) * smoothstep(0.2, 0.6, yn)) * exp(-a0 / 1.5)).x;
     if (a <= 0.0) return 0.0;
     float top = dwEnvelope(a, h, k), ph;
@@ -270,7 +275,7 @@ float dwDensity(vec3 g, bool coarse) {
     // front and rolling back over it at 8 m/s, in patches along the front, breaking down within ~0.5 s behind it
     // (presentation; 70 m bands swept past a fixed eye by the 470 m/s front pulsed its dust at ~7 Hz)
     if (!coarse && a0 < 3.0) {
-        float along = atan(q.z, q.x) * DwRing.x;
+        float along = atan(q.z, q.x) * DW_ARC;
         float patchy = smoothstep(0.35, 0.7, dwNoise3(vec3(along / 160.0, 12.9, 0.02 * DwEye.w)));
         top *= 1.0 + 0.08 * patchy * sin(6.2832 * (DwRing.x - r + 8.0 * DwEye.w) / 200.0) * exp(-a0 / 0.5);
     }
@@ -294,7 +299,7 @@ float dwDensity(vec3 g, bool coarse) {
     // point crosses in ~1.3 s, never within a few frames
     float headTex = (1.0 - smoothstep(0.3, 0.8, a0)) * smoothstep(300.0, 900.0, length(q.xz - DwEye.xz));
     if (headTex > 0.0) {
-        vec3 hc = vec3(atan(q.z, q.x) * DwRing.x, q.y, DwRing.x - r + 10.0 * DwEye.w);
+        vec3 hc = vec3(atan(q.z, q.x) * DW_ARC, q.y, DwRing.x - r + 10.0 * DwEye.w);
         vec3 hq3 = hc / vec3(20.0, 13.0, 20.0) + 41.0;
         n = mix(n, coarse ? dwFbm2(hq3, 0.0) : dwFbm(hq3, 1.0 / 13.0), headTex);
         if (!coarse) bl = mix(bl, dwBillow(hc / vec3(34.0, 22.0, 34.0) + 53.0, 1.0 / 22.0), headTex);
