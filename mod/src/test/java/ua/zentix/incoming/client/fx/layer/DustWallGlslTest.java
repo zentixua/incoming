@@ -73,23 +73,20 @@ class DustWallGlslTest {
     }
 
     /**
-     * The billow texture (n, bl) lives in the air the dust was raised in near the eye and behind the head; only the head
-     * away from the eye (beyond a band starting 300 m out) carries it with the front. Riding with the front at the eye,
-     * the texture crosses the eye's rays in one or two frames at 470 m/s as the front passes under it: the lower frame
-     * fluttered (harness passage second difference 2.7 against 1.1).
+     * The billow texture (n, bl) is fixed in the air across the ground and carried in height by the dust's own envelope
+     * (yc): no texture rides with the front. Riding with it, the texture slid outward at the front's speed and crossed the
+     * eye's rays in one or two frames as the front passed under it (the lower frame fluttered); sliced at fixed heights,
+     * the 470 m/s head swept through new air every frame.
      */
     @Test
-    void billowTextureRidesWithTheFrontOnlyAwayFromTheEye() throws IOException {
+    void billowTextureIsFixedInTheAirAndRisesWithTheDust() throws IOException {
         String s = glsl();
-        Matcher n = Pattern.compile("\\bn = coarse \\? [^;]*;").matcher(s), bl = Pattern.compile("\\bbl = dwBillow\\([^;]*;").matcher(s);
-        assertTrue(n.find() && bl.find(), "the air's texture lines in dwDensity");
-        assertTrue(n.group().contains("tq") && bl.group().contains("pw."), "n and bl sample the air (tq, pw)");
-        Matcher head = Pattern.compile("float headTex = \\(1\\.0 - smoothstep\\([0-9.]+, ([0-9.]+), a0\\)\\) \\* smoothstep\\(([0-9.]+), ([0-9.]+), length\\(q\\.xz - DwEye\\.xz\\)\\);").matcher(s);
-        assertTrue(head.find(), "the head's texture weight: by age and by distance from the eye");
-        assertTrue(Double.parseDouble(head.group(1)) <= 1.0, "the head's own texture is gone by 1 s of age");
-        assertTrue(Double.parseDouble(head.group(2)) >= 300.0, "none within 300 m of the eye");
-        // the handover band: a head point crosses it in no less than ~1 s at 470 m/s
-        assertTrue(Double.parseDouble(head.group(3)) - Double.parseDouble(head.group(2)) >= 470.0, "the handover band is wide");
+        Matcher n = Pattern.compile("\\bfloat n = [^;]*;").matcher(s), bl = Pattern.compile("\\bfloat bl = [^;]*;").matcher(s);
+        assertTrue(n.find() && bl.find(), "texture lines in dwDensity");
+        assertTrue(n.group().contains("tq") && bl.group().contains("pw.x, yc"), "n and bl sample the air (tq, pw) at the dust's height");
+        assertTrue(s.contains("float yc = q.y * h / max(env, 2.0)"), "height as a share of the envelope");
+        String texture = s.substring(s.indexOf("float yc = "), s.indexOf("if (!coarse) gDwSurf = surf;"));
+        assertTrue(!texture.contains("DwRing.x - r") && !texture.contains("headTex"), "no texture riding with the front");
         String surface = s.substring(s.indexOf("float surf = "), s.indexOf("if (!coarse) gDwSurf = surf;"));
         assertTrue(!surface.contains("smoothstep") && !surface.contains("bf"), "the billowed top is the texture's at every age");
     }

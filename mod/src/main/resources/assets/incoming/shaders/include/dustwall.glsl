@@ -270,7 +270,7 @@ float dwDensity(vec3 g, bool coarse) {
     float cleft = 50.0 * smoothstep(0.55, 0.85, dwNoise3(vec3(atan(q.z, q.x) * DW_ARC / 150.0, 61.7, 0.02 * DwEye.w)));
     float a = DwEye.w - dwNode(r + cleft + (40.0 * yn * yn + 70.0 * max(bf - 0.3, 0.0) * smoothstep(0.2, 0.6, yn)) * exp(-a0 / 1.5)).x;
     if (a <= 0.0) return 0.0;
-    float top = dwEnvelope(a, h, k), ph;
+    float top = dwEnvelope(a, h, k), env = top, ph;
     // shear rolls on the head (Kelvin–Helmholtz): bands ~200 m apart (a few head heights) across the head, riding with the
     // front and rolling back over it at 8 m/s, in patches along the front, breaking down within ~0.5 s behind it
     // (presentation; 70 m bands swept past a fixed eye by the 470 m/s front pulsed its dust at ~7 Hz)
@@ -283,35 +283,23 @@ float dwDensity(vec3 g, bool coarse) {
     float swell = dwBulge(pw, a);
     if (!coarse) gDwSwell = swell;
     top *= 1.0 + swell;
-    // Distance-aware frame for the head's texture. The face and crest run at 470 m/s through the air: an air-fixed texture
-    // on them is new air every frame, the far head churned (Artem on take 23; in-game far detail change per 0.1 s 0.25
-    // against take 11's 0.20). Away from the eye the head (its first 0.3–0.8 s) carries the texture with it, rolling back
-    // over it at 10 m/s, so it changes only at that slow rate. Within ~300 m of the eye it keeps the air's: riding with
-    // the front, the texture crossed the eye's rays in one or two frames as the front passed under it (the lower frame
-    // fluttered: harness passage d2 2.7 against 1.1). The handover lies in a band fixed to the eye (300–900 m) that a head
-    // point crosses in ~1.3 s, never within a few frames
-    float headTex = (1.0 - smoothstep(0.3, 0.8, a0)) * smoothstep(300.0, 900.0, length(q.xz - DwEye.xz));
-    vec3 tq = vec3(pw.x, pw.y - 0.45 * ph, pw.z) / vec3(20.0, 13.0, 20.0);
-    float n = 0.5, bl = 0.42;
-    if (headTex < 1.0) {
-        // texture fixed in the air mass: billows of ~20 × 13 m and finer, the rising and settling top reveals and hides
-        // them (light paths see the billows' two first octaves but not the head's lumps riding with the front: those
-        // made the shadow toward the fireball, and the face's shade with it, change every frame: the face shimmered)
-        n = coarse ? dwFbm2(tq, 0.0) : dwFbm(tq, 1.0 / 13.0);
-        // cauliflower lumps of the top, ~35 m and finer, in the same air
-        if (!coarse) bl = dwBillow(vec3(pw.x, pw.y - 0.3 * ph, pw.z) / vec3(34.0, 22.0, 34.0) + 11.0, 1.0 / 22.0);
-    }
-    if (headTex > 0.0) {
-        vec3 hc = vec3(atan(q.z, q.x) * DW_ARC, q.y, DwRing.x - r + 10.0 * DwEye.w);
-        vec3 hq3 = hc / vec3(20.0, 13.0, 20.0) + 41.0;
-        n = mix(n, coarse ? dwFbm2(hq3, 0.0) : dwFbm(hq3, 1.0 / 13.0), headTex);
-        if (!coarse) bl = mix(bl, dwBillow(hc / vec3(34.0, 22.0, 34.0) + 53.0, 1.0 / 22.0), headTex);
-    }
+    // One frame for the texture: fixed in the air across the ground and carried by the dust's own rise and fall in height
+    // (height as a share of this point's envelope, scaled to the settled layer): each column's billows are born at the
+    // ground as the front reaches it, rise into the crest and settle with it, and stay where they were torn up. Sliced
+    // by a fixed height, the 470 m/s head swept through new air every frame (the far head churned, take 23); riding with
+    // the front, the texture slid outward with it (take 26: 2–10 px a frame, "too mobile") and, at the eye, crossed its
+    // rays in one or two frames as the front passed under it (the lower frame fluttered)
+    float yc = q.y * h / max(env, 2.0) + (pw.y - q.y);
+    // billows of ~20 × 13 m and finer (light paths see the two first octaves)
+    vec3 tq = vec3(pw.x, yc - 0.45 * ph, pw.z) / vec3(20.0, 13.0, 20.0);
+    float n = coarse ? dwFbm2(tq, 0.0) : dwFbm(tq, 1.0 / 13.0);
+    // cauliflower lumps of the top, ~35 m and finer, in the same frame
+    float bl = coarse ? 0.42 : dwBillow(vec3(pw.x, yc - 0.3 * ph, pw.z) / vec3(34.0, 22.0, 34.0) + 11.0, 1.0 / 22.0);
     // fibrous streaks combed along the radial wind, ~28 m along, 4.5 m across
     float fs = 0.5;
     if (!coarse) {
         float ral = length(pw.xz);
-        fs = mix(0.5, dwFbm2(vec3(ral / 28.0, (pw.y - 0.25 * ph) / 5.0, atan(pw.z, pw.x) * ral / 4.5), 0.0), dwLod(1.0 / 2.2));
+        fs = mix(0.5, dwFbm2(vec3(ral / 28.0, (yc - 0.25 * ph) / 5.0, atan(pw.z, pw.x) * ral / 4.5), 0.0), dwLod(1.0 / 2.2));
     }
     // the billowed surface: rises and dips by the texture (cauliflower billows, ragged where the dust is young), within
     // DW_BILLOW of the top: the hump's excess (+30–50 %) stays well above the billows, so the crest reads as a crest

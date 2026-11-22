@@ -909,10 +909,9 @@ paths:
   on the contact line as a ramp leaning back (never ahead of the front: dust there is cut by the ring, a seam), a
   hump whose crest is 1.4–1.6 of the settled layer (drawn ×68/58 of the law's, `NukePall.YOUNG_PRESENT_HEIGHT`:
   the crest just under a 120 m camera's horizon at 4.5 km from 1 Mt; on the horizon line its ragged top flickered), back to the layer within 0.5–1 s (`DustWallGlslTest`), billows and bulges
-  fixed in the air near the eye and behind the head, the head carrying its texture with the front only away from the eye
-  (air-fixed on a 470 m/s head is new air every frame: the far head churns; riding with the front at the eye, it crosses
-  the eye's rays in one or two frames as the front passes under it: the view down flutters; handover in a band fixed to
-  the eye, `DustWallGlslTest`), the head's eddies, gusts and evolution on a slowed clock (`dwClock`), features along the front at bearing × a fixed arc
+  fixed in the air across the ground and carried in height by the dust's own envelope (born at the ground, rising into
+  the crest and settling with it; riding with the front, texture slides outward at its speed and flutters as the front
+  passes under the eye; sliced at fixed heights, the 470 m/s head is new air every frame; `DustWallGlslTest`), the head's eddies, gusts and evolution on a slowed clock (`dwClock`), features along the front at bearing × a fixed arc
   (`DW_ARC`; × the front's current radius they slid along the front at ~700 m/s: the ring turned), the face's notches cut by head lumps riding with the front
   (fixed in the ground, the front sweeps each 30 m lump in two frames: boiling), light from the fireball, sun and sky with multiply scattered light in the soil's bulk colour (no
   near-black). The pall hands its young dust, head and eye dust over across `PallYoung` (a crossfade over `FADE`) only
