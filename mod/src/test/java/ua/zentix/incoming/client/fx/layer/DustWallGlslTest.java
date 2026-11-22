@@ -73,21 +73,24 @@ class DustWallGlslTest {
     }
 
     /**
-     * The billow texture (n, bl) lives in the air the dust was raised in, except on the thin approaching face (its first
-     * 0.35 s of age at most), where it rides with the front. Riding with the front deeper into the head, it crosses a fixed
-     * eye in one or two frames at 470 m/s as the front passes under it: the lower frame fluttered (harness passage second
-     * difference 2.7 against 1.1).
+     * The billow texture (n, bl) lives in the air the dust was raised in near the eye and behind the head; only the head
+     * away from the eye (beyond a band starting 300 m out) carries it with the front. Riding with the front at the eye,
+     * the texture crosses the eye's rays in one or two frames at 470 m/s as the front passes under it: the lower frame
+     * fluttered (harness passage second difference 2.7 against 1.1).
      */
     @Test
-    void billowTextureRidesWithTheFrontOnlyOnTheFace() throws IOException {
+    void billowTextureRidesWithTheFrontOnlyAwayFromTheEye() throws IOException {
         String s = glsl();
         Matcher n = Pattern.compile("\\bfloat n = [^;]*;").matcher(s), bl = Pattern.compile("\\bfloat bl = [^;]*;").matcher(s);
         assertTrue(n.find() && bl.find(), "texture lines in dwDensity");
         assertTrue(n.group().contains("tq") && bl.group().contains("pw."), "n and bl sample the air (tq, pw)");
-        Matcher face = Pattern.compile("float headTex = 1\\.0 - smoothstep\\(([0-9.]+), ([0-9.]+), a0\\);").matcher(s);
-        assertTrue(face.find(), "the face's texture fades out by age");
-        assertTrue(Double.parseDouble(face.group(2)) <= 0.35, "the face's texture is gone by 0.35 s: " + face.group(2));
-        String surface = s.substring(s.indexOf("float billow = "), s.indexOf("if (!coarse) gDwSurf = surf;"));
+        Matcher head = Pattern.compile("float headTex = \\(1\\.0 - smoothstep\\([0-9.]+, ([0-9.]+), a0\\)\\) \\* smoothstep\\(([0-9.]+), ([0-9.]+), length\\(q\\.xz - DwEye\\.xz\\)\\);").matcher(s);
+        assertTrue(head.find(), "the head's texture weight: by age and by distance from the eye");
+        assertTrue(Double.parseDouble(head.group(1)) <= 1.0, "the head's own texture is gone by 1 s of age");
+        assertTrue(Double.parseDouble(head.group(2)) >= 300.0, "none within 300 m of the eye");
+        // the handover band: a head point crosses it in no less than ~1 s at 470 m/s
+        assertTrue(Double.parseDouble(head.group(3)) - Double.parseDouble(head.group(2)) >= 470.0, "the handover band is wide");
+        String surface = s.substring(s.indexOf("float surf = "), s.indexOf("if (!coarse) gDwSurf = surf;"));
         assertTrue(!surface.contains("smoothstep") && !surface.contains("bf"), "the billowed top is the texture's at every age");
     }
 }

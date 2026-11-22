@@ -57,8 +57,6 @@ const float DW_FADE = 6.0;
 const float DW_EXPOSURE = 0.22;
 // head timing, seconds of age (presentation): rise e-fold at the contact line, hump hold, width of the hump's fall
 const float DW_RISE = 0.12, DW_HOLD = 0.25, DW_FALL = 0.3;
-// presentation: a film camera's shutter (seconds) over which the young head's envelope is averaged (motion blur)
-const float DW_SHUTTER = 0.025;
 // most the bulges, the billowed surface and its soft edge (DW_HAZE) lift the dust over its envelope, shares (the ray bound,
 // dwBound)
 // (the top behind the head is uneven at several scales, no cap: swells up to ±DW_BULGE of the layer at 150–400 m, billows,
@@ -125,7 +123,7 @@ float dwFbm2(vec3 p, float fq) {
 // behind), lobes ~120 m along the front over ~400 m swells, staying with their bearing as the front runs out
 float dwHump(vec2 xz) {
     float b = atan(xz.y, xz.x) * 4500.0;
-    return 1.54 + 0.22 * smoothstep(0.25, 0.75, 0.6 * dwNoise3(vec3(b / 120.0, 33.4, 0.1 * DwEye.w)) + 0.4 * dwNoise3(vec3(b / 400.0, 5.5, 0.0)));
+    return 1.54 + 0.22 * smoothstep(0.25, 0.75, 0.6 * dwNoise3(vec3(b / 120.0, 33.4, 0.04 * DwEye.w)) + 0.4 * dwNoise3(vec3(b / 400.0, 5.5, 0.0)));
 }
 
 // the dust envelope at age a (s since the front passed) over settled height h with hump k (presentation): born at zero on
@@ -134,6 +132,14 @@ float dwEnvelope(float a, float h, float k) {
     if (a <= 0.0) return 0.0;
     float x = max(a - DW_HOLD, 0.0) / DW_FALL;
     return h * (1.0 - exp(-a / DW_RISE)) * (1.0 + (k - 1.0) * exp(-x * x));
+}
+
+// the head's motion clock (presentation, Artem 22.11 on take 23: the head read as a too-mobile super-matter): the young
+// air's eddies, gusts and outflow run 2.5x slower at the front, 4x slower beyond ~3 km from the eye (far detail must not
+// churn), and come up to the real rate over ~2 s of age; its rate never exceeds 1, so nothing speeds up later
+float dwClock(float a, vec2 xz) {
+    float slow = mix(0.4, 0.25, smoothstep(800.0, 3000.0, length(xz - DwEye.xz)));
+    return a - (1.0 - slow) * 2.0 * (1.0 - exp(-max(a, 0.0) / 2.0));
 }
 
 // the air mass the dust rides in: position the lofted air at q (age a, radius r, envelope top) came from — the texture is
@@ -212,7 +218,7 @@ float dwTopAt(vec2 xz) {
     if (a <= 0.0 || n0.z <= 0.0) return 0.0;
     // without the hump: its shadow would sweep over the near dust at the front's speed (lit patches sliding at the passage)
     float top = dwEnvelope(a, n0.y, 1.0), ph;
-    vec3 pw = dwAir(vec3(xz.x, 0.6 * top, xz.y), a, r, top, ph);
+    vec3 pw = dwAir(vec3(xz.x, 0.6 * top, xz.y), dwClock(a, xz), r, top, ph);
     return top * (1.0 + dwBulge(pw, a));
 }
 
@@ -256,19 +262,19 @@ float dwDensity(vec3 g, bool coarse) {
     // (the lumps cut the upper face only: cut to the ground they opened holes through the base that the moving front
     // swept across the ray steps, popping from frame to frame)
     // clefts between the head's lobes: the front line itself is cut back by up to ~50 m in notches ~150 m along it
-    float cleft = 50.0 * smoothstep(0.55, 0.85, dwNoise3(vec3(atan(q.z, q.x) * DwRing.x / 150.0, 61.7, 0.05 * DwEye.w)));
+    float cleft = 50.0 * smoothstep(0.55, 0.85, dwNoise3(vec3(atan(q.z, q.x) * DwRing.x / 150.0, 61.7, 0.02 * DwEye.w)));
     float a = DwEye.w - dwNode(r + cleft + (40.0 * yn * yn + 70.0 * max(bf - 0.3, 0.0) * smoothstep(0.2, 0.6, yn)) * exp(-a0 / 1.5)).x;
-    if (a <= -0.5 * DW_SHUTTER) return 0.0;
-    float env = dwEnvelope(a, h, k), top = env, ph;
+    if (a <= 0.0) return 0.0;
+    float top = dwEnvelope(a, h, k), ph;
     // shear rolls on the head (Kelvin–Helmholtz): bands ~200 m apart (a few head heights) across the head, riding with the
-    // front and rolling back over it at 20 m/s, in patches along the front, breaking down within ~0.5 s behind it
+    // front and rolling back over it at 8 m/s, in patches along the front, breaking down within ~0.5 s behind it
     // (presentation; 70 m bands swept past a fixed eye by the 470 m/s front pulsed its dust at ~7 Hz)
     if (!coarse && a0 < 3.0) {
         float along = atan(q.z, q.x) * DwRing.x;
-        float patchy = smoothstep(0.35, 0.7, dwNoise3(vec3(along / 160.0, 12.9, 0.05 * DwEye.w)));
-        top *= 1.0 + 0.08 * patchy * sin(6.2832 * (DwRing.x - r + 20.0 * DwEye.w) / 200.0) * exp(-a0 / 0.5);
+        float patchy = smoothstep(0.35, 0.7, dwNoise3(vec3(along / 160.0, 12.9, 0.02 * DwEye.w)));
+        top *= 1.0 + 0.08 * patchy * sin(6.2832 * (DwRing.x - r + 8.0 * DwEye.w) / 200.0) * exp(-a0 / 0.5);
     }
-    vec3 pw = dwAir(q, a, r, top, ph);
+    vec3 pw = dwAir(q, dwClock(a, q.xz), r, top, ph);
     float swell = dwBulge(pw, a);
     if (!coarse) gDwSwell = swell;
     top *= 1.0 + swell;
@@ -279,14 +285,16 @@ float dwDensity(vec3 g, bool coarse) {
     float n = coarse ? dwFbm2(tq, 0.0) : dwFbm(tq, 1.0 / 13.0);
     // cauliflower lumps of the top, ~35 m and finer, in the same air
     float bl = coarse ? 0.42 : dwBillow(vec3(pw.x, pw.y - 0.3 * ph, pw.z) / vec3(34.0, 22.0, 34.0) + 11.0, 1.0 / 22.0);
-    // One frame per surface: the approaching face's texture rides with the front (lobes of a gravity current's head move
-    // with it; air-fixed, the face swept through new air every frame: in-game approach coherence 0.82 -> 0.69), everything
-    // behind the face keeps the air's. The face is thin (its first 0.1–0.35 s of age, ~50–160 m): a head texture riding with
-    // the front over the first 1.5 s crossed a fixed eye in one or two frames as the front passed under it (the lower frame
-    // fluttered: harness passage d2 2.7 against 1.1), and its long crossfade blurred the young dust
-    float headTex = 1.0 - smoothstep(0.1, 0.35, a0);
+    // Distance-aware frame for the head's texture. The face and crest run at 470 m/s through the air: an air-fixed texture
+    // on them is new air every frame, the far head churned (Artem on take 23; in-game far detail change per 0.1 s 0.25
+    // against take 11's 0.20). Away from the eye the head (its first 0.3–0.8 s) carries the texture with it, rolling back
+    // over it at 10 m/s, so it changes only at that slow rate. Within ~300 m of the eye it keeps the air's: riding with
+    // the front, the texture crossed the eye's rays in one or two frames as the front passed under it (the lower frame
+    // fluttered: harness passage d2 2.7 against 1.1). The handover lies in a band fixed to the eye (300–900 m) that a head
+    // point crosses in ~1.3 s, never within a few frames
+    float headTex = (1.0 - smoothstep(0.3, 0.8, a0)) * smoothstep(300.0, 900.0, length(q.xz - DwEye.xz));
     if (headTex > 0.0) {
-        vec3 hc = vec3(atan(q.z, q.x) * DwRing.x, q.y, DwRing.x - r + 25.0 * DwEye.w);
+        vec3 hc = vec3(atan(q.z, q.x) * DwRing.x, q.y, DwRing.x - r + 10.0 * DwEye.w);
         vec3 hq3 = hc / vec3(20.0, 13.0, 20.0) + 41.0;
         n = mix(n, coarse ? dwFbm2(hq3, 0.0) : dwFbm(hq3, 1.0 / 13.0), headTex);
         if (!coarse) bl = mix(bl, dwBillow(hc / vec3(34.0, 22.0, 34.0) + 53.0, 1.0 / 22.0), headTex);
@@ -300,25 +308,12 @@ float dwDensity(vec3 g, bool coarse) {
     // the billowed surface: rises and dips by the texture (cauliflower billows, ragged where the dust is young), within
     // DW_BILLOW of the top: the hump's excess (+30–50 %) stays well above the billows, so the crest reads as a crest
     float torn = 1.0 + 0.5 * exp(-a / 0.25);
-    float billow = 1.0 + DW_BILLOW * dwSoft(((bl - 0.42) * 3.0 + (n - 0.5) * 2.0) * torn), surf = top * billow;
+    float surf = top * (1.0 + DW_BILLOW * dwSoft(((bl - 0.42) * 3.0 + (n - 0.5) * 2.0) * torn));
     if (!coarse) gDwSurf = surf;
     // a soft top: billow tops thin out over ~a quarter of the layer (an opaque top popped where dips passed in and out of
     // view at grazing angles)
     float edge = 0.22 * top + 4.0;
-    float born = smoothstep(0.0, 0.08, a), prof = (1.0 - smoothstep(surf - edge, surf + 0.4 * edge, q.y)) * born;
-    // motion blur (presentation, a film camera's shutter): the young head's envelope moves ~15 m a frame through the air's
-    // billows (the face rises 0 → crest within 0.12 s and settles within 0.6 s), so sampled at one instant the face and
-    // the crest's silhouette were redrawn through new air every frame; averaged over four instants across the shutter it
-    // sweeps smoothly as on film. The billows are fixed in the air and do not move within a frame
-    if (!coarse && a < 1.5) {
-        float scale = env > 1e-3 ? top / env : 1.0, sum = 0.0;
-        for (int i = 0; i < 4; i++) {
-            float ai = a + (float(i) - 1.5) * 0.25 * DW_SHUTTER, ti = dwEnvelope(ai, h, k) * scale;
-            float si = billow * ti, ei = 0.22 * ti + 4.0;
-            sum += (1.0 - smoothstep(si - ei, si + 0.4 * ei, q.y)) * smoothstep(0.0, 0.08, ai);
-        }
-        prof = 0.25 * sum;
-    }
+    float prof = 1.0 - smoothstep(surf - edge, surf + 0.4 * edge, q.y);
     // coarse dust falls back (the core thins over seconds, fines stay); the young head is denser
     float amt = (0.45 + 0.55 * exp(-max(a - 1.0, 0.0) / 8.0)) * (1.0 + 0.5 * exp(-a / 1.1));
     float fade = 1.0 - smoothstep(DW_SPAN - DW_FADE, DW_SPAN, a0);
@@ -337,8 +332,8 @@ float dwDensity(vec3 g, bool coarse) {
     float veil = (1.0 - smoothstep(surf, surf * 1.12 + 4.0, q.y)) * smoothstep(surf * 0.8, surf, q.y) * 0.03;
     float puff = coarse || q.y < top * 0.8 ? 0.0 : dwPuff(pw, top, a);
     // the lowest metres thin to the ground (soft where no terrain stands under the dust)
-    return sigma * smoothstep(0.0, 3.0, q.y)
-            * (prof * strat * (0.5 + 1.0 * n) * (0.7 + 0.6 * fs) + (veil + puff) * (0.6 + 0.8 * n) * born);
+    return sigma * smoothstep(0.0, 0.08, a) * smoothstep(0.0, 3.0, q.y)
+            * (prof * strat * (0.5 + 1.0 * n) * (0.7 + 0.6 * fs) + (veil + puff) * (0.6 + 0.8 * n));
 }
 
 // light on a white wall facing the fireball at q (Lambertian sphere of radius DwBall.w, DwBallLight at its surface, R²/d²)
