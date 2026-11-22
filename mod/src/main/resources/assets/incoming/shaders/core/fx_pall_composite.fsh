@@ -374,6 +374,64 @@ vec4 mediumTo(float surface, ivec2 full, vec3 dir, float nearEnd, vec4 rays, vec
     return front;
 }
 
+// Only the wall opacity behind a volume sample can be obscured by it. Integrate
+// visible sample opacity from front to back. A thin cloud crossing a thick
+// wall then reveals its near part continuously, just as a pane does.
+void wallOcclusionStep(inout vec2 sum, float tau, float z, vec2 span, float t, float logT) {
+    float alpha = sum.x * (1.0 - exp(-tau));
+    float u = clamp((z - span.x) / (span.y - span.x), 0.0, 1.0);
+    float behind = clamp((exp(logT * u) - t) / (1.0 - t), 0.0, 1.0);
+    sum += vec2(-alpha, alpha * behind);
+}
+
+// Each cloud covers a fraction of the wall. Two clouds at the same depth
+// obscure that fraction only once. Their common part is the farther fraction
+// times the product of their opacities.
+vec2 combineWallCover(vec2 cover, vec2 sampleSum) {
+    float opacity = 1.0 - sampleSum.x;
+    float both = min(cover.x * sampleSum.y, opacity * cover.y);
+    return vec2(cover.x + (1.0 - cover.x) * opacity, cover.y + sampleSum.y - both);
+}
+
+vec4 wallForeground(vec4 entry, vec4 total, vec3 dir, vec2 span, float t) {
+    if (entry.a <= total.a || span.y <= span.x || t >= 1.0) return entry;
+    float logT = log(max(t, 1e-7));
+    vec2 cover = vec2(0.0);
+    for (int k = 0; k < MUSHROOMS; k++) {
+        if (!mushOn(Sampler7, k)) continue;
+        Mush m = mushLoad(Sampler7, k);
+        vec2 body = mushSpan(m, dir);
+        float a = max(span.x, body.x), b = min(span.y, body.y);
+        if (b <= a) continue;
+        bool ownsStem = PallSlot0[1].w > 0.5 && length(m.base.xz - PallSlot0[0].xy) < 1.0;
+        float ds = (b - a) / 8.0;
+        vec2 sum = vec2(1.0, 0.0);
+        for (int i = 0; i < 8; i++) {
+            float z = a + (float(i) + 0.5) * ds;
+            vec3 p = dir * z;
+            vec2 extinction = mushDepthAt(m, mushLocal(m, p), ownsStem);
+            float share = wallShare(PallYoung, length(p.xz - PallSlot0[0].xy));
+            wallOcclusionStep(sum, max(extinction.x - share * extinction.y, 0.0) * ds, z, span, t, logT);
+        }
+        cover = combineWallCover(cover, sum);
+    }
+    if (smokeOn()) {
+        vec2 cloud = pallBox(dir, SmokeMin, SmokeMax);
+        float a = max(span.x, cloud.x), b = min(span.y, cloud.y);
+        if (b > a) {
+            float ds = (b - a) / 6.0;
+            vec2 sum = vec2(1.0, 0.0);
+            for (int i = 0; i < 6; i++) {
+                float z = a + (float(i) + 0.5) * ds;
+                wallOcclusionStep(sum, smokeSigma(dir * z) * ds, z, span, t, logT);
+            }
+            cover = combineWallCover(cover, sum);
+        }
+    }
+    float share = clamp(entry.a * cover.y / (entry.a - total.a), 0.0, 1.0);
+    return mix(entry, total, share);
+}
+
 void main() {
     ivec2 fullSize = textureSize(Sampler1, 0), lowSize = textureSize(Sampler0, 0);
     ivec2 full = ivec2(gl_FragCoord.xy);
@@ -421,11 +479,15 @@ void main() {
     wall.light = vec4(0.0, 0.0, 0.0, 1.0);
     wall.depth = vec3(0.0);
     vec4 air = pall, beforeWall = vec4(0.0, 0.0, 0.0, 1.0);
+    vec4 entry = beforeWall;
+    float axis = max(dot(dir0, PallForward), 1e-3);
     if (PallYoung.w > 0.0) {
         wall = wallLayer(Sampler4, Sampler1, vec2(full) + 0.5, depth, DwDiv);
         if (wall.light.a < 1.0) {
-            if (air.a < 1.0 || any(greaterThan(air.rgb, vec3(0.0))))
-                beforeWall = mediumTo(wall.depth.x, full, dir0, nearEnd, rays, air, true);
+            if (air.a < 1.0 || any(greaterThan(air.rgb, vec3(0.0)))) {
+                entry = mediumTo(wall.depth.x, full, dir0, nearEnd, rays, air, true);
+                beforeWall = wallForeground(entry, air, dir0, wall.depth.xy / axis, wall.light.a);
+            }
             pall = insertWall(air, beforeWall, wall.light);
         }
     }
@@ -499,7 +561,9 @@ void main() {
             vec4 front = mediumTo(surface, full, dir0, nearEnd, rays, wall.light.a < 1.0 ? air : laid, false);
             if (wall.light.a < 1.0) {
                 vec4 nearWall = wallTo(wall, surface);
-                vec4 before = surface >= wall.depth.x ? beforeWall : front;
+                vec4 before = beforeWall;
+                if (surface < wall.depth.y)
+                    before = wallForeground(entry, front, dir0, vec2(wall.depth.x, surface) / axis, nearWall.a);
                 front = insertWall(front, before, nearWall);
             }
             vec4 g = texelFetch(FxGlass, full, 0);

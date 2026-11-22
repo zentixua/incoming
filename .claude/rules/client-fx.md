@@ -935,9 +935,14 @@ paths:
   each history sample checked against the previous depth, clamped to the depth-alike 3 × 3 neighbourhood with the pixel's
   own sample, restarted on another detonation, a clock jump or a view resize); a
   fixed offset sparkles along the far top where 9–18 m steps cross the moving billowed surface. Light paths see the large shapes only: a shadow tap
-  reading the fine texture or the head's front-riding lumps re-shaded the approaching face every frame. The march records its occupied view depths and opacity-weighted distance. The pall composite reconstructs the foreground up to the first occupied depth and splits the interval at glass.
-  Where the young surface owns the ground layer, its haze and the soil lifted from it into the stem form the
-  background of that surface. Detached mushroom matter and conventional smoke keep their foreground extinction. As for a pane, the far field assigns light in proportion to extinction: dark smoke in front of the
+  reading the fine texture or the head's front-riding lumps re-shaded the approaching face every frame. The march records its occupied view depths and opacity-weighted distance. The pall composite reconstructs the foreground to the first occupied depth. Inside the interval each
+  visible smoke or mushroom sample obscures the share of wall opacity behind it. A pane truncates both the wall
+  and the integration interval. Before the inner handoff starts, the wall owns soil to the centre outside the fireball footprint.
+  Its ground haze and lifted soil back its rolling surface. The
+  stem core contributes foreground extinction in proportion to the part visible through its source soil column
+  (`pallColumn` at the sample height). An exposed core, a detached cap and other mushrooms keep their extinction.
+  The `volume` and `crossing` cases in `tools/dust_wall_contract_gl.py` isolate the crest and pane from texture noise.
+  As for a pane, the far field assigns light in proportion to extinction: dark smoke in front of the
   wall can receive some light from a bright mushroom behind it. Quads and source probes use the atlas on screen and
   the full dust field outside it. Each tap contributes only its dust in front of the pixel's depth, including where
   one continuous surface crosses several depth samples. Cost at HIGH

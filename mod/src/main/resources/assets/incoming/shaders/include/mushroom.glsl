@@ -723,6 +723,20 @@ vec3 mushBallCap(vec3 e, float adapt) {
     return mushFilm3(e * mushBallGain(dot(e, vec3(0.2126, 0.7152, 0.0722)), adapt));
 }
 
+// Total extinction and the part embedded in the wall owner's soil column.
+vec2 mushDepthAt(Mush m, vec3 q, bool ownsStem) {
+    float lifted;
+    vec4 sigma = mushMeanWithInflow(m, q, lifted);
+    float backing = 0.0;
+    if (ownsStem && m.footShare > 0.0) {
+        // The soil column that supplies the stem also covers its embedded core.
+        // Above the layer, only the separate inflow joins the wall's backing.
+        float column = m.footSigma * m.footTop * pallColumn(q.y / max(m.footTop, 1.0));
+        backing = mix(lifted, sigma.y, m.footShare * (1.0 - exp(-column)));
+    }
+    return vec2(dot(sigma, vec4(1.0)), backing);
+}
+
 // Integrated mushroom depth and the part supplied by the wall owner's lifted soil.
 vec2 mushDepthRange(sampler2D data, vec3 dir, float start, float len, int steps, vec2 owner) {
     vec2 depth = vec2(0.0);
@@ -735,10 +749,8 @@ vec2 mushDepthRange(sampler2D data, vec3 dir, float start, float len, int steps,
         if (span.y <= span.x) continue;
         float ds = (span.y - span.x) / float(steps);
         for (int i = 0; i < steps; i++) {
-            float lifted;
-            vec4 sigma = mushMeanWithInflow(m, mushLocal(m, dir * (span.x + (float(i) + 0.5) * ds)), lifted);
-            depth.x += dot(sigma, vec4(1.0)) * ds;
-            if (length(m.base.xz - owner) < 1.0) depth.y += lifted * ds;
+            vec3 q = mushLocal(m, dir * (span.x + (float(i) + 0.5) * ds));
+            depth += mushDepthAt(m, q, length(m.base.xz - owner) < 1.0) * ds;
         }
     }
     return depth;

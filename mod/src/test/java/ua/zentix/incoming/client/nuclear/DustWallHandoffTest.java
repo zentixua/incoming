@@ -51,6 +51,10 @@ class DustWallHandoffTest {
             tau += (1 - replacement) * BlastWall.sigma(head, x, z + .5, 1, 0);
         }
         assertEquals(0.233159, Math.exp(-tau), 1e-5, "head transmitted along the tangent with the active wall handoff");
+        when(a.seconds(0)).thenReturn(8.0);
+        handoff.invoke(null, a, new Vec3(x, 65, 0), 0f, frame);
+        assertTrue(frame.dustWall.active);
+        assertEquals(0f, frame.young.y, "the young wall owns the centre before the inner handoff starts");
     }
 
     @Test

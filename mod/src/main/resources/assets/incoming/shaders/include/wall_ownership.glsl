@@ -8,7 +8,9 @@ float wallFootprint(float cut, float r) {
 
 float wallShare(vec4 ring, float r) {
     if (ring.w <= 0.0) return 0.0;
-    float inner = smoothstep(ring.x, ring.y, r);
     float footprint = wallFootprint(ring.z, r);
-    return inner * footprint * (1.0 - smoothstep(ring.w * (1.0 - 1.0 / (DW_NODES - 1.0)), ring.w, r));
+    float outer = footprint * (1.0 - smoothstep(ring.w * (1.0 - 1.0 / (DW_NODES - 1.0)), ring.w, r));
+    if (r >= ring.y) return outer;
+    if (r <= ring.x) return 0.0;
+    return smoothstep(ring.x, ring.y, r) * outer;
 }

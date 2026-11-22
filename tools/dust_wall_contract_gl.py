@@ -46,7 +46,7 @@ def march_setup():
     g.glUniform3f(loc(program, "PallForward"), 0, 0, -1)
     g.glUniform1f(loc(program, "DwDiv"), 4)
     g.glUniform4f(loc(program, "DwEye"), 100, 9, 0, 10)
-    g.glUniform4f(loc(program, "PallYoung"), 0, 1, 0, 800)
+    g.glUniform4f(loc(program, "PallYoung"), 0, 0, 0, 800)
     g.glUniform4f(loc(program, "DwRing"), 800, 0, 100, 800)
     g.glUniform4f(loc(program, "DwBall"), 0, 30, 0, 1)
     g.glUniform3f(loc(program, "DwSunDir"), 0, 1, 0)
@@ -136,7 +136,7 @@ def composite(program, scene, samples, glass=None, cloud=None, rays=None, mushro
         g.glTexImage3D(g.GL_TEXTURE_3D, 0, g.GL_R32F, 1, 1, 1, 0, g.GL_RED, g.GL_FLOAT,
                        np.ones(1, dtype=np.float32))
     g.glUniformMatrix4fv(loc(program, "SmokeCascade"), 1, True, cascade)
-    g.glUniform4f(loc(program, "PallYoung"), 0, 1, 0, 800 if young else 0)
+    g.glUniform4f(loc(program, "PallYoung"), 0, 0, 0, 800 if young else 0)
     g.glUniform4f(loc(program, "PallFrame"), 0, 0, 4, 0)
     g.glUniformMatrix4fv(loc(program, "InvViewProj"), 1, True, np.linalg.inv(projection).astype(np.float32))
     g.glUniform3f(loc(program, "PallForward"), 0, 0, -1)
@@ -241,7 +241,7 @@ def pane_order(composite_program):
 def mixed_depth(march_program, program):
     g.glUseProgram(march_program)
     g.glUniform4f(loc(march_program, "DwEye"), 0, 9, 600, 10)
-    g.glUniform4f(loc(march_program, "PallYoung"), 0, 1, 0, 800)
+    g.glUniform4f(loc(march_program, "PallYoung"), 0, 0, 0, 800)
     g.glUniform4f(loc(march_program, "DwRing"), 450, 0, 100, 800)
     depths = np.full((size, size), 400.0)
     depths[:, :3] = 10
@@ -302,7 +302,7 @@ void main() {
         g.glUniform3f(loc(program, "Endpoint"), *point)
         values = []
         for reach in (0, 800):
-            g.glUniform4f(loc(program, "PallYoung"), 0, 1, 0, reach)
+            g.glUniform4f(loc(program, "PallYoung"), 0, 0, 0, reach)
             quad(program)
             values.append(read(1, 1)[0, 0, 0])
         field, active = values
@@ -354,7 +354,7 @@ void main() {
 def foreground_volume(march_program, program):
     g.glUseProgram(march_program)
     g.glUniform4f(loc(march_program, "DwEye"), 0, 9, 600, 10)
-    g.glUniform4f(loc(march_program, "PallYoung"), 0, 1, 0, 800)
+    g.glUniform4f(loc(march_program, "PallYoung"), 0, 0, 0, 800)
     g.glUniform4f(loc(march_program, "DwRing"), 450, 0, 100, 800)
     scene = make_scene(400)
     samples = march(march_program, scene, 2)
@@ -408,8 +408,8 @@ def foreground_volume(march_program, program):
     check(base > .05 and abs(base - backed) < .001, f"wall over its opaque basal layer: {backed:.5f} vs {base:.5f}")
     check(cap < .001, f"opaque cap in front of wall and basal layer: {cap:.5f}")
 
-    # Only the soil supplied by this wall enters its backing. The same dust from
-    # a different burst, or opaque matter in the stem itself, stays in front.
+    # The soil supplied by this wall backs it. Dust from another burst and
+    # the exposed core of the stem stay in front.
     stem = caps.copy()
     stem[0, 4, 1] = 0                  # no cap
     stem[0, 6] = (80, 15, 0, 0)        # stem height, radius, flare, core optical depth
@@ -428,13 +428,77 @@ def foreground_volume(march_program, program):
         shown = composite(program, scene, samples, rays=dark, haze=.5, smoke_span=span)[6, 6, 0]
         check(abs(shown - expected) < .001, f"smoke at {span} over the basal layer: {shown:.5f} vs {expected:.5f}")
 
+    # At a height of 20 the core is above a 15-block source layer. Raising
+    # that same layer embeds the core. A detached cap still covers either.
+    stem[0, 19, 0] = 50
+    embedded = composite(program, scene, samples, rays=dark, mushroom=stem,
+                         haze=.5, ground_origin=(0, -70))[6, 6, 0]
+    check(abs(embedded - base) < .001, f"submerged stem core: wall red {embedded:.5f} vs {base:.5f}")
+
+    # Adjacent wall rays cross in front of and behind the buried core. Wall
+    # light and coverage are constant, so any row edge comes from ordering.
+    light, depths = slab(140, 180, .25)
+    light[:, :, :3] = .25
+    depths[0] = slab(10, 30, .25)[1][0]
+    image = composite(program, scene, (light, depths), rays=dark, mushroom=stem,
+                      haze=.5, ground_origin=(0, -70))
+    rows = 255 * image[:, :, 0].mean(axis=1)
+    step = np.abs(np.diff(rows)).max()
+    check(step < 1, f"buried core across the wall crest: maximum row step {step:.3f} / 255")
+
+
+def crossing_volume(program):
+    # A narrow, opaque slice moves along a black 100-block wall. Its outgoing
+    # light reaches the eye through the part of the wall between it and the eye.
+    scene = make_scene(400)
+    samples = slab(100, 200, .25)
+    rays = np.broadcast_to((.6, .6, .6, 0), (low, low, 4))
+    for z in (95, 100, 110, 125, 150, 175, 190, 200):
+        thickness = 8
+        shown = composite(program, scene, samples, rays=rays, smoke_span=(z, z + thickness))[6, 6, 0]
+        # The grid density is one per block. Integrate the two media together
+        # on a fine CPU grid, including the zero-extinction regions at each end.
+        dz = .01
+        positions = z + (np.arange(thickness / dz) + .5) * dz
+        wall_t = .25 ** np.clip((positions - 100) / 100, 0, 1)
+        expected = .6 * np.sum(np.exp(-(positions - z)) * wall_t * dz)
+        # Rays include the fully opaque remainder behind the smoke slice.
+        expected += .6 * np.exp(-thickness) * .25
+        check(abs(shown - expected) < .004,
+              f"smoke crossing wall at {z}: red {shown:.5f}, integrated {expected:.5f}")
+
+    # Both opaque volumes occupy the same narrow depth band. They can only
+    # hide dust behind that band, including when they overlap each other.
+    cap = np.zeros((4, 20, 4), dtype=np.float32)
+    cap[0, 1] = (0, 0, 5, 3)
+    cap[0, 2] = (2, 2, 1, 5)
+    cap[0, 3] = (1, 1, 2, 2)
+    cap[0, 4] = (2, 20, 1, 1)
+    for z in (115, 150, 185):
+        cap[0, 0] = (0, -z, -2, 1)
+        near = .6 * .25 ** ((z - 3 - 100) / 100)
+        far = .6 * .25 ** ((z + 3 - 100) / 100)
+        for smoke in (None, (z - 2, z + 2)):
+            red = composite(program, scene, samples, rays=rays, mushroom=cap, smoke_span=smoke)[6, 6, 0]
+            check(far <= red <= near, f"cap at {z}, smoke {smoke}: {far:.5f} <= {red:.5f} <= {near:.5f}")
+
+    # The pane truncates both the wall and the interval in which smoke covers
+    # it. Smoke beyond the pane cannot obscure the pane's own light.
+    glass = texture(*rgba, size, size, [(.4, .4, .4, .5)] * (size * size))
+    for z in (120, 155):
+        red = composite(program, make_scene(400, 150), samples, glass, rays=rays,
+                        smoke_span=(z, z + 8))[6, 6, 0]
+        smoke = composite(program, scene, samples, rays=rays, smoke_span=(z, z + 8))[6, 6, 0]
+        expected = smoke if z < 150 else .5 * smoke + .4 * .5
+        check(abs(red - expected) < .002, f"crossing smoke at {z}, pane at 150: {red:.5f} vs {expected:.5f}")
+
 
 def terrain_occluder(march_program):
     # Chunks end at 256, the relief map has a ridge ~600 blocks away,
     # and the only dust is on the far side in the valley behind it.
     g.glUseProgram(march_program)
     g.glUniform4f(loc(march_program, "DwEye"), 0, 12, 0, 10)
-    g.glUniform4f(loc(march_program, "PallYoung"), 0, 1, 0, 1400)
+    g.glUniform4f(loc(march_program, "PallYoung"), 0, 0, 0, 1400)
     g.glUniform4f(loc(march_program, "DwRing"), 1400, 900, 100, 1400)
     g.glUniform2f(loc(march_program, "DwRelief"), 0, 32)
     slot = np.zeros((4, 4), dtype=np.float32)
@@ -458,7 +522,7 @@ def terrain_occluder(march_program):
 def weather_haze(march_program, composite_program):
     g.glUseProgram(march_program)
     g.glUniform4f(loc(march_program, "DwEye"), 0, 9, 0, 10)
-    g.glUniform4f(loc(march_program, "PallYoung"), 0, 1, 0, 3500)
+    g.glUniform4f(loc(march_program, "PallYoung"), 0, 0, 0, 3500)
     g.glUniform4f(loc(march_program, "DwRing"), 3500, 2500, 100, 3500)
     g.glUniform3f(loc(march_program, "DwSkyLight"), 0.2, 0.2, 0.2)
     g.glUniform4f(loc(march_program, "PallAir"), 0, 0, 3.912 / 1000, 1 / 1200)
@@ -522,7 +586,7 @@ def relief_cases():
 
     # Eye outside the ring. The ridge is past the drawn chunks but before the first possible dust.
     g.glUniform4f(loc(program, "DwEye"), 0, 9, 1000, 10)
-    g.glUniform4f(loc(program, "PallYoung"), 0, 1, 0, 800)
+    g.glUniform4f(loc(program, "PallYoung"), 0, 0, 0, 800)
     g.glUniform4f(loc(program, "DwRing"), 450, 0, 100, 800)
     bind_relief(program, 1000, 9, {584: 32, 600: 32, 616: 32})
     sky = march(program, make_scene(1e9), 2)[0][1, 1, 3]
@@ -536,7 +600,7 @@ def bright_air():
     comp = link("fx_pall_composite")
     g.glUseProgram(mp)
     g.glUniform4f(loc(mp, "DwEye"), 0, 9, 0, 10)
-    g.glUniform4f(loc(mp, "PallYoung"), 0, 1, 0, 3500)
+    g.glUniform4f(loc(mp, "PallYoung"), 0, 0, 0, 3500)
     g.glUniform4f(loc(mp, "DwRing"), 3500, 2500, 100, 3500)
     g.glUniform3f(loc(mp, "DwSkyLight"), 0.2, 0.2, 0.2)
     g.glUniform4f(loc(mp, "PallAir"), 0, 0, 3.912 / 1000, 1 / 1200)
@@ -562,6 +626,7 @@ def main():
         "ownership": ownership,
         "offscreen": offscreen_dust,
         "post": lambda: mixed_depth(march_setup(), composite_program),
+        "crossing": lambda: crossing_volume(composite_program),
         "volume": lambda: foreground_volume(march_setup(), composite_program),
         "jitter": lambda: jitter_occluder(march_setup(), composite_program),
         "history": history_taps,
