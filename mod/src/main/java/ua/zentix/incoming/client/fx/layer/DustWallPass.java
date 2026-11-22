@@ -79,6 +79,7 @@ public final class DustWallPass {
     /** History pair ({@code fx_dustwall_resolve}): the latest is {@link #latest}. */
     private static final int[] HISTORY_TEX = {-1, -1}, HISTORY_FBO = {-1, -1};
     private static int latest;
+    private static final int[] historyDiv = new int[2];
     private static boolean failed, history;
     private static long frame;
     private static final float[] PREVIOUS_EYE = new float[3];
@@ -146,7 +147,9 @@ public final class DustWallPass {
      * Lays the young wall of {@code pall} over the frame. {@code scene}: the world-distance texture
      * ({@link SceneDepth}). Primary view only (NukePall hands the wall over only there).
      */
-    static void draw(PallPass.Frame pall, int scene, Matrix4f view, Matrix4f projection, PallPass.Step step, boolean warming) {
+    static void draw(PallPass.Frame pall, int scene, Matrix4f view, Matrix4f projection, PallPass.Step step, boolean warming, int timing) {
+        assert !FxViews.secondary() && scene >= 0 && width > 0 && height > 0;
+        if (warming) latest = 0;
         Frame f = pall.dustWall;
         ShaderInstance m = march, r = resolve, c = composite;
         int timed = warming ? -1 : GPU.begin();
@@ -180,7 +183,7 @@ public final class DustWallPass {
             m.safeGetUniform("PallSlot0").set(pall.slot0);
             m.safeGetUniform("PallGround0").set(g.x, g.y, g.z, g.w);
             m.safeGetUniform("DwRelief").set(g.x > 0 ? g.y : 0f, g.x > 0 ? g.z : 0f);
-            OpenAir.bind(m, true);
+            if (PallPass.submits(m, warming)) OpenAir.bind(m, true, warming);
             upload(f.table);
             RenderSystem.setShaderTexture(2, table);
             m.safeGetUniform("DwEye").set(f.eye[0], f.eye[1], f.eye[2], f.eye[3]);
@@ -201,7 +204,8 @@ public final class DustWallPass {
             m.safeGetUniform("PallFloorFrom").set(pall.floorFrom);
             m.safeGetUniform("PallAirSky").set(pall.airSky.x, pall.airSky.y, pall.airSky.z);
             m.safeGetUniform("PallAirFog").set(pall.airFog.x, pall.airFog.y, pall.airFog.z, pall.airFog.w);
-            fullScreen(m, () -> Uniform.uploadInteger(Uniform.glGetUniformLocation(m.getId(), "DwNoise"), NOISE_UNIT), true);
+            fullScreen(m, () -> Uniform.uploadInteger(Uniform.glGetUniformLocation(m.getId(), "DwNoise"), NOISE_UNIT), true, warming);
+            PallPass.stamp(timing, 7);
             // averaged over frames at the same resolution into the other history target
             int next = 1 - latest;
             {
@@ -217,9 +221,10 @@ public final class DustWallPass {
                 r.safeGetUniform("PrevViewProj").set(PREVIOUS);
                 r.safeGetUniform("PallForward").set(FORWARD.x, FORWARD.y, FORWARD.z);
                 r.safeGetUniform("DwDiv").set((float) div);
+                r.safeGetUniform("DwPrevDiv").set((float) historyDiv[latest]);
                 r.safeGetUniform("DwReproject").set(dx, dy, dz, past ? 1f : 0f);
                 r.safeGetUniform("DwHistory").set(HISTORY, f.layerTop - f.eye[1]);
-                fullScreen(r, null, false);
+                fullScreen(r, null, false, warming);
                 latest = next;
                 PREVIOUS.set(VIEW_PROJECTION);
                 System.arraycopy(f.eye, 0, PREVIOUS_EYE, 0, 3);
@@ -228,6 +233,7 @@ public final class DustWallPass {
                 history = !warming;
                 if (!warming) frame++;
             }
+            PallPass.stamp(timing, 8);
             // laid on the frame: light adds, the frame is multiplied by the transmittance
             GlStateManager._glBindFramebuffer(GL30.GL_DRAW_FRAMEBUFFER, main);
             GlStateManager._viewport(VIEWPORT[0], VIEWPORT[1], VIEWPORT[2], VIEWPORT[3]);
@@ -237,8 +243,8 @@ public final class DustWallPass {
             RenderSystem.setShaderTexture(0, HISTORY_TEX[next]);
             RenderSystem.setShaderTexture(1, scene);
             c.safeGetUniform("DwDiv").set((float) div);
-            SceneDepth.bindSee(c);
-            fullScreen(c, null, false);
+            if (PallPass.submits(c, warming)) SceneDepth.bindSee(c);
+            fullScreen(c, null, false, warming);
         } finally {
             GlStateManager._glBindFramebuffer(GL30.GL_DRAW_FRAMEBUFFER, main);
             GlStateManager._viewport(VIEWPORT[0], VIEWPORT[1], VIEWPORT[2], VIEWPORT[3]);
@@ -272,7 +278,9 @@ public final class DustWallPass {
     private static boolean targets(int w, int h, int d) {
         int lw = Math.max(1, (w + d - 1) / d), lh = Math.max(1, (h + d - 1) / d);
         if (lattice < 0) lattice = lattice();
-        if (target >= 0 && w == fullW && h == fullH && d == div) return true;
+        boolean sameFrame = w == fullW && h == fullH;
+        boolean sameMarch = target >= 0 && sameFrame && d == div;
+        if (sameMarch && historyDiv[1 - latest] == d) return true;
         int draw = GlStateManager._getInteger(GL30.GL_DRAW_FRAMEBUFFER_BINDING);
         if (target < 0) {
             target = GlStateManager._genTexture();
@@ -282,9 +290,14 @@ public final class DustWallPass {
                 HISTORY_FBO[i] = GlStateManager.glGenFramebuffers();
             }
         }
-        boolean ok = attach(fbo, target, lw, lh, GlConst.GL_NEAREST);
+        boolean ok = sameMarch || attach(fbo, target, lw, lh, GlConst.GL_NEAREST);
         // history is read between its pixels when the view turns: linear
-        for (int i = 0; i < 2; i++) ok &= attach(HISTORY_FBO[i], HISTORY_TEX[i], lw, lh, GlConst.GL_LINEAR);
+        for (int i = 0; i < 2; i++) {
+            // Reproject the last image on its own lattice. Resize its storage only after the other image replaces it.
+            if (sameFrame && (historyDiv[i] == d || history && i == latest)) continue;
+            ok &= attach(HISTORY_FBO[i], HISTORY_TEX[i], lw, lh, GlConst.GL_LINEAR);
+            historyDiv[i] = d;
+        }
         GlStateManager._glBindFramebuffer(GL30.GL_DRAW_FRAMEBUFFER, draw);
         if (!ok) {
             Incoming.LOG.error("Nuclear dust wall: targets {}×{} not created, no young wall pass", lw, lh);
@@ -297,7 +310,7 @@ public final class DustWallPass {
         fullW = w;
         fullH = h;
         div = d;
-        history = false;
+        history &= sameFrame;
         return true;
     }
 
@@ -345,7 +358,8 @@ public final class DustWallPass {
         }
     }
 
-    private static void fullScreen(ShaderInstance s, Runnable uniforms, boolean noise) {
+    private static void fullScreen(ShaderInstance s, Runnable uniforms, boolean noise, boolean warming) {
+        if (!PallPass.submits(s, warming)) return;
         BufferBuilder b = Tesselator.getInstance().begin(VertexFormat.Mode.QUADS, DefaultVertexFormat.POSITION);
         b.addVertex(-1, -1, 0);
         b.addVertex(1, -1, 0);

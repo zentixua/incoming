@@ -80,12 +80,83 @@ def composite_cases(p):
     check(abs(red - 0.5) < 1e-3, f"dust behind a pane: RGB {red:.4f}, expected X + Tpane*Twall*background = 0.5")
 
 
-def resolve(p, w, h, current, past, depths, history=1, before=None):
+
+def warmup_noop_case(programs):
+    """The review probe's empty wall must leave every RGBA8 channel unchanged over world, sky and near depth."""
+    march, resolve, composite = (programs[k] for k in ("", "_resolve", "_composite"))
+    size, low = 12, 3
+    rgba = (g.GL_RGBA32F, g.GL_RGBA)
+    projection = np.array([[100, 0, 0, 0], [0, 100, 0, 0], [0, 0, -1.02, -0.2], [0, 0, -1, 0]], dtype=np.float32)
+    for label, depth in (("world", 100), ("sky", 0), ("near", 0.5)):
+        distances = scene(size, size, [depth] * (size * size))
+        g.glUseProgram(march)
+        g.glUniformMatrix4fv(loc(march, "InvViewProj"), 1, True, np.linalg.inv(projection).astype(np.float32))
+        g.glUniform3f(loc(march, "PallForward"), 0, 0, -1)
+        g.glUniform1f(loc(march, "DwDiv"), 4)
+        g.glUniform2f(loc(march, "DwFrame"), 0, 128)
+        for name in ("DwEye", "DwBall", "PallAir", "PallAirFog", "DwWind"):
+            g.glUniform4f(loc(march, name), 0, 0, 0, 0)
+        g.glUniform4f(loc(march, "DwRing"), 0, 0, 0, 1)
+        for name in ("DwBallLight", "DwSunLight", "DwSunDir", "DwSkyLight", "DwGroundLight", "DwAlbedo", "DwBulk",
+                     "DwSandAlbedo", "DwSandBulk", "PallAirSky"):
+            g.glUniform3f(loc(march, name), 0, 0, 0)
+        g.glUniform2f(loc(march, "DwRelief"), 0, 0)
+        g.glUniform1f(loc(march, "DwCut"), 0)
+        g.glUniform1f(loc(march, "PallFloorFrom"), 0)
+        for unit, name in ((12, "DwNoise"), (13, "PallOpen")):
+            g.glActiveTexture(g.GL_TEXTURE0 + unit)
+            g.glBindTexture(g.GL_TEXTURE_3D, g.glGenTextures(1))
+            g.glTexParameteri(g.GL_TEXTURE_3D, g.GL_TEXTURE_MIN_FILTER, g.GL_LINEAR)
+            g.glTexImage3D(g.GL_TEXTURE_3D, 0, g.GL_R32F, 1, 1, 1, 0, g.GL_RED, g.GL_FLOAT, np.array([0.5], np.float32))
+            g.glUniform1i(loc(march, name), unit)
+        zeros = texture(*rgba, 128, 4, np.zeros((4, 128, 4), np.float32))
+        bind(march, 3, zeros)
+        target(low, low, [rgba])
+        g.glUseProgram(march)
+        bind(march, 1, distances)
+        bind(march, 2, texture(*rgba, 128, 1, np.zeros((1, 128, 4), np.float32)))
+        quad(march)
+        rays = read(low, low).copy()
+        ok_march = np.all(np.isfinite(rays)) and np.allclose(rays, (0, 0, 0, 1))
+        # resolve without history
+        target(low, low, [rgba])
+        g.glUseProgram(resolve)
+        samples = texture(*rgba, low, low, rays)
+        for unit, tex in enumerate((samples, samples, distances, distances)):
+            bind(resolve, unit, tex)
+        g.glUniform1f(loc(resolve, "DwDiv"), 4)
+        g.glUniform4f(loc(resolve, "DwReproject"), 0, 0, 0, 0)
+        g.glUniform2f(loc(resolve, "DwHistory"), 0.1, 0)
+        g.glUniformMatrix4fv(loc(resolve, "InvViewProj"), 1, True, np.linalg.inv(projection).astype(np.float32))
+        quad(resolve)
+        resolved = read(low, low).copy()
+        # composite over a known frame
+        target(size, size, [(g.GL_RGBA8, g.GL_RGBA)])
+        g.glClearColor(0.3, 0.5, 0.7, 0.8)
+        g.glClear(g.GL_COLOR_BUFFER_BIT)
+        before = read(size, size).copy()
+        g.glUseProgram(composite)
+        bind(composite, 0, texture(*rgba, low, low, resolved))
+        bind(composite, 1, distances)
+        g.glUniform1f(loc(composite, "DwDiv"), 4)
+        g.glUniform1f(loc(composite, "FxSee"), 0)
+        g.glEnable(g.GL_BLEND)
+        g.glBlendFuncSeparate(g.GL_ONE, g.GL_SRC_ALPHA, g.GL_ZERO, g.GL_ONE)
+        quad(composite)
+        g.glDisable(g.GL_BLEND)
+        screen = read(size, size).copy()
+        ok_screen = np.array_equal(screen, before)
+        check(ok_march and ok_screen, f"warm-up over {label}: finite transparent march and identical RGBA8 frame")
+    assert g.glGetError() == g.GL_NO_ERROR
+
+
+def resolve(p, w, h, current, past, depths, history=1, before=None, previous_div=4):
     size = ((w + 3) // 4, (h + 3) // 4)
     target(*size, [(g.GL_RGBA32F, g.GL_RGBA)])
     g.glUseProgram(p)
     bind(p, 0, image(*size, current))
-    bind(p, 1, image(*size, past))
+    past_size = ((w + previous_div - 1) // previous_div, (h + previous_div - 1) // previous_div)
+    bind(p, 1, image(*past_size, past))
     g.glTexParameteri(g.GL_TEXTURE_2D, g.GL_TEXTURE_MIN_FILTER, g.GL_LINEAR)
     g.glTexParameteri(g.GL_TEXTURE_2D, g.GL_TEXTURE_MAG_FILTER, g.GL_LINEAR)
     bind(p, 2, scene(w, h, depths))
@@ -94,6 +165,7 @@ def resolve(p, w, h, current, past, depths, history=1, before=None):
     g.glUniformMatrix4fv(loc(p, "InvViewProj"), 1, True, np.linalg.inv(proj).astype(np.float32))
     g.glUniform3f(loc(p, "PallForward"), 0, 0, -1)
     g.glUniform1f(loc(p, "DwDiv"), 4)
+    g.glUniform1f(loc(p, "DwPrevDiv"), previous_div)
     g.glUniform4f(loc(p, "DwReproject"), 0, 0, 0, history)
     g.glUniform2f(loc(p, "DwHistory"), 0.1, 10)
     # the previous frame's world distances (SceneDepth.previous); none given: the same as now
@@ -117,6 +189,10 @@ def resolve_cases(p):
     result = resolve(p, 9, 4, [0, 0.5, 1], [0, 0.5, 1], [100.0] * 36)
     check(abs(result[0, 1] - 0.5) < 1e-5, f"stationary 9-pixel view reprojection: T={result[0, 1]:.4f}, expected 0.5")
     check(abs(result[0, 2] - 1) < 1e-5, f"stationary 9-pixel view, last column (sample at 8.5): T={result[0, 2]:.4f}, expected 1")
+    # 16 full pixels: the old divisor-5 centres are 2.5, 7.5, 12.5, 15.5. The new divisor-4
+    # centre at 6 lies 70% of the way between the first two. Its new sample has weight 0.1.
+    result = resolve(p, 16, 4, [0, 1, 0, 1], [0, 1, 0, 1], [100.0] * 64, previous_div=5)
+    check(abs(result[0, 1] - 0.73) < 1e-4, f"divisor change keeps reprojected history: T={result[0, 1]:.4f}, expected 0.73")
     # a ceiling moved in front of all nine samples (now 20 blocks, before 100): no dust from behind it
     cur = [0.25] * 9
     cur[4] = 1.0
@@ -385,6 +461,7 @@ for name, p in programs.items():
             check(False, f"Veil round trip for fx_dustwall{name}: {str(err)[:400]}")
         else:
             print(f"Linked fx_dustwall{name} after the Veil parser round trip")
+warmup_noop_case(programs)
 composite_cases(programs["_composite"])
 resolve_cases(programs["_resolve"])
 march_cases()

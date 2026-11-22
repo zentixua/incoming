@@ -133,12 +133,9 @@ public final class PallPass {
         /** Near volume cell width in full-frame pixels ({@link #VOLUME_FAR}). */
         final int tile;
         /**
-         * GPU time per frame, ms, above which detail steps down ({@link Detail}). Each setting keeps its look: a setting is
-         * the player's choice of picture against frame rate (Artem 08.11: picture first, the setting fits the PC), so the
-         * budget only catches views far costlier than usual, with a fifth of headroom over the costliest measured view (looking
-         * up into a firestorm): at a sixth, MEDIUM and HIGH still lost one or two rungs there. Artem's laptop (RTX 4060, 2560×1600,
-         * 150 kt firestorm in the dust, 08.11, rung free): LOW 2.5–6.1 ms, MEDIUM 6.2–12.5, HIGH 4.8–19.2 — each setting stays at
-         * its own rung there (PallDetailTest).
+         * GPU budget in ms for the whole volume. Calibration on the RTX 4060 Laptop at 2560×1600 uses pall-only
+         * timings in a 150 kt firestorm: LOW 2.5–6.1 ms, MEDIUM 6.2–12.5, HIGH 4.8–19.2 (PallDetailTest).
+         * The separate young wall also contributes to each measured window when it is in view.
          */
         final double budget;
 
@@ -170,6 +167,14 @@ public final class PallPass {
             return steps / (double) (factor * factor * interleave * interleave);
         }
 
+        double wallPixels() {
+            return 1.0 / (wallDiv * wallDiv);
+        }
+
+        double wallCost() {
+            return wallSteps * wallPixels();
+        }
+
         /** Log form: {@code 1/2 × 28 steps}, with {@code , rays 1/4 per frame} when interleaved. */
         String describe() {
             return String.format(Locale.ROOT, "1/%d × %d steps%s", factor, steps, interleave > 1 ? ", rays 1/" + interleave * interleave + " per frame" : "");
@@ -185,12 +190,19 @@ public final class PallPass {
      * rays per frame (n = 3, 4) drew the cellular lattice that burns in when the view stands still (each untraced pixel pulled
      * toward its block's bounds for n² frames; Artem 08.11, measured |dL| ×4.3 from n = 1 to the floor).
      */
-    // Wall rungs interpolate between the three preset pictures (4/128, 5/104, 6/96).
     static final Step[] LADDER = {
-            new Step(2, 48, 1, 4, 128), new Step(2, 36, 1, 4, 116), new Step(2, 28, 1, 5, 104),
-            new Step(2, 22, 1, 5, 102), new Step(2, 64, 2, 5, 100), new Step(2, 48, 2, 5, 98),
-            new Step(2, 36, 2, 6, 98), new Step(2, 28, 2, 6, 97), new Step(2, 22, 2, 6, 96)
+            rung(0, 48, 1), rung(1, 36, 1), rung(2, 28, 1),
+            rung(3, 22, 1), rung(4, 64, 2), rung(5, 48, 2),
+            rung(6, 36, 2), rung(7, 28, 2), rung(8, 22, 2)
     };
+
+    // Keep the preset pictures. Interpolate the step cap by rung distance between HIGH (0), MEDIUM (2) and LOW (8).
+    // The divisor changes in whole pixels, at MEDIUM and midway from MEDIUM to LOW (ties keep the finer grid).
+    private static Step rung(int index, int raySteps, int interleave) {
+        int steps = index <= 2 ? 128 - index * (128 - 104) / 2 : 104 - Math.round((index - 2) * (104 - 96) / 6f);
+        int divisor = index < 2 ? 4 : index <= 5 ? 5 : 6;
+        return new Step(2, raySteps, interleave, divisor, steps);
+    }
 
     /**
      * Ray pixel of each n × n block per frame, in turn (n = 1–2): far apart in consecutive frames (ordered dither), so a
@@ -203,7 +215,7 @@ public final class PallPass {
      * (each with at least four measurements; one window above {@link #FAR_OVER} budgets is enough) — switch to a rung estimated to
      * fit; headroom — one rung up if its estimated cost is at most {@link #UP_SHARE} of budget for two consecutive windows and
      * {@link #HOLD_NS} has passed since the last change (four times longer after an increase immediately followed by a decrease).
-     * Estimates scale only the rays' time with the rung ({@link Step#cost}): the near volume, its sums, the accumulation and the
+     * Estimates scale pall rays by samples, wall rays by samples and wall resolve by pixels. The near volume, sums, accumulation and
      * pall composite do not depend on the rung (laptop 08.11: 5–9 ms of HIGH's 18), and scaling them too kept a dropped rung down for
      * minutes. No higher than the setting and no lower than the last rung; pinned ({@link #pin}) — setting rung, unaffected by
      * measurements. No world or OpenGL — unit test.
@@ -227,7 +239,7 @@ public final class PallPass {
         boolean pinned;
         /** Held at the last rung for the session ({@link #floor}): {@link GpuWatch} saw a frame far past any budget. */
         boolean floored;
-        private double sum, raySum;
+        private double sum, raySum, wallMarchSum, wallResolveSum;
         private int samples, calm, over;
         private long windowStart, holdUntil, raisedAt = Long.MIN_VALUE;
         private boolean skip;
@@ -269,7 +281,7 @@ public final class PallPass {
          * Frame measurement: whole pall {@code ms} of which rays {@code rayMs}, at rung generation {@code gen}, time {@code now} (ns);
          * true — rung changed.
          */
-        boolean sample(double ms, double rayMs, int gen, long now) {
+        boolean sample(double ms, double rayMs, double wallMarchMs, double wallResolveMs, int gen, long now) {
             if (gen != generation || ceiling < 0 || pinned) return false;
             // first rung frame has new framebuffers and cold caches
             if (skip) {
@@ -279,18 +291,21 @@ public final class PallPass {
             if (samples == 0) windowStart = now;
             sum += ms;
             raySum += Math.min(Math.max(rayMs, 0), ms);
+            wallMarchSum += wallMarchMs;
+            wallResolveSum += wallResolveMs;
             samples++;
             if (samples < MIN_SAMPLES || now - windowStart < WINDOW_NS) return false;
             double mean = sum / samples, rays = raySum / samples;
+            double wallMarch = wallMarchSum / samples, wallResolve = wallResolveSum / samples;
             lastMean = mean;
             sum = 0;
-            raySum = 0;
+            raySum = wallMarchSum = wallResolveSum = 0;
             samples = 0;
             int floor = LADDER.length - 1;
             over = mean > budget ? over + 1 : 0;
             if (mean > budget && level < floor && (over >= 2 || mean > FAR_OVER * budget)) {
                 int to = level + 1;
-                while (to < floor && estimate(mean, rays, to) > budget) to++;
+                while (to < floor && estimate(mean, rays, wallMarch, wallResolve, to) > budget) to++;
                 over = 0;
                 // an increase exceeded capacity — delay the next increase
                 holdUntil = now + (raisedAt != Long.MIN_VALUE && now - raisedAt < 2 * HOLD_NS ? 4 * HOLD_NS : HOLD_NS);
@@ -299,7 +314,7 @@ public final class PallPass {
                 changes++;
                 return true;
             }
-            if (level > ceiling && now >= holdUntil && estimate(mean, rays, level - 1) <= UP_SHARE * budget) {
+            if (level > ceiling && now >= holdUntil && estimate(mean, rays, wallMarch, wallResolve, level - 1) <= UP_SHARE * budget) {
                 if (++calm >= CALM_WINDOWS) {
                     calm = 0;
                     holdUntil = now + HOLD_NS;
@@ -314,9 +329,11 @@ public final class PallPass {
             return false;
         }
 
-        /** Cost at rung {@code to} of a window measured at the current rung: rays scale with {@link Step#cost}, the rest stays. */
-        private double estimate(double mean, double rays, int to) {
-            return mean - rays + rays * LADDER[to].cost() / LADDER[level].cost();
+        private double estimate(double mean, double rays, double wallMarch, double wallResolve, int to) {
+            Step from = LADDER[level], next = LADDER[to];
+            return mean + rays * (next.cost() / from.cost() - 1)
+                    + wallMarch * (next.wallCost() / from.wallCost() - 1)
+                    + wallResolve * (next.wallPixels() / from.wallPixels() - 1);
         }
 
         /** Last rung from now on, whatever the setting, pin or measurements ask ({@link GpuWatch#FLOOR_MS}). */
@@ -331,7 +348,7 @@ public final class PallPass {
             generation++;
             skip = true;
             sum = 0;
-            raySum = 0;
+            raySum = wallMarchSum = wallResolveSum = 0;
             samples = 0;
         }
     }
@@ -598,9 +615,9 @@ public final class PallPass {
     private static final int RING = 4;
     /**
      * Timestamps per frame: start, after preparation (smoke grid, shadow map, foot light), after the near volume's medium,
-     * after its sums, after rays, after accumulation, end.
+     * after its sums, rays, accumulation, pall composite, wall march, wall resolve and wall composite.
      */
-    private static final int STAMPS = 7;
+    private static final int STAMPS = 10;
     /** Part of the measured frame between stamps that is the ray march ({@link #describe}: preparation, near volume, sums, rays…). */
     private static final int RAYS_PART = 3;
     private static int[] QUERIES = new int[STAMPS * RING];
@@ -633,7 +650,7 @@ public final class PallPass {
      * screen veil shows the wall head at the eye ({@code NukeDust.veil}).
      */
     public static boolean available() {
-        return supported() && prepared.programs(false);
+        return supported() && prepared.ready(!FxViews.secondary() && wallEnabled);
     }
 
     private static boolean supported() {
@@ -647,6 +664,10 @@ public final class PallPass {
             textures = CompletableFuture.supplyAsync(() -> new byte[][]{
                     VolumeNoise.generate(VolumeNoise.SIZE, 0x9A11L), BlueNoise.generate(BlueNoise.SIZE, 0xB1E5L)});
         }
+    }
+
+    static boolean noiseReady() {
+        return textures != null && textures.isDone();
     }
 
     /** Field table for layer quads ({@code Sampler5} in {@code fx}); −1 — no pall in frame. */
@@ -729,10 +750,11 @@ public final class PallPass {
         }
         if (timer()) poll(System.nanoTime());
         latch();
-        if (gpuOff()) return;
+        if (gpuOff() || FxViews.secondary()) return;
+        wallEnabled = setting != Quality.OFF;
         WARMUP.quality = quality;
         // Resizes and setting/rung changes belong to the view, even with no detonation in sight.
-        if (!FxViews.secondary() && !cold()) DustWallPass.prepare(DETAIL);
+        if (wallEnabled && !cold()) DustWallPass.prepare(DETAIL);
     }
 
     static Frame warmupFrame() {
@@ -748,7 +770,7 @@ public final class PallPass {
         // the watchdog turned the volume off for the session: no pass at all, also no warm-up for a new view
         if (gpuOff()) return false;
         boolean warming = f == WARMUP;
-        long preparing = warming ? System.nanoTime() : 0;
+        if (warming && !cold()) return false;
         ShaderInstance m = march, r = resolve, c = composite, sh = shadow, fl = footLighting, mt = mushTaus, fv = froxel, fs = froxelSum,
                 mx = mix;
         if (m == null || r == null || c == null || fv == null || fs == null || mx == null || f.quality == Quality.OFF || !upload()) return false;
@@ -758,8 +780,11 @@ public final class PallPass {
         Step step = LADDER[DETAIL.level];
         if (!ensure(w, h, step.factor, step.interleave) || !volume(w, h, f.quality.tile)) return false;
         if (warming) {
+            WARMUP.dustWall.active = wallEnabled && DustWallPass.prepare(DETAIL);
+            prepared.start(w, h, step);
+            // Each stage writes the input of a later stage. Keep both ping-pong pairs on the same sides across loading frames.
+            latest = volumeLatest = 0;
             history = volumeHistory = false;
-            WARMUP.dustWall.active = !FxViews.secondary() && DustWallPass.prepare(DETAIL);
         }
         boolean open = mc.level != null && OpenAir.update(mc.level, eye);
         // torches, lamps and light carried by entities in the window (OpenAir, MovingLight): dust glows around them, the shadow
@@ -803,7 +828,8 @@ public final class PallPass {
         if (previousEye == null || previousEye.distanceToSqr(eye) > JUMP * JUMP) history = false;
         float dx = (float) (previousEye == null ? 0 : eye.x - previousEye.x), dy = (float) (previousEye == null ? 0 : eye.y - previousEye.y),
                 dz = (float) (previousEye == null ? 0 : eye.z - previousEye.z);
-        frame++;
+        // A staged warm-up has one sampling phase across its twelve passes, like a single volume frame.
+        if (!warming || prepared.stage == 0) frame++;
         int n = interleave, phase = ORDER[n - 1][(int) (frame % (n * n))];
         float ox = phase % n, oy = phase / n;
         int timing = warming ? -1 : begin();
@@ -825,7 +851,7 @@ public final class PallPass {
             RenderSystem.viewport(0, 0, MushroomField.SHADOW, MushroomField.SHADOW * f.mushroomCount);
             RenderSystem.setShaderTexture(0, mushrooms);
             sh.safeGetUniform("PallSun").set(f.sun.x, f.sun.y, f.sun.z, f.sun.w);
-            quad(sh, false);
+            quad(sh, false, warming);
         }
 
         boolean litFoot = fl != null && footMap >= 0 && (warming || f.hasLitFoot());
@@ -916,8 +942,10 @@ public final class PallPass {
             m.safeGetUniform("SmokeBalls").set(f.smokeBalls);
             m.safeGetUniform("SmokeBallLight").set(f.smokeBallLight);
             m.safeGetUniform("PallFroxel").set(f.quality.tile, VOLUME_NEAR, VOLUME_FAR, 0f);
-            OpenAir.bind(m, open);
-            SmokePass.bind(m, f.smoke);
+            if (submits(m, warming)) {
+                OpenAir.bind(m, open, warming);
+                SmokePass.bind(m, f.smoke);
+            }
             if (pass == 2) {
                 // the previous medium volume in place of world distances (the volume knows no world); the point in each cell
                 // moves every frame
@@ -928,7 +956,7 @@ public final class PallPass {
                 m.safeGetUniform("PallReproject").set(dx, dy, dz, volumePast ? 1f : 0f);
                 stamp(timing, 1);
             }
-            quad(m, true);
+            quad(m, true, warming);
             if (pass == 2) {
                 volumeLatest = volumeNext;
                 volumeHistory = true;
@@ -942,7 +970,7 @@ public final class PallPass {
                 fs.safeGetUniform("PallAirFog").set(f.airFog.x, f.airFog.y, f.airFog.z, f.airFog.w);
                 fs.safeGetUniform("PallFroxel").set(f.quality.tile, VOLUME_NEAR, VOLUME_FAR, 0f);
                 fs.safeGetUniform("PallFroxelFrame").set(w, h, VOLUME_CURRENT, 0f);
-                quad(fs, false);
+                quad(fs, false, warming);
                 stamp(timing, 3);
             }
         }
@@ -969,8 +997,8 @@ public final class PallPass {
         r.safeGetUniform("PallInterleave").set(n, ox, oy, (float) HISTORY);
         // history moves 1/n of the way to the neighbour-ray bounds each frame: outright without interleaving
         r.safeGetUniform("PallClamp").set(1f / n);
-        SmokePass.bind(r, f.smoke);
-        quad(r, false);
+        if (submits(r, warming)) SmokePass.bind(r, f.smoke);
+        quad(r, false, warming);
         latest = next - 1;
         // the whole pall in front of the world at each reduced-frame pixel, for layer quads (frame())
         GlStateManager._glBindFramebuffer(GlConst.GL_FRAMEBUFFER, FBOS[3]);
@@ -988,14 +1016,14 @@ public final class PallPass {
         mx.safeGetUniform("PallWall1").set(f.wall1);
         mx.safeGetUniform("PallGround0").set(groundSlot0.x, groundSlot0.y, groundSlot0.z, groundSlot0.w);
         mx.safeGetUniform("PallGround1").set(groundSlot1.x, groundSlot1.y, groundSlot1.z, groundSlot1.w);
-        quad(mx, false);
+        quad(mx, false, warming);
         stamp(timing, 5);
 
         // 3. composite
         GlStateManager._glBindFramebuffer(GlConst.GL_FRAMEBUFFER, previous);
         RenderSystem.viewport(VIEWPORT[0], VIEWPORT[1], VIEWPORT[2], VIEWPORT[3]);
         // fireball light brightens the world, but blending only attenuates: copy frame, composite writes the entire world pixel
-        boolean balls = f.ballsLit && copyFrame();
+        boolean balls = f.ballsLit && submits(c, warming) && copyFrame();
         RenderSystem.enableBlend();
         RenderSystem.blendFuncSeparate(GlStateManager.SourceFactor.ONE, GlStateManager.DestFactor.SRC_ALPHA,
                 GlStateManager.SourceFactor.ZERO, GlStateManager.DestFactor.ONE);
@@ -1035,74 +1063,99 @@ public final class PallPass {
         c.safeGetUniform("PallBallLight").set(f.ballLight);
         c.safeGetUniform("PallOpenSky").set(f.openSky.x, f.openSky.y, f.openSky.z);
         c.safeGetUniform("PallFaceShade").set(f.faceShade.x, f.faceShade.y, f.faceShade.z, f.faceShade.w);
-        OpenAir.bind(c, open);
-        SmokePass.bind(c, f.smoke);
-        SceneDepth.bindSee(c);
+        if (submits(c, warming)) {
+            OpenAir.bind(c, open, warming);
+            SmokePass.bind(c, f.smoke);
+            SceneDepth.bindSee(c);
+        }
         // surface flame flickers by 3D noise
-        quad(c, true);
+        quad(c, true, warming);
         RenderSystem.enableDepthTest();
-        if (f.dustWall.active) {
-            DustWallPass.draw(f, scene, view, projection, step, warming);
+        stamp(timing, 6);
+        if (f.dustWall.active && !FxViews.secondary()) {
+            DustWallPass.draw(f, scene, view, projection, step, warming, timing);
         } else {
             DustWallPass.idle();
+            stamp(timing, 7);
+            stamp(timing, 8);
         }
         end(timing);
 
         PREVIOUS.set(VIEW_PROJECTION);
         previousEye = eye;
         history = true;
-        drawn++;
+        if (!warming) drawn++;
         if (warming) {
-            GL11.glFinish();
-            prepared.programs(true);
-            reset();
-            if (!FxViews.secondary()) {
-                long ms = (System.nanoTime() - preparing) / 1_000_000;
-                if (shade && litFoot && grid && f.dustWall.active) {
-                    Incoming.LOG.info("Nuclear volume shaders prepared in {} ms", ms);
-                } else {
-                    Incoming.LOG.info("Nuclear volume preparation finished in {} ms with unavailable passes (shadow {}, foot {}, tau {}, wall {})",
-                            ms, shade, litFoot, grid, f.dustWall.active);
-                }
+            if (prepared.finishStage()) {
+                // Only the primary prepares programs. A new camera's private history never drains the shared context.
+                GL11.glFinish();
+                Incoming.LOG.info("Nuclear volume shaders prepared (shadow {}, foot {}, tau {}, wall {})",
+                        shade, litFoot, grid, f.dustWall.active);
             }
+            reset();
         }
         return true;
     }
 
-    /** Reload replaces shader instances; Veil may also replace any linked program in place. */
-    private static Prepared prepared = new Prepared();
+    /** Programs belong to the GL context. Targets and temporal histories belong to the view. */
+    private static final Prepared prepared = new Prepared();
+    private static boolean wallEnabled = true;
 
     private static final class Prepared {
         private static final List<Supplier<ShaderInstance>> PROGRAMS = List.of(
-                () -> march, () -> resolve, () -> composite, () -> shadow, () -> footLighting,
-                () -> mushTaus, () -> froxel, () -> froxelSum, () -> mix,
-                () -> FxViews.secondary() ? null : DustWallPass.march,
-                () -> FxViews.secondary() ? null : DustWallPass.resolve,
-                () -> FxViews.secondary() ? null : DustWallPass.composite);
+                () -> shadow, () -> footLighting, () -> mushTaus, () -> froxel, () -> froxelSum, () -> march,
+                () -> resolve, () -> mix, () -> composite, () -> DustWallPass.march,
+                () -> DustWallPass.resolve, () -> DustWallPass.composite);
         private final ShaderInstance[] shaders = new ShaderInstance[PROGRAMS.size()];
         private final int[] ids = new int[shaders.length];
+        private int stage, width, height;
+        private Step step;
 
-        boolean programs(boolean remember) {
-            for (int i = 0; i < shaders.length; i++) {
+        // Secondary views and dust OFF use the nine pall/mushroom programs preceding the three wall programs.
+        private int count(boolean wall) {
+            return wall ? shaders.length : shaders.length - 3;
+        }
+
+        boolean ready(boolean wall) {
+            return stage >= count(wall) && matches(count(wall));
+        }
+
+        private boolean matches(int count) {
+            for (int i = 0; i < count; i++) {
                 ShaderInstance shader = PROGRAMS.get(i).get();
-                int id = shader == null ? -1 : shader.getId();
-                if (remember) {
-                    shaders[i] = shader;
-                    ids[i] = id;
-                } else if (shaders[i] != shader || ids[i] != id) {
-                    return false;
-                }
+                if (shaders[i] != shader || shader != null && ids[i] != shader.getId()) return false;
             }
             return true;
         }
+
+        void start(int w, int h, Step rung) {
+            if (width == w && height == h && rung == step && matches(count(wallEnabled))) return;
+            width = w;
+            height = h;
+            step = rung;
+            stage = 0;
+            for (int i = 0; i < shaders.length; i++) {
+                shaders[i] = PROGRAMS.get(i).get();
+                ids[i] = shaders[i] == null ? -1 : shaders[i].getId();
+            }
+        }
+
+        boolean finishStage() {
+            return ++stage == count(wallEnabled);
+        }
+    }
+
+    static boolean submits(ShaderInstance shader, boolean warming) {
+        return !warming || shader == prepared.shaders[prepared.stage];
     }
 
     static boolean cold() {
-        return supported() && !prepared.programs(false);
+        return !FxViews.secondary() && supported() && !prepared.ready(wallEnabled);
     }
 
     /** Full-frame quad with custom shader; ray pass also binds 3D noise at its own texture unit. */
-    private static void quad(ShaderInstance s, boolean withNoise) {
+    private static void quad(ShaderInstance s, boolean withNoise, boolean warming) {
+        if (!submits(s, warming)) return;
         BufferBuilder b = Tesselator.getInstance().begin(VertexFormat.Mode.QUADS, DefaultVertexFormat.POSITION);
         b.addVertex(-1, -1, 0);
         b.addVertex(1, -1, 0);
@@ -1514,12 +1567,14 @@ public final class PallPass {
             long stop = GL33.glGetQueryObjecti64(QUERIES[STAMPS * i + STAMPS - 1], GL15.GL_QUERY_RESULT);
             double ms = Math.max(0, stop - start) / 1e6;
             long before = start;
-            double rays = 0;
+            double rays = 0, wallMarch = 0, wallResolve = 0;
             for (int q = 1; q < STAMPS; q++) {
                 long at = GL33.glGetQueryObjecti64(QUERIES[STAMPS * i + q], GL15.GL_QUERY_RESULT);
                 double part = Math.max(0, at - before) / 1e6;
                 PART_SUM[q - 1] += part;
                 if (q - 1 == RAYS_PART) rays = part;
+                if (q == 7) wallMarch = part;
+                if (q == 8) wallResolve = part;
                 before = Math.max(before, at);
             }
             gpuSum += ms;
@@ -1527,11 +1582,11 @@ public final class PallPass {
             gpuFrames++;
             measured(ms - SUBMIT[i] / 1e6);
             int was = DETAIL.level;
-            if (DETAIL.sample(ms, rays, ISSUED[i], now)) {
-                Step from = LADDER[was], to = LADDER[DETAIL.level];
-                // in game — DEBUG: rung changes every few seconds; scenario rung is pinned (draw)
-                Incoming.LOG.debug(String.format(Locale.ROOT, "Nuclear dust pall: %.2f ms on the GPU (budget %.1f), detail %s → %s",
-                        DETAIL.lastMean, DETAIL.budget, from.describe(), to.describe()));
+            if (DETAIL.sample(ms, rays, wallMarch, wallResolve, ISSUED[i], now)) {
+                Step to = LADDER[DETAIL.level];
+                Incoming.LOG.info(String.format(Locale.ROOT,
+                        "Nuclear volume rung %d → %d (setting %d, %.2f ms, budget %.1f ms), wall 1/%d × %d steps",
+                        was, DETAIL.level, DETAIL.ceiling, DETAIL.lastMean, DETAIL.budget, to.wallDiv, to.wallSteps));
             }
             ISSUED[i] = -1;
         }
@@ -1580,13 +1635,11 @@ public final class PallPass {
         if (!timer() || ISSUED[ring] >= 0) return -1;
         GL33.glQueryCounter(QUERIES[STAMPS * ring], GL33.GL_TIMESTAMP);
         SUBMIT[ring] = System.nanoTime();
-        // every stamp is written each measured frame (a pass skipped this frame still has its point)
-        for (int k = 1; k < STAMPS - 1; k++) GL33.glQueryCounter(QUERIES[STAMPS * ring + k], GL33.GL_TIMESTAMP);
         return ring;
     }
 
     /** Timestamp k between passes of the measured frame. */
-    private static void stamp(int pair, int k) {
+    static void stamp(int pair, int k) {
         if (pair >= 0) GL33.glQueryCounter(QUERIES[STAMPS * pair + k], GL33.GL_TIMESTAMP);
     }
 
@@ -1618,8 +1671,8 @@ public final class PallPass {
         Step step = LADDER[Math.max(0, DETAIL.level)];
         Step top = LADDER[Math.max(0, DETAIL.ceiling)];
         String gpu = timer < 0 ? "gpu n/a" : String.format(Locale.ROOT,
-                "gpu %.2f ms (longest %.2f, budget %.1f; preparation %.2f, near volume %.2f + sums %.2f, rays %.2f, accumulation %.2f, composite + wall %.2f)",
-                lastGpuMean, lastGpuMax, DETAIL.budget, LAST_PART[0], LAST_PART[1], LAST_PART[2], LAST_PART[3], LAST_PART[4], LAST_PART[5]);
+                "gpu %.2f ms (longest %.2f, budget %.1f; preparation %.2f, near volume %.2f + sums %.2f, rays %.2f, accumulation %.2f, composite %.2f, wall march %.2f, resolve %.2f, composite %.2f)",
+                lastGpuMean, lastGpuMax, DETAIL.budget, LAST_PART[0], LAST_PART[1], LAST_PART[2], LAST_PART[3], LAST_PART[4], LAST_PART[5], LAST_PART[6], LAST_PART[7], LAST_PART[8]);
         return String.format(Locale.ROOT, "%d frames, %d×%d, near volume %d×%d×%d to %.0f blocks, detail %s (step %d of %d, setting %s, %s, %d changes), %s; %s",
                 lastDrawn, lowW, lowH, volumeW / VOLUME_COLUMNS, volumeH / (VOLUME_SLICES / VOLUME_COLUMNS), VOLUME_SLICES, VOLUME_FAR, step.describe(), DETAIL.level, LADDER.length - 1, top.describe(),
                 DETAIL.pinned ? "pinned" : "by GPU budget", DETAIL.changes, gpu, OpenAir.describe());
@@ -1709,7 +1762,6 @@ public final class PallPass {
         private int gpuFrames;
         private int drawn;
         private int lastDrawn;
-        private Prepared prepared = new Prepared();
 
         void close() {
             FxViews.textures(TEXTURES); FxViews.textures(VOLUME); FxViews.textures(FIRE); FxViews.textures(GROUND);
@@ -1921,9 +1973,6 @@ public final class PallPass {
             int oldlastDrawn = PallPass.lastDrawn;
             PallPass.lastDrawn = lastDrawn;
             lastDrawn = oldlastDrawn;
-            Prepared oldprepared = PallPass.prepared;
-            PallPass.prepared = prepared;
-            prepared = oldprepared;
         }
     }
 }

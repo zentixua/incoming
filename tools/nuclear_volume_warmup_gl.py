@@ -1,12 +1,14 @@
 # /// script
 # dependencies = ["pyopengl", "numpy"]
 # ///
-"""Measure the four draws missed by an empty pall frame. Run with 'cold' for the unprepared control.
+"""Measure a batch ('batch'), individual loading frames (default), or an unprepared first burst ('cold').
+Each run starts in a fresh llvmpipe process with the driver cache disabled.
 
 The Java submission order, allocation, reload and watchdog checks live in NuclearVolumeBudgetTest.
 This timing fixture uses a 3x3 empty foot atlas region, a 3x3 march/history and a 12x12 composite.
 Linking and resource allocation are outside the measured interval. No game or hardware GPU.
 """
+import json
 import os
 import sys
 from time import perf_counter
@@ -39,77 +41,132 @@ def volume(p, unit, name, side):
     return texture
 
 
-def main(cold):
+PALL = ("fx_mush_shadow", "fx_pall_foot", "fx_mush_taus", "fx_pall_froxel", "fx_pall_froxel_sum",
+        "fx_pall", "fx_pall_resolve", "fx_pall_mix", "fx_pall_composite")
+WALL = ("fx_dustwall", "fx_dustwall_resolve", "fx_dustwall_composite")
+
+
+def defaults(program, name):
+    setup = json.loads((h.namespace["CORE"] / (name + ".json")).read_text())
+    for uniform in setup["uniforms"]:
+        location = h.loc(program, uniform["name"])
+        if location < 0:
+            continue
+        values = uniform["values"]
+        if uniform["type"] == "matrix4x4":
+            g.glUniformMatrix4fv(location, 1, False, np.array(values, np.float32))
+        elif uniform["type"] == "int":
+            g.glUniform1i(location, values[0])
+        else:
+            getattr(g, f"glUniform{len(values)}f")(location, *values)
+
+
+def main(mode):
     h.context()
-    foot, resolve, composite = (h.link(name) for name in ("fx_pall_foot", "fx_dustwall_resolve", "fx_dustwall_composite"))
-    march = h.march_setup()
+    programs = {name: h.link(name) for name in PALL}
+    programs.update(zip(WALL, (h.march_setup(), h.link(WALL[1]), h.link(WALL[2]))))
     scene = h.make_scene(100)
     empty = h.texture(*h.rgba, 128, 4, np.zeros((4, 128, 4), np.float32))
     dusty = h.texture(*h.rgba, 128, 1, [(0, 20, .11, .3)] * 128)
-    atlas, _ = framebuffer(h.low, g.GL_RGBA32F)
-    samples, rays = framebuffer(h.low, g.GL_RGBA16F)
-    history, resolved = framebuffer(h.low, g.GL_RGBA16F)
-    previous_history = h.texture(g.GL_RGBA16F, g.GL_RGBA, h.low, h.low)
-    screen, _ = framebuffer(h.size, g.GL_RGBA8)
+    screen = framebuffer(h.size, g.GL_RGBA8)
+    targets = {}
+    for name in programs:
+        if name.endswith("composite"):
+            targets[name] = screen
+        else:
+            fmt = g.GL_RGBA32F if name == "fx_pall_foot" else g.GL_RGBA16F
+            targets[name] = framebuffer(h.low, fmt)
+    previous = h.texture(g.GL_RGBA16F, g.GL_RGBA, h.low, h.low)
+    # The same offscreen pipeline and formats in every schedule. The matrices and sizes are explicit
+    # so that the froxels and the empty mushroom execute a valid, bounded first draw.
+    march = programs[WALL[0]]
     g.glUseProgram(march)
     wall_noise = volume(march, 12, "DwNoise", 128)
-    g.glUseProgram(foot)
-    foot_noise = volume(foot, 12, "PallNoise", 1)
-    volume(foot, 13, "PallOpen", 1)
-    for program in (resolve, composite):
+    for unit, sampler in enumerate(("PallNoise", "PallOpen", "SmokeGrid", "PallBall"), 12):
+        texture = volume(march, unit, sampler, 1)
+        if unit == 12:
+            pall_noise = texture
+    for name, program in programs.items():
         g.glUseProgram(program)
+        if name in PALL:
+            defaults(program, name)
+        for unit, sampler in enumerate(("PallNoise", "PallOpen", "SmokeGrid", "PallBall"), 12):
+            g.glUniform1i(h.loc(program, sampler), unit)
+        g.glUniform1i(h.loc(program, "FxGlass"), 16)
         g.glUniform1f(h.loc(program, "DwDiv"), 4)
+        g.glUniform1f(h.loc(program, "DwPrevDiv"), 4)
+        g.glUniform4f(h.loc(program, "PallFroxel"), 8, 1, 256, 0)
+        g.glUniform4f(h.loc(program, "PallFroxelFrame"), h.size, h.size, .1, 0)
+    g.glActiveTexture(g.GL_TEXTURE0 + 16)
+    g.glBindTexture(g.GL_TEXTURE_2D, empty)
 
-    # Keep complete, distinct samplers bound; the foot row stays blank to isolate driver first use.
-    def frame(preparing):
-        intervals = []
-        for program, fbo, width in ((foot, atlas, h.low), (march, samples, h.low),
-                                    (resolve, history, h.low), (composite, screen, h.size)):
-            g.glUseProgram(program)
-            g.glBindFramebuffer(g.GL_FRAMEBUFFER, fbo)
-            g.glViewport(0, 0, width, width)
-            if program == foot:
-                g.glDisable(g.GL_BLEND)
-                g.glActiveTexture(g.GL_TEXTURE0 + 12)
-                g.glBindTexture(g.GL_TEXTURE_3D, foot_noise)
-                for unit, sampler in enumerate((1, 3, 4, 5, 6, 7, 8, 11)):
-                    g.glActiveTexture(g.GL_TEXTURE0 + unit)
-                    g.glBindTexture(g.GL_TEXTURE_2D, empty)
-                    g.glUniform1i(h.loc(foot, f"Sampler{sampler}"), unit)
-            elif program == march:
-                g.glActiveTexture(g.GL_TEXTURE0 + 12)
-                g.glBindTexture(g.GL_TEXTURE_3D, wall_noise)
-                ring = (0, 0, 0, 1) if preparing else (800, 0, 100, 800)
-                g.glUniform4f(h.loc(march, "DwRing"), *ring)
-                h.bind(march, 1, scene)
-                h.bind(march, 2, empty if preparing else dusty)
-                h.bind(march, 3, empty)
-                g.glUniform2f(h.loc(march, "DwFrame"), 1, 128)
-            elif program == resolve:
-                for unit, tex in enumerate((rays, previous_history, scene, scene)):
-                    h.bind(resolve, unit, tex)
-            else:
-                h.bind(composite, 0, resolved)
-                h.bind(composite, 1, scene)
-                g.glEnable(g.GL_BLEND)
-                g.glBlendFuncSeparate(g.GL_ONE, g.GL_SRC_ALPHA, g.GL_ZERO, g.GL_ONE)
-            start = perf_counter()
-            h.quad(program)
-            g.glFinish()
-            intervals.append((perf_counter() - start) * 1000)
-        assert g.glGetError() == g.GL_NO_ERROR
-        return intervals
+    def draw(name, preparing):
+        program = programs[name]
+        g.glUseProgram(program)
+        composite = name.endswith("composite")
+        width = h.size if composite else h.low
+        g.glBindFramebuffer(g.GL_FRAMEBUFFER, targets[name][0])
+        g.glViewport(0, 0, width, width)
+        if composite:
+            g.glEnable(g.GL_BLEND)
+            g.glBlendFuncSeparate(g.GL_ONE, g.GL_SRC_ALPHA, g.GL_ZERO, g.GL_ONE)
+        else:
+            g.glDisable(g.GL_BLEND)
+        g.glActiveTexture(g.GL_TEXTURE0 + 12)
+        g.glBindTexture(g.GL_TEXTURE_3D, wall_noise if name == WALL[0] else pall_noise)
+        if name == WALL[0]:
+            g.glUniform4f(h.loc(program, "DwRing"), *((0, 0, 0, 1) if preparing else (800, 0, 100, 800)))
+            g.glUniform2f(h.loc(program, "DwFrame"), 1, 128)
+            h.bind(program, 1, scene)
+            h.bind(program, 2, empty if preparing else dusty)
+            h.bind(program, 3, empty)
+        elif name == WALL[1]:
+            for unit, tex in enumerate((targets[WALL[0]][1], previous, scene, scene)):
+                h.bind(program, unit, tex)
+        elif name == WALL[2]:
+            h.bind(program, 0, targets[WALL[1]][1])
+            h.bind(program, 1, scene)
+        else:
+            for unit in range(12):
+                h.bind(program, unit, empty)
+            if name in ("fx_pall", "fx_pall_froxel", "fx_pall_foot"):
+                h.bind(program, 0, scene)
+            if name in ("fx_pall", "fx_pall_froxel"):
+                h.bind(program, 9, targets["fx_pall_foot"][1])
+                h.bind(program, 10, targets["fx_mush_taus"][1])
+            if name in ("fx_pall_froxel_sum", "fx_pall_resolve", "fx_pall_mix", "fx_pall_composite"):
+                source = {"fx_pall_froxel_sum": "fx_pall_froxel", "fx_pall_resolve": "fx_pall",
+                          "fx_pall_mix": "fx_pall_resolve", "fx_pall_composite": "fx_pall_resolve"}
+                h.bind(program, 0, targets[source[name]][1])
+        h.quad(program)
+
+    def frame(names, preparing):
+        start = perf_counter()
+        for name in names:
+            draw(name, preparing)
+        g.glFinish()
+        return (perf_counter() - start) * 1000
 
     g.glFinish()
-    if not cold:
-        frame(True)
-    times = frame(False)
-    print("First eligible draws with " + ("cold programs" if cold else "prepared programs"))
-    print("  " + ", ".join(f"{name} {ms:.2f} ms" for name, ms in zip(("foot", "march", "resolve", "composite"), times))
-          + f", sum {sum(times):.2f} ms")
-    g.glBindFramebuffer(g.GL_FRAMEBUFFER, history)
+    preparation = []
+    if mode == "batch":
+        preparation.append(frame(programs, True))
+    elif mode != "cold":
+        for name in programs:
+            preparation.append(frame((name,), True))
+            print(f"  loading frame {name}: {preparation[-1]:.2f} ms", flush=True)
+    first = frame(programs, False)
+    print(f"{mode}: longest preparation frame {max(preparation, default=0):.2f} ms, "
+          f"first eligible volume frame {first:.2f} ms", flush=True)
+    assert g.glGetError() == g.GL_NO_ERROR
+    g.glBindFramebuffer(g.GL_FRAMEBUFFER, targets[WALL[1]][0])
     assert h.read(h.low, h.low)[1, 1, 3] < .99, "eligible frame must actually produce dust"
+    if preparation:
+        # Relative to this process's cold compiler. Even one omitted costly first use must be visible.
+        # Wall composite is the cheapest of the four previously missed passes.
+        limit = min(preparation[-3:]) if mode == "staged" else preparation[0]
+        assert first < limit / 2, f"first eligible frame still pays cold first-use cost: {first:.2f} ms"
 
 
 if __name__ == "__main__":
-    main("cold" in sys.argv[1:])
+    main(next((arg for arg in sys.argv[1:] if arg in ("cold", "batch")), "staged"))

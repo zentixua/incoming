@@ -1,5 +1,6 @@
 package ua.zentix.incoming.client.fx.layer;
 
+import com.mojang.blaze3d.pipeline.RenderCall;
 import com.mojang.blaze3d.pipeline.RenderTarget;
 import com.mojang.blaze3d.platform.GlConst;
 import com.mojang.blaze3d.platform.GlStateManager;
@@ -29,11 +30,13 @@ import org.lwjgl.opengl.GL30;
 import org.lwjgl.opengl.GL33;
 import org.mockito.MockedStatic;
 import ua.zentix.incoming.client.nuclear.NukeBallSurface;
+import ua.zentix.incoming.client.nuclear.NukePall;
 import ua.zentix.incoming.compat.FlashbackReplay;
 
 import java.lang.reflect.Field;
 import java.lang.reflect.Modifier;
 import java.nio.ByteBuffer;
+import java.util.ArrayDeque;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
@@ -94,6 +97,10 @@ class NuclearVolumeBudgetTest {
         when(mc.getMainRenderTarget()).thenReturn(main);
         GameRenderer renderer = mock(GameRenderer.class);
         replace(Minecraft.class, mc, "gameRenderer", renderer);
+        var camera = mock(net.minecraft.client.Camera.class);
+        when(renderer.getMainCamera()).thenReturn(camera);
+        when(camera.getPosition()).thenReturn(Vec3.ZERO);
+        when(mc.getOverlay()).thenReturn(mock(net.minecraft.client.gui.screens.Overlay.class));
         LightTexture light = mock(LightTexture.class);
         when(renderer.lightTexture()).thenReturn(light);
         replace(LightTexture.class, light, "lightTexture", mock(DynamicTexture.class));
@@ -102,6 +109,37 @@ class NuclearVolumeBudgetTest {
 
     private static void draw(PallPass.Frame frame) {
         assertTrue(PallPass.draw(frame, 8, new Matrix4f(), new Matrix4f(), Vec3.ZERO, new Vector4f()));
+    }
+
+    private void warm(PallPass.Quality setting, List<String> programs) {
+        for (int i = 0; i < programs.size(); i++) {
+            PallPass.beginFrame(setting);
+            assertFalse(PallPass.available());
+            draw(PallPass.warmupFrame());
+            assertEquals(programs.subList(0, i + 1), draws, "one first use per loading frame");
+        }
+    }
+
+    private void loadOnSeparateFrames(MockedStatic<RenderSystem> render, List<String> programs) {
+        var flips = new ArrayDeque<RenderCall>();
+        var clientTasks = new ArrayDeque<Runnable>();
+        render.when(() -> RenderSystem.recordRenderCall(any())).thenAnswer(call -> flips.add(call.getArgument(0)));
+        Minecraft mc = Minecraft.getInstance();
+        doAnswer(call -> clientTasks.add(call.getArgument(0))).when(mc).tell(any());
+        var loaded = VolumeReload.start();
+        for (int i = 0; i < programs.size(); i++) {
+            assertFalse(loaded.isDone());
+            assertEquals(1, flips.size());
+            flips.remove().execute();
+            assertTrue(flips.isEmpty(), "the display flip must return before another program can start");
+            assertEquals(1, clientTasks.size());
+            clientTasks.remove().run();
+            assertEquals(programs.subList(0, i + 1), draws);
+        }
+        assertTrue(loaded.isDone());
+        loaded.join();
+        assertTrue(flips.isEmpty());
+        assertFalse(VolumeReload.active());
     }
 
     @Test
@@ -115,11 +153,13 @@ class NuclearVolumeBudgetTest {
              var uniforms = mockStatic(Uniform.class); var tess = mockStatic(Tesselator.class);
              var uploader = mockStatic(BufferUploader.class); var air = mockStatic(OpenAir.class);
              var smoke = mockStatic(SmokePass.class); var ball = mockStatic(NukeBallSurface.class);
-             var depth = mockStatic(SceneDepth.class); var replay = mockStatic(FlashbackReplay.class)) {
+             var depth = mockStatic(SceneDepth.class); var nuke = mockStatic(NukePall.class); var replay = mockStatic(FlashbackReplay.class)) {
             storage.swap();
             try {
                 saveWallResources();
                 client(minecraft);
+                depth.when(() -> SceneDepth.loadingScene(12, 12)).thenReturn(8);
+                nuke.when(NukePall::quality).thenReturn(PallPass.Quality.HIGH);
                 replace(PallPass.class, null, "watch", null);
                 CompletableFuture<byte[][]> noise = new CompletableFuture<>();
                 replace(PallPass.class, null, "textures", noise);
@@ -159,7 +199,10 @@ class NuclearVolumeBudgetTest {
                     shader(PallPass.class, name, name);
                 }
                 for (String name : List.of("march", "resolve", "composite")) shader(DustWallPass.class, name, "wall." + name);
-                Uniform divisor = mock(Uniform.class), frame = mock(Uniform.class);
+                Uniform divisor = mock(Uniform.class), frame = mock(Uniform.class), previousDiv = mock(Uniform.class);
+                Uniform reproject = mock(Uniform.class);
+                when(DustWallPass.resolve.safeGetUniform("DwPrevDiv")).thenReturn(previousDiv);
+                when(DustWallPass.resolve.safeGetUniform("DwReproject")).thenReturn(reproject);
                 when(DustWallPass.march.safeGetUniform("DwDiv")).thenReturn(divisor);
                 when(DustWallPass.march.safeGetUniform("DwFrame")).thenReturn(frame);
                 List<String> all = List.of("shadow", "footLighting", "mushTaus", "froxel", "froxelSum", "march",
@@ -169,14 +212,18 @@ class NuclearVolumeBudgetTest {
                 assertFalse(PallPass.draw(PallPass.warmupFrame(), 8, new Matrix4f(), new Matrix4f(), Vec3.ZERO, new Vector4f()));
                 assertTrue(draws.isEmpty());
                 noise.complete(new byte[][] {{0}, {0}});
-                draw(PallPass.warmupFrame());
-                assertEquals(all, draws);
+                warm(PallPass.Quality.OFF, all.subList(0, 9));
+                gl12.verify(() -> GL12.glTexImage3D(eq(GL12.GL_TEXTURE_3D), eq(0), eq(GL30.GL_R8), eq(128), eq(128), eq(128),
+                        eq(0), eq(GL11.GL_RED), eq(GL11.GL_UNSIGNED_BYTE), any(ByteBuffer.class)), never());
+                draws.clear();
+                state.clearInvocations(); // LOW also has a 3×3 interleaved pall ray target.
+                warm(PallPass.Quality.HIGH, all);
                 assertTrue(DustWallPass.ready());
                 gl12.verify(() -> GL12.glTexImage3D(eq(GL12.GL_TEXTURE_3D), eq(0), eq(GL30.GL_R8), eq(128), eq(128), eq(128),
                         eq(0), eq(GL11.GL_RED), eq(GL11.GL_UNSIGNED_BYTE), any(ByteBuffer.class)));
                 state.verify(() -> GlStateManager._texImage2D(eq(GL11.GL_TEXTURE_2D), eq(0), eq(GL30.GL_RGBA16F),
                         eq(3), eq(3), eq(0), eq(GL11.GL_RGBA), eq(GL11.GL_FLOAT), isNull()), times(3));
-                gl11.verify(GL11::glFinish);
+                gl11.verify(GL11::glFinish, times(2));
 
                 // Recompile just the foot program in place, as a resource manager can do.
                 when(PallPass.footLighting.getId()).thenReturn(9);
@@ -184,8 +231,26 @@ class NuclearVolumeBudgetTest {
                 assertFalse(DustWallPass.ready());
                 draws.clear();
                 PallPass.beginFrame(PallPass.Quality.HIGH);
-                draw(PallPass.warmupFrame());
-                assertEquals(all, draws);
+                loadOnSeparateFrames(render, all);
+
+                gl33.verify(() -> GL33.glQueryCounter(anyInt(), anyInt()), never());
+                assertTrue(timestamps.isEmpty(), "loading frames must never issue a GPU time sample");
+                // A new camera feed owns fresh targets, but uses the prepared programs on its very first frame.
+                PallPass.ViewState feed = new PallPass.ViewState();
+                feed.swap();
+                try (var views = mockStatic(FxViews.class, CALLS_REAL_METHODS)) {
+                    views.when(FxViews::secondary).thenReturn(true);
+                    assertTrue(PallPass.available());
+                    assertFalse(PallPass.cold());
+                    draws.clear();
+                    PallPass.beginFrame(PallPass.Quality.LOW);
+                    draw(new PallPass.Frame());
+                    assertEquals(all.subList(3, 9), draws);
+                    gl11.verify(GL11::glFinish, times(3));
+                } finally {
+                    feed.swap();
+                    feed.close();
+                }
 
                 draws.clear();
                 state.clearInvocations();
@@ -194,6 +259,7 @@ class NuclearVolumeBudgetTest {
                 burst.quality = PallPass.Quality.HIGH;
                 burst.dustWall.active = true;
                 PallPass.beginFrame(burst.quality);
+                assertEquals(GpuWatch.State.WATCHING, PallPass.watch().state());
                 draw(burst);
                 assertEquals(all.subList(all.indexOf("froxel"), all.size()), draws);
                 state.verify(GlStateManager::_genTexture, never());
@@ -205,13 +271,16 @@ class NuclearVolumeBudgetTest {
                 PallPass.beginFrame(burst.quality);
                 assertEquals(GpuWatch.State.FLOOR, PallPass.watch().state());
                 assertEquals(305, PallPass.watch().cause(), 0);
+                clearInvocations(previousDiv, reproject);
                 wallDrawNs = 400_000_000L;
                 draw(burst);
                 verify(divisor).set(6f);
+                verify(previousDiv).set(4f);
+                verify(reproject).set(0f, 0f, 0f, 1f);
                 verify(frame).set(anyFloat(), eq(96f));
                 replace(PallPass.class, null, "SUBMIT", new long[4]);
                 PallPass.beginFrame(burst.quality);
-                verify(detail).sample(eq(1205d), anyDouble(), anyInt(), anyLong());
+                verify(detail).sample(eq(1205d), eq(0d), eq(400d), eq(400d), anyInt(), anyLong());
                 assertEquals(1205, PallPass.watch().cause(), 0);
                 assertEquals(GpuWatch.State.OFF, PallPass.watch().state());
             } finally {

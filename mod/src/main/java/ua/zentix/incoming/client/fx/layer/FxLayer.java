@@ -348,9 +348,8 @@ public final class FxLayer {
         PallPass.Frame pall = NukePall.frame(level, view.camera(), view.partial(), FRUSTUM);
         // ordinary blast smoke — in the same pass: with the nuke or without it
         pall = SmokeFrame.frame(level, view.camera(), view.partial(), pall);
-        // First draw can compile the ray program in the driver. Run the actual pass while entering
-        // the world (retry until background textures are ready), before the first nuclear flash.
-        if (PallPass.cold()) pall = PallPass.warmupFrame();
+        // In-place recompilation can happen outside a resource reload. Stage it on primary frames as well.
+        if (!VolumeReload.active() && PallPass.cold()) pall = PallPass.warmupFrame();
         lastQuads = QUADS.size();
         if (QUADS.size() == 0 && pall == null && !WaterDecal.active() && !hot) {
             PallPass.reset();
@@ -379,7 +378,7 @@ public final class FxLayer {
             LayerTimes.mark(LayerTimes.Pass.WATER);
             // pall — before the quads: they lie on it with their own share of pall in front of them (fx.vsh)
             boolean pallDrawn = pall != null && scene >= 0 && PallPass.draw(pall, scene, VIEW, e.getProjectionMatrix(), view.camera(),
-                    FOG.haze(view.range(), HAZE));
+                    FOG.haze(view.range(), HAZE)) && pall != PallPass.warmupFrame();
             if (!pallDrawn) {
                 PallPass.reset();
                 DustWallPass.idle();
