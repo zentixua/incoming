@@ -68,11 +68,6 @@ float gDwFoot = 0.0;
 // set by dwDensity at its sample: the billowed dust surface above it, its full extinction and its share of sand (the light
 // reads them)
 float gDwSurf = 0.0, gDwSigma = 0.0, gDwSand = 0.0;
-// set by dwDensity: the sample is in the young head (sampled twice per step: it moves across the steps at the front's speed,
-// faster than the history follows)
-bool gDwHead = false;
-// set by dwDensity: the sample's dust is older than 2 s (calm, settled: its light changes slowly along the ray)
-bool gDwOld = false;
 // set by dwDensity: the swell at the sample (dwBulge, share of the layer): sags sit in the shade of the swells around them
 float gDwSwell = 0.0;
 
@@ -252,7 +247,7 @@ float dwDensity(vec3 g, bool coarse) {
     // at 25 m/s: fixed in the ground, the front would sweep each 30 m lump in two frames and the face would boil
     float yn = clamp(q.y / top0, 0.0, 1.5);
     float bf = 0.42;
-    if (a0 < 4.0) {
+    if (a0 < 8.0) {
         vec3 hf = vec3(atan(q.z, q.x) * DwRing.x / 30.0, q.y / 22.0, (DwRing.x - r + 25.0 * DwEye.w) / 30.0);
         bf = coarse ? 0.42 : dwBillow(hf + vec3(3.7, 0.0, 9.1), 1.0 / 22.0);
     }
@@ -261,15 +256,11 @@ float dwDensity(vec3 g, bool coarse) {
     // clefts between the head's lobes: the front line itself is cut back by up to ~50 m in notches ~150 m along it
     float cleft = 50.0 * smoothstep(0.55, 0.85, dwNoise3(vec3(atan(q.z, q.x) * DwRing.x / 150.0, 61.7, 0.05 * DwEye.w)));
     float a = DwEye.w - dwNode(r + cleft + (40.0 * yn * yn + 70.0 * max(bf - 0.3, 0.0) * smoothstep(0.2, 0.6, yn)) * exp(-a0 / 1.5)).x;
-    if (!coarse) {
-        gDwHead = a0 < 1.5;
-        gDwOld = a0 > 2.0;
-    }
     if (a <= 0.0) return 0.0;
     float top = dwEnvelope(a, h, k), ph;
     // shear rolls on the head (Kelvin–Helmholtz): bands ~70 m apart across the head, riding with the front and rolling back
     // over it at 20 m/s, in patches along the front, breaking down behind it (presentation)
-    if (!coarse && a0 < 2.0) {
+    if (!coarse && a0 < 6.0) {
         float along = atan(q.z, q.x) * DwRing.x;
         float patchy = smoothstep(0.35, 0.7, dwNoise3(vec3(along / 160.0, 12.9, 0.05 * DwEye.w)));
         top *= 1.0 + 0.12 * patchy * sin(6.2832 * (DwRing.x - r + 20.0 * DwEye.w) / 70.0) * exp(-a0 / 1.0);
@@ -285,22 +276,22 @@ float dwDensity(vec3 g, bool coarse) {
     float n = coarse ? dwFbm2(tq, 0.0) : dwFbm(tq, 1.0 / 13.0);
     // cauliflower lumps of the top, ~35 m and finer, in the same air
     float bl = coarse ? 0.42 : dwBillow(vec3(pw.x, pw.y - 0.3 * ph, pw.z) / vec3(34.0, 22.0, 34.0) + 11.0, 1.0 / 22.0);
-    // the young dust is combed along the radial post-shock wind: its texture (still fixed in the air) is stretched ~150 m
-    // along the radius, ~20 m across. The face runs along the streaks at the front's speed and keeps each one's cross-
-    // section for ~0.3 s; isotropic 20 m detail was new every ~2 frames at 470 m/s (the approaching face shimmered).
-    // Handed over to the isotropic billows within 0.8–2 s, as the wind dies.
-    float comb = 1.0 - smoothstep(0.8, 2.0, a0);
-    if (comb > 0.0 && !coarse) {
-        float ral = length(pw.xz);
-        vec3 rq = vec3(ral, pw.y, atan(pw.z, pw.x) * ral);
-        n = mix(n, dwFbm(vec3(rq.x / 150.0, (rq.y - 0.45 * ph) / 13.0, rq.z / 20.0) + 41.0, 1.0 / 13.0), comb);
-        bl = mix(bl, dwBillow(vec3(rq.x / 200.0, (rq.y - 0.3 * ph) / 22.0, rq.z / 34.0) + 53.0, 1.0 / 22.0), comb);
+    // One frame per feature: the young head's texture lives in the head's own frame (along the front, height, distance
+    // behind it rolling back at 25 m/s) and hands over to the air's over 0.6–1.5 s of age, for the light paths too. Fixed
+    // in the air, the head's detail was swept by the 470 m/s front and redrawn every frame (the approaching face and crest
+    // shimmered); anchored, every billow has one place to live and a continuous lifetime
+    float headTex = 1.0 - smoothstep(0.6, 1.5, a0);
+    if (headTex > 0.0) {
+        vec3 hc = vec3(atan(q.z, q.x) * DwRing.x, q.y, DwRing.x - r + 25.0 * DwEye.w);
+        vec3 hq3 = hc / vec3(20.0, 13.0, 20.0) + 41.0;
+        n = mix(n, coarse ? dwFbm2(hq3, 0.0) : dwFbm(hq3, 1.0 / 13.0), headTex);
+        if (!coarse) bl = mix(bl, dwBillow(hc / vec3(34.0, 22.0, 34.0) + 53.0, 1.0 / 22.0), headTex);
     }
     // fibrous streaks combed along the radial wind, ~28 m along, 4.5 m across
     float fs = 0.5;
     if (!coarse) {
         float ral = length(pw.xz);
-        fs = mix(0.5, dwFbm2(vec3(ral / 28.0, (pw.y - 0.25 * ph) / 5.0, atan(pw.z, pw.x) * ral / 4.5), 0.0), dwLod(1.0 / 2.2));
+        fs = mix(0.5, dwFbm2(vec3(ral / 28.0, (pw.y - 0.25 * ph) / 5.0, atan(pw.z, pw.x) * ral / 4.5), 0.0), dwLod(1.0 / 2.2) * (1.0 - headTex));
     }
     // the billowed surface: rises and dips by the texture (cauliflower billows, ragged where the dust is young), within
     // DW_BILLOW of the top: the hump's excess (+30–50 %) stays well above the billows, so the crest reads as a crest
@@ -382,7 +373,6 @@ vec3 dwLight(vec3 q, vec3 rd) {
 }
 
 const float DW_K = 0.008, DW_S = 4.5;
-const int DW_HEAD_SAMPLES = 2;
 float dwGridT(float k) {
     float kb = 1.0 / DW_K;
     return k < kb ? k * DW_S : DW_S / DW_K * pow(1.0 + DW_K, k - kb);
@@ -430,7 +420,7 @@ vec4 dwMarch(vec3 rd, float tEnd, float jitter, float foot, int maxSteps) {
     // n: cells to the next sample (strides grow over empty air); kLast: the last sampled cell
     float n = 1.0, kLast = k - 1.0;
     vec3 light = vec3(0.0), c = vec3(0.0);
-    float T = 1.0, lit = -1.0;
+    float T = 1.0;
     for (int i = 0; i < 400; i++) {
         float t = dwGridT(k);
         if (i >= maxSteps || t >= t1 || T < 0.02) break;
@@ -457,18 +447,7 @@ vec4 dwMarch(vec3 rd, float tEnd, float jitter, float foot, int maxSteps) {
             continue;
         }
         gDwFoot = max(tt * foot, dt * 0.3);
-        gDwHead = false;
         float s = dwDensity(q, false);
-        if (gDwHead) {
-            // the young head: DW_HEAD_SAMPLES samples spread over the step, averaged (its face turns opaque within a step and
-            // runs 15 m a frame at the front's speed)
-            float surf = gDwSurf, sigma = gDwSigma, sand = gDwSand, sum = s;
-            for (int j = 1; j < DW_HEAD_SAMPLES; j++) sum += dwDensity(eye + rd * (t + dt * fract(jitter + float(j) / float(DW_HEAD_SAMPLES))), false);
-            s = sum / float(DW_HEAD_SAMPLES);
-            gDwSurf = surf;
-            gDwSigma = sigma;
-            gDwSand = sand;
-        }
         if (s > 1e-5) {
             if (k - kLast > 1.0) {
                 // a stride landed in dust: single cells from just after the last empty sample
@@ -476,10 +455,7 @@ vec4 dwMarch(vec3 rd, float tEnd, float jitter, float foot, int maxSteps) {
                 kLast = k - 1.0;
                 continue;
             }
-            // light at every sample in the young dust; in the settled dust every other grid cell (the history averages the
-            // fixed grid's two parities; the light there changes over tens of metres)
-            if (!gDwOld || lit < 0.0 || fract(k * 0.5) < 0.25) c = dwLight(q, rd);
-            lit = 1.0;
+            c = dwLight(q, rd);
             // the thin soft edge, veil and puffs over the dense top: four cells per sample (at grazing views they are
             // hundreds of metres of ray)
             float cells = hq > gDwSurf + 2.0 ? 4.0 : 1.0;
