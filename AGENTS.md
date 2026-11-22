@@ -49,8 +49,8 @@ instructions: work in a worktree from `origin/main`.
   take obvious engineering steps without waiting. Once the applicable checks pass, merge your PR after green Итог and
   review (workflow below). Ask only about goal changes or irreversible choices.
 - **Plans are targets, not decisions** (Artem, 03.11, 20.11): a clearly better way found mid-work, even a fundamental
-  rewrite of an existing feature, is taken without asking and recorded in the PR. Limits stay: the concept below, real
-  size/shape and public steps by Artem's word.
+  rewrite of an existing feature, is taken without asking and recorded in the PR. Limits: the concept below, public
+  steps by Artem's word.
 - **Public steps** (GitHub release, version bump for a release, Modrinth, CurseForge, YouTube, replies to players)
   require Artem's explicit instruction. A release candidate reaches him only after we tested it in game ourselves and
   found nothing to fault; he approves, he does not test for us.
@@ -119,9 +119,10 @@ defense, `launcher/`, `grid/` blackout, `sound/`, `client/`, `work/` tick budget
    own model; more only when the simpler one fails, shown by a frame or number. Two errors: "childish" (finished
    objects at the wrong place/time, eyeballed numbers) and "excess" (complexity or cost invisible in game).
 4. **Presentation is free within plausibility.** Light, colour, contrast, billows, detail, movement, sound and camera
-   are strengthened toward the reference footage, marked `presentation:` in code, without changing facts. A real size
-   or shape changes only by Artem's word, as a marked deviation. Never add what reality lacks (fire on every block,
-   smoke from nowhere, impossible colour, impossible flight, 200 m craters, "space" effects).
+   are strengthened toward the reference footage, marked `presentation:` in code, without changing facts. A size, height
+   or shape serving the agreed look is the owner's call, never Artem's question (22.11), as a marked deviation.
+   Never add what reality lacks (fire on every block, smoke from nowhere, impossible colour/flight, 200 m craters,
+   "space" effects).
 - **Vanilla first** (Artem, 20.11): the look is built and accepted without shaders first; under a shader pack (Iris)
   every effect works and looks at least as good, never broken. Accept in both: vanilla frames, then one GPU
   shader-pack check on the last head.
@@ -165,9 +166,9 @@ defense, `launcher/`, `grid/` blackout, `sound/`, `client/`, `work/` tick budget
   vanilla 72×, day-length mods 1×, stopped day real, sleep/`/time add` jump forward). Each detonation runs
   `nuclear/NukeClock`: real for the 20-minute show, then joins the world clock over a minute (`nuclear.md`). An
   effect never precedes its cause (`NukeClockTest`). No new time settings; durations stay in world hours.
-- **Physics deviations** only preset scale or Artem's explicit decision; mark every one “not physical” in code and
-  guide deviation list (game flight speeds/heights, wave 0.35 let players see approach/wave; real values in weapon
-  table). No silent deviations. Presentation boosts change no facts, so are not deviations.
+- **Physics deviations** only preset scale, Artem's decision or concept 4's owner call; mark every one “not
+  physical” in code and guide deviation list (game flight speeds/heights, wave 0.35; real values in weapon table). No
+  silent deviations. Presentation boosts change no facts, so are not deviations.
 - **Complaints never repeat:** each fix gets a test/check that would catch recurrence.
 
 ## Mod boundaries and compatibility
