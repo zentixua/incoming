@@ -1,6 +1,7 @@
 #version 150
 
 #moj_import <incoming:pall.glsl>
+#moj_import <incoming:wall_layer.glsl>
 
 // Young dust wall temporal accumulation (client/fx/layer/DustWallPass), at the march's resolution: the march's sample
 // offset along each ray moves every frame, and each pixel averages its last frames (exponential, current weight
@@ -104,7 +105,8 @@ void main() {
         float w = mix(1.0 - fr.x, fr.x, float(o.x)) * mix(1.0 - fr.y, fr.y, float(o.y));
         if (DwPrevScene > 0.5) {
             float was = pallScene(texelFetch(Sampler3, ivec2(min((vec2(c) + 0.5) * DwDiv, vec2(size) - 0.5)), 0).r);
-            if (!pallSamePlace(was, here)) w = 0.0;
+            if (!pallSamePlace(was, here)) continue;
+            if (was > here && !wallTapBefore(texelFetch(Sampler1, c + ivec2(low.x, 0), 0), here)) continue;
         }
         hs += w * valid(texelFetch(Sampler1, c + offset, 0));
         ws += w;

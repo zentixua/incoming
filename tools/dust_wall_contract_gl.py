@@ -9,7 +9,6 @@ The cases exercise the march, temporal reprojection and shared pall composite,
 including thin opaque edges, the near volume, panes, weather and coarse terrain.
 Run by tools/dust_wall_gl.py."""
 from functools import cache
-import inspect
 from pathlib import Path
 import sys
 
@@ -154,30 +153,41 @@ def jitter_occluder(march_program, composite_program):
     check(a > 0.8 and b > 0.8 and abs(a - b) < 0.03,
           "opaque pixel remains foreground at both R2 phases")
 
+    close = make_scene(np.where(np.arange(size) < 3, 10, 10.75))
+    light, span = march(march_program, close, 1)
+    last = span[1, 0, 1] / (1.0 - light[1, 0, 3])
+    print(f"depth at lattice centre 10, jittered depth 10.75, last dusty point {last:.4f}")
+    check(0 < last <= 10.001, "jitter cannot move dust past the centre's opaque surface")
 
-def history_occluder(far=0.10):
+
+def history_occluder(far=0.10, here=20, far_depth=100, enabled=1, sparse=False):
     program = link("fx_dustwall_resolve")
     target(low, low, [rgba])
     g.glUseProgram(program)
     current = np.zeros((low, low, 4), dtype=np.float32)
     current[:, :, 3] = 0.25
+    if sparse:
+        current[1, :, 3] = 1.0
+        current[:, 1, 3] = 1.0
     current[1, 1, 3] = 1.0
     history = np.zeros_like(current)
     history[:, :, 3] = 1.0
     history[:, 2, 3] = far
     bind(program, 0, texture(*rgba, 2 * low, low, np.tile(current, (1, 2, 1))))
-    bind(program, 1, texture(*rgba, 2 * low, low, np.tile(history, (1, 2, 1))))
+    bounds = history.copy()
+    bounds[:, 2, :3] = (1 - far) * np.array([(here + far_depth) / 2, far_depth, far_depth])
+    bind(program, 1, texture(*rgba, 2 * low, low, np.concatenate((history, bounds), axis=1)))
     g.glTexParameteri(g.GL_TEXTURE_2D, g.GL_TEXTURE_MIN_FILTER, g.GL_LINEAR)
     g.glTexParameteri(g.GL_TEXTURE_2D, g.GL_TEXTURE_MAG_FILTER, g.GL_LINEAR)
-    bind(program, 2, make_scene(20.0))
-    bind(program, 3, make_scene(np.where(np.arange(size) < 8, 20.0, 100.0)))
+    bind(program, 2, make_scene(here))
+    bind(program, 3, make_scene(np.where(np.arange(size) < 8, here, far_depth)))
     prev = projection.copy()
     prev[0] += projection[3] * (1.96 * 2 / size)
     g.glUniformMatrix4fv(loc(program, "PrevViewProj"), 1, True, prev)
     g.glUniformMatrix4fv(loc(program, "InvViewProj"), 1, True, np.linalg.inv(projection).astype(np.float32))
     g.glUniform3f(loc(program, "PallForward"), 0, 0, -1)
     g.glUniform1f(loc(program, "DwDiv"), 4)
-    g.glUniform4f(loc(program, "DwReproject"), 0, 0, 0, 1)
+    g.glUniform4f(loc(program, "DwReproject"), 0, 0, 0, enabled)
     g.glUniform2f(loc(program, "DwHistory"), 0.1, 10)
     g.glUniform1f(loc(program, "DwPrevScene"), 1)
     quad(program)
@@ -359,19 +369,16 @@ def weather_haze(march_program, composite_program):
 
 # review round 4 (#724): one depth rule across the passes, the relief only where the scene has no depth, bright fog
 def history_cases():
-    source = inspect.getsource(history_occluder)
-    source = source.replace("def history_occluder(far=0.10):", "def resolve_variant(far=0.10, far_depth=109, enabled=1):")
-    source = source.replace("current[:, :, 3] = 0.25", "current[::2, ::2, 3] = 0.25\n    current[1, :, 3] = 1.0\n    current[::2, 1, 3] = 1.0")
-    source = source.replace("make_scene(20.0)", "make_scene(100.0)").replace("20.0, 100.0", "100.0, far_depth")
-    source = source.replace('"DwReproject"), 0, 0, 0, 1', '"DwReproject"), 0, 0, 0, enabled')
-    adapted = globals().copy()
-    exec(source, adapted)
-    resolve = adapted["resolve_variant"]
+    def resolve(far=0.10, far_depth=109, enabled=1):
+        return history_occluder(far, 100, far_depth, enabled, sparse=True)
+
     shipped = history_occluder(1.0)
     dusty = resolve()
     clear = resolve(far=1.0)
     incompatible = resolve(far_depth=120)
     current = resolve(enabled=0)
+    close = resolve(far_depth=102)
+    check(abs(close - clear) < 1e-4, f"history dust behind a surface in the same depth class: T={close:.5f}, expected {clear:.5f}")
     print(f"R3 fixture with all history clear: T={shipped:.5f} (current T=1)")
     print(f"100-block surface, history taps at 109: T={dusty:.5f}, clear far taps T={clear:.5f}, "
           f"rejected 120-block taps T={incompatible:.5f}, current only T={current:.5f}")

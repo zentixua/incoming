@@ -74,7 +74,9 @@ void main() {
     vec2 ndc = at / vec2(size) * 2.0 - 1.0;
     vec4 farPoint = InvViewProj * vec4(ndc, 1.0, 1.0);
     vec3 dir = normalize(farPoint.xyz / farPoint.w);
-    float axis = pallScene(texelFetch(Sampler1, ivec2(at), 0).r);
+    // Even depths in the same class can straddle a thin surface. End this
+    // jittered ray at the nearer of its sample and its representative centre.
+    float axis = min(d0, pallScene(texelFetch(Sampler1, ivec2(at), 0).r));
     float tEnd = axis / max(dot(dir, PallForward), 1e-3);
     float jitter = fract(52.9829189 * fract(dot(floor(gl_FragCoord.xy), vec2(0.06711056, 0.00583715))) + DwFrame.x * 0.618034);
     // no world behind the pixel (beyond the drawn chunks, between LODs): the ray ends on the relief map traced from the eye,

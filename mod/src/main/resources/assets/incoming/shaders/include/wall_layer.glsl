@@ -5,6 +5,13 @@ struct WallLayer {
     vec3 depth;
 };
 
+// A farther tap is usable only when all its occupied dust is in front of the
+// surface. The atlas stores its last depth multiplied by the opacity.
+bool wallTapBefore(vec4 span, float here) {
+    float cover = 1.0 - span.a;
+    return cover <= 0.0 || (span.y > 0.0 && span.y <= here * cover);
+}
+
 WallLayer wallLayer(sampler2D atlas, sampler2D scene, vec2 pixel, float here, float div) {
     WallLayer wall;
     wall.light = vec4(0.0, 0.0, 0.0, 1.0);
@@ -30,7 +37,7 @@ WallLayer wallLayer(sampler2D atlas, sampler2D scene, vec2 pixel, float here, fl
         vec3 z = span.rgb / max(1.0 - span.a, 1e-6);
         // A farther tap can contribute only if its entire dust path ends before
         // this surface. This also protects close depth classes at a thin edge.
-        if (there > here && cover > 0.0 && (z.y > here || z.y <= 0.0)) continue;
+        if (there > here && !wallTapBefore(span, here)) continue;
         if (pallSamePlace(there, here)) {
             sum += w * v;
             depths += w * cover * z;
