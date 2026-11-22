@@ -36,9 +36,9 @@ class DustWallGlslTest {
         assertEquals(DustWallPass.SPAN, constant(s, "DW_SPAN"), 1e-9);
         assertEquals(DustWallPass.FADE, constant(s, "DW_FADE"), 1e-9);
         assertEquals(DustWallPass.NODES, (int) constant(s, "DW_NODES"));
-        // the ray's slab top over the layer: the bound over the largest hump (dwHump: 1.55 + 0.2), the bulges and the haze over them
+        // the ray's slab top over the layer: the bound over the largest hump (dwHump: 1.54 + 0.22), the bulges and the haze over them
         assertEquals(DustWallPass.TOP_OVER_LAYER, 1.8 * (1 + constant(s, "DW_BULGE")) * constant(s, "DW_HAZE"), 1e-9);
-        assertTrue(s.contains("return 1.55 + 0.2 * smoothstep"), "dwHump spans 1.55–1.75, under the bound 1.8");
+        assertTrue(s.contains("return 1.54 + 0.22 * smoothstep"), "dwHump spans 1.54–1.76, under the bound 1.8");
     }
 
     /** {@code dwEnvelope} (same formula): the dust top at age a over a settled layer h = 1 with hump k. */
@@ -54,7 +54,7 @@ class DustWallGlslTest {
         assertTrue(s.contains("return h * (1.0 - exp(-a / DW_RISE)) * (1.0 + (k - 1.0) * exp(-x * x));"),
                 "dwEnvelope is the formula this test evaluates");
         double rise = constant(s, "DW_RISE"), hold = constant(s, "DW_HOLD"), fall = constant(s, "DW_FALL");
-        for (double k : new double[] {1.55, 1.75}) {
+        for (double k : new double[] {1.54, 1.76}) {
             assertEquals(0, envelope(0, k, rise, hold, fall), 1e-12, "born at zero on the contact line");
             double peak = 0, peakAge = 0;
             for (double a = 0; a < 3; a += 0.005) {

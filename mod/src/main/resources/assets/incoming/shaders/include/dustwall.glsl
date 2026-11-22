@@ -124,11 +124,11 @@ float dwFbm2(vec3 p, float fq) {
     return 0.6667 * mix(0.5, dwNoise3(p), dwLod(fq)) + 0.3333 * mix(0.5, dwNoise3(p * 2.07 + vec3(1.7, 9.2, 3.1)), dwLod(fq * 2.07));
 }
 
-// hump of the head over the settled layer along the front: 1.5–1.8 of the envelope (its visible crest ~1.4–1.6x the layer
+// hump of the head over the settled layer along the front: 1.54–1.76 of the envelope (its visible crest ~1.4–1.6x the layer
 // behind), lobes ~120 m along the front over ~400 m swells, staying with their bearing as the front runs out
 float dwHump(vec2 xz) {
     float b = atan(xz.y, xz.x) * 4500.0;
-    return 1.5 + 0.3 * smoothstep(0.25, 0.75, 0.6 * dwNoise3(vec3(b / 120.0, 33.4, 0.1 * DwEye.w)) + 0.4 * dwNoise3(vec3(b / 400.0, 5.5, 0.0)));
+    return 1.54 + 0.22 * smoothstep(0.25, 0.75, 0.6 * dwNoise3(vec3(b / 120.0, 33.4, 0.1 * DwEye.w)) + 0.4 * dwNoise3(vec3(b / 400.0, 5.5, 0.0)));
 }
 
 // the dust envelope at age a (s since the front passed) over settled height h with hump k (presentation): born at zero on
