@@ -912,7 +912,9 @@ paths:
   fixed in the air across the ground and carried in height by the dust's own column. One model, per-point birth (LOOK
   Trait 0): the front is a line of births; each ground point's seed (world-fixed noise) sets its birth delay after the
   front's arrival, amount, column height and overshoot, its column rises, overshoots and settles by its own age and stays
-  where it was born (a small outward push, decaying eddies turning either way, the wind). Nothing rides with the front or
+  where it was born; behind the front one law of time since the passage per point moves it (the blast wind's outward
+  surge, the weaker longer reverse, the afterwind drawing low dust in, eddies turning either way decaying over ~25 s,
+  swells, tongues, the wind). Nothing rides with the front or
   is placed by bearing × the front's radius: texture riding out with it slides at its speed and flutters as the front
   passes under the eye, a ramp shared by every point reads as one mass carried out from the centre, features placed by
   bearing × the current radius slide along the front (`DustWallGlslTest`, the turning and births checks in

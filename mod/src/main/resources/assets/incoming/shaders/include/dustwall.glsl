@@ -61,7 +61,7 @@ const float DW_RISE = 0.12, DW_HOLD = 0.25, DW_FALL = 0.3;
 // dwBound)
 // (the top behind the head is uneven at several scales, no cap: swells up to ±DW_BULGE of the layer at 150–400 m, billows,
 // rising puffs and a thin veil; on the head the swells are small, so its crest, 1.4–1.6 of the layer, still stands out)
-const float DW_BULGE = 0.25, DW_BILLOW = 0.15, DW_HAZE = 1.2;
+const float DW_BULGE = 0.35, DW_BILLOW = 0.15, DW_HAZE = 1.2;
 
 // pixel footprint at the sample, blocks (set by the march)
 float gDwFoot = 0.0;
@@ -119,20 +119,25 @@ float dwFbm2(vec3 p, float fq) {
     return 0.6667 * mix(0.5, dwNoise3(p), dwLod(fq)) + 0.3333 * mix(0.5, dwNoise3(p * 2.07 + vec3(1.7, 9.2, 3.1)), dwLod(fq * 2.07));
 }
 
-// a ground point's seed (0..1, mean ~0.5): smooth noise over several scales from `scale` to a quarter of it, on a plane
-// oblique to the noise lattice and domain-warped, so no cell, row or period shows. One value per lattice cell (value
-// noise flattens at its nodes) laid the wall's birth line as a staircase of identical steps and scallops along the front
-float dwSeed(vec2 xz, float scale, float k) {
-    vec2 w = vec2(dwNoise3(vec3(xz / (3.0 * scale), k + 3.1)), dwNoise3(vec3(xz / (3.0 * scale), k + 8.7))) - 0.5;
-    vec2 p = (xz + w * 1.2 * scale) / scale;
-    vec3 o = vec3(p.x, p.y, 0.43 * p.x - 0.71 * p.y + k);
-    return 0.55 * dwNoise3(o) + 0.3 * dwNoise3(o * 2.03 + 5.3) + 0.15 * dwNoise3(o * 4.11 + 9.7);
+// a ground point's seeds (0..1, mean ~0.5): x ~60 m, y ~200 m, z the overshoot's (~40–160 m); smooth two-octave noise on a
+// plane oblique to the noise lattice, domain-warped by one shared ~600 m field, so no cell, row or period shows. One value
+// per lattice cell (value noise flattens at its nodes) laid the wall's birth line as a staircase of identical steps and
+// scallops along the front
+float dwSeedAt(vec2 p, float scale, float k) {
+    vec3 o = vec3(p.x, p.y, 0.43 * p.x - 0.71 * p.y) / scale + vec3(0.0, 0.0, k);
+    return 0.65 * dwNoise3(o) + 0.35 * dwNoise3(o * 2.03 + 5.3);
+}
+vec3 dwSeeds(vec2 xz) {
+    vec2 w = vec2(dwNoise3(vec3(xz / 600.0, 3.1)), dwNoise3(vec3(xz / 600.0, 8.7))) - 0.5;
+    vec2 p = xz + w * 240.0;
+    float s1 = dwSeedAt(p, 60.0, 17.3), s2 = dwSeedAt(p, 200.0, 29.1);
+    return vec3(s1, s2, 0.6 * s2 + 0.4 * s1);
 }
 
-// overshoot of a ground point's column over the settled layer: 1.54–1.76 of the envelope (its visible crest ~1.4–1.6x the
-// layer behind), from the point's own ground (`dwSeed`, patches ~40–160 m), so the hump is uneven along the front
-float dwHump(vec2 xz) {
-    return 1.54 + 0.22 * smoothstep(0.25, 0.75, dwSeed(xz, 160.0, 33.4));
+// overshoot of a ground point's column over the settled layer for its seed: 1.54–1.76 of the envelope (its visible crest
+// ~1.4–1.6x the layer behind), so the hump is uneven along the front
+float dwHump(float seed) {
+    return 1.54 + 0.22 * smoothstep(0.25, 0.75, seed);
 }
 
 // the dust envelope at age a (s since the front passed) over settled height h with hump k (presentation): born at zero on
@@ -153,14 +158,14 @@ float dwClock(float a, vec2 xz) {
 
 // the air mass the dust rides in: position the lofted air at q (age a, radius r, envelope top) came from — the texture is
 // fixed in it, so motion carries billows and does not slide them through the dust (presentation). The post-shock wind
-// whirls it hardest in the first seconds and calms with the wind (eddy energy e-fold 8 s, floor 30 %, violent first
+// whirls it hardest in the first seconds and calms with the wind (eddy energy e-fold 25 s: the lofted layer stays turbulent for tens of seconds, floor 30 %, violent first
 // seconds e-fold 4 s); eddies 32 × 20 m turn with phase = integral of their energy: violent while the wave's wind
 // blows, then at the speed of real dust fronts (haboob drone footage: a 16-pixel patch decorrelates at ~0.45/s); the whole mass sloshes out with the wind and back with the
 // negative phase, the top more (rolls); the world wind drifts it all
 vec3 dwAir(vec3 q, float a, float r, float top, out float ph) {
-    float E = exp(-a / 8.0), Ef = exp(-a / 4.0);
+    float E = exp(-a / 25.0), Ef = exp(-a / 4.0);
     float A = 0.3 + 0.7 * E + 0.9 * Ef;
-    ph = 0.5 * (8.0 * (1.0 - E) + 0.25 * a) + 3.5 * (1.0 - Ef);
+    ph = 0.5 * (25.0 * (1.0 - E) + 0.25 * a) + 3.5 * (1.0 - Ef);
     vec3 b = q / vec3(32.0, 20.0, 32.0);
     // one octave: a second one shears the 20 m billows into marbled, liquid-looking swirls
     vec3 w = vec3(dwNoise3(b + vec3(0.0, ph * 0.15, 0.0)), dwNoise3(b + vec3(5.2, 1.3 - ph * 0.14, 2.8)),
@@ -168,20 +173,24 @@ vec3 dwAir(vec3 q, float a, float r, float top, out float ph) {
     vec3 pw = q + w * vec3(40.0, 26.0, 40.0) * A * smoothstep(0.0, 0.45 * max(top, 1.0), q.y);
     vec2 rdir = q.xz / max(r, 1.0);
     float yy = clamp(q.y / max(top, 1.0), 0.0, 1.5);
-    // a small push out by the post-shock wind (~25 m over its first seconds, the dust stays near where it was torn up),
-    // then drifting back with the negative phase
-    pw.xz -= rdir * (25.0 * (1.0 - exp(-a / 1.2)) * exp(-a / 6.0) + 8.0 * sin(0.45 * a)) * yy;
+    // the blast wind behind the front (presentation, by the time since the front passed here): the positive phase throws
+    // the dust out (~25 m over ~2 s, the dust stays near where it was torn up), the weaker, longer negative phase stalls
+    // it and brings part of it back over ~6 s, the top further than the base (rolls fold over); then the afterwind draws
+    // the low dust in toward the rising fireball, a few m/s, stronger closer in
+    float out_ = 25.0 * (1.0 - exp(-a / 1.0)) - 15.0 * smoothstep(2.0, 8.0, a);
+    float in_ = 3.0 * clamp(2500.0 / max(r, 1.0), 0.3, 2.0) * max(a - 5.0, 0.0) * (1.0 - 0.7 * min(yy, 1.0));
+    pw.xz -= rdir * (out_ * (0.3 + 0.7 * yy) - in_);
     // residual turbulence behind the front: neighbouring parcels circle on slow orbits (20 m, 5 m/s; phases varying over
     // ~150 m), so the settled dust keeps swirling and drifting sideways as real dust does, never frozen, without the
     // endless shear a steady flow field would stretch it into; they turn either way (sense and ellipse from the phase field,
     // zero mean): orbits of one sense everywhere read as the whole mass turning around ground zero
     float sw = 6.2832 * dwNoise3(vec3(q.xz / 150.0, 71.3)), hand = sin(3.0 * sw);
     pw.xz -= 20.0 * vec2(cos(0.25 * a + sw), hand * sin(0.25 * a + sw)) * (1.0 - exp(-a / 1.5)) * (0.6 + 0.4 * yy);
-    // gusts right behind the front: the hit air keeps surging forward and sideways in ~200 m gust cells whose push
-    // changes over a few seconds, strongest just after the front and calming over ~6 s (presentation)
+    // gusts behind the front: the hit air keeps surging forward and sideways in ~200 m gust cells whose push changes over
+    // a few seconds, strongest just after the front and calming over ~15 s (presentation)
     vec2 gp = q.xz / 220.0 + vec2(0.0, 0.35 * a);
     vec2 gust = vec2(dwNoise3(vec3(gp, 3.3)), dwNoise3(vec3(gp + 7.7, 9.1))) - 0.5;
-    pw.xz -= gust * 30.0 * (1.0 - exp(-a / 0.8)) * exp(-a / 6.0) * (0.5 + 0.5 * yy);
+    pw.xz -= gust * 30.0 * (1.0 - exp(-a / 0.8)) * exp(-a / 15.0) * (0.5 + 0.5 * yy);
     pw.xz -= DwWind.xy * a;
     return pw;
 }
@@ -199,24 +208,24 @@ float dwBulge(vec3 pw, float a) {
     vec2 p = pw.xz / 220.0;
     float w = dwNoise3(vec3(p * 0.4, 4.4)) - 0.5;
     p += 0.8 * vec2(w, -w);
-    float L = 0.6 * dwNoise3(vec3(p, 7.1 + 0.02 * a)) + 0.4 * dwNoise3(vec3(pw.xz / 90.0, 0.37 + 0.03 * a));
+    float L = 0.6 * dwNoise3(vec3(p, 7.1 + 0.08 * a)) + 0.4 * dwNoise3(vec3(pw.xz / 90.0, 0.37 + 0.12 * a));
     return DW_BULGE * dwSoft((L - 0.5) * 4.0) * mix(0.2, 1.0, smoothstep(1.5, 4.0, a));
 }
 
 // a buoyant puff above the top: about one 70 m cell in four lifts a rounded column of dust ~45 % of the layer above the
-// top, 1–9 s after the front, over ~4 s, thinning as it rises (presentation)
+// top, 1–15 s after the front, over ~6 s, thinning as it rises over ~15 s: tongues that keep lifting (presentation)
 float dwPuff(vec3 pw, float top, float a) {
     vec2 cell = floor(pw.xz / 70.0);
     float h1 = dwNoise3(vec3(cell * 1.37, 91.2)), h2 = dwNoise3(vec3(cell * 1.37 + 0.5, 47.7));
     if (h1 < 0.56) return 0.0;
-    float born = 1.0 + 8.0 * h2, age = a - born;
+    float born = 1.0 + 14.0 * h2, age = a - born;
     if (age <= 0.0) return 0.0;
     // (each puff stays inside its own cell: grown past it, it was cut by the cell's edges into rectangles with seams)
     vec2 c = (cell + 0.5) * 70.0 + (vec2(h2, h1) - 0.5) * 16.0;
-    float rise = 0.45 * top * (1.0 - exp(-age / 2.5)) * (h1 - 0.4) * 2.5;
+    float rise = 0.45 * top * (1.0 - exp(-age / 4.0)) * (h1 - 0.4) * 2.5;
     float radius = min(10.0 + 4.0 * age, 26.0);
     vec2 d = vec2(length(pw.xz - c), (pw.y - top * 0.9 - rise) * 1.3);
-    return 0.5 * exp(-age / 6.0) * (1.0 - smoothstep(0.5, 1.0, length(d) / radius)) * smoothstep(0.0, 1.0, age);
+    return 0.5 * exp(-age / 15.0) * (1.0 - smoothstep(0.5, 1.0, length(d) / radius)) * smoothstep(0.0, 1.0, age);
 }
 
 // the smooth dust top over ground point xz (no billows; the light's shadow surface), blocks above the local ground; 0 where
@@ -257,14 +266,15 @@ float dwDensity(vec3 g, bool coarse) {
     float a0 = DwEye.w - n0.x;
     if (a0 < 0.0 || n0.z <= 0.0) return 0.0;
     // One model, per-point birth (LOOK Trait 0): the front is a line of births running over the ground. Each ground point
-    // tears up its own dust when the front reaches it: its seed (world-fixed, `dwSeed`, ~15–60 and ~50–200 m) sets its birth a little
+    // tears up its own dust when the front reaches it: its seed (world-fixed, `dwSeeds`) sets its birth a little
     // after the front's arrival (lagging patches open clefts in the front line), how much it raises, its column's height
     // and overshoot; its column rises, overshoots and settles by its own age and stays where it was born. Nothing rides
     // with the front: a ramp surface shared by every point read as one mass carried out from the centre
     // (light paths take the mean point: their shade is smooth)
-    float s1 = coarse ? 0.5 : dwSeed(q.xz, 60.0, 17.3), s2 = coarse ? 0.5 : dwSeed(q.xz, 200.0, 29.1);
+    vec3 seed = coarse ? vec3(0.5) : dwSeeds(q.xz);
+    float s1 = seed.x, s2 = seed.y;
     float delay = 0.12 * clamp(1.6 * s2 - 0.55, 0.0, 1.0) * (0.6 + 0.8 * s1);
-    float h = n0.y * mix(0.88, 1.02, s2), k = dwHump(q.xz);
+    float h = n0.y * mix(0.88, 1.02, s2), k = dwHump(seed.z);
     float top0 = max(dwEnvelope(a0, h, k), 1.0);
     if (q.y > top0 * (1.0 + DW_BULGE) * DW_HAZE + 6.0) return 0.0;
     // higher up the dust has the profile of a point a little outward (younger): the face is a ramp from the ground up
