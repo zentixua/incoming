@@ -907,7 +907,8 @@ paths:
 - The young dust wall (front to `DustWallPass.SPAN` 24 model s behind it) is its own ray-marched pass, one presentation
   model (`include/dustwall.glsl`, `DustWallPass`, `NukePall.youngWall`, inputs `PallField.young`): a dust envelope born
   on the contact line as a ramp leaning back (never ahead of the front: dust there is cut by the ring, a seam), a
-  hump whose crest is 1.4–1.6 of the settled layer, back to the layer within 0.5–1 s (`DustWallGlslTest`), billows and bulges
+  hump whose crest is 1.4–1.6 of the settled layer (drawn ×80/58 of the law's, `NukePall.YOUNG_PRESENT_HEIGHT`:
+  the crest reaches a 120 m camera at 4.5 km from 1 Mt), back to the layer within 0.5–1 s (`DustWallGlslTest`), billows and bulges
   fixed in the air, head lumps riding with the front (fixed in the ground, the front sweeps each 30 m lump in two frames:
   boiling), light from the fireball, sun and sky with multiply scattered light in the soil's bulk colour (no
   near-black). The pall hands its young dust, head and eye dust over across `PallYoung` (a crossfade over `FADE`) only
@@ -917,7 +918,8 @@ paths:
   not by blur: the sample grid is fixed along each ray from the eye, its offset moves every frame, and
   `fx_dustwall_resolve` averages ~10 frames (reprojected through the settled layer top, read on the march lattice,
   clamped to the depth-alike 3 × 3 neighbourhood, restarted on another detonation, a clock jump or a view resize); a
-  fixed offset sparkles along the far top where 9–18 m steps cross the moving billowed surface. The composite keeps
+  fixed offset sparkles along the far top where 9–18 m steps cross the moving billowed surface. Light paths see the large shapes only: a shadow tap
+  reading the fine texture or the head's front-riding lumps re-shaded the approaching face every frame. The composite keeps
   thin foreground and the hand its taps missed and lays dust behind a see-through pane through it. Cost at HIGH
   (1/4 resolution, 128 steps, 2560×1600, RTX 4060): ~1 ms approaching, ~5 ms after the passage; the ray bound must stay
   under a 120 m camera, or every near-eye ray marches fine steps through empty air. Shader checks without a

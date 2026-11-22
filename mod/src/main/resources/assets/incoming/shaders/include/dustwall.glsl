@@ -224,10 +224,9 @@ float dwDensity(vec3 g, bool coarse) {
     // at 25 m/s: fixed in the ground, the front would sweep each 30 m lump in two frames and the face would boil
     float yn = clamp(q.y / top0, 0.0, 1.5);
     float bf = 0.42;
-    // (light paths too: the lumps shade each other under the low sun, or a sunlit face reads flat)
     if (a0 < 4.0) {
         vec3 hf = vec3(atan(q.z, q.x) * DwRing.x / 30.0, q.y / 22.0, (DwRing.x - r + 25.0 * DwEye.w) / 30.0);
-        bf = dwBillow(hf + vec3(3.7, 0.0, 9.1), coarse ? 0.0 : 1.0 / 22.0);
+        bf = coarse ? 0.42 : dwBillow(hf + vec3(3.7, 0.0, 9.1), 1.0 / 22.0);
     }
     // (the lumps cut the upper face only: cut to the ground they opened holes through the base that the moving front
     // swept across the ray steps, popping from frame to frame)
@@ -242,9 +241,22 @@ float dwDensity(vec3 g, bool coarse) {
     top *= 1.0 + dwBulge(pw, a);
     // texture fixed in the air mass: billows of ~20 × 13 m and finer, the rising and settling top reveals and hides them
     vec3 tq = vec3(pw.x, pw.y - 0.45 * ph, pw.z) / vec3(20.0, 13.0, 20.0);
-    float n = coarse ? dwFbm2(tq, 0.0) : dwFbm(tq, 1.0 / 13.0);
+    // (light paths see the dust's large shapes only: fine texture and the head's lumps riding with the front made the
+    // shadow toward the fireball, and the face's shade with it, change every frame: the approaching face shimmered)
+    float n = coarse ? 0.5 : dwFbm(tq, 1.0 / 13.0);
     // cauliflower lumps of the top, ~35 m and finer, in the same air
     float bl = coarse ? 0.42 : dwBillow(vec3(pw.x, pw.y - 0.3 * ph, pw.z) / vec3(34.0, 22.0, 34.0) + 11.0, 1.0 / 22.0);
+    // the young dust is combed along the radial post-shock wind: its texture (still fixed in the air) is stretched ~150 m
+    // along the radius, ~20 m across. The face runs along the streaks at the front's speed and keeps each one's cross-
+    // section for ~0.3 s; isotropic 20 m detail was new every ~2 frames at 470 m/s (the approaching face shimmered).
+    // Handed over to the isotropic billows within 0.8–2 s, as the wind dies.
+    float comb = 1.0 - smoothstep(0.8, 2.0, a0);
+    if (comb > 0.0 && !coarse) {
+        float ral = length(pw.xz);
+        vec3 rq = vec3(ral, pw.y, atan(pw.z, pw.x) * ral);
+        n = mix(n, dwFbm(vec3(rq.x / 150.0, (rq.y - 0.45 * ph) / 13.0, rq.z / 20.0) + 41.0, 1.0 / 13.0), comb);
+        bl = mix(bl, dwBillow(vec3(rq.x / 200.0, (rq.y - 0.3 * ph) / 22.0, rq.z / 34.0) + 53.0, 1.0 / 22.0), comb);
+    }
     // fibrous streaks combed along the radial wind, ~28 m along, 4.5 m across
     float fs = 0.5;
     if (!coarse) {
@@ -308,7 +320,7 @@ vec3 dwLight(vec3 q, vec3 rd) {
     float sunUp = smoothstep(-0.05, 0.05, DwSunDir.y);
     // thin dust toward the fireball glows (forward peak: the crest's rim against the ball); the low sun lights the faces
     // turned to it
-    vec3 single = dwBallLight(q) * (0.4 * min(dwPhase(dot(rd, lb)), 6.0) * exp(-taub))
+    vec3 single = dwBallLight(q) * (0.4 * min(dwPhase(dot(rd, lb)), 3.0) * exp(-taub))
             + DwSunLight * (0.5 * min(dwPhase(dot(rd, DwSunDir)), 6.0) * exp(-taus)) * sunUp;
     vec3 multiple = dwBallLight(q) * ms * (0.45 + 0.55 * exp(-0.25 * taub)) + DwSunLight * ms * (0.45 + 0.55 * exp(-0.25 * taus)) * sunUp
             + DwSkyLight * (0.04 + 0.22 * exp(-0.3 * depth));
@@ -317,6 +329,7 @@ vec3 dwLight(vec3 q, vec3 rd) {
 }
 
 const float DW_K = 0.0055, DW_S = 2.5;
+const int DW_HEAD_SAMPLES = 2;
 float dwGridT(float k) {
     float kb = 1.0 / DW_K;
     return k < kb ? k * DW_S : DW_S / DW_K * pow(1.0 + DW_K, k - kb);
@@ -392,11 +405,12 @@ vec4 dwMarch(vec3 rd, float tEnd, float jitter, float foot, int maxSteps) {
         gDwFoot = max(tt * foot, dt * 0.3);
         gDwHead = false;
         float s = dwDensity(q, false);
-        if (gDwHead && s > 1e-5) {
-            // the young head: a second sample half a step on, averaged
-            float surf = gDwSurf, sigma = gDwSigma, sand = gDwSand;
-            float t2 = t + dt * fract(jitter + 0.5);
-            s = 0.5 * (s + dwDensity(eye + rd * t2, false));
+        if (gDwHead) {
+            // the young head: DW_HEAD_SAMPLES samples spread over the step, averaged (its face turns opaque within a step and
+            // runs 15 m a frame at the front's speed)
+            float surf = gDwSurf, sigma = gDwSigma, sand = gDwSand, sum = s;
+            for (int j = 1; j < DW_HEAD_SAMPLES; j++) sum += dwDensity(eye + rd * (t + dt * fract(jitter + float(j) / float(DW_HEAD_SAMPLES))), false);
+            s = sum / float(DW_HEAD_SAMPLES);
             gDwSurf = surf;
             gDwSigma = sigma;
             gDwSand = sand;

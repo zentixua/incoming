@@ -310,6 +310,12 @@ public final class NukePall {
      * dust law's layer top at that age, the wall's own hump and settling ride on it.
      */
     private static final double YOUNG_SETTLE_S = 1.0;
+    /**
+     * The young wall's layer drawn taller than the dust law's (presentation, not physical; Artem 22.11): ×80/58, so that
+     * at 4.5 km from a 1 Mt surface burst the settled layer stands ~80 blocks high and its crest (1.4–1.6 of it) reaches a
+     * 120-block camera, on the horizon line as in the Silo frame; over the law's 58 m the crest could not read from there.
+     */
+    static final double YOUNG_PRESENT_HEIGHT = 80.0 / 58.0;
     /** Ground bounce under the wall: share of sun and sky light the burnt ground returns (est.). */
     private static final double GROUND_BOUNCE = 0.1;
 
@@ -333,6 +339,7 @@ public final class NukePall {
         w.eye[3] = (float) t;
         int n = ua.zentix.incoming.client.fx.layer.DustWallPass.NODES;
         a.pall.young(t, YOUNG_SETTLE_S, span, n, w.table);
+        for (int j = 0; j < n; j++) w.table[4 * j + 1] *= (float) YOUNG_PRESENT_HEIGHT;
         double top = 0, reach = a.pall.reach();
         boolean any = false;
         for (int j = 0; j < n; j++) {
