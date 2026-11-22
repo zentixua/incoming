@@ -61,7 +61,7 @@ const float DW_RISE = 0.12, DW_HOLD = 0.25, DW_FALL = 0.3;
 // dwBound)
 // (the top behind the head is uneven at several scales, no cap: swells up to ±DW_BULGE of the layer at 150–400 m, billows,
 // rising puffs and a thin veil; on the head the swells are small, so its crest, 1.4–1.6 of the layer, still stands out)
-const float DW_BULGE = 0.22, DW_BILLOW = 0.15, DW_HAZE = 1.2;
+const float DW_BULGE = 0.32, DW_BILLOW = 0.15, DW_HAZE = 1.2;
 
 // pixel footprint at the sample, blocks (set by the march)
 float gDwFoot = 0.0;
@@ -73,6 +73,8 @@ float gDwSurf = 0.0, gDwSigma = 0.0, gDwSand = 0.0;
 bool gDwHead = false;
 // set by dwDensity: the sample's dust is older than 2 s (calm, settled: its light changes slowly along the ray)
 bool gDwOld = false;
+// set by dwDensity: the swell at the sample (dwBulge, share of the layer): sags sit in the shade of the swells around them
+float gDwSwell = 0.0;
 
 vec4 dwNode(float r) {
     float x = clamp(r / max(DwRing.w, 1.0), 0.0, 1.0) * float(DW_NODES - 1);
@@ -122,10 +124,11 @@ float dwFbm2(vec3 p, float fq) {
     return 0.6667 * mix(0.5, dwNoise3(p), dwLod(fq)) + 0.3333 * mix(0.5, dwNoise3(p * 2.07 + vec3(1.7, 9.2, 3.1)), dwLod(fq * 2.07));
 }
 
-// hump of the head over the settled layer along the front: 1.55–1.75 of the envelope (its visible crest 1.4–1.6x the layer
-// behind), lumps ~200 m along the front that stay with their bearing as the front runs out and change slowly
+// hump of the head over the settled layer along the front: 1.5–1.8 of the envelope (its visible crest ~1.4–1.6x the layer
+// behind), lobes ~120 m along the front over ~400 m swells, staying with their bearing as the front runs out
 float dwHump(vec2 xz) {
-    return 1.55 + 0.2 * smoothstep(0.3, 0.7, dwNoise3(vec3(atan(xz.y, xz.x) * 4500.0 / 190.0, 33.4, 0.1 * DwEye.w)));
+    float b = atan(xz.y, xz.x) * 4500.0;
+    return 1.5 + 0.3 * smoothstep(0.25, 0.75, 0.6 * dwNoise3(vec3(b / 120.0, 33.4, 0.1 * DwEye.w)) + 0.4 * dwNoise3(vec3(b / 400.0, 5.5, 0.0)));
 }
 
 // the dust envelope at age a (s since the front passed) over settled height h with hump k (presentation): born at zero on
@@ -178,23 +181,23 @@ float dwSoft(float x) {
 // lumps, up to ±DW_BULGE of the layer behind the head, a third of that on the head (its crest stays readable); they
 // swell and sag slowly as the dust settles
 float dwBulge(vec3 pw, float a) {
-    vec2 p = pw.xz / 350.0;
-    float w = dwNoise3(vec3(p * 0.6, 4.4)) - 0.5;
-    p += 0.7 * vec2(w, -w);
-    float L = 0.6 * dwNoise3(vec3(p, 7.1 + 0.02 * a)) + 0.4 * dwNoise3(vec3(pw.xz / 120.0, 0.37 + 0.03 * a));
+    vec2 p = pw.xz / 220.0;
+    float w = dwNoise3(vec3(p * 0.4, 4.4)) - 0.5;
+    p += 0.8 * vec2(w, -w);
+    float L = 0.6 * dwNoise3(vec3(p, 7.1 + 0.02 * a)) + 0.4 * dwNoise3(vec3(pw.xz / 90.0, 0.37 + 0.03 * a));
     return DW_BULGE * dwSoft((L - 0.5) * 4.0) * mix(0.33, 1.0, smoothstep(0.8, 2.5, a));
 }
 
-// a buoyant puff above the top: about one 70 m cell in six lifts a rounded column of dust ~25 % of the layer above the
+// a buoyant puff above the top: about one 70 m cell in four lifts a rounded column of dust ~45 % of the layer above the
 // top, 1–9 s after the front, over ~4 s, thinning as it rises (presentation)
 float dwPuff(vec3 pw, float top, float a) {
     vec2 cell = floor(pw.xz / 70.0);
     float h1 = dwNoise3(vec3(cell * 1.37, 91.2)), h2 = dwNoise3(vec3(cell * 1.37 + 0.5, 47.7));
-    if (h1 < 0.62) return 0.0;
+    if (h1 < 0.56) return 0.0;
     float born = 1.0 + 8.0 * h2, age = a - born;
     if (age <= 0.0) return 0.0;
     vec2 c = (cell + 0.5) * 70.0 + (vec2(h2, h1) - 0.5) * 30.0;
-    float rise = 0.25 * top * (1.0 - exp(-age / 2.5)) * (h1 - 0.4) * 2.5;
+    float rise = 0.45 * top * (1.0 - exp(-age / 2.5)) * (h1 - 0.4) * 2.5;
     float radius = 10.0 + 5.0 * age;
     vec2 d = vec2(length(pw.xz - c), (pw.y - top * 0.9 - rise) * 1.3);
     return 0.5 * exp(-age / 6.0) * (1.0 - smoothstep(0.5, 1.0, length(d) / radius)) * smoothstep(0.0, 1.0, age);
@@ -253,15 +256,26 @@ float dwDensity(vec3 g, bool coarse) {
     }
     // (the lumps cut the upper face only: cut to the ground they opened holes through the base that the moving front
     // swept across the ray steps, popping from frame to frame)
-    float a = DwEye.w - dwNode(r + (40.0 * yn * yn + 70.0 * max(bf - 0.3, 0.0) * smoothstep(0.2, 0.6, yn)) * exp(-a0 / 1.5)).x;
+    // clefts between the head's lobes: the front line itself is cut back by up to ~50 m in notches ~150 m along it
+    float cleft = 50.0 * smoothstep(0.55, 0.85, dwNoise3(vec3(atan(q.z, q.x) * DwRing.x / 150.0, 61.7, 0.05 * DwEye.w)));
+    float a = DwEye.w - dwNode(r + cleft + (40.0 * yn * yn + 70.0 * max(bf - 0.3, 0.0) * smoothstep(0.2, 0.6, yn)) * exp(-a0 / 1.5)).x;
     if (!coarse) {
         gDwHead = a0 < 1.5;
         gDwOld = a0 > 2.0;
     }
     if (a <= 0.0) return 0.0;
     float top = dwEnvelope(a, h, k), ph;
+    // shear rolls on the head (Kelvin–Helmholtz): bands ~70 m apart across the head, riding with the front and rolling back
+    // over it at 20 m/s, in patches along the front, breaking down behind it (presentation)
+    if (!coarse && a0 < 2.0) {
+        float along = atan(q.z, q.x) * DwRing.x;
+        float patchy = smoothstep(0.35, 0.7, dwNoise3(vec3(along / 160.0, 12.9, 0.05 * DwEye.w)));
+        top *= 1.0 + 0.12 * patchy * sin(6.2832 * (DwRing.x - r + 20.0 * DwEye.w) / 70.0) * exp(-a0 / 1.0);
+    }
     vec3 pw = dwAir(q, a, r, top, ph);
-    top *= 1.0 + dwBulge(pw, a);
+    float swell = dwBulge(pw, a);
+    if (!coarse) gDwSwell = swell;
+    top *= 1.0 + swell;
     // texture fixed in the air mass: billows of ~20 × 13 m and finer, the rising and settling top reveals and hides them
     vec3 tq = vec3(pw.x, pw.y - 0.45 * ph, pw.z) / vec3(20.0, 13.0, 20.0);
     // (light paths see the billows' two first octaves but not the head's lumps riding with the front: those made the
@@ -350,10 +364,14 @@ vec3 dwLight(vec3 q, vec3 rd) {
     float taub = dwShadow(q, lb), taus = dwShadow(q, DwSunDir);
     float depth = max(gDwSurf - (q.y - dwFloor(q.xz)), 0.0) * gDwSigma;
     float ms = 0.3 + 0.3 * exp(-0.12 * depth);
+    // presentation: the swells read from above as in the Silo frame, raised dust catching more light and sags in the shade
+    // of the swells around them (an occlusion of the light the dust scatters, by the local swell)
+    float lift = clamp(1.0 + 1.2 * gDwSwell, 0.55, 1.45);
+    ms *= lift;
     float sunUp = smoothstep(-0.05, 0.05, DwSunDir.y);
     // thin dust toward the fireball glows (forward peak: the crest's rim against the ball); the low sun lights the faces
     // turned to it
-    vec3 single = dwBallLight(q) * (0.4 * min(dwPhase(dot(rd, lb)), 3.0) * exp(-taub))
+    vec3 single = lift * dwBallLight(q) * (0.4 * min(dwPhase(dot(rd, lb)), 3.0) * exp(-taub))
             + DwSunLight * (0.5 * min(dwPhase(dot(rd, DwSunDir)), 6.0) * exp(-taus)) * sunUp;
     vec3 multiple = dwBallLight(q) * ms * (0.45 + 0.55 * exp(-0.25 * taub)) + DwSunLight * ms * (0.45 + 0.55 * exp(-0.25 * taus)) * sunUp
             + DwSkyLight * (0.03 + 0.15 * exp(-0.3 * depth));
