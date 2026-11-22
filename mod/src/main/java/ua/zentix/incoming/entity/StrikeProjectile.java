@@ -1073,8 +1073,10 @@ public abstract class StrikeProjectile extends Entity implements IEntityWithComp
         if (virtual) return advanceVirtual(level, aim, reachPad, dir);
 
         boolean onTarget = onFinalLeg() && pos.distanceTo(aim) <= speed + reachPad;
-        if (onTarget && armed()) {
-            impact(level, aim, null);
+        if (onTarget && armed() && Terrain.readyAlong(level, pos, aim)) {
+            // Snapping to a nearby point still crosses every block between the entity and that point.
+            Vec3 contact = blockContact(level, pos, aim);
+            impact(level, contact != null ? contact : aim, null);
             return false;
         }
         if (exhausted()) {
@@ -1094,12 +1096,7 @@ public abstract class StrikeProjectile extends Entity implements IEntityWithComp
 
         // Also during boost: passing through a house on booster would end boost inside it and crash
         // on first climb tick — silently and far from initial encounter.
-        Vec3 blockPoint = null;
-        BlockHitResult block = level.clip(new ClipContext(noseFrom, noseTo, ClipContext.Block.COLLIDER, ClipContext.Fluid.ANY, this));
-        if (block.getType() != HitResult.Type.MISS) {
-            // Sable craft hit arrives in plot coordinates.
-            blockPoint = SubLevels.toWorld(level, block.getLocation());
-        }
+        Vec3 blockPoint = blockContact(level, noseFrom, noseTo);
         Vec3 sweepEnd = blockPoint != null ? blockPoint : noseTo;
 
         if (armed()) {
@@ -1126,6 +1123,13 @@ public abstract class StrikeProjectile extends Entity implements IEntityWithComp
         if (leavesTickingChunks(level, next)) return false;
         moveAlong(level, next, dir);
         return true;
+    }
+
+    /** First contact on an already chunk-checked segment, in world coordinates (Sable returns plot coordinates). */
+    @Nullable
+    private Vec3 blockContact(ServerLevel level, Vec3 from, Vec3 to) {
+        BlockHitResult hit = level.clip(new ClipContext(from, to, ClipContext.Block.COLLIDER, ClipContext.Fluid.ANY, this));
+        return hit.getType() == HitResult.Type.MISS ? null : SubLevels.toWorld(level, hit.getLocation());
     }
 
     /**

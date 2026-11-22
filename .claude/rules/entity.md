@@ -73,7 +73,7 @@ paths:
   (`surveyAhead`); target-approach straight line `Autopilot.Sightline`, if blocked (`Craft.clearAlong`: block cells in
   ready chunks, beyond/outside world survey terrain top, `Terrain.underRelief`), do not attack; missile stays in
   pop-up, Shahed cruises without climbing (climb raises nose, preventing timely dive along same line over obstacle).
-  The dive deadline compares remaining horizontal range with the horizontal distance traveled in `DIVE_MARGIN`
+  The dive deadline compares remaining horizontal range with an estimate of the horizontal distance traveled in `DIVE_MARGIN`
   nose-turn times. Slant range can grow during pop-up while the projectile runs out of room to dive.
   `MissileBuildingGameTests` checks first-pass roof contact for covered points and hits at exposed points.
   No moving-target lead (Artem, 21.10). Unit test

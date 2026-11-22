@@ -20,7 +20,6 @@ import ua.zentix.incoming.guidance.Route;
 import ua.zentix.incoming.registry.ModEntities;
 import ua.zentix.incoming.stress.StressDirector;
 import ua.zentix.incoming.strike.VirtualFlights;
-import ua.zentix.incoming.strike.WeaponSpec;
 import ua.zentix.incoming.target.Target;
 
 import java.util.Arrays;
@@ -46,22 +45,26 @@ public final class MissileBuildingGameTests {
     }
 
     private enum Aim {
-        INSIDE(new Vec3(0.45, 3, 1.15), 1),
-        INSIDE_CENTER(new Vec3(0, 2, 0), -1),
-        NORTH_FACE(new Vec3(0, 5.5, -6.5), 1),
-        ROOF(new Vec3(0, 13, 0), 1),
-        OPEN(new Vec3(0, 0, 0), 1);
+        // Final-leg lengths in blocks on the recorded 2400-block routes.
+        INSIDE(new Vec3(0.45, 3, 1.15), 1, 1687.150066),
+        INSIDE_CENTER(new Vec3(0, 2, 0), -1, 1686),
+        NORTH_FACE(new Vec3(0, 5.5, -6.5), 1, 1679.5),
+        ROOF(new Vec3(0, 13, 0), 1, 1686),
+        OPEN(new Vec3(0, 0, 0), 1, 1686),
+        TOP_FLOOR(new Vec3(0, ROOF_Y - 0.5, 0), 1, 1686);
 
         final Vec3 offset;
         final double side;
+        final double entry;
 
-        Aim(Vec3 offset, double side) {
+        Aim(Vec3 offset, double side, double entry) {
             this.offset = offset;
             this.side = side;
+            this.entry = entry;
         }
 
         boolean inside() {
-            return this == INSIDE || this == INSIDE_CENTER;
+            return this == INSIDE || this == INSIDE_CENTER || this == TOP_FLOOR;
         }
     }
 
@@ -124,11 +127,7 @@ public final class MissileBuildingGameTests {
             missile.seed(0);
             missile.setUUID(id);
             missile.launch(from, new Target.Point(aim), aim, id);
-            // Use the ordered-site fallback route with a fixed detour side and an explicit aim after dispersion.
-            WeaponSpec spec = WeaponSpec.MISSILE;
-            double entry = Math.max(spec.finalLeg(), from.subtract(aim).horizontalDistance() + 150);
-            double length = spec.airframe().cruiseSpeed() * spec.route().seconds() * 20;
-            missile.setRoute(Route.plan(missile.position(), aim, heading, length, entry, kind.side));
+            missile.setRoute(Route.plan(missile.position(), aim, heading, 2400, kind.entry, kind.side));
             VirtualFlights.launch(level, missile);
             launched = true;
         }
@@ -145,8 +144,9 @@ public final class MissileBuildingGameTests {
                 h.assertTrue(impactRange > 0, "Missile ran out of range");
                 if (kind.inside()) {
                     double edge = HALF_BOX + 0.5;
-                    h.assertTrue(Math.abs(at.x) <= edge && Math.abs(at.z) <= edge && at.y >= ROOF_Y && at.y <= ROOF_Y + 1,
-                            "Missile aimed inside missed the roof: " + at);
+                    h.assertTrue(Math.abs(at.x) <= edge && Math.abs(at.z) <= edge
+                                    && Math.abs(at.y - (ROOF_Y + 1)) < 1.0e-6,
+                            "Missile aimed inside missed the top surface of the roof: " + at);
                 } else {
                     h.assertTrue(impact.distanceTo(aim) <= 1, "Missile missed its exposed aim point: " + impact.subtract(aim));
                 }

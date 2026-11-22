@@ -214,8 +214,8 @@ further away. At 1 the B-2 bomb falls for about 50 seconds after the drop, so it
 A kamikaze drone: it takes off from a trailer next to you, flies with a loud engine buzz and dives at the end. Use it
 on buildings and on moving targets. Its two-stroke engine has no muffler: on a quiet night it can be heard about 12 km away, by day about 6 km, long
 before it arrives. A SAM can shoot it down, so
-against air defense send a salvo or route it around. It dives only once it can see the target: if a hill or a
-building hides it, the drone flies on at its height and dives more steeply later. It does not aim ahead of a moving
+against air defense send a salvo or route it around. If a hill or building hides the target, the drone stays at its
+current height for longer. It can still start its dive while the target is hidden. It does not aim ahead of a moving
 target. A tall building right next to the target or a roof over it can still be in the way: it then hits the
 building or the roof.
 
