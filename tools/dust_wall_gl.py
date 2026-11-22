@@ -5,7 +5,7 @@
 
     uv run tools/dust_wall_gl.py
 
-Links fx_dustwall, fx_dustwall_resolve and fx_dustwall_composite and checks (exit 1 on a failure): the composite keeps a
+Links fx_dustwall, fx_dustwall_resolve and fx_dustwall_pack and checks (exit 1 on a failure): the composite keeps a
 thin foreground and the first-person hand its low-resolution taps missed, and lays dust behind a see-through pane through
 it, and lays no dust from behind a foreground surface; the resolve drops history at a new occluder, behind a ceiling that
 moved in, with no history, and reads the previous frame on the march lattice when the frame width is not a multiple of the
@@ -31,132 +31,26 @@ context, link, target, texture, bind, quad, read, loc, check = (
 )
 
 
-def image(w, h, alphas):
-    return texture(g.GL_RGBA16F, g.GL_RGBA, w, h, [(0, 0, 0, a) for a in alphas])
-
-
 def scene(w, h, depths):
     return texture(g.GL_RG32F, g.GL_RG, w, h, [(d, d) for d in depths])
 
 
-def composite_cases(p):
-    w, h = 12, 12
-    target(w, h, [(g.GL_RGBA32F, g.GL_RGBA)])
-    g.glUseProgram(p)
-    bind(p, 0, image(3, 3, [0.25] * 9))
-    data = [100.0] * (w * h)
-    data[4 * w + 4] = 2.0
-    data[4 * w + 5] = 0.10
-    bind(p, 1, scene(w, h, data))
-    g.glUniform1f(loc(p, "DwDiv"), 4)
-    quad(p)
-    result = read(w, h)
-    check(result[4, 4, 3] > 0.999, f"opaque foreground missed by low-res taps: T={result[4, 4, 3]:.4f}, expected 1")
-    check(result[4, 5, 3] > 0.999, f"Iris hand missed by low-res taps: T={result[4, 5, 3]:.4f}, expected 1")
-    # a foreground surface 100 blocks away, every tap behind it at 109 (dust in those 9 blocks): not laid over it
-    depth = [109.0] * (w * h)
-    depth[4 * w + 4] = 100.0
-    bind(p, 1, scene(w, h, depth))
-    quad(p)
-    r100 = read(w, h)[4, 4, 3]
-    check(r100 > 0.999, f"foreground at 100 blocks, taps at 109: T={r100:.4f}, expected 1")
-
-    # The r/g contract describes a pane one block away, with the dust behind it.
-    # Incoming's pane representation is X + Tpane*background, here .4 + .5*.8.
-    bind(p, 1, texture(g.GL_RG32F, g.GL_RG, w, h, [(100, 1)] * (w * h)))
-    g.glActiveTexture(g.GL_TEXTURE0 + 13)
-    glass = texture(g.GL_RGBA16F, g.GL_RGBA, w, h, [(0.4, 0.4, 0.4, 0.5)] * (w * h))
-    g.glActiveTexture(g.GL_TEXTURE0 + 13)
-    g.glBindTexture(g.GL_TEXTURE_2D, glass)
-    g.glUniform1i(loc(p, "FxGlass"), 13)
-    g.glUniform1f(loc(p, "FxSee"), 1)
-    g.glClearColor(0.8, 0.8, 0.8, 1.0)
-    g.glClear(g.GL_COLOR_BUFFER_BIT)
-    g.glEnable(g.GL_BLEND)
-    g.glBlendFuncSeparate(g.GL_ONE, g.GL_SRC_ALPHA, g.GL_ZERO, g.GL_ONE)
-    quad(p)
-    g.glDisable(g.GL_BLEND)
-    red = read(w, h)[4, 4, 0]
-    check(abs(red - 0.5) < 1e-3, f"dust behind a pane: RGB {red:.4f}, expected X + Tpane*Twall*background = 0.5")
-
-
-
-def warmup_noop_case(programs):
-    """The review probe's empty wall must leave every RGBA8 channel unchanged over world, sky and near depth."""
-    march, resolve, composite = (programs[k] for k in ("", "_resolve", "_composite"))
-    size, low = 12, 3
-    rgba = (g.GL_RGBA32F, g.GL_RGBA)
-    projection = np.array([[100, 0, 0, 0], [0, 100, 0, 0], [0, 0, -1.02, -0.2], [0, 0, -1, 0]], dtype=np.float32)
-    for label, depth in (("world", 100), ("sky", 0), ("near", 0.5)):
-        distances = scene(size, size, [depth] * (size * size))
-        g.glUseProgram(march)
-        g.glUniformMatrix4fv(loc(march, "InvViewProj"), 1, True, np.linalg.inv(projection).astype(np.float32))
-        g.glUniform3f(loc(march, "PallForward"), 0, 0, -1)
-        g.glUniform1f(loc(march, "DwDiv"), 4)
-        g.glUniform2f(loc(march, "DwFrame"), 0, 128)
-        for name in ("DwEye", "DwBall", "PallAir", "PallAirFog", "DwWind"):
-            g.glUniform4f(loc(march, name), 0, 0, 0, 0)
-        g.glUniform4f(loc(march, "DwRing"), 0, 0, 0, 1)
-        for name in ("DwBallLight", "DwSunLight", "DwSunDir", "DwSkyLight", "DwGroundLight", "DwAlbedo", "DwBulk",
-                     "DwSandAlbedo", "DwSandBulk", "PallAirSky"):
-            g.glUniform3f(loc(march, name), 0, 0, 0)
-        g.glUniform2f(loc(march, "DwRelief"), 0, 0)
-        g.glUniform1f(loc(march, "DwCut"), 0)
-        g.glUniform1f(loc(march, "PallFloorFrom"), 0)
-        for unit, name in ((12, "DwNoise"), (13, "PallOpen")):
-            g.glActiveTexture(g.GL_TEXTURE0 + unit)
-            g.glBindTexture(g.GL_TEXTURE_3D, g.glGenTextures(1))
-            g.glTexParameteri(g.GL_TEXTURE_3D, g.GL_TEXTURE_MIN_FILTER, g.GL_LINEAR)
-            g.glTexImage3D(g.GL_TEXTURE_3D, 0, g.GL_R32F, 1, 1, 1, 0, g.GL_RED, g.GL_FLOAT, np.array([0.5], np.float32))
-            g.glUniform1i(loc(march, name), unit)
-        zeros = texture(*rgba, 128, 4, np.zeros((4, 128, 4), np.float32))
-        bind(march, 3, zeros)
-        target(low, low, [rgba])
-        g.glUseProgram(march)
-        bind(march, 1, distances)
-        bind(march, 2, texture(*rgba, 128, 1, np.zeros((1, 128, 4), np.float32)))
-        quad(march)
-        rays = read(low, low).copy()
-        ok_march = np.all(np.isfinite(rays)) and np.allclose(rays, (0, 0, 0, 1))
-        # resolve without history
-        target(low, low, [rgba])
-        g.glUseProgram(resolve)
-        samples = texture(*rgba, low, low, rays)
-        for unit, tex in enumerate((samples, samples, distances, distances)):
-            bind(resolve, unit, tex)
-        g.glUniform1f(loc(resolve, "DwDiv"), 4)
-        g.glUniform4f(loc(resolve, "DwReproject"), 0, 0, 0, 0)
-        g.glUniform2f(loc(resolve, "DwHistory"), 0.1, 0)
-        g.glUniformMatrix4fv(loc(resolve, "InvViewProj"), 1, True, np.linalg.inv(projection).astype(np.float32))
-        quad(resolve)
-        resolved = read(low, low).copy()
-        # composite over a known frame
-        target(size, size, [(g.GL_RGBA8, g.GL_RGBA)])
-        g.glClearColor(0.3, 0.5, 0.7, 0.8)
-        g.glClear(g.GL_COLOR_BUFFER_BIT)
-        before = read(size, size).copy()
-        g.glUseProgram(composite)
-        bind(composite, 0, texture(*rgba, low, low, resolved))
-        bind(composite, 1, distances)
-        g.glUniform1f(loc(composite, "DwDiv"), 4)
-        g.glUniform1f(loc(composite, "FxSee"), 0)
-        g.glEnable(g.GL_BLEND)
-        g.glBlendFuncSeparate(g.GL_ONE, g.GL_SRC_ALPHA, g.GL_ZERO, g.GL_ONE)
-        quad(composite)
-        g.glDisable(g.GL_BLEND)
-        screen = read(size, size).copy()
-        ok_screen = np.array_equal(screen, before)
-        check(ok_march and ok_screen, f"warm-up over {label}: finite transparent march and identical RGBA8 frame")
-    assert g.glGetError() == g.GL_NO_ERROR
-
-
-def resolve(p, w, h, current, past, depths, history=1, before=None, previous_div=4):
+def resolve(p, w, h, current, past, depths, history=1, before=None, previous_div=4, read_span=False):
     size = ((w + 3) // 4, (h + 3) // 4)
-    target(*size, [(g.GL_RGBA32F, g.GL_RGBA)])
-    g.glUseProgram(p)
-    bind(p, 0, image(*size, current))
     past_size = ((w + previous_div - 1) // previous_div, (h + previous_div - 1) // previous_div)
-    bind(p, 1, image(*past_size, past))
+    target(2 * size[0], size[1], [(g.GL_RGBA32F, g.GL_RGBA)])
+    g.glUseProgram(p)
+
+    def atlas(shape, values):
+        tile = np.asarray(values).reshape(shape[1], shape[0])
+        light = np.zeros((*tile.shape, 4), np.float32)
+        light[:, :, 3] = tile
+        span = light.copy()
+        span[:, :, :3] = (1 - tile[:, :, None]) * np.array([2, 6, 4])
+        return texture(g.GL_RGBA16F, g.GL_RGBA, 2 * shape[0], shape[1], np.concatenate((light, span), axis=1))
+
+    bind(p, 0, atlas(size, current))
+    bind(p, 1, atlas(past_size, past))
     g.glTexParameteri(g.GL_TEXTURE_2D, g.GL_TEXTURE_MIN_FILTER, g.GL_LINEAR)
     g.glTexParameteri(g.GL_TEXTURE_2D, g.GL_TEXTURE_MAG_FILTER, g.GL_LINEAR)
     bind(p, 2, scene(w, h, depths))
@@ -172,6 +66,8 @@ def resolve(p, w, h, current, past, depths, history=1, before=None, previous_div
     bind(p, 3, scene(w, h, before if before is not None else depths))
     g.glUniform1f(loc(p, "DwPrevScene"), 1)
     quad(p)
+    if read_span:
+        return read(2 * size[0], size[1])[:, size[0]:]
     return read(*size)[:, :, 3]
 
 
@@ -189,10 +85,13 @@ def resolve_cases(p):
     result = resolve(p, 9, 4, [0, 0.5, 1], [0, 0.5, 1], [100.0] * 36)
     check(abs(result[0, 1] - 0.5) < 1e-5, f"stationary 9-pixel view reprojection: T={result[0, 1]:.4f}, expected 0.5")
     check(abs(result[0, 2] - 1) < 1e-5, f"stationary 9-pixel view, last column (sample at 8.5): T={result[0, 2]:.4f}, expected 1")
-    # 16 full pixels: the old divisor-5 centres are 2.5, 7.5, 12.5, 15.5. The new divisor-4
-    # centre at 6 lies 70% of the way between the first two. Its new sample has weight 0.1.
-    result = resolve(p, 16, 4, [0, 1, 0, 1], [0, 1, 0, 1], [100.0] * 64, previous_div=5)
-    check(abs(result[0, 1] - 0.73) < 1e-4, f"divisor change keeps reprojected history: T={result[0, 1]:.4f}, expected 0.73")
+    # 13 full pixels: three old cells at divisor 5, four new at divisor 4. At x=6 the old
+    # centres at 2.5 and 7.5 contribute 30/70. The depth moments live three columns after light.
+    for span in (False, True):
+        result = resolve(p, 13, 4, [0, 1, 0, 1], [0, 1, 0], [100.0] * 52, previous_div=5, read_span=span)
+        expected = (.54, 1.62, 1.08, .73) if span else .73
+        check(np.allclose(result[0, 1], expected, atol=1e-4),
+              f"divisor change keeps {'depth moments' if span else 'light'}: {result[0, 1]}, expected {expected}")
     # a ceiling moved in front of all nine samples (now 20 blocks, before 100): no dust from behind it
     cur = [0.25] * 9
     cur[4] = 1.0
@@ -232,6 +131,7 @@ void main() {
     g.glTexParameteri(g.GL_TEXTURE_3D, g.GL_TEXTURE_MAG_FILTER, g.GL_LINEAR)
     g.glTexImage3D(g.GL_TEXTURE_3D, 0, g.GL_R32F, 1, 1, 1, 0, g.GL_RED, g.GL_FLOAT, np.array([0.5], dtype=np.float32))
     g.glUniform1i(loc(p, "DwNoise"), 12)
+    g.glUniform4f(loc(p, "PallYoung"), 0, 1, 0, 300)
     g.glUniform4f(loc(p, "DwRing"), 300, 0, 65, 300)
     g.glUniform4f(loc(p, "DwBall"), 0, 10, 0, 1)
     g.glUniform3f(loc(p, "DwSunDir"), 0, 1, 0)
@@ -334,6 +234,7 @@ void main() {
         front = 4500 * (t / arrive) ** 0.8
         # the eye far off (the head's own texture is drawn away from the eye)
         g.glUniform4f(loc(p, "DwEye"), 0, 120, 4500, t)
+        g.glUniform4f(loc(p, "PallYoung"), 0, 1, 0, reach)
         g.glUniform4f(loc(p, "DwRing"), front, 0, 400, reach)
         # a fixed arc on the ground, 80 blocks behind the front at the first instant (the dust is anchored where it was born)
         g.glUniform1f(loc(p, "Radius"), 4500 - 80)
@@ -416,6 +317,7 @@ void main() {
     t = arrive + 1.0
     front = 4500 * (t / arrive) ** 0.8
     g.glUniform4f(loc(p, "DwEye"), 0, 120, 4500, t)
+    g.glUniform4f(loc(p, "PallYoung"), 0, 1, 0, reach)
     g.glUniform4f(loc(p, "DwRing"), front, 0, 400, reach)
     g.glUniform1f(loc(p, "Front"), front)
     step = np.radians(60.0) * front / 2048
@@ -449,7 +351,7 @@ def link_after_veil(name, java, classpath):
 
 
 context()
-programs = {name: link("fx_dustwall" + name) for name in ("", "_resolve", "_composite")}
+programs = {name: link("fx_dustwall" + name) for name in ("", "_resolve", "_pack")}
 for name, p in programs.items():
     print(f"Linked fx_dustwall{name}, {g.glGetProgramiv(p, g.GL_ACTIVE_UNIFORMS)} active uniforms")
     if len(sys.argv) == 3:
@@ -461,13 +363,13 @@ for name, p in programs.items():
             check(False, f"Veil round trip for fx_dustwall{name}: {str(err)[:400]}")
         else:
             print(f"Linked fx_dustwall{name} after the Veil parser round trip")
-warmup_noop_case(programs)
-composite_cases(programs["_composite"])
 resolve_cases(programs["_resolve"])
 march_cases()
 turning_case()
 period_case()
-# the render contract (march, resolve, composite together): its own script, the same exit rule
-contract = subprocess.run([sys.executable, str(Path(__file__).resolve().with_name("dust_wall_contract_gl.py"))])
-warmup = subprocess.run([sys.executable, str(harness.with_name("nuclear_volume_warmup_gl.py"))])
-sys.exit(bool(gl["FAILED"]) or contract.returncode != 0 or warmup.returncode != 0)
+# The full pass contract and its camera-motion and screen-edge regressions use llvmpipe.
+failed = bool(gl["FAILED"])
+for script in ("dust_wall_contract_gl.py", "nuclear_volume_warmup_gl.py"):
+    run = subprocess.run([sys.executable, str(Path(__file__).with_name(script))])
+    failed |= run.returncode != 0
+sys.exit(failed)

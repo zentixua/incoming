@@ -131,7 +131,7 @@ class PallGlslTest {
         assertEquals(sample, glsl(match(wall, "float m1 = (.+?);")), "shadow billows: the sample is not the same as that of thicknesses");
         assertEquals(sample, glsl(match(wall, "float m2 = (.+?);")), "shadow billows: the sample is not the same as that of thicknesses");
         assertEquals(sample, glsl(match(wall, "float hm = (.+?);")), "head at point: not the same sample");
-        String[] stop = match(at, "if \\((.+?)\\) return h;").split("\\|\\|"), p = args(match(at, "h\\.P = vec4\\(([^;]+)\\); return h;"));
+        String[] stop = match(at, "if \\((.+?)\\) return h;").split("\\|\\|"), p = args(match(at, "h\\.P = vec4\\(([^;]+)\\); h\\.P\\.w \\*="));
         String lag = glsl(match(at, "float lag = (.+?);")), numbers = "float Px = " + glsl(p[0]) + ", Py = " + glsl(p[1]) + ", Pz = " + glsl(p[2]) + ";";
         StringBuilder test = new StringBuilder(GLSL).append("\nfloat headAt(float pts, float ptz, float ptwet, float pthard").append(SLOT_PARAMS).append(") {\n");
         for (String c : stop) test.append("if (").append(glsl(c)).append(") return 0.0;\n");

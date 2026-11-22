@@ -2,6 +2,8 @@ package ua.zentix.incoming.client.nuclear;
 
 import net.minecraft.world.phys.Vec3;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 import ua.zentix.incoming.client.fx.layer.DustWallPass;
 import ua.zentix.incoming.nuclear.Detonation;
 import ua.zentix.incoming.nuclear.model.FireballModel;
@@ -71,25 +73,28 @@ class DustWallInputsTest {
     }
 
     /**
-     * The pall hands over its lofted dust in the young ring only where the wall draws dust (review of #724, round 3: a dry
-     * 1 kt surface burst at 18.1 s, a 600-block sightline tangent at 2,378.6 blocks: nodes just under GONE_DEPTH were drawn as
-     * none while the pall's own field held optical depth 0.113 there).
+     * Tangent through the interior and the #724 review fixture at 2378.6 blocks, where nodes
+     * below GONE_DEPTH still carry visible lofted soil.
      */
-    @Test
-    void wallDrawsWhateverThePallHandsOver() {
-        double t = 18.1, x = 2378.6;
+    @ParameterizedTest
+    @ValueSource(doubles = {2250, 2378.6})
+    void wallDrawsWhateverThePallHandsOver(double x) {
+        double t = 18.1;
         var detonation = new Detonation(1, new Vec3(0, 64, 0), 64, 1, true, 0, 0, 0, 20_000, 7, 1, false, 0.35f);
         var field = new PallField(detonation);
         int nodes = DustWallPass.NODES;
         var table = new float[nodes * 4];
         field.young(t, 1, DustWallPass.SPAN, nodes, table);
         double spacing = field.reach() / (nodes - 1);
+        int samples = 0;
         for (double z = -299.5; z < 300; z++) {
             double r = Math.hypot(x, z);
             int j = (int) (r / spacing);
             if (field.sigma(x, z, 4, 0, t * 20, PallField.Water.DRY) <= 0) continue;
+            samples++;
             assertTrue(NukePall.youngSigma(table[4 * j + 2]) > 0 || NukePall.youngSigma(table[4 * (j + 1) + 2]) > 0,
                     "the wall draws dust where the pall has it, at " + r);
         }
+        assertTrue(samples > 0, "tangent crosses lofted dust");
     }
 }

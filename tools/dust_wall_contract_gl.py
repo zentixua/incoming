@@ -5,13 +5,10 @@
 
     uv run tools/dust_wall_contract_gl.py [checkout] [case ...]
 
-Cases: jitter (the march's in-pixel offset keeps an opaque foreground pixel foreground), history (a history sample whose
-previous depth is another place contributes nothing), terrain (the relief stops the march where the scene has no depth),
-weather (distant dust fades into the airlight in a thunderstorm), history2 (one depth rule: a
-history sample the composite would reject contributes nothing; a clear pixel stays clear), relief (the relief map stops no
-ray inside the drawn world, and hides dust behind a ridge past it), fog (a hazed wall shows the fog's colour), pane (dust in front of a see-through surface: a known
-limit, reported, not checked). Run by tools/dust_wall_gl.py."""
-import inspect
+The cases exercise the march, temporal reprojection and shared pall composite,
+including thin opaque edges, the near volume, panes, weather and coarse terrain.
+Run by tools/dust_wall_gl.py."""
+from functools import cache
 from pathlib import Path
 import sys
 
@@ -29,6 +26,7 @@ g = namespace["g"]
 context, link, target, texture, bind, quad, read, loc, check = (
     namespace[name] for name in ("context", "link", "target", "texture", "bind", "quad", "read", "loc", "check")
 )
+link = cache(link)
 size, low = 12, 3
 projection = np.array([[100, 0, 0, 0], [0, 100, 0, 0], [0, 0, -1.02, -0.2], [0, 0, -1, 0]], dtype=np.float32)
 scene_format = (g.GL_RG32F, g.GL_RG)
@@ -48,6 +46,7 @@ def march_setup():
     g.glUniform3f(loc(program, "PallForward"), 0, 0, -1)
     g.glUniform1f(loc(program, "DwDiv"), 4)
     g.glUniform4f(loc(program, "DwEye"), 100, 9, 0, 10)
+    g.glUniform4f(loc(program, "PallYoung"), 0, 0, 0, 800)
     g.glUniform4f(loc(program, "DwRing"), 800, 0, 100, 800)
     g.glUniform4f(loc(program, "DwBall"), 0, 30, 0, 1)
     g.glUniform3f(loc(program, "DwSunDir"), 0, 1, 0)
@@ -66,33 +65,106 @@ def march_setup():
 
 
 def march(program, scene, frame):
-    target(low, low, [rgba])
+    target(low, low, [rgba, rgba])
     g.glUseProgram(program)
     bind(program, 2, texture(*rgba, 128, 1, [(0, 20, 0.11, 0.3)] * 128))
     bind(program, 1, scene)
     g.glUniform2f(loc(program, "DwFrame"), frame, 128)
     quad(program)
-    return read(low, low).copy()
+    colour = g.glGetFragDataLocation(program, "fragColor")
+    light, depth = read(low, low, colour).copy(), read(low, low, 1 - colour).copy()
+    return light, depth
 
 
-def composite(program, scene, samples, glass=None):
-    target(size, size, [rgba])
+def composite(program, scene, samples, glass=None, cloud=None, rays=None, mushroom=None, layer_frame=False,
+              young=True, haze=0, smoke_span=None, ground_origin=(100, 0), ring=(0, 0, 0, 800)):
+    # Run the shipped pack and resolve before the full-resolution pall composite.
+    light, depth = samples
+    pack = link("fx_dustwall_pack")
+    target(2 * low, low, [rgba])
+    g.glUseProgram(pack)
+    bind(pack, 0, texture(*rgba, low, low, light))
+    bind(pack, 1, texture(*rgba, low, low, depth))
+    quad(pack)
+    packed = texture(*rgba, 2 * low, low, read(2 * low, low))
+    resolve = link("fx_dustwall_resolve")
+    target(2 * low, low, [rgba])
+    g.glUseProgram(resolve)
+    bind(resolve, 0, packed)
+    bind(resolve, 1, packed)
+    bind(resolve, 2, scene)
+    g.glUniform4f(loc(resolve, "DwReproject"), 0, 0, 0, 0)
+    quad(resolve)
+    atlas = texture(*rgba, 2 * low, low, read(2 * low, low))
+    output = low if layer_frame else size
+    target(output, output, [rgba])
     g.glUseProgram(program)
-    bind(program, 0, texture(*rgba, low, low, samples))
+    clear = texture(*rgba, 1, 1, [(0, 0, 0, 0)])
+    for unit in range(12):
+        bind(program, unit, clear)
+    g.glUniform1i(loc(program, "PallLayerFrame"), int(layer_frame))
+    empty_ray = np.broadcast_to((0, 0, 0, 1), (low, low, 4))
+    bind(program, 0, texture(*rgba, low, low, empty_ray if rays is None else rays))
     bind(program, 1, scene)
+    bind(program, 4, atlas)
+    slot = np.zeros((4, 4), dtype=np.float32)
+    if haze:
+        # The wall and the ground haze below its surface belong to the same dry burst.
+        slot[:, 0] = (*ground_origin, 0, 800)
+        slot[3, 1] = 1
+        slot[2, 2], slot[3, 2] = .25, .75
+        bind(program, 2, texture(*rgba, 1, 2, [(0, 10, 0, 0), (haze, 100, 0, 0)]))
+    g.glUniformMatrix4fv(loc(program, "PallSlot0"), 1, True, slot)
+    if mushroom is not None:
+        bind(program, 7, texture(*rgba, 20, 4, mushroom))
+    for name in ("SmokeGrid", "PallNoise", "PallOpen"):
+        g.glUniform1i(loc(program, name), 13)
+    cascade = np.zeros((4, 4), dtype=np.float32)
+    if smoke_span is not None:
+        near, far = smoke_span
+        lo, hi = np.zeros_like(cascade), np.zeros_like(cascade)
+        lo[:, 0], hi[:, 0] = (-20, -20, -far, 1), (20, 20, -near, 0)
+        cascade[:, 0], cascade[0, 3] = (-20, -20, -far, 1), 1
+        g.glUniform3f(loc(program, "SmokeMin"), *lo[:3, 0])
+        g.glUniform3f(loc(program, "SmokeMax"), *hi[:3, 0])
+        for name, matrix in (("SmokeLo", lo), ("SmokeHi", hi)):
+            g.glUniformMatrix4fv(loc(program, name), 1, True, matrix)
+        g.glUniform1i(loc(program, "SmokeGrid"), 14)
+        g.glActiveTexture(g.GL_TEXTURE0 + 14)
+        g.glBindTexture(g.GL_TEXTURE_3D, g.glGenTextures(1))
+        g.glTexParameteri(g.GL_TEXTURE_3D, g.GL_TEXTURE_MIN_FILTER, g.GL_NEAREST)
+        g.glTexImage3D(g.GL_TEXTURE_3D, 0, g.GL_R32F, 1, 1, 1, 0, g.GL_RED, g.GL_FLOAT,
+                       np.ones(1, dtype=np.float32))
+    g.glUniformMatrix4fv(loc(program, "SmokeCascade"), 1, True, cascade)
+    g.glUniform4f(loc(program, "PallYoung"), *(ring if young else (0, 0, 0, 0)))
+    g.glUniform4f(loc(program, "PallFrame"), 0, 0, 4, 0)
+    g.glUniformMatrix4fv(loc(program, "InvViewProj"), 1, True, np.linalg.inv(projection).astype(np.float32))
+    g.glUniform3f(loc(program, "PallForward"), 0, 0, -1)
     g.glUniform1f(loc(program, "DwDiv"), 4)
+    g.glUniform4f(loc(program, "PallFroxel"), 16, 1, 256 if cloud is not None else 0, 0)
+    if cloud is not None:
+        bind(program, 11, texture(*rgba, 8, 8, cloud))
     g.glUniform1f(loc(program, "FxSee"), 0 if glass is None else 1)
+    # FxGlass has a different texture target from the volume samplers.
+    g.glUniform1i(loc(program, "FxGlass"), 16)
     if glass is not None:
-        g.glActiveTexture(g.GL_TEXTURE0 + 13)
+        g.glActiveTexture(g.GL_TEXTURE0 + 16)
         g.glBindTexture(g.GL_TEXTURE_2D, glass)
-        g.glUniform1i(loc(program, "FxGlass"), 13)
         g.glClearColor(0.8, 0.8, 0.8, 1.0)
         g.glClear(g.GL_COLOR_BUFFER_BIT)
         g.glEnable(g.GL_BLEND)
         g.glBlendFuncSeparate(g.GL_ONE, g.GL_SRC_ALPHA, g.GL_ZERO, g.GL_ONE)
     quad(program)
     g.glDisable(g.GL_BLEND)
-    return read(size, size).copy()
+    return read(output, output).copy()
+
+
+def slab(start, end, transmission):
+    light = np.zeros((low, low, 4), dtype=np.float32)
+    light[:, :, 3] = transmission
+    depth = np.empty_like(light)
+    depth[:] = ((1 - transmission) * start, (1 - transmission) * end, (1 - transmission) * (start + end) / 2, transmission)
+    return light, depth
 
 
 def jitter_occluder(march_program, composite_program):
@@ -107,23 +179,35 @@ def jitter_occluder(march_program, composite_program):
     check(a > 0.8 and b > 0.8 and abs(a - b) < 0.03,
           "opaque pixel remains foreground at both R2 phases")
 
+    # Jitter on a continuous slope marches to the sampled depth in both directions.
+    for depths in (10 + .25 * np.arange(size), 11 - .25 * np.arange(size)):
+        light, span = march(march_program, make_scene(depths), 1)
+        last = span[1, 0, 1] / (1.0 - light[1, 0, 3])
+        print(f"depth at lattice centre {depths[2]}, jittered depth {depths[3]}, last dusty point {last:.4f}")
+        check(abs(last - depths[3]) < .001, "a continuous surface ends the jittered ray at its own depth")
 
-def history_occluder(far=0.10):
+
+def history_occluder(far=0.10, here=20, far_depth=100, enabled=1, sparse=False):
     program = link("fx_dustwall_resolve")
     target(low, low, [rgba])
     g.glUseProgram(program)
     current = np.zeros((low, low, 4), dtype=np.float32)
     current[:, :, 3] = 0.25
+    if sparse:
+        current[1, :, 3] = 1.0
+        current[:, 1, 3] = 1.0
     current[1, 1, 3] = 1.0
     history = np.zeros_like(current)
     history[:, :, 3] = 1.0
     history[:, 2, 3] = far
-    bind(program, 0, texture(*rgba, low, low, current))
-    bind(program, 1, texture(*rgba, low, low, history))
+    bind(program, 0, texture(*rgba, 2 * low, low, np.tile(current, (1, 2, 1))))
+    bounds = history.copy()
+    bounds[:, 2, :3] = (1 - far) * np.array([(here + far_depth) / 2, far_depth, far_depth])
+    bind(program, 1, texture(*rgba, 2 * low, low, np.concatenate((history, bounds), axis=1)))
     g.glTexParameteri(g.GL_TEXTURE_2D, g.GL_TEXTURE_MIN_FILTER, g.GL_LINEAR)
     g.glTexParameteri(g.GL_TEXTURE_2D, g.GL_TEXTURE_MAG_FILTER, g.GL_LINEAR)
-    bind(program, 2, make_scene(20.0))
-    bind(program, 3, make_scene(np.where(np.arange(size) < 8, 20.0, 100.0)))
+    bind(program, 2, make_scene(here))
+    bind(program, 3, make_scene(np.where(np.arange(size) < 8, here, far_depth)))
     prev = projection.copy()
     prev[0] += projection[3] * (1.96 * 2 / size)
     g.glUniformMatrix4fv(loc(program, "PrevViewProj"), 1, True, prev)
@@ -131,7 +215,7 @@ def history_occluder(far=0.10):
     g.glUniform3f(loc(program, "PallForward"), 0, 0, -1)
     g.glUniform1f(loc(program, "DwDiv"), 4)
     g.glUniform1f(loc(program, "DwPrevDiv"), 4)
-    g.glUniform4f(loc(program, "DwReproject"), 0, 0, 0, 1)
+    g.glUniform4f(loc(program, "DwReproject"), 0, 0, 0, enabled)
     g.glUniform2f(loc(program, "DwHistory"), 0.1, 10)
     g.glUniform1f(loc(program, "DwPrevScene"), 1)
     quad(program)
@@ -145,16 +229,356 @@ def history_taps():
     check(abs(dusty - clear) < 1e-4, "a history sample whose previous depth is another place contributes nothing")
 
 
+def motion_atlas(T, start, end):
+    T = np.asarray(T, dtype=np.float32)
+    light = np.zeros((low, low, 4), dtype=np.float32)
+    light[:, :, 3] = T
+    depth = np.zeros_like(light)
+    c = 1 - T
+    depth[:, :, 0], depth[:, :, 1], depth[:, :, 2], depth[:, :, 3] = c * start, c * end, c * (start + end) / 2, T
+    return np.concatenate((light, depth), axis=1)
+
+
+def motion_resolve(history_end, prev_depth=20.05, here=20.0, forward=0.05, yaw=0.0):
+    p = link("fx_dustwall_resolve")
+    target(2 * low, low, [rgba])
+    g.glUseProgram(p)
+    noise = np.where((np.add.outer(np.arange(low), np.arange(low)) % 2) == 0, 0.7, 0.5)
+    bind(p, 0, texture(*rgba, 2 * low, low, motion_atlas(noise, 0.5, here)))
+    bind(p, 1, texture(*rgba, 2 * low, low, motion_atlas(np.full((low, low), 0.4), 0.5, history_end)))
+    g.glTexParameteri(g.GL_TEXTURE_2D, g.GL_TEXTURE_MIN_FILTER, g.GL_LINEAR)
+    g.glTexParameteri(g.GL_TEXTURE_2D, g.GL_TEXTURE_MAG_FILTER, g.GL_LINEAR)
+    bind(p, 2, make_scene(here))
+    bind(p, 3, make_scene(prev_depth))
+    projection = np.array([[1, 0, 0, 0], [0, 1, 0, 0], [0, 0, -1.02, -0.2], [0, 0, -1, 0]], dtype=np.float32)
+    rotation = np.eye(4, dtype=np.float32)
+    rotation[0, 0] = rotation[2, 2] = np.cos(yaw)
+    rotation[0, 2], rotation[2, 0] = np.sin(yaw), -np.sin(yaw)
+    g.glUniformMatrix4fv(loc(p, "PrevViewProj"), 1, True, projection @ rotation)
+    g.glUniformMatrix4fv(loc(p, "InvViewProj"), 1, True, np.linalg.inv(projection).astype(np.float32))
+    g.glUniform3f(loc(p, "PallForward"), 0, 0, -1)
+    g.glUniform1f(loc(p, "DwDiv"), 4)
+    g.glUniform1f(loc(p, "DwPrevDiv"), 4)
+    # this eye minus the previous eye: moved forward (−z) by `forward`
+    g.glUniform4f(loc(p, "DwReproject"), 0, 0, -forward, 1)
+    g.glUniform2f(loc(p, "DwHistory"), 0.1, 10)
+    g.glUniform1f(loc(p, "DwPrevScene"), 1)
+    quad(p)
+    return read(2 * low, low)[1, 1, 3]
+
+
+def motion_case():
+    moving = motion_resolve(history_end=20.05)
+    control = motion_resolve(history_end=19.9)
+    # At the centre of the frame yaw changes previous view-axis depth by cos(yaw).
+    yaw = np.deg2rad(25)
+    previous = 20 * np.cos(yaw)
+    turning = motion_resolve(previous, prev_depth=previous, forward=0, yaw=yaw)
+    ceiling = motion_resolve(100, prev_depth=100)
+    print(f"Current T=0.7000, moving={moving:.4f}, control={control:.4f}, turning={turning:.4f}, new ceiling={ceiling:.4f}")
+    check(np.allclose([moving, control, turning, ceiling], [.4858, .4858, .4858, .7], atol=.001),
+          "translation and rotation preserve dust history until a new ceiling occludes it")
+
+
+def surface_rows(depths):
+    light, span = slab(.5, 100, .5)
+    # March centres are at rows 2, 6 and 10. Each ray contains dust up to its surface.
+    end = depths[2::4, None]
+    span[:, :, 1] = .5 * end
+    span[:, :, 2] = .5 * (.5 + end) / 2
+    result = composite(link("fx_pall_composite"), make_scene(depths[:, None]), (light, span))
+    return result[:, 6, 3]
+
+
+def edge_case():
+    rows = np.arange(size, dtype=np.float32)
+    plane = surface_rows(100 + .25 * rows)
+    corner = surface_rows(100 + .25 * abs(rows - 4))
+    print(f"Sloped ground T by row {np.round(plane, 4)}, convex corner T={corner[4]:.4f}")
+    check(np.allclose(plane, .5, atol=.004) and np.allclose(corner, .5, atol=.004),
+          "dust covers the sloped ground up to the frame edge and across the convex corner")
+
+
 def pane_order(composite_program):
     clear = make_scene(200, 100)
     glass = texture(*rgba, size, size, [(0.4, 0.4, 0.4, 0.5)] * (size * size))
-    dark_dust = np.zeros((low, low, 4), dtype=np.float32)
-    dark_dust[:, :, 3] = 0.25
-    red = composite(composite_program, clear, dark_dust, glass)[6, 6, 0]
-    print(f"dust completely in front of glass: red {red:.5f}, expected 0.2")
-    print("  limit   dust in front of a see-through surface is laid as if behind it (fx_dustwall_composite: a known limit)")
+    for first, last, expected in ((20, 80, .2), (120, 180, .5), (50, 150, .3)):
+        red = composite(composite_program, clear, slab(first, last, .25), glass)[6, 6, 0]
+        print(f"dust at {first}–{last}, glass at 100: red {red:.5f}, expected {expected:.2f}")
+        check(abs(red - expected) < .001, "wall and pane in depth order")
 
 
+def mixed_depth(march_program, program):
+    g.glUseProgram(march_program)
+    g.glUniform4f(loc(march_program, "DwEye"), 0, 9, 600, 10)
+    g.glUniform4f(loc(march_program, "PallYoung"), 0, 0, 0, 800)
+    g.glUniform4f(loc(march_program, "DwRing"), 450, 0, 100, 800)
+    depths = np.full((size, size), 400.0)
+    depths[:, :3] = 10
+    depths[:, 4] = 20
+    depths[:, 8] = .1
+    scene = make_scene(depths)
+    samples = march(march_program, scene, 2)
+    result = composite(program, scene, samples)[6, :, 3]
+    direct = march(march_program, make_scene(20), 2)[0][1, 1, 3]
+    far = march(march_program, make_scene(400), 2)[0][1, 1, 3]
+    print(f"post T={result[4]:.6f}, direct={direct:.6f}, terrain={far:.6f}, adjacent background={result[5]:.6f}")
+    check(direct > .999 and far < .1 and abs(result[4] - direct) < .001, "thin post between near and far taps")
+    check(result[8] > .999 and result[5] < .1, "clear hand and dusty first background pixel")
+    depths[:] = 109
+    depths[:, 4] = 100
+    result = composite(program, make_scene(depths), slab(101, 109, .25))[6, 4, 3]
+    check(result > .999, "dust nine blocks behind a foreground edge stays behind")
+    result = composite(program, make_scene(depths), slab(91, 109, .25))[6, 4, 3]
+    check(abs(result - .5) < .001, f"only the foreground half of a crossing tap contributes: T={result:.5f}")
+
+
+def fragment_program(source):
+    return namespace["compileProgram"](
+        namespace["compileShader"]((namespace["CORE"] / "fx_dustwall.vsh").read_text(), g.GL_VERTEX_SHADER),
+        namespace["compileShader"](namespace["expand"](source), g.GL_FRAGMENT_SHADER), validate=False)
+
+
+def offscreen_dust():
+    # Both the quad vertex shader and the light probe call this function for their endpoint.
+    program = fragment_program("""#version 150
+#moj_import <incoming:pall.glsl>
+#moj_import <incoming:pall_front.glsl>
+uniform vec3 Endpoint;
+uniform sampler2D Scene;
+out vec4 fragColor;
+void main() {
+    fragColor = vec4(pallThrough(Scene, normalize(Endpoint), length(Endpoint)));
+}
+""")
+    target(1, 1, [rgba])
+    g.glUseProgram(program)
+    slot = np.zeros((4, 4), dtype=np.float32)
+    slot[:, 0] = (100, 0, 0, 800)
+    slot[3, 1] = 1
+    slot[2, 2], slot[3, 2] = .25, .75  # soil and haze rows
+    g.glUniformMatrix4fv(loc(program, "PallSlot0"), 1, True, slot)
+    g.glUniformMatrix4fv(loc(program, "DwViewProj"), 1, True, projection)
+    g.glUniform3f(loc(program, "PallMin"), -100, -100, -100)
+    g.glUniform3f(loc(program, "PallMax"), 100, 100, 100)
+    g.glUniform4f(loc(program, "PallAmbient"), 0, 0, 0, 1)
+    g.glUniform1f(loc(program, "DwDiv"), 4)
+    g.glUniform1i(loc(program, "PallOpen"), 13)
+    bind(program, 0, make_scene(100))
+    g.glUniform1i(loc(program, "Scene"), 0)
+    bind(program, 5, texture(*rgba, 1, 2, [(.02, 10, 0, 0), (0, 10, 0, 0)]))
+    bind(program, 10, texture(*rgba, low * 2, low, np.concatenate(slab(1, 15, .25), axis=1)))
+    for point, visible in [((0, 0, -20), True), ((1, 0, -20), False), ((0, 0, 20), False)]:
+        g.glUniform3f(loc(program, "Endpoint"), *point)
+        values = []
+        for reach in (0, 800):
+            g.glUniform4f(loc(program, "PallYoung"), 0, 0, 0, reach)
+            quad(program)
+            values.append(read(1, 1)[0, 0, 0])
+        field, active = values
+        check(.5 < field < .8 and abs(active - (.25 if visible else field)) < .001,
+              f"light/quad at {point}: field T={field:.4f}, active T={active:.4f}")
+
+
+def ownership():
+    # Exercise the actual head and field functions across both handoffs and the ball footprint.
+    program = fragment_program("""#version 150
+#moj_import <incoming:pall.glsl>
+uniform vec4 Ring;
+uniform float Radius;
+uniform sampler2D Ground;
+out vec4 fragColor;
+void main() {
+    mat4 S = mat4(0.0), V = mat4(0.0);
+    V[0] = vec4(Radius + 10.0, 20.0, 10.0, 1.0);
+    V[2].z = 1.0;
+    V[3] = vec4(1.0);
+    vec3 p = vec3(Radius, 1.0, 0.0);
+    WallAt head = pallWallAt(Ground, S, V, vec4(0.0), vec4(0.0), p, 0.0, Ring);
+    PallAt f;
+    f.sigma = vec3(1.0, 0.375, 0.125);
+    f.slab = vec3(1.0);
+    f.column = vec3(1.0);
+    pallHandoff(f, Ring, S, p);
+    fragColor = vec4(wallShare(Ring, Radius), head.P.w, f.sigma.x, f.sigma.y + f.sigma.z);
+}
+""")
+    target(1, 1, [rgba])
+    g.glUseProgram(program)
+    g.glUniform4f(loc(program, "Ring"), 100, 200, 0, 2435.89)
+    edge = 2435.89
+    cases = [(50, 0), (150, .5), (200, 1), (edge * (1 - .5 / 127), .5), (edge, 0), (2507.38, 0)]
+    for radius, expected in cases:
+        g.glUniform1f(loc(program, "Radius"), radius)
+        quad(program)
+        wall, head, soil, other = read(1, 1)[0, 0]
+        check(np.allclose([wall, head, soil, other], [expected, 1 - expected, 1 - expected, .5], atol=2e-5),
+              f"radius {radius:.2f}: wall {wall:.5f}, head {head:.5f}, soil {soil:.5f}, haze and mist {other:.3f}")
+    g.glUniform4f(loc(program, "Ring"), 0, 1, 200, edge)
+    for radius, expected in ((160, 0), (180, .5), (200, 1), (220, 1), (240, 1)):
+        g.glUniform1f(loc(program, "Radius"), radius)
+        quad(program)
+        check(abs(read(1, 1)[0, 0, 0] - expected) < 1e-5, f"fireball footprint at {radius}")
+
+
+def foreground_volume(march_program, program):
+    g.glUseProgram(march_program)
+    g.glUniform4f(loc(march_program, "DwEye"), 0, 9, 600, 10)
+    g.glUniform4f(loc(march_program, "PallYoung"), 0, 0, 0, 800)
+    g.glUniform4f(loc(march_program, "DwRing"), 450, 0, 100, 800)
+    scene = make_scene(400)
+    samples = march(march_program, scene, 2)
+    direct = march(march_program, make_scene(30), 2)[0][1, 1, 3]
+    wall = samples[0][1, 1, 3]
+    values = []
+    controls = []
+    for light in (.2, .8):
+        cloud = np.zeros((64, 4), dtype=np.float32)
+        cloud[:, 3] = 1
+        cloud[256 ** (np.arange(1, 65) / 64) > 30] = (light, light, light, 0)
+        values.append(composite(program, scene, samples, cloud=cloud)[6, 6, 0])
+        controls.append(composite(program, scene, slab(0, 0, 1), cloud=cloud)[6, 6, 0])
+    gain = (values[1] - values[0]) / (controls[1] - controls[0])
+    print(f"cloud at 30: T to cloud={direct:.6f}, T to terrain={wall:.6f}, foreground contrast retained={gain:.6f}")
+    check(direct > .999 and wall < .1 and controls[1] - controls[0] > .1, "opaque cloud fixture spans real contrast")
+    check(abs(gain - 1) < .001 and np.allclose(values, controls, atol=.001), "wall behind an opaque foreground volume")
+    behind = np.broadcast_to((.6, .6, .6, 0), (low, low, 4))
+    dark = np.broadcast_to((0, 0, 0, 0), behind.shape)
+    gain = (composite(program, scene, samples, rays=behind)[6, 6, 0]
+            - composite(program, scene, samples, rays=dark)[6, 6, 0]) / .6
+    check(abs(gain - wall) < .01, "distant volume behind the wall takes its transmission")
+
+    # The far ray holds the outgoing colour of an opaque cap. Its actual field
+    # separates cases with the cap wholly before or wholly beyond the dust.
+    caps = np.zeros((4, 20, 4), dtype=np.float32)
+    caps[0, 1] = (0, 0, 40, 30)        # drift, end height, bounding radius
+    caps[0, 2] = (20, 20, 10, 40)      # cap height, radius, ring, upper bound
+    caps[0, 3] = (10, 10, 20, 20)      # ring section and dome
+    caps[0, 4] = (20, 2, 1, 1)         # dome height and cap extinction
+    for distance, expected in ((70, 1.0), (300, wall)):
+        caps[0, 0] = (0, -distance, -20, 1)
+        bright = composite(program, scene, samples, rays=behind, mushroom=caps)[6, 6, 0]
+        dim = composite(program, scene, samples, rays=dark, mushroom=caps)[6, 6, 0]
+        layer = composite(program, scene, samples, rays=behind, mushroom=caps, layer_frame=True)[1, 1, 0]
+        check(abs(bright - layer) < 1e-4, "layer quads and the display use the same ordered medium")
+        glass = texture(*rgba, size, size, [(.4, .4, .4, .5)] * (size * size))
+        red = [composite(program, make_scene(400, 100), slab(0, 0, 1), glass, rays=dark, mushroom=caps,
+                         young=young)[6, 6, 0] for young in (True, False)]
+        expected_red = 0 if distance < 100 else .4
+        check(np.allclose(red, expected_red, atol=.001), f"cap at {distance} through glass: wall on/off {red}")
+        gain = (bright - dim) / .6
+        check(abs(gain - expected) < .01, f"cap at {distance}: contrast {gain:.6f}, expected {expected:.6f}")
+
+    # The dark basal layer at ground zero backs the young surface. A detached cap
+    # at 70 still occludes that same surface, including when the backing is opaque.
+    base = composite(program, scene, samples, rays=dark)[6, 6, 0]
+    backed = composite(program, scene, samples, rays=dark, haze=.5)[6, 6, 0]
+    caps[0, 0] = (0, -70, -20, 1)
+    cap = composite(program, scene, samples, rays=dark, mushroom=caps, haze=.5)[6, 6, 0]
+    check(base > .05 and abs(base - backed) < .001, f"wall over its opaque basal layer: {backed:.5f} vs {base:.5f}")
+    check(cap < .001, f"opaque cap in front of wall and basal layer: {cap:.5f}")
+
+    # The soil supplied by this wall backs it. Dust from another burst and
+    # the exposed core of the stem stay in front.
+    stem = caps.copy()
+    stem[0, 4, 1] = 0                  # no cap
+    stem[0, 6] = (80, 15, 0, 0)        # stem height, radius, flare, core optical depth
+    stem[0, 10, 2] = 40                # cap bottom
+    stem[0, 11, 3] = 65                # inflow merge height
+    stem[0, 19] = (15, 2, 1, 80)       # layer height, density, carried share, rise
+    for origin, core, expected in (((0, -70), 0, base), ((100, 0), 0, 0), ((0, -70), 20, 0)):
+        stem[0, 6, 3] = core
+        shown = composite(program, scene, samples, rays=dark, mushroom=stem, haze=.5, ground_origin=origin)[6, 6, 0]
+        check(abs(shown - expected) < .001,
+              f"stem inflow at (0, -70), ground at {origin}, core depth {core}: {shown:.5f} vs {expected:.5f}")
+
+    # A smoke grid in front retains its measured near-volume light even over
+    # the same burst's dusty ground. Moving the cloud behind the wall exposes it.
+    for span, expected in (((22, 38), 0.0), ((280, 300), base)):
+        shown = composite(program, scene, samples, rays=dark, haze=.5, smoke_span=span)[6, 6, 0]
+        check(abs(shown - expected) < .001, f"smoke at {span} over the basal layer: {shown:.5f} vs {expected:.5f}")
+
+    # At a height of 20 the core is above a 15-block source layer. Raising
+    # that same layer embeds the core. A detached cap still covers either.
+    stem[0, 19, 0] = 50
+    embedded = composite(program, scene, samples, rays=dark, mushroom=stem,
+                         haze=.5, ground_origin=(0, -70))[6, 6, 0]
+    check(abs(embedded - base) < .001, f"submerged stem core: wall red {embedded:.5f} vs {base:.5f}")
+
+    # Adjacent wall rays cross in front of and behind the buried core. Wall
+    # light and coverage are constant, so any row edge comes from ordering.
+    light, depths = slab(140, 180, .25)
+    light[:, :, :3] = .25
+    depths[0] = slab(10, 30, .25)[1][0]
+    image = composite(program, scene, (light, depths), rays=dark, mushroom=stem,
+                      haze=.5, ground_origin=(0, -70))
+    rows = 255 * image[:, :, 0].mean(axis=1)
+    step = np.abs(np.diff(rows)).max()
+    check(step < 1, f"buried core across the wall crest: maximum row step {step:.3f} / 255")
+
+
+def crossing_volume(program):
+    # A narrow, opaque slice moves along a black 100-block wall. Its outgoing
+    # light reaches the eye through the part of the wall between it and the eye.
+    scene = make_scene(400)
+    samples = slab(100, 200, .25)
+    rays = np.broadcast_to((.6, .6, .6, 0), (low, low, 4))
+    for z in (95, 100, 110, 125, 150, 175, 190, 200):
+        thickness = 8
+        shown = composite(program, scene, samples, rays=rays, smoke_span=(z, z + thickness))[6, 6, 0]
+        # The grid density is one per block. Integrate the two media together
+        # on a fine CPU grid, including the zero-extinction regions at each end.
+        dz = .01
+        positions = z + (np.arange(thickness / dz) + .5) * dz
+        wall_t = .25 ** np.clip((positions - 100) / 100, 0, 1)
+        expected = .6 * np.sum(np.exp(-(positions - z)) * wall_t * dz)
+        # Rays include the fully opaque remainder behind the smoke slice.
+        expected += .6 * np.exp(-thickness) * .25
+        check(abs(shown - expected) < .004,
+              f"smoke crossing wall at {z}: red {shown:.5f}, integrated {expected:.5f}")
+
+    # Both opaque volumes occupy the same narrow depth band. They can only
+    # hide dust behind that band, including when they overlap each other.
+    cap = np.zeros((4, 20, 4), dtype=np.float32)
+    cap[0, 1] = (0, 0, 5, 3)
+    cap[0, 2] = (2, 2, 1, 5)
+    cap[0, 3] = (1, 1, 2, 2)
+    cap[0, 4] = (2, 20, 1, 1)
+    for z in (115, 150, 185):
+        cap[0, 0] = (0, -z, -2, 1)
+        near = .6 * .25 ** ((z - 3 - 100) / 100)
+        far = .6 * .25 ** ((z + 3 - 100) / 100)
+        for smoke in (None, (z - 2, z + 2)):
+            red = composite(program, scene, samples, rays=rays, mushroom=cap, smoke_span=smoke)[6, 6, 0]
+            check(far <= red <= near, f"cap at {z}, smoke {smoke}: {far:.5f} <= {red:.5f} <= {near:.5f}")
+
+    # The pane truncates both the wall and the interval in which smoke covers
+    # it. Smoke beyond the pane cannot obscure the pane's own light.
+    glass = texture(*rgba, size, size, [(.4, .4, .4, .5)] * (size * size))
+    for z in (120, 155):
+        red = composite(program, make_scene(400, 150), samples, glass, rays=rays,
+                        smoke_span=(z, z + 8))[6, 6, 0]
+        smoke = composite(program, scene, samples, rays=rays, smoke_span=(z, z + 8))[6, 6, 0]
+        expected = smoke if z < 150 else .5 * smoke + .4 * .5
+        check(abs(red - expected) < .002, f"crossing smoke at {z}, pane at 150: {red:.5f} vs {expected:.5f}")
+
+
+def froxel_split(program):
+    # The entry at 400 is beyond the froxel boundary at 256. Both endpoints
+    # lie in the fully owned annulus, but the ray crosses its hole at 190.
+    # The red-channel references use the separate near and far midpoint grids.
+    scene = make_scene(700)
+    samples = slab(400, 520, .45)
+    samples[0][:, :, :3] = .20
+    rays = np.broadcast_to((.25, .15, .07, .20), (low, low, 4))
+    for near, full, hole in ((None, .459109, .362131),
+                             ((.2, .08, .05, .68), .564671, .554769),
+                             ((.1, .1, .1, 1), .520762, .490396)):
+        cloud = None if near is None else np.broadcast_to(near, (64, 4))
+        for ring, expected in (((0, 0, 0, 800), full), ((45, 95, 0, 800), hole)):
+            red = composite(program, scene, samples, rays=rays, haze=.006, ground_origin=(0, -190),
+                            ring=ring, cloud=cloud)[6, 6, 0]
+            check(abs(red - expected) < 1e-5, f"wall entry beyond near volume {near}, ring {ring}: red {red:.6f}")
 
 
 def terrain_occluder(march_program):
@@ -162,6 +586,7 @@ def terrain_occluder(march_program):
     # and the only dust is on the far side in the valley behind it.
     g.glUseProgram(march_program)
     g.glUniform4f(loc(march_program, "DwEye"), 0, 12, 0, 10)
+    g.glUniform4f(loc(march_program, "PallYoung"), 0, 0, 0, 1400)
     g.glUniform4f(loc(march_program, "DwRing"), 1400, 900, 100, 1400)
     g.glUniform2f(loc(march_program, "DwRelief"), 0, 32)
     slot = np.zeros((4, 4), dtype=np.float32)
@@ -173,8 +598,8 @@ def terrain_occluder(march_program):
     bind(march_program, 3, texture(*rgba, 1, 16, relief))
     g.glTexParameteri(g.GL_TEXTURE_2D, g.GL_TEXTURE_MIN_FILTER, g.GL_LINEAR)
     g.glTexParameteri(g.GL_TEXTURE_2D, g.GL_TEXTURE_MAG_FILTER, g.GL_LINEAR)
-    absent = march(march_program, make_scene(1e9), 2)[1, 1, 3]
-    drawn = march(march_program, make_scene(575), 2)[1, 1, 3]
+    absent = march(march_program, make_scene(1e9), 2)[0][1, 1, 3]
+    drawn = march(march_program, make_scene(575), 2)[0][1, 1, 3]
     # Reset inputs for the other cases.
     g.glUniform4f(loc(march_program, "PallGround0"), 0, 0, 0, 0)
     g.glUniform2f(loc(march_program, "DwRelief"), 0, 0)
@@ -185,6 +610,7 @@ def terrain_occluder(march_program):
 def weather_haze(march_program, composite_program):
     g.glUseProgram(march_program)
     g.glUniform4f(loc(march_program, "DwEye"), 0, 9, 0, 10)
+    g.glUniform4f(loc(march_program, "PallYoung"), 0, 0, 0, 3500)
     g.glUniform4f(loc(march_program, "DwRing"), 3500, 2500, 100, 3500)
     g.glUniform3f(loc(march_program, "DwSkyLight"), 0.2, 0.2, 0.2)
     g.glUniform4f(loc(march_program, "PallAir"), 0, 0, 3.912 / 1000, 1 / 1200)
@@ -203,19 +629,16 @@ def weather_haze(march_program, composite_program):
 
 # review round 4 (#724): one depth rule across the passes, the relief only where the scene has no depth, bright fog
 def history_cases():
-    source = inspect.getsource(history_occluder)
-    source = source.replace("def history_occluder(far=0.10):", "def resolve_variant(far=0.10, far_depth=109, enabled=1):")
-    source = source.replace("current[:, :, 3] = 0.25", "current[::2, ::2, 3] = 0.25\n    current[1, :, 3] = 1.0\n    current[::2, 1, 3] = 1.0")
-    source = source.replace("make_scene(20.0)", "make_scene(100.0)").replace("20.0, 100.0", "100.0, far_depth")
-    source = source.replace('"DwReproject"), 0, 0, 0, 1', '"DwReproject"), 0, 0, 0, enabled')
-    adapted = globals().copy()
-    exec(source, adapted)
-    resolve = adapted["resolve_variant"]
+    def resolve(far=0.10, far_depth=109, enabled=1):
+        return history_occluder(far, 100, far_depth, enabled, sparse=True)
+
     shipped = history_occluder(1.0)
     dusty = resolve()
     clear = resolve(far=1.0)
     incompatible = resolve(far_depth=120)
     current = resolve(enabled=0)
+    close = resolve(far_depth=102)
+    check(abs(close - clear) < 1e-4, f"history dust behind a surface in the same depth class: T={close:.5f}, expected {clear:.5f}")
     print(f"R3 fixture with all history clear: T={shipped:.5f} (current T=1)")
     print(f"100-block surface, history taps at 109: T={dusty:.5f}, clear far taps T={clear:.5f}, "
           f"rejected 120-block taps T={incompatible:.5f}, current only T={current:.5f}")
@@ -243,27 +666,29 @@ def relief_cases():
     g.glUniform4f(loc(program, "DwEye"), 0, 9, 0, 10)
     bind_relief(program, 0, 9, {8: 32, -8: 32})
     # The near coarse cells describe nearby roofs. Scene depth describes the actual ray through a street/opening.
-    coarse = march(program, make_scene(180), 2)[1, 1, 3]
+    coarse = march(program, make_scene(180), 2)[0][1, 1, 3]
     bind_relief(program, 0, 9, {})
-    open_street = march(program, make_scene(180), 2)[1, 1, 3]
+    open_street = march(program, make_scene(180), 2)[0][1, 1, 3]
     print(f"drawn opening along a street, depth 180: coarse nearby roofs T={coarse:.5f}, open-ray T={open_street:.5f}")
     check(abs(coarse - open_street) < 0.01, "coarse map cannot stop a ray inside the drawn world")
 
     # Eye outside the ring. The ridge is past the drawn chunks but before the first possible dust.
     g.glUniform4f(loc(program, "DwEye"), 0, 9, 1000, 10)
+    g.glUniform4f(loc(program, "PallYoung"), 0, 0, 0, 800)
     g.glUniform4f(loc(program, "DwRing"), 450, 0, 100, 800)
     bind_relief(program, 1000, 9, {584: 32, 600: 32, 616: 32})
-    sky = march(program, make_scene(1e9), 2)[1, 1, 3]
-    depth = march(program, make_scene(380), 2)[1, 1, 3]
+    sky = march(program, make_scene(1e9), 2)[0][1, 1, 3]
+    depth = march(program, make_scene(380), 2)[0][1, 1, 3]
     print(f"eye outside ring, ridge at ~400, first dust after 548: sky depth T={sky:.5f}, drawn ridge T={depth:.5f}")
     check(abs(sky - depth) < 0.01, "relief in front of the dust span still hides it")
 
 
 def bright_air():
     mp = march_setup()
-    comp = link("fx_dustwall_composite")
+    comp = link("fx_pall_composite")
     g.glUseProgram(mp)
     g.glUniform4f(loc(mp, "DwEye"), 0, 9, 0, 10)
+    g.glUniform4f(loc(mp, "PallYoung"), 0, 0, 0, 3500)
     g.glUniform4f(loc(mp, "DwRing"), 3500, 2500, 100, 3500)
     g.glUniform3f(loc(mp, "DwSkyLight"), 0.2, 0.2, 0.2)
     g.glUniform4f(loc(mp, "PallAir"), 0, 0, 3.912 / 1000, 1 / 1200)
@@ -284,10 +709,18 @@ def bright_air():
 
 def main():
     context()
-    composite_program = link("fx_dustwall_composite")
+    composite_program = link("fx_pall_composite")
     cases = {
+        "ownership": ownership,
+        "offscreen": offscreen_dust,
+        "post": lambda: mixed_depth(march_setup(), composite_program),
+        "crossing": lambda: crossing_volume(composite_program),
+        "split": lambda: froxel_split(composite_program),
+        "volume": lambda: foreground_volume(march_setup(), composite_program),
         "jitter": lambda: jitter_occluder(march_setup(), composite_program),
         "history": history_taps,
+        "motion": motion_case,
+        "edge": edge_case,
         "pane": lambda: pane_order(composite_program),
         "terrain": lambda: terrain_occluder(march_setup()),
         "weather": lambda: weather_haze(march_setup(), composite_program),

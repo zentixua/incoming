@@ -30,6 +30,26 @@ uniform sampler3D PallOpen;
 uniform vec4 PallOpenAt;
 uniform vec3 PallOpenWrap;
 
+#moj_import <incoming:wall_layer.glsl>
+uniform mat4 DwViewProj;
+uniform float DwDiv;
+uniform vec4 PallYoung;
+
+float youngThrough(sampler2D scene, vec3 p, out vec4 ring) {
+    // Outside the atlas the field and head still supply all the extinction.
+    ring = vec4(0.0);
+    if (PallYoung.w <= 0.0) return 1.0;
+    vec4 clip = DwViewProj * vec4(p, 1.0);
+    if (clip.w <= 0.0) return 1.0;
+    vec2 uv = clip.xy / clip.w * 0.5 + 0.5;
+    if (any(lessThan(uv, vec2(0.0))) || any(greaterThanEqual(uv, vec2(1.0)))) return 1.0;
+    ring = PallYoung;
+    ivec2 size = textureSize(scene, 0);
+    vec2 pixel = uv * vec2(size);
+    float here = pallScene(texelFetch(scene, ivec2(pixel), 0).r);
+    return wallTo(wallLayer(Sampler10, scene, pixel, here, DwDiv), clip.w).a;
+}
+
 // outdoor-air share at p (pall.glsl: pallOpen), outside-window terrain from first available slot map
 float pallOpenHere(vec3 p) {
     if (PallSlot0[1].w > 0.5) return pallOpen(PallOpen, PallOpenAt, PallOpenWrap, Sampler9, PallSlot0, PallGround0, p);
@@ -37,14 +57,14 @@ float pallOpenHere(vec3 p) {
 }
 
 // Slot wall head before point on [t0, t1]: transmitted share per ray span (pallWallSpans)
-float pallWallThrough(sampler2D ground, mat4 S, mat4 V, vec4 G, vec4 W, vec3 dir, float t0, float t1) {
+float pallWallThrough(sampler2D ground, mat4 S, mat4 V, vec4 G, vec4 W, vec3 dir, float t0, float t1, vec4 ring) {
     vec4 spans = pallWallSpans(S, V, G, dir, t0, t1);
     float through = 1.0;
     for (int k = 0; k < 2; k++) {
         vec2 sp = k == 0 ? spans.xy : spans.zw;
         if (sp.y <= sp.x) continue;
         // wall head is also outdoor-air matter (as in pall ray, fx_pall: pallStep)
-        float tau = pallWallTau(ground, S, V, G, W, dir, sp.x, sp.y, 4) * pallOpenHere(dir * (0.5 * (sp.x + sp.y)));
+        float tau = pallWallTau(ground, S, V, G, W, dir, sp.x, sp.y, 4, ring) * pallOpenHere(dir * (0.5 * (sp.x + sp.y)));
         through *= exp(-tau);
     }
     return through;
@@ -59,18 +79,21 @@ float pallWilsonThrough(mat4 S, vec4 L, vec3 dir, float end) {
 // Pall transmittance between eye and point dir·len (without mushrooms): six noiseless-field steps (noise mean
 // equals field); wall head/Wilson cloud over own ray spans. Real transmittance: haze in front of pall shows the air's own
 // light in the pall frame (fx_pall: passMatter), it never makes the pall transparent to what lies behind it.
-float pallThrough(vec3 dir, float len) {
+float pallThrough(sampler2D scene, vec3 dir, float len) {
     if (PallAmbient.w < 0.5) return 1.0;
     vec2 span = pallBox(dir, PallMin, PallMax);
     float t0 = span.x, t1 = min(span.y, len);
-    if (t1 <= t0) return 1.0;
-    float through = 1.0, ds = (t1 - t0) / 6.0;
+    vec4 ring;
+    float through = youngThrough(scene, dir * len, ring);
+    if (t1 <= t0) return through;
+    float ds = (t1 - t0) / 6.0;
     for (int i = 0; i < 6; i++) {
         float t = t0 + (float(i) + 0.5) * ds, tau = 0.0;
         vec3 q = dir * t;
         // full depth of all matter, like volume ray (mist also attenuates what lies behind)
         if (PallSlot0[1].w > 0.5) {
             PallAt f = pallField(Sampler5, Sampler9, PallSlot0, PallGround0, PallWater0, q, pallRelief(Sampler9, PallSlot0, PallGround0, q.xz), 1.0);
+            pallHandoff(f, ring, PallSlot0, q);
             tau += (f.sigma.x + f.sigma.y + f.sigma.z) * ds;
         }
         if (PallSlot1[1].w > 0.5) {
@@ -79,7 +102,7 @@ float pallThrough(vec3 dir, float len) {
         }
         through *= exp(-tau * pallOpenHere(q));
     }
-    return through * pallWallThrough(Sampler9, PallSlot0, PallWall0, PallGround0, PallWater0, dir, t0, t1)
-            * pallWallThrough(Sampler10, PallSlot1, PallWall1, PallGround1, PallWater1, dir, t0, t1)
+    return through * pallWallThrough(Sampler9, PallSlot0, PallWall0, PallGround0, PallWater0, dir, t0, t1, ring)
+            * pallWallThrough(Sampler10, PallSlot1, PallWall1, PallGround1, PallWater1, dir, t0, t1, vec4(0.0))
             * pallWilsonThrough(PallSlot0, PallWilson0, dir, t1) * pallWilsonThrough(PallSlot1, PallWilson1, dir, t1);
 }

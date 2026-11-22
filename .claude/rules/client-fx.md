@@ -50,7 +50,7 @@ paths:
   decal and the half-resolution upsampler key on g (its reduction keeps one frame pixel's pair). Exact compositing:
   `SeeThroughGlslTest`. Readers of the surface's distance use g of the distance texture they already sample: the pall
   composite is at 16 samplers, the minimum a GL implementation must allow. Limits: smoke between two separate panes takes
-  both tints, a mushroom between the eye and a window counts as behind it, two coplanar panes mix across half a
+  both tints, mushroom extinction at the pane uses its mean field, two coplanar panes mix across half a
   half-resolution pixel, an opaque vanilla particle behind a pane hides the layer at the pane, a vanilla particle drawn
   after translucent terrain in front of a pane is looked through with the pane's tint, beyond the near volume (256 m) the
   pall split shares the rays' light by extinction (dark smoke in front of a far pane with lit smoke behind it: 0.25
@@ -74,7 +74,8 @@ paths:
   view also stages in-place program replacements detected by shader instance and GL ID. Secondary views reuse
   the shared programs with their own targets and histories. The completion log follows the primary GPU drain.
   Dust OFF prepares only the mushroom and pall programs. With dust enabled, the lattice and wall targets are ready
-  before handoff. Terrain and fire maps upload when a real frame supplies them.
+  before handoff. The march writes two RGBA16F attachments. The pack and both history targets are twice the march width.
+  The shared composite warms the unblended layer target and blended display in separate loading frames. Terrain and fire maps upload when a real frame supplies them.
   Verify first use in a fresh process with the driver cache disabled. A second detonation uses compiled programs;
   a one-pixel dummy pass with placeholder textures misses first-use specialization on the real targets.
   See `NuclearVolumeBudgetTest` and `tools/nuclear_volume_warmup_gl.py`.
@@ -787,7 +788,7 @@ paths:
   Detail also keeps a budget per setting (`PallPass.Quality.budget`: LOW 7, MEDIUM 15, HIGH 24 ms on the GPU,
   `PallPass.Detail`): if the half-second average is longer for two windows in a row (one window over 1.25 budgets is
   enough), it drops to a step of `PallPass.LADDER` estimated to fit; it goes up a step if the estimate for that step is at
-  most 0.9 of the budget for two windows in a row and 3 s after the last change. Estimates scale pall rays and wall march by their respective samples per frame, and wall resolve by pixel count.
+  most 0.9 of the budget for two windows in a row and 3 s after the last change. Estimates scale pall rays and wall march by their respective samples per frame, and wall pack and resolve by pixel count.
   Composites and the other passes have fixed resolution (laptop 08.11: 5–9 ms of HIGH's 18). Scaling the whole time, plus a drop on a single window 0.04 ms over, kept
   MEDIUM at the floor and HIGH two steps down for over a minute at the cost of their own step
   (`PallDetailTest.oneWindowOverBudgetKeepsTheRung`, `fixedPassesDoNotKeepDetailDown`). It is never above the setting and
@@ -795,7 +796,7 @@ paths:
   still view. The budget calibration uses pall-only GPU times on the RTX 4060 Laptop at 2560×1600 in a 150 kt
   firestorm (LOW ≤ 6.1, MEDIUM ≤ 12.5, HIGH ≤ 19.2 ms looking up). Measure combined load during the passage
   with adaptive detail enabled. The INFO line records each rung transition and its window mean. The timing
-  summary includes separate wall march, resolve and composite intervals. On a divisor change the wall resolves
+  summary includes separate wall march, pack and resolve intervals followed by the shared composites. On a divisor change the wall resolves
   against the last image on its original sample lattice, then reuses that storage for the next output.
   Near volume (froxels, the standard fog-the-camera-stands-in method: Wronski AC4 2014, Frostbite): the pall nearer than
   `VOLUME_FAR` 256 blocks along the view axis is a screen-aligned volume of 64 exponential slices, each slice a tile of a
@@ -923,7 +924,8 @@ paths:
   when the pass can draw it: all three programs ready, primary view, one detonation in the slots, no water under the
   pall (spray and surge stay the pall's), lofted dust left in the young ring. The dust lies on the pall's terrain map
   (`pallRelief`) and never indoors (`pallOpen`), none under the fireball's ground footprint (the pall keeps its own dust
-  there, `PallYoung.z`). Where the scene has no depth the ray ends on the relief traced from the eye (`pallFloor`, as the
+  there, fading across the inner 40 blocks of the footprint's rim, `PallYoung.z`). The last table spacing fades back to the pall head. One radial share in
+  `wall_ownership.glsl` governs the wall, lofted soil, head and the corresponding part of the eye ray limit. Where the scene has no depth the ray ends on the relief traced from the eye (`pallFloor`, as the
   pall's); where the world is drawn its depth alone ends it. The march, resolve and composite judge "the same place" by one
   rule (`pallSamePlace`: a looser rule in one pass let dust from behind a foreground edge through another). The frame air
   (haze, weather) lies in front of the dust as for the pall (`pallAir`, `pallAirLightOf`). Flicker is fixed in time,
@@ -933,8 +935,18 @@ paths:
   each history sample checked against the previous depth, clamped to the depth-alike 3 × 3 neighbourhood with the pixel's
   own sample, restarted on another detonation, a clock jump or a view resize); a
   fixed offset sparkles along the far top where 9–18 m steps cross the moving billowed surface. Light paths see the large shapes only: a shadow tap
-  reading the fine texture or the head's front-riding lumps re-shaded the approaching face every frame. The composite keeps
-  thin foreground and the hand its taps missed and lays dust behind a see-through pane through it. Cost at HIGH
+  reading the fine texture or the head's front-riding lumps re-shaded the approaching face every frame. The march records its occupied view depths and opacity-weighted distance. The pall composite reconstructs the foreground to the first occupied depth. Inside the interval each
+  visible smoke or mushroom sample obscures the share of wall opacity behind it. A pane truncates both the wall
+  and the integration interval. Before the inner handoff starts, the wall owns soil to the centre outside the fireball footprint.
+  Its ground haze and lifted soil back its rolling surface. The
+  stem core contributes foreground extinction in proportion to the part visible through its source soil column
+  (`pallColumn` at the sample height). An exposed core, a detached cap and other mushrooms keep their extinction.
+  The `volume` and `crossing` cases in `tools/dust_wall_contract_gl.py` isolate the crest and pane from texture noise.
+  As for a pane, the far field assigns light in proportion to extinction: dark smoke in front of the
+  wall can receive some light from a bright mushroom behind it. Quads and source probes use the atlas on screen and
+  the full dust field outside it. Each tap contributes only its dust in front of the pixel's depth, including where
+  one continuous surface crosses several depth samples. In RGBA16F, one transmission step changes reconstructed depth
+  by about 5% at 1% opacity and 1% at 5% opacity. Cost at HIGH
   (1/4 resolution, 128 steps, 2560×1600, RTX 4060): ~1–2 ms approaching, ~5–7 ms after the passage; the ray bound must stay
   under a 120 m camera, or every near-eye ray marches fine steps through empty air. Shader checks without a
   game: `tools/dust_wall_gl.py`.

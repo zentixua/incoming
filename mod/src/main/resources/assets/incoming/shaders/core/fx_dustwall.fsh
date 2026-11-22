@@ -58,6 +58,7 @@ uniform float DwDiv;
 // frame counter (wraps), and the march's step cap
 uniform vec2 DwFrame;
 out vec4 fragColor;
+out vec4 wallDepth;
 
 void main() {
     ivec2 size = textureSize(Sampler1, 0);
@@ -69,11 +70,14 @@ void main() {
     // ... within the centre's depth class: the resolve and composite classify the sample by the centre's depth (an offset
     // across a foreground edge put the background's dust onto the foreground)
     float d0 = pallScene(texelFetch(Sampler1, ivec2(centre), 0).r), d1 = pallScene(texelFetch(Sampler1, ivec2(at), 0).r);
-    if (!pallSamePlace(d0, d1)) at = centre;
+    float axis = d1;
+    if (!pallSamePlace(d0, d1)) {
+        at = centre;
+        axis = d0;
+    }
     vec2 ndc = at / vec2(size) * 2.0 - 1.0;
     vec4 farPoint = InvViewProj * vec4(ndc, 1.0, 1.0);
     vec3 dir = normalize(farPoint.xyz / farPoint.w);
-    float axis = pallScene(texelFetch(Sampler1, ivec2(at), 0).r);
     float tEnd = axis / max(dot(dir, PallForward), 1e-3);
     float jitter = fract(52.9829189 * fract(dot(floor(gl_FragCoord.xy), vec2(0.06711056, 0.00583715))) + DwFrame.x * 0.618034);
     // no world behind the pixel (beyond the drawn chunks, between LODs): the ray ends on the relief map traced from the eye,
@@ -84,4 +88,6 @@ void main() {
     vec4 side = InvViewProj * vec4(ndc + vec2(2.0 * DwDiv / float(size.x), 0.0), 1.0, 1.0);
     float foot = length(normalize(side.xyz / side.w) - dir);
     fragColor = dwMarch(dir, min(tEnd, 30000.0), jitter, foot, int(DwFrame.y));
+    float cover = 1.0 - fragColor.a;
+    wallDepth = vec4(vec3(gDwDepth.xy * cover, gDwDepth.z) * max(dot(dir, PallForward), 1e-3), fragColor.a);
 }
