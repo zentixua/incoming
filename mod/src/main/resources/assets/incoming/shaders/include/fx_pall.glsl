@@ -514,13 +514,18 @@ vec3 pallBallLight(vec4 G, vec4 H, float d) {
 // G, H slot dust-wall light (PallGlow, PallHot); dir view ray; cone smallest resolved size here (blocks)
 void slot(mat4 S, mat4 V, sampler2D ground, vec4 R, vec4 W, vec4 G, vec4 H, vec3 p, vec3 sunDir, vec3 dir, float cone, vec4 inflow, vec2 young, inout Sample s) {
     if (S[1].w < 0.5) return;
-    // the young wall is the dust-wall pass's: the pall hands over to it across [young.x, young.y]
+    // the young wall's dust is the dust-wall pass's: the pall hands its lofted dust over across [young.x, young.y]; haze of
+    // fires, mist and the stem's inflow stay the pall's
     float keep = young.y > young.x ? 1.0 - smoothstep(young.x, young.y, length(p.xz - S[0].xy)) : 1.0;
-    if (keep <= 0.0) return;
     // layer floor is local terrain (PallGround map): valley pall is still a slab, fires/ground at its bottom, not epicenter
     // ground height; no map, epicenter ground
     float floorUp = pallRelief(ground, S, R, p.xz);
     PallAt f = pallField(Sampler1, ground, S, R, W, p, floorUp, topBumps(S, p));
+    if (keep < 1.0) {
+        f.sigma.x *= keep;
+        f.column.x *= keep;
+        f.slab.x *= keep;
+    }
     // Dust lifted out of the flat layer by inflow has the same material and billows. Its light is computed here too,
     // including self-shadowing: above the old top it does not become flat gray fill.
     if (inflow.w > 0.0 && length(inflow.xz - S[0].xy) < 1.0) {
@@ -543,12 +548,7 @@ void slot(mat4 S, mat4 V, sampler2D ground, vec4 R, vec4 W, vec4 G, vec4 H, vec3
         }
     }
     WallAt head = pallWallAt(ground, S, V, R, W, p, floorUp);
-    if (keep < 1.0) {
-        f.sigma *= keep;
-        f.column *= keep;
-        f.slab *= keep;
-        head.P.w *= keep;
-    }
+    head.P.w *= keep;
     vec3 dustW = f.dustW;
     s.tau += f.column.x + f.column.y + f.column.z;
     s.slab += f.slab.x + f.slab.y + f.slab.z;

@@ -130,6 +130,12 @@ public final class DustWallPass {
         public float layerTop;
         /** The detonation this wall belongs to (history continuity). */
         public Object source;
+        /** Detonation-clock seconds in ten game ticks at its scale: a longer step between frames is a jump (replay seek). */
+        public float clockJump = 0.5f;
+        /** Ground radius of the fireball now, blocks: no dust under it. */
+        public float cut;
+        /** Sand's dust albedo and bulk colour (the pall's). */
+        public final Vector3f sandAlbedo = new Vector3f(), sandBulk = new Vector3f();
     }
 
     /**
@@ -138,6 +144,16 @@ public final class DustWallPass {
      */
     public static boolean ready() {
         return march != null && resolve != null && composite != null && !failed;
+    }
+
+    /**
+     * {@link #ready} with its targets in place at this view's size for {@code quality} (allocated here, before the pall hands
+     * the wall over: a target failing only in {@link #draw} left the frame without either wall). Render thread.
+     */
+    public static boolean prepare(PallPass.Quality quality) {
+        if (!ready()) return false;
+        Minecraft mc = Minecraft.getInstance();
+        return targets(FxViews.width(mc.getMainRenderTarget().width), FxViews.height(mc.getMainRenderTarget().height), div(quality));
     }
 
     /**
@@ -155,7 +171,7 @@ public final class DustWallPass {
         float dx = f.eye[0] - PREVIOUS_EYE[0], dy = f.eye[1] - PREVIOUS_EYE[1], dz = f.eye[2] - PREVIOUS_EYE[2];
         // the same detonation, its clock running on (not a replay seek), the eye not teleported
         float since = f.eye[3] - previousTime;
-        boolean past = HISTORY_ON && history && f.source == previousSource && since >= 0 && since < 0.5f
+        boolean past = HISTORY_ON && history && f.source == previousSource && since >= 0 && since < f.clockJump
                 && dx * dx + dy * dy + dz * dz < JUMP * JUMP;
         VIEW_PROJECTION.set(projection).mul(view);
         VIEW_PROJECTION.invert(INVERSE);
@@ -195,6 +211,9 @@ public final class DustWallPass {
             m.safeGetUniform("DwGroundLight").set(f.groundLight.x, f.groundLight.y, f.groundLight.z);
             m.safeGetUniform("DwAlbedo").set(f.albedo.x, f.albedo.y, f.albedo.z);
             m.safeGetUniform("DwBulk").set(f.bulk.x, f.bulk.y, f.bulk.z);
+            m.safeGetUniform("DwSandAlbedo").set(f.sandAlbedo.x, f.sandAlbedo.y, f.sandAlbedo.z);
+            m.safeGetUniform("DwSandBulk").set(f.sandBulk.x, f.sandBulk.y, f.sandBulk.z);
+            m.safeGetUniform("DwCut").set(f.cut);
             m.safeGetUniform("DwWind").set(f.windX, f.windZ, 0f, 0f);
             fullScreen(m, () -> Uniform.uploadInteger(Uniform.glGetUniformLocation(m.getId(), "DwNoise"), NOISE_UNIT), true);
             // averaged over frames at the same resolution into the other history target
@@ -204,6 +223,10 @@ public final class DustWallPass {
                 RenderSystem.setShaderTexture(0, target);
                 RenderSystem.setShaderTexture(1, HISTORY_TEX[latest]);
                 RenderSystem.setShaderTexture(2, scene);
+                // the previous frame's world distances: history only where it saw the same place
+                int before = SceneDepth.previous();
+                RenderSystem.setShaderTexture(3, before >= 0 ? before : scene);
+                r.safeGetUniform("DwPrevScene").set(before >= 0 ? 1f : 0f);
                 r.safeGetUniform("InvViewProj").set(INVERSE);
                 r.safeGetUniform("PrevViewProj").set(PREVIOUS);
                 r.safeGetUniform("PallForward").set(FORWARD.x, FORWARD.y, FORWARD.z);

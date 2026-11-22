@@ -404,8 +404,11 @@ shot() {
     # the take itself shrinks the window and frame limit (Sandbox.quiet): nobody looks at its frames
     local take from=0
     mkdir -p "$FX/out"
-    take=$(basename "$(mktemp -d "$FX/out/.wav-$name-XXXXXX")") || exit 1
-    [ "$at" != none ] && awk -v f="${at%%,*}" 'BEGIN { exit !(f < 0) }' && from=${at%%,*}
+    # (a name the client's `shots` accepts: letters, digits, _ . -, not starting with a dot)
+    take=$(basename "$(mktemp -d "$FX/out/_wav-$name-XXXXXX")") || exit 1
+    # the first frame's second without its time of day (`-0.5@12500`)
+    local first=${at%%,*}; first=${first%%@*}
+    [ "$at" != none ] && awk -v f="$first" 'BEGIN { exit !(f < 0) }' && from=$first
     if [ "$at" != none ]; then
       fx "shots $name $at 0" || exit 1
       FX_LIMIT=$limit fx "$effect" || exit 1

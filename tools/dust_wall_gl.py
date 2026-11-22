@@ -7,9 +7,11 @@
 
 Links fx_dustwall, fx_dustwall_resolve and fx_dustwall_composite and checks (exit 1 on a failure): the composite keeps a
 thin foreground and the first-person hand its low-resolution taps missed, and lays dust behind a see-through pane through
-it; the resolve drops history at a new occluder, with no history, and reads the previous frame on the march lattice when
-the frame width is not a multiple of the divisor; the march stops at the world behind the pixel, a straight-down ray sees
-the layer as a slightly tilted one does, and the layer lies on the local ground (a valley). Optional arguments: a Java 21
+it, and lays no dust from behind a foreground surface; the resolve drops history at a new occluder, behind a ceiling that
+moved in, with no history, and reads the previous frame on the march lattice when the frame width is not a multiple of the
+divisor (its last column too); the march stops at the world behind the pixel, a straight-down ray sees the layer as a
+slightly tilted one does, the layer lies on the local ground (a valley), a ray over rising ground does not skip it, and no
+dust lies inside the fireball's ground footprint. Optional arguments: a Java 21
 executable and the Veil parser classpath to link the programs after Veil's parse and print as well (VeilPrintProbe.java
 beside this script is not shipped; ShaderSourceTest covers Veil in the build)."""
 import json
@@ -49,6 +51,13 @@ def composite_cases(p):
     result = read(w, h)
     check(result[4, 4, 3] > 0.999, f"opaque foreground missed by low-res taps: T={result[4, 4, 3]:.4f}, expected 1")
     check(result[4, 5, 3] > 0.999, f"Iris hand missed by low-res taps: T={result[4, 5, 3]:.4f}, expected 1")
+    # a foreground surface 100 blocks away, every tap behind it at 109 (dust in those 9 blocks): not laid over it
+    depth = [109.0] * (w * h)
+    depth[4 * w + 4] = 100.0
+    bind(p, 1, scene(w, h, depth))
+    quad(p)
+    r100 = read(w, h)[4, 4, 3]
+    check(r100 > 0.999, f"foreground at 100 blocks, taps at 109: T={r100:.4f}, expected 1")
 
     # The r/g contract describes a pane one block away, with the dust behind it.
     # Incoming's pane representation is X + Tpane*background, here .4 + .5*.8.
@@ -69,7 +78,7 @@ def composite_cases(p):
     check(abs(red - 0.5) < 1e-3, f"dust behind a pane: RGB {red:.4f}, expected X + Tpane*Twall*background = 0.5")
 
 
-def resolve(p, w, h, current, past, depths, history=1):
+def resolve(p, w, h, current, past, depths, history=1, before=None):
     size = ((w + 3) // 4, (h + 3) // 4)
     target(*size, [(g.GL_RGBA32F, g.GL_RGBA)])
     g.glUseProgram(p)
@@ -85,6 +94,9 @@ def resolve(p, w, h, current, past, depths, history=1):
     g.glUniform1f(loc(p, "DwDiv"), 4)
     g.glUniform4f(loc(p, "DwReproject"), 0, 0, 0, history)
     g.glUniform2f(loc(p, "DwHistory"), 0.1, 10)
+    # the previous frame's world distances (SceneDepth.previous); none given: the same as now
+    bind(p, 3, scene(w, h, before if before is not None else depths))
+    g.glUniform1f(loc(p, "DwPrevScene"), 1)
     quad(p)
     return read(*size)[:, :, 3]
 
@@ -102,14 +114,23 @@ def resolve_cases(p):
     # Fixed view. Full-width 9 means centres at x=2, 6, 8.5 for a 3-column low target.
     result = resolve(p, 9, 4, [0, 0.5, 1], [0, 0.5, 1], [100.0] * 36)
     check(abs(result[0, 1] - 0.5) < 1e-5, f"stationary 9-pixel view reprojection: T={result[0, 1]:.4f}, expected 0.5")
+    check(abs(result[0, 2] - 1) < 1e-5, f"stationary 9-pixel view, last column (sample at 8.5): T={result[0, 2]:.4f}, expected 1")
+    # a ceiling moved in front of all nine samples (now 20 blocks, before 100): no dust from behind it
+    cur = [0.25] * 9
+    cur[4] = 1.0
+    result = resolve(p, 12, 12, cur, [0.25] * 9, [20.0] * 144, 1, [100.0] * 144)
+    check(result[1, 1] > 0.999, f"history behind a new ceiling: T={result[1, 1]:.4f}, expected 1")
 
 
 def march_cases():
     core, expand = gl["CORE"], gl["expand"]
     src = expand("""#version 150
 uniform float Floor;
-float dwFloorEye(vec2 xz) { return Floor; }
+uniform vec2 Shelf;
+// the ground: Floor, or Shelf.y blocks from Shelf.x blocks ahead of the eye on x (a rise)
+float dwFloorEye(vec2 xz) { return Shelf.y > 0.0 && xz.x > Shelf.x ? Shelf.y : Floor; }
 float dwOpenEye(vec3 p) { return 1.0; }
+vec2 dwSoilAt(vec2 xz) { return vec2(0.0); }
 #moj_import <incoming:dustwall.glsl>
 uniform vec3 Dir;
 uniform float End;
@@ -160,6 +181,32 @@ void main() {
     valley = march(-10, (1, 0, 0), 30, -12.0)
     check(abs(plain[3] - valley[3]) < 0.01,
           f"2 blocks above local ground: plain T={plain[3]:.4f}, 12-block valley T={valley[3]:.4f}")
+
+    # a shallow ray from 78 blocks over a valley floor reaches a 64-block shelf 32 blocks ahead, 12 blocks over it (inside
+    # the 20-block layer): the march over the valley must not skip it (the same ray started at the shelf)
+    d = np.array([1, -0.05, 0]) / np.sqrt(1.0025)
+    g.glUniform2f(loc(p, "Shelf"), 32, 64)
+    g.glUniform1f(loc(p, "Floor"), 0)
+    g.glUniform2f(loc(p, "DwRelief"), 0, 64)
+    g.glUniform4f(loc(p, "DwEye"), 100, 78, 0, 10)
+    g.glUniform3f(loc(p, "Dir"), *d)
+    g.glUniform1f(loc(p, "End"), 52)
+    quad(p)
+    full = read(1, 1)[0, 0, 3]
+    t32 = 32 / d[0]
+    g.glUniform2f(loc(p, "Shelf"), 0, 64)
+    g.glUniform4f(loc(p, "DwEye"), 132, 78 + t32 * d[1], 0, 10)
+    g.glUniform1f(loc(p, "End"), 52 - t32)
+    quad(p)
+    shelf = read(1, 1)[0, 0, 3]
+    check(shelf < 0.9 and abs(full - shelf) < 0.1, f"shallow ray over a rise: full path T={full:.4f}, from the shelf T={shelf:.4f}")
+    g.glUniform2f(loc(p, "Shelf"), 0, 0)
+    g.glUniform2f(loc(p, "DwRelief"), 0, 0)
+    # no dust where the fireball touches the ground, between table nodes too
+    g.glUniform1f(loc(p, "DwCut"), 250)
+    cut = march(2, (1, 0, 0), 20)
+    g.glUniform1f(loc(p, "DwCut"), 0)
+    check(abs(cut[3] - 1) < 1e-5, f"ray inside the fireball's ground footprint: T={cut[3]:.4f}, expected 1")
 
 
 def link_after_veil(name, java, classpath):

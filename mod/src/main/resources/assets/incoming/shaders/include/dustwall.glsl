@@ -14,7 +14,7 @@ uniform vec4 DwEye;
 // (front radius now; inner radius of the young wall: the front DW_SPAN seconds ago; envelope top, blocks; table reach)
 uniform vec4 DwRing;
 // table (DW_NODES × 1, RGBA32F): node i at radius i / (DW_NODES − 1) × reach: (front arrival, s since burst; settled layer
-// height, blocks; lofted dust extinction, 1/block; 0)
+// height, blocks; lofted dust extinction, 1/block; dust over hard ground relative to soil, PallField.paved)
 uniform sampler2D Sampler2;
 // (fireball centre from ground zero's ground point, radius)
 uniform vec4 DwBall;
@@ -25,18 +25,23 @@ uniform vec3 DwSunDir;
 uniform vec3 DwSkyLight;
 uniform vec3 DwGroundLight;
 // dust single-scattering albedo, and the colour of a thick layer of it (the soil's bulk colour: what multiply scattered
-// light takes on), the pall's dust at this soil
+// light takes on): the pall's reference soil and sand
 uniform vec3 DwAlbedo;
 uniform vec3 DwBulk;
+uniform vec3 DwSandAlbedo;
+uniform vec3 DwSandBulk;
+// ground radius of the fireball now, blocks: no dust under it (PallField.young zeroes its nodes; this cuts between them)
+uniform float DwCut;
 // (wind x, z, blocks/s; 0; 0)
 uniform vec4 DwWind;
 // lowest and highest ground of the terrain map under the wall, blocks above ground zero's ground point (0, 0: no map)
 uniform vec2 DwRelief;
 
 
-// the ground under ground point xz and the share of open air at q (both from ground zero's ground point): the pall's terrain
-// map and outdoor-air window, defined before this file by its user from eye-relative points (fx_dustwall.fsh: dwFloorEye,
-// dwOpenEye over pallRelief, pallOpen); dust lies on the local ground and never indoors
+// the ground under ground point xz, the share of open air at q (both from ground zero's ground point) and the soil there
+// (hard ground, sand: shares of the ground): the pall's terrain map and outdoor-air window, defined before this file by its
+// user (fx_dustwall.fsh: dwFloorEye, dwOpenEye over pallRelief, pallOpen from eye-relative points; dwSoilAt over pallSoil);
+// dust lies on the local ground and never indoors, and over rock, roads and roofs only debris dust rises
 float dwFloor(vec2 xz) {
     return dwFloorEye(xz - DwEye.xz);
 }
@@ -61,8 +66,12 @@ const float DW_BULGE = 0.08, DW_BILLOW = 0.1, DW_HAZE = 1.2;
 
 // pixel footprint at the sample, blocks (set by the march)
 float gDwFoot = 0.0;
-// set by dwDensity at its sample: the billowed dust surface above it and its full extinction (the light reads them)
-float gDwSurf = 0.0, gDwSigma = 0.0;
+// set by dwDensity at its sample: the billowed dust surface above it, its full extinction and its share of sand (the light
+// reads them)
+float gDwSurf = 0.0, gDwSigma = 0.0, gDwSand = 0.0;
+// set by dwDensity: the sample is in the young head (sampled twice per step: it moves across the steps at the front's speed,
+// faster than the history follows)
+bool gDwHead = false;
 
 vec4 dwNode(float r) {
     float x = clamp(r / max(DwRing.w, 1.0), 0.0, 1.0) * float(DW_NODES - 1);
@@ -183,7 +192,7 @@ float dwTopAt(vec2 xz) {
 // highest the dust can reach above the local ground at a point (blocks), below 0 where no young dust is
 float dwBound(vec3 q) {
     float r = length(q.xz);
-    if (r > DwRing.x + 2.0 || r < DwRing.y - 50.0) return -1.0;
+    if (r > DwRing.x + 2.0 || r < max(DwRing.y - 50.0, DwCut)) return -1.0;
     vec4 n0 = dwNode(r);
     float a = DwEye.w - n0.x;
     if (a < 0.0 || n0.z <= 0.0) return -1.0;
@@ -199,7 +208,7 @@ float dwDensity(vec3 g, bool coarse) {
     // heights above the local ground
     vec3 q = vec3(g.x, g.y - dwFloor(g.xz), g.z);
     float r = length(q.xz);
-    if (r > DwRing.x + 2.0 || r < DwRing.y - 50.0) return 0.0;
+    if (r > DwRing.x + 2.0 || r < max(DwRing.y - 50.0, DwCut)) return 0.0;
     vec4 n0 = dwNode(r);
     float a0 = DwEye.w - n0.x;
     if (a0 < 0.0 || n0.z <= 0.0) return 0.0;
@@ -218,7 +227,10 @@ float dwDensity(vec3 g, bool coarse) {
         vec3 hf = vec3(atan(q.z, q.x) * DwRing.x / 30.0, q.y / 22.0, (DwRing.x - r + 25.0 * DwEye.w) / 30.0);
         bf = dwBillow(hf + vec3(3.7, 0.0, 9.1), coarse ? 0.0 : 1.0 / 22.0);
     }
-    float a = DwEye.w - dwNode(r + (40.0 * yn * yn + 100.0 * max(bf - 0.3, 0.0)) * exp(-a0 / 1.5)).x;
+    // (the lumps cut the upper face only: cut to the ground they opened holes through the base that the moving front
+    // swept across the ray steps, popping from frame to frame)
+    float a = DwEye.w - dwNode(r + (40.0 * yn * yn + 70.0 * max(bf - 0.3, 0.0) * smoothstep(0.2, 0.6, yn)) * exp(-a0 / 1.5)).x;
+    if (!coarse) gDwHead = a0 < 1.5;
     if (a <= 0.0) return 0.0;
     float top = dwEnvelope(a, h, k), ph;
     vec3 pw = dwAir(q, a, r, top, ph);
@@ -246,8 +258,14 @@ float dwDensity(vec3 g, bool coarse) {
     // coarse dust falls back (the core thins over seconds, fines stay); the young head is denser
     float amt = (0.45 + 0.55 * exp(-max(a - 1.0, 0.0) / 8.0)) * (1.0 + 0.5 * exp(-a / 1.1));
     float fade = 1.0 - smoothstep(DW_SPAN - DW_FADE, DW_SPAN, a0);
-    float sigma = n0.z * amt * fade;
-    if (!coarse) sigma *= dwOpen(g);
+    // over hard ground only debris dust (the pall's own reading: PallField.paved of the soil's mass), sand pales it
+    vec2 soil = dwSoilAt(q.xz);
+    float paved = 1.0 + soil.x * (n0.w - 1.0);
+    float sigma = n0.z * amt * fade * paved;
+    if (!coarse) {
+        sigma *= dwOpen(g);
+        gDwSand = clamp(soil.y / max(paved, 1e-6), 0.0, 1.0);
+    }
     if (!coarse) gDwSigma = sigma;
     // the lowest metres thin to the ground (soft where no terrain stands under the dust)
     return sigma * smoothstep(0.0, 0.08, a) * smoothstep(0.0, 3.0, q.y) * prof * (0.5 + 1.0 * n) * (0.7 + 0.6 * fs);
@@ -285,11 +303,12 @@ vec3 dwLight(vec3 q, vec3 rd) {
     float sunUp = smoothstep(-0.05, 0.05, DwSunDir.y);
     // thin dust toward the fireball glows (forward peak: the crest's rim against the ball); the low sun lights the faces
     // turned to it
-    vec3 single = dwBallLight(q) * (0.4 * min(dwPhase(dot(rd, lb)), 10.0) * exp(-taub))
+    vec3 single = dwBallLight(q) * (0.4 * min(dwPhase(dot(rd, lb)), 6.0) * exp(-taub))
             + DwSunLight * (0.5 * min(dwPhase(dot(rd, DwSunDir)), 6.0) * exp(-taus)) * sunUp;
     vec3 multiple = dwBallLight(q) * ms * (0.45 + 0.55 * exp(-0.25 * taub)) + DwSunLight * ms * (0.45 + 0.55 * exp(-0.25 * taus)) * sunUp
             + DwSkyLight * (0.04 + 0.22 * exp(-0.3 * depth));
-    return DW_EXPOSURE * (DwAlbedo * single + DwBulk * multiple + DwBulk * DwGroundLight);
+    vec3 albedo = mix(DwAlbedo, DwSandAlbedo, gDwSand), bulk = mix(DwBulk, DwSandBulk, gDwSand);
+    return DW_EXPOSURE * (albedo * single + bulk * multiple + bulk * DwGroundLight);
 }
 
 const float DW_K = 0.0055, DW_S = 2.5;
@@ -355,9 +374,10 @@ vec4 dwMarch(vec3 rd, float tEnd, float jitter, float foot, int maxSteps) {
         float hq = q.y - dwFloor(q.xz);
         if (hq > bound) {
             if (rd.y < 0.0) {
-                // above the dust here: down to its bound, onto the next grid cell (a stride that lands in dust backs up)
+                // above the dust here: down to its bound over the highest ground of the map (rising ground ahead may lift the
+                // dust toward the ray), onto the next grid cell (a stride that lands in dust backs up)
                 kLast = k;
-                k = max(k + 1.0, ceil(dwGridK(t + (hq - bound) / -rd.y)));
+                k = max(k + 1.0, ceil(dwGridK(t + max(q.y - DwRelief.y - bound, 0.0) / -rd.y)));
                 n = 1.0;
             } else {
                 kLast = k; k += n; n = min(n * 2.0, 8.0);
@@ -365,7 +385,17 @@ vec4 dwMarch(vec3 rd, float tEnd, float jitter, float foot, int maxSteps) {
             continue;
         }
         gDwFoot = max(tt * foot, dt * 0.3);
+        gDwHead = false;
         float s = dwDensity(q, false);
+        if (gDwHead && s > 1e-5) {
+            // the young head: a second sample half a step on, averaged
+            float surf = gDwSurf, sigma = gDwSigma, sand = gDwSand;
+            float t2 = t + dt * fract(jitter + 0.5);
+            s = 0.5 * (s + dwDensity(eye + rd * t2, false));
+            gDwSurf = surf;
+            gDwSigma = sigma;
+            gDwSand = sand;
+        }
         if (s > 1e-5) {
             if (k - kLast > 1.0) {
                 // a stride landed in dust: single cells from just after the last empty sample

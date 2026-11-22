@@ -9,8 +9,9 @@
 // is to this pixel's: the wall neither bleeds over a roof edge nor leaves a gap behind it. A pixel none of whose samples
 // saw its place keeps the world: in front of all of them (a fence post, the first-person hand) the wall is behind it;
 // behind them (sky past a roof edge) the nearest samples stand in. The first-person hand keeps the world too. Behind a
-// see-through surface (Sampler1 g, FxGlass) the wall reaches the eye through it, as the pall does (see.glsl). Shown like
-// the pall (pallShown).
+// see-through surface (Sampler1 g, FxGlass) the wall reaches the eye through it, as the pall does (see.glsl); dust between
+// the eye and a far see-through surface is laid as if behind it (the march keeps no split at the surface: a known limit).
+// Shown like the pall (pallShown).
 uniform sampler2D Sampler0;
 uniform sampler2D Sampler1;
 uniform sampler2D FxGlass;
@@ -40,7 +41,8 @@ void main() {
         if (!pallValid(v)) v = vec4(0.0, 0.0, 0.0, 1.0);
         float tent = max(1.5 - abs(d.x), 0.0) * max(1.5 - abs(d.y), 0.0) + 1e-6;
         nearest = min(nearest, there);
-        if (abs(there - here) <= 0.1 * max(min(there, here), 1.0)) {
+        // the same place: within 3 % (a sample 10 % farther carried dust from behind a foreground surface)
+        if (abs(there - here) <= 0.03 * max(min(there, here), 1.0) + 0.5) {
             sum += tent * v;
             weights += tent;
         }

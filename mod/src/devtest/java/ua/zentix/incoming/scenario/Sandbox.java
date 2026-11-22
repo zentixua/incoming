@@ -1613,7 +1613,7 @@ final class Sandbox {
         if (paceLast != 0) {
             double frame = (now - paceLast) / 1e9;
             paceFrameS = paceFrameS == 0 ? frame : paceFrameS * 0.7 + frame * 0.3;
-            pace(1 / ((Boolean.TRUE.equals(soft) ? FRAMES_PER_TICK : GPU_FRAMES_PER_TICK) * paceFrameS), true);
+            pace(1 / ((Boolean.TRUE.equals(soft) ? FRAMES_PER_TICK : GPU_FRAMES_PER_TICK) * paceFrameS));
         }
         paceLast = now;
     }
@@ -1623,19 +1623,15 @@ final class Sandbox {
         return (armed != null && armed.times.length > 0) || (capture != null && capture.next < capture.times.length);
     }
 
-    private void pace(double rate) {
-        pace(rate, false);
-    }
-
     /**
-     * World rate, ticks/s (20 restores); command only on a change of more than a tenth. A rate from measured frame times
-     * applies on any renderer: a GPU take with a frame every 1/30 s writes each PNG on the render thread, and unpaced its
-     * effect runs several times ahead of the frames' seconds; preset rates (arming) only on the CPU renderer.
+     * World rate, ticks/s (20 restores); command only on a change of more than a tenth. Any renderer: a GPU take with a frame
+     * every 1/30 s writes each PNG on the render thread, and unpaced its effect runs several times ahead of the frames'
+     * seconds; the preset arming rate holds the first frames too, before a measured rate exists (at 20 ticks/s the second
+     * frame of a take whose first is due at once lands ~67 ms late).
      */
-    private void pace(double rate, boolean measured) {
+    private void pace(double rate) {
         // render thread: the GL context answers only there, and only after the window exists
         if (soft == null) soft = ua.zentix.incoming.client.fx.layer.GpuWatch.software(com.mojang.blaze3d.platform.GlUtil.getRenderer());
-        if (!soft && !measured && rate < 20) return;
         double r = Math.max(1, Math.min(20, rate));
         if (r == 20) {
             // leaving the pacing window: the next due frame measures afresh, not across the idle gap

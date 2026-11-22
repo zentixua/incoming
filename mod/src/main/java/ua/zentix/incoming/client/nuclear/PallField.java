@@ -224,7 +224,8 @@ public final class PallField {
      * since the burst), the dust layer top at age {@code settleS} model seconds, when the wall has settled (blocks; the slow
      * rise over the hot ground afterwards is the pall's), and the layer's vertical optical depth at age {@code handoffS}, where
      * the pall takes the wall over ({@link DustModel.Column#depth}; how much dust was lofted there) — none where the fireball
-     * touches the ground at {@code t} ({@link FireballModel#groundRadius}, as the pall's {@link #pallShare}). 4 numbers per node.
+     * touches the ground at {@code t} ({@link FireballModel#groundRadius}, as the pall's {@link #pallShare}) — and the dust over
+     * hard ground relative to soil ({@link #paved}). 4 numbers per node.
      */
     public void young(double t, double settleS, double handoffS, int n, float[] out) {
         double hob = Math.max(0, d.hobMetres());
@@ -235,7 +236,7 @@ public final class PallField {
             out[4 * j] = (float) (d.arrivalTicks(d.blocks(slant)) / (20.0 * d.scale()));
             out[4 * j + 1] = (float) Math.max(d.blocks(c.height(settleS)), MIN_TOP_BLOCKS);
             out[4 * j + 2] = d.metres(rb) < ball ? 0f : (float) c.depth(handoffS);
-            out[4 * j + 3] = 0;
+            out[4 * j + 3] = (float) paved[Math.min(BINS - 1, Math.max(0, (int) (rb / reach * BINS)))];
         }
     }
 

@@ -77,7 +77,7 @@ fx() {
 }
 : > "$tmp/fx.log"; mkdir -p "$FX/out/n3-wav"; echo soft > "$FX/renderer"; touch "$FX/out/n3-wav/keep.png"
 ( shot n3 'nuke 15 near' --at -0.5,1 --wav 2 --no-swap ) >/dev/null 2>&1; rc=$?
-take=$(sed -n 's/^shots \(\.wav-n3-[A-Za-z0-9]*\) none@-0.5 2$/\1/p' "$tmp/fx.log")
+take=$(sed -n 's/^shots \(_wav-n3-[A-Za-z0-9]*\) none@-0.5 2$/\1/p' "$tmp/fx.log")
 [ $rc = 0 ] && grep -qx 'shots n3 -0.5,1 0' "$tmp/fx.log" && [ -n "$take" ] && [ "$(grep -cx 'nuke 15 near' "$tmp/fx.log")" = 2 ] \
   && [ "$(grep -n -x 'clear' "$tmp/fx.log" | tail -1 | cut -d: -f1)" -lt "$(grep -n "shots $take" "$tmp/fx.log" | cut -d: -f1)" ] \
   && ok "CPU shot: frames take without sound, cleared, then a sound take from -0.5 s ($take)" || bad "CPU shot: rc $rc $(tr '\n' ';' < "$tmp/fx.log")"
@@ -101,15 +101,22 @@ grep -qx '15600 blast drone' "$tmp/limit.log" && ok "CPU shot deadline from the 
 # client), WAV and capture.json in the shot's directory on a fresh tree (no fx/out yet)
 rm -rf "$FX/out"; : > "$tmp/fx.log"
 ( shot n7 'real missile' --at none --wav 2 --no-swap ) >/dev/null 2>&1; rc=$?
-[ $rc = 0 ] && [ "$(grep -c '^shots' "$tmp/fx.log")" = 1 ] && grep -qE '^shots \.wav-n7-[A-Za-z0-9]+ none@0 2$' "$tmp/fx.log" \
+[ $rc = 0 ] && [ "$(grep -c '^shots' "$tmp/fx.log")" = 1 ] && grep -qE '^shots _wav-n7-[A-Za-z0-9]+ none@0 2$' "$tmp/fx.log" \
   && [ "$(grep -cx 'real missile' "$tmp/fx.log")" = 1 ] && ok "CPU sound-only shot: one sound take, no frame take" || bad "CPU sound-only shot: rc $rc $(tr '\n' ';' < "$tmp/fx.log")"
 python3 -c 'import json,sys,wave; w=wave.open(sys.argv[1]); a=json.load(open(sys.argv[2])); sys.exit(0 if abs(w.getnframes()/w.getframerate()-2)<0.01 and a["frames"]==[] and a["audio"]["seconds"]==2 else 1)' \
   "$FX/out/n7/n7.wav" "$FX/out/n7/capture.json" 2>/dev/null && ok "CPU sound-only shot: WAV and capture.json" || bad "CPU sound-only shot output: $(ls "$FX/out" "$FX/out/n7" 2>&1 | tr '\n' ' ')"
 : > "$tmp/fx.log"; echo gpu > "$FX/renderer"
 # GPU frames are paced too (Sandbox.paceFrame): frames and sound in separate takes, as on a CPU renderer
 ( shot n4 'blast drone' --at 0.5 --wav 2 --no-swap ) >/dev/null 2>&1
-grep -qx 'shots n4 0.5 0' "$tmp/fx.log" && [ "$(grep -cE '^shots \.wav-n4-[A-Za-z0-9]+ none@0 2$' "$tmp/fx.log")" = 1 ] \
+grep -qx 'shots n4 0.5 0' "$tmp/fx.log" && [ "$(grep -cE '^shots _wav-n4-[A-Za-z0-9]+ none@0 2$' "$tmp/fx.log")" = 1 ] \
   && ok "GPU shot: frames take without sound, then a sound take" || bad "GPU shot: $(tr '\n' ';' < "$tmp/fx.log")"
+# every take name sent to the client is one its `shots` accepts (SandboxCommand: not starting with a dot), and a first
+# frame with a time of day gives the sound take a plain second
+: > "$tmp/fx.log"
+( shot n9 'blast drone' --at -0.5@12500,1 --wav 2 --no-swap ) >/dev/null 2>&1
+bad_names=$(sed -n 's/^shots \([^ ]*\) .*/\1/p' "$tmp/fx.log" | grep -vE '^[A-Za-z0-9_][A-Za-z0-9_.-]*$')
+[ -z "$bad_names" ] && grep -qE '^shots _wav-n9-[A-Za-z0-9]+ none@-0.5 2$' "$tmp/fx.log" && ok "sound take: a name and second the client accepts" \
+  || bad "sound take names: $(tr '\n' ';' < "$tmp/fx.log")"
 # sound only on a GPU: nothing is paced, one take with sound
 : > "$tmp/fx.log"
 ( shot n8 'blast drone' --at none --wav 2 --no-swap ) >/dev/null 2>&1

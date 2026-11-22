@@ -6,13 +6,18 @@
 // offset along each ray moves every frame, and each pixel averages its last frames (exponential, current weight
 // DwHistory.x), taken from where its dust was a frame ago. The dust's place for reprojection is where the ray meets the
 // wall's settled layer top (DwHistory.y above the eye; the world behind the pixel if nearer): exact for turning, close for
-// moving (the wall is hundreds of metres away). The previous frame is read on its own lattice of march samples. History
+// moving (the wall is hundreds of metres away). The previous frame is read on its own lattice of march samples (exact at
+// the frame edge, where the last sample sits half a frame pixel inside), and only where the previous frame's world at that
+// place (Sampler3) was as far as this one's: a ceiling or wall that moved in front takes no dust from behind it. History
 // is clamped to the current 3 × 3 neighbourhood at the same world distance (mean ± 1.5 σ): where the wall really changed
 // (the front passing, an object moving in front), the old frames give way within a frame; where only the sample offsets
 // differ, they average into stable dust instead of a per-frame shimmer.
 uniform sampler2D Sampler0;
 uniform sampler2D Sampler1;
 uniform sampler2D Sampler2;
+// the previous frame's world distances along its view axis (SceneDepth.previous), full resolution; DwPrevScene 1 if valid
+uniform sampler2D Sampler3;
+uniform float DwPrevScene;
 uniform mat4 InvViewProj;
 uniform mat4 PrevViewProj;
 uniform vec3 PallForward;
@@ -26,6 +31,14 @@ out vec4 fragColor;
 
 vec4 valid(vec4 v) {
     return pallValid(v) ? v : vec4(0.0, 0.0, 0.0, 1.0);
+}
+
+// lattice coordinate (in samples) of frame pixel coordinate x on one axis: sample i sits at min((i + 0.5) × DwDiv, size −
+// 0.5); between the last two samples, linear between their true places
+float lattice(float x, float size, float n) {
+    float a = (n - 1.5) * DwDiv, b = min((n - 0.5) * DwDiv, size - 0.5);
+    if (n < 2.0 || x <= a) return x / DwDiv - 0.5;
+    return n - 2.0 + (x - a) / max(b - a, 1e-3);
 }
 
 void main() {
@@ -63,14 +76,21 @@ void main() {
         fragColor = cur;
         return;
     }
-    // the previous frame's pixel, then its place on the march lattice (sample i sits at frame pixel (i + 0.5) × DwDiv)
+    // the previous frame's pixel, then its place on the march lattice
     vec2 prevPixel = (clip.xy / clip.w * 0.5 + 0.5) * vec2(size);
-    vec2 lattice = prevPixel / DwDiv;
-    if (any(lessThan(lattice, vec2(0.0))) || any(greaterThan(lattice, vec2(low)))) {
+    if (any(lessThan(prevPixel, vec2(0.0))) || any(greaterThanEqual(prevPixel, vec2(size)))) {
         fragColor = cur;
         return;
     }
-    vec4 h = valid(texture(Sampler1, lattice / vec2(low)));
+    if (DwPrevScene > 0.5) {
+        float before = pallScene(texelFetch(Sampler3, ivec2(prevPixel), 0).r);
+        if (abs(before - here) > 0.1 * max(min(before, here), 1.0)) {
+            fragColor = cur;
+            return;
+        }
+    }
+    vec2 l = vec2(lattice(prevPixel.x, float(size.x), float(low.x)), lattice(prevPixel.y, float(size.y), float(low.y)));
+    vec4 h = valid(texture(Sampler1, (l + 0.5) / vec2(low)));
     h = clamp(h, m1 - 1.5 * sd, m1 + 1.5 * sd);
     fragColor = mix(h, cur, DwHistory.x);
 }

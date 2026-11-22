@@ -273,7 +273,7 @@ public final class NukePall {
         f.dustWall.active = false;
         // the young wall's own pass: primary view, one detonation in the slots, no water under its pall (spray and the base
         // surge stay the pall's), all its programs ready; otherwise the pall draws the whole wall
-        if (k == 1 && f.water0.w < 0.5 && ua.zentix.incoming.client.fx.layer.DustWallPass.ready()
+        if (k == 1 && f.water0.w < 0.5 && ua.zentix.incoming.client.fx.layer.DustWallPass.prepare(q)
                 && !ua.zentix.incoming.client.fx.layer.FxViews.secondary()) youngWall(SLOTTED[0], eye, partial, f);
         // without pall use zero bounds: the ray cannot enter (inverted bounds would span the entire ray)
         if (k == 0) {
@@ -375,6 +375,11 @@ public final class NukePall {
         w.windX = (float) (cos * wind);
         w.windZ = (float) (sin * wind);
         w.source = a;
+        // ten game ticks of the detonation clock; the fireball's ground footprint; sand's colours
+        w.clockJump = (float) (10 / (20.0 * d.scale()));
+        w.cut = (float) d.blocks(a.wall.underBall(t));
+        w.sandAlbedo.set((float) SAND_W[0], (float) SAND_W[1], (float) SAND_W[2]);
+        w.sandBulk.set((float) SAND[0], (float) SAND[1], (float) SAND[2]);
         w.active = true;
     }
 

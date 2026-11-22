@@ -8,7 +8,7 @@
 #moj_import <incoming:pall.glsl>
 
 // the detonation's pall slot, terrain map (Sampler3) and the outdoor-air window (pall.glsl: pallRelief, pallOpen): the
-// young wall's ground and open air (dustwall.glsl: dwFloor, dwOpen), from eye-relative points
+// young wall's ground, open air and soil (dustwall.glsl: dwFloor, dwOpen, dwSoilAt)
 uniform sampler2D Sampler3;
 uniform mat4 PallSlot0;
 uniform vec4 PallGround0;
@@ -20,8 +20,17 @@ float dwFloorEye(vec2 xz) {
     return pallRelief(Sampler3, PallSlot0, PallGround0, xz);
 }
 
+// open air only inside the outdoor-air window around the eye (rooms, caves, adits); beyond it the dust is outdoors (the
+// pall's test there compares with the coarse relief map, and samples moving along the ray flipped dust near the ground on
+// and off: popping patches on the approaching wall)
 float dwOpenEye(vec3 p) {
+    vec3 w = p - PallOpenAt.xyz;
+    if (any(lessThan(w, vec3(0.0))) || any(greaterThanEqual(w, PALL_OPEN_SIZE))) return 1.0;
     return pallOpen(PallOpen, PallOpenAt, PallOpenWrap, Sampler3, PallSlot0, PallGround0, p);
+}
+
+vec2 dwSoilAt(vec2 xz) {
+    return pallSoil(Sampler3, PallSlot0, PallGround0, xz);
 }
 
 #moj_import <incoming:dustwall.glsl>
