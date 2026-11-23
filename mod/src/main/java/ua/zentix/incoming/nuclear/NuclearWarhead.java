@@ -101,7 +101,7 @@ public final class NuclearWarhead {
         boolean grid = (round != null ? round.rules() : ua.zentix.incoming.strike.StrikeRules.live()).grid();
         var birth = NuclearWorld.get(level).materials.detonate(level, events, strikeId, d);
         PacketDistributor.sendToPlayersInDimension(level, new S2C.NukeDetonation(d, (float) Blackouts.nukeRadius(d, grid), strikeId,
-                java.util.Optional.of(birth.id)));
+                birth.id));
         Orders.queue(level, new NuclearDetonationEvent(level.dimension(), d.id(), d.burst(), yieldKt, !d.surface(), owner,
                 round == null ? null : round.order(), round == null ? null : round.round(), round == null ? null : round.tag()));
 

@@ -107,21 +107,49 @@ public final class MaterialGameTests {
         ServerLevel level = h.getLevel();
         Vec3 target = Vec3.atCenterOf(h.absolutePos(new BlockPos(16, 4, 16)));
         var events = new NuclearEvents();
-        long burst = level.getGameTime() + 210;
-        events.schedule(new NuclearEvents.ScheduledStrike(1, target, 15, false, burst - 210, burst, target, Optional.empty(), true));
+        long burst = level.getGameTime() + 250;
+        for (int id = 1; id <= 17; id++) events.schedule(new NuclearEvents.ScheduledStrike(id, target, 15, false,
+                burst - 250, burst, target, Optional.empty(), true));
         var surveys = new MaterialSurveys();
+        long[] peak = {0};
         h.succeedWhen(() -> {
-            long now = level.getGameTime();
             surveys.tick(level, events, System.nanoTime() + 450_000);
-            var b = events.material(1);
-            h.assertTrue(b != null && b.encoded() != null, "waiting for scheduled revision");
-            var m = MaterialMap.decode(b.encoded().bytes());
-            h.assertTrue(m.tick() <= burst - 200, "birth tick " + m.tick() + " for burst " + burst);
+            peak[0] = Math.max(peak[0], surveys.lastCommitNanos);
+            var ticks = new java.util.HashSet<Long>();
+            for (int id = 1; id <= 17; id++) {
+                var b = events.material(id);
+                h.assertTrue(b != null && b.encoded() != null, "waiting for scheduled revision " + id);
+                var m = MaterialMap.decode(b.encoded().bytes());
+                h.assertTrue(m.tick() <= burst - 200, "birth tick " + m.tick() + " for burst " + burst);
+                ticks.add(m.tick());
+            }
+            h.assertTrue(ticks.size() == 17, "simultaneous births monopolised a tick");
+            Incoming.LOG.info("MATERIALBENCH scheduled 17-source burst: {} commit ticks, peak commit {} ns", ticks.size(), peak[0]);
+        });
+    }
+
+    @GameTest(template = "range", batch = "nuke_material_wet", timeoutTicks = 200, skyAccess = true)
+    public static void wetOriginIsIndependentOfTheDryCellMajority(GameTestHelper h) {
+        var level = h.getLevel();
+        var pos = h.absolutePos(new BlockPos(21, 23, 21));
+        level.setBlock(pos, Blocks.WATER.defaultBlockState(), 2);
+        var d = new Detonation(1, Vec3.atBottomCenterOf(pos.above()), pos.getY() + 1, 1, true, 800, 0, 0, 20000, 1, 0.05f, false, 0.35f);
+        var votes = new Long2IntOpenHashMap();
+        votes.put(new ChunkPos(pos).toLong(), 4 << 12);
+        var under = MaterialSurvey.origin(level, d);
+        var b = MaterialBirth.seal(java.util.UUID.randomUUID(), d, 600, under, votes, null);
+        level.setBlock(pos, Blocks.STONE.defaultBlockState(), 2);
+        h.succeedWhen(() -> {
+            var data = b.encoded();
+            h.assertTrue(data != null, "encoding shore");
+            var m = MaterialMap.decode(data.bytes());
+            h.assertTrue(m.wet() && m.material(pos.getX(), pos.getZ()) == DustMaterial.HARD, "origin wetness changed with the cell majority");
         });
     }
 
     @GameTest(template = "range", batch = "nuke_material_disk", timeoutTicks = 700, skyAccess = true)
     public static void sparseEditorReadIsReservedAndNeverLoadsTheChunk(GameTestHelper h) {
+        ua.zentix.incoming.gametest.StrikeGameTests.gameSpeed(h);
         ServerLevel level = h.getLevel();
         BlockPos at = h.absolutePos(new BlockPos(32, 8, 32));
         var d = source(1, at.getX(), at.getZ(), level.getGameTime() + 900, 1000);
@@ -141,10 +169,10 @@ public final class MaterialGameTests {
         long[] peak = {0};
         MaterialBirth[] birth = {null};
         h.succeedWhen(() -> {
-            h.assertTrue(saved.isDone(), "waiting for fixture write");
-            saved.join();
+            // The I/O worker exposes queued writes to reads before the region-file flush.
+            h.assertFalse(saved.isCompletedExceptionally(), "fixture write failed");
             if (birth[0] == null) {
-                survey.work(level, System.nanoTime() + 400_000, true);
+                survey.work(level, System.nanoTime() + 400_000, NuclearPrep.readSlots(level));
                 peak[0] = Math.max(peak[0], reserved.get());
                 h.assertTrue(survey.storedAnswers > 0, "waiting for stored chunk, submitted " + survey.sparseReads);
                 birth[0] = survey.seal(level, level.getGameTime(), live);
@@ -162,28 +190,37 @@ public final class MaterialGameTests {
 
     @GameTest(template = "range", batch = "nuke_material", timeoutTicks = 1200, skyAccess = true)
     public static void coldJoinAndSeekUseIdenticalCommittedSnapshots(GameTestHelper h) {
+        ua.zentix.incoming.gametest.StrikeGameTests.gameSpeed(h);
         var events = new NuclearEvents();
         var births = new java.util.ArrayList<MaterialBirth>();
+        long commitNs = 0;
         // Spatially varying 1 Mt map with four real block classes. Measure the SavedData increment and framed wire bytes.
         for (int id = 1; id <= 17; id++) {
             int x = id * 4096;
-            var d = source(id, x, 0, 1000, id == 1 ? 1000 : 1);
+            var d = source(id, x, 0, 1000, 1000);
             var samples = new Long2IntOpenHashMap();
             for (int iz = -16; iz < 16; iz++) for (int ix = -16; ix < 16; ix++) {
                 int kind = Math.floorMod(ix / 3 + iz / 5, 4);
                 samples.put(ChunkPos.asLong((x >> 4) + ix * 8, iz * 8), 4 << (kind * 4));
             }
-            births.add(MaterialBirth.seal(d, 800, 0, samples, null));
+            var idAtLaunch = java.util.UUID.randomUUID();
+            long start = System.nanoTime();
+            births.add(MaterialBirth.seal(idAtLaunch, d, 800, 0, samples, null));
+            commitNs += System.nanoTime() - start;
             events.add(d, 1000.0);
         }
+        long committed = commitNs;
         h.succeedWhen(() -> {
             for (var b : births) h.assertTrue(b.encoded() != null, "encoding sources");
-            int oneDisk;
+            int oneDisk, compressedDisk;
             try {
                 var tag = events.save(new CompoundTag(), h.getLevel().registryAccess());
                 int empty = diskBytes(tag);
+                int emptyCompressed = compressedBytes(tag);
                 events.material(1, births.getFirst());
-                oneDisk = diskBytes(events.save(new CompoundTag(), h.getLevel().registryAccess())) - empty;
+                var full = events.save(new CompoundTag(), h.getLevel().registryAccess());
+                oneDisk = diskBytes(full) - empty;
+                compressedDisk = compressedBytes(full) - emptyCompressed;
             } catch (IOException e) { throw new IllegalStateException(e); }
             MaterialDelivery a = new MaterialDelivery(), b = new MaterialDelivery();
             a.snapshot(births, 4096, 0);
@@ -194,16 +231,20 @@ public final class MaterialGameTests {
             long peak = 0;
             for (int tick = 0; tick < 300; tick++) {
                 long start = System.nanoTime();
-                var pa = a.next(tick);
+                var pa = a.next(tick, tick * 50_000_000L);
                 peak = Math.max(peak, System.nanoTime() - start);
-                var pb = b.next(tick);
+                var pb = b.next(tick, tick * 50_000_000L);
                 if (pa == null || pb == null) break;
                 if (tick == 0) h.assertTrue(pa.id().equals(births.getFirst().id) && pb.id().equals(births.getLast().id), "nearest source order");
-                h.assertTrue(a.next(tick) == null, "two parts in one tick");
+                h.assertTrue(a.next(tick, tick * 50_000_000L) == null, "two parts in one tick");
                 total += wire(h, pa, mapsA.computeIfAbsent(pa.id(), unused -> new MaterialInbox()));
                 if (pa.id().equals(births.getFirst().id)) oneWire = total;
                 wire(h, pb, mapsB.computeIfAbsent(pb.id(), unused -> new MaterialInbox()));
             }
+            var refs = new java.util.LinkedHashMap<Integer, java.util.UUID>();
+            for (int i = 0; i < births.size(); i++) refs.put(i + 1, births.get(i).id);
+            total += syncBytes(h, new S2C.NukeSync(events.detonations(), List.of(), refs));
+            oneWire += syncBytes(h, new S2C.NukeSync(List.of(events.detonations().getFirst()), List.of(), java.util.Map.of(1, births.getFirst().id)));
             h.assertTrue(mapsA.size() == 17 && mapsB.size() == 17 && total < 1_500_000 && oneWire < 64_000, "snapshot wire " + total);
             for (var birth : births) {
                 var replay = new MaterialInbox();
@@ -211,11 +252,21 @@ public final class MaterialGameTests {
                 h.assertTrue(java.util.Arrays.equals(mapsA.get(birth.id).map().encode(), mapsB.get(birth.id).map().encode())
                         && java.util.Arrays.equals(replay.map().encode(), birth.encoded().bytes()), "cold client or seek disagreement");
             }
-            Incoming.LOG.info("MATERIALBENCH 1 Mt fixture: framed wire {} B, uncompressed SavedData {} B, 17 sources {} B, peak dispatch {} ns",
-                    oneWire, oneDisk, total, peak);
+            Incoming.LOG.info("MATERIALBENCH 1 Mt fixture: framed wire {} B, SavedData {} B raw / {} B gzip increment, 17 x 1 Mt {} B, sum of 17 seals {} ns, peak dispatch {} ns",
+                    oneWire, oneDisk, compressedDisk, total, committed, peak);
         });
     }
 
+    private static int syncBytes(GameTestHelper h, S2C.NukeSync sync) {
+        var buf = Unpooled.buffer();
+        try {
+            var codec = net.minecraft.network.protocol.game.GameProtocols.CLIENTBOUND_TEMPLATE.bind(
+                    net.minecraft.network.RegistryFriendlyByteBuf.decorator(h.getLevel().registryAccess(),
+                            net.neoforged.neoforge.network.connection.ConnectionType.NEOFORGE)).codec();
+            codec.encode(buf, new net.minecraft.network.protocol.common.ClientboundCustomPayloadPacket(sync));
+            return buf.readableBytes() + net.minecraft.network.VarInt.getByteSize(buf.readableBytes());
+        } finally { buf.release(); }
+    }
     private static int wire(GameTestHelper h, S2C.NukeMaterial p, MaterialInbox target) {
         var buf = Unpooled.buffer();
         try {
@@ -228,6 +279,11 @@ public final class MaterialGameTests {
             target.receive((S2C.NukeMaterial) packet.payload());
             return bytes;
         } finally { buf.release(); }
+    }
+    private static int compressedBytes(CompoundTag tag) throws IOException {
+        var bytes = new ByteArrayOutputStream();
+        NbtIo.writeCompressed(tag, bytes);
+        return bytes.size();
     }
     private static int diskBytes(CompoundTag tag) throws IOException {
         var bytes = new ByteArrayOutputStream();

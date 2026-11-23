@@ -1,17 +1,23 @@
 package ua.zentix.incoming.nuclear.world;
 
+import it.unimi.dsi.fastutil.longs.Long2IntOpenHashMap;
 import net.minecraft.core.BlockPos;
+import it.unimi.dsi.fastutil.longs.LongLinkedOpenHashSet;
+import net.minecraft.world.level.ChunkPos;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.level.chunk.LevelChunk;
-import net.neoforged.neoforge.network.PacketDistributor;
 import ua.zentix.incoming.IncomingConfig;
 import ua.zentix.incoming.nuclear.Detonation;
 import ua.zentix.incoming.nuclear.NuclearEvents;
 import ua.zentix.incoming.nuclear.NuclearWarhead;
+import ua.zentix.incoming.nuclear.NuclearStrikes;
+import ua.zentix.incoming.nuclear.material.LoadedSurfaces;
 import ua.zentix.incoming.nuclear.material.MaterialBirth;
+import ua.zentix.incoming.nuclear.material.MaterialDelivery;
 import ua.zentix.incoming.registry.ModAttachments;
 import ua.zentix.incoming.util.Terrain;
 
+import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.concurrent.atomic.AtomicLong;
@@ -22,22 +28,30 @@ public final class MaterialSurveys {
     private final Map<Integer, MaterialSurvey> open = new LinkedHashMap<>();
     private final AtomicLong reserved = new AtomicLong();
     long reservedBytes() { return reserved.get(); }
-    int pendingReads() { return (int) (reserved.get() / NuclearPrep.READ_BYTES); }
 
-    private final ua.zentix.incoming.nuclear.material.LoadedSurfaces loaded = new ua.zentix.incoming.nuclear.material.LoadedSurfaces();
-    private java.util.Iterator<net.minecraft.server.level.ChunkHolder> refresh;
+    private final LoadedSurfaces loaded = new LoadedSurfaces();
+    private final LongLinkedOpenHashSet refresh = new LongLinkedOpenHashSet();
+    private int playerCursor, surveyCursor;
+    long lastCommitNanos;
     void live(LevelChunk chunk) {
-        loaded.put(chunk.getPos().toLong(), MaterialSurvey.liveVotes(chunk));
+        long key = chunk.getPos().toLong();
+        refresh.add(key);
+        loaded.put(key, MaterialSurvey.liveVotes(chunk));
     }
-    void unload(LevelChunk chunk) { loaded.remove(chunk.getPos().toLong()); }
+    void unload(LevelChunk chunk) {
+        long key = chunk.getPos().toLong();
+        refresh.remove(key);
+        loaded.remove(key);
+    }
 
     /** Revisit ready columns to include player edits between chunk load and birth. */
     private void refresh(ServerLevel level, long deadline) {
-        if (refresh == null || !refresh.hasNext()) refresh = level.getChunkSource().chunkMap.getChunks().iterator();
-        for (int n = 0; n < 32 && System.nanoTime() < deadline && refresh.hasNext(); n++) {
-            var p = refresh.next().getPos();
-            var c = level.getChunkSource().getChunkNow(p.x, p.z);
-            if (c != null) live(c);
+        int count = Math.min(refresh.size(), open.isEmpty() ? 4 : 32);
+        for (int n = 0; n < count && System.nanoTime() < deadline; n++) {
+            long key = refresh.removeFirstLong();
+            refresh.add(key);
+            var c = level.getChunkSource().getChunkNow(ChunkPos.getX(key), ChunkPos.getZ(key));
+            if (c != null) loaded.put(key, MaterialSurvey.liveVotes(c));
         }
     }
     void disk(long key, int votes) {
@@ -50,39 +64,59 @@ public final class MaterialSurveys {
 
     public void tick(ServerLevel level, NuclearEvents events, long deadline) {
         long now = level.getGameTime();
+        // Reserve a tick per concurrent source before the first-cell deadline so a salvo can seal in portions.
+        int runway = events.scheduled().size() - 1;
+        boolean sealed = false, opened = false;
+        lastCommitNanos = 0;
         for (var s : events.scheduled()) {
             if (events.material(s.id()) != null) continue;
             MaterialSurvey survey = open.get(s.id());
             if (survey == null) {
+                if ((opened || System.nanoTime() >= deadline) && now < s.detonateTime() - LEAD_TICKS) continue;
                 if (!Terrain.ready(level, BlockPos.containing(s.target())) && now < s.detonateTime() - LEAD_TICKS) continue;
-                Detonation geometry = NuclearWarhead.geometry(level, s.target(), s.yieldKt(), s.airBurst(),
-                        (float) IncomingConfig.SERVER.effectsScale());
+                Detonation geometry = NuclearWorld.get(level).planned(NuclearWarhead.geometry(level,
+                        s.surface() ? NuclearWarhead.surfaceAt(level, s.target()) : s.target(), s.yieldKt(), s.airBurst(),
+                        (float) IncomingConfig.SERVER.effectsScale()));
                 survey = new MaterialSurvey(level, geometry, reserved);
                 open.put(s.id(), survey);
+                opened = true;
             }
-            if (now >= s.detonateTime() - LEAD_TICKS) {
-                publish(level, events, s.id(), survey.seal(level, now, loaded));
+            long deadlineTick = s.detonateTime() - LEAD_TICKS;
+            if (now >= deadlineTick || !sealed && now >= deadlineTick - runway) {
+                sealed = true;
+                long start = System.nanoTime();
+                var birth = survey.seal(level, now, loaded);
+                events.material(s.id(), birth);
+                for (var player : level.players()) {
+                    if (NuclearStrikes.warns(s, player)) player.getData(ModAttachments.MATERIAL_DELIVERY).announce(birth);
+                }
                 open.remove(s.id());
+                lastCommitNanos += System.nanoTime() - start;
             }
         }
         // Deliver committed work before spending the remaining time on optional pre-birth samples.
-        for (var p : level.players()) {
-            if (!p.hasData(ModAttachments.MATERIAL_DELIVERY)) continue;
-            var packet = p.getData(ModAttachments.MATERIAL_DELIVERY).next(level.getServer().getTickCount());
-            if (packet != null) PacketDistributor.sendToPlayer(p, packet);
-            if (System.nanoTime() >= deadline) break;
+        var players = level.players();
+        for (int n = 0; n < players.size() && System.nanoTime() < deadline; n++) {
+            if (playerCursor >= players.size()) playerCursor = 0;
+            MaterialDelivery.send(players.get(playerCursor++), level.getServer().getTickCount());
         }
-        for (var survey : open.values()) {
-            if (System.nanoTime() >= deadline) break;
-            boolean room = NuclearWorld.get(level).prep().pendingReads() + pendingReads() < NuclearPrep.READS;
-            survey.work(level, deadline, room);
+        if (!open.isEmpty()) {
+            var surveys = new ArrayList<>(open.values());
+            for (int n = 0; n < surveys.size() && System.nanoTime() < deadline; n++) {
+                if (surveyCursor >= surveys.size()) surveyCursor = 0;
+                surveys.get(surveyCursor++).work(level, deadline, NuclearPrep.readSlots(level));
+            }
         }
+        if (System.nanoTime() < deadline) events.encodeMaterial();
         refresh(level, deadline);
     }
 
     public MaterialBirth detonate(ServerLevel level, NuclearEvents events, int strike, Detonation d) {
         MaterialBirth frozen = events.moveMaterial(strike, d.id());
-        if (frozen != null) return frozen;
+        if (frozen != null) {
+            deliver(level, frozen);
+            return frozen;
+        }
         MaterialSurvey survey = open.remove(strike);
         long now = level.getGameTime();
         if (survey != null) frozen = survey.seal(level, now, loaded);
@@ -91,15 +125,15 @@ public final class MaterialSurveys {
             var p = BlockPos.containing(d.burst());
             var chunk = level.getChunkSource().getChunkNow(p.getX() >> 4, p.getZ() >> 4);
             if (chunk != null) live(chunk);
-            frozen = MaterialBirth.seal(d, now, MaterialSurvey.origin(level, d),
-                    new it.unimi.dsi.fastutil.longs.Long2IntOpenHashMap(), loaded.snapshot());
+            frozen = MaterialBirth.seal(new java.util.UUID(d.seed(), now ^ d.id()), d, now, MaterialSurvey.origin(level, d),
+                    new Long2IntOpenHashMap(), loaded.snapshot());
         }
-        publish(level, events, d.id(), frozen);
+        events.material(d.id(), frozen);
+        deliver(level, frozen);
         return frozen;
     }
 
-    private static void publish(ServerLevel level, NuclearEvents events, int id, MaterialBirth birth) {
-        events.material(id, birth);
-        for (var player : level.players()) player.getData(ModAttachments.MATERIAL_DELIVERY).offer(birth);
+    private static void deliver(ServerLevel level, MaterialBirth birth) {
+        for (var player : level.players()) player.getData(ModAttachments.MATERIAL_DELIVERY).detonate(birth);
     }
 }

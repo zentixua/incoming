@@ -25,7 +25,8 @@ public final class MaterialBirth {
     public final UUID id;
     public final int x, z;
     private Pending pending;
-    private final CompletableFuture<Encoded> encoding;
+    private CompletableFuture<Encoded> encoding;
+    private final byte[] savedBytes;
 
     public record Encoded(byte[] bytes, List<S2C.NukeMaterial> packets) {
         static Encoded of(UUID id, byte[] bytes) {
@@ -40,8 +41,8 @@ public final class MaterialBirth {
         }
     }
 
-    public static MaterialBirth seal(Detonation d, long tick, int under, Long2IntOpenHashMap chunks, LoadedSurfaces.Snapshot live) {
-        return new MaterialBirth(UUID.randomUUID(), (int) Math.floor(d.burst().x), (int) Math.floor(d.burst().z),
+    public static MaterialBirth seal(UUID revision, Detonation d, long tick, int under, Long2IntOpenHashMap chunks, LoadedSurfaces.Snapshot live) {
+        return new MaterialBirth(revision, (int) Math.floor(d.burst().x), (int) Math.floor(d.burst().z),
                 new Pending(d, tick, under, chunks, live), null);
     }
     private MaterialBirth(UUID id, int x, int z, Pending snapshot, byte[] saved) {
@@ -49,15 +50,19 @@ public final class MaterialBirth {
         this.x = x;
         this.z = z;
         pending = snapshot;
-        encoding = CompletableFuture.supplyAsync(() -> {
-            byte[] bytes = saved != null ? saved : MaterialMap.build(DustGrid.Bounds.of(snapshot.geometry),
-                    snapshot.samples(), snapshot.under, snapshot.tick).encode();
-            return Encoded.of(id, bytes);
-        }, Util.backgroundExecutor());
+        savedBytes = saved;
     }
 
-    /** Server thread. Zero wait even on the birth tick. */
+    /** Server thread. Encoding admission is separate from committing the birth revision. */
     public Encoded encoded() {
+        if (encoding == null) {
+            Pending snapshot = pending;
+            encoding = CompletableFuture.supplyAsync(() -> {
+                byte[] bytes = savedBytes != null ? savedBytes : MaterialMap.build(DustGrid.Bounds.of(snapshot.geometry),
+                        snapshot.samples(), snapshot.under, snapshot.tick).encode();
+                return Encoded.of(id, bytes);
+            }, Util.backgroundExecutor());
+        }
         Encoded ready = encoding.getNow(null);
         if (ready != null) pending = null;
         return ready;
@@ -68,14 +73,10 @@ public final class MaterialBirth {
         t.putUUID("revision", id);
         t.putInt("x", x);
         t.putInt("z", z);
-        Encoded ready = encoded();
-        if (ready != null) t.putByteArray("map", ready.bytes);
+        Encoded ready = encoding == null ? null : encoding.getNow(null);
+        if (ready != null || savedBytes != null) t.putByteArray("map", ready != null ? ready.bytes : savedBytes);
         else {
             Pending p = pending;
-            if (p == null) {
-                t.putByteArray("map", savedBytes);
-                return t;
-            }
             t.put("geometry", Detonation.CODEC.encodeStart(NbtOps.INSTANCE, p.geometry).getOrThrow());
             t.putLong("tick", p.tick);
             t.putInt("under", p.under);
@@ -92,15 +93,12 @@ public final class MaterialBirth {
         }
         return t;
     }
-    private byte[] savedBytes;
     public static MaterialBirth load(CompoundTag t) {
         UUID id = t.getUUID("revision");
         int x = t.getInt("x"), z = t.getInt("z");
         if (t.contains("map")) {
             byte[] bytes = t.getByteArray("map");
-            var birth = new MaterialBirth(id, x, z, null, bytes);
-            birth.savedBytes = bytes;
-            return birth;
+            return new MaterialBirth(id, x, z, null, bytes);
         }
         var chunks = new Long2IntOpenHashMap(t.getLongArray("chunks"), t.getIntArray("votes"));
         var p = new Pending(Detonation.CODEC.parse(NbtOps.INSTANCE, t.get("geometry")).getOrThrow(),

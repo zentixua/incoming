@@ -128,7 +128,7 @@ class S2CGoldenTest {
                         new S2C.NukeDetonation(D.withFires(false), 242f),
                         new S2C.NukeDetonation(D.withFires(false), 242f, 9),
                         new S2C.NukeDetonation(D.withFires(false).withRain(false), 242f, 9),
-                        new S2C.NukeDetonation(D.withFires(false).withRain(false), 242f, 9, Optional.of(A))),
+                        new S2C.NukeDetonation(D.withFires(false).withRain(false), 242f, 9, A)),
                 golden(S2C.NukeMaterial.TYPE, S2C.NukeMaterial.CODEC, new S2C.NukeMaterial(A, 0, 0, new byte[]{1, 7, 0})),
                 golden(S2C.NukeClock.TYPE, S2C.NukeClock.CODEC, new S2C.NukeClock(91_234.5, List.of(new S2C.NukeClock.ShowEnd(3, 81_234.25), new S2C.NukeClock.ShowEnd(7, 0)))),
                 golden(S2C.NukeTick.TYPE, S2C.NukeTick.CODEC, new S2C.NukeTick(2_000_000_123L)),

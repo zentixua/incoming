@@ -127,15 +127,33 @@ public final class NuclearEvents extends SavedData {
     /** Detonation number → world-clock anchors ({@link Anchor}); detonations saved before them have none (estimated). */
     private final Map<Integer, Anchor> clocks = new LinkedHashMap<>();
     private final Map<Integer, MaterialBirth> materials = new LinkedHashMap<>();
+    private final java.util.ArrayDeque<MaterialBirth> encoding = new java.util.ArrayDeque<>();
+    /** Start at most one new background encoding per tick even when seventeen source maps are sealed together. */
+    public void encodeMaterial() {
+        MaterialBirth birth = encoding.peek();
+        if (birth != null && birth.encoded() != null) {
+            encoding.remove();
+            setDirty(); // a save during encoding wrote sealed inputs; the next one can store compact cells
+        }
+    }
     public MaterialBirth material(int id) { return materials.get(id); }
-    public java.util.Collection<MaterialBirth> materials() { return materials.values(); }
+    public List<MaterialBirth> visibleMaterials() {
+        return detonations.stream().map(d -> materials.get(d.id())).filter(java.util.Objects::nonNull).toList();
+    }
     public void material(int id, MaterialBirth birth) {
         materials.put(id, birth);
+        encoding.add(birth);
         setDirty();
+    }
+    public void forgetMaterial(int id) {
+        if (materials.remove(id) != null) setDirty();
     }
     public MaterialBirth moveMaterial(int strike, int detonation) {
         MaterialBirth birth = materials.remove(strike);
-        if (birth != null) material(detonation, birth);
+        if (birth != null) {
+            materials.put(detonation, birth);
+            setDirty();
+        }
         return birth;
     }
     Map<Integer, UUID> materialIds() {
@@ -342,6 +360,7 @@ public final class NuclearEvents extends SavedData {
         impacts.clear();
         past.clear();
         materials.clear();
+        encoding.clear();
         craters.clear();
         craterGrounds.clear();
         clocks.clear();
@@ -356,7 +375,7 @@ public final class NuclearEvents extends SavedData {
         if (!faded.isEmpty()) {
             detonations.removeAll(faded);
             past.addAll(faded);
-            faded.forEach(d -> materials.remove(d.id()));
+            faded.forEach(d -> forgetMaterial(d.id()));
             setDirty();
         }
         if (clocks.keySet().removeIf(id -> detonations.stream().noneMatch(d -> d.id() == id))) setDirty();
@@ -382,7 +401,9 @@ public final class NuclearEvents extends SavedData {
         var saved = tag.getList("materials", net.minecraft.nbt.Tag.TAG_COMPOUND);
         for (int i = 0; i < saved.size(); i++) {
             CompoundTag entry = saved.getCompound(i);
-            e.materials.put(entry.getInt("source"), MaterialBirth.load(entry));
+            MaterialBirth birth = MaterialBirth.load(entry);
+            e.materials.put(entry.getInt("source"), birth);
+            if (!entry.contains("map")) e.encoding.add(birth);
         }
         return e;
     }

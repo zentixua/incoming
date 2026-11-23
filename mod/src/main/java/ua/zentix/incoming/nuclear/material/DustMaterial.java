@@ -30,6 +30,7 @@ public enum DustMaterial {
     }
     public static DustMaterial from(BlockState s) {
         if (s.getFluidState().is(FluidTags.WATER)) return WATER;
+        if (!s.getFluidState().isEmpty()) return SOIL;
         Block block = s.getBlock();
         if (BuiltInRegistries.BLOCK.wrapAsHolder(block).is(BlockTags.SAND)) return SAND;
         if (snow(block)) return HARD;

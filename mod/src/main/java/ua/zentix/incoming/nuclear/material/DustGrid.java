@@ -11,6 +11,7 @@ public final class DustGrid {
 
     public record Bounds(int x, int z, int dense, int reach) {
         public Bounds {
+            if (Math.abs((long) x) > 30_000_000 || Math.abs((long) z) > 30_000_000) throw new IllegalArgumentException("Dust origin");
             if (dense < 0 || reach < dense || reach > MAX_RADIUS) throw new IllegalArgumentException("Dust radii");
         }
 

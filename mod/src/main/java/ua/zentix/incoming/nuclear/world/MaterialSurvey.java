@@ -6,6 +6,7 @@ import net.minecraft.core.BlockPos;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.level.ChunkPos;
 import net.minecraft.world.level.block.state.BlockState;
+import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.chunk.LevelChunk;
 import net.minecraft.world.level.chunk.PalettedContainer;
 import net.minecraft.world.level.levelgen.Heightmap;
@@ -15,6 +16,7 @@ import ua.zentix.incoming.nuclear.material.DustMaterial;
 import ua.zentix.incoming.nuclear.material.MaterialBirth;
 
 import java.util.ArrayList;
+import ua.zentix.incoming.nuclear.material.LoadedSurfaces;
 import java.util.Comparator;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.atomic.AtomicLong;
@@ -22,6 +24,7 @@ import java.util.concurrent.atomic.AtomicLong;
 /** Per scheduled source. Only the level thread owns the live votes. Closing transfers them to an immutable revision. */
 final class MaterialSurvey {
     record Sample(long chunk, int votes) {}
+    private final java.util.UUID revision = java.util.UUID.randomUUID();
     private final Detonation geometry;
     int sparseReads, storedAnswers;
     private final Long2IntOpenHashMap votes = new Long2IntOpenHashMap();
@@ -34,7 +37,12 @@ final class MaterialSurvey {
     MaterialSurvey(ServerLevel level, Detonation d, AtomicLong reservations) {
         geometry = d;
         reads = new RuinInbox<>(reservations::addAndGet, NuclearPrep.READ_BYTES);
-        sparse = CompletableFuture.supplyAsync(() -> sparse(d), Util.backgroundExecutor());
+        var regions = ua.zentix.incoming.util.RegionFiles.folder(level);
+        sparse = CompletableFuture.supplyAsync(() -> {
+            long[] cells = sparse(d);
+            return java.util.Arrays.stream(cells).filter(key -> ua.zentix.incoming.util.RegionFiles.present(regions,
+                    ChunkPos.getX(key), ChunkPos.getZ(key))).toArray();
+        }, Util.backgroundExecutor());
     }
 
     /** One representative chunk per world-aligned outer cell, nearest first. No chunk generation. */
@@ -62,7 +70,7 @@ final class MaterialSurvey {
                 if (sections[sec] == null) continue;
                 for (int y = 15; y >= 0; y--) {
                     BlockState state = sections[sec].get(x, y, z);
-                    if (state.isAir()) continue;
+                    if (!surface(state)) continue;
                     votes += 1 << (4 * DustMaterial.from(state).ordinal());
                     break column;
                 }
@@ -70,19 +78,23 @@ final class MaterialSurvey {
         }
         return votes;
     }
+    /** The top non-air block supplies the material. Permeable canopy and plants expose their support, as in FarTerrain.dustY. */
+    private static boolean surface(BlockState state) {
+        return !state.isAir() && (state.getBlock() == Blocks.SNOW || Heightmap.Types.MOTION_BLOCKING_NO_LEAVES.isOpaque().test(state));
+    }
+
     private static int top(LevelChunk chunk, int x, int z) {
         // A ready FULL chunk normally has WORLD_SURFACE. An editor chunk without it must never trigger vanilla priming.
-        if (chunk.hasPrimedHeightmap(Heightmap.Types.WORLD_SURFACE)) {
-            int y = chunk.getHeight(Heightmap.Types.WORLD_SURFACE, x & 15, z & 15);
-            if (y < chunk.getMinBuildHeight()) return -1;
-            return DustMaterial.from(chunk.getBlockState(new BlockPos(x, y, z))).ordinal();
-        }
+        int top = chunk.getMaxBuildHeight() - 1;
+        if (chunk.hasPrimedHeightmap(Heightmap.Types.WORLD_SURFACE)) top = chunk.getHeight(Heightmap.Types.WORLD_SURFACE, x & 15, z & 15);
+        if (top < chunk.getMinBuildHeight()) return -1;
         var sections = chunk.getSections();
-        for (int i = sections.length - 1; i >= 0; i--) {
+        int first = chunk.getSectionIndex(top);
+        for (int i = first; i >= 0; i--) {
             if (sections[i].hasOnlyAir()) continue;
-            for (int y = 15; y >= 0; y--) {
+            for (int y = i == first ? top & 15 : 15; y >= 0; y--) {
                 BlockState state = sections[i].getBlockState(x & 15, y, z & 15);
-                if (!state.isAir()) return DustMaterial.from(state).ordinal();
+                if (surface(state)) return DustMaterial.from(state).ordinal();
             }
         }
         return -1;
@@ -100,19 +112,21 @@ final class MaterialSurvey {
         if (!closed && value != 0) votes.putIfAbsent(chunk, value);
     }
 
-    void work(ServerLevel level, long deadline, boolean ioRoom) {
+    void work(ServerLevel level, long deadline, int slots) {
         Sample s;
         while (System.nanoTime() < deadline && (s = reads.poll()) != null) collect(s);
         long[] positions = sparse.getNow(null);
-        if (positions == null || next == positions.length || !ioRoom || reads.pending() >= 4
-                || System.nanoTime() >= deadline || !RuinWorkers.admit(RuinWorkers.Priority.FAR)
-                || NuclearPrep.memory(level) + NuclearPrep.READ_BYTES > NuclearPrep.PLANS_CAP) return;
-        long key = positions[next++];
-        if (votes.containsKey(key)) return;
-        if (format == null) format = DiskShots.Format.of(level);
-        var receive = reads.expect();
-        sparseReads++;
-        DiskShots.readSurface(format, new ChunkPos(key)).thenAccept(value -> receive.accept(new Sample(key, value)));
+        if (positions == null) return;
+        while (next < positions.length && slots > 0 && reads.pending() < 4 && System.nanoTime() < deadline) {
+            if (!RuinWorkers.admit(RuinWorkers.Priority.FAR) || NuclearPrep.memory(level) + NuclearPrep.READ_BYTES > NuclearPrep.PLANS_CAP) return;
+            long key = positions[next++];
+            if (votes.containsKey(key) || level.getChunkSource().getChunkNow(ChunkPos.getX(key), ChunkPos.getZ(key)) != null) continue;
+            if (format == null) format = DiskShots.Format.of(level);
+            var receive = reads.expect();
+            slots--;
+            sparseReads++;
+            DiskShots.readSurface(format, new ChunkPos(key)).thenAccept(value -> receive.accept(new Sample(key, value)));
+        }
     }
 
     private void collect(Sample s) {
@@ -128,14 +142,14 @@ final class MaterialSurvey {
         BlockPos at = new BlockPos(x, (int) Math.ceil(d.groundY()) - 1, z);
         return c.getFluidState(at).is(net.minecraft.tags.FluidTags.WATER) ? DustMaterial.WATER.ordinal() : DustMaterial.SOIL.ordinal();
     }
-    MaterialBirth seal(ServerLevel level, long tick, ua.zentix.incoming.nuclear.material.LoadedSurfaces live) {
+    MaterialBirth seal(ServerLevel level, long tick, LoadedSurfaces live) {
         Sample s;
         while ((s = reads.poll()) != null) collect(s);
         int x = (int) Math.floor(geometry.burst().x), z = (int) Math.floor(geometry.burst().z);
         var c = level.getChunkSource().getChunkNow(x >> 4, z >> 4);
         if (c != null) live.put(c.getPos().toLong(), liveVotes(c));
         close();
-        return MaterialBirth.seal(geometry, tick, origin(level, geometry), votes, live.snapshot());
+        return MaterialBirth.seal(revision, geometry, tick, origin(level, geometry), votes, live.snapshot());
     }
     void close() {
         closed = true;

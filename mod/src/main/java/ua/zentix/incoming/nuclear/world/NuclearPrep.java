@@ -327,8 +327,15 @@ public final class NuclearPrep {
         return bytes;
     }
 
-    int pendingReads() {
-        return (int) (readBytes.get() / READ_BYTES);
+    /** Preparation and sparse material reads draw from the same server-wide I/O window. */
+    static int readSlots(ServerLevel level) {
+        long pending = 0;
+        for (ServerLevel other : level.getServer().getAllLevels()) {
+            if (!other.hasData(ModAttachments.NUCLEAR_WORLD)) continue;
+            NuclearWorld world = NuclearWorld.get(other);
+            pending += world.prep().readBytes.get() + world.materials.reservedBytes();
+        }
+        return READS - (int) (pending / READ_BYTES);
     }
 
     /** One server-wide preparation admission estimate; multiple strikes/dimensions share the cap. */
@@ -607,17 +614,19 @@ public final class NuclearPrep {
             }
         }
         // window read-ahead in wave order
-        while (p.nextRead < p.order.length && p.reading.size() + NuclearWorld.get(level).materials.pendingReads() < READS && memory(level) + READ_BYTES <= PLANS_CAP) {
+        int slots = readSlots(level);
+        while (p.nextRead < p.order.length && slots > 0 && memory(level) + READ_BYTES <= PLANS_CAP) {
             long c = p.order[p.nextRead];
             boolean all = true;
             for (int dx = -RuinPlanner.REACH; all && dx <= RuinPlanner.REACH; dx++) {
                 for (int dz = -RuinPlanner.REACH; all && dz <= RuinPlanner.REACH; dz++) {
                     long k = ChunkPos.asLong(ChunkPos.getX(c) + dx, ChunkPos.getZ(c) + dz);
                     if (p.reading.contains(k) || p.unreadable.contains(k) || p.ruins.shotAvailable(level, k)) continue;
-                    if (p.reading.size() + NuclearWorld.get(level).materials.pendingReads() >= READS || memory(level) + READ_BYTES > PLANS_CAP) {
+                    if (slots == 0 || memory(level) + READ_BYTES > PLANS_CAP) {
                         all = false;
                         continue;
                     }
+                    slots--;
                     p.reading.add(k);
                     DiskShots.read(p.format, new ChunkPos(k), RuinWorkers.Priority.FAR).thenAccept(p.reads.expect());
                 }

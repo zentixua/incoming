@@ -577,7 +577,8 @@ renewal and so sees one tick less right after a tick (`NukeFlashSkyTest`).
 
 ## Dust source material
 
-- A scheduled source seals its world-aligned ground map at the earliest cell deadline, 200 game ticks before the burst.
+- A scheduled source seals its world-aligned ground map by the earliest cell deadline, 200 game ticks before the burst.
+  Concurrent launches reserve one earlier commit tick each.
   A source created without that much warning seals as soon as it exists. The geometry uses 64-block cells through
   vertical optical depth 1 at the pall's settling age and 256-block cells out to the dust reach.
   `MaterialMap` resolves a cell's sampled columns by plurality, with ties in water, sand, soil, hard order.
@@ -587,7 +588,9 @@ renewal and so sees one tick less right after a tick (`NukeFlashSkyTest`).
   Closing a survey detaches its inputs. A worker packs four cells per byte and uses byte-run pairs when smaller.
   A save during encoding records the sealed inputs for that exact revision. `NukeSync` and `NukeDetonation` carry
   revision references. `NukeMaterial` sends complete batches keyed by UUID and remaining part count for Flashback.
-  Player delivery starts with the nearest source on entry and sends one part of at most 12,500 data bytes per tick.
+  Players who receive the strike warning can prefetch its revision. Other players receive it at detonation.
+  Player delivery starts with the nearest source on entry,
+  up to 12,500 data bytes per tick and 20 parts per rolling wall second.
 - `ClientNuclear.Active.sourceMaterial()` exposes the committed class and origin wetness after a complete batch.
   A revision that is still arriving returns an empty answer. Missing revision references in old recordings and
   saves use client terrain, frozen at the first query to each world cell. The existing dust passes use `PallGround`.

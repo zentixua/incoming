@@ -1,8 +1,5 @@
 package ua.zentix.incoming.client.nuclear;
 
-import ua.zentix.incoming.nuclear.material.DustMaterial;
-import ua.zentix.incoming.nuclear.material.MaterialInbox;
-import java.util.UUID;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.multiplayer.ClientLevel;
 import net.minecraft.world.phys.Vec3;
@@ -18,6 +15,8 @@ import ua.zentix.incoming.net.S2C;
 import ua.zentix.incoming.nuclear.NuclearStrikes;
 import ua.zentix.incoming.nuclear.Detonation;
 import ua.zentix.incoming.nuclear.NukeClock;
+import ua.zentix.incoming.nuclear.material.DustMaterial;
+import ua.zentix.incoming.nuclear.material.MaterialInbox;
 import ua.zentix.incoming.nuclear.radiation.RetinaScars;
 
 import java.util.ArrayList;
@@ -28,6 +27,7 @@ import java.util.Iterator;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.UUID;
 import java.util.function.DoubleSupplier;
 
 /**
@@ -469,6 +469,9 @@ public final class ClientNuclear {
             }
             DETONATIONS.put(d.id(), a);
         }
+        // A live sync supersedes the dimension, including recalled sources. Recording snapshots can deliver
+        // their batches before the matching detonation and retain them until the seek finishes.
+        if (!ua.zentix.incoming.client.replay.Replay.active()) MATERIALS.keySet().retainAll(p.materials().values());
         for (S2C.NukeWarning w : p.warnings()) WARNINGS.put(w.strikeId(), w);
         NukeDust.reset();
         NukePall.reset();

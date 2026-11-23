@@ -83,6 +83,11 @@ public final class FlashbackReplay {
         return c != null && c.isInstance(s);
     }
 
+    /** New viewer before Flashback flushes the cold snapshot. */
+    public static void materialViewer(ServerPlayer player) {
+        if (isReplay(player.server)) ReplayMaterialDelivery.attach(player);
+    }
+
     /** End of replay-server tick (and each seek read): send viewers a recording-position marker. */
     public static void onServerTick(ServerTickEvent.Post e) {
         MinecraftServer s = e.getServer();
@@ -91,7 +96,10 @@ public final class FlashbackReplay {
             boolean seeking = exportJob.get(null) != null ? fastForwarding.getBoolean(s) : !(boolean) rendering.invoke(s);
             S2C.ReplayTick tick = new S2C.ReplayTick((int) place.invoke(s), seeking);
             for (Object v : (Collection<?>) viewers.invoke(s)) {
-                if (v instanceof ServerPlayer player) PacketDistributor.sendToPlayer(player, tick);
+                if (v instanceof ServerPlayer player) {
+                    ReplayMaterialDelivery.attach(player);
+                    PacketDistributor.sendToPlayer(player, tick);
+                }
             }
         } catch (ReflectiveOperationException | RuntimeException ex) {
             off(ex);

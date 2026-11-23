@@ -653,8 +653,10 @@ public final class S2C {
      * each appended to packet end; recordings predating them read “as before”: wall speed {@link Detonation#OLD_WAVE},
      * no EMP, time of day unknown, fires enabled, no strike, black rain enabled.
      */
-    public record NukeDetonation(Detonation detonation, float blackout, int strikeId, Optional<UUID> material) implements CustomPacketPayload {
-        public NukeDetonation(Detonation d, float blackout, int strikeId) { this(d, blackout, strikeId, Optional.empty()); }
+    public record NukeDetonation(Detonation detonation, float blackout, int strikeId, @org.jetbrains.annotations.Nullable UUID id) implements CustomPacketPayload {
+        // Flashback snapshots group independent instances of a payload by their UUID record component.
+        public Optional<UUID> material() { return Optional.ofNullable(id); }
+        public NukeDetonation(Detonation d, float blackout, int strikeId) { this(d, blackout, strikeId, null); }
         public NukeDetonation(Detonation detonation, float blackout) { this(detonation, blackout, -1); }
         public static final Type<NukeDetonation> TYPE = new Type<>(Incoming.id("nuke_detonation"));
         private static final StreamCodec<ByteBuf, NukeDetonation> BASE = NeoForgeStreamCodecs.composite(
@@ -669,7 +671,7 @@ public final class S2C {
                         d.withWave(wave).withDayTime(dayTime).withFires(fires).withRain(rain), blackout, strikeId));
         public static final StreamCodec<ByteBuf, NukeDetonation> CODEC = StreamCodec.composite(
                 BASE, p -> p, StreamCodecs.trailing(ByteBufCodecs.optional(UUIDUtil.STREAM_CODEC), Optional.empty()), NukeDetonation::material,
-                (p, material) -> new NukeDetonation(p.detonation, p.blackout, p.strikeId, material));
+                (p, material) -> new NukeDetonation(p.detonation, p.blackout, p.strikeId, material.orElse(null)));
 
         @Override
         public Type<? extends CustomPacketPayload> type() {
