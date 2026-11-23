@@ -37,24 +37,23 @@ class ProgressTest {
         double min = a.getAsJsonObject("criteria").getAsJsonObject("survived").getAsJsonObject("conditions")
                 .getAsJsonObject("overpressure_psi").get("min").getAsDouble();
         assertEquals(Blackouts.DEAD_PSI, min);
-        assertEquals(0.3, Progress.WATCH_PSI, 1e-9, "watched from where the wave hits bodies");
     }
 
     /**
-     * Survival is judged after the wave has passed the body: later than front arrival plus the positive phase there, later
-     * for a body farther out, and by {@link Progress#LANDING_TICKS} only.
+     * Survival is judged once the wave has passed the body: from its hit, the positive phase at the body's place, then
+     * {@link Progress#LANDING_TICKS}; a body farther out (a longer phase) waits longer.
      */
     @Test
     void survivalIsDueOnceTheWaveHasPassed() {
         double ring = AIR.groundRange(BlastModel.kpa(5));
         assertTrue(ring > 1000 && ring < 3000, "15 kt air burst 5 psi ring: " + ring + " m");
-        long last = 0;
+        long hit = 1000, last = 0;
         for (double f : new double[]{0.2, 0.5, 0.9, 1.5}) {
             Vec3 at = new Vec3(ring * f, 64, 0);
-            double slant = at.distanceTo(AIR.burst());
-            long due = Progress.survivalDue(AIR, at);
-            double passed = AIR.arrivalTicks(slant) + AIR.positivePhaseTicks(slant);
-            assertTrue(due >= passed + Progress.LANDING_TICKS && due <= passed + Progress.LANDING_TICKS + 1, "due " + due + " passed " + passed);
+            long due = Progress.survivalDue(AIR, at, hit);
+            double phase = AIR.positivePhaseSeconds(at) * 20;
+            assertTrue(phase > 0, "no positive phase at " + f + " of the ring");
+            assertTrue(due >= hit + phase + Progress.LANDING_TICKS && due <= hit + phase + Progress.LANDING_TICKS + 1, "due " + due + " phase " + phase);
             assertTrue(due > last, "survival due earlier farther out");
             last = due;
         }

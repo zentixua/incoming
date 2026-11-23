@@ -491,6 +491,11 @@ public abstract class StrikeProjectile extends Entity implements IEntityWithComp
         return cameraGuided;
     }
 
+    /** {@code next} carries this one's round on (a B-2's bomb): it carries its camera mark too. */
+    void handCameraMark(StrikeProjectile next) {
+        next.cameraGuided |= cameraGuided;
+    }
+
     /** Carries nuclear warhead: canceled only by nuclear recall. */
     public boolean isNuclear() {
         return entityData.get(DATA_NUCLEAR);

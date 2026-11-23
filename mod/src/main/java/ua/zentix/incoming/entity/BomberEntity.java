@@ -257,6 +257,7 @@ public class BomberEntity extends StrikeProjectile {
         bomb.setNuclear(nuclear);
         // The round goes on in the bomb; the departing B-2 is no longer it.
         bomb.attachRound(detachRound());
+        handCameraMark(bomb);
         shareAir(bomb);
         // The bomb UUID from projectile warnings identifies its B-2.
         Incoming.LOG.info("B-2 {} dropped bomb {} at {}, {} blocks from the aim point, {} above it (off-world {})", getUUID(), bomb.getUUID(),

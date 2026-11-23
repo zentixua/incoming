@@ -101,6 +101,8 @@ public final class NuclearWarhead {
         Orders.queue(level, new NuclearDetonationEvent(level.dimension(), d.id(), d.burst(), yieldKt, !d.surface(), owner,
                 round == null ? null : round.order(), round == null ? null : round.round(), round == null ? null : round.tag()));
 
+        ua.zentix.incoming.progress.Progress.witness(level, d);
+
         long w0 = System.nanoTime();
         NuclearWorld.get(level).onDetonation(level, d, owner);
         long w1 = System.nanoTime();

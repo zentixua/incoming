@@ -34,7 +34,8 @@
               "incoming:sam",
               "incoming:fixed_launcher",
               "incoming:substation",
-              "incoming:geiger_counter"
+              "incoming:geiger_counter",
+              "incoming:trinitite"
             ]
           }
         ]

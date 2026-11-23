@@ -304,13 +304,19 @@ public final class ProgressGameTests {
 
     // ---------------------------------------------------------------- nuclear
 
+    /** Burst of the survival test: its 5 psi ring falls inside the platform with room for a box either side. */
+    private static final double SURVIVAL_KT = 0.1;
+    private static final float SURVIVAL_SCALE = 0.1f;
+
     /**
-     * A 0.1 kt surface burst at scale 0.05. Inside the 5 psi ring: a player alive once the wave has passed gets Still Standing
-     * (not before); one killed before that, and one in creative mode, do not. Between 5 and 0.3 psi: watched, not granted. All
-     * of them within the damage reach count one detonation witnessed; a player beyond it counts none.
+     * A small surface burst. Five players stand sealed in stone boxes in the world, so the real wave reaches and hits them
+     * (shelter only spares them its injuries). Inside the 5 psi ring: one alive once the wave has passed gets Still Standing
+     * (not before); one killed after the hit, one who turns invulnerable (creative) after the hit, and one in creative mode
+     * throughout do not. Between 4 and 5 psi: hit, not granted. All within the damage reach count one detonation witnessed,
+     * a player beyond it none.
      */
-    @GameTest(template = "range", timeoutTicks = 400, batch = "progress_nuke", skyAccess = true)
-    public static void survivorInsideTheRingOnly(GameTestHelper h) {
+    @GameTest(template = "range", timeoutTicks = 600, batch = "progress_nuke", skyAccess = true)
+    public static void survivorOfTheWaveOnly(GameTestHelper h) {
         ServerLevel level = h.getLevel();
         boolean fires = IncomingConfig.SERVER.nukeFires.get(), damage = IncomingConfig.SERVER.nukeBlockDamage.get();
         IncomingConfig.SERVER.nukeFires.set(false);
@@ -321,40 +327,81 @@ public final class ProgressGameTests {
             NuclearStrikes.clear(level);
         });
         Vec3 ground = Vec3.atBottomCenterOf(h.absolutePos(RANGE_CENTER));
-        Detonation d = NuclearWarhead.detonate(level, ground, 0.1, false, null, 0.05f);
-        double ring = d.groundRange(BlastModel.kpa(5));
-        h.assertTrue(ring > 2, "5 psi ring " + ring + " blocks: too small to stand in");
-        Vec3 burst = d.burst();
-        Credited survivor = Credited.online(h, "progress_survivor", 0, burst.add(ring * 0.6, 0, 0));
-        Credited dead = Credited.online(h, "progress_dead", 0, burst.add(-ring * 0.6, 0, 0));
-        Credited creative = Credited.online(h, "progress_creative", 0, burst.add(0, 0, ring * 0.6));
+        Detonation plan = NuclearWarhead.geometry(level, ground, SURVIVAL_KT, false, SURVIVAL_SCALE);
+        double ring = plan.groundRange(BlastModel.kpa(5)), edge = plan.groundRange(BlastModel.kpa(4));
+        h.assertTrue(ring > 8 && edge < 30, "5 psi ring " + ring + ", 4 psi " + edge + " blocks: does not fit the platform");
+        Vec3 burst = plan.burst();
+        Credited survivor = sealed(h, "progress_survivor", burst.add(ring * 0.6, 0, 0));
+        Credited dead = sealed(h, "progress_dead", burst.add(-ring * 0.6, 0, 0));
+        Credited creative = sealed(h, "progress_creative", burst.add(0, 0, ring * 0.6));
         creative.getAbilities().invulnerable = true;
-        double mid = d.groundRange(BlastModel.kpa(2));
-        Credited outside = Credited.online(h, "progress_outside", 0, burst.add(0, 0, -mid));
-        Credited far = Credited.online(h, "progress_far", 0, burst.add(d.radiusMax() + 50, 0, 0));
-        for (Credited p : List.of(survivor, dead, creative)) h.assertTrue(d.psi(p.position()) >= 5, p.getGameProfile().getName() + " not inside 5 psi");
-        h.assertTrue(d.psi(outside.position()) < 5 && d.psi(outside.position()) >= 0.3, "the outside player at " + d.psi(outside.position()) + " psi");
-        Orders.deliver(level);
-        long due = ua.zentix.incoming.progress.Progress.survivalDue(d, survivor.position());
-        h.assertTrue(due > level.getGameTime(), "survival already due at the burst");
-        dead.kill();
-        h.assertFalse(dead.isAlive(), "the killed player lives");
-        List<Credited> all = List.of(survivor, dead, creative, outside, far);
+        Credited turned = sealed(h, "progress_turned", burst.add(0, 0, -ring * 0.6));
+        double mid = (ring + edge) / 2 / Math.sqrt(2);
+        Credited outside = sealed(h, "progress_outside", burst.add(mid, 0, mid));
+        Credited far = Credited.online(h, "progress_far", 0, burst.add(plan.radiusMax() + 50, 0, 0));
+        for (Credited p : List.of(survivor, dead, creative, turned)) h.assertTrue(plan.psi(p.position()) >= 5, p.getGameProfile().getName() + " not inside 5 psi");
+        double between = plan.psi(outside.position());
+        h.assertTrue(between < 5 && between >= 4, "the outside player at " + between + " psi");
+
+        Detonation d = NuclearWarhead.detonate(level, ground, SURVIVAL_KT, false, null, SURVIVAL_SCALE);
+        h.assertTrue(d.burst().distanceTo(burst) < 1e-6, "the burst moved from its plan");
+        List<Credited> all = List.of(survivor, dead, creative, turned, outside, far);
+        boolean[] killed = {false}, switched = {false};
         h.onEachTick(() -> {
             for (Credited p : all) NeoForge.EVENT_BUS.post(new PlayerTickEvent.Post(p));
-            if (level.getGameTime() < due) h.assertFalse(done(survivor, "strikes/nuclear_survivor"), "Still Standing before the wave passed");
+            if (!killed[0] && !watches(dead).isEmpty()) {
+                dead.kill();
+                h.assertTrue(watches(dead).isEmpty(), "death left a survival watch");
+                killed[0] = true;
+            }
+            if (!switched[0] && !watches(turned).isEmpty()) {
+                turned.getAbilities().invulnerable = true;
+                switched[0] = true;
+            }
+            if (watches(survivor).isEmpty() == false) {
+                h.assertFalse(done(survivor, "strikes/nuclear_survivor"), "Still Standing while still watched");
+            }
         });
         h.succeedWhen(() -> {
-            h.assertTrue(level.getGameTime() > due, "waiting for the wave to pass");
+            h.assertTrue(killed[0] && switched[0], "the wave never hit the boxed players");
+            h.assertTrue(watches(outside).isEmpty() && watches(survivor).isEmpty(), "waiting for the wave to pass");
             h.assertTrue(done(survivor, "strikes/nuclear_survivor"), "the survivor has no Still Standing");
             h.assertFalse(done(dead, "strikes/nuclear_survivor"), "a dead player got Still Standing");
             h.assertFalse(done(creative, "strikes/nuclear_survivor"), "a creative player got Still Standing");
+            h.assertFalse(done(turned, "strikes/nuclear_survivor"), "a player invulnerable when the wave had passed got Still Standing");
             h.assertFalse(done(outside, "strikes/nuclear_survivor"), "a player below 5 psi got Still Standing");
-            for (Credited p : List.of(survivor, dead, creative, outside)) {
+            for (Credited p : List.of(survivor, dead, creative, turned, outside)) {
                 h.assertValueEqual(stat(p, ModStats.NUCLEAR_DETONATIONS_WITNESSED), 1, p.getGameProfile().getName() + ": detonations witnessed");
             }
             h.assertValueEqual(stat(far, ModStats.NUCLEAR_DETONATIONS_WITNESSED), 0, "beyond the damage reach: detonations witnessed");
         });
+    }
+
+    private static List<ua.zentix.incoming.progress.Progress.Watch> watches(ServerPlayer p) {
+        return p.getData(ua.zentix.incoming.registry.ModAttachments.SURVIVAL);
+    }
+
+    /**
+     * A credited player standing at {@code at} in the world, in a closed stone box (no air path to the sky: the wave's
+     * pressure does not reach the body, its hit still comes).
+     */
+    private static Credited sealed(GameTestHelper h, String name, Vec3 at) {
+        ServerLevel level = h.getLevel();
+        BlockPos feet = BlockPos.containing(at);
+        for (int dx = -1; dx <= 1; dx++) {
+            for (int dz = -1; dz <= 1; dz++) {
+                for (int dy = -1; dy <= 2; dy++) {
+                    if (dx == 0 && dz == 0 && (dy == 0 || dy == 1)) continue;
+                    level.setBlock(feet.offset(dx, dy, dz), net.minecraft.world.level.block.Blocks.STONE.defaultBlockState(), 2);
+                }
+            }
+        }
+        level.setBlock(feet, net.minecraft.world.level.block.Blocks.AIR.defaultBlockState(), 2);
+        level.setBlock(feet.above(), net.minecraft.world.level.block.Blocks.AIR.defaultBlockState(), 2);
+        Credited p = Credited.online(h, name, 0, Vec3.atBottomCenterOf(feet));
+        level.addNewPlayer(p);
+        StrikeGameTests.afterTest(h, () -> level.removePlayerImmediately(p, net.minecraft.world.entity.Entity.RemovalReason.DISCARDED));
+        return p;
     }
 
     // ---------------------------------------------------------------- grid
@@ -380,8 +427,9 @@ public final class ProgressGameTests {
         h.assertValueEqual(outages.size(), 1, "outages");
         double radius = outages.getFirst().getRadius();
         Credited inside = Credited.online(h, "progress_in_dark", 0, RANGE_CENTER.offset(2, 0, 2));
+        // beyond any outage another batch may restore meanwhile (a nuclear one reaches at most 16 384 blocks)
         Credited away = Credited.online(h, "progress_away", 0, RANGE_CENTER);
-        away.moveTo(Vec3.atCenterOf(node).add(radius + 20, 0, 0));
+        away.moveTo(Vec3.atCenterOf(node).add(radius + 40_000, 0, 0));
         h.assertTrue(Blackouts.restore(level, Vec3.atCenterOf(node), 8, 0) >= 1, "nothing to restore");
         h.succeedWhen(() -> {
             Orders.deliver(level);
@@ -399,11 +447,25 @@ public final class ProgressGameTests {
     @GameTest(template = "range", timeoutTicks = 20, batch = "progress_data", skyAccess = true)
     public static void statisticsAndAdvancementsLoad(GameTestHelper h) {
         MinecraftServer server = h.getLevel().getServer();
+        // created at common setup, before any lookup could create them lazily: the statistics screen lists only these
+        for (var id : ModStats.all()) h.assertTrue(Stats.CUSTOM.contains(id), "stat " + id + " not created");
         for (var id : ModStats.all()) {
             String name = "minecraft.custom:" + id.getNamespace() + "." + id.getPath();
             h.assertTrue(ObjectiveCriteria.byName(name).isPresent(), "no scoreboard criterion " + name);
         }
         h.assertValueEqual(ModStats.all().size(), 3 + WeaponType.values().length, "statistics");
+        // the tab opens with any Incoming item: the root's list names every item the mod registers
+        Set<String> listed = new HashSet<>();
+        try (var in = server.getResourceManager().getResourceOrThrow(Incoming.id("advancement/strikes/root.json")).openAsReader()) {
+            com.google.gson.JsonObject root = com.google.gson.JsonParser.parseReader(in).getAsJsonObject();
+            for (var e : root.getAsJsonObject("criteria").getAsJsonObject("has_incoming_item").getAsJsonObject("conditions").getAsJsonArray("items")
+                    .get(0).getAsJsonObject().getAsJsonArray("items")) listed.add(e.getAsString());
+        } catch (java.io.IOException e) {
+            throw new GameTestAssertException("root advancement unreadable: " + e);
+        }
+        for (var id : net.minecraft.core.registries.BuiltInRegistries.ITEM.keySet()) {
+            if (id.getNamespace().equals(Incoming.MOD_ID)) h.assertTrue(listed.contains(id.toString()), "the tab does not open with " + id);
+        }
         for (String path : List.of("root", "first_strike", "camera_strike", "first_interception", "nuclear_survivor", "lights_back")) {
             AdvancementHolder a = server.getAdvancements().get(Incoming.id("strikes/" + path));
             h.assertTrue(a != null && a.value().display().isPresent(), "advancement strikes/" + path + " not loaded");

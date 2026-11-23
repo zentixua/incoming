@@ -1,8 +1,10 @@
 package ua.zentix.incoming.progress;
 
+import net.minecraft.resources.ResourceKey;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
+import net.minecraft.world.level.Level;
 import net.minecraft.world.phys.Vec3;
 import net.neoforged.bus.api.IEventBus;
 import net.neoforged.fml.event.lifecycle.FMLCommonSetupEvent;
@@ -11,11 +13,12 @@ import net.neoforged.neoforge.event.tick.PlayerTickEvent;
 import net.neoforged.neoforge.server.ServerLifecycleHooks;
 import org.jetbrains.annotations.Nullable;
 import ua.zentix.incoming.api.GridRestoreEvent;
-import ua.zentix.incoming.api.NuclearDetonationEvent;
 import ua.zentix.incoming.api.StrikeRoundEvent;
+import ua.zentix.incoming.grid.Blackouts;
+import ua.zentix.incoming.grid.Districts;
+import ua.zentix.incoming.grid.Outage;
+import ua.zentix.incoming.grid.PowerGrid;
 import ua.zentix.incoming.nuclear.Detonation;
-import ua.zentix.incoming.nuclear.NuclearEvents;
-import ua.zentix.incoming.nuclear.model.BlastModel;
 import ua.zentix.incoming.registry.ModAttachments;
 import ua.zentix.incoming.strike.WeaponType;
 import ua.zentix.incoming.target.Sides;
@@ -25,8 +28,9 @@ import java.util.List;
 import java.util.UUID;
 
 /**
- * Advancements and statistics ({@link ModTriggers}, {@link ModStats}) from Incoming's own order and round events
- * ({@code ua.zentix.incoming.api}), as they are delivered at the end of the tick they happened in. The round carries its
+ * Advancements and statistics ({@link ModTriggers}, {@link ModStats}). Rounds and outages: from Incoming's own order,
+ * round and grid events ({@code ua.zentix.incoming.api}), as they are delivered at the end of the tick they happened in.
+ * Nuclear: from the burst ({@link #witness}) and the wave's hit on a body ({@link #blasted}). The round carries its
  * owner across off-world flight and restarts, so credit follows the round, never the world entity. Credit goes only to a
  * player online at that moment and not a fake player (an automation mod's); an offline owner, an ownerless round
  * (console, command block, ownerless launcher, game master) gets nothing, now or later.
@@ -37,9 +41,7 @@ public final class Progress {
      * is at most 6 blocks/tick ({@code BlastBody.MAX_THROW}) and loses ×0.546 per tick on the ground (vanilla block friction
      * 0.6 × 0.91), under 0.1 block/tick in 7 ticks; its hop (at most a jump, {@code BlastBody.HOP}) lands within 12 ticks.
      */
-    static final int LANDING_TICKS = 20;
-    /** A body is watched for survival from this overpressure at its position: the wave hits bodies from here on. */
-    static final double WATCH_PSI = BlastModel.psi(Detonation.HIT_KPA);
+    public static final int LANDING_TICKS = 20;
 
     private Progress() {}
 
@@ -84,22 +86,12 @@ public final class Progress {
     // ---------------------------------------------------------------- nuclear
 
     /**
-     * Every online player in the burst's dimension: within its damage reach ({@link #witnessed}) counts a detonation
-     * witnessed; one the wave reaches ({@link #WATCH_PSI}) and who can be hurt is watched until the wave has passed them
-     * ({@link #survivalDue}).
+     * A detonation in {@code level}: every online player there within its damage reach ({@link #witnessed}) counts one
+     * detonation witnessed. Called by the burst itself ({@code NuclearWarhead.detonate}), so a strike cleared in the same
+     * tick still counts.
      */
-    public static void onDetonation(NuclearDetonationEvent e) {
-        MinecraftServer server = ServerLifecycleHooks.getCurrentServer();
-        ServerLevel level = server == null ? null : server.getLevel(e.getDimension());
-        Detonation d = level == null ? null : detonation(level, e.getDetonationId());
-        if (d == null) return;
-        for (ServerPlayer p : online(level)) {
-            Vec3 at = p.position();
-            if (witnessed(d, at)) p.awardStat(ModStats.NUCLEAR_DETONATIONS_WITNESSED);
-            double psi = d.psi(at);
-            if (psi < WATCH_PSI || !p.isAlive() || p.isSpectator() || p.getAbilities().invulnerable) continue;
-            p.getData(ModAttachments.SURVIVAL).add(new Watch(survivalDue(d, at), psi, d.yieldKt()));
-        }
+    public static void witness(ServerLevel level, Detonation d) {
+        for (ServerPlayer p : online(level)) if (witnessed(d, p.position())) p.awardStat(ModStats.NUCLEAR_DETONATIONS_WITNESSED);
     }
 
     /**
@@ -111,25 +103,42 @@ public final class Progress {
     }
 
     /**
-     * Game time when a body at {@code at} has outlived the blast: front arrival at its slant range, the positive phase there,
-     * then {@link #LANDING_TICKS}.
+     * The blast wave of {@code d} has just hit {@code p} ({@code BlastFront}: the front reached them, from 0.3 psi, and its
+     * hit was applied; the wave's own injury law decided what it did to them). An online, real player who can be hurt is
+     * watched until the wave has passed them ({@link #survivalDue}), with the peak overpressure at their position, shelter
+     * or not. A strike cleared before its front arrives hits no one, so it watches no one.
      */
-    public static long survivalDue(Detonation d, Vec3 at) {
-        double slant = at.distanceTo(d.burst());
-        return d.gameTime() + (long) Math.ceil(d.arrivalTicks(slant) + d.positivePhaseTicks(slant)) + LANDING_TICKS;
+    public static void blasted(ServerLevel level, Detonation d, ServerPlayer p) {
+        if (p.isFakePlayer() || !p.isAlive() || p.isSpectator() || p.getAbilities().invulnerable) return;
+        if (level.getServer().getPlayerList().getPlayer(p.getUUID()) != p) return;
+        p.getData(ModAttachments.SURVIVAL).add(new Watch(level.dimension(), survivalDue(d, p.position(), level.getGameTime()), d.psi(p.position()), d.yieldKt()));
     }
 
-    /** A watched player's due survivals; dead or logged out, the watch is gone with the player object. */
+    /**
+     * Game time when a body at {@code at}, hit at {@code now}, has outlived the blast: the positive phase at its place
+     * ({@link Detonation#positivePhaseSeconds}, in game ticks at the strike's scale as the front's own phase), then
+     * {@link #LANDING_TICKS}. The hit comes at front arrival or later (it waits for the light pulse and the work budget),
+     * so this is never before the wave has passed.
+     */
+    public static long survivalDue(Detonation d, Vec3 at, long now) {
+        return now + (long) Math.ceil(d.positivePhaseSeconds(at) * 20 * d.scale()) + LANDING_TICKS;
+    }
+
+    /**
+     * A watched player's due survivals: still alive, in the burst's dimension and able to be hurt. Due watches are taken
+     * off the list before any criterion runs: a reward may kill the player, whose death clears the list.
+     */
     public static void onPlayerTick(PlayerTickEvent.Post e) {
         if (!(e.getEntity() instanceof ServerPlayer p) || !p.hasData(ModAttachments.SURVIVAL)) return;
         List<Watch> watches = p.getData(ModAttachments.SURVIVAL);
         if (watches.isEmpty()) return;
         long now = p.serverLevel().getGameTime();
-        for (var it = watches.iterator(); it.hasNext(); ) {
-            Watch w = it.next();
-            if (now < w.due) continue;
-            it.remove();
-            if (p.isAlive()) ModTriggers.NUCLEAR_SURVIVED.get().trigger(p, w.psi, w.yieldKt);
+        List<Watch> due = new ArrayList<>();
+        watches.removeIf(w -> now >= w.due && due.add(w));
+        for (Watch w : due) {
+            if (p.isAlive() && !p.isSpectator() && !p.getAbilities().invulnerable && p.level().dimension() == w.dimension) {
+                ModTriggers.NUCLEAR_SURVIVED.get().trigger(p, w.psi, w.yieldKt);
+            }
         }
     }
 
@@ -140,13 +149,19 @@ public final class Progress {
 
     // ---------------------------------------------------------------- grid
 
-    /** Everyone standing in the outage's area (horizontal radius from its centre) when its power is all back. */
+    /**
+     * Everyone standing in a district the outage covered (as the grid decides coverage: by district seed) when its power is
+     * all back, unless another outage still keeps that district dark.
+     */
     public static void onRestore(GridRestoreEvent e) {
         MinecraftServer server = ServerLifecycleHooks.getCurrentServer();
         ServerLevel level = server == null ? null : server.getLevel(e.getDimension());
         if (level == null) return;
+        PowerGrid grid = PowerGrid.get(level);
+        long now = Blackouts.now(level);
         for (ServerPlayer p : online(level)) {
-            if (Math.hypot(p.getX() - e.getCentreX(), p.getZ() - e.getCentreZ()) > e.getRadius()) continue;
+            int cx = p.getBlockX() >> 4, cz = p.getBlockZ() >> 4;
+            if (!Outage.covers(e.getCentreX(), e.getCentreZ(), e.getRadius(), Districts.of(cx, cz)) || grid.dark(cx, cz, now)) continue;
             ModTriggers.BLACKOUT_RESTORED.get().trigger(p, e.isNuclear());
         }
     }
@@ -175,14 +190,8 @@ public final class Progress {
         return null;
     }
 
-    @Nullable
-    private static Detonation detonation(ServerLevel level, int id) {
-        for (Detonation d : NuclearEvents.get(level).detonations()) if (d.id() == id) return d;
-        return null;
-    }
-
-    /** A pending survival: game time it is due, overpressure at the body, yield. */
-    public record Watch(long due, double psi, double yieldKt) {}
+    /** A pending survival: the burst's dimension, game time it is due, overpressure at the body, yield. */
+    public record Watch(ResourceKey<Level> dimension, long due, double psi, double yieldKt) {}
 
     /** A player's pending survivals ({@link ModAttachments#SURVIVAL}): unsaved, not copied on death. */
     public static final class Watches extends ArrayList<Watch> {}

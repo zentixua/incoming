@@ -175,22 +175,27 @@ paths:
   `TaggedClearAlertsTest`, `TaggedSalvoHudTest`, `CraterImpactTest`, `FlashAftermathClockTest`.
 
 ## Advancements and statistics (`progress/`)
-- `Progress` credits only from the api events as delivered (`Released`, `Ended`, `NuclearDetonationEvent`,
-  `GridRestoreEvent`), never from Incoming's own loops: one place decides, and credit follows the round's owner UUID
-  across off-world flight and restarts. Credited = in the player list at delivery and not `isFakePlayer()`; nothing
+- `Progress` credits rounds and outages from the api events as delivered (`Released`, `Ended`, `GridRestoreEvent`),
+  never from Incoming's own loops: one place decides, and credit follows the round's owner UUID across off-world
+  flight and restarts (a fake player under a real player's profile is that player, as in `Authority`). Nuclear credit
+  comes from the burst itself (`Progress.witness` in `NuclearWarhead.detonate`: a same-tick clear cannot lose it) and
+  from the wave's real hit (`Progress.blasted` in `BlastFront.work`, hit and burial). Credited = in the player list at delivery and not `isFakePlayer()`; nothing
   is queued for an offline owner. Online players of a level come from the player list filtered by level, not
   `level.players()`. Interceptions skip rounds friendly to the interceptor (`Sides.friendly`, the SAM radar's rule).
 - Camera credit is `StrikeProjectile.cameraGuided` (saved as `camera_guided`, set by `retarget` and a pursuit HELD
-  tick), carried to `RoundEnd.cameraGuided`/`Ended.isCameraGuided` by `endRound` and `detonateNuclear`.
-- Nuclear survival: watched from 0.3 psi (`Detonation.HIT_KPA`) unless creative/spectator, due at front arrival +
-  positive phase + `LANDING_TICKS` (`survivalDue`); the watch is the unsaved player attachment `SURVIVAL`, cleared on
-  death; the advancement's 5 psi is in its JSON (`Blackouts.DEAD_PSI`, `ProgressTest`). Witnessed = horizontal range
-  within `Detonation.radiusMax`.
-- Stats (`ModStats`) are created at common setup: vanilla lists in the statistics screen and accepts as scoreboard
-  criteria only created stat objects. A new weapon adds `rounds_launched.<id>` and its lang key automatically fails
+  tick), carried to `RoundEnd.cameraGuided`/`Ended.isCameraGuided` by `endRound` and `detonateNuclear`; a round
+  handed to another entity takes the mark along (`handCameraMark`: B-2 to bomb).
+- Nuclear survival: watched from the hit (the wave hits from 0.3 psi) unless creative/spectator, due at hit + positive
+  phase at the body + `LANDING_TICKS` (`survivalDue`), granted only alive, vulnerable and in the burst's dimension; the
+  watch is the unsaved player attachment `SURVIVAL`, cleared on death; due watches leave the list before the trigger
+  runs (a reward may kill the player). The advancement's 5 psi is in its JSON (`Blackouts.DEAD_PSI`, `ProgressTest`).
+  Witnessed = horizontal range within `Detonation.radiusMax`. Restore credit tests the player's district with
+  `Outage.covers` and `PowerGrid.dark`, as the grid does, never a circle.
+- Stats (`ModStats`) are created at common setup, as vanilla's: the statistics screen lists only created stat
+  objects. A new weapon adds `rounds_launched.<id>` and its lang key automatically fails
   `ProgressTest` until translated. GameTest players that must earn advancements or stats are real `ServerPlayer`s
   (`ProgressGameTests.Credited`): `FakePlayer` drops stats and advancements; connection before `moveTo`.
-  Regressions: `ProgressGameTests`, `ProgressTest`.
+  Regressions: `ProgressGameTests`, `ProgressReviewGameTests`, `ProgressTest`.
 
 ## Unpaid nuclear review
 - `NuclearReview` is separate player state, not a `NuclearKeys` order. Global nuclear abort invalidates it on the

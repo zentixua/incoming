@@ -8,6 +8,7 @@ import it.unimi.dsi.fastutil.ints.IntSet;
 import it.unimi.dsi.fastutil.longs.LongOpenHashSet;
 import net.minecraft.core.BlockPos;
 import net.minecraft.server.level.ServerLevel;
+import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.util.Mth;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.LivingEntity;
@@ -23,6 +24,7 @@ import org.jetbrains.annotations.Nullable;
 import ua.zentix.incoming.IncomingConfig;
 import ua.zentix.incoming.compat.SubLevels;
 import ua.zentix.incoming.nuclear.Detonation;
+import ua.zentix.incoming.progress.Progress;
 import ua.zentix.incoming.registry.ModAttachments;
 import ua.zentix.incoming.registry.ModDamageTypes;
 import ua.zentix.incoming.registry.ModParticles;
@@ -210,8 +212,10 @@ final class BlastFront {
             if (!e.isAlive() || e.isSpectator() || e.isPassenger()) continue;
             long t0 = clock.begin();
             Entity owner = h.owner() == null ? null : level.getPlayerByUUID(h.owner());
-            if (h.buried()) BlastBody.bury(level, h.d(), e, owner);
-            else if (!e.getData(ModAttachments.NUKE_SEEN).blasted(h.d().id())) {
+            if (h.buried()) {
+                BlastBody.bury(level, h.d(), e, owner);
+                if (e instanceof ServerPlayer p) Progress.blasted(level, h.d(), p);
+            } else if (!e.getData(ModAttachments.NUKE_SEEN).blasted(h.d().id())) {
                 // once per body and detonation: loading it later brings no second wave, and a body loaded on the tick the front
                 // crosses it and caught up first (LateExposure) is not hit again
                 e.setData(ModAttachments.NUKE_SEEN, e.getData(ModAttachments.NUKE_SEEN).withBlast(h.d().id()));
@@ -220,6 +224,7 @@ final class BlastFront {
                 BlastBody.Before late = h.before() != null || seen == null ? null : seen.remove(e.getId());
                 BlastBody.Before b = h.before() != null ? h.before() : late == null ? null : late.drifted(e.position());
                 if (BlastBody.hit(level, h.d(), e, owner, b)) windy.computeIfAbsent(h.d().id(), k -> new IntOpenHashSet()).add(e.getId());
+                if (e instanceof ServerPlayer p) Progress.blasted(level, h.d(), p);
             }
             clock.end(t0);
         }

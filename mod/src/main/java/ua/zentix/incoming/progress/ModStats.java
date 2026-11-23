@@ -56,8 +56,8 @@ public final class ModStats {
     }
 
     /**
-     * Create the stat objects (common setup, both sides): vanilla lists in the statistics screen, and accepts as scoreboard
-     * criteria, only stats created this way, as its own {@code Stats.makeCustomStat} does.
+     * Create the stat objects (common setup, both sides), as vanilla's own {@code Stats.makeCustomStat} does: the statistics
+     * screen lists only created stats (a scoreboard criterion creates its stat on first use).
      */
     public static void create() {
         for (ResourceLocation id : ALL) Stats.CUSTOM.get(id, StatFormatter.DEFAULT);

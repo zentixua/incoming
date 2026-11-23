@@ -103,8 +103,8 @@ scoreboards, datapacks and a game master that follows advancements use them as t
 | `incoming:strikes/first_strike` | `incoming:round_released` | a round of the player's leaves |
 | `incoming:strikes/camera_strike` | `incoming:camera_guided_hit` | a round the player steered through its camera goes off |
 | `incoming:strikes/first_interception` | `incoming:round_intercepted` | the player's SAM or weapon shoots down a hostile round |
-| `incoming:strikes/nuclear_survivor` | `incoming:nuclear_survived` with `overpressure_psi` at least 5 | the player is alive once a nuclear blast wave of at least 5 psi has passed them |
-| `incoming:strikes/lights_back` | `incoming:blackout_restored` | the player is inside an outage's area when its power is all back |
+| `incoming:strikes/nuclear_survivor` | `incoming:nuclear_survived` with `overpressure_psi` at least 5 | the player is alive once a nuclear blast wave that hit them at 5 psi or more has passed |
+| `incoming:strikes/lights_back` | `incoming:blackout_restored` | an outage ends while the player stands in one of its districts and that district is lit again |
 
 Your own advancements can use the triggers with these conditions (all optional, besides the usual `player`):
 
@@ -124,13 +124,17 @@ Your own advancements can use the triggers with these conditions (all optional, 
 | `incoming:nuclear_detonations_witnessed` | `minecraft.custom:incoming.nuclear_detonations_witnessed` | nuclear detonations the player was within reach of (glass breaks or skin burns there) |
 
 - A round credits its owner, the same player the strike events name, and only while they are online: nothing is kept
-  for an offline owner. Rounds from the console, command blocks, ownerless launchers and fake players (machines of
-  other mods) credit no one. `/execute as <player>` makes the round that player's.
+  for an offline owner. Rounds from the console, command blocks, ownerless launchers and fake players with their own
+  identity credit no one. `/execute as <player>` makes the round that player's, and so does a machine acting under the
+  player's own profile (a Create deployer for its owner), as with a fixed launcher and with permissions.
 - A round shot down counts for the SAM's owner or for the player whose weapon brought it down, unless the round is
   theirs or a teammate's (by `/team`, as the SAM decides whom to shoot).
-- Still Standing reads the pressure at the player's position from the blast model, shelter or not, and waits until
-  the wave and its positive phase have passed them plus one second for a thrown body to land. Creative and spectator
-  players are not watched; a death or logout before then cancels it.
+- Still Standing starts when the wave front actually hits the player: it reads the pressure at their position from
+  the blast model, shelter or not, and waits until the positive phase there has passed plus one second for a thrown
+  body to land. A player who left before the front, a cleared strike, creative and spectator mode get nothing; a
+  death, logout or change of dimension before then cancels it.
+- Lights Back On follows the grid's districts: the player's district must have been in the outage and must be lit
+  once it ends (another outage over it keeps it dark).
 
 ```mcfunction
 # a sidebar of rounds shot down

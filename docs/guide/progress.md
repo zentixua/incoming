@@ -12,8 +12,8 @@ The tab appears once you hold any Incoming item or launch your first round.
 | First Strike | Launch a round of any weapon: from the designator, with a command, or from your own fixed launcher. |
 | Eyes on Target | A round you steered through its camera goes off: you retargeted it with LMB in the projectile camera, or a Shahed-136 or Lancet followed a target you held in its camera frame. |
 | Clear Skies | Shoot down a hostile round with a SAM you placed, or with your own weapon. |
-| Still Standing | Live through a nuclear blast wave where it reaches at least 5 psi: close enough to flatten houses. You must still be alive once the wave has passed you. A sealed bunker counts; creative and spectator mode do not. |
-| Lights Back On | Be inside a blacked-out area when power comes back to all of it. |
+| Still Standing | Live through a nuclear blast wave that hits you at 5 psi or more: close enough to flatten houses. You must still be alive once the wave has passed you. A sealed bunker counts; creative and spectator mode do not. |
+| Lights Back On | Be in a blacked-out district when its outage ends and its lights come back. |
 
 ## Statistics
 

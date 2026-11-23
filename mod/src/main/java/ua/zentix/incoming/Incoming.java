@@ -90,7 +90,6 @@ public final class Incoming {
         NeoForge.EVENT_BUS.addListener(IncomingCommand::register);
         NeoForge.EVENT_BUS.addListener(Progress::onReleased);
         NeoForge.EVENT_BUS.addListener(Progress::onEnded);
-        NeoForge.EVENT_BUS.addListener(Progress::onDetonation);
         NeoForge.EVENT_BUS.addListener(Progress::onRestore);
         NeoForge.EVENT_BUS.addListener(Progress::onPlayerTick);
         NeoForge.EVENT_BUS.addListener(EventPriority.LOWEST, Progress::onDeath);
