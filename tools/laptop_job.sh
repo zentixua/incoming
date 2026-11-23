@@ -9,6 +9,11 @@
 # group (e.g. Claude app): on exit everything left in the group stops (no stranded nested-session D-Bus
 # helpers), and if the system still runs out of memory, this job goes first (OOMScoreAdjust), not Artem's
 # programs. Laptop stays awake while job runs (systemd-inhibit).
+# The unit lives in agents.slice (laptop-agents installs it with one MemoryMax/MemorySwapMax for all agent work: missions,
+# delegate runs, laptop jobs): the sum of all jobs stays inside it, so swap never fills and systemd-oomd never kills the
+# Claude app; a job that does not fit is killed inside the slice ("agent work memory … is full"). Without the installed
+# unit (a server) the slice has no limit. TMPDIR is the job's own directory on disk (~/.cache/agents-tmp), not the /tmp
+# RAM tmpfs, removed when the unit stops.
 # Every job has a memory ceiling (MemoryMax, MemorySwapMax): a job past it is stopped inside its own unit and its output
 # ends with "laptop_job <name>: memory ceiling … reached", instead of the kernel picking a victim on the whole laptop.
 # Ceilings from measured unit peaks (journal, 14 days to 20.11, RAM + swap): GameTest, sweeps, builds and GPU jobs at most
@@ -42,8 +47,10 @@ fi
 
 # ExecStopPost of every job unit: one row for the delegated task's laptop load (laptop-agents mission-load reads it):
 #   cpu <epoch> <task> <unit> <wall s> <cpu s>   — CPU from the unit's own cgroup (cpu.stat), still there at stop-post
+# It also removes the job's own TMPDIR (only one under agents-tmp: never a caller's)
 if [ "${1:-}" = --account ]; then
   set +e
+  case "${TMPDIR:-}" in */agents-tmp/incoming-job-*) rm -rf -- "$TMPDIR" ;; esac
   cg=$(cut -d: -f3 /proc/self/cgroup 2>/dev/null | head -n 1)
   us=$(awk '$1 == "usage_usec" { print $2 }' "/sys/fs/cgroup$cg/cpu.stat" 2>/dev/null)
   [ -n "$us" ] || exit 0
@@ -52,12 +59,18 @@ if [ "${1:-}" = --account ]; then
   printf 'cpu\t%s\t%s\t%s\t%s\t%s\n' "$(date +%s)" "${DELEGATE_TASK:--}" "${cg##*/}" \
     "$(( $(date +%s) - ${INCOMING_JOB_START:-$(date +%s)} ))" "$(awk -v u="$us" 'BEGIN { printf "%.1f", u / 1e6 }')" >> "$log" 2>/dev/null
   # the unit hit its memory ceiling (the kernel killed inside it; systemd then stops the rest): the caller prints it
-  # memory.events: oom = this cgroup reached its own limit, oom_kill = processes killed in it (also by a global OOM)
+  # memory.events: oom = this cgroup reached its own limit, oom_kill = processes killed in it (also by a global OOM);
+  # the slice's own oom count (memory.events.local: its limit, not a job's) grown since the job started
+  # (INCOMING_SLICE_OOM) = agents.slice reached its limit
   oom=$(awk '$1 == "oom_kill" { print $2 }' "/sys/fs/cgroup$cg/memory.events" 2>/dev/null)
   own=$(awk '$1 == "oom" { print $2 }' "/sys/fs/cgroup$cg/memory.events" 2>/dev/null)
+  slice=$(awk '$1 == "oom" { print $2 }' "/sys/fs/cgroup${cg%/*}/memory.events.local" 2>/dev/null)
   if [ "${SERVICE_RESULT:-}" = oom-kill ] || [ "${oom:-0}" -gt 0 ]; then
     peak=$(awk '{ printf "%.1f", $1 / 1073741824 }' "/sys/fs/cgroup$cg/memory.peak" 2>/dev/null)
-    [ -n "${INCOMING_JOB_OOM:-}" ] && echo "${oom:-1} ${peak:-?} $([ "${own:-0}" -gt 0 ] && echo own || echo host)" > "$INCOMING_JOB_OOM"
+    where=host
+    [ "${slice:-0}" -gt "${INCOMING_SLICE_OOM:-0}" ] && where=slice
+    [ "${own:-0}" -gt 0 ] && where=own
+    [ -n "${INCOMING_JOB_OOM:-}" ] && echo "${oom:-1} ${peak:-?} $where" > "$INCOMING_JOB_OOM"
   fi
   exit 0
 fi
@@ -157,6 +170,13 @@ while IFS= read -r line; do envs+=(-E "$line"); done < <(env | grep -E '^(JAVA_H
 oomfile="${XDG_RUNTIME_DIR:-/run/user/$(id -u)}/incoming-job-$name-$$.oom"
 rm -f "$oomfile"
 props=(-p OOMScoreAdjust=500 -p MemoryMax="$mem_max" -p MemorySwapMax="$mem_swap" -p OOMPolicy=stop -E INCOMING_JOB_OOM="$oomfile")
+# agents.slice: one ceiling for all agent work (header); its oom count now, so --account tells a full slice from the unit's own
+slice_cg=$(systemctl --user show agents.slice -p ControlGroup --value 2>/dev/null || true)
+slice_mem=$(systemctl --user show agents.slice -p MemoryMax --value 2>/dev/null || true)
+slice_props=(--slice=agents.slice -E INCOMING_SLICE_OOM="$(awk '$1 == "oom" { print $2 }' "/sys/fs/cgroup$slice_cg/memory.events.local" 2>/dev/null || echo 0)")
+# the job's temporary files on disk (header), removed at stop (--account); the name only in a safe form, one path part
+tmp_dir="${XDG_CACHE_HOME:-$HOME/.cache}/agents-tmp/incoming-job-${name//[^A-Za-z0-9_.-]/_}-$$"
+slice_props+=(-E TMPDIR="$tmp_dir")
 if [ "$mode" = soft ]; then
   # idle CPU class and the client's memory ceiling (soft_mem_cap, above): a CPU client never pushes the host into swap;
   # INCOMING_SOFT_UNIT tells scripts inside that the ceiling is already theirs
@@ -176,11 +196,12 @@ inhibit=(systemd-inhibit --what=sleep:idle --who="Incoming: $name" --why="mod ch
 # the delegated task's load: the unit's CPU goes to the load log at stop (--account); only names, never the command's
 # arguments, reach the description and the log
 code=0
+mkdir -p "$tmp_dir"
 "${inhibit[@]}" \
   systemd-run --user --wait --pipe --collect --quiet --same-dir --unit="incoming-job-$name-$$" \
     --description="incoming job $name (task ${DELEGATE_TASK:--})" -E INCOMING_JOB_START="$(date +%s)" \
     -p ExecStopPost="$(_sd_quote "$(readlink -f "$0")") --account" \
-    "${props[@]}" "${envs[@]}" -- "$(readlink -f "$0")" --in-unit "$mode" "$name" $$ -- "$@" 0<&0 198>&- &
+    "${props[@]}" "${envs[@]}" "${slice_props[@]}" -- "$(readlink -f "$0")" --in-unit "$mode" "$name" $$ -- "$@" 0<&0 198>&- &
 run=$!
 # stopping this script (Ctrl+C, TERM from a caller's timeout) stops its service: the client does not outlive the command
 trap 'systemctl --user stop "incoming-job-$name-$$" 2>/dev/null; wait $run; echo "laptop_job $name: stopped"; exit 143' TERM INT
@@ -190,9 +211,12 @@ if [ "$mode" = soft ]; then
   exec 198>&-
 fi
 wait $run || code=$?
+rm -rf -- "$tmp_dir"   # also when the unit never started (its ExecStopPost removes it otherwise)
 if [ -s "$oomfile" ]; then
   read -r killed peak where < "$oomfile"
-  if [ "$where" = host ]; then
+  if [ "$where" = slice ]; then
+    echo "laptop_job $name: agent work memory (agents.slice: missions, delegate runs and laptop jobs together, MemoryMax $(awk -v b="$slice_mem" 'BEGIN { printf "%.0f GB", b / 1073741824 }')) is full: $killed process(es) killed inside its unit, peak $peak GB; job stopped (other agent work holds the memory: run it when that ends)"
+  elif [ "$where" = host ]; then
     echo "laptop_job $name: out of memory on the laptop (below its ceiling $mem_max): $killed process(es) killed inside its unit, peak $peak GB; job stopped"
   else
     echo "laptop_job $name: memory ceiling $mem_max (+ $mem_swap swap) reached: $killed process(es) killed inside its unit, peak $peak GB; job stopped (laptop_job.sh --full or INCOMING_JOB_MEM for a larger job)"

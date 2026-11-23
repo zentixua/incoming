@@ -94,6 +94,8 @@ Prism: `~/.var/app/org.prismlauncher.PrismLauncher/data/PrismLauncher/` (`tools/
                                            every job has a memory ceiling (--ceiling <mode>): 10 GB + 4 GB swap, --full (whole pack) 20 GB,
                                            from measured unit peaks; past it the unit stops itself and the output says “memory ceiling …
                                            reached”; INCOMING_JOB_MEM/INCOMING_JOB_SWAP for one job; without a sleep inhibitor where none is allowed (a server);
+                                           every job runs in agents.slice (laptop-agents: one ceiling for all agent work, rigs.md); a job
+                                           killed because the slice is full says “agent work memory … is full”; TMPDIR: its own on disk, removed at stop;
                                            TERM/Ctrl+C on laptop_job.sh stops its service (the client never outlives the command)
                                            task load: at stop (ExecStopPost `laptop_job.sh --account`) the unit's CPU from its cgroup
                                            goes to the load log (`cpu` row, task = DELEGATE_TASK set by `delegate`; job and task
@@ -188,6 +190,7 @@ Prism: `~/.var/app/org.prismlauncher.PrismLauncher/data/PrismLauncher/` (`tools/
                                            dist/incoming-trailer.mp4, -lite.mp4 and -credits.txt (lines for the video description)
     trailer/icon_from_frames.py <frames> <folder> ← the old Shahed-against-the-sky icon from frames (superseded by the pixel icon)
   docs/DESIGN-nuke.md                    ← nuclear strike design
+  docs/design/universal-integration.md   ← integration roadmap (events, permissions, claims, data, compat), status table
   docs/guide/                            ← player guide in English (pages by topic, pictures in img/),
                                            docs/guide/ru/ — the same in Russian
   docs/store/                            ← Modrinth and CurseForge page texts
