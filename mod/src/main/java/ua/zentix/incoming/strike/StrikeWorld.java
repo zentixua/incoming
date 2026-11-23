@@ -172,7 +172,7 @@ public final class StrikeWorld {
         if (level.hasData(ModAttachments.STRIKE_WORLD)) get(level).areas.tick(level);
         // “/tick freeze” stops entities: virtual projectiles, salvos, explosions stop with them.
         if (!level.tickRateManager().runsNormally()) {
-            Orders.deliver(level);
+            Orders.deliver(level.getServer());
             return;
         }
         SalvoData.get(level).tick(level);
@@ -184,7 +184,7 @@ public final class StrikeWorld {
             world.tick(level);
             world.flightLog.flush();
         }
-        Orders.deliver(level);
+        Orders.deliver(level.getServer());
     }
 
     /** Active world strike: in-world/virtual projectiles, salvos, explosions. */
@@ -274,8 +274,6 @@ public final class StrikeWorld {
     public static void onServerStopping(ServerStoppingEvent event) {
         // Pending nuclear orders unsaved: refund owners while still online (players saved afterward).
         NuclearKeys.cancelAll(event.getServer(), event.getServer().getPlayerList().getPlayers(), null, "server stopping");
-        // their endings go out before the world closes
-        for (ServerLevel level : event.getServer().getAllLevels()) Orders.deliver(level);
         for (ServerLevel level : event.getServer().getAllLevels()) {
             // Impact work unsaved: finish started/queued work now, otherwise world would retain explosions
             // half removed (timelines not yet queuing detonations are lost).
@@ -285,6 +283,8 @@ public final class StrikeWorld {
             }
             releaseAreas(level);
         }
+        // last: the endings above and what the finished impacts caused (outages) go out before the world closes
+        Orders.deliver(event.getServer());
     }
 
     /**

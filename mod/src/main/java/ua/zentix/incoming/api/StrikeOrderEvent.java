@@ -15,8 +15,8 @@ import java.util.Locale;
 import java.util.UUID;
 
 /**
- * One strike order on its way to admission: {@link Request}, then exactly one {@link Rejected} or {@link Accepted} at
- * the end of the same tick. Posted on {@code NeoForge.EVENT_BUS} from the server thread. Getters return immutable values only; the order's
+ * One strike order on its way to admission: {@link Request}, then at once exactly one {@link Rejected} or {@link
+ * Accepted}. Posted on {@code NeoForge.EVENT_BUS} from the server thread. Getters return immutable values only; the order's
  * rounds follow in {@link StrikeRoundEvent}.
  */
 public abstract class StrikeOrderEvent extends Event {
@@ -158,7 +158,7 @@ public abstract class StrikeOrderEvent extends Event {
      * Validation: a listener cancels to refuse the order and charges nothing here (debit in {@link Accepted}). Incoming's
      * own checks (permissions, target rules, nuclear gates, active-strike limit, a fixed launcher's mission and stock)
      * already passed; munitions are paid only after every listener has let it through. An order started from this
-     * listener is made again, with all its checks, on the next tick.
+     * listener is made again, with all its checks, on a later tick.
      */
     public static final class Request extends StrikeOrderEvent implements ICancellableEvent {
         @Nullable

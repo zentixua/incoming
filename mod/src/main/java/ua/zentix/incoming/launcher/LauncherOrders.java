@@ -21,6 +21,7 @@ import ua.zentix.incoming.strike.LaunchOrigin;
 import ua.zentix.incoming.strike.Loadout;
 import ua.zentix.incoming.strike.Munitions;
 import ua.zentix.incoming.strike.SalvoData;
+import ua.zentix.incoming.strike.Orders;
 import ua.zentix.incoming.strike.ServerActions;
 import ua.zentix.incoming.strike.StrikeWorld;
 import ua.zentix.incoming.strike.Waypoints;
@@ -49,6 +50,15 @@ public final class LauncherOrders {
     /** Signal reached launcher {@code be}: issue mission order. Null means ordered; otherwise failure reason. */
     @Nullable
     public static Component fire(ServerLevel level, FixedLauncherBlockEntity be) {
+        // started inside a strike-order listener or off the server thread: the whole firing, with its checks, later
+        if (Orders.elsewhere(level, () -> {
+            if (level.getBlockEntity(be.getBlockPos()) == be) be.fire(level);
+        })) return null;
+        return fireReason(level, be);
+    }
+
+    @Nullable
+    private static Component fireReason(ServerLevel level, FixedLauncherBlockEntity be) {
         Mission m = be.mission();
         if (m == null) return Component.translatable("incoming.fixed_launcher.no_mission.short");
         BlockPos pos = be.getBlockPos();

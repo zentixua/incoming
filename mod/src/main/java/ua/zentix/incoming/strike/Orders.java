@@ -1,6 +1,7 @@
 package ua.zentix.incoming.strike;
 
 import net.minecraft.network.chat.Component;
+import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.util.Mth;
 import net.minecraft.world.phys.Vec3;
@@ -34,8 +35,9 @@ public final class Orders {
 
     /**
      * An order entry must run elsewhere: off the server thread (another mod's worker) it runs on the server thread; inside
-     * a {@link StrikeOrderEvent.Request} listener it runs on the next tick. Both rerun the whole entry, so its own checks
-     * (rights, target, active-strike limit) see the state of that moment.
+     * a {@link StrikeOrderEvent.Request} listener it runs on a later tick. Both rerun the whole entry from its outermost
+     * call, so all its checks (rights, target, active-strike limit, a launcher's mission and stock) see the state of that
+     * moment.
      *
      * @param entry the same call again
      * @return true: {@code entry} is queued, the caller returns (an order queued counts as given)
@@ -47,19 +49,27 @@ public final class Orders {
             return true;
         }
         if (requesting == 0) return false;
-        Incoming.LOG.info("Strike order started inside another order's request, queued to the next tick");
+        Incoming.LOG.info("Strike order started inside another order's request, queued to a later tick");
         StrikeWorld.get(level).defer(level.getGameTime() + 1, entry);
         return true;
     }
 
     /**
-     * Ask the listeners ({@link StrikeOrderEvent.Request}, the one event posted at once), then run {@code body}, which pays
-     * and answers. Exactly one Rejected or Accepted follows: a veto rejects before payment; a body that did not answer
-     * (exception) is rejected with {@link StrikeOrderEvent.Reason#ERROR}.
+     * Ask the listeners ({@link StrikeOrderEvent.Request}), then run {@code body}, which pays and answers. Request, Rejected
+     * and Accepted are posted at once: they are the admission itself, and a second order must see the first one's
+     * Accepted (a cooldown, a balance). Exactly one Rejected or Accepted follows: a veto rejects before payment; a body that
+     * did not answer (exception) is rejected with {@link StrikeOrderEvent.Reason#ERROR}. A stopping server admits nothing:
+     * its unsaved waits are already settled.
      *
-     * @return {@code body}'s result; false if vetoed
+     * @return {@code body}'s result; false if vetoed or the server is stopping
      */
     public static boolean admit(Order order, Admission body) {
+        var server = order.level().getServer();
+        if (server != null && !server.isRunning()) {
+            Incoming.LOG.info("Strike order {} ×{} — {} not admitted: the server is stopping", order.weapon().getSerializedName(), order.count(),
+                    order.actorName());
+            return false;
+        }
         if (elsewhere(order.level(), () -> admit(order, body))) return true;
         StrikeOrderEvent.Request request = new StrikeOrderEvent.Request(order);
         boolean asked;
@@ -102,18 +112,21 @@ public final class Orders {
     }
 
     /**
-     * Post {@code event} at the end of this world tick (or of the server tick), in the order queued. Listeners therefore
-     * never run inside Incoming's own loops over salvos, key waits, flights or scheduled strikes, and a round's events
-     * reach every listener in order (a listener reacting to Released cannot make Ended overtake it).
+     * Post {@code event} at the end of this world tick (or of the server tick), in the order queued: round, detonation and
+     * grid events happen inside Incoming's own loops over salvos, key waits, flights and scheduled strikes, where a
+     * listener must not run, and a round's events reach every listener in order (a listener reacting to Released cannot
+     * make Ended overtake it). One queue for the whole server, kept with the overworld: a round that changes dimension
+     * keeps its order.
      */
     public static void queue(ServerLevel level, Event event) {
-        StrikeWorld.get(level).events().add(event);
+        StrikeWorld.get(level.getServer().overworld()).events().add(event);
     }
 
-    /** Deliver {@code level}'s queued events; events their listeners queue follow in the same pass. */
-    public static void deliver(ServerLevel level) {
-        if (!level.hasData(ModAttachments.STRIKE_WORLD)) return;
-        StrikeWorld world = StrikeWorld.get(level);
+    /** Deliver the queued events; events their listeners queue follow in the same pass. */
+    public static void deliver(MinecraftServer server) {
+        ServerLevel home = server.overworld();
+        if (home == null || !home.hasData(ModAttachments.STRIKE_WORLD)) return;
+        StrikeWorld world = StrikeWorld.get(home);
         if (world.events().isEmpty() || world.delivering) return;
         world.delivering = true;
         try {
@@ -123,9 +136,14 @@ public final class Orders {
         }
     }
 
+    /** {@link #deliver(MinecraftServer)} for {@code level}'s server. */
+    public static void deliver(ServerLevel level) {
+        deliver(level.getServer());
+    }
+
     /** Server tick end, after impacts and nuclear work: whatever they queued goes out this tick. */
     public static void onServerTick(ServerTickEvent.Post event) {
-        for (ServerLevel level : event.getServer().getAllLevels()) deliver(level);
+        deliver(event.getServer());
     }
 
     /**
@@ -134,7 +152,7 @@ public final class Orders {
      *
      * @return false if a listener failed
      */
-    static boolean publish(Event event) {
+    public static boolean publish(Event event) {
         try {
             NeoForge.EVENT_BUS.post(event);
             return true;

@@ -10,7 +10,9 @@ import java.util.UUID;
 
 /**
  * A nuclear detonation: an ICBM, a cruise missile or B-2 bomb with a nuclear warhead, {@code /incoming nuke now}. Posted
- * on {@code NeoForge.EVENT_BUS} from the server thread at the burst, before its round's {@link StrikeRoundEvent.Ended}.
+ * on {@code NeoForge.EVENT_BUS} from the server thread at the end of the burst's tick, before its round's {@link
+ * StrikeRoundEvent.Ended}. A burst outside the order lifecycle (another mod's call, a strike saved before these events)
+ * is reported too, with no order or round id.
  */
 public final class NuclearDetonationEvent extends Event {
     private final ResourceKey<Level> dimension;

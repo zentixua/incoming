@@ -938,9 +938,13 @@ public abstract class StrikeProjectile extends Entity implements IEntityWithComp
     protected final void detonateNuclear(ServerLevel level, Vec3 at, boolean airBurst) {
         RoundRef r = detachRound();
         UUID owner = ownerId();
-        discard();
-        Detonation d = NuclearWarhead.detonate(level, at, nuclear.yieldKt(), airBurst, owner, r);
-        if (r != null) Orders.ended(level, r, weapon(), owner, shotDownEnd != null ? shotDownEnd : RoundEnd.nuclear(d.burst(), d.yieldKt()));
+        try {
+            discard();
+        } finally {
+            // a failing removal listener cannot cost the burst or its round's end
+            Detonation d = NuclearWarhead.detonate(level, at, nuclear.yieldKt(), airBurst, owner, r);
+            if (r != null) Orders.ended(level, r, weapon(), owner, shotDownEnd != null ? shotDownEnd : RoundEnd.nuclear(d.burst(), d.yieldKt()));
+        }
     }
 
     /**

@@ -225,6 +225,8 @@ public final class IncomingCommand {
         Entity e = s.getEntity();
         ServerLevel level = s.getLevel();
         if (Orders.elsewhere(level, () -> nukeNow(s, pos, nuke))) return 1;
+        // a rerun later: the command's own gate as it is then
+        if (!mayNuke(s) || !s.hasPermission(2)) return 0;
         Vec3 ground = NuclearStrikes.ground(level, pos);
         // the yield that will burst: detonateNow applies the server's limit
         Loadout l = new Loadout(WeaponType.NUKE, 1, 0, TargetMode.LOOK, "", nuke.withYield(Math.min(nuke.yieldKt(), IncomingConfig.SERVER.nukeMaxYield.get())));

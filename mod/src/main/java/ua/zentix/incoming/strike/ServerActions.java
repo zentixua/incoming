@@ -437,7 +437,12 @@ public final class ServerActions {
     public static boolean strike(ServerPlayer player, WeaponType weapon, int count, int spread, Aim aim, Loadout.Nuke nuke, Waypoints via,
                                  @Nullable LaunchOrigin from, boolean rules, @Nullable String tag) {
         Aim asAsked = aim;
-        if (Orders.elsewhere(player.serverLevel(), () -> strike(player, weapon, count, spread, asAsked, nuke, via, from, rules, tag))) return true;
+        if (Orders.elsewhere(player.serverLevel(), () -> {
+            // later the player may have left (inventory already saved) or respawned (a new object): order as they are now
+            ServerPlayer now = live(player);
+            if (now != null) strike(now, weapon, count, spread, asAsked, nuke, via, from, rules, tag);
+            else Incoming.LOG.info("Queued strike order dropped: {} left", player.getGameProfile().getName());
+        })) return true;
         if (rules) {
             aim = ruled(player, aim);
             if (aim == null) return false;
@@ -598,9 +603,16 @@ public final class ServerActions {
     /** Same; {@code feedback} receives a listener's refusal (the launcher's status). */
     public static boolean fromLauncher(ServerLevel level, String who, @Nullable UUID owner, Loadout l, Aim aim, Waypoints via, LaunchOrigin.Fixed at,
                                        @Nullable Consumer<Component> feedback) {
-        if (Orders.elsewhere(level, () -> fromLauncher(level, who, owner, l, aim, via, at, feedback))) return true;
         Loadout order = clamp(l);
         return Orders.admit(Order.launcher(level, at.pos(), owner, order, aim, feedback), o -> launch(level, who, null, owner, 0, order, aim, via, at, null, o));
+    }
+
+    /** {@code player} as they are in the game now: the same object, or their respawned one; null if they left. */
+    @Nullable
+    private static ServerPlayer live(ServerPlayer player) {
+        if (!player.isRemoved() && !player.hasDisconnected()) return player;
+        ServerPlayer now = player.server.getPlayerList().getPlayer(player.getUUID());
+        return now == null || now.hasDisconnected() ? null : now;
     }
 
     /** Order within server limits ({@link #clamp}). */

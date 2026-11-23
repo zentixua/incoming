@@ -324,10 +324,11 @@ public final class OrderReentryGameTests {
     public static void workerDispatchCannotPostARequestOffThread(GameTestHelper h) {
         ServerLevel level = h.getLevel();
         String tag = "probe_thread";
-        AtomicBoolean offThread = new AtomicBoolean();
+        AtomicBoolean offThread = new AtomicBoolean(), asked = new AtomicBoolean();
         listen(h, EventPriority.HIGHEST, StrikeOrderEvent.Request.class, e -> {
             if (!tag.equals(e.getTag())) return;
             e.setCanceled(true);
+            asked.set(true);
             offThread.set(!level.getServer().isSameThread());
         });
         ServerActions.Aim aim = aim(h);
@@ -335,6 +336,7 @@ public final class OrderReentryGameTests {
                 ServerActions.dispatch(level, tag, 0, WeaponType.DRONE, 1, 0, aim, Loadout.Nuke.DEFAULT, Waypoints.NONE, null, tag, null));
         h.succeedWhen(() -> {
             h.assertTrue(worker.isDone(), "worker call has yet to return");
+            h.assertTrue(asked.get(), "the worker's order was never requested");
             h.assertFalse(offThread.get(), "Request was posted on the worker");
         });
     }

@@ -26,12 +26,14 @@ Every request ends in exactly one `Rejected` or `Accepted`, and every round of a
 `Ended`. A round keeps its id while it flies outside the loaded world, comes back into it, and across a server
 restart. A round that never left (a cancelled salvo, a failed launch, a nuclear launch without its second key) ends
 without `Released`. All events come from the server thread; their values are plain numbers, ids, names and
-positions. `Request` arrives while the order is being made; every other event arrives at the end of the same tick,
-in the order things happened.
+positions. `Request`, `Rejected` and `Accepted` arrive while the order is being made, so the next order already
+sees the last one accepted. The other events arrive at the end of the same tick, in the order things happened. A
+nuclear burst or an outage that belongs to no order (another mod's, or one saved before you added your script) is
+reported too, with no order or round id.
 
 To charge your own price or add a cooldown, check it in `Request`, take it in `Accepted`, and give it back in
 `Ended` if you wish. Incoming does not undo another mod's charges. A strike started from inside a `Request` listener
-is made on the next tick, with all its checks and its own request.
+is made on a later tick, with all its checks and its own request.
 
 ## KubeJS example
 

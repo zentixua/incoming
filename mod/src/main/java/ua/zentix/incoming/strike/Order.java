@@ -205,13 +205,13 @@ public final class Order {
     public void accept(int rounds) {
         if (answered()) throw new IllegalStateException("Order " + id + " already answered");
         accepted = rounds;
-        Orders.queue(level, new StrikeOrderEvent.Accepted(this, rounds));
+        Orders.publish(new StrikeOrderEvent.Accepted(this, rounds));
     }
 
     /** Not admitted: post {@link StrikeOrderEvent.Rejected}. Once; nothing was kept from the payer. */
     public void reject(StrikeOrderEvent.Reason reason) {
         if (answered()) throw new IllegalStateException("Order " + id + " already answered");
         rejected = reason;
-        Orders.queue(level, new StrikeOrderEvent.Rejected(this, reason));
+        Orders.publish(new StrikeOrderEvent.Rejected(this, reason));
     }
 }

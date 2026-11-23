@@ -137,8 +137,14 @@ paths:
 ## Order lifecycle events (`ua.zentix.incoming.api`)
 - Every order entry (designator, player command, `dispatch`, fixed launcher, `nuke now`) is admitted through
   `strike/Orders.admit` after Incoming's own checks and before payment: `Request` → one `Rejected`/`Accepted`
-  (`Order.accept`/`reject`, once). A new entry path goes through it too; an order started inside a `Request` listener
-  is deferred one tick (`StrikeWorld.defer`).
+  (`Order.accept`/`reject`, once), all three posted at once (the next order must see the last `Accepted`). Each entry's
+  outermost call starts with `Orders.elsewhere` (off the server thread, or inside a `Request` listener: the whole entry
+  reruns later with all its checks and a live player object); a new entry does the same.
+- Round, detonation and grid events never post inside Incoming's loops: `Orders.queue` puts them in one server-wide
+  queue (overworld `StrikeWorld`), delivered at world- and server-tick end and last in `onServerStopping`. A
+  synchronous post there would let listeners recall or clear inside salvo, key-wait and flight loops (double endings,
+  `ConcurrentModificationException`) and reorder Released/Ended; per-world queues would reorder rounds that change
+  dimension.
 - Each admitted round ends exactly once. Rounds are `RoundRef` (order id + index, name-based UUID), saved on whatever
   carries them: `StrikeProjectile` NBT `round`, `ScheduledStrike.round`, `SalvoData` `order`/`failed_rounds`. A form
   change hands the round on (`VirtualFlights.park` detaches it from the old entity, B-2 release moves it to the bomb);
