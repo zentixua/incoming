@@ -179,3 +179,8 @@ paths:
   for a slot or state) must report its failed bound with another exception (`IllegalStateException`), or the retry skips
   the done fixture and passes (`CollapseGameTests.snapshotStepsStayInTheirSlice`).
 
+
+- The GameTest server has no profile cache (`MinecraftServer.getProfileCache()` is null): an offline UUID never resolves
+  to an operator there, so offline-operator rights (`Authority.level`) cannot be probed in GameTest; online rights come
+  from `MunitionGameTests.Listener`'s permission level. A permission-handler probe swaps `PermissionAPI`'s active
+  handler for its own batch only (`PermissionGameTests.Handler`), since the handler is server-wide.
