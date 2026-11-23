@@ -553,9 +553,10 @@ def drift_inverse(law):
 
 VIEW_BODY = """
 uniform vec3 Fwd, Right, Up;
-uniform float Tan, Aspect, Steps, Foot;
+uniform float Tan, Aspect, Steps, Foot, ForceF;
 out vec4 fragColor;
 void main() {
+    gDwForceF = ForceF;
     vec2 uv = gl_FragCoord.xy / vec2(160.0, 90.0) * 2.0 - 1.0;
     vec3 rd = normalize(Fwd + Right * uv.x * Tan + Up * uv.y * Tan / Aspect);
     float tEnd = rd.y < 0.0 ? DwEye.y / -rd.y : 60000.0;
@@ -668,6 +669,36 @@ def light_levels(law):
     REPORT["light"] = rows
 
 
+def view_cost(law):
+    """llvmpipe time of the judging view's march (160 x 90 rays, HIGH light), the blend window as shipped against the
+    textured level alone (step 1) and the haze level alone, at +4, +22 and +60 s: what the window's dual evaluation costs."""
+    import time
+    print("view cost (llvmpipe ms per 160 x 90 frame, HIGH light): shipped blend / textured only / haze only")
+    p = program(VIEW_BODY, "new")
+    g.glUseProgram(p); noise(p)
+    R = 4500.0
+    pitch = np.radians(-6.0)
+    fwd = np.array([-np.cos(pitch), np.sin(pitch), 0.0]); right = np.array([0.0, 0.0, 1.0]); up = np.cross(right, fwd)
+    rows = []
+    for age in (4, 22, 60):
+        bind_new(p, law, law.arrival_at(R) + age, (R, 120.0, 0.0))
+        g.glUniform3f(loc(p, "Fwd"), *fwd); g.glUniform3f(loc(p, "Right"), *right); g.glUniform3f(loc(p, "Up"), *up)
+        g.glUniform1f(loc(p, "Tan"), np.tan(np.radians(23.0))); g.glUniform1f(loc(p, "Aspect"), 16 / 9)
+        g.glUniform1f(loc(p, "Steps"), 128); g.glUniform1f(loc(p, "Foot"), 0.0022)
+        target(160, 90, [(g.GL_RGBA32F, g.GL_RGBA)])
+        out = []
+        for force in (-1.0, 1.0, 0.0):
+            g.glUniform1f(loc(p, "ForceF"), force)
+            quad(p); g.glFinish()
+            ts = []
+            for _ in range(3):
+                t0 = time.perf_counter(); quad(p); g.glFinish(); ts.append(1000 * (time.perf_counter() - t0))
+            out.append(min(ts))
+        rows.append((age, *out))
+        print(f"    +{age:3d} s: shipped {out[0]:7.1f}   textured only {out[1]:7.1f}   haze only {out[2]:7.1f}")
+    REPORT["view_cost"] = rows
+
+
 context()
 laws = {"1000": Law("1000"), "15": Law("15")}
 if "--only" in sys.argv:
@@ -684,6 +715,8 @@ if "e8" in which:
     march_accuracy()
 if "light" in which:
     light_levels(laws["1000"])
+if "cost" in which:
+    view_cost(laws["1000"])
 if "view" in which:
     view_work(laws["1000"])
 if "drift" in which:
