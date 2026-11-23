@@ -103,6 +103,25 @@ class GateTest(unittest.TestCase):
         self.repo.write("AGENTS.md", AGENTS + "x" * check_knowledge.AGENTS_MAX)
         self.assertTrue(any("AGENTS.md is" in p for p in self.problems()))
 
+    def test_rule_size_cap(self):
+        rule = self.repo.root / ".claude/rules"
+        name = next(f.name for f in sorted(rule.glob("*.md")))
+        text = (rule / name).read_text(encoding="utf-8")
+        self.repo.write(f".claude/rules/{name}", text + "x" * check_knowledge.RULE_MAX)
+        self.assertTrue(any(f"{name} is" in p for p in self.problems()))
+
+    def test_oversize_ceiling_only_falls(self):
+        for name, ceiling in check_knowledge.RULE_OVERSIZE.items():
+            self.assertGreater(ceiling, check_knowledge.RULE_MAX)
+            size = len((ROOT / ".claude/rules" / name).read_bytes())
+            self.assertLessEqual(size, ceiling)
+            self.assertGreaterEqual(size, ceiling - check_knowledge.RULE_SLACK)
+
+    def test_crlf_counts_as_read(self):
+        body = ("x" * 60 + "\r\n") * (check_knowledge.RULE_MAX // 61)
+        self.repo.write(".claude/rules/area.md", RULE + body)
+        self.assertTrue(any("area.md is" in p for p in self.problems()))
+
     def test_rule_without_paths(self):
         self.repo.write(".claude/rules/area.md", "# no frontmatter\n")
         self.assertTrue(any("no strict `paths:`" in p for p in self.problems()))

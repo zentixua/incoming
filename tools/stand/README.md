@@ -82,8 +82,8 @@ does not run the paired scene acceptance gate or certify visible terrain publica
   (`client.Host`, containing client, KWin and JVM), foreign = all − own; neighbouring services (who),
   power profile, load average, GPU temperature/frequency. Continuous GPU (`client.GpuWatch`:
   `nvidia-smi pmon -d 1 -o DT`), foreign % SM per cycle; measured only with our client SM number. Before
-  client: wait for quiet (10 s without heavy foreign load, at most 2 min; pair waits only before A1,
-  B/A2 follow immediately). Load does not determine validity: sampling every few seconds cannot prove
+  client: wait for quiet (10 s without heavy foreign load, at most 2 min), before every slot of a pair: load that
+  starts mid-pair lands on one slot, which the bracket cannot cancel. Load does not determine validity: sampling every few seconds cannot prove
   quiet at every instant (two review rounds 25.10 on cycle coverage); the same-session pair protects
   the look gate from steady foreign load and GPU heating ("Look gate"). Verdict-window load lines
   (`results.load_notes`) explain non-reproduced failures in the report. Client renders another 3 s

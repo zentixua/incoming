@@ -34,8 +34,11 @@ Prism: `~/.var/app/org.prismlauncher.PrismLauncher/data/PrismLauncher/` (`tools/
                                            does not touch an instance with pack auto-update: packwiz-installer would bring back the pack's jar
     logscan.py                           ← digest of logs/latest.log
     check_knowledge.py                   ← CI job “Знания” (every run): agent knowledge layout (CLAUDE.md = @AGENTS.md, AGENTS.md
-                                           ≤ 28 KiB, every rule has live `paths:` and is listed, plugin hooks exist, no private
+                                           ≤ 28 KiB, every rule ≤ 64 KiB (an oversized one's ceiling only falls), has live `paths:` and is listed, plugin hooks exist, no private
                                            facts); test_check_knowledge.py also tests the plugin's hooks/knowledge.py
+    clip_metrics.py change|flicker|period ← motion and repetition of a look take or of reference footage, both measured the
+                                           same way (look skill): detail change per 0.1 s after the best shift and apparent speed (search 8 px per lag), frame-to-frame
+                                           pulsing, a dominant period and staircase steps along an edge; test_clip_metrics.py
     nuke_survey.py <untouched> <blasted> <gz x> <gz z> ← nuclear ruins against the untouched world, block by block (region
                                            files only, safe on a live server's world): share of built blocks still in place by
                                            kind and distance ring, one-block spikes left standing, block columns at --spot=x,z
@@ -109,7 +112,7 @@ Prism: `~/.var/app/org.prismlauncher.PrismLauncher/data/PrismLauncher/` (`tools/
                                            session: refusal “GPU held by …, since …”; a live nested KWin without the lock (the script before
                                            the lease) also counts as busy; running work extends it, without it expires in 10 min; Artem's game
                                            is artem_playing (java in his instance's folder or in the Prism group); --wait:
-                                           an honest queue (FIFO): a free GPU goes to the first waiter; status: who holds it and
+                                           an honest queue (FIFO): a free GPU goes to the first waiter; a holder past its turn (INCOMING_GPU_TURN, 30 min) with a waiter queues its new takes and yields after INCOMING_GPU_YIELD (90 s) without work; status: who holds it and
                                            who waits; at most INCOMING_GPU_QUEUE_MAX (2) other sessions wait, a newcomer beyond is refused (75);
                                            a nested KWin on a wayland-incoming-soft-… socket is a CPU session, not a GPU client;
                                            shared slots (gpu_slot_take, INCOMING_GPU_SLOTS 3, `$LEASE.slot<N>` locks plus a shared hold of the

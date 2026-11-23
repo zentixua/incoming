@@ -37,6 +37,11 @@
 # own session renews and restarts its work as before; lease ends only on release or expiry. The queue holds
 # the waiting process (PID and start time): exit or interruption (Ctrl+C) removes its position automatically.
 # On 23.10, without a queue, `start --wait` waited ~35 min while three sessions checking earlier took turns on the GPU.
+# A turn has an end: once the holder has held the lease longer than INCOMING_GPU_TURN (1800 s) while another session
+# waits, its new takes queue behind the waiters and its lease passes to the first of them after INCOMING_GPU_YIELD (90 s)
+# without GPU work; running work is never displaced (it renews every 30 s). The yield is a mechanism, not a note: on
+# a chain of GPU jobs otherwise holds the lease for hours while a waiting mission's request reaches it only as a note.
+# A client of the job that holds the client lock (the bench's next slot) is that job, not a new take.
 # The queue is capped (INCOMING_GPU_QUEUE_MAX other sessions, default 2): a newcomer beyond it is refused (75) at once.
 # The lease serves what needs the GPU to itself (shader packs, DH/Voxy, frame cost); a long queue means a session
 # holding the GPU between frames.
@@ -57,6 +62,8 @@
 # (tmpfs): reboot clears it. Test: tools/test_gpu_lease.sh (CI).
 LEASE=${INCOMING_GPU_LEASE:-${XDG_RUNTIME_DIR:-/run/user/$(id -u)}/incoming-gpu.lease}
 LEASE_IDLE=${INCOMING_GPU_LEASE_IDLE:-600}
+LEASE_TURN=${INCOMING_GPU_TURN:-1800}
+LEASE_YIELD=${INCOMING_GPU_YIELD:-90}
 # GPU client: lock and holder (owner, worktree, since when, client description)
 GPU_CLIENT=$LEASE.client
 # wait queue: "owner, worktree, since (epoch), process (PID start-time)" rows in arrival order; under $LEASE.lock
@@ -79,7 +86,14 @@ lease_owner() {
 # lease row: owner, worktree, since (epoch), last work (epoch); under $LEASE.lock
 _lease_read() { [ -s "$LEASE" ] && IFS=$'\t' read -r L_OWNER L_TREE L_SINCE L_SEEN < "$LEASE" || { L_OWNER=; L_TREE=; L_SINCE=0; L_SEEN=0; }; }
 _lease_write() { printf '%s\t%s\t%s\t%s\n' "$1" "$2" "$3" "$4" > "$LEASE.tmp" && mv "$LEASE.tmp" "$LEASE"; }
-_lease_free() { [ -z "$L_OWNER" ] || [ $(( $(date +%s) - L_SEEN )) -gt "$LEASE_IDLE" ]; }
+# the holder's turn is over: held longer than LEASE_TURN while another session waits
+_turn_over() {
+  [ $(( $(date +%s) - L_SINCE )) -gt "$LEASE_TURN" ] && _queue_live | awk -F'\t' -v o="$L_OWNER" '$1 != o { f = 1 } END { exit !f }'
+}
+_lease_free() {
+  local idle=$(( $(date +%s) - L_SEEN ))
+  [ -z "$L_OWNER" ] || [ "$idle" -gt "$LEASE_IDLE" ] || { [ "$idle" -gt "$LEASE_YIELD" ] && _turn_over; }
+}
 _lease_hm() { date -d "@$1" +%H:%M; }
 
 # foreign holder gives "GPU held by …"; free with queue is also busy (waiters); queue description follows
@@ -103,6 +117,7 @@ _queue_live() {
   while IFS=$'\t' read -r o t since pid; do
     [ -n "$pid" ] && [ "$(_proc_start "${pid%% *}")" = "${pid#* }" ] && printf '%s\t%s\t%s\t%s\n' "$o" "$t" "$since" "$pid"
   done < "$QUEUE"
+  return 0  # an exited last row is filtered, not a failure (under pipefail it hid live waiters)
 }
 
 # rewrite queue with live waiters, omitting owner $1 if specified
@@ -136,8 +151,9 @@ lease_take() {
     _lease_read; now=$(date +%s)
     why=
     if [ "$L_OWNER" = "$owner" ] && ! _lease_free; then
-      # own, unexpired: renew; queue cannot displace holder
-      :
+      # own, unexpired: renew; queue cannot displace holder, but past its turn new work queues behind the waiters (a
+      # client of a job already holding the client lock, such as the bench's next slot, is that job, not new work)
+      _turn_over && ! gpu_client_inherited && why="GPU turn of $owner since $(_lease_hm "$L_SINCE") is over and $(_queue_line): this take waits behind them"
     elif ! _lease_free; then
       why=$(lease_status)
     elif [ -n "$(_queue_head)" ] && [ "$(_queue_head)" != "$owner" ]; then
@@ -184,7 +200,9 @@ lease_renew() {
   exec {fd}>"$LEASE.lock"; flock "$fd"
   _lease_read; now=$(date +%s)
   if [ "$L_OWNER" = "$owner" ] && ! _lease_free; then _lease_write "$L_OWNER" "$L_TREE" "$L_SINCE" "$now"; rc=0
-  elif _lease_free; then _lease_write "$owner" "$(readlink -m "${tree:-$L_TREE}")" "$now" "$now"; rc=0; fi
+  # a free lease is reacquired only when no other session is ahead in the queue (a yielded lease goes to the waiter),
+  # or by the job that holds the client lock (running work whose heartbeat came late is never displaced)
+  elif _lease_free && { [ -z "$(_queue_head)" ] || [ "$(_queue_head)" = "$owner" ] || gpu_client_inherited; }; then _lease_write "$owner" "$(readlink -m "${tree:-$L_TREE}")" "$now" "$now"; rc=0; fi
   exec {fd}>&-
   return $rc
 }

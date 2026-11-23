@@ -8,7 +8,7 @@
     {
       "name": "incoming",
       "source": "./.claude/plugins/incoming",
-      "description": "Incoming project skills: deep-debug"
+      "description": "Incoming project skills: deep-debug, look"
     }
   ]
 }

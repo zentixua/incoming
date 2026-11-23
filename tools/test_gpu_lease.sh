@@ -3,7 +3,7 @@
 # start time, or waits with --wait; the owner reacquires without waiting; abandoned leases expire; another session cannot
 # renew or release it; owner comes from the tree; laptop_job.sh --gpu and sandbox.sh start from another session refuse before
 # starting anything; jobs without GPU take no lease; a client without a lock (pre-lease script) also means a busy
-# GPU, not a free one; a CPU session (soft socket) is not; waiters form a fair FIFO queue capped at two other sessions; Artem's game is detected by its instance directory, not its
+# GPU, not a free one; a CPU session (soft socket) is not; waiters form a fair FIFO queue capped at two other sessions, and a holder past its turn yields to them; Artem's game is detected by its instance directory, not its
 # command-line path, and stops a --gpu job it starts during; a delegated task owns the lease across its trees; a running
 # client's GPU samples and a job's CPU go to the load log; vanilla clients share GPU slots without waiting, fall back
 # to the CPU, and never share the GPU with a measurement; every laptop job has a memory ceiling and says when it hits it.
@@ -193,6 +193,31 @@ for _ in $(seq 50); do [ -f "$tmp/tr" ] && break; sleep 0.1; done
 kill $q4 2>/dev/null; wait $q4 2>/dev/null
 lease_release TR
 
+# A turn has an end: past INCOMING_GPU_TURN with another session waiting, the holder's running work still renews, its
+# new take queues behind the waiter, and its lease passes to the waiter after INCOMING_GPU_YIELD without work. 21.11: a
+# chain of release-candidate GPU jobs held the lease for 2 h 20 min while the dust wall waited
+rm -f "$INCOMING_GPU_LEASE" "$INCOMING_GPU_LEASE.queue" "$tmp/dw"
+now=$(date +%s)
+printf 'RC\t/x/wt-RC\t%s\t%s\n' $(( now - 4000 )) $(( now - 5 )) > "$INCOMING_GPU_LEASE"
+lease_take RC /x/wt-RC && ok "alone, the holder re-takes past its turn" || bad "turn over without waiters"
+( lease_take DW /x/wt-DW --wait 2>/dev/null; echo DW > "$tmp/dw" ) & q1=$!
+sleep 0.5
+lease_renew RC && [ "$(cut -f1 "$INCOMING_GPU_LEASE")" = RC ] && ok "running work renews past its turn" || bad "running work displaced"
+out=$(lease_take RC /x/wt-RC 2>&1); rc=$?
+[ $rc = 75 ] && [[ $out == *"GPU turn of RC since "*"is over and queued: DW"* ]] && ok "a new take past the turn waits behind the waiter: $out" \
+  || bad "turn: $rc $out"
+printf 'RC\t/x/wt-RC\t%s\t%s\n' $(( now - 4000 )) $(( now - 100 )) > "$INCOMING_GPU_LEASE"
+for _ in $(seq 50); do [ -f "$tmp/dw" ] && break; sleep 0.1; done
+[ "$(cut -f1 "$INCOMING_GPU_LEASE")" = DW ] && ok "an idle holder past its turn yields to the waiter" || bad "no yield: $(cat "$INCOMING_GPU_LEASE")"
+kill $q1 2>/dev/null; wait $q1 2>/dev/null
+rm -f "$INCOMING_GPU_LEASE" "$INCOMING_GPU_LEASE.queue"
+printf 'RC\t/x/wt-RC\t%s\t%s\n' $(( $(date +%s) - 600 )) $(( $(date +%s) - 100 )) > "$INCOMING_GPU_LEASE"
+( lease_take DW /x/wt-DW --wait 2>/dev/null ) & q1=$!
+sleep 0.5
+lease_take RC /x/wt-RC && [ "$(cut -f1 "$INCOMING_GPU_LEASE")" = RC ] && ok "within its turn the holder keeps the GPU between jobs" || bad "yield inside the turn"
+kill $q1 2>/dev/null; wait $q1 2>/dev/null
+lease_release RC; rm -f "$INCOMING_GPU_LEASE.queue"
+
 # The queue is capped: with two other sessions waiting, a third is refused at once and pointed to the CPU path
 rm -f "$INCOMING_GPU_LEASE" "$INCOMING_GPU_LEASE.queue"
 lease_take V3 /x/wt-V3
@@ -335,7 +360,7 @@ fi
 # review probes (tools/probes): shared and exclusive launches exclude each other also across slot counts and older
 # scripts; a vanilla launch never waits on exclusive admission; a CPU client's admission uses its real ceiling; Artem's
 # game stops the whole shared session and frees its slot, with and without errexit
-for p in gpu-exclusion vanilla-no-wait soft-memory-override soft-memory-fractional; do
+for p in gpu-exclusion vanilla-no-wait soft-memory-override soft-memory-fractional gpu-turn; do
   out=$(bash "$ROOT/tools/probes/$p.sh" "$ROOT" 2>&1) && ok "probe $p" || bad "probe $p: $out"
 done
 if command -v dbus-run-session >/dev/null; then

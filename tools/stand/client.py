@@ -146,8 +146,8 @@ def kill_tagged(tag, grace=20):
 
 SAMPLE_S = 5
 # Wait for quiet before client: this many consecutive samples without heavy foreign load (10 s, long
-# jobs show immediately), at most QUIET_WAIT_S while holding GPU lease; pair waits only before pack A1,
-# B/A2 follow immediately (stand.py); the pair itself protects from steady foreign load (gate.py)
+# jobs show immediately), at most QUIET_WAIT_S while holding GPU lease, before every slot of a pair (stand.py); the
+# pair itself protects from steady foreign load (gate.py), not from load that starts mid-pair
 QUIET_SAMPLES, QUIET_WAIT_S = 2, 120
 # nvidia-smi pmon cycle (-d 1): per-process SM is cycle mean, cycles are consecutive; neighbouring ends
 # over PMON_GAP_S apart indicate a gap (pmon stalled), not one long cycle
