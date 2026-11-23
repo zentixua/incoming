@@ -24,6 +24,7 @@ Strikes destroy blocks and start fires by default. The owner can change this in 
 | Build a redstone firing position | [Fixed launcher](launcher.md) |
 | Try a nuclear strike or survive one | [Nuclear strike](nuke.md) |
 | Cut the lights in a district | [Blackout](blackout.md) |
+| Track your advancements and statistics | [Advancements and statistics](progress.md) |
 | Set up the world or fix a problem | [Settings](settings.md) · [Commands](commands.md) · [FAQ](faq.md) |
 | Add other mods | [Compatibility](compatibility.md) |
 | Run a server or build a modpack around Incoming | [For server owners and pack makers](packs.md) |

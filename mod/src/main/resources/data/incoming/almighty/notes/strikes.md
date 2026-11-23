@@ -25,6 +25,10 @@ Incoming (https://github.com/zentixua/incoming): strikes by Shahed and Lancet dr
   (waiting to launch, in flight, or still exploding; a nuclear blast until its wave has passed) and lists each order
   with its arrival time or «unknown»; 0 means the group is over. «incoming status» covers all orders.
   «incoming clear tag <name>» recalls one group, nuclear ones too, and leaves other strikes.
+- Progress: advancements incoming:strikes/first_strike, camera_strike, first_interception, nuclear_survivor
+  (alive after a nuclear wave of at least 5 psi), lights_back; statistics as scoreboard criteria
+  minecraft.custom:incoming.rounds_launched (also .drone .loiter .rocket .missile .bunker .nuke), .interceptions,
+  .nuclear_detonations_witnessed. Your strikes have no owner and credit no player; a player shooting one down is credited.
 - A campaign (a salvo every N seconds) is a tick rule with a name, interval and run limit; pauses count toward the
   limit too. In the script, pass the whole command as one string to gm.command and pass numbers as numbers. Stop the
   campaign with rule remove before using incoming clear, or the next rule run will launch again.

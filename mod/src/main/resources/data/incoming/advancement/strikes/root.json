@@ -1,0 +1,54 @@
+{
+  "display": {
+    "icon": {
+      "id": "incoming:strike_designator"
+    },
+    "title": {
+      "translate": "advancements.incoming.strikes.root.title"
+    },
+    "description": {
+      "translate": "advancements.incoming.strikes.root.description"
+    },
+    "frame": "task",
+    "show_toast": false,
+    "announce_to_chat": false,
+    "hidden": false,
+    "background": "minecraft:textures/block/gray_concrete.png"
+  },
+  "criteria": {
+    "has_incoming_item": {
+      "trigger": "minecraft:inventory_changed",
+      "conditions": {
+        "items": [
+          {
+            "items": [
+              "incoming:strike_designator",
+              "incoming:shahed",
+              "incoming:lancet",
+              "incoming:grad_rockets",
+              "incoming:cruise_missile",
+              "incoming:bunker_buster",
+              "incoming:icbm",
+              "incoming:nuclear_warhead",
+              "incoming:interceptor",
+              "incoming:sam",
+              "incoming:fixed_launcher",
+              "incoming:substation",
+              "incoming:geiger_counter",
+              "incoming:trinitite"
+            ]
+          }
+        ]
+      }
+    },
+    "launched": {
+      "trigger": "incoming:round_released"
+    }
+  },
+  "requirements": [
+    [
+      "has_incoming_item",
+      "launched"
+    ]
+  ]
+}

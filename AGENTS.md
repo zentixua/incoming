@@ -280,7 +280,7 @@ queues, little rework; each mission's budget is checked against its measured loa
 
 ## `.claude/rules/` files
 - `tools.md`: layout, every `tools/` script, CI.
-- `strike.md` (`strike/`, `target/`: orders/spec/launch/virtual flight/areas/hit outcomes); `entity.md` (`entity/`,
+- `strike.md` (`strike/`, `target/`, `progress/`: orders/spec/launch/virtual flight/areas/hits/credit); `entity.md` (`entity/`,
   `guidance/`: flight/autopilots/virtual projectile/client entity tracking); `work.md` (tick budget, bulk damage in
   units); `warhead.md` (staged blast/glass/crater falls/vanilla-blast particles); `defense.md` (air defense, allowed/
   forbidden targets); `launcher.md` (fixed launcher, redstone launch).

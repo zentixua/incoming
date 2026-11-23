@@ -1,0 +1,28 @@
+{
+  "parent": "incoming:strikes/root",
+  "display": {
+    "icon": {
+      "id": "incoming:sam"
+    },
+    "title": {
+      "translate": "advancements.incoming.strikes.first_interception.title"
+    },
+    "description": {
+      "translate": "advancements.incoming.strikes.first_interception.description"
+    },
+    "frame": "goal",
+    "show_toast": true,
+    "announce_to_chat": true,
+    "hidden": false
+  },
+  "criteria": {
+    "intercepted": {
+      "trigger": "incoming:round_intercepted"
+    }
+  },
+  "requirements": [
+    [
+      "intercepted"
+    ]
+  ]
+}

@@ -451,7 +451,7 @@ public final class SamGameTests {
 
     // ---------------------------------------------------------------- assistants
 /** Air defense rules for the duration of the test: rails and reload in seconds; return after it. */
-    private static void air(GameTestHelper h, int rails, int reloadSeconds) {
+    static void air(GameTestHelper h, int rails, int reloadSeconds) {
         IncomingConfig.Server c = IncomingConfig.SERVER;
         int rails0 = c.samRails.get(), reload0 = c.samReloadSeconds.get();
         c.samRails.set(rails);
@@ -472,7 +472,7 @@ public final class SamGameTests {
      * Place SAM (the owner - as if this player had placed it) and put missiles in the reserve. After the check, the SAM is removed
      *  without falling out: the sites of the old checks are still there, and a charged SAM at the adjacent site would shoot down the shells of other people’s checks.
      */
-    private static SamBlockEntity sam(GameTestHelper h, BlockPos at, @Nullable UUID owner, int missiles) {
+    static SamBlockEntity sam(GameTestHelper h, BlockPos at, @Nullable UUID owner, int missiles) {
         h.setBlock(at, ModBlocks.SAM.get());
         SamBlockEntity be = h.getBlockEntity(at);
         BlockPos abs = h.absolutePos(at);
@@ -487,7 +487,7 @@ public final class SamGameTests {
     }
 
     /** Shahed above the beginning of the strip, on the line {@code x}, - to its end. */
-    private static DroneEntity drone(GameTestHelper h, int x, @Nullable UUID owner) {
+    static DroneEntity drone(GameTestHelper h, int x, @Nullable UUID owner) {
         ServerLevel level = h.getLevel();
         DroneEntity d = ModEntities.DRONE.get().create(level);
         Vec3 start = Vec3.atCenterOf(h.absolutePos(new BlockPos(x, DRONE_Y, 4)));
