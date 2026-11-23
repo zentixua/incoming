@@ -3,6 +3,7 @@ paths:
   - "mod/src/main/java/ua/zentix/incoming/strike/**"
   - "mod/src/main/java/ua/zentix/incoming/target/**"
   - "mod/src/main/java/ua/zentix/incoming/net/**"
+  - "mod/src/main/java/ua/zentix/incoming/progress/**"
   - "mod/src/test/java/ua/zentix/incoming/strike/**"
 ---
 
@@ -172,6 +173,24 @@ paths:
   owner notice ending the salvo progress line when no salvo of that owner still launches.
   Regressions: `OrderStatusTest`, `OrderStatusGameTests`, `OrderStatusRegressionGameTests`, `ImpactRegistrationTest`,
   `TaggedClearAlertsTest`, `TaggedSalvoHudTest`, `CraterImpactTest`, `FlashAftermathClockTest`.
+
+## Advancements and statistics (`progress/`)
+- `Progress` credits only from the api events as delivered (`Released`, `Ended`, `NuclearDetonationEvent`,
+  `GridRestoreEvent`), never from Incoming's own loops: one place decides, and credit follows the round's owner UUID
+  across off-world flight and restarts. Credited = in the player list at delivery and not `isFakePlayer()`; nothing
+  is queued for an offline owner. Online players of a level come from the player list filtered by level, not
+  `level.players()`. Interceptions skip rounds friendly to the interceptor (`Sides.friendly`, the SAM radar's rule).
+- Camera credit is `StrikeProjectile.cameraGuided` (saved as `camera_guided`, set by `retarget` and a pursuit HELD
+  tick), carried to `RoundEnd.cameraGuided`/`Ended.isCameraGuided` by `endRound` and `detonateNuclear`.
+- Nuclear survival: watched from 0.3 psi (`Detonation.HIT_KPA`) unless creative/spectator, due at front arrival +
+  positive phase + `LANDING_TICKS` (`survivalDue`); the watch is the unsaved player attachment `SURVIVAL`, cleared on
+  death; the advancement's 5 psi is in its JSON (`Blackouts.DEAD_PSI`, `ProgressTest`). Witnessed = horizontal range
+  within `Detonation.radiusMax`.
+- Stats (`ModStats`) are created at common setup: vanilla lists in the statistics screen and accepts as scoreboard
+  criteria only created stat objects. A new weapon adds `rounds_launched.<id>` and its lang key automatically fails
+  `ProgressTest` until translated. GameTest players that must earn advancements or stats are real `ServerPlayer`s
+  (`ProgressGameTests.Credited`): `FakePlayer` drops stats and advancements; connection before `moveTo`.
+  Regressions: `ProgressGameTests`, `ProgressTest`.
 
 ## Unpaid nuclear review
 - `NuclearReview` is separate player state, not a `NuclearKeys` order. Global nuclear abort invalidates it on the

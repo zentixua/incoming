@@ -1,0 +1,28 @@
+{
+  "parent": "incoming:strikes/first_strike",
+  "display": {
+    "icon": {
+      "id": "incoming:lancet"
+    },
+    "title": {
+      "translate": "advancements.incoming.strikes.camera_strike.title"
+    },
+    "description": {
+      "translate": "advancements.incoming.strikes.camera_strike.description"
+    },
+    "frame": "goal",
+    "show_toast": true,
+    "announce_to_chat": true,
+    "hidden": false
+  },
+  "criteria": {
+    "camera_hit": {
+      "trigger": "incoming:camera_guided_hit"
+    }
+  },
+  "requirements": [
+    [
+      "camera_hit"
+    ]
+  ]
+}

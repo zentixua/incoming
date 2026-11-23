@@ -1,0 +1,28 @@
+{
+  "parent": "incoming:strikes/root",
+  "display": {
+    "icon": {
+      "id": "incoming:shahed"
+    },
+    "title": {
+      "translate": "advancements.incoming.strikes.first_strike.title"
+    },
+    "description": {
+      "translate": "advancements.incoming.strikes.first_strike.description"
+    },
+    "frame": "task",
+    "show_toast": true,
+    "announce_to_chat": true,
+    "hidden": false
+  },
+  "criteria": {
+    "launched": {
+      "trigger": "incoming:round_released"
+    }
+  },
+  "requirements": [
+    [
+      "launched"
+    ]
+  ]
+}

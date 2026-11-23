@@ -228,6 +228,8 @@ public abstract class StrikeProjectile extends Entity implements IEntityWithComp
      */
     @Nullable
     private RoundEnd shotDownEnd;
+    /** {@link #cameraGuided()}. */
+    private boolean cameraGuided;
 
     private int phaseStart;
     /** Client: phase whose change established {@link #phaseStart}. */
@@ -477,7 +479,16 @@ public abstract class StrikeProjectile extends Entity implements IEntityWithComp
     /** End the round, once: the first ending wins; a shot-down warhead's burst ends it as the interception. */
     public void endRound(RoundEnd end) {
         RoundRef r = detachRound();
-        if (r != null && level() instanceof ServerLevel level) Orders.ended(level, r, weapon(), ownerId(), shotDownEnd != null ? shotDownEnd : end);
+        if (r != null && level() instanceof ServerLevel level) Orders.ended(level, r, weapon(), ownerId(), (shotDownEnd != null ? shotDownEnd : end).guided(cameraGuided));
+    }
+
+    /**
+     * Its owner steered it through the projectile camera: a retarget from the camera ({@link #retarget}), or the camera held
+     * its sighted target in frame ({@link #updateTarget}). Saved, so it survives off-world flight and restarts; its round's
+     * end carries it ({@link RoundEnd#cameraGuided}).
+     */
+    public boolean cameraGuided() {
+        return cameraGuided;
     }
 
     /** Carries nuclear warhead: canceled only by nuclear recall. */
@@ -618,6 +629,7 @@ public abstract class StrikeProjectile extends Entity implements IEntityWithComp
     public boolean retarget(Target target, Vec3 point) {
         if (tracker == null || !acceptsRetarget()) return false;
         mission().retarget(tracker.retarget(target, point));
+        cameraGuided = true;
         if (route != null) route.skip();
         releaseTargetArea();
         syncAim();
@@ -945,7 +957,7 @@ public abstract class StrikeProjectile extends Entity implements IEntityWithComp
         } finally {
             // a failing removal listener cannot cost the burst or its round's end
             Detonation d = NuclearWarhead.detonate(level, at, nuclear.yieldKt(), airBurst, owner, r);
-            if (r != null) Orders.ended(level, r, weapon(), owner, shotDownEnd != null ? shotDownEnd : RoundEnd.nuclear(d.burst(), d.yieldKt()));
+            if (r != null) Orders.ended(level, r, weapon(), owner, (shotDownEnd != null ? shotDownEnd : RoundEnd.nuclear(d.burst(), d.yieldKt())).guided(cameraGuided));
         }
     }
 
@@ -1007,6 +1019,7 @@ public abstract class StrikeProjectile extends Entity implements IEntityWithComp
         mission().chase(tracker.tick(level, at -> byCamera && CameraLink.holds(level, this, tracker.target().subject(), at)));
         Pursuit pursuit = !byCamera || !(tracker.target() instanceof Target.Sighted) || tracker.isLost() ? Pursuit.NONE
                 : tracker.inSight() ? Pursuit.HELD : Pursuit.WAITING;
+        if (pursuit == Pursuit.HELD) cameraGuided = true;
         entityData.set(DATA_PURSUIT, (byte) pursuit.ordinal());
         // Also for projectile saved with already-lost target but without “reduced” flag.
         if (tracker.isLost() && mission().lose(plannedPathLeft(), cruiseSpeed())) onTargetLost(level);
@@ -1666,6 +1679,7 @@ public abstract class StrikeProjectile extends Entity implements IEntityWithComp
         setNuclear(tag.contains("nuclear") ? Loadout.Nuke.CODEC.parse(NbtOps.INSTANCE, tag.get("nuclear")).result().orElse(null) : null);
         // Saved before order events: no round, no events for it.
         round = tag.contains("round") ? RoundRef.load(tag.getCompound("round")) : null;
+        cameraGuided = tag.getBoolean("camera_guided");
         syncAim();
         syncSpeed();
     }
@@ -1695,6 +1709,7 @@ public abstract class StrikeProjectile extends Entity implements IEntityWithComp
         tag.putInt("siren_lead", sirenLead);
         if (nuclear != null) Loadout.Nuke.CODEC.encodeStart(NbtOps.INSTANCE, nuclear).result().ifPresent(n -> tag.put("nuclear", n));
         if (round != null) tag.put("round", round.save());
+        if (cameraGuided) tag.putBoolean("camera_guided", true);
     }
 
     /**
