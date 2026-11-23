@@ -132,6 +132,12 @@ paths:
   The camouflet's three-column displacement limit remains; fallen-block count is a separate quantity, not a crater
   radius adjustment.
 
+- Redstone fixtures: a piston base is a `moving_piston` while it moves, so reading `EXTENDED` from it throws inside
+  `onEachTick` and crashes the whole GameTest server (every later batch is lost); check the block first. A comparator
+  placed by `setBlock` never reads its input until a neighbour update reaches it (none comes from its own placement):
+  place it before the block it reads changes (loading a magazine updates it), then allow its 2-tick delay
+  (`RedstoneGameTests`).
+
 - Fixed surface-baseline seeds and `blast_crater_seed` regression: see `warhead.md`.
 
 - Late-exposure fixtures measure pulse/wave damage, independently of ground fire. Saved-zone settlement can lay

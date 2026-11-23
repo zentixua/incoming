@@ -2,6 +2,8 @@ package ua.zentix.incoming.grid;
 
 import it.unimi.dsi.fastutil.ints.IntArrayList;
 import it.unimi.dsi.fastutil.ints.IntArrays;
+import it.unimi.dsi.fastutil.ints.IntOpenHashSet;
+import it.unimi.dsi.fastutil.ints.IntSet;
 import it.unimi.dsi.fastutil.longs.Long2IntOpenHashMap;
 import it.unimi.dsi.fastutil.longs.Long2LongOpenHashMap;
 import it.unimi.dsi.fastutil.longs.Long2ObjectOpenHashMap;
@@ -358,6 +360,13 @@ public final class BlackoutWorld {
 
     public int repeatedTimes() {
         return lastRepeatMax;
+    }
+
+    /** Grid nodes whose substation's neighbours were asked to recheck it since the server started ({@link Substations#sync}). */
+    private final IntOpenHashSet signalled = new IntOpenHashSet();
+
+    IntSet signalled() {
+        return signalled;
     }
 
     /** For {@link ModAttachments#BLACKOUT_WORLD}: separate for each world, lives while the world is loaded, non-persistent. */

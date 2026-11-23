@@ -88,6 +88,7 @@ public final class Incoming {
         Progress.register(modBus);
 
         NeoForge.EVENT_BUS.addListener(IncomingCommand::register);
+        NeoForge.EVENT_BUS.addListener(ua.zentix.incoming.util.SignalEdge::onLevelTick);
         NeoForge.EVENT_BUS.addListener(Progress::onReleased);
         NeoForge.EVENT_BUS.addListener(Progress::onEnded);
         NeoForge.EVENT_BUS.addListener(Progress::onRelit);
