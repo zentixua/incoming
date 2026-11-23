@@ -53,6 +53,10 @@ class DustLawDumpProbe {
             }
             s.append("]}\n");
             Files.writeString(out.resolve(String.format(Locale.ROOT, "law-%.0fkt.json", kt)), s);
+            StringBuilder fb = new StringBuilder();
+            for (double t = 0; t <= 240; t += 1)
+                fb.append(String.format(Locale.ROOT, "%.0f %.1f%n", t, ua.zentix.incoming.nuclear.model.FireballModel.groundRadius(t, 0, kt, true)));
+            Files.writeString(out.resolve(String.format(Locale.ROOT, "footprint-%.0fkt.txt", kt)), fb);
         }
     }
 }

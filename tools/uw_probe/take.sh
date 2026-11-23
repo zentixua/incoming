@@ -15,7 +15,7 @@ tools/sandbox.sh start --size "$SIZE" "$@" || { echo "sandbox start failed"; exi
 O=$S/options.txt
 sed -i 's/^renderDistance:.*/renderDistance:32/' $O; grep -q '^renderClouds' $O && sed -i 's/^renderClouds:.*/renderClouds:"false"/' $O || echo 'renderClouds:"false"' >> $O
 sed -i "s/^\tmax_yield = .*/\tmax_yield = 1000/" $S/config/incoming-server.toml
-sed -i 's/^nuke_dust_quality = .*/nuke_dust_quality = "HIGH"/' $S/config/incoming-client.toml
+sed -i "s/^nuke_dust_quality = .*/nuke_dust_quality = \"${DW_QUALITY:-HIGH}\"/" $S/config/incoming-client.toml
 tools/sandbox.sh restart --size "$SIZE" "$@" || { echo "sandbox restart failed"; tools/sandbox.sh stop; exit 1; }
 tools/sandbox.sh fx 'zoom 1.537'
 tools/sandbox.sh shot "$NAME" 'nuke 1000 ground near 4500' --at "$AT" --cam '7632 120 148 -521' --wav 0 --time 12000 \

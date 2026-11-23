@@ -337,7 +337,74 @@ public final class PallField {
         double x = age / LIFETIME_JOIN_S, join = 1 - Math.exp(-x * x * x);
         double top = first + (law - first) * join;
         double a = lifetimeSettled(age);
-        return new double[] {top * present, c.depth(a) * top / Math.max(mixed, top)};
+        double tau = c.depth(a) * top / Math.max(mixed, top);
+        return new double[] {top * present, visible(c, age, tau, top * present, present)};
+    }
+
+    /**
+     * Presentation, not physical (owner call, unified-wave 2a): inside an old, thick layer a camera sees about
+     * {@link #SEE_FIRST_M} at the first minute and {@link #SEE_FIVE_M} by five minutes (the reference: Silo's haze behind
+     * the wall, Nevada test dust: a see-through warm haze, not a wall). The law's τ (60–96 at 4.5 km from 1 Mt over 5–10 min)
+     * would hold the camera in a 50-block fog for ten minutes. The transfer saturates the old column's drawn optical depth
+     * at the extinction that gives that sight (Koschmieder, 3.912/V, over the drawn column), by age through the haze
+     * level's fade (none while the textured young level owns the column: take 33 holds); from five minutes on the ceiling
+     * falls with the law's own thinning (the drawn depth follows the law's τ through g). Returned as the τ the shader's
+     * {@code dwTransfer} turns into that drawn depth (its inverse), so the shader keeps one transfer.
+     */
+    private double visible(DustModel.Column c, double age, double tau, double topBlocks, double present) {
+        double drawn = transfer(tau), fade = 1 - textured(age);
+        if (fade <= 0 || drawn <= 0) return tau;
+        double ceiling = seeCeiling(c, age, topBlocks, present);
+        double capped = drawn / Math.sqrt(1 + (drawn / ceiling) * (drawn / ceiling));
+        return inverseTransfer(drawn + (capped - drawn) * fade);
+    }
+
+    /** Sight inside old dust at one minute and at five minutes, m (presentation; owner call). */
+    static final double SEE_FIRST_M = 200, SEE_FIVE_M = 400;
+
+    /**
+     * The drawn column's ceiling (optical depth) at age: the sight's extinction over the drawn profile's integral. The sight
+     * grows as (a/60)^p to the five-minute value, smoothly (no kink: C3); the ceiling then follows the law's own thinning
+     * (its g ratio to the five-minute column), weighted in smoothly about 300 s.
+     */
+    private double seeCeiling(DustModel.Column c, double age, double topBlocks, double present) {
+        double a = Math.max(age, 1), p = Math.log(SEE_FIVE_M / SEE_FIRST_M) / Math.log(5);
+        double sight = d.blocks(SEE_FIRST_M) * Math.pow(a / 60.0, p) / Math.pow(1 + Math.pow(a / 300.0, 4), p / 4);
+        double ceiling = 3.912 / sight * profileIntegral(0.95 * topBlocks);
+        double refTau = c.depth(lifetimeSettled(300)), now = c.depth(lifetimeSettled(a));
+        double follow = refTau > 0 && now > 0 ? ceiling * transfer(now) / transfer(refTau) : ceiling;
+        double w = 1 / (1 + Math.pow(300 / a, 4));
+        return Math.exp(Math.log(ceiling) + (Math.log(Math.max(follow, 1e-9)) - Math.log(ceiling)) * w);
+    }
+
+    /** {@code dwProfileInt}: the drawn profile's integral over a settled top h, blocks. */
+    static double profileIntegral(double h) {
+        return Math.max(0.9483 * h - 2.854, 1);
+    }
+
+    /** {@code dwTransfer}. */
+    public static double transfer(double tau) {
+        if (tau <= 1) return tau;
+        double x = tau - 1;
+        return 1 + 0.073 * x + (1 - 0.073) * 0.5 * (1 - Math.exp(-x / 0.5));
+    }
+
+    /** Inverse of {@link #transfer} (monotone; Newton from the affine branch). */
+    static double inverseTransfer(double drawn) {
+        if (drawn <= 1) return drawn;
+        double x = Math.max((drawn - 1 - 0.4635) / 0.073, 0);
+        for (int i = 0; i < 30; i++) {
+            double f = 1 + 0.073 * x + (1 - 0.073) * 0.5 * (1 - Math.exp(-x / 0.5)) - drawn, df = 0.073 + (1 - 0.073) * Math.exp(-x / 0.5);
+            x = Math.max(x - f / df, 0);
+            if (Math.abs(f) < 1e-9) break;
+        }
+        return 1 + x;
+    }
+
+    /** {@code dwTextured}: the textured level's share at age (quintic step from 1 at 24 s to 0 at 60 s). */
+    static double textured(double age) {
+        double x = Math.min(1, Math.max(0, (age - 24) / 36.0));
+        return 1 - x * x * x * (x * (6 * x - 15) + 10);
     }
 
     /** A smooth max of the age and {@link #LIFETIME_SETTLE_S} (softplus, width 0.3 s), model s. */

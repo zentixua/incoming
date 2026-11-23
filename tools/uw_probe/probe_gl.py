@@ -391,7 +391,27 @@ def age_functions(law):
             else:
                 g.glUniform1f(loc(p, "Span"), 0.0)
                 quad(p)
-                sweeps.append((xs, read(1000, 1)[0].astype(np.float64)))
+                vv = read(1000, 1)[0].astype(np.float64)
+                # a flagged kink must persist 20x finer (a slope discontinuity keeps its jump as the spacing shrinks; C1
+                # curvature, such as the visibility ceiling settling, loses it in proportion): resample around it
+                if model == "new":
+                    for cc in [c for c in range(4) for _ in range(6)]:
+                        _, _, _, _, _, ki = steps(vv[:, cc], xs)
+                        for i in ki[:1]:
+                            a0, a1 = np.exp(xs[i - 1]), np.exp(xs[i + 2])
+                            g.glUniform1f(loc(p, "Centre"), 0.5 * (a0 + a1)); g.glUniform1f(loc(p, "Span"), a1 - a0)
+                            quad(p)
+                            fine = read(1000, 1)[0].astype(np.float64)[:, cc]
+                            fx = np.linspace(a0, a1, 1000)
+                            fs = np.diff(fine) / np.diff(fx)
+                            coarse_change = abs((vv[i + 2, cc] - vv[i + 1, cc]) / (np.exp(xs[i + 2]) - np.exp(xs[i + 1]))
+                                                - (vv[i, cc] - vv[i - 1, cc]) / (np.exp(xs[i]) - np.exp(xs[i - 1])))
+                            fine_change = np.abs(fs[20:] - fs[:-20]).max()
+                            if fine_change < 0.5 * coarse_change:
+                                RESOLVED.append((name, cc, float(np.exp(xs[i])), float(coarse_change), float(fine_change)))
+                                vv[i - 1:i + 3, cc] = np.interp(xs[i - 1:i + 3], [xs[i - 2], xs[i + 3]], [vv[i - 2, cc], vv[i + 3, cc]])
+                    g.glUniform1f(loc(p, "Span"), 0.0)
+                sweeps.append((xs, vv))
             for c in range(4):
                 if (model, k, c) in EXEMPT:
                     print(f"    exempt {model}: {name} [{c}]: {EXEMPT[(model, k, c)]}")
@@ -424,7 +444,7 @@ def age_functions(law):
     REPORT["c3_fails"] = fails
     REPORT["c3_resolved_c1"] = RESOLVED
     REPORT["c3_field_flags"] = FIELD_FLAGS
-    print(f"    ({len(RESOLVED)} flags in noise-driven fields resolved as C1 by 20x refinement: the slope change shrank with the interval)")
+    print(f"    ({len(RESOLVED)} flags resolved as C1 by 20x refinement, the slope change shrank with the interval: {[(r[0][:30], round(r[2], 1)) for r in RESOLVED]})")
     check(fails == 0, f"no step in value or slope of any age parameter over 0-3 h: {fails} found")
     ctl = {t: a + b for t, a, b in REPORT.get("c3_control", [])}
     caught = sum(1 for t, v in ctl.items() if "afterwind" in t and v > 0)
@@ -500,6 +520,7 @@ def march_accuracy():
                 g.glUniform4f(loc(p, "DwFar"), 0.0 if mode == "full" else 1.0, 34.0, 0, 0)
                 g.glUniform1f(loc(p, "End"), end)
                 g.glUniform1f(loc(p, "Steps"), steps_)
+                g.glUniform1f(loc(p, "DwDetail"), {"HIGH": 0.0, "MEDIUM": 1.0, "LOW": 2.0}[rung])
                 g.glUniform1f(loc(p, "Foot"), foot * (6 if "x6" in mode else 1))
                 g.glUniform1f(loc(p, "Jit"), 0.37)
                 quad(p)
@@ -553,7 +574,7 @@ def drift_inverse(law):
 
 VIEW_BODY = """
 uniform vec3 Fwd, Right, Up;
-uniform float Tan, Aspect, Steps, Foot, ForceF;
+uniform float Tan, Aspect, Steps, Foot, ForceF, Kinds;
 out vec4 fragColor;
 void main() {
     gDwForceF = ForceF;
@@ -561,7 +582,7 @@ void main() {
     vec3 rd = normalize(Fwd + Right * uv.x * Tan + Up * uv.y * Tan / Aspect);
     float tEnd = rd.y < 0.0 ? DwEye.y / -rd.y : 60000.0;
     vec4 w = dwMarch(rd, tEnd, fract(0.37 + 0.618034 * gl_FragCoord.x + 0.414 * gl_FragCoord.y), Foot, int(Steps));
-    fragColor = vec4(float(gDwSamples), float(gDwIters), float(gDwTailEvals), w.a);
+    fragColor = Kinds > 1.5 ? vec4(gDwWhyHist[3], gDwWhyHist[5], gDwWhyHist[6], gDwWhyHq / max(gDwKinds.w, 1.0)) : Kinds > 0.5 ? gDwKinds : vec4(float(gDwSamples), float(gDwIters), float(gDwTailEvals), w.a);
 }
 """
 
@@ -570,7 +591,7 @@ def view_work(law):
     """Per-ray work of the judging view (camera 4.5 km out, 120 blocks up, pitch -6 deg, 46 deg wide) at +4 s, +1 min and
     +10 min: occupied samples (each with its light: 2 shadow taps), loop iterations, tail evaluations (each with light)."""
     print("view work: rays of the judging view, 160 x 90, per preset step cap")
-    p = program(VIEW_BODY, "new")
+    p = program(VIEW_BODY, "new", "#define DW_DIAG\n")
     g.glUseProgram(p); noise(p)
     R = 4500.0
     pitch = np.radians(-6.0)
@@ -591,6 +612,10 @@ def view_work(law):
             light = v[:, 0] + v[:, 2]
             rows.append((age, name, float(v[:, 0].mean()), float(v[:, 1].mean()), float(v[:, 2].mean()), float(light.mean()),
                          float((v[:, 0] >= steps_).mean()), float(v[:, 3].mean())))
+            g.glUniform1f(loc(p, "Kinds"), 1.0); quad(p); kv = read(160, 90).reshape(-1, 4).astype(np.float64).mean(0); g.glUniform1f(loc(p, "Kinds"), 0.0)
+            g.glUniform1f(loc(p, "Kinds"), 2.0); quad(p); wv = read(160, 90).reshape(-1, 4).astype(np.float64).mean(0); g.glUniform1f(loc(p, "Kinds"), 0.0)
+            print(f"      clear inside the bound: above the texture (early exit) {wv[0]:.1f}, lean-back age {wv[1]:.1f}, thin profile {wv[2]:.1f}, mean height {wv[3]:.0f}")
+            print(f"      strides: no dust at the radius {kv[0]:.1f}, above the bound going up {kv[1]:.1f}, going down {kv[2]:.1f}, clear inside {kv[3]:.1f}")
             print(f"    +{age:4d} s {name:6s}: occupied samples {v[:, 0].mean():6.1f} (at the cap {100 * (v[:, 0] >= steps_).mean():4.0f} %),"
                   f" iterations {v[:, 1].mean():6.1f}, tail evaluations {v[:, 2].mean():5.1f}, light evaluations {light.mean():6.1f}, mean T {v[:, 3].mean():.3f}")
     REPORT["view_work"] = rows
@@ -669,6 +694,38 @@ def light_levels(law):
     REPORT["light"] = rows
 
 
+def view_cost_variants(law):
+    """llvmpipe ms of the judging view at +4 and +22 s (shipped blend) per light detail level and march variant."""
+    import time
+    print("view cost variants (llvmpipe ms per 160 x 90 frame): detail 0/1/2 x march variant")
+    R = 4500.0
+    pitch = np.radians(-6.0)
+    fwd = np.array([-np.cos(pitch), np.sin(pitch), 0.0]); right = np.array([0.0, 0.0, 1.0]); up = np.cross(right, fwd)
+    variants = [("shipped", ""), ("bound one step", "#define DW_BOUND_ONESTEP\n"), ("gap 64", "#define DW_GAP_OVERRIDE 64.0\n"),
+                ("both", "#define DW_BOUND_ONESTEP\n#define DW_GAP_OVERRIDE 64.0\n")] + EXTRA_VARIANTS
+    for vname, defs in variants:
+        p = program(VIEW_BODY, "new", defs)
+        g.glUseProgram(p); noise(p)
+        line = []
+        for age in (4, 22):
+            bind_new(p, law, law.arrival_at(R) + age, (R, 120.0, 0.0))
+            g.glUniform3f(loc(p, "Fwd"), *fwd); g.glUniform3f(loc(p, "Right"), *right); g.glUniform3f(loc(p, "Up"), *up)
+            g.glUniform1f(loc(p, "Tan"), np.tan(np.radians(23.0))); g.glUniform1f(loc(p, "Aspect"), 16 / 9)
+            g.glUniform1f(loc(p, "Steps"), 128); g.glUniform1f(loc(p, "Foot"), 0.0022); g.glUniform1f(loc(p, "ForceF"), -1.0)
+            target(160, 90, [(g.GL_RGBA32F, g.GL_RGBA)])
+            for det in (0.0, 1.0, 2.0):
+                g.glUniform1f(loc(p, "DwDetail"), det)
+                quad(p); g.glFinish()
+                ts = []
+                for _ in range(3):
+                    t0 = time.perf_counter(); quad(p); g.glFinish(); ts.append(1000 * (time.perf_counter() - t0))
+                line.append(f"+{age}s d{det:.0f} {min(ts):6.1f}")
+        print(f"    {vname:16s} " + "  ".join(line))
+
+
+EXTRA_VARIANTS = [("old wide bound", "#define DW_BOUND_WIDE\n")]
+
+
 def view_cost(law):
     """llvmpipe time of the judging view's march (160 x 90 rays, HIGH light), the blend window as shipped against the
     textured level alone (step 1) and the haze level alone, at +4, +22 and +60 s: what the window's dual evaluation costs."""
@@ -715,6 +772,8 @@ if "e8" in which:
     march_accuracy()
 if "light" in which:
     light_levels(laws["1000"])
+if "variants" in which:
+    view_cost_variants(laws["1000"])
 if "cost" in which:
     view_cost(laws["1000"])
 if "view" in which:

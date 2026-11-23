@@ -347,17 +347,16 @@ public final class NukePall {
     /** Presentation exposure of the dust lit by sun and sky alone ({@code DwAdapt}, tools/uw_probe: the reference curtain's luma). */
     static final double DUST_ADAPT = 3.1;
 
+    /** The dust exposure each detonation's eye has reached ({@code DwAdapt}): value, the detonation clock's second. */
+    private static final java.util.Map<ClientNuclear.Active, double[]> ADAPTED = new java.util.WeakHashMap<>();
+    /** Eye adaptation time constants, s (presentation, est.): opening to a darker scene, closing to a brighter one. */
+    static final double ADAPT_UP_S = 2, ADAPT_DOWN_S = 8;
+
     /** Share of the diffuse light's decay inside the dust that the eye takes back ({@code DwAdapt}; presentation). */
     static final double DUST_ADAPT_INSIDE = 0.7;
     /** Diffuse decay of the reference dust, k² = 3(1 − ω')(1 − ω'g') at its green albedo ({@code pallK}). */
     static final double DUST_K = PallLight.k(0.8099, 0.375);
 
-    /** {@code dwTransfer}: the drawn column's optical depth from the law's (τ to 1, then the slope falls to 0.073). */
-    static double dustTransfer(double tau) {
-        if (tau <= 1) return tau;
-        double x = tau - 1;
-        return 1 + 0.073 * x + (1 - 0.073) * 0.5 * (1 - Math.exp(-x / 0.5));
-    }
 
     /**
      * Drawn optical depth of the dust above the eye (no drift: the eye's own ground point; the table's age nodes read linearly):
@@ -377,7 +376,7 @@ public final class NukePall {
         double h = Math.max(eye[1], 0) / Math.max(top, 1);
         if (h >= 1) return 0;
         double above = 1.25 * (1 - h) - 0.25 * (1 - h * h);
-        return dustTransfer(tau) * (1 + 0.5 * Math.exp(-age / 1.1)) * above;
+        return PallField.transfer(tau) * (1 + 0.5 * Math.exp(-age / 1.1)) * above;
     }
 
     private static double luminance(org.joml.Vector3f c) {
@@ -475,7 +474,19 @@ public final class NukePall {
         double adapt = 1 + (DUST_ADAPT - 1) * (1 - Math.min(ballAt / Math.max(ambient, 1e-6), 1));
         // inside the dust the eye adapts to the light that reaches it: the drawn column's optical depth above the eye, the
         // two streams' diffuse decay e^(−kτ) (k of the reference dust), the eye taking back DUST_ADAPT_INSIDE of it (presentation)
-        w.adapt = (float) (adapt * Math.exp(Math.min(DUST_ADAPT_INSIDE * DUST_K * eyeDepth(table, n, end, reach, t, w.eye), 1.6)));
+        double target = adapt * Math.exp(DUST_ADAPT_INSIDE * DUST_K * eyeDepth(table, n, end, reach, t, w.eye));
+        // the eye takes it over time (presentation, as NukeExposure and Sight.adapted: opening ~2 s, closing ~8 s, est.): the
+        // fireball's fade stepped the exposure within a second (16→17 s after the front, +12 % in a frame)
+        // (on the detonation's clock: the time the player watches; a seek or jump restarts it at the target)
+        double[] state = ADAPTED.computeIfAbsent(a, k -> new double[] {target, t});
+        double dt = t - state[1];
+        if (dt < 0 || dt > 1) {
+            state[0] = target;
+            dt = 0;
+        }
+        state[0] = target + (state[0] - target) * Math.exp(-dt / (target > state[0] ? ADAPT_UP_S : ADAPT_DOWN_S));
+        state[1] = t;
+        w.adapt = (float) state[0];
         w.sandBulk.set((float) SAND[0], (float) SAND[1], (float) SAND[2]);
         w.active = true;
     }

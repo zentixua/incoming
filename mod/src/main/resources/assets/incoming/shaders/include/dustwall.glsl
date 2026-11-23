@@ -78,6 +78,10 @@ const float DW_RISE = 0.12, DW_HOLD = 0.25, DW_FALL = 0.3;
 // (the top behind the head is uneven at several scales, no cap: swells up to ±DW_BULGE of the layer at 150–400 m, billows,
 // rising puffs and a thin veil; on the head the swells are small, so its crest, 1.4–1.6 of the layer, still stands out)
 const float DW_BULGE = 0.35, DW_BILLOW = 0.15, DW_HAZE = 1.2;
+// presentation (est.): the wind's shear stretches the haze's features along the wind, ×(1 + a / DW_SHEAR_S); the slow
+// plumes over hot ground (the fire zone, the law's buoyant rise) lift the swells' crests by up to DW_PLUME of the top over
+// the first minutes, and sink back as the ground cools
+const float DW_SHEAR_S = 300.0, DW_PLUME = 0.6;
 
 // First and last occupied distances and the sum of distances weighted by visible opacity.
 vec3 gDwDepth = vec3(0.0);
@@ -211,7 +215,13 @@ float dwLod(float f) {
 // frequency, 1/block)
 float dwFbm(vec3 p, float fq) {
     float a = 0.5, s = 0.0, fr = fq;
+    // (MEDIUM and LOW: the finest octave at its mean)
+    int octaves = DwDetail > 0.5 ? 3 : 4;
     for (int i = 0; i < 4; i++) {
+        if (i >= octaves) {
+            s += a * 0.5;
+            continue;
+        }
         s += a * mix(0.5, dwNoise3(p), dwLod(fr));
         p = p * 2.07 + vec3(1.7, 9.2, 3.1);
         a *= 0.5;
@@ -222,7 +232,13 @@ float dwFbm(vec3 p, float fq) {
 // billowed fBm, three octaves of |2n − 1| (rounded lumps with creases between them: the cauliflower of a dust top), 0..1
 float dwBillow(vec3 p, float fq) {
     float a = 0.5, s = 0.0, fr = fq;
+    // (LOW: the finest billow octave at its mean)
+    int octaves = DwDetail > 1.5 ? 2 : 3;
     for (int i = 0; i < 3; i++) {
+        if (i >= octaves) {
+            s += a * 0.42;
+            continue;
+        }
         s += a * mix(0.42, abs(2.0 * dwNoise3(p) - 1.0), dwLod(fr));
         p = p * 2.13 + vec3(4.1, 2.7, 8.3);
         a *= 0.5;
@@ -324,16 +340,21 @@ float dwSoft(float x) {
 // lumps, up to ±DW_BULGE of the layer behind the head, a fifth of that on the head, growing in over 1.5–4 s (the crest
 // stands out of a layer near its mean right behind it); they
 // swell and sag slowly as the dust settles
-float dwBulge(vec3 pw, float a) {
-    vec2 p = pw.xz / 220.0;
+// the swell field at air-mass point xz (4 fetches; L: its large-scale value 0..1, for the haze level's plumes)
+float dwSwellField(vec2 xz, float a, out float L) {
+    vec2 p = xz / 220.0;
     float w = dwNoise3(vec3(p * 0.4, 4.4)) - 0.5;
     p += 0.8 * vec2(w, -w);
     float e = dwEddyPhase(a);
-    float L = 0.6 * dwNoise3(vec3(p, 7.1 + 0.08 * e)) + 0.4 * dwNoise3(vec3(pw.xz / 90.0, 0.37 + 0.12 * e));
+    L = 0.6 * dwNoise3(vec3(p, 7.1 + 0.08 * e)) + 0.4 * dwNoise3(vec3(xz / 90.0, 0.37 + 0.12 * e));
     // hollows opening in the blanket: in patches ~160 m across the layer sinks by up to 40 % over 3–10 s behind the front,
     // drifting slowly (presentation: the mass shifting as the blast wind reverses)
-    float hollow = smoothstep(0.62, 0.8, dwNoise3(vec3(pw.xz / 160.0, 2.2 + 0.03 * e))) * dwRamp(a, 6.5, 1.2);
+    float hollow = smoothstep(0.62, 0.8, dwNoise3(vec3(xz / 160.0, 2.2 + 0.03 * e))) * dwRamp(a, 6.5, 1.2);
     return DW_BULGE * dwSoft((L - 0.5) * 4.0) * mix(0.2, 1.0, dwRamp(a, 2.75, 0.45)) - 0.4 * hollow;
+}
+float dwBulge(vec3 pw, float a) {
+    float L;
+    return dwSwellField(pw.xz, a, L);
 }
 
 // a buoyant tongue above the top: about one 110 m cell in three lifts a rounded column of dust up to ~35 % of the layer
@@ -374,7 +395,11 @@ float dwBound(vec3 g) {
     // the harness's analytic media (tools/uw_probe/probe_gl.py: E8 accuracy of the march)
     return dwAnalyticBound(g);
 #endif
+#ifdef DW_BOUND_ONESTEP
+    vec2 q = g.xz - DwLife.zw * max(DwEye.w - dwArrival(length(g.xz)), 0.0);
+#else
     vec2 q = dwSource(g.xz);
+#endif
     float r = length(q);
     if (r > min(DwRing.x + 2.0, DwRing.w) || r < DwCut) return -1.0;
     float a = DwEye.w - dwArrival(r);
@@ -384,11 +409,34 @@ float dwBound(vec3 g) {
     // the envelope here (an older point inward is no higher: the hump is at the front) lifted by the bulges, billows and edge;
     // 1.6: the largest hump, for the forward lean of the crest
     float env = a < 1.5 ? law.x * 1.8 : dwEnvelope(a, law.x, 1.8);
-    return env * (1.0 + DW_BULGE) * DW_HAZE + 6.0;
+    float full = env * (1.0 + DW_BULGE) * DW_HAZE + 6.0;
+    // the haze level's crests and plumes (dwHaze: top × (1 + swell + plume), its soft edge to 1.3 of it)
+    if (dwTextured(a) < 0.999) full = max(full, env * (1.0 + DW_BULGE + DW_PLUME) * 1.3 + 6.0);
+#ifndef DW_BOUND_WIDE
+    // the swell here (dwBulge at the ground point, without the eddies' shift: ±0.12 of margin for it), its billowed top and
+    // soft edge and veil over it: the dust's own reach. A ray above the swollen top strides as over clear air instead of
+    // evaluating the whole texture at every 24-block cell up to the widest swell's reach (the young view's cost: 52 strides a
+    // ray, 40 of them in clear air under the old bound). Puffs rise above it only in the cells that hold one (dwPuff, h1 ≥ 0.5,
+    // its cell and the eddies' reach around it)
+    if (a > 1.5 && dwTextured(a) > 0.001) {
+        float sw = dwBulge(vec3(q.x, 0.0, q.y), a);
+        float reach = env * (1.0 + max(sw + 0.12, -0.3)) * (1.0 + DW_BILLOW) * 1.12 + 0.1 * env + 6.0;
+        if (a < 30.0) {
+            vec2 c0 = floor((q - 40.0) / 110.0), c1 = floor((q + 40.0) / 110.0);
+            float h = max(max(dwNoise3(vec3(c0 * 1.37, 91.2)), dwNoise3(vec3(c1 * 1.37, 91.2))),
+                    max(dwNoise3(vec3(vec2(c0.x, c1.y) * 1.37, 91.2)), dwNoise3(vec3(vec2(c1.x, c0.y) * 1.37, 91.2))));
+            if (h >= 0.5) reach = full;
+        }
+        return min(reach, full);
+    }
+#endif
+    return full;
 }
 
 // noise-free mode (the consumers' reference, the thin tail and plan B's far level): mean seeds and texture, no swells or puffs
 bool gDwMean = false;
+// diagnostics: why the last density was zero (1 ring/cut, 2 before arrival, 3 no law, 4 above the ceiling, 5 lean-back age, 6 thin profile)
+float gDwWhy = 0.0;
 // set by dwDensity at its sample: the textured share (dwTextured; gDwForceF ≥ 0 forces it: harness), and the haze level's
 // column there: its drawn optical depth, the depth above the sample, the fire zone's share under it, its top
 float gDwF = 1.0, gDwForceF = -1.0, gDwHazeTc = 0.0, gDwHazeAbove = 0.0, gDwHazeFire = 0.0, gDwHazeTop = 0.0;
@@ -403,17 +451,27 @@ float dwColumnAbove(float x) {
 // soil, open air and table end), no seeds, billows, swells or puffs. q: the source ground point and height above the ground
 float dwHaze(vec3 g, vec3 q, float r, float a, vec2 law, bool coarse) {
     float h = law.x * 0.95;
-    float top = max(dwEnvelope(a, h, 1.65), 1.0);
+    // the haze's own structure: the textured level's swell field (the same fields: no seam across the blend) at its air-mass
+    // point, stretched along the wind; its crests rise as plumes. Its matter moves with the air (q: the law's drift)
+    vec2 wd = dot(DwLife.zw, DwLife.zw) > 1e-12 ? normalize(DwLife.zw) : vec2(1.0, 0.0);
+    vec2 xs = q.xz + wd * (dot(q.xz, wd) * (1.0 / (1.0 + a / DW_SHEAR_S) - 1.0));
+    float L;
+    float swell = dwSwellField(xs, a, L);
+    vec3 row = dwRow0(r);
+    float hot = 0.3 + 0.7 * row.z;
+    float plume = DW_PLUME * hot * smoothstep(0.58, 0.85, L) * (1.0 - exp(-a / 45.0)) * exp(-a / 900.0);
+    float top = max(dwEnvelope(a, h, 1.65) * (1.0 + swell + plume), 1.0);
     if (q.y > top * 1.3 + 6.0) return 0.0;
     float edge = 0.22 * top + 4.0;
     float prof = 1.0 - smoothstep(top - edge, top + 0.4 * edge, q.y);
     float strat = 1.25 - 0.5 * clamp(q.y / top, 0.0, 1.0);
     vec2 soil = dwSoilAt(q.xz);
-    vec3 row = dwRow0(r);
     float paved = 1.0 + soil.x * (row.y - 1.0);
     float tc = dwTransfer(law.y) * (1.0 + 0.5 * exp(-a / 1.1)) * paved
             * (1.0 - smoothstep(DwRing.w * (1.0 - 1.0 / (DW_NODES - 1.0)), DwRing.w, r));
-    float sigma = tc / dwProfileInt(h) * prof * strat * smoothstep(0.0, 3.0, q.y) * smoothstep(0.0, 0.08, a);
+    // (normalised over its own swollen top: the swells and plumes reshape the column, its optical depth stays the law's
+    // through g, so the consumers' noise-free reference holds)
+    float sigma = tc / dwProfileInt(top) * prof * strat * smoothstep(0.0, 3.0, q.y) * smoothstep(0.0, 0.08, a);
     if (!coarse) {
         sigma *= dwOpen(g);
         gDwSand = clamp(soil.y / max(paved, 1e-6), 0.0, 1.0);
@@ -449,11 +507,15 @@ float dwDensity(vec3 g, bool coarse) {
     vec2 src = dwSource(g.xz);
     vec3 q = vec3(src.x, hq, src.y);
     float r = length(q.xz);
+    gDwWhy = 1.0;
     if (r > DwRing.x + 2.0 || r < DwCut) return 0.0;
     float a0 = DwEye.w - dwArrival(r);
+    gDwWhy = 2.0;
     if (a0 < 0.0) return 0.0;
     vec2 law = dwLaw(r, a0);
+    gDwWhy = 3.0;
     if (law.y <= 0.0) return 0.0;
+    gDwWhy = 6.0;
     // the haze level where the texture has faded, blended by the same fade function (no seam in time or space)
     float F = gDwForceF >= 0.0 ? gDwForceF : dwTextured(a0);
     if (!coarse) gDwF = F;
@@ -483,17 +545,36 @@ float dwDensity(vec3 g, bool coarse) {
     float delay = 0.12 * clamp(1.6 * s2 - 0.55, 0.0, 1.0) * (0.6 + 0.8 * s1);
     float h = law.x * mix(0.88, 1.02, s2), k = dwHump(seed.z);
     float top0 = max(dwEnvelope(a0, h, k), 1.0), ceiling = top0 * (1.0 + DW_BULGE) * DW_HAZE + 6.0;
+    gDwWhy = 4.0;
     if (q.y > ceiling) return 0.0;
+    gDwWhy = 6.0;
     // higher up the dust has the profile of a point a little outward (younger): the face is a ramp from the ground up
     // into the crest, leaning back, never ahead of the front
     float yn = clamp(q.y / top0, 0.0, 1.5);
     float a = DwEye.w - dwArrival(r + 40.0 * yn * yn * exp(-a0 / 1.5)) - delay;
+    gDwWhy = 5.0;
     if (a <= 0.0) return 0.0;
+    gDwWhy = 6.0;
     float top = dwEnvelope(a, h, k), env = top, ph;
     vec3 pw = dwAir(q, dwClock(a, q.xz), r, top, ph);
     float swell = mean ? 0.0 : dwBulge(pw, a);
     if (!coarse) gDwSwell = swell;
     top *= 1.0 + swell;
+    // above the highest billowed top, its soft edge and veil (dwSoft ≤ 1: surf ≤ top·(1 + DW_BILLOW)), only a puff can hold dust:
+    // the texture is not read there (the young view's rays crossed ~20 such clear cells each, at the full texture's cost)
+    if (!coarse && !mean && q.y > top * (1.0 + DW_BILLOW) * 1.12 + 4.0 + 0.4 * (0.22 * top + 4.0)) {
+        gDwSurf = top * (1.0 + DW_BILLOW);
+        float pf = dwPuff(vec3(pw.x, q.y, pw.z), top, a);
+        if (pf <= 0.0) {
+            gDwWhy = 7.0;
+            return F >= 0.999 ? 0.0 : (1.0 - F) * haze;
+        }
+        float taup = dwTransfer(law.y) * (1.0 + 0.5 * exp(-a / 1.1));
+        float sigp = taup / dwProfileInt(h) * mix(1.0, mix(0.75, 1.25, 0.55 * s1 + 0.45 * s2), dwContrast(a)) * dwNoiseGain(taup) * dwOpen(g);
+        gDwSigma = sigp;
+        float texp = sigp * pf * (1.0 - smoothstep(ceiling - 8.0, ceiling, q.y)) * smoothstep(0.0, 0.08, a);
+        return F >= 0.999 ? texp : mix(haze, texp, F);
+    }
     // One frame for the texture: fixed in the air across the ground and carried by the dust's own rise and fall in height
     // (height as a share of this point's envelope, scaled to the settled layer): each column's billows are born at the
     // ground as the front reaches it, rise into the crest and settle with it, and stay where they were torn up. Sliced
@@ -510,7 +591,8 @@ float dwDensity(vec3 g, bool coarse) {
     float bl = coarse || mean ? 0.42 : mix(0.42, dwBillow(vec3(pw.x, yc - 0.3 * ph, pw.z) / vec3(34.0, 22.0, 34.0) + 11.0, 1.0 / 22.0), C);
     // fibrous streaks combed along the radial wind, ~28 m along, 4.5 m across
     float fs = 0.5;
-    if (!coarse && !mean) {
+    // (the streaks are HIGH's: MEDIUM and LOW keep their mean)
+    if (!coarse && !mean && DwDetail < 0.5) {
         float ral = length(pw.xz);
         float angle = pw.x == 0.0 ? sign(pw.z) * 1.57079633 : atan(pw.z, pw.x);
         fs = mix(0.5, dwFbm2(vec3(ral / 28.0, (yc - 0.25 * ph) / 5.0, angle * ral / 4.5), 0.0), dwLod(1.0 / 2.2) * C);
@@ -648,9 +730,23 @@ float dwGridK(float t) {
 // largest billow, the ray integrates the noise-free column in one segment, blended in over a factor of 2), 0: the full march
 uniform vec4 DwFar;
 // longest stride over clear air inside the dust's bound, blocks
+#ifdef DW_GAP_OVERRIDE
+const float DW_GAP = DW_GAP_OVERRIDE;
+#else
 const float DW_GAP = 24.0;
+#endif
+// the clear stride inside the bound per light detail level (MEDIUM and LOW 36 blocks: E8 holds at each rung; 48 at LOW
+// missed thin spans by 0.034)
+float dwGap() {
+    float k = DwDetail > 0.5 ? 1.5 : 1.0;
+    return DW_GAP * k;
+}
 // diagnostics of the last march (harness): occupied samples, step-cap exits with material left, tail optical depth
 int gDwSamples = 0, gDwIters = 0, gDwTailEvals = 0;
+// diagnostics: strides with no dust at the radius, above the bound going up, above it going down, clear inside it
+vec4 gDwKinds = vec4(0.0);
+float gDwWhyHist[8] = float[8](0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0);
+float gDwWhyHq = 0.0;
 float gDwCapLeft = 0.0, gDwTailTau = 0.0;
 
 // the noise-free column integrated over [ta, tb] along the ray in n Gauss–Legendre segments of 4 nodes, light at each node:
@@ -701,6 +797,7 @@ vec4 dwMarch(vec3 rd, float tEnd, float jitter, float foot, int maxSteps) {
     gDwSamples = 0;
     gDwIters = 0;
     gDwTailEvals = 0;
+    gDwKinds = vec4(0.0);
     gDwCapLeft = 0.0;
     gDwTailTau = 0.0;
     // vertical slab from the lowest ground to the envelope top over the highest
@@ -754,12 +851,18 @@ vec4 dwMarch(vec3 rd, float tEnd, float jitter, float foot, int maxSteps) {
         vec3 q = eye + rd * tt;
         float bound = dwBound(q);
         if (bound < 0.0) {
+#ifdef DW_DIAG
+            gDwKinds.x += 1.0;
+#endif
             // no dust at this radius: long strides
             kLast = k; k += n; n = min(n * 2.0, 16.0); inDust = false;
             continue;
         }
         float hq = q.y - dwFloor(q.xz);
         if (hq > bound) {
+#ifdef DW_DIAG
+            if (rd.y < 0.0) gDwKinds.z += 1.0; else gDwKinds.y += 1.0;
+#endif
             if (rd.y < 0.0) {
                 // above the dust here: down to its bound over the highest ground of the map (rising ground ahead may lift the
                 // dust toward the ray), onto the next grid cell (a stride that lands in dust backs up)
@@ -809,9 +912,15 @@ vec4 dwMarch(vec3 rd, float tEnd, float jitter, float foot, int maxSteps) {
             // (the haze level is smooth: its spans grow while a cell holds under 0.1 of optical depth)
             n = s * dt < mix(0.1, 0.01, gDwF) ? min(cells * 2.0, 8.0) : 1.0;
         } else {
+#ifdef DW_DIAG
+            gDwKinds.w += 1.0;
+            gDwWhyHist[int(gDwWhy) % 8] += 1.0;
+            if (gDwWhy > 6.5) gDwWhyHist[3] += 1.0;
+            gDwWhyHq += q.y - dwFloor(q.xz);
+#endif
             // inside the dust's bound but clear here: strides no longer than DW_GAP blocks, so a thin span the bound admits
             // (a swell's crest, another source's layer) is never stepped over (E8: five 50-block spans were missed at LOW)
-            kLast = k; k += n; n = min(n * 2.0, max(1.0, floor(DW_GAP / max(dt, 1e-3))));
+            kLast = k; k += n; n = min(n * 2.0, max(1.0, floor(dwGap() / max(dt, 1e-3))));
             inDust = false;
         }
     }
