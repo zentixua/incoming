@@ -5,21 +5,21 @@
 # C grazing thin haze (+600..+618 s, same camera), B inside the layer (+60..+78 s, camera 30 m up).
 set -u
 TREE=/mnt/data/projects/incoming-wt-uwprobe
-OUT=/mnt/data/projects/incoming/mod/run/agents/unified-wave/step1/gpu2a
+OUT=/mnt/data/projects/incoming/mod/run/agents/unified-wave/step1/gpu2a${GPU_TAG:-}
 mkdir -p "$OUT"
 cd "$TREE" || exit 1
 export JAVA_HOME=$HOME/.var/app/org.prismlauncher.PrismLauncher/data/PrismLauncher/java/java-runtime-delta
 S=mod/run/sandbox
 CFG=$S/config/incoming-client.toml
-CONFIGS=("HIGH full" "MEDIUM full" "LOW full" "HIGH full" "MEDIUM full" "LOW full" "HIGH full")
-apply() {  # apply "<preset> <full|planB>"
+CONFIGS=("HIGH 1" "HIGH 2" "MEDIUM 1" "MEDIUM 2" "LOW 1" "LOW 2" "HIGH 1" "HIGH 2" "MEDIUM 1" "MEDIUM 2" "LOW 1" "LOW 2")
+apply() {  # apply "<preset> <march divisor scale>"
   local q=${1% *} m=${1#* }
   sed -i "s/^nuke_dust_quality = .*/nuke_dust_quality = \"$q\"/" $CFG
-  if [ "$m" = planB ]; then touch $S/fx/planB; else rm -f $S/fx/planB; fi
+  echo "$m" > $S/fx/dustwall_div_scale; rm -f $S/fx/planB
   echo "$(date +%T) apply $1" >> "$OUT/watcher.log"
 }
-group() {  # frames of one view: T0, T0+3, ... (7 frames)
-  python3 -c "print(','.join(str($1 + 3 * i) for i in range(7)))"
+group() {  # frames of one view: T0, T0+3, ... (12 frames)
+  python3 -c "print(','.join(str($1 + 3 * i) for i in range(12)))"
 }
 watch() {  # flip the setting after each logged frame of take $1
   local name=$1 n=0 total=$2
@@ -28,7 +28,7 @@ watch() {  # flip the setting after each logged frame of take $1
     local c; c=$(grep -c "SANDBOX shot ${name}_" $S/logs/latest.log 2>/dev/null); c=${c:-0}
     if [ "$c" -gt "$n" ]; then
       n=$c
-      apply "${CONFIGS[$(( n % 7 ))]}"
+      apply "${CONFIGS[$(( n % 12 ))]}"
     fi
     sleep 0.2
   done
@@ -43,12 +43,12 @@ apply "HIGH full"
 tools/sandbox.sh restart gpu --wait --size 2560x1600 || { echo "sandbox restart failed"; tools/sandbox.sh stop; exit 1; }
 tools/sandbox.sh fx 'zoom 1.537'
 # shot 1: views A and C, camera 120 m up
-watch gpu_ac 14 &
+watch gpu_ac 24 &
 W=$!
 tools/sandbox.sh shot gpu_ac 'nuke 1000 ground near 4500' --at "$(group 4),$(group 600)" --cam '7632 120 148 -521' --wav 0 --time 12000
 kill $W 2>/dev/null
 # shot 2: view B, camera 30 m up (inside the layer)
-watch gpu_b 7 &
+watch gpu_b 12 &
 W=$!
 tools/sandbox.sh shot gpu_b 'nuke 1000 ground near 4500' --at "$(group 60)" --cam '7632 30 148 -521' --wav 0 --time 12000
 kill $W 2>/dev/null
@@ -57,5 +57,5 @@ for n in gpu_ac gpu_b; do rm -rf "$OUT/$n"; cp -r $S/fx/out/$n "$OUT/$n"; done
 cp $S/logs/latest.log "$OUT/latest.log"
 tools/sandbox.sh stop
 tools/gpu_lease.sh release
-rm -f $S/fx/planB
+rm -f $S/fx/planB $S/fx/dustwall_div_scale
 echo "done gpu run -> $OUT"

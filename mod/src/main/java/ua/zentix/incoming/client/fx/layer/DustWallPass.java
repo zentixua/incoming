@@ -99,6 +99,23 @@ public final class DustWallPass {
     private static boolean planB;
     private static long planBChecked = -1;
 
+    /** The preset's own march divisor (the light's detail level reads it, not the scaled one). */
+    private static int baseDiv = 4;
+    private static int divScale = 1;
+    private static long divChecked = -1;
+
+    private static int divScale() {
+        if (frame - divChecked >= 30 || divChecked < 0) {
+            divChecked = frame;
+            try {
+                divScale = Math.max(1, Integer.parseInt(java.nio.file.Files.readString(java.nio.file.Path.of("fx/dustwall_div_scale")).trim()));
+            } catch (Exception e) {
+                divScale = 1;
+            }
+        }
+        return divScale;
+    }
+
     private static boolean planB() {
         if (frame - planBChecked >= 30 || planBChecked < 0) {
             planBChecked = frame;
@@ -163,6 +180,9 @@ public final class DustWallPass {
         if (!supported()) return false;
         Minecraft mc = Minecraft.getInstance();
         int divisor = PallPass.LADDER[detail.level].wallDiv();
+        baseDiv = divisor;
+        // probe (unified-wave 2a): the march divisor × the integer in fx/dustwall_div_scale (the GPU run's coarser candidate)
+        divisor *= divScale();
         if (FORCED_DIV != null) {
             // A diagnostic override can request finer sampling only while the controller is at the chosen setting.
             int minimum = detail.floored || detail.level > detail.ceiling ? divisor : 1;
@@ -230,7 +250,7 @@ public final class DustWallPass {
             m.safeGetUniform("DwFire").set(f.fire.x, f.fire.y, f.fire.z);
             m.safeGetUniform("DwAdapt").set(f.adapt);
             // the light's detail by the march divisor of the preset's rung (1/4 HIGH, 1/5 MEDIUM, 1/6 and coarser LOW)
-            m.safeGetUniform("DwDetail").set(div <= 4 ? 0f : div == 5 ? 1f : 2f);
+            m.safeGetUniform("DwDetail").set(baseDiv <= 4 ? 0f : baseDiv == 5 ? 1f : 2f);
             m.safeGetUniform("DwBall").set(f.ball[0], f.ball[1], f.ball[2], f.ball[3]);
             m.safeGetUniform("DwBallLight").set(f.ballLight.x, f.ballLight.y, f.ballLight.z);
             m.safeGetUniform("DwSunLight").set(f.sunLight.x, f.sunLight.y, f.sunLight.z);
@@ -463,7 +483,7 @@ public final class DustWallPass {
 
     /** The pass's state for the timing log: resolution, step cap, history. */
     public static String describe() {
-        return String.format(java.util.Locale.ROOT, "1/%d, history %s, frame %d, %s", div, history && HISTORY_ON ? "on" : "off", frame,
+        return String.format(java.util.Locale.ROOT, "1/%d (preset 1/%d), history %s, frame %d, %s", div, baseDiv, history && HISTORY_ON ? "on" : "off", frame,
                 planB ? "plan B far level" : "full march");
     }
 
