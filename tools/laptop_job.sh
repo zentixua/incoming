@@ -9,6 +9,10 @@
 # group (e.g. Claude app): on exit everything left in the group stops (no stranded nested-session D-Bus
 # helpers), and if the system still runs out of memory, this job goes first (OOMScoreAdjust), not Artem's
 # programs. Laptop stays awake while job runs (systemd-inhibit).
+# The unit lives in agents.slice (laptop-agents installs it with one MemoryMax/MemorySwapMax for all agent work: missions,
+# delegate runs, laptop jobs): the sum of all jobs stays inside it, so swap never fills and systemd-oomd never kills the
+# Claude app; a job that does not fit is killed inside the slice ("agent work memory … is full"). Without the installed
+# unit (a server) the slice has no limit. The caller's TMPDIR passes on (agent units keep temporary files on disk).
 # Every job has a memory ceiling (MemoryMax, MemorySwapMax): a job past it is stopped inside its own unit and its output
 # ends with "laptop_job <name>: memory ceiling … reached", instead of the kernel picking a victim on the whole laptop.
 # Ceilings from measured unit peaks (journal, 14 days to 20.11, RAM + swap): GameTest, sweeps, builds and GPU jobs at most
@@ -52,12 +56,17 @@ if [ "${1:-}" = --account ]; then
   printf 'cpu\t%s\t%s\t%s\t%s\t%s\n' "$(date +%s)" "${DELEGATE_TASK:--}" "${cg##*/}" \
     "$(( $(date +%s) - ${INCOMING_JOB_START:-$(date +%s)} ))" "$(awk -v u="$us" 'BEGIN { printf "%.1f", u / 1e6 }')" >> "$log" 2>/dev/null
   # the unit hit its memory ceiling (the kernel killed inside it; systemd then stops the rest): the caller prints it
-  # memory.events: oom = this cgroup reached its own limit, oom_kill = processes killed in it (also by a global OOM)
+  # memory.events: oom = this cgroup reached its own limit, oom_kill = processes killed in it (also by a global OOM);
+  # the slice's oom count grown since the job started (INCOMING_SLICE_OOM) = agents.slice reached its limit
   oom=$(awk '$1 == "oom_kill" { print $2 }' "/sys/fs/cgroup$cg/memory.events" 2>/dev/null)
   own=$(awk '$1 == "oom" { print $2 }' "/sys/fs/cgroup$cg/memory.events" 2>/dev/null)
+  slice=$(awk '$1 == "oom" { print $2 }' "/sys/fs/cgroup${cg%/*}/memory.events" 2>/dev/null)
   if [ "${SERVICE_RESULT:-}" = oom-kill ] || [ "${oom:-0}" -gt 0 ]; then
     peak=$(awk '{ printf "%.1f", $1 / 1073741824 }' "/sys/fs/cgroup$cg/memory.peak" 2>/dev/null)
-    [ -n "${INCOMING_JOB_OOM:-}" ] && echo "${oom:-1} ${peak:-?} $([ "${own:-0}" -gt 0 ] && echo own || echo host)" > "$INCOMING_JOB_OOM"
+    where=host
+    [ "${slice:-0}" -gt "${INCOMING_SLICE_OOM:-0}" ] && where=slice
+    [ "${own:-0}" -gt 0 ] && where=own
+    [ -n "${INCOMING_JOB_OOM:-}" ] && echo "${oom:-1} ${peak:-?} $where" > "$INCOMING_JOB_OOM"
   fi
   exit 0
 fi
@@ -151,12 +160,16 @@ fi
 
 # service environment contains only what the job needs (service does not inherit shell environment)
 envs=()
-while IFS= read -r line; do envs+=(-E "$line"); done < <(env | grep -E '^(JAVA_HOME|MC_DIR|MODS|INCOMING_[A-Z_]+|DELEGATE_[A-Z_]+|PYTHON_CPU_COUNT|XDG_RUNTIME_DIR|XDG_STATE_HOME)=' || true)
+while IFS= read -r line; do envs+=(-E "$line"); done < <(env | grep -E '^(JAVA_HOME|MC_DIR|MODS|INCOMING_[A-Z_]+|DELEGATE_[A-Z_]+|PYTHON_CPU_COUNT|TMPDIR|XDG_RUNTIME_DIR|XDG_STATE_HOME)=' || true)
 
 # memory ceiling (_ceiling); OOMPolicy=stop: a kill inside the unit stops the whole job, --account reports it
 oomfile="${XDG_RUNTIME_DIR:-/run/user/$(id -u)}/incoming-job-$name-$$.oom"
 rm -f "$oomfile"
 props=(-p OOMScoreAdjust=500 -p MemoryMax="$mem_max" -p MemorySwapMax="$mem_swap" -p OOMPolicy=stop -E INCOMING_JOB_OOM="$oomfile")
+# agents.slice: one ceiling for all agent work (header); its oom count now, so --account tells a full slice from the unit's own
+slice_cg=$(systemctl --user show agents.slice -p ControlGroup --value 2>/dev/null || true)
+slice_mem=$(systemctl --user show agents.slice -p MemoryMax --value 2>/dev/null || true)
+props+=(--slice=agents.slice -E INCOMING_SLICE_OOM="$(awk '$1 == "oom" { print $2 }' "/sys/fs/cgroup$slice_cg/memory.events" 2>/dev/null || echo 0)")
 if [ "$mode" = soft ]; then
   # idle CPU class and the client's memory ceiling (soft_mem_cap, above): a CPU client never pushes the host into swap;
   # INCOMING_SOFT_UNIT tells scripts inside that the ceiling is already theirs
@@ -192,7 +205,9 @@ fi
 wait $run || code=$?
 if [ -s "$oomfile" ]; then
   read -r killed peak where < "$oomfile"
-  if [ "$where" = host ]; then
+  if [ "$where" = slice ]; then
+    echo "laptop_job $name: agent work memory (agents.slice: missions, delegate runs and laptop jobs together, MemoryMax $(awk -v b="$slice_mem" 'BEGIN { printf "%.0f GB", b / 1073741824 }')) is full: $killed process(es) killed inside its unit, peak $peak GB; job stopped (other agent work holds the memory: run it when that ends)"
+  elif [ "$where" = host ]; then
     echo "laptop_job $name: out of memory on the laptop (below its ceiling $mem_max): $killed process(es) killed inside its unit, peak $peak GB; job stopped"
   else
     echo "laptop_job $name: memory ceiling $mem_max (+ $mem_swap swap) reached: $killed process(es) killed inside its unit, peak $peak GB; job stopped (laptop_job.sh --full or INCOMING_JOB_MEM for a larger job)"

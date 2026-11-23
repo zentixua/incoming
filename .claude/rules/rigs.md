@@ -48,6 +48,12 @@ paths:
 - Measurement server without a panel: `./gradlew runServer -PserverDir=run/<name> -PmcModsDir=run/ci-mods` (after
   `tools/fetch_runtime_mods.py`), `advertiseDedicatedServerToLan=false` in its `config/neoforge-server.toml`
   (LoopbackGuard), RCON for commands. `forceload add` only queues tickets: wait with `execute if loaded` before acting.
+- Laptop memory: all agent work (missions, delegate runs, `laptop_job.sh` jobs, units agents start) shares one ceiling,
+  the user unit `agents.slice` that laptop-agents installs (MemoryMax/MemorySwapMax, no MemoryHigh). Without it, their
+  sum fills RAM and zram swap and systemd-oomd kills the cgroup with the most swap, which is always the Claude desktop
+  app (idle pages swap out first). Heavy runs from a Claude app session therefore go through `laptop_job.sh`, never
+  directly (a `java` started there counts as the app), and temporary files go to `$TMPDIR` (on disk in agent units),
+  never `/tmp` (a 16 GB RAM tmpfs).
 - Stop background scripts by PID: `pkill -f <pattern>` also matches your own shell's command line and kills it.
 - `tools/prod_client.py --video` copies Artem's `options.txt`; with `fullscreen:true` the window grows to the nested
   screen and `x11_record.py` (which starts a segment only at exactly `--size`) records nothing after the menu: run
