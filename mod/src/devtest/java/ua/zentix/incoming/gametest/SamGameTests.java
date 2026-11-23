@@ -76,7 +76,7 @@ import java.util.UUID;
 @PrefixGameTestTemplate(false)
 public final class SamGameTests {
     /** SAM on the runway "runway": the ground of the runway is y 3, Shahed fly over it at +Z to its end (z 200). */
-    private static final BlockPos SAM = new BlockPos(16, 4, 100);
+    static final BlockPos SAM = new BlockPos(16, 4, 100);
     /** The height of Shahed above the beginning of the site. */
     private static final int DRONE_Y = 50;
     /** The middle of the site “range” and its ground (first air - y 11). */
@@ -251,7 +251,8 @@ public final class SamGameTests {
 
     /**
      * ICBM takes off in 30 blocks from SAM, "Grad" falls nearby: the radar sees both as strangers, but does not hit - ICBM is not its target,
-     *  "Grad" is not worth a missile (spec: {@code Signature.intercept}).
+     *  "Grad" is not worth a missile (spec: {@code Signature.intercept}). Seen, not engaged, the ICBM still sounds the SAM's
+     *  redstone alarm while it is the only hostile track (A4 contract).
      */
     @GameTest(template = "range", timeoutTicks = 800, batch = "sam_skip", skyAccess = true)
     public static void skipsIcbmAndGrad(GameTestHelper h) {
@@ -277,19 +278,24 @@ public final class SamGameTests {
         });
         UUID gradId = grad.getUUID();
         Launches launches = new Launches(level, owner);
-        Set<UUID> seen = new HashSet<>();
+        Set<UUID> seen = new HashSet<>(), alarmed = new HashSet<>();
         h.onEachTick(() -> {
             launches.watch();
-            for (Radar.Track t : scan(level, antenna, owner)) {
+            List<Radar.Track> hostile = scan(level, antenna, owner).stream().filter(Radar.Track::hostile).toList();
+            for (Radar.Track t : hostile) {
                 if (!t.id().equals(icbm.getUUID()) && !t.id().equals(gradId)) continue;
-                h.assertTrue(t.hostile() && !t.engageable(), t.projectile().weapon() + ": stranger " + t.hostile() + ", beat " + t.engageable());
+                h.assertTrue(!t.engageable(), t.projectile().weapon() + ": beat " + t.engageable());
                 seen.add(t.id());
             }
+            // the alarm reflects the last sweep: credit a target only when it alone has been in sight a full sweep
+            if (hostile.size() == 1 && sam.alarm()) alarmed.add(hostile.get(0).id());
             h.assertTrue(launches.count() == 0, "launch by " + launches.targets());
         });
         h.succeedWhen(() -> {
             h.assertTrue(seen.contains(icbm.getUUID()), "ICBM radar did not see");
             h.assertTrue(seen.contains(gradId), "\"Grad\" was not seen by radar");
+            // the Grad may never be alone in sight (it lands while the ICBM climbs); the ICBM is, after the Grad lands
+            h.assertTrue(alarmed.contains(icbm.getUUID()), "no redstone alarm for the ICBM alone in sight");
             h.assertTrue(level.getEntity(gradId) == null && VirtualFlights.get(level).flights().stream().noneMatch(p -> p.getUUID().equals(gradId)),
                     "\"Grad\" is still flying");
             h.assertTrue(sam.ready() + sam.stockCount() == 4, "missiles spent");
@@ -451,7 +457,7 @@ public final class SamGameTests {
 
     // ---------------------------------------------------------------- assistants
 /** Air defense rules for the duration of the test: rails and reload in seconds; return after it. */
-    private static void air(GameTestHelper h, int rails, int reloadSeconds) {
+    static void air(GameTestHelper h, int rails, int reloadSeconds) {
         IncomingConfig.Server c = IncomingConfig.SERVER;
         int rails0 = c.samRails.get(), reload0 = c.samReloadSeconds.get();
         c.samRails.set(rails);
@@ -472,7 +478,7 @@ public final class SamGameTests {
      * Place SAM (the owner - as if this player had placed it) and put missiles in the reserve. After the check, the SAM is removed
      *  without falling out: the sites of the old checks are still there, and a charged SAM at the adjacent site would shoot down the shells of other people’s checks.
      */
-    private static SamBlockEntity sam(GameTestHelper h, BlockPos at, @Nullable UUID owner, int missiles) {
+    static SamBlockEntity sam(GameTestHelper h, BlockPos at, @Nullable UUID owner, int missiles) {
         h.setBlock(at, ModBlocks.SAM.get());
         SamBlockEntity be = h.getBlockEntity(at);
         BlockPos abs = h.absolutePos(at);
@@ -487,7 +493,7 @@ public final class SamGameTests {
     }
 
     /** Shahed above the beginning of the strip, on the line {@code x}, - to its end. */
-    private static DroneEntity drone(GameTestHelper h, int x, @Nullable UUID owner) {
+    static DroneEntity drone(GameTestHelper h, int x, @Nullable UUID owner) {
         ServerLevel level = h.getLevel();
         DroneEntity d = ModEntities.DRONE.get().create(level);
         Vec3 start = Vec3.atCenterOf(h.absolutePos(new BlockPos(x, DRONE_Y, 4)));
@@ -501,7 +507,7 @@ public final class SamGameTests {
     }
 
     /** Shahed, flying out of world from {@code from} to {@code to}; removed after inspection. */
-    private static DroneEntity virtualDrone(GameTestHelper h, Vec3 from, Vec3 to, @Nullable UUID owner) {
+    static DroneEntity virtualDrone(GameTestHelper h, Vec3 from, Vec3 to, @Nullable UUID owner) {
         ServerLevel level = h.getLevel();
         DroneEntity d = ModEntities.DRONE.get().create(level);
         d.launch(from, new Target.Point(to), to, owner);
@@ -587,7 +593,7 @@ public final class SamGameTests {
      *  (using it, {@link Sides} recognizes the team of the SAM owner; the server GameTest does not have a profile cache). Without tickets and packages;
      *  the chat lines that he received are in {@link #heard}. Removed after inspection.
      */
-    private static Listener listener(GameTestHelper h, String name, BlockPos at) {
+    static Listener listener(GameTestHelper h, String name, BlockPos at) {
         ServerLevel level = h.getLevel();
         Listener p = new Listener(level, name);
         p.moveTo(Vec3.atBottomCenterOf(h.absolutePos(at)));
@@ -613,7 +619,7 @@ public final class SamGameTests {
         }
     }
 
-    private static final class Listener extends FakePlayer {
+    static final class Listener extends FakePlayer {
         final List<Component> heard = new ArrayList<>();
 
         Listener(ServerLevel level, String name) {

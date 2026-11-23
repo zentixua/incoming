@@ -130,6 +130,36 @@ class FlashAftermathClockTest {
         }
     }
 
+    @Test
+    void cancellingOneScheduledTagDoesNotRestartAnotherActiveBurst() {
+        Minecraft client = mock(Minecraft.class);
+        ClientLevel level = mock(ClientLevel.class);
+        client.level = level;
+        when(level.dimensionType()).thenReturn(mock(DimensionType.class));
+        Detonation other = new Detonation(1, new Vec3(0, 64, 0), 64, 1, true, 100, 0, 5, 20_000, 0, 1, false, 1);
+        S2C.NukeSync empty = new S2C.NukeSync(List.of(), List.of());
+        try (var minecraft = mockStatic(Minecraft.class); var flash = mockStatic(FlashAftermath.class);
+             var water = mockStatic(NukeWater.class); var light = mockStatic(NukeLight.class);
+             var echoes = mockConstruction(NukeEchoes.class)) {
+            minecraft.when(Minecraft::getInstance).thenReturn(client);
+            when(level.getGameTime()).thenReturn(100L);
+            try {
+                ClientNuclear.detonation(new S2C.NukeDetonation(other, 0, 1), true);
+                flash.verify(() -> FlashAftermath.detonation(eq(other), any(DoubleUnaryOperator.class), eq(0.0)));
+                water.verify(() -> NukeWater.resolve(any(), eq(level)));
+                light.verify(() -> NukeLight.detonation(level));
+                assertEquals(1, echoes.constructed().size());
+                var active = ClientNuclear.detonations().getFirst();
+                active.tick();
+                // a tagged clear cancels another strike by its id (NuclearStrikes.cancelTagged), not by a full resync
+                ClientNuclear.cancelled(new S2C.NukeCancelled(List.of(99)));
+                assertEquals(1, ClientNuclear.detonations().getFirst().age(), "the surviving burst's tick and sound schedule restarted");
+            } finally {
+                ClientNuclear.sync(empty);
+            }
+        }
+    }
+
     private static Puffs probeHay(ClientNuclear.AgeClock clock, Vec3 burst, DoubleUnaryOperator arrival, int effectTick)
             throws ReflectiveOperationException {
         Minecraft client = mock(Minecraft.class);

@@ -1127,7 +1127,7 @@ public final class StrikeGameTests {
                 "route longer than the range accepted");
 
         // salvo remembers the launch site
-        h.assertTrue(command(h, "incoming salvo missile 3 6" + at + fromArg(far)) == 1, "salvo from the launch site not accepted");
+        h.assertTrue(command(h, "incoming salvo missile 3 6" + at + fromArg(far)) == 3, "salvo from the launch site not admitted with its 3 rounds");
         CompoundTag saved = SalvoData.get(level).save(new CompoundTag(), level.registryAccess());
         SalvoData.get(level).cancel(level, null, List.of());
         ListTag salvos = saved.getList("salvos", Tag.TAG_COMPOUND);

@@ -1,0 +1,28 @@
+{
+  "parent": "incoming:strikes/root",
+  "display": {
+    "icon": {
+      "id": "incoming:substation"
+    },
+    "title": {
+      "translate": "advancements.incoming.strikes.lights_back.title"
+    },
+    "description": {
+      "translate": "advancements.incoming.strikes.lights_back.description"
+    },
+    "frame": "task",
+    "show_toast": true,
+    "announce_to_chat": true,
+    "hidden": false
+  },
+  "criteria": {
+    "restored": {
+      "trigger": "incoming:blackout_restored"
+    }
+  },
+  "requirements": [
+    [
+      "restored"
+    ]
+  ]
+}

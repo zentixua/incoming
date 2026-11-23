@@ -163,7 +163,13 @@ public class FixedLauncherBlockEntity extends BlockEntity implements Launcher {
      */
     @Nullable
     public Component fire(ServerLevel level) {
-        Component problem = LauncherOrders.fire(level, this);
+        return fire(level, null);
+    }
+
+    /** Same; {@code made} receives the answered order ({@link LauncherOrders#fire}). */
+    @Nullable
+    public Component fire(ServerLevel level, @Nullable java.util.function.Consumer<ua.zentix.incoming.strike.Order> made) {
+        Component problem = LauncherOrders.fire(level, this, made);
         report(problem != null ? problem : Component.translatable("incoming.fixed_launcher.fired"));
         if (problem != null) level.levelEvent(1001, worldPosition, 0);
         return problem;

@@ -1,5 +1,6 @@
 package ua.zentix.incoming.defense;
 
+import net.minecraft.core.BlockPos;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.phys.Vec3;
 import org.jetbrains.annotations.Nullable;
@@ -29,9 +30,9 @@ public final class FireControl {
      * Launch a missile from {@code rail} at {@code track}.
      *
      * @param owner missile owner (who placed the SAM)
-     * @param launcher launch location (for the log)
+     * @param site the SAM block (log, interception events)
      */
-    public static Interceptor launch(ServerLevel level, Vec3 rail, Radar.Track track, @Nullable UUID owner, String launcher, InterceptorSpec spec) {
-        return DefenseWorld.get(level).launch(level, rail, track, owner, launcher, spec);
+    public static Interceptor launch(ServerLevel level, Vec3 rail, Radar.Track track, @Nullable UUID owner, BlockPos site, InterceptorSpec spec) {
+        return DefenseWorld.get(level).launch(level, rail, track, owner, site, spec);
     }
 }

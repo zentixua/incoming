@@ -30,6 +30,8 @@ import org.junit.jupiter.api.Test;
 import ua.zentix.incoming.IncomingConfig;
 import ua.zentix.incoming.nuclear.NuclearStrikes;
 import ua.zentix.incoming.strike.Loadout;
+import ua.zentix.incoming.strike.Orders;
+import ua.zentix.incoming.strike.RoundRef;
 import ua.zentix.incoming.strike.ServerActions;
 import ua.zentix.incoming.strike.Waypoints;
 import ua.zentix.incoming.strike.WeaponType;
@@ -51,6 +53,8 @@ import static org.mockito.Mockito.mockStatic;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.ArgumentMatchers.isNull;
 import static org.mockito.Mockito.when;
 
 /** Exercise the registered Brigadier tree and its real permission predicates without starting a server. */
@@ -135,19 +139,32 @@ class IncomingCommandTest {
         return node.getChildren().stream().map(CommandNode::getName).collect(Collectors.toSet());
     }
 
+    /** A strike call that admits its order with {@code rounds} rounds and hands it to the command ({@code made}, the last argument). */
+    private static org.mockito.stubbing.Answer<Boolean> admits(int rounds) {
+        return inv -> {
+            ua.zentix.incoming.strike.Order o = mock(ua.zentix.incoming.strike.Order.class);
+            when(o.admitted()).thenReturn(rounds);
+            when(o.id()).thenReturn(new java.util.UUID(0, 1));
+            inv.<java.util.function.Consumer<ua.zentix.incoming.strike.Order>>getArgument(inv.getArguments().length - 1).accept(o);
+            return true;
+        };
+    }
+
     @Test
     void rootAndAllWeaponAliasesHaveExecutableTargets() {
         assertEquals(Set.of("incoming"), children(dispatcher.getRoot()));
-        assertEquals(Set.of("help", "menu", "clear", "give", "nuke", "grid", "launcher", "radiation", "salvo",
+        assertEquals(Set.of("help", "menu", "clear", "give", "nuke", "grid", "launcher", "radiation", "salvo", "status",
                 "drone", "shahed", "missile", "bunker", "rocket", "grad", "loiter", "lancet"), children(node("incoming")));
         assertEquals(WEAPONS, children(node("incoming", "salvo")));
         for (String weapon : WEAPONS) {
             for (String target : List.of("", " at 10 64 20", " at ~ ~", " target")) parses("incoming " + weapon + target);
             for (String target : List.of("", " me", " look", " at 10 64 20", " at ~ ~", " target")) {
                 parses("incoming salvo " + weapon + " 2 5" + target);
+                parses("incoming salvo " + weapon + " 2 5" + target + " tag wave1");
             }
         }
-        for (String command : List.of("help", "menu", "clear", "give", "give @a", "radiation", "radiation clear @a",
+        for (String command : List.of("help", "menu", "clear", "clear tag wave1", "status", "status tag wave1", "status @a", "give", "give @a",
+                "radiation", "radiation clear @a",
                 "grid status", "grid node list", "launcher 0 64 0", "launcher 0 64 0 fire", "launcher 0 64 0 clear",
                 "launcher 0 64 0 load 1", "launcher 0 64 0 owner none")) parses("incoming " + command);
     }
@@ -162,11 +179,9 @@ class IncomingCommandTest {
                 "grad", WeaponType.ROCKET, "loiter", WeaponType.LOITER, "lancet", WeaponType.LOITER);
         for (var alias : aliases.entrySet()) {
             try (var actions = mockStatic(ServerActions.class)) {
-                actions.when(() -> ServerActions.dispatch(level, "test", 0, alias.getValue(), 1, 0, aim,
-                        Loadout.Nuke.DEFAULT, Waypoints.NONE, null)).thenReturn(true);
+                actions.when(() -> ServerActions.dispatch(isNull(), eq(level), eq("test"), eq(0f), eq(alias.getValue()), eq(1), eq(0), eq(aim), eq(Loadout.Nuke.DEFAULT), eq(Waypoints.NONE), isNull(), isNull(), any(), any())).thenAnswer(admits(1));
                 assertEquals(1, dispatcher.execute("incoming " + alias.getKey() + " at 10.25 64.5 20.75", source(2, false, level)), alias.getKey());
-                actions.verify(() -> ServerActions.dispatch(level, "test", 0, alias.getValue(), 1, 0, aim,
-                        Loadout.Nuke.DEFAULT, Waypoints.NONE, null));
+                actions.verify(() -> ServerActions.dispatch(isNull(), eq(level), eq("test"), eq(0f), eq(alias.getValue()), eq(1), eq(0), eq(aim), eq(Loadout.Nuke.DEFAULT), eq(Waypoints.NONE), isNull(), isNull(), any(), any()));
             }
         }
     }
@@ -181,16 +196,36 @@ class IncomingCommandTest {
             int yield = suffix.isEmpty() ? 6 : 4;
             boolean air = suffix.endsWith(" air");
             Loadout.Nuke expected = new Loadout.Nuke(yield, air);
-            try (var actions = mockStatic(ServerActions.class); var nuclear = mockStatic(NuclearStrikes.class)) {
-                actions.when(() -> ServerActions.dispatch(level, "test", 0, WeaponType.NUKE, 1, 0, aim,
-                        expected, Waypoints.NONE, null)).thenReturn(true);
+            try (var actions = mockStatic(ServerActions.class); var nuclear = mockStatic(NuclearStrikes.class); var orders = mockStatic(Orders.class)) {
+                // admission runs its body here; events and their world queue are outside this test
+                orders.when(() -> Orders.admit(any(), any())).thenAnswer(inv -> inv.<Orders.Admission>getArgument(1).run(inv.getArgument(0)));
+                actions.when(() -> ServerActions.dispatch(isNull(), eq(level), eq("test"), eq(0f), eq(WeaponType.NUKE), eq(1), eq(0), eq(aim), eq(expected), eq(Waypoints.NONE), isNull(), isNull(), any(), any())).thenAnswer(admits(1));
                 assertEquals(1, dispatcher.execute("incoming nuke at 10.25 64.5 20.75" + suffix, source(2, false, level)));
-                actions.verify(() -> ServerActions.dispatch(level, "test", 0, WeaponType.NUKE, 1, 0, aim,
-                        expected, Waypoints.NONE, null));
+                actions.verify(() -> ServerActions.dispatch(isNull(), eq(level), eq("test"), eq(0f), eq(WeaponType.NUKE), eq(1), eq(0), eq(aim), eq(expected), eq(Waypoints.NONE), isNull(), isNull(), any(), any()));
                 nuclear.when(() -> NuclearStrikes.ground(level, point)).thenReturn(point);
                 assertEquals(1, dispatcher.execute("incoming nuke now at 10.25 64.5 20.75" + suffix, source(2, false, level)));
-                nuclear.verify(() -> NuclearStrikes.detonateNow(level, point, yield, air, null));
+                nuclear.verify(() -> NuclearStrikes.detonateNow(eq(level), eq(point), eq((double) yield), eq(air), isNull(), any(RoundRef.class)));
             }
+        }
+    }
+
+    /**
+     * A salvo's tag reaches its order and the command returns the admitted rounds (A2); an over-long tag is refused before
+     * anything is ordered.
+     */
+    @Test
+    void salvoTagReachesTheOrderAndTheResultIsTheAdmittedCount() throws CommandSyntaxException {
+        ServerLevel level = mock(ServerLevel.class);
+        Vec3 point = new Vec3(10.25, 64.5, 20.75);
+        ServerActions.Aim aim = new ServerActions.Aim(new Target.Point(point), point, null);
+        try (var actions = mockStatic(ServerActions.class)) {
+            actions.when(() -> ServerActions.dispatch(isNull(), eq(level), eq("test"), eq(0f), eq(WeaponType.DRONE), eq(12), eq(5), eq(aim), eq(Loadout.Nuke.DEFAULT),
+                    eq(Waypoints.NONE), isNull(), eq("wave1"), any(), any())).thenAnswer(admits(12));
+            assertEquals(12, dispatcher.execute("incoming salvo drone 12 5 at 10.25 64.5 20.75 tag wave1", source(2, false, level)));
+            assertThrows(CommandSyntaxException.class, () -> dispatcher.execute("incoming salvo drone 12 5 at 10.25 64.5 20.75 tag " + "x".repeat(33),
+                    source(2, false, level)));
+            actions.verify(() -> ServerActions.dispatch(any(), any(), any(), any(Float.class), any(), any(Integer.class), any(Integer.class), any(), any(), any(),
+                    any(), any(), any(), any()), org.mockito.Mockito.times(1));
         }
     }
 
@@ -202,10 +237,9 @@ class IncomingCommandTest {
         var from = new ua.zentix.incoming.strike.LaunchOrigin.Place(new Vec3(30.25, 0, 40.75));
         Loadout.Nuke nuke = new Loadout.Nuke(3, true);
         try (var actions = mockStatic(ServerActions.class)) {
-            actions.when(() -> ServerActions.dispatch(level, "test", 0, WeaponType.NUKE, 1, 0, aim,
-                    nuke, Waypoints.NONE, from)).thenReturn(true);
+            actions.when(() -> ServerActions.dispatch(isNull(), eq(level), eq("test"), eq(0f), eq(WeaponType.NUKE), eq(1), eq(0), eq(aim), eq(nuke), eq(Waypoints.NONE), eq(from), isNull(), any(), any())).thenAnswer(admits(1));
             assertEquals(1, dispatcher.execute("incoming nuke at 10.25 64.5 20.75 3 air from 30.25 40.75", source(2, false, level)));
-            actions.verify(() -> ServerActions.dispatch(level, "test", 0, WeaponType.NUKE, 1, 0, aim, nuke, Waypoints.NONE, from));
+            actions.verify(() -> ServerActions.dispatch(isNull(), eq(level), eq("test"), eq(0f), eq(WeaponType.NUKE), eq(1), eq(0), eq(aim), eq(nuke), eq(Waypoints.NONE), eq(from), isNull(), any(), any()));
         }
     }
 
@@ -265,6 +299,8 @@ class IncomingCommandTest {
         parses("incoming salvo bunker 1 0 at 10 20 from 30 40 via 50 60");
         for (String suffix : List.of("", " 1", " 1 air", " 1 ground")) {
             parses("incoming nuke at 10 64 20" + suffix + " from 30 40");
+            parses("incoming nuke at 10 64 20" + suffix + " from 30 40 tag wave1");
+            parses("incoming nuke now at 10 64 20" + suffix + " tag wave1");
             assertThrows(CommandSyntaxException.class, () -> dispatcher.execute("incoming nuke at 10 64 20" + suffix + " via 30 40", source(2, false)));
         }
         assertThrows(CommandSyntaxException.class, () -> dispatcher.execute("incoming nuke now at 10 64 20 from 30 40", source(2, false)));
@@ -273,7 +309,7 @@ class IncomingCommandTest {
         parses(route);
         assertThrows(CommandSyntaxException.class, () -> dispatcher.execute(route + " 30 40", source(2, false)));
         for (String weapon : List.of("rocket", "grad")) {
-            assertEquals(Set.of("me", "look", "at", "target", "from"), children(node("incoming", "salvo", weapon, "count", "spread")));
+            assertEquals(Set.of("me", "look", "at", "target", "from", "tag"), children(node("incoming", "salvo", weapon, "count", "spread")));
         }
         assertEquals(Set.of("drone", "shahed", "missile", "rocket", "grad", "loiter", "lancet"),
                 children(node("incoming", "launcher", "launcher", "mission")));

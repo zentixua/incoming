@@ -483,6 +483,12 @@ public final class IncomingClient {
         }
 
         @Override
+        public void nukeCancelled(S2C.NukeCancelled p) {
+            // a state change, not a one-shot: replayed on a seek it only removes warnings already gone
+            Replay.event("nuke_cancelled", live -> ClientNuclear.cancelled(p));
+        }
+
+        @Override
         public void nukeApproach(S2C.NukeApproach p) {
             // Keep snapshot order with burst events and apply it after the replay seek reset.
             Replay.event("nuke_approach", live -> ClientNuclear.approach(p));

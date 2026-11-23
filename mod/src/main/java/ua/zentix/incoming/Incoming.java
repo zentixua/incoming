@@ -28,6 +28,7 @@ import ua.zentix.incoming.nuclear.model.HobBlast;
 import ua.zentix.incoming.nuclear.radiation.RadiationTicker;
 import ua.zentix.incoming.nuclear.world.BlockResponse;
 import ua.zentix.incoming.nuclear.world.FarLods;
+import ua.zentix.incoming.progress.Progress;
 import ua.zentix.incoming.registry.ModAttachments;
 import ua.zentix.incoming.registry.ModBlockEntities;
 import ua.zentix.incoming.registry.ModBlocks;
@@ -83,8 +84,18 @@ public final class Incoming {
         modBus.addListener(ua.zentix.incoming.registry.ModDataMaps::register);
         modBus.addListener(SamBlockEntity::registerCapabilities);
         modBus.addListener(FixedLauncherBlockEntity::registerCapabilities);
+        // advancements and statistics (progress.Progress): no legacy ids to alias
+        Progress.register(modBus);
 
         NeoForge.EVENT_BUS.addListener(IncomingCommand::register);
+        NeoForge.EVENT_BUS.addListener(ua.zentix.incoming.util.SignalEdge::onLevelTick);
+        NeoForge.EVENT_BUS.addListener(Progress::onReleased);
+        NeoForge.EVENT_BUS.addListener(Progress::onEnded);
+        NeoForge.EVENT_BUS.addListener(Progress::onRelit);
+        NeoForge.EVENT_BUS.addListener(Progress::onChangeDimension);
+        NeoForge.EVENT_BUS.addListener(Progress::onPlayerTick);
+        NeoForge.EVENT_BUS.addListener(EventPriority.LOWEST, Progress::onDeath);
+        NeoForge.EVENT_BUS.addListener(ua.zentix.incoming.strike.Authority::onGatherNodes);
         NeoForge.EVENT_BUS.addListener(StrikeWorld::onLevelTick);
         NeoForge.EVENT_BUS.addListener(ua.zentix.incoming.warhead.SurfaceDamage::onLevelTick);
         NeoForge.EVENT_BUS.addListener(ua.zentix.incoming.warhead.FuelFires::onLevelTick);
@@ -107,6 +118,8 @@ public final class Incoming {
         NeoForge.EVENT_BUS.addListener(EventPriority.LOWEST, ua.zentix.incoming.util.StopDrain::onServerStopping);
         NeoForge.EVENT_BUS.addListener(EventPriority.HIGHEST, ua.zentix.incoming.util.WorldClock::onServerTick);
         NeoForge.EVENT_BUS.addListener(FlightStatus::onServerTick);
+        // Last: order and round events queued by this tick's impacts and nuclear work go out in it.
+        NeoForge.EVENT_BUS.addListener(EventPriority.LOWEST, ua.zentix.incoming.strike.Orders::onServerTick);
         NeoForge.EVENT_BUS.addListener(FarFlights::onServerTick);
         NeoForge.EVENT_BUS.addListener(FlashbackReplay::onServerTick);
         NeoForge.EVENT_BUS.addListener(DhChunks::onServerStarting);

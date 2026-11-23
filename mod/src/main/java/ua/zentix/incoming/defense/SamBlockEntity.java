@@ -13,6 +13,7 @@ import net.minecraft.sounds.SoundSource;
 import net.minecraft.world.Containers;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.level.Level;
+import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.entity.BlockEntity;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.levelgen.Heightmap;
@@ -28,6 +29,7 @@ import ua.zentix.incoming.registry.ModItems;
 import ua.zentix.incoming.target.Sides;
 import ua.zentix.incoming.target.Sightings;
 import ua.zentix.incoming.util.Magazine;
+import ua.zentix.incoming.util.SignalEdge;
 import ua.zentix.incoming.util.Terrain;
 
 import java.util.ArrayList;
@@ -41,7 +43,7 @@ import java.util.UUID;
  * ({@link AirAlert}) and side reconnaissance ({@link Sightings}) learn of hostile targets, fire control ({@link
  * FireControl}) launches one missile at the nearest free target, and nearby friendlies receive the radar screen
  * ({@link S2C.RadarScope}). Loads no chunks: radar uses the world projectile list; missile flight is {@link
- * Interceptor}.
+ * Interceptor}. The sweep also sets the redstone alarm ({@link #alarm}).
  */
 public class SamBlockEntity extends BlockEntity {
     /** Radar sweeps the sky once per this many ticks; launches no more often. */
@@ -71,6 +73,11 @@ public class SamBlockEntity extends BlockEntity {
     private int lastTracks, lastHostile;
     /** Sky above the SAM is blocked: it does not fire under a roof. */
     private boolean covered;
+    /**
+     * The neighbours were asked to recheck the alarm ({@link SamBlock#ALARM}) since this block entity loaded (not
+     * saved): the first sweep does it once, in case a change was saved untold.
+     */
+    private boolean signalled;
 
     public SamBlockEntity(BlockPos pos, BlockState state) {
         super(ModBlockEntities.SAM.get(), pos, state);
@@ -103,6 +110,11 @@ public class SamBlockEntity extends BlockEntity {
     /** Insert missiles into storage; returns what did not fit. */
     public ItemStack load(ItemStack stack) {
         return stock.load(stack);
+    }
+
+    /** The latest radar sweep saw a hostile projectile: redstone alarm on ({@link SamBlock#ALARM}). */
+    public boolean alarm() {
+        return getBlockState().getValue(SamBlock.ALARM);
     }
 
     /** Comparator signal follows storage fullness. */
@@ -169,17 +181,35 @@ public class SamBlockEntity extends BlockEntity {
             if (side != null) Sightings.spot(level, side, t.projectile(), Sightings.Source.RADAR);
         }
         AirAlert.sweep(level, owner, side, tracks);
+        setAlarm(level, pos, lastHostile > 0);
         // Open sky above the SAM (its chunk is ready because it ticks): a missile launches upward and would burst against a roof.
         covered = Terrain.height(level, Heightmap.Types.MOTION_BLOCKING, pos.getX(), pos.getZ()) > pos.getY() + 1;
         if (ready > 0 && !covered) {
             Radar.Track shot = FireControl.pick(tracks, DefenseWorld.get(level));
             if (shot != null) {
-                FireControl.launch(level, rail(pos, ready - 1), shot, owner, pos.toShortString(), spec);
+                FireControl.launch(level, rail(pos, ready - 1), shot, owner, pos.immutable(), spec);
                 ready--;
                 setChanged();
             }
         }
         scope(level, antenna, tracks);
+    }
+
+    /**
+     * Redstone alarm follows the sweep. The state changes without neighbour updates; {@link SignalEdge} tells the
+     * neighbours on the same tick when every chunk their circuit can reach is ready, otherwise once they are.
+     */
+    private void setAlarm(ServerLevel level, BlockPos pos, boolean on) {
+        BlockState state = getBlockState();
+        if (state.getValue(SamBlock.ALARM) != on) {
+            state = state.setValue(SamBlock.ALARM, on);
+            level.setBlock(pos, state, Block.UPDATE_CLIENTS | Block.UPDATE_KNOWN_SHAPE);
+            SignalEdge.changed(level, pos, state);
+        }
+        if (!signalled) {
+            SignalEdge.recheck(level, pos, state);
+            signalled = true;
+        }
     }
 
     /** Center of rail {@code k}'s canister: the missile stands at full length inside and launches upward. */

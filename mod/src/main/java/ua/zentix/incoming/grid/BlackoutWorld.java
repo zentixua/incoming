@@ -2,6 +2,8 @@ package ua.zentix.incoming.grid;
 
 import it.unimi.dsi.fastutil.ints.IntArrayList;
 import it.unimi.dsi.fastutil.ints.IntArrays;
+import it.unimi.dsi.fastutil.ints.IntOpenHashSet;
+import it.unimi.dsi.fastutil.ints.IntSet;
 import it.unimi.dsi.fastutil.longs.Long2IntOpenHashMap;
 import it.unimi.dsi.fastutil.longs.Long2LongOpenHashMap;
 import it.unimi.dsi.fastutil.longs.Long2ObjectOpenHashMap;
@@ -360,6 +362,13 @@ public final class BlackoutWorld {
         return lastRepeatMax;
     }
 
+    /** Grid nodes whose substation's neighbours were asked to recheck it since the server started ({@link Substations#sync}). */
+    private final IntOpenHashSet signalled = new IntOpenHashSet();
+
+    IntSet signalled() {
+        return signalled;
+    }
+
     /** For {@link ModAttachments#BLACKOUT_WORLD}: separate for each world, lives while the world is loaded, non-persistent. */
     public BlackoutWorld() {
         resume.defaultReturnValue(-1);
@@ -645,7 +654,7 @@ public final class BlackoutWorld {
         relightPlaced(level, clock);
         scheduleRestoreSweeps(grid, at);
         if (now % 20 == 0) {
-            grid.prune(at);
+            for (Outage o : grid.prune(at)) Blackouts.restored(level, o);
             sounded.long2LongEntrySet().removeIf(e -> now - e.getLongValue() > 200);
             // chunk left memory without becoming full (ring around edge chunks): it has no unload event
             var chunkMap = level.getChunkSource().chunkMap;

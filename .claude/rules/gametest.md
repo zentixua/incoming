@@ -132,6 +132,12 @@ paths:
   The camouflet's three-column displacement limit remains; fallen-block count is a separate quantity, not a crater
   radius adjustment.
 
+- Redstone fixtures: a piston base is a `moving_piston` while it moves, so reading `EXTENDED` from it throws inside
+  `onEachTick` and crashes the whole GameTest server (every later batch is lost); check the block first. A comparator
+  placed by `setBlock` never reads its input until a neighbour update reaches it (none comes from its own placement):
+  place it before the block it reads changes (loading a magazine updates it), then allow its 2-tick delay
+  (`RedstoneGameTests`).
+
 - Fixed surface-baseline seeds and `blast_crater_seed` regression: see `warhead.md`.
 
 - Late-exposure fixtures measure pulse/wave damage, independently of ground fire. Saved-zone settlement can lay
@@ -179,3 +185,11 @@ paths:
   for a slot or state) must report its failed bound with another exception (`IllegalStateException`), or the retry skips
   the done fixture and passes (`CollapseGameTests.snapshotStepsStayInTheirSlice`).
 
+
+- The GameTest server has no profile cache (`MinecraftServer.getProfileCache()` is null): an offline UUID never resolves
+  to an operator there, so offline-operator rights (`Authority.level`) cannot be probed in GameTest; online rights come
+  from `MunitionGameTests.Listener`'s permission level. A fake player put into the server's player list needs a
+  connection with a channel (`PermissionGameTests.online`, `FuelFireGameTests.Watcher`): the server sends listed players
+  packets every 20 ticks (`MinecraftServer.synchronizeTime`), and a bare `FakePlayer` crashes the whole GameTest server
+  there. A permission-handler probe swaps `PermissionAPI`'s active
+  handler for its own batch only (`PermissionGameTests.Handler`), since the handler is server-wide.
