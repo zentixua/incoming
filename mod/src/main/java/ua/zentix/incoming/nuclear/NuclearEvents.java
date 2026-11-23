@@ -96,7 +96,22 @@ public final class NuclearEvents extends SavedData {
         }
     }
 
+    /**
+     * A nuclear round's impact ({@code strike.OrderStatus}): detonation {@code detonation} of order round {@code round},
+     * for {@code owner}. Kept while its blast front travels and hits what it caught; ruins that follow the front, fires and
+     * fallout are consequences in the world, not the round's work.
+     */
+    public record Impact(int detonation, RoundRef round, Optional<UUID> owner) {
+        static final Codec<Impact> CODEC = RecordCodecBuilder.create(i -> i.group(
+                Codec.INT.fieldOf("detonation").forGetter(Impact::detonation),
+                RoundRef.CODEC.fieldOf("round").forGetter(Impact::round),
+                UUIDUtil.CODEC.optionalFieldOf("owner").forGetter(Impact::owner)
+        ).apply(i, Impact::new));
+    }
+
     private final List<Detonation> detonations = new ArrayList<>();
+    /** Nuclear rounds whose impact work runs, by detonation number (saved: a restart mid-front keeps them). */
+    private final Map<Integer, Impact> impacts = new LinkedHashMap<>();
     /** Forgotten detonations: no fallout or visuals — only destruction in chunks loaded later. */
     private final List<Detonation> past = new ArrayList<>();
     private final List<ScheduledStrike> scheduled = new ArrayList<>();
@@ -120,6 +135,11 @@ public final class NuclearEvents extends SavedData {
 
     public static NuclearEvents get(ServerLevel level) {
         return level.getDataStorage().computeIfAbsent(new Factory<>(NuclearEvents::new, NuclearEvents::load, null), NAME);
+    }
+
+    /** For tests: this data as a restart would read it back — saved and loaded into a detached copy (the live data stays). */
+    public static NuclearEvents readBackForTest(ServerLevel level) {
+        return load(get(level).save(new CompoundTag(), level.registryAccess()), level.registryAccess());
     }
 
     public int nextId() {
@@ -258,6 +278,31 @@ public final class NuclearEvents extends SavedData {
         return p == null || p.size() != 3 ? null : new double[] {p.get(0), p.get(1), p.get(2)};
     }
 
+    /** Detonation {@code detonation} is round {@code round}'s impact ({@link Impact}). */
+    public void impact(int detonation, RoundRef round, @org.jetbrains.annotations.Nullable UUID owner) {
+        impacts.put(detonation, new Impact(detonation, round, Optional.ofNullable(owner)));
+        setDirty();
+    }
+
+    /** Detonation {@code detonation}'s round impact, or null (no round, or its work is over). */
+    @org.jetbrains.annotations.Nullable
+    public Impact impact(int detonation) {
+        return impacts.get(detonation);
+    }
+
+    /** Nuclear rounds whose impact work runs. */
+    public java.util.Collection<Impact> impacts() {
+        return java.util.Collections.unmodifiableCollection(impacts.values());
+    }
+
+    /** Forget impacts whose work is over: {@code busy} tells, by detonation, whether it still runs (a forgotten detonation's does not). */
+    public void settleImpacts(java.util.function.Predicate<Detonation> busy) {
+        if (impacts.isEmpty()) return;
+        if (impacts.values().removeIf(i -> detonations.stream().filter(d -> d.id() == i.detonation()).findFirst().map(d -> !busy.test(d)).orElse(true))) {
+            setDirty();
+        }
+    }
+
     /** Remember a crater's ground plane so a restart digs on from the same ground; only finite planes. */
     public void craterGround(int detonation, double[] plane) {
         if (plane.length != 3 || !Double.isFinite(plane[0]) || !Double.isFinite(plane[1]) || !Double.isFinite(plane[2])) return;
@@ -273,6 +318,7 @@ public final class NuclearEvents extends SavedData {
         int n = scheduled.size() + detonations.size();
         scheduled.clear();
         detonations.clear();
+        impacts.clear();
         past.clear();
         craters.clear();
         craterGrounds.clear();
@@ -307,6 +353,9 @@ public final class NuclearEvents extends SavedData {
         if (tag.contains("crater_grounds")) GROUNDS_CODEC.parse(NbtOps.INSTANCE, tag.get("crater_grounds")).resultOrPartial(Incoming.LOG::error).ifPresent(e.craterGrounds::putAll);
         if (tag.contains("clocks")) Anchor.CODEC.listOf().parse(NbtOps.INSTANCE, tag.get("clocks")).resultOrPartial(Incoming.LOG::error)
                 .ifPresent(l -> l.forEach(a -> e.clocks.put(a.id(), a)));
+        // saved before order status: detonations from then have no impact work
+        if (tag.contains("impacts")) Impact.CODEC.listOf().parse(NbtOps.INSTANCE, tag.get("impacts")).resultOrPartial(Incoming.LOG::error)
+                .ifPresent(l -> l.forEach(i -> e.impacts.put(i.detonation(), i)));
         return e;
     }
 
@@ -320,6 +369,7 @@ public final class NuclearEvents extends SavedData {
         CRATERS_CODEC.encodeStart(NbtOps.INSTANCE, craters).resultOrPartial(Incoming.LOG::error).ifPresent(t -> tag.put("craters", t));
         GROUNDS_CODEC.encodeStart(NbtOps.INSTANCE, craterGrounds).resultOrPartial(Incoming.LOG::error).ifPresent(t -> tag.put("crater_grounds", t));
         Anchor.CODEC.listOf().encodeStart(NbtOps.INSTANCE, List.copyOf(clocks.values())).resultOrPartial(Incoming.LOG::error).ifPresent(t -> tag.put("clocks", t));
+        Impact.CODEC.listOf().encodeStart(NbtOps.INSTANCE, List.copyOf(impacts.values())).resultOrPartial(Incoming.LOG::error).ifPresent(t -> tag.put("impacts", t));
         return tag;
     }
 }

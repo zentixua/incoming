@@ -380,6 +380,16 @@ public final class NuclearKeys {
         }
     }
 
+    /**
+     * Rounds of orders waiting for a second key or the carrier's pre-launch warning ({@link OrderStatus}): queued, arrival
+     * unknown (a second key may never come; the launch waits for its site).
+     */
+    void rounds(java.util.function.Consumer<OrderStatus.Round> out) {
+        for (Order o : orders) {
+            if (o.round != null) out.accept(OrderStatus.Round.queued(o.round, o.ownerId, o.loadout.weapon()));
+        }
+    }
+
     /** Orders awaiting second key or post-warning launch. */
     public int pending() {
         return orders.size();
@@ -404,11 +414,17 @@ public final class NuclearKeys {
      * @return canceled count
      */
     public static int cancelAll(MinecraftServer server, Collection<? extends ServerPlayer> online, @Nullable Component notice, String why) {
+        return cancel(server, online, null, notice, why);
+    }
+
+    /** Same for orders carrying group name {@code tag} ({@link ua.zentix.incoming.strike.Order#tagged}); null means all. */
+    public static int cancel(MinecraftServer server, Collection<? extends ServerPlayer> online, @Nullable String tag, @Nullable Component notice, String why) {
         int n = 0;
         for (ServerLevel level : server.getAllLevels()) {
             if (!level.hasData(ModAttachments.STRIKE_WORLD)) continue;
             NuclearKeys keys = get(level);
             for (Order o : List.copyOf(keys.orders)) {
+                if (tag != null && (o.round == null || !tag.equals(o.round.tag()))) continue;
                 if (!keys.orders.remove(o)) continue;
                 n++;
                 ServerPlayer owner = o.owner(online);

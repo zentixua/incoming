@@ -926,9 +926,11 @@ public abstract class StrikeProjectile extends Entity implements IEntityWithComp
 
     /** Impact point reached or collision: default is weapon's conventional warhead. */
     protected void impact(ServerLevel level, Vec3 point, @Nullable Entity hitEntity) {
+        RoundRef r = round;
         endRound(RoundEnd.impact(point, weapon().spec().warheadTnt()));
         discard();
-        Warheads.detonate(level, weapon(), point, this, ownerId());
+        // the round's impact work lasts while its blast's jobs run (strike.ImpactWork)
+        Warheads.detonate(level, weapon(), point, this, ownerId(), r);
     }
 
     /**

@@ -24,6 +24,13 @@ import java.util.UUID;
 public final class Orders {
     /** {@link StrikeOrderEvent.Request} listeners running now: an order they start runs again on a later tick. */
     private static int requesting;
+    /**
+     * Orders inside their admission ({@link #admit}) whose accepted rounds have no carrier yet ({@link #carrierPending}):
+     * they count as unfinished ({@link OrderStatus}), so a listener of {@code Accepted} asking for a status sees them. An
+     * order recorded before it is accepted (a salvo) is not here: its record is what status reads, and a clear from that
+     * listener removes it. Server thread only; empty between calls.
+     */
+    private static final java.util.ArrayDeque<Order> ADMITTING = new java.util.ArrayDeque<>();
 
     private Orders() {}
 
@@ -52,6 +59,15 @@ public final class Orders {
         Incoming.LOG.info("Strike order started inside another order's request, queued to a later tick");
         StrikeWorld.get(level).defer(level.getGameTime() + 1, entry);
         return true;
+    }
+
+    /**
+     * An order entry started now in {@code level} would run elsewhere ({@link #elsewhere}): off the server thread or inside
+     * a {@link StrikeOrderEvent.Request} listener. Nothing is queued.
+     */
+    public static boolean deferred(ServerLevel level) {
+        var server = level.getServer();
+        return server != null && !server.isSameThread() || requesting > 0;
     }
 
     /**
@@ -98,7 +114,22 @@ public final class Orders {
         } catch (RuntimeException e) {
             if (!order.answered()) order.reject(StrikeOrderEvent.Reason.ERROR);
             throw e;
+        } finally {
+            ADMITTING.remove(order);
         }
+    }
+
+    /**
+     * {@code order}'s rounds get their carrier only after {@link Order#accept} (a single launch, a key wait, {@code nuke
+     * now}): until its admission returns, status counts them ({@link #ADMITTING}).
+     */
+    public static void carrierPending(Order order) {
+        if (!ADMITTING.contains(order)) ADMITTING.push(order);
+    }
+
+    /** Orders being admitted now whose rounds have no carrier yet, innermost first ({@link #ADMITTING}). */
+    static java.util.Collection<Order> admitting() {
+        return ADMITTING;
     }
 
     /** Round {@code r} left at {@code origin} toward {@code target}. */

@@ -2,6 +2,7 @@ package ua.zentix.incoming.command;
 
 import com.mojang.brigadier.CommandDispatcher;
 import com.mojang.brigadier.arguments.IntegerArgumentType;
+import com.mojang.brigadier.arguments.StringArgumentType;
 import com.mojang.brigadier.builder.ArgumentBuilder;
 import com.mojang.brigadier.builder.LiteralArgumentBuilder;
 import com.mojang.brigadier.builder.RequiredArgumentBuilder;
@@ -58,6 +59,7 @@ import java.util.Collection;
 import java.util.List;
 import java.util.Locale;
 import java.util.Optional;
+import java.util.function.Consumer;
 
 /**
  * /incoming — the same as the designator, for operators and automation (command blocks, functions):
@@ -69,8 +71,10 @@ import java.util.Optional;
  *   /incoming salvo drone 6 25 [me|look|name|at x y z|at x z] salvo: count, spread
  *          … [from x z] [via x z [x z …]]            launch position (operator) and waypoints, as on the designator map;
  *                                                     one projectile — salvo drone 1 0 …
- *   /incoming menu | clear | give [players] | help
- *   /incoming nuke [kt] [air|ground]                  ICBM where I am looking (default — surface burst)
+ *          … [tag name]                               group name shared by orders: status and clear by it
+ *   /incoming menu | clear [tag name] | give [players] | help
+ *   /incoming status [player | tag name]              unfinished rounds by phase ({@link StatusCommand})
+ *   /incoming nuke [kt] [air|ground] [tag name]       ICBM where I am looking (default — surface burst)
  *   /incoming nuke at x y z [kt] [air|ground]         ICBM at a point
  *   /incoming nuke now [at x y z] [kt] [air|ground]   immediate detonation, no flight (operator only)
  *   /incoming radiation [player] | radiation clear [players]
@@ -81,7 +85,8 @@ import java.util.Optional;
  * </pre>
  * Tab completes player names; case does not matter. “shahed” is an alias for drone. A player command without
  * operator permission follows the designator rules ({@link #rules}) and consumes inventory munitions ({@code strike.Munitions});
- * operators, the console and command blocks do not pay.
+ * operators, the console and command blocks do not pay. A strike command returns the rounds its order admitted (a salvo
+ * launches them over later ticks) and tells the order's id ({@link StatusCommand#admitted}).
  * <p>
  * The {@code from} launch position is where the launcher is placed (for staged battles: who fires from where is visible);
  * only operators, the console and command blocks can set it. {@code via} points are the same ones players place on the
@@ -119,7 +124,8 @@ public final class IncomingCommand {
             int n = ServerActions.clearAll(s.getServer(), trusted, s.getTextName());
             s.sendSuccess(() -> ServerActions.clearedMessage(n, trusted), true);
             return n;
-        }));
+        }).then(StatusCommand.clearTag()));
+        root.then(StatusCommand.status());
         root.then(Commands.literal("give").requires(s -> s.hasPermission(2))
                 .executes(ctx -> give(ctx, List.of(ctx.getSource().getPlayerOrException())))
                 .then(Commands.argument("players", EntityArgument.players())
@@ -182,7 +188,7 @@ public final class IncomingCommand {
     private static <T extends ArgumentBuilder<CommandSourceStack, T>> T nukePath(T node, NukeAction action, boolean launch,
             java.util.function.Function<CommandContext<CommandSourceStack>, Loadout.Nuke> loadout) {
         return launch ? pathArgs(node, WeaponType.NUKE, (ctx, path) -> action.run(ctx, loadout.apply(ctx), path))
-                : node.executes(ctx -> action.run(ctx, loadout.apply(ctx), Path.NONE));
+                : end(node, (ctx, path) -> action.run(ctx, loadout.apply(ctx), path), ctx -> Path.NONE);
     }
 
     private static LiteralArgumentBuilder<CommandSourceStack> nuke() {
@@ -192,9 +198,9 @@ public final class IncomingCommand {
                 .then(Commands.literal("at").then(yieldArgs(Commands.argument("pos", Vec3Argument.vec3()),
                         (ctx, n, path) -> nukeAt(ctx.getSource(), Vec3Argument.getVec3(ctx, "pos"), n, path))))
                 // detonation without flight is a host tool: no payment or warning; unavailable to non-operators even with ops_only = false
-                .then(yieldArgs(Commands.literal("now").requires(s -> s.hasPermission(2)), (ctx, n, path) -> nukeNow(ctx.getSource(), lookPoint(ctx), n), false)
+                .then(yieldArgs(Commands.literal("now").requires(s -> s.hasPermission(2)), (ctx, n, path) -> nukeNow(ctx.getSource(), lookPoint(ctx), n, path.tag()), false)
                         .then(Commands.literal("at").then(yieldArgs(Commands.argument("pos", Vec3Argument.vec3()),
-                                (ctx, n, path) -> nukeNow(ctx.getSource(), Vec3Argument.getVec3(ctx, "pos"), n), false))));
+                                (ctx, n, path) -> nukeNow(ctx.getSource(), Vec3Argument.getVec3(ctx, "pos"), n, path.tag()), false))));
     }
 
     private static boolean mayNuke(CommandSourceStack s) {
@@ -221,10 +227,10 @@ public final class IncomingCommand {
     }
 
     /** Burst without flight: an order like any other ({@link Orders}), unpaid, its round released at the burst point. */
-    private static int nukeNow(CommandSourceStack s, Vec3 pos, Loadout.Nuke nuke) {
+    private static int nukeNow(CommandSourceStack s, Vec3 pos, Loadout.Nuke nuke, @Nullable String tag) {
         Entity e = s.getEntity();
         ServerLevel level = s.getLevel();
-        if (Orders.elsewhere(level, () -> nukeNow(s, pos, nuke))) return 1;
+        if (Orders.elsewhere(level, () -> nukeNow(s, pos, nuke, tag))) return StatusCommand.deferred(s);
         // a rerun later: the command's own gate as it is then
         if (!mayNuke(s) || !s.hasPermission(2)) return 0;
         Vec3 ground = NuclearStrikes.ground(level, pos);
@@ -232,11 +238,12 @@ public final class IncomingCommand {
         Loadout l = new Loadout(WeaponType.NUKE, 1, 0, TargetMode.LOOK, "", nuke.withYield(Math.min(nuke.yieldKt(), IncomingConfig.SERVER.nukeMaxYield.get())));
         ServerActions.Aim aim = new ServerActions.Aim(new Target.Point(ground), ground, null);
         // ua.zentix.incoming.strike.Order: this class's own Order is a command path step.
-        ua.zentix.incoming.strike.Order order = e instanceof ServerPlayer p
+        ua.zentix.incoming.strike.Order order = (e instanceof ServerPlayer p
                 ? ua.zentix.incoming.strike.Order.player(level, p, l, aim, StrikeOrderEvent.Payment.WAIVED)
-                : ua.zentix.incoming.strike.Order.server(level, s.getTextName(), l, aim, s::sendFailure);
+                : ua.zentix.incoming.strike.Order.server(level, s.getTextName(), l, aim, s::sendFailure)).tagged(tag);
         Detonation[] burst = new Detonation[1];
         boolean admitted = Orders.admit(order, o -> {
+            Orders.carrierPending(o);
             o.accept(1);
             burst[0] = NuclearStrikes.detonateNow(level, ground, nuke.yieldKt(), nuke.airBurst(), e == null ? null : e.getUUID(), o.round(0));
             return true;
@@ -247,7 +254,7 @@ public final class IncomingCommand {
         s.sendSuccess(() -> Component.translatable(d != null ? "incoming.nuke.detonated" : "incoming.nuke.detonating", Math.round(kt),
                 Component.translatable(nuke.airBurst() ? "incoming.nuke.burst.air" : "incoming.nuke.burst.ground"),
                 Mth.floor(pos.x), Mth.floor(pos.y), Mth.floor(pos.z)), IncomingConfig.SERVER.earlyWarning.get());
-        return 1;
+        return StatusCommand.admitted(s, order);
     }
 
     private static int radiation(CommandContext<CommandSourceStack> ctx, ServerPlayer p) {
@@ -292,8 +299,27 @@ public final class IncomingCommand {
     // ---------------------------------------------------------------- origin and waypoints
 
     /** Where the order flies from and through: launch position (null — near the shooter or from afar) and waypoints. */
-    private record Path(@Nullable LaunchOrigin from, Waypoints via) {
-        static final Path NONE = new Path(null, Waypoints.NONE);
+    private record Path(@Nullable LaunchOrigin from, Waypoints via, @Nullable String tag) {
+        static final Path NONE = new Path(null, Waypoints.NONE, null);
+
+        Path tagged(String tag) {
+            return new Path(from, via, tag);
+        }
+    }
+
+    /** The command's path so far. */
+    private interface PathOf {
+        Path of(CommandContext<CommandSourceStack> ctx) throws CommandSyntaxException;
+    }
+
+    /**
+     * {@code node} runs {@code order} along {@code path}, or, followed by “tag name”, the same order carrying that group
+     * name on its rounds ({@link StatusCommand}).
+     */
+    private static <T extends ArgumentBuilder<CommandSourceStack, T>> T end(T node, Order order, PathOf path) {
+        return node.executes(ctx -> order.run(ctx, path.of(ctx)))
+                .then(Commands.literal("tag").then(Commands.argument("tag", StringArgumentType.word())
+                        .executes(ctx -> order.run(ctx, path.of(ctx).tagged(StatusCommand.tag(ctx))))));
     }
 
     private interface Order {
@@ -301,28 +327,31 @@ public final class IncomingCommand {
     }
 
     /**
-     * “[from x z] [via x z [x z …]]” after the salvo target: launch position — where the launcher is placed (operators,
-     * console and command blocks only) — and waypoints, as on the designator map (only for weapons that fly through them:
-     * the spec, {@link WeaponSpec.Route#waypoints}).
+     * “[from x z] [via x z [x z …]] [tag name]” after the salvo target: launch position — where the launcher is placed
+     * (operators, console and command blocks only) — and waypoints, as on the designator map (only for weapons that fly
+     * through them: the spec, {@link WeaponSpec.Route#waypoints}); then the order's group name ({@link #end}).
      */
     private static <T extends ArgumentBuilder<CommandSourceStack, T>> T pathArgs(T node, WeaponType w, Order order) {
-        RequiredArgumentBuilder<CommandSourceStack, Coordinates> from = Commands.argument("site", Vec2Argument.vec2())
-                .executes(ctx -> order.run(ctx, path(ctx, true, 0)));
+        RequiredArgumentBuilder<CommandSourceStack, Coordinates> from = end(Commands.argument("site", Vec2Argument.vec2()), order, ctx -> path(ctx, true, 0));
         if (w.spec().route().waypoints()) {
-            node.then(via(order, false));
-            from.then(via(order, true));
+            node.then(via(order, false, true));
+            from.then(via(order, true, true));
         }
-        return node.executes(ctx -> order.run(ctx, Path.NONE))
+        return end(node, order, ctx -> Path.NONE)
                 .then(Commands.literal("from").requires(s -> s.hasPermission(2)).then(from));
     }
 
-    /** “via x z [x z …]”: up to {@link Waypoints#MAX} points in flight order; {@code from} comes after the launch position. */
-    private static LiteralArgumentBuilder<CommandSourceStack> via(Order order, boolean from) {
+    /**
+     * “via x z [x z …]”: up to {@link Waypoints#MAX} points in flight order; {@code from} comes after the launch position;
+     * {@code tags}: a group name may follow ({@link #end}; a launcher mission has none).
+     */
+    private static LiteralArgumentBuilder<CommandSourceStack> via(Order order, boolean from, boolean tags) {
         ArgumentBuilder<CommandSourceStack, ?> next = null;
         for (int i = Waypoints.MAX; i >= 1; i--) {
             int n = i;
-            RequiredArgumentBuilder<CommandSourceStack, Coordinates> point = Commands.argument("point" + i, Vec2Argument.vec2())
-                    .executes(ctx -> order.run(ctx, path(ctx, from, n)));
+            RequiredArgumentBuilder<CommandSourceStack, Coordinates> point = Commands.argument("point" + i, Vec2Argument.vec2());
+            if (tags) end(point, order, ctx -> path(ctx, from, n));
+            else point.executes(ctx -> order.run(ctx, path(ctx, from, n)));
             if (next != null) point.then(next);
             next = point;
         }
@@ -333,7 +362,7 @@ public final class IncomingCommand {
     private static Path path(CommandContext<CommandSourceStack> ctx, boolean from, int points) {
         List<Vec3> via = new ArrayList<>(points);
         for (int i = 1; i <= points; i++) via.add(column(ctx, "point" + i));
-        return new Path(from ? new LaunchOrigin.Place(column(ctx, "site")) : null, new Waypoints(via));
+        return new Path(from ? new LaunchOrigin.Place(column(ctx, "site")) : null, new Waypoints(via), null);
     }
 
     /** Horizontal “x z” position; “~” is relative to the caller (using doubles: {@code Vec2Argument.getVec2} uses floats). */
@@ -411,11 +440,18 @@ public final class IncomingCommand {
             s.sendFailure(problem);
             return 0;
         }
-        boolean ok = player != null
-                ? ServerActions.strike(player, w, count, spread, aim, nuke, path.via(), path.from(), rules(s))
-                : ServerActions.dispatch(level, s.getTextName(), s.getRotation().y, w, count, spread, aim, nuke, path.via(), path.from(), null,
-                s::sendFailure);
-        return ok ? 1 : 0;
+        // inside another order's request the entry reruns later with all its checks: nothing is admitted now, and the
+        // order is named once it is
+        boolean later = Orders.deferred(level);
+        ua.zentix.incoming.strike.Order[] got = {null};
+        Consumer<ua.zentix.incoming.strike.Order> made = later ? o -> StatusCommand.admitted(s, o) : o -> got[0] = o;
+        if (player != null) {
+            ServerActions.strike(player, w, count, spread, aim, nuke, path.via(), path.from(), rules(s), path.tag(), made);
+        } else {
+            ServerActions.dispatch(level, s.getTextName(), s.getRotation().y, w, count, spread, aim, nuke, path.via(), path.from(), path.tag(),
+                    s::sendFailure, made);
+        }
+        return later ? StatusCommand.deferred(s) : StatusCommand.admitted(s, got[0]);
     }
 
     // ---------------------------------------------------------------- fixed launcher
@@ -435,13 +471,18 @@ public final class IncomingCommand {
                 });
         at.then(Commands.literal("fire").executes(ctx -> {
             FixedLauncherBlockEntity be = launcherAt(ctx);
-            Component problem = be.fire(ctx.getSource().getLevel());
+            CommandSourceStack s = ctx.getSource();
+            // as a strike command: the rounds the order admitted, and its id ({@link StatusCommand#admitted})
+            boolean later = Orders.deferred(s.getLevel());
+            ua.zentix.incoming.strike.Order[] got = {null};
+            Component problem = be.fire(s.getLevel(), later ? o -> StatusCommand.admitted(s, o) : o -> got[0] = o);
             if (problem != null) {
-                ctx.getSource().sendFailure(problem);
-                return 0;
+                s.sendFailure(problem);
+                // admitted, then its release failed: the round was admitted and ended failed, as for any strike command
+                return later ? StatusCommand.deferred(s) : StatusCommand.admitted(s, got[0]);
             }
-            ctx.getSource().sendSuccess(be::status, IncomingConfig.SERVER.earlyWarning.get());
-            return 1;
+            s.sendSuccess(be::status, IncomingConfig.SERVER.earlyWarning.get());
+            return later ? StatusCommand.deferred(s) : StatusCommand.admitted(s, got[0]);
         }));
         at.then(Commands.literal("clear").executes(ctx -> {
             FixedLauncherBlockEntity be = idleLauncherAt(ctx);
@@ -471,7 +512,7 @@ public final class IncomingCommand {
     private static RequiredArgumentBuilder<CommandSourceStack, Coordinates> missionTarget(RequiredArgumentBuilder<CommandSourceStack, Coordinates> node,
                                                                                          WeaponType w, Place place) {
         node.executes(ctx -> launcherMission(ctx, w, place, Waypoints.NONE));
-        if (w.spec().route().waypoints()) node.then(via((ctx, path) -> launcherMission(ctx, w, place, path.via()), false));
+        if (w.spec().route().waypoints()) node.then(via((ctx, path) -> launcherMission(ctx, w, place, path.via()), false, false));
         return node;
     }
 
@@ -546,7 +587,7 @@ public final class IncomingCommand {
     private static int help(CommandContext<CommandSourceStack> ctx) {
         CommandSourceStack s = ctx.getSource();
         s.sendSystemMessage(Component.translatable("incoming.help.title").withStyle(ChatFormatting.DARK_RED, ChatFormatting.BOLD));
-        for (int i = 1; i <= 14; i++) {
+        for (int i = 1; i <= 15; i++) {
             s.sendSystemMessage(Component.translatable("incoming.help." + i).withStyle(ChatFormatting.GRAY));
         }
         return 1;

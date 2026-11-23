@@ -101,7 +101,7 @@ public final class NuclearStrikes {
         if (icbm == null) return false;
         icbm.prepare(pad, target, owner, IcbmArrival.boost(flightTicks));
         if (!level.addFreshEntity(icbm)) return false;
-        schedule(level, target, surface, yieldKt, airBurst, pad, owner, flightTicks, round);
+        icbm.showStrike(schedule(level, target, surface, yieldKt, airBurst, pad, owner, flightTicks, round).id());
         return true;
     }
 
@@ -134,13 +134,14 @@ public final class NuclearStrikes {
         } else {
             ua.zentix.incoming.strike.VirtualFlights.launch(level, icbm);
         }
-        schedule(level, target, surface, Math.min(yieldKt, IncomingConfig.SERVER.nukeMaxYield.get()), airBurst, pad, owner, flightTicks, round);
+        icbm.showStrike(schedule(level, target, surface, Math.min(yieldKt, IncomingConfig.SERVER.nukeMaxYield.get()), airBurst, pad, owner, flightTicks,
+                round).id());
         return true;
     }
 
     /** Record a strike: detonation time = now + flight time; owner countdown and, with the early-warning network, notices to the dimension. */
-    private static void schedule(ServerLevel level, Vec3 target, boolean surface, double yieldKt, boolean airBurst, Vec3 launchPos, @Nullable UUID owner,
-                                 int flightTicks, @Nullable RoundRef round) {
+    private static NuclearEvents.ScheduledStrike schedule(ServerLevel level, Vec3 target, boolean surface, double yieldKt, boolean airBurst, Vec3 launchPos,
+                                                          @Nullable UUID owner, int flightTicks, @Nullable RoundRef round) {
         NuclearEvents events = NuclearEvents.get(level);
         long now = level.getGameTime();
         NuclearEvents.ScheduledStrike s = new NuclearEvents.ScheduledStrike(events.nextId(), target, yieldKt, airBurst, now,
@@ -157,6 +158,7 @@ public final class NuclearStrikes {
         // Capability/state at launch too: new recordings never fall back to the legacy countdown graphic.
         PacketDistributor.sendToPlayersInDimension(level, new S2C.NukeApproach(now,
                 events.scheduled().stream().flatMap(x -> x.arrival().stream()).toList()));
+        return s;
     }
 
     /** Network notices go to everyone only when the world's early-warning network exists. */
@@ -201,6 +203,39 @@ public final class NuclearStrikes {
         events.schedule(new NuclearEvents.ScheduledStrike(events.nextId(), target, yieldKt, airBurst, now, now, target, Optional.ofNullable(owner), false)
                 .withRound(round));
         return null;
+    }
+
+    /**
+     * Cancel the scheduled strikes carrying group name {@code tag} ({@code strike.Order#tagged}): their rounds end
+     * recalled; detonations and their aftermath stay.
+     *
+     * @return strikes cancelled
+     */
+    public static int cancelTagged(ServerLevel level, String tag) {
+        NuclearEvents events = NuclearEvents.get(level);
+        java.util.Set<Integer> ids = new java.util.HashSet<>();
+        for (NuclearEvents.ScheduledStrike s : List.copyOf(events.scheduled())) {
+            if (!s.round().map(r -> tag.equals(r.tag())).orElse(false)) continue;
+            events.unschedule(s);
+            holdGround(level, s, false);
+            s.round().ifPresent(r -> Orders.ended(level, r, WeaponType.NUKE, s.owner().orElse(null), RoundEnd.recalled(null)));
+            Incoming.LOG.info("ICBM #{} cancelled with its tag {}", s.id(), tag);
+            ids.add(s.id());
+        }
+        if (ids.isEmpty()) return 0;
+        // the missiles showing them (no round of their own: nothing ends with them)
+        java.util.function.Predicate<ua.zentix.incoming.entity.StrikeProjectile> shows = p -> p instanceof IcbmEntity i && ids.contains(i.strike());
+        List<UUID> gone = new ArrayList<>(ua.zentix.incoming.strike.VirtualFlights.get(level).clear(level, shows));
+        for (IcbmEntity i : level.getEntities(net.minecraft.world.level.entity.EntityTypeTest.forClass(IcbmEntity.class), shows::test)) {
+            gone.add(i.getUUID());
+            i.discard();
+        }
+        // only these strikes: a full resync would restart the client's live detonations
+        PacketDistributor.sendToPlayersInDimension(level, new S2C.NukeCancelled(List.copyOf(ids)));
+        PacketDistributor.sendToPlayersInDimension(level, new S2C.NukeApproach(level.getGameTime(),
+                events.scheduled().stream().flatMap(x -> x.arrival().stream()).toList()));
+        if (!gone.isEmpty()) PacketDistributor.sendToAllPlayers(new S2C.Cleared(Optional.of(net.minecraft.Util.NIL_UUID), false, gone));
+        return ids.size();
     }
 
     /** Cancel: scheduled strikes canceled (their rounds recalled), fallout traces removed, queues stopped. */
@@ -317,6 +352,10 @@ public final class NuclearStrikes {
         long t1 = System.nanoTime();
         NuclearWorld world = NuclearWorld.get(level);
         world.tick(level, clock);
+        // a nuclear round's impact work (strike.OrderStatus): its front and hits, and its crater, which loads its own chunks;
+        // ruins resuming in chunks loaded later do not reopen it. Craft blasts waiting for their area count as conventional
+        // impact work of the same round (BlastFront).
+        events.settleImpacts(d -> world.frontBusy(d, now) || world.craterDigging(d));
         long t2 = System.nanoTime();
         RadiationTicker.tick(level);
         long t3 = System.nanoTime();

@@ -19,6 +19,12 @@ Incoming (https://github.com/zentixua/incoming): strikes by Shahed and Lancet dr
   rocket (grad) and nuke (ICBM) are ballistic: they take no via, and a command with via fails.
 - incoming clear removes all launchers and every projectile in flight at once: an emergency stop. To stop a campaign,
   remove its rule first.
+- Results: every strike command returns the rounds its order admitted (a salvo of 12 returns 12 at once, an ICBM 1,
+  a refused order 0) and its output names the order id. salvo and nuke take «tag <name>» last: a group name that many
+  orders may share and that survives a restart. «incoming status tag <name>» returns the group's unfinished rounds
+  (waiting to launch, in flight, or still exploding; a nuclear blast until its wave has passed) and lists each order
+  with its arrival time or «unknown»; 0 means the group is over. «incoming status» covers all orders.
+  «incoming clear tag <name>» recalls one group, nuclear ones too, and leaves other strikes.
 - A campaign (a salvo every N seconds) is a tick rule with a name, interval and run limit; pauses count toward the
   limit too. In the script, pass the whole command as one string to gm.command and pass numbers as numbers. Stop the
   campaign with rule remove before using incoming clear, or the next rule run will launch again.

@@ -29,6 +29,7 @@ import ua.zentix.incoming.nuclear.world.ColumnScar;
 import ua.zentix.incoming.registry.ModDamageTypes;
 import ua.zentix.incoming.registry.ModDataMaps.Penetrability;
 import ua.zentix.incoming.strike.RoundEnd;
+import ua.zentix.incoming.strike.RoundRef;
 import ua.zentix.incoming.strike.WeaponSpec;
 import ua.zentix.incoming.strike.WeaponType;
 import ua.zentix.incoming.target.Target;
@@ -403,9 +404,10 @@ public class BunkerBusterEntity extends StrikeProjectile {
     private void detonate(ServerLevel level) {
         Vec3 at = position();
         Vec3 entry = entry();
+        RoundRef r = round();
         endRound(RoundEnd.impact(at, weapon().spec().warheadTnt()));
         discard();
-        Warheads.bunker(level, at, entry, this, ownerId());
+        Warheads.bunker(level, at, entry, this, ownerId(), r);
     }
 
     /**

@@ -622,6 +622,17 @@ public final class S2C {
         @Override public Type<? extends CustomPacketPayload> type() { return TYPE; }
     }
 
+    /**
+     * Scheduled nuclear strikes cancelled one by one ({@code clear tag}): their warnings, countdowns and sirens end; other
+     * strikes and live detonations stay (a full {@link NukeSync} would restart them).
+     */
+    public record NukeCancelled(List<Integer> strikes) implements CustomPacketPayload {
+        public static final Type<NukeCancelled> TYPE = new Type<>(Incoming.id("nuke_cancelled"));
+        public static final StreamCodec<ByteBuf, NukeCancelled> CODEC = StreamCodec.composite(
+                ByteBufCodecs.VAR_INT.apply(ByteBufCodecs.list()), NukeCancelled::strikes, NukeCancelled::new);
+        @Override public Type<? extends CustomPacketPayload> type() { return TYPE; }
+    }
+
     /** Full terminal snapshot and server epoch. Repeated snapshots also restore Flashback seek/late join. */
     public record NukeApproach(long time, List<ua.zentix.incoming.nuclear.IcbmArrival> arrivals) implements CustomPacketPayload {
         public static final Type<NukeApproach> TYPE = new Type<>(Incoming.id("nuke_approach"));

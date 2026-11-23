@@ -196,6 +196,11 @@ public final class Order {
         return RoundRef.of(id, index, tag);
     }
 
+    /** Rounds admitted ({@link #accept}); 0 while unanswered or if rejected. */
+    public int admitted() {
+        return Math.max(accepted, 0);
+    }
+
     /** Answered: rejected or accepted. */
     boolean answered() {
         return rejected != null || accepted >= 0;

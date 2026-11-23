@@ -345,6 +345,11 @@ public final class ClientNuclear {
         if (fresh && live) NukeSounds.warning(w);
     }
 
+    /** Scheduled strikes cancelled ({@link S2C.NukeCancelled}): their warnings end; detonations and other strikes stay. */
+    public static void cancelled(S2C.NukeCancelled p) {
+        for (int id : p.strikes()) WARNINGS.remove(id);
+    }
+
     /**
      * Detonation; {@code live} excludes replay seeking: flash/sound/shake only live; sought detonations appear
      * at their age. A live detonation packet already shown as past (replay sought just before it)
