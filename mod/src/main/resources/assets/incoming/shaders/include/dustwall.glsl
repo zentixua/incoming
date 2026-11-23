@@ -41,6 +41,9 @@ uniform vec3 DwSandBulk;
 uniform float DwCut;
 // (wind x, z, blocks/s; 0; 0): unused, the drift is DwLife.zw
 uniform vec4 DwWind;
+// fire light from below on dust over a fully burning zone (linear, PallField.fireLight through pallFlame); the zone's share per
+// node is the table's row 0 z
+uniform vec3 DwFire;
 // lowest and highest ground of the terrain map under the wall, blocks above ground zero's ground point (0, 0: no map)
 uniform vec2 DwRelief;
 
@@ -57,6 +60,8 @@ float dwOpen(vec3 q) {
 }
 
 #moj_import <incoming:wall_ownership.glsl>
+// the pall's accepted light law (two Eddington streams after delta-Eddington in the slab: pallDiffuse, PallLight)
+#moj_import <incoming:pall.glsl>
 // presentation exposure of the wall's light (Silo S3E09 dust band: display luma median ~0.35)
 const float DW_EXPOSURE = 0.22;
 // head timing, seconds of age (presentation): rise e-fold at the contact line, hump hold, width of the hump's fall
@@ -78,10 +83,10 @@ float gDwSurf = 0.0, gDwSigma = 0.0, gDwSand = 0.0;
 float gDwSwell = 0.0;
 
 // table row 0 at ground radius r: (front arrival, model s; paved share)
-vec2 dwRow0(float r) {
+vec3 dwRow0(float r) {
     float x = clamp(r / max(DwRing.w, 1.0), 0.0, 1.0) * (DW_NODES - 1.0);
     int i = int(min(floor(x), DW_NODES - 2.0));
-    return mix(texelFetch(Sampler2, ivec2(i, 0), 0).xy, texelFetch(Sampler2, ivec2(i + 1, 0), 0).xy, x - float(i));
+    return mix(texelFetch(Sampler2, ivec2(i, 0), 0).xyz, texelFetch(Sampler2, ivec2(i + 1, 0), 0).xyz, x - float(i));
 }
 float dwArrival(float r) {
     return dwRow0(r).x;
@@ -158,6 +163,13 @@ float dwEddyPhase(float a) {
 // to hours (≥ 0.98 over take 33's 24 s)
 float dwContrast(float a) {
     return pow(1.0 + max(a, 0.0) / 600.0, -0.5);
+}
+// the textured share of the dust at age a (the haze level takes the rest): the billows' turbulence has decayed and the fines
+// have diluted; the noise-free column with the pall's closed-form light is the same dust at a level that costs a twentieth.
+// Logistic about DW_HAZE_AGE (presentation; the texture holds through take 33's judged ages: 0.97 at 12 s)
+const float DW_HAZE_AGE = 30.0, DW_HAZE_WIDTH = 5.0;
+float dwTextured(float a) {
+    return 1.0 - 1.0 / (1.0 + exp(-(a - DW_HAZE_AGE) / DW_HAZE_WIDTH));
 }
 // a smooth max(a − c, 0) (softplus, width 1 s): no kink in any age function
 float dwAfter(float a, float c) {
@@ -367,6 +379,41 @@ float dwBound(vec3 g) {
 
 // noise-free mode (the consumers' reference, the thin tail and plan B's far level): mean seeds and texture, no swells or puffs
 bool gDwMean = false;
+// set by dwDensity at its sample: the textured share (dwTextured; gDwForceF ≥ 0 forces it: harness), and the haze level's
+// column there: its drawn optical depth, the depth above the sample, the fire zone's share under it, its top
+float gDwF = 1.0, gDwForceF = -1.0, gDwHazeTc = 0.0, gDwHazeAbove = 0.0, gDwHazeFire = 0.0, gDwHazeTop = 0.0;
+
+// share of a column's optical depth above relative height x of its top (the profile's stratification, 1.25 − 0.5x)
+float dwColumnAbove(float x) {
+    float u = clamp(x, 0.0, 1.0);
+    return 1.25 * (1.0 - u) - 0.25 * (1.0 - u * u);
+}
+
+// The haze level (noise-free): the same column (the law's top and depth through dwTransfer, the same profile, ground fade,
+// soil, open air and table end), no seeds, billows, swells or puffs. q: the source ground point and height above the ground
+float dwHaze(vec3 g, vec3 q, float r, float a, vec2 law, bool coarse) {
+    float h = law.x * 0.95;
+    float top = max(dwEnvelope(a, h, 1.65), 1.0);
+    if (q.y > top * 1.3 + 6.0) return 0.0;
+    float edge = 0.22 * top + 4.0;
+    float prof = 1.0 - smoothstep(top - edge, top + 0.4 * edge, q.y);
+    float strat = 1.25 - 0.5 * clamp(q.y / top, 0.0, 1.0);
+    vec2 soil = dwSoilAt(q.xz);
+    vec3 row = dwRow0(r);
+    float paved = 1.0 + soil.x * (row.y - 1.0);
+    float tc = dwTransfer(law.y) * (1.0 + 0.5 * exp(-a / 1.1)) * paved
+            * (1.0 - smoothstep(DwRing.w * (1.0 - 1.0 / (DW_NODES - 1.0)), DwRing.w, r));
+    float sigma = tc / dwProfileInt(h) * prof * strat * smoothstep(0.0, 3.0, q.y) * smoothstep(0.0, 0.08, a);
+    if (!coarse) {
+        sigma *= dwOpen(g);
+        gDwSand = clamp(soil.y / max(paved, 1e-6), 0.0, 1.0);
+        gDwHazeTc = tc;
+        gDwHazeAbove = tc * dwColumnAbove(q.y / top);
+        gDwHazeFire = row.z;
+        gDwHazeTop = top;
+    }
+    return sigma;
+}
 // the noise's gain on the column's extinction that keeps its mean transmission over the billow tile the noise-free column's
 // (review N6: equal mean extinction gives a higher mean transmission, by Jensen). The noisy column's mean optical depth is
 // DW_NOISE_MEAN below the noise-free one (the swells' hollows, the texture's means), and a Gamma(k) model of its spread:
@@ -384,6 +431,7 @@ float dwDensity(vec3 g, bool coarse) {
     if (!coarse) gDwSigma = 0.0;
 #ifdef DW_ANALYTIC
     gDwSurf = 1e9;
+    gDwF = gDwForceF >= 0.0 ? gDwForceF : 0.0;
     return dwAnalytic(g);
 #endif
     // heights above the local ground (the destination's terrain); the ground point the air came from (the law's drift)
@@ -396,6 +444,21 @@ float dwDensity(vec3 g, bool coarse) {
     if (a0 < 0.0) return 0.0;
     vec2 law = dwLaw(r, a0);
     if (law.y <= 0.0) return 0.0;
+    // the haze level where the texture has faded, blended by the same fade function (no seam in time or space)
+    float F = gDwForceF >= 0.0 ? gDwForceF : dwTextured(a0);
+    if (!coarse) gDwF = F;
+    float haze = 0.0;
+    if (F < 0.999) {
+        haze = dwHaze(g, q, r, a0, law, coarse);
+        if (F <= 0.001) {
+            if (!coarse) {
+                gDwSigma = haze;
+                gDwSurf = gDwHazeTop;
+                gDwSwell = 0.0;
+            }
+            return haze;
+        }
+    }
     bool mean = gDwMean;
     // One model, per-point birth (LOOK Trait 0): the front is a line of births running over the ground. Each ground point
     // tears up its own dust when the front reaches it: its seed (world-fixed, `dwSeeds`) sets its birth a little
@@ -457,6 +520,7 @@ float dwDensity(vec3 g, bool coarse) {
     // over hard ground only debris dust (the pall's own reading: PallField.paved of the soil's mass), sand pales it
     vec2 soil = dwSoilAt(q.xz);
     float paved = 1.0 + soil.x * (dwRow0(r).y - 1.0);
+    // (the haze level read the open-air window already; it multiplies both)
     float sigma = taud / dwProfileInt(h) * paved * mix(1.0, mix(0.75, 1.25, 0.55 * s1 + 0.45 * s2), C)
             * (1.0 - smoothstep(DwRing.w * (1.0 - 1.0 / (DW_NODES - 1.0)), DwRing.w, r));
     if (!coarse && !mean) sigma *= dwNoiseGain(taud);
@@ -471,8 +535,9 @@ float dwDensity(vec3 g, bool coarse) {
     float veil = (1.0 - smoothstep(surf, surf * 1.12 + 4.0, q.y)) * smoothstep(surf * 0.8, surf, q.y) * 0.03;
     float puff = coarse || mean || q.y < top * 0.8 ? 0.0 : dwPuff(vec3(pw.x, q.y, pw.z), top, a) * (1.0 - smoothstep(ceiling - 8.0, ceiling, q.y));
     // the lowest metres thin to the ground (soft where no terrain stands under the dust)
-    return sigma * smoothstep(0.0, 0.08, a) * smoothstep(0.0, 3.0, q.y)
+    float textured = sigma * smoothstep(0.0, 0.08, a) * smoothstep(0.0, 3.0, q.y)
             * (prof * strat * (0.5 + 1.0 * n) * (0.7 + 0.6 * fs) + (veil + puff) * (0.6 + 0.8 * n));
+    return F >= 0.999 ? textured : mix(haze, textured, F);
 }
 
 // light on a white wall facing the fireball at q (Lambertian sphere of radius DwBall.w, DwBallLight at its surface, R²/d²)
@@ -499,7 +564,37 @@ float dwShadow(vec3 q, vec3 l) {
 // and the sun (forward-peaked: edges toward the ball glow), and multiply scattered light that diffuses in from every lit face
 // and takes on the soil's bulk colour (dense dust is darker inside but stays warm dust-coloured, never black); sky light
 // enters from the top, ground bounce from below
-vec3 dwLight(vec3 q, vec3 rd) {
+// Henyey–Greenstein phase of asymmetry g, mean 1 over the sphere (cosine c of the scattering angle)
+float dwHG(float g, float c) {
+    return (1.0 - g * g) / pow(1.0 + g * g - 2.0 * g * c, 1.5);
+}
+
+// presentation: exposure of the haze level's light, held to the textured level's at their blend (no step in brightness;
+// tools/uw_probe/probe_gl.py: light), and sky light reaching the dust at its luminance without the sky's blue (the low
+// sun's frames drew dust under a blue sky as grey-blue smoke; the reference haze is warm: Silo S3E09, haboob footage)
+const float DW_HAZE_EXPOSURE = 1.0;
+// light of a haze-level sample (the pall's law, PallLight): two Eddington streams after delta-Eddington in the drawn column at
+// the sample's depth below its top, from the sun and fireball beams, sky light from above, fire light from below, ground of
+// land albedo; plus the beams' single scattering. No shadow taps
+vec3 dwHazeLight(vec3 q, vec3 rd) {
+    vec3 w = mix(PALL_DUST_W, PALL_SAND_W, gDwSand);
+    float gp = PALL_DUST_G, tc = max(gDwHazeTc, 1e-4), tau = clamp(gDwHazeAbove, 0.0, tc);
+    float sunUp = smoothstep(-0.05, 0.05, DwSunDir.y), muS = max(DwSunDir.y, 0.12);
+    vec3 fS = DwSunLight * sunUp;
+    vec3 lb = normalize(DwBall.xyz - q + vec3(0.0, 1e-3, 0.0));
+    float muB = clamp(lb.y, 0.12, 1.0);
+    vec3 fB = dwBallLight(q);
+    vec3 top = vec3(dot(DwSkyLight, vec3(0.2126, 0.7152, 0.0722)));
+    vec3 bottom = DwFire * gDwHazeFire;
+    float c = gp * -rd.y;
+    vec3 d = vec3(pallDiffuse(w.r, gp, tau, tc, PALL_LAND, muS, fS.r, muB, fB.r, top.r, bottom.r, c),
+            pallDiffuse(w.g, gp, tau, tc, PALL_LAND, muS, fS.g, muB, fB.g, top.g, bottom.g, c),
+            pallDiffuse(w.b, gp, tau, tc, PALL_LAND, muS, fS.b, muB, fB.b, top.b, bottom.b, c));
+    vec3 single = 0.25 * (fS * dwHG(gp, dot(rd, DwSunDir)) * exp(-tau / muS) + fB * dwHG(gp, dot(rd, lb)) * exp(-tau / muB));
+    return DW_HAZE_EXPOSURE * w * (single + max(d, vec3(0.0)));
+}
+
+vec3 dwTexturedLight(vec3 q, vec3 rd) {
     vec3 lb = normalize(DwBall.xyz - q + vec3(0.0, 1e-3, 0.0));
     float taub = dwShadow(q, lb), taus = dwShadow(q, DwSunDir);
     float depth = max(gDwSurf - (q.y - dwFloor(q.xz)), 0.0) * gDwSigma;
@@ -517,6 +612,13 @@ vec3 dwLight(vec3 q, vec3 rd) {
             + DwSkyLight * (0.03 + 0.15 * exp(-0.3 * depth));
     vec3 albedo = mix(DwAlbedo, DwSandAlbedo, gDwSand), bulk = mix(DwBulk, DwSandBulk, gDwSand);
     return DW_EXPOSURE * (albedo * single + bulk * multiple + bulk * DwGroundLight);
+}
+
+// light of a sample: the textured level's (take 33's) and the haze level's, blended by the textured share
+vec3 dwLight(vec3 q, vec3 rd) {
+    vec3 haze = gDwF < 0.999 ? dwHazeLight(q, rd) : vec3(0.0);
+    if (gDwF <= 0.001) return haze;
+    return mix(haze, dwTexturedLight(q, rd), gDwF);
 }
 
 const float DW_K = 0.0065, DW_S = 3.5;
@@ -691,7 +793,8 @@ vec4 dwMarch(vec3 rd, float tEnd, float jitter, float foot, int maxSteps) {
             gDwDepth.z += (T * (1.0 - al)) * tt;
             T *= al;
             kLast = k + cells - 1.0; k += cells;
-            n = s * dt < 0.01 ? min(cells * 2.0, 8.0) : 1.0;
+            // (the haze level is smooth: its spans grow while a cell holds under 0.1 of optical depth)
+            n = s * dt < mix(0.1, 0.01, gDwF) ? min(cells * 2.0, 8.0) : 1.0;
         } else {
             // inside the dust's bound but clear here: strides no longer than DW_GAP blocks, so a thin span the bound admits
             // (a swell's crest, another source's layer) is never stepped over (E8: five 50-block spans were missed at LOW)

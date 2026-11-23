@@ -594,6 +594,79 @@ def view_work(law):
     REPORT["view_work"] = rows
 
 
+LIGHT_BODY = """
+uniform float Mode, Frac;
+out vec4 fragColor;
+void main() {
+    float i = gl_FragCoord.x;
+    float phi = radians(-10.0 + 20.0 * fract(i * 0.618034));
+    float rr = 4300.0 + 400.0 * fract(i * 0.4142);
+    vec2 xz = rr * vec2(cos(phi), sin(phi));
+    float H = dwLaw(rr, DwEye.w - dwArrival(rr)).x;
+    vec3 p = vec3(xz.x, Frac * H, xz.y);
+    vec3 rd = normalize(vec3(-cos(radians(6.0)), -sin(radians(6.0)), 0.0));
+    gDwForceF = Mode;
+    float s = dwDensity(p, false);
+    vec3 c = Mode > 0.5 ? dwTexturedLight(p, rd) : dwHazeLight(p, rd);
+    fragColor = vec4(c, s);
+}
+"""
+SCENE_LIGHT = {  # the sandbox judging take's frame light (life_head shots.log: young wall describe), by age after the front
+    "sun_dir": (-0.98, 0.22, 0.0), "sun": (0.367, 0.268, 0.110), "sky": (0.081, 0.168, 0.427), "ground": (0.016, 0.023, 0.045),
+    "ball": {4: ((6, 1485, -5, 1801), (18.2, 8.25, 2.29)), 20: ((40, 4022, -35, 3523), (0.59, 0.0692, 0.0)),
+             45: ((116, 6095, -102, 4755), (7.7e-5, 6.6e-7, 0.0))}}
+
+
+def scene_light(p, age):
+    L = SCENE_LIGHT
+    g.glUniform3f(loc(p, "DwSunDir"), *L["sun_dir"]); g.glUniform3f(loc(p, "DwSunLight"), *L["sun"])
+    g.glUniform3f(loc(p, "DwSkyLight"), *L["sky"]); g.glUniform3f(loc(p, "DwGroundLight"), *L["ground"])
+    g.glUniform3f(loc(p, "DwAlbedo"), 0.8688, 0.8099, 0.7286); g.glUniform3f(loc(p, "DwBulk"), 0.60, 0.53, 0.45)
+    key = 4 if age < 12 else 20 if age < 35 else 45
+    ball, light = L["ball"][key]
+    g.glUniform4f(loc(p, "DwBall"), *ball); g.glUniform3f(loc(p, "DwBallLight"), *light)
+
+
+def display(c):
+    """Linear light of opaque dust to screen (pallDisplay, gamma 2.2; shoulder ignored), luma and hue."""
+    d = np.clip(c, 0, None) ** (1 / 2.2)
+    luma = d @ np.array([0.2126, 0.7152, 0.0722])
+    mx, mn = d.max(axis=-1), d.min(axis=-1)
+    r, gg, b = d[..., 0], d[..., 1], d[..., 2]
+    hue = np.degrees(np.arctan2(np.sqrt(3) * (gg - b), 2 * r - gg - b)) % 360
+    return d, luma, hue
+
+
+def light_levels(law):
+    """The two levels' light at the same samples of the reference view (ages 10 s - 10 min), as screen colour of opaque dust:
+    the textured level (take 33's light) and the haze level (two streams); their luminance ratio at the blend centre sets
+    DW_HAZE_EXPOSURE; the haze's hue and luma against the reference curtain (luma 0.45-0.51, hue 31-33 deg)."""
+    print("light: textured vs haze level at the reference view (screen colour of opaque dust, the sandbox's frame light)")
+    p = program(LIGHT_BODY, "new")
+    g.glUseProgram(p); noise(p)
+    R = 4500.0
+    rows = []
+    for age in (10, 16, 24, 30, 45, 60, 120, 600):
+        t = law.arrival_at(R) + age
+        bind_new(p, law, t, (R + 600, 120.0, 0.0))
+        scene_light(p, age)
+        out = {}
+        for mode in (1.0, 0.0):
+            cs = []
+            for frac in (0.3, 0.6, 0.9):
+                g.glUniform1f(loc(p, "Mode"), mode); g.glUniform1f(loc(p, "Frac"), frac)
+                target(256, 1, [(g.GL_RGBA32F, g.GL_RGBA)])
+                quad(p)
+                cs.append(read(256, 1)[0, :, :3].astype(np.float64))
+            out[mode] = np.concatenate(cs)
+        dt, lt, ht = display(out[1.0]); dh, lh, hh = display(out[0.0])
+        ratio = float(out[1.0] @ [0.2126, 0.7152, 0.0722]).mean() if False else float((out[1.0] @ np.array([0.2126, 0.7152, 0.0722])).mean() / max((out[0.0] @ np.array([0.2126, 0.7152, 0.0722])).mean(), 1e-9))
+        rows.append((age, float(np.median(lt)), float(np.median(ht)), float(np.median(lh)), float(np.median(hh)), ratio))
+        print(f"    +{age:4d} s: textured luma {np.median(lt):.3f} hue {np.median(ht):5.1f}  |  haze luma {np.median(lh):.3f} hue {np.median(hh):5.1f}"
+              f"  |  linear luminance textured/haze {ratio:.3f}")
+    REPORT["light"] = rows
+
+
 context()
 laws = {"1000": Law("1000"), "15": Law("15")}
 if "--only" in sys.argv:
@@ -608,6 +681,8 @@ if "c3" in which:
     age_functions(laws["1000"])
 if "e8" in which:
     march_accuracy()
+if "light" in which:
+    light_levels(laws["1000"])
 if "view" in which:
     view_work(laws["1000"])
 if "drift" in which:

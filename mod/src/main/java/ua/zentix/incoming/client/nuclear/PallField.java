@@ -260,7 +260,7 @@ public final class PallField {
     /**
      * Probe (unified-wave step 1): inputs of the whole-lifetime dust wave, the law's numbers by ground radius and log age.
      * Row 0, node j at radius j/(n − 1) of {@link #reach}: front arrival (model s), dust over hard ground relative to soil
-     * ({@link #paved}), 0, 0. Rows 1..{@link #AGES}, age node k ({@link #lifetimeAge}): the presentation layer top (blocks)
+     * ({@link #paved}), the fire zone's share (fire light from below), 0. Rows 1..{@link #AGES}, age node k ({@link #lifetimeAge}): the presentation layer top (blocks)
      * and the optical depth the transfer reads, then both slopes per age node (the shader's cubic Hermite in the age
      * coordinate: C1, no kink at a node).
      * <p>
@@ -278,7 +278,7 @@ public final class PallField {
             int i = Math.min(BINS - 1, Math.max(0, (int) (rb / reach * BINS)));
             out[4 * j] = (float) (d.arrivalTicks(d.blocks(slant)) / (20.0 * d.scale()));
             out[4 * j + 1] = (float) paved[i];
-            out[4 * j + 2] = 0;
+            out[4 * j + 2] = (float) fire[i];
             out[4 * j + 3] = 0;
             DustModel.Column c = columns[i];
             for (int k = 0; k < AGES; k++) v[k] = lifetimeAt(c, lifetimeAge(k, end), present);

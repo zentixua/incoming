@@ -420,6 +420,13 @@ public final class NukePall {
         // ten game ticks of the detonation clock; sand's colours
         w.clockJump = (float) (10 / (20.0 * d.scale()));
         w.sandAlbedo.set((float) SAND_W[0], (float) SAND_W[1], (float) SAND_W[2]);
+        // fire light from below on a fully burning zone's dust (the pall's: pallFlame of the fire light at the detonation's
+        // fire clock over the frame's sky base, capped at the flame's colour)
+        double fl = a.pall.fireLight(a.ticks(partial));
+        float[] fc = {f.fireLight.x, f.fireLight.y, f.fireLight.z};
+        double[] lit = new double[3];
+        for (int c = 0; c < 3; c++) lit[c] = fc[0] <= 0 ? 0 : PallLight.flame(f.base, fl * fc[c], fc[c] / fc[0]);
+        w.fire.set((float) lit[0], (float) lit[1], (float) lit[2]);
         w.sandBulk.set((float) SAND[0], (float) SAND[1], (float) SAND[2]);
         w.active = true;
     }
