@@ -314,41 +314,47 @@ public final class OrderStatusRegressionGameTests {
         h.succeed();
     }
 
-    @GameTest(template = "range", timeoutTicks = 20, batch = "status_r2_fixed_report", skyAccess = true)
+    /**
+     * {@code launcher … fire} whose release fails after admission (launch sector walled in, as in {@code
+     * OrderEventGameTests.launcherShotFailingAfterAdmissionEndsItsRound}): returns the admitted round and names its order.
+     */
+    @GameTest(template = "runway", timeoutTicks = 20, batch = "status_r2_fixed_report", skyAccess = true)
     public static void fixedFireNamesTheAcceptedOrderEvenIfReleaseFails(GameTestHelper h) {
-        BlockPos pad = h.absolutePos(CENTER);
-        h.setBlock(CENTER, ModBlocks.FIXED_LAUNCHER.get());
-        FixedLauncherBlockEntity launcher = h.getBlockEntity(CENTER);
-        Vec3 target = Vec3.atCenterOf(pad).add(0, 0, 40);
-        launcher.setMission(new Mission(WeaponType.DRONE, 1, 0, new Target.Point(target), target, Waypoints.NONE));
-        h.assertTrue(launcher.load(new ItemStack(ModItems.SHAHED.get())).isEmpty(), "stock loaded");
-
+        ServerLevel level = h.getLevel();
+        BlockPos rel = new BlockPos(16, 4, 8);
+        h.setBlock(rel, ModBlocks.FIXED_LAUNCHER.get());
+        FixedLauncherBlockEntity launcher = h.getBlockEntity(rel);
+        BlockPos pad = h.absolutePos(rel);
+        launcher.setOwner(null);
+        launcher.setYaw(0);
+        List<BlockPos> walls = new ArrayList<>();
+        for (int dx = -4; dx <= 4; dx++) {
+            for (int dz = -4; dz <= 4; dz++) {
+                if (Math.max(Math.abs(dx), Math.abs(dz)) != 4) continue;
+                for (int y = rel.getY(); y <= 50; y++) walls.add(new BlockPos(rel.getX() + dx, y, rel.getZ() + dz));
+            }
+        }
+        walls.forEach(w -> h.setBlock(w, Blocks.STONE));
+        Vec3 far = Vec3.atBottomCenterOf(pad).add(0, -1, 1000);
+        launcher.setMission(new Mission(WeaponType.DRONE, 1, 0, new Target.Point(far), far, Waypoints.NONE));
+        h.assertTrue(launcher.load(new ItemStack(ModItems.SHAHED.get(), 2)).isEmpty(), "stock loaded");
         UUID[] accepted = {null};
-        int[] vetoes = {0};
         Consumer<StrikeOrderEvent.Accepted> observe = event -> {
             if (pad.equals(event.getLauncherPos())) accepted[0] = event.getOrderId();
         };
-        Consumer<EntityJoinLevelEvent> veto = event -> {
-            if (event.getLevel() == h.getLevel() && event.getEntity() instanceof StrikeProjectile p
-                    && p.flightPhase().onLauncher() && p.position().distanceToSqr(Vec3.atCenterOf(pad)) < 36) {
-                vetoes[0]++;
-                event.setCanceled(true);
-            }
-        };
         NeoForge.EVENT_BUS.addListener(observe);
-        NeoForge.EVENT_BUS.addListener(veto);
         StrikeGameTests.afterTest(h, () -> {
             NeoForge.EVENT_BUS.unregister(observe);
-            NeoForge.EVENT_BUS.unregister(veto);
-            h.setBlock(CENTER, Blocks.AIR);
+            walls.forEach(w -> h.setBlock(w, Blocks.AIR));
+            level.removeBlockEntity(pad);
+            level.setBlock(pad, Blocks.AIR.defaultBlockState(), 3);
         });
 
         List<Component> feedback = new ArrayList<>();
         int result = run(console(h, feedback), "incoming launcher " + pad.getX() + " " + pad.getY() + " " + pad.getZ() + " fire");
+        h.assertTrue(accepted[0] != null, "the launcher's order was not accepted");
         h.assertValueEqual(result, 1, "the failed release still admitted one round");
-        h.assertTrue(accepted[0] != null, "the launcher's order was accepted");
-        h.assertValueEqual(vetoes[0], 1, "claim listener vetoed the projectile join");
-        h.assertValueEqual(launcher.stockCount(), 1, "failed release restored its munition");
+        h.assertValueEqual(launcher.stockCount(), 2, "the failed release kept its munition");
         h.assertTrue(feedback.stream().anyMatch(c -> mentions(c, accepted[0].toString())), "feedback did not name admitted order " + accepted[0]);
         h.succeed();
     }
