@@ -478,3 +478,13 @@ paths:
 - Measure ruin cost on dense city chunks (cities on big real-terrain maps are denser than on small ones), never on
   natural terrain samples; a map's pre-generated area is not the whole map (Artem, 04.11).
 
+
+## Surface samples for dust
+
+`MaterialSurveys` samples four column tops per ready chunk. The loaded index is refreshed in portions and captures
+a copy-on-write snapshot at source birth. `DiskShots` extracts the same four votes on detached block palettes in its
+worker. A ruin snapshot entering `RuinContext.putDisk` also feeds the open surveys. Outside the prebuilt disk window
+a survey visits one representative chunk per 256-block cell in distance order. `DiskShots.readSurface` checks the
+region file off-thread and reads the block palettes without a heightmap or biome pass. Its inbox reserves
+`NuclearPrep.READ_BYTES` per submitted or uncollected read under the same 512 MiB admission estimate. A sealed
+survey releases outstanding reservations on completion and ignores late answers. Ready chunks take precedence at birth.

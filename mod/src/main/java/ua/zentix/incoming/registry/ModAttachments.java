@@ -143,6 +143,9 @@ public final class ModAttachments {
     public static final Supplier<AttachmentType<ua.zentix.incoming.compat.VoxyLods>> VOXY_LODS = REGISTER.register("voxy_lods",
             () -> AttachmentType.builder(ua.zentix.incoming.compat.VoxyLods::new).build());
 
+    public static final Supplier<AttachmentType<ua.zentix.incoming.nuclear.material.MaterialDelivery>> MATERIAL_DELIVERY =
+            REGISTER.register("material_delivery", () -> AttachmentType.builder(ua.zentix.incoming.nuclear.material.MaterialDelivery::new).build());
+
     /** World: terrain survey without chunk loading — disk heightmaps and background generator terrain ({@link ua.zentix.incoming.util.TerrainSurvey}); not saved. */
     public static final Supplier<AttachmentType<ua.zentix.incoming.util.TerrainSurvey>> TERRAIN_SURVEY = REGISTER.register("terrain_survey",
             () -> AttachmentType.builder(ua.zentix.incoming.util.TerrainSurvey::new).build());

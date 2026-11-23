@@ -46,6 +46,7 @@ public interface ClientHooks {
 
     default void nukeFlashMarks(S2C.NukeFlashMarks p) {}
 
+    default void nukeMaterial(S2C.NukeMaterial p) {}
     default void nukeSync(S2C.NukeSync p) {}
 
     default void nukeClock(S2C.NukeClock p) {}

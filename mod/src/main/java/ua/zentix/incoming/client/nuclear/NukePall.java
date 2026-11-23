@@ -327,7 +327,7 @@ public final class NukePall {
      * Age at which the young wall has settled behind its hump, model seconds (LOOK: about a second): its layer height is the
      * dust law's layer top at that age, the wall's own hump and settling ride on it.
      */
-    private static final double YOUNG_SETTLE_S = 1.0;
+    private static final double YOUNG_SETTLE_S = ua.zentix.incoming.nuclear.material.DustGrid.SETTLE_SECONDS;
     /**
      * The young wall's layer drawn taller than the dust law's (presentation, not physical; owner's call 22.11 under Artem's
      * "crest up to about camera height"): ×68/58, so that at 4.5 km from a 1 Mt surface burst the settled layer stands ~68

@@ -39,6 +39,7 @@ public final class NuclearWorld {
      * tens of MB). Chunk whose neighbors arrive later builds ruins with new context.
      */
     private static final int RUINS_SWEEP = 100, RUINS_IDLE = 600;
+    public final MaterialSurveys materials = new MaterialSurveys();
     private final NuclearPrep prep = new NuclearPrep();
     private final RuinSettle settle = new RuinSettle();
     private final List<PulseJob> pulses = new ArrayList<>();
@@ -178,7 +179,7 @@ public final class NuclearWorld {
 
     /** Retained preparation and active-context estimates, without the shared worker buffers. */
     long retainedRuinBytes() {
-        long bytes = prep.retainedBytes();
+        long bytes = prep.retainedBytes() + materials.reservedBytes();
         for (RuinContext ctx : ruins.values()) bytes += ctx.retainedBytes();
         return bytes;
     }
@@ -190,7 +191,7 @@ public final class NuclearWorld {
      * strike's preparation.
      */
     long workingRuinBytes() {
-        long bytes = prep.retainedBytes();
+        long bytes = prep.retainedBytes() + materials.reservedBytes();
         for (RuinContext ctx : ruins.values()) bytes += ctx.retainedBytes() - ctx.durableBytes();
         return bytes;
     }
@@ -350,6 +351,7 @@ public final class NuclearWorld {
     }
 
     public void onChunkLoad(ServerLevel level, LevelChunk chunk) {
+        materials.live(chunk);
         // front LOD copy unnecessary: world supplies chunk ruins/LODs
         prep.loaded(chunk.getPos().toLong());
         NuclearEvents events = NuclearEvents.get(level);
@@ -360,6 +362,7 @@ public final class NuclearWorld {
     }
 
     public void onChunkUnload(ServerLevel level, LevelChunk chunk) {
+        materials.unload(chunk);
         scars.drop(level, chunk.getPos());
         // layer mark saved with chunk: reevaluate next load
         unburnt.remove(chunk.getPos().toLong());
@@ -407,6 +410,7 @@ public final class NuclearWorld {
 
     /** Cancel: queues stopped (destruction not restored). */
     public void clear(ServerLevel level) {
+        materials.clear();
         // preparation before FarLods: copies return claimed requests there, to be removed with its queues
         settle.clear(level);
         prep.clear(level, scars);

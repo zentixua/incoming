@@ -34,6 +34,7 @@ public final class IncomingNetwork {
         r.playToClient(S2C.NukeDetonation.TYPE, S2C.NukeDetonation.CODEC, (p, ctx) -> ClientHooks.get().nukeDetonation(p));
         r.playToClient(S2C.NukeDebris.TYPE, S2C.NukeDebris.CODEC, (p, ctx) -> ClientHooks.get().nukeDebris(p));
         r.playToClient(S2C.NukeFlashMarks.TYPE, S2C.NukeFlashMarks.CODEC, (p, ctx) -> ClientHooks.get().nukeFlashMarks(p));
+        r.playToClient(S2C.NukeMaterial.TYPE, S2C.NukeMaterial.CODEC, (p, ctx) -> ClientHooks.get().nukeMaterial(p));
         r.playToClient(S2C.NukeSync.TYPE, S2C.NukeSync.CODEC, (p, ctx) -> ClientHooks.get().nukeSync(p));
         r.playToClient(S2C.NukeClock.TYPE, S2C.NukeClock.CODEC, (p, ctx) -> ClientHooks.get().nukeClock(p));
         r.playToClient(S2C.NukeTick.TYPE, S2C.NukeTick.CODEC, (p, ctx) -> ClientHooks.get().nukeTick(p));

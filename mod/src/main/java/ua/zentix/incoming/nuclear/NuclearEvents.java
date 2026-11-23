@@ -10,6 +10,7 @@ import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.level.saveddata.SavedData;
 import net.minecraft.world.phys.Vec3;
 import ua.zentix.incoming.Incoming;
+import ua.zentix.incoming.nuclear.material.MaterialBirth;
 import ua.zentix.incoming.strike.RoundRef;
 
 import java.util.ArrayList;
@@ -125,6 +126,26 @@ public final class NuclearEvents extends SavedData {
     private final Map<Integer, Double> steps = new java.util.HashMap<>();
     /** Detonation number → world-clock anchors ({@link Anchor}); detonations saved before them have none (estimated). */
     private final Map<Integer, Anchor> clocks = new LinkedHashMap<>();
+    private final Map<Integer, MaterialBirth> materials = new LinkedHashMap<>();
+    public MaterialBirth material(int id) { return materials.get(id); }
+    public java.util.Collection<MaterialBirth> materials() { return materials.values(); }
+    public void material(int id, MaterialBirth birth) {
+        materials.put(id, birth);
+        setDirty();
+    }
+    public MaterialBirth moveMaterial(int strike, int detonation) {
+        MaterialBirth birth = materials.remove(strike);
+        if (birth != null) material(detonation, birth);
+        return birth;
+    }
+    Map<Integer, UUID> materialIds() {
+        Map<Integer, UUID> ids = new LinkedHashMap<>();
+        for (Detonation d : detonations) {
+            MaterialBirth birth = material(d.id());
+            if (birth != null) ids.put(d.id(), birth.id);
+        }
+        return ids;
+    }
     private int nextId = 1;
     /**
      * First detonation number whose flash, prompt radiation and wave reach bodies loaded later ({@code LateExposure}). A world
@@ -320,6 +341,7 @@ public final class NuclearEvents extends SavedData {
         detonations.clear();
         impacts.clear();
         past.clear();
+        materials.clear();
         craters.clear();
         craterGrounds.clear();
         clocks.clear();
@@ -334,6 +356,7 @@ public final class NuclearEvents extends SavedData {
         if (!faded.isEmpty()) {
             detonations.removeAll(faded);
             past.addAll(faded);
+            faded.forEach(d -> materials.remove(d.id()));
             setDirty();
         }
         if (clocks.keySet().removeIf(id -> detonations.stream().noneMatch(d -> d.id() == id))) setDirty();
@@ -342,7 +365,7 @@ public final class NuclearEvents extends SavedData {
         if (craterGrounds.keySet().removeIf(id -> !craters.containsKey(id))) setDirty();
     }
 
-    private static NuclearEvents load(CompoundTag tag, HolderLookup.Provider registries) {
+    public static NuclearEvents load(CompoundTag tag, HolderLookup.Provider registries) {
         NuclearEvents e = new NuclearEvents();
         e.nextId = Math.max(1, tag.getInt("next_id"));
         e.lateFrom = tag.contains("late_from") ? tag.getInt("late_from") : e.nextId;
@@ -356,6 +379,11 @@ public final class NuclearEvents extends SavedData {
         // saved before order status: detonations from then have no impact work
         if (tag.contains("impacts")) Impact.CODEC.listOf().parse(NbtOps.INSTANCE, tag.get("impacts")).resultOrPartial(Incoming.LOG::error)
                 .ifPresent(l -> l.forEach(i -> e.impacts.put(i.detonation(), i)));
+        var saved = tag.getList("materials", net.minecraft.nbt.Tag.TAG_COMPOUND);
+        for (int i = 0; i < saved.size(); i++) {
+            CompoundTag entry = saved.getCompound(i);
+            e.materials.put(entry.getInt("source"), MaterialBirth.load(entry));
+        }
         return e;
     }
 
@@ -370,6 +398,15 @@ public final class NuclearEvents extends SavedData {
         GROUNDS_CODEC.encodeStart(NbtOps.INSTANCE, craterGrounds).resultOrPartial(Incoming.LOG::error).ifPresent(t -> tag.put("crater_grounds", t));
         Anchor.CODEC.listOf().encodeStart(NbtOps.INSTANCE, List.copyOf(clocks.values())).resultOrPartial(Incoming.LOG::error).ifPresent(t -> tag.put("clocks", t));
         Impact.CODEC.listOf().encodeStart(NbtOps.INSTANCE, List.copyOf(impacts.values())).resultOrPartial(Incoming.LOG::error).ifPresent(t -> tag.put("impacts", t));
+        if (!materials.isEmpty()) {
+            var list = new net.minecraft.nbt.ListTag();
+            materials.forEach((id, birth) -> {
+                CompoundTag entry = birth.save();
+                entry.putInt("source", id);
+                list.add(entry);
+            });
+            tag.put("materials", list);
+        }
         return tag;
     }
 }

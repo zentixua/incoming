@@ -290,7 +290,13 @@ public final class NuclearStrikes {
      * ({@code RuinWorkers}) is outside the clock.
      */
     public static void work(List<ServerLevel> levels, WorkClock clock) {
-        for (ServerLevel level : levels) tick(level, clock);
+        long materialBudget = 500_000;
+        for (ServerLevel level : levels) {
+            long start = System.nanoTime();
+            NuclearWorld.get(level).materials.tick(level, NuclearEvents.get(level), start + materialBudget);
+            materialBudget = Math.max(0, materialBudget - (System.nanoTime() - start));
+            tick(level, clock);
+        }
     }
 
     /** Whether nuclear queues have server-thread work (in any dimension). */
@@ -428,7 +434,8 @@ public final class NuclearStrikes {
     private static void sync(ServerPlayer p) {
         NuclearEvents events = NuclearEvents.get(p.serverLevel());
         PacketDistributor.sendToPlayer(p, new S2C.NukeSync(List.copyOf(events.detonations()),
-                events.scheduled().stream().filter(s -> warns(s, p)).map(s -> warning(s, p)).toList()));
+                events.scheduled().stream().filter(s -> warns(s, p)).map(s -> warning(s, p)).toList(), events.materialIds()));
+        p.getData(ua.zentix.incoming.registry.ModAttachments.MATERIAL_DELIVERY).snapshot(events.materials(), p.getX(), p.getZ());
         PacketDistributor.sendToPlayer(p, new S2C.NukeApproach(p.serverLevel().getGameTime(),
                 events.scheduled().stream().flatMap(s -> s.arrival().stream()).toList()));
         PacketDistributor.sendToPlayer(p, clockPacket(events, p.serverLevel().getGameTime(), ua.zentix.incoming.util.WorldClock.now(p.serverLevel())));

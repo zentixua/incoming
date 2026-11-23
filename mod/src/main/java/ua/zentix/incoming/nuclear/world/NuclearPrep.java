@@ -96,8 +96,8 @@ public final class NuclearPrep {
      */
     static final long PLANS_CAP = 512L << 20;
     /** Concurrent disk reads and estimated memory per read (parsed city chunk tens of KB). */
-    private static final int READS = 64;
-    private static final long READ_BYTES = 96L << 10;
+    static final int READS = 64;
+    static final long READ_BYTES = 96L << 10;
     /** Allowed detonation-location difference from plan, blocks. */
     private static final double SAME_PLACE = 8;
 
@@ -325,6 +325,10 @@ public final class NuclearPrep {
             bytes += (long) (p.order.length + p.edge.length + p.toScan.size()) * Long.BYTES;
         }
         return bytes;
+    }
+
+    int pendingReads() {
+        return (int) (readBytes.get() / READ_BYTES);
     }
 
     /** One server-wide preparation admission estimate; multiple strikes/dimensions share the cap. */
@@ -603,14 +607,14 @@ public final class NuclearPrep {
             }
         }
         // window read-ahead in wave order
-        while (p.nextRead < p.order.length && p.reading.size() < READS && memory(level) + READ_BYTES <= PLANS_CAP) {
+        while (p.nextRead < p.order.length && p.reading.size() + NuclearWorld.get(level).materials.pendingReads() < READS && memory(level) + READ_BYTES <= PLANS_CAP) {
             long c = p.order[p.nextRead];
             boolean all = true;
             for (int dx = -RuinPlanner.REACH; all && dx <= RuinPlanner.REACH; dx++) {
                 for (int dz = -RuinPlanner.REACH; all && dz <= RuinPlanner.REACH; dz++) {
                     long k = ChunkPos.asLong(ChunkPos.getX(c) + dx, ChunkPos.getZ(c) + dz);
                     if (p.reading.contains(k) || p.unreadable.contains(k) || p.ruins.shotAvailable(level, k)) continue;
-                    if (p.reading.size() >= READS || memory(level) + READ_BYTES > PLANS_CAP) {
+                    if (p.reading.size() + NuclearWorld.get(level).materials.pendingReads() >= READS || memory(level) + READ_BYTES > PLANS_CAP) {
                         all = false;
                         continue;
                     }
