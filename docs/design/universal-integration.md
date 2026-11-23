@@ -1,7 +1,7 @@
 # Incoming as a building block: universal integration (roadmap)
 
 Status: approved by Artem 23.11.2026 as the long-term plan; done item by item, one PR each, in roadmap order.
-Progress: the status table in section 7 and the tracking issue zentixua/incoming#739; an item's PR updates both.
+Order and finished items: the table in section 7. Items under way: the tracking issue zentixua/incoming#739.
 Each item's PR writes its contract out first, with tests and guide updates. Code references are `path:line` against
 `main` at the time of writing; `J/` is `mod/src/main/java/ua/zentix/incoming/`, `D/` is
 `mod/src/main/resources/data/`.
@@ -25,8 +25,8 @@ the rules:
 The largest gaps today: Incoming has no events of its own with order and owner identity, its block damage is only
 partly visible to claim mods (nuclear ruins and several conventional side effects not at all), and there are no
 permission nodes or statistics. Closing them unlocks servers, minigames and the Almighty game master at once. Each
-item needs a written contract before code (section 5 names the hard parts); the schedule in section 7 is a tentative
-estimate until those contracts are scoped.
+item needs a written contract before code (section 5 names the hard parts). The order in section 7 is fixed; the
+cost estimates in section 5 are tentative until each contract is written.
 
 ## 2. What players say
 
@@ -364,33 +364,19 @@ round and detonation events with no Almighty change. Add to the note: the grid a
 | 11 | C1 radiation shielding, Mekanism compat | planned | |
 | 12 | D2 Jade, D1 CC:Tweaked | planned | |
 | 13 | B5 sides from party mods | planned | |
-| later | Section 5F items | planned | |
+| later | 5F Component items for progression | planned | |
+| later | 5F Blackout of modded lamps | planned | |
+| later | 5F Foreign air-defense targets | planned | |
+| later | 5F Create Display Link source | planned | |
+| later | 5F Data-driven munition variants | planned | |
+| later | 5F Launch from Create contraptions and Create Aeronautics craft | planned | |
+| later | 5F KubeJS event group | planned | |
 
-Status is planned, in progress or done. One item = one mission = one PR: the item's PR sets its row (in progress
-with the PR link when it opens, done when it merges) and ticks its box in zentixua/incoming#739. The second wave
+Items 1–8 are the first wave (small or foundational, high value), 9–13 the second wave, "later" the items of
+section 5F; each is done in table order. A1's lifecycle comes first, since A2, D1 and E build on it. One item = one
+mission = one PR. When the item's PR opens, it links itself on the item's line in zentixua/incoming#739; the PR sets
+its row here to done with its link and ticks the box when it merges. Status is planned or done. The second wave
 starts only after Artem's word.
-
-Estimates are tentative until each item's contract is written (A1's lifecycle first, since A2, D1 and E build on
-it).
-
-First wave (small or foundational, high value):
-1. A1 order and round events.
-2. A2 command results, `status`, `tag`.
-3. B1 permission nodes behind one policy.
-4. A3 advancements and statistics.
-5. A4 redstone from the SAM and the substation.
-6. B4 world rules by command.
-7. C2 common tags in recipes, C3 Geiger counter recipe and pack-author documentation.
-8. E Almighty note update.
-
-Second wave:
-9. B2 claim protection for every block-changing path.
-10. B3 owner identity.
-11. C1 radiation shielding, Mekanism compat.
-12. D2 Jade, D1 CC:Tweaked.
-13. B5 sides from party mods.
-
-Later: section 5F.
 
 A guide page "For server owners and pack makers" (both languages) grows with each shipped item.
 
@@ -410,23 +396,14 @@ A guide page "For server owners and pack makers" (both languages) grows with eac
 - **HBM-style production chains:** component items (5F) let a pack plug us into its own chains instead.
 - **Code for specific mods in the main code:** only optional `compat/` modules through public APIs.
 
-## 9. Review
+## 9. Open contract cases
 
-An independent Codex review (effort high) checked every claim against Incoming's code, NeoForge 21.1.264 and the
-other mods' 1.21.1 source. It confirmed the core findings (no own events, nuclear writes without events, the
-projectile is not a vanilla `Projectile`, no permission nodes, statistics or item shielding, no Geiger recipe, no `c:`
-tags) and corrected: conventional claim coverage (side writes outside the `Detonate` lists), the OPAC API choice,
-FTB Ranks (no NeoForge handler), GriefLogger 1.21.1 (no explosion logging) and FTB Chunks (owner ignored), command
-counts versus later launches, the order lifecycle, the arena rules, side keys, shielding scope, lamp reversibility,
-foreign air-defense targets, CC:Tweaked threading, and `c:gunpowders`.
-
-The second and final round confirmed most fixes and found that the deepest items still had open contract cases:
-B2's mechanism (position-level listeners, sourceless explosions, durable per-chunk decisions across restart and LOD
-copies, writers still missing), A1's settlement (debits before admission, per-release launcher payment, the scheduled
-nuclear strike as the authoritative round), B5's personal teams, and B4's nuclear writes. Those cases are written
-into the items above as requirements for their own design PRs; the mechanisms of A1 and B2 are deliberately left to
-those PRs, where each is decided with probes. The same class of finding surviving both rounds shows its cause: a
-proposal cannot settle an implementation contract for a multi-path subsystem without that subsystem's own study.
+Every claim here is checked against Incoming's code, NeoForge 21.1.264 and the other mods' 1.21.1 source. The
+deepest items have open contract cases, written into each item as requirements for its own PR: B2's mechanism
+(position-level listeners, sourceless explosions, durable per-chunk decisions across restart and LOD copies, all
+writers covered), A1's settlement (no debit before admission, per-release launcher payment, the scheduled nuclear
+strike as the authoritative round), B5's personal teams and B4's nuclear writes. A1's and B2's mechanisms are decided
+in their PRs with probes: an implementation contract for a multi-path subsystem needs that subsystem's own study.
 
 ## 10. Sources
 
