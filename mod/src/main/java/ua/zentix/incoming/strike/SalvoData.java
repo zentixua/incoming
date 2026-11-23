@@ -17,7 +17,9 @@ import net.minecraft.world.level.saveddata.SavedData;
 import net.minecraft.world.phys.Vec3;
 import net.neoforged.neoforge.network.PacketDistributor;
 import org.jetbrains.annotations.Nullable;
+import it.unimi.dsi.fastutil.ints.IntArrayList;
 import ua.zentix.incoming.Incoming;
+import ua.zentix.incoming.api.StrikeRoundEvent.Outcome;
 import ua.zentix.incoming.net.S2C;
 import ua.zentix.incoming.util.Terrain;
 import ua.zentix.incoming.registry.ModTags;
@@ -82,7 +84,7 @@ public final class SalvoData extends SavedData {
             Salvo s = it.next();
             if (owner != null && !owner.equals(s.owner) || !nuclear && s.nuclear()) continue;
             it.remove();
-            refund(s, online, "salvo cancelled");
+            settle(level, s, online, "salvo cancelled", Outcome.RECALLED);
             n++;
         }
         if (n > 0) setDirty();
@@ -121,17 +123,30 @@ public final class SalvoData extends SavedData {
 
     /**
      * Salvo leaves list: paid salvo refunds online owner ({@code online}) unlaunched rounds and failed launches
-     * ({@link Munitions#refund}). Sole refund location, called by every removal path: cancel, error, completion.
-     * Nuclear warhead only occurs in one-projectile salvo.
+     * ({@link Munitions#refund}), and every round that never left ends ({@link Orders#ended}): failed launches as failed,
+     * the unlaunched rest as {@code unlaunched}. Sole refund location, called by every removal path: cancel, error,
+     * completion. Nuclear warhead only occurs in one-projectile salvo.
      */
-    private static void refund(Salvo s, Collection<? extends ServerPlayer> online, String why) {
+    private static void settle(ServerLevel level, Salvo s, Collection<? extends ServerPlayer> online, String why, Outcome unlaunched) {
+        // A fixed launcher pays per release: unlaunched rounds never left its magazine, failed ones went back (StrikeService).
+        boolean refunded = s.from instanceof LaunchOrigin.Fixed;
         if (s.paid) {
             // Carrier nuclear warhead paid per projectile, as in Munitions.Bill.of.
             int shots = s.remaining + s.failed;
             boolean carrier = s.nuclear() && !s.weapon.spec().warhead().always();
-            Munitions.refund(online, s.owner, new Munitions.Bill(s.weapon, shots, carrier ? shots : 0), why);
+            refunded = Munitions.refund(online, s.owner, new Munitions.Bill(s.weapon, shots, carrier ? shots : 0), why);
+        }
+        if (s.order != null) {
+            for (int i : s.failedRounds) {
+                Orders.ended(level, RoundRef.of(s.order, i, s.tag), s.weapon, s.owner, RoundEnd.unreleased(Outcome.FAILED, refunded));
+            }
+            for (int i = s.total - s.remaining; i < s.total; i++) {
+                Orders.ended(level, RoundRef.of(s.order, i, s.tag), s.weapon, s.owner, RoundEnd.unreleased(unlaunched, refunded));
+            }
         }
         s.failed = 0;
+        s.failedRounds.clear();
+        s.remaining = 0;
     }
 
     void tick(ServerLevel level) {
@@ -141,7 +156,7 @@ public final class SalvoData extends SavedData {
                 return !s.tick(level);
             } catch (RuntimeException e) {
                 Incoming.LOG.error("Salvo failed with an exception and was cancelled", e);
-                refund(s, level.getServer().getPlayerList().getPlayers(), "salvo failed with an exception");
+                settle(level, s, level.getServer().getPlayerList().getPlayers(), "salvo failed with an exception", Outcome.FAILED);
                 return true;
             }
         });
@@ -161,14 +176,30 @@ public final class SalvoData extends SavedData {
      */
     public static void start(ServerLevel level, WeaponType weapon, int count, int radius, Target center, Vec3 centerPoint,
                              float yaw, @Nullable UUID owner, Loadout.Nuke nuke, Waypoints via, @Nullable LaunchOrigin from, boolean paid) {
-        start(level, weapon, count, radius, center, centerPoint, yaw, owner, nuke, via, from, paid, level.random.nextLong());
+        start(level, weapon, count, radius, center, centerPoint, yaw, owner, nuke, via, from, paid, level.random.nextLong(), null);
+    }
+
+    /** Salvo of admitted {@code order} ({@link Orders}): round {@code i} is the {@code i}-th launch, {@link Order#round}. */
+    static void start(ServerLevel level, WeaponType weapon, int count, int radius, Target center, Vec3 centerPoint,
+                      float yaw, @Nullable UUID owner, Loadout.Nuke nuke, Waypoints via, @Nullable LaunchOrigin from, boolean paid, Order order) {
+        start(level, weapon, count, radius, center, centerPoint, yaw, owner, nuke, via, from, paid, level.random.nextLong(), order);
     }
 
     /** Same with salvo {@code seed}: determines lanes ({@link WeaponSpec.Lanes#offset}; tests supply their own). */
     public static void start(ServerLevel level, WeaponType weapon, int count, int radius, Target center, Vec3 centerPoint,
                              float yaw, @Nullable UUID owner, Loadout.Nuke nuke, Waypoints via, @Nullable LaunchOrigin from, boolean paid,
                              long seed) {
+        start(level, weapon, count, radius, center, centerPoint, yaw, owner, nuke, via, from, paid, seed, null);
+    }
+
+    private static void start(ServerLevel level, WeaponType weapon, int count, int radius, Target center, Vec3 centerPoint,
+                              float yaw, @Nullable UUID owner, Loadout.Nuke nuke, Waypoints via, @Nullable LaunchOrigin from, boolean paid,
+                              long seed, @Nullable Order order) {
         Salvo salvo = new Salvo(weapon, count, count, radius, center, centerPoint, yaw, owner, 1, nuke, via, from, paid, 0, seed);
+        if (order != null) {
+            salvo.order = order.id();
+            salvo.tag = order.tag();
+        }
         get(level).add(salvo);
         ServerPlayer player = salvo.reporter(level);
         if (player != null) {
@@ -221,6 +252,13 @@ public final class SalvoData extends SavedData {
         int waited;
         /** Salvo seed: each projectile's route lane ({@link WeaponSpec.Lanes#offset}). */
         final long seed;
+        /** Admitted order whose rounds these are ({@link Orders}); null — saved before order events, posts none. */
+        @Nullable
+        UUID order;
+        @Nullable
+        String tag;
+        /** Rounds (launch indices) whose launch failed: they end with the salvo's refund ({@link #settle}). */
+        final IntArrayList failedRounds = new IntArrayList();
 
         Salvo(WeaponType weapon, int total, int remaining, int radius, Target center, Vec3 lastCenter, float yaw, @Nullable UUID owner, int cooldown,
               Loadout.Nuke nuke, Waypoints via, @Nullable LaunchOrigin from, boolean paid, int failed, long seed) {
@@ -277,7 +315,7 @@ public final class SalvoData extends SavedData {
                 if (fixed.launcher(level) == null) {
                     Incoming.LOG.info("Salvo: {} — launcher {} is gone, remaining {} cancelled", weapon.getSerializedName(),
                             fixed.pos().toShortString(), remaining);
-                    refund(this, level.getServer().getPlayerList().getPlayers(), "launcher is gone");
+                    settle(level, this, level.getServer().getPlayerList().getPlayers(), "launcher is gone", Outcome.FAILED);
                     return false;
                 }
             }
@@ -288,10 +326,14 @@ public final class SalvoData extends SavedData {
                     ownerPlayer.displayClientMessage(Component.translatable("incoming.salvo.done").withStyle(ChatFormatting.GRAY), true);
                     PacketDistributor.sendToPlayer(ownerPlayer, new S2C.SalvoStatus(weapon.id(), total, total));
                 }
-                if (failed > 0) refund(this, level.getServer().getPlayerList().getPlayers(), "salvo launches failed");
+                if (failed > 0) settle(level, this, level.getServer().getPlayerList().getPlayers(), "salvo launches failed", Outcome.FAILED);
                 return false;
             }
-            if (!fire(level).ok()) failed++;
+            int index = total - remaining;
+            if (!fire(level, index).ok()) {
+                failed++;
+                failedRounds.add(index);
+            }
             remaining--;
             cooldown = weapon.salvoGap(level.random);
             if (ownerPlayer != null) PacketDistributor.sendToPlayer(ownerPlayer, new S2C.SalvoStatus(weapon.id(), total - remaining, total));
@@ -323,7 +365,7 @@ public final class SalvoData extends SavedData {
             return e instanceof LivingEntity l ? l.isDeadOrDying() : e.getRemovalReason() == Entity.RemovalReason.KILLED;
         }
 
-        private StrikeService.Result fire(ServerLevel level) {
+        private StrikeService.Result fire(ServerLevel level, int index) {
             center.resolve(level).ifPresent(p -> lastCenter = p);
             int dx = 0, dz = 0;
             if (radius > 0) {
@@ -349,7 +391,8 @@ public final class SalvoData extends SavedData {
             float shotYaw = yaw + (level.random.nextInt(7001) - 3500) / 100f;
             double lane = weapon.spec().lanes().offset(seed, total - remaining, total);
             // One siren per salvo: first projectile enables it when “seen” approaching.
-            return StrikeService.launch(level, weapon, shot, point, shotYaw, owner, remaining == total, nuke, via, from, lane);
+            RoundRef round = order == null ? null : RoundRef.of(order, index, tag);
+            return StrikeService.launch(level, weapon, shot, point, shotYaw, owner, remaining == total, nuke, via, from, lane, round);
         }
 
         /**
@@ -396,6 +439,9 @@ public final class SalvoData extends SavedData {
             if (failed > 0) t.putInt("failed", failed);
             if (aloft != null) t.putBoolean("aloft", aloft);
             t.putLong("seed", seed);
+            if (order != null) t.putUUID("order", order);
+            if (tag != null) t.putString("tag", tag);
+            if (!failedRounds.isEmpty()) t.putIntArray("failed_rounds", failedRounds.toIntArray());
             return t;
         }
 
@@ -415,6 +461,10 @@ public final class SalvoData extends SavedData {
                     t.hasUUID("owner") ? t.getUUID("owner") : null, t.getInt("cooldown"), nuke, via, LaunchOrigin.load(t), t.getBoolean("paid"),
                     t.getInt("failed"), t.getLong("seed"));
             if (t.contains("aloft")) s.aloft = t.getBoolean("aloft");
+            // Saved before order events: no order, its rounds post no events.
+            if (t.hasUUID("order")) s.order = t.getUUID("order");
+            if (t.contains("tag")) s.tag = t.getString("tag");
+            s.failedRounds.addElements(0, t.getIntArray("failed_rounds"));
             return Optional.of(s);
         }
     }

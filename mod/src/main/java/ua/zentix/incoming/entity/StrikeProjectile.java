@@ -40,11 +40,16 @@ import ua.zentix.incoming.guidance.Route;
 import ua.zentix.incoming.util.Air;
 import ua.zentix.incoming.util.Terrain;
 import ua.zentix.incoming.util.TerrainSurvey;
+import ua.zentix.incoming.nuclear.Detonation;
+import ua.zentix.incoming.nuclear.NuclearWarhead;
 import ua.zentix.incoming.strike.CameraLink;
 import ua.zentix.incoming.strike.ChunkTickets;
 import ua.zentix.incoming.strike.FlightLog;
 import ua.zentix.incoming.strike.FlightTickets;
 import ua.zentix.incoming.strike.Loadout;
+import ua.zentix.incoming.strike.Orders;
+import ua.zentix.incoming.strike.RoundEnd;
+import ua.zentix.incoming.strike.RoundRef;
 import ua.zentix.incoming.strike.StrikeService;
 import ua.zentix.incoming.strike.StrikeWorld;
 import ua.zentix.incoming.strike.VirtualFlights;
@@ -211,6 +216,12 @@ public abstract class StrikeProjectile extends Entity implements IEntityWithComp
     /** Nuclear warhead replacing conventional one (cruise missile, bomb). */
     @Nullable
     protected Loadout.Nuke nuclear;
+    /**
+     * Order round this projectile carries ({@link ua.zentix.incoming.api.StrikeRoundEvent}); null — none (old save,
+     * a launch outside the order lifecycle, or the round already ended or handed on). Saved: copies keep it.
+     */
+    @Nullable
+    private RoundRef round;
 
     private int phaseStart;
     /** Client: phase whose change established {@link #phaseStart}. */
@@ -437,6 +448,30 @@ public abstract class StrikeProjectile extends Entity implements IEntityWithComp
     public void setNuclear(@Nullable Loadout.Nuke nuke) {
         this.nuclear = nuke;
         entityData.set(DATA_NUCLEAR, nuke != null);
+    }
+
+    /** Carry order round {@code r} from its release on ({@link ua.zentix.incoming.strike.StrikeService}). */
+    public void attachRound(@Nullable RoundRef r) {
+        this.round = r;
+    }
+
+    @Nullable
+    public RoundRef round() {
+        return round;
+    }
+
+    /** Hand the round on (the B-2's bomb, an off-world copy that loaded it): this entity no longer ends it. */
+    @Nullable
+    public RoundRef detachRound() {
+        RoundRef r = round;
+        round = null;
+        return r;
+    }
+
+    /** End the round, once: the first ending wins (an interception before the detonation it causes). */
+    public void endRound(RoundEnd end) {
+        RoundRef r = detachRound();
+        if (r != null && level() instanceof ServerLevel level) Orders.ended(level, r, weapon(), ownerId(), end);
     }
 
     /** Carries nuclear warhead: canceled only by nuclear recall. */
@@ -885,8 +920,21 @@ public abstract class StrikeProjectile extends Entity implements IEntityWithComp
 
     /** Impact point reached or collision: default is weapon's conventional warhead. */
     protected void impact(ServerLevel level, Vec3 point, @Nullable Entity hitEntity) {
+        endRound(RoundEnd.impact(point, weapon().spec().warheadTnt()));
         discard();
         Warheads.detonate(level, weapon(), point, this, ownerId());
+    }
+
+    /**
+     * Nuclear warhead bursts at {@code at} (carrier impact): the detonation, then the round's end, both with the round's
+     * ids.
+     */
+    protected final void detonateNuclear(ServerLevel level, Vec3 at, boolean airBurst) {
+        RoundRef r = detachRound();
+        UUID owner = ownerId();
+        discard();
+        Detonation d = NuclearWarhead.detonate(level, at, nuclear.yieldKt(), airBurst, owner, r);
+        if (r != null) Orders.ended(level, r, weapon(), owner, RoundEnd.nuclear(d.burst(), d.yieldKt()));
     }
 
     /**
@@ -898,6 +946,7 @@ public abstract class StrikeProjectile extends Entity implements IEntityWithComp
     public boolean recall(ServerLevel level) {
         if (!recallable()) return false;
         Incoming.LOG.debug("Projectile {} {} self-destructed on recall at {}", getType().getDescriptionId(), getUUID(), blockPosition());
+        endRound(RoundEnd.recalled(position()));
         crash(level, position().add(flight.forward().scale(noseLength())));
         return true;
     }
@@ -915,6 +964,7 @@ public abstract class StrikeProjectile extends Entity implements IEntityWithComp
      * fuel burns.
      */
     protected void crash(ServerLevel level, Vec3 point) {
+        endRound(RoundEnd.failed(point));
         discard();
         Warheads.whenReady(level, point, Warheads.reach(1.5f),
                 l -> l.explode(this, point.x, point.y, point.z, 1.5f, false, Level.ExplosionInteraction.NONE));
@@ -1366,6 +1416,8 @@ public abstract class StrikeProjectile extends Entity implements IEntityWithComp
     @Override
     public void remove(RemovalReason reason) {
         if (reason.shouldDestroy() && !isRemoved() && !level().isClientSide()) noteForeignRemoval(reason);
+        // Any other destruction (lost, gave up waiting, failed reentry, /kill): the round failed. Unloading keeps it.
+        if (reason.shouldDestroy() && !level().isClientSide()) endRound(RoundEnd.failed(position()));
         super.remove(reason);
         releaseTickets();
     }
@@ -1438,6 +1490,8 @@ public abstract class StrikeProjectile extends Entity implements IEntityWithComp
 
     /** Shot down: detonate where hit (at launch before fuze arming: just crash). */
     protected void shotDown(ServerLevel level, DamageSource source) {
+        Entity by = source.getEntity();
+        endRound(RoundEnd.intercepted(position(), null, by == null ? null : by.getUUID()));
         if (armed()) {
             impact(level, position(), null);
             return;
@@ -1454,9 +1508,10 @@ public abstract class StrikeProjectile extends Entity implements IEntityWithComp
      * falls along flight direction ({@link DebrisSpawner#wreck}); outside-world projectile simply removed — no world for debris
      * to fall in. One log line per salvo ({@link FlightLog.Event#INTERCEPTED}, detail: which SAM).
      */
-    public void intercepted(ServerLevel level, String by) {
+    public void intercepted(ServerLevel level, String by, @Nullable BlockPos sam, @Nullable UUID samOwner) {
         if (isRemoved()) return;
         Vec3 at = position();
+        endRound(RoundEnd.intercepted(at, sam, samOwner));
         StrikeWorld.get(level).flightLog().note(getType().getDescriptionId(), FlightLog.Event.INTERCEPTED, BlockPos.containing(at), targetLost(), 0, by);
         if (virtual) {
             VirtualFlights.get(level).clear(level, p -> p == this);
@@ -1586,6 +1641,8 @@ public abstract class StrikeProjectile extends Entity implements IEntityWithComp
         readyTicks = tag.getInt("ready_ticks");
         sirenLead = tag.contains("siren_lead") ? tag.getInt("siren_lead") : -1;
         setNuclear(tag.contains("nuclear") ? Loadout.Nuke.CODEC.parse(NbtOps.INSTANCE, tag.get("nuclear")).result().orElse(null) : null);
+        // Saved before order events: no round, no events for it.
+        round = tag.contains("round") ? RoundRef.load(tag.getCompound("round")) : null;
         syncAim();
         syncSpeed();
     }
@@ -1614,6 +1671,7 @@ public abstract class StrikeProjectile extends Entity implements IEntityWithComp
         tag.putInt("ready_ticks", readyTicks);
         tag.putInt("siren_lead", sirenLead);
         if (nuclear != null) Loadout.Nuke.CODEC.encodeStart(NbtOps.INSTANCE, nuclear).result().ifPresent(n -> tag.put("nuclear", n));
+        if (round != null) tag.put("round", round.save());
     }
 
     /**

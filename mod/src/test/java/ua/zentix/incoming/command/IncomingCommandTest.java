@@ -30,6 +30,7 @@ import org.junit.jupiter.api.Test;
 import ua.zentix.incoming.IncomingConfig;
 import ua.zentix.incoming.nuclear.NuclearStrikes;
 import ua.zentix.incoming.strike.Loadout;
+import ua.zentix.incoming.strike.RoundRef;
 import ua.zentix.incoming.strike.ServerActions;
 import ua.zentix.incoming.strike.Waypoints;
 import ua.zentix.incoming.strike.WeaponType;
@@ -51,6 +52,8 @@ import static org.mockito.Mockito.mockStatic;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.ArgumentMatchers.isNull;
 import static org.mockito.Mockito.when;
 
 /** Exercise the registered Brigadier tree and its real permission predicates without starting a server. */
@@ -162,11 +165,9 @@ class IncomingCommandTest {
                 "grad", WeaponType.ROCKET, "loiter", WeaponType.LOITER, "lancet", WeaponType.LOITER);
         for (var alias : aliases.entrySet()) {
             try (var actions = mockStatic(ServerActions.class)) {
-                actions.when(() -> ServerActions.dispatch(level, "test", 0, alias.getValue(), 1, 0, aim,
-                        Loadout.Nuke.DEFAULT, Waypoints.NONE, null)).thenReturn(true);
+                actions.when(() -> ServerActions.dispatch(eq(level), eq("test"), eq(0f), eq(alias.getValue()), eq(1), eq(0), eq(aim), eq(Loadout.Nuke.DEFAULT), eq(Waypoints.NONE), isNull(), isNull(), any())).thenReturn(true);
                 assertEquals(1, dispatcher.execute("incoming " + alias.getKey() + " at 10.25 64.5 20.75", source(2, false, level)), alias.getKey());
-                actions.verify(() -> ServerActions.dispatch(level, "test", 0, alias.getValue(), 1, 0, aim,
-                        Loadout.Nuke.DEFAULT, Waypoints.NONE, null));
+                actions.verify(() -> ServerActions.dispatch(eq(level), eq("test"), eq(0f), eq(alias.getValue()), eq(1), eq(0), eq(aim), eq(Loadout.Nuke.DEFAULT), eq(Waypoints.NONE), isNull(), isNull(), any()));
             }
         }
     }
@@ -182,14 +183,12 @@ class IncomingCommandTest {
             boolean air = suffix.endsWith(" air");
             Loadout.Nuke expected = new Loadout.Nuke(yield, air);
             try (var actions = mockStatic(ServerActions.class); var nuclear = mockStatic(NuclearStrikes.class)) {
-                actions.when(() -> ServerActions.dispatch(level, "test", 0, WeaponType.NUKE, 1, 0, aim,
-                        expected, Waypoints.NONE, null)).thenReturn(true);
+                actions.when(() -> ServerActions.dispatch(eq(level), eq("test"), eq(0f), eq(WeaponType.NUKE), eq(1), eq(0), eq(aim), eq(expected), eq(Waypoints.NONE), isNull(), isNull(), any())).thenReturn(true);
                 assertEquals(1, dispatcher.execute("incoming nuke at 10.25 64.5 20.75" + suffix, source(2, false, level)));
-                actions.verify(() -> ServerActions.dispatch(level, "test", 0, WeaponType.NUKE, 1, 0, aim,
-                        expected, Waypoints.NONE, null));
+                actions.verify(() -> ServerActions.dispatch(eq(level), eq("test"), eq(0f), eq(WeaponType.NUKE), eq(1), eq(0), eq(aim), eq(expected), eq(Waypoints.NONE), isNull(), isNull(), any()));
                 nuclear.when(() -> NuclearStrikes.ground(level, point)).thenReturn(point);
                 assertEquals(1, dispatcher.execute("incoming nuke now at 10.25 64.5 20.75" + suffix, source(2, false, level)));
-                nuclear.verify(() -> NuclearStrikes.detonateNow(level, point, yield, air, null));
+                nuclear.verify(() -> NuclearStrikes.detonateNow(eq(level), eq(point), eq((double) yield), eq(air), isNull(), any(RoundRef.class)));
             }
         }
     }
@@ -202,10 +201,9 @@ class IncomingCommandTest {
         var from = new ua.zentix.incoming.strike.LaunchOrigin.Place(new Vec3(30.25, 0, 40.75));
         Loadout.Nuke nuke = new Loadout.Nuke(3, true);
         try (var actions = mockStatic(ServerActions.class)) {
-            actions.when(() -> ServerActions.dispatch(level, "test", 0, WeaponType.NUKE, 1, 0, aim,
-                    nuke, Waypoints.NONE, from)).thenReturn(true);
+            actions.when(() -> ServerActions.dispatch(eq(level), eq("test"), eq(0f), eq(WeaponType.NUKE), eq(1), eq(0), eq(aim), eq(nuke), eq(Waypoints.NONE), eq(from), isNull(), any())).thenReturn(true);
             assertEquals(1, dispatcher.execute("incoming nuke at 10.25 64.5 20.75 3 air from 30.25 40.75", source(2, false, level)));
-            actions.verify(() -> ServerActions.dispatch(level, "test", 0, WeaponType.NUKE, 1, 0, aim, nuke, Waypoints.NONE, from));
+            actions.verify(() -> ServerActions.dispatch(eq(level), eq("test"), eq(0f), eq(WeaponType.NUKE), eq(1), eq(0), eq(aim), eq(nuke), eq(Waypoints.NONE), eq(from), isNull(), any()));
         }
     }
 

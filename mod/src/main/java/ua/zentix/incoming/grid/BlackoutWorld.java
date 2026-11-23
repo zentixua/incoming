@@ -645,7 +645,7 @@ public final class BlackoutWorld {
         relightPlaced(level, clock);
         scheduleRestoreSweeps(grid, at);
         if (now % 20 == 0) {
-            grid.prune(at);
+            for (Outage o : grid.prune(at)) Blackouts.restored(level, o);
             sounded.long2LongEntrySet().removeIf(e -> now - e.getLongValue() > 200);
             // chunk left memory without becoming full (ring around edge chunks): it has no unload event
             var chunkMap = level.getChunkSource().chunkMap;

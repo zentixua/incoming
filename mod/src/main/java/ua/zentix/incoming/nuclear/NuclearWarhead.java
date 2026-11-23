@@ -16,6 +16,9 @@ import net.minecraft.world.phys.Vec3;
 import net.neoforged.neoforge.network.PacketDistributor;
 import org.jetbrains.annotations.Nullable;
 import ua.zentix.incoming.Incoming;
+import ua.zentix.incoming.api.NuclearDetonationEvent;
+import ua.zentix.incoming.strike.Orders;
+import ua.zentix.incoming.strike.RoundRef;
 import ua.zentix.incoming.IncomingConfig;
 import ua.zentix.incoming.grid.Blackouts;
 import ua.zentix.incoming.net.S2C;
@@ -60,17 +63,22 @@ public final class NuclearWarhead {
      * @param airBurst airburst at optimal height; otherwise surface burst
      */
     public static Detonation detonate(ServerLevel level, Vec3 target, double yieldKt, boolean airBurst, @Nullable UUID owner) {
-        return detonate(level, target, yieldKt, airBurst, owner, (float) IncomingConfig.SERVER.effectsScale());
+        return detonate(level, target, yieldKt, airBurst, owner, (RoundRef) null);
+    }
+
+    /** Same, as order round {@code round} ({@link NuclearDetonationEvent} carries its ids; the caller ends the round). */
+    public static Detonation detonate(ServerLevel level, Vec3 target, double yieldKt, boolean airBurst, @Nullable UUID owner, @Nullable RoundRef round) {
+        return detonate(level, target, yieldKt, airBurst, owner, (float) IncomingConfig.SERVER.effectsScale(), null, -1, round);
     }
 
     /** @param scale radius scale (1 is real life); usually from effects_scale setting, GameTest supplies its own */
     public static Detonation detonate(ServerLevel level, Vec3 target, double yieldKt, boolean airBurst, @Nullable UUID owner, float scale) {
-        return detonate(level, target, yieldKt, airBurst, owner, scale, null, -1);
+        return detonate(level, target, yieldKt, airBurst, owner, scale, null, -1, null);
     }
 
     /** A committed arrival consumes its exact endpoint; terrain edits cannot move a visible head's destination. */
     static Detonation detonate(ServerLevel level, Vec3 target, double yieldKt, boolean airBurst, @Nullable UUID owner,
-                               float scale, @Nullable Detonation committed, int strikeId) {
+                               float scale, @Nullable Detonation committed, int strikeId, @Nullable RoundRef round) {
         long started = System.nanoTime();
         // yield limit also applies to strikes from old saves and other mods' commands
         yieldKt = Math.min(yieldKt, ua.zentix.incoming.strike.Loadout.Nuke.MAX_YIELD);
@@ -89,6 +97,8 @@ public final class NuclearWarhead {
                 IncomingConfig.SERVER.nukeBlackRain.get());
         events.add(d, ua.zentix.incoming.util.WorldClock.now(level));
         PacketDistributor.sendToPlayersInDimension(level, new S2C.NukeDetonation(d, (float) Blackouts.nukeRadius(d), strikeId));
+        Orders.post(new NuclearDetonationEvent(level.dimension(), d.id(), d.burst(), yieldKt, !d.surface(), owner,
+                round == null ? null : round.order(), round == null ? null : round.round(), round == null ? null : round.tag()));
 
         long w0 = System.nanoTime();
         NuclearWorld.get(level).onDetonation(level, d, owner);

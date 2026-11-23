@@ -76,7 +76,7 @@ public final class NuclearCarrierGameTests {
             }
             NuclearStrikes.clear(level);
             var intercepted = missile(level, at, at.add(0, 0, 2000), true);
-            intercepted.intercepted(level, "GameTest");
+            intercepted.intercepted(level, "GameTest", null, null);
             h.assertTrue(intercepted.isRemoved() && NuclearEvents.get(level).detonations().isEmpty(), "SAM interception detonated nuclear payload");
             var unarmed = missile(level, at, at.add(0, 0, 2000), true);
             unarmed.launchPos = at; unarmed.setPhase(FlightPhase.IGNITION);

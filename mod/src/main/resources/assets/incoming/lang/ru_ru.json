@@ -66,6 +66,7 @@
   "incoming.recalled": "Отбой своих ударов: снарядов остановлено — %s, залпов отменено — %s. Ядерный удар не отзывается; ракеты «Града» и сброшенная бомба долетят.",
   "incoming.given": "Пульт наведения выдан (%s).",
   "incoming.no_permission": "Пульт здесь только у операторов (Настройки → Пуск)",
+  "incoming.order.refused": "Приказ на удар отклонён",
   "incoming.player_not_found": "Игрок «%s» не найден",
   "incoming.player_other_world": "%s в другом измерении",
   "incoming.player_out_of_range": "%s дальше %s блоков — дальности карты",

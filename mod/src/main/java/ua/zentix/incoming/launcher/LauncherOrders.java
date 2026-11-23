@@ -68,7 +68,7 @@ public final class LauncherOrders {
         if (missing != null) return missing;
         String who = "launcher " + pos.toShortString();
         Component before = be.lastReport();
-        boolean ok = ServerActions.fromLauncher(level, who, owner, l, new ServerActions.Aim(m.target(), m.point(), null), m.via(), origin);
+        boolean ok = ServerActions.fromLauncher(level, who, owner, l, new ServerActions.Aim(m.target(), m.point(), null), m.via(), origin, be::report);
         if (ok) return null;
         // Launch reported its own issue (blocked sector, inventory): this reason is more specific than the general one.
         return be.lastReport() != before ? be.lastReport() : Component.translatable("incoming.fixed_launcher.failed");

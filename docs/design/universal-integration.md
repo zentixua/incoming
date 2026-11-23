@@ -172,7 +172,8 @@ entry (designator packet, command, fixed launcher, queued second-key and warning
 Each request ends in exactly one `Rejected` or `Accepted`, each admitted round in exactly one `Ended`. A pack that
 charges its own cost or cooldown checks in `Request`, debits in `Accepted` and settles in `Ended`; Incoming promises no
 rollback of foreign debits. Listeners must not start a new order synchronously inside `Request`; a nested order is
-queued to the next tick. Getters return primitives and UUIDs.
+queued to the next tick. Getters return immutable values (primitives, UUIDs, strings, enums, `Vec3`, `BlockPos`, the
+dimension key), never live game objects.
 Lights up: KubeJS (its built-in `NativeEvents` subscribes to any game-bus event), Almighty (explicit rules subscribe
 to discoverable game-bus event classes and serialize public getters; a rule disables itself above 200 emits in
 20 ticks, so per-round events suit it and bulk block events do not), Java addons. Risk: medium; the order paths are
@@ -351,7 +352,7 @@ round and detonation events with no Almighty change. Add to the note: the grid a
 
 | # | Item | Status | PR |
 |---|---|---|---|
-| 1 | A1 order and round events | planned | |
+| 1 | A1 order and round events | done | #741 |
 | 2 | A2 command results, `status`, `tag` | planned | |
 | 3 | B1 permission nodes behind one policy | planned | |
 | 4 | A3 advancements and statistics | planned | |

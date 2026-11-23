@@ -50,6 +50,10 @@ public final class StrikeWorld {
     private final Map<String, Long> noLaunchSite = new HashMap<>();
     /** Non-operator nuclear orders awaiting second key or post-warning launch. */
     private final NuclearKeys keys = new NuclearKeys();
+    /** Orders started inside another order's request ({@link Orders#admit}): admitted at their due game time. */
+    private final List<Deferred> deferred = new ArrayList<>();
+
+    private record Deferred(long due, Runnable admit) {}
 
     /** For {@link ModAttachments#STRIKE_WORLD}: per-world, lives while loaded, unsaved. */
     public StrikeWorld() {}
@@ -123,6 +127,25 @@ public final class StrikeWorld {
         return owner + " " + weapon.getSerializedName();
     }
 
+    /** Admit an order at world-tick end once game time reaches {@code due}. */
+    void defer(long due, Runnable admit) {
+        deferred.add(new Deferred(due, admit));
+    }
+
+    private void admitDeferred(ServerLevel level) {
+        if (deferred.isEmpty()) return;
+        long now = level.getGameTime();
+        List<Deferred> due = new ArrayList<>();
+        deferred.removeIf(d -> d.due() <= now && due.add(d));
+        for (Deferred d : due) {
+            try {
+                d.admit().run();
+            } catch (RuntimeException e) {
+                Incoming.LOG.error("Queued strike order failed with an exception", e);
+            }
+        }
+    }
+
     /** Unplanned flight endings this tick: log at world tick end. */
     public FlightLog flightLog() {
         return flightLog;
@@ -144,6 +167,7 @@ public final class StrikeWorld {
         VirtualFlights.get(level).tick(level);
         if (level.hasData(ModAttachments.STRIKE_WORLD)) {
             StrikeWorld world = get(level);
+            world.admitDeferred(level);
             world.keys.tick(level, level.getServer().getPlayerList().getPlayers());
             world.tick(level);
             world.flightLog.flush();

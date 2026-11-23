@@ -117,8 +117,9 @@ public final class DefenseWorld {
     }
 
     /** Launch: the missile leaves the rail upward at the spec's angle toward the target (vertically for the SAM). */
-    Interceptor launch(ServerLevel level, Vec3 rail, Radar.Track track, @Nullable UUID owner, String launcher, InterceptorSpec spec) {
-        Interceptor f = new Interceptor(spec, track.id(), owner, launcher, rail, Interceptor.railDirection(rail, track.position(), spec));
+    Interceptor launch(ServerLevel level, Vec3 rail, Radar.Track track, @Nullable UUID owner, BlockPos site, InterceptorSpec spec) {
+        String launcher = site.toShortString();
+        Interceptor f = new Interceptor(spec, track.id(), owner, site, rail, Interceptor.railDirection(rail, track.position(), spec));
         flights.add(f);
         engaged.put(track.id(), f);
         Incoming.LOG.debug("SAM {} fired at {} {}, range {} blocks", launcher, track.projectile().getType().getDescriptionId(), track.id(),
@@ -147,7 +148,7 @@ public final class DefenseWorld {
      */
     void burst(ServerLevel level, Interceptor f, Vec3 at, @Nullable StrikeProjectile target, Interceptor.End end) {
         boolean kill = end == Interceptor.End.KILL && target != null;
-        if (kill) target.intercepted(level, "SAM " + f.launcher());
+        if (kill) target.intercepted(level, "SAM " + f.launcher(), f.site(), f.owner());
         Incoming.LOG.debug("Interceptor from SAM {} against {}: {} at {}", f.launcher(), f.target(), end, BlockPos.containing(at));
         PacketDistributor.sendToPlayersNear(level, null, at.x, at.y, at.z, IncomingConfig.SERVER.farRange.get(),
                 new S2C.Intercept(at, kill, kill ? Optional.of(target.getUUID()) : Optional.empty(), level.random.nextLong()));

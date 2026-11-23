@@ -25,10 +25,10 @@ import ua.zentix.incoming.IncomingConfig;
 import ua.zentix.incoming.guidance.BombDrop;
 import ua.zentix.incoming.guidance.FlightController;
 import ua.zentix.incoming.guidance.Mission;
-import ua.zentix.incoming.nuclear.NuclearWarhead;
 import ua.zentix.incoming.nuclear.world.ColumnScar;
 import ua.zentix.incoming.registry.ModDamageTypes;
 import ua.zentix.incoming.registry.ModDataMaps.Penetrability;
+import ua.zentix.incoming.strike.RoundEnd;
 import ua.zentix.incoming.strike.WeaponSpec;
 import ua.zentix.incoming.strike.WeaponType;
 import ua.zentix.incoming.target.Target;
@@ -183,8 +183,7 @@ public class BunkerBusterEntity extends StrikeProjectile {
         if (flightPhase() == FlightPhase.DRILL) return;
         if (nuclear != null) {
             // Nuclear penetrating warhead (like B61-11): enters ground a few meters, a surface detonation with a crater.
-            discard();
-            NuclearWarhead.detonate(level, point, nuclear.yieldKt(), false, ownerId());
+            detonateNuclear(level, point, false);
             return;
         }
         // Impact uses entity velocity at fall end: along the nose plus wind drift.
@@ -404,6 +403,7 @@ public class BunkerBusterEntity extends StrikeProjectile {
     private void detonate(ServerLevel level) {
         Vec3 at = position();
         Vec3 entry = entry();
+        endRound(RoundEnd.impact(at, weapon().spec().warheadTnt()));
         discard();
         Warheads.bunker(level, at, entry, this, ownerId());
     }
