@@ -47,8 +47,10 @@ fi
 
 # ExecStopPost of every job unit: one row for the delegated task's laptop load (laptop-agents mission-load reads it):
 #   cpu <epoch> <task> <unit> <wall s> <cpu s>   — CPU from the unit's own cgroup (cpu.stat), still there at stop-post
+# It also removes the job's own TMPDIR (only one under agents-tmp: never a caller's)
 if [ "${1:-}" = --account ]; then
   set +e
+  case "${TMPDIR:-}" in */agents-tmp/incoming-job-*) rm -rf -- "$TMPDIR" ;; esac
   cg=$(cut -d: -f3 /proc/self/cgroup 2>/dev/null | head -n 1)
   us=$(awk '$1 == "usage_usec" { print $2 }' "/sys/fs/cgroup$cg/cpu.stat" 2>/dev/null)
   [ -n "$us" ] || exit 0
@@ -172,9 +174,9 @@ props=(-p OOMScoreAdjust=500 -p MemoryMax="$mem_max" -p MemorySwapMax="$mem_swap
 slice_cg=$(systemctl --user show agents.slice -p ControlGroup --value 2>/dev/null || true)
 slice_mem=$(systemctl --user show agents.slice -p MemoryMax --value 2>/dev/null || true)
 slice_props=(--slice=agents.slice -E INCOMING_SLICE_OOM="$(awk '$1 == "oom" { print $2 }' "/sys/fs/cgroup$slice_cg/memory.events.local" 2>/dev/null || echo 0)")
-# the job's temporary files on disk (header), removed at stop
-tmp_dir="${XDG_CACHE_HOME:-$HOME/.cache}/agents-tmp/incoming-job-$name-$$"
-slice_props+=(-E TMPDIR="$tmp_dir" -p ExecStopPost="$(_sd_quote "$(command -v rm)") -rf -- $(_sd_quote "$tmp_dir")")
+# the job's temporary files on disk (header), removed at stop (--account); the name only in a safe form, one path part
+tmp_dir="${XDG_CACHE_HOME:-$HOME/.cache}/agents-tmp/incoming-job-${name//[^A-Za-z0-9_.-]/_}-$$"
+slice_props+=(-E TMPDIR="$tmp_dir")
 if [ "$mode" = soft ]; then
   # idle CPU class and the client's memory ceiling (soft_mem_cap, above): a CPU client never pushes the host into swap;
   # INCOMING_SOFT_UNIT tells scripts inside that the ceiling is already theirs
