@@ -94,7 +94,12 @@ float gDwSurf = 0.0, gDwSigma = 0.0, gDwSand = 0.0;
 float gDwSwell = 0.0;
 
 // table row 0 at ground radius r: (front arrival, model s; paved share)
+// diagnostics (harness, DW_DIAG): texture fetches of the current ray
+float gDwFetches = 0.0;
 vec3 dwRow0(float r) {
+#ifdef DW_DIAG
+    gDwFetches += 2.0;
+#endif
     float x = clamp(r / max(DwRing.w, 1.0), 0.0, 1.0) * (DW_NODES - 1.0);
     int i = int(min(floor(x), DW_NODES - 2.0));
     return mix(texelFetch(Sampler2, ivec2(i, 0), 0).xyz, texelFetch(Sampler2, ivec2(i + 1, 0), 0).xyz, x - float(i));
@@ -111,6 +116,9 @@ float dwAgeU(float a) {
 // one node's law at age coordinate u: cubic Hermite between the age nodes (values and slopes stored: C1 in age, no kink at a
 // node); (presentation layer top, blocks; optical depth)
 vec2 dwLawAt(int i, float u) {
+#ifdef DW_DIAG
+    gDwFetches += 2.0;
+#endif
     float k = clamp(floor(u), 0.0, DW_AGES - 2.0), f = clamp(u - k, 0.0, 1.0);
     // (u at the last node: f = 1 of the last interval)
     vec4 p0 = texelFetch(Sampler2, ivec2(i, 1 + int(k)), 0), p1 = texelFetch(Sampler2, ivec2(i, 2 + int(k)), 0);
@@ -153,7 +161,13 @@ float dwProfileInt(float h) {
 vec2 dwSource(vec2 p) {
     vec2 D = DwLife.zw;
     if (dot(D, D) <= 0.0) return p;
-    vec2 q = p - D * max(DwEye.w - dwArrival(length(p)), 0.0);
+    float ap = max(DwEye.w - dwArrival(length(p)), 0.0);
+    vec2 q = p - D * ap;
+#ifndef DW_KEEP_DRIFT3
+    // young dust (under a minute): two steps (one left 2 % of the drift: the drift speed over the front's; two leave
+    // ~0.04 %); the third step's 2 fetches a sample bought nothing there
+    if (ap < 60.0) return p - D * max(DwEye.w - dwArrival(length(q)), 0.0);
+#endif
     q = p - D * max(DwEye.w - dwArrival(length(q)), 0.0);
     return p - D * max(DwEye.w - dwArrival(length(q)), 0.0);
 }
@@ -201,6 +215,9 @@ float dwRamp(float a, float c, float w) {
 // warped coordinate: C1 value noise with a period of 128 cells (1.7 km at the finest 13 m octave), no visible repeat
 const float DW_LATTICE = 128.0;
 float dwNoise3(vec3 x) {
+#ifdef DW_DIAG
+    gDwFetches += 1.0;
+#endif
     vec3 i = floor(x), f = fract(x);
     f = f * f * (3.0 - 2.0 * f);
     return textureLod(DwNoise, (i + f + 0.5) / DW_LATTICE, 0.0).r;
@@ -360,6 +377,18 @@ float dwBulge(vec3 pw, float a) {
 // the slow plumes over hot ground (presentation, est.): where the swell field's large-scale value L is high, a tuft rises
 // over the first minute to DW_PLUME of the top (hot: the fire zone's share, half outside it) and sinks back over ~20 min as
 // the ground cools; the young level and the haze level read the same function (the puffs' successors from ~15 s: T6)
+// T6, the young level's tufts at horizon scale (presentation, est.; the puffs' successors from ~10 s): read once per ray at
+// its column's ground point (where the ray comes down to 1.4 of the layer at the eye, 0.6–8 km out: the horizon line is the
+// far layer's top seen edge-on), from the swell field's crests, and lifting the top only around that distance along the ray
+// (a 1 km Gaussian), so the near field keeps its own top. gDwTuft: the lift there (share of the top); gDwTuftD: its distance
+float gDwTuft = 0.0, gDwTuftD = 0.0;
+const float DW_TUFT = 2.0, DW_TUFT_W = 1000.0;
+float dwTuftAt(vec3 g) {
+    if (gDwTuft <= 0.0) return 0.0;
+    float d = (length(g.xz - DwEye.xz) - gDwTuftD) / DW_TUFT_W;
+    return gDwTuft * exp(-d * d);
+}
+
 float dwPlume(float L, float a, float hot) {
     float tuft = smoothstep(0.62, 0.84, L);
     return DW_PLUME * hot * tuft * tuft * (1.0 - exp(-a / 40.0)) * exp(-a / 1500.0);
@@ -417,7 +446,7 @@ float dwBound(vec3 g) {
     // the envelope here (an older point inward is no higher: the hump is at the front) lifted by the bulges, billows and edge;
     // 1.6: the largest hump, for the forward lean of the crest
     float env = a < 1.5 ? law.x * 1.8 : dwEnvelope(a, law.x, 1.8);
-    float full = env * (1.0 + DW_BULGE) * DW_HAZE + 6.0;
+    float full = env * (1.0 + DW_BULGE + dwTuftAt(g)) * DW_HAZE + 6.0;
     // the haze level's crests and plumes (dwHaze: top × (1 + swell + plume), its soft edge to 1.3 of it)
     if (dwTextured(a) < 0.999) {
         // the swell and plume over this ground point (the same fields; the eddies shift the air by up to ~40 m against their
@@ -558,11 +587,19 @@ float dwDensity(vec3 g, bool coarse) {
     // the wind's drift, dwSource). Nothing rides with the front. The layer behind it, its haze and fade are the same column
     // at later ages: its top and optical depth are the law's at its age (dwLaw), nothing switches at any age.
     // (light paths take the mean point: their shade is smooth)
-    vec3 seed = coarse || mean ? vec3(0.5) : dwSeeds(q.xz);
+    vec3 seed = vec3(0.5);
+#ifdef DW_KEEP_SEEDS
+    if (!coarse && !mean) seed = dwSeeds(q.xz);
+#else
+    // the seeds' 60–200 m variation fades to its mean from 2 to 3 km from the eye (a pixel there spans 4–7 m at HIGH; the
+    // seeds' 6 fetches a sample bought detail the far texture no longer shows)
+    float seedFar = smoothstep(2000.0, 3000.0, distance(g, DwEye.xyz));
+    if (!coarse && !mean && seedFar < 1.0) seed = mix(dwSeeds(q.xz), vec3(0.5), seedFar);
+#endif
     float s1 = seed.x, s2 = seed.y;
     float delay = 0.12 * clamp(1.6 * s2 - 0.55, 0.0, 1.0) * (0.6 + 0.8 * s1);
     float h = law.x * mix(0.88, 1.02, s2), k = dwHump(seed.z);
-    float top0 = max(dwEnvelope(a0, h, k), 1.0), ceiling = top0 * (1.0 + DW_BULGE) * DW_HAZE + 6.0;
+    float top0 = max(dwEnvelope(a0, h, k), 1.0), ceiling = top0 * (1.0 + DW_BULGE + dwTuftAt(g)) * DW_HAZE + 6.0;
     gDwWhy = 4.0;
     if (q.y > ceiling) return 0.0;
     gDwWhy = 6.0;
@@ -578,7 +615,7 @@ float dwDensity(vec3 g, bool coarse) {
     float swellL = 0.5;
     float swell = mean ? 0.0 : dwSwellField(pw.xz, a, swellL);
     if (!coarse) gDwSwell = swell;
-    top *= 1.0 + swell;
+    top *= 1.0 + swell + dwTuftAt(g);
     // One frame for the texture: fixed in the air across the ground and carried by the dust's own rise and fall in height
     // (height as a share of this point's envelope, scaled to the settled layer): each column's billows are born at the
     // ground as the front reaches it, rise into the crest and settle with it, and stay where they were torn up. Sliced
@@ -728,8 +765,13 @@ vec3 dwHazeLight(vec3 q, vec3 rd) {
 vec3 dwTexturedLight(vec3 q, vec3 rd) {
     vec3 lb = normalize(DwBall.xyz - q + vec3(0.0, 1e-3, 0.0));
     float taub, taus;
-    if (DwDetail > 1.5) {
-        // LOW: one shadow tap, toward the brighter of the fireball and the sun; the other light takes the same depth
+#ifdef DW_KEEP_MEDIUM_TAPS
+    bool oneTap = DwDetail > 1.5;
+#else
+    bool oneTap = DwDetail > 0.5;
+#endif
+    if (oneTap) {
+        // MEDIUM and LOW: one shadow tap, toward the brighter of the fireball and the sun; the other light takes the same depth
         bool ball = dot(dwBallLight(q), vec3(1.0)) > dot(DwSunLight, vec3(1.0));
         taub = dwShadow(q, ball ? lb : DwSunDir);
         taus = taub;
@@ -870,6 +912,25 @@ vec4 dwMarch(vec3 rd, float tEnd, float jitter, float foot, int maxSteps) {
     }
     if (t0 >= t1) return vec4(0.0, 0.0, 0.0, 1.0);
     vec3 light = vec3(0.0), c = vec3(0.0), airLight = dwAirLight(rd);
+    // the ray's tuft (T6): at its column's ground point, from the swell field's crest there (4 fetches a ray)
+    gDwTuft = 0.0;
+    {
+        float re = length(eye.xz), ae = DwEye.w - dwArrival(re);
+        float band = 1.4 * max(dwLaw(re, ae).x, 20.0), hl = length(rd.xz);
+        if (hl > 1e-3) {
+            float dc = rd.y < -1e-4 ? (eye.y - band) / -rd.y * hl : 8000.0;
+            dc = clamp(dc, 600.0, 8000.0);
+            vec2 gc = dwSource(eye.xz + rd.xz / hl * dc);
+            float rc = length(gc), ac = DwEye.w - dwArrival(rc);
+            if (ac > 8.0 && dwTextured(ac) > 0.001) {
+                float L;
+                dwSwellField(gc, ac, L);
+                float crest = smoothstep(0.6, 0.82, L);
+                gDwTuft = DW_TUFT * crest * crest * (1.0 - exp(-(ac - 8.0) / 15.0)) * (0.5 + 0.5 * dwRow0(rc).z);
+                gDwTuftD = dc;
+            }
+        }
+    }
     // plan B: the noisy march ends where a pixel spans twice the largest billow, the far level takes the rest
     float tB = DwFar.x > 0.5 ? DwFar.y / max(foot, 1e-6) : 1e30;
     float tMarch = min(t1, 2.0 * tB);

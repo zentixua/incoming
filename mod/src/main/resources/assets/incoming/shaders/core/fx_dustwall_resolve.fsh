@@ -30,7 +30,27 @@ uniform vec4 DwReproject;
 // x: weight of the current frame; y: the layer top's height relative to the eye, blocks
 uniform vec2 DwHistory;
 
+// interleaved rays (fx_dustwall, DwInterleave): x 1 when on, y this frame's parity; DwLow: the full march lattice (width,
+// height). A pixel taking a ray this frame keeps history weight 1 − DwHistory.x (0.9, the pall's rule); one between rays
+// takes its history held to the depth-alike rays around it (the 4-neighbours of a checkerboard are all this frame's), or,
+// without history, their mean (the pall's interleave, PallPass.Step: 2 at most, 3–4 burnt a lattice into a still view)
+uniform vec4 DwInterleave;
+uniform vec2 DwLow;
 out vec4 fragColor;
+
+bool interleaved() {
+    return DwInterleave.x > 0.5;
+}
+
+// this frame's ray of march pixel c (half: 0 light, 1 depth moments); false where c took no ray this frame
+bool rayAt(ivec2 c, int half_, ivec2 inLow, out vec4 v) {
+    if (interleaved()) {
+        if (((c.x + c.y + int(DwInterleave.y + 0.5)) & 1) != 0) return false;
+        c.x = c.x >> 1;
+    }
+    v = texelFetch(Sampler0, c + ivec2(half_ * inLow.x, 0), 0);
+    return true;
+}
 
 vec4 valid(vec4 v) {
     return pallValid(v) ? v : vec4(0.0, 0.0, 0.0, 1.0);
@@ -45,32 +65,51 @@ float lattice(float x, float size, float n) {
 }
 
 void main() {
-    ivec2 p = ivec2(gl_FragCoord.xy), low = textureSize(Sampler0, 0), size = textureSize(Sampler2, 0);
-    low.x /= 2; // light and depth halves use the same spatial lattice
-    ivec2 offset = ivec2(p.x >= low.x ? low.x : 0, 0);
+    ivec2 p = ivec2(gl_FragCoord.xy), inLow = textureSize(Sampler0, 0), size = textureSize(Sampler2, 0);
+    inLow.x /= 2; // light and depth halves use the same spatial lattice
+    ivec2 low = interleaved() ? ivec2(DwLow + 0.5) : inLow;
+    int half_ = p.x >= low.x ? 1 : 0;
+    ivec2 offset = ivec2(half_ * low.x, 0);
     p -= offset;
-    vec4 cur = valid(texelFetch(Sampler0, p + offset, 0));
-    if (DwReproject.w < 0.5) {
-        fragColor = cur;
-        return;
-    }
+    vec4 raw;
+    bool traced = rayAt(p, half_, inLow, raw);
+    vec4 cur = traced ? valid(raw) : vec4(0.0, 0.0, 0.0, 1.0);
     vec2 at = min((vec2(p) + 0.5) * DwDiv, vec2(size) - 0.5);
     float here = pallScene(texelFetch(Sampler2, ivec2(at), 0).r);
-    // neighbourhood at the same world distance (a neighbour across an object's edge is another place)
-    vec4 m1 = cur, m2 = cur * cur;
-    float count = 1.0;
+    // neighbourhood at the same world distance (a neighbour across an object's edge is another place): this frame's rays
+    vec4 m1 = traced ? cur : vec4(0.0), m2 = traced ? cur * cur : vec4(0.0);
+    float count = traced ? 1.0 : 0.0;
     for (int k = 0; k < 9; k++) {
         if (k == 4) continue;
         ivec2 c = clamp(p + ivec2(k % 3 - 1, k / 3 - 1), ivec2(0), low - 1);
+        vec4 v;
+        if (!rayAt(c, half_, inLow, v)) continue;
         float there = pallScene(texelFetch(Sampler2, ivec2(min((vec2(c) + 0.5) * DwDiv, vec2(size) - 0.5)), 0).r);
         if (!pallSamePlace(there, here)) continue;
-        vec4 v = valid(texelFetch(Sampler0, c + offset, 0));
+        v = valid(v);
         m1 += v;
         m2 += v * v;
         count += 1.0;
     }
-    m1 /= count;
-    vec4 sd = sqrt(max(m2 / count - m1 * m1, 0.0));
+    // between rays without a depth-alike ray around: the nearest rays at any depth (a lone pixel across an edge)
+    if (count < 0.5) {
+        for (int k = 1; k < 9; k += 2) {
+            ivec2 c = clamp(p + ivec2(k % 3 - 1, k / 3 - 1), ivec2(0), low - 1);
+            vec4 v;
+            if (!rayAt(c, half_, inLow, v)) continue;
+            v = valid(v);
+            m1 += v;
+            m2 += v * v;
+            count += 1.0;
+        }
+    }
+    m1 /= max(count, 1.0);
+    vec4 sd = sqrt(max(m2 / max(count, 1.0) - m1 * m1, 0.0));
+    if (!traced) cur = count > 0.5 ? m1 : vec4(0.0, 0.0, 0.0, 1.0);
+    if (DwReproject.w < 0.5) {
+        fragColor = cur;
+        return;
+    }
     vec2 ndc = at / vec2(size) * 2.0 - 1.0;
     vec4 farPoint = InvViewProj * vec4(ndc, 1.0, 1.0);
     vec3 dir = normalize(farPoint.xyz / farPoint.w);
@@ -138,5 +177,6 @@ void main() {
     // to the neighbourhood's range, which always holds this pixel's own sample (a clear pixel among dusty neighbours was
     // pulled toward their dust)
     vec4 h = clamp(hs / ws, min(m1 - 1.5 * sd, cur), max(m1 + 1.5 * sd, cur));
-    fragColor = mix(h, cur, DwHistory.x);
+    // a pixel between rays this frame keeps its held history (weight 1 there: its ray comes next frame)
+    fragColor = traced ? mix(h, cur, DwHistory.x) : h;
 }

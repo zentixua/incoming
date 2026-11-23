@@ -12,6 +12,7 @@ S=mod/run/sandbox
 tools/sandbox.sh stop >/dev/null 2>&1
 mkdir -p $S/fx; echo "$FPT" > $S/fx/frames_per_tick
 if [ -n "${DW_DIV_SCALE:-}" ]; then echo "$DW_DIV_SCALE" > $S/fx/dustwall_div_scale; else rm -f $S/fx/dustwall_div_scale; fi
+if [ -n "${DW_INTERLEAVE:-}" ]; then echo "$DW_INTERLEAVE" > $S/fx/dustwall_interleave; else rm -f $S/fx/dustwall_interleave; fi
 tools/sandbox.sh start --size "$SIZE" "$@" || { echo "sandbox start failed"; exit 1; }
 O=$S/options.txt
 sed -i 's/^renderDistance:.*/renderDistance:32/' $O; grep -q '^renderClouds' $O && sed -i 's/^renderClouds:.*/renderClouds:"false"/' $O || echo 'renderClouds:"false"' >> $O

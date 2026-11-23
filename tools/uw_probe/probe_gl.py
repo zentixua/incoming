@@ -582,7 +582,7 @@ void main() {
     vec3 rd = normalize(Fwd + Right * uv.x * Tan + Up * uv.y * Tan / Aspect);
     float tEnd = rd.y < 0.0 ? DwEye.y / -rd.y : 60000.0;
     vec4 w = dwMarch(rd, tEnd, fract(0.37 + 0.618034 * gl_FragCoord.x + 0.414 * gl_FragCoord.y), Foot, int(Steps));
-    fragColor = Kinds > 1.5 ? vec4(gDwWhyHist[3], gDwWhyHist[5], gDwWhyHist[6], gDwWhyHq / max(gDwKinds.w, 1.0)) : Kinds > 0.5 ? gDwKinds : vec4(float(gDwSamples), float(gDwIters), float(gDwTailEvals), w.a);
+    fragColor = Kinds > 2.5 ? vec4(gDwFetches, 0.0, 0.0, 0.0) : Kinds > 1.5 ? vec4(gDwWhyHist[3], gDwWhyHist[5], gDwWhyHist[6], gDwWhyHq / max(gDwKinds.w, 1.0)) : Kinds > 0.5 ? gDwKinds : vec4(float(gDwSamples), float(gDwIters), float(gDwTailEvals), w.a);
 }
 """
 
@@ -729,6 +729,35 @@ def view_cost_variants(law):
 EXTRA_VARIANTS = [("old wide bound", "#define DW_BOUND_WIDE\n")]
 
 
+def fetch_counts(law):
+    """Texture fetches per ray of the judging view at +4 and +22 s (160 x 90 rays), per preset, for the shipped density and
+    with each young-density cut undone on its own (DW_KEEP_*): the cuts' worth by count."""
+    print("fetches per ray (judging view, +4 / +22 s), HIGH / MEDIUM / LOW")
+    R = 4500.0
+    pitch = np.radians(-6.0)
+    fwd = np.array([-np.cos(pitch), np.sin(pitch), 0.0]); right = np.array([0.0, 0.0, 1.0]); up = np.cross(right, fwd)
+    rows = []
+    for vname, defs in (("shipped", ""), ("three drift steps", "#define DW_KEEP_DRIFT3\n"), ("seeds everywhere", "#define DW_KEEP_SEEDS\n"),
+                        ("MEDIUM two taps", "#define DW_KEEP_MEDIUM_TAPS\n"), ("all three undone", "#define DW_KEEP_DRIFT3\n#define DW_KEEP_SEEDS\n#define DW_KEEP_MEDIUM_TAPS\n")):
+        p = program(VIEW_BODY, "new", "#define DW_DIAG\n" + defs)
+        g.glUseProgram(p); noise(p)
+        cells = []
+        for age in (4, 22):
+            bind_new(p, law, law.arrival_at(R) + age, (R, 120.0, 0.0))
+            g.glUniform4f(loc(p, "DwLife"), law.end, 0.05, 1.5, 2.0)
+            g.glUniform3f(loc(p, "Fwd"), *fwd); g.glUniform3f(loc(p, "Right"), *right); g.glUniform3f(loc(p, "Up"), *up)
+            g.glUniform1f(loc(p, "Tan"), np.tan(np.radians(23.0))); g.glUniform1f(loc(p, "Aspect"), 16 / 9)
+            g.glUniform1f(loc(p, "ForceF"), -1.0); g.glUniform1f(loc(p, "Kinds"), 3.0)
+            for name, steps_, foot, det in (("HIGH", 128, 0.0022, 0.0), ("MEDIUM", 104, 0.0027, 1.0), ("LOW", 96, 0.0033, 2.0)):
+                g.glUniform1f(loc(p, "Steps"), steps_); g.glUniform1f(loc(p, "Foot"), foot); g.glUniform1f(loc(p, "DwDetail"), det)
+                target(160, 90, [(g.GL_RGBA32F, g.GL_RGBA)])
+                quad(p)
+                cells.append(float(read(160, 90).reshape(-1, 4)[:, 0].mean()))
+        rows.append((vname, cells))
+        print(f"    {vname:18s} +4 s: " + " / ".join(f"{c:6.0f}" for c in cells[:3]) + "   +22 s: " + " / ".join(f"{c:6.0f}" for c in cells[3:]))
+    REPORT["fetches"] = rows
+
+
 def view_cost(law):
     """llvmpipe time of the judging view's march (160 x 90 rays, HIGH light), the blend window as shipped against the
     textured level alone (step 1) and the haze level alone, at +4, +22 and +60 s: what the window's dual evaluation costs."""
@@ -777,6 +806,8 @@ if "light" in which:
     light_levels(laws["1000"])
 if "variants" in which:
     view_cost_variants(laws["1000"])
+if "fetches" in which:
+    fetch_counts(laws["1000"])
 if "cost" in which:
     view_cost(laws["1000"])
 if "view" in which:

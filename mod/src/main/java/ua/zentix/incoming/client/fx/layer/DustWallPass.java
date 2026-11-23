@@ -101,6 +101,28 @@ public final class DustWallPass {
     private static boolean planB;
     private static long planBChecked = -1;
 
+    /**
+     * Interleaved rays (unified-wave 2c-i round 3): each frame marches half of the march pixels, a checkerboard alternating by
+     * frame, and the resolve fills the rest from history (the pall's {@code Step.interleave}, at 2: 3–4 burnt a lattice into a
+     * still view). On unless the file {@code fx/dustwall_interleave} holds 0 (the GPU run's full-ray comparison).
+     */
+    private static boolean interleave = true, builtInterleave;
+    private static long interleaveChecked = -1;
+    /** Width of the march target: the march lattice's, halved while interleaved. */
+    private static int marchW;
+
+    private static boolean interleaveOn() {
+        if (frame - interleaveChecked >= 30 || interleaveChecked < 0) {
+            interleaveChecked = frame;
+            try {
+                interleave = !"0".equals(java.nio.file.Files.readString(java.nio.file.Path.of("fx/dustwall_interleave")).trim());
+            } catch (Exception e) {
+                interleave = true;
+            }
+        }
+        return interleave;
+    }
+
     /** Only the haze level is left this frame ({@code NukePall.youngWall}): the march takes a quarter of the rays. */
     public static boolean hazeOnly;
 
@@ -226,7 +248,7 @@ public final class DustWallPass {
         try {
             // the march at low resolution into its own target
             GlStateManager._glBindFramebuffer(GL30.GL_DRAW_FRAMEBUFFER, fbo);
-            GlStateManager._viewport(0, 0, width, height);
+            GlStateManager._viewport(0, 0, marchW, height);
             GlStateManager._colorMask(true, true, true, true);
             RenderSystem.disableBlend();
             RenderSystem.disableDepthTest();
@@ -235,6 +257,7 @@ public final class DustWallPass {
             m.safeGetUniform("InvViewProj").set(INVERSE);
             m.safeGetUniform("PallForward").set(FORWARD.x, FORWARD.y, FORWARD.z);
             m.safeGetUniform("DwDiv").set((float) div);
+            m.safeGetUniform("DwInterleave").set(builtInterleave ? 1f : 0f, (float) (frame & 1), (float) width, 0f);
             m.safeGetUniform("DwFrame").set((float) (frame % 4096), (float) step.wallSteps());
             // the slot's terrain map and the outdoor-air window: the dust lies on the local ground, never indoors
             int ground = PallPass.groundMap(0);
@@ -281,7 +304,7 @@ public final class DustWallPass {
             // Pack both simultaneous outputs into one atlas. The two halves share
             // temporal weights, and all readers need only one texture unit.
             GlStateManager._glBindFramebuffer(GL30.GL_DRAW_FRAMEBUFFER, packedFbo);
-            GlStateManager._viewport(0, 0, 2 * width, height);
+            GlStateManager._viewport(0, 0, 2 * marchW, height);
             RenderSystem.setShaderTexture(0, target);
             RenderSystem.setShaderTexture(1, bounds);
             part = warming ? -1 : GPU_PACK.begin();
@@ -302,7 +325,10 @@ public final class DustWallPass {
                 r.safeGetUniform("InvViewProj").set(INVERSE);
                 r.safeGetUniform("PrevViewProj").set(PREVIOUS);
                 r.safeGetUniform("PallForward").set(FORWARD.x, FORWARD.y, FORWARD.z);
+                GlStateManager._viewport(0, 0, 2 * width, height);
                 r.safeGetUniform("DwDiv").set((float) div);
+                r.safeGetUniform("DwInterleave").set(builtInterleave ? 1f : 0f, (float) (frame & 1), 0f, 0f);
+                r.safeGetUniform("DwLow").set((float) width, (float) height);
                 r.safeGetUniform("DwPrevDiv").set((float) historyDiv[latest]);
                 r.safeGetUniform("DwReproject").set(dx, dy, dz, past ? 1f : 0f);
                 r.safeGetUniform("DwHistory").set(HISTORY, f.layerTop - f.eye[1]);
@@ -353,7 +379,8 @@ public final class DustWallPass {
         if (lattice < 0) lattice = lattice();
         int program = march.getId();
         boolean sameFrame = w == fullW && h == fullH && program == marchId;
-        boolean sameMarch = target >= 0 && sameFrame && d == div;
+        boolean il = interleaveOn();
+        boolean sameMarch = target >= 0 && sameFrame && d == div && il == builtInterleave;
         if (sameMarch && historyDiv[1 - latest] == d) return true;
         int draw = GlStateManager._getInteger(GL30.GL_DRAW_FRAMEBUFFER_BINDING);
         if (target < 0) {
@@ -368,16 +395,17 @@ public final class DustWallPass {
             }
         }
         boolean ok = true;
+        int mw = il ? (lw + 1) / 2 : lw;
         if (!sameMarch) {
-            attach(fbo, bounds, lw, lh, GlConst.GL_NEAREST, GL30.GL_COLOR_ATTACHMENT1);
-            attach(fbo, target, lw, lh, GlConst.GL_NEAREST, GL30.GL_COLOR_ATTACHMENT0);
+            attach(fbo, bounds, mw, lh, GlConst.GL_NEAREST, GL30.GL_COLOR_ATTACHMENT1);
+            attach(fbo, target, mw, lh, GlConst.GL_NEAREST, GL30.GL_COLOR_ATTACHMENT0);
             // GLSL 150 assigns the output locations at link time.
             int colour = GL30.glGetFragDataLocation(program, "fragColor");
             GL20.glDrawBuffers(colour == 0
                     ? new int[] {GL30.GL_COLOR_ATTACHMENT0, GL30.GL_COLOR_ATTACHMENT1}
                     : new int[] {GL30.GL_COLOR_ATTACHMENT1, GL30.GL_COLOR_ATTACHMENT0});
             ok = complete();
-            attach(packedFbo, packed, 2 * lw, lh, GlConst.GL_NEAREST, GL30.GL_COLOR_ATTACHMENT0);
+            attach(packedFbo, packed, 2 * mw, lh, GlConst.GL_NEAREST, GL30.GL_COLOR_ATTACHMENT0);
             ok &= complete();
         }
         // history is read between its pixels when the view turns: linear
@@ -396,6 +424,8 @@ public final class DustWallPass {
             return false;
         }
         marchId = program;
+        marchW = mw;
+        builtInterleave = il;
         width = lw;
         height = lh;
         fullW = w;
