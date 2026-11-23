@@ -16,6 +16,10 @@ and the reference at the same times, one fresh judge, done. The full procedure i
 new model of a phenomenon.
 
 ## 1. Inherit and fix the target (plan, before code)
+- Scope first, in Artem's words: what changes on screen and what stays old (which views, how long, under which
+  conditions). The lead echoes that boundary back to him before code; a boundary that moves later (a 10 s window
+  becoming 24 s) is a scope change reported to the lead, never a silent design choice. "The new X" means all of X
+  unless he says otherwise.
 - Collect what is already agreed about the phenomenon from its homes: its row in the design document
   (`docs/DESIGN-nuke.md` for the nuke), its area rule, the tests that guard earlier complaints, and Artem's own words
   quoted with their time. Approved look traits are decisions, not older items to drop; a lead's paraphrase is never a
@@ -70,6 +74,10 @@ per lag, so shorten `--lag` for fast fronts) and from the law.
   consecutive full-rate frame strips at the fixed times, the flicker map and the numbers for both sides, the reference
   and the traits, never the author's notes, and rates flicker explicitly. Stills never pass motion. Codex reviews the
   code only.
+- Done means the player's conditions, not the judging scene: clips of the smallest and largest yield (or size), over
+  land and over water, several at once, the full duration including any handoff, a second view, his servers' settings
+  (scale preset, wave speed). Each shows the new model. The PR lists every condition under which an older model of
+  the phenomenon still draws: none, or the lead's recorded agreement (AGENTS.md: such a fallback is serious).
 - Under a shader pack the effect works and looks at least as good (AGENTS.md); one check on the last head, which does
   not replace a pack-specific functional test.
 
