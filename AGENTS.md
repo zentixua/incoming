@@ -46,8 +46,8 @@ instructions: work in a worktree from `origin/main`.
 - Never delete what your task did not create (worlds, saves, files, worktrees) without Artem's word; move surplus
   aside (`deploy.sh` uses `incoming-backup/`).
 - **Act as the engineer, finish without questions** (Artem, 04.11): Artem sets goals as a player; we decide how and
-  take obvious engineering steps without waiting. Once the applicable checks pass, merge your PR after green Итог and
-  review (workflow below). Ask Artem only what team.md reserves for his word.
+  take obvious engineering steps without waiting and merge your own PRs (workflow below). Ask Artem only what team.md
+  reserves for his word.
 - **Plans are targets, not decisions** (Artem, 03.11, 20.11): a clearly better way found mid-work, even a fundamental
   rewrite of an existing feature, is taken without asking and recorded in the PR. Limits: the concept below, public
   steps by Artem's word.
@@ -260,8 +260,9 @@ queues, little rework; each mission's budget is checked against its measured loa
   laws, rendering, performance, concurrency, and reviews of such changes. **low** for mechanical work: renames,
   moving or copying text, routine checks, collecting files or logs. Above high only when high demonstrably failed on
   that task (a missed serious error or a wrong result), stated in the PR or report.
-- **Author or explicitly accepted work owner merges** (who owns a task in the team: open-skies `team.md`): green Итог (sole required check), review without serious errors. No repeated verification by
-  someone else; CI-missed bugs get tests, not extra manual steps.
+- **Author or explicitly accepted work owner merges** (task owner: open-skies `team.md`): after review
+  without serious errors, `gh pr merge --auto --squash` (lands on green Итог, the sole required check). No repeated
+  verification by someone else; CI-missed bugs get tests, not extra manual steps.
 - End commits with your own agent's name/address in `Co-Authored-By:`, never another agent's.
 - Community standards versus our tools/replacements: `docs/dev-pipeline.md`.
 
