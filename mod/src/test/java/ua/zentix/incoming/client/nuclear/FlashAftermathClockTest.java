@@ -57,13 +57,13 @@ class FlashAftermathClockTest {
     void stalledFrontStillAllowsEmissionAndControlsExpiry() throws Exception {
         var clock = new ClientNuclear.AgeClock(0, true);
         clock.anchor(0);
-        for (int tick = 0; tick < 11; tick++) {
+        for (int tick = 0; tick < 2400; tick++) {
             clock.tick();
             SmokeGrid.tick();
         }
-        assertEquals(3, clock.shown(), 1e-9);
-        Puffs smoke = probeHay(clock, new Vec3(0, 64, 0), distance -> 10, 11);
-        assertEquals(1, smoke.size(), "hay still emits at age 3 with the front arriving at age 10");
+        assertEquals(200, clock.shown(), 1e-9);
+        Puffs smoke = probeHay(clock, new Vec3(0, 64, 0), distance -> 205, 11);
+        assertEquals(1, smoke.size(), "hay still emits at the lead brake with the front arriving at 205");
 
         double width = smoke.puffGrowth(SmokeGrid.seconds(0));
         for (int tick = 0; tick < 40; tick++) {
@@ -75,14 +75,14 @@ class FlashAftermathClockTest {
         assertEquals(1, smoke.size(), "the local smoke clock ran two more seconds during the stall");
         assertEquals(width, smoke.puffGrowth(SmokeGrid.seconds(0)), 1e-9);
 
-        for (int anchor = 1; anchor <= 20 && clock.shown() < 10; anchor++) {
+        for (int anchor = 1; anchor <= 200 && clock.shown() < 205; anchor++) {
             clock.anchor(anchor);
             clock.tick();
             SmokeGrid.tick();
             smoke.emit(SmokeGrid.seconds(0), sink);
-            assertEquals(clock.shown() < 10 ? 1 : 0, smoke.size(), "shown age " + clock.shown());
+            assertEquals(clock.shown() < 205 ? 1 : 0, smoke.size(), "shown age " + clock.shown());
         }
-        assertTrue(clock.shown() >= 10, "the resumed front reaches the hay");
+        assertTrue(clock.shown() >= 205, "the resumed front reaches the hay");
     }
 
     @Test

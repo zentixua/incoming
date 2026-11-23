@@ -22,6 +22,7 @@ import ua.zentix.incoming.nuclear.radiation.Shielding;
 import java.util.HashMap;
 import java.util.IdentityHashMap;
 import java.util.Map;
+import java.util.List;
 
 /**
  * Shock-wave dust wall up close. While the wall head is within {@link #NEAR} of the camera, scraps of litter and material torn
@@ -186,26 +187,27 @@ public final class NukeDust {
         }
     }
 
+    static void received() {
+        packets++;
+    }
+
     /**
      * Blocks demolished by the wave (server to chunk viewers, {@code S2C.NukeDebris}: sampled locations and total demolished
      * count): each sampled location breaks into initially stationary pieces of its material when reached by the front, then local wind behind
      * the front carries them ({@link BlastGust}); sparser at distance. Pulverized masonry dust forms a downwind
      * streak ({@link BlastDust}): mass accounts for every demolished location represented by the sample.
      */
-    static void debris(ClientNuclear.Active a, S2C.NukeDebris packet) {
+    static void debris(ClientNuclear.Active a, WaveEvents.Receipt batch, List<S2C.NukeDebris.Piece> pieces) {
         ClientLevel level = Minecraft.getInstance().level;
         if (level == null) return;
         Detonation d = a.d;
-        double now = a.ticks(0), weight = packet.weight();
+        double weight = batch.packet().weight();
         Vec3 eye = Minecraft.getInstance().gameRenderer.getMainCamera().getPosition();
         // breach dust: clustered by cells near the camera, farther away one per chunk (mass, center and position spread)
         Map<Long, double[]> heaps = new HashMap<>();
-        packets++;
-        for (S2C.NukeDebris.Piece p : packet.pieces()) {
+        for (S2C.NukeDebris.Piece p : pieces) {
             Vec3 c = Vec3.atCenterOf(p.pos());
-            double wait = d.arrivalTicks(c.distanceTo(d.burst())) - now;
-            if (wait < -DEBRIS_LATE) continue;
-            int delay = Mth.clamp((int) Math.ceil(wait), 0, Fragments.DELAY_MAX);
+            if (ClientNuclear.DIAG) ClientNuclear.eventTrace(a, batch, d.arrivalTicks(c.distanceTo(d.burst())), "apply", "debris");
             BlastGust gust = BlastGust.at(a, c);
             Fragments.Kind kind = Fragments.Kind.of(level, p.pos(), p.state());
             double dist = c.distanceTo(eye);
@@ -215,7 +217,7 @@ public final class NukeDust {
             places++;
             for (int i = 0; i < n; i++) {
                 if (Fragments.torn(level, p.state(), p.pos(), kind, c.x + (RANDOM.nextDouble() - 0.5) * 0.6, c.y + (RANDOM.nextDouble() - 0.5) * 0.6,
-                        c.z + (RANDOM.nextDouble() - 0.5) * 0.6, 0, 0, 0, 0.25f + 0.35f * RANDOM.nextFloat(), gust, delay, !ground(p.state()))) TORN[kind.ordinal()]++;
+                        c.z + (RANDOM.nextDouble() - 0.5) * 0.6, 0, 0, 0, 0.25f + 0.35f * RANDOM.nextFloat(), gust, 0, !ground(p.state()))) TORN[kind.ordinal()]++;
             }
             if (dist > NEAR || kind != Fragments.Kind.CHUNK) continue;
             // masonry crumbles into dust — stone, brick, concrete; wood, ice and metal do not; natural soil and rock are dust of

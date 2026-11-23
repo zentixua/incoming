@@ -122,6 +122,9 @@ Particles and the effects layer: `client-fx.md`; models: `client-models.md`; sou
   wind lean on front arrival (`BodySway`: hit from G&D blast loading, immediate lean rate `jolt`; `CameraShake.sway`
   from body-front arrival including tick fraction), EFX deafness, Geiger counter, countdowns/alarm, two-step launch).
 
+The nuclear renderer reads the live presentation clock at the frame fraction. Replay samples Flashback once at
+frame start, including export frames. Clock limits and diagnostics are in `nuclear.md`, replay positions in `replay.md`.
+
 ## Pitfalls
 - `ClientLevel` calculates sky darkness (`Level.skyDarken`, `updateSkyBrightness`) only in constructor on world entry:
   client `getMaxLocalRawBrightness(pos)` stays daytime all evening. Time-of-day sky light at eye:

@@ -33,7 +33,29 @@ public final class Replay {
     /** Live and past event counts per type (for replay scenario). */
     private static final Map<String, int[]> COUNTS = new LinkedHashMap<>();
     private static int waited;
-    private static boolean warned;
+    private static boolean warned, opened;
+    private static RecordedBursts births;
+    private static double position;
+
+    public static double position() {
+        return position;
+    }
+
+    public static void frame(net.neoforged.neoforge.client.event.RenderFrameEvent.Pre event) {
+        if (opened) position = FlashbackReplay.position(Minecraft.getInstance().getSingleplayerServer(), MARKERS.place);
+    }
+
+    public static double birth(int id, long gameTime, long age) {
+        openClock();
+        return births == null ? MARKERS.place - age : births.birth(id, gameTime, MARKERS.place - age);
+    }
+
+    private static void openClock() {
+        if (opened) return;
+        opened = true;
+        var recording = FlashbackReplay.recording(Minecraft.getInstance().getSingleplayerServer());
+        if (recording != null) births = new RecordedBursts(recording.path(), recording.id());
+    }
 
     private record Pending(String kind, BooleanConsumer action) {}
 
@@ -55,8 +77,11 @@ public final class Replay {
      * Replay server end-of-tick marker: prior events become live or past; first playback marker after seek calls
      * {@code rewound} first (everything before seeking belongs to another recording position).
      */
-    public static void marker(int place, boolean seeking, Runnable rewound) {
+    public static void marker(int place, boolean seeking, Runnable seekStarted, Runnable rewound) {
+        openClock();
+        position = place;
         Markers.Verdict v = MARKERS.next(place, seeking);
+        if (MARKERS.interrupted) seekStarted.run();
         if (v == Markers.Verdict.SETTLED) rewound.run();
         flush(v == Markers.Verdict.LIVE);
     }
@@ -79,6 +104,10 @@ public final class Replay {
     public static void reset() {
         PENDING.clear();
         MARKERS.reset();
+        if (births != null) births.close();
+        births = null;
+        opened = false;
+        position = 0;
         waited = 0;
     }
 
@@ -142,11 +171,13 @@ public final class Replay {
         /** Consecutive playback markers, up to {@code SETTLE + 1}. */
         private int streak;
         private int place;
+        private boolean interrupted;
         long count;
 
         Verdict next(int place, boolean seeking) {
             int moved = place - this.place;
             boolean clean = count > 0 && !seeking && moved >= 0 && moved <= STEP;
+            interrupted = !clean && streak > 0;
             streak = clean ? Math.min(streak + 1, SETTLE + 1) : 0;
             this.place = place;
             count++;
@@ -160,6 +191,7 @@ public final class Replay {
 
         void reset() {
             streak = 0;
+            place = 0;
             count = 0;
         }
     }
