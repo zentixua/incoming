@@ -259,8 +259,8 @@ queues, little rework; each mission's budget is checked against its measured loa
   laws, rendering, performance, concurrency, and reviews of such changes. **low** for mechanical work: renames,
   moving or copying text, routine checks, collecting files or logs. Above high only when high demonstrably failed on
   that task (a missed serious error or a wrong result), stated in the PR or report.
-- **The task owner merges** (open-skies `team.md`): once all but Итог holds (review fixes and probe pushed, bench
-  in, flagged looks answered), `gh pr ready` and `gh pr merge --auto --squash`; it lands on green Итог (sole required
+- **The task owner merges** once every condition but Итог holds (review fixes and probe pushed, any needed
+  bench in and answered): `gh pr ready` and `gh pr merge --auto --squash`; it lands on green Итог (sole required
   check; if behind `main`, `gh pr update-branch`). No repeat checks by others; CI-missed bugs get tests, not manual
   steps.
 - End commits with your own agent's name/address in `Co-Authored-By:`, never another agent's.
