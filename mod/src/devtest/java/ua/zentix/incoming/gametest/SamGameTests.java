@@ -76,7 +76,7 @@ import java.util.UUID;
 @PrefixGameTestTemplate(false)
 public final class SamGameTests {
     /** SAM on the runway "runway": the ground of the runway is y 3, Shahed fly over it at +Z to its end (z 200). */
-    private static final BlockPos SAM = new BlockPos(16, 4, 100);
+    static final BlockPos SAM = new BlockPos(16, 4, 100);
     /** The height of Shahed above the beginning of the site. */
     private static final int DRONE_Y = 50;
     /** The middle of the site “range” and its ground (first air - y 11). */
@@ -501,7 +501,7 @@ public final class SamGameTests {
     }
 
     /** Shahed, flying out of world from {@code from} to {@code to}; removed after inspection. */
-    private static DroneEntity virtualDrone(GameTestHelper h, Vec3 from, Vec3 to, @Nullable UUID owner) {
+    static DroneEntity virtualDrone(GameTestHelper h, Vec3 from, Vec3 to, @Nullable UUID owner) {
         ServerLevel level = h.getLevel();
         DroneEntity d = ModEntities.DRONE.get().create(level);
         d.launch(from, new Target.Point(to), to, owner);
@@ -587,7 +587,7 @@ public final class SamGameTests {
      *  (using it, {@link Sides} recognizes the team of the SAM owner; the server GameTest does not have a profile cache). Without tickets and packages;
      *  the chat lines that he received are in {@link #heard}. Removed after inspection.
      */
-    private static Listener listener(GameTestHelper h, String name, BlockPos at) {
+    static Listener listener(GameTestHelper h, String name, BlockPos at) {
         ServerLevel level = h.getLevel();
         Listener p = new Listener(level, name);
         p.moveTo(Vec3.atBottomCenterOf(h.absolutePos(at)));
@@ -613,7 +613,7 @@ public final class SamGameTests {
         }
     }
 
-    private static final class Listener extends FakePlayer {
+    static final class Listener extends FakePlayer {
         final List<Component> heard = new ArrayList<>();
 
         Listener(ServerLevel level, String name) {

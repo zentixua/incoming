@@ -41,7 +41,7 @@ import java.util.UUID;
  * ({@link AirAlert}) and side reconnaissance ({@link Sightings}) learn of hostile targets, fire control ({@link
  * FireControl}) launches one missile at the nearest free target, and nearby friendlies receive the radar screen
  * ({@link S2C.RadarScope}). Loads no chunks: radar uses the world projectile list; missile flight is {@link
- * Interceptor}.
+ * Interceptor}. The sweep also sets the redstone alarm ({@link #alarm}).
  */
 public class SamBlockEntity extends BlockEntity {
     /** Radar sweeps the sky once per this many ticks; launches no more often. */
@@ -71,6 +71,11 @@ public class SamBlockEntity extends BlockEntity {
     private int lastTracks, lastHostile;
     /** Sky above the SAM is blocked: it does not fire under a roof. */
     private boolean covered;
+    /**
+     * Redstone alarm ({@link SamBlock#getSignal}): the latest sweep saw a hostile projectile, whether or not the SAM
+     * would fire at it. Saved, so a reloaded chunk powers its neighbours as it did when saved until the next sweep.
+     */
+    private boolean alarm;
 
     public SamBlockEntity(BlockPos pos, BlockState state) {
         super(ModBlockEntities.SAM.get(), pos, state);
@@ -103,6 +108,11 @@ public class SamBlockEntity extends BlockEntity {
     /** Insert missiles into storage; returns what did not fit. */
     public ItemStack load(ItemStack stack) {
         return stock.load(stack);
+    }
+
+    /** The latest radar sweep saw a hostile projectile: redstone alarm on. */
+    public boolean alarm() {
+        return alarm;
     }
 
     /** Comparator signal follows storage fullness. */
@@ -169,6 +179,7 @@ public class SamBlockEntity extends BlockEntity {
             if (side != null) Sightings.spot(level, side, t.projectile(), Sightings.Source.RADAR);
         }
         AirAlert.sweep(level, owner, side, tracks);
+        setAlarm(level, pos, lastHostile > 0);
         // Open sky above the SAM (its chunk is ready because it ticks): a missile launches upward and would burst against a roof.
         covered = Terrain.height(level, Heightmap.Types.MOTION_BLOCKING, pos.getX(), pos.getZ()) > pos.getY() + 1;
         if (ready > 0 && !covered) {
@@ -180,6 +191,14 @@ public class SamBlockEntity extends BlockEntity {
             }
         }
         scope(level, antenna, tracks);
+    }
+
+    /** Redstone alarm follows the sweep; neighbours learn of a change on the same tick (weak power reaches only them). */
+    private void setAlarm(ServerLevel level, BlockPos pos, boolean on) {
+        if (alarm == on) return;
+        alarm = on;
+        setChanged();
+        level.updateNeighborsAt(pos, getBlockState().getBlock());
     }
 
     /** Center of rail {@code k}'s canister: the missile stands at full length inside and launches upward. */
@@ -217,6 +236,7 @@ public class SamBlockEntity extends BlockEntity {
         tag.put("stock", stock.serializeNBT(registries));
         tag.putInt("ready", ready);
         tag.putInt("reload", reload);
+        tag.putBoolean("alarm", alarm);
     }
 
     @Override
@@ -226,5 +246,6 @@ public class SamBlockEntity extends BlockEntity {
         if (tag.contains("stock")) stock.deserializeNBT(registries, tag.getCompound("stock"));
         ready = tag.getInt("ready");
         reload = tag.getInt("reload");
+        alarm = tag.getBoolean("alarm");
     }
 }

@@ -22,7 +22,10 @@ paths:
   (`Capabilities.ItemHandler.BLOCK`: hopper, Create funnel) inserts only, no extraction; rails (`rails`) fill from stock one at
   a time per `reload_seconds`; sky sweeps every `SWEEP` ticks, staggered by block position; no firing under a roof
   (its ready chunk's heightmap is above the block); broken or exploded, it drops stock and rail missiles (`onRemove`),
-  the block itself drops by loot table (`survives_explosion`); comparator reads stock.
+  the block itself drops by loot table (`survives_explosion`); comparator reads stock. Redstone alarm
+  (`SamBlockEntity.alarm`, saved): weak power 15 from every face while the latest sweep saw any hostile track
+  (engageable or not; a roof blinds the radar, so no alarm under one), neighbours updated on the sweep tick that changes
+  it; frozen with its chunk (`RedstoneGameTests`).
 - Air defense uses its own game model (Artem's decision, 21.10): ranges, missile flight and fuze are game numbers in
   `InterceptorSpec`, not data or laws of a real system (guidance, radar equation and kill probability are not modeled).
 - Separate parts, reusable by a portable SAM: `Radar` (only world projectiles in `StrikeWorld.projectiles`, one snapshot

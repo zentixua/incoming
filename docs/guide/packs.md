@@ -195,3 +195,34 @@ With LuckPerms, for example:
 /lp group veterans permission set incoming.launch.nuke true
 /lp group veterans permission set incoming.nuclear true
 ```
+
+## Redstone
+
+Two blocks give redstone, so contraptions and computers react without any script. Both give weak power of strength 15
+from all six sides, like a daylight detector: dust, repeaters, lamps, pistons, doors, Create's Redstone Link and
+ComputerCraft's `redstone.getInput(side)` next to them read it; it does not pass through the block they touch. Neighbours
+learn of a change on the tick it happens. It works the same in single-player, a LAN world and on a dedicated server.
+
+| Block | Signal on | Signal off |
+|---|---|---|
+| SAM | its radar's latest sweep (every half second) saw a hostile projectile, whether or not it would fire at it | no hostile projectile in its radar's sight; a solid roof over it blinds it |
+| Transformer Substation | it works (hums) | it is knocked out (sparks and burning oil), until power starts coming back to its area |
+
+- The SAM's comparator output is still its stock. A SAM without an owner counts every projectile hostile; one without
+  missiles still gives the signal. Details: [Defense](defense.md#redstone).
+- The substation's signal follows the substation itself, not its district: another substation's outage over it leaves
+  it on. Details: [Blackout](blackout.md).
+- A block in an unloaded chunk keeps the signal it was saved with and updates within a second once its chunk works
+  again.
+
+A bunker door that closes on alarm, with Create: put a Redstone Link (transmitter) against the SAM and a receiver on
+the same frequency at the bunker. The receiver powers a Gearshift between the shaft and a Mechanical Piston that holds
+the door wall: while hostile targets are in the air the gearshift reverses the rotation and the wall slides shut; when
+the sky is clear it opens again. A ComputerCraft computer with the SAM behind it can do the same in a script:
+
+```lua
+while true do
+  os.pullEvent("redstone")
+  print(redstone.getInput("back") and "Air raid" or "Sky clear")
+end
+```

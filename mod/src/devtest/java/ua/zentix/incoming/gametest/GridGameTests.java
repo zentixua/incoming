@@ -97,8 +97,8 @@ import java.util.stream.Collectors;
 @GameTestHolder(Incoming.MOD_ID)
 @PrefixGameTestTemplate(false)
 public final class GridGameTests {
-    private static final BlockPos CENTER = new BlockPos(32, 12, 32);
-    private static final TicketType<ChunkPos> HOLD = TicketType.create("incoming_test_grid_hold", Comparator.comparingLong(ChunkPos::toLong));
+    static final BlockPos CENTER = new BlockPos(32, 12, 32);
+    static final TicketType<ChunkPos> HOLD = TicketType.create("incoming_test_grid_hold", Comparator.comparingLong(ChunkPos::toLong));
 
     private GridGameTests() {}
 
@@ -106,7 +106,7 @@ public final class GridGameTests {
      * Disabling other checks - the lights are on in all blocks now, so that they don’t turn off the site in the middle of this
      *  (with the spread of the team, the site block would remain dark until 10 s - longer than the period of other checks).
      */
-    private static void quiet(ServerLevel level) {
+    static void quiet(ServerLevel level) {
         Blackouts.restore(level, null, 0, 0);
         // substations of other checks remain in the world: a nuclear strike from this one would knock them out (batch order - by name hash)
         PowerGrid grid = PowerGrid.get(level);
@@ -1442,7 +1442,7 @@ public final class GridGameTests {
      * Keep a chunk and its neighbors and load them immediately (from disk or generation): the GameTest server on CI ticks
      *  tens of times faster than the game, and the test period passes before the background loading.
      */
-    private static void hold(ServerLevel level, ChunkPos p) {
+    static void hold(ServerLevel level, ChunkPos p) {
         level.getChunkSource().addRegionTicket(HOLD, p, 2, p);
         for (int dx = -1; dx <= 1; dx++) {
             for (int dz = -1; dz <= 1; dz++) level.getChunk(p.x + dx, p.z + dz);
@@ -1507,7 +1507,7 @@ public final class GridGameTests {
      *  (queue {@code unloadQueue}) only during the remaining tick time - as any live server does.
      *  Here this time is given to it: one unloading pass per waiting step.
      */
-    private static void unloaded(GameTestHelper h, ServerLevel level, ChunkPos p) {
+    static void unloaded(GameTestHelper h, ServerLevel level, ChunkPos p) {
         level.getChunkSource().tick(() -> true, false);
         var holder = level.getChunkSource().chunkMap.getVisibleChunkIfPresent(p.toLong());
         h.assertTrue(holder == null, "chunk not unloaded: level " + (holder == null ? 0 : holder.getTicketLevel()));

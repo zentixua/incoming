@@ -356,7 +356,7 @@ round and detonation events with no Almighty change. Add to the note: the grid a
 | 2 | A2 command results, `status`, `tag` | done | #744 |
 | 3 | B1 permission nodes behind one policy | done | #745 |
 | 4 | A3 advancements and statistics | done | #746 |
-| 5 | A4 redstone from the SAM and the substation | planned | |
+| 5 | A4 redstone from the SAM and the substation | done | #747 |
 | 6 | B4 world rules by command | planned | |
 | 7 | C2 common tags in recipes, C3 Geiger counter recipe and pack-author documentation | planned | |
 | 8 | E Almighty note update | planned | |

@@ -9,6 +9,7 @@ import ua.zentix.incoming.util.Terrain;
 /**
  * Substation blocks follow the grid: knocked out — {@code powered=false} until power restoration starts in their area;
  * standing where a nuclear blast destroyed the grid ({@link PowerGrid#destroyed}) — for as long as that zone has no power.
+ * {@code powered} is the block's redstone output ({@link SubstationBlock#getSignal}): a change notifies its neighbours.
  */
 final class Substations {
     private Substations() {}
@@ -24,6 +25,8 @@ final class Substations {
             boolean powered = grid.downOutage(node.id(), now).isEmpty() && !grid.destroyed(pos.getX() >> 4, pos.getZ() >> 4, now);
             if (state.getValue(SubstationBlock.POWERED) != powered) {
                 level.setBlock(pos, state.setValue(SubstationBlock.POWERED, powered), ChunkLights.FLAGS);
+                // FLAGS skip neighbour updates (lamps change in bulk): redstone beside the substation must learn of it now
+                level.updateNeighborsAt(pos, state.getBlock());
             }
         }
     }

@@ -25,7 +25,8 @@ import ua.zentix.incoming.net.ClientHooks;
 /**
  * Transformer substation: when placed, a grid node of radius {@code grid.node_radius}; a nearby strike knocks it out,
  * and its area goes dark in a cascade ({@link Blackouts}). Working — hums; knocked out — sparks and smokes until power
- * is restored. The grid sets {@code powered} ({@link Substations#sync}); players do not change it.
+ * is restored. The grid sets {@code powered} ({@link Substations#sync}); players do not change it. Redstone: weak
+ * power 15 from every face while {@code powered} (the substation works), none while knocked out.
  */
 public class SubstationBlock extends HorizontalDirectionalBlock {
     public static final MapCodec<SubstationBlock> CODEC = simpleCodec(SubstationBlock::new);
@@ -77,6 +78,22 @@ public class SubstationBlock extends HorizontalDirectionalBlock {
             if (node != null && node.block()) grid.removeNode(node.id());
         }
         super.onRemove(state, level, pos, newState, movedByPiston);
+    }
+
+    /** Working-state output: dust connects, adjacent redstone reads it ({@link #getSignal}). */
+    @Override
+    protected boolean isSignalSource(BlockState state) {
+        return true;
+    }
+
+    /**
+     * Weak power 15 from every face while the substation works ({@code powered}), like a daylight detector: it powers
+     * what touches it, not through that block. It tells whether this node works, not whether its district is lit: an
+     * outage of another node does not knock it out. {@link Substations#sync} notifies neighbours when it changes.
+     */
+    @Override
+    protected int getSignal(BlockState state, BlockGetter level, BlockPos pos, Direction direction) {
+        return state.getValue(POWERED) ? 15 : 0;
     }
 
     /** Block is a knocked-out substation (unpowered). */

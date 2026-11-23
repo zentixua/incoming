@@ -104,3 +104,20 @@ Without Create, use a clock in the SAM and a comparator in the interceptor inste
    clear the space above it to see the counts. Stock alone cannot fire until a missile reaches a rail.
 
 Missiles cannot be taken back out, but a broken SAM drops its stock and ready missiles.
+
+### Redstone
+
+The SAM gives a redstone signal while its radar sees a hostile target: strength 15 from every side, like a daylight
+detector. It powers dust, lamps, pistons, doors and the redstone inputs of Create and ComputerCraft blocks next to it,
+not through the block it touches. Through a redstone torch the signal inverts: iron doors fed by the torch stand open
+while the sky is clear and shut on alarm (more examples in [For server owners and pack makers](packs.md#redstone)).
+
+- It comes on within half a second of a hostile target appearing on the radar and goes off within half a second of the
+  last one leaving it, being shot down or exploding.
+- Every hostile target the radar sees counts, also the ones it does not fire at: an ICBM, Grad rockets, targets beyond
+  its 1.5 km firing range. Projectiles of its owner and the owner's team never turn it on. A SAM placed by command,
+  without an owner, counts every projectile it sees.
+- It works without missiles. Under a solid roof the radar sees nothing, so there is no signal; leaves do not hide the
+  sky from the radar.
+- A comparator next to the SAM still shows how full its stock is.
+- In an unloaded chunk the SAM keeps the signal it had and looks again within half a second once its chunk works.
