@@ -1,5 +1,6 @@
 // Resolved wall light and the corresponding occupied view-depth span. Both are
 // premultiplied by coverage during filtering. Depth is in blocks along the view axis.
+// Consumers ignore light.rgb and depth when light.a == 1 (full transmission).
 struct WallLayer {
     vec4 light;
     vec3 depth;
@@ -83,6 +84,9 @@ WallLayer wallLayer(sampler2D atlas, sampler2D scene, vec2 pixel, float here, fl
             }
         }
         if (weights > 0.0) break;
+        // A zero-weight tap can still contribute 0 * NaN. Start the other class clean.
+        sum = vec4(0.0);
+        depths = vec3(0.0);
     }
     if (weights > 0.0) {
         wall.light = sum / weights;
