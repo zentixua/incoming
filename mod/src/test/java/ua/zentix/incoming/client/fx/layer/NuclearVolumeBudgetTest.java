@@ -206,7 +206,7 @@ class NuclearVolumeBudgetTest {
                     }
                     return null;
                 });
-                for (String name : List.of("march", "froxel", "froxelSum", "footLighting", "mushTaus", "shadow", "resolve", "mix", "composite")) {
+                for (String name : List.of("march", "singleMarch", "froxel", "froxelSum", "footLighting", "mushTaus", "shadow", "resolve", "mix", "composite")) {
                     shader(PallPass.class, name, name);
                 }
                 for (String name : List.of("march", "pack", "resolve")) shader(DustWallPass.class, name, "wall." + name);
@@ -223,7 +223,7 @@ class NuclearVolumeBudgetTest {
                 when(DustWallPass.march.safeGetUniform("DwDiv")).thenReturn(divisor);
                 when(DustWallPass.march.safeGetUniform("DwFrame")).thenReturn(frame);
                 List<String> all = List.of("shadow", "footLighting", "mushTaus", "froxel", "froxelSum", "march",
-                        "resolve", "mix", "composite", "wall.march", "wall.pack", "wall.resolve", "layer", "composite");
+                        "resolve", "mix", "composite", "singleMarch", "wall.march", "wall.pack", "wall.resolve", "layer", "composite");
                 PallPass.beginFrame(PallPass.Quality.HIGH);
                 assertFalse(PallPass.available());
                 assertFalse(PallPass.draw(PallPass.warmupFrame(), 8, new Matrix4f(), new Matrix4f(), Vec3.ZERO, new Vector4f()));
@@ -318,6 +318,37 @@ class NuclearVolumeBudgetTest {
                 storage.close();
             }
         }
+    }
+
+    @Test
+    void singleBurstRayRequiresExactlyTheMediaItDraws() {
+        PallPass.Frame f = new PallPass.Frame();
+        f.dustWall.active = true;
+        f.young.w = 800;
+        f.slot0.m13(1);
+        f.water0.zero();
+        f.mushroomCount = 1;
+        assertTrue(f.singleRay(false));
+        assertFalse(f.singleRay(true), "conventional smoke in the same frame");
+        f.whirlShape.m31(0.1f);
+        assertFalse(f.singleRay(false), "whirl in the last column");
+        f.whirlShape.zero();
+        f.water0.z = 0.1f;
+        assertFalse(f.singleRay(false), "water surge without a water map");
+        f.water0.z = 0;
+        f.water0.w = 1;
+        assertFalse(f.singleRay(false), "spray");
+        f.water0.w = 0;
+        f.slot1.m13(1);
+        assertFalse(f.singleRay(false), "second active slot");
+        f.slot1.zero();
+        f.mushroomCount = 2;
+        assertFalse(f.singleRay(false), "second body outside the pall slots");
+        f.mushroomCount = 0;
+        assertFalse(f.singleRay(false), "a wall without a body");
+        f.mushroomCount = 1;
+        f.young.w = 0;
+        assertFalse(f.singleRay(false), "disabled handoff");
     }
 
     @Test

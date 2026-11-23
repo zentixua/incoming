@@ -26,6 +26,7 @@ import org.lwjgl.opengl.GL12;
 import org.lwjgl.opengl.GL13;
 import ua.zentix.incoming.client.nuclear.NukeBallSurface;
 import org.lwjgl.opengl.GL15;
+import org.lwjgl.opengl.GL20;
 import org.lwjgl.opengl.GL30;
 import org.lwjgl.opengl.GL33;
 import org.lwjgl.opengl.GLCapabilities;
@@ -510,6 +511,13 @@ public final class PallPass {
         public final float[] mushrooms = new float[MushroomField.WIDTH * MushroomField.ROWS * 4];
         public int mushroomCount;
 
+        /** The single-burst program keeps the original depth order, including Wilson shells and a partial soil handoff. */
+        boolean singleRay(boolean blastSmoke) {
+            return dustWall.active && young.w > 0 && slot0.m13() > 0.5f && slot1.m13() == 0 && !fire1.on()
+                    && water0.w == 0 && water0.z == 0 && mushroomCount == 1 && !blastSmoke
+                    && whirlShape.m01() == 0 && whirlShape.m11() == 0 && whirlShape.m21() == 0 && whirlShape.m31() == 0;
+        }
+
         private boolean hasLitFoot() {
             for (int k = 0; k < mushroomCount; k++) {
                 int at = k * MushroomField.WIDTH * 4;
@@ -545,7 +553,7 @@ public final class PallPass {
     }
 
     @Nullable
-    static ShaderInstance march, resolve, composite, shadow, footLighting, mushTaus, froxel, froxelSum, mix;
+    static ShaderInstance singleMarch, march, resolve, composite, shadow, footLighting, mushTaus, froxel, froxelSum, mix;
     static final int FOOT_LIGHT_AZ = 64, FOOT_LIGHT_R = 16, FOOT_LIGHT_H = 32;
     /** Mushroom mean depth grid ({@code fx_mush_taus}): cells across x and z and height layers per mushroom, two blocks each. */
     static final int MUSH_TAU_N = 48;
@@ -852,6 +860,9 @@ public final class PallPass {
         SmokePass.begin();
         if (f.smoke != null) SmokePass.fill(f.smoke);
 
+        ShaderInstance ray = march;
+        if (singleMarch != null && (warming ? submits(singleMarch, true) : f.singleRay(SmokePass.filled()))) ray = singleMarch;
+
         // 0. mushroom sun shadow map — frame mushroom tiles stacked vertically
         if (shade) {
             GlStateManager._glBindFramebuffer(GlConst.GL_FRAMEBUFFER, shadowFbo);
@@ -871,7 +882,7 @@ public final class PallPass {
         boolean volumePast = history && volumeHistory;
         for (int pass = 0; pass < 4; pass++) {
             if (pass == 0 && !litFoot || pass == 1 && !grid) continue;
-            m = pass == 0 ? fl : pass == 1 ? mt : pass == 2 ? fv : march;
+            m = pass == 0 ? fl : pass == 1 ? mt : pass == 2 ? fv : ray;
             if (pass == 0) {
                 GlStateManager._glBindFramebuffer(GlConst.GL_FRAMEBUFFER, footFbo);
                 RenderSystem.viewport(0, 0, FOOT_LIGHT_AZ + 1, FOOT_LIGHT_H * FOOT_LIGHT_R * f.mushroomCount);
@@ -1130,7 +1141,7 @@ public final class PallPass {
     private static final class Prepared {
         private static final List<Supplier<ShaderInstance>> PROGRAMS = List.of(
                 () -> shadow, () -> footLighting, () -> mushTaus, () -> froxel, () -> froxelSum, () -> march,
-                () -> resolve, () -> mix, () -> composite, () -> DustWallPass.march,
+                () -> resolve, () -> mix, () -> composite, () -> singleMarch, () -> DustWallPass.march,
                 () -> DustWallPass.pack, () -> DustWallPass.resolve, () -> composite, () -> composite);
         private final ShaderInstance[] shaders = new ShaderInstance[PROGRAMS.size()];
         private final int[] ids = new int[shaders.length];
@@ -1204,6 +1215,13 @@ public final class PallPass {
                 Minecraft.getInstance().getWindow());
         FxViews.screenSize(s);
         s.apply();
+        if (s == singleMarch) {
+            // The first texels of the same RGBA32F row that was uploaded for the other passes.
+            int limit = mushroomBuffer.limit();
+            mushroomBuffer.limit(4 * MushroomField.FOOT_COLUMNS);
+            GL20.glUniform4fv(Uniform.glGetUniformLocation(s.getId(), "PallMushBody[0]"), mushroomBuffer);
+            mushroomBuffer.limit(limit);
+        }
         int unit = GlStateManager._getActiveTexture();
         if (withNoise) {
             // ShaderInstance cannot bind a 3D texture (all its textures are 2D): custom unit and binding

@@ -59,8 +59,9 @@ PALL = ("fx_mush_shadow", "fx_pall_foot", "fx_mush_taus", "fx_pall_froxel", "fx_
         "fx_pall", "fx_pall_resolve", "fx_pall_mix", "fx_pall_composite")
 MARCH, PACK, RESOLVE = WALL = ("fx_dustwall", "fx_dustwall_pack", "fx_dustwall_resolve")
 LAYER, DISPLAY = "wall layer composite", "wall display composite"
-STAGES = (*PALL, *WALL, LAYER, DISPLAY)
-BURST = (*PALL[:7], *WALL, LAYER, DISPLAY)
+SINGLE = "fx_pall_single"
+STAGES = (*PALL, SINGLE, *WALL, LAYER, DISPLAY)
+BURST = (*PALL[:5], SINGLE, "fx_pall_resolve", *WALL, LAYER, DISPLAY)
 
 
 def defaults(program, name):
@@ -80,7 +81,7 @@ def defaults(program, name):
 
 def main(mode):
     h.context()
-    programs = {name: h.link(name) for name in PALL}
+    programs = {name: h.link(name) for name in (*PALL, SINGLE)}
     programs.update(zip(WALL, (h.march_setup(), h.link(WALL[1]), h.link(WALL[2]))))
     scene = h.make_scene(100)
     empty = h.texture(*h.rgba, 128, 4, np.zeros((4, 128, 4), np.float32))
@@ -89,6 +90,7 @@ def main(mode):
     targets = {name: framebuffer(h.low, h.low, g.GL_RGBA32F if name == "fx_pall_foot" else g.GL_RGBA16F)
                for name in PALL[:-1]}
     targets[PALL[-1]] = targets[DISPLAY] = screen
+    targets[SINGLE] = targets["fx_pall"]
     targets[LAYER] = targets["fx_pall_mix"]
     targets[MARCH] = framebuffer(h.low, h.low, g.GL_RGBA16F, count=2)
     colour = g.glGetFragDataLocation(programs[MARCH], "fragColor")
@@ -109,7 +111,7 @@ def main(mode):
             pall_noise = texture
     for name, program in programs.items():
         g.glUseProgram(program)
-        if name in PALL:
+        if name in PALL or name == SINGLE:
             defaults(program, name)
         for unit, sampler in enumerate(("PallNoise", "PallOpen", "SmokeGrid", "PallBall"), 12):
             g.glUniform1i(h.loc(program, sampler), unit)
@@ -148,9 +150,9 @@ def main(mode):
         else:
             for unit in range(12):
                 h.bind(program, unit, empty)
-            if name in ("fx_pall", "fx_pall_froxel", "fx_pall_foot"):
+            if name in ("fx_pall", SINGLE, "fx_pall_froxel", "fx_pall_foot"):
                 h.bind(program, 0, scene)
-            if name in ("fx_pall", "fx_pall_froxel"):
+            if name in ("fx_pall", SINGLE, "fx_pall_froxel"):
                 h.bind(program, 9, targets["fx_pall_foot"].textures[0])
                 h.bind(program, 10, targets["fx_mush_taus"].textures[0])
             if name in ("fx_pall_froxel_sum", "fx_pall_resolve", "fx_pall_mix", "fx_pall_composite"):

@@ -56,7 +56,11 @@ uniform vec4 PallAir;
 uniform vec3 PallAirSky;
 uniform vec4 PallAirFog;
 uniform mat4 PallSlot0;
+#ifdef PALL_SINGLE
+const mat4 PallSlot1 = mat4(0.0);
+#else
 uniform mat4 PallSlot1;
+#endif
 uniform vec3 PallMin;
 uniform vec3 PallMax;
 // sun direction (xyz), daytime sun strength 0..1 (w)
@@ -102,7 +106,11 @@ uniform vec4 PallYoung;
 uniform sampler2D Sampler3;
 uniform sampler2D Sampler4;
 uniform mat4 PallFire0;
+#ifdef PALL_SINGLE
+const mat4 PallFire1 = mat4(0.0);
+#else
 uniform mat4 PallFire1;
+#endif
 uniform vec3 PallFireMin;
 uniform vec3 PallFireMax;
 uniform mat4 PallWhirlPos;
@@ -188,6 +196,11 @@ const float RAY_EXIT = 0.02;
 // sets one reads it as unset, not as whatever the register held (zero on NVIDIA, garbage elsewhere; ShaderSourceTest)
 vec2 gMushSpan[MUSHROOMS] = vec2[MUSHROOMS](vec2(0.0), vec2(0.0), vec2(0.0), vec2(0.0));
 int gMushes = 0;
+#ifdef PALL_SINGLE
+const int PALL_BODIES = 1;
+#else
+const int PALL_BODIES = MUSHROOMS;
+#endif
 vec3 gDir = vec3(0.0, 0.0, -1.0);
 int gFoot0 = -1, gFoot1 = -1;
 vec2 gFootSpan0 = vec2(0.0, 1e9), gFootSpan1 = vec2(0.0, 1e9);
@@ -1129,12 +1142,29 @@ vec4 pallSource(vec3 p, float cone, vec4 inflow, out vec3 dustLight) {
     return vec4(emit, st);
 }
 
+#ifdef PALL_SINGLE
+// Full handoff removes local soil and the old head. The ordinary ray still draws haze
+// and fire-column soot. Use their existing density functions so the empty test follows
+// terrain, plume drift, fire-map mips and column rise exactly as the lighting pass does.
+bool emptyYoungSample(vec3 p, float cone) {
+    if (wallShare(PallYoung, length(p.xz - PallSlot0[0].xy)) < 1.0) return false;
+    float relief = pallRelief(Sampler5, PallSlot0, PallGround0, p.xz);
+    PallAt field = pallField(Sampler1, Sampler5, PallSlot0, PallGround0, vec4(0.0), p, relief, 1.0);
+    if (field.sigma.y > 1e-7) return false;
+    if (any(lessThan(p, PallFireMin)) || any(greaterThan(p, PallFireMax))) return true;
+    return storm(Sampler3, PallSlot0, PallFire0, p, cone, 1.0).x <= 0.0;
+}
+#endif
+
 void pallStep(float ta, float ds, float grid, inout vec3 light, inout float transmit, inout float haze) {
     passesBefore(ta, light, transmit, haze);
     vec3 p = gDir * ta;
+    float cone = max(ta * gPixel, 0.35 * grid);
+#ifdef PALL_SINGLE
+    if (emptyYoungSample(p, cone)) return;
+#endif
     float open = pallOpenHere(p);
     if (open <= 0.0) return;
-    float cone = max(ta * gPixel, 0.35 * grid);
     vec3 dustLight;
     vec4 matter = pallSource(p, cone, vec4(0.0), dustLight);
     if (matter.w <= 1e-7) return;
@@ -1676,7 +1706,7 @@ vec2 mushSetup(vec3 dir, float scene) {
     gFoot1 = -1;
     gFootSpan0 = gFootSpan1 = vec2(1.0, 0.0);
     gMushes = 0;
-    for (int k = 0; k < MUSHROOMS; k++) {
+    for (int k = 0; k < PALL_BODIES; k++) {
         if (!mushOn(Sampler7, k)) break;
         Mush body = mushLoad(Sampler7, k);
         vec2 sp = mushSpan(body, dir);
@@ -1702,6 +1732,10 @@ vec2 mushSetup(vec3 dir, float scene) {
         m0 = min(m0, sp.x);
         m1 = max(m1, sp.y);
     }
+#ifdef PALL_SINGLE
+    // This draw has precisely one active row, even on rays that miss its bounds.
+    gMushes = 1;
+#endif
     return vec2(m0, m1);
 }
 
@@ -1823,6 +1857,7 @@ void main() {
     gFootSpan0 = gFootSpan1 = vec2(1.0, 0.0);
     gWhirlLight = mat4(0.0);
     gWhirlIn = vec4(1e9);
+#ifndef PALL_SINGLE
     whirlSetup(dir, scene, -1.0);
     for (int i = 0; i < 4; i++) {
         // whirls nearer than the near volume's far boundary are that volume's (fx_pall_froxel); this ray takes the rest
@@ -1832,6 +1867,7 @@ void main() {
         gWhirlLight[i] = whirl(i, dir, a, gWhirlSpan[i].y, jitter, gWhirlLit[i].rgb, gWhirlFire[i].rgb, whirlFlame);
         gWhirlIn[i] = a;
     }
+#endif
     // Wilson cloud: up to two shell crossings per slot, likewise when step reaches crossing (before world behind pixel)
     vec4 w0 = pallWilson(PallSlot0, PallWilson0, dir, scene), w1 = pallWilson(PallSlot1, PallWilson1, dir, scene);
     gWilsonLight = mat4(wilsonLight(PallSlot0, PallGlow0, PallHot0, PallWilson0, dir, sunDir, w0.x, w0.y),
@@ -1923,7 +1959,11 @@ void main() {
         bool pallLeft = i < pallSteps && ta < t1;
         // mushroom behind a ray nearly opaque to itself is invisible even in haze (light weighted by transmit)
         bool mushLeft = mk < mSteps && tm < m1 && transmit >= 0.005;
+#ifdef PALL_SINGLE
+        const bool smokeLeft = false;
+#else
         bool smokeLeft = sk < sSteps && se < sEmpty && ts < s1 && transmit >= 0.005;
+#endif
         if (!pallLeft && !mushLeft && !smokeLeft) break;
         if (smokeLeft && (!pallLeft || ts < ta) && (!mushLeft || ts < tm)) {
             float cone = max(ts * gPixel, 0.0);

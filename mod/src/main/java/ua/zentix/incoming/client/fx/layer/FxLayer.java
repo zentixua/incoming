@@ -133,6 +133,12 @@ public final class FxLayer {
             Incoming.LOG.error("Nuclear dust pall shaders failed to load: no dust pall", ex);
         }
         try {
+            e.registerShader(new ShaderInstance(e.getResourceProvider(), Incoming.id("fx_pall_single"), DefaultVertexFormat.POSITION), s -> PallPass.singleMarch = s);
+        } catch (IOException ex) {
+            PallPass.singleMarch = null;
+            Incoming.LOG.warn("Single-burst pall shader unavailable; using the full ray shader", ex);
+        }
+        try {
             e.registerShader(new ShaderInstance(e.getResourceProvider(), Incoming.id("fx_dustwall"), DefaultVertexFormat.POSITION), s -> DustWallPass.march = s);
             e.registerShader(new ShaderInstance(e.getResourceProvider(), Incoming.id("fx_dustwall_resolve"), DefaultVertexFormat.POSITION), s -> DustWallPass.resolve = s);
             e.registerShader(new ShaderInstance(e.getResourceProvider(), Incoming.id("fx_dustwall_pack"), DefaultVertexFormat.POSITION), s -> DustWallPass.pack = s);

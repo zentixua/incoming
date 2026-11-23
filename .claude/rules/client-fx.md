@@ -74,7 +74,9 @@ paths:
   view also stages in-place program replacements detected by shader instance and GL ID. Secondary views reuse
   the shared programs with their own targets and histories. The completion log follows the primary GPU drain.
   Dust OFF prepares only the mushroom and pall programs. With dust enabled, the lattice and wall targets are ready
-  before handoff. The march writes two RGBA16F attachments. The pack and both history targets are twice the march width.
+  before handoff. The single-burst pall ray warms on a separate loading frame. It reads one mushroom body from draw
+  uniforms and skips fully handed-off dry samples with neither haze nor fire-column soot. Water, multiple bodies,
+  a second slot, fire whirls or an active conventional smoke grid use the general ray. The wall march writes two RGBA16F attachments. The pack and both history targets are twice the march width.
   The shared composite warms the unblended layer target and blended display in separate loading frames. Terrain and fire maps upload when a real frame supplies them.
   Verify first use in a fresh process with the driver cache disabled. A second detonation uses compiled programs;
   a one-pixel dummy pass with placeholder textures misses first-use specialization on the real targets.
