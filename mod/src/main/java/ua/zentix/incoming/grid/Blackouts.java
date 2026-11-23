@@ -179,7 +179,7 @@ public final class Blackouts {
         long now = now(level);
         Outage o = PowerGrid.get(level).addOutage(new Outage(0, at.x, at.z, radius, now, speed / rate(level), restoreAt, restoreSpread(), node, dead, damaged));
         BlackoutWorld.get(level).onOutage(level, o);
-        Orders.post(new GridOutageEvent(level.dimension(), outageId(level, o), o.x(), o.z(), o.radius(), nodePos(level, o), o.byDamage()));
+        Orders.queue(level, new GridOutageEvent(level.dimension(), outageId(level, o), o.x(), o.z(), o.radius(), nodePos(level, o), o.byDamage()));
         String restore = o.byDamage() ? String.format(Locale.ROOT, "power returns by damage: in hours beyond %d blocks, in days beyond %d, never within %d",
                 Math.round(damaged), Math.round(dead), Math.round(dead))
                 : o.restoreAt() == Outage.NEVER ? "power will not come back by itself"
@@ -235,7 +235,7 @@ public final class Blackouts {
 
     /** Power is back in all of outage {@code o}, now forgotten ({@link PowerGrid#prune}). */
     static void restored(ServerLevel level, Outage o) {
-        Orders.post(new GridRestoreEvent(level.dimension(), outageId(level, o), o.x(), o.z(), o.radius(), nodePos(level, o), o.byDamage()));
+        Orders.queue(level, new GridRestoreEvent(level.dimension(), outageId(level, o), o.x(), o.z(), o.radius(), nodePos(level, o), o.byDamage()));
         Incoming.LOG.info("Blackout #{} ({}): power restored everywhere", o.id(), level.dimension().location());
     }
 

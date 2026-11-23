@@ -20,17 +20,18 @@ a nuclear launch that waits for a second key or warning, or `/incoming nuke now`
 | `StrikeRoundEvent$Ended` | A round is over: its warhead went off, it was shot down, it failed (crashed before arming, a failed launch), or it was recalled or cancelled. It also says whether the round's munitions came back. |
 | `NuclearDetonationEvent` | A nuclear warhead bursts: position, yield, air or ground burst, and the order and round it belongs to. |
 | `GridOutageEvent` | A power outage begins: a substation was knocked out or a nuclear burst cut the grid. |
-| `GridRestoreEvent` | Power is back in the whole area of an outage. An outage around a destroyed area never ends. |
+| `GridRestoreEvent` | This outage no longer darkens any district (another outage may still darken some). An outage around a destroyed area ends only when power is restored by command. |
 
 Every request ends in exactly one `Rejected` or `Accepted`, and every round of an accepted order ends in exactly one
 `Ended`. A round keeps its id while it flies outside the loaded world, comes back into it, and across a server
 restart. A round that never left (a cancelled salvo, a failed launch, a nuclear launch without its second key) ends
 without `Released`. All events come from the server thread; their values are plain numbers, ids, names and
-positions.
+positions. `Request` arrives while the order is being made; every other event arrives at the end of the same tick,
+in the order things happened.
 
 To charge your own price or add a cooldown, check it in `Request`, take it in `Accepted`, and give it back in
-`Ended` if you wish. Incoming does not undo another mod's charges. Do not start a new strike from inside a `Request`
-listener: such a strike waits until the next tick and gets its own request.
+`Ended` if you wish. Incoming does not undo another mod's charges. A strike started from inside a `Request` listener
+is made on the next tick, with all its checks and its own request.
 
 ## KubeJS example
 

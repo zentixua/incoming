@@ -55,6 +55,11 @@ public final class StrikeWorld {
 
     private record Deferred(long due, Runnable admit) {}
 
+    /** Order and round events waiting for delivery ({@link Orders#queue}). */
+    private final java.util.ArrayDeque<net.neoforged.bus.api.Event> events = new java.util.ArrayDeque<>();
+    /** {@link Orders#deliver} running for this world. */
+    boolean delivering;
+
     /** For {@link ModAttachments#STRIKE_WORLD}: per-world, lives while loaded, unsaved. */
     public StrikeWorld() {}
 
@@ -127,6 +132,10 @@ public final class StrikeWorld {
         return owner + " " + weapon.getSerializedName();
     }
 
+    java.util.ArrayDeque<net.neoforged.bus.api.Event> events() {
+        return events;
+    }
+
     /** Admit an order at world-tick end once game time reaches {@code due}. */
     void defer(long due, Runnable admit) {
         deferred.add(new Deferred(due, admit));
@@ -162,7 +171,10 @@ public final class StrikeWorld {
         // Area loading is not simulation: runs in frozen world (trailer waits for shot loading).
         if (level.hasData(ModAttachments.STRIKE_WORLD)) get(level).areas.tick(level);
         // “/tick freeze” stops entities: virtual projectiles, salvos, explosions stop with them.
-        if (!level.tickRateManager().runsNormally()) return;
+        if (!level.tickRateManager().runsNormally()) {
+            Orders.deliver(level);
+            return;
+        }
         SalvoData.get(level).tick(level);
         VirtualFlights.get(level).tick(level);
         if (level.hasData(ModAttachments.STRIKE_WORLD)) {
@@ -172,6 +184,7 @@ public final class StrikeWorld {
             world.tick(level);
             world.flightLog.flush();
         }
+        Orders.deliver(level);
     }
 
     /** Active world strike: in-world/virtual projectiles, salvos, explosions. */
@@ -261,6 +274,8 @@ public final class StrikeWorld {
     public static void onServerStopping(ServerStoppingEvent event) {
         // Pending nuclear orders unsaved: refund owners while still online (players saved afterward).
         NuclearKeys.cancelAll(event.getServer(), event.getServer().getPlayerList().getPlayers(), null, "server stopping");
+        // their endings go out before the world closes
+        for (ServerLevel level : event.getServer().getAllLevels()) Orders.deliver(level);
         for (ServerLevel level : event.getServer().getAllLevels()) {
             // Impact work unsaved: finish started/queued work now, otherwise world would retain explosions
             // half removed (timelines not yet queuing detonations are lost).

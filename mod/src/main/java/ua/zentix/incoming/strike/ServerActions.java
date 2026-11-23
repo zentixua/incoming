@@ -436,6 +436,8 @@ public final class ServerActions {
      */
     public static boolean strike(ServerPlayer player, WeaponType weapon, int count, int spread, Aim aim, Loadout.Nuke nuke, Waypoints via,
                                  @Nullable LaunchOrigin from, boolean rules, @Nullable String tag) {
+        Aim asAsked = aim;
+        if (Orders.elsewhere(player.serverLevel(), () -> strike(player, weapon, count, spread, asAsked, nuke, via, from, rules, tag))) return true;
         if (rules) {
             aim = ruled(player, aim);
             if (aim == null) return false;
@@ -577,6 +579,7 @@ public final class ServerActions {
      */
     public static boolean dispatch(ServerLevel level, String who, float yaw, WeaponType weapon, int count, int spread, Aim aim, Loadout.Nuke nuke,
                                    Waypoints via, @Nullable LaunchOrigin from, @Nullable String tag, @Nullable Consumer<Component> feedback) {
+        if (Orders.elsewhere(level, () -> dispatch(level, who, yaw, weapon, count, spread, aim, nuke, via, from, tag, feedback))) return true;
         Loadout l = order(weapon, count, spread, nuke);
         return Orders.admit(Order.server(level, who, l, aim, feedback).tagged(tag), o -> launch(level, who, null, null, yaw, l, aim, via, from, null, o));
     }
@@ -595,6 +598,7 @@ public final class ServerActions {
     /** Same; {@code feedback} receives a listener's refusal (the launcher's status). */
     public static boolean fromLauncher(ServerLevel level, String who, @Nullable UUID owner, Loadout l, Aim aim, Waypoints via, LaunchOrigin.Fixed at,
                                        @Nullable Consumer<Component> feedback) {
+        if (Orders.elsewhere(level, () -> fromLauncher(level, who, owner, l, aim, via, at, feedback))) return true;
         Loadout order = clamp(l);
         return Orders.admit(Order.launcher(level, at.pos(), owner, order, aim, feedback), o -> launch(level, who, null, owner, 0, order, aim, via, at, null, o));
     }

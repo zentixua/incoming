@@ -70,7 +70,12 @@ public final class Order {
 
     /** Player's order (designator or their command); {@code l} already clamped. */
     public static Order player(ServerPlayer player, Loadout l, ServerActions.Aim aim, Payment payment) {
-        return new Order(player.serverLevel(), Actor.PLAYER, player.getUUID(), player.getGameProfile().getName(), player.getUUID(), null, l, aim,
+        return player(player.serverLevel(), player, l, aim, payment);
+    }
+
+    /** Player's order carried out in {@code level} ({@code execute in} another dimension). */
+    public static Order player(ServerLevel level, ServerPlayer player, Loadout l, ServerActions.Aim aim, Payment payment) {
+        return new Order(level, Actor.PLAYER, player.getUUID(), player.getGameProfile().getName(), player.getUUID(), null, l, aim,
                 payment, null, c -> ServerActions.refuse(player, c));
     }
 
@@ -86,7 +91,7 @@ public final class Order {
 
     /** Same order (not yet requested) carrying group name {@code tag} on all its rounds. */
     public Order tagged(@Nullable String tag) {
-        return new Order(this, tag);
+        return java.util.Objects.equals(tag, this.tag) ? this : new Order(this, tag);
     }
 
     private Order(Order o, @Nullable String tag) {
@@ -200,13 +205,13 @@ public final class Order {
     public void accept(int rounds) {
         if (answered()) throw new IllegalStateException("Order " + id + " already answered");
         accepted = rounds;
-        Orders.post(new StrikeOrderEvent.Accepted(this, rounds));
+        Orders.queue(level, new StrikeOrderEvent.Accepted(this, rounds));
     }
 
     /** Not admitted: post {@link StrikeOrderEvent.Rejected}. Once; nothing was kept from the payer. */
     public void reject(StrikeOrderEvent.Reason reason) {
         if (answered()) throw new IllegalStateException("Order " + id + " already answered");
         rejected = reason;
-        Orders.post(new StrikeOrderEvent.Rejected(this, reason));
+        Orders.queue(level, new StrikeOrderEvent.Rejected(this, reason));
     }
 }

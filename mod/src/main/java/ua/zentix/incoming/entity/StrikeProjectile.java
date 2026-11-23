@@ -222,6 +222,12 @@ public abstract class StrikeProjectile extends Entity implements IEntityWithComp
      */
     @Nullable
     private RoundRef round;
+    /**
+     * How the round ends when the warhead it set off bursts (shot down armed): the shooter's interception, not the
+     * impact; unsaved, used within the same call.
+     */
+    @Nullable
+    private RoundEnd shotDownEnd;
 
     private int phaseStart;
     /** Client: phase whose change established {@link #phaseStart}. */
@@ -468,10 +474,10 @@ public abstract class StrikeProjectile extends Entity implements IEntityWithComp
         return r;
     }
 
-    /** End the round, once: the first ending wins (an interception before the detonation it causes). */
+    /** End the round, once: the first ending wins; a shot-down warhead's burst ends it as the interception. */
     public void endRound(RoundEnd end) {
         RoundRef r = detachRound();
-        if (r != null && level() instanceof ServerLevel level) Orders.ended(level, r, weapon(), ownerId(), end);
+        if (r != null && level() instanceof ServerLevel level) Orders.ended(level, r, weapon(), ownerId(), shotDownEnd != null ? shotDownEnd : end);
     }
 
     /** Carries nuclear warhead: canceled only by nuclear recall. */
@@ -934,7 +940,7 @@ public abstract class StrikeProjectile extends Entity implements IEntityWithComp
         UUID owner = ownerId();
         discard();
         Detonation d = NuclearWarhead.detonate(level, at, nuclear.yieldKt(), airBurst, owner, r);
-        if (r != null) Orders.ended(level, r, weapon(), owner, RoundEnd.nuclear(d.burst(), d.yieldKt()));
+        if (r != null) Orders.ended(level, r, weapon(), owner, shotDownEnd != null ? shotDownEnd : RoundEnd.nuclear(d.burst(), d.yieldKt()));
     }
 
     /**
@@ -1405,6 +1411,7 @@ public abstract class StrikeProjectile extends Entity implements IEntityWithComp
             Incoming.LOG.warn("Projectile {} {} unloaded in flight with its chunk at {} ({})", getType().getDescriptionId(), getUUID(), blockPosition(),
                     reason == null ? "chunk no longer tracked" : "chunk unloaded");
         }
+        failRoundIfDestroyed(reason);
         super.onRemovedFromLevel();
         releaseTickets();
     }
@@ -1416,8 +1423,7 @@ public abstract class StrikeProjectile extends Entity implements IEntityWithComp
     @Override
     public void remove(RemovalReason reason) {
         if (reason.shouldDestroy() && !isRemoved() && !level().isClientSide()) noteForeignRemoval(reason);
-        // Any other destruction (lost, gave up waiting, failed reentry, /kill): the round failed. Unloading keeps it.
-        if (reason.shouldDestroy() && !level().isClientSide()) endRound(RoundEnd.failed(position()));
+        failRoundIfDestroyed(reason);
         super.remove(reason);
         releaseTickets();
     }
@@ -1447,6 +1453,15 @@ public abstract class StrikeProjectile extends Entity implements IEntityWithComp
             StrikeWorld.get(level).flightLog().note(getType().getDescriptionId(), FlightLog.Event.REMOVED, blockPosition(), targetLost(), 0,
                     who.substring(who.lastIndexOf('.') + 1) + " (" + reason + ")");
         }
+    }
+
+    /**
+     * The round of a destroyed projectile whose own path did not end it (lost, gave up waiting, failed reentry, {@code
+     * /kill}) fails; unloading keeps it. From {@link #remove} and from {@link #onRemovedFromLevel}, which another mod's
+     * direct {@code setRemoved} reaches without {@code remove}.
+     */
+    private void failRoundIfDestroyed(@Nullable RemovalReason reason) {
+        if (reason != null && reason.shouldDestroy() && !level().isClientSide()) endRound(RoundEnd.failed(position()));
     }
 
     private void releaseTickets() {
@@ -1491,7 +1506,9 @@ public abstract class StrikeProjectile extends Entity implements IEntityWithComp
     /** Shot down: detonate where hit (at launch before fuze arming: just crash). */
     protected void shotDown(ServerLevel level, DamageSource source) {
         Entity by = source.getEntity();
-        endRound(RoundEnd.intercepted(position(), null, by == null ? null : by.getUUID()));
+        // The round ends as this interception: armed, the warhead bursts where hit (a nuclear one with the round's ids);
+        // unarmed, the body breaks up.
+        shotDownEnd = RoundEnd.intercepted(position(), null, by == null ? null : by.getUUID());
         if (armed()) {
             impact(level, position(), null);
             return;

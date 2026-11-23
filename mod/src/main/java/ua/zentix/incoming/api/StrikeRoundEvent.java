@@ -16,7 +16,8 @@ import java.util.UUID;
 /**
  * One round of an admitted order ({@link StrikeOrderEvent.Accepted}): {@link Released} when it leaves, {@link Ended} once
  * when it is over. The round id stays the same while the projectile flies outside the loaded world, returns to it and
- * across a server restart. Posted on {@code NeoForge.EVENT_BUS} from the server thread.
+ * across a server restart. Posted on {@code NeoForge.EVENT_BUS} from the server thread at the end of the tick in which
+ * they happened: a round's Released always reaches every listener before its Ended.
  */
 public abstract class StrikeRoundEvent extends Event {
     /** How a round ended. */

@@ -42,6 +42,7 @@ import ua.zentix.incoming.nuclear.NuclearStrikes;
 import ua.zentix.incoming.registry.ModBlocks;
 import ua.zentix.incoming.registry.ModItems;
 import ua.zentix.incoming.strike.Loadout;
+import ua.zentix.incoming.strike.Orders;
 import ua.zentix.incoming.strike.RoundRef;
 import ua.zentix.incoming.strike.SalvoData;
 import ua.zentix.incoming.strike.ServerActions;
@@ -58,7 +59,8 @@ import java.util.function.Consumer;
 import java.util.function.Predicate;
 
 /**
- * Order lifecycle events ({@code ua.zentix.incoming.api}): every probe of the contract in the A1 pull request. Each request
+ * Order lifecycle events ({@code ua.zentix.incoming.api}): every probe of the contract in the A1 pull request. Events
+ * after Request are queued to the tick's end; a check right after an action delivers them first ({@link Orders#deliver}). Each request
  * gets exactly one Rejected or Accepted; each admitted round exactly one Ended, Released first when it left; the round id
  * survives a projectile's form changes and the save of a scheduled ICBM strike. Listeners are registered on the game bus for
  * the test only and filter by the test's own order ids (other tests in the batch also post events). Each test has its own
@@ -99,6 +101,7 @@ public final class OrderEventGameTests {
         ServerActions.Aim aim = aim(h);
 
         h.assertFalse(ServerActions.strike(p, WeaponType.DRONE, 3, 20, aim, Loadout.Nuke.DEFAULT, Waypoints.NONE, null, true), "vetoed order launched");
+        Orders.deliver(level);
         h.assertValueEqual(seen, List.of("first", "second"), "listeners in priority order");
         StrikeOrderEvent.Request request = log.only(StrikeOrderEvent.Request.class);
         StrikeOrderEvent.Rejected rejected = log.only(StrikeOrderEvent.Rejected.class);
@@ -112,6 +115,7 @@ public final class OrderEventGameTests {
         veto[0] = false;
         log.clear();
         h.assertTrue(ServerActions.strike(p, WeaponType.DRONE, 3, 20, aim, Loadout.Nuke.DEFAULT, Waypoints.NONE, null, true), "order without veto");
+        Orders.deliver(level);
         StrikeOrderEvent.Accepted accepted = log.only(StrikeOrderEvent.Accepted.class);
         h.assertValueEqual(log.all(StrikeOrderEvent.Rejected.class).size(), 0, "an accepted order was also rejected");
         h.assertValueEqual(accepted.getOrderId(), log.only(StrikeOrderEvent.Request.class).getOrderId(), "Accepted answers its Request");
@@ -121,6 +125,7 @@ public final class OrderEventGameTests {
 
         // cancelled in the same tick: no round has launched yet
         h.assertValueEqual(SalvoData.get(level).cancel(level, p.getUUID(), List.of(p)), 1, "salvo not cancelled");
+        Orders.deliver(level);
         List<StrikeRoundEvent.Ended> ended = log.all(StrikeRoundEvent.Ended.class);
         h.assertValueEqual(ended.size(), 3, "each unlaunched round ends once");
         for (int i = 0; i < 3; i++) {
@@ -208,6 +213,7 @@ public final class OrderEventGameTests {
         EventLog log = EventLog.open(h, e -> e instanceof StrikeOrderEvent o ? abs.equals(o.getLauncherPos()) : e instanceof StrikeRoundEvent);
 
         Component problem = LauncherOrders.fire(level, be);
+        Orders.deliver(level);
         h.assertTrue(problem != null, "a walled-in launcher fired");
         StrikeOrderEvent.Request request = log.only(StrikeOrderEvent.Request.class);
         h.assertValueEqual(request.getActor(), StrikeOrderEvent.Actor.LAUNCHER, "actor");
@@ -242,6 +248,7 @@ public final class OrderEventGameTests {
         });
         StrikeGameTests.afterTest(h, () -> VirtualFlights.get(level).clear(level, p -> p.round() != null && p.round().order().equals(order[0])));
         h.assertTrue(dispatch(h, who), "order not accepted");
+        Orders.deliver(level);
         StrikeRoundEvent.Released released = log.only(StrikeRoundEvent.Released.class);
         UUID round = released.getRoundId();
         h.assertValueEqual(round, RoundRef.of(order[0], 0, null).round(), "round id");
@@ -262,6 +269,42 @@ public final class OrderEventGameTests {
             h.assertValueEqual(e.getRoundId(), round, "ended round id");
             h.assertValueEqual(e.getOutcome(), StrikeRoundEvent.Outcome.IMPACT, "outcome");
             h.assertTrue(e.isReleased() && e.getChargeKg() > 0 && e.getPosition() != null, "impact details");
+        });
+    }
+
+    /**
+     * A B-2 from the console: the round passes from the bomber to its bomb at release (the departing B-2 carries none) and
+     * ends once, as the bomb's impact, under the round id Released gave.
+     */
+    @GameTest(template = "range", timeoutTicks = 3000, batch = "order_bomber", skyAccess = true)
+    public static void bomberHandsItsRoundToTheBomb(GameTestHelper h) {
+        ServerLevel level = h.getLevel();
+        String who = "order_bomber";
+        UUID[] order = {null};
+        EventLog log = EventLog.open(h, e -> e instanceof StrikeOrderEvent o ? who.equals(o.getActorName())
+                : e instanceof StrikeRoundEvent r && order[0] != null && order[0].equals(r.getOrderId()));
+        listen(h, EventPriority.LOWEST, StrikeOrderEvent.Accepted.class, a -> {
+            if (who.equals(a.getActorName())) order[0] = a.getOrderId();
+        });
+        StrikeGameTests.afterTest(h, () -> VirtualFlights.get(level).clear(level, p -> p instanceof ua.zentix.incoming.entity.BomberEntity
+                || p.round() != null && p.round().order().equals(order[0])));
+        h.assertTrue(ServerActions.dispatch(level, who, 0, WeaponType.BUNKER, 1, 0, aim(h), Loadout.Nuke.DEFAULT, Waypoints.NONE, null),
+                "order not accepted");
+        Orders.deliver(level);
+        UUID round = log.only(StrikeRoundEvent.Released.class).getRoundId();
+        boolean[] handed = {false};
+        h.onEachTick(() -> {
+            if (handed[0]) return;
+            StrikeProjectile p = carrying(level, round);
+            if (p instanceof ua.zentix.incoming.entity.BunkerBusterEntity) handed[0] = true;
+        });
+        h.succeedWhen(() -> {
+            h.assertTrue(handed[0], "the bomb never carried the round");
+            StrikeRoundEvent.Ended e = log.only(StrikeRoundEvent.Ended.class);
+            h.assertValueEqual(e.getRoundId(), round, "ended round id");
+            h.assertValueEqual(e.getOutcome(), StrikeRoundEvent.Outcome.IMPACT, "outcome");
+            h.assertTrue(StrikeWorld.projectiles(level).stream().noneMatch(p -> p.round() != null && p.round().round().equals(round)),
+                    "something still carries the ended round");
         });
     }
 
@@ -291,6 +334,7 @@ public final class OrderEventGameTests {
         Vec3 point = Vec3.atCenterOf(h.absolutePos(new BlockPos(16, 3, 120)));
         ServerActions.Aim aim = new ServerActions.Aim(new Target.Point(point), point, null);
         h.assertTrue(ServerActions.strike(op, WeaponType.NUKE, 1, 0, aim, new Loadout.Nuke(1, true), Waypoints.NONE, null, false, "wave3"), "ICBM order");
+        Orders.deliver(level);
         StrikeOrderEvent.Accepted accepted = log.only(StrikeOrderEvent.Accepted.class);
         h.assertValueEqual(accepted.getPayment(), StrikeOrderEvent.Payment.WAIVED, "operator command payment");
         h.assertValueEqual(accepted.getTag(), "wave3", "order tag");
@@ -367,6 +411,7 @@ public final class OrderEventGameTests {
         CommandSourceStack source = new CommandSourceStack(net.minecraft.commands.CommandSource.NULL, Vec3.atCenterOf(far), Vec2.ZERO, level, 4, who,
                 Component.literal(who), level.getServer(), null).withSuppressedOutput();
         level.getServer().getCommands().performPrefixedCommand(source, "incoming nuke now at " + far.getX() + " " + far.getY() + " " + far.getZ() + " 1 air");
+        Orders.deliver(level);
         StrikeOrderEvent.Accepted accepted = log.only(StrikeOrderEvent.Accepted.class);
         h.assertValueEqual(accepted.getActor(), StrikeOrderEvent.Actor.SERVER, "actor");
         StrikeRoundEvent.Released released = log.only(StrikeRoundEvent.Released.class);
@@ -399,6 +444,7 @@ public final class OrderEventGameTests {
         EventLog log = EventLog.open(h, e -> e instanceof GridOutageEvent o ? node.equals(o.getNodePos()) : e instanceof GridRestoreEvent);
         Vec3 c = Vec3.atCenterOf(node.east(3));
         level.explode(null, c.x, c.y, c.z, 2f, Level.ExplosionInteraction.NONE);
+        Orders.deliver(level);
         GridOutageEvent outage = log.only(GridOutageEvent.class);
         h.assertFalse(outage.isNuclear(), "a substation outage is not nuclear");
         h.assertValueEqual(outage.getDimension(), level.dimension(), "dimension");

@@ -107,6 +107,8 @@ public final class Incoming {
         NeoForge.EVENT_BUS.addListener(EventPriority.LOWEST, ua.zentix.incoming.util.StopDrain::onServerStopping);
         NeoForge.EVENT_BUS.addListener(EventPriority.HIGHEST, ua.zentix.incoming.util.WorldClock::onServerTick);
         NeoForge.EVENT_BUS.addListener(FlightStatus::onServerTick);
+        // Last: order and round events queued by this tick's impacts and nuclear work go out in it.
+        NeoForge.EVENT_BUS.addListener(EventPriority.LOWEST, ua.zentix.incoming.strike.Orders::onServerTick);
         NeoForge.EVENT_BUS.addListener(FarFlights::onServerTick);
         NeoForge.EVENT_BUS.addListener(FlashbackReplay::onServerTick);
         NeoForge.EVENT_BUS.addListener(DhChunks::onServerStarting);

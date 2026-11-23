@@ -30,6 +30,7 @@ import org.junit.jupiter.api.Test;
 import ua.zentix.incoming.IncomingConfig;
 import ua.zentix.incoming.nuclear.NuclearStrikes;
 import ua.zentix.incoming.strike.Loadout;
+import ua.zentix.incoming.strike.Orders;
 import ua.zentix.incoming.strike.RoundRef;
 import ua.zentix.incoming.strike.ServerActions;
 import ua.zentix.incoming.strike.Waypoints;
@@ -182,7 +183,9 @@ class IncomingCommandTest {
             int yield = suffix.isEmpty() ? 6 : 4;
             boolean air = suffix.endsWith(" air");
             Loadout.Nuke expected = new Loadout.Nuke(yield, air);
-            try (var actions = mockStatic(ServerActions.class); var nuclear = mockStatic(NuclearStrikes.class)) {
+            try (var actions = mockStatic(ServerActions.class); var nuclear = mockStatic(NuclearStrikes.class); var orders = mockStatic(Orders.class)) {
+                // admission runs its body here; events and their world queue are outside this test
+                orders.when(() -> Orders.admit(any(), any())).thenAnswer(inv -> inv.<Orders.Admission>getArgument(1).run(inv.getArgument(0)));
                 actions.when(() -> ServerActions.dispatch(eq(level), eq("test"), eq(0f), eq(WeaponType.NUKE), eq(1), eq(0), eq(aim), eq(expected), eq(Waypoints.NONE), isNull(), isNull(), any())).thenReturn(true);
                 assertEquals(1, dispatcher.execute("incoming nuke at 10.25 64.5 20.75" + suffix, source(2, false, level)));
                 actions.verify(() -> ServerActions.dispatch(eq(level), eq("test"), eq(0f), eq(WeaponType.NUKE), eq(1), eq(0), eq(aim), eq(expected), eq(Waypoints.NONE), isNull(), isNull(), any()));

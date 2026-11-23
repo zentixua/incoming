@@ -60,7 +60,10 @@ public abstract class GridEvent extends Event {
         return node;
     }
 
-    /** Caused by a nuclear detonation: power returns by damage (hours, days, or never near the burst). */
+    /**
+     * The outage a nuclear burst records over its whole reach: power returns by damage (hours, days, or never near the
+     * burst). Each substation the burst knocks out records an outage of its own, with this false.
+     */
     public boolean isNuclear() {
         return nuclear;
     }

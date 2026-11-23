@@ -261,8 +261,17 @@ public class BomberEntity extends StrikeProjectile {
         // The bomb UUID from projectile warnings identifies its B-2.
         Incoming.LOG.info("B-2 {} dropped bomb {} at {}, {} blocks from the aim point, {} above it (off-world {})", getUUID(), bomb.getUUID(),
                 blockPosition(), Math.round(position().subtract(drop).horizontalDistance()), Math.round(getY() - drop.y), isVirtual());
-        if (isVirtual()) VirtualFlights.launch(level, bomb);
-        else if (!level.addFreshEntity(bomb)) bomb.discard(); // refused entry: its round fails here, not never
+        if (isVirtual()) {
+            VirtualFlights.launch(level, bomb);
+            return;
+        }
+        boolean added = false;
+        try {
+            added = level.addFreshEntity(bomb);
+        } finally {
+            // refused entry, or a join listener threw: the bomb never flies, its round fails here instead of never
+            if (!added) bomb.discard();
+        }
     }
 
     /**

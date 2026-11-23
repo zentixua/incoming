@@ -362,11 +362,10 @@ public final class NuclearKeys {
                     LaunchPlaces.hold(level, o.from, o.placeKey);
                     if (!LaunchPlaces.ready(level, o.from) && o.waited++ < LaunchPlaces.WAIT) continue;
                 }
-                if (now < o.launchAt) continue;
-                orders.remove(o);
+                if (now < o.launchAt || !orders.remove(o)) continue;
                 launch(o, online);
             } else if (now >= o.deadline) {
-                orders.remove(o);
+                if (!orders.remove(o)) continue;
                 ServerPlayer owner = o.owner(online);
                 if (owner != null) {
                     owner.sendSystemMessage(Component.translatable("incoming.nuke.key.expired", window() / 20).withStyle(ChatFormatting.RED));
@@ -410,7 +409,7 @@ public final class NuclearKeys {
             if (!level.hasData(ModAttachments.STRIKE_WORLD)) continue;
             NuclearKeys keys = get(level);
             for (Order o : List.copyOf(keys.orders)) {
-                keys.orders.remove(o);
+                if (!keys.orders.remove(o)) continue;
                 n++;
                 ServerPlayer owner = o.owner(online);
                 if (owner != null && notice != null) owner.sendSystemMessage(notice);
@@ -432,8 +431,7 @@ public final class NuclearKeys {
             if (!level.hasData(ModAttachments.STRIKE_WORLD)) continue;
             NuclearKeys keys = get(level);
             for (Order o : List.copyOf(keys.orders)) {
-                if (o.launchAt >= 0 || !o.ownerId.equals(player.getUUID())) continue;
-                keys.orders.remove(o);
+                if (o.launchAt >= 0 || !o.ownerId.equals(player.getUUID()) || !keys.orders.remove(o)) continue;
                 boolean refunded = o.paid != null && Munitions.refund(List.of(player), o.ownerId, o.paid, "launching player left before the second key");
                 end(o, StrikeRoundEvent.Outcome.RECALLED, refunded);
                 Incoming.LOG.info("Nuclear launch {} cancelled: {} left before the second key", o.loadout.weapon().getSerializedName(), o.name);

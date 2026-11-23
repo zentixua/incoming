@@ -224,13 +224,14 @@ public final class IncomingCommand {
     private static int nukeNow(CommandSourceStack s, Vec3 pos, Loadout.Nuke nuke) {
         Entity e = s.getEntity();
         ServerLevel level = s.getLevel();
+        if (Orders.elsewhere(level, () -> nukeNow(s, pos, nuke))) return 1;
         Vec3 ground = NuclearStrikes.ground(level, pos);
         // the yield that will burst: detonateNow applies the server's limit
         Loadout l = new Loadout(WeaponType.NUKE, 1, 0, TargetMode.LOOK, "", nuke.withYield(Math.min(nuke.yieldKt(), IncomingConfig.SERVER.nukeMaxYield.get())));
         ServerActions.Aim aim = new ServerActions.Aim(new Target.Point(ground), ground, null);
         // ua.zentix.incoming.strike.Order: this class's own Order is a command path step.
         ua.zentix.incoming.strike.Order order = e instanceof ServerPlayer p
-                ? ua.zentix.incoming.strike.Order.player(p, l, aim, StrikeOrderEvent.Payment.WAIVED)
+                ? ua.zentix.incoming.strike.Order.player(level, p, l, aim, StrikeOrderEvent.Payment.WAIVED)
                 : ua.zentix.incoming.strike.Order.server(level, s.getTextName(), l, aim, s::sendFailure);
         Detonation[] burst = new Detonation[1];
         boolean admitted = Orders.admit(order, o -> {
