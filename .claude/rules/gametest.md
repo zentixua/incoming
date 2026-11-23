@@ -186,6 +186,12 @@ paths:
   the done fixture and passes (`CollapseGameTests.snapshotStepsStayInTheirSlice`).
 
 
+- A test that saves the server config (`/incoming rule`, `SERVER_SPEC.save()`) writes every value in memory, other
+  tests' temporary ones too, into `run/gametest/config/incoming-server.toml`, which outlives the run (local runs then
+  start from them: a CUSTOM preset left there failed `nuke_settle_budget`), and FML's watcher reloads that file about
+  500 ms later on its own thread, overwriting whatever a later batch has set in memory. Such a test puts back the
+  file's original bytes and values and waits for that reload before passing (`RuleGameTests.Fence`); tests that only
+  `set()` values never write the file.
 - The GameTest server has no profile cache (`MinecraftServer.getProfileCache()` is null): an offline UUID never resolves
   to an operator there, so offline-operator rights (`Authority.level`) cannot be probed in GameTest; online rights come
   from `MunitionGameTests.Listener`'s permission level. A fake player put into the server's player list needs a

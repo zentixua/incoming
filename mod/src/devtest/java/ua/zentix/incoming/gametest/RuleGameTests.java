@@ -79,10 +79,10 @@ public final class RuleGameTests {
      * world's config file holds it and loads without correction (a restart keeps it); unknown keys and bad values fail
      * and change nothing.
      */
-    @GameTest(template = "range", timeoutTicks = 40, batch = "rule_command", skyAccess = true)
+    @GameTest(template = "range", timeoutTicks = 20000, batch = "rule_command", skyAccess = true)
     public static void ruleCommandReadsSetsAndSaves(GameTestHelper h) {
         ServerLevel level = h.getLevel();
-        restoreAfter(h);
+        Fence fence = Fence.open(h);
         CommandSourceStack op = console(h, "rule_command");
 
         h.assertValueEqual(run(h, op, "incoming rule"), RuleCommand.rules().size(), "list result");
@@ -116,7 +116,7 @@ public final class RuleGameTests {
         h.assertValueEqual(file.get("world.fire"), Boolean.FALSE, "world.fire in the file");
         h.assertValueEqual(((Number) file.get("launch.max_salvo")).intValue(), 7, "launch.max_salvo in the file");
         h.assertTrue(IncomingConfig.SERVER_SPEC.isCorrect(file), "the saved file would be corrected on load");
-        h.succeed();
+        h.succeedWhen(() -> fence.settle(h));
     }
 
     /** A player without operator permission cannot read or set a rule (the branch does not exist for them). */
@@ -142,10 +142,10 @@ public final class RuleGameTests {
      * queued and flying rounds (also off-world, also read back from their saves) after the rules are switched off, and a
      * salvo made after the change carries the new ones; a scheduled ICBM keeps {@code grid.enabled} across its save.
      */
-    @GameTest(template = "range", timeoutTicks = 2400, batch = "rule_capture", skyAccess = true)
+    @GameTest(template = "range", timeoutTicks = 20000, batch = "rule_capture", skyAccess = true)
     public static void ordersKeepTheirRules(GameTestHelper h) {
         ServerLevel level = h.getLevel();
-        restoreAfter(h);
+        Fence fence = Fence.open(h);
         boolean enabled = IncomingConfig.SERVER.nukeEnabled.get();
         int flight = IncomingConfig.SERVER.nukeFlightTime.get();
         String before = "b4before", after = "b4after", nuke = "b4nuke";
@@ -201,7 +201,10 @@ public final class RuleGameTests {
                 seen[before.equals(r.tag()) ? 0 : 1] = true;
             }
         });
-        h.succeedWhen(() -> h.assertTrue(seen[0] && seen[1], "rounds checked in flight: before " + seen[0] + ", after " + seen[1]));
+        h.succeedWhen(() -> {
+            h.assertTrue(seen[0] && seen[1], "rounds checked in flight: before " + seen[0] + ", after " + seen[1]);
+            fence.settle(h);
+        });
     }
 
     /**
@@ -210,10 +213,10 @@ public final class RuleGameTests {
      * the arena (its wreck) change no block on an arena of glass, planks, wool, hay, grass, a lantern and a substation,
      * and cut no power, although the rules are switched back on before anything hits.
      */
-    @GameTest(template = "range", timeoutTicks = 4000, batch = "rule_arena", skyAccess = true)
+    @GameTest(template = "range", timeoutTicks = 20000, batch = "rule_arena", skyAccess = true)
     public static void arenaKeepsItsBlocks(GameTestHelper h) {
         ServerLevel level = h.getLevel();
-        restoreAfter(h);
+        Fence fence = Fence.open(h);
         CommandSourceStack op = console(h, "rule_arena");
         BlockPos substation = arena(h);
         Node node = PowerGrid.get(level).nodeAt(h.absolutePos(substation));
@@ -258,6 +261,7 @@ public final class RuleGameTests {
             h.assertTrue(PowerGrid.get(level).downOutage(node.id(), level.getGameTime()).isEmpty(), "the substation was knocked out");
             List<String> changed = changes(h, was);
             h.assertTrue(changed.isEmpty(), changed.size() + " blocks changed, first " + changed.subList(0, Math.min(8, changed.size())));
+            fence.settle(h);
         });
     }
 
@@ -265,10 +269,10 @@ public final class RuleGameTests {
      * Control for the arena: rounds made with every rule on keep them after the config switches everything off: the
      * same arena loses blocks and its substation.
      */
-    @GameTest(template = "range", timeoutTicks = 2400, batch = "rule_arena_control", skyAccess = true)
+    @GameTest(template = "range", timeoutTicks = 20000, batch = "rule_arena_control", skyAccess = true)
     public static void roundsMadeUnderRulesOnStillDamage(GameTestHelper h) {
         ServerLevel level = h.getLevel();
-        restoreAfter(h);
+        Fence fence = Fence.open(h);
         CommandSourceStack op = console(h, "rule_arena_control");
         BlockPos substation = arena(h);
         Node node = PowerGrid.get(level).nodeAt(h.absolutePos(substation));
@@ -284,6 +288,7 @@ public final class RuleGameTests {
             h.assertTrue(PowerGrid.get(level).downOutage(node.id(), level.getGameTime()).isPresent(), "the substation kept power");
             List<String> changed = changes(h, was);
             h.assertTrue(changed.size() > 20, "only " + changed.size() + " blocks changed under rounds made with every rule on");
+            fence.settle(h);
         });
     }
 
@@ -291,10 +296,10 @@ public final class RuleGameTests {
      * Control for the arena's entity legs: a bomb and a shot-down Shahed whose rounds were made with every rule on still
      * bore the post and leave wreck blocks after the config switches everything off.
      */
-    @GameTest(template = "range", timeoutTicks = 2400, batch = "rule_arena_control_entities", skyAccess = true)
+    @GameTest(template = "range", timeoutTicks = 20000, batch = "rule_arena_control_entities", skyAccess = true)
     public static void entityLegsMadeUnderRulesOnStillChangeBlocks(GameTestHelper h) {
         ServerLevel level = h.getLevel();
-        restoreAfter(h);
+        Fence fence = Fence.open(h);
         CommandSourceStack op = console(h, "rule_arena_control_entities");
         arena(h);
         Map<BlockPos, BlockState> was = snapshot(h);
@@ -325,6 +330,7 @@ public final class RuleGameTests {
             }
             h.assertTrue(bore > 0, "the bomb made under rules on left its column whole");
             h.assertTrue(wreck > 0, "the wreck made under rules on left no block");
+            fence.settle(h);
         });
     }
 
@@ -371,14 +377,70 @@ public final class RuleGameTests {
 
     // ---------------------------------------------------------------- helpers
 
-    /** Every exposed rule back to its value before the test, saved. */
-    private static void restoreAfter(GameTestHelper h) {
-        Map<ModConfigSpec.ConfigValue<?>, Object> was = new HashMap<>();
-        for (RuleCommand.Rule r : RuleCommand.rules()) was.put(r.config(), r.config().get());
-        StrikeGameTests.afterTest(h, () -> {
-            was.forEach(RuleGameTests::put);
-            IncomingConfig.SERVER_SPEC.save();
-        });
+    /**
+     * The world's server config as it was before the test, put back and settled. {@code /incoming rule} saves the file,
+     * and FML's watcher reloads it on its own thread about 500 ms after the last write (NightConfig debounce), replacing
+     * every value in memory: a reload landing in a later batch would undo that batch's own settings, and a save would
+     * carry other tests' temporary values into the file. So the test puts back the original bytes and values, then
+     * waits, before passing, for the reload of that write ({@link #settle}). Without a working watcher it times out.
+     */
+    private static final class Fence {
+        private static final java.util.concurrent.atomic.AtomicLong LAST_RELOAD = new java.util.concurrent.atomic.AtomicLong(Long.MIN_VALUE);
+        private static boolean listening;
+        /** NightConfig's debounce is 500 ms: a reload this long after the write follows it. */
+        private static final long AFTER_WRITE_NANOS = 450_000_000L;
+        private final java.nio.file.Path file;
+        private final byte[] bytes;
+        private final Map<ModConfigSpec.ConfigValue<?>, Object> values = new HashMap<>();
+        private long writtenAt = Long.MIN_VALUE;
+
+        private Fence(GameTestHelper h) {
+            listen();
+            file = config().getFullPath();
+            try {
+                bytes = Files.readAllBytes(file);
+            } catch (java.io.IOException e) {
+                throw new GameTestAssertException("config file " + file + ": " + e);
+            }
+            for (RuleCommand.Rule r : RuleCommand.rules()) values.put(r.config(), r.config().get());
+            // a failed test still leaves the file and values as they were (no wait: it has failed)
+            StrikeGameTests.afterTest(h, this::restore);
+        }
+
+        static Fence open(GameTestHelper h) {
+            return new Fence(h);
+        }
+
+        private static synchronized void listen() {
+            if (listening) return;
+            listening = true;
+            var bus = net.neoforged.fml.ModList.get().getModContainerById(Incoming.MOD_ID).orElseThrow().getEventBus();
+            if (bus == null) throw new IllegalStateException("no mod event bus");
+            bus.addListener((net.neoforged.fml.event.config.ModConfigEvent.Reloading e) -> {
+                if (e.getConfig().getType() == ModConfig.Type.SERVER && Incoming.MOD_ID.equals(e.getConfig().getModId())) LAST_RELOAD.set(System.nanoTime());
+            });
+        }
+
+        private void restore() {
+            values.forEach(RuleGameTests::put);
+            try {
+                Files.write(file, bytes);
+            } catch (java.io.IOException e) {
+                throw new IllegalStateException("config file " + file, e);
+            }
+        }
+
+        /** In {@code succeedWhen}, after the test's checks: put the config back once, then wait for its reload. */
+        void settle(GameTestHelper h) {
+            if (writtenAt == Long.MIN_VALUE) {
+                restore();
+                writtenAt = System.nanoTime();
+            }
+            h.assertTrue(LAST_RELOAD.get() - writtenAt >= AFTER_WRITE_NANOS, "waiting for the config file's reload");
+            for (var e : values.entrySet()) {
+                h.assertValueEqual(e.getKey().getRaw(), e.getValue(), "config after its reload: " + String.join(".", e.getKey().getPath()));
+            }
+        }
     }
 
     @SuppressWarnings("unchecked")
@@ -414,9 +476,13 @@ public final class RuleGameTests {
         return ua.zentix.incoming.strike.OrderStatus.rounds(level.getServer(), new ua.zentix.incoming.strike.OrderStatus.Filter(null, tag)).size();
     }
 
+    /** This mod's server config: the world's settings file. */
+    private static ModConfig config() {
+        return ModConfigs.getConfigSet(ModConfig.Type.SERVER).stream().filter(c -> Incoming.MOD_ID.equals(c.getModId())).findFirst().orElseThrow();
+    }
+
     private static CommentedConfig file(GameTestHelper h) {
-        ModConfig config = ModConfigs.getConfigSet(ModConfig.Type.SERVER).stream()
-                .filter(c -> Incoming.MOD_ID.equals(c.getModId())).findFirst().orElseThrow();
+        ModConfig config = config();
         try {
             return new TomlParser().parse(new StringReader(Files.readString(config.getFullPath())));
         } catch (java.io.IOException e) {
