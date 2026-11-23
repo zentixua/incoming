@@ -141,17 +141,27 @@ struct Mush {
     float footMerge;
 };
 
+// The single-burst ray reads its one body from draw uniforms. The radial tables and
+// shadow tiles following these parameters keep their ordinary texture coordinates.
+vec4 mushBodyTexel(sampler2D data, int k, int column) {
+#ifdef PALL_SINGLE
+    return PallMushBody[column];
+#else
+    return texelFetch(data, ivec2(column, k), 0);
+#endif
+}
+
 Mush mushLoad(sampler2D data, int k) {
-    vec4 t0 = texelFetch(data, ivec2(0, k), 0), t1 = texelFetch(data, ivec2(1, k), 0), t2 = texelFetch(data, ivec2(2, k), 0);
-    vec4 t3 = texelFetch(data, ivec2(3, k), 0), t4 = texelFetch(data, ivec2(4, k), 0), t6 = texelFetch(data, ivec2(6, k), 0);
-    vec4 t8 = texelFetch(data, ivec2(8, k), 0), t10 = texelFetch(data, ivec2(10, k), 0), t11 = texelFetch(data, ivec2(11, k), 0);
-    vec4 t12 = texelFetch(data, ivec2(12, k), 0), t13 = texelFetch(data, ivec2(13, k), 0), t15 = texelFetch(data, ivec2(15, k), 0);
-    vec4 t16 = texelFetch(data, ivec2(16, k), 0), t19 = texelFetch(data, ivec2(19, k), 0);
+    vec4 t0 = mushBodyTexel(data, k, 0), t1 = mushBodyTexel(data, k, 1), t2 = mushBodyTexel(data, k, 2);
+    vec4 t3 = mushBodyTexel(data, k, 3), t4 = mushBodyTexel(data, k, 4), t6 = mushBodyTexel(data, k, 6);
+    vec4 t8 = mushBodyTexel(data, k, 8), t10 = mushBodyTexel(data, k, 10), t11 = mushBodyTexel(data, k, 11);
+    vec4 t12 = mushBodyTexel(data, k, 12), t13 = mushBodyTexel(data, k, 13), t15 = mushBodyTexel(data, k, 15);
+    vec4 t16 = mushBodyTexel(data, k, 16), t19 = mushBodyTexel(data, k, 19);
     // table epicenter is x/z/ground y (like pall slot); position becomes x/y/z
     return Mush(t0.xzy, t1.xy, t1.z, t1.w, t2.x, t2.y, t2.z, t2.w, t3.x, t3.y, t3.z, t3.w, t4.x, t4.y, t4.z, t4.w,
-            texelFetch(data, ivec2(5, k), 0), t6.x, t6.y, t6.z, t6.w, texelFetch(data, ivec2(7, k), 0), t8.x, t8.y, t8.z, t8.w,
-            texelFetch(data, ivec2(9, k), 0), t10.x, t10.y, t10.z, t10.w, t11.x, t11.y, t11.z, t12.rgb, t12.w,
-            t13.x, t13.y, t13.z, t13.w, texelFetch(data, ivec2(14, k), 0), t15.x, t15.y, t15.z, t15.w, t16.x, t16.y, t16.z, t16.w,
+            mushBodyTexel(data, k, 5), t6.x, t6.y, t6.z, t6.w, mushBodyTexel(data, k, 7), t8.x, t8.y, t8.z, t8.w,
+            mushBodyTexel(data, k, 9), t10.x, t10.y, t10.z, t10.w, t11.x, t11.y, t11.z, t12.rgb, t12.w,
+            t13.x, t13.y, t13.z, t13.w, mushBodyTexel(data, k, 14), t15.x, t15.y, t15.z, t15.w, t16.x, t16.y, t16.z, t16.w,
             t19.x, t19.y, t19.z, t19.w, t11.w);
 }
 
