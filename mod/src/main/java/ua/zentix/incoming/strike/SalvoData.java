@@ -98,17 +98,21 @@ public final class SalvoData extends SavedData {
 
     /**
      * Cancel salvos carrying group name {@code tag} ({@link Order#tagged}) of {@code owner} (null means any), as {@link
-     * #cancel}; {@code nuclear} includes the nuclear salvo.
+     * #cancel}; {@code nuclear} includes the nuclear salvo; {@code reported} receives the owners whose salvo progress line
+     * the cancelled salvos showed.
      *
      * @return rounds that ended: unlaunched and failed launches
      */
-    public int cancelTagged(ServerLevel level, @Nullable UUID owner, String tag, Collection<? extends ServerPlayer> online, boolean nuclear) {
+    public int cancelTagged(ServerLevel level, @Nullable UUID owner, String tag, Collection<? extends ServerPlayer> online, boolean nuclear,
+                            java.util.function.Consumer<UUID> reported) {
         int rounds = 0;
         for (Iterator<Salvo> it = salvos.iterator(); it.hasNext(); ) {
             Salvo s = it.next();
             if (!tag.equals(s.tag) || s.order == null || owner != null && !owner.equals(s.owner) || !nuclear && s.nuclear()) continue;
             it.remove();
             rounds += s.remaining + s.failed;
+            // its progress line on the owner's screen (a launcher's salvo has none)
+            if (s.owner != null && !(s.from instanceof LaunchOrigin.Fixed)) reported.accept(s.owner);
             settle(level, s, online, "salvo cancelled", Outcome.RECALLED);
         }
         if (rounds > 0) setDirty();

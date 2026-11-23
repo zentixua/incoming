@@ -25,9 +25,10 @@ public final class Orders {
     /** {@link StrikeOrderEvent.Request} listeners running now: an order they start runs again on a later tick. */
     private static int requesting;
     /**
-     * Orders whose admission body runs now ({@link #admit}): accepted rounds count as unfinished ({@link OrderStatus})
-     * before their carrier exists, so a listener of {@code Accepted} asking for a status sees them. Server thread only;
-     * empty between calls.
+     * Orders inside their admission ({@link #admit}) whose accepted rounds have no carrier yet ({@link #carrierPending}):
+     * they count as unfinished ({@link OrderStatus}), so a listener of {@code Accepted} asking for a status sees them. An
+     * order recorded before it is accepted (a salvo) is not here: its record is what status reads, and a clear from that
+     * listener removes it. Server thread only; empty between calls.
      */
     private static final java.util.ArrayDeque<Order> ADMITTING = new java.util.ArrayDeque<>();
 
@@ -103,7 +104,6 @@ public final class Orders {
                     Mth.floor(order.target().z), order.actorName());
             return false;
         }
-        ADMITTING.push(order);
         try {
             boolean ok = body.run(order);
             if (!order.answered()) {
@@ -119,7 +119,15 @@ public final class Orders {
         }
     }
 
-    /** Orders being admitted now, innermost first ({@link #ADMITTING}). */
+    /**
+     * {@code order}'s rounds get their carrier only after {@link Order#accept} (a single launch, a key wait, {@code nuke
+     * now}): until its admission returns, status counts them ({@link #ADMITTING}).
+     */
+    public static void carrierPending(Order order) {
+        if (!ADMITTING.contains(order)) ADMITTING.push(order);
+    }
+
+    /** Orders being admitted now whose rounds have no carrier yet, innermost first ({@link #ADMITTING}). */
     static java.util.Collection<Order> admitting() {
         return ADMITTING;
     }

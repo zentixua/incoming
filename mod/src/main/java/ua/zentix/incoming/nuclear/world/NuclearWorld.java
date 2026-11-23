@@ -159,6 +159,16 @@ public final class NuclearWorld {
     }
 
     /**
+     * {@code d}'s crater is being dug: a live job (a failed one is dropped for this session; its saved progress resumes
+     * after a restart, a later run, like ruins on a later chunk load). Saved unfinished craters become live jobs on the
+     * first tick after a world load, before the impact settle reads this.
+     */
+    public boolean craterDigging(Detonation d) {
+        for (CraterJob job : craters) if (job.detonation().id() == d.id()) return true;
+        return false;
+    }
+
+    /**
      * Whether nuclear queues have server-thread work (NUCLEAR lane {@code WorkScheduler}: while present, impacts
      * do not take entire shared budget).
      */

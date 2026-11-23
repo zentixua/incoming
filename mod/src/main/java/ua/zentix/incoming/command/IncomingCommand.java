@@ -243,6 +243,7 @@ public final class IncomingCommand {
                 : ua.zentix.incoming.strike.Order.server(level, s.getTextName(), l, aim, s::sendFailure)).tagged(tag);
         Detonation[] burst = new Detonation[1];
         boolean admitted = Orders.admit(order, o -> {
+            Orders.carrierPending(o);
             o.accept(1);
             burst[0] = NuclearStrikes.detonateNow(level, ground, nuke.yieldKt(), nuke.airBurst(), e == null ? null : e.getUUID(), o.round(0));
             return true;
@@ -478,7 +479,7 @@ public final class IncomingCommand {
             if (problem != null) {
                 s.sendFailure(problem);
                 // admitted, then its release failed: the round was admitted and ended failed, as for any strike command
-                return got[0] == null ? 0 : got[0].admitted();
+                return later ? StatusCommand.deferred(s) : StatusCommand.admitted(s, got[0]);
             }
             s.sendSuccess(be::status, IncomingConfig.SERVER.earlyWarning.get());
             return later ? StatusCommand.deferred(s) : StatusCommand.admitted(s, got[0]);

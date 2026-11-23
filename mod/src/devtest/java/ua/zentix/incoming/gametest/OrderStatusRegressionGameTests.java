@@ -57,7 +57,8 @@ import java.util.function.Consumer;
  * Regressions from the independent review of A2 (command results, status, tags), one probe each: status inside an
  * {@code Accepted} listener and during an off-world flight's world entry; a deferred command naming its order; {@code clear
  * tag} leaving launchers and removing the boosting ICBM it cancels; {@code nuke now} waiting for its ground counted as
- * queued; {@code launcher … fire} returning the admitted rounds; a nuclear crater still being dug keeping its round open.
+ * queued; {@code launcher … fire} returning the admitted rounds, and naming its order when the release fails; a nuclear
+ * crater still being dug keeping its round open; status inside {@code Accepted} after a clear there.
  */
 @GameTestHolder(Incoming.MOD_ID)
 @PrefixGameTestTemplate(false)
@@ -283,6 +284,72 @@ public final class OrderStatusRegressionGameTests {
         NuclearStrikes.work(List.of(level), budget);
         h.assertTrue(world.craterJobs() > 0, "crater already finished");
         h.assertValueEqual(run(console(h, new ArrayList<>()), "incoming status tag " + tag), 1, "round while its crater still has work");
+        h.succeed();
+    }
+
+    @GameTest(template = "range", timeoutTicks = 20, batch = "status_r2_accepted_clear", skyAccess = true)
+    public static void statusInsideAcceptedReflectsAnImmediatelyClearedSalvo(GameTestHelper h) {
+        String tag = "reviewAcceptedClear";
+        BlockPos target = h.absolutePos(CENTER);
+        CommandSourceStack source = console(h, new ArrayList<>());
+        String status = "incoming status tag " + tag;
+        int[] seen = {-1, -1, -1};
+        Consumer<StrikeOrderEvent.Accepted> listener = event -> {
+            if (!tag.equals(event.getTag())) return;
+            seen[0] = run(source, status);
+            seen[1] = run(source, "incoming clear tag " + tag);
+            seen[2] = run(source, status);
+        };
+        NeoForge.EVENT_BUS.addListener(listener);
+        StrikeGameTests.afterTest(h, () -> {
+            NeoForge.EVENT_BUS.unregister(listener);
+            ServerActions.clearTag(h.getLevel().getServer(), tag, "review");
+        });
+
+        h.assertValueEqual(run(source, "incoming salvo drone 2 0 at " + target.getX() + " " + target.getY() + " " + target.getZ() + " tag " + tag), 2, "rounds admitted");
+        h.assertValueEqual(seen[0], 2, "status at entry to Accepted");
+        h.assertValueEqual(seen[1], 2, "cancelled from Accepted");
+        h.assertValueEqual(run(source, status), 0, "status after the same admission returned");
+        h.assertValueEqual(seen[2], 0, "status immediately after clear returned in Accepted");
+        h.succeed();
+    }
+
+    @GameTest(template = "range", timeoutTicks = 20, batch = "status_r2_fixed_report", skyAccess = true)
+    public static void fixedFireNamesTheAcceptedOrderEvenIfReleaseFails(GameTestHelper h) {
+        BlockPos pad = h.absolutePos(CENTER);
+        h.setBlock(CENTER, ModBlocks.FIXED_LAUNCHER.get());
+        FixedLauncherBlockEntity launcher = h.getBlockEntity(CENTER);
+        Vec3 target = Vec3.atCenterOf(pad).add(0, 0, 40);
+        launcher.setMission(new Mission(WeaponType.DRONE, 1, 0, new Target.Point(target), target, Waypoints.NONE));
+        h.assertTrue(launcher.load(new ItemStack(ModItems.SHAHED.get())).isEmpty(), "stock loaded");
+
+        UUID[] accepted = {null};
+        int[] vetoes = {0};
+        Consumer<StrikeOrderEvent.Accepted> observe = event -> {
+            if (pad.equals(event.getLauncherPos())) accepted[0] = event.getOrderId();
+        };
+        Consumer<EntityJoinLevelEvent> veto = event -> {
+            if (event.getLevel() == h.getLevel() && event.getEntity() instanceof StrikeProjectile p
+                    && p.flightPhase().onLauncher() && p.position().distanceToSqr(Vec3.atCenterOf(pad)) < 36) {
+                vetoes[0]++;
+                event.setCanceled(true);
+            }
+        };
+        NeoForge.EVENT_BUS.addListener(observe);
+        NeoForge.EVENT_BUS.addListener(veto);
+        StrikeGameTests.afterTest(h, () -> {
+            NeoForge.EVENT_BUS.unregister(observe);
+            NeoForge.EVENT_BUS.unregister(veto);
+            h.setBlock(CENTER, Blocks.AIR);
+        });
+
+        List<Component> feedback = new ArrayList<>();
+        int result = run(console(h, feedback), "incoming launcher " + pad.getX() + " " + pad.getY() + " " + pad.getZ() + " fire");
+        h.assertValueEqual(result, 1, "the failed release still admitted one round");
+        h.assertTrue(accepted[0] != null, "the launcher's order was accepted");
+        h.assertValueEqual(vetoes[0], 1, "claim listener vetoed the projectile join");
+        h.assertValueEqual(launcher.stockCount(), 1, "failed release restored its munition");
+        h.assertTrue(feedback.stream().anyMatch(c -> mentions(c, accepted[0].toString())), "feedback did not name admitted order " + accepted[0]);
         h.succeed();
     }
 

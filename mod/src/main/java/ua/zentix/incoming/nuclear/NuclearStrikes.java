@@ -355,7 +355,7 @@ public final class NuclearStrikes {
         // a nuclear round's impact work (strike.OrderStatus): its front and hits, and its crater, which loads its own chunks;
         // ruins resuming in chunks loaded later do not reopen it. Craft blasts waiting for their area count as conventional
         // impact work of the same round (BlastFront).
-        events.settleImpacts(d -> world.frontBusy(d, now) || events.craters().containsKey(d.id()));
+        events.settleImpacts(d -> world.frontBusy(d, now) || world.craterDigging(d));
         long t2 = System.nanoTime();
         RadiationTicker.tick(level);
         long t3 = System.nanoTime();

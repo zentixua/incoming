@@ -487,6 +487,7 @@ public final class ServerActions {
             if (target.label() != null) player.sendSystemMessage(locked(weapon, target).withStyle(ChatFormatting.GOLD));
             // Non-operator nuclear strike: second key and at least 90 s flight/delay, retaining an authorized origin.
             if (l.nuclear() && rules && !NuclearKeys.trusted(player)) {
+                Orders.carrierPending(o);
                 o.accept(1);
                 return NuclearKeys.order(player, player.server.getPlayerList().getPlayers(), l, target, via, from, bill, o.round(0));
             }
@@ -679,6 +680,7 @@ public final class ServerActions {
             order.accept(l.count());
             return true;
         }
+        Orders.carrierPending(order);
         order.accept(1);
         RoundRef round = order.round(0);
         StrikeService.Result r;
@@ -968,6 +970,7 @@ public final class ServerActions {
         // Projectiles now gone: clients stop sound/camera (turned-away B-2 sounds while departing).
         List<UUID> gone = new ArrayList<>();
         int destroyed = 0, turned = 0, unlaunched = 0, virtual = 0, launchersRemoved = 0, salvos = 0, salvoRounds = 0;
+        java.util.Set<UUID> stoppedSalvo = new java.util.HashSet<>();
         for (ServerLevel level : server.getAllLevels()) {
             List<UUID> outside = VirtualFlights.get(level).clear(level, p -> mine.test(p) && (p.flightPhase().onLauncher() || p.recallable()));
             virtual += outside.size();
@@ -1017,10 +1020,11 @@ public final class ServerActions {
             }
             // Player abort leaves nuclear salvo (projectile awaiting launch site), like nuclear projectile.
             if (tag == null) salvos += SalvoData.get(level).cancel(level, owner, server.getPlayerList().getPlayers(), false);
-            else salvoRounds += SalvoData.get(level).cancelTagged(level, owner, tag, server.getPlayerList().getPlayers(), false);
+            else salvoRounds += SalvoData.get(level).cancelTagged(level, owner, tag, server.getPlayerList().getPlayers(), false, stoppedSalvo::add);
         }
         if (tag == null) PacketDistributor.sendToAllPlayers(new S2C.Cleared(Optional.of(owner), false, gone));
         else if (!gone.isEmpty()) PacketDistributor.sendToAllPlayers(new S2C.Cleared(Optional.of(net.minecraft.Util.NIL_UUID), false, gone));
+        if (tag != null) endSalvoLines(server, stoppedSalvo);
         Incoming.LOG.info("Stand down{} — {}: self-destructed {}, turned away {}, taken off launchers {} (launchers {}), off-world {}, salvos {}{}",
                 tag == null ? "" : " (tag " + tag + ")", who, destroyed, turned, unlaunched, launchersRemoved, virtual, salvos,
                 tag == null ? "" : ", unlaunched salvo rounds " + salvoRounds);
@@ -1061,6 +1065,7 @@ public final class ServerActions {
     public static int clearTag(MinecraftServer server, String tag, String who) {
         Predicate<StrikeProjectile> cancelled = p -> tagged(p, tag);
         List<UUID> gone = new ArrayList<>();
+        java.util.Set<UUID> stoppedSalvo = new java.util.HashSet<>();
         int rounds = 0;
         Collection<ServerPlayer> online = server.getPlayerList().getPlayers();
         for (ServerLevel level : server.getAllLevels()) {
@@ -1075,15 +1080,28 @@ public final class ServerActions {
                 p.endRound(RoundEnd.recalled(p.position()));
                 p.discard();
             }
-            rounds += SalvoData.get(level).cancelTagged(level, null, tag, online, true);
+            rounds += SalvoData.get(level).cancelTagged(level, null, tag, online, true, stoppedSalvo::add);
             rounds += NuclearStrikes.cancelTagged(level, tag);
         }
         rounds += NuclearKeys.cancel(server, online, tag, Component.translatable("incoming.nuke.key.cancelled").withStyle(ChatFormatting.GRAY),
                 "tag clear — " + who);
         // nobody's notice (Util.NIL_UUID): an empty owner would reset every player's alerts, an owner their salvo progress
         if (!gone.isEmpty()) PacketDistributor.sendToAllPlayers(new S2C.Cleared(Optional.of(net.minecraft.Util.NIL_UUID), false, gone));
+        endSalvoLines(server, stoppedSalvo);
         Incoming.LOG.info("Clear tag {} — {}: projectiles {}, unlaunched rounds {}", tag, who, gone.size(), rounds);
         return rounds + gone.size();
+    }
+
+    /**
+     * A tagged clear stopped these owners' salvos: end their salvo progress line, unless another salvo of theirs still
+     * launches (it shows its own progress at its next launch).
+     */
+    private static void endSalvoLines(MinecraftServer server, java.util.Set<UUID> owners) {
+        for (UUID owner : owners) {
+            boolean more = false;
+            for (ServerLevel level : server.getAllLevels()) more |= SalvoData.get(level).remaining(owner) > 0;
+            if (!more) PacketDistributor.sendToAllPlayers(new S2C.Cleared(Optional.of(owner), false, List.of()));
+        }
     }
 
     /** Abort result to issuer: whether nuclear strikes were canceled too. */
