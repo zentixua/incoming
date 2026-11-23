@@ -218,6 +218,7 @@ public final class RuleGameTests {
         ServerLevel level = h.getLevel();
         Fence fence = Fence.open(h);
         CommandSourceStack op = console(h, "rule_arena");
+        GridQuiet grid = new GridQuiet();
         BlockPos substation = arena(h);
         Node node = PowerGrid.get(level).nodeAt(h.absolutePos(substation));
         h.assertTrue(node != null, "the substation is not a grid node");
@@ -254,13 +255,19 @@ public final class RuleGameTests {
         h.onEachTick(() -> {
             if (!struck[0] && bomb.isRemoved() && level.getGameTime() > start + 2 && StrikeWorld.get(level).idle() && tagged(level, "b4arena") == 0) struck[0] = true;
         });
+        boolean[] held = {false};
         h.succeedWhen(() -> {
-            h.assertTrue(bomb.isRemoved(), "the bomb has not gone off");
-            h.assertTrue(struck[0], "strikes still running");
-            h.assertTrue(level.getEntitiesOfClass(DebrisEntity.class, new AABB(h.absolutePos(BlockPos.ZERO)).inflate(80)).isEmpty(), "debris still falling");
-            h.assertTrue(PowerGrid.get(level).downOutage(node.id(), level.getGameTime()).isEmpty(), "the substation was knocked out");
-            List<String> changed = changes(h, was);
-            h.assertTrue(changed.isEmpty(), changed.size() + " blocks changed, first " + changed.subList(0, Math.min(8, changed.size())));
+            // the checks once (the cleanup below changes what they read), then the cleanup and its waits
+            if (!held[0]) {
+                h.assertTrue(bomb.isRemoved(), "the bomb has not gone off");
+                h.assertTrue(struck[0], "strikes still running");
+                h.assertTrue(level.getEntitiesOfClass(DebrisEntity.class, new AABB(h.absolutePos(BlockPos.ZERO)).inflate(80)).isEmpty(), "debris still falling");
+                h.assertTrue(PowerGrid.get(level).downOutage(node.id(), level.getGameTime()).isEmpty(), "the substation was knocked out");
+                List<String> changed = changes(h, was);
+                h.assertTrue(changed.isEmpty(), changed.size() + " blocks changed, first " + changed.subList(0, Math.min(8, changed.size())));
+                held[0] = true;
+            }
+            grid.settle(h, level, node);
             fence.settle(h);
         });
     }
@@ -274,6 +281,7 @@ public final class RuleGameTests {
         ServerLevel level = h.getLevel();
         Fence fence = Fence.open(h);
         CommandSourceStack op = console(h, "rule_arena_control");
+        GridQuiet grid = new GridQuiet();
         BlockPos substation = arena(h);
         Node node = PowerGrid.get(level).nodeAt(h.absolutePos(substation));
         h.assertTrue(node != null, "the substation is not a grid node");
@@ -283,11 +291,17 @@ public final class RuleGameTests {
         setAll(h, op, false);
         Warheads.detonate(level, WeaponType.DRONE, Vec3.atBottomCenterOf(h.absolutePos(new BlockPos(24, 12, 24))), null, null, drone);
         Warheads.detonate(level, WeaponType.MISSILE, Vec3.atBottomCenterOf(h.absolutePos(new BlockPos(40, 12, 24))), null, null, missile);
+        boolean[] held = {false};
         h.succeedWhen(() -> {
-            h.assertTrue(StrikeWorld.get(level).idle(), "strikes still running");
-            h.assertTrue(PowerGrid.get(level).downOutage(node.id(), level.getGameTime()).isPresent(), "the substation kept power");
-            List<String> changed = changes(h, was);
-            h.assertTrue(changed.size() > 20, "only " + changed.size() + " blocks changed under rounds made with every rule on");
+            // the checks once (the cleanup below changes what they read), then the cleanup and its waits
+            if (!held[0]) {
+                h.assertTrue(StrikeWorld.get(level).idle(), "strikes still running");
+                h.assertTrue(PowerGrid.get(level).downOutage(node.id(), level.getGameTime()).isPresent(), "the substation kept power");
+                List<String> changed = changes(h, was);
+                h.assertTrue(changed.size() > 20, "only " + changed.size() + " blocks changed under rounds made with every rule on");
+                held[0] = true;
+            }
+            grid.settle(h, level, node);
             fence.settle(h);
         });
     }
@@ -301,7 +315,9 @@ public final class RuleGameTests {
         ServerLevel level = h.getLevel();
         Fence fence = Fence.open(h);
         CommandSourceStack op = console(h, "rule_arena_control_entities");
-        arena(h);
+        GridQuiet grid = new GridQuiet();
+        Node node = PowerGrid.get(level).nodeAt(h.absolutePos(arena(h)));
+        h.assertTrue(node != null, "the substation is not a grid node");
         Map<BlockPos, BlockState> was = snapshot(h);
         setAll(h, op, true);
         RoundRef bombRound = RoundRef.of(UUID.randomUUID(), 0, "b4control2"), droneRound = RoundRef.of(UUID.randomUUID(), 1, "b4control2");
@@ -318,18 +334,24 @@ public final class RuleGameTests {
         drone.attachRound(droneRound);
         level.addFreshEntity(drone);
         drone.intercepted(level, "rule_arena_control_entities", null, null);
+        boolean[] held = {false};
         h.succeedWhen(() -> {
-            h.assertTrue(bomb.isRemoved() && StrikeWorld.get(level).idle(), "the bomb has not gone off");
-            h.assertTrue(level.getEntitiesOfClass(DebrisEntity.class, new AABB(h.absolutePos(BlockPos.ZERO)).inflate(80)).isEmpty(), "debris still falling");
-            long bore = 0, wreck = 0;
-            for (var e : was.entrySet()) {
-                if (h.getBlockState(e.getKey()).equals(e.getValue())) continue;
-                BlockPos p = e.getKey();
-                if (Math.abs(p.getX() - 32) <= 1 && Math.abs(p.getZ() - 20) <= 1 && p.getY() <= 13) bore++;
-                if (p.getZ() >= 36) wreck++;
+            // the checks once (the cleanup below changes what they read), then the cleanup and its waits
+            if (!held[0]) {
+                h.assertTrue(bomb.isRemoved() && StrikeWorld.get(level).idle(), "the bomb has not gone off");
+                h.assertTrue(level.getEntitiesOfClass(DebrisEntity.class, new AABB(h.absolutePos(BlockPos.ZERO)).inflate(80)).isEmpty(), "debris still falling");
+                long bore = 0, wreck = 0;
+                for (var e : was.entrySet()) {
+                    if (h.getBlockState(e.getKey()).equals(e.getValue())) continue;
+                    BlockPos p = e.getKey();
+                    if (Math.abs(p.getX() - 32) <= 1 && Math.abs(p.getZ() - 20) <= 1 && p.getY() <= 13) bore++;
+                    if (p.getZ() >= 36) wreck++;
+                }
+                h.assertTrue(bore > 0, "the bomb made under rules on left its column whole");
+                h.assertTrue(wreck > 0, "the wreck made under rules on left no block");
+                held[0] = true;
             }
-            h.assertTrue(bore > 0, "the bomb made under rules on left its column whole");
-            h.assertTrue(wreck > 0, "the wreck made under rules on left no block");
+            grid.settle(h, level, node);
             fence.settle(h);
         });
     }
@@ -384,6 +406,24 @@ public final class RuleGameTests {
      * carry other tests' temporary values into the file. So the test puts back the original bytes and values, then
      * waits, before passing, for the reload of that write ({@link #settle}). Without a working watcher it times out.
      */
+    /**
+     * The arena's substation leaves the grid as it found it: power back everywhere, its node gone, the blackout queue
+     * idle, so no outage cascade or node outlives the test into later batches (an outage left by the controls held back
+     * the nuclear settlement's admission in the next batch, `nuke_settle_budget`).
+     */
+    private static final class GridQuiet {
+        private boolean restored;
+
+        void settle(GameTestHelper h, ServerLevel level, Node node) {
+            if (!restored) {
+                restored = true;
+                ua.zentix.incoming.grid.Blackouts.restore(level, null, 0, 0);
+                PowerGrid.get(level).removeNode(node.id());
+            }
+            h.assertTrue(ua.zentix.incoming.grid.BlackoutWorld.get(level).idle(), "blackout work still queued");
+        }
+    }
+
     private static final class Fence {
         private static final java.util.concurrent.atomic.AtomicLong LAST_RELOAD = new java.util.concurrent.atomic.AtomicLong(Long.MIN_VALUE);
         private static boolean listening;
