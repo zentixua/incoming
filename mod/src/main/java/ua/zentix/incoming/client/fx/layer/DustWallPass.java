@@ -69,6 +69,8 @@ public final class DustWallPass {
     public static final int NODES = 128;
     private static final Integer FORCED_DIV = Integer.getInteger("incoming.dustwall.div");
     static final GpuTimer GPU = new GpuTimer();
+    /** The pass by part (unified-wave 2c-i): the march, the atlas pack, the temporal resolve. */
+    static final GpuTimer GPU_MARCH = new GpuTimer(), GPU_PACK = new GpuTimer(), GPU_RESOLVE = new GpuTimer();
 
     /** Value-noise lattice side ({@code DW_LATTICE}). */
     private static final int LATTICE = 128;
@@ -98,6 +100,9 @@ public final class DustWallPass {
      */
     private static boolean planB;
     private static long planBChecked = -1;
+
+    /** Only the haze level is left this frame ({@code NukePall.youngWall}): the march takes a quarter of the rays. */
+    public static boolean hazeOnly;
 
     /** The preset's own march divisor (the light's detail level reads it, not the scaled one). */
     private static int baseDiv = 4;
@@ -181,8 +186,10 @@ public final class DustWallPass {
         Minecraft mc = Minecraft.getInstance();
         int divisor = PallPass.LADDER[detail.level].wallDiv();
         baseDiv = divisor;
-        // probe (unified-wave 2a): the march divisor × the integer in fx/dustwall_div_scale (the GPU run's coarser candidate)
-        divisor *= divScale();
+        // probe (unified-wave 2a): the march divisor × the integer in fx/dustwall_div_scale (the GPU run's coarser candidate);
+        // once only the haze level is left (no dust younger than its fade's end anywhere on the table), a quarter of the rays:
+        // the haze's light and shape are smooth at that scale (judge 2a-r3: no visible difference), the young level's not
+        divisor *= Math.max(divScale(), hazeOnly ? 2 : 1);
         if (FORCED_DIV != null) {
             // A diagnostic override can request finer sampling only while the controller is at the chosen setting.
             int minimum = detail.floored || detail.level > detail.ceiling ? divisor : 1;
@@ -267,7 +274,9 @@ public final class DustWallPass {
             m.safeGetUniform("PallFloorFrom").set(pall.floorFrom);
             m.safeGetUniform("PallAirSky").set(pall.airSky.x, pall.airSky.y, pall.airSky.z);
             m.safeGetUniform("PallAirFog").set(pall.airFog.x, pall.airFog.y, pall.airFog.z, pall.airFog.w);
+            int part = warming ? -1 : GPU_MARCH.begin();
             fullScreen(m, () -> Uniform.uploadInteger(Uniform.glGetUniformLocation(m.getId(), "DwNoise"), NOISE_UNIT), true, warming);
+            GPU_MARCH.end(part);
             PallPass.stamp(timing, 6);
             // Pack both simultaneous outputs into one atlas. The two halves share
             // temporal weights, and all readers need only one texture unit.
@@ -275,7 +284,9 @@ public final class DustWallPass {
             GlStateManager._viewport(0, 0, 2 * width, height);
             RenderSystem.setShaderTexture(0, target);
             RenderSystem.setShaderTexture(1, bounds);
+            part = warming ? -1 : GPU_PACK.begin();
             fullScreen(pack, null, false, warming);
+            GPU_PACK.end(part);
             PallPass.stamp(timing, 7);
             // averaged over frames at the same resolution into the other history target
             int next = 1 - latest;
@@ -295,7 +306,9 @@ public final class DustWallPass {
                 r.safeGetUniform("DwPrevDiv").set((float) historyDiv[latest]);
                 r.safeGetUniform("DwReproject").set(dx, dy, dz, past ? 1f : 0f);
                 r.safeGetUniform("DwHistory").set(HISTORY, f.layerTop - f.eye[1]);
+                part = warming ? -1 : GPU_RESOLVE.begin();
                 fullScreen(r, null, false, warming);
+                GPU_RESOLVE.end(part);
                 latest = next;
                 PREVIOUS.set(VIEW_PROJECTION);
                 System.arraycopy(f.eye, 0, PREVIOUS_EYE, 0, 3);
@@ -483,7 +496,8 @@ public final class DustWallPass {
 
     /** The pass's state for the timing log: resolution, step cap, history. */
     public static String describe() {
-        return String.format(java.util.Locale.ROOT, "1/%d (preset 1/%d), history %s, frame %d, %s", div, baseDiv, history && HISTORY_ON ? "on" : "off", frame,
+        return String.format(java.util.Locale.ROOT, "1/%d (preset 1/%d), march %.3f pack %.3f resolve %.3f ms, history %s, frame %d, %s", div, baseDiv,
+                GPU_MARCH.lastMean, GPU_PACK.lastMean, GPU_RESOLVE.lastMean, history && HISTORY_ON ? "on" : "off", frame,
                 planB ? "plan B far level" : "full march");
     }
 

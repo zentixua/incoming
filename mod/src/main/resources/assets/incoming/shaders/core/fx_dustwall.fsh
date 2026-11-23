@@ -83,11 +83,24 @@ void main() {
     // no world behind the pixel (beyond the drawn chunks, between LODs): the ray ends on the relief map traced from the eye,
     // as the pall's (pallFloor); where the world is drawn its depth alone ends the ray (the coarse map stood over open
     // streets and hid the dust down them)
-    if (axis >= 1e8) tEnd = min(tEnd, pallFloor(Sampler3, PallSlot0, PallGround0, dir, PallFloorFrom, 1e6, 24, jitter));
+    bool relief = false;
+    if (axis >= 1e8) {
+        float floorAt = pallFloor(Sampler3, PallSlot0, PallGround0, dir, PallFloorFrom, 1e6, 24, jitter);
+        relief = floorAt < 1e6 && floorAt < tEnd;
+        tEnd = min(tEnd, floorAt);
+    }
     // pixel size per block of distance at this resolution
     vec4 side = InvViewProj * vec4(ndc + vec2(2.0 * DwDiv / float(size.x), 0.0), 1.0, 1.0);
     float foot = length(normalize(side.xyz / side.w) - dir);
     fragColor = dwMarch(dir, min(tEnd, 30000.0), jitter, foot, int(DwFrame.y));
+    // past the world's drawn edge the ray ends on the relief: the ground there stands behind the haze as it does inside the
+    // edge (a dome at the render distance showed through see-through haze where the drawn ground stopped), weighted by the
+    // dust the ray crossed, so a view without dust keeps vanilla's own edge
+    if (relief && fragColor.a < 0.999) {
+        float w = (1.0 - fragColor.a) / (1.0 - fragColor.a + 0.03);
+        fragColor.rgb += fragColor.a * w * dwGroundBehind(DwEye.xyz + dir * tEnd);
+        fragColor.a *= 1.0 - w;
+    }
     float cover = 1.0 - fragColor.a;
     wallDepth = vec4(vec3(gDwDepth.xy * cover, gDwDepth.z) * max(dot(dir, PallForward), 1e-3), fragColor.a);
 }

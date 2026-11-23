@@ -412,6 +412,8 @@ public final class NukePall {
             top = Math.max(top, table[4 * ((1 + k) * n + j)]);
         }
         if (t > lastArrival + end) return;
+        // the youngest dust anywhere is past the textured level's window (dwTextured: 0 from 60 s): the haze level alone
+        ua.zentix.incoming.client.fx.layer.DustWallPass.hazeOnly = t > lastArrival + 60;
         float gx = (float) (d.burst().x - eye.x), gz = (float) (d.burst().z - eye.z), gy = (float) (d.groundY() - eye.y);
         w.eye[0] = -gx;
         w.eye[1] = -gy;

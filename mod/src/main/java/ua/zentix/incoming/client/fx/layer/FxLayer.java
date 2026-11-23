@@ -222,6 +222,9 @@ public final class FxLayer {
             GPU.second();
             HEAT.second();
             DustWallPass.GPU.second();
+            DustWallPass.GPU_MARCH.second();
+            DustWallPass.GPU_PACK.second();
+            DustWallPass.GPU_RESOLVE.second();
             FxBloom.second();
             LayerTimes.second();
             frameNanos = frameMax = cleanMax = cleanCpu = 0;

@@ -81,7 +81,7 @@ const float DW_BULGE = 0.35, DW_BILLOW = 0.15, DW_HAZE = 1.2;
 // presentation (est.): the wind's shear stretches the haze's features along the wind, ×(1 + a / DW_SHEAR_S); the slow
 // plumes over hot ground (the fire zone, the law's buoyant rise) lift the swells' crests by up to DW_PLUME of the top over
 // the first minutes, and sink back as the ground cools
-const float DW_SHEAR_S = 300.0, DW_PLUME = 1.0;
+const float DW_SHEAR_S = 300.0, DW_PLUME = 1.6;
 
 // First and last occupied distances and the sum of distances weighted by visible opacity.
 vec3 gDwDepth = vec3(0.0);
@@ -357,6 +357,14 @@ float dwBulge(vec3 pw, float a) {
     return dwSwellField(pw.xz, a, L);
 }
 
+// the slow plumes over hot ground (presentation, est.): where the swell field's large-scale value L is high, a tuft rises
+// over the first minute to DW_PLUME of the top (hot: the fire zone's share, half outside it) and sinks back over ~20 min as
+// the ground cools; the young level and the haze level read the same function (the puffs' successors from ~15 s: T6)
+float dwPlume(float L, float a, float hot) {
+    float tuft = smoothstep(0.66, 0.86, L);
+    return DW_PLUME * hot * tuft * tuft * (1.0 - exp(-a / 30.0)) * exp(-a / 1200.0);
+}
+
 // a buoyant tongue above the top: about one 110 m cell in three lifts a rounded column of dust up to ~35 % of the layer
 // above the top (inside the ray's bound), 1–15 s after the front, over ~6 s, thinning as it rises over ~15 s (presentation)
 float dwPuff(vec3 pw, float top, float a) {
@@ -411,7 +419,17 @@ float dwBound(vec3 g) {
     float env = a < 1.5 ? law.x * 1.8 : dwEnvelope(a, law.x, 1.8);
     float full = env * (1.0 + DW_BULGE) * DW_HAZE + 6.0;
     // the haze level's crests and plumes (dwHaze: top × (1 + swell + plume), its soft edge to 1.3 of it)
-    if (dwTextured(a) < 0.999) full = max(full, env * (1.0 + DW_BULGE + DW_PLUME) * 1.3 + 6.0);
+    if (a > 3.0) {
+        // the swell and plume over this ground point (the same fields; the eddies shift the air by up to ~40 m against their
+        // 220 m scale: margins of 0.15 on the swell and a lower tuft threshold), so the plumes' room stands only over plumes
+        // (a bound over every point with the tallest plume's room tripled the strides of the young view's rays)
+        float L;
+        float sw = dwSwellField(q, a, L);
+        float pl = DW_PLUME * (0.5 + 0.5 * dwRow0(r).z) * smoothstep(0.56, 0.8, L) * (1.0 - exp(-a / 30.0)) * exp(-a / 1200.0);
+        float reach = env * (1.0 + max(sw + 0.15, 0.0) + pl) * DW_HAZE * 1.12 + 6.0;
+        // (the puffs of the first ~20 s keep the old room over every point)
+        full = a < 20.0 ? max(full, reach) : reach;
+    }
 #ifdef DW_BOUND_SWELL
     // the swell here (dwBulge at the ground point, without the eddies' shift: ±0.12 of margin for it), its billowed top and
     // soft edge and veil over it: the dust's own reach. A ray above the swollen top strides as over clear air instead of
@@ -458,8 +476,7 @@ float dwHaze(vec3 g, vec3 q, float r, float a, vec2 law, bool coarse) {
     float L;
     float swell = dwSwellField(xs, a, L);
     vec3 row = dwRow0(r);
-    float hot = 0.5 + 0.5 * row.z;
-    float plume = DW_PLUME * hot * smoothstep(0.6, 0.82, L) * (1.0 - exp(-a / 30.0)) * exp(-a / 1200.0);
+    float plume = dwPlume(L, a, 0.5 + 0.5 * row.z);
     float top = max(dwEnvelope(a, h, 1.65) * (1.0 + swell + plume), 1.0);
     if (q.y > top * 1.3 + 6.0) return 0.0;
     float edge = 0.22 * top + 4.0;
@@ -545,7 +562,8 @@ float dwDensity(vec3 g, bool coarse) {
     float s1 = seed.x, s2 = seed.y;
     float delay = 0.12 * clamp(1.6 * s2 - 0.55, 0.0, 1.0) * (0.6 + 0.8 * s1);
     float h = law.x * mix(0.88, 1.02, s2), k = dwHump(seed.z);
-    float top0 = max(dwEnvelope(a0, h, k), 1.0), ceiling = top0 * (1.0 + DW_BULGE) * DW_HAZE + 6.0;
+    float plumeRoom = a0 > 3.0 ? DW_PLUME : 0.0;
+    float top0 = max(dwEnvelope(a0, h, k), 1.0), ceiling = top0 * (1.0 + DW_BULGE + plumeRoom) * DW_HAZE + 6.0;
     gDwWhy = 4.0;
     if (q.y > ceiling) return 0.0;
     gDwWhy = 6.0;
@@ -558,24 +576,11 @@ float dwDensity(vec3 g, bool coarse) {
     gDwWhy = 6.0;
     float top = dwEnvelope(a, h, k), env = top, ph;
     vec3 pw = dwAir(q, dwClock(a, q.xz), r, top, ph);
-    float swell = mean ? 0.0 : dwBulge(pw, a);
+    float swellL = 0.5;
+    float swell = mean ? 0.0 : dwSwellField(pw.xz, a, swellL);
     if (!coarse) gDwSwell = swell;
-    top *= 1.0 + swell;
-    // above the highest billowed top, its soft edge and veil (dwSoft ≤ 1: surf ≤ top·(1 + DW_BILLOW)), only a puff can hold dust:
-    // the texture is not read there (the young view's rays crossed ~20 such clear cells each, at the full texture's cost)
-    if (!coarse && !mean && q.y > top * (1.0 + DW_BILLOW) * 1.12 + 4.0 + 0.4 * (0.22 * top + 4.0)) {
-        gDwSurf = top * (1.0 + DW_BILLOW);
-        float pf = dwPuff(vec3(pw.x, q.y, pw.z), top, a);
-        if (pf <= 0.0) {
-            gDwWhy = 7.0;
-            return F >= 0.999 ? 0.0 : (1.0 - F) * haze;
-        }
-        float taup = dwTransfer(law.y) * (1.0 + 0.5 * exp(-a / 1.1));
-        float sigp = taup / dwProfileInt(h) * mix(1.0, mix(0.75, 1.25, 0.55 * s1 + 0.45 * s2), dwContrast(a)) * dwNoiseGain(taup) * dwOpen(g);
-        gDwSigma = sigp;
-        float texp = sigp * pf * (1.0 - smoothstep(ceiling - 8.0, ceiling, q.y)) * smoothstep(0.0, 0.08, a);
-        return F >= 0.999 ? texp : mix(haze, texp, F);
-    }
+    float plume = mean || a < 3.0 ? 0.0 : dwPlume(swellL, a, 0.5 + 0.5 * dwRow0(r).z);
+    top *= 1.0 + swell + plume;
     // One frame for the texture: fixed in the air across the ground and carried by the dust's own rise and fall in height
     // (height as a share of this point's envelope, scaled to the settled layer): each column's billows are born at the
     // ground as the front reaches it, rise into the crest and settle with it, and stay where they were torn up. Sliced
@@ -587,6 +592,29 @@ float dwDensity(vec3 g, bool coarse) {
     float C = dwContrast(a);
     // billows of ~20 × 13 m and finer (light paths see the two first octaves)
     vec3 tq = vec3(pw.x, yc - 0.45 * ph, pw.z) / vec3(20.0, 13.0, 20.0);
+    // occupancy from the texture's first octaves: the finer ones can lift the billowed top at most by their summed weights
+    // (fBm 0.4375 of 0.9375, billows 0.375 of 0.875), so above that top, its soft edge and veil only a puff holds dust and the
+    // texture is not read (the young view's rays crossed ~20 such clear cells each at the full texture's cost)
+    if (!coarse && !mean) {
+        vec3 bq = vec3(pw.x, yc - 0.3 * ph, pw.z) / vec3(34.0, 22.0, 34.0) + 11.0;
+        float n1 = 0.5 * mix(0.5, dwNoise3(tq), dwLod(1.0 / 13.0)), b1 = 0.5 * mix(0.42, abs(2.0 * dwNoise3(bq) - 1.0), dwLod(1.0 / 22.0));
+        float nMax = mix(0.5, (n1 + 0.4375) / 0.9375, C), bMax = mix(0.42, (b1 + 0.375) / 0.875, C);
+        float tornMax = 1.0 + 0.5 * exp(-a / 0.25);
+        float surfMax = top * (1.0 + DW_BILLOW * dwSoft(((bMax - 0.42) * 3.0 + (nMax - 0.5) * 2.0) * tornMax));
+        if (q.y > max(surfMax + 0.4 * (0.22 * top + 4.0), surfMax * 1.12 + 4.0)) {
+            gDwSurf = surfMax;
+            float pf = q.y < top * 0.8 ? 0.0 : dwPuff(vec3(pw.x, q.y, pw.z), top, a);
+            if (pf <= 0.0) {
+                gDwWhy = 7.0;
+                return F >= 0.999 ? 0.0 : (1.0 - F) * haze;
+            }
+            float taup = dwTransfer(law.y) * (1.0 + 0.5 * exp(-a / 1.1));
+            float sigp = taup / dwProfileInt(h) * mix(1.0, mix(0.75, 1.25, 0.55 * s1 + 0.45 * s2), C) * dwNoiseGain(taup) * dwOpen(g);
+            gDwSigma = sigp;
+            float texp = sigp * pf * (1.0 - smoothstep(ceiling - 8.0, ceiling, q.y)) * smoothstep(0.0, 0.08, a);
+            return F >= 0.999 ? texp : mix(haze, texp, F);
+        }
+    }
     float n = mean ? 0.5 : mix(0.5, coarse ? dwFbm2(tq, 0.0) : dwFbm(tq, 1.0 / 13.0), C);
     // cauliflower lumps of the top, ~35 m and finer, in the same frame
     float bl = coarse || mean ? 0.42 : mix(0.42, dwBillow(vec3(pw.x, yc - 0.3 * ph, pw.z) / vec3(34.0, 22.0, 34.0) + 11.0, 1.0 / 22.0), C);
@@ -726,6 +754,20 @@ vec3 dwTexturedLight(vec3 q, vec3 rd) {
             + dwSkyOnDust() * (0.03 + 0.15 * exp(-0.3 * depth));
     vec3 albedo = mix(DwAlbedo, DwSandAlbedo, gDwSand), bulk = mix(DwBulk, DwSandBulk, gDwSand);
     return DW_EXPOSURE * max(DwAdapt, 1.0) * (albedo * single + bulk * multiple + bulk * DwGroundLight);
+}
+
+// the ground under the dust at p (relief map point, from ground zero's ground point): land albedo (est., grass and soil)
+// lit by the sun's beam through the drawn column above it and by the column's diffuse light (the two streams at its bottom)
+const vec3 DW_GROUND_ALBEDO = vec3(0.16, 0.19, 0.11);
+vec3 dwGroundBehind(vec3 p) {
+    gDwF = 0.0;
+    dwDensity(vec3(p.x, dwFloor(p.xz) + 1.0, p.z), false);
+    float tc = gDwHazeTc;
+    float muS = max(DwSunDir.y, 0.12), sunUp = smoothstep(-0.05, 0.05, DwSunDir.y);
+    vec3 down = vec3(pallDiffuse(PALL_DUST_W.r, PALL_DUST_G, tc, tc, PALL_LAND, muS, DwSunLight.r * sunUp, 1.0, 0.0, dwSkyOnDust().r, 0.0, -0.6666667),
+            pallDiffuse(PALL_DUST_W.g, PALL_DUST_G, tc, tc, PALL_LAND, muS, DwSunLight.g * sunUp, 1.0, 0.0, dwSkyOnDust().g, 0.0, -0.6666667),
+            pallDiffuse(PALL_DUST_W.b, PALL_DUST_G, tc, tc, PALL_LAND, muS, DwSunLight.b * sunUp, 1.0, 0.0, dwSkyOnDust().b, 0.0, -0.6666667));
+    return DW_GROUND_ALBEDO * (DwSunLight * sunUp * muS * exp(-tc / muS) + max(down, vec3(0.0))) * max(DwAdapt, 1.0);
 }
 
 // light of a sample: the textured level's (take 33's) and the haze level's, blended by the textured share
