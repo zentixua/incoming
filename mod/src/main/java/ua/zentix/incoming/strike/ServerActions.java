@@ -441,30 +441,37 @@ public final class ServerActions {
      */
     public static boolean strike(ServerPlayer player, WeaponType weapon, int count, int spread, Aim aim, Loadout.Nuke nuke, Waypoints via,
                                  @Nullable LaunchOrigin from, boolean rules, @Nullable String tag, @Nullable Consumer<Order> made) {
+        return strike(player, player, weapon, count, spread, aim, nuke, via, from, rules, tag, made);
+    }
+
+    /**
+     * Same, given by {@code asker} ({@link Authority}: the player who gave the order, also through {@code /execute as};
+     * null for automation, the console, command blocks and what they run, which asks nothing). {@code player} is whom
+     * the order is made for: targets, payment, projectiles.
+     */
+    public static boolean strike(@Nullable ServerPlayer asker, ServerPlayer player, WeaponType weapon, int count, int spread, Aim aim,
+                                 Loadout.Nuke nuke, Waypoints via, @Nullable LaunchOrigin from, boolean rules, @Nullable String tag,
+                                 @Nullable Consumer<Order> made) {
         Aim asAsked = aim;
         if (Orders.elsewhere(player.serverLevel(), () -> {
-            // later the player may have left (inventory already saved) or respawned (a new object): order as they are now
+            // later the player may have left (inventory already saved) or respawned (a new object): order as they are now;
+            // the asker's rights are read again then (Authority.Actor.live)
             ServerPlayer now = live(player);
-            if (now != null) strike(now, weapon, count, spread, asAsked, nuke, via, from, rules, tag, made);
+            if (now != null) strike(asker, now, weapon, count, spread, asAsked, nuke, via, from, rules, tag, made);
             else Incoming.LOG.info("Queued strike order dropped: {} left", player.getGameProfile().getName());
         })) return true;
         // The order as requested, before clamping: a carrier warhead where carriers carry none is refused, as in review.
         Loadout asked = new Loadout(weapon, count, spread, TargetMode.LOOK, "", nuke);
-        // The player's own rights: a designator or a player's command (an operator's own included). A higher-level source
-        // running as this player (/execute as from the console or a command block) is automation and asks nothing here;
-        // a nuclear order asks for every player source, below.
-        if (!asked.nuclear() && (rules || player.hasPermissions(2))) {
-            Authority.Denial denied = Authority.check(Authority.Action.launch(weapon, false), Authority.Actor.of(player));
-            if (denied != null) {
-                refuse(player, denied.line());
-                return false;
-            }
-        }
+        // The rights of whoever gave the order, as they are now; automation asks nothing. A nuclear order asks after its
+        // target, in the order its refusals always came.
+        if (!asked.nuclear() && !askerAllows(asker, player, asked)) return false;
         if (rules) {
             aim = ruled(player, aim);
             if (aim == null) return false;
         }
+        // A nuclear order also needs the rights of the player it is made for, from any source, as the switches always did
         if (asked.nuclear()) {
+            if (!askerAllows(asker, player, asked)) return false;
             Component no = nuclearRefusal(player, asked);
             if (no != null) {
                 refuse(player, no);
@@ -500,6 +507,20 @@ public final class ServerActions {
         });
         if (made != null) made.accept(order);
         return ok;
+    }
+
+    /**
+     * {@code asker}'s rights ({@link Authority}) to launch {@code asked}, read as they are now (an asker who left: by
+     * {@link Authority.Actor#owner}); null asker is automation. A refusal goes to the asker, otherwise to {@code player}.
+     */
+    private static boolean askerAllows(@Nullable ServerPlayer asker, ServerPlayer player, Loadout asked) {
+        if (asker == null) return true;
+        ServerPlayer by = live(asker);
+        Authority.Denial denied = Authority.check(Authority.Action.launch(asked.weapon(), asked.nuclear()),
+                by != null ? Authority.Actor.of(by) : Authority.Actor.owner(player.server, asker.getUUID()));
+        if (denied == null) return true;
+        refuse(by != null ? by : player, denied.line());
+        return false;
     }
 
     /**

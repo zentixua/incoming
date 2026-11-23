@@ -235,9 +235,9 @@ public final class IncomingCommand {
         if (Orders.elsewhere(level, () -> nukeNow(s, pos, nuke, tag))) return StatusCommand.deferred(s);
         // a rerun later: the command's own gate as it is then
         if (!mayNuke(s) || !s.hasPermission(2)) return 0;
-        // an operator's own command asks their rights (a permission mod may deny them); a higher-level source running as a
-        // player, the console and command blocks are automation
-        if (e instanceof ServerPlayer p && p.hasPermissions(2)) {
+        // the player who typed it asks their own rights (a permission mod may deny an operator); the console, command blocks
+        // and what they run, as any player, are automation, as this host tool always was
+        if (asker(s) instanceof ServerPlayer p) {
             Authority.Denial denied = Authority.check(Authority.Action.launch(WeaponType.NUKE, true), Authority.Actor.of(p));
             if (denied != null) {
                 ServerActions.refuse(p, denied.line());
@@ -457,7 +457,7 @@ public final class IncomingCommand {
         ua.zentix.incoming.strike.Order[] got = {null};
         Consumer<ua.zentix.incoming.strike.Order> made = later ? o -> StatusCommand.admitted(s, o) : o -> got[0] = o;
         if (player != null) {
-            ServerActions.strike(player, w, count, spread, aim, nuke, path.via(), path.from(), rules(s), path.tag(), made);
+            ServerActions.strike(asker(s), player, w, count, spread, aim, nuke, path.via(), path.from(), rules(s), path.tag(), made);
         } else {
             ServerActions.dispatch(level, s.getTextName(), s.getRotation().y, w, count, spread, aim, nuke, path.via(), path.from(), path.tag(),
                     s::sendFailure, made);
@@ -585,6 +585,15 @@ public final class IncomingCommand {
      */
     private static boolean rules(CommandSourceStack s) {
         return !s.hasPermission(2);
+    }
+
+    /**
+     * The player who gave the command ({@code Authority}: their rights decide), also through {@code /execute as}: the
+     * stack's original source; null for the console, command blocks and what they run.
+     */
+    @Nullable
+    private static ServerPlayer asker(CommandSourceStack s) {
+        return s.source instanceof ServerPlayer p ? p : null;
     }
 
     private static int give(CommandContext<CommandSourceStack> ctx, Collection<ServerPlayer> players) {

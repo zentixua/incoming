@@ -192,13 +192,17 @@ paths:
   `NuclearKeys.trusted`), so the default handler answers exactly as before; its refusal lines stay the switches' own,
   a foreign handler's say only what is refused (`Denial.byDefault`). Gates: designator, weapon, nuclear flag (hard),
   `incoming.nuclear`. Trust is never a node: second key, warning, nuclear abort/retarget, map launch site stay
-  `NuclearKeys.trusted`. Automation asks nothing: console, command blocks, ownerless launcher, `/execute as` from a source
-  above the player's own level (`strike`: asked when `rules || player.hasPermissions(2)`), except nuclear orders, which
-  always ask the player (`nuclearRefusal` for every player source). An offline owner never calls
-  `PermissionAPI.getOfflinePermission` (LuckPerms loads from storage there): default handler = the resolver; a foreign
-  handler = the answers kept at logout (`Authority.remember`, `PERMISSION_MEMORY` overworld attachment, unsaved), else the
-  resolver. Regressions: `AuthorityTest`, `PermissionGameTests` (devtest handler swapped into `PermissionAPI`, one batch
-  per probe: the handler and switches are server-wide).
+  `NuclearKeys.trusted`. The actor is who gave the order: a command's `CommandSourceStack.source` player (also through
+  `/execute as`; `ServerActions.strike(asker, player, …)`, re-read live after a deferral); console, command blocks and
+  ownerless launchers are automation and ask nothing, except that a flying nuclear order always asks the player it is
+  made for (`nuclearRefusal`, as the switches did); `nuke now` asks only a typing player. A key wait re-asks its owner's
+  rights (not carrier/yield validity) when the key turns, after finding the order (no-order line unchanged); an armed
+  order rechecks the nuclear flag before release. An offline owner never calls `PermissionAPI.getOfflinePermission`
+  (NeoForge promises nothing about storage there): the resolver answers, under a foreign handler narrowed (only
+  narrowed) by the answers kept at logout (`Authority.remember`, `PERMISSION_MEMORY`, unsaved); context-dependent
+  denials from another dimension are not known offline. A handler that lacks a node falls back to its resolver.
+  Regressions: `AuthorityTest`, `PermissionGameTests`, `PermissionRegressionGameTests` (devtest handlers swapped into
+  `PermissionAPI`, one batch per probe: the handler and switches are server-wide).
 - Nuclear permission (Artem): `nuclear.ops_only` means operators and the world host (`NuclearKeys.trusted`: the
   single-player or LAN host, cheats on or off). Review and launch take the refusal from one function,
   `ServerActions.nuclearRefusal` (`Authority`: designator, weapon, enabled, `incoming.nuclear`; then carrier, yield cap,

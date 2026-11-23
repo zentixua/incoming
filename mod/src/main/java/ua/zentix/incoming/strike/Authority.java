@@ -41,13 +41,16 @@ import java.util.function.Predicate;
  * flag refuses before {@code incoming.nuclear}; operator and host trust ({@link NuclearKeys#trusted}: second key, warning,
  * nuclear abort and retarget, map launch site) is never granted by a node.
  * <p>
- * Automation (console, command blocks, functions, {@code /execute as} from a source above the player's own level, an
- * ownerless launcher) asks nothing here: the entries that have it pass it by, as with today's switches.
+ * The actor is who gave the order: the player at the designator, the player who typed a command (also through
+ * {@code /execute as}; {@code CommandSourceStack.source}), a fixed launcher's owner. Automation (console, command blocks,
+ * functions they run, an ownerless launcher) asks nothing here, as with the switches. A nuclear order made for a
+ * player also asks that player ({@code ServerActions.nuclearRefusal}), as the switches always did.
  * <p>
- * An offline owner never reaches the handler's storage on the server tick: the default handler's answer is the node's
- * own resolver (profile cache and op list); any other handler's is the answer it gave while the owner was last online
- * ({@link #remember}, at logout, kept until the server stops), otherwise the node default.
- * {@link PermissionAPI#getOfflinePermission} is never called (LuckPerms loads the user from storage there).
+ * An offline owner never reaches the handler on the server tick: NeoForge does not promise that a handler's offline
+ * lookup avoids storage, so {@link PermissionAPI#getOfflinePermission} is never called. The default handler's answer is
+ * the node's own resolver (profile cache and op list). Under any other handler the resolver answers too, narrowed by
+ * what the handler refused while the owner was last online in this server run ({@link #remember}, at logout): a kept
+ * answer only takes rights away, never grants beyond the default, so a stale grant cannot open a launcher.
  */
 public final class Authority {
     /** Use the designator at all; launch anything. Default: {@code designator_for_everyone} or operator. */
@@ -180,20 +183,25 @@ public final class Authority {
         e.addNodes(new ArrayList<>(nodes()));
     }
 
-    /** A player leaves: keep the active handler's answers for their offline launchers. */
+    /** A player leaves: keep the active handler's answers for their offline launchers. Never interrupts the logout. */
     public static void onLogout(PlayerEvent.PlayerLoggedOutEvent e) {
-        if (e.getEntity() instanceof ServerPlayer player) remember(player);
+        if (!(e.getEntity() instanceof ServerPlayer player)) return;
+        try {
+            remember(player);
+        } catch (RuntimeException x) {
+            Incoming.LOG.warn("Permission answers of {} not kept for offline launchers", player.getGameProfile().getName(), x);
+        }
     }
 
     /**
-     * Keep {@code player}'s answers for every node while they are online: an offline owner's launcher reads them
-     * ({@link Offline}) without asking the handler's storage. Only for a handler other than the default one, whose
-     * offline answer is its resolver.
+     * Keep {@code player}'s answers for every node as they leave: an offline owner's launcher narrows the node default
+     * by them ({@link Offline}) without asking the handler. Only for a handler other than the default one, whose offline
+     * answer is its resolver. The answers carry the context of the moment (the dimension the player left from).
      */
     public static void remember(ServerPlayer player) {
         if (defaultHandler()) return;
         Map<String, Boolean> answers = new HashMap<>();
-        for (PermissionNode<Boolean> node : nodes()) answers.put(node.getNodeName(), PermissionAPI.getPermission(player, node));
+        for (PermissionNode<Boolean> node : nodes()) answers.put(node.getNodeName(), online(player, node));
         player.server.overworld().getData(ModAttachments.PERMISSION_MEMORY).put(player.getUUID(), answers);
     }
 
@@ -226,14 +234,26 @@ public final class Authority {
     private static boolean has(PermissionNode<Boolean> node, Actor actor, boolean byDefault) {
         return switch (actor) {
             // before the server registers nodes (no handler yet) the node's own default answers
-            case Player(ServerPlayer p) -> PermissionAPI.getActivePermissionHandler() == null ? node.getDefaultResolver().resolve(p, p.getUUID())
-                    : PermissionAPI.getPermission(p, node);
+            case Player(ServerPlayer p) -> online(p, node);
             case Offline(MinecraftServer server, UUID id) -> {
-                Boolean kept = byDefault ? null : server.overworld().getData(ModAttachments.PERMISSION_MEMORY).get(id, node);
                 // the default handler's offline answer is exactly this resolver call
-                yield kept != null ? kept : node.getDefaultResolver().resolve(null, id);
+                boolean byResolver = node.getDefaultResolver().resolve(null, id);
+                Boolean kept = byDefault ? null : server.overworld().getData(ModAttachments.PERMISSION_MEMORY).get(id, node);
+                yield byResolver && (kept == null || kept);
             }
         };
+    }
+
+    /**
+     * The active handler's answer for a player online; the node's own default before the server has a handler, or when
+     * the handler does not carry the node (a handler that skipped registration would otherwise throw from the command
+     * tree and logout).
+     */
+    private static boolean online(ServerPlayer p, PermissionNode<Boolean> node) {
+        if (PermissionAPI.getActivePermissionHandler() == null || !PermissionAPI.getRegisteredNodes().contains(node)) {
+            return node.getDefaultResolver().resolve(p, p.getUUID());
+        }
+        return PermissionAPI.getPermission(p, node);
     }
 
     /** The active handler is NeoForge's default (or none yet): node answers are the switches. */
