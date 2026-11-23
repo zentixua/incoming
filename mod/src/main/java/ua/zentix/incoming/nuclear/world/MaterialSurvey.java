@@ -24,6 +24,8 @@ final class MaterialSurvey {
     record Sample(long chunk, int votes) {}
     private final MaterialBirth prepared;
     private final Detonation geometry;
+    final boolean originReadyAtOpen;
+    private volatile int firstDeadline;
     int sparseReads, storedAnswers;
     private Long2IntOpenHashMap votes = new Long2IntOpenHashMap();
     private final RuinInbox<Sample> reads;
@@ -38,10 +40,15 @@ final class MaterialSurvey {
 
     MaterialSurvey(ServerLevel level, Detonation d, AtomicLong reservations) {
         geometry = d;
+        originReadyAtOpen = ua.zentix.incoming.util.Terrain.ready(level, BlockPos.containing(d.burst()));
+        firstDeadline = d.burst().y == d.groundY() ? -DustGrid.LEAD_TICKS : 0;
         prepared = MaterialBirth.prepare(java.util.UUID.randomUUID(), d);
         reads = new RuinInbox<>(reservations::addAndGet, NuclearPrep.READ_BYTES);
         var regions = ua.zentix.incoming.util.RegionFiles.folder(level);
-        sparse = CompletableFuture.supplyAsync(() -> plan(d, regions), Util.backgroundExecutor()).exceptionally(error -> {
+        sparse = CompletableFuture.supplyAsync(() -> {
+            firstDeadline = Math.min(0, DustGrid.deadline(d.front(), d.burst().y - d.groundY(), 0));
+            return plan(d, regions);
+        }, Util.backgroundExecutor()).exceptionally(error -> {
             ua.zentix.incoming.Incoming.LOG.warn("Cannot survey stored surfaces for source {}", prepared.id, error);
             return new ReadPlan(null, new long[0], new int[0]);
         });
@@ -215,13 +222,19 @@ final class MaterialSurvey {
     private int nearestSeed = DustMaterial.SOIL.ordinal();
     private long nearestKey = Long.MAX_VALUE, nearestDistance = Long.MAX_VALUE;
 
-    MaterialBirth begin(ServerLevel level, long burst, long now, LoadedSurfaces live) {
+    long originDeadline(long burst) { return burst + firstDeadline; }
+
+    MaterialBirth begin(ServerLevel level, Detonation atBirth, long burst, long now, LoadedSurfaces live) {
         collectReady();
-        int seed = origin(level, geometry);
-        prepared.begin(geometry, burst, now, seed < 0 ? nearestSeed : seed, votes, live.snapshot());
+        int seed = origin(level, atBirth);
+        prepared.begin(atBirth, burst, now, seed < 0 ? nearestSeed : seed, votes, live.snapshot());
         birth = prepared;
         votes = new Long2IntOpenHashMap();
         return birth;
+    }
+
+    MaterialBirth begin(ServerLevel level, long burst, long now, LoadedSurfaces live) {
+        return begin(level, geometry, burst, now, live);
     }
     private void collectReady() {
         Sample s;

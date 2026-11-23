@@ -23,7 +23,7 @@ import java.util.concurrent.atomic.AtomicLong;
 
 /** Dimension owner of scheduled and post-burst surveys. Material evidence follows each source through detonation. */
 public final class MaterialSurveys {
-    public static final long LEAD_TICKS = 200;
+    private static final int LEAD_TICKS = ua.zentix.incoming.nuclear.material.DustGrid.LEAD_TICKS;
     private final Map<Integer, MaterialSurvey> open = new LinkedHashMap<>();
     private final AtomicLong reserved = new AtomicLong();
     long reservedBytes() { return reserved.get(); }
@@ -85,19 +85,17 @@ public final class MaterialSurveys {
             MaterialSurvey survey = open.get(s.id());
             if (survey == null) {
                 if ((opened || System.nanoTime() >= deadline) && now < s.detonateTime() - LEAD_TICKS) continue;
-                if (!Terrain.ready(level, BlockPos.containing(s.target())) && now < s.detonateTime() - LEAD_TICKS) continue;
-                Detonation geometry = NuclearWorld.get(level).planned(NuclearWarhead.geometry(level,
-                        s.surface() ? NuclearWarhead.surfaceAt(level, s.target()) : s.target(), s.yieldKt(), s.airBurst(),
-                        (float) IncomingConfig.SERVER.effectsScale()));
-                survey = new MaterialSurvey(level, geometry, reserved);
+                survey = new MaterialSurvey(level, geometry(level, s), reserved);
                 open.put(s.id(), survey);
                 opened = true;
             }
-            long deadlineTick = s.detonateTime() - LEAD_TICKS;
-            if (now >= deadlineTick || !sealed && now >= deadlineTick - runway) {
+            long deadlineTick = survey.originDeadline(s.detonateTime());
+            if (now >= deadlineTick || !sealed && now >= deadlineTick - runway && Terrain.ready(level, BlockPos.containing(s.target()))) {
                 sealed = true;
                 long start = System.nanoTime();
-                var birth = survey.begin(level, s.detonateTime(), now, loaded);
+                var birth = survey.originReadyAtOpen && s.arrival().isEmpty()
+                        ? survey.begin(level, s.detonateTime(), now, loaded)
+                        : survey.begin(level, geometry(level, s), s.detonateTime(), now, loaded);
                 events.material(s.id(), birth);
                 for (var player : level.players()) {
                     if (NuclearStrikes.warns(s, player)) player.getData(ModAttachments.MATERIAL_DELIVERY).announce(birth);
@@ -141,6 +139,13 @@ public final class MaterialSurveys {
         refresh(level, deadline);
     }
 
+    private static Detonation geometry(ServerLevel level, NuclearEvents.ScheduledStrike s) {
+        if (s.arrival().isPresent()) return s.arrival().get().geometry();
+        return NuclearWorld.get(level).planned(NuclearWarhead.geometry(level,
+                s.surface() ? NuclearWarhead.surfaceAt(level, s.target()) : s.target(), s.yieldKt(), s.airBurst(),
+                (float) IncomingConfig.SERVER.effectsScale()));
+    }
+
     private void restore(ServerLevel level, int id, MaterialBirth birth) {
         if (birth == null || !birth.surveying() || open.containsKey(id)) return;
         var survey = new MaterialSurvey(level, birth.geometry(), reserved);
@@ -153,7 +158,7 @@ public final class MaterialSurveys {
         MaterialSurvey survey = open.remove(strike);
         if (birth == null) {
             if (survey == null) survey = new MaterialSurvey(level, d, reserved);
-            birth = survey.begin(level, d.gameTime(), level.getGameTime(), loaded);
+            birth = survey.begin(level, d, d.gameTime(), level.getGameTime(), loaded);
             events.material(d.id(), birth);
         }
         if (survey != null) open.put(d.id(), survey);

@@ -119,8 +119,8 @@ public final class MaterialBirth {
     }
     private MaterialBirth(UUID id, int x, int z, Pending snapshot, byte[] saved) {
         this.id = id;
-        this.x = x;
-        this.z = z;
+        this.x = Math.clamp(x, -30000000, 30000000);
+        this.z = Math.clamp(z, -30000000, 30000000);
         seed = snapshot == null ? DustMaterial.SOIL.ordinal() : Math.max(0, snapshot.under);
         if (snapshot != null && snapshot.under < 0) {
             int origin = snapshot.chunks.get(net.minecraft.world.level.ChunkPos.asLong(x >> 4, z >> 4));
@@ -168,7 +168,7 @@ public final class MaterialBirth {
 
     private Encoded fallback(Throwable error) {
         ua.zentix.incoming.Incoming.LOG.warn("Using uniform ground material for source {}", id, error);
-        var bounds = new DustGrid.Bounds(Math.clamp(x, -30000000, 30000000), Math.clamp(z, -30000000, 30000000), 0, 65536);
+        var bounds = new DustGrid.Bounds(x, z, 0, 65536);
         return Encoded.of(id, MaterialMap.uniform(bounds, seed).encode());
     }
 

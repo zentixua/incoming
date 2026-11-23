@@ -5,6 +5,7 @@ import ua.zentix.incoming.nuclear.model.DustModel;
 
 /** World-aligned rows of cells intersecting the two dust footprints. Coordinates and radii are blocks. */
 public final class DustGrid {
+    public static final int LEAD_TICKS = 200;
     public static final int FINE = 64, COARSE = 256;
     // Server sampling footprint: outer optical-depth cutoff and dense-band settling age.
     private static final double GONE_DEPTH = 0.05, SETTLE_SECONDS = 1.0;
@@ -111,7 +112,7 @@ public final class DustGrid {
     }
     /** First server tick on which this cell must reject later answers; all distances use the existing game front. */
     public static int deadline(ua.zentix.incoming.nuclear.model.FrontProfile front, double height, double squared) {
-        return (int) Math.floor(front.arrivalTicks(Math.sqrt(squared + height * height))) - 200;
+        return (int) Math.floor(front.arrivalTicks(Math.sqrt(squared + height * height))) - LEAD_TICKS;
     }
     public int cellSize(int x, int z) { return fine.index(x, z) >= 0 ? FINE : COARSE; }
     public boolean covered(int x, int z, double through) {

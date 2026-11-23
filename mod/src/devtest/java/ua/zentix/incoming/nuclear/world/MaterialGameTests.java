@@ -129,6 +129,31 @@ public final class MaterialGameTests {
         });
     }
 
+    @GameTest(template = "range", batch = "nuke_material_remote", timeoutTicks = 100)
+    public static void unloadedOriginsKeepPreflightEvidenceUntilTheirDeadline(GameTestHelper h) {
+        var level = h.getLevel();
+        var surveys = new MaterialSurveys();
+        var events = new NuclearEvents();
+        long due = level.getGameTime() + 16;
+        var target = Vec3.atCenterOf(h.absolutePos(BlockPos.ZERO).offset(40000, 0, 40000));
+        var pos = new ChunkPos(BlockPos.containing(target));
+        h.assertTrue(level.getChunkSource().getChunkNow(pos.x, pos.z) == null, "fixture origin already loaded");
+        for (int id = 1; id <= 2; id++) events.schedule(new NuclearEvents.ScheduledStrike(id, target, 1, false,
+                level.getGameTime(), due + DustGrid.LEAD_TICKS, target, Optional.empty(), true));
+        ua.zentix.incoming.gametest.StrikeGameTests.afterTest(h, surveys::clear);
+        h.succeedWhen(() -> {
+            long now = level.getGameTime();
+            surveys.tick(level, events, System.nanoTime() + 500_000);
+            // The normal ruin-palette callback, after the staggered-salvo opportunity, before the origin cutoff.
+            if (now == due - 1) surveys.disk(pos.toLong(), 4 << (4 * DustMaterial.WATER.ordinal()));
+            for (int id = 1; id <= 2; id++) {
+                var birth = events.material(id);
+                h.assertTrue(birth != null && birth.started() == due && birth.seed() == DustMaterial.WATER.ordinal(),
+                        "unloaded source discarded preflight water or sealed a fallback early");
+            }
+        });
+    }
+
     @GameTest(template = "range", batch = "nuke_material_wet", timeoutTicks = 200, skyAccess = true)
     public static void wetOriginIsIndependentOfTheDryCellMajority(GameTestHelper h) {
         var level = h.getLevel();
@@ -218,6 +243,9 @@ public final class MaterialGameTests {
             var encoded = fail.encoded();
             h.assertTrue(encoded != null && MaterialMap.decode(encoded.bytes()).wet(), "failed encoding did not publish water fallback");
             h.assertTrue(fail.encoded() == encoded, "failed encoding restarted");
+            var recovered = NuclearEvents.load(reload.save(new CompoundTag(), reg), reg);
+            h.assertTrue(recovered.detonations().size() == 2 && recovered.material(13) != null
+                    && recovered.material(13).seed() == DustMaterial.WATER.ordinal(), "uniform recovery lost during save/reload");
         });
     }
 

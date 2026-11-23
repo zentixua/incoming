@@ -15,6 +15,7 @@ import ua.zentix.incoming.nuclear.NuclearEvents;
 import ua.zentix.incoming.nuclear.NuclearStrikes;
 import ua.zentix.incoming.nuclear.material.MaterialBirth;
 import ua.zentix.incoming.nuclear.material.MaterialInbox;
+import ua.zentix.incoming.nuclear.material.MaterialDelivery;
 
 import java.util.HashMap;
 import java.util.List;
@@ -85,6 +86,17 @@ public final class MaterialJoinGameTests {
                             && java.util.Arrays.equals(inbox.map().encode(), events.material(ids.get(n)).encoded().bytes()), "client source missing or changed");
                 }
             }
+            UUID faded = expected.getFirst();
+            MaterialDelivery.retire(first.player, faded);
+            MaterialDelivery.send(first.player, level.getServer().getTickCount());
+            var latest = first.got.stream().filter(S2C.NukeMaterialSources.class::isInstance)
+                    .map(S2C.NukeMaterialSources.class::cast).toList().getLast().sources();
+            h.assertTrue(!latest.contains(faded) && latest.contains(expected.get(1)), "recording still lists faded source");
+            h.assertTrue(first.got.stream().anyMatch(packet -> packet instanceof S2C.NukeMaterial p
+                    && p.id().equals(faded) && p.tombstone()), "recorder kept archived material bytes");
+            var other = second.got.stream().filter(S2C.NukeMaterialSources.class::isInstance)
+                    .map(S2C.NukeMaterialSources.class::cast).toList().getLast().sources();
+            h.assertTrue(other.containsAll(expected) && events.material(ids.getFirst()) != null, "retirement affected the other viewer");
         });
     }
 }
