@@ -236,6 +236,7 @@ public final class Blackouts {
     /** Power is back in all of outage {@code o}, now forgotten ({@link PowerGrid#prune}). */
     static void restored(ServerLevel level, Outage o) {
         Orders.queue(level, new GridRestoreEvent(level.dimension(), outageId(level, o), o.x(), o.z(), o.radius(), nodePos(level, o), o.byDamage()));
+        Orders.queue(level, new ua.zentix.incoming.progress.Progress.Relit(level.dimension(), o));
         Incoming.LOG.info("Blackout #{} ({}): power restored everywhere", o.id(), level.dimension().location());
     }
 

@@ -138,6 +138,14 @@ public abstract class StrikeRoundEvent extends Event {
             return end.interceptorOwner();
         }
 
+        /**
+         * Its owner steered it through the projectile camera during flight: retargeted it from the camera, or the camera
+         * held its sighted target in frame (a Shahed-136 or Lancet following a moving target).
+         */
+        public boolean isCameraGuided() {
+            return end.cameraGuided();
+        }
+
         /** A {@link Released} was posted for this round. */
         public boolean isReleased() {
             return end.released();

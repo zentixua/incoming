@@ -175,6 +175,10 @@ public final class ModAttachments {
     public static final Supplier<AttachmentType<Optional<CameraLink>>> CAMERA_LINK = REGISTER.register("camera_link",
             () -> AttachmentType.builder(Optional::<CameraLink>empty).build());
 
+    /** Player: nuclear blasts they are being watched to survive ({@link ua.zentix.incoming.progress.Progress}); not saved, lost on death. */
+    public static final Supplier<AttachmentType<ua.zentix.incoming.progress.Progress.Watches>> SURVIVAL = REGISTER.register("survival",
+            () -> AttachmentType.builder(ua.zentix.incoming.progress.Progress.Watches::new).build());
+
     /** Player: game time of last player-list request for the targeting map; not saved. */
     public static final Supplier<AttachmentType<Long>> LAST_MAP_PLAYERS = REGISTER.register("last_map_players",
             () -> AttachmentType.builder(() -> 0L).build());

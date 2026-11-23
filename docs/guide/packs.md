@@ -17,7 +17,7 @@ a nuclear launch that waits for a second key or warning, or `/incoming nuke now`
 | `StrikeOrderEvent$Rejected` | The order was refused after its request: cancelled by a listener, or the player lacked munitions when paying. |
 | `StrikeOrderEvent$Accepted` | The order is recorded and paid. It says how many rounds it has and how they are paid: upfront from the player's inventory, one by one from a fixed launcher's magazine, or not at all (console, command blocks, operators, creative). |
 | `StrikeRoundEvent$Released` | A round leaves: a projectile takes its rail or starts from afar, an ICBM launches, a `nuke now` burst begins. |
-| `StrikeRoundEvent$Ended` | A round is over: its warhead went off, it was shot down, it failed (crashed before arming, a failed launch), or it was recalled or cancelled. It also says whether the round's munitions came back. |
+| `StrikeRoundEvent$Ended` | A round is over: its warhead went off, it was shot down, it failed (crashed before arming, a failed launch), or it was recalled or cancelled. It also says whether the round's munitions came back and whether its owner steered it through its camera. |
 | `NuclearDetonationEvent` | A nuclear warhead bursts: position, yield, air or ground burst, and the order and round it belongs to. |
 | `GridOutageEvent` | A power outage begins: a substation was knocked out or a nuclear burst cut the grid. |
 | `GridRestoreEvent` | This outage no longer darkens any district (another outage may still darken some). An outage around a destroyed area ends only when power is restored by command. |
@@ -89,6 +89,70 @@ over.
 execute store result score #wave arena run incoming salvo rocket 20 25 at 120 70 -340 tag wave1
 # every second: rounds of the wave still waiting, flying or exploding
 execute store result score #left arena run incoming status tag wave1
+```
+
+## Advancements and statistics
+
+Incoming's advancements and statistics are vanilla ones, so quest mods (FTB Quests advancement and stat tasks),
+scoreboards, datapacks and a game master that follows advancements use them as they are. What players see:
+[Advancements and statistics](progress.md).
+
+| Advancement | Criterion trigger | Granted when |
+|---|---|---|
+| `incoming:strikes/root` (the tab) | `minecraft:inventory_changed`, `incoming:round_released` | the player holds any Incoming item or launches a round |
+| `incoming:strikes/first_strike` | `incoming:round_released` | a round of the player's leaves |
+| `incoming:strikes/camera_strike` | `incoming:camera_guided_hit` | a round the player steered through its camera goes off |
+| `incoming:strikes/first_interception` | `incoming:round_intercepted` | the player's SAM or weapon shoots down a hostile round |
+| `incoming:strikes/nuclear_survivor` | `incoming:nuclear_survived` with `overpressure_psi` at least 5 | the player is alive once a nuclear blast wave that hit them at 5 psi or more has passed |
+| `incoming:strikes/lights_back` | `incoming:blackout_restored` | an outage ends while the player stands in one of its districts and that district is lit again |
+
+Your own advancements can use the triggers with these conditions (all optional, besides the usual `player`):
+
+| Trigger | Conditions |
+|---|---|
+| `incoming:round_released` | `weapon`: `drone`, `loiter`, `rocket`, `missile`, `bunker` or `nuke` |
+| `incoming:camera_guided_hit` | `weapon` |
+| `incoming:round_intercepted` | `weapon` (of the round shot down), `by_sam` (true for a SAM, false for the player's own weapon) |
+| `incoming:nuclear_survived` | `overpressure_psi`, `yield_kt` (number ranges, as `{"min": 5}`) |
+| `incoming:blackout_restored` | `nuclear` (true for the outage a nuclear burst caused over its whole reach) |
+
+| Statistic | Scoreboard criterion | Counts |
+|---|---|---|
+| `incoming:rounds_launched` | `minecraft.custom:incoming.rounds_launched` | rounds the player launched |
+| `incoming:rounds_launched.<weapon>` | `minecraft.custom:incoming.rounds_launched.drone` and the other weapon ids | the same for one weapon |
+| `incoming:interceptions` | `minecraft.custom:incoming.interceptions` | hostile rounds the player shot down |
+| `incoming:nuclear_detonations_witnessed` | `minecraft.custom:incoming.nuclear_detonations_witnessed` | nuclear detonations the player was within reach of (glass breaks or skin burns there) |
+
+- A round credits its owner, the same player the strike events name, and only while they are online: nothing is kept
+  for an offline owner. Rounds from the console, command blocks, ownerless launchers and fake players with their own
+  identity credit no one. `/execute as <player>` makes the round that player's, and so does a machine acting under the
+  player's own profile (a Create deployer for its owner), as with a fixed launcher and with permissions.
+- A round shot down counts for the SAM's owner or for the player whose weapon brought it down, unless the round is
+  theirs or a teammate's (by `/team`, as the SAM decides whom to shoot).
+- Still Standing starts when the wave front actually hits the player: it reads the pressure at their position from
+  the blast model, shelter or not, and waits until the positive phase there has passed plus one second for a thrown
+  body to land. A player who left before the front, a cleared strike, creative and spectator mode get nothing; a
+  death, logout or change of dimension before then cancels it.
+- Lights Back On follows the grid's districts: the player's district must have gone dark in the outage and must be
+  lit once it ends (another outage over it keeps it dark).
+
+```mcfunction
+# a sidebar of rounds shot down
+scoreboard objectives add shot_down minecraft.custom:incoming.interceptions "Shot down"
+scoreboard objectives setdisplay sidebar shot_down
+```
+
+A datapack advancement for surviving a 20 psi blast of an ICBM-sized yield:
+
+```json
+{
+  "criteria": {
+    "close": {
+      "trigger": "incoming:nuclear_survived",
+      "conditions": { "overpressure_psi": { "min": 20 }, "yield_kt": { "min": 10 } }
+    }
+  }
+}
 ```
 
 ## Permissions
