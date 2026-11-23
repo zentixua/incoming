@@ -38,7 +38,9 @@ public class SubstationBlock extends HorizontalDirectionalBlock {
 
     public SubstationBlock(Properties properties) {
         super(properties);
-        registerDefaultState(stateDefinition.any().setValue(FACING, Direction.NORTH).setValue(POWERED, true));
+        // Dead until the grid says it works (onPlace, Substations.sync): whatever reads it before that, a neighbour
+        // notified by the block it replaced included, never sees a false 15.
+        registerDefaultState(stateDefinition.any().setValue(FACING, Direction.NORTH).setValue(POWERED, false));
     }
 
     @Override
@@ -67,15 +69,16 @@ public class SubstationBlock extends HorizontalDirectionalBlock {
         super.onPlace(state, level, pos, oldState, movedByPiston);
         if (level instanceof ServerLevel server && !oldState.is(this)) {
             PowerGrid grid = PowerGrid.get(server);
-            if (grid.nodeAt(pos) == null) grid.addNode(pos, IncomingConfig.SERVER.gridNodeRadius.get(), true);
-            // Where a nuclear blast destroyed the grid it never works. Placed by any path (player, deployer, command,
-            // structure, a write that skips updates), it goes dead here, before the placing setBlock tells the
-            // neighbours: that call then finds a different state and skips its notices (Level.markAndNotifyBlock), and
-            // SignalEdge tells them of the dead block once their chunks are ready, so they never see a false 15.
-            if (state.getValue(POWERED) && grid.destroyed(pos.getX() >> 4, pos.getZ() >> 4, Blackouts.now(server))) {
-                BlockState dead = state.setValue(POWERED, false);
-                level.setBlock(pos, dead, Block.UPDATE_CLIENTS | Block.UPDATE_KNOWN_SHAPE);
-                SignalEdge.changed(server, pos, dead);
+            Node node = grid.nodeAt(pos);
+            if (node == null) node = grid.addNode(pos, IncomingConfig.SERVER.gridNodeRadius.get(), true);
+            // Takes the grid's state at once, by any placement path (player, deployer, command, a write that skips
+            // updates). When this changes it, the placing setBlock finds a different state and skips its notices
+            // (Level.markAndNotifyBlock); SignalEdge sends them once the chunks they reach are ready.
+            boolean works = Substations.works(server, grid, node, Blackouts.now(server));
+            if (state.getValue(POWERED) != works) {
+                BlockState now = state.setValue(POWERED, works);
+                level.setBlock(pos, now, Block.UPDATE_CLIENTS | Block.UPDATE_KNOWN_SHAPE);
+                SignalEdge.changed(server, pos, now);
             }
         }
     }
@@ -87,7 +90,7 @@ public class SubstationBlock extends HorizontalDirectionalBlock {
             Node node = grid.nodeAt(pos);
             if (node != null && node.block()) grid.removeNode(node.id());
             // Removed while working: ruin and collapse writes skip neighbour updates, and dust beside it would keep 15.
-            if (state.getValue(POWERED)) SignalEdge.recheck(server, pos, newState);
+            SignalEdge.removed(server, pos, newState, state.getValue(POWERED));
         }
         super.onRemove(state, level, pos, newState, movedByPiston);
     }

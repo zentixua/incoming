@@ -32,7 +32,8 @@ Ingredients: 3 lightning rods, 2 copper ingots, 1 redstone block and 3 iron ingo
   power starts coming back to its area (within a second) or at once with `/incoming grid restore`; near the edge of
   the loaded world it waits until the ground around it loads. An outage from
   another substation or `/incoming grid blackout` that only darkens its district does not knock it out, so the signal
-  stays: it tells whether this substation works, not whether the lamps around it are lit. Examples:
+  stays: it tells whether this substation works, not whether the lamps around it are lit. A substation placed where
+  the grid is destroyed never works and gives no signal. Examples:
   [For server owners and pack makers](packs.md#redstone).
 - The world is saved with ordinary lamps and opens without the mod. Only Create contraptions assembled in a dark
   district are better disassembled before you remove the mod.

@@ -73,7 +73,12 @@ public final class RedstoneRoundTwoReviewGameTests {
                     h.assertTrue(power(level, source.east(15)) == 0 && SignalEdge.waiting(level, source), "the rising edge was not held");
                     hold(h, site);
                 })
-                .thenWaitUntil(() -> h.assertTrue(power(level, source.east(15)) == 1, "the held rising edge never reached the wire tail"))
+                .thenWaitUntil(() -> {
+                    h.assertTrue(power(level, source.east(15)) == 1, "the held rising edge never reached the wire tail");
+                    // the block the last wire points into powers the piston: the edge ran the push resolution too
+                    BlockState piston = level.getBlockState(source.east(17));
+                    h.assertTrue(piston.is(Blocks.PISTON) && piston.getValue(PistonBaseBlock.EXTENDED), "the piston at the wire's end did not extend");
+                })
                 .thenSucceed();
     }
 
@@ -106,7 +111,8 @@ public final class RedstoneRoundTwoReviewGameTests {
                     h.assertTrue(level.setBlock(control, station.setValue(SubstationBlock.POWERED, false), quiet),
                             "control placement failed");
                     h.assertFalse(Terrain.ready(level, east.x, east.z), "quiet placement loaded the control's east chunk");
-                    h.assertTrue(level.setBlock(source, station, quiet), "default-state placement failed");
+                    // a write of a working state (as `/setblock …[powered=true]`): the substation takes the grid's dead state
+                    h.assertTrue(level.setBlock(source, station.setValue(SubstationBlock.POWERED, true), quiet), "placement failed");
                     h.assertFalse(level.getBlockState(source).getValue(SubstationBlock.POWERED), "placed substation is on");
                     h.assertFalse(Terrain.ready(level, east.x, east.z), "nested placement notified dust and loaded the east chunk");
                     h.assertTrue(SignalEdge.waiting(level, source), "the dead substation's notice was dropped, not held");
@@ -145,6 +151,7 @@ public final class RedstoneRoundTwoReviewGameTests {
                     Blackouts.knockOut(level, node);
                     h.assertFalse(level.getBlockState(knockedOut).getValue(SubstationBlock.POWERED), "the station is still on");
                     h.assertTrue(power(level, knockedOut.west()) == 15, "the falling edge was not held");
+                    h.assertTrue(SignalEdge.waiting(level, knockedOut), "the knock-out's falling edge is not waiting");
                     hold(h, site);
                 })
                 // the outer ring of the reach loads in the background
@@ -216,7 +223,7 @@ public final class RedstoneRoundTwoReviewGameTests {
     }
 
     private static void hold(GameTestHelper h, ChunkPos site) {
-        GridGameTests.hold(h.getLevel(), site);
+        GridGameTests.holdWide(h.getLevel(), site);
         StrikeGameTests.afterTest(h, () -> release(h.getLevel(), site, 2));
     }
 

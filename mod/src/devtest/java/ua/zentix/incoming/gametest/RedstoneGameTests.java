@@ -236,7 +236,7 @@ public final class RedstoneGameTests {
         BlockPos[] at = new BlockPos[2];
         DroneEntity[] d = new DroneEntity[1];
         boolean[] reloading = {false}, firstSeen = {false};
-        GridGameTests.hold(level, far);
+        GridGameTests.holdWide(level, far);
         StrikeGameTests.afterTest(h, () -> level.getChunkSource().removeRegionTicket(GridGameTests.HOLD, far, 2, far));
         h.onEachTick(() -> {
             if (at[0] == null || level.getChunkSource().getChunkNow(far.x, far.z) == null) return;
@@ -270,7 +270,7 @@ public final class RedstoneGameTests {
                     String saved = savedSam(level, far, at[0]);
                     h.assertTrue("true".equals(saved), "the saved chunk holds the SAM with alarm=" + saved);
                     reloading[0] = true;
-                    GridGameTests.hold(level, far);
+                    GridGameTests.holdWide(level, far);
                 })
                 .thenWaitUntil(() -> {
                     h.assertTrue(firstSeen[0], "the chunk has not loaded");
@@ -377,7 +377,7 @@ public final class RedstoneGameTests {
         BlockPos[] at = new BlockPos[2];
         Node[] node = new Node[1];
         boolean[] reloaded = {false};
-        GridGameTests.hold(level, far);
+        GridGameTests.holdWide(level, far);
         StrikeGameTests.afterTest(h, () -> level.getChunkSource().removeRegionTicket(GridGameTests.HOLD, far, 2, far));
         h.onEachTick(() -> {
             if (at[0] == null || level.getChunkSource().getChunkNow(far.x, far.z) == null) return;
@@ -403,7 +403,7 @@ public final class RedstoneGameTests {
                 .thenExecute(() -> {
                     Blackouts.knockOut(level, node[0]);
                     h.assertTrue(level.getChunkSource().chunkMap.getVisibleChunkIfPresent(far.toLong()) == null, "the knock-out loaded the chunk");
-                    GridGameTests.hold(level, far);
+                    GridGameTests.holdWide(level, far);
                 })
                 .thenWaitUntil(() -> {
                     h.assertTrue(level.getChunkSource().getChunkNow(far.x, far.z) != null, "chunk is loading");

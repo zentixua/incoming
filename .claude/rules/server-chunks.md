@@ -13,8 +13,10 @@ paths:
   redstone synchronously: dust carries 15 blocks, and a piston beside the last wire resolves its push 13 blocks
   further, loading any chunk there that is not ready. Our signal sources change state without neighbour flags and hand
   every notice (change, placement, removal by a quiet write, recheck after load) to `util/SignalEdge`: sent at once when
-  every chunk within `SignalEdge.REACH` (32) is ready, else queued per position in a world attachment and sent by its
-  level tick once they are (`RedstoneReviewGameTests`, `RedstoneRoundTwoReviewGameTests`).
+  every chunk within `SignalEdge.REACH` (32) is ready, else queued per position in a world attachment
+  (saved with the world; a removal turns a waiting change into a plain recheck, so a later observer never sees it) and
+  sent by its level tick once they are (`RedstoneReviewGameTests`, `RedstoneRoundTwoReviewGameTests`,
+  `RedstoneQueueReviewGameTests`). Fixtures that need a notice at once load two chunks around (`GridGameTests.holdWide`).
 - Ground location only via `util/Terrain.estimate`: height/source `CHUNK`/`CEILING`/`DISK`/`CLIENT_MAP`/`GENERATOR`/`SEA`/
   `UNKNOWN`, caller chooses allowed sources: `Allowed.CHUNK` in world, `FLIGHT` outside, `ORDER` for orders, `RELIEF`
   for entire flight path, `VIRTUAL_RELIEF` outside world/straight target line beyond ready chunks (no Nether ceiling);

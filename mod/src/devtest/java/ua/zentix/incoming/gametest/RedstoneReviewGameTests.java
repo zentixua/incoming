@@ -48,7 +48,7 @@ public final class RedstoneReviewGameTests {
         BlockPos station = edge.west(2);
         BlockPos dust = edge.west();
         hold(h, chunk, 0);
-        GridGameTests.hold(level, chunk);
+        GridGameTests.holdWide(level, chunk);
         StrikeGameTests.afterTest(h, () -> level.getChunkSource().removeRegionTicket(GridGameTests.HOLD, chunk, 2, chunk));
         placeWire(level, dust);
         level.setBlock(station, ModBlocks.SUBSTATION.get().defaultBlockState(), Block.UPDATE_ALL);
@@ -65,7 +65,7 @@ public final class RedstoneReviewGameTests {
                     h.assertFalse(Terrain.ready(level, east.x, east.z), "knockout synchronously loaded the east chunk through the dust");
                     // the circuit reaches into the unready chunk: its neighbours learn of it once that chunk is ready
                     h.assertTrue(level.getBlockState(dust).getValue(RedStoneWireBlock.POWER) == 15, "the dust was told while its circuit's chunks were unready");
-                    GridGameTests.hold(level, chunk);
+                    GridGameTests.holdWide(level, chunk);
                 })
                 .thenWaitUntil(() -> h.assertTrue(level.getBlockState(dust).getValue(RedStoneWireBlock.POWER) == 0, "the deferred update never reached the dust"))
                 .thenSucceed();
@@ -79,7 +79,7 @@ public final class RedstoneReviewGameTests {
         BlockPos station = new BlockPos(chunk.getMaxBlockX(), 100, chunk.getMiddleBlockZ());
         BlockPos dust = station.west();
         hold(h, chunk, 0);
-        GridGameTests.hold(level, chunk);
+        GridGameTests.holdWide(level, chunk);
         StrikeGameTests.afterTest(h, () -> level.getChunkSource().removeRegionTicket(GridGameTests.HOLD, chunk, 2, chunk));
         placeWire(level, dust);
         level.setBlock(station, ModBlocks.SUBSTATION.get().defaultBlockState(), Block.UPDATE_ALL);
@@ -99,7 +99,7 @@ public final class RedstoneReviewGameTests {
                     boolean powered = level.getBlockState(station).getValue(SubstationBlock.POWERED);
                     int power = level.getBlockState(dust).getValue(RedStoneWireBlock.POWER);
                     h.assertTrue(power == (powered ? 15 : 0), "dust reads " + power + " beside a substation with powered=" + powered);
-                    GridGameTests.hold(level, chunk);
+                    GridGameTests.holdWide(level, chunk);
                 })
                 .thenWaitUntil(() -> {
                     h.assertFalse(level.getBlockState(station).getValue(SubstationBlock.POWERED), "the substation stays up once its ground is ready");
@@ -115,7 +115,7 @@ public final class RedstoneReviewGameTests {
         ChunkPos outerEast = new ChunkPos(chunk.x + 2, chunk.z);
         BlockPos sam = new BlockPos(chunk.getMaxBlockX(), 100, chunk.getMiddleBlockZ());
         hold(h, chunk, 1);
-        GridGameTests.hold(level, chunk);
+        GridGameTests.holdWide(level, chunk);
         StrikeGameTests.afterTest(h, () -> level.getChunkSource().removeRegionTicket(GridGameTests.HOLD, chunk, 2, chunk));
         level.getChunk(outerEast.x, outerEast.z);
         level.setBlock(sam, ModBlocks.SAM.get().defaultBlockState(), Block.UPDATE_ALL);
@@ -135,7 +135,7 @@ public final class RedstoneReviewGameTests {
                     int power = level.getBlockState(sam.east(1)).getValue(RedStoneWireBlock.POWER);
                     h.assertTrue(power == 0, "the dust was told while its circuit's chunks were unready: " + power);
                     // the alarm's reach (SignalEdge.REACH) covers two chunks around the SAM's
-                    GridGameTests.hold(level, chunk);
+                    GridGameTests.holdWide(level, chunk);
                 })
                 .thenWaitUntil(() -> {
                     h.assertTrue(level.getBlockState(sam.east(1)).getValue(RedStoneWireBlock.POWER) == 15, "the deferred alarm never reached the dust");

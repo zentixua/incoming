@@ -114,8 +114,8 @@ public class SamBlock extends BaseEntityBlock {
         }
         // Removed while sounding the alarm: ruin and collapse writes skip neighbour updates, and dust beside it would
         // keep carrying 15 from a SAM that is gone.
-        if (!state.is(newState.getBlock()) && state.getValue(ALARM) && level instanceof ServerLevel server) {
-            SignalEdge.recheck(server, pos, newState);
+        if (!state.is(newState.getBlock()) && level instanceof ServerLevel server) {
+            SignalEdge.removed(server, pos, newState, state.getValue(ALARM));
         }
         super.onRemove(state, level, pos, newState, movedByPiston);
     }

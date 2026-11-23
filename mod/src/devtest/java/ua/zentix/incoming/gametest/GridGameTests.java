@@ -1442,6 +1442,17 @@ public final class GridGameTests {
      * Keep a chunk and its neighbors and load them immediately (from disk or generation): the GameTest server on CI ticks
      *  tens of times faster than the game, and the test period passes before the background loading.
      */
+    /**
+     * {@link #hold}, with the whole ticket area (two chunks around) loaded now: a redstone notice of our sources reaches
+     * that far ({@code SignalEdge.REACH}) and waits until it is ready.
+     */
+    static void holdWide(ServerLevel level, ChunkPos p) {
+        hold(level, p);
+        for (int dx = -2; dx <= 2; dx++) {
+            for (int dz = -2; dz <= 2; dz++) level.getChunk(p.x + dx, p.z + dz);
+        }
+    }
+
     static void hold(ServerLevel level, ChunkPos p) {
         level.getChunkSource().addRegionTicket(HOLD, p, 2, p);
         for (int dx = -1; dx <= 1; dx++) {
