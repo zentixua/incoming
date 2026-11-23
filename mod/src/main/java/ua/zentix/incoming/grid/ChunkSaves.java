@@ -102,22 +102,31 @@ public final class ChunkSaves {
         if (!states.contains("palette", Tag.TAG_LIST)) return 0;
         ListTag palette = states.getList("palette", Tag.TAG_COMPOUND);
         java.util.Set<String> twins = twinNames();
+        String[] names = new String[palette.size()];
         int[] at = null;
         int n = 0;
         for (int i = 0; i < palette.size(); i++) {
-            if (!twins.contains(palette.getCompound(i).getString("Name"))) continue;
+            names[i] = palette.getCompound(i).getString("Name");
+            if (!twins.contains(names[i])) continue;
             if (at == null) at = new int[palette.size()];
             at[n++] = i;
         }
         if (n == 0) return 0;
-        Tag[] lamps = new Tag[n];
-        java.util.Set<Tag> listed = new java.util.HashSet<>(palette);
+        CompoundTag[] lamps = new CompoundTag[n];
+        java.util.Set<String> lampNames = new java.util.HashSet<>();
         for (int k = 0; k < n; k++) {
             BlockState twin = BlockState.CODEC.parse(NbtOps.INSTANCE, palette.get(at[k])).getOrThrow();
             BlockState lamp = GridLights.lit(twin);
             if (lamp == null) throw new IllegalStateException("not a twin: " + twin);
-            lamps[k] = BlockState.CODEC.encodeStart(NbtOps.INSTANCE, lamp).getOrThrow();
-            if (!listed.add(lamps[k])) return DUPLICATE;
+            lamps[k] = (CompoundTag) BlockState.CODEC.encodeStart(NbtOps.INSTANCE, lamp).getOrThrow();
+            lampNames.add(lamps[k].getString("Name"));
+            for (int j = 0; j < k; j++) if (lamps[j].equals(lamps[k])) return DUPLICATE;
+        }
+        // a lamp state already listed: only entries of the lamps' own blocks can equal one (full-palette hashing cost most of the save)
+        for (int i = 0; i < palette.size(); i++) {
+            if (!lampNames.contains(names[i])) continue;
+            CompoundTag entry = palette.getCompound(i);
+            for (CompoundTag lamp : lamps) if (lamp.equals(entry)) return DUPLICATE;
         }
         for (int k = 0; k < n; k++) palette.set(at[k], lamps[k]);
         return n;
