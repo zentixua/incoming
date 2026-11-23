@@ -32,11 +32,13 @@ import org.lwjgl.opengl.GL33;
 import org.mockito.MockedStatic;
 import ua.zentix.incoming.client.nuclear.NukeBallSurface;
 import ua.zentix.incoming.client.nuclear.NukePall;
+import ua.zentix.incoming.client.nuclear.MushroomField;
 import ua.zentix.incoming.compat.FlashbackReplay;
 
 import java.lang.reflect.Field;
 import java.lang.reflect.Modifier;
 import java.nio.ByteBuffer;
+import java.nio.FloatBuffer;
 import java.util.ArrayDeque;
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -286,10 +288,25 @@ class NuclearVolumeBudgetTest {
                 PallPass.Frame burst = new PallPass.Frame();
                 burst.quality = PallPass.Quality.HIGH;
                 burst.dustWall.active = true;
+                burst.young.w = 800;
+                burst.water0.zero();
+                burst.slot0.m13(1);
+                burst.mushroomCount = 1;
+                burst.mushrooms[3] = 1;
+                burst.mushrooms[4] = 24;
+                int bodyLocation = 47;
+                uniforms.when(() -> Uniform.glGetUniformLocation(anyInt(), eq("PallMushBody[0]"))).thenReturn(bodyLocation);
+                gl20.when(() -> GL20.glUniform4fv(eq(bodyLocation), any(FloatBuffer.class))).thenAnswer(call -> {
+                    FloatBuffer body = call.getArgument(1);
+                    assertEquals(4 * MushroomField.FOOT_COLUMNS, body.remaining());
+                    for (int i = 0; i < body.remaining(); i++) assertEquals(burst.mushrooms[i], body.get(body.position() + i));
+                    return null;
+                });
                 PallPass.beginFrame(burst.quality);
                 assertEquals(GpuWatch.State.WATCHING, PallPass.watch().state());
                 draw(burst);
-                assertEquals(List.of("froxel", "froxelSum", "march", "resolve",
+                gl20.verify(() -> GL20.glUniform4fv(eq(bodyLocation), any(FloatBuffer.class)));
+                assertEquals(List.of("mushTaus", "froxel", "froxelSum", "singleMarch", "resolve",
                         "wall.march", "wall.pack", "wall.resolve", "layer", "composite"), draws);
                 state.verify(GlStateManager::_genTexture, never());
                 state.verify(() -> GlStateManager._texImage2D(anyInt(), anyInt(), anyInt(), anyInt(), anyInt(), anyInt(),
@@ -302,7 +319,9 @@ class NuclearVolumeBudgetTest {
                 assertEquals(305, PallPass.watch().cause(), 0);
                 clearInvocations(previousDiv, reproject);
                 wallDrawNs = 400_000_000L;
+                burst.mushrooms[4] = 48;
                 draw(burst);
+                gl20.verify(() -> GL20.glUniform4fv(eq(bodyLocation), any(FloatBuffer.class)), times(2));
                 verify(divisor).set(6f);
                 verify(previousDiv).set(4f);
                 verify(reproject).set(0f, 0f, 0f, 1f);

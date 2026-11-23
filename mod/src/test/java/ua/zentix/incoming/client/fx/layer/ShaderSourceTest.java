@@ -155,7 +155,7 @@ class ShaderSourceTest {
       * front of a point for the layer's quads and probes).
      */
     @Test
-    void everyUniformIsBoundInItsProgram() throws IOException, URISyntaxException {
+    void everyUniformIsBoundInItsProgram() throws Exception {
         Path core = Path.of(ShaderSourceTest.class.getResource("/assets/incoming/shaders/core").toURI());
         Pattern uniform = Pattern.compile("(?m)^\\s*uniform\\s+(\\w+)\\s+(\\w+)\\s*;");
         List<String> bad = new ArrayList<>();
@@ -168,7 +168,12 @@ class ShaderSourceTest {
                 String name = json.getFileName().toString();
                 for (String[] stage : new String[][]{{"vertex", ".vsh"}, {"fragment", ".fsh"}}) {
                     String file = program.get(stage[0]).getAsString().replaceFirst("^incoming:", "") + stage[1];
-                    Matcher m = uniform.matcher(blankComments(withImports(core.resolveSibling("include"), Files.readString(core.resolve(file)), new HashSet<>())));
+                    String source = withImports(core.resolveSibling("include"), Files.readString(core.resolve(file)), new HashSet<>());
+                    if (source.contains("#define PALL_SINGLE")) {
+                        // The single-burst interface excludes the second slot, whirls and conventional smoke.
+                        source = io.github.ocelot.glslprocessor.api.GlslParser.preprocessParse(source, new java.util.HashMap<>()).toSourceString();
+                    }
+                    Matcher m = uniform.matcher(blankComments(source));
                     Set<String> declared = new HashSet<>();
                     while (m.find()) {
                         String type = m.group(1), u = m.group(2);

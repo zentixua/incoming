@@ -59,7 +59,7 @@ Prism: `~/.var/app/org.prismlauncher.PrismLauncher/data/PrismLauncher/` (`tools/
     see_through_gl.py                    ← the see-through shaders on Mesa llvmpipe without a game: sampler counts (the pall
                                            composite within 16), fx_depth on synthetic captures, the half-resolution
                                            pair, the pall split with smoke in front of a far pane; exit 1 on a failed check
-    nuclear_volume_warmup_gl.py           ← Mesa cold-cache nuclear volume timings for all twelve programs: batch (one frame), staged
+    nuclear_volume_warmup_gl.py           ← Mesa cold-cache nuclear volume timings for the pall and wall programs: batch (one frame), staged
                                            (one draw per loading frame, including both wall composite targets), cold (unprepared burst). dust_wall_gl.py runs staged
     dust_wall_gl.py                      ← the young nuclear dust wall's shaders on Mesa llvmpipe (see_through_gl.py's
                                            harness): thin foreground, hand and pane in its composite, history at a new
@@ -70,6 +70,8 @@ Prism: `~/.var/app/org.prismlauncher.PrismLauncher/data/PrismLauncher/` (`tools/
                                            dust_wall_gl.py runs every case.
     wall_layer_identity.py               ← fixed-seed llvmpipe comparison with fixtures/wall_layer_7de91b6d1.glsl, run by
                                            dust_wall_gl.py. Checks light, depth and clipped transmission across 672 cases.
+    pall_single_gl.py                    ← compares the general and single-burst ray in seven llvmpipe scenes, including
+                                           haze, soot and a populated cap with a missing-body negative control. Run by dust_wall_gl.py.
     dust_wall_ray_cost.py <checkout> [readbacks.npz] ← llvmpipe timings and optional RGBA32F readbacks for the pall ray pass
     nested_kwin.sh                       ← nested KWin for the client: no window and no host sound, its own D-Bus bus without starting services
                                            (nested_kwin_bus.conf) and XDG directories; takes the GPU lease and the client lock
