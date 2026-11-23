@@ -182,5 +182,8 @@ paths:
 
 - The GameTest server has no profile cache (`MinecraftServer.getProfileCache()` is null): an offline UUID never resolves
   to an operator there, so offline-operator rights (`Authority.level`) cannot be probed in GameTest; online rights come
-  from `MunitionGameTests.Listener`'s permission level. A permission-handler probe swaps `PermissionAPI`'s active
+  from `MunitionGameTests.Listener`'s permission level. A fake player put into the server's player list needs a
+  connection with a channel (`PermissionGameTests.online`, `FuelFireGameTests.Watcher`): the server sends listed players
+  packets every 20 ticks (`MinecraftServer.synchronizeTime`), and a bare `FakePlayer` crashes the whole GameTest server
+  there. A permission-handler probe swaps `PermissionAPI`'s active
   handler for its own batch only (`PermissionGameTests.Handler`), since the handler is server-wide.

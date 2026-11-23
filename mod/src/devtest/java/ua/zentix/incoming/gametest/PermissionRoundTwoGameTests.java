@@ -265,18 +265,9 @@ public final class PermissionRoundTwoGameTests {
             h.assertValueEqual(NuclearKeys.get(h.getLevel()).pending(), 1, "the paid order no longer waits for its payer");
             FakePlayer back = new FakePlayer(h.getLevel(), owner.getGameProfile());
             back.moveTo(beside);
-            var list = h.getLevel().getServer().getPlayerList();
-            List<ServerPlayer> players = net.neoforged.fml.util.ObfuscationReflectionHelper.getPrivateValue(
-                    net.minecraft.server.players.PlayerList.class, list, "players");
-            java.util.Map<java.util.UUID, ServerPlayer> byId = net.neoforged.fml.util.ObfuscationReflectionHelper.getPrivateValue(
-                    net.minecraft.server.players.PlayerList.class, list, "playersByUUID");
-            players.add(back);
-            byId.put(back.getUUID(), back);
-            StrikeGameTests.afterTest(h, () -> {
-                players.remove(back);
-                byId.remove(back.getUUID());
-            });
-            h.runAfterDelay(3, () -> {
+            PermissionGameTests.online(h, back);
+            // past a server time sync (every 20 ticks), which sends every listed player a packet
+            h.runAfterDelay(25, () -> {
                 h.assertValueEqual(releases.size(), 0, "released after the payer came back");
                 h.assertValueEqual(endings.size(), 1, "terminal outcomes");
                 h.assertValueEqual(endings.getFirst().getOutcome(), StrikeRoundEvent.Outcome.RECALLED, "terminal outcome");

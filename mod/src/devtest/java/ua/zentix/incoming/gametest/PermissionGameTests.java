@@ -12,7 +12,14 @@ import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
+import net.minecraft.network.Connection;
+import net.minecraft.network.PacketSendListener;
+import net.minecraft.network.protocol.Packet;
+import net.minecraft.network.protocol.PacketFlow;
+import net.minecraft.server.network.CommonListenerCookie;
+import net.minecraft.server.network.ServerGamePacketListenerImpl;
 import net.minecraft.server.players.PlayerList;
+import io.netty.channel.embedded.EmbeddedChannel;
 import net.minecraft.world.InteractionHand;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.phys.Vec3;
@@ -419,8 +426,16 @@ public final class PermissionGameTests {
         return p;
     }
 
-    /** {@code p} in the server's player list for this test (a launcher owner online, a second-key player). */
-    private static void online(GameTestHelper h, ServerPlayer p) {
+    /**
+     * {@code p} in the server's player list for this test (a launcher owner online, a second-key player), with a muted
+     * connection: the server sends listed players packets (time every 20 ticks), and a fake player's own connection has
+     * no channel (CI crash in {@code MinecraftServer.synchronizeTime}).
+     */
+    static void online(GameTestHelper h, ServerPlayer p) {
+        Connection connection = new Connection(PacketFlow.SERVERBOUND);
+        EmbeddedChannel channel = new EmbeddedChannel(connection);
+        StrikeGameTests.afterTest(h, channel::finish);
+        new Muted(p, connection);
         PlayerList list = h.getLevel().getServer().getPlayerList();
         List<ServerPlayer> players = ObfuscationReflectionHelper.getPrivateValue(PlayerList.class, list, "players");
         Map<UUID, ServerPlayer> byId = ObfuscationReflectionHelper.getPrivateValue(PlayerList.class, list, "playersByUUID");
@@ -481,6 +496,17 @@ public final class PermissionGameTests {
     private static String key(net.minecraft.network.chat.Component c) {
         String k = FixedLauncherGameTests.key(c);
         return k == null ? "" : k;
+    }
+
+    /** A listed test player's connection that sends nothing. */
+    private static final class Muted extends ServerGamePacketListenerImpl {
+        Muted(ServerPlayer player, Connection connection) {
+            super(player.server, connection, player, CommonListenerCookie.createInitial(player.getGameProfile(), false));
+        }
+
+        @Override
+        public void send(Packet<?> packet, @Nullable PacketSendListener listener) {
+        }
     }
 
     /**
