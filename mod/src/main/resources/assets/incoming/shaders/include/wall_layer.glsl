@@ -66,10 +66,11 @@ WallLayer wallLayer(sampler2D atlas, sampler2D scene, vec2 pixel, float here, fl
     // Only the matching depth class contributes. A thin foreground object
     // with no valid matching tap uses the other class on the second pass.
     for (int pass = 0; pass < 2; pass++) {
+        bool matching = pass == 0;
         for (int y = 0; y < 3; y++) {
             for (int x = 0; x < 3; x++) {
                 float there = pallScene(texelFetch(scene, ivec2(px[x], py[y]), 0).r);
-                if (pallSamePlace(there, here) != (pass == 0)) continue;
+                if (pallSamePlace(there, here) != matching) continue;
                 ivec2 c = ivec2(cx[x], cy[y]);
                 vec4 v = texelFetch(atlas, c, 0);
                 vec4 span = texelFetch(atlas, c + ivec2(low.x, 0), 0);

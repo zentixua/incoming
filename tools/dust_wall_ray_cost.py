@@ -17,6 +17,7 @@ from time import perf_counter
 
 import numpy as np
 
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("checkout", type=Path)
