@@ -49,6 +49,8 @@ public final class BlockLighting {
     private boolean admissionQueued, repairLogPending;
     private long admitted, droppedUnloaded, droppedCapacity, marked;
     private int peakPending;
+    /** Most recovery checks one slice gave the light engine before its fence ({@link #LIGHT_SLICE} at most). */
+    private int peakSlice;
     private boolean stopping;
     private long completed, recovered, workNanos, recoveryNanos, checks, readyNanos;
     private int peakHeld;
@@ -59,10 +61,10 @@ public final class BlockLighting {
     public record Measurements(long completed, long recovered, long workNanos, long recoveryNanos,
                                long checks, long readyNanos, int peakHeld, long admitted, long droppedUnloaded,
                                long droppedCapacity, long marked, int peakPending, long savedNeighbours,
-                               long cleanNeighbours) {}
+                               long cleanNeighbours, int peakSlice) {}
     public Measurements measurements() {
         return new Measurements(completed, recovered, workNanos, recoveryNanos, checks, readyNanos, peakHeld,
-                admitted, droppedUnloaded, droppedCapacity, marked, peakPending, savedNeighbours, cleanNeighbours);
+                admitted, droppedUnloaded, droppedCapacity, marked, peakPending, savedNeighbours, cleanNeighbours, peakSlice);
     }
 
     public static BlockLighting get(ServerLevel level) { return level.getData(ModAttachments.BLOCK_LIGHTING); }
@@ -230,9 +232,14 @@ public final class BlockLighting {
         boolean fullSeen, succeeded;
         long ownNanos;
         CompletableFuture<Void> fence;
-        /** Light engine has processed the last {@link #LIGHT_SLICE} recovery checks; layer: next block row to scan. */
+        /**
+         * Light engine has processed the last slice of recovery checks. The scan cursor is chunk {@code repairChunk},
+         * section {@code section}, cell {@code cell} (y, z, x order); every move to another section or chunk starts
+         * that one at cell 0. A slice holds at most {@link #LIGHT_SLICE} checks, all in one chunk: the engine orders
+         * its tasks by chunk, so a fence on one chunk does not cover checks queued for another.
+         */
         CompletableFuture<?> slice;
-        int layer, sliceChecks;
+        int cell, sliceChecks;
         Batch(ChunkPos center) { this.center = center; }
         ChunkPos at(int i) { return new ChunkPos(center.x + i % 3 - 1, center.z + i / 3 - 1); }
 
@@ -261,8 +268,20 @@ public final class BlockLighting {
                     if (lightChunk(level, new ChunkPos(p.x + x, p.z + z)) == null) return false;
             }
             if (!fullSeen) { readyNanos += System.nanoTime() - born; fullSeen = true; }
-            if (slice != null && !slice.isDone()) return false;
-            return fence == null || fence.isDone();
+            return !lightPending();
+        }
+
+        /** Checks or a fence this batch already gave the light engine are still being processed. */
+        private boolean lightPending() {
+            return slice != null && !slice.isDone() || fence != null && !fence.isDone();
+        }
+
+        /**
+         * Waiting for the light engine is admitted work in progress, not an area that failed to load: the queue skips it
+         * without counting it toward {@link UnitQueue#GIVE_UP_TICKS}.
+         */
+        @Override public boolean blocked() {
+            return lightPending();
         }
 
         @Override public boolean step(ServerLevel level) {
@@ -301,19 +320,21 @@ public final class BlockLighting {
                 ChunkPos target = at(repairChunk);
                 var chunk = lightChunk(level, target);
                 var layers = level.getChunkSource().getLightEngine().getLayerListener(LightLayer.BLOCK);
+                var light = level.getChunkSource().getLightEngine();
                 while (section < chunk.getSectionsCount()) {
                     var data = layers.getDataLayerData(net.minecraft.core.SectionPos.of(target, chunk.getSectionYFromSectionIndex(section)));
                     if (data != null && !data.isEmpty()) break;
+                    // storage can vanish between slices (its last block removed): the next section starts at its first cell
                     section++;
+                    cell = 0;
                 }
                 if (section < chunk.getSectionsCount()) {
-                    // Block rows of one section per unit, including air sections carrying stale arrays, until a light
-                    // slice is full. Recheck boundary spill and unsupported interior maxima (old missed-source checks).
+                    // Cells of one section per unit, including air sections carrying stale arrays, until a light slice is
+                    // full. Recheck boundary spill and unsupported interior maxima (old missed-source checks).
                     int y0 = chunk.getSectionYFromSectionIndex(section) * 16;
                     BlockPos.MutableBlockPos p = new BlockPos.MutableBlockPos();
-                    var light = level.getChunkSource().getLightEngine();
-                    for (; layer < 16 && sliceChecks < LIGHT_SLICE; layer++) for (int z = 0; z < 16; z++) for (int x = 0; x < 16; x++) {
-                        int y = y0 + layer;
+                    for (; cell < 4096 && sliceChecks < LIGHT_SLICE; cell++) {
+                        int x = cell & 15, z = cell >> 4 & 15, y = y0 + (cell >> 8);
                         p.set(target.getMinBlockX() + x, y, target.getMinBlockZ() + z);
                         int value = level.getBrightness(LightLayer.BLOCK, p);
                         if (value == 0) continue;
@@ -325,16 +346,15 @@ public final class BlockLighting {
                         }
                         if (peak) { light.checkBlock(p); checks++; sliceChecks++; }
                     }
-                    if (layer == 16) { layer = 0; section++; }
-                    if (sliceChecks >= LIGHT_SLICE) {
-                        // completes after the engine's batch that holds these checks has propagated them
-                        slice = light.waitForPendingTasks(target.x, target.z);
-                        sliceChecks = 0;
-                    }
+                    if (cell == 4096) { cell = 0; section++; }
+                    if (sliceChecks >= LIGHT_SLICE) closeSlice(light, target);
                     revision++;
                     return true;
                 }
+                // the slice never spans two chunks
+                if (sliceChecks > 0) closeSlice(light, target);
                 section = 0;
+                cell = 0;
                 scanned = ++repairChunk == 9;
                 return true;
             }
@@ -390,6 +410,13 @@ public final class BlockLighting {
             return false;
         }
 
+        /** Next checks wait until the engine has propagated these ({@code target}'s queued tasks). */
+        private void closeSlice(net.minecraft.server.level.ThreadedLevelLightEngine light, ChunkPos target) {
+            slice = light.waitForPendingTasks(target.x, target.z);
+            peakSlice = Math.max(peakSlice, sliceChecks);
+            sliceChecks = 0;
+        }
+
         private ChunkPos saveAt(int i) {
             return repair ? new ChunkPos(center.x + i % 5 - 2, center.z + i / 5 - 2) : at(i);
         }
@@ -406,20 +433,25 @@ public final class BlockLighting {
 
     /** Drain already committed edits before vanilla saves worlds; never initiate unrelated recovery at shutdown. */
     public static void onStopping(ServerStoppingEvent event) {
+        long deadline = ua.zentix.incoming.util.StopDrain.deadline(event.getServer());
         for (ServerLevel level : event.getServer().getAllLevels()) {
-            finish(level);
+            finish(level, deadline);
             if (level.hasData(ModAttachments.BLOCK_LIGHTING)) get(level).stopping = true;
         }
     }
 
     /** Same world-exit drain, also exercised with pending leases by the unload/reload regression. */
     public static void finish(ServerLevel level) {
+        finish(level, System.nanoTime() + ua.zentix.incoming.util.StopDrain.LIMIT_NANOS);
+    }
+
+    /** Drain until {@code deadline} ({@link System#nanoTime}), the stop's deadline shared with the impact drains. */
+    public static void finish(ServerLevel level, long deadline) {
         if (!level.hasData(ModAttachments.BLOCK_LIGHTING)) return;
         BlockLighting work = get(level);
         work.stopping = true;
         work.repairs.clear(); // No committed edit and no ticket; let a future load offer legacy work again.
         WorkClock clock = new WorkClock();
-        long deadline = System.nanoTime() + ua.zentix.incoming.util.StopDrain.LIMIT_NANOS;
         while (!work.idle()) {
             if (System.nanoTime() > deadline) {
                 ua.zentix.incoming.Incoming.LOG.error("Block lighting did not drain before shutdown: {} batches", work.batches.size());

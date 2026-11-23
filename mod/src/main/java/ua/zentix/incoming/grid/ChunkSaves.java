@@ -1,21 +1,18 @@
 package ua.zentix.incoming.grid;
 
-import com.mojang.serialization.Codec;
 import it.unimi.dsi.fastutil.longs.LongArrayList;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.SectionPos;
+import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.nbt.ListTag;
 import net.minecraft.nbt.NbtOps;
 import net.minecraft.nbt.Tag;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.level.ChunkPos;
-import net.minecraft.world.level.block.Block;
-import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.chunk.LevelChunk;
 import net.minecraft.world.level.chunk.LevelChunkSection;
-import net.minecraft.world.level.chunk.PalettedContainer;
 import net.minecraft.world.level.chunk.status.ChunkType;
 import net.minecraft.world.level.chunk.storage.ChunkSerializer;
 import net.neoforged.neoforge.event.level.ChunkDataEvent;
@@ -33,9 +30,6 @@ import java.util.function.LongPredicate;
  * or from a backup, and nothing is lost after a server failure.
  */
 public final class ChunkSaves {
-    /** As in vanilla ({@code ChunkSerializer}): the same section block codec. */
-    private static final Codec<PalettedContainer<BlockState>> BLOCK_STATES = PalettedContainer.codecRW(
-            Block.BLOCK_STATE_REGISTRY, BlockState.CODEC, PalettedContainer.Strategy.SECTION_STATES, Blocks.AIR.defaultBlockState());
     private static final String BLOCK_TICKS = "block_ticks", TWIN_PREFIX = Incoming.MOD_ID + ":unlit_";
     private static boolean failureLogged;
 
@@ -43,111 +37,180 @@ public final class ChunkSaves {
 
     /**
      * Saved chunk tag: twins become lamps again in each section's palette list, and lighting is recomputed on load (saved
-     * lighting was computed for unlit lamps). A twin and its lamp have the same properties, so renaming the twin's palette
-     * entry restores every such block while the packed block data stays as vanilla wrote it. Decoding, converting and
-     * re-encoding all 4096 blocks of each section (and encoding the live section once more to compare) cost 1.6 times
-     * vanilla's whole chunk serialization while a 1 Mt wave saved a blacked-out city (server thread, srvlag run 23.11).
-     * A rename that would list one state twice (a kept lamp beside its own twin state) rebuilds that section instead:
-     * palette implementations (Lithium's too) need not keep duplicate entries at their indices.
+     * lighting was computed for unlit lamps). The decision comes from the saved tag itself, not the live chunk: the tag is
+     * a snapshot, and the live blocks may have changed since. A twin and its lamp have the same properties, so renaming
+     * the twin's palette entry restores every such block while the packed block data stays as vanilla wrote it. Decoding,
+     * converting and re-encoding all 4096 blocks of each section (and encoding the live section once more to compare) cost
+     * 1.6 times vanilla's whole chunk serialization while a 1 Mt wave saved a blacked-out city (server thread, srvlag run
+     * 23.11). Only the registered name changes: other keys of the entry and the section (another mod's data) stay. A twin
+     * whose lamp state is already listed merges into that entry instead ({@link #relightPalette}). A section that does not
+     * read as a vanilla palette is another writer's and stays as it is; it does not stop the other sections.
      */
     public static void onSave(ChunkDataEvent.Save e) {
-        if (!(e.getChunk() instanceof LevelChunk chunk) || !(e.getLevel() instanceof ServerLevel)) return;
-        if (!ChunkLights.anyUnlit(chunk.getSections())) return;
+        // twins live only in full chunks: a below-full chunk's tag is another pipeline's, left byte for byte
+        if (!(e.getChunk() instanceof LevelChunk) || !(e.getLevel() instanceof ServerLevel level)) return;
         CompoundTag tag = e.getData();
         if (!tag.contains(ChunkSerializer.SECTIONS_TAG, Tag.TAG_LIST)) return;
         ListTag list = tag.getList(ChunkSerializer.SECTIONS_TAG, Tag.TAG_COMPOUND);
-        try {
-            boolean changed = false;
-            for (int i = 0; i < list.size(); i++) {
-                CompoundTag s = list.getCompound(i);
-                if (!s.contains("Y", Tag.TAG_ANY_NUMERIC) || !s.contains("block_states", Tag.TAG_COMPOUND)) continue;
-                // only sections of this chunk whose live blocks hold twins (palette check, no block scan): a section
-                // outside the chunk's height or without twins in memory is another writer's, left byte for byte
-                int index = chunk.getSectionIndexFromSectionY(s.getByte("Y"));
-                if (index < 0 || index >= chunk.getSectionsCount() || !ChunkLights.needs(chunk.getSection(index), false)) continue;
-                CompoundTag states = s.getCompound("block_states");
-                int renamed = relightPalette(states);
-                if (renamed == DUPLICATE) {
-                    // own copy from the tag, not copy(): any non-global palette copy retains the live section's resize handler
-                    PalettedContainer<BlockState> copy = BLOCK_STATES.parse(NbtOps.INSTANCE, states).getOrThrow();
-                    if (ChunkLights.apply(copy, false) == 0) continue;
-                    s.put("block_states", BLOCK_STATES.encodeStart(NbtOps.INSTANCE, copy).getOrThrow());
-                    REBUILT.incrementAndGet();
-                    changed = true;
-                } else if (renamed > 0) {
-                    RENAMED.incrementAndGet();
-                    changed = true;
+        boolean changed = false;
+        for (int i = 0; i < list.size(); i++) {
+            CompoundTag s = list.getCompound(i);
+            if (!s.contains("Y", Tag.TAG_ANY_NUMERIC) || !s.contains("block_states", Tag.TAG_COMPOUND)) continue;
+            // a section outside the world's height is another writer's, left byte for byte
+            int y = s.getByte("Y");
+            if (y < level.getMinSection() || y >= level.getMaxSection()) continue;
+            CompoundTag states = s.getCompound("block_states");
+            if (!holdsTwin(states)) continue;
+            try {
+                if (relightPalette(states) > 0) changed = true;
+            } catch (RuntimeException ex) {
+                if (!failureLogged) {
+                    failureLogged = true;
+                    Incoming.LOG.error("Blackout: section {} of chunk {} is not a vanilla palette (another mod writes it?): its unlit lamps are saved as they are",
+                            y, e.getChunk().getPos(), ex);
                 }
             }
-            if (changed) {
-                tag.putBoolean(ChunkSerializer.IS_LIGHT_ON_TAG, false);
-                // scheduled counterpart ticks (nearby redstone, neighbors) are now lamp ticks: they do not belong on disk
-                if (tag.contains(BLOCK_TICKS, Tag.TAG_LIST)) tag.getList(BLOCK_TICKS, Tag.TAG_COMPOUND).removeIf(t -> t instanceof CompoundTag c && c.getString("i").startsWith(TWIN_PREFIX));
-            }
-        } catch (RuntimeException ex) {
-            if (!failureLogged) {
-                failureLogged = true;
-                Incoming.LOG.error("Blackout: chunk {} saved with unlit lamps — could not restore them in the tag", chunk.getPos(), ex);
-            }
+        }
+        if (changed) {
+            // every converted section's saved light was computed for unlit lamps, even if another section failed
+            tag.putBoolean(ChunkSerializer.IS_LIGHT_ON_TAG, false);
+            // scheduled counterpart ticks (nearby redstone, neighbors) are now lamp ticks: they do not belong on disk
+            if (tag.contains(BLOCK_TICKS, Tag.TAG_LIST)) tag.getList(BLOCK_TICKS, Tag.TAG_COMPOUND).removeIf(t -> t instanceof CompoundTag c && c.getString("i").startsWith(TWIN_PREFIX));
         }
     }
 
-    /** {@link #relightPalette}: the rename would list one state twice. */
-    public static final int DUPLICATE = -1;
-    /** Sections restored by renaming palette entries / by rebuilding the section (tests, measurements). */
-    public static final java.util.concurrent.atomic.AtomicLong RENAMED = new java.util.concurrent.atomic.AtomicLong(),
-            REBUILT = new java.util.concurrent.atomic.AtomicLong();
-
-    /**
-     * Renames twin entries of an encoded section's {@code palette} list to their lamps in place; returns the number
-     * renamed, or {@link #DUPLICATE} (nothing changed) if a lamp state is already listed.
-     */
-    public static int relightPalette(CompoundTag states) {
-        if (!states.contains("palette", Tag.TAG_LIST)) return 0;
+    /** Palette list names a twin: a prefix test first, most entries fail it at the first character. */
+    private static boolean holdsTwin(CompoundTag states) {
+        if (!states.contains("palette", Tag.TAG_LIST)) return false;
         ListTag palette = states.getList("palette", Tag.TAG_COMPOUND);
         java.util.Set<String> twins = twinNames();
-        String[] names = new String[palette.size()];
-        int[] at = null;
-        int n = 0;
         for (int i = 0; i < palette.size(); i++) {
-            names[i] = palette.getCompound(i).getString("Name");
-            if (!twins.contains(names[i])) continue;
-            if (at == null) at = new int[palette.size()];
-            at[n++] = i;
+            String name = palette.getCompound(i).getString("Name");
+            if (name.startsWith(TWIN_PREFIX) && twins.contains(name)) return true;
         }
-        if (n == 0) return 0;
-        CompoundTag[] lamps = new CompoundTag[n];
-        java.util.Set<String> lampNames = new java.util.HashSet<>();
-        for (int k = 0; k < n; k++) {
-            BlockState twin = BlockState.CODEC.parse(NbtOps.INSTANCE, palette.get(at[k])).getOrThrow();
-            BlockState lamp = GridLights.lit(twin);
-            if (lamp == null) throw new IllegalStateException("not a twin: " + twin);
-            lamps[k] = (CompoundTag) BlockState.CODEC.encodeStart(NbtOps.INSTANCE, lamp).getOrThrow();
-            lampNames.add(lamps[k].getString("Name"));
-            for (int j = 0; j < k; j++) if (lamps[j].equals(lamps[k])) return DUPLICATE;
-        }
-        // a lamp state already listed: only entries of the lamps' own blocks can equal one (full-palette hashing cost most of the save)
-        for (int i = 0; i < palette.size(); i++) {
-            if (!lampNames.contains(names[i])) continue;
-            CompoundTag entry = palette.getCompound(i);
-            for (CompoundTag lamp : lamps) if (lamp.equals(entry)) return DUPLICATE;
-        }
-        for (int k = 0; k < n; k++) palette.set(at[k], lamps[k]);
-        return n;
+        return false;
     }
 
-    private static volatile java.util.Set<String> twinNames;
+    /**
+     * Turns the twin entries of an encoded section ({@code palette} list, packed {@code data}) into their lamps in place;
+     * returns how many twin entries it restored. A twin entry keeps its tag with the lamp's registered name. A twin whose
+     * lamp state is already listed (a kept lamp beside its own twin state; compared by decoded state, as extra keys
+     * may differ) cannot be renamed, since palette readers (Lithium's too) need not keep a state listed twice at its
+     * index: its blocks move to the lamp's index in the packed data, its entry leaves the list, and the data is packed
+     * again at the width vanilla reads for the new list size. Other entries and keys stay.
+     *
+     * @throws RuntimeException the section does not read as a vanilla palette (an entry, the data length or an index)
+     */
+    public static int relightPalette(CompoundTag states) {
+        ListTag palette = states.getList("palette", Tag.TAG_COMPOUND);
+        int size = palette.size();
+        java.util.Set<String> twins = twinNames();
+        // decided first, written only once the whole section reads: a section that fails stays as it was
+        // target[i]: palette index whose state block i becomes; renamed[i]: entry i's new tag
+        int[] target = null;
+        CompoundTag[] renamed = null;
+        int restored = 0, merged = 0;
+        java.util.Map<BlockState, Integer> listed = null;
+        for (int i = 0; i < size; i++) {
+            CompoundTag entry = palette.getCompound(i);
+            String name = entry.getString("Name");
+            if (!name.startsWith(TWIN_PREFIX) || !twins.contains(name)) continue;
+            BlockState twin = BlockState.CODEC.parse(NbtOps.INSTANCE, entry).getOrThrow();
+            BlockState lamp = GridLights.lit(twin);
+            if (lamp == null) throw new IllegalStateException("not a twin: " + twin);
+            if (listed == null) {
+                listed = lampsListed(palette);
+                target = new int[size];
+                for (int k = 0; k < size; k++) target[k] = k;
+                renamed = new CompoundTag[size];
+            }
+            restored++;
+            Integer at = listed.get(lamp);
+            if (at != null) {
+                target[i] = at;
+                merged++;
+                continue;
+            }
+            CompoundTag tag = entry.copy();
+            tag.putString("Name", BuiltInRegistries.BLOCK.getKey(lamp.getBlock()).toString());
+            if (BlockState.CODEC.parse(NbtOps.INSTANCE, tag).getOrThrow() != lamp) {
+                // properties written differently from the lamp's: its canonical properties, other keys kept
+                CompoundTag canonical = (CompoundTag) BlockState.CODEC.encodeStart(NbtOps.INSTANCE, lamp).getOrThrow();
+                tag.remove("Properties");
+                if (canonical.contains("Properties")) tag.put("Properties", canonical.get("Properties"));
+            }
+            renamed[i] = tag;
+            listed.put(lamp, i);
+        }
+        if (restored == 0) return 0;
+        long[] data = null;
+        if (merged > 0) {
+            // indices of the remaining entries once merged twins leave the list
+            int[] index = new int[size];
+            for (int i = 0, n = 0; i < size; i++) index[i] = target[i] == i ? n++ : -1;
+            int bits = serializedBits(size), newBits = serializedBits(size - merged);
+            if (!states.contains("data", Tag.TAG_LONG_ARRAY)) throw new IllegalStateException("palette of " + size + " without data");
+            var old = new net.minecraft.util.SimpleBitStorage(bits, 4096, states.getLongArray("data"));
+            if (newBits > 0) {
+                var packed = new net.minecraft.util.SimpleBitStorage(newBits, 4096);
+                for (int c = 0; c < 4096; c++) {
+                    int v = old.get(c);
+                    if (v >= size) throw new IllegalStateException("block index " + v + " beyond a palette of " + size);
+                    packed.set(c, index[target[v]]);
+                }
+                data = packed.getRaw();
+            }
+        }
+        for (int i = size - 1; i >= 0; i--) {
+            if (renamed[i] != null) palette.set(i, renamed[i]);
+            else if (target[i] != i) palette.remove(i);
+        }
+        if (merged > 0) {
+            if (data == null) states.remove("data");
+            else states.putLongArray("data", data);
+        }
+        return restored;
+    }
+
+    /** Lamp states already in the palette list, by decoded state, with their index. */
+    private static java.util.Map<BlockState, Integer> lampsListed(ListTag palette) {
+        java.util.Set<String> lampNames = lampNames();
+        java.util.Map<BlockState, Integer> listed = new java.util.HashMap<>();
+        for (int i = 0; i < palette.size(); i++) {
+            CompoundTag entry = palette.getCompound(i);
+            if (!lampNames.contains(entry.getString("Name"))) continue;
+            BlockState st = BlockState.CODEC.parse(NbtOps.INSTANCE, entry).getOrThrow();
+            listed.putIfAbsent(st, i);
+        }
+        return listed;
+    }
+
+    /** Bits per block vanilla reads for a palette list of {@code size} ({@code PalettedContainer.Strategy.SECTION_STATES}). */
+    static int serializedBits(int size) {
+        int bits = net.minecraft.util.Mth.ceillog2(size);
+        return bits == 0 ? 0 : Math.max(4, bits);
+    }
+
+    private static volatile java.util.Set<String> twinNames, lampNames;
 
     private static java.util.Set<String> twinNames() {
         java.util.Set<String> names = twinNames;
-        if (names == null) {
-            names = new java.util.HashSet<>();
-            for (ua.zentix.incoming.registry.ModBlocks.UnlitPair p : ua.zentix.incoming.registry.ModBlocks.UNLIT) {
-                names.add(net.minecraft.core.registries.BuiltInRegistries.BLOCK.getKey(p.unlit().get()).toString());
-            }
-            twinNames = names = java.util.Set.copyOf(names);
-        }
+        if (names == null) twinNames = names = names(true);
         return names;
+    }
+
+    private static java.util.Set<String> lampNames() {
+        java.util.Set<String> names = lampNames;
+        if (names == null) lampNames = names = names(false);
+        return names;
+    }
+
+    private static java.util.Set<String> names(boolean twin) {
+        java.util.Set<String> names = new java.util.HashSet<>();
+        for (ua.zentix.incoming.registry.ModBlocks.UnlitPair p : ua.zentix.incoming.registry.ModBlocks.UNLIT) {
+            names.add(BuiltInRegistries.BLOCK.getKey((twin ? p.unlit() : p.lit()).get()).toString());
+        }
+        return java.util.Set.copyOf(names);
     }
 
     /**

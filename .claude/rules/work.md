@@ -47,13 +47,22 @@ paths:
   cost, mid-lane requests, neighbor decodes, uneven ticks and the factor; a new background loader
   of disk chunks goes through it too.
 - `UnitQueue` runs new heads in enqueue order, then one unit per continuation in a persistent round-robin order.
-  Unready areas and blocked dependencies are skipped. Continuation `ready`/`blocked` results are cached once per
+  Unready areas and blocked dependencies are skipped; a job is cancelled after `GIVE_UP_TICKS` without a unit (since
+  its last unit or its enqueue), not by age: a light repair that ran a unit every tick for five minutes may wait a
+  tick for its fence (`UnitQueueTest.giveUpCountsTicksWithoutProgressNotAge`). Continuation `ready`/`blocked` results are cached once per
   work window, after heads (whose first step can introduce a dependency). Post refreshes them even within the same
-  world tick. Unit kinds keep separate clock estimates. Shutdown drains available work via `finish`, then releases
-  jobs that cannot proceed. World time stops during the drain: `Job.drain` tells each job (also one enqueued meanwhile)
-  to do now what waits for a later tick (the explosion front's arrival); a step returning true without progress
-  would otherwise repeat forever in finish's window. `StopDrain.LIMIT_NANOS` bounds the drain (`UnitQueueTest`,
-  `blast_front_stop`). Strike timelines enqueue into `StrikeWorld.impacts()` rather
+  world tick. Unit kinds keep separate clock estimates. Shutdown drains available work via `finish` while its windows run
+  units (a last continuation that enqueues a ready successor keeps the queue length and is still progress), then
+  releases jobs that cannot proceed. World time stops during the drain: `Job.drain` tells each job (also one enqueued
+  meanwhile) to do now what waits for a later tick (the explosion front's arrival); a step returning true without
+  progress would otherwise repeat forever in finish's window. One stop deadline (`StopDrain.deadline`, fixed by the
+  HIGHEST `ServerStoppingEvent` listener, `StopDrain.LIMIT_NANOS` from the start) bounds every world's impact drain
+  and then the block-light drain together: a clock per world let three worlds take three times the limit. Released
+  work logs ERROR when time ran out (also when an estimate refused the last unit) and WARN when it could not run.
+  Jobs are not saved, so a job released before its last unit commits in `end` what its finished units owe the world
+  (`StagedExplosion` its drops, `StrikeCollapse.Fall` the buffered rubble of blocks it removed; GameTest
+  `collapse_stop_landing`). The generation wait (`util/StopDrain`) keeps its own limit: skipping it leaves vanilla's
+  unload loop spinning forever (`UnitQueueTest`, `blast_front_stop`). Strike timelines enqueue into `StrikeWorld.impacts()` rather
   than executing directly; an empty queue can start the job that tick.
 - `StallWatch` samples the server stack every 0.5 s while stalled. After a stall longer than 2 s, within or between
   ticks, it logs `Server thread stalled for N s` with common stack locations. A single-player pause is not a stall.
@@ -99,8 +108,11 @@ paths:
   Legacy admission is itself a budgeted unit: pending positions own no tickets, a bounded scan drops unloaded or
   already marked entries and chooses the nearest player chunk. Only one repair can hold its source-context ring;
   normal live-edit leases remain independent. Shutdown drops pending legacy positions and drains committed edits.
-  Recovery checks go to vanilla's one light-engine queue in slices of `BlockLighting.LIGHT_SLICE` (256): the next
-  slice waits until the engine processed the last. Server-thread budgets do not bound that queue, and a moving
+  Recovery checks go to vanilla's one light-engine queue in slices of at most `BlockLighting.LIGHT_SLICE` (256)
+  checks in one chunk (the engine orders tasks by chunk, so a fence on one chunk does not cover another's checks):
+  the next slice waits until the engine processed the last. The scan resumes at a cell; every move to another section
+  (including past one whose storage vanished between slices) or chunk starts at its first cell (GameTest
+  `light_repair_cursor`). A pending slice or fence is `blocked`, admitted work rather than an unready area. Server-thread budgets do not bound that queue, and a moving
   player's synchronous chunk load needs a light task from it: whole sections per unit queued 195,000 checks in the
   minute after a 1 Mt blackout (every pre-existing chunk under the outage counts as legacy) and held such loads
   0.3–0.8 s (GameTest `light_repair_slices`).

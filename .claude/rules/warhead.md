@@ -179,7 +179,8 @@ paths:
     bottom-up), picks the rubble share (`Debris.SOLID_SHARE`, same hash as the nuclear landing) and lists the cells
     beside each fall position that bore nothing (`Result.watch`).
   - The fall is a second job (`Fall`), queued when the solve starts (`UnitQueue` cancels a job unready
-    `GIVE_UP_TICKS` after queueing). It writes once the Sable origin chunk is loaded (`NuclearTickets.ORIGIN`,
+    `GIVE_UP_TICKS` after queueing). Released before its end (stop deadline, cancellation), it lands the buffered
+    rubble of every block it already removed (`collapse_stop_landing`). It writes once the Sable origin chunk is loaded (`NuclearTickets.ORIGIN`,
     requested when the collapse takes its slot). Preparation in timed portions: the holes the solve used are checked;
     claim handlers get `ExplosionEvent.Detonate` events of up to 1024 positions, attributed to the strike's projectile and
     damage source, without entities. Candidates in a shared support window also go through each peer impact whose

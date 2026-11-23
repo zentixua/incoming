@@ -240,6 +240,16 @@ public final class Warheads {
             return job.stats.direct;
         }
 
+        /** Direct rubble placed. */
+        public int placedRubble() {
+            return job.stats.placed;
+        }
+
+        /** Direct rubble removed blocks still owe the world (buffered, not yet landed). */
+        public int bufferedRubble() {
+            return job.stats.direct - job.stats.landings;
+        }
+
         public int portions() {
             return job.stats.portions;
         }

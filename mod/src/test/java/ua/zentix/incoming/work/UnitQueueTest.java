@@ -3,6 +3,7 @@ package ua.zentix.incoming.work;
 import net.minecraft.server.level.ServerLevel;
 import org.junit.jupiter.api.Test;
 import ua.zentix.incoming.nuclear.world.WorkClock;
+import ua.zentix.incoming.util.StopDrain;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -166,7 +167,7 @@ class UnitQueueTest {
         q.add(0, far);
         q.add(0, after);
         tick(q, WorkClock.counting(MS), 3 * MS, 0);
-        q.finish(null, 1);
+        drain(q, 1);
         assertTrue(q.isEmpty());
         assertEquals(0, big.units);
         assertEquals(1, big.ended);
@@ -207,6 +208,114 @@ class UnitQueueTest {
         assertTrue(q.isEmpty());
         assertEquals(1, ended[0]);
         assertTrue(steps[0] >= 98 && steps[0] <= 101, "about one 1 ms unit per ms of the limit: " + steps[0]);
+    }
+
+    /**
+     * Save and Quit while a continuation is about to hand over to a successor (a collapse's last snapshot unit enqueues its
+     * fall): the queue length stays 1 across that window, yet the successor is ready and runs before the drain ends.
+     */
+    @Test
+    void finishRunsASuccessorEnqueuedByTheLastContinuation() {
+        UnitQueue queue = new UnitQueue();
+        int[] parent = {0}, child = {0}, released = {0};
+        queue.add(0, new Named() {
+            @Override public boolean step(ServerLevel ignored) {
+                if (++parent[0] == 1) return true;
+                queue.add(0, new Named() {
+                    @Override public boolean step(ServerLevel ignored) { child[0]++; return false; }
+                    @Override public void end(ServerLevel ignored) { released[0]++; }
+                });
+                return false;
+            }
+        });
+        WorkClock ordinary = WorkClock.counting(MS);
+        ordinary.start(MS);
+        queue.work(null, 0, ordinary); // the parent is a continuation before the stop
+        queue.finish(null, 0, WorkClock.counting(MS), StopDrain.LIMIT_NANOS);
+        assertEquals(2, parent[0]);
+        assertEquals(1, child[0], "ready successor released before its first unit");
+        assertEquals(1, released[0]);
+    }
+
+    /**
+     * A repair that ran a unit every tick for five minutes waits one tick for its light fence: inactivity, not age, cancels
+     * a job, so its last unit still runs.
+     */
+    @Test
+    void giveUpCountsTicksWithoutProgressNotAge() {
+        UnitQueue queue = new UnitQueue();
+        int[] steps = {0}, releases = {0};
+        boolean[] pendingFence = {false};
+        queue.add(0, new Named() {
+            @Override public boolean dynamicReadiness() { return true; }
+            @Override public boolean ready(ServerLevel ignored) { return !pendingFence[0]; }
+            @Override public boolean step(ServerLevel ignored) { return ++steps[0] < UnitQueue.GIVE_UP_TICKS + 1; }
+            @Override public void end(ServerLevel ignored) { releases[0]++; }
+        });
+        WorkClock clock = WorkClock.counting(MS);
+        for (int t = 0; t < UnitQueue.GIVE_UP_TICKS; t++) {
+            clock.start(MS);
+            queue.work(null, t, clock);
+        }
+        assertEquals(UnitQueue.GIVE_UP_TICKS, steps[0]);
+        pendingFence[0] = true;
+        clock.start(MS);
+        queue.work(null, UnitQueue.GIVE_UP_TICKS, clock);
+        pendingFence[0] = false;
+        clock.start(MS);
+        queue.work(null, UnitQueue.GIVE_UP_TICKS + 1, clock);
+        assertEquals(UnitQueue.GIVE_UP_TICKS + 1, steps[0], "one pending fence cancelled a progressing continuation");
+        assertEquals(1, releases[0]);
+        // still cancelled after the limit without a unit
+        UnitQueue idle = new UnitQueue();
+        int[] idleEnds = {0};
+        boolean[] ready = {true};
+        idle.add(0, new Named() {
+            @Override public boolean dynamicReadiness() { return true; }
+            @Override public boolean ready(ServerLevel ignored) { return ready[0]; }
+            @Override public boolean step(ServerLevel ignored) { ready[0] = false; return true; }
+            @Override public void end(ServerLevel ignored) { idleEnds[0]++; }
+        });
+        tick(idle, WorkClock.counting(MS), MS, 100);
+        tick(idle, WorkClock.counting(MS), MS, 100 + UnitQueue.GIVE_UP_TICKS - 1);
+        assertEquals(0, idleEnds[0]);
+        tick(idle, WorkClock.counting(MS), MS, 100 + UnitQueue.GIVE_UP_TICKS);
+        assertEquals(1, idleEnds[0]);
+    }
+
+    /**
+     * Three worlds' impact queues share one stop deadline: 30,001 units of 1 ms each would take 90 s with a clock per world.
+     * Work that did not fit is released (its {@code end} commits what it owes the world).
+     */
+    @Test
+    void worldsShareOneStopDeadline() {
+        long[] nanos = {0};
+        int[] applied = {0}, ended = {0};
+        for (int dimension = 0; dimension < 3; dimension++) {
+            UnitQueue impacts = new UnitQueue();
+            impacts.add(0, new Named() {
+                int units;
+                @Override public boolean step(ServerLevel ignored) {
+                    nanos[0] += MS;
+                    applied[0]++;
+                    return ++units < 30_001;
+                }
+                @Override public void end(ServerLevel ignored) { ended[0]++; }
+            });
+            impacts.finish(null, 0, WorkClock.decaying(() -> nanos[0], 1), StopDrain.LIMIT_NANOS);
+            assertTrue(impacts.isEmpty());
+        }
+        assertTrue(nanos[0] <= StopDrain.LIMIT_NANOS, "worlds took " + nanos[0] / 1e9 + " s of a " + StopDrain.LIMIT_NANOS / 1e9 + " s stop");
+        assertTrue(applied[0] >= 29_999, "the deadline's time went unused: " + applied[0] + " units");
+        assertEquals(3, ended[0], "every unfinished job is released through end");
+    }
+
+    private abstract static class Named implements UnitQueue.Job {
+        @Override public String describe() { return "test job"; }
+    }
+
+    private static void drain(UnitQueue q, long now) {
+        q.finish(null, now, WorkClock.counting(MS), Long.MAX_VALUE / 4);
     }
 
     /** Steps without progress until drained, then {@code units} units; runs {@code onFirst} in its first step. */
@@ -269,7 +378,7 @@ class UnitQueueTest {
         assertEquals(1, front.ended, "the main front gets a turn every round");
         assertEquals(0, ignition.ended);
         assertEquals(0, shatter.ended);
-        queue.finish(null, 13);
+        drain(queue, 13);
         assertTrue(queue.isEmpty());
         assertEquals(1, ignition.ended);
         assertEquals(1, shatter.ended);

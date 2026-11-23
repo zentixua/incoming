@@ -24,7 +24,10 @@ import ua.zentix.incoming.Incoming;
 import ua.zentix.incoming.IncomingConfig;
 import ua.zentix.incoming.net.S2C;
 import ua.zentix.incoming.nuclear.world.StrikeSupport;
+import ua.zentix.incoming.nuclear.world.WorkClock;
+import ua.zentix.incoming.strike.StrikeWorld;
 import ua.zentix.incoming.warhead.Warheads;
+import ua.zentix.incoming.work.WorkScheduler;
 
 import java.util.ArrayList;
 import java.util.Collections;
@@ -234,6 +237,49 @@ public final class CollapseRegressionGameTests {
                     h.assertTrue(debris == 0, debris + " brick rubble blocks landed with debris_stay=false");
                     h.assertTrue(h.getLevel().getEntitiesOfClass(ItemEntity.class, area,
                             e -> e.getItem().is(Blocks.CYAN_SHULKER_BOX.asItem())).size() == 1, "storage item must still drop");
+                }).thenSucceed();
+    }
+
+    /**
+     * Released between its removals and their buffered rubble (the stop's deadline, or an area that never got ready):
+     * the fall's end lands the rubble of every block it already removed, so the world never saves those holes without
+     * their landings. Impact units run one a tick (counting lane clock) and a portion takes a few blocks (counting
+     * portion clock), so the release comes while the fall still holds rubble.
+     */
+    @GameTest(template = "range", batch = "collapse_stop_landing", timeoutTicks = 2400, skyAccess = true)
+    public static void releasedFallLandsItsBufferedRubble(GameTestHelper h) {
+        var setting = IncomingConfig.SERVER.debrisStay;
+        boolean original = setting.get();
+        setting.set(true);
+        var level = h.getLevel();
+        var server = level.getServer();
+        WorkScheduler.useImpactClock(server, WorkClock.counting(1_000_000_000L));
+        StrikeGameTests.afterTest(h, () -> {
+            setting.set(original);
+            WorkScheduler.useImpactClock(server, WorkScheduler.newImpactClock());
+        });
+        CollapseGameTests.ground(h);
+        List<BlockPos> removed = new ArrayList<>();
+        // beyond the fall area's live-rubble room: part of the rubble is buffered for direct landing
+        for (int x = 17; x <= 46; x += 2) for (int z = 17; z <= 46; z += 2) {
+            BlockPos foot = new BlockPos(x, GROUND + 1, z);
+            set(h, foot.above(), BRICKS);
+            removed.add(foot);
+        }
+        LongArrayList at = new LongArrayList();
+        for (BlockPos p : removed) at.add(h.absolutePos(p).asLong());
+        long[] portionClock = {0};
+        Warheads.CollapseProbe probe = Warheads.testCollapse(level, h.absoluteVec(Vec3.atCenterOf(PILLAR)), 10, at,
+                Collections.nCopies(removed.size(), BRICKS), () -> portionClock[0] += 1_000_000L);
+        h.startSequence()
+                .thenWaitUntil(() -> h.assertTrue(probe.bufferedRubble() > 0, "no rubble buffered yet"))
+                .thenExecute(() -> {
+                    h.assertTrue(!probe.done() && probe.placedRubble() == 0, "landing began before the release");
+                    int buffered = probe.bufferedRubble();
+                    StrikeWorld.get(level).impacts().finish(level, System.nanoTime()); // the stop's deadline has passed
+                    h.assertTrue(probe.done(), "the fall was not released");
+                    h.assertTrue(probe.bufferedRubble() == 0, probe.bufferedRubble() + " of " + buffered + " buffered rubble blocks lost on release");
+                    h.assertTrue(probe.placedRubble() > 0, "no buffered rubble placed on release");
                 }).thenSucceed();
     }
 }

@@ -14,10 +14,11 @@ import java.util.List;
  * Heads run their first unit in enqueue order before any continuations. Continuations take one unit per turn,
  * retaining their rotation between windows and ticks, so an old fire sweep cannot monopolize a new blast front.
  * <p>
- * Unready areas wait up to {@link #GIVE_UP_TICKS}; jobs waiting on dependencies are skipped. Continuation readiness
- * and dependencies are sampled once per work window, after heads have run: a first unit can introduce a dependency.
- * A later window, including Post in the same world tick, refreshes that sample. Jobs are not saved; shutdown drains
- * available work through {@link #finish(ServerLevel)} and releases the rest.
+ * A job that cannot run waits up to {@link #GIVE_UP_TICKS} after its last unit (or its enqueue); jobs waiting on
+ * dependencies are skipped. Continuation readiness and dependencies are sampled once per work window, after heads have
+ * run: a first unit can introduce a dependency. A later window, including Post in the same world tick, refreshes that
+ * sample. Jobs are not saved; shutdown drains available work through {@link #finish(ServerLevel, long)} and releases
+ * the rest.
  */
 public final class UnitQueue {
     /** A chain of units, continuing while {@link #step} returns true. */
@@ -49,25 +50,33 @@ public final class UnitQueue {
          */
         default void drain() {}
 
-        /** Release held resources, including tickets, when completed, cancelled or failed. */
+        /**
+         * Release held resources, including tickets, when completed, cancelled or failed. A job released before its last
+         * unit (shutdown deadline, an area that never became ready) commits here what its finished units still owe the
+         * world, such as buffered replacements for blocks it already removed: jobs are not saved, so the world saves as
+         * {@code end} leaves it.
+         */
         default void end(ServerLevel level) {}
 
         /** Job description for logs. */
         String describe();
     }
 
-    /** Maximum wait for area readiness, in ticks, before cancellation. */
+    /** Maximum wait without a unit (area readiness, an outstanding fence), in ticks, before cancellation. */
     public static final int GIVE_UP_TICKS = 6000;
 
     private static final class Entry {
         final Job job;
         final long added;
+        /** World time of the last unit, or of the enqueue: {@link #GIVE_UP_TICKS} counts inactivity from it. */
+        long progressed;
         long checkedWindow = -1;
         Outcome availability;
 
         Entry(Job job, long added) {
             this.job = job;
             this.added = added;
+            this.progressed = added;
         }
     }
 
@@ -78,6 +87,10 @@ public final class UnitQueue {
     /** Started jobs with remaining units. */
     private final Deque<Entry> tails = new ArrayDeque<>();
     private long window;
+    /** Units executed so far: {@link #finish} drains while windows make progress. */
+    private long units;
+    /** The last window stopped because the clock refused a unit or ran out. */
+    private boolean outOfTime;
     /** Inside {@link #finish}: jobs enqueued meanwhile drain too. */
     private boolean draining;
 
@@ -128,10 +141,14 @@ public final class UnitQueue {
 
     private void workWindow(ServerLevel level, long now, WorkClock clock) {
         long currentWindow = ++window;
+        outOfTime = false;
         for (int i = 0; i < heads.size(); ) {
             Entry e = heads.get(i);
             Outcome o = run(level, now, e, clock, currentWindow, false);
-            if (o == Outcome.OUT_OF_TIME) return;
+            if (o == Outcome.OUT_OF_TIME) {
+                outOfTime = true;
+                return;
+            }
             if (o == Outcome.SKIPPED) {
                 i++;
                 continue;
@@ -142,7 +159,10 @@ public final class UnitQueue {
         }
         int missed = 0;
         while (!tails.isEmpty() && missed < tails.size()) {
-            if (clock.workedThisTick() && clock.overdue()) return;
+            if (clock.workedThisTick() && clock.overdue()) {
+                outOfTime = true;
+                return;
+            }
             Entry e = tails.removeFirst();
             Outcome o = run(level, now, e, clock, currentWindow, true);
             if (o == Outcome.DONE) finish(level, e);
@@ -150,11 +170,12 @@ public final class UnitQueue {
             // A full circle without progress: all wait, or none of their estimates fits the remaining time.
             if (o == Outcome.SKIPPED || o == Outcome.OUT_OF_TIME) missed++;
             else missed = 0;
+            if (o == Outcome.OUT_OF_TIME) outOfTime = true;
         }
     }
 
     /** One unit; continuation readiness and dependencies are sampled once per work window. */
-    private static Outcome run(ServerLevel level, long now, Entry e, WorkClock clock, long window, boolean continuation) {
+    private Outcome run(ServerLevel level, long now, Entry e, WorkClock clock, long window, boolean continuation) {
         try {
             if (!continuation || e.checkedWindow != window || e.job.dynamicReadiness()) {
                 e.availability = availability(level, now, e);
@@ -166,6 +187,8 @@ public final class UnitQueue {
             int kind = e.job.unitKind();
             if (!clock.canStart(kind)) return Outcome.OUT_OF_TIME;
             long c0 = clock.begin();
+            units++;
+            e.progressed = now;
             try {
                 return e.job.step(level) ? Outcome.MORE : Outcome.DONE;
             } finally {
@@ -180,8 +203,10 @@ public final class UnitQueue {
     private static Outcome availability(ServerLevel level, long now, Entry e) {
         if (e.job.blocked()) return Outcome.SKIPPED;
         if (e.job.ready(level)) return Outcome.MORE;
-        if (now - e.added < GIVE_UP_TICKS) return Outcome.SKIPPED;
-        Incoming.LOG.warn("{} cancelled: area did not load within {} ticks", e.job.describe(), GIVE_UP_TICKS);
+        // Inactivity, not age: a job that ran units until a moment ago (a light repair waiting one tick for its fence)
+        // has not failed to load its area.
+        if (now - e.progressed < GIVE_UP_TICKS) return Outcome.SKIPPED;
+        Incoming.LOG.warn("{} cancelled: not ready for {} ticks", e.job.describe(), GIVE_UP_TICKS);
         return Outcome.DONE;
     }
 
@@ -194,37 +219,50 @@ public final class UnitQueue {
     }
 
     /**
-     * On shutdown, complete available work without a deadline. Unready areas are still never read, and jobs that
-     * remain unavailable or depend on unavailable jobs are released.
+     * On shutdown, complete available work until {@code deadline} ({@link System#nanoTime}), the one stop deadline shared
+     * by every world and drain ({@link ua.zentix.incoming.util.StopDrain#deadline}). Unready areas are still never read,
+     * and jobs that remain unavailable, depend on unavailable jobs or did not fit before the deadline are released.
      */
-    public void finish(ServerLevel level) {
-        finish(level, level.getGameTime());
+    public void finish(ServerLevel level, long deadline) {
+        finish(level, level.getGameTime(), new WorkClock(), deadline);
     }
 
-    /** Explicit world time for tests without a world. */
-    public void finish(ServerLevel level, long now) {
-        finish(level, now, new WorkClock(), ua.zentix.incoming.util.StopDrain.LIMIT_NANOS);
+    /** Same with a deadline of its own: tests and callers outside a server stop. */
+    public void finish(ServerLevel level) {
+        finish(level, System.nanoTime() + ua.zentix.incoming.util.StopDrain.LIMIT_NANOS);
     }
 
     /**
-     * Same with the clock and its wall-time limit (tests): a job that keeps stepping without finishing (a wait that
-     * ignores {@link Job#drain}) is released when the limit passes instead of holding shutdown forever.
+     * Explicit world time and clock for tests; {@code deadline} is on the clock's time base. Windows repeat while units
+     * run: a unit that enqueues a ready successor is progress even when the queue length stays the same. World time
+     * stops during the drain ({@link Job#drain}); a job that keeps stepping without finishing is released at the
+     * deadline instead of holding shutdown forever.
      */
-    void finish(ServerLevel level, long now, WorkClock clock, long limitNanos) {
+    void finish(ServerLevel level, long now, WorkClock clock, long deadline) {
         draining = true;
         try {
             for (Entry e : heads) e.job.drain();
             for (Entry e : tails) e.job.drain();
-            clock.start(limitNanos);
-            for (int before = -1; !isEmpty() && size() != before && !clock.overdue(); ) {
-                before = size();
+            clock.start(Math.max(0, deadline - clock.begin()));
+            boolean late = false;
+            while (!isEmpty()) {
+                if (clock.overdue()) {
+                    late = true;
+                    break;
+                }
+                long before = units;
                 work(level, now, clock);
+                if (units == before) {
+                    late = outOfTime;
+                    break;
+                }
             }
-            if (!isEmpty() && clock.overdue()) {
+            if (!isEmpty()) {
                 List<String> left = new ArrayList<>();
                 for (Entry e : heads) left.add(e.job.describe());
                 for (Entry e : tails) left.add(e.job.describe());
-                Incoming.LOG.error("Shutdown: work did not finish within {} s, released unfinished: {}", limitNanos / 1_000_000_000L, left);
+                if (late) Incoming.LOG.error("Shutdown: work did not finish before the stop deadline, released unfinished: {}", left);
+                else Incoming.LOG.warn("Shutdown: released work that cannot run (area not ready or waiting for it): {}", left);
             }
         } finally {
             draining = false;

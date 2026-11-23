@@ -252,7 +252,104 @@ public final class LightRepairQueueGameTests {
                     long checks = lighting.measurements().checks() - before[0];
                     h.assertTrue(checks > 8 * BlockLighting.LIGHT_SLICE, "fixture issued only " + checks + " checks");
                     h.assertTrue(level.getBrightness(LightLayer.BLOCK, probe) == 0, "ghost light remained: " + level.getBrightness(LightLayer.BLOCK, probe));
-                    Incoming.LOG.info("LIGHT_REPAIR_SLICES checks={} peakPerTick={}", checks, peak[0]);
+                    int slice = lighting.measurements().peakSlice();
+                    h.assertTrue(slice <= BlockLighting.LIGHT_SLICE, "one slice gave the light engine " + slice + " checks");
+                    Incoming.LOG.info("LIGHT_REPAIR_SLICES checks={} peakPerTick={} peakSlice={}", checks, peak[0], slice);
+                }).thenSucceed();
+    }
+
+    /**
+     * A section's light storage can vanish between two slices (its last block removed): the scan moves on to the next
+     * stored section from its first cell, not from the row where the previous section's slice stopped. A slice stops
+     * at {@link BlockLighting#LIGHT_SLICE} checks mid-row: here 255 stale cells fill section 9's first row and 256 its
+     * second. The unsupported peak in section 13's first row is cleared before the chunk is marked repaired, through
+     * the stop's light drain and an actual unload and reload.
+     */
+    @GameTest(template = "range", batch = "light_repair_cursor", timeoutTicks = 2400)
+    public static void emptiedSectionDoesNotSkipTheNextSectionsFirstCells(GameTestHelper h) {
+        StrikeGameTests.gameSpeed(h);
+        ServerLevel level = h.getLevel().getServer().getLevel(net.minecraft.world.level.Level.END);
+        h.assertTrue(level != null, "End dimension missing");
+        BlockLighting.finish(level);
+        var lighting = BlockLighting.get(level);
+        var source = level.getChunkSource();
+        var light = source.getLightEngine();
+        ChunkPos pad = new ChunkPos(h.absolutePos(BlockPos.ZERO));
+        ChunkPos center = new ChunkPos(pad.x + 14500, pad.z + 14500);
+        BlockPos stone = new BlockPos(center.getMiddleBlockX(), 159, center.getMiddleBlockZ());
+        BlockPos ghost = new BlockPos(stone.getX(), 208, stone.getZ());
+        List<CompletableFuture<?>> writes = new ArrayList<>();
+        for (int dz = -2; dz <= 2; dz++) for (int dx = -2; dx <= 2; dx++) {
+            ChunkPos pos = new ChunkPos(center.x + dx, center.z + dz);
+            LevelChunk chunk = new LevelChunk(level, pos);
+            boolean scar = pos.equals(center);
+            if (scar) {
+                chunk.setData(ModAttachments.CHUNK_SCAR, 1);
+                for (int y : new int[]{159, 223}) chunk.getSection(chunk.getSectionIndex(y)).setBlockState(8, 15, 8, Blocks.STONE.defaultBlockState(), false);
+            } else chunk.setData(ModAttachments.LIGHT_REPAIRED, true);
+            chunk.setLightCorrect(true);
+            CompoundTag tag = ChunkSerializer.write(level, chunk);
+            if (scar) for (Tag t : tag.getList("sections", Tag.TAG_COMPOUND)) {
+                CompoundTag section = (CompoundTag) t;
+                byte[] data = new byte[2048];
+                if (section.getByte("Y") == 9) {
+                    java.util.Arrays.fill(data, 0, 256, (byte) 0xff); // 255 stale cells in the first row, 256 in the second
+                    data[0] = (byte) 0xf0;
+                } else if (section.getByte("Y") == 13) {
+                    data[(8 * 16 + 8) / 2] = 15; // isolated unsupported peak in the first row
+                } else continue;
+                section.putByteArray("BlockLight", data);
+            }
+            tag.putBoolean("isLightOn", true);
+            writes.add(RegionFiles.write(level, pos, tag));
+        }
+        WorkScheduler.useImpactClock(level.getServer(), WorkClock.counting(1_000_000_000L));
+        StrikeGameTests.afterTest(h, () -> {
+            source.removeRegionTicket(VIEW, center, 0, center);
+            WorkScheduler.useImpactClock(level.getServer(), WorkScheduler.newImpactClock());
+        });
+        long[] before = {0};
+        var written = CompletableFuture.allOf(writes.toArray(CompletableFuture<?>[]::new));
+        h.startSequence().thenWaitUntil(() -> h.assertTrue(written.isDone(), "fixture writes pending"))
+                .thenExecute(() -> {
+                    written.join();
+                    before[0] = lighting.measurements().checks();
+                    source.addRegionTicket(VIEW, center, 0, center);
+                })
+                .thenWaitUntil(() -> h.assertTrue(lighting.measurements().checks() > before[0], "first slice outstanding"))
+                .thenExecute(() -> {
+                    long slice = lighting.measurements().checks() - before[0];
+                    h.assertTrue(slice <= BlockLighting.LIGHT_SLICE, "first slice gave the light engine " + slice + " checks");
+                    h.assertTrue(level.getBrightness(LightLayer.BLOCK, ghost) == 15 && level.getBlockState(stone).is(Blocks.STONE), "fixture did not load");
+                    level.setBlock(stone, Blocks.AIR.defaultBlockState(), 3); // section 9 holds no block now: its storage goes
+                    var fence = light.waitForPendingTasks(center.x, center.z);
+                    long until = System.nanoTime() + 5_000_000_000L;
+                    while (!fence.isDone() && System.nanoTime() < until) {
+                        light.tryScheduleUpdate();
+                        source.pollTask();
+                        Thread.yield();
+                    }
+                    var data = light.getLayerListener(LightLayer.BLOCK).getDataLayerData(net.minecraft.core.SectionPos.of(stone));
+                    h.assertTrue(fence.isDone() && (data == null || data.isEmpty()), "section 9 still has light storage");
+                    BlockLighting.finish(level); // the server stop's light drain
+                })
+                .thenWaitUntil(() -> h.assertTrue(lighting.idle() && source.getChunkNow(center.x, center.z).getData(ModAttachments.LIGHT_REPAIRED), "repair pending"))
+                .thenExecute(() -> {
+                    h.assertTrue(level.getBrightness(LightLayer.BLOCK, ghost) == 0, "repaired with unsupported light " + level.getBrightness(LightLayer.BLOCK, ghost));
+                    h.assertTrue(lighting.measurements().peakSlice() <= BlockLighting.LIGHT_SLICE, "slice of " + lighting.measurements().peakSlice() + " checks");
+                    source.removeRegionTicket(VIEW, center, 0, center);
+                })
+                .thenWaitUntil(() -> {
+                    unloadPass(level);
+                    h.assertTrue(source.chunkMap.getVisibleChunkIfPresent(center.toLong()) == null
+                            && !source.chunkMap.pendingUnloads.containsKey(center.toLong()), "awaiting unload");
+                })
+                .thenExecute(() -> source.addRegionTicket(VIEW, center, 0, center))
+                .thenWaitUntil(() -> h.assertTrue(source.getChunkNow(center.x, center.z) != null, "awaiting reload"))
+                .thenExecute(() -> {
+                    boolean marked = source.getChunkNow(center.x, center.z).getData(ModAttachments.LIGHT_REPAIRED);
+                    int value = level.getBrightness(LightLayer.BLOCK, ghost);
+                    h.assertTrue(marked && value == 0, "reloaded: repair marker " + marked + " with unsupported light " + value);
                 }).thenSucceed();
     }
 

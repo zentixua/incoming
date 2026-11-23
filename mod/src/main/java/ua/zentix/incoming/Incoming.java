@@ -99,6 +99,8 @@ public final class Incoming {
         NeoForge.EVENT_BUS.addListener(ua.zentix.incoming.util.TerrainSurvey::onLevelTick);
         NeoForge.EVENT_BUS.addListener(ua.zentix.incoming.util.TerrainSurvey::onChunkUnload);
         NeoForge.EVENT_BUS.addListener(ua.zentix.incoming.util.TerrainSurvey::onChunkLoad);
+        // One work deadline for the whole stop, fixed before any drain (every world's impacts, then block light).
+        NeoForge.EVENT_BUS.addListener(EventPriority.HIGHEST, ua.zentix.incoming.util.StopDrain::begin);
         NeoForge.EVENT_BUS.addListener(StrikeWorld::onServerStopping);
         NeoForge.EVENT_BUS.addListener((net.neoforged.neoforge.event.server.ServerStoppingEvent e) -> ua.zentix.incoming.nuclear.world.NuclearWorld.onServerStopping(e.getServer()));
         NeoForge.EVENT_BUS.addListener(EventPriority.LOW, ua.zentix.incoming.work.BlockLighting::onStopping);
