@@ -192,48 +192,56 @@ public final class ProgressReviewGameTests {
         h.succeed();
     }
 
-    @GameTest(template = "range", timeoutTicks = 200, batch = "progress_review_grid_district", skyAccess = true)
+    @GameTest(template = "range", timeoutTicks = 400, batch = "progress_review_grid_district", skyAccess = true)
     public static void actualDistrictReceivesRestoreCreditOutsideCircle(GameTestHelper h) {
         ServerLevel level = h.getLevel();
         Vec3 at = Vec3.atBottomCenterOf(h.absolutePos(CENTRE));
-        ServerPlayer p = ProgressGameTests.Credited.online(h, "review_district", 0, at);
-        long district = Districts.of(p.chunkPosition().x, p.chunkPosition().z);
-        Vec3 seed = new Vec3(Districts.seedX(district), at.y, Districts.seedZ(district));
-        if (at.distanceTo(seed) <= 2) p.moveTo(at.add(6, 0, 0));
-        Outage outage = Blackouts.blackout(level, seed, 2, 16, -1);
-        h.assertTrue(outage.covers(Districts.of(p.chunkPosition().x, p.chunkPosition().z)), "fixture outside outage district");
-        h.assertTrue(p.position().distanceTo(seed) > outage.radius(), "fixture inside restore event circle");
-        h.startSequence()
-                .thenWaitUntil(() -> h.assertTrue(darkAtPlayer(level, p), "waiting for the player's district to go dark"))
-                .thenExecute(() -> h.assertValueEqual(Blackouts.restore(level, seed, 0, 0), 1, "outages set to restore"))
-                .thenWaitUntil(() -> assertRestored(h, outage))
+        ServerPlayer[] p = new ServerPlayer[1];
+        Outage[] outage = new Outage[1];
+        Vec3[] seed = new Vec3[1];
+        ProgressGameTests.quietGrid(h)
                 .thenExecute(() -> {
-                    h.assertFalse(darkAtPlayer(level, p), "the player's district still has no power");
-                    h.assertTrue(done(p, "lights_back"), "The player's district was dark then relit but got no Lights Back On");
+                    p[0] = ProgressGameTests.Credited.online(h, "review_district", 0, at);
+                    long district = Districts.of(p[0].chunkPosition().x, p[0].chunkPosition().z);
+                    seed[0] = new Vec3(Districts.seedX(district), at.y, Districts.seedZ(district));
+                    if (at.distanceTo(seed[0]) <= 2) p[0].moveTo(at.add(6, 0, 0));
+                    outage[0] = Blackouts.blackout(level, seed[0], 2, 16, -1);
+                    h.assertTrue(outage[0].covers(Districts.of(p[0].chunkPosition().x, p[0].chunkPosition().z)), "fixture outside outage district");
+                    h.assertTrue(p[0].position().distanceTo(seed[0]) > outage[0].radius(), "fixture inside restore event circle");
+                })
+                .thenWaitUntil(() -> h.assertTrue(darkAtPlayer(level, p[0]), "waiting for the player's district to go dark"))
+                .thenExecute(() -> h.assertValueEqual(Blackouts.restore(level, seed[0], 0, 0), 1, "outages set to restore"))
+                .thenWaitUntil(() -> assertRestored(h, outage[0]))
+                .thenExecute(() -> {
+                    h.assertFalse(darkAtPlayer(level, p[0]), "the player's district still has no power");
+                    h.assertTrue(done(p[0], "lights_back"), "The player's district was dark then relit but got no Lights Back On");
                 })
                 .thenSucceed();
     }
 
-    @GameTest(template = "range", timeoutTicks = 200, batch = "progress_review_grid_overlap", skyAccess = true)
+    @GameTest(template = "range", timeoutTicks = 400, batch = "progress_review_grid_overlap", skyAccess = true)
     public static void districtStillDarkFromAnotherOutageDoesNotGetCredit(GameTestHelper h) {
         ServerLevel level = h.getLevel();
         Vec3 at = Vec3.atBottomCenterOf(h.absolutePos(CENTRE));
-        ServerPlayer p = ProgressGameTests.Credited.online(h, "review_overlap", 0, at);
-        Outage first = Blackouts.blackout(level, at, 120, 32, -1);
         Vec3 secondCentre = at.add(4, 0, 0);
-        Outage second = Blackouts.blackout(level, secondCentre, 120, 32, -1);
-        long district = Districts.of(p.chunkPosition().x, p.chunkPosition().z);
+        ServerPlayer[] p = new ServerPlayer[1];
+        Outage[] outages = new Outage[2];
         StrikeGameTests.afterTest(h, () -> Blackouts.restore(level, secondCentre, 0, 0));
-        h.startSequence()
+        ProgressGameTests.quietGrid(h)
+                .thenExecute(() -> {
+                    p[0] = ProgressGameTests.Credited.online(h, "review_overlap", 0, at);
+                    outages[0] = Blackouts.blackout(level, at, 120, 32, -1);
+                    outages[1] = Blackouts.blackout(level, secondCentre, 120, 32, -1);
+                })
                 .thenWaitUntil(() -> {
-                    long now = Blackouts.now(level);
-                    h.assertTrue(first.dark(district, now) && second.dark(district, now), "waiting for both outages");
+                    long now = Blackouts.now(level), district = Districts.of(p[0].chunkPosition().x, p[0].chunkPosition().z);
+                    h.assertTrue(outages[0].dark(district, now) && outages[1].dark(district, now), "waiting for both outages");
                 })
                 .thenExecute(() -> h.assertValueEqual(Blackouts.restore(level, at, 0, 0), 1, "outages set to restore"))
-                .thenWaitUntil(() -> assertRestored(h, first))
+                .thenWaitUntil(() -> assertRestored(h, outages[0]))
                 .thenExecute(() -> {
-                    h.assertTrue(darkAtPlayer(level, p), "the second outage no longer darkens the district");
-                    h.assertFalse(done(p, "lights_back"), "The player got Lights Back On while still in a dark district");
+                    h.assertTrue(darkAtPlayer(level, p[0]), "the second outage no longer darkens the district");
+                    h.assertFalse(done(p[0], "lights_back"), "The player got Lights Back On while still in a dark district");
                 })
                 .thenSucceed();
     }

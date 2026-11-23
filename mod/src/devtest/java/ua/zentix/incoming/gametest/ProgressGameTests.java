@@ -410,37 +410,52 @@ public final class ProgressGameTests {
     @GameTest(template = "range", timeoutTicks = 400, batch = "progress_grid", skyAccess = true)
     public static void restoreCreditsPlayersInTheArea(GameTestHelper h) {
         ServerLevel level = h.getLevel();
-        Blackouts.restore(level, null, 0, 0);
         PowerGrid grid = PowerGrid.get(level);
-        List<Integer> ids = new ArrayList<>();
-        for (Node n : grid.nodes()) ids.add(n.id());
-        ids.forEach(grid::removeNode);
-        h.setBlock(RANGE_CENTER, ModBlocks.SUBSTATION.get());
         BlockPos node = h.absolutePos(RANGE_CENTER);
         List<ua.zentix.incoming.api.GridOutageEvent> outages = new ArrayList<>();
         listen(h, ua.zentix.incoming.api.GridOutageEvent.class, e -> {
             if (node.equals(e.getNodePos())) outages.add(e);
         });
-        Vec3 c = Vec3.atCenterOf(node.east(3));
-        level.explode(null, c.x, c.y, c.z, 2f, Level.ExplosionInteraction.NONE);
-        Orders.deliver(level);
-        h.assertValueEqual(outages.size(), 1, "outages");
-        double radius = outages.getFirst().getRadius();
-        Credited inside = Credited.online(h, "progress_in_dark", 0, RANGE_CENTER.offset(2, 0, 2));
-        // beyond any outage another batch may restore meanwhile (a nuclear one reaches at most 16 384 blocks)
-        Credited away = Credited.online(h, "progress_away", 0, RANGE_CENTER);
-        away.moveTo(Vec3.atCenterOf(node).add(radius + 40_000, 0, 0));
-        int cx = inside.getBlockX() >> 4, cz = inside.getBlockZ() >> 4;
-        // restored only once its cascade has darkened the player's district: a district never dark earns nothing
-        h.startSequence()
-                .thenWaitUntil(() -> h.assertTrue(grid.dark(cx, cz, Blackouts.now(level)), "waiting for the player's district to go dark"))
+        Credited[] in = new Credited[2];
+        quietGrid(h)
+                .thenExecute(() -> {
+                    List<Integer> ids = new ArrayList<>();
+                    for (Node n : grid.nodes()) ids.add(n.id());
+                    ids.forEach(grid::removeNode);
+                    h.setBlock(RANGE_CENTER, ModBlocks.SUBSTATION.get());
+                    Vec3 c = Vec3.atCenterOf(node.east(3));
+                    level.explode(null, c.x, c.y, c.z, 2f, Level.ExplosionInteraction.NONE);
+                    Orders.deliver(level);
+                    h.assertValueEqual(outages.size(), 1, "outages");
+                    in[0] = Credited.online(h, "progress_in_dark", 0, RANGE_CENTER.offset(2, 0, 2));
+                    // beyond any outage another batch may restore meanwhile (a nuclear one reaches at most 16 384 blocks)
+                    in[1] = Credited.online(h, "progress_away", 0, RANGE_CENTER);
+                    in[1].moveTo(Vec3.atCenterOf(node).add(outages.getFirst().getRadius() + 40_000, 0, 0));
+                })
+                // restored only once its cascade has darkened the player's district: a district never dark earns nothing
+                .thenWaitUntil(() -> h.assertTrue(grid.dark(in[0].getBlockX() >> 4, in[0].getBlockZ() >> 4, Blackouts.now(level)),
+                        "waiting for the player's district to go dark"))
                 .thenExecute(() -> h.assertTrue(Blackouts.restore(level, Vec3.atCenterOf(node), 8, 0) >= 1, "nothing to restore"))
                 .thenWaitUntil(() -> {
                     Orders.deliver(level);
-                    h.assertTrue(done(inside, "strikes/lights_back"), "the player in the area has no Lights Back On");
+                    h.assertTrue(done(in[0], "strikes/lights_back"), "the player in the area has no Lights Back On");
                 })
-                .thenExecute(() -> h.assertFalse(done(away, "strikes/lights_back"), "a player outside the area got Lights Back On"))
+                .thenExecute(() -> h.assertFalse(done(in[1], "strikes/lights_back"), "a player outside the area got Lights Back On"))
                 .thenSucceed();
+    }
+
+    /**
+     * Ends every outage in the test world and waits until the grid has forgotten them: the world is shared by every batch,
+     * and another batch's outage that really darkened a fixture's district may end meanwhile and rightly credit it, or
+     * keep it dark.
+     */
+    static net.minecraft.gametest.framework.GameTestSequence quietGrid(GameTestHelper h) {
+        ServerLevel level = h.getLevel();
+        Blackouts.restore(level, null, 0, 0);
+        return h.startSequence().thenWaitUntil(() -> {
+            Orders.deliver(level);
+            h.assertTrue(PowerGrid.get(level).outages().isEmpty(), "waiting for earlier outages to end");
+        });
     }
 
     // ---------------------------------------------------------------- data

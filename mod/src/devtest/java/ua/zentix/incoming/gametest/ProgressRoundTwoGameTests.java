@@ -94,16 +94,10 @@ public final class ProgressRoundTwoGameTests {
         h.assertTrue(at.distanceTo(centre) > radius, "configure a position outside the old radial check");
         Outage[] made = new Outage[2];
         boolean[] watching = {false};
-        // other batches' outages end first: one that really darkened this district may finish meanwhile and rightly credit it
-        Blackouts.restore(level, null, 0, 0);
         h.onEachTick(() -> {
             if (watching[0]) h.assertFalse(grid.dark(cx, cz, Blackouts.now(level)), "district was dark");
         });
-        h.startSequence()
-                .thenWaitUntil(() -> {
-                    Orders.deliver(level);
-                    h.assertTrue(grid.outages().isEmpty(), "waiting for earlier outages to end");
-                })
+        ProgressGameTests.quietGrid(h)
                 .thenExecute(() -> {
                     // arrives once earlier outages are over
                     player[0] = ProgressGameTests.Credited.online(h, "r2_never_dark", 0, at);
