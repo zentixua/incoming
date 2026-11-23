@@ -790,7 +790,7 @@ struct WallAt {
 // epicenter (blocks), ground, G, W — relief and water maps of the slot and their numbers, water of the slot (the map is read for
 // water only if it is under the pall). Attenuation of dust — from the edge toward the end of the wedge (dust lifted closer to the
 // epicenter — of its own density); spray — its own
-WallAt pallWallAt(sampler2D ground, mat4 S, mat4 V, vec4 G, vec4 W, vec3 p, float floorUp, vec4 ring) {
+WallAt pallWallAt(sampler2D ground, mat4 S, mat4 V, vec4 G, vec4 W, vec3 p, float floorUp, float keep) {
     WallAt h;
     h.rel = p.xz - S[0].xy;
     h.s = V[0].x - length(h.rel);
@@ -800,6 +800,7 @@ WallAt pallWallAt(sampler2D ground, mat4 S, mat4 V, vec4 G, vec4 W, vec3 p, floa
     h.sand = 0.0;
     h.P = vec4(V[0].y, V[0].z, 0.0, 0.0);
     if (V[0].w <= 0.0 || pallWallInside(h.s, h.z, V[0].y, V[0].z, V[1].y) <= 0.0) return h;
+    if (keep == 0.0) return h;
     if (W.w > 0.5) h.wet = pallWater(ground, G, h.rel);
     vec2 soil = pallSoil(ground, S, G, h.rel);
     h.hard = soil.x;
@@ -807,7 +808,7 @@ WallAt pallWallAt(sampler2D ground, mat4 S, mat4 V, vec4 G, vec4 W, vec3 p, floa
     float lag = V[1].y * h.wet;
     h.P = vec4(V[0].y, V[0].z * mix(1.0, V[1].z, h.wet), lag, pallWallDensity(h.s - lag, V[0].y, V[0].w, V[3].z, V[3].w, V[1].w, h.wet,
             V[2].y, V[2].z, V[3].x, V[3].y, h.hard));
-    h.P.w *= 1.0 - wallShare(ring, length(h.rel));
+    h.P.w *= keep;
     return h;
 }
 
@@ -856,7 +857,7 @@ float pallWallTau(sampler2D ground, mat4 S, mat4 V, vec4 G, vec4 W, vec3 dir, fl
         for (int i = 0; i < steps; i++) {
             vec3 q = dir * (sp.x + (float(i) + 0.5) * ds);
             float floorUp = pallRelief(ground, S, G, q.xz);
-            WallAt h = pallWallAt(ground, S, V, G, W, q, floorUp, ring);
+            WallAt h = pallWallAt(ground, S, V, G, W, q, floorUp, 1.0 - wallShare(ring, length(q.xz - S[0].xy)));
             if (h.P.w > 0.0) tau += h.P.w * pallWallMean(h.s - h.P.z, h.z, h.P.x, h.P.y) * ds;
         }
     }

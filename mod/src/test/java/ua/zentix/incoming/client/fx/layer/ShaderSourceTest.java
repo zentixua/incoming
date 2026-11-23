@@ -9,6 +9,7 @@ import java.io.IOException;
 import java.net.URISyntaxException;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.ArrayDeque;
 import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
@@ -61,6 +62,70 @@ class ShaderSourceTest {
     void noConditionalInsideAnExpression() throws IOException, URISyntaxException {
         List<String> bad = everyShader(ShaderSourceTest::nested);
         assertTrue(bad.isEmpty(), "“?:” inside an expression (Veil loses the brackets): " + bad);
+    }
+
+    @Test
+    void noEqualityWithBracketedEqualityOperand() throws IOException, URISyntaxException {
+        List<String> bad = everyShader(ShaderSourceTest::bracketedEquality);
+        assertTrue(bad.isEmpty(), "Veil drops parentheses around nested equality comparisons: " + bad);
+    }
+
+    @Test
+    void findsBracketedEqualityOnEitherSide() {
+        assertEquals(List.of(1, 2, 3), bracketedEquality("""
+                if (pallSamePlace(there, here) != (pass == 0)) continue;
+                bool left = (a != sample(i)) == c;
+                bool nested = a == ((b != c));
+                bool relational = a != (b < c);
+                bool call = sample(b == c) != a;
+                bool logic = a != (b == c && d);
+                bool index = a == (values[b == c]);
+                // a == (b == c)
+                """));
+    }
+
+    private static boolean equality(String token) {
+        return token.equals("==") || token.equals("!=");
+    }
+
+    private static List<Integer> bracketedEquality(String source) {
+        String text = blankComments(source);
+        var tokens = TOKEN.matcher(text).results().toList();
+        var opens = new ArrayDeque<Integer>();
+        int[] close = new int[tokens.size()];
+        Set<String> lowerPrecedence = Set.of("&", "^", "|", "&&", "||", "?", ",", "=",
+                "+=", "-=", "*=", "/=", "%=", "&=", "^=", "|=");
+        List<Integer> found = new ArrayList<>();
+        for (int i = 0; i < tokens.size(); i++) {
+            String token = tokens.get(i).group();
+            if (token.equals("(") || token.equals("[")) opens.push(i);
+            if (!token.equals(")") && !token.equals("]")) continue;
+            int open = opens.pop();
+            close[open] = i;
+            if (token.equals("]")) continue;
+            String before = open == 0 ? "" : tokens.get(open - 1).group();
+            String after = i + 1 == tokens.size() ? "" : tokens.get(i + 1).group();
+            boolean call = before.matches("[A-Za-z_]\\w*") && !before.equals("return");
+            boolean leftOperand = equality(after) && !call;
+            if (!leftOperand && !equality(before)) continue;
+            int first = open + 1, end = i;
+            while (first < end && tokens.get(first).group().equals("(") && close[first] == end - 1) {
+                first++;
+                end--;
+            }
+            boolean comparison = false;
+            for (int j = first; j < end; j++) {
+                String operand = tokens.get(j).group();
+                if (operand.equals("(") || operand.equals("[")) j = close[j];
+                else if (lowerPrecedence.contains(operand)) {
+                    comparison = false;
+                    break;
+                } else if (equality(operand)) comparison = true;
+            }
+            if (comparison) found.add(1 + (int) text.substring(0, tokens.get(open).start()).chars()
+                    .filter(c -> c == '\n').count());
+        }
+        return found;
     }
 
     @Test

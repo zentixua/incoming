@@ -299,6 +299,26 @@ def edge_case():
           "dust covers the sloped ground up to the frame edge and across the convex corner")
 
 
+def sparse_taps(program):
+    # Only the far diagonal tap of the tent contains dust. Pixel (6,6) also supplies layer pixel (1,1).
+    light, span = slab(0, 0, 1)
+    dusty = slab(20, 80, .5)
+    light[2, 2], span[2, 2] = dusty[0][2, 2], dusty[1][2, 2]
+    depths = np.full((size, size), 400.0)
+    for layer in (False, True):
+        buffer = composite(program, make_scene(depths), (light, span), layer_frame=layer)
+        x = 1 if layer else 6
+        expected = 1 - .5 * (.625 / 2.375) ** 2
+        check(abs(buffer[x, x, 3] - expected) < 1e-6, "a clear centre still sees the occupied diagonal tap")
+    depths[10, 10] = 800
+    result = composite(program, make_scene(depths), (light, span))
+    check(result[6, 6, 3] == 1, "a valid clear centre excludes dust in another depth class")
+    depths[5, 5] = 200
+    result = composite(program, make_scene(depths), (light, span))
+    expected = 1 - .5 * (.375 / 2.375) ** 2
+    check(abs(result[5, 5, 3] - expected) < 1e-6, "an unsampled depth class uses the whole tent")
+
+
 def pane_order(composite_program):
     clear = make_scene(200, 100)
     glass = texture(*rgba, size, size, [(0.4, 0.4, 0.4, 0.5)] * (size * size))
@@ -394,7 +414,7 @@ void main() {
     V[2].z = 1.0;
     V[3] = vec4(1.0);
     vec3 p = vec3(Radius, 1.0, 0.0);
-    WallAt head = pallWallAt(Ground, S, V, vec4(0.0), vec4(0.0), p, 0.0, Ring);
+    WallAt head = pallWallAt(Ground, S, V, vec4(0.0), vec4(0.0), p, 0.0, 1.0 - wallShare(Ring, Radius));
     PallAt f;
     f.sigma = vec3(1.0, 0.375, 0.125);
     f.slab = vec3(1.0);
@@ -712,6 +732,7 @@ def main():
     composite_program = link("fx_pall_composite")
     cases = {
         "ownership": ownership,
+        "sparse": lambda: sparse_taps(composite_program),
         "offscreen": offscreen_dust,
         "post": lambda: mixed_depth(march_setup(), composite_program),
         "crossing": lambda: crossing_volume(composite_program),
