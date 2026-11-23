@@ -37,6 +37,7 @@ import ua.zentix.incoming.grid.SubstationBlock;
 import ua.zentix.incoming.nuclear.Detonation;
 import ua.zentix.incoming.registry.ModBlocks;
 import ua.zentix.incoming.strike.VirtualFlights;
+import ua.zentix.incoming.util.SignalEdge;
 
 import java.util.HashSet;
 import java.util.Optional;
@@ -240,7 +241,8 @@ public final class RedstoneGameTests {
         h.onEachTick(() -> {
             if (at[0] == null || level.getChunkSource().getChunkNow(far.x, far.z) == null) return;
             if (!(level.getBlockEntity(at[0]) instanceof SamBlockEntity sam)) return;
-            assertDust(level, h, at[1], sam.alarm());
+            // a notice waits while its circuit reaches an unready chunk (SignalEdge)
+            if (SignalEdge.ready(level, at[0])) assertDust(level, h, at[1], sam.alarm());
             if (reloading[0] && !firstSeen[0]) {
                 firstSeen[0] = true;
                 boolean swept = (level.getGameTime() + Math.floorMod(at[0].hashCode(), SamBlockEntity.SWEEP)) % SamBlockEntity.SWEEP == 0;
@@ -380,7 +382,7 @@ public final class RedstoneGameTests {
         h.onEachTick(() -> {
             if (at[0] == null || level.getChunkSource().getChunkNow(far.x, far.z) == null) return;
             BlockState s = level.getBlockState(at[0]);
-            if (s.getBlock() instanceof SubstationBlock) assertDust(level, h, at[1], s.getValue(SubstationBlock.POWERED));
+            if (s.getBlock() instanceof SubstationBlock && SignalEdge.ready(level, at[0])) assertDust(level, h, at[1], s.getValue(SubstationBlock.POWERED));
         });
         h.startSequence()
                 .thenWaitUntil(() -> h.assertTrue(level.getChunkSource().getChunkNow(far.x, far.z) != null, "chunk is loading"))

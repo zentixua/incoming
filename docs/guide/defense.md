@@ -124,5 +124,5 @@ while the sky is clear and shut on alarm (more examples in [For server owners an
   an extended piston next to it hides targets lower than about 45° above the horizon straight out from that side, and
   the alarm can drop as the door closes.
 - In an unloaded chunk the SAM keeps the signal it had and looks again within half a second once its chunk works.
-  Within 18 blocks of ground that is not loaded (the edge of the loaded world), what it powers learns of a change
+  Within 32 blocks of ground that is not loaded (the edge of the loaded world), what it powers learns of a change
   only once that ground loads: a circuit reaching there would otherwise load it.

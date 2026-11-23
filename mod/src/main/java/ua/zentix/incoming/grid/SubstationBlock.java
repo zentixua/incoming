@@ -69,11 +69,13 @@ public class SubstationBlock extends HorizontalDirectionalBlock {
             PowerGrid grid = PowerGrid.get(server);
             if (grid.nodeAt(pos) == null) grid.addNode(pos, IncomingConfig.SERVER.gridNodeRadius.get(), true);
             // Where a nuclear blast destroyed the grid it never works. Placed by any path (player, deployer, command,
-            // structure), it goes dead here, before the placing setBlock tells the neighbours: that call then finds a
-            // different state and skips its notices (Level.markAndNotifyBlock), and this one tells them of the dead
-            // state, so they never see a false 15.
+            // structure, a write that skips updates), it goes dead here, before the placing setBlock tells the
+            // neighbours: that call then finds a different state and skips its notices (Level.markAndNotifyBlock), and
+            // SignalEdge tells them of the dead block once their chunks are ready, so they never see a false 15.
             if (state.getValue(POWERED) && grid.destroyed(pos.getX() >> 4, pos.getZ() >> 4, Blackouts.now(server))) {
-                level.setBlock(pos, state.setValue(POWERED, false), Block.UPDATE_ALL);
+                BlockState dead = state.setValue(POWERED, false);
+                level.setBlock(pos, dead, Block.UPDATE_CLIENTS | Block.UPDATE_KNOWN_SHAPE);
+                SignalEdge.changed(server, pos, dead);
             }
         }
     }
@@ -85,7 +87,7 @@ public class SubstationBlock extends HorizontalDirectionalBlock {
             Node node = grid.nodeAt(pos);
             if (node != null && node.block()) grid.removeNode(node.id());
             // Removed while working: ruin and collapse writes skip neighbour updates, and dust beside it would keep 15.
-            if (state.getValue(POWERED) && SignalEdge.ready(level, pos)) level.updateNeighborsAt(pos, this);
+            if (state.getValue(POWERED)) SignalEdge.recheck(server, pos, newState);
         }
         super.onRemove(state, level, pos, newState, movedByPiston);
     }

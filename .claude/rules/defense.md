@@ -26,8 +26,8 @@ paths:
   (block state `SamBlock.ALARM`, so the chunk saves it and observers see it): weak power 15 from every face while the
   latest sweep saw any hostile track (engageable or not; a roof blinds the radar, so no alarm under one); the state
   changes without neighbour updates and `util/SignalEdge` tells the neighbours once every chunk within its reach is
-  ready (a dust circuit would otherwise load one from the tick); removal while on notifies too (ruin writes suppress
-  updates); frozen with its chunk (`RedstoneGameTests`, `RedstoneReviewGameTests`).
+  ready (a circuit would otherwise load one from the tick; `server-chunks.md`); removal while on rechecks them too (ruin
+  writes suppress updates); frozen with its chunk (`RedstoneGameTests`, `RedstoneReviewGameTests`).
 - Air defense uses its own game model (Artem's decision, 21.10): ranges, missile flight and fuze are game numbers in
   `InterceptorSpec`, not data or laws of a real system (guidance, radar equation and kill probability are not modeled).
 - Separate parts, reusable by a portable SAM: `Radar` (only world projectiles in `StrikeWorld.projectiles`, one snapshot

@@ -213,7 +213,7 @@ learn of a change on the tick it happens, observers included. It works the same 
 - The substation's signal follows the substation itself, not its district: another substation's outage over it leaves
   it on. Details: [Blackout](blackout.md).
 - A block in an unloaded chunk keeps the signal it was saved with and updates within a second once its chunk works
-  again. Within 18 blocks of ground that is not loaded, its neighbours learn of a change once that ground loads: the
+  again. Within 32 blocks of ground that is not loaded, its neighbours learn of a change once that ground loads: the
   circuit's synchronous update would otherwise load chunks during the server tick.
 
 A bunker door that closes on alarm, with Create: put a Redstone Link (transmitter) against the SAM and a receiver on

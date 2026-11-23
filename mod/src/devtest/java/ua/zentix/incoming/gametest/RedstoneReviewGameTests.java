@@ -134,11 +134,8 @@ public final class RedstoneReviewGameTests {
                     h.assertFalse(Terrain.ready(level, outerEast.x, outerEast.z), "SAM sweep synchronously loaded the chunk beyond the full east halo");
                     int power = level.getBlockState(sam.east(1)).getValue(RedStoneWireBlock.POWER);
                     h.assertTrue(power == 0, "the dust was told while its circuit's chunks were unready: " + power);
-                    // the alarm's reach (SignalEdge.REACH) covers the whole outer column, diagonals included
-                    for (int dz = -1; dz <= 1; dz++) {
-                        hold(h, new ChunkPos(outerEast.x, outerEast.z + dz), 0);
-                        level.getChunk(outerEast.x, outerEast.z + dz);
-                    }
+                    // the alarm's reach (SignalEdge.REACH) covers two chunks around the SAM's
+                    GridGameTests.hold(level, chunk);
                 })
                 .thenWaitUntil(() -> {
                     h.assertTrue(level.getBlockState(sam.east(1)).getValue(RedStoneWireBlock.POWER) == 15, "the deferred alarm never reached the dust");

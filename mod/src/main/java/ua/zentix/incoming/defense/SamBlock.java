@@ -13,6 +13,7 @@ import net.minecraft.world.entity.LivingEntity;
 import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.context.BlockPlaceContext;
+import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.level.BlockGetter;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.level.block.BaseEntityBlock;
@@ -113,8 +114,8 @@ public class SamBlock extends BaseEntityBlock {
         }
         // Removed while sounding the alarm: ruin and collapse writes skip neighbour updates, and dust beside it would
         // keep carrying 15 from a SAM that is gone.
-        if (!state.is(newState.getBlock()) && state.getValue(ALARM) && !level.isClientSide && SignalEdge.ready(level, pos)) {
-            level.updateNeighborsAt(pos, this);
+        if (!state.is(newState.getBlock()) && state.getValue(ALARM) && level instanceof ServerLevel server) {
+            SignalEdge.recheck(server, pos, newState);
         }
         super.onRemove(state, level, pos, newState, movedByPiston);
     }

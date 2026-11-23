@@ -99,6 +99,10 @@ public final class ModAttachments {
     public static final Supplier<AttachmentType<Boolean>> GRID_DARK = REGISTER.register("grid_dark",
             () -> AttachmentType.builder(() -> false).build());
 
+    /** World: redstone notices of our signal sources waiting for unready chunks ({@link ua.zentix.incoming.util.SignalEdge}); not saved. */
+    public static final Supplier<AttachmentType<ua.zentix.incoming.util.SignalEdge.Queue>> SIGNAL_EDGES = REGISTER.register("signal_edges",
+            () -> AttachmentType.builder(ua.zentix.incoming.util.SignalEdge.Queue::new).build());
+
     /** World: blackout cascades and chunk queue ({@link BlackoutWorld}); not saved. */
     public static final Supplier<AttachmentType<BlackoutWorld>> BLACKOUT_WORLD = REGISTER.register("blackout_world",
             () -> AttachmentType.builder(BlackoutWorld::new).build());

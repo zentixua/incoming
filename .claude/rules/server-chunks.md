@@ -10,9 +10,11 @@ paths:
 
 ## Pitfalls
 - A neighbour update from a block we change (`updateNeighborsAt`, `setBlock` with neighbour flags) runs vanilla
-  redstone synchronously: dust 15 blocks long and the blocks beside it read up to 18 blocks away, loading any chunk
-  there that is not ready. Our signal sources change state without neighbour flags and notify through
-  `util/SignalEdge` only once every chunk within `SignalEdge.REACH` is ready (`RedstoneReviewGameTests`).
+  redstone synchronously: dust carries 15 blocks, and a piston beside the last wire resolves its push 13 blocks
+  further, loading any chunk there that is not ready. Our signal sources change state without neighbour flags and hand
+  every notice (change, placement, removal by a quiet write, recheck after load) to `util/SignalEdge`: sent at once when
+  every chunk within `SignalEdge.REACH` (32) is ready, else queued per position in a world attachment and sent by its
+  level tick once they are (`RedstoneReviewGameTests`, `RedstoneRoundTwoReviewGameTests`).
 - Ground location only via `util/Terrain.estimate`: height/source `CHUNK`/`CEILING`/`DISK`/`CLIENT_MAP`/`GENERATOR`/`SEA`/
   `UNKNOWN`, caller chooses allowed sources: `Allowed.CHUNK` in world, `FLIGHT` outside, `ORDER` for orders, `RELIEF`
   for entire flight path, `VIRTUAL_RELIEF` outside world/straight target line beyond ready chunks (no Nether ceiling);

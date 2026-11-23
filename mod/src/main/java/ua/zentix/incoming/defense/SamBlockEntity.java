@@ -74,12 +74,10 @@ public class SamBlockEntity extends BlockEntity {
     /** Sky above the SAM is blocked: it does not fire under a roof. */
     private boolean covered;
     /**
-     * The neighbours were told of the alarm state ({@link SamBlock#ALARM}) since this block entity loaded (not saved):
-     * the first sweep with ready surroundings has them recheck it once, in case a change was saved untold.
+     * The neighbours were asked to recheck the alarm ({@link SamBlock#ALARM}) since this block entity loaded (not
+     * saved): the first sweep does it once, in case a change was saved untold.
      */
     private boolean signalled;
-    /** An alarm change whose notices wait for unready chunks ({@link SignalEdge}). */
-    private boolean pending;
 
     public SamBlockEntity(BlockPos pos, BlockState state) {
         super(ModBlockEntities.SAM.get(), pos, state);
@@ -198,19 +196,18 @@ public class SamBlockEntity extends BlockEntity {
     }
 
     /**
-     * Redstone alarm follows the sweep. The state changes without neighbour updates; the neighbours learn of it on the
-     * same tick when every chunk their circuit can reach is ready, otherwise at the first sweep that finds them ready.
+     * Redstone alarm follows the sweep. The state changes without neighbour updates; {@link SignalEdge} tells the
+     * neighbours on the same tick when every chunk their circuit can reach is ready, otherwise once they are.
      */
     private void setAlarm(ServerLevel level, BlockPos pos, boolean on) {
         BlockState state = getBlockState();
         if (state.getValue(SamBlock.ALARM) != on) {
             state = state.setValue(SamBlock.ALARM, on);
             level.setBlock(pos, state, Block.UPDATE_CLIENTS | Block.UPDATE_KNOWN_SHAPE);
-            pending = true;
+            SignalEdge.changed(level, pos, state);
         }
-        if ((pending || !signalled) && SignalEdge.ready(level, pos)) {
-            SignalEdge.notify(level, pos, state, pending);
-            pending = false;
+        if (!signalled) {
+            SignalEdge.recheck(level, pos, state);
             signalled = true;
         }
     }
