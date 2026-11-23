@@ -81,7 +81,7 @@ const float DW_BULGE = 0.35, DW_BILLOW = 0.15, DW_HAZE = 1.2;
 // presentation (est.): the wind's shear stretches the haze's features along the wind, ×(1 + a / DW_SHEAR_S); the slow
 // plumes over hot ground (the fire zone, the law's buoyant rise) lift the swells' crests by up to DW_PLUME of the top over
 // the first minutes, and sink back as the ground cools
-const float DW_SHEAR_S = 300.0, DW_PLUME = 0.6;
+const float DW_SHEAR_S = 300.0, DW_PLUME = 1.0;
 
 // First and last occupied distances and the sum of distances weighted by visible opacity.
 vec3 gDwDepth = vec3(0.0);
@@ -412,7 +412,7 @@ float dwBound(vec3 g) {
     float full = env * (1.0 + DW_BULGE) * DW_HAZE + 6.0;
     // the haze level's crests and plumes (dwHaze: top × (1 + swell + plume), its soft edge to 1.3 of it)
     if (dwTextured(a) < 0.999) full = max(full, env * (1.0 + DW_BULGE + DW_PLUME) * 1.3 + 6.0);
-#ifndef DW_BOUND_WIDE
+#ifdef DW_BOUND_SWELL
     // the swell here (dwBulge at the ground point, without the eddies' shift: ±0.12 of margin for it), its billowed top and
     // soft edge and veil over it: the dust's own reach. A ray above the swollen top strides as over clear air instead of
     // evaluating the whole texture at every 24-block cell up to the widest swell's reach (the young view's cost: 52 strides a
@@ -458,8 +458,8 @@ float dwHaze(vec3 g, vec3 q, float r, float a, vec2 law, bool coarse) {
     float L;
     float swell = dwSwellField(xs, a, L);
     vec3 row = dwRow0(r);
-    float hot = 0.3 + 0.7 * row.z;
-    float plume = DW_PLUME * hot * smoothstep(0.58, 0.85, L) * (1.0 - exp(-a / 45.0)) * exp(-a / 900.0);
+    float hot = 0.5 + 0.5 * row.z;
+    float plume = DW_PLUME * hot * smoothstep(0.6, 0.82, L) * (1.0 - exp(-a / 30.0)) * exp(-a / 1200.0);
     float top = max(dwEnvelope(a, h, 1.65) * (1.0 + swell + plume), 1.0);
     if (q.y > top * 1.3 + 6.0) return 0.0;
     float edge = 0.22 * top + 4.0;
@@ -476,7 +476,8 @@ float dwHaze(vec3 g, vec3 q, float r, float a, vec2 law, bool coarse) {
         sigma *= dwOpen(g);
         gDwSand = clamp(soil.y / max(paved, 1e-6), 0.0, 1.0);
         gDwHazeTc = tc;
-        gDwHazeAbove = tc * dwColumnAbove(q.y / top);
+        // (the depth for the light reads the smooth top: swells drifting over the camera darkened the whole near field)
+        gDwHazeAbove = tc * dwColumnAbove(q.y / max(dwEnvelope(a, h, 1.65), 1.0));
         gDwHazeFire = row.z;
         gDwHazeTop = top;
     }
@@ -521,7 +522,7 @@ float dwDensity(vec3 g, bool coarse) {
     if (!coarse) gDwF = F;
     float haze = 0.0;
     // (the cheapest level lights the textured dust with the haze level's two streams: its column is read too)
-    if (F < 0.999 || (DwDetail > 1.5 && !coarse)) {
+    if (F < 0.999) {
         haze = dwHaze(g, q, r, a0, law, coarse);
         if (F <= 0.001) {
             if (!coarse) {
@@ -659,6 +660,15 @@ float dwShadow(vec3 q, vec3 l) {
 // and the sun (forward-peaked: edges toward the ball glow), and multiply scattered light that diffuses in from every lit face
 // and takes on the soil's bulk colour (dense dust is darker inside but stays warm dust-coloured, never black); sky light
 // enters from the top, ground bounce from below
+// presentation: the sky light the dust takes, at the sky's luminance in the sun's colour (golden-hour haze: the reference's
+// warm amber; a blue sky drew the low sun's dust as grey-blue smoke, its luminance alone as beige fog, saturation 0.15–0.27
+// against the Silo frame's 0.45); white light at noon stays white
+vec3 dwSkyOnDust() {
+    float sky = dot(DwSkyLight, vec3(0.2126, 0.7152, 0.0722)), sun = dot(DwSunLight, vec3(0.2126, 0.7152, 0.0722));
+    vec3 tint = sun > 1e-4 ? DwSunLight / sun : vec3(1.0);
+    return sky * mix(vec3(1.0), tint, smoothstep(-0.05, 0.05, DwSunDir.y));
+}
+
 // Henyey–Greenstein phase of asymmetry g, mean 1 over the sphere (cosine c of the scattering angle)
 float dwHG(float g, float c) {
     return (1.0 - g * g) / pow(1.0 + g * g - 2.0 * g * c, 1.5);
@@ -679,7 +689,7 @@ vec3 dwHazeLight(vec3 q, vec3 rd) {
     vec3 lb = normalize(DwBall.xyz - q + vec3(0.0, 1e-3, 0.0));
     float muB = clamp(lb.y, 0.12, 1.0);
     vec3 fB = dwBallLight(q);
-    vec3 top = vec3(dot(DwSkyLight, vec3(0.2126, 0.7152, 0.0722)));
+    vec3 top = dwSkyOnDust();
     vec3 bottom = DwFire * gDwHazeFire;
     float c = gp * -rd.y;
     vec3 d = vec3(pallDiffuse(w.r, gp, tau, tc, PALL_LAND, muS, fS.r, muB, fB.r, top.r, bottom.r, c),
@@ -691,7 +701,16 @@ vec3 dwHazeLight(vec3 q, vec3 rd) {
 
 vec3 dwTexturedLight(vec3 q, vec3 rd) {
     vec3 lb = normalize(DwBall.xyz - q + vec3(0.0, 1e-3, 0.0));
-    float taub = dwShadow(q, lb), taus = dwShadow(q, DwSunDir);
+    float taub, taus;
+    if (DwDetail > 1.5) {
+        // LOW: one shadow tap, toward the brighter of the fireball and the sun; the other light takes the same depth
+        bool ball = dot(dwBallLight(q), vec3(1.0)) > dot(DwSunLight, vec3(1.0));
+        taub = dwShadow(q, ball ? lb : DwSunDir);
+        taus = taub;
+    } else {
+        taub = dwShadow(q, lb);
+        taus = dwShadow(q, DwSunDir);
+    }
     float depth = max(gDwSurf - (q.y - dwFloor(q.xz)), 0.0) * gDwSigma;
     float ms = 0.3 + 0.3 * exp(-0.12 * depth);
     // presentation: the swells read from above as in the Silo frame, raised dust catching more light and sags in the shade
@@ -704,15 +723,15 @@ vec3 dwTexturedLight(vec3 q, vec3 rd) {
     vec3 single = lift * dwBallLight(q) * (0.4 * min(dwPhase(dot(rd, lb)), 3.0) * exp(-taub))
             + DwSunLight * (0.5 * min(dwPhase(dot(rd, DwSunDir)), 6.0) * exp(-taus)) * sunUp;
     vec3 multiple = dwBallLight(q) * ms * (0.45 + 0.55 * exp(-0.25 * taub)) + DwSunLight * ms * (0.45 + 0.55 * exp(-0.25 * taus)) * sunUp
-            + vec3(dot(DwSkyLight, vec3(0.2126, 0.7152, 0.0722))) * (0.03 + 0.15 * exp(-0.3 * depth));
+            + dwSkyOnDust() * (0.03 + 0.15 * exp(-0.3 * depth));
     vec3 albedo = mix(DwAlbedo, DwSandAlbedo, gDwSand), bulk = mix(DwBulk, DwSandBulk, gDwSand);
     return DW_EXPOSURE * max(DwAdapt, 1.0) * (albedo * single + bulk * multiple + bulk * DwGroundLight);
 }
 
 // light of a sample: the textured level's (take 33's) and the haze level's, blended by the textured share
 vec3 dwLight(vec3 q, vec3 rd) {
-    vec3 haze = gDwF < 0.999 || DwDetail > 1.5 ? dwHazeLight(q, rd) : vec3(0.0);
-    if (gDwF <= 0.001 || DwDetail > 1.5) return haze;
+    vec3 haze = gDwF < 0.999 ? dwHazeLight(q, rd) : vec3(0.0);
+    if (gDwF <= 0.001) return haze;
     return mix(haze, dwTexturedLight(q, rd), gDwF);
 }
 

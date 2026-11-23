@@ -360,7 +360,12 @@ public final class PallField {
     }
 
     /** Sight inside old dust at one minute and at five minutes, m (presentation; owner call). */
-    static final double SEE_FIRST_M = 200, SEE_FIVE_M = 400;
+    static final double SEE_FIRST_M = 200, SEE_FIVE_M = 700;
+    /**
+     * Optical depth over the sight distance: the meteorological optical range's 5 % contrast (WMO), so the ground 370 m
+     * below and ahead of a 120 m camera shows at five minutes (optical depth 1.6 over it); Koschmieder's 2 % hid it.
+     */
+    static final double SEE_TAU = 3.0;
 
     /**
      * The drawn column's ceiling (optical depth) at age: the sight's extinction over the drawn profile's integral. The sight
@@ -370,7 +375,7 @@ public final class PallField {
     private double seeCeiling(DustModel.Column c, double age, double topBlocks, double present) {
         double a = Math.max(age, 1), p = Math.log(SEE_FIVE_M / SEE_FIRST_M) / Math.log(5);
         double sight = d.blocks(SEE_FIRST_M) * Math.pow(a / 60.0, p) / Math.pow(1 + Math.pow(a / 300.0, 4), p / 4);
-        double ceiling = 3.912 / sight * profileIntegral(0.95 * topBlocks);
+        double ceiling = SEE_TAU / sight * profileIntegral(0.95 * topBlocks);
         double refTau = c.depth(lifetimeSettled(300)), now = c.depth(lifetimeSettled(a));
         double follow = refTau > 0 && now > 0 ? ceiling * transfer(now) / transfer(refTau) : ceiling;
         double w = 1 / (1 + Math.pow(300 / a, 4));

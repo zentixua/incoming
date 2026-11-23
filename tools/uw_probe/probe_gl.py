@@ -395,7 +395,7 @@ def age_functions(law):
                 # a flagged kink must persist 20x finer (a slope discontinuity keeps its jump as the spacing shrinks; C1
                 # curvature, such as the visibility ceiling settling, loses it in proportion): resample around it
                 if model == "new":
-                    for cc in [c for c in range(4) for _ in range(6)]:
+                    for cc in [c for c in range(4) for _ in range(24)]:
                         _, _, _, _, _, ki = steps(vv[:, cc], xs)
                         for i in ki[:1]:
                             a0, a1 = np.exp(xs[i - 1]), np.exp(xs[i + 2])
