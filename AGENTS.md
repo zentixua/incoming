@@ -132,8 +132,6 @@ defense, `launcher/`, `grid/` blackout, `sound/`, `client/`, `work/` tick budget
 - **Game launch, physical effects at the target.** Craft, press launch; target charge, blast, fragments, destruction
   and damage follow real specs/laws. Each number from `WeaponSpec` or law with nearby source; missing-data values
   marked `(est.)`, approximate laws identified.
-- **Judging the look:** sandbox frame beside the same `main` frame and the reference footage; the player's eye
-  decides, numbers inform. Before/after frames go to Artem.
 - **Picture first, then performance** (Artem, 25.10, 04.11, 08.11): optimization never visibly hurts the picture;
   quality presets let players fit their PC. Each effect has a frame-cost limit held at any strike count; redesign
   effects that cannot perform well without hacks, discard costly, barely visible detail. Optimize what is noticeably
@@ -169,7 +167,7 @@ defense, `launcher/`, `grid/` blackout, `sound/`, `client/`, `work/` tick budget
 - **Physics deviations** only preset scale, Artem's decision or concept 4's owner call; mark every one “not
   physical” in code and guide deviation list (game flight speeds/heights, wave 0.35; real values in weapon table). No
   silent deviations. Presentation boosts change no facts, so are not deviations.
-- **Complaints never repeat:** each fix gets a test/check that would catch recurrence.
+- **Complaints never repeat:** each fix gets a test/check that would catch recurrence; a new model inherits them.
 
 ## Mod boundaries and compatibility
 Artem, 26.10: standard Minecraft mod practice, no extra custom principles.
@@ -222,8 +220,9 @@ queues, little rework; each mission's budget is checked against its measured loa
   ./gradlew runGameTestServer -PgametestOnly=…`). Numeric claims get unit tests/GameTest; comment/guide promises held
   by tests. Documentation-only changes use the applicable CI checks, without a game run. Open draft immediately
   (CI only on PRs); split large work.
-- **Visual/audio:** edit → sandbox frame/WAV (`tools/sandbox.sh shot`) beside same `main` frame; before/after frames/
-  WAV in PR; where frames render: `client-scenario.md`. Scene bench (100-strike frame
+- **Visual/audio:** the `look` skill: agreed traits and mechanism before code, technique by probe clips, clips judged
+  in motion beside the reference and `main`; the player's eye decides, numbers inform. Before/after frames/WAV in PR;
+  where frames render: `client-scenario.md`. Scene bench (100-strike frame
   cost versus `main`) only for changes that can change frame cost: render/FX code, shaders, particle or draw counts
   (Artem, 30.10); once, on the final PR head after review; colors, textures, sounds, text, server, tools skip it. Never
   merge above frame-cost limit or with a bench look flag unanswered in the PR (intended or fixed). No
