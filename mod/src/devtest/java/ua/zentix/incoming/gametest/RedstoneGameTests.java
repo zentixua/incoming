@@ -76,25 +76,28 @@ public final class RedstoneGameTests {
         board.addPlayerToTeam(crew.getScoreboardName(), team);
         board.addPlayerToTeam(mate.getScoreboardName(), team);
         BlockPos a = SamGameTests.SAM, b = a.east(8), c = a.west(8);
+        // the comparator first, as a player would: a comparator reads its input only on a neighbour update, and loading
+        // the SAM's magazine (setChanged) is the one that gives it the stock
+        h.setBlock(b.east().below(), Blocks.STONE);
+        // a diode reads the block on its FACING side
+        h.setBlock(b.east(), Blocks.COMPARATOR.defaultBlockState().setValue(ComparatorBlock.FACING, Direction.WEST));
         SamBlockEntity samA = SamGameTests.sam(h, a, crew.getUUID(), 0);
         SamBlockEntity samB = SamGameTests.sam(h, b, crew.getUUID(), 4);
         SamBlockEntity samC = SamGameTests.sam(h, c, crew.getUUID(), 0);
         h.setBlock(c.above(2), Blocks.STONE);
         BlockPos dustA = a.west(), lamp = a.north(), piston = a.south(), comparator = b.east(), dustB = b.west(), dustC = c.west();
-        for (BlockPos p : new BlockPos[]{dustA, dustB, dustC, comparator}) h.setBlock(p.below(), Blocks.STONE);
+        for (BlockPos p : new BlockPos[]{dustA, dustB, dustC}) h.setBlock(p.below(), Blocks.STONE);
         h.setBlock(dustA, Blocks.REDSTONE_WIRE);
         h.setBlock(dustB, Blocks.REDSTONE_WIRE);
         h.setBlock(dustC, Blocks.REDSTONE_WIRE);
         h.setBlock(lamp, Blocks.REDSTONE_LAMP);
         h.setBlock(piston, Blocks.PISTON.defaultBlockState().setValue(PistonBaseBlock.FACING, Direction.UP));
-        // a diode reads the block on its FACING side
-        h.setBlock(comparator, Blocks.COMPARATOR.defaultBlockState().setValue(ComparatorBlock.FACING, Direction.WEST));
         Vec3 antenna = Vec3.atCenterOf(h.absolutePos(a)).add(0, 1, 0);
 
         DroneEntity[] hostile = new DroneEntity[1], friends = new DroneEntity[2];
         long[] launched = {-1}, on = {-1}, off = {-1}, removed = {-1}, extended = {-1}, retracted = {-1}, unlit = {-1};
         Set<UUID> friendlySeen = new HashSet<>();
-        // a comparator sets its output 2 ticks after placement: check it from the tick it first reads the magazine
+        // a comparator sets its output 2 ticks after an update: check it from the tick it first reads the magazine
         boolean[] settled = {false};
         h.onEachTick(() -> {
             long t = level.getGameTime();
