@@ -465,7 +465,7 @@ record SandboxCommand(Verb verb, List<String> args) {
                 throw new IllegalArgumentException("frame time — seconds separated by commas: " + args.get(1));
             }
             // before the effect starts (−10…0 s) — only for an effect whose start is known in advance (nuke … near: the front's arrival)
-            if (t[i] < -10 || t[i] > 600) throw new IllegalArgumentException("frame time −10…600 s");
+            if (t[i] < -10 || t[i] > 3700) throw new IllegalArgumentException("frame time −10…3700 s");
             if (i > 0 && t[i] < t[i - 1]) throw new IllegalArgumentException("frame times must ascend");
         }
         return t;
