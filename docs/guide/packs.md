@@ -90,3 +90,44 @@ execute store result score #wave arena run incoming salvo rocket 20 25 at 120 70
 # every second: rounds of the wave still waiting, flying or exploding
 execute store result score #left arena run incoming status tag wave1
 ```
+
+## Permissions
+
+Who may launch is decided by NeoForge permission nodes. Without a permission mod they follow the settings
+(`launch.designator_for_everyone`, `nuclear.ops_only`, operator rights), so nothing changes. A permission mod that is
+the active NeoForge permission handler (LuckPerms sets itself up when NeoForge's default handler is selected) can grant
+or deny each right per player or group, and per dimension through its contexts.
+
+| Node | Without a permission mod | What it allows |
+|---|---|---|
+| `incoming.launch` | everyone with `launch.designator_for_everyone` on, otherwise operators | the designator, its map and abort, strike commands |
+| `incoming.launch.<weapon>` | everyone | one weapon: `drone` (Shahed-136), `loiter` (Lancet), `rocket` (Grad), `missile` (cruise missile), `bunker` (B-2 with its bomb), `nuke` (ICBM) |
+| `incoming.nuclear` | everyone with `nuclear.ops_only` off, otherwise operators and the host of a single-player or LAN world | nuclear orders, a nuclear warhead on a cruise missile or B-2 included, and turning a second key |
+| `incoming.launcher.link` | as `incoming.launch` | linking fixed launchers to a designator and giving them missions |
+
+- The nodes apply to every order a player gives: the designator, the commands they type (an operator's too, and
+  through `/execute as`), launchers linked to their designator, and a fixed launcher they own, which fires under its
+  owner's rights. An order started inside another order's event runs a tick later and asks again then. A nuclear launch
+  waiting for a second key asks its owner again when the key turns: a right taken away in the meantime cancels it and
+  returns the munitions. A `nuke now` started a tick later asks again too and still needs an operator.
+- The console, command blocks and functions they run, and launchers placed by command (without an owner), are not
+  asked. A flying nuclear strike they make for a player (`/execute as`) needs that player's rights; `nuke now` does
+  not.
+- With `nuclear.enabled` off nobody launches nuclear weapons, whatever the nodes say; a carrier already warning its
+  target does not leave and its munitions come back (to an offline owner when they join again). `incoming.nuclear` does not make a player an operator: they still
+  need a second key from a player nearby, and only operators and the host abort every nuclear strike, retarget a
+  nuclear warhead or pick a launch site on the map. Only players who may turn a second key are asked to.
+- A permission mod cannot be asked about a player who is offline without risking a pause of the server, so a fixed
+  launcher whose owner is offline follows the column "Without a permission mod": what the permission mod grants or
+  denies the owner applies to their launcher while they are online.
+- A refused order shows its reason above the hotbar; a fixed launcher shows it in its status line. A player without
+  `incoming.launch` and without operator rights does not get the `/incoming` command at all.
+
+With LuckPerms, for example:
+
+```
+/lp group default permission set incoming.launch.bunker false
+/lp group default permission set incoming.launch.nuke false
+/lp group veterans permission set incoming.launch.nuke true
+/lp group veterans permission set incoming.nuclear true
+```

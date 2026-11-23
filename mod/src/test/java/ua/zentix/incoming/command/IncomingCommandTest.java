@@ -179,9 +179,9 @@ class IncomingCommandTest {
                 "grad", WeaponType.ROCKET, "loiter", WeaponType.LOITER, "lancet", WeaponType.LOITER);
         for (var alias : aliases.entrySet()) {
             try (var actions = mockStatic(ServerActions.class)) {
-                actions.when(() -> ServerActions.dispatch(eq(level), eq("test"), eq(0f), eq(alias.getValue()), eq(1), eq(0), eq(aim), eq(Loadout.Nuke.DEFAULT), eq(Waypoints.NONE), isNull(), isNull(), any(), any())).thenAnswer(admits(1));
+                actions.when(() -> ServerActions.dispatch(isNull(), eq(level), eq("test"), eq(0f), eq(alias.getValue()), eq(1), eq(0), eq(aim), eq(Loadout.Nuke.DEFAULT), eq(Waypoints.NONE), isNull(), isNull(), any(), any())).thenAnswer(admits(1));
                 assertEquals(1, dispatcher.execute("incoming " + alias.getKey() + " at 10.25 64.5 20.75", source(2, false, level)), alias.getKey());
-                actions.verify(() -> ServerActions.dispatch(eq(level), eq("test"), eq(0f), eq(alias.getValue()), eq(1), eq(0), eq(aim), eq(Loadout.Nuke.DEFAULT), eq(Waypoints.NONE), isNull(), isNull(), any(), any()));
+                actions.verify(() -> ServerActions.dispatch(isNull(), eq(level), eq("test"), eq(0f), eq(alias.getValue()), eq(1), eq(0), eq(aim), eq(Loadout.Nuke.DEFAULT), eq(Waypoints.NONE), isNull(), isNull(), any(), any()));
             }
         }
     }
@@ -199,9 +199,9 @@ class IncomingCommandTest {
             try (var actions = mockStatic(ServerActions.class); var nuclear = mockStatic(NuclearStrikes.class); var orders = mockStatic(Orders.class)) {
                 // admission runs its body here; events and their world queue are outside this test
                 orders.when(() -> Orders.admit(any(), any())).thenAnswer(inv -> inv.<Orders.Admission>getArgument(1).run(inv.getArgument(0)));
-                actions.when(() -> ServerActions.dispatch(eq(level), eq("test"), eq(0f), eq(WeaponType.NUKE), eq(1), eq(0), eq(aim), eq(expected), eq(Waypoints.NONE), isNull(), isNull(), any(), any())).thenAnswer(admits(1));
+                actions.when(() -> ServerActions.dispatch(isNull(), eq(level), eq("test"), eq(0f), eq(WeaponType.NUKE), eq(1), eq(0), eq(aim), eq(expected), eq(Waypoints.NONE), isNull(), isNull(), any(), any())).thenAnswer(admits(1));
                 assertEquals(1, dispatcher.execute("incoming nuke at 10.25 64.5 20.75" + suffix, source(2, false, level)));
-                actions.verify(() -> ServerActions.dispatch(eq(level), eq("test"), eq(0f), eq(WeaponType.NUKE), eq(1), eq(0), eq(aim), eq(expected), eq(Waypoints.NONE), isNull(), isNull(), any(), any()));
+                actions.verify(() -> ServerActions.dispatch(isNull(), eq(level), eq("test"), eq(0f), eq(WeaponType.NUKE), eq(1), eq(0), eq(aim), eq(expected), eq(Waypoints.NONE), isNull(), isNull(), any(), any()));
                 nuclear.when(() -> NuclearStrikes.ground(level, point)).thenReturn(point);
                 assertEquals(1, dispatcher.execute("incoming nuke now at 10.25 64.5 20.75" + suffix, source(2, false, level)));
                 nuclear.verify(() -> NuclearStrikes.detonateNow(eq(level), eq(point), eq((double) yield), eq(air), isNull(), any(RoundRef.class)));
@@ -219,12 +219,12 @@ class IncomingCommandTest {
         Vec3 point = new Vec3(10.25, 64.5, 20.75);
         ServerActions.Aim aim = new ServerActions.Aim(new Target.Point(point), point, null);
         try (var actions = mockStatic(ServerActions.class)) {
-            actions.when(() -> ServerActions.dispatch(eq(level), eq("test"), eq(0f), eq(WeaponType.DRONE), eq(12), eq(5), eq(aim), eq(Loadout.Nuke.DEFAULT),
+            actions.when(() -> ServerActions.dispatch(isNull(), eq(level), eq("test"), eq(0f), eq(WeaponType.DRONE), eq(12), eq(5), eq(aim), eq(Loadout.Nuke.DEFAULT),
                     eq(Waypoints.NONE), isNull(), eq("wave1"), any(), any())).thenAnswer(admits(12));
             assertEquals(12, dispatcher.execute("incoming salvo drone 12 5 at 10.25 64.5 20.75 tag wave1", source(2, false, level)));
             assertThrows(CommandSyntaxException.class, () -> dispatcher.execute("incoming salvo drone 12 5 at 10.25 64.5 20.75 tag " + "x".repeat(33),
                     source(2, false, level)));
-            actions.verify(() -> ServerActions.dispatch(any(), any(), any(Float.class), any(), any(Integer.class), any(Integer.class), any(), any(), any(),
+            actions.verify(() -> ServerActions.dispatch(any(), any(), any(), any(Float.class), any(), any(Integer.class), any(Integer.class), any(), any(), any(),
                     any(), any(), any(), any()), org.mockito.Mockito.times(1));
         }
     }
@@ -237,9 +237,9 @@ class IncomingCommandTest {
         var from = new ua.zentix.incoming.strike.LaunchOrigin.Place(new Vec3(30.25, 0, 40.75));
         Loadout.Nuke nuke = new Loadout.Nuke(3, true);
         try (var actions = mockStatic(ServerActions.class)) {
-            actions.when(() -> ServerActions.dispatch(eq(level), eq("test"), eq(0f), eq(WeaponType.NUKE), eq(1), eq(0), eq(aim), eq(nuke), eq(Waypoints.NONE), eq(from), isNull(), any(), any())).thenAnswer(admits(1));
+            actions.when(() -> ServerActions.dispatch(isNull(), eq(level), eq("test"), eq(0f), eq(WeaponType.NUKE), eq(1), eq(0), eq(aim), eq(nuke), eq(Waypoints.NONE), eq(from), isNull(), any(), any())).thenAnswer(admits(1));
             assertEquals(1, dispatcher.execute("incoming nuke at 10.25 64.5 20.75 3 air from 30.25 40.75", source(2, false, level)));
-            actions.verify(() -> ServerActions.dispatch(eq(level), eq("test"), eq(0f), eq(WeaponType.NUKE), eq(1), eq(0), eq(aim), eq(nuke), eq(Waypoints.NONE), eq(from), isNull(), any(), any()));
+            actions.verify(() -> ServerActions.dispatch(isNull(), eq(level), eq("test"), eq(0f), eq(WeaponType.NUKE), eq(1), eq(0), eq(aim), eq(nuke), eq(Waypoints.NONE), eq(from), isNull(), any(), any()));
         }
     }
 

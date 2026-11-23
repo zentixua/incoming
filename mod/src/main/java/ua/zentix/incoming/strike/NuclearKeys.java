@@ -210,6 +210,24 @@ public final class NuclearKeys {
             by.displayClientMessage(Component.translatable("incoming.nuke.key.none", distance()).withStyle(ChatFormatting.GRAY), true);
             return false;
         }
+        // a key holder needs the right to nuclear weapons themselves (Authority: incoming.nuclear)
+        Authority.Denial denied = Authority.check(Authority.Action.SECOND_KEY, Authority.Actor.of(by));
+        if (denied != null) {
+            ServerActions.refuse(by, denied.line());
+            return false;
+        }
+        // the order asks its owner's rights again as the key turns (Authority, the nuclear flag included); the accepted
+        // loadout stays as paid: carrier and yield settings changed meanwhile do not redefine it
+        ServerPlayer launching = best.owner(online);
+        Authority.Denial revoked = launching == null ? null
+                : Authority.check(Authority.Action.launch(best.loadout.weapon(), true), Authority.Actor.of(launching));
+        if (revoked != null) {
+            where.orders.remove(best);
+            ServerActions.refuse(launching, revoked.line());
+            drop(best, online, "rights revoked before the second key");
+            by.displayClientMessage(Component.translatable("incoming.nuke.key.none", distance()).withStyle(ChatFormatting.GRAY), true);
+            return false;
+        }
         best.confirmer = by.getGameProfile().getName();
         Incoming.LOG.info("Second key: {} confirmed nuclear launch {} — {}", best.confirmer, best.loadout.weapon().getSerializedName(), best.name);
         Component done = Component.translatable("incoming.nuke.key.confirmed", by.getDisplayName(), what(best.loadout)).withStyle(ChatFormatting.GOLD);
@@ -302,6 +320,14 @@ public final class NuclearKeys {
         return r;
     }
 
+    /** Order {@code o}, already out of the list, never leaves: refund its owner and end its round. */
+    private static void drop(Order o, Collection<? extends ServerPlayer> online, String why) {
+        ServerPlayer owner = o.owner(online);
+        boolean refunded = o.paid != null && Munitions.refund(owner != null ? List.of(owner) : online, o.ownerId, o.paid, why);
+        end(o, StrikeRoundEvent.Outcome.RECALLED, refunded);
+        Incoming.LOG.info("Nuclear launch {} cancelled ({}) — {}", o.loadout.weapon().getSerializedName(), why, o.name);
+    }
+
     /** The order's round never left: it ends here ({@link Orders#ended}). */
     private static void end(Order o, StrikeRoundEvent.Outcome outcome, boolean refunded) {
         if (o.round != null) Orders.ended(o.level, o.round, o.loadout.weapon(), o.ownerId, RoundEnd.unreleased(outcome, refunded));
@@ -345,7 +371,10 @@ public final class NuclearKeys {
         long left = Math.max(1, (o.deadline - o.level.getGameTime() + 19) / 20);
         Vec3 at = o.aim.point();
         for (ServerPlayer p : online) {
-            if (p.getUUID().equals(o.ownerId) || p.level() != owner.level() || p.distanceToSqr(owner) > d * d || !o.prompted.add(p.getUUID())) continue;
+            if (p.getUUID().equals(o.ownerId) || p.level() != owner.level() || p.distanceToSqr(owner) > d * d) continue;
+            // only those who may turn the key are asked (Authority: incoming.nuclear), each once
+            if (o.prompted.contains(p.getUUID()) || !Authority.allows(Authority.Action.SECOND_KEY, p)) continue;
+            o.prompted.add(p.getUUID());
             p.sendSystemMessage(Component.translatable("incoming.nuke.key.prompt", owner.getDisplayName(), what(o.loadout), Mth.floor(at.x), Mth.floor(at.z),
                     Component.keybind(KEY), left).withStyle(ChatFormatting.GOLD));
             p.playNotifySound(SoundEvents.NOTE_BLOCK_PLING.value(), SoundSource.MASTER, 1.0f, 1.2f);
@@ -362,7 +391,19 @@ public final class NuclearKeys {
                     LaunchPlaces.hold(level, o.from, o.placeKey);
                     if (!LaunchPlaces.ready(level, o.from) && o.waited++ < LaunchPlaces.WAIT) continue;
                 }
-                if (now < o.launchAt || !orders.remove(o)) continue;
+                if (now < o.launchAt) continue;
+                // the hard gate holds to the last moment: nuclear weapons switched off meanwhile, nothing leaves. A paid
+                // order waits for its owner to come back for the refund (an offline inventory takes nothing back), or
+                // for nuclear weapons to come back on.
+                if (!IncomingConfig.SERVER.nukeEnabled.get()) {
+                    ServerPlayer owner = o.owner(online);
+                    if (owner == null && o.paid != null) continue;
+                    if (!orders.remove(o)) continue;
+                    if (owner != null) ServerActions.refuse(owner, Component.translatable("incoming.nuke.disabled"));
+                    drop(o, online, "nuclear weapons disabled before launch");
+                    continue;
+                }
+                if (!orders.remove(o)) continue;
                 launch(o, online);
             } else if (now >= o.deadline) {
                 if (!orders.remove(o)) continue;

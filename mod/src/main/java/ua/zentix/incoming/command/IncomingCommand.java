@@ -42,6 +42,7 @@ import ua.zentix.incoming.nuclear.radiation.GeigerFormat;
 import ua.zentix.incoming.nuclear.radiation.RadiationDose;
 import ua.zentix.incoming.nuclear.radiation.RadiationTicker;
 import ua.zentix.incoming.registry.ModItems;
+import ua.zentix.incoming.strike.Authority;
 import ua.zentix.incoming.strike.LaunchOrigin;
 import ua.zentix.incoming.strike.Loadout;
 import ua.zentix.incoming.strike.NuclearKeys;
@@ -205,8 +206,9 @@ public final class IncomingCommand {
 
     private static boolean mayNuke(CommandSourceStack s) {
         if (!IncomingConfig.SERVER.nukeEnabled.get()) return false;
-        // a player under the same rights as the designator's nuclear order (the world host counts as an operator)
-        return s.hasPermission(2) || s.getEntity() instanceof ServerPlayer p && ServerActions.mayUse(p) && ServerActions.mayUseNuke(p);
+        // a player under the same rights as the designator's nuclear order (Authority; the world host counts as an operator);
+        // the weapon's own node refuses at the order with its line
+        return s.hasPermission(2) || s.getEntity() instanceof ServerPlayer p && Authority.allows(Authority.Action.launch(null, true), p);
     }
 
     private static int nukeLook(CommandContext<CommandSourceStack> ctx, Loadout.Nuke nuke, Path path) throws CommandSyntaxException {
@@ -233,6 +235,18 @@ public final class IncomingCommand {
         if (Orders.elsewhere(level, () -> nukeNow(s, pos, nuke, tag))) return StatusCommand.deferred(s);
         // a rerun later: the command's own gate as it is then
         if (!mayNuke(s) || !s.hasPermission(2)) return 0;
+        // the player who typed it asks their own rights as they are now (a permission mod may deny an operator; a deferred run
+        // finds them by UUID and needs them still an operator); the console, command blocks and what they run, as any
+        // player, are automation, as this host tool always was
+        if (asker(s) instanceof ServerPlayer typed) {
+            ServerPlayer p = ServerActions.live(typed);
+            if (p == null || !p.hasPermissions(2)) return 0;
+            Authority.Denial denied = Authority.check(Authority.Action.launch(WeaponType.NUKE, true), Authority.Actor.of(p));
+            if (denied != null) {
+                ServerActions.refuse(p, denied.line());
+                return 0;
+            }
+        }
         Vec3 ground = NuclearStrikes.ground(level, pos);
         // the yield that will burst: detonateNow applies the server's limit
         Loadout l = new Loadout(WeaponType.NUKE, 1, 0, TargetMode.LOOK, "", nuke.withYield(Math.min(nuke.yieldKt(), IncomingConfig.SERVER.nukeMaxYield.get())));
@@ -446,10 +460,10 @@ public final class IncomingCommand {
         ua.zentix.incoming.strike.Order[] got = {null};
         Consumer<ua.zentix.incoming.strike.Order> made = later ? o -> StatusCommand.admitted(s, o) : o -> got[0] = o;
         if (player != null) {
-            ServerActions.strike(player, w, count, spread, aim, nuke, path.via(), path.from(), rules(s), path.tag(), made);
+            ServerActions.strike(asker(s), player, w, count, spread, aim, nuke, path.via(), path.from(), rules(s), path.tag(), made);
         } else {
-            ServerActions.dispatch(level, s.getTextName(), s.getRotation().y, w, count, spread, aim, nuke, path.via(), path.from(), path.tag(),
-                    s::sendFailure, made);
+            ServerActions.dispatch(asker(s), level, s.getTextName(), s.getRotation().y, w, count, spread, aim, nuke, path.via(), path.from(),
+                    path.tag(), s::sendFailure, made);
         }
         return later ? StatusCommand.deferred(s) : StatusCommand.admitted(s, got[0]);
     }
@@ -574,6 +588,15 @@ public final class IncomingCommand {
      */
     private static boolean rules(CommandSourceStack s) {
         return !s.hasPermission(2);
+    }
+
+    /**
+     * The player who gave the command ({@code Authority}: their rights decide), also through {@code /execute as}: the
+     * stack's original source; null for the console, command blocks and what they run.
+     */
+    @Nullable
+    private static ServerPlayer asker(CommandSourceStack s) {
+        return s.source instanceof ServerPlayer p ? p : null;
     }
 
     private static int give(CommandContext<CommandSourceStack> ctx, Collection<ServerPlayer> players) {

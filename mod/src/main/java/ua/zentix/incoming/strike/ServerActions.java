@@ -73,8 +73,9 @@ public final class ServerActions {
         player.displayClientMessage(reason.copy().withStyle(ChatFormatting.RED), true);
     }
 
+    /** May use the designator, its map and abort ({@link Authority}: {@code incoming.launch}). */
     public static boolean mayUse(Player player) {
-        return IncomingConfig.SERVER.designatorForEveryone.get() || player.hasPermissions(2);
+        return player instanceof ServerPlayer p && Authority.allows(Authority.Action.USE, p);
     }
 
     // ---------------------------------------------------------------- packets
@@ -90,13 +91,15 @@ public final class ServerActions {
 
     /** Shared reviewed/unreviewed dispatch. A reviewed aim is immutable until this call. */
     static void fire(ServerPlayer player, C2S.Fire p, @Nullable Aim reviewed) {
-        if (!mayUse(player)) {
-            refuse(player, Component.translatable("incoming.no_permission"));
+        Loadout l = p.loadout();
+        // the designator and this weapon; a nuclear warhead is asked by the review and again by the order (nuclearRefusal)
+        Authority.Denial denied = Authority.check(Authority.Action.launch(l.weapon(), false), Authority.Actor.of(player));
+        if (denied != null) {
+            refuse(player, denied.line());
             return;
         }
         if (tooSoon(player, ModAttachments.LAST_FIRE.get())) return;
 
-        Loadout l = p.loadout();
         Aim aim = reviewed != null ? reviewed : fireAim(player, p);
         if (aim == null) return;
         // Designator linked to fixed launchers assigns missions instead of launching itself: they launch from their sites.
@@ -384,32 +387,24 @@ public final class ServerActions {
                 Math.min(l.spread(), IncomingConfig.SERVER.maxSpread.get()), l.mode(), l.player(), n);
     }
 
-    /** Nuclear weapons: enabled and allowed for this player (default operators and the world host, {@link NuclearKeys#trusted}). */
-    public static boolean mayUseNuke(ServerPlayer player) {
-        return IncomingConfig.SERVER.nukeEnabled.get() && (!IncomingConfig.SERVER.nukeOpsOnly.get() || NuclearKeys.trusted(player));
-    }
-
     /**
-     * Why {@code player}'s nuclear order {@code l} is refused, or null: {@link #nuclearRefusal(Loadout, boolean,
-     * boolean, boolean, boolean, int)} with this world's settings. Review and launch both ask here, so they never disagree.
+     * Why {@code player}'s nuclear order {@code l} is refused, or null: the rights ({@link Authority}: the designator, the
+     * weapon, nuclear weapons in this world, {@code incoming.nuclear}), then {@link #nuclearRefusal(Loadout, boolean, int)}
+     * with this world's settings. Review and launch both ask here, so they never disagree.
      */
     @Nullable
     static Component nuclearRefusal(ServerPlayer player, Loadout l) {
-        var c = IncomingConfig.SERVER;
-        return nuclearRefusal(l, mayUse(player), c.nukeEnabled.get(), c.nukeOpsOnly.get() && !NuclearKeys.trusted(player),
-                c.carrierNukes.get(), c.nukeMaxYield.get());
+        Authority.Denial denied = Authority.check(Authority.Action.launch(l.weapon(), true), Authority.Actor.of(player));
+        if (denied != null) return denied.line();
+        return nuclearRefusal(l, IncomingConfig.SERVER.carrierNukes.get(), IncomingConfig.SERVER.nukeMaxYield.get());
     }
 
     /**
-     * Why a nuclear order {@code l} is refused, the first reason in the order the player can act on: the designator
-     * itself, nuclear weapons in this world, operator rights (the world host counts as one), a warhead on a carrier,
-     * the yield limit; null if allowed.
+     * Why an allowed player's nuclear order {@code l} is refused, the first reason in the order the player can act on: a
+     * warhead on a carrier, the yield limit; null if valid.
      */
     @Nullable
-    static Component nuclearRefusal(Loadout l, boolean mayUse, boolean enabled, boolean needsOperator, boolean carrierNukes, int cap) {
-        if (!mayUse) return Component.translatable("incoming.no_permission");
-        if (!enabled) return Component.translatable("incoming.nuke.disabled");
-        if (needsOperator) return Component.translatable("incoming.nuke.ops_only");
+    static Component nuclearRefusal(Loadout l, boolean carrierNukes, int cap) {
         if (l.nuke().onCarrier() && !l.weapon().spec().warhead().always() && !carrierNukes) return Component.translatable("incoming.nuke.carrier_off");
         if (l.nuke().yieldKt() > cap) return Component.translatable("incoming.nuke.over_cap", l.nuke().yieldKt(), cap);
         return null;
@@ -446,20 +441,37 @@ public final class ServerActions {
      */
     public static boolean strike(ServerPlayer player, WeaponType weapon, int count, int spread, Aim aim, Loadout.Nuke nuke, Waypoints via,
                                  @Nullable LaunchOrigin from, boolean rules, @Nullable String tag, @Nullable Consumer<Order> made) {
+        return strike(player, player, weapon, count, spread, aim, nuke, via, from, rules, tag, made);
+    }
+
+    /**
+     * Same, given by {@code asker} ({@link Authority}: the player who gave the order, also through {@code /execute as};
+     * null for automation, the console, command blocks and what they run, which asks nothing). {@code player} is whom
+     * the order is made for: targets, payment, projectiles.
+     */
+    public static boolean strike(@Nullable ServerPlayer asker, ServerPlayer player, WeaponType weapon, int count, int spread, Aim aim,
+                                 Loadout.Nuke nuke, Waypoints via, @Nullable LaunchOrigin from, boolean rules, @Nullable String tag,
+                                 @Nullable Consumer<Order> made) {
         Aim asAsked = aim;
         if (Orders.elsewhere(player.serverLevel(), () -> {
-            // later the player may have left (inventory already saved) or respawned (a new object): order as they are now
+            // later the player may have left (inventory already saved) or respawned (a new object): order as they are now;
+            // the asker's rights are read again then (Authority.Actor.live)
             ServerPlayer now = live(player);
-            if (now != null) strike(now, weapon, count, spread, asAsked, nuke, via, from, rules, tag, made);
+            if (now != null) strike(asker, now, weapon, count, spread, asAsked, nuke, via, from, rules, tag, made);
             else Incoming.LOG.info("Queued strike order dropped: {} left", player.getGameProfile().getName());
         })) return true;
+        // The order as requested, before clamping: a carrier warhead where carriers carry none is refused, as in review.
+        Loadout asked = new Loadout(weapon, count, spread, TargetMode.LOOK, "", nuke);
+        // The rights of whoever gave the order, as they are now; automation asks nothing. A nuclear order asks after its
+        // target, in the order its refusals always came.
+        if (!asked.nuclear() && !askerAllows(asker, player, asked)) return false;
         if (rules) {
             aim = ruled(player, aim);
             if (aim == null) return false;
         }
-        // The order as requested, before clamping: a carrier warhead where carriers carry none is refused, as in review.
-        Loadout asked = new Loadout(weapon, count, spread, TargetMode.LOOK, "", nuke);
+        // A nuclear order also needs the rights of the player it is made for, from any source, as the switches always did
         if (asked.nuclear()) {
+            if (!askerAllows(asker, player, asked)) return false;
             Component no = nuclearRefusal(player, asked);
             if (no != null) {
                 refuse(player, no);
@@ -495,6 +507,20 @@ public final class ServerActions {
         });
         if (made != null) made.accept(order);
         return ok;
+    }
+
+    /**
+     * {@code asker}'s rights ({@link Authority}) to launch {@code asked}, read as they are now (an asker who left: by
+     * {@link Authority.Actor#owner}); null asker is automation. A refusal goes to the asker, otherwise to {@code player}.
+     */
+    private static boolean askerAllows(@Nullable ServerPlayer asker, ServerPlayer player, Loadout asked) {
+        if (asker == null) return true;
+        ServerPlayer by = live(asker);
+        Authority.Denial denied = Authority.check(Authority.Action.launch(asked.weapon(), asked.nuclear()),
+                by != null ? Authority.Actor.of(by) : Authority.Actor.owner(player.server, asker.getUUID()));
+        if (denied == null) return true;
+        refuse(by != null ? by : player, denied.line());
+        return false;
     }
 
     /**
@@ -604,7 +630,27 @@ public final class ServerActions {
     public static boolean dispatch(ServerLevel level, String who, float yaw, WeaponType weapon, int count, int spread, Aim aim, Loadout.Nuke nuke,
                                    Waypoints via, @Nullable LaunchOrigin from, @Nullable String tag, @Nullable Consumer<Component> feedback,
                                    @Nullable Consumer<Order> made) {
-        if (Orders.elsewhere(level, () -> dispatch(level, who, yaw, weapon, count, spread, aim, nuke, via, from, tag, feedback, made))) return true;
+        return dispatch(null, level, who, yaw, weapon, count, spread, aim, nuke, via, from, tag, feedback, made);
+    }
+
+    /**
+     * Same, given by {@code asker} ({@link Authority}): a player's command run by a non-player entity ({@code /execute as}
+     * an armor stand) asks that player's rights, read again on a deferred run; null is automation.
+     */
+    public static boolean dispatch(@Nullable ServerPlayer asker, ServerLevel level, String who, float yaw, WeaponType weapon, int count, int spread,
+                                   Aim aim, Loadout.Nuke nuke, Waypoints via, @Nullable LaunchOrigin from, @Nullable String tag,
+                                   @Nullable Consumer<Component> feedback, @Nullable Consumer<Order> made) {
+        if (Orders.elsewhere(level, () -> dispatch(asker, level, who, yaw, weapon, count, spread, aim, nuke, via, from, tag, feedback, made))) return true;
+        if (asker != null) {
+            ServerPlayer by = live(asker);
+            Authority.Denial denied = Authority.check(Authority.Action.launch(weapon, new Loadout(weapon, count, spread, TargetMode.LOOK, "", nuke).nuclear()),
+                    by != null ? Authority.Actor.of(by) : Authority.Actor.owner(level.getServer(), asker.getUUID()));
+            if (denied != null) {
+                if (by != null) refuse(by, denied.line());
+                if (feedback != null) feedback.accept(denied.line());
+                return false;
+            }
+        }
         Loadout l = order(weapon, count, spread, nuke);
         Order order = Order.server(level, who, l, aim, feedback).tagged(tag);
         boolean ok = Orders.admit(order, o -> launch(level, who, null, null, yaw, l, aim, via, from, null, o));
@@ -641,7 +687,7 @@ public final class ServerActions {
 
     /** {@code player} as they are in the game now: the same object, or their respawned one; null if they left. */
     @Nullable
-    private static ServerPlayer live(ServerPlayer player) {
+    public static ServerPlayer live(ServerPlayer player) {
         if (!player.isRemoved() && !player.hasDisconnected()) return player;
         ServerPlayer now = player.server.getPlayerList().getPlayer(player.getUUID());
         return now == null || now.hasDisconnected() ? null : now;

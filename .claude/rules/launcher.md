@@ -38,7 +38,7 @@ paths:
   `incoming:launchers`: `GlobalPos` list, up to 16). While the list is nonempty, the remote's “Fire”
   (`ServerActions.fire`) assigns missions to linked launchers (`LauncherOrders.assign`): target follows player rules
   (`ServerActions.ruled`); each launcher must be in this world, in a ready chunk (do not load for a mission), owned by
-  the player or their team, idle; target within `map_range` of it, route within weapon range from it (`routeProblem`
+  the player or their team (`LauncherLinks.refusal`: `Authority` LINK first), idle; target within `map_range` of it, route within weapon range from it (`routeProblem`
   with launch origin `LaunchOrigin.Fixed`). Missing launcher (chunk ready, block absent) is unlinked
   (`LauncherLinks.forget`): otherwise the remote would remain in mission mode forever.
 - Launch follows the player-order path (`ServerActions.fromLauncher`): single via `StrikeService.launch`, salvo via
@@ -48,7 +48,7 @@ paths:
   `LaunchSite.pickOn` rotation on its mount; a busy one launches on its heading), MLRS/Lancet via `aimedFixed`; blocked
   sector, unready chunk, missing block mean failed launch (no distant approach), reason in `report`. Projectiles act
   for the owner (friendly by `/team`, their “Cancel”, their active-projectile limit); no salvo lines or bar to the
-  owner (`Salvo.reporter`). Owner rules apply (`designator_for_everyone` or operator by profile, owner may be offline;
+  owner (`Salvo.reporter`). Owner rules apply (`strike/Authority` for the owner: the designator and the mission's weapon, owner may be offline;
   `max_active_per_player`; target within `map_range` of the launcher); ownerless (placed by command) has no rules.
   Stock must cover the entire order (`Munitions.shortage`), but is charged per projectile when it enters the rail
   (`Munitions.pay(Store, Bill)` in `StrikeService`): canceled salvos and failed launches stay in stock, so nothing

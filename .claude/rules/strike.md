@@ -184,10 +184,31 @@ paths:
   movement. Keep ordinary launch resolution separate from review disclosure. Packet-level regressions:
   `nuclear_review_disclosure`, `nuclear_review_last_seen`.
 
+- Authorization (`strike/Authority`, roadmap B1): one policy for every entry (designator packets, player commands,
+  deferred reruns, a key wait as its key turns, fixed launcher owner, linking, second key): `check(Action, Actor)` →
+  null or `Denial` (gate, line). Rights are NeoForge `PermissionNode`s (`incoming.launch`, `incoming.launch.<weapon
+  serialized name>`, `incoming.nuclear`, `incoming.launcher.link`) whose default resolvers are the switches
+  (`designator_for_everyone`, `nuclear.ops_only`, operator by `hasPermissions(2)` online or the cached profile offline,
+  `NuclearKeys.trusted`), so the default handler answers exactly as before; its refusal lines stay the switches' own,
+  a foreign handler's say only what is refused (`Denial.byDefault`). Gates: designator, weapon, nuclear flag (hard),
+  `incoming.nuclear`. Trust is never a node: second key, warning, nuclear abort/retarget, map launch site stay
+  `NuclearKeys.trusted`. The actor is who gave the order: a command's `CommandSourceStack.source` player (also through
+  `/execute as`; `ServerActions.strike(asker, player, …)`, re-read live after a deferral); console, command blocks and
+  ownerless launchers are automation and ask nothing, except that a flying nuclear order always asks the player it is
+  made for (`nuclearRefusal`, as the switches did); `nuke now` asks only a typing player. A key wait re-asks its owner's
+  rights (not carrier/yield validity) when the key turns, after finding the order (no-order line unchanged); an armed
+  order rechecks the nuclear flag before release (a paid order whose owner is offline waits for them: refunds reach only
+  online inventories). A non-player executor of a player's command (`/execute as` an armor stand) asks that player
+  (`dispatch(asker, …)`); a deferred `nuke now` re-reads its player by UUID (`ServerActions.live`) and needs them still
+  operator. An offline owner never calls `PermissionAPI.getOfflinePermission` (NeoForge promises nothing about storage
+  there) and nothing is kept from their last visit (its context, e.g. dimension, would be wrong): the node resolver
+  answers, as the default handler does. A handler that lacks a node falls back to its resolver.
+  Regressions: `AuthorityTest`, `PermissionGameTests`, `PermissionRegressionGameTests`, `PermissionRoundTwoGameTests`
+  (devtest handlers swapped into `PermissionAPI`, one batch per probe: the handler and switches are server-wide).
 - Nuclear permission (Artem): `nuclear.ops_only` means operators and the world host (`NuclearKeys.trusted`: the
   single-player or LAN host, cheats on or off). Review and launch take the refusal from one function,
-  `ServerActions.nuclearRefusal` (designator, enabled, operator/host, carrier, yield cap, in that order;
-  `NuclearRefusalTest`). Every refused order speaks through `ServerActions.refuse` (red action bar,
+  `ServerActions.nuclearRefusal` (`Authority`: designator, weapon, enabled, `incoming.nuclear`; then carrier, yield cap,
+  in that order; `NuclearRefusalTest`). Every refused order speaks through `ServerActions.refuse` (red action bar,
   `RefusalChannelTest`); every key named in code exists in both lang files (`LangTest`).
 
 - `world.early_warning` controls automatic sirens and nuclear launch/target notices (default true). `ServerConfigMigration`

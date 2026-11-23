@@ -195,7 +195,7 @@ public final class IncomingConfig {
             mapRange = b.comment("Range of strikes at a place picked on the targeting map, blocks (horizontal distance from the player).",
                             "The server loads the target area and generates it where nobody has been: the larger the range, the more new terrain.")
                     .translation("incoming.config.map_range").defineInRange("map_range", 10_000, 256, 1_000_000);
-            designatorForEveryone = b.comment("The designator works for every player, not only operators.")
+            designatorForEveryone = b.comment("The designator works for every player, not only operators (default of the permission node incoming.launch).")
                     .translation("incoming.config.designator_for_everyone").define("designator_for_everyone", true);
             mapPlayers = b.comment("The targeting map shows players in the same dimension (within map_range, except invisible players and spectators):",
                             "teammates (/team) always, others where they were last seen (with sight_rules) or all of them (without).",
@@ -222,7 +222,7 @@ public final class IncomingConfig {
             b.translation("incoming.config.nuclear").push("nuclear");
             nukeEnabled = b.comment("Nuclear weapons are available: the ICBM, nuclear warheads and /incoming nuke.")
                     .translation("incoming.config.nuke_enabled").define("enabled", true);
-            nukeOpsOnly = b.comment("Only operators and the host of a single-player or LAN world launch nuclear strikes. Off: other players need a second key from a player nearby.")
+            nukeOpsOnly = b.comment("Only operators and the host of a single-player or LAN world launch nuclear strikes (default of the permission node incoming.nuclear). Off: other players need a second key from a player nearby.")
                     .translation("incoming.config.nuke_ops_only").define("ops_only", true);
             nukeDefaultYield = b.comment("Yield of /incoming nuke without a number, kt (15 is Hiroshima). On the console the yield is entered in whole kt.")
                     .translation("incoming.config.nuke_default_yield").defineInRange("default_yield", 15, 1, Loadout.Nuke.MAX_YIELD);
