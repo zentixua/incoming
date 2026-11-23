@@ -81,6 +81,19 @@ public final class VirtualFlights extends SavedData {
         return flights;
     }
 
+    /** Same, with flights read from disk and not yet ticked instantiated first (a command right after a world load). */
+    public List<StrikeProjectile> flights(ServerLevel level) {
+        createPending(level);
+        return flights;
+    }
+
+    /** For tests: a restart of this data — saved, read back and put in place of the live data (the old copies are dropped). */
+    public static VirtualFlights reloadForTest(ServerLevel level) {
+        VirtualFlights read = load(get(level).save(new CompoundTag(), level.registryAccess()), level.registryAccess());
+        level.getDataStorage().set(NAME, read);
+        return read;
+    }
+
     /** Number of outside-world flights (including disk records not yet instantiated). */
     public int size() {
         return flights.size() + pending.size();

@@ -21,9 +21,14 @@ The separate `nuke` syntax is below; it has no entity target, `at <x z>` form or
 | `/incoming salvo <weapon> <count> <spread> [target]` | salvo; the target is `me` (where you stand, the default), `look`, a player or mob, `at <x z>` or `at <x y z>` |
 | `… via <x z> [<x z> …]` | route: up to five points, for the Shahed, missile, Lancet and B-2 only |
 | `… from <x z>` | launch point: a launcher sets up there (or at the nearest open, level spot within about 100 blocks) and stays until an abort; if there is none, the rounds take off from there without it (operators only) |
+| `… tag <name>` | name a group of orders, to check or recall them together (see below) |
 
-`from` and `via` go after the salvo target, `from` first. A single round on a route is a salvo of one:
-`salvo drone 1 0 …`.
+`from` and `via` go after the salvo target, `from` first; `tag` comes last. A single round on a route is a salvo of
+one: `salvo drone 1 0 …`.
+
+Every strike command returns how many rounds its order was given: a salvo of 20 returns 20 at once, although its
+rounds launch over the next seconds; an ICBM returns 1; a refused order returns 0. Command blocks and
+`execute store result` read this number. The chat line names the order with its id.
 
 ## Nuclear strike
 
@@ -33,6 +38,7 @@ The separate `nuke` syntax is below; it has no entity target, `at <x z>` form or
 | `/incoming nuke at <x y z> [kt [air\|ground]]` | ICBM at a point |
 | `/incoming nuke [at <x y z>] [kt [air\|ground]] from <x z>` | ICBM from a chosen ground pad (operator only); no waypoints |
 | `/incoming nuke now [at <x y z>] [kt [air\|ground]]` | detonation at once, without a flight (operators only) |
+| `… tag <name>` | at the end of any `nuke` command: name a group of orders |
 
 Without a number: the world's `nuclear.default_yield` (15 kt by default). Without a burst mode: ground burst.
 `air` or `ground` only after the number: `/incoming nuke 15 air` selects an air burst.
@@ -42,6 +48,9 @@ Without a number: the world's `nuclear.default_yield` (15 kt by default). Withou
 | Command | What it does |
 |---|---|
 | `/incoming clear` | cancel your conventional salvos and recall eligible projectiles; operators or the host abort every player's strikes, including nuclear ones, and [end the aftermath](nuke.md#ending-the-aftermath) of past nuclear blasts |
+| `/incoming clear tag <name>` | the same for one group of orders: your own rounds in it, or, for operators and the host, all of them; past nuclear blasts stay |
+| `/incoming status` | your unfinished orders (operators and the host: everyone's): rounds waiting to launch, in flight and still exploding, and when the last one arrives |
+| `/incoming status tag <name>`, `status <player>` | one group of orders; one player's orders (operators only) |
 | `/incoming menu` | console |
 | `/incoming help` | short help in chat |
 | `/incoming give [players]` | give a Strike Designator (operators only) |
@@ -49,6 +58,10 @@ Without a number: the world's `nuclear.default_yield` (15 kt by default). Withou
 
 For ordinary players, Grad rockets already in flight and released bombs continue to their targets; nuclear orders
 cannot be recalled, including those waiting for a second key.
+
+A tag is one word of up to 32 letters, digits and `_ - . +`; capital letters count. Any number of orders, from any
+player, may share a tag, and it stays with them after a server restart. `status` returns the number of unfinished
+rounds: a datapack can wait for it to reach 0 (see [For server owners and pack makers](packs.md#command-results-status-and-tags)).
 
 ## Power grid
 
@@ -95,6 +108,8 @@ console.
 /incoming salvo loiter 5 20 look
 /incoming salvo drone 1 0 at 800 64 200 via 300 -100 600 -50
 /incoming salvo missile 4 10 at 120 70 -340 from -900 400
+/incoming salvo rocket 40 30 at 120 70 -340 tag wave1
+/incoming status tag wave1
 /incoming nuke at 2000 64 0 1 ground
 /incoming launcher 100 64 -20 mission missile 2 10 120 70 -340
 ```
@@ -104,5 +119,7 @@ console.
 3. A swarm of five Lancets where you are looking.
 4. One Shahed at a point, detouring through two route points.
 5. Four cruise missiles at a point from a launcher at -900 400 (operator).
-6. A 1 kt ground burst at a point.
-7. A mission for the launcher at 100 64 -20: two cruise missiles with a spread of 10 blocks at a point (operator).
+6. A Grad ripple of 40 rockets in the group `wave1`.
+7. How many rounds of `wave1` are still waiting, flying or exploding.
+8. A 1 kt ground burst at a point.
+9. A mission for the launcher at 100 64 -20: two cruise missiles with a spread of 10 blocks at a point (operator).

@@ -108,6 +108,23 @@ final class BlastFront {
         return hits.size() + aircraft.size();
     }
 
+    /**
+     * Last game tick of {@code d}'s front: its arrival at the last hit reach ({@link Detonation#blastReach}) plus the
+     * positive phase there, and two ticks for the last ring.
+     */
+    static long frontEnd(Detonation d) {
+        double reach = d.blastReach();
+        return d.gameTime() + (long) Math.floor(d.arrivalTicks(reach) + d.positivePhaseTicks(reach)) + 2;
+    }
+
+    /** {@code detonation}'s front still travels or its hits wait. */
+    boolean pending(int detonation) {
+        if (reached.containsKey(detonation)) return true;
+        for (Hit h : hits) if (h.d().id() == detonation) return true;
+        for (AircraftHit a : aircraft) if (a.d().id() == detonation) return true;
+        return false;
+    }
+
     /** Front traveling or hits queued (common-budget NUCLEAR lane). */
     boolean busy() {
         return !reached.isEmpty() || !hits.isEmpty() || !aircraft.isEmpty();
@@ -123,8 +140,7 @@ final class BlastFront {
         Set<Integer> active = new HashSet<>();
         for (Detonation d : detonations) {
             long since = now - d.gameTime();
-            double reach = d.blastReach();
-            if (since >= 0 && since <= d.arrivalTicks(reach) + d.positivePhaseTicks(reach) + 2) {
+            if (since >= 0 && now <= frontEnd(d)) {
                 advance(level, d, since);
                 active.add(d.id());
             }

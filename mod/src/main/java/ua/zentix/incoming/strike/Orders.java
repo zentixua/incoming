@@ -55,6 +55,15 @@ public final class Orders {
     }
 
     /**
+     * An order entry started now in {@code level} would run elsewhere ({@link #elsewhere}): off the server thread or inside
+     * a {@link StrikeOrderEvent.Request} listener. Nothing is queued.
+     */
+    public static boolean deferred(ServerLevel level) {
+        var server = level.getServer();
+        return server != null && !server.isSameThread() || requesting > 0;
+    }
+
+    /**
      * Ask the listeners ({@link StrikeOrderEvent.Request}), then run {@code body}, which pays and answers. Request, Rejected
      * and Accepted are posted at once: they are the admission itself, and a second order must see the first one's
      * Accepted (a cooldown, a balance). Exactly one Rejected or Accepted follows: a veto rejects before payment; a body that

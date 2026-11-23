@@ -96,6 +96,7 @@ public final class NuclearWarhead {
                 IncomingConfig.SERVER.nukeFires.get() && IncomingConfig.SERVER.nukeMaxFires.get() > 0,
                 IncomingConfig.SERVER.nukeBlackRain.get());
         events.add(d, ua.zentix.incoming.util.WorldClock.now(level));
+        if (round != null) events.impact(d.id(), round, owner);
         PacketDistributor.sendToPlayersInDimension(level, new S2C.NukeDetonation(d, (float) Blackouts.nukeRadius(d), strikeId));
         Orders.queue(level, new NuclearDetonationEvent(level.dimension(), d.id(), d.burst(), yieldKt, !d.surface(), owner,
                 round == null ? null : round.order(), round == null ? null : round.round(), round == null ? null : round.tag()));

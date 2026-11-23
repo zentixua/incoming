@@ -203,6 +203,27 @@ public final class NuclearStrikes {
         return null;
     }
 
+    /**
+     * Cancel the scheduled strikes carrying group name {@code tag} ({@code strike.Order#tagged}): their rounds end
+     * recalled; detonations and their aftermath stay.
+     *
+     * @return strikes cancelled
+     */
+    public static int cancelTagged(ServerLevel level, String tag) {
+        NuclearEvents events = NuclearEvents.get(level);
+        int n = 0;
+        for (NuclearEvents.ScheduledStrike s : List.copyOf(events.scheduled())) {
+            if (!s.round().map(r -> tag.equals(r.tag())).orElse(false)) continue;
+            events.unschedule(s);
+            holdGround(level, s, false);
+            s.round().ifPresent(r -> Orders.ended(level, r, WeaponType.NUKE, s.owner().orElse(null), RoundEnd.recalled(null)));
+            Incoming.LOG.info("ICBM #{} cancelled with its tag {}", s.id(), tag);
+            n++;
+        }
+        if (n > 0) sync(level);
+        return n;
+    }
+
     /** Cancel: scheduled strikes canceled (their rounds recalled), fallout traces removed, queues stopped. */
     public static int clear(ServerLevel level) {
         for (NuclearEvents.ScheduledStrike s : List.copyOf(NuclearEvents.get(level).scheduled())) {
@@ -317,6 +338,8 @@ public final class NuclearStrikes {
         long t1 = System.nanoTime();
         NuclearWorld world = NuclearWorld.get(level);
         world.tick(level, clock);
+        // a nuclear round's impact work ends with its front (strike.OrderStatus): ruins resuming in chunks loaded later do not reopen it
+        events.settleImpacts(d -> world.frontBusy(d, now));
         long t2 = System.nanoTime();
         RadiationTicker.tick(level);
         long t3 = System.nanoTime();

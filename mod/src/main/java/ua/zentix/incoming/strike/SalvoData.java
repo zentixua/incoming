@@ -59,6 +59,13 @@ public final class SalvoData extends SavedData {
         return level.getDataStorage().computeIfAbsent(FACTORY, NAME);
     }
 
+    /** For tests: a restart of this data — saved, read back and put in place of the live data. */
+    public static SalvoData reloadForTest(ServerLevel level) {
+        SalvoData read = load(get(level).save(new CompoundTag(), level.registryAccess()), level.registryAccess());
+        level.getDataStorage().set(NAME, read);
+        return read;
+    }
+
     public void add(Salvo s) {
         salvos.add(s);
         setDirty();
@@ -89,6 +96,37 @@ public final class SalvoData extends SavedData {
         }
         if (n > 0) setDirty();
         return n;
+    }
+
+    /**
+     * Cancel salvos carrying group name {@code tag} ({@link Order#tagged}) of {@code owner} (null means any), as {@link
+     * #cancel}; {@code nuclear} includes the nuclear salvo.
+     *
+     * @return rounds that ended: unlaunched and failed launches
+     */
+    public int cancelTagged(ServerLevel level, @Nullable UUID owner, String tag, Collection<? extends ServerPlayer> online, boolean nuclear) {
+        int rounds = 0;
+        for (Iterator<Salvo> it = salvos.iterator(); it.hasNext(); ) {
+            Salvo s = it.next();
+            if (!tag.equals(s.tag) || s.order == null || owner != null && !owner.equals(s.owner) || !nuclear && s.nuclear()) continue;
+            it.remove();
+            rounds += s.remaining + s.failed;
+            settle(level, s, online, "salvo cancelled", Outcome.RECALLED);
+        }
+        if (rounds > 0) setDirty();
+        return rounds;
+    }
+
+    /**
+     * Rounds of admitted orders not yet in the air ({@link OrderStatus}): the unlaunched rest and failed launches, which
+     * end with the salvo's settlement. Salvos saved before order events have no rounds.
+     */
+    void rounds(java.util.function.Consumer<OrderStatus.Round> out) {
+        for (Salvo s : salvos) {
+            if (s.order == null) continue;
+            for (int i : s.failedRounds) out.accept(OrderStatus.Round.queued(RoundRef.of(s.order, i, s.tag), s.owner, s.weapon));
+            for (int i = s.total - s.remaining; i < s.total; i++) out.accept(OrderStatus.Round.queued(RoundRef.of(s.order, i, s.tag), s.owner, s.weapon));
+        }
     }
 
     public int size() {

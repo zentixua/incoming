@@ -151,6 +151,14 @@ public final class NuclearWorld {
     }
 
     /**
+     * {@code d}'s blast front at {@code now}: travelling, or its hits on bodies and craft still queued. A nuclear round's
+     * impact work ({@link ua.zentix.incoming.nuclear.NuclearEvents.Impact}).
+     */
+    public boolean frontBusy(Detonation d, long now) {
+        return now <= BlastFront.frontEnd(d) || blast.pending(d.id());
+    }
+
+    /**
      * Whether nuclear queues have server-thread work (NUCLEAR lane {@code WorkScheduler}: while present, impacts
      * do not take entire shared budget).
      */

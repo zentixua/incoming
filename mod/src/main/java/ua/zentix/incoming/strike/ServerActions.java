@@ -436,6 +436,15 @@ public final class ServerActions {
      */
     public static boolean strike(ServerPlayer player, WeaponType weapon, int count, int spread, Aim aim, Loadout.Nuke nuke, Waypoints via,
                                  @Nullable LaunchOrigin from, boolean rules, @Nullable String tag) {
+        return strike(player, weapon, count, spread, aim, nuke, via, from, rules, tag, null);
+    }
+
+    /**
+     * Same; {@code made} receives the order once it is made, before admission (a command reads its answer, {@link
+     * Order#admitted}); it is not called for an order refused by Incoming's own checks or deferred ({@link Orders#deferred}).
+     */
+    public static boolean strike(ServerPlayer player, WeaponType weapon, int count, int spread, Aim aim, Loadout.Nuke nuke, Waypoints via,
+                                 @Nullable LaunchOrigin from, boolean rules, @Nullable String tag, @Nullable Consumer<Order> made) {
         Aim asAsked = aim;
         if (Orders.elsewhere(player.serverLevel(), () -> {
             // later the player may have left (inventory already saved) or respawned (a new object): order as they are now
@@ -469,6 +478,7 @@ public final class ServerActions {
         Munitions.Bill bill = rules && !player.hasInfiniteMaterials() ? Munitions.Bill.of(l) : null;
         Aim target = aim;
         Order order = Order.player(player, l, target, bill != null ? StrikeOrderEvent.Payment.UPFRONT : StrikeOrderEvent.Payment.WAIVED).tagged(tag);
+        if (made != null) made.accept(order);
         return Orders.admit(order, o -> {
             if (bill != null && !Munitions.pay(player, bill)) {
                 o.reject(StrikeOrderEvent.Reason.MUNITIONS);
@@ -584,9 +594,18 @@ public final class ServerActions {
      */
     public static boolean dispatch(ServerLevel level, String who, float yaw, WeaponType weapon, int count, int spread, Aim aim, Loadout.Nuke nuke,
                                    Waypoints via, @Nullable LaunchOrigin from, @Nullable String tag, @Nullable Consumer<Component> feedback) {
+        return dispatch(level, who, yaw, weapon, count, spread, aim, nuke, via, from, tag, feedback, null);
+    }
+
+    /** Same; {@code made} receives the order before admission, as in {@link #strike}. */
+    public static boolean dispatch(ServerLevel level, String who, float yaw, WeaponType weapon, int count, int spread, Aim aim, Loadout.Nuke nuke,
+                                   Waypoints via, @Nullable LaunchOrigin from, @Nullable String tag, @Nullable Consumer<Component> feedback,
+                                   @Nullable Consumer<Order> made) {
         if (Orders.elsewhere(level, () -> dispatch(level, who, yaw, weapon, count, spread, aim, nuke, via, from, tag, feedback))) return true;
         Loadout l = order(weapon, count, spread, nuke);
-        return Orders.admit(Order.server(level, who, l, aim, feedback).tagged(tag), o -> launch(level, who, null, null, yaw, l, aim, via, from, null, o));
+        Order order = Order.server(level, who, l, aim, feedback).tagged(tag);
+        if (made != null) made.accept(order);
+        return Orders.admit(order, o -> launch(level, who, null, null, yaw, l, aim, via, from, null, o));
     }
 
     /**
@@ -924,10 +943,18 @@ public final class ServerActions {
      * @return projectiles that stopped attacking and canceled salvos
      */
     public static Recalled recall(MinecraftServer server, UUID owner, String who) {
-        Predicate<StrikeProjectile> mine = p -> owner.equals(p.ownerId()) && !p.isNuclear();
+        return recall(server, owner, null, who);
+    }
+
+    /**
+     * Same, only for rounds carrying group name {@code tag} (null means all): untagged and other-tagged strikes go on,
+     * and only launchers that served a recalled projectile, and serve no other, are taken down.
+     */
+    public static Recalled recall(MinecraftServer server, UUID owner, @Nullable String tag, String who) {
+        Predicate<StrikeProjectile> mine = p -> owner.equals(p.ownerId()) && !p.isNuclear() && (tag == null || tagged(p, tag));
         // Projectiles now gone: clients stop sound/camera (turned-away B-2 sounds while departing).
         List<UUID> gone = new ArrayList<>();
-        int destroyed = 0, turned = 0, unlaunched = 0, virtual = 0, launchersRemoved = 0, salvos = 0;
+        int destroyed = 0, turned = 0, unlaunched = 0, virtual = 0, launchersRemoved = 0, salvos = 0, salvoRounds = 0;
         for (ServerLevel level : server.getAllLevels()) {
             List<UUID> outside = VirtualFlights.get(level).clear(level, p -> mine.test(p) && (p.flightPhase().onLauncher() || p.recallable()));
             virtual += outside.size();
@@ -960,7 +987,7 @@ public final class ServerActions {
                 unlaunched++;
             }
             for (LauncherEntity l : launchers) {
-                if (onRail.stream().noneMatch(l::serves)) {
+                if (onRail.stream().noneMatch(l::serves) && (tag == null || mineOnRail.stream().anyMatch(l::serves))) {
                     l.discard();
                     launchersRemoved++;
                 }
@@ -976,12 +1003,14 @@ public final class ServerActions {
                 }
             }
             // Player abort leaves nuclear salvo (projectile awaiting launch site), like nuclear projectile.
-            salvos += SalvoData.get(level).cancel(level, owner, server.getPlayerList().getPlayers(), false);
+            if (tag == null) salvos += SalvoData.get(level).cancel(level, owner, server.getPlayerList().getPlayers(), false);
+            else salvoRounds += SalvoData.get(level).cancelTagged(level, owner, tag, server.getPlayerList().getPlayers(), false);
         }
         PacketDistributor.sendToAllPlayers(new S2C.Cleared(Optional.of(owner), false, gone));
-        Incoming.LOG.info("Stand down — {}: self-destructed {}, turned away {}, taken off launchers {} (launchers {}), off-world {}, salvos {}",
-                who, destroyed, turned, unlaunched, launchersRemoved, virtual, salvos);
-        return new Recalled(destroyed + turned + unlaunched + virtual, salvos);
+        Incoming.LOG.info("Stand down{} — {}: self-destructed {}, turned away {}, taken off launchers {} (launchers {}), off-world {}, salvos {}{}",
+                tag == null ? "" : " (tag " + tag + ")", who, destroyed, turned, unlaunched, launchersRemoved, virtual, salvos,
+                tag == null ? "" : ", unlaunched salvo rounds " + salvoRounds);
+        return new Recalled(destroyed + turned + unlaunched + virtual, salvos, salvoRounds);
     }
 
     /** {@link #recall(MinecraftServer, UUID, String)} for {@code player}: report to them. */
@@ -990,8 +1019,83 @@ public final class ServerActions {
         return Component.translatable("incoming.recalled", r.projectiles(), r.salvos());
     }
 
-    /** Own-abort result: projectiles that stopped attacking and canceled salvos. */
-    public record Recalled(int projectiles, int salvos) {}
+    /**
+     * Own-abort result: projectiles that stopped attacking, cancelled salvos and, for a tagged recall, their unlaunched
+     * rounds that ended (cancelled salvos are not counted there).
+     */
+    public record Recalled(int projectiles, int salvos, int salvoRounds) {
+        /** Rounds of a tagged recall that stopped: projectiles and unlaunched salvo rounds. */
+        public int rounds() {
+            return projectiles + salvoRounds;
+        }
+    }
+
+    /** Projectile {@code p} carries a round of an order tagged {@code tag}. */
+    private static boolean tagged(StrikeProjectile p, String tag) {
+        return p.round() != null && tag.equals(p.round().tag());
+    }
+
+    /**
+     * {@code clear tag} by an operator, the host, the console or a command block: every round carrying group name
+     * {@code tag} in every dimension, nuclear included, as {@link #clearAll} does: projectiles removed without exploding,
+     * salvos cancelled with refunds to online owners, scheduled ICBMs and orders waiting for a second key cancelled.
+     * Rounds already detonated keep their impact work; debris and other strikes stay; only launchers that served a removed
+     * projectile, and serve no other, are taken down.
+     *
+     * @return rounds that ended
+     */
+    public static int clearTag(MinecraftServer server, String tag, String who) {
+        Predicate<StrikeProjectile> cancelled = p -> tagged(p, tag);
+        Map<UUID, List<UUID>> gone = new HashMap<>();
+        int rounds = 0, launchersRemoved = 0, removed = 0;
+        Collection<ServerPlayer> online = server.getPlayerList().getPlayers();
+        for (ServerLevel level : server.getAllLevels()) {
+            // owners before removal: an off-world projectile leaves with its round
+            for (StrikeProjectile p : VirtualFlights.get(level).flights(level)) {
+                if (cancelled.test(p)) gone.computeIfAbsent(owner(p), k -> new ArrayList<>()).add(p.getUUID());
+            }
+            removed += VirtualFlights.get(level).clear(level, cancelled).size();
+            List<StrikeProjectile> kill = new ArrayList<>(), onRail = new ArrayList<>();
+            List<LauncherEntity> launchers = new ArrayList<>();
+            for (StrikeProjectile p : VirtualFlights.get(level).flights()) {
+                if (p.flightPhase().onLauncher()) onRail.add(p);
+            }
+            // Collect only: discard immediately removes from the map traversed by getAllEntities.
+            for (Entity e : level.getAllEntities()) {
+                if (e instanceof StrikeProjectile p) {
+                    if (cancelled.test(p)) kill.add(p);
+                    else if (p.flightPhase().onLauncher()) onRail.add(p);
+                } else if (e instanceof LauncherEntity l) {
+                    launchers.add(l);
+                }
+            }
+            for (StrikeProjectile p : kill) {
+                gone.computeIfAbsent(owner(p), k -> new ArrayList<>()).add(p.getUUID());
+                p.endRound(RoundEnd.recalled(p.position()));
+                p.discard();
+                removed++;
+            }
+            for (LauncherEntity l : launchers) {
+                if (kill.stream().anyMatch(l::serves) && onRail.stream().noneMatch(l::serves)) {
+                    l.discard();
+                    launchersRemoved++;
+                }
+            }
+            rounds += SalvoData.get(level).cancelTagged(level, null, tag, online, true);
+            rounds += NuclearStrikes.cancelTagged(level, tag);
+        }
+        rounds += NuclearKeys.cancel(server, online, tag, Component.translatable("incoming.nuke.key.cancelled").withStyle(ChatFormatting.GRAY),
+                "tag clear — " + who);
+        // per owner: an empty owner would reset every player's alerts, as a full clear does; other strikes still fly
+        gone.forEach((owner, ids) -> PacketDistributor.sendToAllPlayers(new S2C.Cleared(Optional.of(owner), false, ids)));
+        Incoming.LOG.info("Clear tag {} — {}: projectiles {}, launchers {}, unlaunched rounds {}", tag, who, removed, launchersRemoved, rounds);
+        return rounds + removed;
+    }
+
+    /** {@code p}'s owner for a cancel notice: nobody's ({@link net.minecraft.Util#NIL_UUID}) for an unowned one. */
+    private static UUID owner(StrikeProjectile p) {
+        return p.ownerId() != null ? p.ownerId() : net.minecraft.Util.NIL_UUID;
+    }
 
     /** Abort result to issuer: whether nuclear strikes were canceled too. */
     public static MutableComponent clearedMessage(int n, boolean nuclear) {

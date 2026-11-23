@@ -57,3 +57,35 @@ NativeEvents.onEvent(Accepted, event => {
 ```
 
 The player sees "Strike order refused" above the hotbar. A Java mod can show its own line with `setRefusal`.
+
+## Command results, status and tags
+
+Strike commands return numbers that command blocks and `execute store result` read, so a datapack or a game master
+can run a minigame round with strikes and no other mod.
+
+- A strike command (`/incoming <weapon> …`, `salvo`, `nuke`, `nuke now`) returns how many rounds its order was given:
+  a salvo of 12 returns 12 on the tick it is given, although its rounds launch over the next seconds; an ICBM returns 1;
+  a refused order returns 0. Its chat line names the order with the id the strike events carry.
+- `salvo …` and `nuke …` take `tag <name>` at the end. A tag names a group of orders: any number of orders, from
+  anyone, in any dimension, may share it, and it stays with their rounds across a server restart.
+- `/incoming status` lists unfinished orders and returns the number of their unfinished rounds; `status tag <name>`
+  counts one group, `status <player>` one player's orders (operators only). A round is unfinished while it waits to
+  launch (the rest of a salvo, a nuclear launch waiting for its second key), while it flies, and after it hits while
+  its blast is still being worked out: a conventional warhead's explosion, crater, collapse, spilled fuel, debris and
+  broken glass;
+  a nuclear blast wave until it has passed its full reach. Ruins that appear later, in chunks loaded afterwards, do
+  not count. Each order shows when its last round arrives, or "unknown" while that cannot be told (a salvo still
+  launching, a second key, a strike waiting for its ground to load).
+- `/incoming clear tag <name>` recalls one group: operators, the host and the console cancel all its rounds, nuclear
+  ones included; a player without operator rights recalls only their own rounds in it, as with `/incoming clear`.
+
+A player without operator rights sees only their own orders in `status`. When `status tag <name>` returns 0, every
+round of the group has ended (its `StrikeRoundEvent$Ended` arrives by the end of that tick) and its explosions are
+over.
+
+```mcfunction
+# start a wave
+execute store result score #wave arena run incoming salvo rocket 20 25 at 120 70 -340 tag wave1
+# every second: rounds of the wave still waiting, flying or exploding
+execute store result score #left arena run incoming status tag wave1
+```

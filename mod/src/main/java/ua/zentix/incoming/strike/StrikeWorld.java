@@ -50,6 +50,8 @@ public final class StrikeWorld {
     private final Map<String, Long> noLaunchSite = new HashMap<>();
     /** Non-operator nuclear orders awaiting second key or post-warning launch. */
     private final NuclearKeys keys = new NuclearKeys();
+    /** Rounds whose impact work runs ({@link OrderStatus}). */
+    private final ImpactWork impactWork = new ImpactWork();
     /** Orders started inside another order's request ({@link Orders#admit}): admitted at their due game time. */
     private final List<Deferred> deferred = new ArrayList<>();
 
@@ -75,6 +77,11 @@ public final class StrikeWorld {
     /** Non-operator nuclear orders: second key and carrier pre-launch warning. */
     NuclearKeys keys() {
         return keys;
+    }
+
+    /** Rounds whose conventional impact work runs here ({@link OrderStatus}). */
+    public ImpactWork impactWork() {
+        return impactWork;
     }
 
     /** Approach-strip areas and holding projectiles ({@link FlightTickets}). */
@@ -234,8 +241,13 @@ public final class StrikeWorld {
 
     /** All world projectiles, in-world and virtual ({@link VirtualFlights}). */
     public static List<StrikeProjectile> projectiles(ServerLevel level) {
+        return projectiles(level, false);
+    }
+
+    /** Same; {@code fromDisk}: off-world flights read from disk and not yet ticked are instantiated and included. */
+    static List<StrikeProjectile> projectiles(ServerLevel level, boolean fromDisk) {
         List<StrikeProjectile> all = new ArrayList<>(level.getEntities(EntityTypeTest.forClass(StrikeProjectile.class), p -> !p.isRemoved()));
-        all.addAll(VirtualFlights.get(level).flights());
+        all.addAll(fromDisk ? VirtualFlights.get(level).flights(level) : VirtualFlights.get(level).flights());
         return all;
     }
 

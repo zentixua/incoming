@@ -353,7 +353,7 @@ round and detonation events with no Almighty change. Add to the note: the grid a
 | # | Item | Status | PR |
 |---|---|---|---|
 | 1 | A1 order and round events | done | #741 |
-| 2 | A2 command results, `status`, `tag` | planned | |
+| 2 | A2 command results, `status`, `tag` | done | #744 |
 | 3 | B1 permission nodes behind one policy | planned | |
 | 4 | A3 advancements and statistics | planned | |
 | 5 | A4 redstone from the SAM and the substation | planned | |
