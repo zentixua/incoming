@@ -323,7 +323,7 @@ def steps(v, x):
     for i in range(n):
         w = np.abs(np.r_[d[max(0, i - 10):i], d[i + 1:i + 11]])
         bg = np.median(w) if len(w) else 0.0
-        if abs(d[i]) > 8 * bg + floor[i] and abs(d[i]) > 0.01 * max(abs(v[i]), abs(v[i + 1])):
+        if abs(d[i]) > 8 * bg + floor[i] and abs(d[i]) > 0.01 * max(abs(v[i]), abs(v[i + 1])) and abs(d[i]) > 1e-6 * np.abs(v).max():
             step_idx.append(i)
             rel = max(rel, abs(d[i]) / max(abs(v[i]), abs(v[i + 1]), 1e-30))
     ds = np.full(n, 0.0)

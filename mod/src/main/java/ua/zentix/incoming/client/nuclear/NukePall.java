@@ -347,6 +347,39 @@ public final class NukePall {
     /** Presentation exposure of the dust lit by sun and sky alone ({@code DwAdapt}, tools/uw_probe: the reference curtain's luma). */
     static final double DUST_ADAPT = 3.1;
 
+    /** Share of the diffuse light's decay inside the dust that the eye takes back ({@code DwAdapt}; presentation). */
+    static final double DUST_ADAPT_INSIDE = 0.7;
+    /** Diffuse decay of the reference dust, k² = 3(1 − ω')(1 − ω'g') at its green albedo ({@code pallK}). */
+    static final double DUST_K = PallLight.k(0.8099, 0.375);
+
+    /** {@code dwTransfer}: the drawn column's optical depth from the law's (τ to 1, then the slope falls to 0.073). */
+    static double dustTransfer(double tau) {
+        if (tau <= 1) return tau;
+        double x = tau - 1;
+        return 1 + 0.073 * x + (1 - 0.073) * 0.5 * (1 - Math.exp(-x / 0.5));
+    }
+
+    /**
+     * Drawn optical depth of the dust above the eye (no drift: the eye's own ground point; the table's age nodes read linearly):
+     * {@code dwHaze}'s column, its top 0.95 of the table's, the share above by the profile's stratification.
+     */
+    static double eyeDepth(float[] table, int n, double end, double reach, double t, float[] eye) {
+        double x = Math.min(Math.hypot(eye[0], eye[2]) / Math.max(reach, 1), 1) * (n - 1);
+        int j = (int) Math.min(Math.floor(x), n - 2);
+        double age = t - (table[4 * j] + (x - j) * (table[4 * (j + 1)] - table[4 * j]));
+        if (age <= 0) return 0;
+        double u = Math.log1p(age / PallField.AGE0) / Math.log1p(end / PallField.AGE0) * (PallField.AGES - 1);
+        if (u >= PallField.AGES - 1) return 0;
+        int k = (int) Math.floor(u);
+        double f = u - k;
+        int o0 = 4 * ((1 + k) * n + j), o1 = 4 * ((2 + k) * n + j);
+        double top = 0.95 * (table[o0] + f * (table[o1] - table[o0])), tau = table[o0 + 1] + f * (table[o1 + 1] - table[o0 + 1]);
+        double h = Math.max(eye[1], 0) / Math.max(top, 1);
+        if (h >= 1) return 0;
+        double above = 1.25 * (1 - h) - 0.25 * (1 - h * h);
+        return dustTransfer(tau) * (1 + 0.5 * Math.exp(-age / 1.1)) * above;
+    }
+
     private static double luminance(org.joml.Vector3f c) {
         return 0.2126 * c.x + 0.7152 * c.y + 0.0722 * c.z;
     }
@@ -439,7 +472,10 @@ public final class NukePall {
         double bx = w.ball[0] - w.eye[0], by = w.ball[1] - w.eye[1], bz = w.ball[2] - w.eye[2];
         double ballAt = luminance(w.ballLight) * Math.min(w.ball[3] * w.ball[3] / Math.max(bx * bx + by * by + bz * bz, 1), 1);
         double ambient = luminance(w.sunLight) + luminance(w.skyLight);
-        w.adapt = (float) (1 + (DUST_ADAPT - 1) * (1 - Math.min(ballAt / Math.max(ambient, 1e-6), 1)));
+        double adapt = 1 + (DUST_ADAPT - 1) * (1 - Math.min(ballAt / Math.max(ambient, 1e-6), 1));
+        // inside the dust the eye adapts to the light that reaches it: the drawn column's optical depth above the eye, the
+        // two streams' diffuse decay e^(−kτ) (k of the reference dust), the eye taking back DUST_ADAPT_INSIDE of it (presentation)
+        w.adapt = (float) (adapt * Math.exp(Math.min(DUST_ADAPT_INSIDE * DUST_K * eyeDepth(table, n, end, reach, t, w.eye), 1.6)));
         w.sandBulk.set((float) SAND[0], (float) SAND[1], (float) SAND[2]);
         w.active = true;
     }

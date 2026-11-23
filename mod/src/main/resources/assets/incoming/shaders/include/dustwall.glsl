@@ -172,7 +172,8 @@ float dwContrast(float a) {
 // Logistic about DW_HAZE_AGE (presentation; the texture holds through take 33's ages: 0.985 at 24 s)
 const float DW_HAZE_AGE = 45.0, DW_HAZE_WIDTH = 5.0;
 float dwTextured(float a) {
-    return 1.0 - 1.0 / (1.0 + exp(-(a - DW_HAZE_AGE) / DW_HAZE_WIDTH));
+    // (the complement written directly: 1 − 1/(1 + e^(−x)) cancels in float32 where the share is small)
+    return 1.0 / (1.0 + exp((a - DW_HAZE_AGE) / DW_HAZE_WIDTH));
 }
 // a smooth max(a − c, 0) (softplus, width 1 s): no kink in any age function
 float dwAfter(float a, float c) {
