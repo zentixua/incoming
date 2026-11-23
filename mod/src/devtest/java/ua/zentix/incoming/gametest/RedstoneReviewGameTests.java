@@ -42,6 +42,8 @@ public final class RedstoneReviewGameTests {
     @GameTest(template = "range", timeoutTicks = 600, batch = "redstone_review_substation_dust_edge", skyAccess = true)
     public static void substationDustDoesNotLoadAnUnreadyChunk(GameTestHelper h) {
         ServerLevel level = h.getLevel();
+        // other batches leave outages and destroyed zones (a CI shard's nuclear tests): start from a quiet grid
+        GridGameTests.quiet(level);
         ChunkPos chunk = remote(h);
         ChunkPos east = new ChunkPos(chunk.x + 1, chunk.z);
         BlockPos edge = new BlockPos(chunk.getMaxBlockX(), 100, chunk.getMiddleBlockZ());
@@ -74,6 +76,8 @@ public final class RedstoneReviewGameTests {
     @GameTest(template = "range", timeoutTicks = 600, batch = "redstone_review_substation_stale_edge", skyAccess = true)
     public static void loadedSubstationUpdatesWithUnreadyChunkAcrossItsBorder(GameTestHelper h) {
         ServerLevel level = h.getLevel();
+        // other batches leave outages and destroyed zones (a CI shard's nuclear tests): start from a quiet grid
+        GridGameTests.quiet(level);
         ChunkPos chunk = remote(h);
         ChunkPos east = new ChunkPos(chunk.x + 1, chunk.z);
         BlockPos station = new BlockPos(chunk.getMaxBlockX(), 100, chunk.getMiddleBlockZ());
@@ -147,6 +151,8 @@ public final class RedstoneReviewGameTests {
     @GameTest(template = "range", batch = "redstone_review_substation_destroyed_placement", skyAccess = true)
     public static void placementInDestroyedDistrictDoesNotPrimeTnt(GameTestHelper h) {
         ServerLevel level = h.getLevel();
+        // other batches leave outages and destroyed zones (a CI shard's nuclear tests): start from a quiet grid
+        GridGameTests.quiet(level);
         BlockPos station = GridGameTests.CENTER;
         BlockPos absolute = h.absolutePos(station);
         ChunkPos chunk = new ChunkPos(absolute);
@@ -167,6 +173,8 @@ public final class RedstoneReviewGameTests {
     @GameTest(template = "range", batch = "redstone_review_substation_observer", skyAccess = true)
     public static void observerSeesSubstationKnockout(GameTestHelper h) {
         ServerLevel level = h.getLevel();
+        // other batches leave outages and destroyed zones (a CI shard's nuclear tests): start from a quiet grid
+        GridGameTests.quiet(level);
         BlockPos source = GridGameTests.CENTER;
         BlockPos observer = source.east();
         h.setBlock(source, ModBlocks.SUBSTATION.get());
@@ -209,6 +217,8 @@ public final class RedstoneReviewGameTests {
     @GameTest(template = "runway", timeoutTicks = 100, batch = "redstone_review_damage_removal", skyAccess = true)
     public static void damageRemovingSignalSourcesDepowersSurvivingDust(GameTestHelper h) {
         ServerLevel level = h.getLevel();
+        // other batches leave outages and destroyed zones (a CI shard's nuclear tests): start from a quiet grid
+        GridGameTests.quiet(level);
         BlockPos samPos = SamGameTests.SAM;
         BlockPos substation = samPos.east(8);
         BlockPos samDust = samPos.west();

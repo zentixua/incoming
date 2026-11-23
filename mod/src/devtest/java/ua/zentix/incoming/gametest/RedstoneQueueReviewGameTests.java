@@ -42,6 +42,8 @@ public final class RedstoneQueueReviewGameTests {
     @GameTest(template = "range", batch = "redstone_queue_review_replacement", skyAccess = true)
     public static void replacingRepeaterWithDeadStationDoesNotPrimeTnt(GameTestHelper h) {
         ServerLevel level = h.getLevel();
+        // other batches leave outages and destroyed zones (a CI shard's nuclear tests): start from a quiet grid
+        GridGameTests.quiet(level);
         BlockPos at = GridGameTests.CENTER;
         BlockPos absolute = h.absolutePos(at);
         ChunkPos chunk = new ChunkPos(absolute);
@@ -70,6 +72,8 @@ public final class RedstoneQueueReviewGameTests {
     @GameTest(template = "range", timeoutTicks = 1200, batch = "redstone_queue_review_restart", skyAccess = true)
     public static void removedSourceStillDepowersWireAfterRestart(GameTestHelper h) {
         ServerLevel level = h.getLevel();
+        // other batches leave outages and destroyed zones (a CI shard's nuclear tests): start from a quiet grid
+        GridGameTests.quiet(level);
         ChunkPos site = site(h, 141);
         ChunkPos east = new ChunkPos(site.x + 1, site.z);
         BlockPos source = source(site);
@@ -119,6 +123,8 @@ public final class RedstoneQueueReviewGameTests {
     @GameTest(template = "range", timeoutTicks = 1200, batch = "redstone_queue_review_stale_shape", skyAccess = true)
     public static void deferredEdgeDoesNotPulseAnObserverInstalledFacingAir(GameTestHelper h) {
         ServerLevel level = h.getLevel();
+        // other batches leave outages and destroyed zones (a CI shard's nuclear tests): start from a quiet grid
+        GridGameTests.quiet(level);
         ChunkPos site = site(h, 157);
         ChunkPos east = new ChunkPos(site.x + 1, site.z);
         BlockPos source = source(site);

@@ -45,6 +45,8 @@ public final class RedstoneRoundTwoReviewGameTests {
     @GameTest(template = "range", timeoutTicks = 1200, batch = "redstone_r2_piston_halo", skyAccess = true)
     public static void dustAndPistonDoNotLoadBeyondSignalHalo(GameTestHelper h) {
         ServerLevel level = h.getLevel();
+        // other batches leave outages and destroyed zones (a CI shard's nuclear tests): start from a quiet grid
+        GridGameTests.quiet(level);
         ChunkPos site = site(h, 81);
         ChunkPos outer = new ChunkPos(site.x + 2, site.z);
         BlockPos source = position(site, 13);
@@ -85,6 +87,8 @@ public final class RedstoneRoundTwoReviewGameTests {
     @GameTest(template = "range", timeoutTicks = 1200, batch = "redstone_r2_quiet_placement", skyAccess = true)
     public static void quietPlacementInDestroyedDistrictDoesNotLoadChunk(GameTestHelper h) {
         ServerLevel level = h.getLevel();
+        // other batches leave outages and destroyed zones (a CI shard's nuclear tests): start from a quiet grid
+        GridGameTests.quiet(level);
         ChunkPos site = site(h, 97);
         ChunkPos east = new ChunkPos(site.x + 1, site.z);
         BlockPos source = position(site, 13);
@@ -126,6 +130,8 @@ public final class RedstoneRoundTwoReviewGameTests {
     @GameTest(template = "range", timeoutTicks = 1200, batch = "redstone_r2_removal", skyAccess = true)
     public static void quietRemovalDeliversFallingEdgeAfterHaloLoads(GameTestHelper h) {
         ServerLevel level = h.getLevel();
+        // other batches leave outages and destroyed zones (a CI shard's nuclear tests): start from a quiet grid
+        GridGameTests.quiet(level);
         ChunkPos site = site(h, 113);
         ChunkPos east = new ChunkPos(site.x + 1, site.z);
         BlockPos working = position(site, 13);
