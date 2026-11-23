@@ -91,6 +91,30 @@ execute store result score #wave arena run incoming salvo rocket 20 25 at 120 70
 execute store result score #left arena run incoming status tag wave1
 ```
 
+## World rules for a minigame
+
+`/incoming rule` (operators, the console, command blocks and functions) changes world rules while the world runs and
+saves them to the world's settings file; the [list of rules](commands.md#world-rules) says what each one governs. A
+change applies to orders given after it: a wave already in the air keeps the rules it was ordered under, so switching
+the rules back on right after the wave is safe. With `world.block_damage`, `world.shatter_glass`, `world.fire`,
+`world.debris_stay`, `world.collapse` and `grid.enabled` off, conventional strikes change no block and cut no power.
+Nuclear strikes have their own rules: turn `nuclear.enabled` off for the arena.
+
+```mcfunction
+# arena round: strikes hurt players but leave the map as it is
+incoming rule world.block_damage false
+incoming rule world.shatter_glass false
+incoming rule world.fire false
+incoming rule world.debris_stay false
+incoming rule world.collapse false
+incoming rule grid.enabled false
+incoming rule nuclear.enabled false
+execute store result score #wave arena run incoming salvo rocket 20 25 at 120 70 -340 tag wave1
+```
+
+`/incoming rule <key>` returns the value as a number (on 1, off 0), so a function can check the arena state with
+`execute store result`.
+
 ## Advancements and statistics
 
 Incoming's advancements and statistics are vanilla ones, so quest mods (FTB Quests advancement and stat tasks),

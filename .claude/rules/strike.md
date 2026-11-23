@@ -237,6 +237,16 @@ paths:
   in that order; `NuclearRefusalTest`). Every refused order speaks through `ServerActions.refuse` (red action bar,
   `RefusalChannelTest`); every key named in code exists in both lang files (`LangTest`).
 
+- World rules by command (`command/RuleCommand`, roadmap B4): `/incoming rule` sets `ModConfigSpec` values and saves the
+  spec (one home: the world's server config). Exposed only where a change reaches just later orders: the six
+  world-changing rules are `StrikeRules`, captured when an `Order` is made and carried on `RoundRef.rules` (saved in its
+  NBT and codec; `SalvoData` saves them because it recomputes round refs), then `BlastArea.rules()` for every blast job,
+  `DebrisEntity.under` (saved), collapse rubble's cancelled drop (vanilla saves it), `StagedExplosion.rulesOf` for the
+  substation listener, `NuclearWarhead` for the nuclear blackout. Block-changing code never reads those six from
+  `IncomingConfig` (work without an order reads `StrikeRules.live()` when its area opens); the other exposed keys are
+  read only at admission, except `nuclear.enabled`, B1's hard gate before a nuclear release. A new key needs the same
+  proof. Regressions: `RuleGameTests` (arena: every conventional weapon, rules off at order, on at impact),
+  `StrikeRulesTest`.
 - `world.early_warning` controls automatic sirens and nuclear launch/target notices (default true). `ServerConfigMigration`
   decorates the registered server `IConfigSpec`: copy legacy `world.siren` before spec correction removes it; an explicit
   new key wins. `IncomingConfigScreen` passes the underlying `ModConfigSpec` to NeoForge section widgets. Warning

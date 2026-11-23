@@ -25,6 +25,14 @@ Incoming (https://github.com/zentixua/incoming): strikes by Shahed and Lancet dr
   (waiting to launch, in flight, or still exploding; a nuclear blast until its wave has passed) and lists each order
   with its arrival time or «unknown»; 0 means the group is over. «incoming status» covers all orders.
   «incoming clear tag <name>» recalls one group, nuclear ones too, and leaves other strikes.
+- World rules: «incoming rule» lists them, «incoming rule <key>» returns the value (true 1, false 0, numbers as they
+  are), «incoming rule <key> <value>» sets and saves it (true/false or a whole number in range; returns 1, a bad key or
+  value fails and changes nothing). Keys: world.block_damage, world.shatter_glass, world.fire, world.debris_stay,
+  world.collapse, grid.enabled, nuclear.enabled, nuclear.ops_only, nuclear.carrier_nukes, launch.designator_for_everyone,
+  launch.max_salvo, launch.max_spread, launch.max_active_per_player. A change reaches only orders given after it;
+  salvos still launching and rounds in flight keep the rules they were ordered under. With the five world.* rules and
+  grid.enabled false, conventional strikes change no block and cut no power (an arena keeps its shape); nuclear strikes
+  are outside that, so turn nuclear.enabled false for an arena and back on after it.
 - Progress: advancements incoming:strikes/first_strike, camera_strike, first_interception, nuclear_survivor
   (alive after a nuclear wave of at least 5 psi), lights_back; statistics as scoreboard criteria
   minecraft.custom:incoming.rounds_launched (also .drone .loiter .rocket .missile .bunker .nuke), .interceptions,
