@@ -32,6 +32,14 @@ import java.util.concurrent.CompletableFuture;
 public final class BlockLighting {
     /** Positions only, no chunk references or tickets. One repair admits at most nine FULL leases per world. */
     public static final int PENDING_REPAIRS = 128;
+    /**
+     * Recovery checks queued in vanilla's light engine at a time: the next slice waits until the engine has processed
+     * this one. The engine is one queue for every chunk's light, including the light tasks of chunks a moving player loads
+     * synchronously; whole sections of checks per work unit queued 195,000 checks in a minute after a 1 Mt blackout
+     * (light thread saturated) and held such loads 0.3–0.8 s. At the ~4,300 checks/s it processed, a slice keeps a
+     * player's load behind at most ~60 ms of recovery work.
+     */
+    public static final int LIGHT_SLICE = 256;
     private static final TicketType<ChunkPos> HOLD = TicketType.create("incoming_block_light", Comparator.comparingLong(ChunkPos::toLong));
     private final Long2ObjectOpenHashMap<Batch> batches = new Long2ObjectOpenHashMap<>();
     private final Long2IntOpenHashMap leases = new Long2IntOpenHashMap();
@@ -222,6 +230,9 @@ public final class BlockLighting {
         boolean fullSeen, succeeded;
         long ownNanos;
         CompletableFuture<Void> fence;
+        /** Light engine has processed the last {@link #LIGHT_SLICE} recovery checks; layer: next block row to scan. */
+        CompletableFuture<?> slice;
+        int layer, sliceChecks;
         Batch(ChunkPos center) { this.center = center; }
         ChunkPos at(int i) { return new ChunkPos(center.x + i % 3 - 1, center.z + i / 3 - 1); }
 
@@ -250,6 +261,7 @@ public final class BlockLighting {
                     if (lightChunk(level, new ChunkPos(p.x + x, p.z + z)) == null) return false;
             }
             if (!fullSeen) { readyNanos += System.nanoTime() - born; fullSeen = true; }
+            if (slice != null && !slice.isDone()) return false;
             return fence == null || fence.isDone();
         }
 
@@ -295,12 +307,13 @@ public final class BlockLighting {
                     section++;
                 }
                 if (section < chunk.getSectionsCount()) {
-                    // One section per unit, including air sections carrying stale arrays.
-                    // Recheck boundary spill and unsupported interior maxima (old missed-source checks).
-                    int y0 = chunk.getSectionYFromSectionIndex(section++) * 16;
+                    // Block rows of one section per unit, including air sections carrying stale arrays, until a light
+                    // slice is full. Recheck boundary spill and unsupported interior maxima (old missed-source checks).
+                    int y0 = chunk.getSectionYFromSectionIndex(section) * 16;
                     BlockPos.MutableBlockPos p = new BlockPos.MutableBlockPos();
                     var light = level.getChunkSource().getLightEngine();
-                    for (int y = y0; y < y0 + 16; y++) for (int z = 0; z < 16; z++) for (int x = 0; x < 16; x++) {
+                    for (; layer < 16 && sliceChecks < LIGHT_SLICE; layer++) for (int z = 0; z < 16; z++) for (int x = 0; x < 16; x++) {
+                        int y = y0 + layer;
                         p.set(target.getMinBlockX() + x, y, target.getMinBlockZ() + z);
                         int value = level.getBrightness(LightLayer.BLOCK, p);
                         if (value == 0) continue;
@@ -310,7 +323,13 @@ public final class BlockLighting {
                                 if (level.getBrightness(LightLayer.BLOCK, p.relative(direction)) > value) { peak = false; break; }
                             }
                         }
-                        if (peak) { light.checkBlock(p); checks++; }
+                        if (peak) { light.checkBlock(p); checks++; sliceChecks++; }
+                    }
+                    if (layer == 16) { layer = 0; section++; }
+                    if (sliceChecks >= LIGHT_SLICE) {
+                        // completes after the engine's batch that holds these checks has propagated them
+                        slice = light.waitForPendingTasks(target.x, target.z);
+                        sliceChecks = 0;
                     }
                     revision++;
                     return true;

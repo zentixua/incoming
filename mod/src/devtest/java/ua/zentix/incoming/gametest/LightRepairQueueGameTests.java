@@ -184,6 +184,78 @@ public final class LightRepairQueueGameTests {
                 }).thenSucceed();
     }
 
+    /**
+     * Legacy recovery feeds vanilla's light engine in slices: a scar chunk whose saved block light is a uniform ghost 15
+     * through four sections (every cell a check) never has more than two slices of checks queued in one tick, and the
+     * ghost still clears. The engine is one queue for all light, including the light tasks of chunks a moving player
+     * loads synchronously; whole sections per unit queued 195,000 checks in a minute after a 1 Mt blackout and held such
+     * loads 0.3–0.8 s (srvlag run 23.11).
+     */
+    @GameTest(template = "range", batch = "light_repair_slices", timeoutTicks = 2400, skyAccess = true)
+    public static void denseLegacyRepairFeedsLightInSlices(GameTestHelper h) {
+        StrikeGameTests.gameSpeed(h);
+        ServerLevel level = h.getLevel().getServer().getLevel(net.minecraft.world.level.Level.END);
+        h.assertTrue(level != null, "End dimension missing");
+        BlockLighting.finish(level);
+        var lighting = BlockLighting.get(level);
+        var source = level.getChunkSource();
+        ChunkPos pad = new ChunkPos(h.absolutePos(BlockPos.ZERO));
+        ChunkPos center = new ChunkPos(pad.x + 12288, pad.z + 12288);
+        List<CompletableFuture<?>> writes = new ArrayList<>();
+        for (int z = -2; z <= 2; z++) for (int x = -2; x <= 2; x++) {
+            ChunkPos pos = new ChunkPos(center.x + x, center.z + z);
+            LevelChunk chunk = new LevelChunk(level, pos);
+            chunk.getSection(chunk.getSectionIndex(98)).setBlockState(8, 98 & 15, 8, Blocks.STONE.defaultBlockState(), false);
+            boolean scar = x == 0 && z == 0;
+            if (scar) chunk.setData(ModAttachments.CHUNK_SCAR, 1);
+            else chunk.setData(ModAttachments.LIGHT_REPAIRED, true);
+            chunk.setLightCorrect(true);
+            CompoundTag tag = ChunkSerializer.write(level, chunk);
+            if (scar) {
+                byte[] ghost = new byte[2048];
+                java.util.Arrays.fill(ghost, (byte) 0xFF);
+                var sections = tag.getList("sections", Tag.TAG_COMPOUND);
+                for (int i = 0; i < sections.size(); i++) {
+                    int y = sections.getCompound(i).getByte("Y");
+                    if (y >= 7 && y <= 10) sections.getCompound(i).putByteArray("BlockLight", ghost.clone());
+                }
+            }
+            tag.putBoolean("isLightOn", true);
+            writes.add(RegionFiles.write(level, pos, tag));
+        }
+        WorkScheduler.useImpactClock(level.getServer(), WorkClock.counting(1_000_000_000L));
+        long[] last = {-1};
+        int[] peak = {0};
+        StrikeGameTests.afterTest(h, () -> {
+            WorkScheduler.useImpactClock(level.getServer(), WorkScheduler.newImpactClock());
+            source.removeRegionTicket(VIEW, center, 0, center);
+        });
+        h.onEachTick(() -> {
+            long now = lighting.measurements().checks();
+            if (last[0] >= 0) peak[0] = (int) Math.max(peak[0], now - last[0]);
+            last[0] = now;
+            h.assertTrue(peak[0] <= 2 * BlockLighting.LIGHT_SLICE, "recovery queued " + peak[0] + " light checks in one tick");
+        });
+        var written = CompletableFuture.allOf(writes.toArray(CompletableFuture<?>[]::new));
+        long[] before = {0};
+        BlockPos probe = new BlockPos(center.getMinBlockX() + 8, 8 * 16 + 8, center.getMinBlockZ() + 8);
+        h.startSequence().thenWaitUntil(() -> h.assertTrue(written.isDone(), "fixture writes pending"))
+                .thenExecute(() -> {
+                    before[0] = lighting.measurements().checks();
+                    source.addRegionTicket(VIEW, center, 0, center);
+                })
+                .thenWaitUntil(() -> {
+                    LevelChunk chunk = source.getChunkNow(center.x, center.z);
+                    h.assertTrue(chunk != null && chunk.getData(ModAttachments.LIGHT_REPAIRED) && lighting.idle(), "dense repair pending");
+                })
+                .thenExecute(() -> {
+                    long checks = lighting.measurements().checks() - before[0];
+                    h.assertTrue(checks > 8 * BlockLighting.LIGHT_SLICE, "fixture issued only " + checks + " checks");
+                    h.assertTrue(level.getBrightness(LightLayer.BLOCK, probe) == 0, "ghost light remained: " + level.getBrightness(LightLayer.BLOCK, probe));
+                    Incoming.LOG.info("LIGHT_REPAIR_SLICES checks={} peakPerTick={}", checks, peak[0]);
+                }).thenSucceed();
+    }
+
     private static long distance(ChunkPos a, ChunkPos b) {
         long x = (long) a.x - b.x, z = (long) a.z - b.z;
         return x * x + z * z;
