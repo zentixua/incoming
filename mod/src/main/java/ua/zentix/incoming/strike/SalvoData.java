@@ -59,11 +59,9 @@ public final class SalvoData extends SavedData {
         return level.getDataStorage().computeIfAbsent(FACTORY, NAME);
     }
 
-    /** For tests: a restart of this data — saved, read back and put in place of the live data. */
-    public static SalvoData reloadForTest(ServerLevel level) {
-        SalvoData read = load(get(level).save(new CompoundTag(), level.registryAccess()), level.registryAccess());
-        level.getDataStorage().set(NAME, read);
-        return read;
+    /** For tests: this data as a restart would read it back — saved and loaded into a detached copy (the live data stays). */
+    public static SalvoData readBackForTest(ServerLevel level) {
+        return load(get(level).save(new CompoundTag(), level.registryAccess()), level.registryAccess());
     }
 
     public void add(Salvo s) {
@@ -121,7 +119,7 @@ public final class SalvoData extends SavedData {
      * Rounds of admitted orders not yet in the air ({@link OrderStatus}): the unlaunched rest and failed launches, which
      * end with the salvo's settlement. Salvos saved before order events have no rounds.
      */
-    void rounds(java.util.function.Consumer<OrderStatus.Round> out) {
+    public void rounds(java.util.function.Consumer<OrderStatus.Round> out) {
         for (Salvo s : salvos) {
             if (s.order == null) continue;
             for (int i : s.failedRounds) out.accept(OrderStatus.Round.queued(RoundRef.of(s.order, i, s.tag), s.owner, s.weapon));

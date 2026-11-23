@@ -244,10 +244,13 @@ public final class StrikeWorld {
         return projectiles(level, false);
     }
 
-    /** Same; {@code fromDisk}: off-world flights read from disk and not yet ticked are instantiated and included. */
+    /**
+     * Same; {@code fromDisk}: off-world flights read from disk and not yet ticked are instantiated and included, and so
+     * are those entering the world this moment ({@link VirtualFlights#inFlight}).
+     */
     static List<StrikeProjectile> projectiles(ServerLevel level, boolean fromDisk) {
         List<StrikeProjectile> all = new ArrayList<>(level.getEntities(EntityTypeTest.forClass(StrikeProjectile.class), p -> !p.isRemoved()));
-        all.addAll(fromDisk ? VirtualFlights.get(level).flights(level) : VirtualFlights.get(level).flights());
+        all.addAll(fromDisk ? VirtualFlights.get(level).inFlight(level) : VirtualFlights.get(level).flights());
         return all;
     }
 

@@ -151,16 +151,24 @@ paths:
   a terminal path calls `endRound` before `discard` (first ending wins); any other destroying removal ends it as
   failed in `StrikeProjectile.remove`. Unreleased rounds end where their carrier settles (`SalvoData.settle`,
   `NuclearKeys.end`, the single-launch failure in `ServerActions.launch`). Regressions: `OrderEventGameTests`.
-- Command results and `status` (`strike/OrderStatus`, `command/StatusCommand`): a strike command returns
-  `Order.admitted` (the order reaches the command through `strike`/`dispatch`'s `made` callback; an entry deferred by
-  `Orders.deferred` returns 0). `status` reads rounds where they live, never a parallel registry that could drift:
-  `SalvoData.rounds` (unlaunched and failed, queued), `NuclearKeys.rounds` (queued), projectiles carrying a round in
-  world and off-world (`VirtualFlights.flights(level)` instantiates disk records first), `ScheduledStrike`s, and impact
-  work: conventional `ImpactWork` (the round's `BlastArea` holders; a new impact job must retain the area or the
-  round leaves the count early), nuclear `NuclearEvents.Impact` (saved; dropped the first tick its front has passed,
-  `NuclearWorld.frontBusy`, so ruins on later chunk loads never reopen it). Unfinished = Accepted until Ended, plus
-  impact work. A tag is world-wide, saved with `RoundRef`; `clear tag` follows `clear`'s owner rules
-  (`ServerActions.recall(…, tag, …)`, `clearTag`). Regressions: `OrderStatusTest`, `OrderStatusGameTests`.
+- Command results and `status` (`strike/OrderStatus`, `command/StatusCommand`): a strike command (and `launcher …
+  fire`) returns `Order.admitted`; the answered order reaches it through the `made` callback of `strike`/`dispatch`/
+  `fromLauncher`, also after a deferral (`Orders.deferred`: the command returns 0 and names the order when admitted).
+  `status` reads rounds where they live, never a parallel registry that could drift: orders inside `Orders.admit`
+  (`Orders.admitting`: an `Accepted` listener sees its rounds before their carrier exists), `SalvoData.rounds`
+  (unlaunched and failed, queued), `NuclearKeys.rounds` (queued), projectiles carrying a round in world and off-world
+  (`VirtualFlights.inFlight`: disk records instantiated, flights entering the world this moment included),
+  `ScheduledStrike`s (a `nuke now` waiting for ground, launch time = burst time, is queued), and impact work:
+  conventional `ImpactWork` (the round's `BlastArea` holders; a new impact job must retain the area or the round
+  leaves the count early; a blast's setup releases its holder if it throws), nuclear `NuclearEvents.Impact` (saved;
+  kept while `NuclearWorld.frontBusy` or its crater is unfinished, dropped the first tick neither holds, so ruins on
+  later chunk loads never reopen it; deferred craft blasts are `ImpactWork` of the same round). Unfinished = Accepted
+  until Ended, plus impact work. A tag is world-wide, saved with `RoundRef`; `clear tag` follows `clear`'s owner rules
+  (`ServerActions.recall(…, tag, …)`, `clearTag`), leaves launchers (`LauncherEntity.serves` matches by owner and
+  weapon only), removes the ICBM showing a cancelled strike (`IcbmEntity.strike`), and tells clients only what is gone
+  (`S2C.Cleared` with `Util.NIL_UUID`, `S2C.NukeCancelled`: a full `NukeSync` would restart live detonations).
+  Regressions: `OrderStatusTest`, `OrderStatusGameTests`, `OrderStatusRegressionGameTests`, `ImpactRegistrationTest`,
+  `TaggedClearAlertsTest`, `FlashAftermathClockTest`.
 
 ## Unpaid nuclear review
 - `NuclearReview` is separate player state, not a `NuclearKeys` order. Global nuclear abort invalidates it on the

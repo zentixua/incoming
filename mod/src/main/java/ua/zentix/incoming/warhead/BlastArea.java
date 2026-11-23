@@ -106,8 +106,14 @@ final class BlastArea {
         area.heldAt = level.getGameTime();
         StrikeWorld world = StrikeWorld.get(level);
         world.areas().hold(level, area.area());
+        try {
+            CraterFalls.get(level).open(level, area.key, centre, reach);
+        } catch (RuntimeException e) {
+            world.areas().release(level, area.area());
+            throw e;
+        }
+        // last: a failed setup above leaves no round counted with nothing to release it
         if (impact != null) world.impactWork().hold(impact);
-        CraterFalls.get(level).open(level, area.key, centre, reach);
         return area;
     }
 

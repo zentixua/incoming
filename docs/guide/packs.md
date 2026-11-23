@@ -63,7 +63,7 @@ The player sees "Strike order refused" above the hotbar. A Java mod can show its
 Strike commands return numbers that command blocks and `execute store result` read, so a datapack or a game master
 can run a minigame round with strikes and no other mod.
 
-- A strike command (`/incoming <weapon> …`, `salvo`, `nuke`, `nuke now`) returns how many rounds its order was given:
+- A strike command (`/incoming <weapon> …`, `salvo`, `nuke`, `nuke now`, `launcher … fire`) returns how many rounds its order was given:
   a salvo of 12 returns 12 on the tick it is given, although its rounds launch over the next seconds; an ICBM returns 1;
   a refused order returns 0. Its chat line names the order with the id the strike events carry.
 - `salvo …` and `nuke …` take `tag <name>` at the end. A tag names a group of orders: any number of orders, from
@@ -78,6 +78,7 @@ can run a minigame round with strikes and no other mod.
   launching, a second key, a strike waiting for its ground to load).
 - `/incoming clear tag <name>` recalls one group: operators, the host and the console cancel all its rounds, nuclear
   ones included; a player without operator rights recalls only their own rounds in it, as with `/incoming clear`.
+  Launchers stay until a full `/incoming clear`.
 
 A player without operator rights sees only their own orders in `status`. When `status tag <name>` returns 0, every
 round of the group has ended (its `StrikeRoundEvent$Ended` arrives by the end of that tick) and its explosions are

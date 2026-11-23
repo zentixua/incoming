@@ -84,6 +84,10 @@ public final class OrderStatus {
     /** Every unfinished round on {@code server} passing {@code filter}, one per round id. */
     public static List<Round> rounds(MinecraftServer server, Filter filter) {
         List<Round> all = new ArrayList<>();
+        // an order inside its admission: its accepted rounds before their carrier exists (an Accepted listener asks)
+        for (Order o : Orders.admitting()) {
+            for (int i = 0; i < o.admitted(); i++) all.add(Round.queued(o.round(i), o.owner(), o.weapon()));
+        }
         for (ServerLevel level : server.getAllLevels()) collect(level, all);
         return distinct(all, filter);
     }
@@ -115,8 +119,10 @@ public final class OrderStatus {
         }
         NuclearEvents events = NuclearEvents.get(level);
         for (NuclearEvents.ScheduledStrike s : events.scheduled()) {
-            // past due: a `nuke now` or an ICBM waiting for its chunk, which bursts once the ground is ready
-            s.round().ifPresent(r -> out.add(Round.flight(r, s.owner().orElse(null), WeaponType.NUKE,
+            // a `nuke now` waiting for its ground has no flight (launch and burst time are one): queued; an ICBM past due
+            // waits for its chunk too, arrival unknown
+            s.round().ifPresent(r -> out.add(s.launchTime() == s.detonateTime() ? Round.queued(r, s.owner().orElse(null), WeaponType.NUKE)
+                    : Round.flight(r, s.owner().orElse(null), WeaponType.NUKE,
                     now < s.detonateTime() ? (int) Math.min(Integer.MAX_VALUE, s.detonateTime() - now) : UNKNOWN)));
         }
         for (NuclearEvents.Impact i : events.impacts()) out.add(Round.impact(i.round(), i.owner().orElse(null), WeaponType.NUKE));

@@ -4,6 +4,7 @@ import com.mojang.brigadier.exceptions.CommandSyntaxException;
 import net.minecraft.commands.CommandSource;
 import net.minecraft.commands.CommandSourceStack;
 import net.minecraft.core.BlockPos;
+import net.minecraft.nbt.CompoundTag;
 import net.minecraft.gametest.framework.GameTest;
 import net.minecraft.gametest.framework.GameTestAssertException;
 import net.minecraft.gametest.framework.GameTestHelper;
@@ -13,6 +14,7 @@ import net.minecraft.network.chat.contents.TranslatableContents;
 import net.minecraft.server.ServerScoreboard;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.entity.Entity;
+import net.minecraft.world.entity.EntityType;
 import net.minecraft.world.phys.Vec2;
 import net.minecraft.world.phys.Vec3;
 import net.minecraft.world.scores.Objective;
@@ -31,6 +33,7 @@ import ua.zentix.incoming.entity.StrikeProjectile;
 import ua.zentix.incoming.nuclear.Detonation;
 import ua.zentix.incoming.nuclear.NuclearEvents;
 import ua.zentix.incoming.nuclear.NuclearStrikes;
+import ua.zentix.incoming.strike.LaunchOrigin;
 import ua.zentix.incoming.strike.Loadout;
 import ua.zentix.incoming.strike.NuclearKeys;
 import ua.zentix.incoming.strike.OrderStatus;
@@ -107,7 +110,8 @@ public final class OrderStatusGameTests {
     }
 
     /**
-     * An operator's tagged salvo of three: the first launch fails (its entry into the world refused), the rest fly; {@code
+     * An operator's tagged salvo of three from an ordered site on the runway (a salvo has no shooter: without a site its
+     * rounds start off-world): the first launch fails (its entry into the world refused), the rest fly; {@code
      * status tag} never grows, counts the failed round until the salvo settles, and an operator's {@code clear tag} takes it
      * to 0 at once; by then each of the three rounds has ended exactly once, one as failed.
      */
@@ -119,7 +123,8 @@ public final class OrderStatusGameTests {
         op.moveTo(Vec3.atBottomCenterOf(h.absolutePos(new BlockPos(16, 4, 60))), 0, 0);
         int[] refused = {0};
         Consumer<EntityJoinLevelEvent> veto = e -> {
-            if (e.getEntity() instanceof StrikeProjectile p && op.getUUID().equals(p.ownerId()) && refused[0] == 0) {
+            // a launch enters before its round is attached; a projectile returning from off-world already carries it
+            if (e.getEntity() instanceof StrikeProjectile p && op.getUUID().equals(p.ownerId()) && p.round() == null && refused[0] == 0) {
                 refused[0]++;
                 e.setCanceled(true);
             }
@@ -137,7 +142,8 @@ public final class OrderStatusGameTests {
         });
         Vec3 point = Vec3.atCenterOf(h.absolutePos(new BlockPos(16, 3, 200))).add(0, 0.5, 0);
         ServerActions.Aim aim = new ServerActions.Aim(new Target.Point(point), point, null);
-        h.assertTrue(ServerActions.strike(op, WeaponType.DRONE, 3, 10, aim, Loadout.Nuke.DEFAULT, Waypoints.NONE, null, false, tag,
+        LaunchOrigin site = new LaunchOrigin.Place(Vec3.atBottomCenterOf(h.absolutePos(new BlockPos(16, 4, 60))));
+        h.assertTrue(ServerActions.strike(op, WeaponType.DRONE, 3, 10, aim, Loadout.Nuke.DEFAULT, Waypoints.NONE, site, false, tag,
                 o -> order[0] = o.id()), "salvo not admitted");
         h.assertValueEqual(count(level, tag), 3, "unfinished rounds once admitted");
         int[] last = {3};
@@ -155,7 +161,7 @@ public final class OrderStatusGameTests {
             cleared[0] = true;
         });
         h.succeedWhen(() -> {
-            h.assertTrue(cleared[0], "no launch failed and flew before the timeout");
+            h.assertTrue(cleared[0], "no launch failed (" + refused[0] + " refused entries) and flew before the timeout");
             Orders.deliver(level);
             h.assertValueEqual(ended.size(), 3, "rounds ended");
             h.assertValueEqual(ended.stream().map(StrikeRoundEvent.Ended::getRoundId).distinct().count(), 3L, "a round ended twice");
@@ -195,7 +201,8 @@ public final class OrderStatusGameTests {
 
     /**
      * A tag survives a restart: a console salvo (queued), a single Shahed in off-world flight and a scheduled ICBM, all
-     * tagged, read back from their saves count the same rounds with the same ids and tag.
+     * tagged, read back from their saves carry the same round ids and tag. The saves are read into detached copies: live
+     * data of other batches stays as it is.
      */
     @GameTest(template = "range", timeoutTicks = 400, batch = "status_restart", skyAccess = true)
     public static void tagSurvivesRestart(GameTestHelper h) {
@@ -217,23 +224,33 @@ public final class OrderStatusGameTests {
         h.assertValueEqual(console.run("incoming salvo drone 1 0" + at + " tag " + tag), 1, "single Shahed");
         h.assertValueEqual(console.run("incoming nuke" + at + " 1 air tag " + tag), 1, "ICBM");
         h.assertValueEqual(count(level, tag), 5, "unfinished rounds");
-        boolean[] restarted = {false};
+        boolean[] checked = {false};
         h.onEachTick(() -> {
-            if (restarted[0] || VirtualFlights.get(level).flights().stream().noneMatch(p -> p.round() != null && tag.equals(p.round().tag()))) return;
-            List<String> before = snapshot(level, tag);
-            h.assertValueEqual(before.size(), 5, "unfinished rounds before the restart: " + before);
-            SalvoData.reloadForTest(level);
-            VirtualFlights.reloadForTest(level);
-            NuclearEvents.reloadForTest(level);
-            List<String> after = snapshot(level, tag);
-            h.assertValueEqual(after, before, "rounds after the restart");
-            h.assertTrue(VirtualFlights.get(level).flights().stream().anyMatch(p -> p.round() != null && tag.equals(p.round().tag())),
-                    "no tagged off-world flight after the restart");
-            h.assertTrue(NuclearEvents.get(level).scheduled().stream().anyMatch(s -> s.round().map(r -> tag.equals(r.tag())).orElse(false)),
-                    "no tagged ICBM after the restart");
-            restarted[0] = true;
+            if (checked[0]) return;
+            StrikeProjectile off = VirtualFlights.get(level).flights().stream().filter(p -> p.round() != null && tag.equals(p.round().tag()))
+                    .findFirst().orElse(null);
+            if (off == null) return;
+            // off-world flight: its save read back as the restart does (VirtualFlights instantiates entities from it)
+            CompoundTag saved = new CompoundTag();
+            h.assertTrue(off.save(saved), "the off-world flight did not save");
+            StrikeProjectile copy = (StrikeProjectile) EntityType.create(saved, level).orElseThrow();
+            h.assertValueEqual(copy.round(), off.round(), "off-world flight round after the restart");
+            // salvo: the same queued rounds
+            List<String> salvo = new ArrayList<>(), salvoBack = new ArrayList<>();
+            SalvoData.get(level).rounds(r -> { if (tag.equals(r.ref().tag())) salvo.add(r.ref().round() + " " + r.phase()); });
+            SalvoData.readBackForTest(level).rounds(r -> { if (tag.equals(r.ref().tag())) salvoBack.add(r.ref().round() + " " + r.phase()); });
+            h.assertTrue(!salvo.isEmpty() || rounds(level, tag).stream().noneMatch(r -> r.phase() == OrderStatus.Phase.QUEUED), "no queued salvo rounds");
+            h.assertValueEqual(salvoBack, salvo, "salvo rounds after the restart");
+            // scheduled ICBM
+            List<RoundRef> icbm = NuclearEvents.get(level).scheduled().stream().flatMap(s -> s.round().stream()).filter(r -> tag.equals(r.tag())).toList();
+            List<RoundRef> icbmBack = NuclearEvents.readBackForTest(level).scheduled().stream().flatMap(s -> s.round().stream())
+                    .filter(r -> tag.equals(r.tag())).toList();
+            h.assertValueEqual(icbm.size(), 1, "tagged ICBMs");
+            h.assertValueEqual(icbmBack, icbm, "ICBM round after the restart");
+            h.assertValueEqual(count(level, tag), 5, "unfinished rounds while they fly");
+            checked[0] = true;
         });
-        h.succeedWhen(() -> h.assertTrue(restarted[0], "the single Shahed never flew off-world"));
+        h.succeedWhen(() -> h.assertTrue(checked[0], "the single Shahed never flew off-world"));
     }
 
     /**
@@ -294,7 +311,7 @@ public final class OrderStatusGameTests {
     }
 
     /**
-     * A tagged {@code nuke now}: one round in impact from the burst, through a restart mid-front, until the front has passed
+     * A tagged {@code nuke now}: one round in impact from the burst (its save keeps it mid-front) until the front has passed
      * its last hit reach; then 0, and it stays 0.
      */
     @GameTest(template = "range", timeoutTicks = 3000, batch = "status_nuke", skyAccess = true)
@@ -322,8 +339,7 @@ public final class OrderStatusGameTests {
             long now = level.getGameTime();
             int n = count(level, tag);
             if (!reloaded[0] && now >= d.gameTime() + 20 && now < frontEnd) {
-                NuclearEvents.reloadForTest(level);
-                h.assertValueEqual(count(level, tag), 1, "impact after a restart mid-front");
+                h.assertTrue(NuclearEvents.readBackForTest(level).impact(d.id()) != null, "the impact did not survive a restart mid-front");
                 reloaded[0] = true;
             }
             if (zeroAt[0] < 0 && n == 0) {

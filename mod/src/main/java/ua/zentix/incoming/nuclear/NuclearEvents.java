@@ -137,11 +137,9 @@ public final class NuclearEvents extends SavedData {
         return level.getDataStorage().computeIfAbsent(new Factory<>(NuclearEvents::new, NuclearEvents::load, null), NAME);
     }
 
-    /** For tests: a restart of this data — saved, read back and put in place of the live data. */
-    public static NuclearEvents reloadForTest(ServerLevel level) {
-        NuclearEvents read = load(get(level).save(new CompoundTag(), level.registryAccess()), level.registryAccess());
-        level.getDataStorage().set(NAME, read);
-        return read;
+    /** For tests: this data as a restart would read it back — saved and loaded into a detached copy (the live data stays). */
+    public static NuclearEvents readBackForTest(ServerLevel level) {
+        return load(get(level).save(new CompoundTag(), level.registryAccess()), level.registryAccess());
     }
 
     public int nextId() {
@@ -284,6 +282,12 @@ public final class NuclearEvents extends SavedData {
     public void impact(int detonation, RoundRef round, @org.jetbrains.annotations.Nullable UUID owner) {
         impacts.put(detonation, new Impact(detonation, round, Optional.ofNullable(owner)));
         setDirty();
+    }
+
+    /** Detonation {@code detonation}'s round impact, or null (no round, or its work is over). */
+    @org.jetbrains.annotations.Nullable
+    public Impact impact(int detonation) {
+        return impacts.get(detonation);
     }
 
     /** Nuclear rounds whose impact work runs. */

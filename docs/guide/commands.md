@@ -28,7 +28,8 @@ one: `salvo drone 1 0 …`.
 
 Every strike command returns how many rounds its order was given: a salvo of 20 returns 20 at once, although its
 rounds launch over the next seconds; an ICBM returns 1; a refused order returns 0. Command blocks and
-`execute store result` read this number. The chat line names the order with its id.
+`execute store result` read this number. The chat line names the order with its id. A strike command run from inside
+another mod's check of an order is carried out on the next tick: it returns 0 and names its order once it is given.
 
 ## Nuclear strike
 
@@ -48,7 +49,7 @@ Without a number: the world's `nuclear.default_yield` (15 kt by default). Withou
 | Command | What it does |
 |---|---|
 | `/incoming clear` | cancel your conventional salvos and recall eligible projectiles; operators or the host abort every player's strikes, including nuclear ones, and [end the aftermath](nuke.md#ending-the-aftermath) of past nuclear blasts |
-| `/incoming clear tag <name>` | the same for one group of orders: your own rounds in it, or, for operators and the host, all of them; past nuclear blasts stay |
+| `/incoming clear tag <name>` | the same for one group of orders: your own rounds in it, or, for operators and the host, all of them; launchers and past nuclear blasts stay |
 | `/incoming status` | your unfinished orders (operators and the host: everyone's): rounds waiting to launch, in flight and still exploding, and when the last one arrives |
 | `/incoming status tag <name>`, `status <player>` | one group of orders; one player's orders (operators only) |
 | `/incoming menu` | console |
@@ -91,7 +92,7 @@ Operators only. The launcher has to be in a loaded chunk.
 | Command | What it does |
 |---|---|
 | `/incoming launcher <x y z>` | status: mission, stock, last signal |
-| `… fire` | order by the mission, like a redstone signal |
+| `… fire` | order by the mission, like a redstone signal; returns how many rounds the order was given, like a strike command |
 | `… mission <weapon> <count> <spread> <x z> [via <x z> …]` | mission without player rules; the target is a place on the ground or, with `<x y z>`, a point |
 | `… clear` | remove the mission |
 | `… load <N>` | put N munitions of the mission's weapon into stock |

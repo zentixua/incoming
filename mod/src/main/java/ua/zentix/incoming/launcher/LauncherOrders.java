@@ -50,15 +50,21 @@ public final class LauncherOrders {
     /** Signal reached launcher {@code be}: issue mission order. Null means ordered; otherwise failure reason. */
     @Nullable
     public static Component fire(ServerLevel level, FixedLauncherBlockEntity be) {
+        return fire(level, be, null);
+    }
+
+    /** Same; {@code made} receives the answered order ({@code ServerActions.fromLauncher}), also after a deferral. */
+    @Nullable
+    public static Component fire(ServerLevel level, FixedLauncherBlockEntity be, @Nullable java.util.function.Consumer<ua.zentix.incoming.strike.Order> made) {
         // started inside a strike-order listener or off the server thread: the whole firing, with its checks, later
         if (Orders.elsewhere(level, () -> {
-            if (level.getBlockEntity(be.getBlockPos()) == be) be.fire(level);
+            if (level.getBlockEntity(be.getBlockPos()) == be) be.fire(level, made);
         })) return null;
-        return fireReason(level, be);
+        return fireReason(level, be, made);
     }
 
     @Nullable
-    private static Component fireReason(ServerLevel level, FixedLauncherBlockEntity be) {
+    private static Component fireReason(ServerLevel level, FixedLauncherBlockEntity be, @Nullable java.util.function.Consumer<ua.zentix.incoming.strike.Order> made) {
         Mission m = be.mission();
         if (m == null) return Component.translatable("incoming.fixed_launcher.no_mission.short");
         BlockPos pos = be.getBlockPos();
@@ -78,7 +84,7 @@ public final class LauncherOrders {
         if (missing != null) return missing;
         String who = "launcher " + pos.toShortString();
         Component before = be.lastReport();
-        boolean ok = ServerActions.fromLauncher(level, who, owner, l, new ServerActions.Aim(m.target(), m.point(), null), m.via(), origin, be::report);
+        boolean ok = ServerActions.fromLauncher(level, who, owner, l, new ServerActions.Aim(m.target(), m.point(), null), m.via(), origin, be::report, made);
         if (ok) return null;
         // Launch reported its own issue (blocked sector, inventory): this reason is more specific than the general one.
         return be.lastReport() != before ? be.lastReport() : Component.translatable("incoming.fixed_launcher.failed");

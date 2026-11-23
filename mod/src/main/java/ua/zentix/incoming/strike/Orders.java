@@ -24,6 +24,12 @@ import java.util.UUID;
 public final class Orders {
     /** {@link StrikeOrderEvent.Request} listeners running now: an order they start runs again on a later tick. */
     private static int requesting;
+    /**
+     * Orders whose admission body runs now ({@link #admit}): accepted rounds count as unfinished ({@link OrderStatus})
+     * before their carrier exists, so a listener of {@code Accepted} asking for a status sees them. Server thread only;
+     * empty between calls.
+     */
+    private static final java.util.ArrayDeque<Order> ADMITTING = new java.util.ArrayDeque<>();
 
     private Orders() {}
 
@@ -97,6 +103,7 @@ public final class Orders {
                     Mth.floor(order.target().z), order.actorName());
             return false;
         }
+        ADMITTING.push(order);
         try {
             boolean ok = body.run(order);
             if (!order.answered()) {
@@ -107,7 +114,14 @@ public final class Orders {
         } catch (RuntimeException e) {
             if (!order.answered()) order.reject(StrikeOrderEvent.Reason.ERROR);
             throw e;
+        } finally {
+            ADMITTING.remove(order);
         }
+    }
+
+    /** Orders being admitted now, innermost first ({@link #ADMITTING}). */
+    static java.util.Collection<Order> admitting() {
+        return ADMITTING;
     }
 
     /** Round {@code r} left at {@code origin} toward {@code target}. */

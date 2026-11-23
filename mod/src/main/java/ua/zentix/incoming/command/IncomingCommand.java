@@ -59,6 +59,7 @@ import java.util.Collection;
 import java.util.List;
 import java.util.Locale;
 import java.util.Optional;
+import java.util.function.Consumer;
 
 /**
  * /incoming — the same as the designator, for operators and automation (command blocks, functions):
@@ -438,16 +439,18 @@ public final class IncomingCommand {
             s.sendFailure(problem);
             return 0;
         }
-        // inside another order's request the entry reruns later with all its checks: nothing is admitted now
+        // inside another order's request the entry reruns later with all its checks: nothing is admitted now, and the
+        // order is named once it is
         boolean later = Orders.deferred(level);
-        ua.zentix.incoming.strike.Order[] made = {null};
+        ua.zentix.incoming.strike.Order[] got = {null};
+        Consumer<ua.zentix.incoming.strike.Order> made = later ? o -> StatusCommand.admitted(s, o) : o -> got[0] = o;
         if (player != null) {
-            ServerActions.strike(player, w, count, spread, aim, nuke, path.via(), path.from(), rules(s), path.tag(), o -> made[0] = o);
+            ServerActions.strike(player, w, count, spread, aim, nuke, path.via(), path.from(), rules(s), path.tag(), made);
         } else {
             ServerActions.dispatch(level, s.getTextName(), s.getRotation().y, w, count, spread, aim, nuke, path.via(), path.from(), path.tag(),
-                    s::sendFailure, o -> made[0] = o);
+                    s::sendFailure, made);
         }
-        return later ? StatusCommand.deferred(s) : StatusCommand.admitted(s, made[0]);
+        return later ? StatusCommand.deferred(s) : StatusCommand.admitted(s, got[0]);
     }
 
     // ---------------------------------------------------------------- fixed launcher
@@ -467,13 +470,18 @@ public final class IncomingCommand {
                 });
         at.then(Commands.literal("fire").executes(ctx -> {
             FixedLauncherBlockEntity be = launcherAt(ctx);
-            Component problem = be.fire(ctx.getSource().getLevel());
+            CommandSourceStack s = ctx.getSource();
+            // as a strike command: the rounds the order admitted, and its id ({@link StatusCommand#admitted})
+            boolean later = Orders.deferred(s.getLevel());
+            ua.zentix.incoming.strike.Order[] got = {null};
+            Component problem = be.fire(s.getLevel(), later ? o -> StatusCommand.admitted(s, o) : o -> got[0] = o);
             if (problem != null) {
-                ctx.getSource().sendFailure(problem);
-                return 0;
+                s.sendFailure(problem);
+                // admitted, then its release failed: the round was admitted and ended failed, as for any strike command
+                return got[0] == null ? 0 : got[0].admitted();
             }
-            ctx.getSource().sendSuccess(be::status, IncomingConfig.SERVER.earlyWarning.get());
-            return 1;
+            s.sendSuccess(be::status, IncomingConfig.SERVER.earlyWarning.get());
+            return later ? StatusCommand.deferred(s) : StatusCommand.admitted(s, got[0]);
         }));
         at.then(Commands.literal("clear").executes(ctx -> {
             FixedLauncherBlockEntity be = idleLauncherAt(ctx);

@@ -31,6 +31,8 @@ public final class VirtualFlights extends SavedData {
     private final List<StrikeProjectile> flights = new ArrayList<>();
     /** Read from disk but not yet instantiated (entity created on first world tick). */
     private final List<CompoundTag> pending = new ArrayList<>();
+    /** This tick's flights while it moves them ({@link #inFlight}); empty otherwise. */
+    private List<StrikeProjectile> ticking = List.of();
 
     public static VirtualFlights get(ServerLevel level) {
         return level.getDataStorage().computeIfAbsent(FACTORY, NAME);
@@ -87,11 +89,14 @@ public final class VirtualFlights extends SavedData {
         return flights;
     }
 
-    /** For tests: a restart of this data — saved, read back and put in place of the live data (the old copies are dropped). */
-    public static VirtualFlights reloadForTest(ServerLevel level) {
-        VirtualFlights read = load(get(level).save(new CompoundTag(), level.registryAccess()), level.registryAccess());
-        level.getDataStorage().set(NAME, read);
-        return read;
+    /**
+     * {@link #flights(ServerLevel)} and those this tick is moving into the world: a listener of their world entry (or one
+     * after them in the same pass) still finds every flight. A copy; an entered one may also be in the world.
+     */
+    public List<StrikeProjectile> inFlight(ServerLevel level) {
+        List<StrikeProjectile> all = new ArrayList<>(flights(level));
+        for (StrikeProjectile p : ticking) if (!p.isRemoved() && !all.contains(p)) all.add(p);
+        return all;
     }
 
     /** Number of outside-world flights (including disk records not yet instantiated). */
@@ -139,6 +144,16 @@ public final class VirtualFlights extends SavedData {
         // Snapshot: a projectile returning to the world may leave again (and be added here) in the same tick.
         List<StrikeProjectile> now = new ArrayList<>(flights);
         flights.clear();
+        ticking = now;
+        try {
+            tick(level, now);
+        } finally {
+            ticking = List.of();
+        }
+        setDirty();
+    }
+
+    private void tick(ServerLevel level, List<StrikeProjectile> now) {
         for (StrikeProjectile p : now) {
             p.virtualTick(level);
             if (p.isRemoved()) continue;
@@ -158,7 +173,6 @@ public final class VirtualFlights extends SavedData {
             }
             flights.add(p);
         }
-        setDirty();
     }
 
     /**

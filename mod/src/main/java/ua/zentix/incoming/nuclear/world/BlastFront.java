@@ -318,11 +318,15 @@ final class BlastFront {
      */
     private static void blast(ServerLevel level, AircraftHit a) {
         boolean blocks = IncomingConfig.SERVER.nukeBlockDamage.get();
+        // a blast waiting for its area is still the detonation round's impact work (strike.OrderStatus)
+        var round = ua.zentix.incoming.nuclear.NuclearEvents.get(level).impact(a.d().id());
+        var impact = round == null ? null : new ua.zentix.incoming.strike.ImpactWork.Impact(round.round(), round.owner().orElse(null),
+                ua.zentix.incoming.strike.WeaponType.NUKE);
         Warheads.whenReady(level, a.at(), Warheads.reach(a.power()), l -> l.explode(null,
                 ModDamageTypes.source(l, ModDamageTypes.NUCLEAR_BLAST, null, null), new AircraftOnly(l),
                 a.at().x, a.at().y, a.at().z, a.power(), false,
                 blocks ? Level.ExplosionInteraction.BLOCK : Level.ExplosionInteraction.NONE,
-                ModParticles.NONE.get(), ModParticles.NONE.get(), ModSounds.SILENT));
+                ModParticles.NONE.get(), ModParticles.NONE.get(), ModSounds.SILENT), impact);
     }
 
     /**
