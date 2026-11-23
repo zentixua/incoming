@@ -344,6 +344,13 @@ public final class NukePall {
      * the game front and arrival table, the pall's layer top and lofted depth at the handoff, the fireball and frame light,
      * wind; and the pall's handover ring ({@link PallPass.Frame#young}).
      */
+    /** Presentation exposure of the dust lit by sun and sky alone ({@code DwAdapt}, tools/uw_probe: the reference curtain's luma). */
+    static final double DUST_ADAPT = 3.1;
+
+    private static double luminance(org.joml.Vector3f c) {
+        return 0.2126 * c.x + 0.7152 * c.y + 0.0722 * c.z;
+    }
+
     /** Probe (unified-wave step 1): each detonation's whole-lifetime table ({@link PallField#lifetime}), built once. */
     private static final java.util.Map<ClientNuclear.Active, float[]> LIFETIME = new java.util.WeakHashMap<>();
 
@@ -427,6 +434,12 @@ public final class NukePall {
         double[] lit = new double[3];
         for (int c = 0; c < 3; c++) lit[c] = fc[0] <= 0 ? 0 : PallLight.flame(f.base, fl * fc[c], fc[c] / fc[0]);
         w.fire.set((float) lit[0], (float) lit[1], (float) lit[2]);
+        // the dust's exposure: DUST_ADAPT once sun and sky alone light it, 1 while the fireball outshines them (its light at
+        // the eye, R²/d² as dwBallLight), smooth as the fireball fades
+        double bx = w.ball[0] - w.eye[0], by = w.ball[1] - w.eye[1], bz = w.ball[2] - w.eye[2];
+        double ballAt = luminance(w.ballLight) * Math.min(w.ball[3] * w.ball[3] / Math.max(bx * bx + by * by + bz * bz, 1), 1);
+        double ambient = luminance(w.sunLight) + luminance(w.skyLight);
+        w.adapt = (float) (1 + (DUST_ADAPT - 1) * (1 - Math.min(ballAt / Math.max(ambient, 1e-6), 1)));
         w.sandBulk.set((float) SAND[0], (float) SAND[1], (float) SAND[2]);
         w.active = true;
     }

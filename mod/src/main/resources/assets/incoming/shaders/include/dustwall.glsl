@@ -44,6 +44,9 @@ uniform vec4 DwWind;
 // fire light from below on dust over a fully burning zone (linear, PallField.fireLight through pallFlame); the zone's share per
 // node is the table's row 0 z
 uniform vec3 DwFire;
+// presentation: the dust's exposure (1 while the fireball lights it; DW_ADAPT once only sun and sky do, following the
+// fireball's light down: NukePall.youngWall), like the eye adapting after the flash: the low sun's dust read as dark smoke
+uniform float DwAdapt;
 // lowest and highest ground of the terrain map under the wall, blocks above ground zero's ground point (0, 0: no map)
 uniform vec2 DwRelief;
 
@@ -166,8 +169,8 @@ float dwContrast(float a) {
 }
 // the textured share of the dust at age a (the haze level takes the rest): the billows' turbulence has decayed and the fines
 // have diluted; the noise-free column with the pall's closed-form light is the same dust at a level that costs a twentieth.
-// Logistic about DW_HAZE_AGE (presentation; the texture holds through take 33's judged ages: 0.97 at 12 s)
-const float DW_HAZE_AGE = 30.0, DW_HAZE_WIDTH = 5.0;
+// Logistic about DW_HAZE_AGE (presentation; the texture holds through take 33's ages: 0.985 at 24 s)
+const float DW_HAZE_AGE = 45.0, DW_HAZE_WIDTH = 5.0;
 float dwTextured(float a) {
     return 1.0 - 1.0 / (1.0 + exp(-(a - DW_HAZE_AGE) / DW_HAZE_WIDTH));
 }
@@ -570,9 +573,9 @@ float dwHG(float g, float c) {
 }
 
 // presentation: exposure of the haze level's light, held to the textured level's at their blend (no step in brightness;
-// tools/uw_probe/probe_gl.py: light), and sky light reaching the dust at its luminance without the sky's blue (the low
-// sun's frames drew dust under a blue sky as grey-blue smoke; the reference haze is warm: Silo S3E09, haboob footage)
-const float DW_HAZE_EXPOSURE = 1.0;
+// tools/uw_probe/probe_gl.py: light), and, in both levels, sky light reaching the dust at its luminance without the sky's
+// blue (the low sun's frames drew dust under a blue sky as grey-blue smoke; the reference haze is warm: Silo S3E09, haboob)
+const float DW_HAZE_EXPOSURE = 0.62;
 // light of a haze-level sample (the pall's law, PallLight): two Eddington streams after delta-Eddington in the drawn column at
 // the sample's depth below its top, from the sun and fireball beams, sky light from above, fire light from below, ground of
 // land albedo; plus the beams' single scattering. No shadow taps
@@ -591,7 +594,7 @@ vec3 dwHazeLight(vec3 q, vec3 rd) {
             pallDiffuse(w.g, gp, tau, tc, PALL_LAND, muS, fS.g, muB, fB.g, top.g, bottom.g, c),
             pallDiffuse(w.b, gp, tau, tc, PALL_LAND, muS, fS.b, muB, fB.b, top.b, bottom.b, c));
     vec3 single = 0.25 * (fS * dwHG(gp, dot(rd, DwSunDir)) * exp(-tau / muS) + fB * dwHG(gp, dot(rd, lb)) * exp(-tau / muB));
-    return DW_HAZE_EXPOSURE * w * (single + max(d, vec3(0.0)));
+    return DW_HAZE_EXPOSURE * max(DwAdapt, 1.0) * w * (single + max(d, vec3(0.0)));
 }
 
 vec3 dwTexturedLight(vec3 q, vec3 rd) {
@@ -609,9 +612,9 @@ vec3 dwTexturedLight(vec3 q, vec3 rd) {
     vec3 single = lift * dwBallLight(q) * (0.4 * min(dwPhase(dot(rd, lb)), 3.0) * exp(-taub))
             + DwSunLight * (0.5 * min(dwPhase(dot(rd, DwSunDir)), 6.0) * exp(-taus)) * sunUp;
     vec3 multiple = dwBallLight(q) * ms * (0.45 + 0.55 * exp(-0.25 * taub)) + DwSunLight * ms * (0.45 + 0.55 * exp(-0.25 * taus)) * sunUp
-            + DwSkyLight * (0.03 + 0.15 * exp(-0.3 * depth));
+            + vec3(dot(DwSkyLight, vec3(0.2126, 0.7152, 0.0722))) * (0.03 + 0.15 * exp(-0.3 * depth));
     vec3 albedo = mix(DwAlbedo, DwSandAlbedo, gDwSand), bulk = mix(DwBulk, DwSandBulk, gDwSand);
-    return DW_EXPOSURE * (albedo * single + bulk * multiple + bulk * DwGroundLight);
+    return DW_EXPOSURE * max(DwAdapt, 1.0) * (albedo * single + bulk * multiple + bulk * DwGroundLight);
 }
 
 // light of a sample: the textured level's (take 33's) and the haze level's, blended by the textured share

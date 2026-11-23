@@ -288,6 +288,7 @@ NEW_FNS = {
         "float E = exp(-a / 25.0), Ef = exp(-a / 4.0); o = vec4(0.3 * dwEddyAmp(a) + 0.7 * E + 0.9 * Ef, 25.0 * (1.0 - exp(-a / 1.0)) - 15.0 * dwRamp(a, 5.0, 1.0), 120.0 * (dwAfter(a, 5.0) < 0.12 ? dwAfter(a, 5.0) / 120.0 : 1.0 - exp(-dwAfter(a, 5.0) / 120.0)), (1.0 - exp(-a / 0.8)) * exp(-a / 15.0));"),
     6: ("orbit phase, swell growth, hollows' share, puff-free birth fade",
         "o = vec4(0.25 * dwEddyPhase(a), mix(0.2, 1.0, dwRamp(a, 2.75, 0.45)), dwRamp(a, 6.5, 1.2), smoothstep(0.0, 0.08, a));"),
+    10: ("textured share (haze blend), haze column above 10 / 40 blocks", "o = vec4(dwTextured(a), 0.0, 0.0, 0.0); gDwForceF = 0.0; dwDensity(vec3(4300.0, 10.0, 120.0), false); o.y = gDwHazeAbove; dwDensity(vec3(4300.0, 40.0, 120.0), false); o.z = gDwHazeAbove; gDwForceF = -1.0;"),
     7: ("drawn column density at a fixed point (noise-free), 10 / 40 blocks up", "gDwMean = true; o = vec4(dwDensity(vec3(4300.0, 10.0, 120.0), false), dwDensity(vec3(4300.0, 40.0, 120.0), false), 0.0, 0.0);"),
 }
 # noise-driven fields of age: continuity checked by dense local sweeps (a log sweep aliases their motion)

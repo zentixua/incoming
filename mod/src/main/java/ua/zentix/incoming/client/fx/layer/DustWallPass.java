@@ -133,6 +133,8 @@ public final class DustWallPass {
         public final float[] life = new float[4];
         /** Fire light from below on dust over a fully burning zone (linear, {@code pallFlame} of the frame's fire light). */
         public final Vector3f fire = new Vector3f();
+        /** The dust's presentation exposure ({@code DwAdapt}). */
+        public float adapt = 1;
         /** Fireball centre from ground zero's ground point (blocks), its radius (blocks). */
         public final float[] ball = new float[4];
         /** Linear light (white wall at noon — 1): fireball black body at its surface, sun, sky, ground bounce; dust albedo, its bulk colour. */
@@ -226,6 +228,7 @@ public final class DustWallPass {
             m.safeGetUniform("DwLife").set(f.life[0], f.life[1], f.life[2], f.life[3]);
             m.safeGetUniform("DwFar").set(planB() ? 1f : 0f, 34f, 0f, 0f);
             m.safeGetUniform("DwFire").set(f.fire.x, f.fire.y, f.fire.z);
+            m.safeGetUniform("DwAdapt").set(f.adapt);
             m.safeGetUniform("DwBall").set(f.ball[0], f.ball[1], f.ball[2], f.ball[3]);
             m.safeGetUniform("DwBallLight").set(f.ballLight.x, f.ballLight.y, f.ballLight.z);
             m.safeGetUniform("DwSunLight").set(f.sunLight.x, f.sunLight.y, f.sunLight.z);

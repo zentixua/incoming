@@ -16,6 +16,7 @@
         { "name": "DwLife", "type": "float", "count": 4, "values": [ 1.0, 0.05, 0.0, 0.0 ] },
         { "name": "DwFar", "type": "float", "count": 4, "values": [ 0.0, 34.0, 0.0, 0.0 ] },
         { "name": "DwFire", "type": "float", "count": 3, "values": [ 0.0, 0.0, 0.0 ] },
+        { "name": "DwAdapt", "type": "float", "count": 1, "values": [ 1.0 ] },
         { "name": "DwBall", "type": "float", "count": 4, "values": [ 0.0, 0.0, 0.0, 1.0 ] },
         { "name": "DwBallLight", "type": "float", "count": 3, "values": [ 0.0, 0.0, 0.0 ] },
         { "name": "DwSunLight", "type": "float", "count": 3, "values": [ 0.0, 0.0, 0.0 ] },
