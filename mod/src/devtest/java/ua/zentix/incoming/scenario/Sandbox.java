@@ -127,14 +127,28 @@ final class Sandbox {
     /** CPU renderer (Mesa llvmpipe, tools/soft_gl.sh): frames pace the world ({@link #paceFrame}). */
     private Boolean soft;
     /** Frames per tick while frames are due on a CPU renderer: a frame lands within half a tick of its second. */
-    private static final double FRAMES_PER_TICK = 2;
+    private static final double FRAMES_PER_TICK = framesPerTick(2);
     /**
      * Frames per tick while frames are due on a GPU: a frame is taken at the first render whose age reaches its second, so
      * it lands within a few milliseconds of it, also after a frame that wrote its PNG (~0.1 s on the render thread); at whole
      * ticks a 30 fps take's frames advanced 25–28 ms with a 45–145 ms jump
      * every half second, and every moving thing in the clip lurched at ~2 Hz.
      */
-    private static final double GPU_FRAMES_PER_TICK = 48;
+    private static final double GPU_FRAMES_PER_TICK = framesPerTick(48);
+
+    /**
+     * Probe override of the frames per tick while frames are due ({@code fx/frames_per_tick} in the sandbox directory): a time
+     * lapse at 1 frame/s needs no 48 renders a tick, which stretched 10 game minutes over hours.
+     */
+    private static double framesPerTick(double otherwise) {
+        try {
+            double v = Double.parseDouble(java.nio.file.Files.readString(java.nio.file.Path.of("fx/frames_per_tick")).trim());
+            Incoming.LOG.info("SANDBOX frames per tick while frames are due: {}", v);
+            return v;
+        } catch (Exception e) {
+            return otherwise;
+        }
+    }
     /** Seconds before a due frame from which the CPU renderer's world is slowed ({@link #paceFrame}). */
     private static final double PACE_LEAD = 2;
     /** Rate from arming to the first measured frames (≈ 2 frames per tick at 4 frames/s, the smoke-filled llvmpipe rate). */

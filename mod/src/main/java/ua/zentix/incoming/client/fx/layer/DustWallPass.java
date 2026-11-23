@@ -89,7 +89,25 @@ public final class DustWallPass {
     private static float previousTime;
     private static final Matrix4f VIEW_PROJECTION = new Matrix4f(), INVERSE = new Matrix4f(), PREVIOUS = new Matrix4f();
     private static final Vector3f FORWARD = new Vector3f();
-    private static final FloatBuffer TABLE = MemoryUtil.memAllocFloat(NODES * 4);
+    /** Table rows: arrival and paved, then the law's top and depth per log age ({@code PallField.lifetime}). */
+    public static final int ROWS = 1 + ua.zentix.incoming.client.nuclear.PallField.AGES;
+    private static final FloatBuffer TABLE = MemoryUtil.memAllocFloat(NODES * ROWS * 4);
+    /**
+     * Probe: plan B's far level (the noise-free column beyond the billows' footprint) while the file {@code fx/planB} exists in
+     * the game directory (checked every 30 frames: the GPU feasibility run flips it between frames).
+     */
+    private static boolean planB;
+    private static long planBChecked = -1;
+
+    private static boolean planB() {
+        if (frame - planBChecked >= 30 || planBChecked < 0) {
+            planBChecked = frame;
+            planB = java.nio.file.Files.exists(java.nio.file.Path.of("fx/planB"));
+        }
+        return planB;
+    }
+    /** The table last uploaded (its source and generation): a detonation's table is uploaded once. */
+    private static Object uploadedSource;
     private static final int[] VIEWPORT = new int[4];
 
     private DustWallPass() {}
@@ -109,8 +127,10 @@ public final class DustWallPass {
         public final float[] eye = new float[4];
         /** Front radius now; inner radius (the front {@link #SPAN} s ago); envelope top; table reach — blocks. */
         public final float[] ring = new float[4];
-        /** Per node: front arrival (model s since the burst), settled layer height (blocks), dust extinction (1/block), paved share. */
-        public final float[] table = new float[NODES * 4];
+        /** Per node: row 0 front arrival (model s since the burst), paved share; rows 1.. the law by log age ({@code PallField.lifetime}). */
+        public float[] table = new float[NODES * ROWS * 4];
+        /** The table's last age, model s; its age scale; the lofted dust's drift, blocks per model second (x, z). */
+        public final float[] life = new float[4];
         /** Fireball centre from ground zero's ground point (blocks), its radius (blocks). */
         public final float[] ball = new float[4];
         /** Linear light (white wall at noon — 1): fireball black body at its surface, sun, sky, ground bounce; dust albedo, its bulk colour. */
@@ -193,11 +213,16 @@ public final class DustWallPass {
             m.safeGetUniform("PallGround0").set(g.x, g.y, g.z, g.w);
             m.safeGetUniform("DwRelief").set(g.x > 0 ? g.y : 0f, g.x > 0 ? g.z : 0f);
             if (PallPass.submits(m, warming)) OpenAir.bind(m, true, warming);
-            upload(f.table);
+            if (f.source != uploadedSource || warming) {
+                upload(f.table);
+                uploadedSource = warming ? null : f.source;
+            }
             RenderSystem.setShaderTexture(2, table);
             m.safeGetUniform("DwEye").set(f.eye[0], f.eye[1], f.eye[2], f.eye[3]);
             m.safeGetUniform("PallYoung").set(pall.young.x, pall.young.y, pall.young.z, pall.young.w);
             m.safeGetUniform("DwRing").set(f.ring[0], f.ring[1], f.ring[2], f.ring[3]);
+            m.safeGetUniform("DwLife").set(f.life[0], f.life[1], f.life[2], f.life[3]);
+            m.safeGetUniform("DwFar").set(planB() ? 1f : 0f, 34f, 0f, 0f);
             m.safeGetUniform("DwBall").set(f.ball[0], f.ball[1], f.ball[2], f.ball[3]);
             m.safeGetUniform("DwBallLight").set(f.ballLight.x, f.ballLight.y, f.ballLight.z);
             m.safeGetUniform("DwSunLight").set(f.sunLight.x, f.sunLight.y, f.sunLight.z);
@@ -270,7 +295,7 @@ public final class DustWallPass {
             GlStateManager._texParameter(GlConst.GL_TEXTURE_2D, GlConst.GL_TEXTURE_MAG_FILTER, GlConst.GL_NEAREST);
             GlStateManager._texParameter(GlConst.GL_TEXTURE_2D, GlConst.GL_TEXTURE_WRAP_S, GlConst.GL_CLAMP_TO_EDGE);
             GlStateManager._texParameter(GlConst.GL_TEXTURE_2D, GlConst.GL_TEXTURE_WRAP_T, GlConst.GL_CLAMP_TO_EDGE);
-            GlStateManager._texImage2D(GlConst.GL_TEXTURE_2D, 0, GL30.GL_RGBA32F, NODES, 1, 0, GL11.GL_RGBA, GL11.GL_FLOAT, null);
+            GlStateManager._texImage2D(GlConst.GL_TEXTURE_2D, 0, GL30.GL_RGBA32F, NODES, ROWS, 0, GL11.GL_RGBA, GL11.GL_FLOAT, null);
         }
         TABLE.clear();
         TABLE.put(values).flip();
@@ -279,7 +304,7 @@ public final class DustWallPass {
         GlStateManager._pixelStore(GL11.GL_UNPACK_ROW_LENGTH, 0);
         GlStateManager._pixelStore(GL11.GL_UNPACK_SKIP_ROWS, 0);
         GlStateManager._pixelStore(GL11.GL_UNPACK_SKIP_PIXELS, 0);
-        GL11.glTexSubImage2D(GL11.GL_TEXTURE_2D, 0, 0, 0, NODES, 1, GL11.GL_RGBA, GL11.GL_FLOAT, TABLE);
+        GL11.glTexSubImage2D(GL11.GL_TEXTURE_2D, 0, 0, 0, NODES, ROWS, GL11.GL_RGBA, GL11.GL_FLOAT, TABLE);
     }
 
     private static boolean targets(int w, int h, int d) {
@@ -430,7 +455,8 @@ public final class DustWallPass {
 
     /** The pass's state for the timing log: resolution, step cap, history. */
     public static String describe() {
-        return String.format(java.util.Locale.ROOT, "1/%d, history %s, frame %d", div, history && HISTORY_ON ? "on" : "off", frame);
+        return String.format(java.util.Locale.ROOT, "1/%d, history %s, frame %d, %s", div, history && HISTORY_ON ? "on" : "off", frame,
+                planB ? "plan B far level" : "full march");
     }
 
     /** No wall this frame in the primary view: the next one starts its history afresh. */

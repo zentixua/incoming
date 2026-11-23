@@ -85,7 +85,8 @@ def main(mode):
     programs.update(zip(WALL, (h.march_setup(), h.link(WALL[1]), h.link(WALL[2]))))
     scene = h.make_scene(100)
     empty = h.texture(*h.rgba, 128, 4, np.zeros((4, 128, 4), np.float32))
-    dusty = h.texture(*h.rgba, 128, 1, [(0, 20, .11, .3)] * 128)
+    # the whole-lifetime table (PallField.lifetime): row 0 arrival and paved, 32 age rows of top and depth
+    dusty = h.texture(*h.rgba, 128, 33, [(0, .3, 0, 0)] * 128 + [(20, 10.0, 0, 0)] * (128 * 32))
     screen = framebuffer(h.size, h.size, g.GL_RGBA8)
     targets = {name: framebuffer(h.low, h.low, g.GL_RGBA32F if name == "fx_pall_foot" else g.GL_RGBA16F)
                for name in PALL[:-1]}
@@ -137,6 +138,7 @@ def main(mode):
         g.glBindTexture(g.GL_TEXTURE_3D, wall_noise if name == WALL[0] else pall_noise)
         if name == WALL[0]:
             g.glUniform4f(h.loc(program, "DwRing"), *((0, 0, 0, 1) if preparing else (800, 0, 100, 800)))
+            g.glUniform4f(h.loc(program, "DwLife"), 1e4, 0.05, 0, 0)
             g.glUniform2f(h.loc(program, "DwFrame"), 1, 128)
             h.bind(program, 1, scene)
             h.bind(program, 2, empty if preparing else dusty)

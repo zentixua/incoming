@@ -274,7 +274,8 @@ vec3 dwAir(vec3 q, float a, float r, float top, out float ph) {
     float out_ = 25.0 * (1.0 - exp(-a / 1.0)) - 15.0 * dwRamp(a, 5.0, 1.0);
     // (dying out over ~2 min as the ball rises away, est.: take 33 drew it for 24 s only)
     float aw = dwAfter(a, 5.0) / 120.0;
-    float in_ = 3.0 * clamp(2500.0 / max(r, 1.0), 0.3, 2.0) * 120.0 * (aw < 1e-3 ? aw * (1.0 - 0.5 * aw) : 1.0 - exp(-aw)) * (1.0 - 0.7 * min(yy, 1.0));
+    float drawn = aw < 1e-3 ? aw * (1.0 - 0.5 * aw) : 1.0 - exp(-aw);
+    float in_ = 3.0 * clamp(2500.0 / max(r, 1.0), 0.3, 2.0) * 120.0 * drawn * (1.0 - 0.7 * min(yy, 1.0));
     pw.xz -= rdir * (out_ * (0.3 + 0.7 * yy) - in_);
     // residual turbulence behind the front: neighbouring parcels circle on slow orbits (20 m, 5 m/s; phases varying over
     // ~150 m), so the settled dust keeps swirling and drifting sideways as real dust does, never frozen, without the
@@ -374,7 +375,8 @@ bool gDwMean = false;
 const float DW_NOISE_K = 12.0, DW_NOISE_MEAN = 1.058;
 float dwNoiseGain(float tau) {
     float t = 4.0 * tau / (4.0 + tau);
-    return DW_NOISE_MEAN * (t < 1e-4 ? 1.0 : DW_NOISE_K * (exp(t / DW_NOISE_K) - 1.0) / t);
+    float gain = t < 1e-4 ? 1.0 : DW_NOISE_K * (exp(t / DW_NOISE_K) - 1.0) / t;
+    return DW_NOISE_MEAN * gain;
 }
 
 // dust extinction (1/block) at g; coarse: light paths (the billows' two first octaves, no streaks, no fine octaves)
@@ -671,7 +673,7 @@ vec4 dwMarch(vec3 rd, float tEnd, float jitter, float foot, int maxSteps) {
                 continue;
             }
             inDust = true;
-            gDwSamples++;
+            gDwSamples += 1;
             c = dwLight(q, rd);
             // the thin soft edge, veil and puffs over the dense top: four cells per sample (at grazing views they are
             // hundreds of metres of ray); thin dust: the span grows while each cell holds little optical depth

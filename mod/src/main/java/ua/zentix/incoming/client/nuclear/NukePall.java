@@ -344,48 +344,60 @@ public final class NukePall {
      * the game front and arrival table, the pall's layer top and lofted depth at the handoff, the fireball and frame light,
      * wind; and the pall's handover ring ({@link PallPass.Frame#young}).
      */
+    /** Probe (unified-wave step 1): each detonation's whole-lifetime table ({@link PallField#lifetime}), built once. */
+    private static final java.util.Map<ClientNuclear.Active, float[]> LIFETIME = new java.util.WeakHashMap<>();
+
     private static void youngWall(ClientNuclear.Active a, Vec3 eye, float partial, PallPass.Frame f) {
         Detonation d = a.d;
-        double t = a.seconds(partial), span = ua.zentix.incoming.client.fx.layer.DustWallPass.SPAN,
-                fade = ua.zentix.incoming.client.fx.layer.DustWallPass.FADE;
+        double t = a.seconds(partial);
         double front = d.blocks(a.wall.shock(t));
         if (front <= 1) return;
         ua.zentix.incoming.client.fx.layer.DustWallPass.Frame w = f.dustWall;
-        double inner = d.blocks(a.wall.shock(t - span)), whole = d.blocks(a.wall.shock(t - span + fade));
+        int n = ua.zentix.incoming.client.fx.layer.DustWallPass.NODES;
+        float[] table = LIFETIME.computeIfAbsent(a, k -> {
+            float[] v = new float[n * ua.zentix.incoming.client.fx.layer.DustWallPass.ROWS * 4];
+            k.pall.lifetime(n, YOUNG_PRESENT_HEIGHT, v);
+            return v;
+        });
+        w.table = table;
+        double end = a.pall.lifetimeEnd(), reach = a.pall.reach();
+        // the wave is over once every node's dust has passed the table's last age
+        double lastArrival = 0, top = 0;
+        for (int j = 0; j < n; j++) {
+            double age = t - table[4 * j];
+            lastArrival = Math.max(lastArrival, table[4 * j]);
+            if (age <= 0) continue;
+            // the layer top at this node now: the age node just above its age (the top grows with age)
+            double u = Math.min(Math.log1p(age / PallField.AGE0) / Math.log1p(end / PallField.AGE0) * (PallField.AGES - 1), PallField.AGES - 1);
+            int k = (int) Math.min(Math.ceil(u), PallField.AGES - 1);
+            top = Math.max(top, table[4 * ((1 + k) * n + j)]);
+        }
+        if (t > lastArrival + end) return;
         float gx = (float) (d.burst().x - eye.x), gz = (float) (d.burst().z - eye.z), gy = (float) (d.groundY() - eye.y);
         w.eye[0] = -gx;
         w.eye[1] = -gy;
         w.eye[2] = -gz;
         w.eye[3] = (float) t;
-        int n = ua.zentix.incoming.client.fx.layer.DustWallPass.NODES;
-        a.pall.young(t, YOUNG_SETTLE_S, span, n, w.table);
-        for (int j = 0; j < n; j++) w.table[4 * j + 1] *= (float) YOUNG_PRESENT_HEIGHT;
-        double top = 0, reach = a.pall.reach();
-        boolean any = false;
-        for (int j = 0; j < n; j++) {
-            double depth = w.table[4 * j + 2];
-            w.table[4 * j + 2] = youngSigma(depth);
-            if (depth >= PallField.GONE_DEPTH) {
-                top = Math.max(top, w.table[4 * j + 1]);
-                double rj = j / (n - 1.0) * reach;
-                // a node of the young ring (one node of margin: the table is read between nodes)
-                any |= rj >= inner - reach / (n - 1.0) && rj <= front + reach / (n - 1.0);
-            }
-        }
-        // no lofted dust left in the young ring (it has run past the dust field): no pass, the pall keeps everything
-        if (!any) return;
-        // the fireball's ground footprint: the pass draws no dust there, the pall keeps its own
+        // the fireball's ground footprint: the pass draws no dust there, the pall keeps its own; elsewhere the wave owns all
+        // the lofted dust at every age (no handover ring)
         w.cut = (float) d.blocks(a.wall.underBall(t));
         assert f.slot1.m13() == 0 : "The wall atlas uses the empty second slot's texture unit";
-        f.young.set((float) inner, (float) whole, w.cut, (float) reach);
+        f.young.set(0f, 0f, w.cut, (float) reach);
         w.ring[0] = (float) front;
-        w.ring[1] = (float) inner;
+        w.ring[1] = 0;
         w.ring[2] = (float) (top * ua.zentix.incoming.client.fx.layer.DustWallPass.TOP_OVER_LAYER + 6);
-        w.ring[3] = (float) a.pall.reach();
-        // the settled layer top at the eye's radius (the history reprojects through it)
+        w.ring[3] = (float) reach;
+        double cosW = Math.cos(d.windDir()), sinW = Math.sin(d.windDir()), drift = d.blocks(d.windSpeed()) * PallField.DRIFT * d.scale();
+        w.life[0] = (float) end;
+        w.life[1] = (float) PallField.AGE0;
+        w.life[2] = (float) (cosW * drift);
+        w.life[3] = (float) (sinW * drift);
+        // the layer top at the eye's radius (the history reprojects through it)
         double x = Math.min(Math.hypot(w.eye[0], w.eye[2]) / Math.max(w.ring[3], 1), 1) * (n - 1);
         int j0 = (int) Math.min(Math.floor(x), n - 2);
-        w.layerTop = (float) (w.table[4 * j0 + 1] + (x - j0) * (w.table[4 * (j0 + 1) + 1] - w.table[4 * j0 + 1]));
+        double ageEye = Math.max(t - table[4 * j0], 0);
+        double ue = Math.min(Math.log1p(ageEye / PallField.AGE0) / Math.log1p(end / PallField.AGE0) * (PallField.AGES - 1), PallField.AGES - 1);
+        w.layerTop = table[4 * ((1 + (int) Math.round(ue)) * n + j0) ];
         // fireball: slot 0's ball light (CloudPuffs.pallLight): radius, drift along the wind, height, black-body light × exposure
         double cos = Math.cos(d.windDir()), sin = Math.sin(d.windDir());
         w.ball[0] = (float) (cos * f.glow0.z);
