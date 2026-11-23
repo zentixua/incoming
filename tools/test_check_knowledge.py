@@ -115,7 +115,12 @@ class GateTest(unittest.TestCase):
             self.assertGreater(ceiling, check_knowledge.RULE_MAX)
             size = len((ROOT / ".claude/rules" / name).read_bytes())
             self.assertLessEqual(size, ceiling)
-            self.assertGreater(size, ceiling - 4096, f"{name} shrank: lower its RULE_OVERSIZE ceiling to its size")
+            self.assertGreaterEqual(size, ceiling - check_knowledge.RULE_SLACK)
+
+    def test_crlf_counts_as_read(self):
+        body = ("x" * 60 + "\r\n") * (check_knowledge.RULE_MAX // 61)
+        self.repo.write(".claude/rules/area.md", RULE + body)
+        self.assertTrue(any("area.md is" in p for p in self.problems()))
 
     def test_rule_without_paths(self):
         self.repo.write(".claude/rules/area.md", "# no frontmatter\n")

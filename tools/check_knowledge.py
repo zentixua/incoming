@@ -31,6 +31,7 @@ from pathlib import Path
 AGENTS_MAX = 28 * 1024
 RULE_MAX = 64 * 1024
 RULE_OVERSIZE = {"client-fx.md": 193_000}  # bytes; lower it when the rule shrinks, drop it once under RULE_MAX
+RULE_SLACK = 1024  # an oversized rule may sit this far under its ceiling; further shrinking must lower the ceiling
 HOOK_EVENTS = {"SessionStart", "InstructionsLoaded", "PostToolUse", "Stop"}
 HOOK_COMMAND = 'python3 "${CLAUDE_PLUGIN_ROOT}/hooks/knowledge.py"'
 POST_TOOLS = {"Read", "Edit", "Write", "MultiEdit", "NotebookEdit", "Grep", "Glob", "Bash"}
@@ -84,13 +85,16 @@ def check(root: Path) -> list[str]:
             problems.append(f"{f.relative_to(root)}: nested rule files are not supported; keep rules flat")
     for f in rules:
         text = f.read_text(encoding="utf-8")
-        size = len(text.encode("utf-8"))
+        size = len(f.read_bytes())  # raw bytes, as read into a session
         ceiling = RULE_OVERSIZE.get(f.name, RULE_MAX)
         if size > ceiling:
             problems.append(f"{f.name} is {size} B > {ceiling} B: rewrite old text instead of appending, or split the "
                             "rule by paths")
         elif f.name in RULE_OVERSIZE and size <= RULE_MAX:
             problems.append(f"{f.name} is under {RULE_MAX} B now: drop it from RULE_OVERSIZE")
+        elif f.name in RULE_OVERSIZE and size < ceiling - RULE_SLACK:
+            problems.append(f"{f.name} shrank to {size} B: lower its RULE_OVERSIZE ceiling to that size, so it cannot "
+                            "grow back")
         globs = rule_paths(text)
         if not globs:
             problems.append(f"{f.name}: no strict `paths:` frontmatter (only `paths:` with `  - \"glob\"` items and an "

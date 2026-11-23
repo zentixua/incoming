@@ -40,8 +40,8 @@
 # A turn has an end: once the holder has held the lease longer than INCOMING_GPU_TURN (1800 s) while another session
 # waits, its new takes queue behind the waiters and its lease passes to the first of them after INCOMING_GPU_YIELD (90 s)
 # without GPU work; running work is never displaced (it renews every 30 s). The yield is a mechanism, not a note: on
-# 21.11 a release candidate's chain of GPU jobs held the lease 07:30–09:50 while another mission waited, and the lead's
-# note asking it to yield reached it hours later.
+# a chain of GPU jobs otherwise holds the lease for hours while a waiting mission's request reaches it only as a note.
+# A client of the job that holds the client lock (the bench's next slot) is that job, not a new take.
 # The queue is capped (INCOMING_GPU_QUEUE_MAX other sessions, default 2): a newcomer beyond it is refused (75) at once.
 # The lease serves what needs the GPU to itself (shader packs, DH/Voxy, frame cost); a long queue means a session
 # holding the GPU between frames.
@@ -117,6 +117,7 @@ _queue_live() {
   while IFS=$'\t' read -r o t since pid; do
     [ -n "$pid" ] && [ "$(_proc_start "${pid%% *}")" = "${pid#* }" ] && printf '%s\t%s\t%s\t%s\n' "$o" "$t" "$since" "$pid"
   done < "$QUEUE"
+  return 0  # an exited last row is filtered, not a failure (under pipefail it hid live waiters)
 }
 
 # rewrite queue with live waiters, omitting owner $1 if specified
@@ -150,8 +151,9 @@ lease_take() {
     _lease_read; now=$(date +%s)
     why=
     if [ "$L_OWNER" = "$owner" ] && ! _lease_free; then
-      # own, unexpired: renew; queue cannot displace holder, but past its turn a new take queues behind the waiters
-      _turn_over && why="GPU turn of $owner since $(_lease_hm "$L_SINCE") is over and $(_queue_line): this take waits behind them"
+      # own, unexpired: renew; queue cannot displace holder, but past its turn new work queues behind the waiters (a
+      # client of a job already holding the client lock, such as the bench's next slot, is that job, not new work)
+      _turn_over && ! gpu_client_inherited && why="GPU turn of $owner since $(_lease_hm "$L_SINCE") is over and $(_queue_line): this take waits behind them"
     elif ! _lease_free; then
       why=$(lease_status)
     elif [ -n "$(_queue_head)" ] && [ "$(_queue_head)" != "$owner" ]; then
@@ -198,7 +200,8 @@ lease_renew() {
   exec {fd}>"$LEASE.lock"; flock "$fd"
   _lease_read; now=$(date +%s)
   if [ "$L_OWNER" = "$owner" ] && ! _lease_free; then _lease_write "$L_OWNER" "$L_TREE" "$L_SINCE" "$now"; rc=0
-  elif _lease_free; then _lease_write "$owner" "$(readlink -m "${tree:-$L_TREE}")" "$now" "$now"; rc=0; fi
+  # a free lease is reacquired only when no other session is ahead in the queue (a yielded lease goes to the waiter)
+  elif _lease_free && { [ -z "$(_queue_head)" ] || [ "$(_queue_head)" = "$owner" ]; }; then _lease_write "$owner" "$(readlink -m "${tree:-$L_TREE}")" "$now" "$now"; rc=0; fi
   exec {fd}>&-
   return $rc
 }

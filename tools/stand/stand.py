@@ -346,7 +346,7 @@ pack (gate.compare_pack: metric failure or invalid run) immediately gets the nex
                 j, info = jars[role]
                 meta = metas.setdefault(d.name, run_meta(f"{a.name}/{d.name}", info, ctx))
                 # Wait for quiet before every slot: a heavy job that starts during the pair lands on one slot, and the
-                # A1/B/A2 bracket cannot cancel it (rc-314-c: 15 foreign cores in A1 only, an unusable 98 min run)
+                # A1/B/A2 bracket cannot cancel it
                 code, took = shoot(d, pack, j, files, a.scenes, a.size, f"{a.name} {d.name}", quiet=True)
                 add_pack(d, meta, pack, code, took, files)
                 if code == 75:

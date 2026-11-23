@@ -4,26 +4,30 @@
 # ///
 """Motion and repetition numbers for a look clip or frame: the measures a visual task states before a clip goes out.
 
-The same command runs on our take and on the reference footage, so both sides are measured the same way.
+The same command runs on our take and on the reference footage, so both sides are measured the same way. Frames are
+read one at a time and taken to 720 rows (as a video is decoded), so a long 1080p take fits in memory.
 
   change  <frames|video> [--region x0,y0,x1,y1] [--lag 0.1]
-          Detail change per lag: 1 − correlation of the high-pass detail (frame − Gaussian blur σ 3 px at 720 p) of
-          32 px blocks between frames `lag` seconds apart, after the best whole-pixel shift within ±8 px, median over textured
-          blocks. 0: the detail only moves (or stands); 1: new detail every lag (boiling, re-randomised noise).
+          Detail change per lag: 1 − correlation of the high-pass detail (frame − Gaussian blur σ 3 px) of 32 px
+          blocks between frames `lag` seconds apart, after the best whole-pixel shift within ±8 px (every shift is
+          tried), median over textured blocks. 0: the detail only moves (or stands); 1: new detail every lag (boiling,
+          re-randomised noise). A block whose partner is flat scores correlation 0. Also the blocks' apparent speed:
+          median and p90 of the best shift, px/s at 720 rows (multiply by metres per pixel of the view for m/s).
   flicker <frames|video> [--region …] [--map out.jpg]
-          Frame-to-frame pulsing: per pixel the temporal median of |second difference| of luma (smooth motion gives
-          ~0; a debris piece crossing a pixel in a frame or two does not count), mean and p99 over the region, share of
-          pixels above 1/255; --map writes where it is (×20) under the middle frame.
+          Frame-to-frame pulsing: per pixel the temporal median of |second difference| of luma over 5 s chunks (smooth
+          motion gives ~0; a debris piece crossing a pixel in a frame or two does not count), mean and p99 over the
+          region, share of pixels above 1/255; --map writes where it is (×20) under a middle frame.
   period  <png> [--band y0,y1] [--x1 f] [--edge]
           Repetition along x inside a band: normalised autocorrelation of the band's high-passed column-mean luma
-          (--edge: of the strongest dark-over-light step's row per column, a band's lower edge). Prints the dominant
-          period in px and its autocorrelation peak; a peak above 0.5 is a visible repeat (copied pieces). --edge also
-          prints the edge slope's kurtosis: above 10 is a staircase (flat runs joined by steps), also when perspective
-          shrinks the spacing so that no single period exists. The band must hold one dark-over-light edge across its
-          width (check its crop): elsewhere the strongest step jumps between features and the numbers mean nothing.
+          (--edge: of the band's lower edge, the strongest dark-over-light step per column at sub-pixel row). Prints
+          the dominant period in px (3 px and up) and its autocorrelation peak; a peak above 0.5 is a visible repeat
+          (copied pieces). --edge also prints the edge slope's kurtosis: above 10 is a staircase (flat runs joined by
+          steps), also when perspective shrinks the spacing so that no single period exists. The band must hold one
+          dark-over-light edge across its width (check its crop): elsewhere the strongest step jumps between features
+          and the numbers mean nothing.
 
 Frames: a directory of PNGs sorted by a `_<age>s.png` suffix (sandbox takes; their fps from the ages) or by name
-(--fps, default 30); a video (mp4/webm/mkv) is decoded at 720 p by ffmpeg, --window t0,t1 in its seconds.
+(--fps, default 30); a video (mp4/webm/mkv) is decoded at 720 rows by ffmpeg, --window t0,t1 in its seconds.
 Regions are fractions of the frame. Exit 0; numbers on stdout, one line per command.
 Run: uv run tools/clip_metrics.py change mod/run/sandbox/out/take --region 0,0.4,1,0.8
 """
@@ -35,7 +39,9 @@ import re
 import subprocess
 import sys
 import tempfile
+from collections import deque
 from pathlib import Path
+from typing import Iterator
 
 import numpy as np
 from PIL import Image
@@ -43,6 +49,10 @@ from scipy.ndimage import gaussian_filter
 
 AGE = re.compile(r"_([-+]?\d+(?:\.\d+)?)s\.png$")
 VIDEO = {".mp4", ".webm", ".mkv", ".mov", ".avi"}
+ROWS = 720  # every input is measured at this height, as the video decode gives
+BLOCK, REACH, TEXTURED = 32, 8, 0.8
+CHUNK = 150  # frames per flicker median (5 s at 30 fps): bounds memory, still robust to passing debris
+STAIRCASE = 10.0  # slope kurtosis (est., from a handful of wave frames): smooth multi-scale edges 4-9, a reported staircase 34
 
 
 def fractions(text: str, count: int) -> tuple[float, ...]:
@@ -52,8 +62,15 @@ def fractions(text: str, count: int) -> tuple[float, ...]:
     return values
 
 
-def load(source: Path, fps: float, window: tuple[float, float] | None, scratch: Path) -> tuple[list[np.ndarray], float]:
-    """Luma frames (float32) and their rate."""
+def luma(path: Path) -> np.ndarray:
+    image = Image.open(path).convert("L")
+    if image.height > ROWS:
+        image = image.resize((round(image.width * ROWS / image.height), ROWS), Image.BILINEAR)
+    return np.asarray(image, np.float32)
+
+
+def frame_files(source: Path, fps: float, window: tuple[float, float] | None, scratch: Path) -> tuple[list[Path], float]:
+    """The frames' files in order and their rate."""
     if source.is_dir():
         files = sorted(source.glob("*.png"))
         ages = [AGE.search(f.name) for f in files]
@@ -65,7 +82,7 @@ def load(source: Path, fps: float, window: tuple[float, float] | None, scratch: 
             steps = np.diff([a for a, _ in pairs])
             if len(steps) and np.median(steps) > 0:
                 fps = 1.0 / float(np.median(steps))
-        return [np.asarray(Image.open(f).convert("L"), np.float32) for f in files], fps
+        return files, fps
     if source.suffix.lower() not in VIDEO:
         raise SystemExit(f"not a frame directory or video: {source}")
     probe = subprocess.run(["ffprobe", "-v", "error", "-select_streams", "v", "-show_entries", "stream=r_frame_rate",
@@ -73,9 +90,9 @@ def load(source: Path, fps: float, window: tuple[float, float] | None, scratch: 
     num, _, den = probe.partition("/")
     fps = float(num) / float(den or 1)
     cut = ["-ss", str(window[0]), "-t", str(window[1] - window[0])] if window else []
-    subprocess.run(["ffmpeg", "-loglevel", "error", *cut, "-i", str(source), "-vf", "scale=-2:720",
+    subprocess.run(["ffmpeg", "-loglevel", "error", *cut, "-i", str(source), "-vf", f"scale=-2:{ROWS}",
                     str(scratch / "f%05d.png")], check=True)
-    return [np.asarray(Image.open(f).convert("L"), np.float32) for f in sorted(scratch.glob("f*.png"))], fps
+    return sorted(scratch.glob("f*.png")), fps
 
 
 def crop(frame: np.ndarray, region: tuple[float, float, float, float]) -> np.ndarray:
@@ -85,64 +102,94 @@ def crop(frame: np.ndarray, region: tuple[float, float, float, float]) -> np.nda
 
 
 def detail(frame: np.ndarray) -> np.ndarray:
-    sigma = 3.0 * frame.shape[0] / 720.0 if frame.shape[0] > 720 else 3.0
-    return frame - gaussian_filter(frame, sigma)
+    return frame - gaussian_filter(frame, 3.0)
 
 
-def best_shift_correlation(a: np.ndarray, b: np.ndarray, block: int = 32, reach: int = 8, step: int = 2,
-                           textured: float = 0.8) -> list[float]:
-    """Per textured block of `a`, the highest correlation with `b` over shifts within ±reach."""
+def _blocks(a: np.ndarray, y0: int, x0: int, ny: int, nx: int) -> np.ndarray:
+    return a[y0:y0 + ny * BLOCK, x0:x0 + nx * BLOCK].reshape(ny, BLOCK, nx, BLOCK).transpose(0, 2, 1, 3)
+
+
+def _normalised(blocks: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
+    z = blocks - blocks.mean(axis=(2, 3), keepdims=True)
+    norm = np.sqrt((z * z).sum(axis=(2, 3)))
+    return z, norm
+
+
+def best_shift(a: np.ndarray, b: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
+    """Per textured block of `a`: the highest correlation with `b` over every whole-pixel shift within ±REACH, and the
+    length of that shift (px)."""
     h, w = a.shape
-    out = []
-    for by in range(reach, h - block - reach + 1, block):
-        for bx in range(reach, w - block - reach + 1, block):
-            block_a = a[by:by + block, bx:bx + block]
-            if block_a.std() < textured:
-                continue
-            za = (block_a - block_a.mean()).ravel()
-            za /= np.linalg.norm(za)
-            def score(dy: int, dx: int) -> float:
-                block_b = b[by + dy:by + dy + block, bx + dx:bx + dx + block]
-                zb = (block_b - block_b.mean()).ravel()
-                norm = np.linalg.norm(zb)
-                return float(za @ zb) / norm if norm > 0 else -1.0
-
-            coarse = max(((score(dy, dx), dy, dx) for dy in range(-reach, reach + 1, step)
-                          for dx in range(-reach, reach + 1, step)))
-            _, cy, cx = coarse  # then every shift next to the best coarse one
-            fine = (score(dy, dx) for dy in range(max(-reach, cy - step + 1), min(reach, cy + step - 1) + 1)
-                    for dx in range(max(-reach, cx - step + 1), min(reach, cx + step - 1) + 1))
-            out.append(max(coarse[0], *fine))
-    return out
+    ny, nx = (h - 2 * REACH) // BLOCK, (w - 2 * REACH) // BLOCK
+    if ny < 1 or nx < 1:
+        return np.empty(0), np.empty(0)
+    ba = _blocks(a, REACH, REACH, ny, nx)
+    za, na = _normalised(ba)
+    textured = ba.std(axis=(2, 3)) >= TEXTURED
+    best = np.full((ny, nx), -np.inf)
+    shift = np.zeros((ny, nx))
+    for dy in range(-REACH, REACH + 1):
+        for dx in range(-REACH, REACH + 1):
+            zb, nb = _normalised(_blocks(b, REACH + dy, REACH + dx, ny, nx))
+            with np.errstate(invalid="ignore", divide="ignore"):
+                c = np.where(nb > 0, (za * zb).sum(axis=(2, 3)) / (na * nb), 0.0)  # a flat partner: correlation 0
+            better = c > best
+            best = np.where(better, c, best)
+            shift = np.where(better, np.hypot(dy, dx), shift)
+    return best[textured], shift[textured]
 
 
-def change(frames: list[np.ndarray], fps: float, lag_s: float, region) -> tuple[float, int, int]:
+def change(files: list[Path], fps: float, lag_s: float, region) -> tuple[float, int, int, float, float]:
+    """(detail change, blocks, lag frames, median and p90 apparent speed px/s); two lag windows of frames in memory."""
     lag = max(1, round(lag_s * fps))
-    hp = [detail(crop(f, region)) for f in frames]
-    values = []
-    for k in range(0, len(hp) - lag, max(1, lag // 2)):
-        values += best_shift_correlation(hp[k], hp[k + lag])
-    if not values:
+    stride = max(1, lag // 2)
+    window: deque[tuple[int, np.ndarray]] = deque()
+    corr, speed = [], []
+    for k, path in enumerate(files):
+        window.append((k, detail(crop(luma(path), region))))
+        while window and window[0][0] < k - lag:
+            window.popleft()
+        first, a = window[0]
+        if first == k - lag and first % stride == 0:
+            c, s = best_shift(a, window[-1][1])
+            corr.append(c)
+            speed.append(s)
+    values = np.concatenate(corr) if corr else np.empty(0)
+    if not len(values):
         raise SystemExit("no textured blocks in the region (or fewer frames than the lag)")
-    return 1.0 - float(np.median(values)), len(values), lag
+    px_s = np.concatenate(speed) * fps / lag
+    return 1.0 - float(np.median(values)), len(values), lag, float(np.median(px_s)), float(np.percentile(px_s, 90))
 
 
-def flicker(frames: list[np.ndarray], region) -> tuple[np.ndarray, float, float, float]:
-    stack = np.stack([crop(f, region) for f in frames])
-    if len(stack) < 3:
+def flicker(files: list[Path], region) -> tuple[np.ndarray, float, float, float]:
+    """Per-pixel temporal median of |second difference| per chunk of CHUNK frames, averaged over chunks by length."""
+    if len(files) < 3:
         raise SystemExit("flicker needs at least 3 frames")
-    d2 = np.abs(stack[2:] - 2 * stack[1:-1] + stack[:-2])
-    md = np.median(d2, axis=0)
+    total, weight = None, 0
+    for start in range(0, len(files) - 2, CHUNK):
+        part = files[start:start + CHUNK + 2]
+        if len(part) < 3:
+            break
+        stack = np.stack([crop(luma(f), region) for f in part])
+        md = np.median(np.abs(stack[2:] - 2 * stack[1:-1] + stack[:-2]), axis=0) * (len(part) - 2)
+        total = md if total is None else total + md
+        weight += len(part) - 2
+    md = total / weight
     return md, float(md.mean()), float(np.percentile(md, 99)), float((md > 1.0).mean())
 
 
 def edge_rows(band: np.ndarray) -> np.ndarray:
+    """Per column the row of the strongest dark-over-light step, refined to sub-pixel by a parabola through its
+    neighbours (whole rows alone turn a straight gentle slope into a staircase)."""
     g = gaussian_filter(band, 1.0)
     step = g[2:] - g[:-2]  # light below dark: positive
-    return 1.0 + np.argmax(step, axis=0).astype(np.float64)
-
-
-STAIRCASE = 10.0  # slope kurtosis (est., from a handful of wave frames): smooth multi-scale edges 4-9, a reported staircase 34
+    i = np.argmax(step, axis=0)
+    cols = np.arange(step.shape[1])
+    lo, hi = np.clip(i - 1, 0, step.shape[0] - 1), np.clip(i + 1, 0, step.shape[0] - 1)
+    a, b, c = step[lo, cols], step[i, cols], step[hi, cols]
+    den = a - 2 * b + c
+    with np.errstate(invalid="ignore", divide="ignore"):
+        off = np.where((den < 0) & (i > 0) & (i < step.shape[0] - 1), 0.5 * (a - c) / den, 0.0)
+    return 1.0 + i + np.clip(off, -0.5, 0.5)
 
 
 def slope_kurtosis(edge: np.ndarray) -> float:
@@ -151,10 +198,10 @@ def slope_kurtosis(edge: np.ndarray) -> float:
     slope = np.diff(np.asarray(edge, np.float64))
     slope -= slope.mean()
     var = float((slope ** 2).mean())
-    return float((slope ** 4).mean() / var ** 2) if var > 0 else 0.0
+    return float((slope ** 4).mean() / var ** 2) if var > 1e-12 else 0.0
 
 
-def period(signal: np.ndarray, min_lag: int = 8) -> tuple[int, float]:
+def period(signal: np.ndarray, min_lag: int = 3) -> tuple[int, float]:
     """Dominant period (px) of a 1-D profile and its normalised autocorrelation peak (0 when none)."""
     s = np.asarray(signal, np.float64)
     s = s - gaussian_filter(s, max(4.0, len(s) / 16.0))  # keep detail, drop the slow trend (perspective, light)
@@ -165,8 +212,7 @@ def period(signal: np.ndarray, min_lag: int = 8) -> tuple[int, float]:
     spectrum = np.fft.rfft(s, 2 * n)
     ac = np.fft.irfft(spectrum * np.conj(spectrum))[:n]
     ac = ac / ac[0]  # biased: falls with the lag, so the fundamental beats its multiples
-    top = n // 3
-    lags = np.arange(min_lag, top)
+    lags = np.arange(min_lag, n // 3)
     peaks = [k for k in lags if ac[k] >= ac[k - 1] and ac[k] >= ac[k + 1]]
     if not peaks:
         return 0, 0.0
@@ -209,22 +255,22 @@ def main(argv: list[str] | None = None) -> int:
         return 0
 
     with tempfile.TemporaryDirectory(prefix="clip-metrics-") as scratch:
-        frames, fps = load(args.source, args.fps, args.window, Path(scratch))
-    if args.command == "change":
-        value, blocks, lag = change(frames, fps, args.lag, args.region)
-        print(f"{args.source.name}: detail change per {args.lag:g} s {value:.3f} "
-              f"(blocks {blocks}, lag {lag} frames at {fps:.1f} fps)")
-        return 0
-    md, mean, p99, share = flicker(frames, args.region)
-    print(f"{args.source.name}: flicker |d2| mean {mean:.3f}/255, p99 {p99:.3f}, share > 1/255 {share * 100:.2f} % "
-          f"({len(frames)} frames)")
-    if args.map:
-        heat = Image.fromarray(np.clip(md * 20, 0, 255).astype(np.uint8)).convert("RGB")
-        middle = Image.fromarray(np.clip(crop(frames[len(frames) // 2], args.region), 0, 255).astype(np.uint8))
-        sheet = Image.new("RGB", (heat.width, heat.height * 2))
-        sheet.paste(middle.convert("RGB"), (0, 0))
-        sheet.paste(heat, (0, heat.height))
-        sheet.save(args.map, quality=85)
+        files, fps = frame_files(args.source, args.fps, args.window, Path(scratch))
+        if args.command == "change":
+            value, blocks, lag, v50, v90 = change(files, fps, args.lag, args.region)
+            print(f"{args.source.name}: detail change per {args.lag:g} s {value:.3f}; apparent speed median {v50:.0f}, "
+                  f"p90 {v90:.0f} px/s at {ROWS} rows (blocks {blocks}, lag {lag} frames at {fps:.1f} fps)")
+            return 0
+        md, mean, p99, share = flicker(files, args.region)
+        print(f"{args.source.name}: flicker |d2| mean {mean:.3f}/255, p99 {p99:.3f}, share > 1/255 {share * 100:.2f} % "
+              f"({len(files)} frames)")
+        if args.map:
+            heat = Image.fromarray(np.clip(md * 20, 0, 255).astype(np.uint8)).convert("RGB")
+            middle = Image.fromarray(np.clip(crop(luma(files[len(files) // 2]), args.region), 0, 255).astype(np.uint8))
+            sheet = Image.new("RGB", (heat.width, heat.height * 2))
+            sheet.paste(middle.convert("RGB"), (0, 0))
+            sheet.paste(heat, (0, heat.height))
+            sheet.save(args.map, quality=85)
     return 0
 
 
