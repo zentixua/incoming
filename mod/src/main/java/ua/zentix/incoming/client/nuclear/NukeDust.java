@@ -21,8 +21,8 @@ import ua.zentix.incoming.nuclear.radiation.Shielding;
 
 import java.util.HashMap;
 import java.util.IdentityHashMap;
-import java.util.Map;
 import java.util.List;
+import java.util.Map;
 
 /**
  * Shock-wave dust wall up close. While the wall head is within {@link #NEAR} of the camera, scraps of litter and material torn

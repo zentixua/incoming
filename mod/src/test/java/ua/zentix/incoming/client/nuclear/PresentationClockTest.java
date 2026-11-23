@@ -223,23 +223,17 @@ class PresentationClockTest {
     }
 
     @Test
-    void replayReadsTheSameExtinctionInputAtEveryPlaybackPosition() {
-        for (double step : new double[]{0.25, 1, 4, 1.0 / 3}) {
-            double birth = 317;
-            double[] position = {birth};
-            var clock = new ClientNuclear.AgeClock(0, true, () -> position[0], birth);
-            for (double p = birth; p < birth + 1000; p += step) {
-                position[0] = p;
-                assertEquals(p - birth, clock.at(0.9));
-            }
-            for (double p : new double[]{1317.25, 1317.25, 456.5, 1317.25}) {
-                clock.tick();
-                clock.anchor(200);
-                position[0] = p;
-                double age = clock.at(0.1);
-                assertEquals(p - birth, age);
-                assertEquals(ua.zentix.incoming.nuclear.model.DustModel.extinctionAloft((p - birth) / 20),
-                        ua.zentix.incoming.nuclear.model.DustModel.extinctionAloft(age / 20));
+    void lowFrameRateWithAllClientTicksProcessedKeepsNormalSlew() {
+        var clock = new ClientNuclear.AgeClock(0, true);
+        double age = 0, speed = 1;
+        for (int frame = 1; frame <= 600; frame++) {
+            for (int i = 0; i < 3; i++) clock.anchor((frame - 1) * 3 + i + 1);
+            for (int i = 0; i < 3; i++) {
+                clock.tick(1 + frame * 150_000_000L);
+                double next = clock.at(0);
+                assertEquals(speed, next - age, 0.01 + 1e-9, "catch-up batch at frame " + frame);
+                speed = next - age;
+                age = next;
             }
         }
     }

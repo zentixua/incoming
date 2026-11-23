@@ -9,10 +9,13 @@ import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.UUID;
+import java.util.function.DoubleSupplier;
+import java.time.Duration;
 import java.util.zip.ZipEntry;
 import java.util.zip.ZipOutputStream;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertTimeoutPreemptively;
 
 class RecordedBurstsTest {
     @Test
@@ -68,12 +71,19 @@ class RecordedBurstsTest {
                 }
             }
         }
-        try (var timeline = new RecordedBursts(archive, uuid)) {
-            assertEquals(3, timeline.birth(id, gameTime, 999));
-            assertEquals(41, timeline.birth(id + 2, gameTime + 1, 999));
-            assertEquals(3, timeline.birth(id, gameTime, -100));
-            assertEquals(-10, timeline.birth(id + 1, gameTime - 50, 999));
-        }
+        var timeline = new RecordedBursts();
+        // The reader cannot start until these lookups return. A blocking implementation fails even on a tiny fixture.
+        DoubleSupplier found = assertTimeoutPreemptively(Duration.ofSeconds(1), () -> timeline.birth(id, gameTime, 999));
+        DoubleSupplier missing = assertTimeoutPreemptively(Duration.ofSeconds(1), () -> timeline.birth(id + 2, gameTime + 1, -100));
+        assertTimeoutPreemptively(Duration.ofSeconds(1), () -> {
+            assertEquals(999, found.getAsDouble());
+            assertEquals(-100, missing.getAsDouble());
+        });
+        timeline.read(archive, uuid);
+        assertEquals(3, found.getAsDouble());
+        assertEquals(41, missing.getAsDouble());
+        assertEquals(3, timeline.birth(id, gameTime, -100).getAsDouble());
+        assertEquals(-10, timeline.birth(id + 1, gameTime - 50, 999).getAsDouble());
     }
 
     private static void string(DataOutputStream out, String s) throws IOException {

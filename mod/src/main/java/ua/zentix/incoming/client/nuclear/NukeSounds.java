@@ -42,7 +42,9 @@ import ua.zentix.incoming.sound.Propagation;
 import ua.zentix.incoming.warhead.GroundMaterial;
 
 import java.util.ArrayList;
+import java.util.IdentityHashMap;
 import java.util.List;
+import java.util.Map;
 
 /**
  * Nuclear strike sound (DESIGN-nuke §5). Light arrives immediately, sound with the shock front: each client tick
@@ -206,7 +208,7 @@ public final class NukeSounds {
         /** Wave-removed glass/debris near listener, to ear ({@link #clatter}); played events for scenario line. */
         private final List<Ruins> ruinPackets = new ArrayList<>();
         private final Clatter clatter = new Clatter(new ua.zentix.incoming.sound.Spectrum[]{Sources.RUIN_GLASS.spectrum(), Sources.RUIN_CLATTER.spectrum()});
-        private final java.util.Map<Clatter.Event, WaveEvents.Receipt> traced = ClientNuclear.DIAG ? new java.util.IdentityHashMap<>() : null;
+        private final Map<Clatter.Event, WaveEvents.Receipt> traced = ClientNuclear.DIAG ? new IdentityHashMap<>() : null;
         private final Clatter.ArrivalTrace arrivalTrace = ClientNuclear.DIAG ? this::traceArrival : null;
         private final List<Clatter.Play> plays = new ArrayList<>();
         private final int[] heardClatter = new int[Clatter.KINDS];
@@ -235,13 +237,9 @@ public final class NukeSounds {
             after.end();
         }
 
-        /**
-         * Server removed nearby chunk blocks: ruin positions for late collapses; glass/debris sound when front
-         * reaches their position ({@link #clatter}).
-         */
-        void debris(WaveEvents.Receipt batch) {
-            after.ruins(batch.packet().pieces());
-            if (!batch.eligible().isEmpty()) ruinPackets.add(new Ruins(batch, a.age()));
+        /** Only pieces scattered at the displayed front can start a sound, and only for a live burst. */
+        void scatter(WaveEvents.Receipt batch, List<S2C.NukeDebris.Piece> pieces) {
+            if (live) ruinPackets.add(new Ruins(batch, pieces));
         }
 
         void clearClatter() {
@@ -255,8 +253,8 @@ public final class NukeSounds {
                     arrived ? "clatter_ear" : "acoustic_range");
         }
 
-        /** Debris packet received at tick {@code at} (detonation clock): sound calculated when chunk ruins reach client. */
-        private record Ruins(WaveEvents.Receipt packet, long at) {}
+        /** A batch's audible subset, retained until replacement blocks reach the client. */
+        private record Ruins(WaveEvents.Receipt batch, List<S2C.NukeDebris.Piece> pieces) {}
 
         /**
          * Ticks after debris packet to wait for chunk ruins on client: server sends packet on replacement tick, ruins themselves
@@ -275,11 +273,12 @@ public final class NukeSounds {
          * each one event at the energy-weighted center from front arrival there. Ruins more than one second after front
          * ({@link NukeDust#DEBRIS_LATE}) have no sound, just as no pieces.
          */
-        private void clatter(ClientLevel level, WaveEvents.Receipt batch) {
+        private void clatter(ClientLevel level, Ruins ruins) {
+            var batch = ruins.batch;
             double weight = batch.packet().weight();
             double[] watts = new double[Clatter.KINDS], seconds = new double[Clatter.KINDS], x = new double[Clatter.KINDS],
                     y = new double[Clatter.KINDS], z = new double[Clatter.KINDS];
-            for (S2C.NukeDebris.Piece piece : batch.eligible()) {
+            for (S2C.NukeDebris.Piece piece : ruins.pieces) {
                 BlockPos pos = piece.pos();
                 double kg = Shielding.density(level, pos, piece.state());
                 if (kg <= 0) continue;
@@ -330,9 +329,9 @@ public final class NukeSounds {
             long now = a.age();
             for (java.util.Iterator<Ruins> it = ruinPackets.iterator(); it.hasNext(); ) {
                 Ruins r = it.next();
-                if (now < r.at + RUINS_SETTLE) continue;
+                if (now < r.batch.receivedAt() + RUINS_SETTLE) continue;
                 it.remove();
-                clatter(level, r.packet);
+                clatter(level, r);
             }
             plays.clear();
             clatter.tick(a.ticks(0), ear.x, ear.y, ear.z, ua.zentix.incoming.util.Air.weather(level), plays, arrivalTrace);
@@ -354,11 +353,11 @@ public final class NukeSounds {
          */
         void tick() {
             after.tick();
+            if (!live) return;
             Minecraft mc = Minecraft.getInstance();
             LocalPlayer p = mc.player;
             Vec3 ear = mc.gameRenderer.getMainCamera().getPosition(), b = d.burst();
             clatterTick(ear);
-            if (!live) return;
             // spectator body is camera: client player viewing through another entity stays where viewing began
             Vec3 body = p == null ? null : p.isSpectator() ? ear : p.getEyePosition();
             long now = (long) a.ticks(0);

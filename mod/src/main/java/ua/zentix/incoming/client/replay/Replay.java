@@ -9,6 +9,7 @@ import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.function.DoubleSupplier;
 
 /**
  * Flashback replay and seeking. In one tick during seek, replay server loads a recording segment snapshot and reads
@@ -35,26 +36,30 @@ public final class Replay {
     private static int waited;
     private static boolean warned, opened;
     private static RecordedBursts births;
-    private static double position;
 
+    /** Both tick consumers and renderers read the editor or export frame currently being displayed. */
     public static double position() {
-        return position;
+        return FlashbackReplay.position(Minecraft.getInstance().getSingleplayerServer(), MARKERS.place);
     }
 
-    public static void frame(net.neoforged.neoforge.client.event.RenderFrameEvent.Pre event) {
-        if (opened) position = FlashbackReplay.position(Minecraft.getInstance().getSingleplayerServer(), MARKERS.place);
+    /** Packet timeline reached by the server during a seek, including the tick currently being interpolated. */
+    public static int packetPosition() {
+        return MARKERS.place;
     }
 
-    public static double birth(int id, long gameTime, long age) {
+    public static DoubleSupplier birth(int id, long gameTime, long age, boolean live) {
+        // The end-of-tick marker identifies the original live packet even before that tick is drawn.
+        double fallback = MARKERS.place - age;
+        if (live) return () -> fallback;
         openClock();
-        return births == null ? MARKERS.place - age : births.birth(id, gameTime, MARKERS.place - age);
+        return births == null ? () -> fallback : births.birth(id, gameTime, fallback);
     }
 
     private static void openClock() {
         if (opened) return;
         opened = true;
         var recording = FlashbackReplay.recording(Minecraft.getInstance().getSingleplayerServer());
-        if (recording != null) births = new RecordedBursts(recording.path(), recording.id());
+        if (recording != null) births = RecordedBursts.open(recording.path(), recording.id());
     }
 
     private record Pending(String kind, BooleanConsumer action) {}
@@ -79,7 +84,6 @@ public final class Replay {
      */
     public static void marker(int place, boolean seeking, Runnable seekStarted, Runnable rewound) {
         openClock();
-        position = place;
         Markers.Verdict v = MARKERS.next(place, seeking);
         if (MARKERS.interrupted) seekStarted.run();
         if (v == Markers.Verdict.SETTLED) rewound.run();
@@ -107,7 +111,6 @@ public final class Replay {
         if (births != null) births.close();
         births = null;
         opened = false;
-        position = 0;
         waited = 0;
     }
 

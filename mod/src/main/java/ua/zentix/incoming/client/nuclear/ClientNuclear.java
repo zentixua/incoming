@@ -5,11 +5,11 @@ import net.minecraft.client.multiplayer.ClientLevel;
 import net.minecraft.world.phys.Vec3;
 import net.neoforged.neoforge.client.event.ClientPlayerNetworkEvent;
 import org.jetbrains.annotations.Nullable;
+import ua.zentix.incoming.Incoming;
 import ua.zentix.incoming.client.far.FarTerrain;
 import ua.zentix.incoming.client.far.Sightline;
 import ua.zentix.incoming.client.fx.CameraShake;
 import ua.zentix.incoming.client.replay.Replay;
-import ua.zentix.incoming.Incoming;
 import ua.zentix.incoming.client.sound.SoundFilters;
 import ua.zentix.incoming.net.S2C;
 import ua.zentix.incoming.nuclear.NuclearStrikes;
@@ -71,33 +71,34 @@ public final class ClientNuclear {
         final NukeSounds.Schedule sounds;
 
         Active(Detonation d, boolean live, long clientNow) {
-            this(d, live, clientNow, new CloudPuffs(d), new BlastWall(d), new BurstWater(), null, null, null);
+            this(d, live, clientNow, null);
         }
 
         /** Same detonation after replay seek: past, without flash/sound, age from this recording position's clock. */
         Active(Active a, long clientNow) {
-            this(a.d, false, clientNow, a.puffs, a.wall, a.water, a.pall, a.storm, a.ground);
+            this(a.d, false, clientNow, a);
         }
 
-        private Active(Detonation d, boolean live, long clientNow, CloudPuffs puffs, BlastWall wall, BurstWater water, @Nullable PallField pall,
-                @Nullable FireStorm storm, @Nullable PallGround ground) {
+        private Active(Detonation d, boolean live, long clientNow, @Nullable Active known) {
             this.d = d;
             this.live = live;
             // Live: the packet is the server's first anchor. Entry or seek: age starts from the level's game time.
             long start = live ? 0 : Math.max(0, clientNow - d.gameTime());
-            this.clock = Replay.active()
-                    ? new AgeClock(start, live, Replay::position, Replay.birth(d.id(), d.gameTime(), start))
-                    : new AgeClock(start, live);
-            this.puffs = puffs;
-            this.wall = wall;
-            this.water = water;
-            ClientLevel level = Minecraft.getInstance().level;
-            this.pall = pall != null ? pall : new PallField(d);
+            if (Replay.active()) {
+                DoubleSupplier birth = known != null && known.clock.replayPosition != null ? known.clock.birth
+                        : Replay.birth(d.id(), d.gameTime(), start, live);
+                this.clock = new AgeClock(start, live, Replay::position, birth);
+            } else {
+                this.clock = new AgeClock(start, live);
+            }
+            this.puffs = known == null ? new CloudPuffs(d) : known.puffs;
+            this.wall = known == null ? new BlastWall(d) : known.wall;
+            this.water = known == null ? new BurstWater() : known.water;
+            this.pall = known == null ? new PallField(d) : known.pall;
             this.pall.clock(this::clockTicksAt);
-            this.storm = storm != null ? storm : new FireStorm(d, this.pall);
-            // same terrain: known data stays; new map fills using water under epicenter
-            if (ground == null) NukeWater.resolve(this, level);
-            this.ground = ground != null ? ground : new PallGround(d, this.pall);
+            this.storm = known == null ? new FireStorm(d, pall) : known.storm;
+            if (known == null) NukeWater.resolve(this, Minecraft.getInstance().level);
+            this.ground = known == null ? new PallGround(d, pall) : known.ground;
             this.sounds = new NukeSounds.Schedule(this);
         }
 
@@ -114,7 +115,10 @@ public final class ClientNuclear {
         }
 
         private void deliverPieces() {
-            if (events.pending()) events.drain(ticks(0), (batch, pieces) -> NukeDust.debris(this, batch, pieces));
+            if (events.pending()) events.drain(ticks(0), (batch, pieces) -> {
+                NukeDust.debris(this, batch, pieces);
+                sounds.scatter(batch, pieces);
+            }, DIAG ? (batch, due) -> eventTrace(this, batch, due, "drop", "drawn_late") : null);
         }
 
         /** Ticks since detonation (with frame fraction): the shown age, monotone across frames ({@link AgeClock#at}). */
@@ -149,23 +153,24 @@ public final class ClientNuclear {
 
     /** Live presentation runs on processed client ticks, with bounded steering toward confirmed server time. */
     static final class AgeClock {
-        // Presentation parameters in ticks. The steering response and brake widths also set the recovery time.
+        /** Plan 4.11 presentation contract (ticks and nominal speed, not physical). SLEW is 0.2× per second. */
         static final double LEAD = 200, DELAY = 2;
         private static final double RESPONSE = 40, BRAKE = 60, SLEW = 0.2 / 20;
         private static final double MIN_SPEED = 0.85, MAX_SPEED = 1.2;
         private final @Nullable DoubleSupplier replayPosition;
-        private final double birth;
+        private final DoubleSupplier birth;
         private long own, anchor, confirmed;
         private double at, anchorAt, shown, speed = 1, resyncUntil;
         private boolean estimated, sampled, over, waitingForTarget, farBehind;
-        private long lastTickNanos;
+        private static final long TICK_NANOS = 1_000_000_000L / 20;
+        private long lastTickNanos, expectedOwn;
         private double lastRate = 1;
 
         AgeClock(long start, boolean live) {
-            this(start, live, null, 0);
+            this(start, live, null, () -> 0);
         }
 
-        AgeClock(long start, boolean live, @Nullable DoubleSupplier position, double birth) {
+        AgeClock(long start, boolean live, @Nullable DoubleSupplier position, DoubleSupplier birth) {
             replayPosition = position;
             this.birth = birth;
             confirmed = live ? start : -1;
@@ -209,14 +214,19 @@ public final class ClientNuclear {
         // Wall time detects a missed client tick. It never adds a tick to the picture.
         void tick(long nanos) {
             if (replayPosition != null) return;
-            if (lastTickNanos != 0 && nanos - lastTickNanos >= 100_000_000L && anchor > shown + 1
-                    && !estimated && !over && resyncUntil <= at) resyncUntil = at + RESPONSE;
+            long elapsed = nanos - lastTickNanos;
+            if (lastTickNanos != 0 && elapsed >= TICK_NANOS) {
+                // At low FPS several client ticks run in one frame. Count the previous batch before declaring a loss.
+                if (own < expectedOwn && anchor > shown + 1 && !estimated && !over && resyncUntil <= at)
+                    resyncUntil = at + RESPONSE;
+                expectedOwn = own + elapsed / TICK_NANOS;
+            }
             lastTickNanos = nanos;
             advance(++own);
         }
 
         double shown() {
-            return replayPosition == null ? shown : Math.max(0, replayPosition.getAsDouble() - birth);
+            return replayPosition == null ? shown : Math.max(0, replayPosition.getAsDouble() - birth.getAsDouble());
         }
 
         double at(double partial) {
@@ -254,8 +264,8 @@ public final class ClientNuclear {
             }
             if (!over && !estimated) {
                 double remaining = Math.max(0, anchor + LEAD - shown);
-                // End the geometric tail below a billionth of a tick; silence has a true stationary endpoint.
-                step = remaining < 1e-9 ? remaining : Math.min(step, remaining);
+                // The linear brake divides the remaining distance by BRAKE. Snap its tail once that speed is below one ULP.
+                step = remaining <= Math.ulp(shown) * BRAKE ? remaining : Math.min(step, remaining);
                 if (step == remaining) speed = 0;
             }
             if (DIAG) lastRate = step / dt;
@@ -439,7 +449,7 @@ public final class ClientNuclear {
         // old detonations disappear (later than recording position) or become past; stop driving their echoes/loops
         stopAll();
         DETONATIONS.values().removeIf(a -> a.clock.replayPosition != null
-                ? a.clock.birth > Replay.position() : a.d.gameTime() > now + TIME_SYNC_TICKS);
+                ? a.clock.birth.getAsDouble() > Replay.packetPosition() : a.d.gameTime() > now + TIME_SYNC_TICKS);
         DETONATIONS.replaceAll((id, a) -> new Active(a, now));
         WARNINGS.values().removeIf(w -> w.launchTime() > now + TIME_SYNC_TICKS);
         CLOCK.reset();
@@ -477,11 +487,11 @@ public final class ClientNuclear {
             }
             return;
         }
-        var receipt = a.events.receive(p, a.clock.confirmed(), piece -> a.d.arrivalTicks(
+        var receipt = a.events.receive(p, a.clock.confirmed(), a.age(), piece -> a.d.arrivalTicks(
                 Vec3.atCenterOf(piece.pos()).distanceTo(a.d.burst())));
         if (receipt == null) {
             if (DIAG) {
-                var repeated = new WaveEvents.Receipt(a.clock.confirmed(), a.events.ordinal(p), p, List.of());
+                var repeated = new WaveEvents.Receipt(a.clock.confirmed(), a.events.ordinal(p), p, a.age());
                 eventTrace(a, repeated, Double.NaN, "drop", a.clock.confirmed() < 0 ? "no_anchor" : "duplicate");
             }
             return;
@@ -494,7 +504,7 @@ public final class ClientNuclear {
             }
         }
         NukeDust.received();
-        a.sounds.debris(receipt);
+        a.sounds.after.ruins(p.pieces());
         a.deliverPieces();
     }
 

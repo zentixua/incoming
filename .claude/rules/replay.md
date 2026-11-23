@@ -24,10 +24,11 @@ paths:
   rendering, and on pause also ticks the client from a packet); during video export the server stops between steps
   without clearing the snapshot marker. The nuclear show uses the editor's fractional replay position
   (`getPartialReplayTick`) or the export frame's exact start tick plus fractional progress. A paused editor
-  supplies its held tick. Every age reader subtracts the original burst's recording position. A read-only index
-  (`RecordedBursts`) identifies that packet outside snapshots, even on a cold seek into a later segment. A show
-  already running at recording start uses the recording's initial world time. The archive UUID must match the
-  replay server's metadata. World exit releases the index. Check: `replay` scenario (`SCENARIO replay seek` lines); replay-server model:
+  supplies its held tick. Both render and tick consumers read that position on demand. Export draws directly
+  between client frame events. The integer marker identifies live packet births and seek membership.
+  `RecordedBursts` scans the UUID-matched archive in the background from replay open. Cold seeks display an
+  estimate until the original packet outside snapshots supplies its exact birth. Shows predating the archive
+  use its initial world time. World exit interrupts the reader. Check: `replay` scenario (`SCENARIO replay seek` lines); replay-server model:
   `ReplayTest`.
 - Chunk-state packets (`S2C.NukeFlashMarks`, flash traces): a Flashback snapshot contains only the last packet of a
   type, not one per chunk, so unloading chunks during seek would erase marks absent from the snapshot. Thus replay

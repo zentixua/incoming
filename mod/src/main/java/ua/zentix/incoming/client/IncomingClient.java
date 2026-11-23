@@ -135,7 +135,6 @@ public final class IncomingClient {
         NeoForge.EVENT_BUS.addListener(ClientFlights::onLevelUnload);
         NeoForge.EVENT_BUS.addListener(ProjectileCamera::onLevelUnload);
         NeoForge.EVENT_BUS.addListener(ScreenProjection::capture);
-        NeoForge.EVENT_BUS.addListener(Replay::frame);
         NeoForge.EVENT_BUS.addListener(NukeRenderer::render);
         NeoForge.EVENT_BUS.addListener(ua.zentix.incoming.client.nuclear.FlashMarksMesh::onSection);
         NeoForge.EVENT_BUS.addListener(ua.zentix.incoming.client.nuclear.FlashMarksClient::onChunkUnload);

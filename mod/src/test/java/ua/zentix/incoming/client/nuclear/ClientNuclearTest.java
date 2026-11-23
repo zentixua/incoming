@@ -213,7 +213,7 @@ class ClientNuclearTest {
     @Test
     void replayWithoutPerTickAnchorsFollowsRecordingPosition() {
         long[] position = {360};
-        var clock = new ClientNuclear.AgeClock(0, true, () -> position[0], 360);
+        var clock = new ClientNuclear.AgeClock(0, true, () -> position[0], () -> 360);
         for (int t = 0; t <= 120; t++) {
             position[0] = 360 + t;
             assertEquals(t, clock.at(0));

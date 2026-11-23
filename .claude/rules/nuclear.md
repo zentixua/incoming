@@ -383,7 +383,7 @@ Ruins and everything in `nuclear/world/` are in `nuclear-world.md`.
   below it, avoiding hovering in lowlands beneath the map.
 - Removed debris is client cosmetic: server sends removed chunk positions (`S2C.NukeDebris`) only to chunk viewers on
   ruin-replacement tick. `WaveEvents` admits each sampled position against the server tick at receipt and dispatches
-  it to `NukeDust.debris` once the displayed front reaches the position. A timely late delivery scatters immediately.
+  it to `NukeDust.debris` during the displayed front's wind window (clock limits below).
   Pieces ride local wave wind at removal origin (`BlastGust`: Friedlander with `blastWind` and local positive phase,
   same air path as head dust, `BlastWall.carriedShare`); masonry-breach dust (mass for all positions represented by
   sample, `S2C.NukeDebris.weight`) forms downwind effects-layer billow streaks (`BlastDust`: grouped in 4-block cells
@@ -445,16 +445,20 @@ Ruins and everything in `nuclear/world/` are in `nuclear-world.md`.
   above its first anchor advances at half speed until the target reaches it. Tick callers use `ticks(0)`.
 - Two viewers must agree within ten ticks after ten seconds of normal service following a steady server or a short
   stall. After 20 s steady, 60 s at 10 TPS and recovery to 20 TPS, a cold join has 60 s to reach that band and stay
-  there. At +10 s server age is 1200. Even the favorable reachable bounds give resident ≥1271.733 and joiner ≤1240,
-  a gap ≥31.733 ticks. The independent join calculation gives gaps 164.155 at entry, 124.182 at +10 s, 94.196 at
-  +20 s, 0.029 at +60 s and 0.000 at +75 s. It stays within ten ticks from +48.067 s through +120 s.
-- Ruin packets take their server age from the preceding anchor. Within a detonation and epoch, distinct batches
-  receive ordinals in delivery order. A repeated batch under the same anchor is consumed once. Debris and clatter
-  share the per-piece freshness decision at receipt (up to 20 server ticks late). The deferred clatter calculation
-  uses the original represented mass and propagation from the site's front arrival. Seek or world entry rebuilds
-  pending and consumed state. Replay position and birth indexing are specified in `replay.md`.
+  there. At +10 s the reachable gap is ≥31.733 ticks (server age 1200, resident ≥1271.733, joiner ≤1240).
+  The independent trajectory and all recovery checkpoints are in the [join calculation](https://github.com/zentixua/incoming/pull/742#clock-contract-and-cold-joins).
+- Ruin packets take their server age from the preceding anchor. The detonation, epoch, server tick and batch
+  ordinal identify a delivery. Each sampled site must be fresh at receipt (up to 20 server ticks after crossing).
+  At dispatch the drawn front must have reached the site within the last 20 displayed ticks (`DEBRIS_LATE`).
+  A site beyond that window produces neither wind-driven debris nor its clatter. Accepted clatter from a live
+  burst travels from the original site arrival, including later arrivals at the ear. A reconstructed show stays
+  silent for clatter. Seek or world entry rebuilds pending and consumed state. Replay clocks are in `replay.md`.
+- **Server timing limit.** Ruin replacement and damage follow the server. They can lag the drawn wave by its lead:
+  up to 4.7 s with the 5.15 s stall on Artem's recorded stream, and 8.3 s after 60 s at 10 TPS
+  (`AgeClockLeadProbeTest`). The client applies authoritative changes at receipt.
 - `PresentationClockTest` checks all 1,445 deliveries in the recording through the final drain, overload, restart,
-  joins and replay. `ClientNuclearTest` checks freeze, the half-rate client and the J3/J6 recorded frame streams
+  joins and frame pacing. `ReplayExportFramesProbeTest` compares editor and export ages and wall extinction.
+  `ClientNuclearTest` checks freeze, the half-rate client and the J3/J6 recorded frame streams
   with ±25 ms arrival jitter. With `-Dincoming.nukeDiag=true`, `nukeFrame` logs epoch, detonation, receive-clock
   nanoseconds, shown age, confirmed age, lead, steering and held status. `nukeAnchor` logs receipt time and server
   age, and `nukeEvent` logs server tick, ordinal, due age, shown age, signed skew (shown minus due), decision and reason.

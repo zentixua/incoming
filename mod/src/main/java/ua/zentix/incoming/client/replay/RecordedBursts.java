@@ -20,6 +20,8 @@ import java.nio.file.Path;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.UUID;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.function.DoubleSupplier;
 import java.util.zip.ZipFile;
 
 /** Recording positions of original packets. A snapshot can repeat a birth thousands of ticks after it happened. */
@@ -32,70 +34,53 @@ final class RecordedBursts implements AutoCloseable {
                 CLOCK_PACKETS.put(index, type);
         });
     }
-    private final Map<Key, Integer> births = new HashMap<>();
-    private long initialTime = Long.MIN_VALUE;
-    private boolean snapshotBaseline;
-    private int requests;
-    private boolean finished;
-    private final Thread reader;
+    private final Map<Key, Integer> births = new ConcurrentHashMap<>();
+    private volatile long initialTime = Long.MIN_VALUE;
+    private Thread reader;
 
-    RecordedBursts(Path archive, UUID recording) {
-        reader = Thread.ofVirtual().name("Incoming replay clock index").start(() -> {
-            try (var zip = new ZipFile(archive.toFile())) {
-                var meta = zip.getEntry("metadata.json");
-                if (meta == null) throw new IOException("missing metadata");
-                try (var json = new InputStreamReader(zip.getInputStream(meta), StandardCharsets.UTF_8)) {
-                    var root = JsonParser.parseReader(json).getAsJsonObject();
-                    if (!recording.toString().equals(root.get("uuid").getAsString())) throw new IOException("recording UUID mismatch");
-                    int start = 0;
-                    for (var segment : root.getAsJsonObject("chunks").entrySet()) {
-                        synchronized (this) {
-                            while (start > 0 && requests == 0 && !finished) wait();
-                            if (finished) break;
-                        }
-                        var entry = zip.getEntry(segment.getKey());
-                        if (entry == null) throw new IOException("missing segment " + segment.getKey());
-                        try (var in = new DataInputStream(new BufferedInputStream(zip.getInputStream(entry), 64 * 1024))) {
-                            scan(in, start);
-                        }
-                        start += segment.getValue().getAsJsonObject().get("duration").getAsInt();
-                    }
-                }
-            } catch (InterruptedException e) {
-                Thread.currentThread().interrupt();
-            } catch (IOException | RuntimeException e) {
-                if (!Thread.currentThread().isInterrupted()) Incoming.LOG.warn("Cannot index replay clock in {}", archive, e);
-            } finally {
-                synchronized (this) {
-                    finished = true;
-                    notifyAll();
-                }
-            }
-        });
+    static RecordedBursts open(Path archive, UUID recording) {
+        var index = new RecordedBursts();
+        index.reader = Thread.ofVirtual().name("Incoming replay clock index").start(() -> index.read(archive, recording));
+        return index;
     }
 
-    /** An identified birth is available immediately. The worker parks between segments when there is no demand. */
-    synchronized double birth(int id, long gameTime, double fallback) {
-        Key key = new Key(id, gameTime);
-        requests++;
-        notifyAll();
-        try {
-            while (!finished && !births.containsKey(key) && !(snapshotBaseline && gameTime < initialTime)) wait();
-        } catch (InterruptedException e) {
-            Thread.currentThread().interrupt();
-        } finally {
-            requests--;
+    void read(Path archive, UUID recording) {
+        try (var zip = new ZipFile(archive.toFile())) {
+            var meta = zip.getEntry("metadata.json");
+            if (meta == null) throw new IOException("missing metadata");
+            try (var json = new InputStreamReader(zip.getInputStream(meta), StandardCharsets.UTF_8)) {
+                var root = JsonParser.parseReader(json).getAsJsonObject();
+                if (!recording.toString().equals(root.get("uuid").getAsString())) throw new IOException("recording UUID mismatch");
+                int start = 0;
+                for (var segment : root.getAsJsonObject("chunks").entrySet()) {
+                    if (Thread.currentThread().isInterrupted()) return;
+                    var entry = zip.getEntry(segment.getKey());
+                    if (entry == null) throw new IOException("missing segment " + segment.getKey());
+                    try (var in = new DataInputStream(new BufferedInputStream(zip.getInputStream(entry), 64 * 1024))) {
+                        scan(in, start);
+                    }
+                    start += segment.getValue().getAsJsonObject().get("duration").getAsInt();
+                }
+            }
+        } catch (IOException | RuntimeException e) {
+            if (!Thread.currentThread().isInterrupted()) Incoming.LOG.warn("Cannot index replay clock in {}", archive, e);
         }
-        Integer tick = births.get(key);
-        if (tick != null) return tick;
-        return initialTime == Long.MIN_VALUE ? fallback : gameTime - initialTime;
+    }
+
+    /** Cold seeks get a provisional origin immediately. The same handle reads the recorded tick once indexed. */
+    DoubleSupplier birth(int id, long gameTime, double fallback) {
+        Key key = new Key(id, gameTime);
+        return () -> {
+            Integer tick = births.get(key);
+            if (tick != null) return tick;
+            long baseline = initialTime;
+            return baseline == Long.MIN_VALUE ? fallback : gameTime - baseline;
+        };
     }
 
     @Override
-    public synchronized void close() {
-        reader.interrupt();
-        finished = true;
-        notifyAll();
+    public void close() {
+        if (reader != null) reader.interrupt();
     }
 
     private void scan(DataInputStream in, int start) throws IOException {
@@ -143,7 +128,7 @@ final class RecordedBursts implements AutoCloseable {
     private void readPrefix(String kind, FriendlyByteBuf bytes, int tick, boolean snapshot) {
         if (kind.endsWith("game_packet") || kind.endsWith("game_packet_optional")) {
             PacketType<?> type = CLOCK_PACKETS.get(bytes.readVarInt());
-            if (GamePacketTypes.CLIENTBOUND_SET_TIME.equals(type) && initialTime == Long.MIN_VALUE) setInitialTime(bytes.readLong() - tick, snapshot);
+            if (GamePacketTypes.CLIENTBOUND_SET_TIME.equals(type) && initialTime == Long.MIN_VALUE) initialTime = bytes.readLong() - tick;
             if (!CommonPacketTypes.CLIENTBOUND_CUSTOM_PAYLOAD.equals(type)) return;
         } else {
             bytes.readVarInt(); // Flashback NeoForge Fixed payload wrapper: protocol, id, payload
@@ -152,21 +137,10 @@ final class RecordedBursts implements AutoCloseable {
         if (nameSize < 0 || nameSize > bytes.readableBytes()) return;
         String name = bytes.readCharSequence(nameSize, StandardCharsets.UTF_8).toString();
         if (name.equals("incoming:nuke_tick") && initialTime == Long.MIN_VALUE) {
-            setInitialTime(bytes.readVarLong() - tick, snapshot);
+            initialTime = bytes.readVarLong() - tick;
         } else if (!snapshot && name.equals("incoming:nuke_detonation")) {
             var d = S2C.NukeDetonation.CODEC.decode(bytes).detonation();
-            synchronized (this) {
-                births.putIfAbsent(new Key(d.id(), d.gameTime()), tick);
-                notifyAll();
-            }
-        }
-    }
-
-    private synchronized void setInitialTime(long time, boolean snapshot) {
-        if (initialTime == Long.MIN_VALUE) {
-            initialTime = time;
-            snapshotBaseline = snapshot;
-            notifyAll();
+            births.putIfAbsent(new Key(d.id(), d.gameTime()), tick);
         }
     }
 
