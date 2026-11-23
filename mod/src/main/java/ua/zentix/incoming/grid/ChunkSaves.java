@@ -37,14 +37,18 @@ public final class ChunkSaves {
     private static final Codec<PalettedContainer<BlockState>> BLOCK_STATES = PalettedContainer.codecRW(
             Block.BLOCK_STATE_REGISTRY, BlockState.CODEC, PalettedContainer.Strategy.SECTION_STATES, Blocks.AIR.defaultBlockState());
     private static final String BLOCK_TICKS = "block_ticks", TWIN_PREFIX = Incoming.MOD_ID + ":unlit_";
-    private static boolean failureLogged, foreignLogged;
+    private static boolean failureLogged;
 
     private ChunkSaves() {}
 
     /**
-     * Saved chunk tag: rebuild sections with counterparts from a copy where they are lamps again; recompute lighting on
-     * load (saved lighting was computed for unlit lamps). A tag unlike vanilla's (different pipeline or sections) is left
-     * alone: a section is rewritten only if the tag's blocks are exactly this section's blocks in the chunk.
+     * Saved chunk tag: twins become lamps again in each section's palette list, and lighting is recomputed on load (saved
+     * lighting was computed for unlit lamps). A twin and its lamp have the same properties, so renaming the twin's palette
+     * entry restores every such block while the packed block data stays as vanilla wrote it. Decoding, converting and
+     * re-encoding all 4096 blocks of each section (and encoding the live section once more to compare) cost 1.6 times
+     * vanilla's whole chunk serialization while a 1 Mt wave saved a blacked-out city (server thread, srvlag run 23.11).
+     * A rename that would list one state twice (a kept lamp beside its own twin state) rebuilds that section instead:
+     * palette implementations (Lithium's too) need not keep duplicate entries at their indices.
      */
     public static void onSave(ChunkDataEvent.Save e) {
         if (!(e.getChunk() instanceof LevelChunk chunk) || !(e.getLevel() instanceof ServerLevel)) return;
@@ -56,29 +60,20 @@ public final class ChunkSaves {
             boolean changed = false;
             for (int i = 0; i < list.size(); i++) {
                 CompoundTag s = list.getCompound(i);
-                if (!s.contains("Y", Tag.TAG_ANY_NUMERIC) || !s.contains("block_states", Tag.TAG_COMPOUND)) continue;
-                int index = chunk.getSectionIndexFromSectionY(s.getByte("Y"));
-                if (index < 0 || index >= chunk.getSectionsCount()) continue;
-                LevelChunkSection section = chunk.getSection(index);
-                if (!ChunkLights.needs(section, false)) continue;
-                // section tag is exactly what vanilla just wrote from this section (comparing tags instead of 4096 blocks)
-                if (!s.getCompound("block_states").equals(BLOCK_STATES.encodeStart(NbtOps.INSTANCE, section.getStates()).getOrThrow())) {
-                    // tag was not written by the vanilla pipeline for this chunk — not ours; this section's counterparts go to disk as is
-                    if (!foreignLogged) {
-                        foreignLogged = true;
-                        Incoming.LOG.warn("Blackout: section {} of chunk {} in the save differs from memory (another mod changes the tag) — its unlit lamps are saved as they are",
-                                s.getByte("Y"), chunk.getPos());
-                    }
-                    continue;
+                if (!s.contains("block_states", Tag.TAG_COMPOUND)) continue;
+                CompoundTag states = s.getCompound("block_states");
+                int renamed = relightPalette(states);
+                if (renamed == DUPLICATE) {
+                    // own copy from the tag, not copy(): any non-global palette copy retains the live section's resize handler
+                    PalettedContainer<BlockState> copy = BLOCK_STATES.parse(NbtOps.INSTANCE, states).getOrThrow();
+                    if (ChunkLights.apply(copy, false) == 0) continue;
+                    s.put("block_states", BLOCK_STATES.encodeStart(NbtOps.INSTANCE, copy).getOrThrow());
+                    REBUILT.incrementAndGet();
+                    changed = true;
+                } else if (renamed > 0) {
+                    RENAMED.incrementAndGet();
+                    changed = true;
                 }
-                // own copy from the tag, not copy(): any non-global palette copy retains the live section's resize handler
-                // (a single-value palette is even the same palette); a replacement beyond the copy palette's capacity (lamp absent
-                // and no space left) would expand the world section and crash the write
-                PalettedContainer<BlockState> states = BLOCK_STATES.parse(NbtOps.INSTANCE, s.getCompound("block_states")).getOrThrow();
-                // the palette remembers removed states too: a counterpart in it does not imply one in the section
-                if (ChunkLights.apply(states, false) == 0) continue;
-                s.put("block_states", BLOCK_STATES.encodeStart(NbtOps.INSTANCE, states).getOrThrow());
-                changed = true;
             }
             if (changed) {
                 tag.putBoolean(ChunkSerializer.IS_LIGHT_ON_TAG, false);
@@ -91,6 +86,55 @@ public final class ChunkSaves {
                 Incoming.LOG.error("Blackout: chunk {} saved with unlit lamps — could not restore them in the tag", chunk.getPos(), ex);
             }
         }
+    }
+
+    /** {@link #relightPalette}: the rename would list one state twice. */
+    public static final int DUPLICATE = -1;
+    /** Sections restored by renaming palette entries / by rebuilding the section (tests, measurements). */
+    public static final java.util.concurrent.atomic.AtomicLong RENAMED = new java.util.concurrent.atomic.AtomicLong(),
+            REBUILT = new java.util.concurrent.atomic.AtomicLong();
+
+    /**
+     * Renames twin entries of an encoded section's {@code palette} list to their lamps in place; returns the number
+     * renamed, or {@link #DUPLICATE} (nothing changed) if a lamp state is already listed.
+     */
+    public static int relightPalette(CompoundTag states) {
+        if (!states.contains("palette", Tag.TAG_LIST)) return 0;
+        ListTag palette = states.getList("palette", Tag.TAG_COMPOUND);
+        java.util.Set<String> twins = twinNames();
+        int[] at = null;
+        int n = 0;
+        for (int i = 0; i < palette.size(); i++) {
+            if (!twins.contains(palette.getCompound(i).getString("Name"))) continue;
+            if (at == null) at = new int[palette.size()];
+            at[n++] = i;
+        }
+        if (n == 0) return 0;
+        Tag[] lamps = new Tag[n];
+        java.util.Set<Tag> listed = new java.util.HashSet<>(palette);
+        for (int k = 0; k < n; k++) {
+            BlockState twin = BlockState.CODEC.parse(NbtOps.INSTANCE, palette.get(at[k])).getOrThrow();
+            BlockState lamp = GridLights.lit(twin);
+            if (lamp == null) throw new IllegalStateException("not a twin: " + twin);
+            lamps[k] = BlockState.CODEC.encodeStart(NbtOps.INSTANCE, lamp).getOrThrow();
+            if (!listed.add(lamps[k])) return DUPLICATE;
+        }
+        for (int k = 0; k < n; k++) palette.set(at[k], lamps[k]);
+        return n;
+    }
+
+    private static volatile java.util.Set<String> twinNames;
+
+    private static java.util.Set<String> twinNames() {
+        java.util.Set<String> names = twinNames;
+        if (names == null) {
+            names = new java.util.HashSet<>();
+            for (ua.zentix.incoming.registry.ModBlocks.UnlitPair p : ua.zentix.incoming.registry.ModBlocks.UNLIT) {
+                names.add(net.minecraft.core.registries.BuiltInRegistries.BLOCK.getKey(p.unlit().get()).toString());
+            }
+            twinNames = names = java.util.Set.copyOf(names);
+        }
+        return names;
     }
 
     /**

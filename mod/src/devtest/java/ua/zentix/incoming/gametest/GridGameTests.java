@@ -1512,4 +1512,62 @@ public final class GridGameTests {
         var holder = level.getChunkSource().chunkMap.getVisibleChunkIfPresent(p.toLong());
         h.assertTrue(holder == null, "chunk not unloaded: level " + (holder == null ? 0 : holder.getTicketLevel()));
     }
+
+    /**
+     * Saving a blacked-out chunk restores lamps by renaming the twins in each section's palette list: the packed block
+     * data in the tag stays the very array vanilla wrote (no section decode or re-encode on the server thread; three of
+     * them per section cost 276 ms of every second while a 1 Mt wave saved a dark city, srvlag run 23.11). Single-value,
+     * small, hash and global (over 256 states) palettes all decode to the lamps, block for block; a lamp beside its own twin
+     * state cannot be renamed without listing one state twice and is reported for the rebuild.
+     */
+    @GameTest(template = "range", timeoutTicks = 20, batch = "grid_save_palette", skyAccess = true)
+    public static void savedTwinsRestoreByPaletteRename(GameTestHelper h) {
+        var codec = PalettedContainer.codecRW(net.minecraft.world.level.block.Block.BLOCK_STATE_REGISTRY, BlockState.CODEC,
+                PalettedContainer.Strategy.SECTION_STATES, Blocks.AIR.defaultBlockState());
+        List<BlockState> lamps = new ArrayList<>();
+        for (ModBlocks.UnlitPair pair : ModBlocks.UNLIT) lamps.addAll(pair.lit().get().getStateDefinition().getPossibleStates());
+        List<BlockState> filler = new ArrayList<>();
+        for (BlockState st : net.minecraft.world.level.block.Block.BLOCK_STATE_REGISTRY) {
+            if (filler.size() >= 400) break;
+            if (!GridLights.isLit(st) && !GridLights.isUnlit(st)) filler.add(st);
+        }
+        net.minecraft.util.RandomSource random = net.minecraft.util.RandomSource.create(23);
+        // sizes: one twin (single value), 3 states (linear), 40 (hash), 400 + twins (global)
+        int[][] cases = {{0, 1}, {2, 1}, {20, 20}, {400, 40}};
+        for (int[] c : cases) {
+            PalettedContainer<BlockState> live = new PalettedContainer<>(net.minecraft.world.level.block.Block.BLOCK_STATE_REGISTRY,
+                    Blocks.AIR.defaultBlockState(), PalettedContainer.Strategy.SECTION_STATES);
+            BlockState[] expect = new BlockState[4096];
+            for (int i = 0; i < 4096; i++) {
+                boolean twin = c[0] == 0 || random.nextInt(c[0] + c[1]) < c[1];
+                BlockState lamp = c[0] == 0 ? lamps.get(0) : lamps.get(random.nextInt(Math.min(c[1], lamps.size())) * (lamps.size() / Math.min(c[1], lamps.size())));
+                BlockState st = twin ? GridLights.unlit(lamp) : filler.get(c[0] == 0 ? 0 : random.nextInt(c[0]));
+                live.set(i & 15, i >> 8, (i >> 4) & 15, st);
+                expect[i] = twin ? lamp : st;
+            }
+            CompoundTag tag = (CompoundTag) codec.encodeStart(NbtOps.INSTANCE, live).getOrThrow();
+            Tag data = tag.get("data");
+            int renamed = ChunkSaves.relightPalette(tag);
+            h.assertTrue(renamed > 0, "case " + c[0] + "/" + c[1] + ": nothing renamed (" + renamed + ")");
+            h.assertTrue(tag.get("data") == data, "case " + c[0] + "/" + c[1] + ": block data re-encoded");
+            PalettedContainer<BlockState> back = codec.parse(NbtOps.INSTANCE, tag).getOrThrow();
+            for (int i = 0; i < 4096; i++) {
+                BlockState got = back.get(i & 15, i >> 8, (i >> 4) & 15);
+                if (got != expect[i]) {
+                    h.fail("case " + c[0] + "/" + c[1] + ": block " + i + " " + got + " instead of " + expect[i]);
+                    return;
+                }
+            }
+        }
+        PalettedContainer<BlockState> both = new PalettedContainer<>(net.minecraft.world.level.block.Block.BLOCK_STATE_REGISTRY,
+                Blocks.AIR.defaultBlockState(), PalettedContainer.Strategy.SECTION_STATES);
+        both.set(0, 0, 0, lamps.get(0));
+        both.set(1, 0, 0, GridLights.unlit(lamps.get(0)));
+        CompoundTag tag = (CompoundTag) codec.encodeStart(NbtOps.INSTANCE, both).getOrThrow();
+        String before = tag.toString();
+        h.assertTrue(ChunkSaves.relightPalette(tag) == ChunkSaves.DUPLICATE, "a lamp beside its own twin state was renamed");
+        h.assertTrue(tag.toString().equals(before), "the refused rename changed the tag");
+        h.succeed();
+    }
+
 }
