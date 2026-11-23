@@ -550,12 +550,56 @@ def drift_inverse(law):
     check(worst <= 0.01, f"drift inverse within 1 % of the drift: worst {100 * worst:.3f} %")
 
 
+VIEW_BODY = """
+uniform vec3 Fwd, Right, Up;
+uniform float Tan, Aspect, Steps, Foot;
+out vec4 fragColor;
+void main() {
+    vec2 uv = gl_FragCoord.xy / vec2(160.0, 90.0) * 2.0 - 1.0;
+    vec3 rd = normalize(Fwd + Right * uv.x * Tan + Up * uv.y * Tan / Aspect);
+    float tEnd = rd.y < 0.0 ? DwEye.y / -rd.y : 60000.0;
+    vec4 w = dwMarch(rd, tEnd, fract(0.37 + 0.618034 * gl_FragCoord.x + 0.414 * gl_FragCoord.y), Foot, int(Steps));
+    fragColor = vec4(float(gDwSamples), float(gDwIters), float(gDwTailEvals), w.a);
+}
+"""
+
+
+def view_work(law):
+    """Per-ray work of the judging view (camera 4.5 km out, 120 blocks up, pitch -6 deg, 46 deg wide) at +4 s, +1 min and
+    +10 min: occupied samples (each with its light: 2 shadow taps), loop iterations, tail evaluations (each with light)."""
+    print("view work: rays of the judging view, 160 x 90, per preset step cap")
+    p = program(VIEW_BODY, "new")
+    g.glUseProgram(p); noise(p)
+    R = 4500.0
+    pitch = np.radians(-6.0)
+    fwd = np.array([-np.cos(pitch), np.sin(pitch), 0.0])
+    right = np.array([0.0, 0.0, 1.0])
+    up = np.cross(right, fwd)
+    rows = []
+    for age in (4, 60, 600):
+        t = law.arrival_at(R) + age
+        bind_new(p, law, t, (R, 120.0, 0.0))
+        for name, steps_, foot in (("HIGH", 128, 0.0022), ("MEDIUM", 96, 0.0027), ("LOW", 64, 0.0033)):
+            g.glUniform3f(loc(p, "Fwd"), *fwd); g.glUniform3f(loc(p, "Right"), *right); g.glUniform3f(loc(p, "Up"), *up)
+            g.glUniform1f(loc(p, "Tan"), np.tan(np.radians(23.0))); g.glUniform1f(loc(p, "Aspect"), 16 / 9)
+            g.glUniform1f(loc(p, "Steps"), steps_); g.glUniform1f(loc(p, "Foot"), foot)
+            target(160, 90, [(g.GL_RGBA32F, g.GL_RGBA)])
+            quad(p)
+            v = read(160, 90).reshape(-1, 4).astype(np.float64)
+            light = v[:, 0] + v[:, 2]
+            rows.append((age, name, float(v[:, 0].mean()), float(v[:, 1].mean()), float(v[:, 2].mean()), float(light.mean()),
+                         float((v[:, 0] >= steps_).mean()), float(v[:, 3].mean())))
+            print(f"    +{age:4d} s {name:6s}: occupied samples {v[:, 0].mean():6.1f} (at the cap {100 * (v[:, 0] >= steps_).mean():4.0f} %),"
+                  f" iterations {v[:, 1].mean():6.1f}, tail evaluations {v[:, 2].mean():5.1f}, light evaluations {light.mean():6.1f}, mean T {v[:, 3].mean():.3f}")
+    REPORT["view_work"] = rows
+
+
 context()
 laws = {"1000": Law("1000"), "15": Law("15")}
 if "--only" in sys.argv:
     which = sys.argv[sys.argv.index("--only") + 1].split(",")
 else:
-    which = ["ref", "thin", "c3", "e8", "drift"]
+    which = ["ref", "thin", "c3", "e8", "drift", "view"]
 if "ref" in which:
     reference_column(laws["1000"])
 if "thin" in which:
@@ -564,6 +608,8 @@ if "c3" in which:
     age_functions(laws["1000"])
 if "e8" in which:
     march_accuracy()
+if "view" in which:
+    view_work(laws["1000"])
 if "drift" in which:
     drift_inverse(laws["1000"])
 (OUT / "probe-report.json").write_text(json.dumps(REPORT, indent=1, default=float))

@@ -535,7 +535,7 @@ uniform vec4 DwFar;
 // longest stride over clear air inside the dust's bound, blocks
 const float DW_GAP = 24.0;
 // diagnostics of the last march (harness): occupied samples, step-cap exits with material left, tail optical depth
-int gDwSamples = 0;
+int gDwSamples = 0, gDwIters = 0, gDwTailEvals = 0;
 float gDwCapLeft = 0.0, gDwTailTau = 0.0;
 
 // the noise-free column integrated over [ta, tb] along the ray in n Gauss–Legendre segments of 4 nodes, light at each node:
@@ -558,6 +558,7 @@ vec3 dwSegment(vec3 eye, vec3 rd, float ta, float tb, int n, inout float T, vec3
             float tt = mid + half_ * X[m], dt = half_ * W[m];
             vec3 q = eye + rd * tt;
             float sg = dwDensity(q, false);
+            gDwTailEvals += 1;
             if (sg <= 1e-7) continue;
             float al = exp(-sg * dt);
             vec3 c = dwLight(q, rd);
@@ -583,6 +584,8 @@ vec3 dwSegment(vec3 eye, vec3 rd, float ta, float tb, int n, inout float T, vec3
 vec4 dwMarch(vec3 rd, float tEnd, float jitter, float foot, int maxSteps) {
     vec3 eye = DwEye.xyz;
     gDwSamples = 0;
+    gDwIters = 0;
+    gDwTailEvals = 0;
     gDwCapLeft = 0.0;
     gDwTailTau = 0.0;
     // vertical slab from the lowest ground to the envelope top over the highest
@@ -624,6 +627,7 @@ vec4 dwMarch(vec3 rd, float tEnd, float jitter, float foot, int maxSteps) {
     // the step cap counts occupied samples (each with its light), not strides over clear air: a cap on every stride
     // handed the far thin spans to the noise-free tail, which saw none of them (E8: 0.29 at HIGH)
     for (int i = 0; i < 640; i++) {
+        gDwIters = i + 1;
         t = dwGridT(k);
         if (t >= tMarch || T < 0.01) break;
         if (gDwSamples >= maxSteps || i == 639) {

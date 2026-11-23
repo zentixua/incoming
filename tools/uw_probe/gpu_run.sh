@@ -34,7 +34,7 @@ watch() {  # flip the setting after each logged frame of take $1
   done
 }
 tools/sandbox.sh stop >/dev/null 2>&1
-mkdir -p $S/fx; echo 48 > $S/fx/frames_per_tick
+mkdir -p $S/fx; echo 2 > $S/fx/frames_per_tick  # cost frames need no exact second: 48 renders a tick stretched the run 3x
 tools/sandbox.sh start gpu --wait --size 2560x1600 || { echo "sandbox start failed"; exit 1; }
 O=$S/options.txt
 sed -i 's/^renderDistance:.*/renderDistance:32/' $O; grep -q '^renderClouds' $O && sed -i 's/^renderClouds:.*/renderClouds:"false"/' $O || echo 'renderClouds:"false"' >> $O
