@@ -1,6 +1,7 @@
-// Young nuclear dust wall (client/fx/layer/DustWallPass): from the front to DustWallPass.SPAN seconds behind it, one presentation
-// model (presentation, not physical): a dense dust top over the ground (its envelope: born at zero on the contact line, a
-// small uneven hump, settled within about a second) filled with matte, billowed dust, and its light.
+// Nuclear dust wave (client/fx/layer/DustWallPass; unified-wave probe): one presentation model (presentation, not physical) of a
+// detonation's ground dust over its whole lifetime: born at zero on the contact line, a small uneven hump, settled within about
+// a second, the layer behind it, its haze thinning and drifting with the wind for hours, filled with matte, billowed dust, and
+// its light. Every ground point's dust is one function of its own age since the front passed it.
 // Physics enters only as inputs the screen shows (DustWallPass.Frame): where the front is and when it passed a radius
 // (table: the mod's in-game front), the settled layer height there and how much dust was lofted, the world wind, the
 // fireball, sun and sky light. Everything else (hump, rise, settling, billows, their motion, light response) is this model's.
@@ -11,12 +12,17 @@
 uniform sampler3D DwNoise;
 // (eye x, y, z from ground zero's ground point; seconds since the burst on the detonation clock)
 uniform vec4 DwEye;
-// (front radius now; inner radius of the young wall: the front DustWallPass.SPAN seconds ago; envelope top, blocks; table reach)
+// (front radius now; 0; envelope top, blocks; table reach)
 uniform vec4 DwRing;
 uniform vec4 PallYoung;
-// table (DW_NODES × 1, RGBA32F): node i at radius i / (DW_NODES − 1) × reach: (front arrival, s since burst; settled layer
-// height, blocks; lofted dust extinction, 1/block; dust over hard ground relative to soil, PallField.paved)
+// table (DW_NODES × (1 + DW_AGES), RGBA32F, PallField.lifetime): node i at radius i / (DW_NODES − 1) × reach. Row 0: (front
+// arrival, model s since the burst; dust over hard ground relative to soil, PallField.paved; 0; 0). Row 1 + k, age node k
+// (age = DwLife.y · ((1 + DwLife.x / DwLife.y)^(k / (DW_AGES − 1)) − 1)): (the presentation layer top, blocks; the column's
+// vertical optical depth the transfer reads; both slopes per age node)
 uniform sampler2D Sampler2;
+// (the table's last age, model s; its age scale, model s; drift of the lofted dust, blocks per model second of its age: the
+// detonation's wind × PallField.DRIFT)
+uniform vec4 DwLife;
 // (fireball centre from ground zero's ground point, radius)
 uniform vec4 DwBall;
 // light colours (linear, frame units): fireball at its surface, sun, sky from above, ground bounce
@@ -33,7 +39,7 @@ uniform vec3 DwSandAlbedo;
 uniform vec3 DwSandBulk;
 // ground radius of the fireball now, blocks: no dust under it (PallField.young zeroes its nodes; this cuts between them)
 uniform float DwCut;
-// (wind x, z, blocks/s; 0; 0)
+// (wind x, z, blocks/s; 0; 0): unused, the drift is DwLife.zw
 uniform vec4 DwWind;
 // lowest and highest ground of the terrain map under the wall, blocks above ground zero's ground point (0, 0: no map)
 uniform vec2 DwRelief;
@@ -71,10 +77,98 @@ float gDwSurf = 0.0, gDwSigma = 0.0, gDwSand = 0.0;
 // set by dwDensity: the swell at the sample (dwBulge, share of the layer): sags sit in the shade of the swells around them
 float gDwSwell = 0.0;
 
-vec4 dwNode(float r) {
+// table row 0 at ground radius r: (front arrival, model s; paved share)
+vec2 dwRow0(float r) {
     float x = clamp(r / max(DwRing.w, 1.0), 0.0, 1.0) * (DW_NODES - 1.0);
     int i = int(min(floor(x), DW_NODES - 2.0));
-    return mix(texelFetch(Sampler2, ivec2(i, 0), 0), texelFetch(Sampler2, ivec2(i + 1, 0), 0), x - float(i));
+    return mix(texelFetch(Sampler2, ivec2(i, 0), 0).xy, texelFetch(Sampler2, ivec2(i + 1, 0), 0).xy, x - float(i));
+}
+float dwArrival(float r) {
+    return dwRow0(r).x;
+}
+
+const float DW_AGES = 32.0;
+// the table's age coordinate of age a (model s): log-spaced nodes, fine at birth, coarse over hours
+float dwAgeU(float a) {
+    return log(1.0 + max(a, 0.0) / DwLife.y) / log(1.0 + DwLife.x / DwLife.y) * (DW_AGES - 1.0);
+}
+// one node's law at age coordinate u: cubic Hermite between the age nodes (values and slopes stored: C1 in age, no kink at a
+// node); (presentation layer top, blocks; optical depth)
+vec2 dwLawAt(int i, float u) {
+    float k = clamp(floor(u), 0.0, DW_AGES - 2.0), f = clamp(u - k, 0.0, 1.0);
+    // (u at the last node: f = 1 of the last interval)
+    vec4 p0 = texelFetch(Sampler2, ivec2(i, 1 + int(k)), 0), p1 = texelFetch(Sampler2, ivec2(i, 2 + int(k)), 0);
+    float f2 = f * f, f3 = f2 * f;
+    float h00 = 2.0 * f3 - 3.0 * f2 + 1.0, h10 = f3 - 2.0 * f2 + f, h01 = -2.0 * f3 + 3.0 * f2, h11 = f3 - f2;
+    return max(h00 * p0.xy + h10 * p0.zw + h01 * p1.xy + h11 * p1.zw, vec2(0.0));
+}
+// the law at ground radius r and age a (model s since the front passed there): (presentation layer top, blocks; the column's
+// vertical optical depth for the transfer); none before arrival and past the table's last age (fading over its last node)
+vec2 dwLaw(float r, float a) {
+    if (a <= 0.0) return vec2(0.0);
+    // past the table's last age the top stays, the depth is gone (faded over the last node)
+    float u = min(dwAgeU(a), DW_AGES - 1.0);
+    float x = clamp(r / max(DwRing.w, 1.0), 0.0, 1.0) * (DW_NODES - 1.0);
+    int i = int(min(floor(x), DW_NODES - 2.0));
+    vec2 v = mix(dwLawAt(i, u), dwLawAt(i + 1, u), x - float(i));
+    v.y *= 1.0 - smoothstep(DW_AGES - 2.0, DW_AGES - 1.0, dwAgeU(a));
+    return v;
+}
+
+// the density transfer (presentation): the drawn column's vertical optical depth from the law's. τ itself up to 1 (thin haze
+// hides what the law's optical depth hides, Koschmieder); compressive above it, the slope falling from 1 smoothly to
+// DW_G_SLOPE over DW_G_KNEE (C1 at τ = 1; the matte, semi-transparent wall: the law's columns of tens to hundreds would draw
+// an opaque skin). Fitted to take 33's drawn column at 4.5 km from 1 Mt, ages 1–24 s (tools/uw_probe/probe_gl.py)
+const float DW_G_SLOPE = 0.073, DW_G_KNEE = 0.5;
+float dwTransfer(float tau) {
+    if (tau <= 1.0) return tau;
+    float x = tau - 1.0;
+    return 1.0 + DW_G_SLOPE * x + (1.0 - DW_G_SLOPE) * DW_G_KNEE * (1.0 - exp(-x / DW_G_KNEE));
+}
+// ∫ of the noise-free vertical profile (dwDensity's prof · strat · the ground fade) over a settled layer of top h, blocks
+// (fit within 0.7 % for h ≥ 6): σ = τ_d · profile / dwProfileInt(h) gives the column τ_d
+float dwProfileInt(float h) {
+    return max(0.9483 * h - 2.854, 1.0);
+}
+
+// the ground point the air at ground point p came from: p minus the drift of its dust since its own birth (the law's drift:
+// the detonation's wind × DRIFT, from the front's arrival there). Fixed point q = p − D·age(q), two steps from
+// q₀ = p − D·age(p); the drift is a small share of the front's speed, so it converges at once
+vec2 dwSource(vec2 p) {
+    vec2 D = DwLife.zw;
+    if (dot(D, D) <= 0.0) return p;
+    vec2 q = p - D * max(DwEye.w - dwArrival(length(p)), 0.0);
+    q = p - D * max(DwEye.w - dwArrival(length(q)), 0.0);
+    return p - D * max(DwEye.w - dwArrival(length(q)), 0.0);
+}
+
+// decaying turbulence (presentation, by the decaying-turbulence law: velocity ∝ (1 + a/τ)^(−0.6), energy exponent 1.2,
+// Comte-Bellot & Corrsin 1966; τ 300 s (est.): the young layer's eddies, take 33's ~25 s violent phase on top): the residual
+// eddies' share of their first strength, and their phase (∫ of the speed: eddies turn over ever more slowly, never stop)
+const float DW_EDDY_S = 300.0;
+float dwEddyAmp(float a) {
+    return pow(1.0 + max(a, 0.0) / DW_EDDY_S, -0.6);
+}
+float dwEddyPhase(float a) {
+    float x = max(a, 0.0) / DW_EDDY_S;
+    // (a series below x = 0.01: the difference of powers cancels in float32)
+    return x < 0.01 ? max(a, 0.0) * (1.0 - 0.3 * x + 0.14 * x * x) : DW_EDDY_S / 0.4 * (pow(1.0 + x, 0.4) - 1.0);
+}
+// contrast of the billow texture (presentation): the turbulence decays and fine dust dilutes, the haze smooths over minutes
+// to hours (≥ 0.98 over take 33's 24 s)
+float dwContrast(float a) {
+    return pow(1.0 + max(a, 0.0) / 600.0, -0.5);
+}
+// a smooth max(a − c, 0) (softplus, width 1 s): no kink in any age function
+float dwAfter(float a, float c) {
+    float x = a - c;
+    return x > 20.0 ? x : log(1.0 + exp(x));
+}
+
+// a smooth ramp in age from 0 to 1 centred on c, width w (logistic: never exactly flat, no kink at its ends, where a
+// smoothstep's slope ends; C3's rule)
+float dwRamp(float a, float c, float w) {
+    return 1.0 / (1.0 + exp(-(a - c) / w));
 }
 
 // value noise from DwNoise, a 128³ lattice of random values (DustWallPass.lattice), one trilinear fetch at the smoothstep-
@@ -164,8 +258,8 @@ float dwClock(float a, vec2 xz) {
 // negative phase, the top more (rolls); the world wind drifts it all
 vec3 dwAir(vec3 q, float a, float r, float top, out float ph) {
     float E = exp(-a / 25.0), Ef = exp(-a / 4.0);
-    float A = 0.3 + 0.7 * E + 0.9 * Ef;
-    ph = 0.5 * (25.0 * (1.0 - E) + 0.25 * a) + 3.5 * (1.0 - Ef);
+    float A = 0.3 * dwEddyAmp(a) + 0.7 * E + 0.9 * Ef;
+    ph = 0.5 * (25.0 * (1.0 - E) + 0.25 * dwEddyPhase(a)) + 3.5 * (1.0 - Ef);
     vec3 b = q / vec3(32.0, 20.0, 32.0);
     // one octave: a second one shears the 20 m billows into marbled, liquid-looking swirls
     vec3 w = vec3(dwNoise3(b + vec3(0.0, ph * 0.15, 0.0)), dwNoise3(b + vec3(5.2, 1.3 - ph * 0.14, 2.8)),
@@ -177,21 +271,24 @@ vec3 dwAir(vec3 q, float a, float r, float top, out float ph) {
     // the dust out (~25 m over ~2 s, the dust stays near where it was torn up), the weaker, longer negative phase stalls
     // it and brings part of it back over ~6 s, the top further than the base (rolls fold over); then the afterwind draws
     // the low dust in toward the rising fireball, a few m/s, stronger closer in
-    float out_ = 25.0 * (1.0 - exp(-a / 1.0)) - 15.0 * smoothstep(2.0, 8.0, a);
-    float in_ = 3.0 * clamp(2500.0 / max(r, 1.0), 0.3, 2.0) * max(a - 5.0, 0.0) * (1.0 - 0.7 * min(yy, 1.0));
+    float out_ = 25.0 * (1.0 - exp(-a / 1.0)) - 15.0 * dwRamp(a, 5.0, 1.0);
+    // (dying out over ~2 min as the ball rises away, est.: take 33 drew it for 24 s only)
+    float aw = dwAfter(a, 5.0) / 120.0;
+    float in_ = 3.0 * clamp(2500.0 / max(r, 1.0), 0.3, 2.0) * 120.0 * (aw < 1e-3 ? aw * (1.0 - 0.5 * aw) : 1.0 - exp(-aw)) * (1.0 - 0.7 * min(yy, 1.0));
     pw.xz -= rdir * (out_ * (0.3 + 0.7 * yy) - in_);
     // residual turbulence behind the front: neighbouring parcels circle on slow orbits (20 m, 5 m/s; phases varying over
     // ~150 m), so the settled dust keeps swirling and drifting sideways as real dust does, never frozen, without the
     // endless shear a steady flow field would stretch it into; they turn either way (sense and ellipse from the phase field,
     // zero mean): orbits of one sense everywhere read as the whole mass turning around ground zero
     float sw = 6.2832 * dwNoise3(vec3(q.xz / 150.0, 71.3)), hand = sin(3.0 * sw);
-    pw.xz -= 20.0 * vec2(cos(0.25 * a + sw), hand * sin(0.25 * a + sw)) * (1.0 - exp(-a / 1.5)) * (0.6 + 0.4 * yy);
+    float orbit = 0.25 * dwEddyPhase(a);
+    pw.xz -= 20.0 * vec2(cos(orbit + sw), hand * sin(orbit + sw)) * (1.0 - exp(-a / 1.5)) * (0.6 + 0.4 * yy);
     // gusts behind the front: the hit air keeps surging forward and sideways in ~200 m gust cells whose push changes over
     // a few seconds, strongest just after the front and calming over ~15 s (presentation)
     vec2 gp = q.xz / 220.0 + vec2(0.0, 0.35 * a);
     vec2 gust = vec2(dwNoise3(vec3(gp, 3.3)), dwNoise3(vec3(gp + 7.7, 9.1))) - 0.5;
     pw.xz -= gust * 30.0 * (1.0 - exp(-a / 0.8)) * exp(-a / 15.0) * (0.5 + 0.5 * yy);
-    pw.xz -= DwWind.xy * a;
+    // (the wind's drift is the law's, dwSource: q is already the ground point the air came from)
     return pw;
 }
 
@@ -208,11 +305,12 @@ float dwBulge(vec3 pw, float a) {
     vec2 p = pw.xz / 220.0;
     float w = dwNoise3(vec3(p * 0.4, 4.4)) - 0.5;
     p += 0.8 * vec2(w, -w);
-    float L = 0.6 * dwNoise3(vec3(p, 7.1 + 0.08 * a)) + 0.4 * dwNoise3(vec3(pw.xz / 90.0, 0.37 + 0.12 * a));
+    float e = dwEddyPhase(a);
+    float L = 0.6 * dwNoise3(vec3(p, 7.1 + 0.08 * e)) + 0.4 * dwNoise3(vec3(pw.xz / 90.0, 0.37 + 0.12 * e));
     // hollows opening in the blanket: in patches ~160 m across the layer sinks by up to 40 % over 3–10 s behind the front,
     // drifting slowly (presentation: the mass shifting as the blast wind reverses)
-    float hollow = smoothstep(0.62, 0.8, dwNoise3(vec3(pw.xz / 160.0, 2.2 + 0.03 * a))) * smoothstep(3.0, 10.0, a);
-    return DW_BULGE * dwSoft((L - 0.5) * 4.0) * mix(0.2, 1.0, smoothstep(1.5, 4.0, a)) - 0.4 * hollow;
+    float hollow = smoothstep(0.62, 0.8, dwNoise3(vec3(pw.xz / 160.0, 2.2 + 0.03 * e))) * dwRamp(a, 6.5, 1.2);
+    return DW_BULGE * dwSoft((L - 0.5) * 4.0) * mix(0.2, 1.0, dwRamp(a, 2.75, 0.45)) - 0.4 * hollow;
 }
 
 // a buoyant tongue above the top: about one 110 m cell in three lifts a rounded column of dust up to ~35 % of the layer
@@ -235,60 +333,89 @@ float dwPuff(vec3 pw, float top, float a) {
 // the smooth dust top over ground point xz (no billows; the light's shadow surface), blocks above the local ground; 0 where
 // no young dust
 float dwTopAt(vec2 xz) {
-    float r = length(xz);
-    if (r > min(DwRing.x + 2.0, DwRing.w) || r < DwRing.y - 50.0) return 0.0;
-    vec4 n0 = dwNode(r);
-    float a = DwEye.w - n0.x;
-    if (a <= 0.0 || n0.z <= 0.0) return 0.0;
+    vec2 q = dwSource(xz);
+    float r = length(q);
+    if (r > min(DwRing.x + 2.0, DwRing.w) || r < DwCut - 50.0) return 0.0;
+    float a = DwEye.w - dwArrival(r);
+    vec2 law = dwLaw(r, a);
+    if (a <= 0.0 || law.y <= 0.0) return 0.0;
     // without the hump: its shadow would sweep over the near dust at the front's speed (lit patches sliding at the passage)
-    float top = dwEnvelope(a, n0.y, 1.0), ph;
-    vec3 pw = dwAir(vec3(xz.x, 0.6 * top, xz.y), dwClock(a, xz), r, top, ph);
+    float top = dwEnvelope(a, law.x, 1.0), ph;
+    vec3 pw = dwAir(vec3(q.x, 0.6 * top, q.y), dwClock(a, q), r, top, ph);
     return top * (1.0 + dwBulge(pw, a));
 }
 
 // highest the dust can reach above the local ground at a point (blocks), below 0 where no young dust is
-float dwBound(vec3 q) {
-    float r = length(q.xz);
-    if (r > min(DwRing.x + 2.0, DwRing.w) || r < max(DwRing.y - 50.0, DwCut)) return -1.0;
-    vec4 n0 = dwNode(r);
-    float a = DwEye.w - n0.x;
-    if (a < 0.0 || n0.z <= 0.0) return -1.0;
+float dwBound(vec3 g) {
+#ifdef DW_ANALYTIC
+    // the harness's analytic media (tools/uw_probe/probe_gl.py: E8 accuracy of the march)
+    return dwAnalyticBound(g);
+#endif
+    vec2 q = dwSource(g.xz);
+    float r = length(q);
+    if (r > min(DwRing.x + 2.0, DwRing.w) || r < DwCut) return -1.0;
+    float a = DwEye.w - dwArrival(r);
+    if (a < 0.0) return -1.0;
+    vec2 law = dwLaw(r, a);
+    if (law.y <= 0.0) return -1.0;
     // the envelope here (an older point inward is no higher: the hump is at the front) lifted by the bulges, billows and edge;
     // 1.6: the largest hump, for the forward lean of the crest
-    float env = a < 1.5 ? n0.y * 1.8 : dwEnvelope(a, n0.y, 1.8);
+    float env = a < 1.5 ? law.x * 1.8 : dwEnvelope(a, law.x, 1.8);
     return env * (1.0 + DW_BULGE) * DW_HAZE + 6.0;
 }
 
-// dust extinction (1/block) at q; coarse: light paths (the billows' two first octaves, no streaks, no fine octaves)
+// noise-free mode (the consumers' reference, the thin tail and plan B's far level): mean seeds and texture, no swells or puffs
+bool gDwMean = false;
+// the noise's gain on the column's extinction that keeps its mean transmission over the billow tile the noise-free column's
+// (review N6: equal mean extinction gives a higher mean transmission, by Jensen). The noisy column's mean optical depth is
+// DW_NOISE_MEAN below the noise-free one (the swells' hollows, the texture's means), and a Gamma(k) model of its spread:
+// E[e^(−κτm)] = (1 + κτ/k)^(−k) = e^(−τ) for κ = k(e^(τ/k) − 1)/τ; above τ ≈ 4 nothing shows through either way, so κ holds
+// its value there (a soft min) instead of growing. Fitted on 11 columns (tools/uw_probe/probe_gl.py: thin, 0.05 ≤ τ ≤ 6)
+const float DW_NOISE_K = 12.0, DW_NOISE_MEAN = 1.058;
+float dwNoiseGain(float tau) {
+    float t = 4.0 * tau / (4.0 + tau);
+    return DW_NOISE_MEAN * (t < 1e-4 ? 1.0 : DW_NOISE_K * (exp(t / DW_NOISE_K) - 1.0) / t);
+}
+
+// dust extinction (1/block) at g; coarse: light paths (the billows' two first octaves, no streaks, no fine octaves)
 float dwDensity(vec3 g, bool coarse) {
     if (!coarse) gDwSigma = 0.0;
-    // heights above the local ground
-    vec3 q = vec3(g.x, g.y - dwFloor(g.xz), g.z);
+#ifdef DW_ANALYTIC
+    gDwSurf = 1e9;
+    return dwAnalytic(g);
+#endif
+    // heights above the local ground (the destination's terrain); the ground point the air came from (the law's drift)
+    float hq = g.y - dwFloor(g.xz);
+    vec2 src = dwSource(g.xz);
+    vec3 q = vec3(src.x, hq, src.y);
     float r = length(q.xz);
-    if (r > DwRing.x + 2.0 || r < max(DwRing.y - 50.0, DwCut)) return 0.0;
-    vec4 n0 = dwNode(r);
-    float a0 = DwEye.w - n0.x;
-    if (a0 < 0.0 || n0.z <= 0.0) return 0.0;
+    if (r > DwRing.x + 2.0 || r < DwCut) return 0.0;
+    float a0 = DwEye.w - dwArrival(r);
+    if (a0 < 0.0) return 0.0;
+    vec2 law = dwLaw(r, a0);
+    if (law.y <= 0.0) return 0.0;
+    bool mean = gDwMean;
     // One model, per-point birth (LOOK Trait 0): the front is a line of births running over the ground. Each ground point
     // tears up its own dust when the front reaches it: its seed (world-fixed, `dwSeeds`) sets its birth a little
     // after the front's arrival (lagging patches open clefts in the front line), how much it raises, its column's height
-    // and overshoot; its column rises, overshoots and settles by its own age and stays where it was born. Nothing rides
-    // with the front: a ramp surface shared by every point read as one mass carried out from the centre
+    // and overshoot; its column rises, overshoots and settles by its own age and stays where it was born (carried only by
+    // the wind's drift, dwSource). Nothing rides with the front. The layer behind it, its haze and fade are the same column
+    // at later ages: its top and optical depth are the law's at its age (dwLaw), nothing switches at any age.
     // (light paths take the mean point: their shade is smooth)
-    vec3 seed = coarse ? vec3(0.5) : dwSeeds(q.xz);
+    vec3 seed = coarse || mean ? vec3(0.5) : dwSeeds(q.xz);
     float s1 = seed.x, s2 = seed.y;
     float delay = 0.12 * clamp(1.6 * s2 - 0.55, 0.0, 1.0) * (0.6 + 0.8 * s1);
-    float h = n0.y * mix(0.88, 1.02, s2), k = dwHump(seed.z);
+    float h = law.x * mix(0.88, 1.02, s2), k = dwHump(seed.z);
     float top0 = max(dwEnvelope(a0, h, k), 1.0), ceiling = top0 * (1.0 + DW_BULGE) * DW_HAZE + 6.0;
     if (q.y > ceiling) return 0.0;
     // higher up the dust has the profile of a point a little outward (younger): the face is a ramp from the ground up
     // into the crest, leaning back, never ahead of the front
     float yn = clamp(q.y / top0, 0.0, 1.5);
-    float a = DwEye.w - dwNode(r + 40.0 * yn * yn * exp(-a0 / 1.5)).x - delay;
+    float a = DwEye.w - dwArrival(r + 40.0 * yn * yn * exp(-a0 / 1.5)) - delay;
     if (a <= 0.0) return 0.0;
     float top = dwEnvelope(a, h, k), env = top, ph;
     vec3 pw = dwAir(q, dwClock(a, q.xz), r, top, ph);
-    float swell = dwBulge(pw, a);
+    float swell = mean ? 0.0 : dwBulge(pw, a);
     if (!coarse) gDwSwell = swell;
     top *= 1.0 + swell;
     // One frame for the texture: fixed in the air across the ground and carried by the dust's own rise and fall in height
@@ -298,17 +425,19 @@ float dwDensity(vec3 g, bool coarse) {
     // the front, the texture slid outward with it (take 26: 2–10 px a frame, "too mobile") and, at the eye, crossed its
     // rays in one or two frames as the front passed under it (the lower frame fluttered)
     float yc = q.y * h / max(env, 2.0) + (pw.y - q.y);
+    // the texture's contrast fades as the turbulence decays and the fines dilute (dwContrast)
+    float C = dwContrast(a);
     // billows of ~20 × 13 m and finer (light paths see the two first octaves)
     vec3 tq = vec3(pw.x, yc - 0.45 * ph, pw.z) / vec3(20.0, 13.0, 20.0);
-    float n = coarse ? dwFbm2(tq, 0.0) : dwFbm(tq, 1.0 / 13.0);
+    float n = mean ? 0.5 : mix(0.5, coarse ? dwFbm2(tq, 0.0) : dwFbm(tq, 1.0 / 13.0), C);
     // cauliflower lumps of the top, ~35 m and finer, in the same frame
-    float bl = coarse ? 0.42 : dwBillow(vec3(pw.x, yc - 0.3 * ph, pw.z) / vec3(34.0, 22.0, 34.0) + 11.0, 1.0 / 22.0);
+    float bl = coarse || mean ? 0.42 : mix(0.42, dwBillow(vec3(pw.x, yc - 0.3 * ph, pw.z) / vec3(34.0, 22.0, 34.0) + 11.0, 1.0 / 22.0), C);
     // fibrous streaks combed along the radial wind, ~28 m along, 4.5 m across
     float fs = 0.5;
-    if (!coarse) {
+    if (!coarse && !mean) {
         float ral = length(pw.xz);
         float angle = pw.x == 0.0 ? sign(pw.z) * 1.57079633 : atan(pw.z, pw.x);
-        fs = mix(0.5, dwFbm2(vec3(ral / 28.0, (yc - 0.25 * ph) / 5.0, angle * ral / 4.5), 0.0), dwLod(1.0 / 2.2));
+        fs = mix(0.5, dwFbm2(vec3(ral / 28.0, (yc - 0.25 * ph) / 5.0, angle * ral / 4.5), 0.0), dwLod(1.0 / 2.2) * C);
     }
     // the billowed surface: rises and dips by the texture (cauliflower billows, ragged where the dust is young), within
     // DW_BILLOW of the top: the hump's excess (+30–50 %) stays well above the billows, so the crest reads as a crest
@@ -319,13 +448,16 @@ float dwDensity(vec3 g, bool coarse) {
     // view at grazing angles)
     float edge = 0.22 * top + 4.0;
     float prof = 1.0 - smoothstep(surf - edge, surf + 0.4 * edge, q.y);
-    // coarse dust falls back (the core thins over seconds, fines stay); the young head is denser
-    float amt = (0.45 + 0.55 * exp(-max(a - 1.0, 0.0) / 8.0)) * (1.0 + 0.5 * exp(-a / 1.1));
-    float fade = wallShare(PallYoung, r);
+    // the drawn column: the law's vertical optical depth through the one transfer (dwTransfer), laid in this profile
+    // normalised over the settled layer (dwProfileInt); settling and dilution are the law's alone. The young head is denser
+    // (presentation, take 33's: ×1.5 at birth, e-fold 1.1 s)
+    float taud = dwTransfer(law.y) * (1.0 + 0.5 * exp(-a / 1.1));
     // over hard ground only debris dust (the pall's own reading: PallField.paved of the soil's mass), sand pales it
     vec2 soil = dwSoilAt(q.xz);
-    float paved = 1.0 + soil.x * (n0.w - 1.0);
-    float sigma = n0.z * amt * fade * paved * mix(0.75, 1.25, 0.55 * s1 + 0.45 * s2);
+    float paved = 1.0 + soil.x * (dwRow0(r).y - 1.0);
+    float sigma = taud / dwProfileInt(h) * paved * mix(1.0, mix(0.75, 1.25, 0.55 * s1 + 0.45 * s2), C)
+            * (1.0 - smoothstep(DwRing.w * (1.0 - 1.0 / (DW_NODES - 1.0)), DwRing.w, r));
+    if (!coarse && !mean) sigma *= dwNoiseGain(taud);
     if (!coarse) {
         sigma *= dwOpen(g);
         gDwSand = clamp(soil.y / max(paved, 1e-6), 0.0, 1.0);
@@ -335,7 +467,7 @@ float dwDensity(vec3 g, bool coarse) {
     // shelf); here and there a puff lifted above the top that thins into the veil and drifts with the wind
     float strat = 1.25 - 0.5 * clamp(q.y / max(top, 1.0), 0.0, 1.0);
     float veil = (1.0 - smoothstep(surf, surf * 1.12 + 4.0, q.y)) * smoothstep(surf * 0.8, surf, q.y) * 0.03;
-    float puff = coarse || q.y < top * 0.8 ? 0.0 : dwPuff(vec3(pw.x, q.y, pw.z), top, a) * (1.0 - smoothstep(ceiling - 8.0, ceiling, q.y));
+    float puff = coarse || mean || q.y < top * 0.8 ? 0.0 : dwPuff(vec3(pw.x, q.y, pw.z), top, a) * (1.0 - smoothstep(ceiling - 8.0, ceiling, q.y));
     // the lowest metres thin to the ground (soft where no terrain stands under the dust)
     return sigma * smoothstep(0.0, 0.08, a) * smoothstep(0.0, 3.0, q.y)
             * (prof * strat * (0.5 + 1.0 * n) * (0.7 + 0.6 * fs) + (veil + puff) * (0.6 + 0.8 * n));
@@ -395,12 +527,62 @@ float dwGridK(float t) {
     return t < tb ? t / DW_S : 1.0 / DW_K + log(t / tb) / log(1.0 + DW_K);
 }
 
+// detail levels of the march (DwFar): x — 1: plan B's far level (beyond the footprint where a pixel spans y blocks, the
+// largest billow, the ray integrates the noise-free column in one segment, blended in over a factor of 2), 0: the full march
+uniform vec4 DwFar;
+// longest stride over clear air inside the dust's bound, blocks
+const float DW_GAP = 24.0;
+// diagnostics of the last march (harness): occupied samples, step-cap exits with material left, tail optical depth
+int gDwSamples = 0;
+float gDwCapLeft = 0.0, gDwTailTau = 0.0;
+
+// the noise-free column integrated over [ta, tb] along the ray in n Gauss–Legendre segments of 4 nodes, light at each node:
+// the thin tail past the step cap and plan B's far level. Returns premultiplied light; T and the depth moments advance
+vec3 dwSegment(vec3 eye, vec3 rd, float ta, float tb, int n, inout float T, vec3 airLight) {
+    vec3 light = vec3(0.0);
+    if (tb <= ta) return light;
+    const vec4 X = vec4(-0.8611363, -0.3399810, 0.3399810, 0.8611363), W = vec4(0.3478548, 0.6521452, 0.6521452, 0.3478548);
+    bool was = gDwMean;
+    gDwMean = true;
+    // log-spaced segments (the eye's side is denser in angle)
+    float la = log(max(ta, 1.0)), lb = log(max(tb, 1.0));
+    for (int j = 0; j < 8; j++) {
+        if (j >= n) break;
+        float s0 = exp(mix(la, lb, float(j) / float(n))), s1 = exp(mix(la, lb, float(j + 1) / float(n)));
+        if (j == 0) s0 = ta;
+        if (j == n - 1) s1 = tb;
+        float half_ = 0.5 * (s1 - s0), mid = 0.5 * (s1 + s0);
+        for (int m = 0; m < 4; m++) {
+            float tt = mid + half_ * X[m], dt = half_ * W[m];
+            vec3 q = eye + rd * tt;
+            float sg = dwDensity(q, false);
+            if (sg <= 1e-7) continue;
+            float al = exp(-sg * dt);
+            vec3 c = dwLight(q, rd);
+            float air = dwAirT(tt, rd.y);
+            light += T * (1.0 - al) * (air * c + (1.0 - air) * airLight);
+            if (T == 1.0) gDwDepth.x = tt;
+            gDwDepth.y = tt + dt;
+            gDwDepth.z += (T * (1.0 - al)) * tt;
+            gDwTailTau += sg * dt;
+            T *= al;
+        }
+    }
+    gDwMean = was;
+    return light;
+}
+
 // march of one ray from the eye (direction rd, unit) up to tEnd blocks (the world behind the pixel); jitter in [0, 1);
 // foot: pixel size per block of distance. Returns premultiplied light and transmittance.
 // Samples sit on a grid fixed along the ray from the eye (geometric steps from the eye, independent of where the
-// wall's span starts), so they do not slide through the texture as the front grows; every sample and span ends at tEnd.
+// dust starts), so they do not slide through the texture as the front grows; every sample and span ends at tEnd. The ray
+// covers the whole supported distance: empty air is skipped in growing strides, thin dust is taken in growing spans, and
+// what the step cap leaves of the ray is integrated from the noise-free column (no far haze is dropped, review finding 14).
 vec4 dwMarch(vec3 rd, float tEnd, float jitter, float foot, int maxSteps) {
     vec3 eye = DwEye.xyz;
+    gDwSamples = 0;
+    gDwCapLeft = 0.0;
+    gDwTailTau = 0.0;
     // vertical slab from the lowest ground to the envelope top over the highest
     float lo = DwRelief.x - 1.0, hi = DwRelief.y + DwRing.z;
     float t0 = 0.0, t1 = tEnd;
@@ -411,10 +593,9 @@ vec4 dwMarch(vec3 rd, float tEnd, float jitter, float foot, int maxSteps) {
         t0 = max(t0, min(ta, tb));
         t1 = min(t1, max(ta, tb));
     }
-    // annulus [inner, front]: clip to the outer circle (inner is skipped by the density's early return); a vertical ray
-    // stays at its own radius
+    // the disc of dust: the front's circle, widened by the oldest dust's drift; a vertical ray stays at its own radius
     vec2 oc = eye.xz;
-    float R = DwRing.x + 4.0;
+    float R = DwRing.x + 4.0 + length(DwLife.zw) * max(DwEye.w, 0.0);
     float A = dot(rd.xz, rd.xz), Bq = dot(oc, rd.xz), C = dot(oc, oc) - R * R;
     if (A < 1e-10) {
         if (C > 0.0) return vec4(0.0, 0.0, 0.0, 1.0);
@@ -426,24 +607,34 @@ vec4 dwMarch(vec3 rd, float tEnd, float jitter, float foot, int maxSteps) {
         t1 = min(t1, (-Bq + sq) / A);
     }
     if (t0 >= t1) return vec4(0.0, 0.0, 0.0, 1.0);
+    vec3 light = vec3(0.0), c = vec3(0.0), airLight = dwAirLight(rd);
+    // plan B: the noisy march ends where a pixel spans twice the largest billow, the far level takes the rest
+    float tB = DwFar.x > 0.5 ? DwFar.y / max(foot, 1e-6) : 1e30;
+    float tMarch = min(t1, 2.0 * tB);
     // sample grid fixed along the ray from the eye: 3.5-block steps to 3.5/K blocks, then geometric (step K × distance:
     // 6.5 m at 1 km, 26 m at 4 km); the history averages the moving offset within each step (a coarser grid, averaged,
     // lost the billows' fine detail)
     float k = floor(dwGridK(t0));
-    // n: cells to the next sample (strides grow over empty air); kLast: the last sampled cell
+    // n: cells to the next sample (strides grow over empty air and thin dust); kLast: the last sampled cell
     float n = 1.0, kLast = k - 1.0;
-    vec3 light = vec3(0.0), c = vec3(0.0), airLight = dwAirLight(rd);
-    float T = 1.0;
-    for (int i = 0; i < 400; i++) {
-        float t = dwGridT(k);
-        if (i >= maxSteps || t >= t1 || T < 0.02) break;
-        float dt = min(dwGridT(k + 1.0), t1) - t;
+    float T = 1.0, t = t0;
+    bool inDust = false, capped = false;
+    // the step cap counts occupied samples (each with its light), not strides over clear air: a cap on every stride
+    // handed the far thin spans to the noise-free tail, which saw none of them (E8: 0.29 at HIGH)
+    for (int i = 0; i < 640; i++) {
+        t = dwGridT(k);
+        if (t >= tMarch || T < 0.01) break;
+        if (gDwSamples >= maxSteps || i == 639) {
+            capped = true;
+            break;
+        }
+        float dt = min(dwGridT(k + 1.0), tMarch) - t;
         float tt = t + dt * jitter;
         vec3 q = eye + rd * tt;
         float bound = dwBound(q);
         if (bound < 0.0) {
-            // no young dust at this radius: long strides
-            kLast = k; k += n; n = min(n * 2.0, 16.0);
+            // no dust at this radius: long strides
+            kLast = k; k += n; n = min(n * 2.0, 16.0); inDust = false;
             continue;
         }
         float hq = q.y - dwFloor(q.xz);
@@ -457,22 +648,35 @@ vec4 dwMarch(vec3 rd, float tEnd, float jitter, float foot, int maxSteps) {
             } else {
                 kLast = k; k += n; n = min(n * 2.0, 8.0);
             }
+            inDust = false;
             continue;
         }
         gDwFoot = max(tt * foot, dt * 0.3);
-        float s = dwDensity(q, false);
+        // plan B's blend: the noise fades to the column's mean over [tB, 2 tB]
+        float wB = smoothstep(tB, 2.0 * tB, tt);
+        float s;
+        if (wB > 0.0) {
+            float sn = wB < 1.0 ? dwDensity(q, false) : 0.0;
+            gDwMean = true;
+            float sm = dwDensity(q, false);
+            gDwMean = false;
+            s = mix(sn, sm, wB);
+        } else s = dwDensity(q, false);
         if (s > 1e-5) {
-            if (k - kLast > 1.0) {
-                // a stride landed in dust: single cells from just after the last empty sample
+            if (!inDust && k - kLast > 1.0) {
+                // a stride from empty air landed in dust: single cells from just after the last empty sample
                 k = kLast + 1.0; n = 1.0;
                 kLast = k - 1.0;
+                inDust = true;
                 continue;
             }
+            inDust = true;
+            gDwSamples++;
             c = dwLight(q, rd);
             // the thin soft edge, veil and puffs over the dense top: four cells per sample (at grazing views they are
-            // hundreds of metres of ray)
-            float cells = hq > gDwSurf + 2.0 ? 4.0 : 1.0;
-            float span = min(dwGridT(k + cells), t1) - t;
+            // hundreds of metres of ray); thin dust: the span grows while each cell holds little optical depth
+            float cells = max(hq > gDwSurf + 2.0 ? 4.0 : 1.0, n);
+            float span = min(dwGridT(k + cells), tMarch) - t;
             float al = exp(-s * span), air = dwAirT(tt, rd.y);
             // the air between the eye and the dust (haze, weather) shows its own light in front of it, as for the pall
             light += T * (1.0 - al) * (air * c + (1.0 - air) * airLight);
@@ -480,9 +684,22 @@ vec4 dwMarch(vec3 rd, float tEnd, float jitter, float foot, int maxSteps) {
             gDwDepth.y = t + span;
             gDwDepth.z += (T * (1.0 - al)) * tt;
             T *= al;
-            kLast = k + cells - 1.0; k += cells; n = 1.0;
+            kLast = k + cells - 1.0; k += cells;
+            n = s * dt < 0.01 ? min(cells * 2.0, 8.0) : 1.0;
         } else {
-            kLast = k; k += n; n = min(n * 2.0, 8.0);
+            // inside the dust's bound but clear here: strides no longer than DW_GAP blocks, so a thin span the bound admits
+            // (a swell's crest, another source's layer) is never stepped over (E8: five 50-block spans were missed at LOW)
+            kLast = k; k += n; n = min(n * 2.0, max(1.0, floor(DW_GAP / max(dt, 1e-3))));
+            inDust = false;
+        }
+    }
+    // the rest of the ray: past the step cap (the thin tail) or plan B's far level, from the noise-free column
+    if (T >= 0.01) {
+        float from = capped ? t : tMarch;
+        if (from < t1) {
+            float before = T;
+            light += dwSegment(eye, rd, from, t1, capped ? 8 : 4, T, airLight);
+            if (capped) gDwCapLeft = before - T;
         }
     }
     return vec4(light, T);

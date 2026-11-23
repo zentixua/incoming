@@ -240,6 +240,118 @@ public final class PallField {
         }
     }
 
+    /** Log-spaced age nodes of the whole-lifetime dust table ({@link #lifetime}). */
+    public static final int AGES = 32;
+    /** Age scale of the table's log coordinate log(1 + age / AGE0), model seconds. */
+    public static final double AGE0 = 0.05;
+
+    /** Latest age at which any node's lofted layer is still thicker than {@link #GONE_DEPTH}, model seconds (the table's last age). */
+    public double lifetimeEnd() {
+        double end = 60;
+        for (int i = 0; i < BINS; i++) end = Math.max(end, settledBy(columns[i]));
+        return end;
+    }
+
+    /** Age of table node u (fractional), model seconds. */
+    public static double lifetimeAge(double u, double end) {
+        return AGE0 * (Math.pow(1 + end / AGE0, u / (AGES - 1)) - 1);
+    }
+
+    /**
+     * Probe (unified-wave step 1): inputs of the whole-lifetime dust wave, the law's numbers by ground radius and log age.
+     * Row 0, node j at radius j/(n − 1) of {@link #reach}: front arrival (model s), dust over hard ground relative to soil
+     * ({@link #paved}), 0, 0. Rows 1..{@link #AGES}, age node k ({@link #lifetimeAge}): the presentation layer top (blocks)
+     * and the optical depth the transfer reads, then both slopes per age node (the shader's cubic Hermite in the age
+     * coordinate: C1, no kink at a node).
+     * <p>
+     * The top (presentation, not physical): {@code present} × the law's top ({@link DustModel.Column#height}) at the settle age
+     * (1 s; the birth, hump and settling are the presentation's), joining the law's rising top over {@link #LIFETIME_JOIN_S}
+     * (a cubic-exponential onset: take 33's layer height held through its 24 s, the law's top from ~5 min on). The depth: the law's
+     * extinction (its optical depth over its own top, {@link DustModel.Column#depth}: the only owner of settling and
+     * dilution) over the presentation's top: once the top has joined the law's, the law's optical depth itself.
+     */
+    public void lifetime(int n, double present, float[] out) {
+        double end = lifetimeEnd();
+        double[][] v = new double[AGES][];
+        for (int j = 0; j < n; j++) {
+            double rb = j / (n - 1.0) * reach, slant = Math.hypot(d.metres(rb), Math.max(0, d.hobMetres()));
+            int i = Math.min(BINS - 1, Math.max(0, (int) (rb / reach * BINS)));
+            out[4 * j] = (float) (d.arrivalTicks(d.blocks(slant)) / (20.0 * d.scale()));
+            out[4 * j + 1] = (float) paved[i];
+            out[4 * j + 2] = 0;
+            out[4 * j + 3] = 0;
+            DustModel.Column c = columns[i];
+            for (int k = 0; k < AGES; k++) v[k] = lifetimeAt(c, lifetimeAge(k, end), present);
+            for (int m = 0; m < 2; m++) {
+                // monotone cubic slopes (Fritsch–Carlson): C1, and no overshoot between nodes (no negative depth)
+                double[] slope = new double[AGES];
+                for (int k = 0; k < AGES; k++) {
+                    double dl = k > 0 ? v[k][m] - v[k - 1][m] : v[1][m] - v[0][m], dr = k < AGES - 1 ? v[k + 1][m] - v[k][m] : dl;
+                    slope[k] = dl * dr <= 0 ? 0 : 0.5 * (dl + dr);
+                }
+                for (int k = 0; k < AGES - 1; k++) {
+                    double dk = v[k + 1][m] - v[k][m];
+                    if (dk == 0) {
+                        slope[k] = slope[k + 1] = 0;
+                        continue;
+                    }
+                    double al = slope[k] / dk, be = slope[k + 1] / dk, r = al * al + be * be;
+                    if (r > 9) {
+                        double t = 3 / Math.sqrt(r);
+                        slope[k] = t * al * dk;
+                        slope[k + 1] = t * be * dk;
+                    }
+                }
+                for (int k = 0; k < AGES; k++) {
+                    int o = 4 * ((1 + k) * n + j);
+                    out[o + m] = (float) v[k][m];
+                    out[o + 2 + m] = (float) slope[k];
+                }
+            }
+        }
+    }
+
+    /** Settle age of the presentation's birth envelope, model s: the law's layer is read from here on (smoothly). */
+    static final double LIFETIME_SETTLE_S = 1.0;
+    /** The presentation top joins the law's rising top over this age (Gaussian onset), model s (presentation; est.). */
+    public static final double LIFETIME_JOIN_S = 180;
+
+    /**
+     * The lofted dust fills the layer the law's top deepens (its growth over the positive phase and over hot ground) by
+     * mixing, one eddy turnover behind it: h/w* with h ~100 m and w* ~25 m/s of the post-shock gusts, est. (model s).
+     */
+    public static final double LIFETIME_MIX_S = 4;
+
+    /** (presentation top, blocks; optical depth for the transfer) of column c at age (model s). */
+    private double[] lifetimeAt(DustModel.Column c, double age, double present) {
+        double first = Math.max(d.blocks(c.height(LIFETIME_SETTLE_S)), MIN_TOP_BLOCKS);
+        age = Math.max(age, 0);
+        // the dust's own height: a first-order lag of the law's top (exponential integrator over growing steps)
+        double mixed = first, s = 0, law = first;
+        while (s < age) {
+            double dt = Math.min(Math.max(0.02, 0.01 * s), age - s);
+            s += dt;
+            law = lifetimeLaw(c, s);
+            mixed = law + (mixed - law) * Math.exp(-dt / LIFETIME_MIX_S);
+        }
+        double x = age / LIFETIME_JOIN_S, join = 1 - Math.exp(-x * x * x);
+        double top = first + (law - first) * join;
+        double a = lifetimeSettled(age);
+        return new double[] {top * present, c.depth(a) * top / Math.max(mixed, top)};
+    }
+
+    /** A smooth max of the age and {@link #LIFETIME_SETTLE_S} (softplus, width 0.3 s), model s. */
+    private static double lifetimeSettled(double age) {
+        double w = 0.3, x = (age - LIFETIME_SETTLE_S) / w;
+        return LIFETIME_SETTLE_S + w * (x > 30 ? x : Math.log1p(Math.exp(x)));
+    }
+
+    /** The law's layer top read from the settle age on (a smooth max of the age and {@link #LIFETIME_SETTLE_S}), blocks. */
+    private double lifetimeLaw(DustModel.Column c, double age) {
+        double a = lifetimeSettled(age);
+        return Math.max(d.blocks(c.height(a)), MIN_TOP_BLOCKS);
+    }
+
     /** Ground ignition-zone radius, blocks (0 — no fires): haze above it, firestorm inside ({@link FireStorm}). */
     double fireReach() {
         return fireReach;
