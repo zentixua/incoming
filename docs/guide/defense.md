@@ -120,4 +120,7 @@ while the sky is clear and shut on alarm (more examples in [For server owners an
 - It works without missiles. Under a solid roof the radar sees nothing, so there is no signal; leaves do not hide the
   sky from the radar.
 - A comparator next to the SAM still shows how full its stock is.
+- Keep what you build beside it no taller than the SAM block: its radar looks out half a block above it, so a door or
+  an extended piston next to it hides targets lower than about 45° above the horizon straight out from that side, and
+  the alarm can drop as the door closes.
 - In an unloaded chunk the SAM keeps the signal it had and looks again within half a second once its chunk works.

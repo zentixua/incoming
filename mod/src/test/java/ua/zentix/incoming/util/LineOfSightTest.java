@@ -39,6 +39,24 @@ class LineOfSightTest {
         assertTrue(LineOfSight.clear(new Vec3(0.5, 65.5, 0.5), new Vec3(300, 66, 0.5), unknown));
     }
 
+    /**
+     * Guide promise (defense, SAM redstone): a door beside the SAM hides targets below about 45° straight out from that
+     * side. SAM block at y 64 (column's first air 65), antenna half a block above it ({@code SamBlockEntity}: block
+     * centre + 1, y 65.5), a two-high door in the next column east (first air 66): the line enters that column half a
+     * block out and must rise half a block, tan = 1.
+     */
+    @Test
+    void blockBesideSamHidesBelowFortyFive() {
+        LineOfSight.Columns door = (x, z) -> x == 0 && z == 0 ? 65 : x == 1 && z == 0 ? 66 : 64;
+        Vec3 antenna = new Vec3(0.5, 65.5, 0.5);
+        double far = 200;
+        assertFalse(LineOfSight.clear(antenna, new Vec3(0.5 + far, 65.5 + far * Math.tan(Math.toRadians(43)), 0.5), door));
+        assertTrue(LineOfSight.clear(antenna, new Vec3(0.5 + far, 65.5 + far * Math.tan(Math.toRadians(47)), 0.5), door));
+        // a block no taller than the SAM leaves the antenna's horizon open
+        LineOfSight.Columns low = (x, z) -> x <= 1 && z == 0 ? 65 : 64;
+        assertTrue(LineOfSight.clear(antenna, new Vec3(0.5 + far, 66, 0.5), low));
+    }
+
     /** A plumb straight line is one column. */
     @Test
     void verticalLine() {

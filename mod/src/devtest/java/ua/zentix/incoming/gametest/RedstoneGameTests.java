@@ -85,17 +85,19 @@ public final class RedstoneGameTests {
         SamBlockEntity samB = SamGameTests.sam(h, b, crew.getUUID(), 4);
         SamBlockEntity samC = SamGameTests.sam(h, c, crew.getUUID(), 0);
         h.setBlock(c.above(2), Blocks.STONE);
-        BlockPos dustA = a.west(), lamp = a.north(), piston = a.south(), comparator = b.east(), dustB = b.west(), dustC = c.west();
+        BlockPos dustA = a.west(), lamp = a.north(), piston = a.east(), comparator = b.east(), dustB = b.west(), dustC = c.west();
         for (BlockPos p : new BlockPos[]{dustA, dustB, dustC}) h.setBlock(p.below(), Blocks.STONE);
         h.setBlock(dustA, Blocks.REDSTONE_WIRE);
         h.setBlock(dustB, Blocks.REDSTONE_WIRE);
         h.setBlock(dustC, Blocks.REDSTONE_WIRE);
         h.setBlock(lamp, Blocks.REDSTONE_LAMP);
+        // East of A, off every drone's line of sight: an extended head stands above the antenna (1.5 blocks over the SAM's
+        // floor) and, like any block there, hides low targets on its side (to the south it hid the diving Shahed).
         h.setBlock(piston, Blocks.PISTON.defaultBlockState().setValue(PistonBaseBlock.FACING, Direction.UP));
         Vec3 antenna = Vec3.atCenterOf(h.absolutePos(a)).add(0, 1, 0);
 
         DroneEntity[] hostile = new DroneEntity[1], friends = new DroneEntity[2];
-        long[] launched = {-1}, on = {-1}, off = {-1}, removed = {-1}, extended = {-1}, retracted = {-1}, unlit = {-1};
+        long[] launched = {-1}, on = {-1}, onB = {-1}, off = {-1}, removed = {-1}, extended = {-1}, retracted = {-1}, unlit = {-1};
         Set<UUID> friendlySeen = new HashSet<>();
         // a comparator sets its output 2 ticks after an update: check it from the tick it first reads the magazine
         boolean[] settled = {false};
@@ -122,8 +124,9 @@ public final class RedstoneGameTests {
             if (on[0] < 0 && samA.alarm()) {
                 on[0] = t;
                 h.assertTrue(lit, "the lamp did not light on the tick the alarm came on");
-                h.assertTrue(samB.alarm(), "SAM B, loaded but with no missile on its rail, did not see the same target");
             }
+            // B sweeps on its own phase (staggered by position)
+            if (onB[0] < 0 && samB.alarm()) onB[0] = t;
             if (on[0] >= 0 && extended[0] < 0 && out) extended[0] = t;
             if (removed[0] < 0 && hostile[0].isRemoved()) removed[0] = t;
             if (on[0] >= 0 && off[0] < 0 && !samA.alarm()) {
@@ -148,6 +151,8 @@ public final class RedstoneGameTests {
                 .thenWaitUntil(() -> {
                     h.assertTrue(unlit[0] >= 0 && retracted[0] >= 0, "the alarm has not come and gone yet");
                     h.assertTrue(on[0] - launched[0] <= SamBlockEntity.SWEEP, "alarm " + (on[0] - launched[0]) + " ticks after the launch");
+                    h.assertTrue(onB[0] >= 0 && onB[0] - launched[0] <= SamBlockEntity.SWEEP,
+                            "SAM B, loaded but with no missile on its rail, gave no alarm within a sweep: " + (onB[0] - launched[0]));
                     h.assertTrue(extended[0] - on[0] <= 2, "piston extended " + (extended[0] - on[0]) + " ticks after the alarm");
                     h.assertTrue(off[0] - removed[0] <= SamBlockEntity.SWEEP, "alarm dropped " + (off[0] - removed[0]) + " ticks after the target was gone");
                     h.assertTrue(unlit[0] - off[0] <= 4, "lamp went out " + (unlit[0] - off[0]) + " ticks after the alarm dropped");
