@@ -1,8 +1,10 @@
-# Incoming as a building block: universal integration (proposal)
+# Incoming as a building block: universal integration (roadmap)
 
-Status: proposal, no code. Artem picks items; each picked item becomes its own PR with its contract written out,
-tests and guide updates. Code references are `path:line` against `main` at the time of writing;
-`J/` is `mod/src/main/java/ua/zentix/incoming/`, `D/` is `mod/src/main/resources/data/`.
+Status: approved by Artem 23.11.2026 as the long-term plan; done item by item, one PR each, in roadmap order.
+Progress: the status table in section 7 and the tracking issue zentixua/incoming#739; an item's PR updates both.
+Each item's PR writes its contract out first, with tests and guide updates. Code references are `path:line` against
+`main` at the time of writing; `J/` is `mod/src/main/java/ua/zentix/incoming/`, `D/` is
+`mod/src/main/resources/data/`.
 
 ## 1. Verdict
 
@@ -346,6 +348,27 @@ round and detonation events with no Almighty change. Add to the note: the grid a
    and ends the evening with a warned nuclear strike outside the town. Uses: A1–A3, E.
 
 ## 7. Roadmap
+
+| # | Item | Status | PR |
+|---|---|---|---|
+| 1 | A1 order and round events | planned | |
+| 2 | A2 command results, `status`, `tag` | planned | |
+| 3 | B1 permission nodes behind one policy | planned | |
+| 4 | A3 advancements and statistics | planned | |
+| 5 | A4 redstone from the SAM and the substation | planned | |
+| 6 | B4 world rules by command | planned | |
+| 7 | C2 common tags in recipes, C3 Geiger counter recipe and pack-author documentation | planned | |
+| 8 | E Almighty note update | planned | |
+| 9 | B2 claim protection for every block-changing path | planned | |
+| 10 | B3 owner identity | planned | |
+| 11 | C1 radiation shielding, Mekanism compat | planned | |
+| 12 | D2 Jade, D1 CC:Tweaked | planned | |
+| 13 | B5 sides from party mods | planned | |
+| later | Section 5F items | planned | |
+
+Status is planned, in progress or done. One item = one mission = one PR: the item's PR sets its row (in progress
+with the PR link when it opens, done when it merges) and ticks its box in zentixua/incoming#739. The second wave
+starts only after Artem's word.
 
 Estimates are tentative until each item's contract is written (A1's lifecycle first, since A2, D1 and E build on
 it).
