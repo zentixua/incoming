@@ -36,7 +36,7 @@ public final class ReplayMaterialGameTests {
         var views = new HashMap<UUID, MaterialInbox>();
         try {
             // Flashback's replay server flushes complete encoded snapshot batches together; there are no live deltas.
-            for (int i = 17; i >= 1; i--) {
+            for (int i = 40; i >= 1; i--) {
                 var id = new UUID(0, i);
                 var map = MaterialMap.build(new DustGrid.Bounds(256 * i, 0, 64, 256), new Long2IntOpenHashMap(), i % 4, 100);
                 var src = new S2C.NukeMaterial(id, 0, 0, map.encode());
@@ -44,6 +44,11 @@ public final class ReplayMaterialGameTests {
                 codec.encode(bytes, new ClientboundCustomPayloadPacket(src));
                 channel.writeOutbound(bytes);
             }
+            var ids = java.util.stream.IntStream.rangeClosed(1, 17).mapToObj(i -> new UUID(0, i)).toList();
+            var manifest = Unpooled.buffer();
+            codec.encode(manifest, new ClientboundCustomPayloadPacket(new S2C.NukeMaterialSources(ids)));
+            channel.writeOutbound(manifest);
+            ((ByteBuf) channel.readOutbound()).release();
             h.assertTrue(channel.readOutbound() == null, "seek burst bypassed the paced path");
             for (int i = 1; i <= 17; i++) {
                 channel.advanceTimeBy(50, TimeUnit.MILLISECONDS);
@@ -59,6 +64,9 @@ public final class ReplayMaterialGameTests {
                     h.assertTrue(in.map().material(i * 256, 0).ordinal() == i % 4, "snapshot without previous packets");
                 } finally { bytes.release(); }
             }
+            channel.advanceTimeBy(2, TimeUnit.SECONDS);
+            channel.runScheduledPendingTasks();
+            h.assertTrue(channel.readOutbound() == null, "archived source used another seek slot");
         } finally { channel.finishAndReleaseAll(); }
         h.succeed();
     }

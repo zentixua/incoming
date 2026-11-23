@@ -16,19 +16,33 @@ public final class MaterialMap {
     private final DustGrid grid;
     private final byte[] cells;
     private final boolean wet;
+    private final double through;
     private final long tick;
 
     private MaterialMap(DustGrid grid, byte[] cells, boolean wet, long tick) {
+        this(grid, cells, wet, tick, Double.POSITIVE_INFINITY);
+    }
+    MaterialMap(DustGrid grid, byte[] cells, boolean wet, long tick, double through) {
+        this.through = through;
         this.grid = grid;
         this.cells = cells;
         this.wet = wet;
         this.tick = tick;
     }
 
-    public DustMaterial material(int x, int z) {
+    public @org.jetbrains.annotations.Nullable DustMaterial material(int x, int z) {
         int i = grid.index(x, z);
-        return i < 0 ? DustMaterial.SOIL : DustMaterial.of(cells[i / 4] >>> (2 * (i % 4)) & 3);
+        return i < 0 || !grid.covered(x, z, through) ? null : DustMaterial.of(cells[i / 4] >>> (2 * (i % 4)) & 3);
     }
+    static MaterialMap uniform(DustGrid.Bounds bounds, int seed) {
+        var grid = new DustGrid(bounds);
+        var cells = new byte[(grid.count() + 3) / 4];
+        Arrays.fill(cells, (byte) (seed * 0x55));
+        return new MaterialMap(grid, cells, seed == DustMaterial.WATER.ordinal(), 0);
+    }
+    public boolean contains(int x, int z) { return grid.index(x, z) >= 0; }
+    public boolean committed(int x, int z) { return grid.covered(x, z, through); }
+    public boolean complete() { return through == Double.POSITIVE_INFINITY; }
     public boolean wet() { return wet; }
     public long tick() { return tick; }
     public DustGrid.Bounds bounds() { return grid.bounds; }
@@ -61,7 +75,7 @@ public final class MaterialMap {
         return new MaterialMap(grid, cells, under == DustMaterial.WATER.ordinal(), tick);
     }
 
-    private static int winner(long counts) {
+    static int winner(long counts) {
         int best = 0, most = -1;
         for (int k = 0; k < 4; k++) {
             int n = (int) (counts >>> (k * 16)) & 65535;
@@ -69,14 +83,14 @@ public final class MaterialMap {
         }
         return best;
     }
-    private record Site(int x, int z, int material) {
+    record Site(int x, int z, int material) {
         long distance(int bx, int bz) {
             long dx = (long) bx - x, dz = (long) bz - z;
             return dx * dx + dz * dz;
         }
     }
     /** Exact squared distance between cell centres. Equal distances use world X then Z. */
-    private record Tree(Site site, boolean splitX, Tree left, Tree right) {
+    record Tree(Site site, boolean splitX, Tree left, Tree right) {
         static final Comparator<Site> X = Comparator.comparingInt(Site::x).thenComparingInt(Site::z);
         static final Comparator<Site> Z = Comparator.comparingInt(Site::z).thenComparingInt(Site::x);
         static Tree build(Site[] sites, int from, int end, boolean splitX) {
@@ -109,17 +123,25 @@ public final class MaterialMap {
         boolean rle = runs.size() < cells.length;
         byte[] body = rle ? runs.toByteArray() : cells;
         DustGrid.Bounds b = grid.bounds;
-        return ByteBuffer.allocate(HEADER + body.length).put((byte) VERSION).putInt(b.x()).putInt(b.z())
-                .putInt(b.dense()).putInt(b.reach()).putLong(tick).put((byte) (wet ? 1 : 0)).put((byte) (rle ? 1 : 0))
-                .put(body).array();
+        ByteBuffer out = ByteBuffer.allocate(HEADER + (complete() ? 0 : 24) + body.length).put((byte) (complete() ? VERSION : 2)).putInt(b.x()).putInt(b.z())
+                .putInt(b.dense()).putInt(b.reach()).putLong(tick).put((byte) (wet ? 1 : 0)).put((byte) (rle ? 1 : 0));
+        if (!complete()) out.putDouble(b.offsetX()).putDouble(b.offsetZ()).putDouble(through);
+        return out.put(body).array();
     }
     public static MaterialMap decode(byte[] data) {
         ByteBuffer in = ByteBuffer.wrap(data);
-        if (data.length < HEADER || in.get() != VERSION) throw new IllegalArgumentException("Dust map header");
-        var grid = new DustGrid(new DustGrid.Bounds(in.getInt(), in.getInt(), in.getInt(), in.getInt()));
+        int version = in.hasRemaining() ? in.get() : 0;
+        if (data.length < HEADER || version != VERSION && version != 2) throw new IllegalArgumentException("Dust map header");
+        int x = in.getInt(), z = in.getInt(), dense = in.getInt(), reach = in.getInt();
         long tick = in.getLong();
-        int wet = in.get(), format = in.get(), size = (grid.count() + 3) / 4;
+        int wet = in.get(), format = in.get();
         if (wet < 0 || wet > 1 || format < 0 || format > 1) throw new IllegalArgumentException("Dust map flags");
+        var bounds = version == 2 ? new DustGrid.Bounds(x, z, dense, reach, in.getDouble(), in.getDouble())
+                : new DustGrid.Bounds(x, z, dense, reach);
+        double through = version == 2 ? in.getDouble() : Double.POSITIVE_INFINITY;
+        if (version == 2 && (!Double.isFinite(through) || through < -1)) throw new IllegalArgumentException("Dust frontier");
+        var grid = new DustGrid(bounds);
+        int size = (grid.count() + 3) / 4;
         byte[] cells = new byte[size];
         if (format == 0) {
             if (in.remaining() != size) throw new IllegalArgumentException("Dust map literal length");
@@ -134,6 +156,6 @@ public final class MaterialMap {
             }
             if (in.hasRemaining() || total != size) throw new IllegalArgumentException("Incomplete dust map");
         }
-        return new MaterialMap(grid, cells, wet == 1, tick);
+        return new MaterialMap(grid, cells, wet == 1, tick, through);
     }
 }

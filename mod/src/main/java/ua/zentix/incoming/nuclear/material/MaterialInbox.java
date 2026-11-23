@@ -12,7 +12,12 @@ public final class MaterialInbox {
     public MaterialMap map() { return map; }
 
     public void receive(S2C.NukeMaterial packet) {
-        if (map != null) return;
+
+        if (packet.tombstone()) {
+            parts = null;
+            map = null;
+            return;
+        }
         if (packet.part() == 0) {
             parts = new ByteArrayOutputStream();
             count = packet.remainingBatches() + 1;
@@ -22,6 +27,7 @@ public final class MaterialInbox {
         parts.writeBytes(packet.data());
         next++;
         if (next == count) {
+            // Recorded checkpoints can move backward on seek. Each transfer is self-contained.
             map = MaterialMap.decode(parts.toByteArray());
             parts = null;
         }

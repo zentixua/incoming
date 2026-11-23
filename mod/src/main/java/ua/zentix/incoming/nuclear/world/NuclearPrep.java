@@ -327,15 +327,26 @@ public final class NuclearPrep {
         return bytes;
     }
 
-    /** Preparation and sparse material reads draw from the same server-wide I/O window. */
-    static int readSlots(ServerLevel level) {
-        long pending = 0;
-        for (ServerLevel other : level.getServer().getAllLevels()) {
-            if (!other.hasData(ModAttachments.NUCLEAR_WORLD)) continue;
-            NuclearWorld world = NuclearWorld.get(other);
-            pending += world.prep().readBytes.get() + world.materials.reservedBytes();
+    static final int MATERIAL_WINDOW = 32;
+
+    /** Each preparation retains its own window. Concurrent surveys reserve half of one window across dimensions. */
+    static int preparationSlots(int outstanding, boolean surveying) {
+        return Math.max(0, (surveying ? READS - MATERIAL_WINDOW : READS) - outstanding);
+    }
+    private static boolean surveying(ServerLevel level) {
+        for (var other : level.getServer().getAllLevels()) {
+            if (other.hasData(ModAttachments.NUCLEAR_WORLD) && NuclearWorld.get(other).materials.wantsReads()) return true;
         }
-        return READS - (int) (pending / READ_BYTES);
+        return false;
+    }
+    static int readSlots(ServerLevel level) {
+        long bytes = 0;
+        for (var other : level.getServer().getAllLevels())
+            if (other.hasData(ModAttachments.NUCLEAR_WORLD)) bytes += NuclearWorld.get(other).materials.reservedBytes();
+        return materialSlots(bytes);
+    }
+    static int materialSlots(long reservedBytes) {
+        return Math.max(0, MATERIAL_WINDOW - (int) (reservedBytes / READ_BYTES));
     }
 
     /** One server-wide preparation admission estimate; multiple strikes/dimensions share the cap. */
@@ -614,7 +625,7 @@ public final class NuclearPrep {
             }
         }
         // window read-ahead in wave order
-        int slots = readSlots(level);
+        int slots = preparationSlots(p.reading.size(), surveying(level));
         while (p.nextRead < p.order.length && slots > 0 && memory(level) + READ_BYTES <= PLANS_CAP) {
             long c = p.order[p.nextRead];
             boolean all = true;

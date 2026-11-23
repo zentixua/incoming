@@ -59,10 +59,11 @@ public final class ClientNuclear {
         final PallGround ground;
         private SourceMaterial source;
         private UUID revision;
+        private int seed = -1;
 
         /** Stable server revision, or the first local answer at each legacy world cell. */
         public SourceMaterial sourceMaterial() {
-            if (source == null) source = new SourceMaterial(d, revision == null ? null : inbox(revision), (x, z) -> {
+            if (source == null) source = new SourceMaterial(d, revision == null ? null : inbox(revision), seed, (x, z) -> {
                 ClientLevel level = Minecraft.getInstance().level;
                 if (level != null) {
                     double wet = FarTerrain.water(level).at(x, z);
@@ -104,6 +105,7 @@ public final class ClientNuclear {
         Active(Active a, long clientNow) {
             this(a.d, false, clientNow, a);
             revision = a.revision;
+            seed = a.seed;
             source = a.source;
         }
 
@@ -367,7 +369,14 @@ public final class ClientNuclear {
     private static MaterialInbox inbox(UUID id) {
         return MATERIALS.computeIfAbsent(id, unused -> new MaterialInbox());
     }
-    public static void material(S2C.NukeMaterial p) { inbox(p.id()).receive(p); }
+    public static void materialSources(S2C.NukeMaterialSources p) {
+        var active = new java.util.HashSet<>(p.sources());
+        MATERIALS.keySet().retainAll(active);
+    }
+    public static void material(S2C.NukeMaterial p) {
+        if (p.tombstone()) MATERIALS.remove(p.id());
+        else inbox(p.id()).receive(p);
+    }
 
     private ClientNuclear() {}
 
@@ -411,6 +420,7 @@ public final class ClientNuclear {
         if (known != null) known.sounds.stop();
         Active a = new Active(d, live, level.getGameTime());
         a.revision = p.material().orElse(null);
+        a.seed = p.ground();
         DETONATIONS.put(d.id(), a);
         if (live) {
             NukeLight.detonation(level);
@@ -465,6 +475,7 @@ public final class ClientNuclear {
             UUID revision = p.materials().get(d.id());
             if (!java.util.Objects.equals(a.revision, revision)) {
                 a.revision = revision;
+                a.seed = -1;
                 a.source = null;
             }
             DETONATIONS.put(d.id(), a);
@@ -667,6 +678,8 @@ public final class ClientNuclear {
             NukeDust.front(a, eye);
             if (a.ticks(0) > lifeTicks(a.d) && a.clockSeconds(0) > a.d.blackRainEndSeconds() && !a.pall.visible(a.ticks(0))) {
                 a.sounds.stop();
+                if (a.revision != null && !ua.zentix.incoming.client.replay.Replay.active())
+                    net.neoforged.neoforge.network.PacketDistributor.sendToServer(new ua.zentix.incoming.net.C2S.MaterialRetired(a.revision));
                 MATERIALS.remove(a.revision);
                 it.remove();
             }

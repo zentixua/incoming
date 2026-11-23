@@ -74,6 +74,8 @@ class MaterialMapTest {
                 wire += framed;
             } finally { buf.release(); }
         }
-        assertTrue(17L * (wire + 22) < 1_500_000, "17 maps, bytes per source " + wire);
+        assertTrue(worst.length > 64_000, "a literal 1 Mt airburst cannot fit in one 64 KB frame");
+        assertTrue(wire + 256 < 84_000, "framed 1 Mt literal including source metadata: " + wire);
+        assertTrue(17L * (wire + 256) < 1_500_000, "17 framed maps and source metadata, bytes per source " + wire);
     }
 }

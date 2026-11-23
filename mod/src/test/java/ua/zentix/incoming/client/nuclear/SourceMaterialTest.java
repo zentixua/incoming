@@ -24,5 +24,19 @@ class SourceMaterialTest {
         var current = new SourceMaterial(d, new MaterialInbox(), (x, z) -> { throw new AssertionError(); });
         assertTrue(current.material(0, 0).value().isEmpty());
         assertTrue(current.wet().isEmpty());
+        var hidden = new SourceMaterial(d, new MaterialInbox(), DustMaterial.WATER.ordinal(), (x, z) -> { throw new AssertionError(); });
+        assertEquals(true, hidden.wet().orElseThrow());
+        assertEquals(DustMaterial.WATER, hidden.material(0, 0).value().orElseThrow());
+        assertFalse(hidden.material(0, 0).committed());
+        assertTrue(hidden.material(1_000_000, 0).value().isEmpty());
+        var inbox = new MaterialInbox();
+        var map = ua.zentix.incoming.nuclear.material.MaterialMap.build(
+                new ua.zentix.incoming.nuclear.material.DustGrid.Bounds(0, 0, 128, 512),
+                new it.unimi.dsi.fastutil.longs.Long2IntOpenHashMap(), 2, 12);
+        inbox.receive(new ua.zentix.incoming.net.S2C.NukeMaterial(java.util.UUID.randomUUID(), 0, 0, map.encode()));
+        var ready = new SourceMaterial(d, inbox, (x, z) -> { throw new AssertionError(); });
+        assertTrue(ready.material(32, 0).committed());
+        assertTrue(ready.material(2048, 0).value().isEmpty());
+        assertFalse(ready.material(2048, 0).committed());
     }
 }

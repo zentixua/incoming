@@ -6,12 +6,15 @@ import ua.zentix.incoming.nuclear.model.DustModel;
 /** World-aligned rows of cells intersecting the two dust footprints. Coordinates and radii are blocks. */
 public final class DustGrid {
     public static final int FINE = 64, COARSE = 256;
-    public static final double GONE_DEPTH = 0.05, SETTLE_SECONDS = 1.0;
+    // Server sampling footprint: outer optical-depth cutoff and dense-band settling age.
+    private static final double GONE_DEPTH = 0.05, SETTLE_SECONDS = 1.0;
     private static final int MAX_RADIUS = 65536;
 
-    public record Bounds(int x, int z, int dense, int reach) {
+    public record Bounds(int x, int z, int dense, int reach, double offsetX, double offsetZ) {
+        public Bounds(int x, int z, int dense, int reach) { this(x, z, dense, reach, 0, 0); }
         public Bounds {
             if (Math.abs((long) x) > 30_000_000 || Math.abs((long) z) > 30_000_000) throw new IllegalArgumentException("Dust origin");
+            if (!(offsetX >= 0 && offsetX < 1 && offsetZ >= 0 && offsetZ < 1)) throw new IllegalArgumentException("Dust origin offset");
             if (dense < 0 || reach < dense || reach > MAX_RADIUS) throw new IllegalArgumentException("Dust radii");
         }
 
@@ -27,7 +30,8 @@ public final class DustGrid {
                 else hi = r;
             }
             return new Bounds((int) Math.floor(d.burst().x), (int) Math.floor(d.burst().z),
-                    (int) Math.ceil(d.blocks(hi)), (int) Math.ceil(d.blocks(reach)));
+                    (int) Math.ceil(d.blocks(hi)), (int) Math.ceil(d.blocks(reach)),
+                    d.burst().x - Math.floor(d.burst().x), d.burst().z - Math.floor(d.burst().z));
         }
     }
 
@@ -98,6 +102,23 @@ public final class DustGrid {
         int i = fine.index(x, z);
         return i >= 0 ? i : coarse.index(x, z);
     }
+    /** Squared horizontal distance to the near edge of the cell in the server footprint. */
+    public double nearSquared(int x, int z, int size) {
+        int left = Math.floorDiv(x, size) * size, top = Math.floorDiv(z, size) * size;
+        double dx = Math.max(0, Math.max(left - bounds.x - bounds.offsetX, bounds.x + bounds.offsetX - left - size));
+        double dz = Math.max(0, Math.max(top - bounds.z - bounds.offsetZ, bounds.z + bounds.offsetZ - top - size));
+        return dx * dx + dz * dz;
+    }
+    /** First server tick on which this cell must reject later answers; all distances use the existing game front. */
+    public static int deadline(ua.zentix.incoming.nuclear.model.FrontProfile front, double height, double squared) {
+        return (int) Math.floor(front.arrivalTicks(Math.sqrt(squared + height * height))) - 200;
+    }
+    public int cellSize(int x, int z) { return fine.index(x, z) >= 0 ? FINE : COARSE; }
+    public boolean covered(int x, int z, double through) {
+        int size = fine.index(x, z) >= 0 ? FINE : COARSE;
+        return index(x, z) >= 0 && nearSquared(x, z, size) <= through;
+    }
+
     public void visit(Visitor visitor) {
         fine.visit(visitor);
         coarse.visit(visitor);

@@ -73,7 +73,7 @@ public final class PallField {
      * No dust thinner than this vertical optical depth in the table (95 % sun transmission): sets table radius and when pall
      * has settled ({@link #dustEnd}).
      */
-    static final double GONE_DEPTH = ua.zentix.incoming.nuclear.material.DustGrid.GONE_DEPTH;
+    static final double GONE_DEPTH = 0.05;
     /** Spray and base surge below this density fraction are not rendered. */
     static final double GONE = 0.0015;
     /** Dust drifts at a fraction of detonation wind: wind is weaker near ground, heavy material settles. */

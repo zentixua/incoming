@@ -12,6 +12,12 @@ public enum DustMaterial {
     WATER, SAND, SOIL, HARD;
 
     private static final DustMaterial[] CLASSES = values();
+    public static DustMaterial ofVotes(int votes) {
+        int best = 0;
+        for (int k = 1; k < 4; k++)
+            if ((votes >>> (4 * k) & 15) > (votes >>> (4 * best) & 15)) best = k;
+        return of(best);
+    }
     public static DustMaterial of(int bits) { return CLASSES[bits]; }
 
     public static boolean sod(BlockState s) {

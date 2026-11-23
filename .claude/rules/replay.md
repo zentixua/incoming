@@ -31,11 +31,13 @@ paths:
   estimate until the original packet outside snapshots supplies its exact birth. Shows predating the archive
   use its initial world time. World exit interrupts the reader. Check: `replay` scenario (`SCENARIO replay seek` lines); replay-server model:
   `ReplayTest`.
-- Flashback NeoForge Fixed keys independent material sources by the UUID record component and saves a complete
-  batch when the remaining-batch counter reaches zero. Birth packets use the same UUID to preserve their geometry.
-  `ReplayMaterialDelivery` paces the mod's encoded material frames on each replay viewer's outbound channel, nearest
-  source first, one part per 50 ms, including when playback is paused. `nuke_material_seek` tests the encoded play
-  stream from a cold snapshot. The map body and legacy fallback live in `nuclear.md`.
+- Flashback NeoForge Fixed retains batched material checkpoints by source UUID. A viewer retiring the effects
+  acknowledges that UUID. The server releases only that viewer's transfer and replaces its recorded batch with a
+  one-byte tombstone. The replaceable `NukeMaterialSources` manifest contains the viewer's current sources.
+  `ReplayMaterialDelivery` checks the snapshot's geometry, sync and material against this manifest before forwarding
+  them. It sends the nearest source first, one part per 50 ms, including while paused. The local play-connection
+  probe passes 40 recorded sources through Minecraft's encoder, NeoForge filters and compression and checks all 17
+  active checkpoints at the receiver. The material format and legacy lookup live in `nuclear.md`.
 - Chunk-state packets (`S2C.NukeFlashMarks`, flash traces): a Flashback snapshot contains only the last packet of a
   type, not one per chunk, so unloading chunks during seek would erase marks absent from the snapshot. Thus replay
   clients retain marks on chunk unload and show the detonation layer by their own clock (`FlashMarksClient.index`:

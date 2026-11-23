@@ -481,10 +481,16 @@ paths:
 
 ## Surface samples for dust
 
-`MaterialSurveys` samples four column tops per ready chunk. The loaded index is refreshed in portions and captures
-a copy-on-write snapshot at source birth. `DiskShots` extracts the same four votes on detached block palettes in its
-worker. A ruin snapshot entering `RuinContext.putDisk` also feeds the open surveys. Outside the prebuilt disk window
-a survey visits one representative chunk per 256-block cell in distance order. `DiskShots.readSurface` checks the
-region file off-thread and reads the block palettes without a heightmap or biome pass. Its inbox reserves
-`NuclearPrep.READ_BYTES` per submitted or uncollected read under the same 512 MiB admission estimate. A sealed
-survey releases outstanding reservations on completion and ignores late answers. Ready chunks take precedence at birth.
+`MaterialSurveys` refreshes four surface columns per ready chunk and pins a copy-on-write snapshot at birth.
+Ready observations supersede disk votes. `DiskShots` extracts the same columns on detached palettes, and ruin
+reads entering `RuinContext.putDisk` also feed the open surveys. Beyond the heavy preparation window each
+addressable fine or coarse cell has one representative chunk. The planner checks each region off-thread and orders
+the reads by cell deadline. Restarted surveys skip expired requests. A completed read enters the current tick's
+inbox fence before the next I/O window is calculated.
+
+Each ruin preparation has its own 64-read window. While a material survey wants reads, each preparation may admit
+32 and the material surveys share a separate 32 across the server's dimensions. Completed and outstanding reads
+each reserve 96 KiB until collection or cancellation. All copies share the 512 MiB memory admission estimate.
+Material commit, dispatch and survey work run inside the nuclear WorkClock, with a 0.5 ms server-wide allowance
+across dimensions. Cell reduction, packing and packet construction run on a worker. The coast fixture records
+direct coverage, sea classifications and post-burst reads.

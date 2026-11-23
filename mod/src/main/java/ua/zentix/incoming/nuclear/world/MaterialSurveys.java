@@ -1,6 +1,5 @@
 package ua.zentix.incoming.nuclear.world;
 
-import it.unimi.dsi.fastutil.longs.Long2IntOpenHashMap;
 import net.minecraft.core.BlockPos;
 import it.unimi.dsi.fastutil.longs.LongLinkedOpenHashSet;
 import net.minecraft.world.level.ChunkPos;
@@ -22,13 +21,17 @@ import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.concurrent.atomic.AtomicLong;
 
-/** Dimension owner of surveys. The earliest point is ground zero, so one early revision can commit the entire footprint. */
+/** Dimension owner of scheduled and post-burst surveys. Material evidence follows each source through detonation. */
 public final class MaterialSurveys {
     public static final long LEAD_TICKS = 200;
     private final Map<Integer, MaterialSurvey> open = new LinkedHashMap<>();
     private final AtomicLong reserved = new AtomicLong();
     long reservedBytes() { return reserved.get(); }
 
+    boolean wantsReads() {
+        for (var survey : open.values()) if (survey.wantsReads()) return true;
+        return false;
+    }
     private final LoadedSurfaces loaded = new LoadedSurfaces();
     private final LongLinkedOpenHashSet refresh = new LongLinkedOpenHashSet();
     private int playerCursor, surveyCursor;
@@ -36,7 +39,7 @@ public final class MaterialSurveys {
     void live(LevelChunk chunk) {
         long key = chunk.getPos().toLong();
         refresh.add(key);
-        loaded.put(key, MaterialSurvey.liveVotes(chunk));
+        updateLive(key, chunk);
     }
     void unload(LevelChunk chunk) {
         long key = chunk.getPos().toLong();
@@ -51,9 +54,14 @@ public final class MaterialSurveys {
             long key = refresh.removeFirstLong();
             refresh.add(key);
             var c = level.getChunkSource().getChunkNow(ChunkPos.getX(key), ChunkPos.getZ(key));
-            if (c != null) loaded.put(key, MaterialSurvey.liveVotes(c));
+            if (c != null) updateLive(key, c);
         }
     }
+    private void updateLive(long key, LevelChunk chunk) {
+        int value = MaterialSurvey.liveVotes(chunk);
+        if (loaded.put(key, value)) for (var survey : open.values()) survey.live(key, value);
+    }
+
     void disk(long key, int votes) {
         for (var survey : open.values()) survey.disk(key, votes);
     }
@@ -69,7 +77,11 @@ public final class MaterialSurveys {
         boolean sealed = false, opened = false;
         lastCommitNanos = 0;
         for (var s : events.scheduled()) {
-            if (events.material(s.id()) != null) continue;
+            var existing = events.material(s.id());
+            if (existing != null) {
+                restore(level, s.id(), existing);
+                continue;
+            }
             MaterialSurvey survey = open.get(s.id());
             if (survey == null) {
                 if ((opened || System.nanoTime() >= deadline) && now < s.detonateTime() - LEAD_TICKS) continue;
@@ -85,14 +97,20 @@ public final class MaterialSurveys {
             if (now >= deadlineTick || !sealed && now >= deadlineTick - runway) {
                 sealed = true;
                 long start = System.nanoTime();
-                var birth = survey.seal(level, now, loaded);
+                var birth = survey.begin(level, s.detonateTime(), now, loaded);
                 events.material(s.id(), birth);
                 for (var player : level.players()) {
                     if (NuclearStrikes.warns(s, player)) player.getData(ModAttachments.MATERIAL_DELIVERY).announce(birth);
                 }
-                open.remove(s.id());
+
                 lastCommitNanos += System.nanoTime() - start;
             }
+        }
+        for (var d : events.detonations()) restore(level, d.id(), events.material(d.id()));
+        if (!open.isEmpty()) {
+            long began = System.nanoTime();
+            for (var survey : open.values()) if (survey.advance(now)) events.setDirty();
+            lastCommitNanos += System.nanoTime() - began;
         }
         // Deliver committed work before spending the remaining time on optional pre-birth samples.
         var players = level.players();
@@ -104,36 +122,50 @@ public final class MaterialSurveys {
             var surveys = new ArrayList<>(open.values());
             for (int n = 0; n < surveys.size() && System.nanoTime() < deadline; n++) {
                 if (surveyCursor >= surveys.size()) surveyCursor = 0;
-                surveys.get(surveyCursor++).work(level, deadline, NuclearPrep.readSlots(level));
+                var survey = surveys.get(surveyCursor++);
+                if (survey.publish()) {
+                    events.setDirty();
+                    for (var player : players) if (player.hasData(ModAttachments.MATERIAL_DELIVERY))
+                        player.getData(ModAttachments.MATERIAL_DELIVERY).refine(survey.birth);
+                }
+                int slots = Math.ceilDiv(Math.max(0, NuclearPrep.readSlots(level)), surveys.size() - n);
+                survey.work(level, deadline, slots);
             }
         }
+        open.values().removeIf(survey -> {
+            if (!survey.publishedFinal()) return false;
+            survey.close();
+            return true;
+        });
         if (System.nanoTime() < deadline) events.encodeMaterial();
         refresh(level, deadline);
     }
 
+    private void restore(ServerLevel level, int id, MaterialBirth birth) {
+        if (birth == null || !birth.surveying() || open.containsKey(id)) return;
+        var survey = new MaterialSurvey(level, birth.geometry(), reserved);
+        survey.birth = birth;
+        open.put(id, survey);
+    }
+
     public MaterialBirth detonate(ServerLevel level, NuclearEvents events, int strike, Detonation d) {
-        MaterialBirth frozen = events.moveMaterial(strike, d.id());
-        if (frozen != null) {
-            deliver(level, frozen);
-            return frozen;
-        }
+        MaterialBirth birth = events.moveMaterial(strike, d.id());
         MaterialSurvey survey = open.remove(strike);
-        long now = level.getGameTime();
-        if (survey != null) frozen = survey.seal(level, now, loaded);
-        else {
-            // A command or interception can only commit at birth. The loaded index is already available.
-            var p = BlockPos.containing(d.burst());
-            var chunk = level.getChunkSource().getChunkNow(p.getX() >> 4, p.getZ() >> 4);
-            if (chunk != null) live(chunk);
-            frozen = MaterialBirth.seal(new java.util.UUID(d.seed(), now ^ d.id()), d, now, MaterialSurvey.origin(level, d),
-                    new Long2IntOpenHashMap(), loaded.snapshot());
+        if (birth == null) {
+            if (survey == null) survey = new MaterialSurvey(level, d, reserved);
+            birth = survey.begin(level, d.gameTime(), level.getGameTime(), loaded);
+            events.material(d.id(), birth);
         }
-        events.material(d.id(), frozen);
-        deliver(level, frozen);
-        return frozen;
+        if (survey != null) open.put(d.id(), survey);
+        deliver(level, birth);
+        return birth;
     }
 
     private static void deliver(ServerLevel level, MaterialBirth birth) {
-        for (var player : level.players()) player.getData(ModAttachments.MATERIAL_DELIVERY).detonate(birth);
+        for (var player : level.players()) {
+            var delivery = player.getData(ModAttachments.MATERIAL_DELIVERY);
+            delivery.detonate(birth);
+            delivery.manifest(player);
+        }
     }
 }

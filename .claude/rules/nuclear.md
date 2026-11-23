@@ -577,20 +577,20 @@ renewal and so sees one tick less right after a tick (`NukeFlashSkyTest`).
 
 ## Dust source material
 
-- A scheduled source seals its world-aligned ground map by the earliest cell deadline, 200 game ticks before the burst.
-  Concurrent launches reserve one earlier commit tick each.
-  A source created without that much warning seals as soon as it exists. The geometry uses 64-block cells through
-  vertical optical depth 1 at the pall's settling age and 256-block cells out to the dust reach.
-  `MaterialMap` resolves a cell's sampled columns by plurality, with ties in water, sand, soil, hard order.
-  An unsampled cell takes the closest sampled cell centre, with equal distances resolved by world X then Z.
-  The origin's fluid is recorded independently. With no observations, its class seeds the map, defaulting to soil.
-- `NuclearEvents` keeps the birth UUID and the map across the scheduled-strike to detonation ID change and saves.
-  Closing a survey detaches its inputs. A worker packs four cells per byte and uses byte-run pairs when smaller.
-  A save during encoding records the sealed inputs for that exact revision. `NukeSync` and `NukeDetonation` carry
-  revision references. `NukeMaterial` sends complete batches keyed by UUID and remaining part count for Flashback.
-  Players who receive the strike warning can prefetch its revision. Other players receive it at detonation.
-  Player delivery starts with the nearest source on entry,
-  up to 12,500 data bytes per tick and 20 parts per rolling wall second.
-- `ClientNuclear.Active.sourceMaterial()` exposes the committed class and origin wetness after a complete batch.
-  A revision that is still arriving returns an empty answer. Missing revision references in old recordings and
-  saves use client terrain, frozen at the first query to each world cell. The existing dust passes use `PallGround`.
+- The server uses 64-block cells through optical depth 1 at one second and 256-block cells through depth 0.05.
+  Presentation owns its separate thresholds. Each cell closes 200 game ticks before the front reaches its nearest
+  ground point. Surveys continue after detonation. Instant sources start with the observations available at birth.
+- Column plurality decides the class, with ties in water, sand, soil, hard order. Unread cells use the nearest
+  measured, closed centre (ties by world X then Z). Cells due together share their samples. Ground-zero wetness
+  uses the origin block, then surveyed ground, then soil.
+- `NuclearEvents` retains the UUID across detonation. An open source saves its birth samples, timestamped
+  observations and frontier tick. A finished source saves packed cells. A malformed entry is isolated. A worker
+  failure publishes uniform seed material.
+- Each checkpoint stands alone. Partial maps include the fractional origin and sealed extent. Four cells pack
+  into one byte, with byte runs when smaller. The 64 KB hard limit is per framed packet. A typical 1 Mt source
+  fits in 64 KB total. An incompressible 330,870-cell airburst needs 82,718 B for values alone. Seventeen sources
+  fit in 1.5 MB with framing and geometry. Cold delivery is nearest first, with 12,500 material bytes per part
+  and 20 parts per rolling second per viewer.
+- `ClientNuclear.Active.sourceMaterial()` returns class, commit status and origin wetness. Detonation carries
+  the frozen seed for an unwarned viewer. `frozenFallback()` identifies it until the cell arrives. Outside the
+  footprint the answer is empty. Sources without a revision freeze the first local terrain answer per cell.

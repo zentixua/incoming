@@ -293,7 +293,9 @@ public final class NuclearStrikes {
         long materialBudget = 500_000;
         for (ServerLevel level : levels) {
             long start = System.nanoTime();
-            NuclearWorld.get(level).materials.tick(level, NuclearEvents.get(level), start + materialBudget);
+            long began = clock.begin();
+            NuclearWorld.get(level).materials.tick(level, NuclearEvents.get(level), start + Math.min(materialBudget, clock.remainingNanos()));
+            clock.spent(began);
             materialBudget = Math.max(0, materialBudget - (System.nanoTime() - start));
             tick(level, clock);
         }

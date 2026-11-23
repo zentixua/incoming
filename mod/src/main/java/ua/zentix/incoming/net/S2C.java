@@ -653,7 +653,11 @@ public final class S2C {
      * each appended to packet end; recordings predating them read “as before”: wall speed {@link Detonation#OLD_WAVE},
      * no EMP, time of day unknown, fires enabled, no strike, black rain enabled.
      */
-    public record NukeDetonation(Detonation detonation, float blackout, int strikeId, @org.jetbrains.annotations.Nullable UUID id) implements CustomPacketPayload {
+    public record NukeDetonation(Detonation detonation, float blackout, int strikeId, @org.jetbrains.annotations.Nullable UUID id, byte ground) implements CustomPacketPayload {
+        public NukeDetonation {
+            if (ground < -1 || ground > 3) throw new IllegalArgumentException("Ground material class");
+        }
+        public NukeDetonation(Detonation d, float blackout, int strikeId, UUID id) { this(d, blackout, strikeId, id, (byte) -1); }
         // Flashback snapshots group independent instances of a payload by their UUID record component.
         public Optional<UUID> material() { return Optional.ofNullable(id); }
         public NukeDetonation(Detonation d, float blackout, int strikeId) { this(d, blackout, strikeId, null); }
@@ -671,7 +675,8 @@ public final class S2C {
                         d.withWave(wave).withDayTime(dayTime).withFires(fires).withRain(rain), blackout, strikeId));
         public static final StreamCodec<ByteBuf, NukeDetonation> CODEC = StreamCodec.composite(
                 BASE, p -> p, StreamCodecs.trailing(ByteBufCodecs.optional(UUIDUtil.STREAM_CODEC), Optional.empty()), NukeDetonation::material,
-                (p, material) -> new NukeDetonation(p.detonation, p.blackout, p.strikeId, material.orElse(null)));
+                StreamCodecs.trailing(ByteBufCodecs.BYTE, (byte) -1), NukeDetonation::ground,
+                (p, material, ground) -> new NukeDetonation(p.detonation, p.blackout, p.strikeId, material.orElse(null), ground));
 
         @Override
         public Type<? extends CustomPacketPayload> type() {
@@ -679,9 +684,18 @@ public final class S2C {
         }
     }
 
+    /** Complete current source membership, one replaceable record in a Flashback snapshot. */
+    public record NukeMaterialSources(List<UUID> sources) implements CustomPacketPayload {
+        public static final Type<NukeMaterialSources> TYPE = new Type<>(Incoming.id("nuke_material_sources"));
+        public static final StreamCodec<ByteBuf, NukeMaterialSources> CODEC = UUIDUtil.STREAM_CODEC
+                .apply(ByteBufCodecs.list()).map(NukeMaterialSources::new, NukeMaterialSources::sources);
+        @Override public Type<NukeMaterialSources> type() { return TYPE; }
+    }
+
     /** Ordered revision batch. The UUID and remaining-batch count also identify complete Flashback snapshots. */
     public record NukeMaterial(UUID id, int part, int remainingBatches, byte[] data) implements CustomPacketPayload {
         public static final int PART = 12_500;
+        public boolean tombstone() { return part == 0 && remainingBatches == 0 && data.length == 1 && data[0] == 0; }
         public static final Type<NukeMaterial> TYPE = new Type<>(Incoming.id("nuke_material"));
         public static final StreamCodec<ByteBuf, NukeMaterial> CODEC = StreamCodec.composite(
                 UUIDUtil.STREAM_CODEC, NukeMaterial::id, ByteBufCodecs.VAR_INT, NukeMaterial::part,

@@ -9,23 +9,24 @@ public final class LoadedSurfaces {
     private final Long2IntOpenHashMap[] buckets = new Long2IntOpenHashMap[BUCKETS];
     private long shared;
 
-    public void put(long key, int value) { change(key, value); }
+    public boolean put(long key, int value) { return change(key, value); }
     public void remove(long key) { change(key, -1); }
-    private void change(long key, int value) {
+    private boolean change(long key, int value) {
         int i = (int) HashCommon.mix(key) & (BUCKETS - 1);
         Long2IntOpenHashMap bucket = buckets[i];
         if (bucket == null) {
-            if (value < 0) return;
+            if (value < 0) return false;
             buckets[i] = bucket = new Long2IntOpenHashMap();
             bucket.defaultReturnValue(-1);
         }
-        if (bucket.get(key) == value) return;
+        if (bucket.get(key) == value) return false;
         if ((shared & 1L << i) != 0) {
             buckets[i] = bucket = bucket.clone();
             shared &= ~(1L << i);
         }
         if (value < 0) bucket.remove(key);
         else bucket.put(key, value);
+        return true;
     }
 
     public Snapshot snapshot() {
@@ -36,7 +37,11 @@ public final class LoadedSurfaces {
         private final Long2IntOpenHashMap[] pages;
         private Snapshot(Long2IntOpenHashMap[] pages) { this.pages = pages; }
         void overlay(Long2IntOpenHashMap target) {
-            for (var page : pages) if (page != null) target.putAll(page);
+            overlay(target, 0);
+        }
+        void overlay(Long2IntOpenHashMap target, int flags) {
+            for (var page : pages) if (page != null)
+                for (var e : page.long2IntEntrySet()) target.put(e.getLongKey(), e.getIntValue() | flags);
         }
     }
 }

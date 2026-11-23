@@ -25,6 +25,23 @@ import java.util.UUID;
 public final class MaterialJoinGameTests {
     private MaterialJoinGameTests() {}
 
+    @GameTest(template = "range", batch = "nuke_material_unwarned", timeoutTicks = 100)
+    public static void instantWaterSourceGivesUnwarnedViewerASeedAtBirth(GameTestHelper h) {
+        var level = h.getLevel();
+        var pos = h.absolutePos(new BlockPos(24, 20, 24));
+        level.setBlock(pos, net.minecraft.world.level.block.Blocks.WATER.defaultBlockState(), 2);
+        var viewer = HiddenLaunchGameTests.Watcher.at(h, "dust_unwarned", Vec3.atCenterOf(pos).add(32, 1, 0));
+        StrikeGameTests.afterTest(h, () -> NuclearStrikes.clear(level));
+        h.assertFalse(viewer.has(S2C.NukeWarning.class), "viewer was warned");
+        var d = ua.zentix.incoming.nuclear.NuclearWarhead.detonate(level, Vec3.atBottomCenterOf(pos.above()), 1, false, null, .01f);
+        var packet = viewer.got.stream().filter(S2C.NukeDetonation.class::isInstance).map(S2C.NukeDetonation.class::cast)
+                .filter(p -> p.detonation().id() == d.id()).findFirst().orElseThrow();
+        var birth = NuclearEvents.get(level).material(d.id());
+        h.assertTrue(packet.id().equals(birth.id) && packet.ground() == ua.zentix.incoming.nuclear.material.DustMaterial.WATER.ordinal(),
+                "unwarned viewer missed frame-zero water/ground seed");
+        h.succeed();
+    }
+
     @GameTest(template = "range", batch = "nuke_material_login", timeoutTicks = 500, skyAccess = true)
     public static void coldLoginsFromOppositeSidesReceiveTheSameSources(GameTestHelper h) {
         var level = h.getLevel();

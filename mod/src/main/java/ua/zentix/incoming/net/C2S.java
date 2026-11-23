@@ -20,6 +20,13 @@ import java.util.UUID;
 public final class C2S {
     private C2S() {}
 
+    /** This viewer has retired the source. Only its own transfer and recording cache can be released. */
+    public record MaterialRetired(UUID id) implements CustomPacketPayload {
+        public static final Type<MaterialRetired> TYPE = new Type<>(Incoming.id("material_retired"));
+        public static final StreamCodec<ByteBuf, MaterialRetired> CODEC = UUIDUtil.STREAM_CODEC.map(MaterialRetired::new, MaterialRetired::id);
+        @Override public Type<MaterialRetired> type() { return TYPE; }
+    }
+
     static final StreamCodec<ByteBuf, InteractionHand> HAND = ByteBufCodecs.BOOL.map(b -> b ? InteractionHand.OFF_HAND : InteractionHand.MAIN_HAND, h -> h == InteractionHand.OFF_HAND);
 
     /**
