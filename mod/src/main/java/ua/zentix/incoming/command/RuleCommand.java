@@ -62,6 +62,10 @@ public final class RuleCommand {
 
     private static final DynamicCommandExceptionType UNKNOWN = new DynamicCommandExceptionType(
             key -> Component.translatable("incoming.rule.unknown", key, String.join(", ", keys())));
+    private static final DynamicCommandExceptionType NOT_SAVED = new DynamicCommandExceptionType(
+            key -> Component.translatable("incoming.rule.not_saved", key));
+    /** Set-and-save rounds against concurrent reloads ({@link #store}); one reload per earlier write can intervene. */
+    private static final int STORE_ATTEMPTS = 8;
     private static final Dynamic3CommandExceptionType BAD_VALUE = new Dynamic3CommandExceptionType(
             (key, value, accepts) -> Component.translatable("incoming.rule.bad_value", key, value, accepts));
 
@@ -136,11 +140,24 @@ public final class RuleCommand {
         String text = StringArgumentType.getString(ctx, "value");
         Object v = parse(r, text);
         if (v == null) throw BAD_VALUE.create(r.key(), text, r.accepts());
-        r.set(v);
-        // one home: the world's server config file, written now (NeoForge then posts its reload event)
-        IncomingConfig.SERVER_SPEC.save();
+        if (!store(r, v)) throw NOT_SAVED.create(r.key());
         ctx.getSource().sendSuccess(() -> Component.translatable("incoming.rule.set", r.key(), r.shown()), true);
         return 1;
+    }
+
+    /**
+     * Set and save to the world's server config file, the rule's one home. FML's file watcher reloads that file on its own
+     * thread after every write, replacing the values in memory: a reload of an earlier write (a function setting several
+     * rules in one tick) landing between this set and this save would put the old value back and save it. So the value is
+     * read back after the save, and set again while it did not hold. False: it never held.
+     */
+    static boolean store(Rule r, Object v) {
+        for (int attempt = 0; attempt < STORE_ATTEMPTS; attempt++) {
+            r.set(v);
+            IncomingConfig.SERVER_SPEC.save();
+            if (v.equals(r.config().getRaw())) return true;
+        }
+        return false;
     }
 
     /** {@code text} as a value of {@code r}: {@code true}/{@code false}, or a whole number in the key's range; null otherwise. */

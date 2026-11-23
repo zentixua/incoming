@@ -243,9 +243,13 @@ paths:
   NBT and codec; `SalvoData` saves them because it recomputes round refs), then `BlastArea.rules()` for every blast job,
   `DebrisEntity.under` (saved), collapse rubble's cancelled drop (vanilla saves it), `StagedExplosion.rulesOf` for the
   substation listener, `NuclearWarhead` for the nuclear blackout. Block-changing code never reads those six from
-  `IncomingConfig` (work without an order reads `StrikeRules.live()` when its area opens); the other exposed keys are
-  read only at admission, except `nuclear.enabled`, B1's hard gate before a nuclear release. A new key needs the same
-  proof. Regressions: `RuleGameTests` (arena: every conventional weapon, rules off at order, on at impact),
+  `IncomingConfig` (work without an order reads `StrikeRules.live()` when its area opens; test helpers and explosions
+  that are not ours, such as the nuclear wave's craft explosions, read it live). A projectile keeps its order's rules
+  apart from its round (`StrikeProjectile.orderRules`, saved): a B-2 hands its round to the bomb and can still be shot
+  down. The other exposed keys are read only at admission, except B1's re-asks before a nuclear release:
+  `nuclear.enabled` (hard gate) and the rights from `nuclear.ops_only` and `launch.designator_for_everyone` at the key
+  turn. A new key needs the same proof. `RuleCommand.store` reads a saved value back: FML's watcher reloads the file
+  on its own thread after each write. Regressions: `RuleGameTests` (arena: every conventional weapon, rules off at order, on at impact), `RuleReviewGameTests`,
   `StrikeRulesTest`.
 - `world.early_warning` controls automatic sirens and nuclear launch/target notices (default true). `ServerConfigMigration`
   decorates the registered server `IConfigSpec`: copy legacy `world.siren` before spec correction removes it; an explicit

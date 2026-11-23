@@ -95,6 +95,11 @@ public class DebrisEntity extends Entity {
         return this;
     }
 
+    /** The rules it lands under. */
+    public StrikeRules rules() {
+        return rules;
+    }
+
     public boolean isChip() { return entityData.get(DATA_CHIP); }
 
     public BlockState blockState() {

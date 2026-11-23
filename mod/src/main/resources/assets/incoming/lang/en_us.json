@@ -529,6 +529,7 @@
   "incoming.rule.set": "%s set to %s: orders made from now on follow it",
   "incoming.rule.unknown": "Unknown rule %s. Rules: %s",
   "incoming.rule.bad_value": "%s cannot be %s: it takes %s",
+  "incoming.rule.not_saved": "%s was not saved: the settings file kept changing. Try again",
   "incoming.grid.no_node": "No grid node #%s",
   "incoming.grid.status": "Outages: %s, grid nodes: %s (chunks queued %s, lamps to relight %s)",
   "incoming.grid.status_clock": "Queue: %s units last tick (budget %s ms), next unit estimate %s ms, longest unit in 5–10 s %s ms",

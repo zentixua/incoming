@@ -31,7 +31,10 @@ import net.neoforged.neoforge.gametest.PrefixGameTestTemplate;
 import ua.zentix.incoming.Incoming;
 import ua.zentix.incoming.IncomingConfig;
 import ua.zentix.incoming.command.RuleCommand;
+import ua.zentix.incoming.entity.BunkerBusterEntity;
 import ua.zentix.incoming.entity.DebrisEntity;
+import ua.zentix.incoming.entity.DroneEntity;
+import ua.zentix.incoming.registry.ModEntities;
 import ua.zentix.incoming.entity.StrikeProjectile;
 import ua.zentix.incoming.grid.Node;
 import ua.zentix.incoming.grid.PowerGrid;
@@ -44,7 +47,6 @@ import ua.zentix.incoming.strike.StrikeRules;
 import ua.zentix.incoming.strike.StrikeWorld;
 import ua.zentix.incoming.strike.VirtualFlights;
 import ua.zentix.incoming.strike.WeaponType;
-import ua.zentix.incoming.warhead.DebrisSpawner;
 import ua.zentix.incoming.warhead.Warheads;
 
 import java.io.StringReader;
@@ -173,6 +175,18 @@ public final class RuleGameTests {
         h.assertValueEqual(scheduledGrid(NuclearEvents.get(level), nuke), List.of(true), "scheduled ICBM grid rule");
         h.assertValueEqual(scheduledGrid(NuclearEvents.readBackForTest(level), nuke), List.of(true), "scheduled ICBM grid rule after a restart");
 
+        // debris keeps the rules of the strike that threw it across a save; one saved without them takes the config
+        DebrisEntity debris = DebrisEntity.create(level, Vec3.atCenterOf(c), Blocks.COBBLESTONE.defaultBlockState(), false, false, Vec3.ZERO).under(OFF);
+        net.minecraft.nbt.CompoundTag debrisSave = new net.minecraft.nbt.CompoundTag();
+        debris.saveWithoutId(debrisSave);
+        DebrisEntity debrisBack = new DebrisEntity(ModEntities.DEBRIS.get(), level);
+        debrisBack.load(debrisSave);
+        h.assertValueEqual(debrisBack.rules(), OFF, "debris rules after a restart");
+        debrisSave.remove("rules");
+        DebrisEntity legacy = new DebrisEntity(ModEntities.DEBRIS.get(), level);
+        legacy.load(debrisSave);
+        h.assertValueEqual(legacy.rules(), StrikeRules.live(), "debris saved without rules");
+
         boolean[] seen = {false, false};
         h.onEachTick(() -> {
             for (StrikeProjectile p : flying(level)) {
@@ -192,9 +206,9 @@ public final class RuleGameTests {
 
     /**
      * The arena guarantee: with the five {@code world.*} rules and {@code grid.enabled} off when the rounds are made, a
-     * conventional impact of every weapon, a shot-down wreck's debris and a console strike that flies in change no block
-     * on an arena of glass, planks, wool, hay, grass, a lantern and a substation, and cut no power, although the rules are
-     * switched back on before anything hits.
+     * conventional impact of every weapon (the B-2's bomb dropped as an entity: its bore too) and a Shahed shot down over
+     * the arena (its wreck) change no block on an arena of glass, planks, wool, hay, grass, a lantern and a substation,
+     * and cut no power, although the rules are switched back on before anything hits.
      */
     @GameTest(template = "range", timeoutTicks = 4000, batch = "rule_arena", skyAccess = true)
     public static void arenaKeepsItsBlocks(GameTestHelper h) {
@@ -207,29 +221,38 @@ public final class RuleGameTests {
         Map<BlockPos, BlockState> was = snapshot(h);
 
         setAll(h, op, false);
-        BlockPos c = h.absolutePos(CENTER);
-        h.assertValueEqual(run(h, op, "incoming salvo missile 1 0 at " + c.getX() + " " + c.getY() + " " + c.getZ() + " tag b4arena"), 1, "console strike");
         List<RoundRef> rounds = new ArrayList<>();
         for (int i = 0; i < 6; i++) rounds.add(RoundRef.of(UUID.randomUUID(), i, "b4arena"));
         h.assertTrue(rounds.stream().allMatch(r -> r.rules().equals(OFF)), "rounds made with the rules off carry " + rounds.getFirst().rules());
         // the config turns everything back on: the rounds keep what they were made under
         setAll(h, op, true);
-        StrikeGameTests.afterTest(h, () -> ServerActions.clearTag(level.getServer(), "b4arena", "test"));
 
         Warheads.detonate(level, WeaponType.DRONE, Vec3.atBottomCenterOf(h.absolutePos(new BlockPos(24, 12, 24))), null, null, rounds.get(0));
         Warheads.detonate(level, WeaponType.MISSILE, Vec3.atBottomCenterOf(h.absolutePos(new BlockPos(40, 12, 24))), null, null, rounds.get(1));
         Warheads.detonate(level, WeaponType.ROCKET, Vec3.atBottomCenterOf(h.absolutePos(new BlockPos(24, 12, 40))), null, null, rounds.get(2));
         Warheads.detonate(level, WeaponType.LOITER, Vec3.atBottomCenterOf(h.absolutePos(new BlockPos(40, 12, 40))), null, null, rounds.get(3));
-        Vec3 bunker = Vec3.atCenterOf(h.absolutePos(new BlockPos(32, 4, 20)));
-        Warheads.bunker(level, bunker, bunker.add(0, 7, 0), null, null, rounds.get(4));
-        DebrisSpawner.wreck(level, Vec3.atCenterOf(h.absolutePos(new BlockPos(32, 30, 44))), new Vec3(0.5, 0, 0), 6, rounds.get(5).rules());
+        // the B-2's bomb as an entity carrying its round: the bore through the ground, then the buried charge
+        Vec3 surface = Vec3.atBottomCenterOf(h.absolutePos(new BlockPos(32, 12, 20)));
+        BunkerBusterEntity bomb = ModEntities.BUNKER_BUSTER.get().create(level);
+        h.assertTrue(bomb != null, "no bomb");
+        bomb.drop(surface.add(0, 26, 0), new Vec3(0, -4, 0), surface, null, null);
+        bomb.attachRound(rounds.get(4));
+        level.addFreshEntity(bomb);
+        // a Shahed shot down over the arena: its wreck through StrikeProjectile.intercepted
+        DroneEntity drone = ModEntities.DRONE.get().create(level);
+        h.assertTrue(drone != null, "no drone");
+        drone.moveTo(Vec3.atCenterOf(h.absolutePos(new BlockPos(32, 34, 44))));
+        drone.attachRound(rounds.get(5));
+        level.addFreshEntity(drone);
+        drone.intercepted(level, "rule_arena", null, null);
 
         boolean[] struck = {false};
         long start = level.getGameTime();
         h.onEachTick(() -> {
-            if (!struck[0] && level.getGameTime() > start + 2 && StrikeWorld.get(level).idle() && tagged(level, "b4arena") == 0) struck[0] = true;
+            if (!struck[0] && bomb.isRemoved() && level.getGameTime() > start + 2 && StrikeWorld.get(level).idle() && tagged(level, "b4arena") == 0) struck[0] = true;
         });
         h.succeedWhen(() -> {
+            h.assertTrue(bomb.isRemoved(), "the bomb has not gone off");
             h.assertTrue(struck[0], "strikes still running");
             h.assertTrue(level.getEntitiesOfClass(DebrisEntity.class, new AABB(h.absolutePos(BlockPos.ZERO)).inflate(80)).isEmpty(), "debris still falling");
             h.assertTrue(PowerGrid.get(level).downOutage(node.id(), level.getGameTime()).isEmpty(), "the substation was knocked out");

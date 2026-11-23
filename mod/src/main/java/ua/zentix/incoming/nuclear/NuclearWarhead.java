@@ -98,7 +98,7 @@ public final class NuclearWarhead {
         events.add(d, ua.zentix.incoming.util.WorldClock.now(level));
         if (round != null) events.impact(d.id(), round, owner);
         // grid.enabled as the order was made (a strike without one: the config now)
-        boolean grid = round != null ? round.rules().grid() : IncomingConfig.SERVER.gridEnabled.get();
+        boolean grid = (round != null ? round.rules() : ua.zentix.incoming.strike.StrikeRules.live()).grid();
         PacketDistributor.sendToPlayersInDimension(level, new S2C.NukeDetonation(d, (float) Blackouts.nukeRadius(d, grid), strikeId));
         Orders.queue(level, new NuclearDetonationEvent(level.dimension(), d.id(), d.burst(), yieldKt, !d.surface(), owner,
                 round == null ? null : round.order(), round == null ? null : round.round(), round == null ? null : round.tag()));

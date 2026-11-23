@@ -91,7 +91,7 @@ public final class Blackouts {
         if (!(e.getLevel() instanceof ServerLevel level)) return;
         // a strike's explosion follows the rules its order was made under; any other explosion, the config now
         StrikeRules rules = Warheads.rulesOf(e.getExplosion());
-        if (!(rules != null ? rules.grid() : IncomingConfig.SERVER.gridEnabled.get())) return;
+        if (!(rules != null ? rules : StrikeRules.live()).grid()) return;
         if (e.getExplosion().getBlockInteraction() == Explosion.BlockInteraction.TRIGGER_BLOCK || e.getExplosion().radius() < MIN_BLAST) return;
         Vec3 at = e.getExplosion().center();
         // Warhead explosion by charge: substation equipment is outdoors; disabled where the wave breaks

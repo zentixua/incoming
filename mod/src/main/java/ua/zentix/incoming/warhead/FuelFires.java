@@ -179,7 +179,8 @@ public final class FuelFires {
 
     /**
      * {@code weapon} fuel left in crater at {@code pos} (impact {@code blastTick}) settles on blocks/burns:
-     * cells, fire, accounting, client packet within {@code reach}. Returns ignited count.
+     * cells, fire, accounting, client packet within {@code reach}. Returns ignited count. The caller holds the strike's
+     * {@code world.fire}; a poured pool relights under it until its fuel is spent.
      */
     static int pour(ServerLevel level, Vec3 pos, WeaponType weapon, long blastTick, double reach) {
         int n = weapon.spec().pool().cells();

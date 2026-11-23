@@ -457,10 +457,10 @@ public final class Warheads {
     /**
      * Ignite ground: fire on column top (like fallen fireballs). Ready chunks only: missile fire ring 7 blocks
      * from impact reached still-generating chunks at loaded edge; {@code igniteAt} block read would load inside
-     * tick, already-loading height/block reads wait in {@code managedBlock}.
+     * tick, already-loading height/block reads wait in {@code managedBlock}. The caller holds {@code world.fire}.
      */
     public static void igniteGround(ServerLevel level, double x, double z) {
-        if (!IncomingConfig.SERVER.fire.get() || !Terrain.readyAround(level, new Vec3(x, 0, z), EDGE)) return;
+        if (!Terrain.readyAround(level, new Vec3(x, 0, z), EDGE)) return;
         BlockPos top = level.getHeightmapPos(Heightmap.Types.MOTION_BLOCKING, BlockPos.containing(x, 0, z));
         igniteAt(level, top);
     }

@@ -82,7 +82,9 @@ A change applies to orders given after it. Orders already given keep the rules t
 salvo still launching, rounds in flight (also out of sight), a scheduled ICBM, and what a strike that has already hit
 still does (its debris landing, its fuel burning). `nuclear.enabled` is also the off switch for nuclear launches not yet
 under way: switched off, a nuclear order waiting for a second key or its launch site does not leave and its munitions
-come back; an ICBM already flying still arrives.
+come back; an ICBM already flying still arrives. `nuclear.ops_only` and `launch.designator_for_everyone` decide who has
+the right to launch, and a nuclear launch waiting for a second key asks its owner's rights again when the key turns
+([permissions](packs.md#permissions)): a right lost in the meantime cancels it and returns the munitions.
 
 | Rule | What it governs |
 |---|---|
