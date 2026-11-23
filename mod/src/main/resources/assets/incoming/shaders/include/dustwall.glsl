@@ -185,15 +185,6 @@ float dwTextured(float a) {
     float x = clamp((a - DW_HAZE_FROM) / (DW_HAZE_TO - DW_HAZE_FROM), 0.0, 1.0);
     return 1.0 - x * x * x * (x * (6.0 * x - 15.0) + 10.0);
 }
-// the textured share by the pixel's footprint (blocks per pixel at the sample, gDwFoot): the billows' coarsest octaves fade
-// to their mean between 0.35 and 0.8 of a cycle per pixel (dwLod: the 22- and 13-block octaves by 8–18 blocks), so past
-// DW_TEX_FOOT the texture shows nothing but its cost; the haze level (the same column, swells and plumes) takes it over a
-// factor of 2 of footprint (est.; 3.6–7.3 km at HIGH, 2.4–4.8 km at LOW)
-const float DW_TEX_FOOT = 8.0;
-float gDwFoot0 = 0.0;
-float dwTexturedFoot() {
-    return 1.0 - smoothstep(DW_TEX_FOOT, 2.0 * DW_TEX_FOOT, gDwFoot);
-}
 // a smooth max(a − c, 0) (softplus, width 1 s): no kink in any age function
 float dwAfter(float a, float c) {
     float x = a - c;
@@ -428,7 +419,7 @@ float dwBound(vec3 g) {
     float env = a < 1.5 ? law.x * 1.8 : dwEnvelope(a, law.x, 1.8);
     float full = env * (1.0 + DW_BULGE) * DW_HAZE + 6.0;
     // the haze level's crests and plumes (dwHaze: top × (1 + swell + plume), its soft edge to 1.3 of it)
-    if (dwTextured(a) < 0.999 || gDwFoot > DW_TEX_FOOT) {
+    if (dwTextured(a) < 0.999) {
         // the swell and plume over this ground point (the same fields; the eddies shift the air by up to ~40 m against their
         // 220 m scale: margins of 0.15 on the swell and a lower tuft threshold), so the plumes' room stands only over plumes
         // (a bound over every point with the tallest plume's room tripled the strides of the young view's rays)
@@ -544,7 +535,7 @@ float dwDensity(vec3 g, bool coarse) {
     if (law.y <= 0.0) return 0.0;
     gDwWhy = 6.0;
     // the haze level where the texture has faded, blended by the same fade function (no seam in time or space)
-    float F = gDwForceF >= 0.0 ? gDwForceF : dwTextured(a0) * dwTexturedFoot();
+    float F = gDwForceF >= 0.0 ? gDwForceF : dwTextured(a0);
     if (!coarse) gDwF = F;
     float haze = 0.0;
     // (the cheapest level lights the textured dust with the haze level's two streams: its column is read too)
@@ -761,20 +752,6 @@ vec3 dwTexturedLight(vec3 q, vec3 rd) {
             + dwSkyOnDust() * (0.03 + 0.15 * exp(-0.3 * depth));
     vec3 albedo = mix(DwAlbedo, DwSandAlbedo, gDwSand), bulk = mix(DwBulk, DwSandBulk, gDwSand);
     return DW_EXPOSURE * max(DwAdapt, 1.0) * (albedo * single + bulk * multiple + bulk * DwGroundLight);
-}
-
-// the ground under the dust at p (relief map point, from ground zero's ground point): land albedo (est., grass and soil)
-// lit by the sun's beam through the drawn column above it and by the column's diffuse light (the two streams at its bottom)
-const vec3 DW_GROUND_ALBEDO = vec3(0.16, 0.19, 0.11);
-vec3 dwGroundBehind(vec3 p) {
-    gDwF = 0.0;
-    dwDensity(vec3(p.x, dwFloor(p.xz) + 1.0, p.z), false);
-    float tc = gDwHazeTc;
-    float muS = max(DwSunDir.y, 0.12), sunUp = smoothstep(-0.05, 0.05, DwSunDir.y);
-    vec3 down = vec3(pallDiffuse(PALL_DUST_W.r, PALL_DUST_G, tc, tc, PALL_LAND, muS, DwSunLight.r * sunUp, 1.0, 0.0, dwSkyOnDust().r, 0.0, -0.6666667),
-            pallDiffuse(PALL_DUST_W.g, PALL_DUST_G, tc, tc, PALL_LAND, muS, DwSunLight.g * sunUp, 1.0, 0.0, dwSkyOnDust().g, 0.0, -0.6666667),
-            pallDiffuse(PALL_DUST_W.b, PALL_DUST_G, tc, tc, PALL_LAND, muS, DwSunLight.b * sunUp, 1.0, 0.0, dwSkyOnDust().b, 0.0, -0.6666667));
-    return DW_GROUND_ALBEDO * (DwSunLight * sunUp * muS * exp(-tc / muS) + max(down, vec3(0.0))) * max(DwAdapt, 1.0);
 }
 
 // light of a sample: the textured level's (take 33's) and the haze level's, blended by the textured share
