@@ -229,6 +229,8 @@ public final class DustWallPass {
             m.safeGetUniform("DwFar").set(planB() ? 1f : 0f, 34f, 0f, 0f);
             m.safeGetUniform("DwFire").set(f.fire.x, f.fire.y, f.fire.z);
             m.safeGetUniform("DwAdapt").set(f.adapt);
+            // the light's detail by the march divisor of the preset's rung (1/4 HIGH, 1/5 MEDIUM, 1/6 and coarser LOW)
+            m.safeGetUniform("DwDetail").set(div <= 4 ? 0f : div == 5 ? 1f : 2f);
             m.safeGetUniform("DwBall").set(f.ball[0], f.ball[1], f.ball[2], f.ball[3]);
             m.safeGetUniform("DwBallLight").set(f.ballLight.x, f.ballLight.y, f.ballLight.z);
             m.safeGetUniform("DwSunLight").set(f.sunLight.x, f.sunLight.y, f.sunLight.z);

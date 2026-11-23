@@ -47,6 +47,10 @@ uniform vec3 DwFire;
 // presentation: the dust's exposure (1 while the fireball lights it; DW_ADAPT once only sun and sky do, following the
 // fireball's light down: NukePall.youngWall), like the eye adapting after the flash: the low sun's dust read as dark smoke
 uniform float DwAdapt;
+// the light's detail level (the preset's rung, DustWallPass): 0 the textured level's full light (two shadow taps of two reads
+// each), 1 one read per shadow tap (the billows over the next 12 m; the 70 m swell shadow dropped), 2 the two-stream light of
+// the haze level on the textured density (no shadow taps)
+uniform float DwDetail;
 // lowest and highest ground of the terrain map under the wall, blocks above ground zero's ground point (0, 0: no map)
 uniform vec2 DwRelief;
 
@@ -169,11 +173,13 @@ float dwContrast(float a) {
 }
 // the textured share of the dust at age a (the haze level takes the rest): the billows' turbulence has decayed and the fines
 // have diluted; the noise-free column with the pall's closed-form light is the same dust at a level that costs a twentieth.
-// Logistic about DW_HAZE_AGE (presentation; the texture holds through take 33's ages: 0.985 at 24 s)
-const float DW_HAZE_AGE = 45.0, DW_HAZE_WIDTH = 5.0;
+// A quintic smooth step over [DW_HAZE_FROM, DW_HAZE_TO] (C2: exactly 1 before and 0 after, so outside the window only one
+// level is evaluated; the C3 rule holds over its 36 s, a ψ-ratio step over 24 s had slope ratios to 19; presentation: the
+// texture holds through take 33's ages to 24 s)
+const float DW_HAZE_FROM = 24.0, DW_HAZE_TO = 60.0;
 float dwTextured(float a) {
-    // (the complement written directly: 1 − 1/(1 + e^(−x)) cancels in float32 where the share is small)
-    return 1.0 / (1.0 + exp((a - DW_HAZE_AGE) / DW_HAZE_WIDTH));
+    float x = clamp((a - DW_HAZE_FROM) / (DW_HAZE_TO - DW_HAZE_FROM), 0.0, 1.0);
+    return 1.0 - x * x * x * (x * (6.0 * x - 15.0) + 10.0);
 }
 // a smooth max(a − c, 0) (softplus, width 1 s): no kink in any age function
 float dwAfter(float a, float c) {
@@ -452,7 +458,8 @@ float dwDensity(vec3 g, bool coarse) {
     float F = gDwForceF >= 0.0 ? gDwForceF : dwTextured(a0);
     if (!coarse) gDwF = F;
     float haze = 0.0;
-    if (F < 0.999) {
+    // (the cheapest level lights the textured dust with the haze level's two streams: its column is read too)
+    if (F < 0.999 || (DwDetail > 1.5 && !coarse)) {
         haze = dwHaze(g, q, r, a0, law, coarse);
         if (F <= 0.001) {
             if (!coarse) {
@@ -560,8 +567,10 @@ float dwPhase(float c) {
 // shaded undersides, the face toward a low light lit through its short way out) and the smooth top ~70 m away (the hump
 // and bulges throw long shadows)
 float dwShadow(vec3 q, vec3 l) {
+    float near = dwDensity(q + l * 12.0, true) * 26.0;
+    if (DwDetail > 0.5) return near;
     vec3 p = q + l * 70.0;
-    return max(dwTopAt(p.xz) - (p.y - dwFloor(p.xz)), 0.0) * gDwSigma * 0.8 + dwDensity(q + l * 12.0, true) * 26.0;
+    return max(dwTopAt(p.xz) - (p.y - dwFloor(p.xz)), 0.0) * gDwSigma * 0.8 + near;
 }
 
 // light of a dust sample at q (presentation, follows the light on ground-coloured dust): single scattering of the fireball
@@ -620,8 +629,8 @@ vec3 dwTexturedLight(vec3 q, vec3 rd) {
 
 // light of a sample: the textured level's (take 33's) and the haze level's, blended by the textured share
 vec3 dwLight(vec3 q, vec3 rd) {
-    vec3 haze = gDwF < 0.999 ? dwHazeLight(q, rd) : vec3(0.0);
-    if (gDwF <= 0.001) return haze;
+    vec3 haze = gDwF < 0.999 || DwDetail > 1.5 ? dwHazeLight(q, rd) : vec3(0.0);
+    if (gDwF <= 0.001 || DwDetail > 1.5) return haze;
     return mix(haze, dwTexturedLight(q, rd), gDwF);
 }
 
