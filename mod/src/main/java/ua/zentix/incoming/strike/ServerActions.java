@@ -630,7 +630,27 @@ public final class ServerActions {
     public static boolean dispatch(ServerLevel level, String who, float yaw, WeaponType weapon, int count, int spread, Aim aim, Loadout.Nuke nuke,
                                    Waypoints via, @Nullable LaunchOrigin from, @Nullable String tag, @Nullable Consumer<Component> feedback,
                                    @Nullable Consumer<Order> made) {
-        if (Orders.elsewhere(level, () -> dispatch(level, who, yaw, weapon, count, spread, aim, nuke, via, from, tag, feedback, made))) return true;
+        return dispatch(null, level, who, yaw, weapon, count, spread, aim, nuke, via, from, tag, feedback, made);
+    }
+
+    /**
+     * Same, given by {@code asker} ({@link Authority}): a player's command run by a non-player entity ({@code /execute as}
+     * an armor stand) asks that player's rights, read again on a deferred run; null is automation.
+     */
+    public static boolean dispatch(@Nullable ServerPlayer asker, ServerLevel level, String who, float yaw, WeaponType weapon, int count, int spread,
+                                   Aim aim, Loadout.Nuke nuke, Waypoints via, @Nullable LaunchOrigin from, @Nullable String tag,
+                                   @Nullable Consumer<Component> feedback, @Nullable Consumer<Order> made) {
+        if (Orders.elsewhere(level, () -> dispatch(asker, level, who, yaw, weapon, count, spread, aim, nuke, via, from, tag, feedback, made))) return true;
+        if (asker != null) {
+            ServerPlayer by = live(asker);
+            Authority.Denial denied = Authority.check(Authority.Action.launch(weapon, new Loadout(weapon, count, spread, TargetMode.LOOK, "", nuke).nuclear()),
+                    by != null ? Authority.Actor.of(by) : Authority.Actor.owner(level.getServer(), asker.getUUID()));
+            if (denied != null) {
+                if (by != null) refuse(by, denied.line());
+                if (feedback != null) feedback.accept(denied.line());
+                return false;
+            }
+        }
         Loadout l = order(weapon, count, spread, nuke);
         Order order = Order.server(level, who, l, aim, feedback).tagged(tag);
         boolean ok = Orders.admit(order, o -> launch(level, who, null, null, yaw, l, aim, via, from, null, o));
@@ -667,7 +687,7 @@ public final class ServerActions {
 
     /** {@code player} as they are in the game now: the same object, or their respawned one; null if they left. */
     @Nullable
-    private static ServerPlayer live(ServerPlayer player) {
+    public static ServerPlayer live(ServerPlayer player) {
         if (!player.isRemoved() && !player.hasDisconnected()) return player;
         ServerPlayer now = player.server.getPlayerList().getPlayer(player.getUUID());
         return now == null || now.hasDisconnected() ? null : now;

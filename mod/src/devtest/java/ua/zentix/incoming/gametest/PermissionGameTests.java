@@ -66,8 +66,8 @@ import java.util.function.Consumer;
  * nothing is paid. With NeoForge's default handler each entry answers exactly as the switches ({@code
  * designator_for_everyone}, {@code nuclear.ops_only}, operator rights); a permission handler ({@link Handler}, swapped in
  * for one batch) refuses one weapon at every entry and leaves the others, refuses nuclear orders and second keys while
- * the nuclear flag and trust stay hard gates, refuses linking, and an offline owner's launcher answers from the handler's
- * last answer or the node default without the handler's offline lookup. Each probe has its own batch: the handler and
+ * the nuclear flag and trust stay hard gates, refuses linking, and an offline owner's launcher answers by the
+ * node default without the handler's offline lookup. Each probe has its own batch: the handler and
  * the switches are server-wide.
  */
 @GameTestHolder(Incoming.MOD_ID)
@@ -226,7 +226,7 @@ public final class PermissionGameTests {
         ServerActions.fire(fire(linker, WeaponType.ROCKET), context(linker));
         h.assertTrue(mine.mission() == null && linker.last("incoming.no_permission.weapon") != null, "Grad mission given: " + mine.mission());
 
-        // fixed launcher owners: online (the handler answers) and offline with the handler's last answer
+        // a fixed launcher owner online: the handler answers
         Vec3 far = Vec3.atBottomCenterOf(h.absolutePos(PAD)).add(0, -1, 1000);
         FakePlayer online = new FakePlayer(level, new GameProfile(UUID.randomUUID(), "perm_w_online"));
         online(h, online);
@@ -360,12 +360,12 @@ public final class PermissionGameTests {
     }
 
     /**
-     * An offline owner's launcher under a permission mod: without a kept answer the node default (fires), with the answer
-     * the handler gave while the owner was online (refuses Grad, fires Shahed); the handler's offline lookup is never used.
-     * An ownerless launcher asks nothing.
+     * An offline owner's launcher under a permission mod follows the node defaults: the handler's own answer for that
+     * owner (here a Grad deny, or a designator grant beyond the switches) is never asked, and its offline lookup is never
+     * used. An ownerless launcher asks nothing.
      */
     @GameTest(template = "runway", timeoutTicks = 20, batch = "permission_offline", skyAccess = true)
-    public static void offlineOwnerUsesKeptAnswer(GameTestHelper h) {
+    public static void offlineOwnerFollowsDefaults(GameTestHelper h) {
         ServerLevel level = h.getLevel();
         switches(h);
         IncomingConfig.SERVER.designatorForEveryone.set(true);
@@ -373,19 +373,17 @@ public final class PermissionGameTests {
         Gate gate = Gate.listen(h);
         GameProfile owner = new GameProfile(UUID.randomUUID(), "perm_o_owner");
         handler.set(owner.getId(), Authority.weapon(WeaponType.ROCKET), false);
+        handler.set(owner.getId(), Authority.LAUNCH, true);
         gate.watch(owner.getId());
         FixedLauncherBlockEntity be = FixedLauncherGameTests.launcher(h, PAD, owner.getId());
         Vec3 far = Vec3.atBottomCenterOf(h.absolutePos(PAD)).add(0, -1, 1000);
         be.setMission(new Mission(WeaponType.ROCKET, 1, 0, new Target.Point(far), far, Waypoints.NONE));
         FixedLauncherGameTests.load(h, be, new ItemStack(ModItems.GRAD_ROCKETS.get()));
         LauncherOrders.fire(level, be);
-        h.assertValueEqual(gate.passed(owner.getId(), WeaponType.ROCKET), 1, "offline owner without a kept answer: node default");
-        Authority.remember(new FakePlayer(level, owner));
-        h.assertValueEqual(FixedLauncherGameTests.key(LauncherOrders.fire(level, be)), "incoming.fixed_launcher.no_rights.weapon", "kept answer");
-        be.setMission(new Mission(WeaponType.DRONE, 1, 0, new Target.Point(far), far, Waypoints.NONE));
-        FixedLauncherGameTests.load(h, be, new ItemStack(ModItems.SHAHED.get(), 1));
-        LauncherOrders.fire(level, be);
-        h.assertValueEqual(gate.passed(owner.getId(), WeaponType.DRONE), 1, "kept answer allows Shahed");
+        h.assertValueEqual(gate.passed(owner.getId(), WeaponType.ROCKET), 1, "offline owner: node default for Grad");
+        IncomingConfig.SERVER.designatorForEveryone.set(false);
+        h.assertValueEqual(FixedLauncherGameTests.key(LauncherOrders.fire(level, be)), "incoming.fixed_launcher.no_rights",
+                "offline owner: node default for the designator");
         // ownerless: no rules even when the handler denies every launch
         handler.everyone(Authority.LAUNCH, false);
         be.setOwner(null);

@@ -197,12 +197,14 @@ paths:
   ownerless launchers are automation and ask nothing, except that a flying nuclear order always asks the player it is
   made for (`nuclearRefusal`, as the switches did); `nuke now` asks only a typing player. A key wait re-asks its owner's
   rights (not carrier/yield validity) when the key turns, after finding the order (no-order line unchanged); an armed
-  order rechecks the nuclear flag before release. An offline owner never calls `PermissionAPI.getOfflinePermission`
-  (NeoForge promises nothing about storage there): the resolver answers, under a foreign handler narrowed (only
-  narrowed) by the answers kept at logout (`Authority.remember`, `PERMISSION_MEMORY`, unsaved); context-dependent
-  denials from another dimension are not known offline. A handler that lacks a node falls back to its resolver.
-  Regressions: `AuthorityTest`, `PermissionGameTests`, `PermissionRegressionGameTests` (devtest handlers swapped into
-  `PermissionAPI`, one batch per probe: the handler and switches are server-wide).
+  order rechecks the nuclear flag before release (a paid order whose owner is offline waits for them: refunds reach only
+  online inventories). A non-player executor of a player's command (`/execute as` an armor stand) asks that player
+  (`dispatch(asker, …)`); a deferred `nuke now` re-reads its player by UUID (`ServerActions.live`) and needs them still
+  operator. An offline owner never calls `PermissionAPI.getOfflinePermission` (NeoForge promises nothing about storage
+  there) and nothing is kept from their last visit (its context, e.g. dimension, would be wrong): the node resolver
+  answers, as the default handler does. A handler that lacks a node falls back to its resolver.
+  Regressions: `AuthorityTest`, `PermissionGameTests`, `PermissionRegressionGameTests`, `PermissionRoundTwoGameTests`
+  (devtest handlers swapped into `PermissionAPI`, one batch per probe: the handler and switches are server-wide).
 - Nuclear permission (Artem): `nuclear.ops_only` means operators and the world host (`NuclearKeys.trusted`: the
   single-player or LAN host, cheats on or off). Review and launch take the refusal from one function,
   `ServerActions.nuclearRefusal` (`Authority`: designator, weapon, enabled, `incoming.nuclear`; then carrier, yield cap,

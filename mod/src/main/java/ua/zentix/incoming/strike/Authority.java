@@ -7,7 +7,6 @@ import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.server.players.GameProfileCache;
-import net.neoforged.neoforge.event.entity.player.PlayerEvent;
 import net.neoforged.neoforge.server.ServerLifecycleHooks;
 import net.neoforged.neoforge.server.permission.PermissionAPI;
 import net.neoforged.neoforge.server.permission.events.PermissionGatherEvent;
@@ -18,11 +17,9 @@ import net.neoforged.neoforge.server.permission.nodes.PermissionTypes;
 import org.jetbrains.annotations.Nullable;
 import ua.zentix.incoming.Incoming;
 import ua.zentix.incoming.IncomingConfig;
-import ua.zentix.incoming.registry.ModAttachments;
 
 import java.util.ArrayList;
 import java.util.EnumMap;
-import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
@@ -47,10 +44,10 @@ import java.util.function.Predicate;
  * player also asks that player ({@code ServerActions.nuclearRefusal}), as the switches always did.
  * <p>
  * An offline owner never reaches the handler on the server tick: NeoForge does not promise that a handler's offline
- * lookup avoids storage, so {@link PermissionAPI#getOfflinePermission} is never called. The default handler's answer is
- * the node's own resolver (profile cache and op list). Under any other handler the resolver answers too, narrowed by
- * what the handler refused while the owner was last online in this server run ({@link #remember}, at logout): a kept
- * answer only takes rights away, never grants beyond the default, so a stale grant cannot open a launcher.
+ * lookup avoids storage, and an answer kept from the owner's last visit carries that moment's context (another
+ * dimension, rights changed since), so {@link PermissionAPI#getOfflinePermission} is never called and nothing is kept.
+ * The node's own resolver answers (the switches; operators by the server's profile cache and op list), which is
+ * exactly the default handler's offline answer.
  */
 public final class Authority {
     /** Use the designator at all; launch anything. Default: {@code designator_for_everyone} or operator. */
@@ -123,7 +120,7 @@ public final class Authority {
     @Nullable
     public static Denial check(Action action, Actor actor) {
         boolean byDefault = defaultHandler();
-        Gate gate = decide(action, IncomingConfig.SERVER.nukeEnabled.get(), node -> has(node, actor, byDefault));
+        Gate gate = decide(action, IncomingConfig.SERVER.nukeEnabled.get(), node -> has(node, actor));
         return gate == null ? null : new Denial(gate, action.weapon(), byDefault);
     }
 
@@ -168,7 +165,7 @@ public final class Authority {
         return WEAPONS.get(w);
     }
 
-    /** Every node, for registration and the logout snapshot. */
+    /** Every node, for registration. */
     public static List<PermissionNode<Boolean>> nodes() {
         List<PermissionNode<Boolean>> all = new ArrayList<>();
         all.add(LAUNCH);
@@ -183,28 +180,6 @@ public final class Authority {
         e.addNodes(new ArrayList<>(nodes()));
     }
 
-    /** A player leaves: keep the active handler's answers for their offline launchers. Never interrupts the logout. */
-    public static void onLogout(PlayerEvent.PlayerLoggedOutEvent e) {
-        if (!(e.getEntity() instanceof ServerPlayer player)) return;
-        try {
-            remember(player);
-        } catch (RuntimeException x) {
-            Incoming.LOG.warn("Permission answers of {} not kept for offline launchers", player.getGameProfile().getName(), x);
-        }
-    }
-
-    /**
-     * Keep {@code player}'s answers for every node as they leave: an offline owner's launcher narrows the node default
-     * by them ({@link Offline}) without asking the handler. Only for a handler other than the default one, whose offline
-     * answer is its resolver. The answers carry the context of the moment (the dimension the player left from).
-     */
-    public static void remember(ServerPlayer player) {
-        if (defaultHandler()) return;
-        Map<String, Boolean> answers = new HashMap<>();
-        for (PermissionNode<Boolean> node : nodes()) answers.put(node.getNodeName(), online(player, node));
-        player.server.overworld().getData(ModAttachments.PERMISSION_MEMORY).put(player.getUUID(), answers);
-    }
-
     /**
      * Vanilla permission level of player {@code id}: online value, otherwise the server's cached profile (operators;
      * 0 when unknown).
@@ -216,31 +191,12 @@ public final class Authority {
         return profile == null ? 0 : server.getProfilePermissions(profile);
     }
 
-    /** Last answers of players who left, per node name (non-persistent overworld attachment). */
-    public static final class Memory {
-        private final Map<UUID, Map<String, Boolean>> answers = new HashMap<>();
-
-        void put(UUID id, Map<String, Boolean> got) {
-            answers.put(id, Map.copyOf(got));
-        }
-
-        @Nullable
-        Boolean get(UUID id, PermissionNode<Boolean> node) {
-            Map<String, Boolean> got = answers.get(id);
-            return got == null ? null : got.get(node.getNodeName());
-        }
-    }
-
-    private static boolean has(PermissionNode<Boolean> node, Actor actor, boolean byDefault) {
+    private static boolean has(PermissionNode<Boolean> node, Actor actor) {
         return switch (actor) {
             // before the server registers nodes (no handler yet) the node's own default answers
             case Player(ServerPlayer p) -> online(p, node);
-            case Offline(MinecraftServer server, UUID id) -> {
-                // the default handler's offline answer is exactly this resolver call
-                boolean byResolver = node.getDefaultResolver().resolve(null, id);
-                Boolean kept = byDefault ? null : server.overworld().getData(ModAttachments.PERMISSION_MEMORY).get(id, node);
-                yield byResolver && (kept == null || kept);
-            }
+            // the default handler's offline answer is exactly this resolver call
+            case Offline(MinecraftServer server, UUID id) -> node.getDefaultResolver().resolve(null, id);
         };
     }
 

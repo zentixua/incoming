@@ -235,9 +235,12 @@ public final class IncomingCommand {
         if (Orders.elsewhere(level, () -> nukeNow(s, pos, nuke, tag))) return StatusCommand.deferred(s);
         // a rerun later: the command's own gate as it is then
         if (!mayNuke(s) || !s.hasPermission(2)) return 0;
-        // the player who typed it asks their own rights (a permission mod may deny an operator); the console, command blocks
-        // and what they run, as any player, are automation, as this host tool always was
-        if (asker(s) instanceof ServerPlayer p) {
+        // the player who typed it asks their own rights as they are now (a permission mod may deny an operator; a deferred run
+        // finds them by UUID and needs them still an operator); the console, command blocks and what they run, as any
+        // player, are automation, as this host tool always was
+        if (asker(s) instanceof ServerPlayer typed) {
+            ServerPlayer p = ServerActions.live(typed);
+            if (p == null || !p.hasPermissions(2)) return 0;
             Authority.Denial denied = Authority.check(Authority.Action.launch(WeaponType.NUKE, true), Authority.Actor.of(p));
             if (denied != null) {
                 ServerActions.refuse(p, denied.line());
@@ -459,8 +462,8 @@ public final class IncomingCommand {
         if (player != null) {
             ServerActions.strike(asker(s), player, w, count, spread, aim, nuke, path.via(), path.from(), rules(s), path.tag(), made);
         } else {
-            ServerActions.dispatch(level, s.getTextName(), s.getRotation().y, w, count, spread, aim, nuke, path.via(), path.from(), path.tag(),
-                    s::sendFailure, made);
+            ServerActions.dispatch(asker(s), level, s.getTextName(), s.getRotation().y, w, count, spread, aim, nuke, path.via(), path.from(),
+                    path.tag(), s::sendFailure, made);
         }
         return later ? StatusCommand.deferred(s) : StatusCommand.admitted(s, got[0]);
     }

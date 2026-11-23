@@ -391,14 +391,19 @@ public final class NuclearKeys {
                     LaunchPlaces.hold(level, o.from, o.placeKey);
                     if (!LaunchPlaces.ready(level, o.from) && o.waited++ < LaunchPlaces.WAIT) continue;
                 }
-                if (now < o.launchAt || !orders.remove(o)) continue;
-                // the hard gate holds to the last moment: nuclear weapons switched off meanwhile, nothing leaves
+                if (now < o.launchAt) continue;
+                // the hard gate holds to the last moment: nuclear weapons switched off meanwhile, nothing leaves. A paid
+                // order waits for its owner to come back for the refund (an offline inventory takes nothing back), or
+                // for nuclear weapons to come back on.
                 if (!IncomingConfig.SERVER.nukeEnabled.get()) {
                     ServerPlayer owner = o.owner(online);
+                    if (owner == null && o.paid != null) continue;
+                    if (!orders.remove(o)) continue;
                     if (owner != null) ServerActions.refuse(owner, Component.translatable("incoming.nuke.disabled"));
                     drop(o, online, "nuclear weapons disabled before launch");
                     continue;
                 }
+                if (!orders.remove(o)) continue;
                 launch(o, online);
             } else if (now >= o.deadline) {
                 if (!orders.remove(o)) continue;

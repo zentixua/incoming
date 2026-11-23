@@ -109,18 +109,17 @@ or deny each right per player or group, and per dimension through its contexts.
   through `/execute as`), launchers linked to their designator, and a fixed launcher they own, which fires under its
   owner's rights. An order started inside another order's event runs a tick later and asks again then. A nuclear launch
   waiting for a second key asks its owner again when the key turns: a right taken away in the meantime cancels it and
-  returns the munitions.
+  returns the munitions. A `nuke now` started a tick later asks again too and still needs an operator.
 - The console, command blocks and functions they run, and launchers placed by command (without an owner), are not
   asked. A flying nuclear strike they make for a player (`/execute as`) needs that player's rights; `nuke now` does
   not.
 - With `nuclear.enabled` off nobody launches nuclear weapons, whatever the nodes say; a carrier already warning its
-  target does not leave and its munitions come back. `incoming.nuclear` does not make a player an operator: they still
+  target does not leave and its munitions come back (to an offline owner when they join again). `incoming.nuclear` does not make a player an operator: they still
   need a second key from a player nearby, and only operators and the host abort every nuclear strike, retarget a
   nuclear warhead or pick a launch site on the map. Only players who may turn a second key are asked to.
 - A permission mod cannot be asked about a player who is offline without risking a pause of the server, so a fixed
-  launcher whose owner is offline follows the column "Without a permission mod", narrowed by what the permission mod
-  refused the owner when they last left during this server run (where they were then). A right granted by the
-  permission mod beyond the default does not reach an offline owner's launcher.
+  launcher whose owner is offline follows the column "Without a permission mod": what the permission mod grants or
+  denies the owner applies to their launcher while they are online.
 - A refused order shows its reason above the hotbar; a fixed launcher shows it in its status line. A player without
   `incoming.launch` and without operator rights does not get the `/incoming` command at all.
 

@@ -50,7 +50,7 @@ import java.util.function.Consumer;
  * the console's {@code nuke now} as a player stays automation while the flying nuke asks that player; the second key
  * keeps its no-order line, keeps a paid carrier when carrier settings change, and nothing leaves after nuclear weapons
  * are switched off during the warning; a handler without Incoming's nodes breaks neither the command tree nor logout; no
- * handler at all answers the switches; an answer kept at logout never grants an offline owner more than the default.
+ * handler at all answers the switches; an offline owner never gets more than the default.
  */
 public final class PermissionRegressionGameTests {
     private PermissionRegressionGameTests() {}
@@ -226,7 +226,7 @@ public final class PermissionRegressionGameTests {
     }
 
     @GameTest(template = "runway", batch = "permission_r_offline_grant", skyAccess = true)
-    public static void keptGrantNeverOpensAnOfflineLauncher(GameTestHelper h) {
+    public static void offlineOwnerGetsNoGrantBeyondDefault(GameTestHelper h) {
         switches(h);
         var owner = player(h, "ReviewOwner", 0);
         // the handler grants the designator to this owner while designator_for_everyone is off
@@ -246,10 +246,10 @@ public final class PermissionRegressionGameTests {
         };
         NeoForge.EVENT_BUS.addListener(listener);
         StrikeGameTests.afterTest(h, () -> NeoForge.EVENT_BUS.unregister(listener));
-        // offline, the grant kept at logout may have been revoked since: only the default answers, and it refuses
+        // offline, the handler is not asked (the grant may have been revoked since): the default answers, and it refuses
         var refused = LauncherOrders.fire(h.getLevel(), pad);
         h.assertTrue(admitted.isEmpty() && "incoming.fixed_launcher.no_rights".equals(FixedLauncherGameTests.key(refused)),
-                "kept grant opened the launcher: admissions=" + admitted.size() + ", line=" + refused);
+                "a grant beyond the default opened an offline launcher: admissions=" + admitted.size() + ", line=" + refused);
         h.succeed();
     }
 
