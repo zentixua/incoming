@@ -55,6 +55,9 @@ public final class Interceptor {
     private final UUID owner;
     /** Launch location (for the log). */
     private final String launcher;
+    /** SAM block it left; null in flight tests without one. */
+    @Nullable
+    private final BlockPos site;
     private Vec3 pos, dir;
     private double speed;
     private int age;
@@ -64,10 +67,20 @@ public final class Interceptor {
     private InterceptorEntity view;
 
     Interceptor(InterceptorSpec spec, UUID target, @Nullable UUID owner, String launcher, Vec3 rail, Vec3 dir) {
+        this(spec, target, owner, launcher, null, rail, dir);
+    }
+
+    /** Missile from the SAM at {@code site}. */
+    Interceptor(InterceptorSpec spec, UUID target, @Nullable UUID owner, BlockPos site, Vec3 rail, Vec3 dir) {
+        this(spec, target, owner, site.toShortString(), site, rail, dir);
+    }
+
+    private Interceptor(InterceptorSpec spec, UUID target, @Nullable UUID owner, String launcher, @Nullable BlockPos site, Vec3 rail, Vec3 dir) {
         this.spec = spec;
         this.target = target;
         this.owner = owner;
         this.launcher = launcher;
+        this.site = site;
         this.pos = rail;
         this.dir = dir.normalize();
         this.speed = spec.launchSpeed();
@@ -208,6 +221,11 @@ public final class Interceptor {
 
     String launcher() {
         return launcher;
+    }
+
+    @Nullable
+    BlockPos site() {
+        return site;
     }
 
     /**

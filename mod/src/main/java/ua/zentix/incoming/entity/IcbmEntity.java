@@ -33,6 +33,8 @@ public class IcbmEntity extends StrikeProjectile {
 
     /** Age at which the climb ends: first-stage burnout, earlier for a short strike ({@code IcbmArrival#boost}). */
     private int burnout = ASCENT.burnTicks();
+    /** The scheduled strike ({@code NuclearEvents.ScheduledStrike}) this missile shows; -1 none (saved before the link). */
+    private int strike = -1;
 
     public IcbmEntity(EntityType<? extends IcbmEntity> type, Level level) {
         super(type, level);
@@ -102,16 +104,28 @@ public class IcbmEntity extends StrikeProjectile {
         return burnout;
     }
 
+    /** It shows scheduled strike {@code id}: cancelling that strike removes it ({@code NuclearStrikes.cancelTagged}). */
+    public void showStrike(int id) {
+        strike = id;
+    }
+
+    /** The scheduled strike it shows; -1 none. */
+    public int strike() {
+        return strike;
+    }
+
     @Override
     protected void readAdditionalSaveData(net.minecraft.nbt.CompoundTag tag) {
         super.readAdditionalSaveData(tag);
         burnout = tag.contains("burnout") ? Math.min(tag.getInt("burnout"), ASCENT.burnTicks()) : ASCENT.burnTicks();
+        strike = tag.contains("strike") ? tag.getInt("strike") : -1;
     }
 
     @Override
     protected void addAdditionalSaveData(net.minecraft.nbt.CompoundTag tag) {
         super.addAdditionalSaveData(tag);
         tag.putInt("burnout", burnout);
+        if (strike >= 0) tag.putInt("strike", strike);
     }
 
     @Override

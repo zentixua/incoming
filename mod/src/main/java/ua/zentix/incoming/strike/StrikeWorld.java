@@ -50,6 +50,17 @@ public final class StrikeWorld {
     private final Map<String, Long> noLaunchSite = new HashMap<>();
     /** Non-operator nuclear orders awaiting second key or post-warning launch. */
     private final NuclearKeys keys = new NuclearKeys();
+    /** Rounds whose impact work runs ({@link OrderStatus}). */
+    private final ImpactWork impactWork = new ImpactWork();
+    /** Orders started inside another order's request ({@link Orders#admit}): admitted at their due game time. */
+    private final List<Deferred> deferred = new ArrayList<>();
+
+    private record Deferred(long due, Runnable admit) {}
+
+    /** Order and round events waiting for delivery ({@link Orders#queue}). */
+    private final java.util.ArrayDeque<net.neoforged.bus.api.Event> events = new java.util.ArrayDeque<>();
+    /** {@link Orders#deliver} running for this world. */
+    boolean delivering;
 
     /** For {@link ModAttachments#STRIKE_WORLD}: per-world, lives while loaded, unsaved. */
     public StrikeWorld() {}
@@ -66,6 +77,11 @@ public final class StrikeWorld {
     /** Non-operator nuclear orders: second key and carrier pre-launch warning. */
     NuclearKeys keys() {
         return keys;
+    }
+
+    /** Rounds whose conventional impact work runs here ({@link OrderStatus}). */
+    public ImpactWork impactWork() {
+        return impactWork;
     }
 
     /** Approach-strip areas and holding projectiles ({@link FlightTickets}). */
@@ -123,6 +139,29 @@ public final class StrikeWorld {
         return owner + " " + weapon.getSerializedName();
     }
 
+    java.util.ArrayDeque<net.neoforged.bus.api.Event> events() {
+        return events;
+    }
+
+    /** Admit an order at world-tick end once game time reaches {@code due}. */
+    void defer(long due, Runnable admit) {
+        deferred.add(new Deferred(due, admit));
+    }
+
+    private void admitDeferred(ServerLevel level) {
+        if (deferred.isEmpty()) return;
+        long now = level.getGameTime();
+        List<Deferred> due = new ArrayList<>();
+        deferred.removeIf(d -> d.due() <= now && due.add(d));
+        for (Deferred d : due) {
+            try {
+                d.admit().run();
+            } catch (RuntimeException e) {
+                Incoming.LOG.error("Queued strike order failed with an exception", e);
+            }
+        }
+    }
+
     /** Unplanned flight endings this tick: log at world tick end. */
     public FlightLog flightLog() {
         return flightLog;
@@ -139,15 +178,20 @@ public final class StrikeWorld {
         // Area loading is not simulation: runs in frozen world (trailer waits for shot loading).
         if (level.hasData(ModAttachments.STRIKE_WORLD)) get(level).areas.tick(level);
         // “/tick freeze” stops entities: virtual projectiles, salvos, explosions stop with them.
-        if (!level.tickRateManager().runsNormally()) return;
+        if (!level.tickRateManager().runsNormally()) {
+            Orders.deliver(level.getServer());
+            return;
+        }
         SalvoData.get(level).tick(level);
         VirtualFlights.get(level).tick(level);
         if (level.hasData(ModAttachments.STRIKE_WORLD)) {
             StrikeWorld world = get(level);
+            world.admitDeferred(level);
             world.keys.tick(level, level.getServer().getPlayerList().getPlayers());
             world.tick(level);
             world.flightLog.flush();
         }
+        Orders.deliver(level.getServer());
     }
 
     /** Active world strike: in-world/virtual projectiles, salvos, explosions. */
@@ -197,8 +241,16 @@ public final class StrikeWorld {
 
     /** All world projectiles, in-world and virtual ({@link VirtualFlights}). */
     public static List<StrikeProjectile> projectiles(ServerLevel level) {
+        return projectiles(level, false);
+    }
+
+    /**
+     * Same; {@code fromDisk}: off-world flights read from disk and not yet ticked are instantiated and included, and so
+     * are those entering the world this moment ({@link VirtualFlights#inFlight}).
+     */
+    static List<StrikeProjectile> projectiles(ServerLevel level, boolean fromDisk) {
         List<StrikeProjectile> all = new ArrayList<>(level.getEntities(EntityTypeTest.forClass(StrikeProjectile.class), p -> !p.isRemoved()));
-        all.addAll(VirtualFlights.get(level).flights());
+        all.addAll(fromDisk ? VirtualFlights.get(level).inFlight(level) : VirtualFlights.get(level).flights());
         return all;
     }
 
@@ -248,6 +300,8 @@ public final class StrikeWorld {
             }
             releaseAreas(level);
         }
+        // last: the endings above and what the finished impacts caused (outages) go out before the world closes
+        Orders.deliver(event.getServer());
     }
 
     /**

@@ -18,6 +18,9 @@ import ua.zentix.incoming.warhead.Warheads;
 import ua.zentix.incoming.Incoming;
 import ua.zentix.incoming.util.WorldClock;
 import ua.zentix.incoming.IncomingConfig;
+import ua.zentix.incoming.api.GridOutageEvent;
+import ua.zentix.incoming.api.GridRestoreEvent;
+import ua.zentix.incoming.strike.Orders;
 import dev.ryanhcode.sable.companion.SubLevelAccess;
 import ua.zentix.incoming.compat.SubLevels;
 import ua.zentix.incoming.net.S2C;
@@ -29,7 +32,9 @@ import ua.zentix.incoming.work.WorkScheduler;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.nio.charset.StandardCharsets;
 import java.util.Locale;
+import java.util.UUID;
 
 /**
  * Blackout: a grid-node (substation) hit, nuclear strike or command cuts power to an area — districts go dark in a cascade
@@ -174,6 +179,7 @@ public final class Blackouts {
         long now = now(level);
         Outage o = PowerGrid.get(level).addOutage(new Outage(0, at.x, at.z, radius, now, speed / rate(level), restoreAt, restoreSpread(), node, dead, damaged));
         BlackoutWorld.get(level).onOutage(level, o);
+        Orders.queue(level, new GridOutageEvent(level.dimension(), outageId(level, o), o.x(), o.z(), o.radius(), nodePos(level, o), o.byDamage()));
         String restore = o.byDamage() ? String.format(Locale.ROOT, "power returns by damage: in hours beyond %d blocks, in days beyond %d, never within %d",
                 Math.round(damaged), Math.round(dead), Math.round(dead))
                 : o.restoreAt() == Outage.NEVER ? "power will not come back by itself"
@@ -225,6 +231,28 @@ public final class Blackouts {
         }
         Substations.sync(level, grid, now);
         return n;
+    }
+
+    /** Power is back in all of outage {@code o}, now forgotten ({@link PowerGrid#prune}). */
+    static void restored(ServerLevel level, Outage o) {
+        Orders.queue(level, new GridRestoreEvent(level.dimension(), outageId(level, o), o.x(), o.z(), o.radius(), nodePos(level, o), o.byDamage()));
+        Incoming.LOG.info("Blackout #{} ({}): power restored everywhere", o.id(), level.dimension().location());
+    }
+
+    /**
+     * Outage identifier for events: a name-based UUID of the dimension and the grid's saved outage number, so it needs no
+     * stored field and is the same after a restart.
+     */
+    public static UUID outageId(ServerLevel level, Outage o) {
+        return UUID.nameUUIDFromBytes(("incoming:outage/" + level.dimension().location() + "/" + o.id()).getBytes(StandardCharsets.UTF_8));
+    }
+
+    /** Substation whose failure caused {@code o}; null for a nuclear or command outage, or a node since removed. */
+    @Nullable
+    private static BlockPos nodePos(ServerLevel level, Outage o) {
+        if (o.node() < 0) return null;
+        Node n = PowerGrid.get(level).node(o.node());
+        return n == null ? null : n.pos();
     }
 
     // ---------------------------------------------------------------- settings

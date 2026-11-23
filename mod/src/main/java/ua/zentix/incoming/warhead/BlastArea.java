@@ -15,6 +15,7 @@ import ua.zentix.incoming.compat.DhUpdates;
 import ua.zentix.incoming.nuclear.world.StrikeRemovals;
 import ua.zentix.incoming.strike.AreaLoader;
 import ua.zentix.incoming.strike.ImpactCost;
+import ua.zentix.incoming.strike.ImpactWork;
 import ua.zentix.incoming.strike.StrikeWorld;
 import ua.zentix.incoming.util.Terrain;
 
@@ -77,11 +78,14 @@ final class BlastArea {
     private final it.unimi.dsi.fastutil.longs.LongArrayList removedAt = new it.unimi.dsi.fastutil.longs.LongArrayList();
     private final List<BlockState> removedWas = new ArrayList<>();
     private @Nullable StrikeRemovals.Source collapseSource;
+    /** The order round whose impact this area is ({@link ImpactWork}); null without one (tests, crashes). */
+    private final ImpactWork.@Nullable Impact impact;
 
     private record Queued(StagedExplosion explosion, long tick) {}
 
-    private BlastArea(Vec3 centre, double reach) {
+    private BlastArea(Vec3 centre, double reach, ImpactWork.@Nullable Impact impact) {
         this.centre = centre;
+        this.impact = impact;
         this.reach = reach;
         this.chunk = new ChunkPos(Mth.floor(centre.x) >> 4, Mth.floor(centre.z) >> 4);
         int west = chunk.x - (Mth.floor(centre.x - reach) >> 4);
@@ -93,10 +97,23 @@ final class BlastArea {
 
     /** Acquire area: everything within {@code reach} of {@code centre} loads/stays ready until {@link #release}. */
     static BlastArea hold(ServerLevel level, Vec3 centre, double reach) {
-        BlastArea area = new BlastArea(centre, reach);
+        return hold(level, centre, reach, null);
+    }
+
+    /** Same, as round {@code impact}'s impact: the round's impact work lasts until the last holder releases the area. */
+    static BlastArea hold(ServerLevel level, Vec3 centre, double reach, ImpactWork.@Nullable Impact impact) {
+        BlastArea area = new BlastArea(centre, reach, impact);
         area.heldAt = level.getGameTime();
-        StrikeWorld.get(level).areas().hold(level, area.area());
-        CraterFalls.get(level).open(level, area.key, centre, reach);
+        StrikeWorld world = StrikeWorld.get(level);
+        world.areas().hold(level, area.area());
+        try {
+            CraterFalls.get(level).open(level, area.key, centre, reach);
+        } catch (RuntimeException e) {
+            world.areas().release(level, area.area());
+            throw e;
+        }
+        // last: a failed setup above leaves no round counted with nothing to release it
+        if (impact != null) world.impactWork().hold(impact);
         return area;
     }
 
@@ -215,6 +232,7 @@ final class BlastArea {
         if (holders <= 0 || --holders > 0) return;
         if (collapseSource != null) collapseSource.close();
         StrikeWorld.get(level).areas().release(level, area());
+        if (impact != null) StrikeWorld.get(level).impactWork().release(impact);
         CraterFalls.get(level).close(level, key);
         // Distant Horizons LOD: crater now, later falls when area stops falling.
         long now = level.getGameTime();
