@@ -10,6 +10,7 @@ import net.minecraft.client.renderer.ShaderInstance;
 import net.neoforged.neoforge.client.event.RenderLevelStageEvent;
 import net.neoforged.neoforge.client.event.RegisterShadersEvent;
 import org.jetbrains.annotations.Nullable;
+import org.lwjgl.opengl.GL20;
 import org.joml.FrustumIntersection;
 import org.joml.Matrix4f;
 import org.joml.Vector3f;
@@ -131,6 +132,15 @@ public final class FxLayer {
         } catch (IOException ex) {
             PallPass.march = PallPass.resolve = PallPass.composite = PallPass.froxel = PallPass.froxelSum = PallPass.mix = null;
             Incoming.LOG.error("Nuclear dust pall shaders failed to load: no dust pall", ex);
+        }
+        try {
+            e.registerShader(new ShaderInstance(e.getResourceProvider(), Incoming.id("fx_pall_single"), DefaultVertexFormat.POSITION), s -> {
+                // ShaderInstance logs a link failure and still returns a program.
+                PallPass.singleMarch = GlStateManager.glGetProgrami(s.getId(), GL20.GL_LINK_STATUS) != 0 ? s : null;
+            });
+        } catch (IOException ex) {
+            PallPass.singleMarch = null;
+            Incoming.LOG.warn("Single-burst pall shader unavailable; using the full ray shader", ex);
         }
         try {
             e.registerShader(new ShaderInstance(e.getResourceProvider(), Incoming.id("fx_dustwall"), DefaultVertexFormat.POSITION), s -> DustWallPass.march = s);

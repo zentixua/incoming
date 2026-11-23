@@ -1,6 +1,8 @@
 #moj_import <incoming:pall.glsl>
 #moj_import <incoming:mushroom.glsl>
+#ifndef PALL_SINGLE
 #moj_import <incoming:smoke.glsl>
+#endif
 
 // Post-blast pall (client/fx/layer/PallPass): eye ray through a low-resolution pixel to the world behind it (SceneDepth,
 // including Distant Horizons LODs; no world — terrain under pall, PallGround), or pall bounds exit. Steps denser near
@@ -56,7 +58,30 @@ uniform vec4 PallAir;
 uniform vec3 PallAirSky;
 uniform vec4 PallAirFog;
 uniform mat4 PallSlot0;
+// In a single dry burst only the primary slot exists and there are no whirls.
+#ifdef PALL_SINGLE
+#define Sampler4 Sampler3
+const mat4 PallSlot1 = mat4(0.0);
+const mat4 PallFire1 = mat4(0.0);
+const vec4 PallGlow1 = vec4(0.0);
+const vec4 PallHot1 = vec4(0.0);
+const vec4 PallWater1 = vec4(0.0);
+const vec4 PallWilson1 = vec4(0.0);
+const mat4 PallWhirlPos = mat4(0.0);
+const mat4 PallWhirlShape = mat4(0.0);
+const mat4 PallWhirlLean = mat4(0.0);
+#else
+uniform sampler2D Sampler4;
 uniform mat4 PallSlot1;
+uniform mat4 PallFire1;
+uniform vec4 PallGlow1;
+uniform vec4 PallHot1;
+uniform vec4 PallWater1;
+uniform vec4 PallWilson1;
+uniform mat4 PallWhirlPos;
+uniform mat4 PallWhirlShape;
+uniform mat4 PallWhirlLean;
+#endif
 uniform vec3 PallMin;
 uniform vec3 PallMax;
 // sun direction (xyz), daytime sun strength 0..1 (w)
@@ -76,9 +101,7 @@ uniform float PallBase;
 // z cap-center downwind drift, w fire zone edge (blocks); Hot is black-body radiance at visible cap temperature
 // (rgb, linear, relative to noon white wall, without eye adaptation), cap center height above ground (w, blocks)
 uniform vec4 PallGlow0;
-uniform vec4 PallGlow1;
 uniform vec4 PallHot0;
-uniform vec4 PallHot1;
 // reflection strength on smoke at frame skylight (CloudPuffs.glowOnSmoke)
 uniform float PallGlowOnSmoke;
 // x frame index (step jitter), y steps, z frame downscale factor, w eye dust extinction (1/block)
@@ -90,9 +113,11 @@ uniform vec4 PallInterleave;
 uniform vec4 PallFroxel;
 // volume passes (fx_pall_froxel): xy full frame size in pixels, z current frame's share of a cell, w 1 if the previous
 // frame's volume exists; previous frame's view-projection and the eye's move since, as in fx_pall_resolve
+#ifndef PALL_SINGLE
 uniform vec4 PallFroxelFrame;
 uniform mat4 PrevViewProj;
 uniform vec4 PallReproject;
+#endif
 // vertical dust depth at eye: x above, y below to ground (NukePall.tick); with PallFrame.w determines ray reach (pallClip)
 uniform vec2 PallEyeTau;
 uniform vec4 PallYoung;
@@ -100,14 +125,9 @@ uniform vec4 PallYoung;
 // mips aggregate sources), fire slots, storm bounds (denser ray steps there); frame whirls (up to four, per column:
 // base/core radius; height/strength/seconds/swirl; tilt/flame/seed — PallPass.Frame)
 uniform sampler2D Sampler3;
-uniform sampler2D Sampler4;
 uniform mat4 PallFire0;
-uniform mat4 PallFire1;
 uniform vec3 PallFireMin;
 uniform vec3 PallFireMax;
-uniform mat4 PallWhirlPos;
-uniform mat4 PallWhirlShape;
-uniform mat4 PallWhirlLean;
 // terrain/water under slot pall (client/nuclear/PallGround, pall.glsl: pallFloor, pallWater), maps and parameters;
 // frame world ends no closer than PallFloorFrom horizontal blocks from eye
 uniform sampler2D Sampler5;
@@ -117,12 +137,10 @@ uniform vec4 PallGround1;
 uniform float PallFloorFrom;
 // slot water (pall.glsl): base surge and whether water exists beneath pall
 uniform vec4 PallWater0;
-uniform vec4 PallWater1;
 // slot dust wall (pall.glsl, client/nuclear/BlastWall): rolling head and Wilson cloud
 uniform mat4 PallWall0;
 uniform mat4 PallWall1;
 uniform vec4 PallWilson0;
-uniform vec4 PallWilson1;
 // frame mushrooms (MushroomField): mushroom and black-body light tables (mushroom.glsl)
 uniform sampler2D Sampler7;
 // sun mushroom shadow map (fx_mush_shadow, mushShadow): at night/without mushrooms, table contains no tiles
@@ -144,10 +162,12 @@ uniform float PallBodyExposure;
 // conventional blast smoke (smoke.glsl): eye position within billow noise tile modulo SMOKE_TILE (xyz), time s (w);
 // smoke wind, blocks/s (xyz, at matter altitude of hundreds of blocks), two-phase noise period s (w); fireballs lighting
 // smoke (as FxLights): column i eye-relative center/radius (0 absent), surface white-wall light (rgb, linear, eye-adapted)
+#ifndef PALL_SINGLE
 uniform vec4 SmokeNoise;
 uniform vec4 SmokeWind;
 uniform mat4 SmokeBalls;
 uniform mat4 SmokeBallLight;
+#endif
 
 out vec4 fragColor;
 
@@ -188,6 +208,11 @@ const float RAY_EXIT = 0.02;
 // sets one reads it as unset, not as whatever the register held (zero on NVIDIA, garbage elsewhere; ShaderSourceTest)
 vec2 gMushSpan[MUSHROOMS] = vec2[MUSHROOMS](vec2(0.0), vec2(0.0), vec2(0.0), vec2(0.0));
 int gMushes = 0;
+#ifdef PALL_SINGLE
+const int PALL_BODIES = 1;
+#else
+const int PALL_BODIES = MUSHROOMS;
+#endif
 vec3 gDir = vec3(0.0, 0.0, -1.0);
 int gFoot0 = -1, gFoot1 = -1;
 vec2 gFootSpan0 = vec2(0.0, 1e9), gFootSpan1 = vec2(0.0, 1e9);
@@ -1129,12 +1154,29 @@ vec4 pallSource(vec3 p, float cone, vec4 inflow, out vec3 dustLight) {
     return vec4(emit, st);
 }
 
+#ifdef PALL_SINGLE
+// Full handoff removes local soil and the old head. The ordinary ray still draws haze
+// and fire-column soot. Use their existing density functions so the empty test follows
+// terrain, plume drift, fire-map mips and column rise exactly as the lighting pass does.
+bool emptyYoungSample(vec3 p, float cone) {
+    if (wallShare(PallYoung, length(p.xz - PallSlot0[0].xy)) < 1.0) return false;
+    float relief = pallRelief(Sampler5, PallSlot0, PallGround0, p.xz);
+    PallAt field = pallField(Sampler1, Sampler5, PallSlot0, PallGround0, vec4(0.0), p, relief, 1.0);
+    if (field.sigma.y > 1e-7) return false;
+    if (any(lessThan(p, PallFireMin)) || any(greaterThan(p, PallFireMax))) return true;
+    return storm(Sampler3, PallSlot0, PallFire0, p, cone, 1.0).x <= 0.0;
+}
+#endif
+
 void pallStep(float ta, float ds, float grid, inout vec3 light, inout float transmit, inout float haze) {
     passesBefore(ta, light, transmit, haze);
     vec3 p = gDir * ta;
+    float cone = max(ta * gPixel, 0.35 * grid);
+#ifdef PALL_SINGLE
+    if (emptyYoungSample(p, cone)) return;
+#endif
     float open = pallOpenHere(p);
     if (open <= 0.0) return;
-    float cone = max(ta * gPixel, 0.35 * grid);
     vec3 dustLight;
     vec4 matter = pallSource(p, cone, vec4(0.0), dustLight);
     if (matter.w <= 1e-7) return;
@@ -1576,6 +1618,7 @@ vec4 mushStep(float t, float cone, out float gap, out vec3 heat, out vec3 glow, 
 
 // ---------------------------------------------------------------- conventional blast smoke (smoke.glsl)
 // Smoke billow tile, blocks, and fine tile (four times smaller)
+#ifndef PALL_SINGLE
 const float SMOKE_TILE = 32.0;
 
 // Smoke billows at eye-relative p: density multiplier averaging 1 (pallShape, pallDetail: same noise as pall).
@@ -1668,6 +1711,8 @@ vec4 smokeStep(float t, float cone, out float gap, out float cell) {
     return vec4(st * (w * light + (1.0 - w) * bb), st);
 }
 
+#endif
+
 // Mushrooms on the eye ray dir (scene: world distance along it, 1e9 none): each one's ray interval (gMushSpan, gMushes) and
 // the carpet field interval (gFoot*); returns the combined interval of matter (empty: x > y)
 vec2 mushSetup(vec3 dir, float scene) {
@@ -1676,7 +1721,7 @@ vec2 mushSetup(vec3 dir, float scene) {
     gFoot1 = -1;
     gFootSpan0 = gFootSpan1 = vec2(1.0, 0.0);
     gMushes = 0;
-    for (int k = 0; k < MUSHROOMS; k++) {
+    for (int k = 0; k < PALL_BODIES; k++) {
         if (!mushOn(Sampler7, k)) break;
         Mush body = mushLoad(Sampler7, k);
         vec2 sp = mushSpan(body, dir);
@@ -1702,6 +1747,10 @@ vec2 mushSetup(vec3 dir, float scene) {
         m0 = min(m0, sp.x);
         m1 = max(m1, sp.y);
     }
+#ifdef PALL_SINGLE
+    // This draw has precisely one active row, even on rays that miss its bounds.
+    gMushes = 1;
+#endif
     return vec2(m0, m1);
 }
 
@@ -1823,6 +1872,7 @@ void main() {
     gFootSpan0 = gFootSpan1 = vec2(1.0, 0.0);
     gWhirlLight = mat4(0.0);
     gWhirlIn = vec4(1e9);
+#ifndef PALL_SINGLE
     whirlSetup(dir, scene, -1.0);
     for (int i = 0; i < 4; i++) {
         // whirls nearer than the near volume's far boundary are that volume's (fx_pall_froxel); this ray takes the rest
@@ -1832,6 +1882,7 @@ void main() {
         gWhirlLight[i] = whirl(i, dir, a, gWhirlSpan[i].y, jitter, gWhirlLit[i].rgb, gWhirlFire[i].rgb, whirlFlame);
         gWhirlIn[i] = a;
     }
+#endif
     // Wilson cloud: up to two shell crossings per slot, likewise when step reaches crossing (before world behind pixel)
     vec4 w0 = pallWilson(PallSlot0, PallWilson0, dir, scene), w1 = pallWilson(PallSlot1, PallWilson1, dir, scene);
     gWilsonLight = mat4(wilsonLight(PallSlot0, PallGlow0, PallHot0, PallWilson0, dir, sunDir, w0.x, w0.y),
@@ -1911,6 +1962,9 @@ void main() {
     // no finer than pixel; interval is smoke bounds before world behind pixel
     // empty-cell steps within cascade boxes counted separately (at most three box crossings of N cells): otherwise empty
     // space between salvo clouds would consume steps, leaving smoke beyond undrawn
+#ifdef PALL_SINGLE
+    const int sSteps = 0, sEmpty = 0;
+#else
     int sk = 0, sSteps = steps + 16, se = 0, sEmpty = 3 * SMOKE_N;
     float s0 = 1e9, s1 = -1.0, ts = 1e9;
     if (smokeOn()) {
@@ -1919,12 +1973,18 @@ void main() {
         s1 = min(ss.y, scene);
         if (s1 > s0) ts = s0 + jitter * min(smokeCell(dir * s0), 0.25 * (s1 - s0));
     }
+#endif
     for (int it = 0; it < pallSteps + mSteps + sSteps + sEmpty; it++) {
         bool pallLeft = i < pallSteps && ta < t1;
         // mushroom behind a ray nearly opaque to itself is invisible even in haze (light weighted by transmit)
         bool mushLeft = mk < mSteps && tm < m1 && transmit >= 0.005;
+#ifdef PALL_SINGLE
+        const bool smokeLeft = false;
+#else
         bool smokeLeft = sk < sSteps && se < sEmpty && ts < s1 && transmit >= 0.005;
+#endif
         if (!pallLeft && !mushLeft && !smokeLeft) break;
+#ifndef PALL_SINGLE
         if (smokeLeft && (!pallLeft || ts < ta) && (!mushLeft || ts < tm)) {
             float cone = max(ts * gPixel, 0.0);
             float gap, cell;
@@ -1943,7 +2003,9 @@ void main() {
             ts += ds;
             if (gap > 0.0) se += 1;
             else sk += 1;
-        } else if (pallLeft && (!mushLeft || ta <= tm)) {
+        } else
+#endif
+        if (pallLeft && (!mushLeft || ta <= tm)) {
             // step end: ordinary boundary or head/storm interval entry; inside, nearest of its grid boundary (or exit) and ordinary
             // boundary: near eye ordinary steps are denser, preserving nearby dust as wall passes through viewer
             float next = nextBase, grid = nextBase - lastBase;
