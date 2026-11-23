@@ -248,9 +248,10 @@ paths:
   apart from its round (`StrikeProjectile.orderRules`, saved): a B-2 hands its round to the bomb and can still be shot
   down. The other exposed keys are read only at admission, except B1's re-asks before a nuclear release:
   `nuclear.enabled` (hard gate) and the rights from `nuclear.ops_only` and `launch.designator_for_everyone` at the key
-  turn. A new key needs the same proof. `RuleCommand.store` reads a saved value back: FML's watcher reloads the file
-  on its own thread after each write. Regressions: `RuleGameTests` (arena: every conventional weapon, rules off at order, on at impact), `RuleReviewGameTests`,
-  `StrikeRulesTest`.
+  turn. A new key needs the same proof. Limit: FML's watcher reloads the file 500 ms after the last write and swaps the
+  values without a lock the mod can take, so a set landing inside that swap is reverted until its own write reloads.
+  Regressions: `RuleGameTests` (arena: every conventional weapon, rules off at order, on at impact; controls),
+  `RuleReviewGameTests`, `StrikeRulesTest`.
 - `world.early_warning` controls automatic sirens and nuclear launch/target notices (default true). `ServerConfigMigration`
   decorates the registered server `IConfigSpec`: copy legacy `world.siren` before spec correction removes it; an explicit
   new key wins. `IncomingConfigScreen` passes the underlying `ModConfigSpec` to NeoForge section widgets. Warning

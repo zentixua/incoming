@@ -342,6 +342,10 @@ public final class RedstoneGameTests {
                 })
                 .thenExecute(() -> {
                     timed[0] = false;
+                    // the timed phase is over: back to hours, or this outage returns 2 world-clock ticks later, which is
+                    // 2 game ticks while the day runs (a daylight state earlier batches leave behind) and lights the
+                    // district before the check below
+                    cfg.gridRestoreHours.set(hours0);
                     Blackouts.blackout(level, c, 64, 1000, -1);
                 })
                 .thenIdle(25)

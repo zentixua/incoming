@@ -34,12 +34,12 @@ import ua.zentix.incoming.command.RuleCommand;
 import ua.zentix.incoming.entity.BunkerBusterEntity;
 import ua.zentix.incoming.entity.DebrisEntity;
 import ua.zentix.incoming.entity.DroneEntity;
-import ua.zentix.incoming.registry.ModEntities;
 import ua.zentix.incoming.entity.StrikeProjectile;
 import ua.zentix.incoming.grid.Node;
 import ua.zentix.incoming.grid.PowerGrid;
 import ua.zentix.incoming.nuclear.NuclearEvents;
 import ua.zentix.incoming.registry.ModBlocks;
+import ua.zentix.incoming.registry.ModEntities;
 import ua.zentix.incoming.strike.RoundRef;
 import ua.zentix.incoming.strike.SalvoData;
 import ua.zentix.incoming.strike.ServerActions;
@@ -284,6 +284,47 @@ public final class RuleGameTests {
             h.assertTrue(PowerGrid.get(level).downOutage(node.id(), level.getGameTime()).isPresent(), "the substation kept power");
             List<String> changed = changes(h, was);
             h.assertTrue(changed.size() > 20, "only " + changed.size() + " blocks changed under rounds made with every rule on");
+        });
+    }
+
+    /**
+     * Control for the arena's entity legs: a bomb and a shot-down Shahed whose rounds were made with every rule on still
+     * bore the post and leave wreck blocks after the config switches everything off.
+     */
+    @GameTest(template = "range", timeoutTicks = 2400, batch = "rule_arena_control_entities", skyAccess = true)
+    public static void entityLegsMadeUnderRulesOnStillChangeBlocks(GameTestHelper h) {
+        ServerLevel level = h.getLevel();
+        restoreAfter(h);
+        CommandSourceStack op = console(h, "rule_arena_control_entities");
+        arena(h);
+        Map<BlockPos, BlockState> was = snapshot(h);
+        setAll(h, op, true);
+        RoundRef bombRound = RoundRef.of(UUID.randomUUID(), 0, "b4control2"), droneRound = RoundRef.of(UUID.randomUUID(), 1, "b4control2");
+        setAll(h, op, false);
+        Vec3 surface = Vec3.atBottomCenterOf(h.absolutePos(new BlockPos(32, 12, 20)));
+        BunkerBusterEntity bomb = ModEntities.BUNKER_BUSTER.get().create(level);
+        h.assertTrue(bomb != null, "no bomb");
+        bomb.drop(surface.add(0, 26, 0), new Vec3(0, -4, 0), surface, null, null);
+        bomb.attachRound(bombRound);
+        level.addFreshEntity(bomb);
+        DroneEntity drone = ModEntities.DRONE.get().create(level);
+        h.assertTrue(drone != null, "no drone");
+        drone.moveTo(Vec3.atCenterOf(h.absolutePos(new BlockPos(32, 34, 44))));
+        drone.attachRound(droneRound);
+        level.addFreshEntity(drone);
+        drone.intercepted(level, "rule_arena_control_entities", null, null);
+        h.succeedWhen(() -> {
+            h.assertTrue(bomb.isRemoved() && StrikeWorld.get(level).idle(), "the bomb has not gone off");
+            h.assertTrue(level.getEntitiesOfClass(DebrisEntity.class, new AABB(h.absolutePos(BlockPos.ZERO)).inflate(80)).isEmpty(), "debris still falling");
+            long bore = 0, wreck = 0;
+            for (var e : was.entrySet()) {
+                if (h.getBlockState(e.getKey()).equals(e.getValue())) continue;
+                BlockPos p = e.getKey();
+                if (Math.abs(p.getX() - 32) <= 1 && Math.abs(p.getZ() - 20) <= 1 && p.getY() <= 13) bore++;
+                if (p.getZ() >= 36) wreck++;
+            }
+            h.assertTrue(bore > 0, "the bomb made under rules on left its column whole");
+            h.assertTrue(wreck > 0, "the wreck made under rules on left no block");
         });
     }
 

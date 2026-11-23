@@ -30,7 +30,9 @@ Incoming (https://github.com/zentixua/incoming): strikes by Shahed and Lancet dr
   value fails and changes nothing). Keys: world.block_damage, world.shatter_glass, world.fire, world.debris_stay,
   world.collapse, grid.enabled, nuclear.enabled, nuclear.ops_only, nuclear.carrier_nukes, launch.designator_for_everyone,
   launch.max_salvo, launch.max_spread, launch.max_active_per_player. A change reaches only orders given after it;
-  salvos still launching and rounds in flight keep the rules they were ordered under. With the five world.* rules and
+  salvos still launching and rounds in flight keep the rules they were ordered under. Exceptions: nuclear.enabled false
+  also stops nuclear launches that have not left yet (munitions return), and nuclear.ops_only and
+  launch.designator_for_everyone are asked again when a waiting nuclear launch's second key turns. With the five world.* rules and
   grid.enabled false, conventional strikes change no block and cut no power (an arena keeps its shape); nuclear strikes
   are outside that, so turn nuclear.enabled false for an arena and back on after it.
 - Progress: advancements incoming:strikes/first_strike, camera_strike, first_interception, nuclear_survivor
