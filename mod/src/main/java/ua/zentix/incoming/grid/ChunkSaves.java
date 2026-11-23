@@ -60,7 +60,11 @@ public final class ChunkSaves {
             boolean changed = false;
             for (int i = 0; i < list.size(); i++) {
                 CompoundTag s = list.getCompound(i);
-                if (!s.contains("block_states", Tag.TAG_COMPOUND)) continue;
+                if (!s.contains("Y", Tag.TAG_ANY_NUMERIC) || !s.contains("block_states", Tag.TAG_COMPOUND)) continue;
+                // only sections of this chunk whose live blocks hold twins (palette check, no block scan): a section
+                // outside the chunk's height or without twins in memory is another writer's, left byte for byte
+                int index = chunk.getSectionIndexFromSectionY(s.getByte("Y"));
+                if (index < 0 || index >= chunk.getSectionsCount() || !ChunkLights.needs(chunk.getSection(index), false)) continue;
                 CompoundTag states = s.getCompound("block_states");
                 int renamed = relightPalette(states);
                 if (renamed == DUPLICATE) {
