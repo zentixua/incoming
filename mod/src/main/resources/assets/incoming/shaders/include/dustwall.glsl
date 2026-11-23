@@ -81,7 +81,7 @@ const float DW_BULGE = 0.35, DW_BILLOW = 0.15, DW_HAZE = 1.2;
 // presentation (est.): the wind's shear stretches the haze's features along the wind, ×(1 + a / DW_SHEAR_S); the slow
 // plumes over hot ground (the fire zone, the law's buoyant rise) lift the swells' crests by up to DW_PLUME of the top over
 // the first minutes, and sink back as the ground cools
-const float DW_SHEAR_S = 300.0, DW_PLUME = 1.6;
+const float DW_SHEAR_S = 300.0, DW_PLUME = 2.5;
 
 // First and last occupied distances and the sum of distances weighted by visible opacity.
 vec3 gDwDepth = vec3(0.0);
@@ -184,6 +184,15 @@ const float DW_HAZE_FROM = 24.0, DW_HAZE_TO = 60.0;
 float dwTextured(float a) {
     float x = clamp((a - DW_HAZE_FROM) / (DW_HAZE_TO - DW_HAZE_FROM), 0.0, 1.0);
     return 1.0 - x * x * x * (x * (6.0 * x - 15.0) + 10.0);
+}
+// the textured share by the pixel's footprint (blocks per pixel at the sample, gDwFoot): the billows' coarsest octaves fade
+// to their mean between 0.35 and 0.8 of a cycle per pixel (dwLod: the 22- and 13-block octaves by 8–18 blocks), so past
+// DW_TEX_FOOT the texture shows nothing but its cost; the haze level (the same column, swells and plumes) takes it over a
+// factor of 2 of footprint (est.; 3.6–7.3 km at HIGH, 2.4–4.8 km at LOW)
+const float DW_TEX_FOOT = 8.0;
+float gDwFoot0 = 0.0;
+float dwTexturedFoot() {
+    return 1.0 - smoothstep(DW_TEX_FOOT, 2.0 * DW_TEX_FOOT, gDwFoot);
 }
 // a smooth max(a − c, 0) (softplus, width 1 s): no kink in any age function
 float dwAfter(float a, float c) {
@@ -361,8 +370,8 @@ float dwBulge(vec3 pw, float a) {
 // over the first minute to DW_PLUME of the top (hot: the fire zone's share, half outside it) and sinks back over ~20 min as
 // the ground cools; the young level and the haze level read the same function (the puffs' successors from ~15 s: T6)
 float dwPlume(float L, float a, float hot) {
-    float tuft = smoothstep(0.66, 0.86, L);
-    return DW_PLUME * hot * tuft * tuft * (1.0 - exp(-a / 30.0)) * exp(-a / 1200.0);
+    float tuft = smoothstep(0.62, 0.84, L);
+    return DW_PLUME * hot * tuft * tuft * (1.0 - exp(-a / 40.0)) * exp(-a / 1500.0);
 }
 
 // a buoyant tongue above the top: about one 110 m cell in three lifts a rounded column of dust up to ~35 % of the layer
@@ -419,7 +428,7 @@ float dwBound(vec3 g) {
     float env = a < 1.5 ? law.x * 1.8 : dwEnvelope(a, law.x, 1.8);
     float full = env * (1.0 + DW_BULGE) * DW_HAZE + 6.0;
     // the haze level's crests and plumes (dwHaze: top × (1 + swell + plume), its soft edge to 1.3 of it)
-    if (a > 3.0) {
+    if (dwTextured(a) < 0.999 || gDwFoot > DW_TEX_FOOT) {
         // the swell and plume over this ground point (the same fields; the eddies shift the air by up to ~40 m against their
         // 220 m scale: margins of 0.15 on the swell and a lower tuft threshold), so the plumes' room stands only over plumes
         // (a bound over every point with the tallest plume's room tripled the strides of the young view's rays)
@@ -535,7 +544,7 @@ float dwDensity(vec3 g, bool coarse) {
     if (law.y <= 0.0) return 0.0;
     gDwWhy = 6.0;
     // the haze level where the texture has faded, blended by the same fade function (no seam in time or space)
-    float F = gDwForceF >= 0.0 ? gDwForceF : dwTextured(a0);
+    float F = gDwForceF >= 0.0 ? gDwForceF : dwTextured(a0) * dwTexturedFoot();
     if (!coarse) gDwF = F;
     float haze = 0.0;
     // (the cheapest level lights the textured dust with the haze level's two streams: its column is read too)
@@ -562,8 +571,7 @@ float dwDensity(vec3 g, bool coarse) {
     float s1 = seed.x, s2 = seed.y;
     float delay = 0.12 * clamp(1.6 * s2 - 0.55, 0.0, 1.0) * (0.6 + 0.8 * s1);
     float h = law.x * mix(0.88, 1.02, s2), k = dwHump(seed.z);
-    float plumeRoom = a0 > 3.0 ? DW_PLUME : 0.0;
-    float top0 = max(dwEnvelope(a0, h, k), 1.0), ceiling = top0 * (1.0 + DW_BULGE + plumeRoom) * DW_HAZE + 6.0;
+    float top0 = max(dwEnvelope(a0, h, k), 1.0), ceiling = top0 * (1.0 + DW_BULGE) * DW_HAZE + 6.0;
     gDwWhy = 4.0;
     if (q.y > ceiling) return 0.0;
     gDwWhy = 6.0;
@@ -579,8 +587,7 @@ float dwDensity(vec3 g, bool coarse) {
     float swellL = 0.5;
     float swell = mean ? 0.0 : dwSwellField(pw.xz, a, swellL);
     if (!coarse) gDwSwell = swell;
-    float plume = mean || a < 3.0 ? 0.0 : dwPlume(swellL, a, 0.5 + 0.5 * dwRow0(r).z);
-    top *= 1.0 + swell + plume;
+    top *= 1.0 + swell;
     // One frame for the texture: fixed in the air across the ground and carried by the dust's own rise and fall in height
     // (height as a share of this point's envelope, scaled to the settled layer): each column's billows are born at the
     // ground as the front reaches it, rise into the crest and settle with it, and stay where they were torn up. Sliced

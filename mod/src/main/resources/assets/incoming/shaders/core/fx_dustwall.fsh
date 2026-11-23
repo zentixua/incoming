@@ -84,6 +84,13 @@ void main() {
     // as the pall's (pallFloor); where the world is drawn its depth alone ends the ray (the coarse map stood over open
     // streets and hid the dust down them)
     bool relief = false;
+    // vanilla's terrain fog band (its last tenth of the render distance, 4–64 blocks, fades the drawn ground to the fog colour):
+    // the ground fill behind the haze starts at its start, so no bright fog arc stands between the drawn ground and the fill
+    float fogFrom = PallAirFog.w - clamp(PallAirFog.w / 10.0, 4.0, 64.0);
+    if (axis < 1e8 && PallAirFog.w > 0.0 && tEnd * length(dir.xz) > fogFrom) {
+        relief = true;
+        tEnd = fogFrom / max(length(dir.xz), 1e-3);
+    }
     if (axis >= 1e8) {
         float floorAt = pallFloor(Sampler3, PallSlot0, PallGround0, dir, PallFloorFrom, 1e6, 24, jitter);
         relief = floorAt < 1e6 && floorAt < tEnd;
