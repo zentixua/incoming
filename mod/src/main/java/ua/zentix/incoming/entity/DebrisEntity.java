@@ -6,6 +6,7 @@ import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
 import net.minecraft.core.particles.ParticleTypes;
 import net.minecraft.nbt.CompoundTag;
+import net.minecraft.nbt.Tag;
 import net.minecraft.nbt.NbtUtils;
 import net.minecraft.core.registries.Registries;
 import net.minecraft.network.syncher.EntityDataAccessor;
@@ -28,7 +29,7 @@ import net.minecraft.world.level.block.state.properties.BlockStateProperties;
 import net.minecraft.world.level.material.Fluids;
 import net.minecraft.world.phys.Vec3;
 import org.jetbrains.annotations.Nullable;
-import ua.zentix.incoming.IncomingConfig;
+import ua.zentix.incoming.strike.StrikeRules;
 import ua.zentix.incoming.registry.ModDamageTypes;
 import ua.zentix.incoming.registry.ModEntities;
 
@@ -49,6 +50,8 @@ public class DebrisEntity extends Entity {
     private boolean hurtsEntities = true;
     /** Ground/charred material, as distinct from an actual large piece of the airframe. Server only. */
     private boolean groundMaterial;
+    /** World rules of the strike that threw it ({@code world.debris_stay}, {@code world.fire}); the config's when spawned otherwise. */
+    private StrikeRules rules = StrikeRules.live();
     private final IntSet hit = new IntOpenHashSet();
     /** Client: random rotation in flight (degrees per tick around two axes). */
     public final float spinX, spinZ;
@@ -84,6 +87,12 @@ public class DebrisEntity extends Entity {
         DebrisEntity debris = small ? chip(level, pos, state, hot, hurts, velocity) : create(level, pos, state, hot, hurts, velocity);
         debris.groundMaterial = true;
         return debris;
+    }
+
+    /** Lands under {@code rules}: those of the strike that threw it ({@link StrikeRules}). */
+    public DebrisEntity under(StrikeRules rules) {
+        this.rules = rules;
+        return this;
     }
 
     public boolean isChip() { return entityData.get(DATA_CHIP); }
@@ -153,7 +162,7 @@ public class DebrisEntity extends Entity {
             level.sendParticles(ParticleTypes.POOF, getX(), getY(), getZ(), 5, 0.3, 0.1, 0.3, 0.03);
             if (isHot()) level.sendParticles(ParticleTypes.LAVA, getX(), getY(), getZ(), 3, 0.2, 0.1, 0.2, 0);
         }
-        if (IncomingConfig.SERVER.debrisStay.get()) {
+        if (rules.debrisStay()) {
             // Loose fallout can accumulate on earth, not turn an intact cohesive face into metre-sized cubes.
             boolean looseFloor = !ua.zentix.incoming.warhead.SurfaceBlocks.cohesive(level.getBlockState(pos.below()));
             if (!isChip() && (!groundMaterial || looseFloor)) place(level, pos);
@@ -168,7 +177,7 @@ public class DebrisEntity extends Entity {
         boolean supported = state.canSurvive(level, pos) && !FallingBlock.isFree(level.getBlockState(pos.below()));
         if (!replaceable || !supported) return;
         // Burning debris ignites only fuel it lands on or beside; on stone and ground it burns out by itself.
-        if (state.is(Blocks.FIRE) && (!IncomingConfig.SERVER.fire.get() || !touchesFuel(level, pos))) return;
+        if (state.is(Blocks.FIRE) && (!rules.fire() || !touchesFuel(level, pos))) return;
         if (state.hasProperty(BlockStateProperties.WATERLOGGED) && level.getFluidState(pos).getType() == Fluids.WATER) {
             state = state.setValue(BlockStateProperties.WATERLOGGED, true);
         }
@@ -204,6 +213,8 @@ public class DebrisEntity extends Entity {
         age = tag.getInt("age");
         entityData.set(DATA_CHIP, tag.getBoolean("chip"));
         groundMaterial = tag.getBoolean("ground_material");
+        // saved before world rules were captured: the config's at load
+        rules = tag.contains("rules", Tag.TAG_INT) ? StrikeRules.of(tag.getInt("rules")) : StrikeRules.live();
     }
 
     @Override
@@ -214,6 +225,7 @@ public class DebrisEntity extends Entity {
         tag.putInt("age", age);
         tag.putBoolean("chip", isChip());
         tag.putBoolean("ground_material", groundMaterial);
+        tag.putInt("rules", rules.bits());
     }
 
     @Nullable

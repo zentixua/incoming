@@ -45,6 +45,7 @@ import ua.zentix.incoming.nuclear.NuclearWarhead;
 import ua.zentix.incoming.strike.CameraLink;
 import ua.zentix.incoming.strike.ChunkTickets;
 import ua.zentix.incoming.strike.FlightLog;
+import ua.zentix.incoming.strike.StrikeRules;
 import ua.zentix.incoming.strike.FlightTickets;
 import ua.zentix.incoming.strike.Loadout;
 import ua.zentix.incoming.strike.Orders;
@@ -466,6 +467,11 @@ public abstract class StrikeProjectile extends Entity implements IEntityWithComp
     @Nullable
     public RoundRef round() {
         return round;
+    }
+
+    /** World rules this projectile changes the world under: its round's, or the config's without one ({@link StrikeRules}). */
+    public StrikeRules rules() {
+        return round != null ? round.rules() : StrikeRules.live();
     }
 
     /** Hand the round on (the B-2's bomb, an off-world copy that loaded it): this entity no longer ends it. */
@@ -1552,6 +1558,7 @@ public abstract class StrikeProjectile extends Entity implements IEntityWithComp
     public void intercepted(ServerLevel level, String by, @Nullable BlockPos sam, @Nullable UUID samOwner) {
         if (isRemoved()) return;
         Vec3 at = position();
+        StrikeRules rules = rules();
         endRound(RoundEnd.intercepted(at, sam, samOwner));
         StrikeWorld.get(level).flightLog().note(getType().getDescriptionId(), FlightLog.Event.INTERCEPTED, BlockPos.containing(at), targetLost(), 0, by);
         if (virtual) {
@@ -1560,7 +1567,7 @@ public abstract class StrikeProjectile extends Entity implements IEntityWithComp
         }
         Vec3 v = getDeltaMovement();
         discard();
-        if (level.isPositionEntityTicking(BlockPos.containing(at))) DebrisSpawner.wreck(level, at, v, noseLength());
+        if (level.isPositionEntityTicking(BlockPos.containing(at))) DebrisSpawner.wreck(level, at, v, noseLength(), rules);
     }
 
     // ---------------------------------------------------------------- synchronization and interpolation

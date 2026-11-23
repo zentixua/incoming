@@ -15,7 +15,6 @@ import net.minecraft.world.phys.Vec3;
 import net.neoforged.neoforge.event.level.ChunkWatchEvent;
 import net.neoforged.neoforge.event.tick.LevelTickEvent;
 import net.neoforged.neoforge.network.PacketDistributor;
-import ua.zentix.incoming.IncomingConfig;
 import ua.zentix.incoming.net.S2C;
 import ua.zentix.incoming.nuclear.model.FuelPool;
 import ua.zentix.incoming.registry.ModAttachments;
@@ -183,7 +182,6 @@ public final class FuelFires {
      * cells, fire, accounting, client packet within {@code reach}. Returns ignited count.
      */
     static int pour(ServerLevel level, Vec3 pos, WeaponType weapon, long blastTick, double reach) {
-        if (!IncomingConfig.SERVER.fire.get()) return 0;
         int n = weapon.spec().pool().cells();
         if (n <= 0 || n > S2C.FuelFire.MAX_CELLS) return 0;
         List<Long> lit = new ArrayList<>(n);

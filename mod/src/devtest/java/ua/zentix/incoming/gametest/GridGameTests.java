@@ -444,7 +444,7 @@ public final class GridGameTests {
         Detonation d = new Detonation(NuclearGameTests.IDS.incrementAndGet(), new Vec3(g.getX() + 0.5, g.getY() + 300, g.getZ() + 0.5), g.getY(),
                 15, false, level.getGameTime(), 0, 0, 20_000, 7, 0.1f, false, Detonation.OLD_WAVE);
         h.assertTrue(d.radiusMax() > 64, "detonation radius " + d.radiusMax() + " does not cover the area");
-        Blackouts.nuke(level, d);
+        Blackouts.nuke(level, d, ua.zentix.incoming.IncomingConfig.SERVER.gridEnabled.get());
         h.assertTrue(PowerGrid.get(level).downOutage(node.id(), level.getGameTime()).isPresent(), "nuclear strike did not knock out the substation");
         h.startSequence()
                 .thenWaitUntil(() -> {
@@ -943,7 +943,7 @@ public final class GridGameTests {
                 15, true, level.getGameTime(), 0, 0, 20_000, 7, 0.1f, false, Detonation.OLD_WAVE);
         double dead = d.groundRange(BlastModel.kpa(Blackouts.DEAD_PSI));
         h.assertTrue(dead > 64, "destroyed zone " + dead + " does not cover the platform");
-        Blackouts.nuke(level, d);
+        Blackouts.nuke(level, d, ua.zentix.incoming.IncomingConfig.SERVER.gridEnabled.get());
         PowerGrid grid = PowerGrid.get(level);
         // this strike's outage: the newest (other nuclear checks leave restored outages until they are pruned)
         Outage o = grid.outages().stream().filter(Outage::byDamage).max(java.util.Comparator.comparingInt(Outage::id)).orElseThrow();
