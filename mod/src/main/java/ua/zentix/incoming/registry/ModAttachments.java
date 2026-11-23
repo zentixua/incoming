@@ -115,10 +115,6 @@ public final class ModAttachments {
     public static final Supplier<AttachmentType<ua.zentix.incoming.work.ImpactTiming>> IMPACT_TIMING = REGISTER.register("impact_timing",
             () -> AttachmentType.builder(() -> new ua.zentix.incoming.work.ImpactTiming()).build());
 
-    /** Overworld: the server stop's one deadline ({@link ua.zentix.incoming.util.StopDrain#deadline}), nanoTime; not saved. */
-    public static final Supplier<AttachmentType<Long>> STOP_DEADLINE = REGISTER.register("stop_deadline",
-            () -> AttachmentType.builder(() -> Long.MAX_VALUE).build());
-
     /** Overworld: pace of the mod's background chunk loads ({@link ua.zentix.incoming.work.ChunkLoadPace}); not saved. */
     public static final Supplier<AttachmentType<ua.zentix.incoming.work.ChunkLoadPace>> CHUNK_LOAD_PACE = REGISTER.register("chunk_load_pace",
             () -> AttachmentType.builder(() -> new ua.zentix.incoming.work.ChunkLoadPace()).build());

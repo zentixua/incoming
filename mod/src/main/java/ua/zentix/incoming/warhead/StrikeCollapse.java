@@ -114,8 +114,6 @@ final class StrikeCollapse implements UnitQueue.Job {
      */
     static final class Stats {
         int dropped, live, direct, placed, changed, solved, portions, largestPortion, replans;
-        /** Direct rubble taken off the buffer: placed, or no room where it would rest. */
-        int landings;
         boolean finished;
         /** Jobs of the chain not yet ended. */
         private int open;
@@ -278,7 +276,7 @@ final class StrikeCollapse implements UnitQueue.Job {
                 fluid(level);
                 more = true;
             } else {
-                n = land(level, PORTION_NANOS);
+                n = land(level);
                 more = landed < landings.size();
             }
             area.record(level, ImpactCost.Kind.COLLAPSE, System.nanoTime() - t0, n);
@@ -287,15 +285,6 @@ final class StrikeCollapse implements UnitQueue.Job {
 
         @Override
         public void end(ServerLevel level) {
-            // Released before its last unit (stop deadline, area gone): blocks already removed get the rubble buffered
-            // for them now, else the world saves the holes without their landings. Landing checks each chunk itself.
-            if (landed < landings.size()) {
-                try {
-                    land(level, Long.MAX_VALUE);
-                } catch (RuntimeException ex) {
-                    Incoming.LOG.error("Collapse at {}: rubble landing on release failed", BlockPos.containing(centre).toShortString(), ex);
-                }
-            }
             support.cancel();
             if (Incoming.LOG.isDebugEnabled()) {
                 Incoming.LOG.debug("Collapse at {}: recorded removals with peers {}, chunks {}, solved {}, fell {} (falling {}, landed at once {}), stayed {}, replans {}",
@@ -650,17 +639,8 @@ final class StrikeCollapse implements UnitQueue.Job {
         return Math.max(1, t);
     }
 
-    /** Rubble without a live falling block, in timed portions of {@code portionNanos}, after every fall is out of the way. */
-    private int land(ServerLevel level, long portionNanos) {
-        int from = landed;
-        try {
-            return landPortion(level, portionNanos);
-        } finally {
-            stats.landings += landed - from;
-        }
-    }
-
-    private int landPortion(ServerLevel level, long portionNanos) {
+    /** Rubble without a live falling block, in timed portions, after every fall is out of the way. */
+    private int land(ServerLevel level) {
         if (!CraterFalls.rubbleStays()) {
             landed = landings.size();
             return 0;
@@ -692,7 +672,7 @@ final class StrikeCollapse implements UnitQueue.Job {
                     n++;
                 }
             }
-            if (watch.getAsLong() - start >= portionNanos) break;
+            if (watch.getAsLong() - start >= PORTION_NANOS) break;
         }
         return n;
     }

@@ -310,6 +310,34 @@ public final class WorkGameTests {
         whenQueueEmpty(h, 150, () -> stopFinishesQueueOnEmpty(h));
     }
 
+    /**
+     * Stop while a blast front is partly applied: the drain completes the started front (never released midway, since
+     * impact work is not saved), every block its rays selected is removed.
+     */
+    @GameTest(template = "range", timeoutTicks = 400, batch = "work_stop_front", skyAccess = true)
+    public static void stopCompletesAStartedFront(GameTestHelper h) {
+        ServerLevel level = h.getLevel();
+        whenQueueEmpty(h, 150, () -> {
+            buildTown(h);
+            useCounting(h, WorkClock.counting(MS));
+            List<Blast> blasts = recordBlasts(h, 48);
+            Warheads.detonate(level, WeaponType.MISSILE, Vec3.atBottomCenterOf(h.absolutePos(CENTER)), null, null);
+            h.startSequence().thenWaitUntil(() -> {
+                h.assertFalse(blasts.isEmpty(), "awaiting selection");
+                var selected = blasts.getFirst().blocks();
+                long removed = selected.stream().filter(p -> gone(level.getBlockState(p))).count();
+                h.assertTrue(removed > 0 && removed < selected.size(), "awaiting a partly applied front, removed " + removed);
+            }).thenExecute(() -> {
+                var selected = blasts.getFirst().blocks();
+                var impacts = StrikeWorld.get(level).impacts();
+                impacts.finish(level);
+                long intact = selected.stream().filter(p -> !goneOrRim(level.getBlockState(p))).count();
+                h.assertTrue(impacts.isEmpty() && intact == 0, "stop left " + intact + " of " + selected.size() + " selected blocks of a started front");
+                StrikeWorld.get(level).dropAll(level);
+            }).thenSucceed();
+        });
+    }
+
     private static void stopFinishesQueueOnEmpty(GameTestHelper h) {
         ServerLevel level = h.getLevel();
         buildTown(h);

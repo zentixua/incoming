@@ -51,18 +51,14 @@ paths:
   its last unit or its enqueue), not by age: a light repair that ran a unit every tick for five minutes may wait a
   tick for its fence (`UnitQueueTest.giveUpCountsTicksWithoutProgressNotAge`). Continuation `ready`/`blocked` results are cached once per
   work window, after heads (whose first step can introduce a dependency). Post refreshes them even within the same
-  world tick. Unit kinds keep separate clock estimates. Shutdown drains available work via `finish` while its windows run
-  units (a last continuation that enqueues a ready successor keeps the queue length and is still progress), then
-  releases jobs that cannot proceed. World time stops during the drain: `Job.drain` tells each job (also one enqueued
-  meanwhile) to do now what waits for a later tick (the explosion front's arrival); a step returning true without
-  progress would otherwise repeat forever in finish's window. One stop deadline (`StopDrain.deadline`, fixed by the
-  HIGHEST `ServerStoppingEvent` listener, `StopDrain.LIMIT_NANOS` from the start) bounds every world's impact drain
-  and then the block-light drain together: a clock per world let three worlds take three times the limit. Released
-  work logs ERROR when time ran out (also when an estimate refused the last unit) and WARN when it could not run.
-  Jobs are not saved, so a job released before its last unit commits in `end` what its finished units owe the world
-  (`StagedExplosion` its drops, `StrikeCollapse.Fall` the buffered rubble of blocks it removed; GameTest
-  `collapse_stop_landing`). The generation wait (`util/StopDrain`) keeps its own limit: skipping it leaves vanilla's
-  unload loop spinning forever (`UnitQueueTest`, `blast_front_stop`). Strike timelines enqueue into `StrikeWorld.impacts()` rather
+  world tick. Unit kinds keep separate clock estimates. Shutdown drains available work to completion via `finish` while
+  its windows run units (a last continuation that enqueues a ready successor keeps the queue length and is still
+  progress), then releases only jobs that cannot run (unready areas, waiting for them). Started work is never cut
+  short: jobs are not saved, so a release midway would save half-applied edits (GameTest `work_stop_front`); a drain
+  past `UnitQueue.SLOW_DRAIN_NANOS` (30 s) only logs. World time stops during the drain: `Job.drain` tells each job
+  (also one enqueued meanwhile) to do now what waits for a later tick (the explosion front's arrival); a step
+  returning true without progress would otherwise repeat forever in finish's window (`UnitQueueTest`,
+  `blast_front_stop`). Strike timelines enqueue into `StrikeWorld.impacts()` rather
   than executing directly; an empty queue can start the job that tick.
 - `StallWatch` samples the server stack every 0.5 s while stalled. After a stall longer than 2 s, within or between
   ticks, it logs `Server thread stalled for N s` with common stack locations. A single-player pause is not a stall.

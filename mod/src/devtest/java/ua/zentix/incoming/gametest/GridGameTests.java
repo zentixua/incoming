@@ -1518,7 +1518,7 @@ public final class GridGameTests {
      * data in the tag stays the very array vanilla wrote (no section decode or re-encode on the server thread; three of
      * them per section cost 276 ms of every second while a 1 Mt wave saved a dark city, srvlag run 23.11). Single-value,
      * small, hash and global (over 256 states) palettes all decode to the lamps, block for block; a lamp beside its own twin
-     * state cannot be renamed without listing one state twice, so the twin's blocks merge into the lamp's entry.
+     * state cannot be renamed without listing one state twice: the fast path declines and leaves the tag as it was.
      */
     @GameTest(template = "range", timeoutTicks = 20, batch = "grid_save_palette", skyAccess = true)
     public static void savedTwinsRestoreByPaletteRename(GameTestHelper h) {
@@ -1559,22 +1559,15 @@ public final class GridGameTests {
                 }
             }
         }
-        // a lamp beside its own twin state: the twin's blocks move to the lamp's entry, packed at the new list's width
+        // a lamp beside its own twin state: a rename would list one state twice, so the fast path declines untouched
         PalettedContainer<BlockState> both = new PalettedContainer<>(net.minecraft.world.level.block.Block.BLOCK_STATE_REGISTRY,
                 Blocks.AIR.defaultBlockState(), PalettedContainer.Strategy.SECTION_STATES);
         both.set(0, 0, 0, lamps.get(0));
         both.set(1, 0, 0, GridLights.unlit(lamps.get(0)));
         CompoundTag tag = (CompoundTag) codec.encodeStart(NbtOps.INSTANCE, both).getOrThrow();
-        h.assertTrue(ChunkSaves.relightPalette(tag) == 1, "the twin beside its lamp was not restored");
-        h.assertTrue(tag.getList("palette", Tag.TAG_COMPOUND).size() == 2, "merged twin still listed: " + tag.get("palette"));
-        PalettedContainer<BlockState> merged = codec.parse(NbtOps.INSTANCE, tag).getOrThrow();
-        for (int i = 0; i < 4096; i++) {
-            BlockState want = i <= 1 ? lamps.get(0) : Blocks.AIR.defaultBlockState();
-            if (merged.get(i & 15, i >> 8, (i >> 4) & 15) != want) {
-                h.fail("merged section: block " + i + " " + merged.get(i & 15, i >> 8, (i >> 4) & 15) + " instead of " + want);
-                return;
-            }
-        }
+        CompoundTag before = tag.copy();
+        h.assertTrue(ChunkSaves.relightPalette(tag) == ChunkSaves.DECLINED, "a lamp beside its own twin state was renamed");
+        h.assertTrue(tag.equals(before), "the declined rename changed the tag");
         h.succeed();
     }
 

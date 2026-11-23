@@ -433,25 +433,20 @@ public final class BlockLighting {
 
     /** Drain already committed edits before vanilla saves worlds; never initiate unrelated recovery at shutdown. */
     public static void onStopping(ServerStoppingEvent event) {
-        long deadline = ua.zentix.incoming.util.StopDrain.deadline(event.getServer());
         for (ServerLevel level : event.getServer().getAllLevels()) {
-            finish(level, deadline);
+            finish(level);
             if (level.hasData(ModAttachments.BLOCK_LIGHTING)) get(level).stopping = true;
         }
     }
 
     /** Same world-exit drain, also exercised with pending leases by the unload/reload regression. */
     public static void finish(ServerLevel level) {
-        finish(level, System.nanoTime() + ua.zentix.incoming.util.StopDrain.LIMIT_NANOS);
-    }
-
-    /** Drain until {@code deadline} ({@link System#nanoTime}), the stop's deadline shared with the impact drains. */
-    public static void finish(ServerLevel level, long deadline) {
         if (!level.hasData(ModAttachments.BLOCK_LIGHTING)) return;
         BlockLighting work = get(level);
         work.stopping = true;
         work.repairs.clear(); // No committed edit and no ticket; let a future load offer legacy work again.
         WorkClock clock = new WorkClock();
+        long deadline = System.nanoTime() + ua.zentix.incoming.util.StopDrain.LIMIT_NANOS;
         while (!work.idle()) {
             if (System.nanoTime() > deadline) {
                 ua.zentix.incoming.Incoming.LOG.error("Block lighting did not drain before shutdown: {} batches", work.batches.size());

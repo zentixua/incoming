@@ -64,8 +64,8 @@ public final class SurfaceFrontGameTests {
     /**
      * Shutdown drain ({@code UnitQueue.finish}) with a front still on its way: world time stops during the drain, and the
      * front reaches a block at least one tick after the blast starts (front speed at least sound speed, 17 blocks a tick).
-     * The front reaches every chosen block now; waiting for a later tick here held the server thread forever
-     * ({@code work_stop}, CI 23.11).
+     * The front reaches every chosen block now; waiting for a later tick here would hold the server thread forever.
+     * GameTest {@code work_stop_front} checks a started front's whole selection.
      */
     @GameTest(template = "range", timeoutTicks = 100, batch = "blast_front_stop", skyAccess = true)
     public static void shutdownDrainCompletesAWaitingFront(GameTestHelper h) {
@@ -83,7 +83,7 @@ public final class SurfaceFrontGameTests {
         h.assertTrue(queue.isEmpty() && job.done(), "blast still queued after the shutdown drain");
         int left = 0;
         for (int y = 0; y < 5; y++) for (int z = 0; z < 5; z++) if (level.getBlockState(wall.offset(0, y, z)).is(Blocks.OAK_PLANKS)) left++;
-        h.assertTrue(left < 25, "front did not reach the wall during the shutdown drain (released at the drain limit instead)");
+        h.assertTrue(left < 25, "front did not reach the wall during the shutdown drain");
         h.succeed();
     }
 }

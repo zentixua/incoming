@@ -284,17 +284,15 @@ public final class StrikeWorld {
     /**
      * Server stop (including singleplayer “Save and Quit”): in-world projectiles go virtual and save with world,
      * resuming after startup; otherwise they wait in chunk files until someone returns, losing target-area
-     * tickets after restart. Finish impact queues first without budget, until the stop's deadline
-     * ({@link UnitQueue#finish(ServerLevel, long)}).
+     * tickets after restart. Finish impact queue first without budget ({@link UnitQueue#finish(ServerLevel)}).
      */
     public static void onServerStopping(ServerStoppingEvent event) {
         // Pending nuclear orders unsaved: refund owners while still online (players saved afterward).
         NuclearKeys.cancelAll(event.getServer(), event.getServer().getPlayerList().getPlayers(), null, "server stopping");
-        long deadline = ua.zentix.incoming.util.StopDrain.deadline(event.getServer());
         for (ServerLevel level : event.getServer().getAllLevels()) {
             // Impact work unsaved: finish started/queued work now, otherwise world would retain explosions
-            // half removed (timelines not yet queuing detonations are lost). All worlds share the stop's deadline.
-            if (level.hasData(ModAttachments.STRIKE_WORLD)) get(level).impacts.finish(level, deadline);
+            // half removed (timelines not yet queuing detonations are lost).
+            if (level.hasData(ModAttachments.STRIKE_WORLD)) get(level).impacts.finish(level);
             for (StrikeProjectile p : level.getEntities(EntityTypeTest.forClass(StrikeProjectile.class), p -> !p.isRemoved())) {
                 p.parkForShutdown(level);
             }

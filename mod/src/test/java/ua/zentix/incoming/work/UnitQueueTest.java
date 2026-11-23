@@ -3,7 +3,6 @@ package ua.zentix.incoming.work;
 import net.minecraft.server.level.ServerLevel;
 import org.junit.jupiter.api.Test;
 import ua.zentix.incoming.nuclear.world.WorkClock;
-import ua.zentix.incoming.util.StopDrain;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -186,28 +185,12 @@ class UnitQueueTest {
         Waiting child = new Waiting(null, 2);
         Waiting first = new Waiting(() -> q.add(0, child), 3);
         q.add(0, first);
-        q.finish(null, 0, WorkClock.counting(MS), 1000 * MS);
+        q.finish(null, 0, WorkClock.counting(MS));
         assertTrue(q.isEmpty());
         assertEquals(3, first.done, "queued job did not drain");
         assertEquals(2, child.done, "job enqueued during the drain did not drain");
         assertEquals(1, first.ended);
         assertEquals(1, child.ended);
-    }
-
-    /** A job that never finishes (a wait ignoring drain) is released at the limit instead of holding shutdown forever. */
-    @Test
-    void finishReleasesAJobThatNeverFinishesAtTheLimit() {
-        UnitQueue q = new UnitQueue();
-        int[] steps = {0}, ended = {0};
-        q.add(0, new UnitQueue.Job() {
-            @Override public boolean step(ServerLevel level) { steps[0]++; return true; }
-            @Override public void end(ServerLevel level) { ended[0]++; }
-            @Override public String describe() { return "endless"; }
-        });
-        q.finish(null, 0, WorkClock.counting(MS), 100 * MS);
-        assertTrue(q.isEmpty());
-        assertEquals(1, ended[0]);
-        assertTrue(steps[0] >= 98 && steps[0] <= 101, "about one 1 ms unit per ms of the limit: " + steps[0]);
     }
 
     /**
@@ -231,7 +214,7 @@ class UnitQueueTest {
         WorkClock ordinary = WorkClock.counting(MS);
         ordinary.start(MS);
         queue.work(null, 0, ordinary); // the parent is a continuation before the stop
-        queue.finish(null, 0, WorkClock.counting(MS), StopDrain.LIMIT_NANOS);
+        queue.finish(null, 0, WorkClock.counting(MS));
         assertEquals(2, parent[0]);
         assertEquals(1, child[0], "ready successor released before its first unit");
         assertEquals(1, released[0]);
@@ -284,11 +267,11 @@ class UnitQueueTest {
     }
 
     /**
-     * Three worlds' impact queues share one stop deadline: 30,001 units of 1 ms each would take 90 s with a clock per world.
-     * Work that did not fit is released (its {@code end} commits what it owes the world).
+     * Started work is never cut short at a stop: three worlds' drains of 30,001 units of 1 ms each all complete (90 s in
+     * total); a drain past {@link UnitQueue#SLOW_DRAIN_NANOS} only logs.
      */
     @Test
-    void worldsShareOneStopDeadline() {
+    void finishCompletesStartedWorkAndOnlyLogsWhenSlow() {
         long[] nanos = {0};
         int[] applied = {0}, ended = {0};
         for (int dimension = 0; dimension < 3; dimension++) {
@@ -302,12 +285,11 @@ class UnitQueueTest {
                 }
                 @Override public void end(ServerLevel ignored) { ended[0]++; }
             });
-            impacts.finish(null, 0, WorkClock.decaying(() -> nanos[0], 1), StopDrain.LIMIT_NANOS);
+            assertTrue(impacts.finish(null, 0, WorkClock.decaying(() -> nanos[0], 1)), "a 30 s drain was not reported");
             assertTrue(impacts.isEmpty());
         }
-        assertTrue(nanos[0] <= StopDrain.LIMIT_NANOS, "worlds took " + nanos[0] / 1e9 + " s of a " + StopDrain.LIMIT_NANOS / 1e9 + " s stop");
-        assertTrue(applied[0] >= 29_999, "the deadline's time went unused: " + applied[0] + " units");
-        assertEquals(3, ended[0], "every unfinished job is released through end");
+        assertEquals(3 * 30_001, applied[0], "started work was dropped");
+        assertEquals(3, ended[0]);
     }
 
     private abstract static class Named implements UnitQueue.Job {
@@ -315,7 +297,7 @@ class UnitQueueTest {
     }
 
     private static void drain(UnitQueue q, long now) {
-        q.finish(null, now, WorkClock.counting(MS), Long.MAX_VALUE / 4);
+        q.finish(null, now, WorkClock.counting(MS));
     }
 
     /** Steps without progress until drained, then {@code units} units; runs {@code onFirst} in its first step. */

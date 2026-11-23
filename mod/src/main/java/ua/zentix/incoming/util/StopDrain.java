@@ -19,31 +19,12 @@ import java.util.concurrent.locks.LockSupport;
  * advance unrelated tasks. The world attachment owns the retained references until generation ends.
  */
 public final class StopDrain {
-    /**
-     * Limit for the whole server: the mod's work drains (impacts of every world, then block light) share one deadline this
-     * far from the start of the stop ({@link #deadline}); the generation wait below has its own, since skipping it would
-     * leave vanilla's unload loop spinning forever.
-     */
+    /** Wait limit for the whole server. */
     public static final long LIMIT_NANOS = 30_000_000_000L;
     /** How often to log ongoing waiting. */
     private static final long REPORT_NANOS = 5_000_000_000L;
 
     private StopDrain() {}
-
-    /** {@code ServerStoppingEvent}, {@code HIGHEST} priority: fixes the stop's work deadline before any mod drain runs. */
-    public static void begin(ServerStoppingEvent event) {
-        event.getServer().overworld().setData(ModAttachments.STOP_DEADLINE, System.nanoTime() + LIMIT_NANOS);
-    }
-
-    /**
-     * {@link System#nanoTime} by which every world's impact drain and the block-light drain stop together: per-world clocks
-     * let three worlds take three times the limit. Outside a stop (tests), a limit from now.
-     */
-    public static long deadline(MinecraftServer server) {
-        ServerLevel overworld = server.overworld();
-        return overworld.hasData(ModAttachments.STOP_DEADLINE) ? overworld.getData(ModAttachments.STOP_DEADLINE)
-                : System.nanoTime() + LIMIT_NANOS;
-    }
 
     /** {@code ServerStoppingEvent}, {@code LOWEST} priority: after the mod releases its tickets and work. */
     public static void onServerStopping(ServerStoppingEvent event) {
