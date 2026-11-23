@@ -96,6 +96,11 @@ paths:
   Legacy admission is itself a budgeted unit: pending positions own no tickets, a bounded scan drops unloaded or
   already marked entries and chooses the nearest player chunk. Only one repair can hold its source-context ring;
   normal live-edit leases remain independent. Shutdown drops pending legacy positions and drains committed edits.
+  Recovery checks go to vanilla's one light-engine queue in slices of `BlockLighting.LIGHT_SLICE` (256): the next
+  slice waits until the engine processed the last. Server-thread budgets do not bound that queue, and a moving
+  player's synchronous chunk load needs a light task from it: whole sections per unit queued 195,000 checks in the
+  minute after a 1 Mt blackout (every pre-existing chunk under the outage counts as legacy) and held such loads
+  0.3–0.8 s (GameTest `light_repair_slices`).
 - A walk over chunks that skips most of them still charges its time budget for the skips and stays bounded to the
   area it searches (`FireWatch.box`).
 
