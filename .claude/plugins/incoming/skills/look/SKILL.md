@@ -16,10 +16,9 @@ and the reference at the same times, one fresh judge, done. The full procedure i
 new model of a phenomenon.
 
 ## 1. Inherit and fix the target (plan, before code)
-- Scope first, in Artem's words: what changes on screen and what stays old (which views, how long, under which
-  conditions). The lead echoes that boundary back to him before code; a boundary that moves later (a 10 s window
-  becoming 24 s) is a scope change reported to the lead, never a silent design choice. "The new X" means all of X
-  unless he says otherwise.
+- Scope first: Artem's words plus our reading of them as boundaries ("new: X for N s in views V; old after that:
+  Y"), echoed to him by the lead (team.md). "The new X" means all of X unless he says otherwise. A boundary that moves
+  later (a 10 s window becoming 24 s) is a scope change reported to the lead, never a silent design choice.
 - Collect what is already agreed about the phenomenon from its homes: its row in the design document
   (`docs/DESIGN-nuke.md` for the nuke), its area rule, the tests that guard earlier complaints, and Artem's own words
   quoted with their time. Approved look traits are decisions, not older items to drop; a lead's paraphrase is never a
@@ -74,10 +73,12 @@ per lag, so shorten `--lag` for fast fronts) and from the law.
   consecutive full-rate frame strips at the fixed times, the flicker map and the numbers for both sides, the reference
   and the traits, never the author's notes, and rates flicker explicitly. Stills never pass motion. Codex reviews the
   code only.
-- Done means the player's conditions, not the judging scene: clips of the smallest and largest yield (or size), over
-  land and over water, several at once, the full duration including any handoff, a second view, his servers' settings
-  (scale preset, wave speed). Each shows the new model. The PR lists every condition under which an older model of
-  the phenomenon still draws: none, or the lead's recorded agreement (AGENTS.md: such a fallback is serious).
+- Done means the player's conditions, not the judging scene (the matrix AGENTS.md's release bar points to): clips of
+  the smallest and largest yield (or size), over land and over water, several at once, a second view, the whole
+  visible life of the effect through any handoff (for the nuke's wall: until its dust is pall, not the first seconds),
+  his servers' settings (scale preset, wave speed), and frame cost at his shader pack and quality preset. Each shows
+  the new model; quality presets scale the new model, never swap in an older one. The PR lists every condition where
+  an older model of the phenomenon still draws: none, or Artem's recorded agreement, quoted (AGENTS.md).
 - Under a shader pack the effect works and looks at least as good (AGENTS.md); one check on the last head, which does
   not replace a pack-specific functional test.
 

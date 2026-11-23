@@ -53,7 +53,7 @@ instructions: work in a worktree from `origin/main`.
   steps by Artem's word.
 - **Public steps** (GitHub release, version bump for a release, Modrinth, CurseForge, YouTube, replies to players)
   require Artem's explicit instruction. A release candidate reaches him only after we tested every changed look and
-  behaviour in game ourselves under his conditions (yields, water, several strikes, full duration, his servers) and
+  behavior in game ourselves under his conditions (look skill matrix, his shader pack and quality preset) and
   found nothing to fault; he approves, he does not test for us.
 - Store pages and the README first screen follow the usual popular-mod layout (`docs/store/listing.md`): banner and
   one line, 2–3 sentence intro, Features with GIFs/screenshots, video, requirements, FAQ, links, license small; no
@@ -145,7 +145,8 @@ defense, `launcher/`, `grid/` blackout, `sound/`, `client/`, `work/` tick budget
   class; weapon numbers in spec. One phenomenon on screen = one model: where a law and the wanted look disagree, the
   look wins: one presentation model, physics only as visible inputs (where, when, how much, wind), never a law plus
   look fixes on it. Model handoff = crossfade; if the seam shows, the new model owns it all. No condition (water,
-  several detonations, a view) falls back to an older model. Review: glue or such a fallback is serious.
+  several detonations, a view) and no handoff returns to an older model unless Artem agreed to it.
+  Review: either is serious.
 - **Configure causes, not consequences.** Player sets conditions, world computes consequences. Four setting kinds:
   world rules (phenomena, permissions, salvos, flight time, real-product choices: nuclear yield 1–15 kt, burst height);
   map time/distance scale (`GAME` default, `REAL`, `CUSTOM`); performance (one work budget/tick, quality); convenience.

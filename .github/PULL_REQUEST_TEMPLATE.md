@@ -8,6 +8,6 @@ Seen or heard by the player: sandbox frames and WAV (tools/sandbox.sh shot) befo
 Render/FX code, shaders, particle or draw counts: frame cost at 100 strikes against main, once on the final head. -->
 
 ## Look changes (seen or heard by the player)
-<!-- Scope in Artem's words: what changes on screen, what stays old. Conditions shown in clips (yields, water, several
-at once, full duration, other views, server settings). Conditions where an older model of the phenomenon still draws:
-none, or why. -->
+<!-- Scope as echoed to Artem: what changes on screen, what stays old. Conditions shown in clips (look skill matrix:
+yields, water, several at once, the effect's whole life, other views, server settings, his shader pack and preset).
+Conditions where an older model of the phenomenon still draws: none, or Artem's recorded agreement, quoted. -->
