@@ -31,7 +31,9 @@ For each visible feature, one row in the plan: its cause; where and when it is b
 air, the moving front, the camera); how fast its matter moves against how fast its pattern moves; how it ends. Take the
 rows from the footage (track features frame by frame; a top-down or side probe in the harness) and from the law.
 - A moving front is usually a moving line of births, not moving matter: features are born where the front passes and
-  stay there; nothing rides with the front (AGENTS.md concept 2: nothing appears finished).
+  stay there; nothing rides with the front (AGENTS.md concept 2: nothing appears finished). Each point needs its own
+  birth (delay, amount, height from its own ground): one age profile shared by every point is a rigid shape moving at
+  the front's speed, whatever its texture does.
 - A shape number (height, hump ratio, contrast, lobe spacing) checks the mechanism; it is never the model.
 - Before the first take, state as numbers the feature speeds the model produces against those rows (for the young
   dust wall: radial speed near the ground tens of m/s, never the front's 470 m/s; no net turning around ground zero).
