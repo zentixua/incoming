@@ -37,8 +37,8 @@ new model of a phenomenon.
 ## 2. Mechanism before shape
 For each visible feature, one row in the plan: its cause; where and when it is born; what it is anchored to (ground,
 air, the moving front, the camera); how fast its matter moves against how fast its pattern moves; how it ends. Take the
-rows from the footage (track features frame by frame; `clip_metrics.py change` gives their apparent speed) and from
-the law.
+rows from the footage (track features frame by frame; `clip_metrics.py change` gives their apparent speed up to 8 px
+per lag, so shorten `--lag` for fast fronts) and from the law.
 - A moving front is usually a moving line of births, not moving matter: features are born where the front passes and
   stay there; nothing rides with the front (AGENTS.md concept 2: nothing appears finished). Each point needs its own
   birth (delay, amount, height from its own ground): one age profile shared by every point is a rigid shape moving at
@@ -76,8 +76,9 @@ the law.
 ## 5. Sound
 - Take: a sandbox WAV (`tools/sandbox.sh shot … --at none`) or a scenario's `audio.wav`, beside `main`'s at the same
   distance and times; the reference is a real recording of the phenomenon at a stated distance.
-- Same measure on both: level over time (EBU R128 short-term), spectrum per band, onset and Doppler timing; offline
-  near/far and small-speaker check with `tools/audition_sounds.py`. Propagation and reach come from `strike/Hearing`
+- Same measure on both, same settings: short-term loudness over time (`ffmpeg -af ebur128`), a spectrogram
+  (`sox … spectrogram`), onset and Doppler timing read from them; offline near/far and small-speaker check with
+  `tools/audition_sounds.py`. Propagation and reach come from `strike/Hearing`
   and the recording spectra of `tools/build_sounds.py`, never a tuned gain.
 - A fresh Claude session judges by the numbers and the waveform and spectrogram images against the traits.
 

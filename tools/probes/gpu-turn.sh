@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
 # Review probe of the GPU turn, kept as a regression test (run by tools/test_gpu_lease.sh). Exits 1 when: the next
 # nested client of a job that holds the client lock is refused past its turn; a renewal reacquires a yielded lease
-# ahead of the queue; an exited last queue row hides a live waiter from the turn check. No GPU, KWin or game is used.
+# ahead of the queue; an exited last queue row hides a live waiter from the turn check; running work whose
+# heartbeat came late loses its lease. No GPU, KWin or game is used.
 set -euo pipefail
 root=$(cd "${1:-$(dirname "$0")/../..}" && pwd)
 t=$(mktemp -d)
@@ -40,4 +41,9 @@ lease_take B "$t" 2>/dev/null || fail "first waiter B refused"
 record 100; queue
 printf 'C\t%s\t%s\t99999999 1\n' "$t" "$now" >> "$QUEUE"
 [[ $(lease_status) == "GPU is free, but queued: B"* ]] || fail "stale last row hid B: $(lease_status)"
-echo "gpu turn: nested client admitted, renewal respects the queue, stale rows ignored"
+# 4. running work whose heartbeat came late (past the yield, turn over, B waiting) recovers its own lease
+record 100; queue
+( gpu_client_hold A "$t/tree" "stand parent"
+  lease_renew A "$t/tree" || fail "the lock holder's late heartbeat lost its lease to the queue"
+  [[ $(lease_status) == "GPU held by A"* ]] || fail "after a late heartbeat: $(lease_status)" ) || exit 1
+echo "gpu turn: nested client admitted, renewal respects the queue, stale rows ignored, late heartbeat recovers"

@@ -11,8 +11,10 @@ read one at a time and taken to 720 rows (as a video is decoded), so a long 1080
           Detail change per lag: 1 − correlation of the high-pass detail (frame − Gaussian blur σ 3 px) of 32 px
           blocks between frames `lag` seconds apart, after the best whole-pixel shift within ±8 px (every shift is
           tried), median over textured blocks. 0: the detail only moves (or stands); 1: new detail every lag (boiling,
-          re-randomised noise). A block whose partner is flat scores correlation 0. Also the blocks' apparent speed:
-          median and p90 of the best shift, px/s at 720 rows (multiply by metres per pixel of the view for m/s).
+          re-randomised noise). A block whose partner is flat scores correlation 0. Also the matched blocks' apparent
+          speed: median and p90 of the best shift, px/s at 720 rows (× metres per pixel of the view for m/s). The search
+          reaches 8 px per lag (80 px/s at the default 0.1 s, 240 px/s at --lag 0.034): motion beyond it reads as
+          change, and the line warns when many blocks sit on that ceiling.
   flicker <frames|video> [--region …] [--map out.jpg]
           Frame-to-frame pulsing: per pixel the temporal median of |second difference| of luma over 5 s chunks (smooth
           motion gives ~0; a debris piece crossing a pixel in a frame or two does not count), mean and p99 over the
@@ -20,7 +22,7 @@ read one at a time and taken to 720 rows (as a video is decoded), so a long 1080
   period  <png> [--band y0,y1] [--x1 f] [--edge]
           Repetition along x inside a band: normalised autocorrelation of the band's high-passed column-mean luma
           (--edge: of the band's lower edge, the strongest dark-over-light step per column at sub-pixel row). Prints
-          the dominant period in px (3 px and up) and its autocorrelation peak; a peak above 0.5 is a visible repeat
+          the dominant period in px (2 px and up) and its autocorrelation peak; a peak above 0.5 is a visible repeat
           (copied pieces). --edge also prints the edge slope's kurtosis: above 10 is a staircase (flat runs joined by
           steps), also when perspective shrinks the spacing so that no single period exists. The band must hold one
           dark-over-light edge across its width (check its crop): elsewhere the strongest step jumps between features
@@ -115,9 +117,13 @@ def _normalised(blocks: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
     return z, norm
 
 
-def best_shift(a: np.ndarray, b: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
-    """Per textured block of `a`: the highest correlation with `b` over every whole-pixel shift within ±REACH, and the
-    length of that shift (px)."""
+SHIFTS = sorted(((dy, dx) for dy in range(-REACH, REACH + 1) for dx in range(-REACH, REACH + 1)),
+                key=lambda d: (d[0] ** 2 + d[1] ** 2, d))  # nearest first: a tie keeps the shortest shift
+
+
+def best_shift(a: np.ndarray, b: np.ndarray) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
+    """Per textured block of `a`: the highest correlation with `b` over every whole-pixel shift within ±REACH, the
+    length of that shift (px), and whether it lies on the search edge (the real motion may be faster)."""
     h, w = a.shape
     ny, nx = (h - 2 * REACH) // BLOCK, (w - 2 * REACH) // BLOCK
     if ny < 1 or nx < 1:
@@ -127,37 +133,48 @@ def best_shift(a: np.ndarray, b: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
     textured = ba.std(axis=(2, 3)) >= TEXTURED
     best = np.full((ny, nx), -np.inf)
     shift = np.zeros((ny, nx))
-    for dy in range(-REACH, REACH + 1):
-        for dx in range(-REACH, REACH + 1):
-            zb, nb = _normalised(_blocks(b, REACH + dy, REACH + dx, ny, nx))
-            with np.errstate(invalid="ignore", divide="ignore"):
-                c = np.where(nb > 0, (za * zb).sum(axis=(2, 3)) / (na * nb), 0.0)  # a flat partner: correlation 0
-            better = c > best
-            best = np.where(better, c, best)
-            shift = np.where(better, np.hypot(dy, dx), shift)
-    return best[textured], shift[textured]
+    edge = np.zeros((ny, nx), bool)
+    for dy, dx in SHIFTS:
+        zb, nb = _normalised(_blocks(b, REACH + dy, REACH + dx, ny, nx))
+        with np.errstate(invalid="ignore", divide="ignore"):
+            c = np.where(nb > 0, (za * zb).sum(axis=(2, 3)) / (na * nb), 0.0)  # a flat partner: correlation 0
+        better = c > best
+        best = np.where(better, c, best)
+        shift = np.where(better, np.hypot(dy, dx), shift)
+        edge = np.where(better, max(abs(dy), abs(dx)) == REACH, edge)
+    return best[textured], shift[textured], edge[textured]
 
 
-def change(files: list[Path], fps: float, lag_s: float, region) -> tuple[float, int, int, float, float]:
-    """(detail change, blocks, lag frames, median and p90 apparent speed px/s); two lag windows of frames in memory."""
+def change(files: list[Path], fps: float, lag_s: float, region) -> tuple[float, int, int, float, float, float]:
+    """(detail change, blocks, lag frames, median and p90 apparent speed px/s at ROWS rows, share of blocks whose best
+    shift is on the search edge); a lag window of frames in memory. Speeds count matched blocks only (correlation > 0.5);
+    the ceiling is REACH px per lag, so a high edge share means faster motion than shown (shorten --lag)."""
     lag = max(1, round(lag_s * fps))
     stride = max(1, lag // 2)
     window: deque[tuple[int, np.ndarray]] = deque()
-    corr, speed = [], []
+    corr, speed, edges = [], [], []
+    scale = 1.0
     for k, path in enumerate(files):
-        window.append((k, detail(crop(luma(path), region))))
+        frame = luma(path)
+        scale = ROWS / frame.shape[0]  # speeds are stated at ROWS rows also for smaller frames
+        window.append((k, detail(crop(frame, region))))
         while window and window[0][0] < k - lag:
             window.popleft()
         first, a = window[0]
         if first == k - lag and first % stride == 0:
-            c, s = best_shift(a, window[-1][1])
+            c, sh, e = best_shift(a, window[-1][1])
             corr.append(c)
-            speed.append(s)
+            speed.append(sh[c > 0.5])
+            edges.append(e[c > 0.5])
     values = np.concatenate(corr) if corr else np.empty(0)
     if not len(values):
         raise SystemExit("no textured blocks in the region (or fewer frames than the lag)")
-    px_s = np.concatenate(speed) * fps / lag
-    return 1.0 - float(np.median(values)), len(values), lag, float(np.median(px_s)), float(np.percentile(px_s, 90))
+    px_s = np.concatenate(speed) * fps / lag * scale
+    on_edge = np.concatenate(edges)
+    if not len(px_s):
+        return 1.0 - float(np.median(values)), len(values), lag, float("nan"), float("nan"), 1.0
+    return (1.0 - float(np.median(values)), len(values), lag, float(np.median(px_s)), float(np.percentile(px_s, 90)),
+            float(on_edge.mean()))
 
 
 def flicker(files: list[Path], region) -> tuple[np.ndarray, float, float, float]:
@@ -201,7 +218,7 @@ def slope_kurtosis(edge: np.ndarray) -> float:
     return float((slope ** 4).mean() / var ** 2) if var > 1e-12 else 0.0
 
 
-def period(signal: np.ndarray, min_lag: int = 3) -> tuple[int, float]:
+def period(signal: np.ndarray, min_lag: int = 2) -> tuple[int, float]:
     """Dominant period (px) of a 1-D profile and its normalised autocorrelation peak (0 when none)."""
     s = np.asarray(signal, np.float64)
     s = s - gaussian_filter(s, max(4.0, len(s) / 16.0))  # keep detail, drop the slow trend (perspective, light)
@@ -257,9 +274,12 @@ def main(argv: list[str] | None = None) -> int:
     with tempfile.TemporaryDirectory(prefix="clip-metrics-") as scratch:
         files, fps = frame_files(args.source, args.fps, args.window, Path(scratch))
         if args.command == "change":
-            value, blocks, lag, v50, v90 = change(files, fps, args.lag, args.region)
+            value, blocks, lag, v50, v90, edge = change(files, fps, args.lag, args.region)
+            ceiling = REACH * fps / lag
+            warn = (f"; {edge * 100:.0f} % of matched blocks at the {ceiling:.0f} px/s search ceiling: real motion is "
+                    "faster, measure again with a shorter --lag") if edge > 0.1 else ""
             print(f"{args.source.name}: detail change per {args.lag:g} s {value:.3f}; apparent speed median {v50:.0f}, "
-                  f"p90 {v90:.0f} px/s at {ROWS} rows (blocks {blocks}, lag {lag} frames at {fps:.1f} fps)")
+                  f"p90 {v90:.0f} px/s at {ROWS} rows{warn} (blocks {blocks}, lag {lag} frames at {fps:.1f} fps)")
             return 0
         md, mean, p99, share = flicker(files, args.region)
         print(f"{args.source.name}: flicker |d2| mean {mean:.3f}/255, p99 {p99:.3f}, share > 1/255 {share * 100:.2f} % "

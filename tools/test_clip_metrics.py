@@ -19,6 +19,7 @@ import clip_metrics  # noqa: E402
 
 RNG = np.random.default_rng(7)
 SIZE = (160, 256)
+ROWS_SCALE = clip_metrics.ROWS / SIZE[0]  # speeds are stated at 720 rows
 
 
 def texture(seed: int) -> np.ndarray:
@@ -45,18 +46,37 @@ class ChangeTest(unittest.TestCase):
     def test_sliding_detail_is_not_change_and_its_speed_is_measured(self):
         base = texture(1)
         files = take([base[20:20 + SIZE[0], 20 + k:20 + k + SIZE[1]] for k in range(12)], self.d)
-        value, blocks, lag, v50, _ = clip_metrics.change(files, 30.0, 0.1, (0, 0, 1, 1))
+        value, blocks, lag, v50, _, _ = clip_metrics.change(files, 30.0, 0.1, (0, 0, 1, 1))
         self.assertEqual(lag, 3)
         self.assertGreater(blocks, 0)
         self.assertLess(value, 0.05)
-        self.assertAlmostEqual(v50, 30.0, delta=1.0)   # 1 px per frame at 30 fps
+        self.assertAlmostEqual(v50, 30.0 * ROWS_SCALE, delta=1.0)   # 1 px per frame at 30 fps, stated at 720 rows
 
     def test_an_odd_pixel_shift_is_found(self):
         a = np.random.default_rng(314).integers(0, 256, (48, 48)).astype(np.float32)
         files = take([a, np.roll(a, 1, axis=1)], self.d)
-        value, blocks, lag, _, _ = clip_metrics.change(files, 10.0, 0.1, (0, 0, 1, 1))
+        value, blocks, lag, _, _, _ = clip_metrics.change(files, 10.0, 0.1, (0, 0, 1, 1))
         self.assertEqual((blocks, lag), (1, 1))
         self.assertLess(value, 0.02)
+
+    def test_motion_beyond_the_search_is_flagged_and_a_short_lag_measures_it(self):
+        big = texture(4)
+        big = np.tile(big, (1, 4))
+        files = take([big[20:20 + SIZE[0], 5 * k:5 * k + SIZE[1]] for k in range(12)], self.d)   # 150 px/s
+        value, _, _, _, _, edge = clip_metrics.change(files, 30.0, 0.1, (0, 0, 1, 1))
+        self.assertGreater(value, 0.2)          # beyond 8 px per lag it reads as change...
+        self.assertLess(clip_metrics.change(files, 30.0, 1 / 30, (0, 0, 1, 1))[0], 0.05)
+        v50 = clip_metrics.change(files, 30.0, 1 / 30, (0, 0, 1, 1))[3]
+        self.assertAlmostEqual(v50, 150.0 * ROWS_SCALE, delta=5.0)
+
+    def test_still_frames_have_no_speed_and_small_frames_are_scaled(self):
+        a = np.tile(np.random.default_rng(5).integers(0, 256, (8, 8)), (12, 20)).astype(np.float32)  # periodic, still
+        files = take([a, a], self.d)
+        self.assertEqual(clip_metrics.change(files, 10.0, 0.1, (0, 0, 1, 1))[3], 0.0)
+        (self.d / "s").mkdir()
+        base = texture(1)
+        small = take([base[20:20 + SIZE[0], 20 + k:20 + k + SIZE[1]] for k in range(4)], self.d / "s")
+        self.assertAlmostEqual(clip_metrics.change(small, 30.0, 1 / 30, (0, 0, 1, 1))[3], 30.0 * ROWS_SCALE, delta=2.0)
 
     def test_new_detail_every_frame_is_full_change(self):
         files = take([texture(10 + k)[:SIZE[0], :SIZE[1]] for k in range(12)], self.d)
@@ -129,6 +149,7 @@ class PeriodTest(unittest.TestCase):
         px, peak = clip_metrics.period(np.cos(2 * np.pi * np.arange(1024) / 6))
         self.assertEqual(px, 6)
         self.assertGreater(peak, 0.9)
+        self.assertEqual(clip_metrics.period(np.tile([0.0, 1.0], 512))[0], 2)
 
     def test_edge_rows_follow_a_dark_band_over_light_ground(self):
         band = np.full((60, 200), 200.0, np.float32)

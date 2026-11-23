@@ -200,8 +200,9 @@ lease_renew() {
   exec {fd}>"$LEASE.lock"; flock "$fd"
   _lease_read; now=$(date +%s)
   if [ "$L_OWNER" = "$owner" ] && ! _lease_free; then _lease_write "$L_OWNER" "$L_TREE" "$L_SINCE" "$now"; rc=0
-  # a free lease is reacquired only when no other session is ahead in the queue (a yielded lease goes to the waiter)
-  elif _lease_free && { [ -z "$(_queue_head)" ] || [ "$(_queue_head)" = "$owner" ]; }; then _lease_write "$owner" "$(readlink -m "${tree:-$L_TREE}")" "$now" "$now"; rc=0; fi
+  # a free lease is reacquired only when no other session is ahead in the queue (a yielded lease goes to the waiter),
+  # or by the job that holds the client lock (running work whose heartbeat came late is never displaced)
+  elif _lease_free && { [ -z "$(_queue_head)" ] || [ "$(_queue_head)" = "$owner" ] || gpu_client_inherited; }; then _lease_write "$owner" "$(readlink -m "${tree:-$L_TREE}")" "$now" "$now"; rc=0; fi
   exec {fd}>&-
   return $rc
 }
