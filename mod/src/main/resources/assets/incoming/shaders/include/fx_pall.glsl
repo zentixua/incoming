@@ -515,7 +515,7 @@ void slot(mat4 S, vec4 ring, mat4 V, sampler2D ground, vec4 R, vec4 W, vec4 G, v
     // ground height; no map, epicenter ground
     float floorUp = pallRelief(ground, S, R, p.xz);
     PallAt f = pallField(Sampler1, ground, S, R, W, p, floorUp, topBumps(S, p));
-    pallHandoff(f, ring, S, p);
+    float keep = 1.0 - pallHandoff(f, ring, S, p);
     // Dust lifted out of the flat layer by inflow has the same material and billows. Its light is computed here too,
     // including self-shadowing: above the old top it does not become flat gray fill.
     if (inflow.w > 0.0 && length(inflow.xz - S[0].xy) < 1.0) {
@@ -537,7 +537,7 @@ void slot(mat4 S, vec4 ring, mat4 V, sampler2D ground, vec4 R, vec4 W, vec4 G, v
             f.slab.z += total * f.wet;
         }
     }
-    WallAt head = pallWallAt(ground, S, V, R, W, p, floorUp, ring);
+    WallAt head = pallWallAt(ground, S, V, R, W, p, floorUp, keep);
     vec3 dustW = f.dustW;
     s.tau += f.column.x + f.column.y + f.column.z;
     s.slab += f.slab.x + f.slab.y + f.slab.z;
@@ -598,17 +598,20 @@ void slot(mat4 S, vec4 ring, mat4 V, sampler2D ground, vec4 R, vec4 W, vec4 G, v
     // distinguish local billow edge from depth, producing blotches instead of lit/shaded sides. Shadow noise samples:
     // two coarse (two channels each), one fine only while resolved
     float sigmaShade = f.sigma.x + f.sigma.z;
-    float clump = clumpShade(coarse, pallMixed(carpetCoarse(S, uvA + lightUv * 0.06, uvB + lightUv * 0.06, phaseBlend, fill), f.mixed),
-            pallMixed(carpetCoarse(S, uvA + lightUv * 0.22, uvB + lightUv * 0.22, phaseBlend, fill), f.mixed)) * sigmaShade * tile;
-    if (fine > 0.0) {
-        clump += fine * clumpShade(pallMixed(detail, f.mixed), pallMixed(carpetFine(uvA + lightUv * 0.015, uvB + lightUv * 0.015, phaseBlend), f.mixed),
-                pallMixed(carpetFine(uvA + lightUv * 0.055, uvB + lightUv * 0.055, phaseBlend), f.mixed)) * sigmaShade * coarse * (0.25 * tile);
+    // A fully handed-off dry cell can still contain haze. Only dust and mist cast these billow shadows.
+    if (sigmaShade > 0.0) {
+        float clump = clumpShade(coarse, pallMixed(carpetCoarse(S, uvA + lightUv * 0.06, uvB + lightUv * 0.06, phaseBlend, fill), f.mixed),
+                pallMixed(carpetCoarse(S, uvA + lightUv * 0.22, uvB + lightUv * 0.22, phaseBlend, fill), f.mixed)) * sigmaShade * tile;
+        if (fine > 0.0) {
+            clump += fine * clumpShade(pallMixed(detail, f.mixed), pallMixed(carpetFine(uvA + lightUv * 0.015, uvB + lightUv * 0.015, phaseBlend), f.mixed),
+                    pallMixed(carpetFine(uvA + lightUv * 0.055, uvB + lightUv * 0.055, phaseBlend), f.mixed)) * sigmaShade * coarse * (0.25 * tile);
+        }
+        // shadow per light weighted by alignment with key light
+        s.shadeSun += clump * max(dot(keyDir, sunDir), 0.0);
+        s.shadeCap += clump * max(dot(keyDir, lightDir), 0.0);
+        s.shadeUp += clump * max(keyDir.y, 0.0);
+        s.shadeDown += clump * max(-keyDir.y, 0.0);
     }
-    // shadow per light weighted by alignment with key light
-    s.shadeSun += clump * max(dot(keyDir, sunDir), 0.0);
-    s.shadeCap += clump * max(dot(keyDir, lightDir), 0.0);
-    s.shadeUp += clump * max(keyDir.y, 0.0);
-    s.shadeDown += clump * max(-keyDir.y, 0.0);
     vec3 sc = d * dustW + h * PALL_HAZE_W + m * PALL_MIST_W;
     s.sigma += d + h + m;
     s.albedo += sc;

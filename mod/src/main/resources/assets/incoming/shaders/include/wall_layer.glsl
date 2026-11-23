@@ -39,35 +39,49 @@ WallLayer wallLayer(sampler2D atlas, sampler2D scene, vec2 pixel, float here, fl
     low.x /= 2;
     vec2 at = pixel / div - 0.5;
     ivec2 base = ivec2(floor(at + 0.5));
-    vec4 sum = vec4(0.0), fallback = vec4(0.0);
-    vec3 depths = vec3(0.0), otherDepths = vec3(0.0);
-    float weights = 0.0, other = 0.0;
-    for (int k = 0; k < 9; k++) {
-        ivec2 c = clamp(base + ivec2(k % 3 - 1, k / 3 - 1), ivec2(0), low - 1);
-        vec2 px = min((vec2(c) + 0.5) * div, vec2(size) - 0.5);
-        float there = pallScene(texelFetch(scene, ivec2(px), 0).r);
-        vec4 v = texelFetch(atlas, c, 0);
-        vec4 span = texelFetch(atlas, c + ivec2(low.x, 0), 0);
-        if (!pallValid(v) || !pallValid(span)) continue;
-        vec2 tent = max(1.5 - abs(vec2(c) - at), vec2(0.0));
-        float w = tent.x * tent.y;
-        wallCut(v, span, here);
-        float cover = 1.0 - v.a;
-        vec3 z = span.rgb / max(1.0 - span.a, 1e-6);
-        if (pallSamePlace(there, here)) {
-            sum += w * v;
-            depths += w * cover * z;
-            weights += w;
-        } else {
-            fallback += w * v;
-            otherDepths += w * cover * z;
-            other += w;
+    // Each column and row of the tent uses the same lattice coordinate,
+    // scene pixel and weight three times, including the clamped edge samples.
+    ivec3 offsets = ivec3(-1, 0, 1);
+    ivec3 cx = clamp(base.x + offsets, 0, low.x - 1);
+    ivec3 cy = clamp(base.y + offsets, 0, low.y - 1);
+    // History can leave dust in any of the nine taps. Only a completely
+    // transmitting neighbourhood is empty regardless of depth class or clipping.
+    if (texelFetch(atlas, ivec2(cx.y, cy.y), 0).a == 1.0) {
+        bool empty = true;
+        for (int y = 0; y < 3; y++) {
+            for (int x = 0; x < 3; x++) {
+                if (texelFetch(atlas, ivec2(cx[x], cy[y]), 0).a != 1.0) empty = false;
+            }
         }
+        if (empty) return wall;
     }
-    if (weights <= 0.0) {
-        sum = fallback;
-        depths = otherDepths;
-        weights = other;
+    ivec3 px = ivec3(min((vec3(cx) + 0.5) * div, float(size.x) - 0.5));
+    ivec3 py = ivec3(min((vec3(cy) + 0.5) * div, float(size.y) - 0.5));
+    vec3 wx = max(1.5 - abs(vec3(cx) - at.x), 0.0);
+    vec3 wy = max(1.5 - abs(vec3(cy) - at.y), 0.0);
+
+    vec4 sum = vec4(0.0);
+    vec3 depths = vec3(0.0);
+    float weights = 0.0;
+    // Only the matching depth class contributes. A thin foreground object
+    // with no valid matching tap uses the other class on the second pass.
+    for (int pass = 0; pass < 2; pass++) {
+        for (int y = 0; y < 3; y++) {
+            for (int x = 0; x < 3; x++) {
+                float there = pallScene(texelFetch(scene, ivec2(px[x], py[y]), 0).r);
+                if (pallSamePlace(there, here) != (pass == 0)) continue;
+                ivec2 c = ivec2(cx[x], cy[y]);
+                vec4 v = texelFetch(atlas, c, 0);
+                vec4 span = texelFetch(atlas, c + ivec2(low.x, 0), 0);
+                if (!pallValid(v) || !pallValid(span)) continue;
+                wallCut(v, span, here);
+                float w = wx[x] * wy[y];
+                sum += w * v;
+                depths += w * (1.0 - v.a) * (span.rgb / max(1.0 - span.a, 1e-6));
+                weights += w;
+            }
+        }
+        if (weights > 0.0) break;
     }
     if (weights > 0.0) {
         wall.light = sum / weights;

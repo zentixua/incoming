@@ -404,12 +404,14 @@ bool onlyWallGround(vec3 to, MediumSpans spans, float end) {
 // world (rays) cut at the surface by the noiseless field and the conventional smoke's mean field, light in the same ratio
 // to opacity (as upsample does). The mushroom contributes extinction on the same interval. Light and
 // transmittance never exceed the whole ray's (laid): the part in front of the surface is a part of it.
-vec4 mediumTo(float surface, ivec2 full, vec3 dir, float nearEnd, vec4 rays, vec4 laid, bool wall, MediumSpans spans) {
+vec4 mediumTo(float surface, ivec2 full, vec3 dir, float nearEnd, float nearDepth, vec4 nearWorld,
+              vec4 rays, vec4 laid, bool wall, MediumSpans spans) {
     float axis = max(dot(dir, PallForward), 1e-3), end = surface / axis;
     vec4 beyond = vec4(0.0, 0.0, 0.0, 1.0);
-    vec4 near = beyond;
+    vec4 near = nearWorld;
     float boundary = min(surface, nearEnd), split = boundary / axis;
-    if (PallFroxel.z > 0.0) near = froxelNear(Sampler11, PallFroxel, vec2(full) + 0.5, boundary);
+    // The opaque surface, wall and pane often end at the same froxel boundary.
+    if (PallFroxel.z > 0.0 && boundary != nearDepth) near = froxelNear(Sampler11, PallFroxel, vec2(full) + 0.5, boundary);
     bool useRays = surface > nearEnd && 1.0 - rays.a > 0.0;
     float ownership = 0.0;
     if (wall && PallSlot0[1].w > 0.5 && laid.a < 1.0 && (near.a < 1.0 || useRays)) {
@@ -534,9 +536,11 @@ void main() {
     // near pall in front of the rays, at this pixel's own depth: a block's edge cuts the volume at the block, with no ray of
     // another place and no history from it (the halos and trails of screen-space accumulation); world behind the volume's
     // end, sky — all of it up to there
+    float nearDepth = min(depth, nearEnd);
+    vec4 nearWorld = vec4(0.0, 0.0, 0.0, 1.0);
     if (PallFroxel.z > 0.0) {
-        vec4 near = froxelNear(Sampler11, PallFroxel, vec2(full) + 0.5, min(depth, nearEnd));
-        pall = froxelOver(near, pall);
+        nearWorld = froxelNear(Sampler11, PallFroxel, vec2(full) + 0.5, nearDepth);
+        pall = froxelOver(nearWorld, pall);
     }
     // Slot one is empty whenever the young wall owns dust. Its fire-map unit
     // then carries the resolved wall atlas, keeping the fragment sampler count at 16.
@@ -554,7 +558,7 @@ void main() {
             if (air.a < 1.0 || any(greaterThan(air.rgb, vec3(0.0)))) {
                 spans = mediumSpans(dir0);
                 haveSpans = true;
-                entry = mediumTo(wall.depth.x, full, dir0, nearEnd, rays, air, true, spans);
+                entry = mediumTo(wall.depth.x, full, dir0, nearEnd, nearDepth, nearWorld, rays, air, true, spans);
                 beforeWall = wallForeground(entry, air, dir0, wall.depth.xy / axis, wall.light.a, spans);
             }
             pall = insertWall(air, beforeWall, wall.light);
@@ -628,7 +632,7 @@ void main() {
         float surface = pallScene(texelFetch(Sampler1, full, 0).g);
         if (seeBehind(depth, surface)) {
             if (!haveSpans) spans = mediumSpans(dir0);
-            vec4 front = mediumTo(surface, full, dir0, nearEnd, rays, wall.light.a < 1.0 ? air : laid, false, spans);
+            vec4 front = mediumTo(surface, full, dir0, nearEnd, nearDepth, nearWorld, rays, wall.light.a < 1.0 ? air : laid, false, spans);
             if (wall.light.a < 1.0) {
                 vec4 nearWall = wallTo(wall, surface);
                 vec4 before = beforeWall;

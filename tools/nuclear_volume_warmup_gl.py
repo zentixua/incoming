@@ -14,8 +14,9 @@ import os
 import sys
 from time import perf_counter
 
-os.environ["MESA_SHADER_CACHE_DISABLE"] = "true"
-os.environ["LP_NUM_THREADS"] = "2"
+if __name__ == "__main__":
+    os.environ["MESA_SHADER_CACHE_DISABLE"] = "true"
+    os.environ["LP_NUM_THREADS"] = "2"
 
 import numpy as np
 import dust_wall_contract_gl as h
