@@ -24,6 +24,7 @@ final class ReplayMaterialDelivery extends ChannelOutboundHandlerAdapter {
     private static final String NAME = "incoming_replay_material";
     private static final byte[] NAME_BYTES = S2C.NukeMaterial.TYPE.id().toString().getBytes(StandardCharsets.UTF_8);
     private static final byte[] MANIFEST = S2C.NukeMaterialSources.TYPE.id().toString().getBytes(StandardCharsets.UTF_8);
+    private static final byte[] TICK = S2C.ReplayTick.TYPE.id().toString().getBytes(StandardCharsets.UTF_8);
     private static final byte[] SYNC = S2C.NukeSync.TYPE.id().toString().getBytes(StandardCharsets.UTF_8);
     private S2C.NukeSync sync;
     private Write syncFrame;
@@ -71,6 +72,9 @@ final class ReplayMaterialDelivery extends ChannelOutboundHandlerAdapter {
             int length = VarInt.read(in);
             if (matches(in, length, MANIFEST)) {
                 active = java.util.Set.copyOf(S2C.NukeMaterialSources.CODEC.decode(in).sources());
+            } else if (matches(in, length, TICK)) {
+                // Preserve ordering for the client that pairs one-shot effects with the replay tick marker.
+                flushGeometry(ctx);
             } else if (matches(in, length, SYNC)) {
                 int prefix = in.readerIndex() - bytes.readerIndex();
                 var packet = S2C.NukeSync.CODEC.decode(in);
@@ -84,7 +88,7 @@ final class ReplayMaterialDelivery extends ChannelOutboundHandlerAdapter {
                 }
             } else if (matches(in, length, BIRTH)) {
                 var id = S2C.NukeDetonation.CODEC.decode(in).id();
-                if (id != null && (active == null || !active.contains(id))) {
+                if (id != null) {
                     Write previous = births.put(id, new Write(bytes, promise));
                     if (previous != null) release(previous, null);
                     if (!scheduled) schedule(ctx);
@@ -125,12 +129,7 @@ final class ReplayMaterialDelivery extends ChannelOutboundHandlerAdapter {
             scheduled = false;
             // A cold recording can emit its membership after the cached packets. Filter the complete batch
             // before creating client Active objects or using a transfer slot.
-            flushSync(ctx);
-            births.forEach((id, write) -> {
-                if (active == null || active.contains(id)) ctx.writeAndFlush(write.bytes, write.promise);
-                else release(write, null);
-            });
-            births.clear();
+            flushGeometry(ctx);
             if (active != null) queue.entrySet().removeIf(e -> {
                 if (active.contains(e.getKey())) return false;
                 discard(e.getValue(), null);
@@ -146,6 +145,15 @@ final class ReplayMaterialDelivery extends ChannelOutboundHandlerAdapter {
             ctx.writeAndFlush(write.bytes, write.promise);
             if (!queue.isEmpty()) schedule(ctx);
         }, 50, TimeUnit.MILLISECONDS);
+    }
+
+    private void flushGeometry(ChannelHandlerContext ctx) {
+        flushSync(ctx);
+        births.forEach((id, write) -> {
+            if (active == null || active.contains(id)) ctx.writeAndFlush(write.bytes, write.promise);
+            else release(write, null);
+        });
+        births.clear();
     }
 
     private void flushSync(ChannelHandlerContext ctx) {

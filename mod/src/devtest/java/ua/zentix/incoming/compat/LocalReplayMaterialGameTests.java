@@ -86,6 +86,9 @@ public final class LocalReplayMaterialGameTests {
                 .putLong(20).put((byte) 0).put((byte) 0);
         // One replay snapshot contains stale geometry as well as material. Its manifest comes last.
         server.channel().eventLoop().submit(() -> {
+            // A second seek starts with membership from the previous playhead position.
+            server.channel().write(new ClientboundCustomPayloadPacket(new S2C.NukeMaterialSources(
+                    IntStream.rangeClosed(1, 40).mapToObj(i -> new UUID(0, i)).toList())));
             var all = new java.util.ArrayList<Detonation>();
             var refs = new java.util.HashMap<Integer, UUID>();
             for (int i = 40; i >= 1; i--) {
@@ -100,7 +103,8 @@ public final class LocalReplayMaterialGameTests {
                     server.channel().write(new ClientboundCustomPayloadPacket(part));
             }
             server.channel().write(new ClientboundCustomPayloadPacket(new S2C.NukeSync(all, List.of(), refs)));
-            server.channel().writeAndFlush(new ClientboundCustomPayloadPacket(new S2C.NukeMaterialSources(ids)));
+            server.channel().write(new ClientboundCustomPayloadPacket(new S2C.NukeMaterialSources(ids)));
+            server.channel().writeAndFlush(new ClientboundCustomPayloadPacket(new S2C.ReplayTick(1200, true)));
         }).syncUninterruptibly();
         StrikeGameTests.gameSpeed(h);
         h.succeedWhen(() -> {
@@ -111,6 +115,10 @@ public final class LocalReplayMaterialGameTests {
             var geometry = received.stream().filter(S2C.NukeDetonation.class::isInstance).map(S2C.NukeDetonation.class::cast)
                     .map(S2C.NukeDetonation::id).toList();
             h.assertTrue(geometry.size() == ids.size() && geometry.containsAll(ids), "archived geometry revived " + geometry);
+            var sequence = List.copyOf(received);
+            int marker = IntStream.range(0, sequence.size()).filter(i -> sequence.get(i) instanceof S2C.ReplayTick).findFirst().orElseThrow();
+            h.assertTrue(sequence.subList(0, marker).stream().filter(S2C.NukeDetonation.class::isInstance).count() == 17,
+                    "geometry crossed the replay tick marker");
             var sync = received.stream().filter(S2C.NukeSync.class::isInstance).map(S2C.NukeSync.class::cast).findFirst().orElseThrow();
             h.assertTrue(sync.detonations().size() == 17 && sync.materials().values().containsAll(ids), "cold sync recreated archived sources");
             var inboxes = new java.util.HashMap<UUID, MaterialInbox>();
