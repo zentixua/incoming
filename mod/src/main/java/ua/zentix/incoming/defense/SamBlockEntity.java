@@ -13,6 +13,7 @@ import net.minecraft.sounds.SoundSource;
 import net.minecraft.world.Containers;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.level.Level;
+import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.entity.BlockEntity;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.levelgen.Heightmap;
@@ -28,6 +29,7 @@ import ua.zentix.incoming.registry.ModItems;
 import ua.zentix.incoming.target.Sides;
 import ua.zentix.incoming.target.Sightings;
 import ua.zentix.incoming.util.Magazine;
+import ua.zentix.incoming.util.SignalEdge;
 import ua.zentix.incoming.util.Terrain;
 
 import java.util.ArrayList;
@@ -72,10 +74,12 @@ public class SamBlockEntity extends BlockEntity {
     /** Sky above the SAM is blocked: it does not fire under a roof. */
     private boolean covered;
     /**
-     * Redstone alarm ({@link SamBlock#getSignal}): the latest sweep saw a hostile projectile, whether or not the SAM
-     * would fire at it. Saved, so a reloaded chunk powers its neighbours as it did when saved until the next sweep.
+     * The neighbours were told of the alarm state ({@link SamBlock#ALARM}) since this block entity loaded (not saved):
+     * the first sweep with ready surroundings has them recheck it once, in case a change was saved untold.
      */
-    private boolean alarm;
+    private boolean signalled;
+    /** An alarm change whose notices wait for unready chunks ({@link SignalEdge}). */
+    private boolean pending;
 
     public SamBlockEntity(BlockPos pos, BlockState state) {
         super(ModBlockEntities.SAM.get(), pos, state);
@@ -110,9 +114,9 @@ public class SamBlockEntity extends BlockEntity {
         return stock.load(stack);
     }
 
-    /** The latest radar sweep saw a hostile projectile: redstone alarm on. */
+    /** The latest radar sweep saw a hostile projectile: redstone alarm on ({@link SamBlock#ALARM}). */
     public boolean alarm() {
-        return alarm;
+        return getBlockState().getValue(SamBlock.ALARM);
     }
 
     /** Comparator signal follows storage fullness. */
@@ -193,12 +197,22 @@ public class SamBlockEntity extends BlockEntity {
         scope(level, antenna, tracks);
     }
 
-    /** Redstone alarm follows the sweep; neighbours learn of a change on the same tick (weak power reaches only them). */
+    /**
+     * Redstone alarm follows the sweep. The state changes without neighbour updates; the neighbours learn of it on the
+     * same tick when every chunk their circuit can reach is ready, otherwise at the first sweep that finds them ready.
+     */
     private void setAlarm(ServerLevel level, BlockPos pos, boolean on) {
-        if (alarm == on) return;
-        alarm = on;
-        setChanged();
-        level.updateNeighborsAt(pos, getBlockState().getBlock());
+        BlockState state = getBlockState();
+        if (state.getValue(SamBlock.ALARM) != on) {
+            state = state.setValue(SamBlock.ALARM, on);
+            level.setBlock(pos, state, Block.UPDATE_CLIENTS | Block.UPDATE_KNOWN_SHAPE);
+            pending = true;
+        }
+        if ((pending || !signalled) && SignalEdge.ready(level, pos)) {
+            SignalEdge.notify(level, pos, state, pending);
+            pending = false;
+            signalled = true;
+        }
     }
 
     /** Center of rail {@code k}'s canister: the missile stands at full length inside and launches upward. */
@@ -236,7 +250,6 @@ public class SamBlockEntity extends BlockEntity {
         tag.put("stock", stock.serializeNBT(registries));
         tag.putInt("ready", ready);
         tag.putInt("reload", reload);
-        tag.putBoolean("alarm", alarm);
     }
 
     @Override
@@ -246,6 +259,5 @@ public class SamBlockEntity extends BlockEntity {
         if (tag.contains("stock")) stock.deserializeNBT(registries, tag.getCompound("stock"));
         ready = tag.getInt("ready");
         reload = tag.getInt("reload");
-        alarm = tag.getBoolean("alarm");
     }
 }

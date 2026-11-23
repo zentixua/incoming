@@ -21,8 +21,10 @@ paths:
   “Blackout (…): work unit (queue|relight|cascade)” with a breakdown by work kind and “outside kinds” time (GC, thread
   preemption are not blackout work; over half the unit = INFO, otherwise WARN)), `Blackouts` (entry points: explosion
   near a node, the nuke, `GridCommand`; events), `SubstationBlock`/`Substations` (node block, “live”; its `powered`
-  is its redstone output, weak 15 from every face: `Substations.sync` writes it with `ChunkLights.FLAGS`, which skip
-  neighbour updates, so it calls `updateNeighborsAt` itself; `RedstoneGameTests`), `ChunkSaves` (no
+  is its redstone output, weak 15 from every face: `Substations.sync` writes it without neighbour updates and tells
+  the neighbours through `util/SignalEdge` once its reach is ready, remembering told nodes in `BlackoutWorld.signalled`
+  (every node again once after a start); placed where the grid is destroyed it goes dead in `onPlace` before the
+  placement's notices; `RedstoneGameTests`, `RedstoneReviewGameTests`), `ChunkSaves` (no
   twins on disk: `ChunkDataEvent.Save` writes sections with lamps and `isLightOn=false`, `ChunkDataEvent.Load` turns
   off dark-district lamps in the palette before the chunk enters the world; `BlackoutWorld` removes their disk light
   via `checkBlock` when neighbors load). A twin replaces `lit=false`: shaders (Complementary) light lamps by block ID,

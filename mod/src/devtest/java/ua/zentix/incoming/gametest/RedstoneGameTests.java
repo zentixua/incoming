@@ -2,6 +2,7 @@ package ua.zentix.incoming.gametest;
 
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
+import net.minecraft.core.SectionPos;
 import net.minecraft.gametest.framework.GameTest;
 import net.minecraft.gametest.framework.GameTestHelper;
 import net.minecraft.nbt.CompoundTag;
@@ -131,9 +132,11 @@ public final class RedstoneGameTests {
             if (removed[0] < 0 && hostile[0].isRemoved()) removed[0] = t;
             if (on[0] >= 0 && off[0] < 0 && !samA.alarm()) {
                 off[0] = t;
-                h.assertTrue(removed[0] >= 0, "the alarm dropped while the hostile Shahed was still flying");
+                // off exactly when the radar no longer sees it: gone, or out of sight in its dive
+                h.assertTrue(removed[0] >= 0 || Radar.scan(level, antenna, InterceptorSpec.SAM.radarRange(), InterceptorSpec.SAM.engageRange(), crew.getUUID())
+                        .stream().noneMatch(Radar.Track::hostile), "the alarm dropped while the radar still saw the hostile Shahed");
             }
-            if (off[0] >= 0 && retracted[0] < 0 && in) retracted[0] = t;
+            if (off[0] >= 0 && extended[0] >= 0 && retracted[0] < 0 && in) retracted[0] = t;
             if (off[0] >= 0 && unlit[0] < 0 && !lit) unlit[0] = t;
         });
         h.startSequence()
@@ -153,8 +156,8 @@ public final class RedstoneGameTests {
                     h.assertTrue(on[0] - launched[0] <= SamBlockEntity.SWEEP, "alarm " + (on[0] - launched[0]) + " ticks after the launch");
                     h.assertTrue(onB[0] >= 0 && onB[0] - launched[0] <= SamBlockEntity.SWEEP,
                             "SAM B, loaded but with no missile on its rail, gave no alarm within a sweep: " + (onB[0] - launched[0]));
-                    h.assertTrue(extended[0] - on[0] <= 2, "piston extended " + (extended[0] - on[0]) + " ticks after the alarm");
-                    h.assertTrue(off[0] - removed[0] <= SamBlockEntity.SWEEP, "alarm dropped " + (off[0] - removed[0]) + " ticks after the target was gone");
+                    h.assertTrue(extended[0] >= 0 && extended[0] - on[0] <= 2, "piston extended " + (extended[0] - on[0]) + " ticks after the alarm");
+                    h.assertTrue(removed[0] < 0 || off[0] - removed[0] <= SamBlockEntity.SWEEP, "alarm dropped " + (off[0] - removed[0]) + " ticks after the target was gone");
                     h.assertTrue(unlit[0] - off[0] <= 4, "lamp went out " + (unlit[0] - off[0]) + " ticks after the alarm dropped");
                     // the base is a moving piston for the 2 ticks of its retraction
                     h.assertTrue(retracted[0] - off[0] <= 4, "piston retracted " + (retracted[0] - off[0]) + " ticks after the alarm dropped");
@@ -220,7 +223,7 @@ public final class RedstoneGameTests {
 
     /**
      * Restart while tracking: an ownerless SAM in a distant chunk sees a stranger's Shahed (an ownerless SAM counts every
-     * projectile hostile) and powers its dust; the chunk unloads with the alarm saved in the block entity on disk. The
+     * projectile hostile) and powers its dust; the chunk unloads with the alarm saved in its block state on disk. The
      * Shahed is removed, the chunk loads again: the dust stays powered by the saved alarm until the next sweep, which drops
      * the signal and the dust together.
      */
@@ -262,8 +265,8 @@ public final class RedstoneGameTests {
                 .thenWaitUntil(() -> GridGameTests.unloaded(h, level, far))
                 .thenExecute(() -> {
                     VirtualFlights.get(level).clear(level, p -> p == d[0]);
-                    CompoundTag saved = savedSam(level, far, at[0]);
-                    h.assertTrue(saved != null && saved.getBoolean("alarm"), "the alarm is not in the saved block entity: " + saved);
+                    String saved = savedSam(level, far, at[0]);
+                    h.assertTrue("true".equals(saved), "the saved chunk holds the SAM with alarm=" + saved);
                     reloading[0] = true;
                     GridGameTests.hold(level, far);
                 })
@@ -304,7 +307,15 @@ public final class RedstoneGameTests {
         Node node = PowerGrid.get(level).nodeAt(h.absolutePos(center));
         h.assertTrue(node != null, "the substation did not become a grid node");
         Vec3 c = Vec3.atCenterOf(h.absolutePos(center));
-        h.onEachTick(() -> assertDust(h, dust, powered(h, center)));
+        // repairs by time: due on the grid clock, applied by the once-a-second sync
+        boolean[] timed = {false};
+        long[] due = {-1};
+        h.onEachTick(() -> {
+            assertDust(h, dust, powered(h, center));
+            if (!timed[0] || powered(h, center)) return;
+            if (due[0] < 0 && PowerGrid.get(level).downOutage(node.id(), Blackouts.now(level)).isEmpty()) due[0] = level.getGameTime();
+            if (due[0] >= 0) h.assertTrue(level.getGameTime() - due[0] <= 20, "repairs were due " + (level.getGameTime() - due[0]) + " ticks ago, still out");
+        });
         h.startSequence()
                 .thenWaitUntil(() -> h.assertTrue(powered(h, center) && extended(h, piston), "a working substation does not power the piston"))
                 .thenExecute(() -> {
@@ -320,13 +331,17 @@ public final class RedstoneGameTests {
                     assertDust(h, dust, true);
                     cfg.gridRestoreHours.set(0.002);
                     Blackouts.knockOut(level, node);
+                    timed[0] = true;
                     h.assertFalse(powered(h, center), "the knock-out did not take the substation down");
                 })
                 .thenWaitUntil(() -> {
                     h.assertTrue(PowerGrid.get(level).downOutage(node.id(), Blackouts.now(level)).isEmpty(), "repairs are not due yet");
                     h.assertTrue(powered(h, center), "repairs are due, but the substation is still out");
                 })
-                .thenExecute(() -> Blackouts.blackout(level, c, 64, 1000, -1))
+                .thenExecute(() -> {
+                    timed[0] = false;
+                    Blackouts.blackout(level, c, 64, 1000, -1);
+                })
                 .thenIdle(25)
                 .thenExecute(() -> {
                     BlockPos abs = h.absolutePos(center);
@@ -439,14 +454,22 @@ public final class RedstoneGameTests {
         return new BlockPos(p.getMinBlockX() + 6, top + 3, p.getMinBlockZ() + 6);
     }
 
-    /** The SAM's block entity as saved in the chunk on disk; null if absent. */
-    private static CompoundTag savedSam(ServerLevel level, ChunkPos chunk, BlockPos pos) {
+    /**
+     * The SAM's {@code alarm} as saved in its chunk section's palette on disk (the fixture has one SAM per section); null
+     * if absent.
+     */
+    private static String savedSam(ServerLevel level, ChunkPos chunk, BlockPos pos) {
         Optional<CompoundTag> tag = level.getChunkSource().chunkMap.read(chunk).join();
         if (tag.isEmpty()) return null;
-        ListTag list = tag.get().getList("block_entities", Tag.TAG_COMPOUND);
-        for (int i = 0; i < list.size(); i++) {
-            CompoundTag be = list.getCompound(i);
-            if (be.getInt("x") == pos.getX() && be.getInt("y") == pos.getY() && be.getInt("z") == pos.getZ()) return be;
+        ListTag sections = tag.get().getList("sections", Tag.TAG_COMPOUND);
+        for (int i = 0; i < sections.size(); i++) {
+            CompoundTag section = sections.getCompound(i);
+            if (section.getByte("Y") != SectionPos.blockToSectionCoord(pos.getY())) continue;
+            ListTag palette = section.getCompound("block_states").getList("palette", Tag.TAG_COMPOUND);
+            for (int k = 0; k < palette.size(); k++) {
+                CompoundTag entry = palette.getCompound(k);
+                if (entry.getString("Name").equals("incoming:sam")) return entry.getCompound("Properties").getString("alarm");
+            }
         }
         return null;
     }

@@ -201,7 +201,7 @@ With LuckPerms, for example:
 Two blocks give redstone, so contraptions and computers react without any script. Both give weak power of strength 15
 from all six sides, like a daylight detector: dust, repeaters, lamps, pistons, doors, Create's Redstone Link and
 ComputerCraft's `redstone.getInput(side)` next to them read it; it does not pass through the block they touch. Neighbours
-learn of a change on the tick it happens. It works the same in single-player, a LAN world and on a dedicated server.
+learn of a change on the tick it happens, observers included. It works the same in single-player, a LAN world and on a dedicated server.
 
 | Block | Signal on | Signal off |
 |---|---|---|
@@ -213,7 +213,8 @@ learn of a change on the tick it happens. It works the same in single-player, a 
 - The substation's signal follows the substation itself, not its district: another substation's outage over it leaves
   it on. Details: [Blackout](blackout.md).
 - A block in an unloaded chunk keeps the signal it was saved with and updates within a second once its chunk works
-  again.
+  again. Within 18 blocks of ground that is not loaded, its neighbours learn of a change once that ground loads: the
+  circuit's synchronous update would otherwise load chunks during the server tick.
 
 A bunker door that closes on alarm, with Create: put a Redstone Link (transmitter) against the SAM and a receiver on
 the same frequency at the bunker. The receiver powers a Gearshift between the shaft and a Mechanical Piston that holds
@@ -221,8 +222,15 @@ the door wall: while hostile targets are in the air the gearshift reverses the r
 the sky is clear it opens again. A ComputerCraft computer with the SAM behind it can do the same in a script:
 
 ```lua
+-- the SAM behind the computer, a siren or door circuit on its left
+local function check()
+  local alarm = redstone.getInput("back")
+  redstone.setOutput("left", alarm)
+  print(alarm and "Air raid" or "Sky clear")
+end
+check()
 while true do
   os.pullEvent("redstone")
-  print(redstone.getInput("back") and "Air raid" or "Sky clear")
+  check()
 end
 ```

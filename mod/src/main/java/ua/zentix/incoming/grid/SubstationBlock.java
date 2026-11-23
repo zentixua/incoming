@@ -21,6 +21,7 @@ import net.minecraft.world.phys.shapes.VoxelShape;
 import org.jetbrains.annotations.Nullable;
 import ua.zentix.incoming.IncomingConfig;
 import ua.zentix.incoming.net.ClientHooks;
+import ua.zentix.incoming.util.SignalEdge;
 
 /**
  * Transformer substation: when placed, a grid node of radius {@code grid.node_radius}; a nearby strike knocks it out,
@@ -67,6 +68,13 @@ public class SubstationBlock extends HorizontalDirectionalBlock {
         if (level instanceof ServerLevel server && !oldState.is(this)) {
             PowerGrid grid = PowerGrid.get(server);
             if (grid.nodeAt(pos) == null) grid.addNode(pos, IncomingConfig.SERVER.gridNodeRadius.get(), true);
+            // Where a nuclear blast destroyed the grid it never works. Placed by any path (player, deployer, command,
+            // structure), it goes dead here, before the placing setBlock tells the neighbours: that call then finds a
+            // different state and skips its notices (Level.markAndNotifyBlock), and this one tells them of the dead
+            // state, so they never see a false 15.
+            if (state.getValue(POWERED) && grid.destroyed(pos.getX() >> 4, pos.getZ() >> 4, Blackouts.now(server))) {
+                level.setBlock(pos, state.setValue(POWERED, false), Block.UPDATE_ALL);
+            }
         }
     }
 
@@ -76,6 +84,8 @@ public class SubstationBlock extends HorizontalDirectionalBlock {
             PowerGrid grid = PowerGrid.get(server);
             Node node = grid.nodeAt(pos);
             if (node != null && node.block()) grid.removeNode(node.id());
+            // Removed while working: ruin and collapse writes skip neighbour updates, and dust beside it would keep 15.
+            if (state.getValue(POWERED) && SignalEdge.ready(level, pos)) level.updateNeighborsAt(pos, this);
         }
         super.onRemove(state, level, pos, newState, movedByPiston);
     }

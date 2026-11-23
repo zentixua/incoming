@@ -29,7 +29,8 @@ Ingredients: 3 lightning rods, 2 copper ingots, 1 redstone block and 3 iron ingo
 - `/incoming grid restore` brings power back at once everywhere, the destroyed zone included.
 - A substation gives a redstone signal while it works: strength 15 from every side, like a daylight detector. It goes
   off on the tick it is knocked out (by a blast, a nuclear strike or `/incoming grid node knockout`) and comes back when
-  power starts coming back to its area (within a second) or at once with `/incoming grid restore`. An outage from
+  power starts coming back to its area (within a second) or at once with `/incoming grid restore`; near the edge of
+  the loaded world it waits until the ground around it loads. An outage from
   another substation or `/incoming grid blackout` that only darkens its district does not knock it out, so the signal
   stays: it tells whether this substation works, not whether the lamps around it are lit. Examples:
   [For server owners and pack makers](packs.md#redstone).
