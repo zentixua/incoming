@@ -6,9 +6,11 @@ import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.phys.Vec3;
+import net.neoforged.bus.api.Event;
 import net.neoforged.bus.api.IEventBus;
 import net.neoforged.fml.event.lifecycle.FMLCommonSetupEvent;
 import net.neoforged.neoforge.event.entity.living.LivingDeathEvent;
+import net.neoforged.neoforge.event.entity.player.PlayerEvent;
 import net.neoforged.neoforge.event.tick.PlayerTickEvent;
 import net.neoforged.neoforge.server.ServerLifecycleHooks;
 import org.jetbrains.annotations.Nullable;
@@ -104,12 +106,15 @@ public final class Progress {
 
     /**
      * The blast wave of {@code d} has just hit {@code p} ({@code BlastFront}: the front reached them, from 0.3 psi, and its
-     * hit was applied; the wave's own injury law decided what it did to them). An online, real player who can be hurt is
+     * hit was applied; the wave's own injury law decided what it did to them). A burial alone is no hit: a body that left
+     * its collapsed house before the rubble job ran met no wave. An online, real player who can be hurt is
      * watched until the wave has passed them ({@link #survivalDue}), with the peak overpressure at their position, shelter
      * or not. A strike cleared before its front arrives hits no one, so it watches no one.
      */
     public static void blasted(ServerLevel level, Detonation d, ServerPlayer p) {
         if (p.isFakePlayer() || !p.isAlive() || p.isSpectator() || p.getAbilities().invulnerable) return;
+        // the front's tick ring may catch a body just beyond the pressure the wave hits with
+        if (d.overpressureKpa(p.position()) < Detonation.HIT_KPA) return;
         if (level.getServer().getPlayerList().getPlayer(p.getUUID()) != p) return;
         p.getData(ModAttachments.SURVIVAL).add(new Watch(level.dimension(), survivalDue(d, p.position(), level.getGameTime()), d.psi(p.position()), d.yieldKt()));
     }
@@ -142,6 +147,11 @@ public final class Progress {
         }
     }
 
+    /** Leaving the burst's dimension ends every survival watch, even with a quick return. */
+    public static void onChangeDimension(PlayerEvent.PlayerChangedDimensionEvent e) {
+        if (e.getEntity() instanceof ServerPlayer p && p.hasData(ModAttachments.SURVIVAL)) p.getData(ModAttachments.SURVIVAL).clear();
+    }
+
     /** A death ends every survival watch: the respawned player object starts without them. */
     public static void onDeath(LivingDeathEvent e) {
         if (e.getEntity() instanceof ServerPlayer p && p.hasData(ModAttachments.SURVIVAL)) p.getData(ModAttachments.SURVIVAL).clear();
@@ -150,19 +160,39 @@ public final class Progress {
     // ---------------------------------------------------------------- grid
 
     /**
-     * Everyone standing in a district the outage covered (as the grid decides coverage: by district seed) when its power is
-     * all back, unless another outage still keeps that district dark.
+     * Outage {@code o} is over ({@code Blackouts.restored}, queued after its {@link GridRestoreEvent} so it is delivered at
+     * the end of the tick, outside the grid's loops). Internal to Incoming: it carries the outage's own record, which the
+     * public event does not.
      */
-    public static void onRestore(GridRestoreEvent e) {
+    public static final class Relit extends Event {
+        private final ResourceKey<Level> dimension;
+        private final Outage outage;
+
+        public Relit(ResourceKey<Level> dimension, Outage outage) {
+            this.dimension = dimension;
+            this.outage = outage;
+        }
+    }
+
+    /**
+     * Everyone standing in a district the outage really darkened (the grid's own coverage by district seed, and its cascade
+     * reached the district no later than its light came back) when the outage is over, unless another outage still keeps that
+     * district dark.
+     */
+    public static void onRelit(Relit e) {
         MinecraftServer server = ServerLifecycleHooks.getCurrentServer();
-        ServerLevel level = server == null ? null : server.getLevel(e.getDimension());
+        ServerLevel level = server == null ? null : server.getLevel(e.dimension);
         if (level == null) return;
         PowerGrid grid = PowerGrid.get(level);
         long now = Blackouts.now(level);
+        Outage o = e.outage;
         for (ServerPlayer p : online(level)) {
             int cx = p.getBlockX() >> 4, cz = p.getBlockZ() >> 4;
-            if (!Outage.covers(e.getCentreX(), e.getCentreZ(), e.getRadius(), Districts.of(cx, cz)) || grid.dark(cx, cz, now)) continue;
-            ModTriggers.BLACKOUT_RESTORED.get().trigger(p, e.isNuclear());
+            long district = Districts.of(cx, cz);
+            // a cascade due at the very grid instant of the restore did darken it: the grid clock advances slower than
+            // game ticks (a stopped day), so the district stayed dark for real ticks
+            if (!o.covers(district) || o.darkAt(district) > o.lightAt(district) || grid.dark(cx, cz, now)) continue;
+            ModTriggers.BLACKOUT_RESTORED.get().trigger(p, o.byDamage());
         }
     }
 

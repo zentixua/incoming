@@ -212,10 +212,8 @@ final class BlastFront {
             if (!e.isAlive() || e.isSpectator() || e.isPassenger()) continue;
             long t0 = clock.begin();
             Entity owner = h.owner() == null ? null : level.getPlayerByUUID(h.owner());
-            if (h.buried()) {
-                BlastBody.bury(level, h.d(), e, owner);
-                if (e instanceof ServerPlayer p) Progress.blasted(level, h.d(), p);
-            } else if (!e.getData(ModAttachments.NUKE_SEEN).blasted(h.d().id())) {
+            if (h.buried()) BlastBody.bury(level, h.d(), e, owner);
+            else if (!e.getData(ModAttachments.NUKE_SEEN).blasted(h.d().id())) {
                 // once per body and detonation: loading it later brings no second wave, and a body loaded on the tick the front
                 // crosses it and caught up first (LateExposure) is not hit again
                 e.setData(ModAttachments.NUKE_SEEN, e.getData(ModAttachments.NUKE_SEEN).withBlast(h.d().id()));

@@ -430,12 +430,17 @@ public final class ProgressGameTests {
         // beyond any outage another batch may restore meanwhile (a nuclear one reaches at most 16 384 blocks)
         Credited away = Credited.online(h, "progress_away", 0, RANGE_CENTER);
         away.moveTo(Vec3.atCenterOf(node).add(radius + 40_000, 0, 0));
-        h.assertTrue(Blackouts.restore(level, Vec3.atCenterOf(node), 8, 0) >= 1, "nothing to restore");
-        h.succeedWhen(() -> {
-            Orders.deliver(level);
-            h.assertTrue(done(inside, "strikes/lights_back"), "the player in the area has no Lights Back On");
-            h.assertFalse(done(away, "strikes/lights_back"), "a player outside the area got Lights Back On");
-        });
+        int cx = inside.getBlockX() >> 4, cz = inside.getBlockZ() >> 4;
+        // restored only once its cascade has darkened the player's district: a district never dark earns nothing
+        h.startSequence()
+                .thenWaitUntil(() -> h.assertTrue(grid.dark(cx, cz, Blackouts.now(level)), "waiting for the player's district to go dark"))
+                .thenExecute(() -> h.assertTrue(Blackouts.restore(level, Vec3.atCenterOf(node), 8, 0) >= 1, "nothing to restore"))
+                .thenWaitUntil(() -> {
+                    Orders.deliver(level);
+                    h.assertTrue(done(inside, "strikes/lights_back"), "the player in the area has no Lights Back On");
+                })
+                .thenExecute(() -> h.assertFalse(done(away, "strikes/lights_back"), "a player outside the area got Lights Back On"))
+                .thenSucceed();
     }
 
     // ---------------------------------------------------------------- data

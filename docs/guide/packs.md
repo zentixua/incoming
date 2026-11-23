@@ -133,8 +133,8 @@ Your own advancements can use the triggers with these conditions (all optional, 
   the blast model, shelter or not, and waits until the positive phase there has passed plus one second for a thrown
   body to land. A player who left before the front, a cleared strike, creative and spectator mode get nothing; a
   death, logout or change of dimension before then cancels it.
-- Lights Back On follows the grid's districts: the player's district must have been in the outage and must be lit
-  once it ends (another outage over it keeps it dark).
+- Lights Back On follows the grid's districts: the player's district must have gone dark in the outage and must be
+  lit once it ends (another outage over it keeps it dark).
 
 ```mcfunction
 # a sidebar of rounds shot down
