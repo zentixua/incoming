@@ -67,7 +67,7 @@ What already connects:
   644-670`). Collapse offers its falling positions as `Detonate` events (`J/warhead/StrikeCollapse.java:421-435`).
 - Own damage types in vanilla tags (`D/minecraft/tags/damage_type/`): strike, shockwave and nuclear blast are
   `is_explosion` (Blast Protection applies), nuclear thermal is `is_fire`; radiation, thermal, shockwave and burn
-  shock bypass armor; debris damages helmets. Death messages are localized.
+  shock bypass armor; burn shock also bypasses effects; debris damages helmets. Death messages are localized.
 - Recipes are datapack JSON. The Shahed, Lancet, cruise missile, ICBM, interceptor, fixed launcher and SAM have a
   Create variant and a vanilla fallback through `neoforge:mod_loaded`; the rest are vanilla-only. Create mechanical
   crafters build them.
@@ -96,8 +96,8 @@ Closed points, most blocking first:
    `FlashScorch.java:510-535`, `CraterJob.java:280-384`). A server owner can only switch nuclear damage off for all.
 3. **Owner identity is fragile.** The explosion's source entity is the projectile, which extends `Entity`, not
    vanilla `Projectile` (`J/entity/StrikeProjectile.java:76`), so vanilla `Explosion.getIndirectSourceEntity()`
-   resolves no player. The damage source carries the owner only when the owner is online in the same level
-   (`J/warhead/Warheads.java:601`); debris, fatal radiation sickness, burn shock and catch-up nuclear exposure carry
+   resolves no player. Blast damage carries the owner only when the owner is online in the same level
+   (`J/warhead/Warheads.java:601`; the bunker buster's kinetic hit looks the owner up server-wide); debris, fatal radiation sickness, burn shock and catch-up nuclear exposure carry
    none.
 4. **No permission nodes.** Launch rights are global switches (`launch.designator_for_everyone`, `nuclear.ops_only`)
    plus the nuclear gates (feature flag, second key, trust of operators and the host).
@@ -131,7 +131,8 @@ Rules for every item (AGENTS.md "Mod boundaries" and concept): loader channels f
 maps, PermissionAPI, vanilla advancements and statistics); a mod-specific call only in an optional `compat/` module
 that loads with that mod; no vanilla mixins; settings stay causes, not consequences; nothing returns a damage or
 crater multiplier. Events are posted only on the server thread, never from worker phases. A PR that changes packet
-or entity-data formats bumps `IncomingNetwork.PROTOCOL`; persisted fields get old-save defaults.
+or entity-data formats bumps `IncomingNetwork.PROTOCOL`; persisted fields get old-save
+defaults; a release whose behavior or lang keys differ from the last shipped jar bumps it too.
 
 How the popular mods do it (from their 1.21.1 source unless noted): Create Big Cannons keeps munition and block-armor
 numbers in datapacks and posts a cancellable per-block projectile damage check; Superb Warfare, TACZ and Ballistix
@@ -149,30 +150,42 @@ Cost: S = up to a day with tests, M = a few days, L = a week or more.
 **A1. Order and round events (M–L).** A small `ua.zentix.incoming.api` package of NeoForge events on
 `NeoForge.EVENT_BUS`, posted on the server thread. The contract follows one order lifecycle, the same for every
 entry (designator packet, command, fixed launcher, queued second-key and warning orders, immediate operator burst):
-- `StrikeOrderEvent.Request` (cancellable): validated request before acceptance and payment: order UUID, actor
-  (player, launcher, command source), weapon, count, target, nuclear yield. Cancel means nothing is charged. Hard
-  nuclear gates (feature flag, second key, trust) stay separate from this veto.
-- `StrikeOrderEvent.Accepted`: the order is paid and queued; carries the accepted round count.
+- `StrikeOrderEvent.Request` (cancellable, validation only): order UUID, actor (player, launcher, command source),
+  weapon, count, target, nuclear yield. Listeners decide yes or no here and debit nothing. Hard nuclear gates
+  (feature flag, second key, trust) stay separate from this veto.
+- `StrikeOrderEvent.Rejected` for every request that is not admitted (vetoed, short of munitions, refused by the
+  world), so no request is left without an answer.
+- `StrikeOrderEvent.Accepted` after the order is recorded: the admitted round count (from the clamped loadout) and
+  the payment mode: paid upfront (player salvo), paid per release from the launcher magazine (fixed launcher, as
+  today), or waived (console, operator).
 - `StrikeRoundEvent.Released` per round: round UUID (stable across virtual flight and rematerialization; the world
   entity is optional), order UUID, owner UUID, origin, target, optional tag.
 - `StrikeRoundEvent.Ended` per round: one terminal outcome: impact (position, charge), intercepted (SAM position and
   owner), failed or recalled (refunded or not).
-- `NuclearDetonationEvent`: position, yield, burst, order UUID.
+- `NuclearDetonationEvent`: position, yield, burst, order UUID. For a nuclear order the authoritative round is the
+  saved scheduled strike, which carries the round UUID; the booster entity, if any, is only its visible part, and
+  timer-only or no-flight bursts (`nuke now`) still get `Released` and `Ended`.
 - `GridOutageEvent` and `GridRestoreEvent`: outage UUID, dimension, centre, radius, optional node; posted when the
   outage is accepted and when restoration completes.
-Each round produces exactly one `Ended`. A pack that charges its own cost or cooldown does it in `Request` and owns
-its refund through `Ended`; Incoming promises no rollback of foreign debits. Getters return primitives and UUIDs.
+Each request ends in exactly one `Rejected` or `Accepted`, each admitted round in exactly one `Ended`. A pack that
+charges its own cost or cooldown checks in `Request`, debits in `Accepted` and settles in `Ended`; Incoming promises no
+rollback of foreign debits. Listeners must not start a new order synchronously inside `Request`; a nested order is
+queued to the next tick. Getters return primitives and UUIDs.
 Lights up: KubeJS (its built-in `NativeEvents` subscribes to any game-bus event), Almighty (explicit rules subscribe
 to discoverable game-bus event classes and serialize public getters; a rule disables itself above 200 emits in
 20 ticks, so per-round events suit it and bulk block events do not), Java addons. Risk: medium; the order paths are
-several and some state is persisted (`SalvoData`, virtual flights), so the PR first writes the lifecycle down.
+several and some state is persisted (`SalvoData`, virtual flights, scheduled nuclear strikes), so the PR first writes
+the lifecycle down and probes a tagged ICBM during boost, after burnout and after restart, a `nuke now` waiting for
+its chunk, a fixed-launcher shot that fails after admission, and a veto by a second listener after a first one.
 
-**A2. Command results, status and tags (S–M).** Strike commands return the accepted round count (the salvo
-launches over later ticks, so this is not the launched count) and store the order UUID in feedback. New
+**A2. Command results, status and tags (S–M).** Strike commands return the admitted round count (the salvo
+launches over later ticks, so this is not the launched count; one ICBM counts once) and store the order UUID in feedback. New
 `/incoming status [player|tag]` reports orders by phase: queued (including unlaunched rounds and pending keys),
-in flight, impact work in progress; it returns the number of unfinished rounds, and ETA shows "unknown" where the
+in flight, impact work in progress; it returns the number of unfinished rounds (impact work counts until the round's own jobs finish; nuclear ruin
+work that resumes on a later chunk load does not), and ETA shows "unknown" where the
 scheduler or a second key cannot predict it. Salvo and nuke commands take `tag <name>`; `clear tag <name>` recalls
-it. Tags persist with the order; owner rules for `clear` stay. Lights up: `execute store`, minigame datapacks,
+it. A tag is a world-wide group name: several orders may share it; it persists with the order; owner rules for
+`clear` stay. Lights up: `execute store`, minigame datapacks,
 command blocks, Almighty (it reads command output). Risk: low once A1's lifecycle exists.
 
 **A3. Advancements and statistics (S–M).** A few visible advancements tied to our mechanics (first strike, first
@@ -202,26 +215,33 @@ permission handler (it installs itself when the default handler is selected; dim
 rights). FTB Ranks does not install a NeoForge handler on 1.21.1, so it needs a separate optional bridge, not
 included. Risk: medium (many entry points; one test per entry).
 
-**B2. Claim protection for every block-changing path (L).** Policy: a chunk is protected when the claim mods say an
-explosion may not damage terrain there; the same answer applies to every Incoming write, conventional and nuclear.
-Mechanism through the channel claim mods already filter: for each write path not covered today (glass, ignition and
-fuel fire, fragments, bunker cavity, flash scorch, ruins, nuclear crater) Incoming posts `ExplosionEvent.Detonate`
-for a real explosion object whose source is the round where one exists (FTB Chunks ignores sourceless
-explosions unless its unknown-explosion protection is on) and the candidate positions, as collapse does now; nuclear paths offer one representative position per chunk in batches,
-and a dropped position withholds that chunk. Decisions are taken on the server thread inside the work budget, frozen
-per detonation and handed to workers and distant LOD copies as immutable data. A claim placed after a chunk's
-decision does not undo the decision. The wave, light, sound and entity effects stay one model; only the world write
-is withheld. Lights up: OPAC and FTB Chunks with no compat code, and any mod or script listening to `Detonate`.
-OPAC's `IChunkProtectionAPI.onPosAffectedByAnotherPos` is not used: it answers a different, anonymous cross-chunk
-question. Risk: high: many writers, LOD consistency, volume (a 15 kt scorch reach covers hundreds of thousands of
-chunks before filtering), and Almighty or KubeJS listeners on `Detonate` receive the batches. The PR measures the
-budget and tests a protected chunk at each writer: a window, a fire start at the boundary, a ruin inside the 15 kt
-ring, with Start cancelled and with Detonate filtered.
+**B2. Claim protection for every block-changing path (L).** Goal: a chunk where the claim mods forbid explosion
+damage keeps its blocks against every Incoming write, conventional and nuclear; the wave, light, sound and entity
+effects stay one model and only the world write is withheld. Today only the real charges' `Start`/`Detonate` and the
+collapse candidates are asked. The mechanism is decided in its own design PR with probes; this proposal fixes the
+requirements it must meet:
+- every writer is covered or explicitly excluded: conventional crater, glass, ignition and fuel fire, fragments,
+  bunker boring, cavity and fracture, collapse landing, debris placement, flash scorch and biome recolor, ruins,
+  nuclear crater, distant LOD copies; grid outages are not block damage and stay outside the claim policy;
+- a real charge keeps its own `Start` veto; extra writers do not reopen a chunk that the real `Detonate` denied;
+- candidate events that are not physical explosions are kept apart from listeners that react to explosions (our own
+  blackout listener, effect mods), and a listener can never make Incoming read an unloaded chunk on the tick;
+- `Detonate` filtering is position-level for an arbitrary listener; a per-chunk representative is valid only for the
+  documented chunk policy of OPAC and FTB Chunks, and FTB Chunks protects against a sourceless explosion only with
+  its unknown-explosion protection on (operator `nuke now` has no source entity);
+- decisions are taken on the server thread inside the work budget and stored per detonation and chunk, durable across
+  restart, shared by live, settlement, crater and LOD paths, so a disk-only chunk denied for a LOD copy is not ruined
+  later on load, and another detonation is decided on its own.
+Candidates: candidate `Detonate` batches as collapse uses, a dedicated `StrikeTerrainEvent` with optional claim
+`compat/` modules answering through public APIs, or both. OPAC's `IChunkProtectionAPI.onPosAffectedByAnotherPos` is
+not used: it answers a different, anonymous cross-chunk question. Risk: high: many writers, LOD consistency, volume
+(a 15 kt scorch reach covers hundreds of thousands of chunks before filtering). Tests: a protected chunk at each
+writer, a claim change between flash and wave, a denied disk-only chunk after restart.
 
 **B3. Owner identity (M).** Three separate contracts:
 - persistent strike attribution: the owner UUID on orders, rounds and events (A1), independent of online state;
-- live combat credit: vanilla damage sources carry the owner entity when the owner is online, in any level (today
-  only the same level), for debris and burn paths that have one cause; merged dose and injuries stay unattributed;
+- live combat credit: vanilla damage sources carry the owner entity when the owner is online, in any level (today the
+  blast looks only in the same level), for debris and burn paths that have one cause; merged dose and injuries stay unattributed;
 - claims and logs: claim mods decide explosions by claim policy, not by owner (FTB Chunks ignores the owner; OPAC
   uses its explosion option), so this item makes no claim or logger promise.
 Making the projectile a vanilla `Projectile` is not proposed: it changes owner persistence, game events, spawn
@@ -230,23 +250,28 @@ packets and foreign `instanceof Projectile` handling for little gain. Risk: medi
 **B4. World rules by command (S).** `/incoming rule <key> [value]` (permission level 2) reads and sets
 runtime-safe world rules and saves them to the same config file; one home per setting, no duplicated gamerules.
 A change applies to orders accepted after it; queued and flying rounds keep the rules they were accepted under. The
-change is world-wide and survives restart. For an undamaged arena the rules that matter are `world.block_damage`,
-`world.shatter_glass`, `world.fire`, `world.debris_stay` and `world.collapse` (conventional) and
-`nuclear.block_damage`; the guide lists exactly what each governs. Lights up: minigame datapacks, command blocks,
+change is world-wide and survives restart. The guarantee is for conventional strikes: with `world.block_damage`, `world.shatter_glass`,
+`world.fire`, `world.debris_stay` and `world.collapse` off and `grid.enabled` off (blasts near a substation otherwise
+cause an outage), an arena keeps its blocks. Nuclear orders are excluded from that guarantee (`nuclear.enabled` off):
+the flash still scorches, ignites and recolors biomes under `nuclear.fires`, and nukes have their own blackout. The
+guide lists exactly what each rule governs. Lights up: minigame datapacks, command blocks,
 Almighty. Risk: low.
 
 **B5. Sides from party mods (M).** Spotting shares contacts by a side key, and air defense compares sides
 pairwise (`J/target/Sides.java`, `J/target/Sightings.java:148-159`). Replace both with one side resolution: a
 `SideResolveEvent` that returns a stable side key for a player UUID (vanilla team by default), cached and
 invalidated on team change, symmetric by construction. Optional `compat/` modules answer it from FTB Teams
-(`TeamManager` by player UUID) and OPAC parties (`IPartyManagerAPI`); with several providers, the first
-non-vanilla answer wins and the order is documented. Lights up: FTB Teams, OPAC, KubeJS. Risk: medium (radar
+(`TeamManager` by player UUID) and OPAC parties (`IPartyManagerAPI`) with provider-namespaced keys, and abstain for a
+personal or absent membership (FTB Teams returns a personal team for every player). With several real shared
+memberships the precedence is documented; the same key serves spotting, radar, targeting and launcher links, also for
+offline owners. Lights up: FTB Teams, OPAC, KubeJS. Risk: medium (radar
 budget, old contacts on party change).
 
 ### C. Data in
 
 **C1. Radiation shielding for items (M).** An item data map `incoming:radiation_shielding` (fraction per worn
-piece). The worn fractions combine as `1 - Π(1 - f)` clamped to [0, 1], and apply to every exposure Incoming gives
+piece, each in [0, 1], rejected otherwise). The worn fractions add up, capped at 1, as Mekanism combines its own
+equipment, so a full Mekanism hazmat set protects fully here too; they apply to every exposure Incoming gives
 a living body: prompt dose, fallout and black rain. Protection applies to new exposure only, never to the
 accumulated dose. An optional `compat/mekanism` reads Mekanism's `RADIATION_SHIELDING` item capability through its
 public interface; when both describe an item, the data map wins. Incoming ships no suit or medicine. Lights up:
@@ -311,8 +336,8 @@ round and detonation events with no Almighty change. Add to the note: the grid a
 3. **Minigame "survive the raid".** The map maker places owner-less fixed launchers by command, a function starts a
    wave `/incoming salvo … tag wave3`, waits until `/incoming status tag wave3` returns 0, then starts the next.
    Players build cover from map blocks; SAMs give redstone while tracking (A4); points come from the interception
-   statistic (A3) on the scoreboard. The world rules for block damage, glass, fire and debris are switched off by
-   command for the arena (B4). Uses: A2–A4, B4.
+   statistic (A3) on the scoreboard. The conventional world rules and the grid are switched off by command for the
+   arena, and nuclear orders are off (B4). Uses: A2–A4, B4.
 4. **Create-automated launch site.** A ComputerCraft computer reads the SAM and launcher peripherals and fires a
    battery when the SAM tracks (D1); a Create bunker door closes on the SAM's redstone (A4); Jade shows why a launcher
    is not firing (D2). Uses: A4, D1, D2.
@@ -370,7 +395,15 @@ projectile is not a vanilla `Projectile`, no permission nodes, statistics or ite
 tags) and corrected: conventional claim coverage (side writes outside the `Detonate` lists), the OPAC API choice,
 FTB Ranks (no NeoForge handler), GriefLogger 1.21.1 (no explosion logging) and FTB Chunks (owner ignored), command
 counts versus later launches, the order lifecycle, the arena rules, side keys, shielding scope, lamp reversibility,
-foreign air-defense targets, CC:Tweaked threading, and `c:gunpowders`. This version includes those corrections.
+foreign air-defense targets, CC:Tweaked threading, and `c:gunpowders`.
+
+The second and final round confirmed most fixes and found that the deepest items still had open contract cases:
+B2's mechanism (position-level listeners, sourceless explosions, durable per-chunk decisions across restart and LOD
+copies, writers still missing), A1's settlement (debits before admission, per-release launcher payment, the scheduled
+nuclear strike as the authoritative round), B5's personal teams, and B4's nuclear writes. Those cases are written
+into the items above as requirements for their own design PRs; the mechanisms of A1 and B2 are deliberately left to
+those PRs, where each is decided with probes. The same class of finding surviving both rounds shows its cause: a
+proposal cannot settle an implementation contract for a multi-path subsystem without that subsystem's own study.
 
 ## 10. Sources
 
