@@ -175,6 +175,62 @@ class UnitQueueTest {
         assertTrue(!log.contains("far:2") && !log.contains("after:1"), log.toString());
     }
 
+    /**
+     * World time stops during the shutdown drain: a job waiting for a later tick (an explosion front on its way) is told to
+     * drain, including one enqueued during the drain, and finishes instead of repeating a step without progress.
+     */
+    @Test
+    void finishDrainsJobsWaitingForLaterTicks() {
+        UnitQueue q = new UnitQueue();
+        Waiting child = new Waiting(null, 2);
+        Waiting first = new Waiting(() -> q.add(0, child), 3);
+        q.add(0, first);
+        q.finish(null, 0, WorkClock.counting(MS), 1000 * MS);
+        assertTrue(q.isEmpty());
+        assertEquals(3, first.done, "queued job did not drain");
+        assertEquals(2, child.done, "job enqueued during the drain did not drain");
+        assertEquals(1, first.ended);
+        assertEquals(1, child.ended);
+    }
+
+    /** A job that never finishes (a wait ignoring drain) is released at the limit instead of holding shutdown forever. */
+    @Test
+    void finishReleasesAJobThatNeverFinishesAtTheLimit() {
+        UnitQueue q = new UnitQueue();
+        int[] steps = {0}, ended = {0};
+        q.add(0, new UnitQueue.Job() {
+            @Override public boolean step(ServerLevel level) { steps[0]++; return true; }
+            @Override public void end(ServerLevel level) { ended[0]++; }
+            @Override public String describe() { return "endless"; }
+        });
+        q.finish(null, 0, WorkClock.counting(MS), 100 * MS);
+        assertTrue(q.isEmpty());
+        assertEquals(1, ended[0]);
+        assertTrue(steps[0] >= 98 && steps[0] <= 101, "about one 1 ms unit per ms of the limit: " + steps[0]);
+    }
+
+    /** Steps without progress until drained, then {@code units} units; runs {@code onFirst} in its first step. */
+    private static final class Waiting implements UnitQueue.Job {
+        final Runnable onFirst;
+        final int units;
+        boolean drained;
+        int done, ended;
+
+        Waiting(Runnable onFirst, int units) {
+            this.onFirst = onFirst;
+            this.units = units;
+        }
+
+        @Override public void drain() { drained = true; }
+        @Override public boolean step(ServerLevel level) {
+            if (!drained) return true;
+            if (done == 0 && onFirst != null) onFirst.run();
+            return ++done < units;
+        }
+        @Override public void end(ServerLevel level) { ended++; }
+        @Override public String describe() { return "waiting"; }
+    }
+
     /** An expensive work-unit kind does not start near the deadline after cheap units: each kind has its own estimate. */
     @Test
     void kindsHaveOwnEstimates() {

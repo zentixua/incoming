@@ -49,8 +49,11 @@ paths:
 - `UnitQueue` runs new heads in enqueue order, then one unit per continuation in a persistent round-robin order.
   Unready areas and blocked dependencies are skipped. Continuation `ready`/`blocked` results are cached once per
   work window, after heads (whose first step can introduce a dependency). Post refreshes them even within the same
-  world tick. Unit kinds keep separate clock estimates. Shutdown drains available work without a deadline via
-  `finish`, then releases jobs that cannot proceed. Strike timelines enqueue into `StrikeWorld.impacts()` rather
+  world tick. Unit kinds keep separate clock estimates. Shutdown drains available work via `finish`, then releases
+  jobs that cannot proceed. World time stops during the drain: `Job.drain` tells each job (also one enqueued meanwhile)
+  to do now what waits for a later tick (the explosion front's arrival); a step returning true without progress
+  would otherwise repeat forever in finish's window. `StopDrain.LIMIT_NANOS` bounds the drain (`UnitQueueTest`,
+  `blast_front_stop`). Strike timelines enqueue into `StrikeWorld.impacts()` rather
   than executing directly; an empty queue can start the job that tick.
 - `StallWatch` samples the server stack every 0.5 s while stalled. After a stall longer than 2 s, within or between
   ticks, it logs `Server thread stalled for N s` with common stack locations. A single-player pause is not a stall.

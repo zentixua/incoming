@@ -43,6 +43,12 @@ public final class UnitQueue {
         /** Execute one unit; false means the job is complete. */
         boolean step(ServerLevel level);
 
+        /**
+         * Shutdown drain ({@link UnitQueue#finish}): world time no longer advances, so a unit that waits for a later
+         * world tick does that work now. A step returning true without progress would repeat forever in finish's window.
+         */
+        default void drain() {}
+
         /** Release held resources, including tickets, when completed, cancelled or failed. */
         default void end(ServerLevel level) {}
 
@@ -72,6 +78,8 @@ public final class UnitQueue {
     /** Started jobs with remaining units. */
     private final Deque<Entry> tails = new ArrayDeque<>();
     private long window;
+    /** Inside {@link #finish}: jobs enqueued meanwhile drain too. */
+    private boolean draining;
 
     public void add(ServerLevel level, Job job) {
         add(level.getGameTime(), job);
@@ -79,6 +87,7 @@ public final class UnitQueue {
 
     /** Enqueue with an explicit world time for tests without a world. */
     public void add(long now, Job job) {
+        if (draining) job.drain();
         heads.add(new Entry(job, now));
     }
 
@@ -194,11 +203,31 @@ public final class UnitQueue {
 
     /** Explicit world time for tests without a world. */
     public void finish(ServerLevel level, long now) {
-        WorkClock unlimited = new WorkClock();
-        for (int before = -1; !isEmpty() && size() != before; ) {
-            before = size();
-            unlimited.start(Long.MAX_VALUE / 4);
-            work(level, now, unlimited);
+        finish(level, now, new WorkClock(), ua.zentix.incoming.util.StopDrain.LIMIT_NANOS);
+    }
+
+    /**
+     * Same with the clock and its wall-time limit (tests): a job that keeps stepping without finishing (a wait that
+     * ignores {@link Job#drain}) is released when the limit passes instead of holding shutdown forever.
+     */
+    void finish(ServerLevel level, long now, WorkClock clock, long limitNanos) {
+        draining = true;
+        try {
+            for (Entry e : heads) e.job.drain();
+            for (Entry e : tails) e.job.drain();
+            clock.start(limitNanos);
+            for (int before = -1; !isEmpty() && size() != before && !clock.overdue(); ) {
+                before = size();
+                work(level, now, clock);
+            }
+            if (!isEmpty() && clock.overdue()) {
+                List<String> left = new ArrayList<>();
+                for (Entry e : heads) left.add(e.job.describe());
+                for (Entry e : tails) left.add(e.job.describe());
+                Incoming.LOG.error("Shutdown: work did not finish within {} s, released unfinished: {}", limitNanos / 1_000_000_000L, left);
+            }
+        } finally {
+            draining = false;
         }
         clear(level);
     }

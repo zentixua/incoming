@@ -6,6 +6,7 @@ import net.minecraft.gametest.framework.GameTest;
 import net.minecraft.gametest.framework.GameTestHelper;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.level.ChunkPos;
+import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.phys.Vec3;
 import net.neoforged.neoforge.gametest.GameTestHolder;
 import net.neoforged.neoforge.gametest.PrefixGameTestTemplate;
@@ -13,7 +14,7 @@ import ua.zentix.incoming.Incoming;
 import ua.zentix.incoming.nuclear.world.WorkClock;
 import ua.zentix.incoming.work.UnitQueue;
 
-/** Loading failures belong to the queue's bounded wait, not the front's work loop. */
+/** Loading failures and the front's arrival times belong to the queue's waits, not the front's work loop. */
 @GameTestHolder(Incoming.MOD_ID)
 @PrefixGameTestTemplate(false)
 public final class SurfaceFrontGameTests {
@@ -58,5 +59,31 @@ public final class SurfaceFrontGameTests {
         } finally {
             if (!job.done()) job.end(level);
         }
+    }
+
+    /**
+     * Shutdown drain ({@code UnitQueue.finish}) with a front still on its way: world time stops during the drain, and the
+     * front reaches a block at least one tick after the blast starts (front speed at least sound speed, 17 blocks a tick).
+     * The front reaches every chosen block now; waiting for a later tick here held the server thread forever
+     * ({@code work_stop}, CI 23.11).
+     */
+    @GameTest(template = "range", timeoutTicks = 100, batch = "blast_front_stop", skyAccess = true)
+    public static void shutdownDrainCompletesAWaitingFront(GameTestHelper h) {
+        ServerLevel level = h.getLevel();
+        BlockPos wall = h.absolutePos(new BlockPos(34, 14, 30));
+        for (int y = 0; y < 5; y++) for (int z = 0; z < 5; z++) level.setBlock(wall.offset(0, y, z), Blocks.OAK_PLANKS.defaultBlockState(), 2);
+        Vec3 at = Vec3.atCenterOf(h.absolutePos(new BlockPos(31, 16, 32)));
+        BlastArea area = BlastArea.hold(level, at, 14);
+        StagedExplosion job = new StagedExplosion(area, List.of(), at, 40.0, SlabBreach.Placement.NONE, null, true, null, null);
+        area.queued(job, level.getGameTime());
+        UnitQueue queue = new UnitQueue();
+        queue.add(level, job);
+        // start, rays and the front in one call, all in this world tick
+        queue.finish(level);
+        h.assertTrue(queue.isEmpty() && job.done(), "blast still queued after the shutdown drain");
+        int left = 0;
+        for (int y = 0; y < 5; y++) for (int z = 0; z < 5; z++) if (level.getBlockState(wall.offset(0, y, z)).is(Blocks.OAK_PLANKS)) left++;
+        h.assertTrue(left < 25, "front did not reach the wall during the shutdown drain (released at the drain limit instead)");
+        h.succeed();
     }
 }

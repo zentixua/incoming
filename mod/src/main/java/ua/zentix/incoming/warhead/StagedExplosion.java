@@ -231,6 +231,8 @@ final class StagedExplosion implements UnitQueue.Job {
     /** Entity distance at the start of the outward sweep, and glass/backing before any blocks are removed. */
     private List<Double> bodyRanges = List.of();
     private long beganAt, frontDueTick;
+    /** {@link #drain}: the queue finishes at shutdown. */
+    private boolean draining;
     /** UnitQueue polls blocked between units; ready is only checked at the start of its slice. */
     private LongSupplier frontTime = () -> Long.MAX_VALUE;
     private final java.util.Map<Entity, BlastBody.Before> bodyBefore = new java.util.IdentityHashMap<>();
@@ -329,7 +331,7 @@ final class StagedExplosion implements UnitQueue.Job {
     @Override
     public boolean ready(ServerLevel level) {
         // Whole strike area covers this explosion too: shared condition preserves work order.
-        return (phase != Phase.FRONT || level.getGameTime() >= frontDueTick) && area.ready(level)
+        return (phase != Phase.FRONT || frontNow(level) >= frontDueTick) && area.ready(level)
                 && (frontArea == null || frontArea.ready(level));
     }
 
@@ -355,7 +357,7 @@ final class StagedExplosion implements UnitQueue.Job {
 
     @Override
     public boolean blocked() {
-        return waiting() || phase == Phase.FRONT && frontTime.getAsLong() < frontDueTick
+        return waiting() || phase == Phase.FRONT && !draining && frontTime.getAsLong() < frontDueTick
                 || (phase == Phase.BLOCKS || phase == Phase.FRONT) && area.peersPicking(this);
     }
 
@@ -887,6 +889,16 @@ final class StagedExplosion implements UnitQueue.Job {
         frontArea = BlastArea.hold(level, centre, craftReach(power));
     }
 
+    /** Shutdown drain: world time stops, so the front reaches every chosen block now instead of waiting for ticks. */
+    @Override
+    public void drain() {
+        draining = true;
+    }
+
+    private long frontNow(ServerLevel level) {
+        return draining ? Long.MAX_VALUE : level.getGameTime();
+    }
+
     private boolean front(ServerLevel level) {
         long t = System.nanoTime();
         LongSupplier watch = clock != null ? clock : WorkScheduler.impactClock(level.getServer()).sampler();
@@ -898,7 +910,7 @@ final class StagedExplosion implements UnitQueue.Job {
             double block = next < toBlow.size() ? new AABB(toBlow.get(next)).distanceToSqr(centre) : Double.POSITIVE_INFINITY;
             double craft = nextCraft < craftFront.size() ? craftFront.get(nextCraft).rangeSqr() : Double.POSITIVE_INFINITY;
             frontDueTick = beganAt + (long) Math.ceil(20 * BlastModel.chemicalArrivalSeconds(Math.sqrt(Math.min(craft, Math.min(body, block))), charge, true));
-            if (level.getGameTime() < frontDueTick) break;
+            if (frontNow(level) < frontDueTick) break;
             if (craft <= Math.min(block, body)) {
                 CraftFront hit = craftFront.get(nextCraft);
                 crafts(level, hit);
