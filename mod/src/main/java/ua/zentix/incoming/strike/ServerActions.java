@@ -73,8 +73,9 @@ public final class ServerActions {
         player.displayClientMessage(reason.copy().withStyle(ChatFormatting.RED), true);
     }
 
+    /** May use the designator, its map and abort ({@link Authority}: {@code incoming.launch}). */
     public static boolean mayUse(Player player) {
-        return IncomingConfig.SERVER.designatorForEveryone.get() || player.hasPermissions(2);
+        return player instanceof ServerPlayer p && Authority.allows(Authority.Action.USE, p);
     }
 
     // ---------------------------------------------------------------- packets
@@ -90,13 +91,15 @@ public final class ServerActions {
 
     /** Shared reviewed/unreviewed dispatch. A reviewed aim is immutable until this call. */
     static void fire(ServerPlayer player, C2S.Fire p, @Nullable Aim reviewed) {
-        if (!mayUse(player)) {
-            refuse(player, Component.translatable("incoming.no_permission"));
+        Loadout l = p.loadout();
+        // the designator and this weapon; a nuclear warhead is asked by the review and again by the order (nuclearRefusal)
+        Authority.Denial denied = Authority.check(Authority.Action.launch(l.weapon(), false), Authority.Actor.of(player));
+        if (denied != null) {
+            refuse(player, denied.line());
             return;
         }
         if (tooSoon(player, ModAttachments.LAST_FIRE.get())) return;
 
-        Loadout l = p.loadout();
         Aim aim = reviewed != null ? reviewed : fireAim(player, p);
         if (aim == null) return;
         // Designator linked to fixed launchers assigns missions instead of launching itself: they launch from their sites.
@@ -384,32 +387,24 @@ public final class ServerActions {
                 Math.min(l.spread(), IncomingConfig.SERVER.maxSpread.get()), l.mode(), l.player(), n);
     }
 
-    /** Nuclear weapons: enabled and allowed for this player (default operators and the world host, {@link NuclearKeys#trusted}). */
-    public static boolean mayUseNuke(ServerPlayer player) {
-        return IncomingConfig.SERVER.nukeEnabled.get() && (!IncomingConfig.SERVER.nukeOpsOnly.get() || NuclearKeys.trusted(player));
-    }
-
     /**
-     * Why {@code player}'s nuclear order {@code l} is refused, or null: {@link #nuclearRefusal(Loadout, boolean,
-     * boolean, boolean, boolean, int)} with this world's settings. Review and launch both ask here, so they never disagree.
+     * Why {@code player}'s nuclear order {@code l} is refused, or null: the rights ({@link Authority}: the designator, the
+     * weapon, nuclear weapons in this world, {@code incoming.nuclear}), then {@link #nuclearRefusal(Loadout, boolean, int)}
+     * with this world's settings. Review and launch both ask here, so they never disagree.
      */
     @Nullable
     static Component nuclearRefusal(ServerPlayer player, Loadout l) {
-        var c = IncomingConfig.SERVER;
-        return nuclearRefusal(l, mayUse(player), c.nukeEnabled.get(), c.nukeOpsOnly.get() && !NuclearKeys.trusted(player),
-                c.carrierNukes.get(), c.nukeMaxYield.get());
+        Authority.Denial denied = Authority.check(Authority.Action.launch(l.weapon(), true), Authority.Actor.of(player));
+        if (denied != null) return denied.line();
+        return nuclearRefusal(l, IncomingConfig.SERVER.carrierNukes.get(), IncomingConfig.SERVER.nukeMaxYield.get());
     }
 
     /**
-     * Why a nuclear order {@code l} is refused, the first reason in the order the player can act on: the designator
-     * itself, nuclear weapons in this world, operator rights (the world host counts as one), a warhead on a carrier,
-     * the yield limit; null if allowed.
+     * Why an allowed player's nuclear order {@code l} is refused, the first reason in the order the player can act on: a
+     * warhead on a carrier, the yield limit; null if valid.
      */
     @Nullable
-    static Component nuclearRefusal(Loadout l, boolean mayUse, boolean enabled, boolean needsOperator, boolean carrierNukes, int cap) {
-        if (!mayUse) return Component.translatable("incoming.no_permission");
-        if (!enabled) return Component.translatable("incoming.nuke.disabled");
-        if (needsOperator) return Component.translatable("incoming.nuke.ops_only");
+    static Component nuclearRefusal(Loadout l, boolean carrierNukes, int cap) {
         if (l.nuke().onCarrier() && !l.weapon().spec().warhead().always() && !carrierNukes) return Component.translatable("incoming.nuke.carrier_off");
         if (l.nuke().yieldKt() > cap) return Component.translatable("incoming.nuke.over_cap", l.nuke().yieldKt(), cap);
         return null;
@@ -453,12 +448,22 @@ public final class ServerActions {
             if (now != null) strike(now, weapon, count, spread, asAsked, nuke, via, from, rules, tag, made);
             else Incoming.LOG.info("Queued strike order dropped: {} left", player.getGameProfile().getName());
         })) return true;
+        // The order as requested, before clamping: a carrier warhead where carriers carry none is refused, as in review.
+        Loadout asked = new Loadout(weapon, count, spread, TargetMode.LOOK, "", nuke);
+        // The player's own rights: a designator or a player's command (an operator's own included). A higher-level source
+        // running as this player (/execute as from the console or a command block) is automation and asks nothing here;
+        // a nuclear order asks for every player source, below.
+        if (!asked.nuclear() && (rules || player.hasPermissions(2))) {
+            Authority.Denial denied = Authority.check(Authority.Action.launch(weapon, false), Authority.Actor.of(player));
+            if (denied != null) {
+                refuse(player, denied.line());
+                return false;
+            }
+        }
         if (rules) {
             aim = ruled(player, aim);
             if (aim == null) return false;
         }
-        // The order as requested, before clamping: a carrier warhead where carriers carry none is refused, as in review.
-        Loadout asked = new Loadout(weapon, count, spread, TargetMode.LOOK, "", nuke);
         if (asked.nuclear()) {
             Component no = nuclearRefusal(player, asked);
             if (no != null) {

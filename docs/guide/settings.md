@@ -46,14 +46,14 @@ world/server. The most useful settings are below; the rest are in the same file,
 
 | Key | Default | What it does |
 |---|---|---|
-| `launch.designator_for_everyone` | on | the designator works for all players, not only operators |
+| `launch.designator_for_everyone` | on | the designator works for all players, not only operators; a permission mod can override it per player ([permissions](packs.md#permissions)) |
 | `launch.max_salvo`, `max_spread` | 30, 150 | largest salvo and spread |
 | `launch.max_active_per_player` | 0 | rejects a new order when the player already has this many active rounds; counts flight, rounds on launchers, unfired salvo rounds and nuclear orders waiting for a second key. One accepted salvo can exceed the limit; operators are exempt; 0: no limit |
 | `launch.sight_rules` | on | [spotting](rules.md#spotting): strike only spotted targets |
 | `world.early_warning` | on | an early-warning network exists: sirens, target banners and nuclear launch notices. Off: only the owner gets flight data/countdowns; other players rely on sight, sound or their SAM radar. Legacy `world.siren` migrates automatically; an explicit new key takes precedence |
 | `world.block_damage`, `world.fire` | on | conventional strike destruction and fires; nuclear strikes have separate switches below |
 | `world.collapse` | on | [what a blast leaves without support falls](weapons.md#what-a-blast-does): storeys above blown-out walls and floors, the roof of a cavity above an underground bomb |
-| `nuclear.enabled`, `ops_only` | on, on | nuclear weapons exist; only operators and the host of a single-player or LAN world launch them |
+| `nuclear.enabled`, `ops_only` | on, on | nuclear weapons exist; only operators and the host of a single-player or LAN world launch them (a permission mod can grant others the right, [permissions](packs.md#permissions)) |
 | `nuclear.default_yield`, `max_yield` | 15, 100 | yield of a command without a number; largest allowed yield, kt (up to 1000 = 1 Mt) |
 | `nuclear.block_damage`, `nuclear.fires` | on | nuclear ruins/craters and thermal fires; independent of `world.block_damage` and `world.fire` |
 | `nuclear.black_rain` | on | smoke from the fires of a nuclear strike rains out downwind as black rain, washing a little radioactivity to the ground and contaminating skin and clothes; off: no black rain, the fires stay. Applies to new detonations |

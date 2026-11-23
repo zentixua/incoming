@@ -190,6 +190,12 @@ public final class NuclearKeys {
      * @return order confirmed
      */
     public static boolean confirm(ServerPlayer by, Collection<? extends ServerPlayer> online) {
+        // a key holder needs the right to nuclear weapons themselves (Authority: incoming.nuclear)
+        Authority.Denial denied = Authority.check(Authority.Action.SECOND_KEY, Authority.Actor.of(by));
+        if (denied != null) {
+            ServerActions.refuse(by, denied.line());
+            return false;
+        }
         double d = distance();
         Order best = null;
         NuclearKeys where = null;
@@ -208,6 +214,18 @@ public final class NuclearKeys {
         }
         if (best == null) {
             by.displayClientMessage(Component.translatable("incoming.nuke.key.none", distance()).withStyle(ChatFormatting.GRAY), true);
+            return false;
+        }
+        // the order asks again as the key turns: rights revoked during the wait cancel it with a refund
+        ServerPlayer launching = best.owner(online);
+        Component revoked = launching != null ? ServerActions.nuclearRefusal(launching, best.loadout) : null;
+        if (revoked != null) {
+            where.orders.remove(best);
+            ServerActions.refuse(launching, revoked);
+            boolean refunded = best.paid != null && Munitions.refund(List.of(launching), best.ownerId, best.paid, "rights revoked before the second key");
+            end(best, StrikeRoundEvent.Outcome.RECALLED, refunded);
+            by.displayClientMessage(Component.translatable("incoming.nuke.key.none", distance()).withStyle(ChatFormatting.GRAY), true);
+            Incoming.LOG.info("Nuclear launch {} cancelled: {} may no longer order it", best.loadout.weapon().getSerializedName(), best.name);
             return false;
         }
         best.confirmer = by.getGameProfile().getName();
@@ -345,7 +363,9 @@ public final class NuclearKeys {
         long left = Math.max(1, (o.deadline - o.level.getGameTime() + 19) / 20);
         Vec3 at = o.aim.point();
         for (ServerPlayer p : online) {
-            if (p.getUUID().equals(o.ownerId) || p.level() != owner.level() || p.distanceToSqr(owner) > d * d || !o.prompted.add(p.getUUID())) continue;
+            if (p.getUUID().equals(o.ownerId) || p.level() != owner.level() || p.distanceToSqr(owner) > d * d) continue;
+            // only those who may turn the key are asked (Authority: incoming.nuclear)
+            if (!Authority.allows(Authority.Action.SECOND_KEY, p) || !o.prompted.add(p.getUUID())) continue;
             p.sendSystemMessage(Component.translatable("incoming.nuke.key.prompt", owner.getDisplayName(), what(o.loadout), Mth.floor(at.x), Mth.floor(at.z),
                     Component.keybind(KEY), left).withStyle(ChatFormatting.GOLD));
             p.playNotifySound(SoundEvents.NOTE_BLOCK_PLING.value(), SoundSource.MASTER, 1.0f, 1.2f);

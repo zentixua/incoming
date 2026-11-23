@@ -42,6 +42,7 @@ import ua.zentix.incoming.nuclear.radiation.GeigerFormat;
 import ua.zentix.incoming.nuclear.radiation.RadiationDose;
 import ua.zentix.incoming.nuclear.radiation.RadiationTicker;
 import ua.zentix.incoming.registry.ModItems;
+import ua.zentix.incoming.strike.Authority;
 import ua.zentix.incoming.strike.LaunchOrigin;
 import ua.zentix.incoming.strike.Loadout;
 import ua.zentix.incoming.strike.NuclearKeys;
@@ -205,8 +206,9 @@ public final class IncomingCommand {
 
     private static boolean mayNuke(CommandSourceStack s) {
         if (!IncomingConfig.SERVER.nukeEnabled.get()) return false;
-        // a player under the same rights as the designator's nuclear order (the world host counts as an operator)
-        return s.hasPermission(2) || s.getEntity() instanceof ServerPlayer p && ServerActions.mayUse(p) && ServerActions.mayUseNuke(p);
+        // a player under the same rights as the designator's nuclear order (Authority; the world host counts as an operator);
+        // the weapon's own node refuses at the order with its line
+        return s.hasPermission(2) || s.getEntity() instanceof ServerPlayer p && Authority.allows(Authority.Action.launch(null, true), p);
     }
 
     private static int nukeLook(CommandContext<CommandSourceStack> ctx, Loadout.Nuke nuke, Path path) throws CommandSyntaxException {
@@ -233,6 +235,15 @@ public final class IncomingCommand {
         if (Orders.elsewhere(level, () -> nukeNow(s, pos, nuke, tag))) return StatusCommand.deferred(s);
         // a rerun later: the command's own gate as it is then
         if (!mayNuke(s) || !s.hasPermission(2)) return 0;
+        // an operator's own command asks their rights (a permission mod may deny them); a higher-level source running as a
+        // player, the console and command blocks are automation
+        if (e instanceof ServerPlayer p && p.hasPermissions(2)) {
+            Authority.Denial denied = Authority.check(Authority.Action.launch(WeaponType.NUKE, true), Authority.Actor.of(p));
+            if (denied != null) {
+                ServerActions.refuse(p, denied.line());
+                return 0;
+            }
+        }
         Vec3 ground = NuclearStrikes.ground(level, pos);
         // the yield that will burst: detonateNow applies the server's limit
         Loadout l = new Loadout(WeaponType.NUKE, 1, 0, TargetMode.LOOK, "", nuke.withYield(Math.min(nuke.yieldKt(), IncomingConfig.SERVER.nukeMaxYield.get())));

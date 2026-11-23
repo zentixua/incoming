@@ -119,6 +119,10 @@ public final class ModAttachments {
     public static final Supplier<AttachmentType<ua.zentix.incoming.work.ChunkLoadPace>> CHUNK_LOAD_PACE = REGISTER.register("chunk_load_pace",
             () -> AttachmentType.builder(() -> new ua.zentix.incoming.work.ChunkLoadPace()).build());
 
+    /** Permission answers of players who left, for their offline launchers (unsaved, overworld; {@code strike.Authority}). */
+    public static final Supplier<AttachmentType<ua.zentix.incoming.strike.Authority.Memory>> PERMISSION_MEMORY = REGISTER.register("permission_memory",
+            () -> AttachmentType.builder(ua.zentix.incoming.strike.Authority.Memory::new).build());
+
     /** World: explosion timelines ({@link StrikeWorld}); not saved. */
     public static final Supplier<AttachmentType<StrikeWorld>> STRIKE_WORLD = REGISTER.register("strike_world",
             () -> AttachmentType.builder(StrikeWorld::new).build());

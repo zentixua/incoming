@@ -184,10 +184,25 @@ paths:
   movement. Keep ordinary launch resolution separate from review disclosure. Packet-level regressions:
   `nuclear_review_disclosure`, `nuclear_review_last_seen`.
 
+- Authorization (`strike/Authority`, roadmap B1): one policy for every entry (designator packets, player commands,
+  deferred reruns, a key wait as its key turns, fixed launcher owner, linking, second key): `check(Action, Actor)` →
+  null or `Denial` (gate, line). Rights are NeoForge `PermissionNode`s (`incoming.launch`, `incoming.launch.<weapon
+  serialized name>`, `incoming.nuclear`, `incoming.launcher.link`) whose default resolvers are the switches
+  (`designator_for_everyone`, `nuclear.ops_only`, operator by `hasPermissions(2)` online or the cached profile offline,
+  `NuclearKeys.trusted`), so the default handler answers exactly as before; its refusal lines stay the switches' own,
+  a foreign handler's say only what is refused (`Denial.byDefault`). Gates: designator, weapon, nuclear flag (hard),
+  `incoming.nuclear`. Trust is never a node: second key, warning, nuclear abort/retarget, map launch site stay
+  `NuclearKeys.trusted`. Automation asks nothing: console, command blocks, ownerless launcher, `/execute as` from a source
+  above the player's own level (`strike`: asked when `rules || player.hasPermissions(2)`), except nuclear orders, which
+  always ask the player (`nuclearRefusal` for every player source). An offline owner never calls
+  `PermissionAPI.getOfflinePermission` (LuckPerms loads from storage there): default handler = the resolver; a foreign
+  handler = the answers kept at logout (`Authority.remember`, `PERMISSION_MEMORY` overworld attachment, unsaved), else the
+  resolver. Regressions: `AuthorityTest`, `PermissionGameTests` (devtest handler swapped into `PermissionAPI`, one batch
+  per probe: the handler and switches are server-wide).
 - Nuclear permission (Artem): `nuclear.ops_only` means operators and the world host (`NuclearKeys.trusted`: the
   single-player or LAN host, cheats on or off). Review and launch take the refusal from one function,
-  `ServerActions.nuclearRefusal` (designator, enabled, operator/host, carrier, yield cap, in that order;
-  `NuclearRefusalTest`). Every refused order speaks through `ServerActions.refuse` (red action bar,
+  `ServerActions.nuclearRefusal` (`Authority`: designator, weapon, enabled, `incoming.nuclear`; then carrier, yield cap,
+  in that order; `NuclearRefusalTest`). Every refused order speaks through `ServerActions.refuse` (red action bar,
   `RefusalChannelTest`); every key named in code exists in both lang files (`LangTest`).
 
 - `world.early_warning` controls automatic sirens and nuclear launch/target notices (default true). `ServerConfigMigration`

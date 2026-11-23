@@ -85,6 +85,8 @@ public final class Incoming {
         modBus.addListener(FixedLauncherBlockEntity::registerCapabilities);
 
         NeoForge.EVENT_BUS.addListener(IncomingCommand::register);
+        NeoForge.EVENT_BUS.addListener(ua.zentix.incoming.strike.Authority::onGatherNodes);
+        NeoForge.EVENT_BUS.addListener(ua.zentix.incoming.strike.Authority::onLogout);
         NeoForge.EVENT_BUS.addListener(StrikeWorld::onLevelTick);
         NeoForge.EVENT_BUS.addListener(ua.zentix.incoming.warhead.SurfaceDamage::onLevelTick);
         NeoForge.EVENT_BUS.addListener(ua.zentix.incoming.warhead.FuelFires::onLevelTick);
