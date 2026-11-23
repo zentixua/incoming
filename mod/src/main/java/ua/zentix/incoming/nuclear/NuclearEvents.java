@@ -10,6 +10,7 @@ import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.level.saveddata.SavedData;
 import net.minecraft.world.phys.Vec3;
 import ua.zentix.incoming.Incoming;
+import ua.zentix.incoming.strike.RoundRef;
 
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
@@ -48,16 +49,27 @@ public final class NuclearEvents extends SavedData {
      * Scheduled strike: target, yield, burst type, when and where the missile launched.
      *
      * @param surface target is a ground position (from the map): surface detonation regardless of the launch height estimate
+     * @param round   the order round this strike is ({@code strike.Orders}): the ICBM entity is only its visible part;
+     *                absent for a strike outside the order lifecycle or saved before order events
      */
     public record ScheduledStrike(int id, Vec3 target, double yieldKt, boolean airBurst, long launchTime, long detonateTime,
-                                  Vec3 launchPos, Optional<UUID> owner, boolean surface, Optional<IcbmArrival> arrival) {
+                                  Vec3 launchPos, Optional<UUID> owner, boolean surface, Optional<IcbmArrival> arrival, Optional<RoundRef> round) {
         public ScheduledStrike(int id, Vec3 target, double yieldKt, boolean airBurst, long launchTime, long detonateTime,
                                Vec3 launchPos, Optional<UUID> owner, boolean surface) {
-            this(id, target, yieldKt, airBurst, launchTime, detonateTime, launchPos, owner, surface, Optional.empty());
+            this(id, target, yieldKt, airBurst, launchTime, detonateTime, launchPos, owner, surface, Optional.empty(), Optional.empty());
+        }
+
+        public ScheduledStrike(int id, Vec3 target, double yieldKt, boolean airBurst, long launchTime, long detonateTime,
+                               Vec3 launchPos, Optional<UUID> owner, boolean surface, Optional<IcbmArrival> arrival) {
+            this(id, target, yieldKt, airBurst, launchTime, detonateTime, launchPos, owner, surface, arrival, Optional.empty());
         }
 
         public ScheduledStrike withArrival(IcbmArrival a) {
-            return new ScheduledStrike(id, target, yieldKt, airBurst, launchTime, detonateTime, launchPos, owner, surface, Optional.of(a));
+            return new ScheduledStrike(id, target, yieldKt, airBurst, launchTime, detonateTime, launchPos, owner, surface, Optional.of(a), round);
+        }
+
+        public ScheduledStrike withRound(@org.jetbrains.annotations.Nullable RoundRef r) {
+            return new ScheduledStrike(id, target, yieldKt, airBurst, launchTime, detonateTime, launchPos, owner, surface, arrival, Optional.ofNullable(r));
         }
         public static final Codec<ScheduledStrike> CODEC = RecordCodecBuilder.create(i -> i.group(
                 Codec.INT.fieldOf("id").forGetter(ScheduledStrike::id),
@@ -71,7 +83,8 @@ public final class NuclearEvents extends SavedData {
                 Vec3.CODEC.fieldOf("launch_pos").forGetter(ScheduledStrike::launchPos),
                 UUIDUtil.CODEC.optionalFieldOf("owner").forGetter(ScheduledStrike::owner),
                 Codec.BOOL.optionalFieldOf("surface", false).forGetter(ScheduledStrike::surface),
-                IcbmArrival.CODEC.optionalFieldOf("arrival").forGetter(ScheduledStrike::arrival)
+                IcbmArrival.CODEC.optionalFieldOf("arrival").forGetter(ScheduledStrike::arrival),
+                RoundRef.CODEC.optionalFieldOf("round").forGetter(ScheduledStrike::round)
         ).apply(i, ScheduledStrike::new));
     }
 

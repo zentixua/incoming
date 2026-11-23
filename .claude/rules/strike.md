@@ -134,6 +134,24 @@ paths:
   clear `Sight.clear` ray, craft uses `SubLevels.visibleFrom` (ray can hit craft itself); player has one view,
   one guided projectile. Without rules target is `OfEntity`/`OfSubLevel`, followed without camera.
 
+## Order lifecycle events (`ua.zentix.incoming.api`)
+- Every order entry (designator, player command, `dispatch`, fixed launcher, `nuke now`) is admitted through
+  `strike/Orders.admit` after Incoming's own checks and before payment: `Request` → one `Rejected`/`Accepted`
+  (`Order.accept`/`reject`, once), all three posted at once (the next order must see the last `Accepted`). Each entry's
+  outermost call starts with `Orders.elsewhere` (off the server thread, or inside a `Request` listener: the whole entry
+  reruns later with all its checks and a live player object); a new entry does the same.
+- Round, detonation and grid events never post inside Incoming's loops: `Orders.queue` puts them in one server-wide
+  queue (overworld `StrikeWorld`), delivered at world- and server-tick end and last in `onServerStopping`. A
+  synchronous post there would let listeners recall or clear inside salvo, key-wait and flight loops (double endings,
+  `ConcurrentModificationException`) and reorder Released/Ended; per-world queues would reorder rounds that change
+  dimension.
+- Each admitted round ends exactly once. Rounds are `RoundRef` (order id + index, name-based UUID), saved on whatever
+  carries them: `StrikeProjectile` NBT `round`, `ScheduledStrike.round`, `SalvoData` `order`/`failed_rounds`. A form
+  change hands the round on (`VirtualFlights.park` detaches it from the old entity, B-2 release moves it to the bomb);
+  a terminal path calls `endRound` before `discard` (first ending wins); any other destroying removal ends it as
+  failed in `StrikeProjectile.remove`. Unreleased rounds end where their carrier settles (`SalvoData.settle`,
+  `NuclearKeys.end`, the single-launch failure in `ServerActions.launch`). Regressions: `OrderEventGameTests`.
+
 ## Unpaid nuclear review
 - `NuclearReview` is separate player state, not a `NuclearKeys` order. Global nuclear abort invalidates it on the
   server before sending cancellation; actual death invalidates it through `LivingDeathEvent`, with dead/removed

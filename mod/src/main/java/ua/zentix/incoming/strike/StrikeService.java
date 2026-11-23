@@ -85,14 +85,28 @@ public final class StrikeService {
         return launch(level, weapon, target, point, approachYaw, owner, siren, nuke, via, from, 0);
     }
 
+    /** {@link #launch} as order round {@code round}: the projectile (or scheduled ICBM strike) carries it, Released posted. */
+    public static Result launch(ServerLevel level, WeaponType weapon, Target target, Vec3 point, float approachYaw,
+                                @Nullable UUID owner, boolean siren, Loadout.Nuke nuke, Waypoints via, @Nullable LaunchOrigin from,
+                                @Nullable RoundRef round) {
+        return launch(level, weapon, target, point, approachYaw, owner, siren, nuke, via, from, 0, round);
+    }
+
     /**
      * Salvo projectile ({@link SalvoData}) as {@link #launch}, in its own lane: route shifted sideways {@code
      * lane} blocks ({@link WeaponSpec.Lanes}, {@link Route#inLane}); 0 follows path itself.
      */
     public static Result launch(ServerLevel level, WeaponType weapon, Target target, Vec3 point, float approachYaw,
                                 @Nullable UUID owner, boolean siren, Loadout.Nuke nuke, Waypoints via, @Nullable LaunchOrigin from, double lane) {
+        return launch(level, weapon, target, point, approachYaw, owner, siren, nuke, via, from, lane, null);
+    }
+
+    /** Salvo projectile in its lane as order round {@code round} (null: outside the order lifecycle). */
+    public static Result launch(ServerLevel level, WeaponType weapon, Target target, Vec3 point, float approachYaw,
+                                @Nullable UUID owner, boolean siren, Loadout.Nuke nuke, Waypoints via, @Nullable LaunchOrigin from, double lane,
+                                @Nullable RoundRef round) {
         ServerPlayer shooter = owner == null ? null : level.getServer().getPlayerList().getPlayer(owner);
-        return launch(level, weapon, target, point, approachYaw, owner, shooter, siren, nuke, via, from, lane);
+        return launch(level, weapon, target, point, approachYaw, owner, shooter, siren, nuke, via, from, lane, round);
     }
 
     /**
@@ -101,12 +115,19 @@ public final class StrikeService {
      */
     public static Result launchBy(ServerLevel level, WeaponType weapon, Target target, Vec3 point, float approachYaw,
                                   ServerPlayer shooter, boolean siren, Loadout.Nuke nuke, Waypoints via, @Nullable LaunchOrigin from) {
-        return launch(level, weapon, target, point, approachYaw, shooter.getUUID(), shooter, siren, nuke, via, from, 0);
+        return launchBy(level, weapon, target, point, approachYaw, shooter, siren, nuke, via, from, null);
+    }
+
+    /** {@link #launchBy} as order round {@code round}. */
+    public static Result launchBy(ServerLevel level, WeaponType weapon, Target target, Vec3 point, float approachYaw,
+                                  ServerPlayer shooter, boolean siren, Loadout.Nuke nuke, Waypoints via, @Nullable LaunchOrigin from,
+                                  @Nullable RoundRef round) {
+        return launch(level, weapon, target, point, approachYaw, shooter.getUUID(), shooter, siren, nuke, via, from, 0, round);
     }
 
     private static Result launch(ServerLevel level, WeaponType weapon, Target target, Vec3 point, float approachYaw, @Nullable UUID owner,
                                  @Nullable ServerPlayer shooter, boolean siren, Loadout.Nuke nuke, Waypoints via, @Nullable LaunchOrigin from,
-                                 double lane) {
+                                 double lane, @Nullable RoundRef round) {
         if (shooter != null && shooter.level() != level) shooter = null;
         WeaponSpec spec = weapon.spec();
         FixedLauncherBlockEntity fixed = null;
@@ -124,7 +145,7 @@ public final class StrikeService {
         }
         boolean ok = false;
         try {
-            Result r = launch(level, weapon, target, point, approachYaw, owner, shooter, siren, nuke, via, from, fixed, lane);
+            Result r = launch(level, weapon, target, point, approachYaw, owner, shooter, siren, nuke, via, from, fixed, lane, round);
             ok = r.ok();
             return r;
         } finally {
@@ -135,7 +156,7 @@ public final class StrikeService {
 
     private static Result launch(ServerLevel level, WeaponType weapon, Target target, Vec3 point, float approachYaw, @Nullable UUID owner,
                                  @Nullable ServerPlayer shooter, boolean siren, Loadout.Nuke nuke, Waypoints via, @Nullable LaunchOrigin from,
-                                 @Nullable FixedLauncherBlockEntity fixed, double lane) {
+                                 @Nullable FixedLauncherBlockEntity fixed, double lane, @Nullable RoundRef round) {
         if (siren) StrikeWorld.get(level).newOrder(owner, weapon);
         WeaponSpec spec = weapon.spec();
         // This launch's miss (spec): aim at shifted target, relative offset for entity.
@@ -144,7 +165,9 @@ public final class StrikeService {
             target = target.offset(miss);
             point = point.add(miss);
         }
-        if (spec.launch() == WeaponSpec.Launch.ICBM) return launchIcbm(level, target, point, nuke, shooter, owner, from, IncomingConfig.SERVER.nukeFlightTime.get());
+        if (spec.launch() == WeaponSpec.Launch.ICBM) {
+            return launchIcbm(level, target, point, nuke, shooter, owner, from, IncomingConfig.SERVER.nukeFlightTime.get(), round);
+        }
         Loadout.Nuke warhead = nuke.onCarrier() && Loadout.carriesNuke(weapon) ? nuke : null;
         Stand stand = fixed != null ? Stand.fixed(fixed) : new Stand(post(level, shooter, owner, from, point), null, from == null ? null : from.at());
         StrikeProjectile p = switch (spec.launch()) {
@@ -172,6 +195,11 @@ public final class StrikeService {
             }
             if (!added) return Result.FAILED;
         }
+        if (round != null) {
+            // Only a projectile that made it into the world or off-world flight carries the round: a refused one failed.
+            p.attachRound(round);
+            Orders.released(level, round, weapon, owner, p.position(), point);
+        }
         return new Result(true, eta);
     }
 
@@ -188,15 +216,21 @@ public final class StrikeService {
     /** ICBM at an ordered pad, retaining the owner even when they are offline. */
     public static Result launchIcbm(ServerLevel level, Target target, Vec3 point, Loadout.Nuke nuke, @Nullable ServerPlayer shooter,
                                     @Nullable UUID owner, @Nullable LaunchOrigin from, int flightTicks) {
+        return launchIcbm(level, target, point, nuke, shooter, owner, from, flightTicks, null);
+    }
+
+    /** ICBM as order round {@code round}: the scheduled strike carries it ({@link NuclearStrikes}). */
+    public static Result launchIcbm(ServerLevel level, Target target, Vec3 point, Loadout.Nuke nuke, @Nullable ServerPlayer shooter,
+                                    @Nullable UUID owner, @Nullable LaunchOrigin from, int flightTicks, @Nullable RoundRef round) {
         if (shooter != null && shooter.level() != level) shooter = null;
         if (from != null) {
             Vec3 aim = target instanceof Target.Ground ? point : NuclearStrikes.ground(level, point);
             return new Result(NuclearStrikes.launchAt(level, aim, target instanceof Target.Ground, nuke.yieldKt(), nuke.airBurst(),
-                    from, owner, flightTicks), flightTicks);
+                    from, owner, flightTicks, round), flightTicks);
         }
         boolean ok = target instanceof Target.Ground
-                ? NuclearStrikes.launch(level, point, true, nuke.yieldKt(), nuke.airBurst(), shooter, flightTicks)
-                : NuclearStrikes.launch(level, NuclearStrikes.ground(level, point), false, nuke.yieldKt(), nuke.airBurst(), shooter, flightTicks);
+                ? NuclearStrikes.launch(level, point, true, nuke.yieldKt(), nuke.airBurst(), shooter, flightTicks, round)
+                : NuclearStrikes.launch(level, NuclearStrikes.ground(level, point), false, nuke.yieldKt(), nuke.airBurst(), shooter, flightTicks, round);
         return new Result(ok, flightTicks);
     }
 

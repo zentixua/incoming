@@ -247,19 +247,21 @@ public final class Munitions {
      * offline owner gets no refund.
      *
      * @param why refund reason for log
+     * @return the owner received it (false: offline, or nothing to return)
      */
-    public static void refund(Collection<? extends ServerPlayer> online, @Nullable UUID owner, Bill bill, String why) {
-        if (owner == null || bill.shots() <= 0 && bill.warheads() <= 0) return;
+    public static boolean refund(Collection<? extends ServerPlayer> online, @Nullable UUID owner, Bill bill, String why) {
+        if (owner == null || bill.shots() <= 0 && bill.warheads() <= 0) return false;
         for (ServerPlayer p : online) {
             if (p.getUUID().equals(owner)) {
                 refund(p, bill);
                 Incoming.LOG.info("Munitions refund ({}): {} ×{}{} — {}", why, bill.weapon().getSerializedName(), bill.shots(),
                         bill.warheads() > 0 ? ", nuclear warheads ×" + bill.warheads() : "", p.getGameProfile().getName());
-                return;
+                return true;
             }
         }
         Incoming.LOG.info("Munitions refund ({}): {} ×{}{} not returned — owner {} is offline", why, bill.weapon().getSerializedName(),
                 bill.shots(), bill.warheads() > 0 ? ", nuclear warheads ×" + bill.warheads() : "", owner);
+        return false;
     }
 
     /** Give {@code rounds}: first refill opened packs (canceled salvo restores whole pack), then give items. */

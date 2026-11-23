@@ -20,6 +20,8 @@ import net.neoforged.neoforge.network.handling.IPayloadContext;
 import org.jetbrains.annotations.Nullable;
 import ua.zentix.incoming.Incoming;
 import ua.zentix.incoming.IncomingConfig;
+import ua.zentix.incoming.api.StrikeOrderEvent;
+import ua.zentix.incoming.api.StrikeRoundEvent;
 import ua.zentix.incoming.compat.SubLevels;
 import ua.zentix.incoming.entity.DebrisEntity;
 import ua.zentix.incoming.entity.LauncherEntity;
@@ -48,6 +50,7 @@ import java.util.Locale;
 import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
+import java.util.function.Consumer;
 import java.util.function.Predicate;
 
 /**
@@ -424,6 +427,22 @@ public final class ServerActions {
      */
     public static boolean strike(ServerPlayer player, WeaponType weapon, int count, int spread, Aim aim, Loadout.Nuke nuke, Waypoints via,
                                  @Nullable LaunchOrigin from, boolean rules) {
+        return strike(player, weapon, count, spread, aim, nuke, via, from, rules, null);
+    }
+
+    /**
+     * Same order carrying group name {@code tag} on its rounds ({@link Order#tagged}). Admission ({@link Orders#admit})
+     * follows Incoming's own checks: listeners see the order before payment.
+     */
+    public static boolean strike(ServerPlayer player, WeaponType weapon, int count, int spread, Aim aim, Loadout.Nuke nuke, Waypoints via,
+                                 @Nullable LaunchOrigin from, boolean rules, @Nullable String tag) {
+        Aim asAsked = aim;
+        if (Orders.elsewhere(player.serverLevel(), () -> {
+            // later the player may have left (inventory already saved) or respawned (a new object): order as they are now
+            ServerPlayer now = live(player);
+            if (now != null) strike(now, weapon, count, spread, asAsked, nuke, via, from, rules, tag);
+            else Incoming.LOG.info("Queued strike order dropped: {} left", player.getGameProfile().getName());
+        })) return true;
         if (rules) {
             aim = ruled(player, aim);
             if (aim == null) return false;
@@ -448,13 +467,21 @@ public final class ServerActions {
         }
         // Whole order at once: do not shrink salvo to inventory contents.
         Munitions.Bill bill = rules && !player.hasInfiniteMaterials() ? Munitions.Bill.of(l) : null;
-        if (bill != null && !Munitions.pay(player, bill)) return false;
-        if (aim.label() != null) player.sendSystemMessage(locked(weapon, aim).withStyle(ChatFormatting.GOLD));
-        // Non-operator nuclear strike: second key and at least 90 s flight/delay, retaining an authorized origin.
-        if (l.nuclear() && rules && !NuclearKeys.trusted(player)) {
-            return NuclearKeys.order(player, player.server.getPlayerList().getPlayers(), l, aim, via, from, bill);
-        }
-        return launch(player.serverLevel(), player.getGameProfile().getName(), player, player.getYRot(), l, aim, via, from, bill);
+        Aim target = aim;
+        Order order = Order.player(player, l, target, bill != null ? StrikeOrderEvent.Payment.UPFRONT : StrikeOrderEvent.Payment.WAIVED).tagged(tag);
+        return Orders.admit(order, o -> {
+            if (bill != null && !Munitions.pay(player, bill)) {
+                o.reject(StrikeOrderEvent.Reason.MUNITIONS);
+                return false;
+            }
+            if (target.label() != null) player.sendSystemMessage(locked(weapon, target).withStyle(ChatFormatting.GOLD));
+            // Non-operator nuclear strike: second key and at least 90 s flight/delay, retaining an authorized origin.
+            if (l.nuclear() && rules && !NuclearKeys.trusted(player)) {
+                o.accept(1);
+                return NuclearKeys.order(player, player.server.getPlayerList().getPlayers(), l, target, via, from, bill, o.round(0));
+            }
+            return launch(player.serverLevel(), player.getGameProfile().getName(), player, player.getYRot(), l, target, via, from, bill, o);
+        });
     }
 
     /**
@@ -549,7 +576,17 @@ public final class ServerActions {
      */
     public static boolean dispatch(ServerLevel level, String who, float yaw, WeaponType weapon, int count, int spread, Aim aim, Loadout.Nuke nuke,
                                    Waypoints via, @Nullable LaunchOrigin from) {
-        return launch(level, who, null, null, yaw, order(weapon, count, spread, nuke), aim, via, from, null);
+        return dispatch(level, who, yaw, weapon, count, spread, aim, nuke, via, from, null, null);
+    }
+
+    /**
+     * Same with group name {@code tag} on its rounds; {@code feedback} receives a listener's refusal (command source).
+     */
+    public static boolean dispatch(ServerLevel level, String who, float yaw, WeaponType weapon, int count, int spread, Aim aim, Loadout.Nuke nuke,
+                                   Waypoints via, @Nullable LaunchOrigin from, @Nullable String tag, @Nullable Consumer<Component> feedback) {
+        if (Orders.elsewhere(level, () -> dispatch(level, who, yaw, weapon, count, spread, aim, nuke, via, from, tag, feedback))) return true;
+        Loadout l = order(weapon, count, spread, nuke);
+        return Orders.admit(Order.server(level, who, l, aim, feedback).tagged(tag), o -> launch(level, who, null, null, yaw, l, aim, via, from, null, o));
     }
 
     /**
@@ -560,7 +597,22 @@ public final class ServerActions {
      * @return true if launched (salvo started)
      */
     public static boolean fromLauncher(ServerLevel level, String who, @Nullable UUID owner, Loadout l, Aim aim, Waypoints via, LaunchOrigin.Fixed at) {
-        return launch(level, who, null, owner, 0, clamp(l), aim, via, at, null);
+        return fromLauncher(level, who, owner, l, aim, via, at, null);
+    }
+
+    /** Same; {@code feedback} receives a listener's refusal (the launcher's status). */
+    public static boolean fromLauncher(ServerLevel level, String who, @Nullable UUID owner, Loadout l, Aim aim, Waypoints via, LaunchOrigin.Fixed at,
+                                       @Nullable Consumer<Component> feedback) {
+        Loadout order = clamp(l);
+        return Orders.admit(Order.launcher(level, at.pos(), owner, order, aim, feedback), o -> launch(level, who, null, owner, 0, order, aim, via, at, null, o));
+    }
+
+    /** {@code player} as they are in the game now: the same object, or their respawned one; null if they left. */
+    @Nullable
+    private static ServerPlayer live(ServerPlayer player) {
+        if (!player.isRemoved() && !player.hasDisconnected()) return player;
+        ServerPlayer now = player.server.getPlayerList().getPlayer(player.getUUID());
+        return now == null || now.hasDisconnected() ? null : now;
     }
 
     /** Order within server limits ({@link #clamp}). */
@@ -576,37 +628,47 @@ public final class ServerActions {
      * unlaunched rounds
      */
     private static boolean launch(ServerLevel level, String who, @Nullable ServerPlayer owner, float yaw, Loadout l, Aim aim, Waypoints via,
-                                  @Nullable LaunchOrigin from, @Nullable Munitions.Bill paid) {
-        return launch(level, who, owner, owner == null ? null : owner.getUUID(), yaw, l, aim, via, from, paid);
+                                  @Nullable LaunchOrigin from, @Nullable Munitions.Bill paid, Order order) {
+        return launch(level, who, owner, owner == null ? null : owner.getUUID(), yaw, l, aim, via, from, paid, order);
     }
 
-    /** {@link #launch} for {@code ownerId}: {@code owner} is shooter when player ordered, not launcher/console. */
+    /**
+     * {@link #launch} for {@code ownerId}: {@code owner} is shooter when player ordered, not launcher/console. Accepts
+     * {@code order} once recorded (salvo stored, or just before the single launch, whose failure ends its round).
+     */
     private static boolean launch(ServerLevel level, String who, @Nullable ServerPlayer owner, @Nullable UUID ownerId, float yaw, Loadout l, Aim aim,
-                                  Waypoints via, @Nullable LaunchOrigin from, @Nullable Munitions.Bill paid) {
+                                  Waypoints via, @Nullable LaunchOrigin from, @Nullable Munitions.Bill paid, Order order) {
         StrikeService.log(level, who, l.weapon(), l.count(), l.spread(), aim.target(), aim.point(), via, from);
         float course = from != null ? FlightController.anglesTo(from.at(), aim.point())[0] : yaw;
         // Unready launch site: even one projectile uses a salvo, which loads/waits for site (LaunchPlaces), rather than starting
         // outside the loaded world, already cruising, where launch is invisible.
         if (l.count() > 1 || l.spread() > 0 || LaunchPlaces.waits(level, l.weapon(), from)) {
-            SalvoData.start(level, l.weapon(), l.count(), l.spread(), aim.target(), aim.point(), course, ownerId, l.nuke(), via, from, paid != null);
+            SalvoData.start(level, l.weapon(), l.count(), l.spread(), aim.target(), aim.point(), course, ownerId, l.nuke(), via, from, paid != null,
+                    order);
+            order.accept(l.count());
             return true;
         }
+        order.accept(1);
+        RoundRef round = order.round(0);
         StrikeService.Result r;
         String why = "launch failed";
         try {
-            r = owner == null ? StrikeService.launch(level, l.weapon(), aim.target(), aim.point(), course, ownerId, true, l.nuke(), via, from)
-                    : StrikeService.launchBy(level, l.weapon(), aim.target(), aim.point(), course, owner, true, l.nuke(), via, from);
+            r = owner == null ? StrikeService.launch(level, l.weapon(), aim.target(), aim.point(), course, ownerId, true, l.nuke(), via, from, round)
+                    : StrikeService.launchBy(level, l.weapon(), aim.target(), aim.point(), course, owner, true, l.nuke(), via, from, round);
         } catch (RuntimeException e) {
             // Like salvo (SalvoData.tick): exception during launch counts as failed, refund payment.
             Incoming.LOG.error("Launch {} failed with an exception — {}", l.weapon().getSerializedName(), who, e);
             r = StrikeService.Result.FAILED;
             why = "launch failed with an exception";
         }
+        boolean refunded = order.payment() == StrikeOrderEvent.Payment.PER_RELEASE;
         if (owner != null) {
             if (r.ok()) StrikeService.confirm(owner, l.weapon(), r.eta());
             else refuse(owner, Component.translatable("incoming.launch_failed"));
-            if (!r.ok() && paid != null) Munitions.refund(List.of(owner), owner.getUUID(), paid, why);
+            if (!r.ok() && paid != null) refunded = Munitions.refund(List.of(owner), owner.getUUID(), paid, why);
         }
+        // A fixed launcher's failed release put its munition back (StrikeService); nothing left a waived order.
+        if (!r.ok()) Orders.ended(level, round, l.weapon(), ownerId, RoundEnd.unreleased(StrikeRoundEvent.Outcome.FAILED, refunded));
         return r.ok();
     }
 
@@ -819,8 +881,10 @@ public final class ServerActions {
                 if (onRail.stream().noneMatch(l::serves)) kill.add(l);
             }
             for (Entity e : kill) {
-                if (e instanceof StrikeProjectile) projectiles.add(e.getUUID());
-                else if (e instanceof LauncherEntity) launchersRemoved++;
+                if (e instanceof StrikeProjectile p) {
+                    projectiles.add(e.getUUID());
+                    p.endRound(RoundEnd.recalled(p.position()));
+                } else if (e instanceof LauncherEntity) launchersRemoved++;
                 e.discard();
             }
             // Nuclear salvo is only one projectile awaiting launch site (ServerActions.clamp, LaunchPlaces); like nuclear projectile,
@@ -890,6 +954,7 @@ public final class ServerActions {
                 }
             }
             for (StrikeProjectile p : mineOnRail) {
+                p.endRound(RoundEnd.recalled(p.position()));
                 p.discard();
                 gone.add(p.getUUID());
                 unlaunched++;

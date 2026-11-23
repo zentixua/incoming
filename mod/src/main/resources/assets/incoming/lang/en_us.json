@@ -66,6 +66,7 @@
   "incoming.recalled": "Strikes aborted: %s projectiles stopped, %s salvos cancelled. A nuclear strike cannot be aborted; Grad rockets in flight and a dropped bomb still hit.",
   "incoming.given": "Strike Designator given (%s).",
   "incoming.no_permission": "Only operators can use the designator here (Settings → Launch)",
+  "incoming.order.refused": "Strike order refused",
   "incoming.player_not_found": "Player “%s” not found",
   "incoming.player_other_world": "%s is in another dimension",
   "incoming.player_out_of_range": "%s is farther than %s blocks (map range)",

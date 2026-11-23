@@ -10,7 +10,6 @@ import net.minecraft.world.phys.Vec3;
 import org.jetbrains.annotations.Nullable;
 import ua.zentix.incoming.guidance.MissileAutopilot;
 import ua.zentix.incoming.nuclear.NuclearStrikes;
-import ua.zentix.incoming.nuclear.NuclearWarhead;
 import ua.zentix.incoming.util.Terrain;
 import ua.zentix.incoming.strike.WeaponSpec;
 import ua.zentix.incoming.strike.WeaponType;
@@ -98,8 +97,7 @@ public class CruiseMissileEntity extends StrikeProjectile {
             super.impact(level, point, hitEntity);
             return;
         }
-        discard();
-        NuclearWarhead.detonate(level, NuclearStrikes.ground(level, point), nuclear.yieldKt(), nuclear.airBurst(), ownerId());
+        detonateNuclear(level, NuclearStrikes.ground(level, point), nuclear.airBurst());
     }
 
     @Override

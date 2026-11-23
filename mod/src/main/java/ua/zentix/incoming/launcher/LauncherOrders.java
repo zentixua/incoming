@@ -21,6 +21,7 @@ import ua.zentix.incoming.strike.LaunchOrigin;
 import ua.zentix.incoming.strike.Loadout;
 import ua.zentix.incoming.strike.Munitions;
 import ua.zentix.incoming.strike.SalvoData;
+import ua.zentix.incoming.strike.Orders;
 import ua.zentix.incoming.strike.ServerActions;
 import ua.zentix.incoming.strike.StrikeWorld;
 import ua.zentix.incoming.strike.Waypoints;
@@ -49,6 +50,15 @@ public final class LauncherOrders {
     /** Signal reached launcher {@code be}: issue mission order. Null means ordered; otherwise failure reason. */
     @Nullable
     public static Component fire(ServerLevel level, FixedLauncherBlockEntity be) {
+        // started inside a strike-order listener or off the server thread: the whole firing, with its checks, later
+        if (Orders.elsewhere(level, () -> {
+            if (level.getBlockEntity(be.getBlockPos()) == be) be.fire(level);
+        })) return null;
+        return fireReason(level, be);
+    }
+
+    @Nullable
+    private static Component fireReason(ServerLevel level, FixedLauncherBlockEntity be) {
         Mission m = be.mission();
         if (m == null) return Component.translatable("incoming.fixed_launcher.no_mission.short");
         BlockPos pos = be.getBlockPos();
@@ -68,7 +78,7 @@ public final class LauncherOrders {
         if (missing != null) return missing;
         String who = "launcher " + pos.toShortString();
         Component before = be.lastReport();
-        boolean ok = ServerActions.fromLauncher(level, who, owner, l, new ServerActions.Aim(m.target(), m.point(), null), m.via(), origin);
+        boolean ok = ServerActions.fromLauncher(level, who, owner, l, new ServerActions.Aim(m.target(), m.point(), null), m.via(), origin, be::report);
         if (ok) return null;
         // Launch reported its own issue (blocked sector, inventory): this reason is more specific than the general one.
         return be.lastReport() != before ? be.lastReport() : Component.translatable("incoming.fixed_launcher.failed");

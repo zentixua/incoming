@@ -34,6 +34,8 @@ import ua.zentix.incoming.launcher.FixedLauncherBlockEntity;
 import ua.zentix.incoming.launcher.LauncherOrders;
 import ua.zentix.incoming.launcher.Mission;
 import ua.zentix.incoming.net.S2C;
+import ua.zentix.incoming.api.StrikeOrderEvent;
+import ua.zentix.incoming.nuclear.Detonation;
 import ua.zentix.incoming.nuclear.NuclearStrikes;
 import ua.zentix.incoming.nuclear.radiation.GeigerFormat;
 import ua.zentix.incoming.nuclear.radiation.RadiationDose;
@@ -42,6 +44,7 @@ import ua.zentix.incoming.registry.ModItems;
 import ua.zentix.incoming.strike.LaunchOrigin;
 import ua.zentix.incoming.strike.Loadout;
 import ua.zentix.incoming.strike.NuclearKeys;
+import ua.zentix.incoming.strike.Orders;
 import ua.zentix.incoming.strike.ServerActions;
 import ua.zentix.incoming.strike.TargetMode;
 import ua.zentix.incoming.strike.Waypoints;
@@ -217,9 +220,29 @@ public final class IncomingCommand {
         return aim.point();
     }
 
+    /** Burst without flight: an order like any other ({@link Orders}), unpaid, its round released at the burst point. */
     private static int nukeNow(CommandSourceStack s, Vec3 pos, Loadout.Nuke nuke) {
         Entity e = s.getEntity();
-        var d = NuclearStrikes.detonateNow(s.getLevel(), NuclearStrikes.ground(s.getLevel(), pos), nuke.yieldKt(), nuke.airBurst(), e == null ? null : e.getUUID());
+        ServerLevel level = s.getLevel();
+        if (Orders.elsewhere(level, () -> nukeNow(s, pos, nuke))) return 1;
+        // a rerun later: the command's own gate as it is then
+        if (!mayNuke(s) || !s.hasPermission(2)) return 0;
+        Vec3 ground = NuclearStrikes.ground(level, pos);
+        // the yield that will burst: detonateNow applies the server's limit
+        Loadout l = new Loadout(WeaponType.NUKE, 1, 0, TargetMode.LOOK, "", nuke.withYield(Math.min(nuke.yieldKt(), IncomingConfig.SERVER.nukeMaxYield.get())));
+        ServerActions.Aim aim = new ServerActions.Aim(new Target.Point(ground), ground, null);
+        // ua.zentix.incoming.strike.Order: this class's own Order is a command path step.
+        ua.zentix.incoming.strike.Order order = e instanceof ServerPlayer p
+                ? ua.zentix.incoming.strike.Order.player(level, p, l, aim, StrikeOrderEvent.Payment.WAIVED)
+                : ua.zentix.incoming.strike.Order.server(level, s.getTextName(), l, aim, s::sendFailure);
+        Detonation[] burst = new Detonation[1];
+        boolean admitted = Orders.admit(order, o -> {
+            o.accept(1);
+            burst[0] = NuclearStrikes.detonateNow(level, ground, nuke.yieldKt(), nuke.airBurst(), e == null ? null : e.getUUID(), o.round(0));
+            return true;
+        });
+        if (!admitted) return 0;
+        Detonation d = burst[0];
         double kt = d != null ? d.yieldKt() : Math.min(nuke.yieldKt(), IncomingConfig.SERVER.nukeMaxYield.get());
         s.sendSuccess(() -> Component.translatable(d != null ? "incoming.nuke.detonated" : "incoming.nuke.detonating", Math.round(kt),
                 Component.translatable(nuke.airBurst() ? "incoming.nuke.burst.air" : "incoming.nuke.burst.ground"),
@@ -390,7 +413,8 @@ public final class IncomingCommand {
         }
         boolean ok = player != null
                 ? ServerActions.strike(player, w, count, spread, aim, nuke, path.via(), path.from(), rules(s))
-                : ServerActions.dispatch(level, s.getTextName(), s.getRotation().y, w, count, spread, aim, nuke, path.via(), path.from());
+                : ServerActions.dispatch(level, s.getTextName(), s.getRotation().y, w, count, spread, aim, nuke, path.via(), path.from(), null,
+                s::sendFailure);
         return ok ? 1 : 0;
     }
 

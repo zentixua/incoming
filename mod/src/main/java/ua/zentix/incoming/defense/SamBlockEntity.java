@@ -174,7 +174,7 @@ public class SamBlockEntity extends BlockEntity {
         if (ready > 0 && !covered) {
             Radar.Track shot = FireControl.pick(tracks, DefenseWorld.get(level));
             if (shot != null) {
-                FireControl.launch(level, rail(pos, ready - 1), shot, owner, pos.toShortString(), spec);
+                FireControl.launch(level, rail(pos, ready - 1), shot, owner, pos.immutable(), spec);
                 ready--;
                 setChanged();
             }

@@ -50,6 +50,8 @@ public final class VirtualFlights extends SavedData {
             copy = saved ? create(level, tag) : null;
             if (copy != null) {
                 p.handOverTargetArea(copy);
+                // The copy loaded the round from the same save: the old entity's removal does not end it.
+                p.detachRound();
                 get(level).add(copy);
             } else Incoming.LOG.warn("Projectile {} {} at {} could not switch to off-world flight ({}), removed", p.getType().getDescriptionId(), p.getUUID(),
                     p.blockPosition(), saved ? "copy not created" : "save failed");
@@ -85,7 +87,8 @@ public final class VirtualFlights extends SavedData {
     }
 
     /**
-     * Cancel: remove projectiles matching {@code which} without exploding.
+     * Cancel: remove projectiles matching {@code which} without exploding; their rounds end recalled (an interception
+     * already ended its own).
      *
      * @return UUIDs of removed projectiles
      */
@@ -95,6 +98,7 @@ public final class VirtualFlights extends SavedData {
         for (Iterator<StrikeProjectile> it = flights.iterator(); it.hasNext(); ) {
             StrikeProjectile p = it.next();
             if (!which.test(p)) continue;
+            p.endRound(RoundEnd.recalled(p.position()));
             p.discard();
             it.remove();
             removed.add(p.getUUID());

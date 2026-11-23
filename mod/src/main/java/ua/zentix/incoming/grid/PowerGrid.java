@@ -188,8 +188,10 @@ public final class PowerGrid extends SavedData {
     /**
      * Forget outages with power restored everywhere: deadline passed and restoration cascade processed the whole area
      * (otherwise loaded chunks not reached by it would stay dark).
+     *
+     * @return the outages forgotten now (restoration complete)
      */
-    public void prune(long now) {
+    public List<Outage> prune(long now) {
         List<Outage> over = outages.stream().filter(o -> o.over(now) && swept(o.id(), true) == Long.MAX_VALUE).toList();
         if (!over.isEmpty()) {
             outages.removeAll(over);
@@ -201,6 +203,7 @@ public final class PowerGrid extends SavedData {
         }
         // own-supply lamps matter only while an outage covers their chunk
         if (!own.isEmpty() && own.keySet().removeIf(c -> !covered(ChunkPos.getX(c), ChunkPos.getZ(c)))) setDirty();
+        return over;
     }
 
     public long swept(int outage, boolean restore) {
