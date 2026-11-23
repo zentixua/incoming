@@ -68,6 +68,9 @@ Prism: `~/.var/app/org.prismlauncher.PrismLauncher/data/PrismLauncher/` (`tools/
     dust_wall_contract_gl.py [checkout] [case ...] ← Mesa GL contracts for depth ordering, ownership and reprojection.
                                            Use motion for camera translation/rotation and edge for slopes and convex corners.
                                            dust_wall_gl.py runs every case.
+    wall_layer_identity.py               ← fixed-seed llvmpipe comparison with fixtures/wall_layer_7de91b6d1.glsl, run by
+                                           dust_wall_gl.py. Checks light, depth and clipped transmission across 672 cases.
+    dust_wall_ray_cost.py <checkout> [readbacks.npz] ← llvmpipe timings and optional RGBA32F readbacks for the pall ray pass
     nested_kwin.sh                       ← nested KWin for the client: no window and no host sound, its own D-Bus bus without starting services
                                            (nested_kwin_bus.conf) and XDG directories; takes the GPU lease and the client lock
                                            (gpu_lease.sh); exit 75 means whoever holds the GPU or Artem's game running (an exclusive client never starts beside it); with INCOMING_SOFT=1 a CPU session
