@@ -36,6 +36,10 @@ fires only while its chunk is loaded, and never from an aircraft.
 If the launcher clicks but does not fire, RMB on it with an empty hand shows why: no mission, not enough stock, the
 previous order still running, or buildings blocking the launch sector.
 
+With Jade, looking at the launcher shows its stock and whether it is ready to fire; its owner, mission and the reasons
+about them only to the owner's side and operators. A CC:Tweaked computer next to it reads its status and fires its
+mission like a signal, but cannot change the mission ([For server owners and pack makers](packs.md#computers-cctweaked)).
+
 ## Crafting
 
 ![Fixed launcher recipe](img/recipe-fixed_launcher.png)

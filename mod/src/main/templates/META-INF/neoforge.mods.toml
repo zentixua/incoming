@@ -75,3 +75,22 @@ reason = "Nuclear radiation: Mekanism's radiation shielding of worn items"
 versionRange = "[10.7,)"
 ordering = "NONE"
 side = "BOTH"
+
+# Jade is optional: overlay lines for the launcher, the SAM, the substation and strike projectiles (compat/jade, found by
+# Jade's own plugin scan); owner and mission only for the owner's side and operators.
+[[dependencies.${mod_id}]]
+modId = "jade"
+type = "optional"
+reason = "Overlay lines: launcher mission and readiness, SAM radar, substation outage, projectile owner"
+versionRange = "[15,)"
+ordering = "NONE"
+side = "BOTH"
+
+# CC:Tweaked is optional: computer peripherals of the fixed launcher and the SAM (compat/computercraft).
+[[dependencies.${mod_id}]]
+modId = "computercraft"
+type = "optional"
+reason = "Computer peripherals: launcher status and fire, SAM stock, tracking and alert events"
+versionRange = "[1.113,)"
+ordering = "NONE"
+side = "BOTH"

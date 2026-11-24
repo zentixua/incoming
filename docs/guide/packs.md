@@ -321,6 +321,68 @@ while true do
 end
 ```
 
+## Jade
+
+With Jade on the server and the client, looking at Incoming's blocks and projectiles shows what the block itself does
+not:
+
+| Looking at | Everyone sees | The owner's side and operators also see |
+|---|---|---|
+| Fixed launcher | rounds of its mission's weapon in stock (munitions held, without a mission); ready to fire, or cannot fire, with the reason when it is about the launcher itself: no mission, busy, on an aircraft | the owner, the mission (weapon, count, target, spread) and every reason it cannot fire |
+| SAM | missiles on the rails and in stock; how many hostile targets its radar tracks, or that a roof blinds it | |
+| Transformer Substation | working; knocked out, and in how many hours of the world's day repairs start; or without power in a destroyed zone | |
+| Strike projectile | its weapon | its owner |
+
+The owner's side is the owner and the players on the owner's team (`/team`); operators have permission level 2. A
+launcher placed or a projectile launched by command has no owner: its owner line and mission are for operators. The
+server sends each player only what that player may see. Each of the four can be turned off in Jade's plugin settings.
+
+## Computers (CC:Tweaked)
+
+With CC:Tweaked, a computer next to a fixed launcher or a SAM, or connected to one by a wired modem, uses it as a
+peripheral. Every call runs on the server's main thread, so it takes at least one tick.
+
+Fixed launcher, peripheral type `incoming_launcher`:
+
+| Method | Returns |
+|---|---|
+| `getStatus()` | a table: `mission` (`weapon`, `count`, `spread`, `x`, `y`, `z`; absent without a mission), `ready` (a signal now would fire it), `busy`, and when it is not ready, `reason` (a code) and `message` (the English text) |
+| `getStock()` | rounds held per weapon: `drone` (Shahed-136), `missile`, `rocket` (Grad), `loiter` (Lancet) |
+| `fire()` | `true` when the order is given, otherwise `false, reason, message` |
+
+`fire()` is a redstone signal: the same order in the owner's name with the owner's rights and limit, the same refusals,
+the same strike events, munitions paid as each round takes the rail. A computer cannot set or clear a mission: that
+stays the designator's and `/incoming launcher … mission`. A reason code is the refusal's language key without
+`incoming.`, for example `fixed_launcher.no_mission.short`, `fixed_launcher.busy`, `fixed_launcher.no_rights`,
+`fixed_launcher.out_of_range`, `fixed_launcher.sector` and `munitions.short`.
+
+SAM, peripheral type `incoming_sam`:
+
+| Method | Returns |
+|---|---|
+| `getStock()` | `ready` (missiles on the rails), `rails`, `stored` |
+| `getTracking()` | from its radar's latest sweep: `tracking` (a hostile target, as the redstone signal), `hostile`, `tracks` (everything on the radar), `covered` (a roof blinds it) |
+| `isTracking()` | `true` while its radar tracks a hostile target |
+
+While its radar tracks a hostile target, every sweep (twice a second) sends the event `incoming_alert` to the computers
+attached to this SAM: the attachment name, the number of hostile targets and the distance to the nearest, in blocks.
+The events stop with the first sweep that sees none. No other computer receives them.
+
+```lua
+-- a SAM on the left, fixed launchers on the computer's wired modem network: one salvo per raid
+local sam = peripheral.wrap("left")
+local launchers = { peripheral.find("incoming_launcher") }
+while true do
+  local _, _, hostile, distance = os.pullEvent("incoming_alert")
+  print(("Air raid: %d hostile, nearest %d blocks"):format(hostile, distance))
+  for _, launcher in ipairs(launchers) do
+    local ok, _, message = launcher.fire()
+    if not ok then print(message) end
+  end
+  while sam.isTracking() do sleep(1) end
+end
+```
+
 ## Blocks from other mods
 
 How a block holds up in a strike comes from data that a datapack or a mod can extend: a data map for what a bomb and a

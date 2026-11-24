@@ -9,6 +9,11 @@ paths:
   - "mod/src/main/java/ua/zentix/incoming/client/render/FixedLauncherRenderer.java"
   - "mod/src/test/java/ua/zentix/incoming/entity/LaunchQueueTest.java"
   - "mod/src/devtest/java/ua/zentix/incoming/gametest/FixedLauncherGameTests.java"
+  - "mod/src/main/java/ua/zentix/incoming/info/**"
+  - "mod/src/main/java/ua/zentix/incoming/compat/jade/**"
+  - "mod/src/main/java/ua/zentix/incoming/compat/computercraft/**"
+  - "mod/src/devtest/java/ua/zentix/incoming/gametest/ReadoutGameTests.java"
+  - "mod/src/devtest/java/ua/zentix/incoming/gametest/AutomationGameTests.java"
 ---
 
 # Fixed launcher (`launcher/`)
@@ -56,6 +61,15 @@ paths:
   rack is not silent (`LaunchQueue.silent`) — `LauncherOrders.busy`: neither orders nor new missions (a mission changes
   the rack, whereas salvo projectiles start from their weapon's rack; `StrikeService` launches only the rack's weapon
   on a round).
+- Overlays and computers (`info/`, no foreign type): `LauncherOrders.problem` is the redstone path's own checks before
+  the launch (`fire` = `problem` + launch), so "why it cannot fire" is one law. `info/Readout` builds Jade lines on the
+  server; owner and mission (and any refusal outside `Readout.PUBLIC_REFUSALS`) only for `Readout.privileged` (operator
+  level 2, or `Sides.friendly` with the owner; ownerless: operators), so a viewer without rights never receives them.
+  `info/Automation` is the CC:Tweaked tables and `fire` (= `FixedLauncherBlockEntity.fire`, the redstone tick's call);
+  nothing changes a mission. Bridges: `compat/jade` (found by Jade's `@WailaPlugin` scan, never named), `compat/computercraft`
+  (`PeripheralCapability` listener added in `Incoming` behind `isLoaded("computercraft")`); `OptionalModsTest` scans
+  the bytecode for any other reference. Neither mod is in the GameTest runtime: `ReadoutGameTests`, `AutomationGameTests`
+  probe the core, `LinesTest`, `PeripheralsTest` the adapters (CC:Tweaked API compiled at 1.113.0, its first 1.21.1).
 - For the game master and scripts: `/incoming launcher <x y z>` (operator, `IncomingCommand.launcher`): status, `fire`,
   `mission` (no player rules; target `x z` is a ground location, `x y z` a point; route via `routeProblem` from the
   launcher), `clear`, `load N`, `owner`; position must be in a ready chunk; `mission` and `clear` refuse a busy launcher.

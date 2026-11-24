@@ -35,6 +35,7 @@ import ua.zentix.incoming.util.Terrain;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
+import java.util.concurrent.CopyOnWriteArrayList;
 
 /**
  * Stationary SAM: placer (their side is friendly, {@link Sides}), stored interceptor missiles (hopper and Create
@@ -71,6 +72,13 @@ public class SamBlockEntity extends BlockEntity {
     private int reload;
     /** What radar saw on its last sweep (for the status line): total and hostile targets. */
     private int lastTracks, lastHostile;
+    /** Distance from the antenna to the nearest hostile track of the last sweep, blocks; infinite without one. */
+    private double lastNearest = Double.POSITIVE_INFINITY;
+    /**
+     * Told on every sweep that sees a hostile track (not saved): computers attached to this SAM. Attach and detach may
+     * come from another thread (a computer's), so the list is copy-on-write; the sweep reads it on the server thread.
+     */
+    private final List<Watcher> watchers = new CopyOnWriteArrayList<>();
     /** Sky above the SAM is blocked: it does not fire under a roof. */
     private boolean covered;
     /**
@@ -110,6 +118,49 @@ public class SamBlockEntity extends BlockEntity {
     /** Insert missiles into storage; returns what did not fit. */
     public ItemStack load(ItemStack stack) {
         return stock.load(stack);
+    }
+
+    /** Radar tracks (any side) of the latest sweep. */
+    public int tracks() {
+        return lastTracks;
+    }
+
+    /** Hostile radar tracks of the latest sweep: the SAM tracks while this is above zero (the redstone alarm). */
+    public int hostile() {
+        return lastHostile;
+    }
+
+    /** Distance from the antenna to the nearest hostile track of the latest sweep, blocks; infinite without one. */
+    public double nearestHostile() {
+        return lastNearest;
+    }
+
+    /** The sky above is blocked: the SAM does not fire (latest sweep). */
+    public boolean covered() {
+        return covered;
+    }
+
+    /** Rails the SAM holds missiles on (the world's {@code sam_rails}). */
+    public static int rails() {
+        return IncomingConfig.SERVER.samRails.get();
+    }
+
+    /**
+     * Something that follows this SAM's tracking (a computer attached to it): told on each sweep that sees a hostile
+     * track, on the server thread, until removed. Not saved.
+     */
+    @FunctionalInterface
+    public interface Watcher {
+        /** This sweep sees {@code hostile} hostile tracks, the nearest {@code nearest} blocks from the antenna. */
+        void tracking(int hostile, double nearest);
+    }
+
+    public void watch(Watcher w) {
+        if (!watchers.contains(w)) watchers.add(w);
+    }
+
+    public void unwatch(Watcher w) {
+        watchers.remove(w);
     }
 
     /** The latest radar sweep saw a hostile projectile: redstone alarm on ({@link SamBlock#ALARM}). */
@@ -174,14 +225,18 @@ public class SamBlockEntity extends BlockEntity {
         String side = owner == null ? null : Sides.side(level.getServer(), owner);
         lastTracks = tracks.size();
         lastHostile = 0;
+        lastNearest = Double.POSITIVE_INFINITY;
         for (Radar.Track t : tracks) {
             if (!t.hostile()) continue;
             lastHostile++;
+            lastNearest = Math.min(lastNearest, t.distance());
             // The side's controller map shows hostile radar targets; the side already sees its own projectiles.
             if (side != null) Sightings.spot(level, side, t.projectile(), Sightings.Source.RADAR);
         }
         AirAlert.sweep(level, owner, side, tracks);
         setAlarm(level, pos, lastHostile > 0);
+        // the same condition as the alarm: the SAM tracks while its sweep sees a hostile target
+        if (lastHostile > 0) for (Watcher w : watchers) w.tracking(lastHostile, lastNearest);
         // Open sky above the SAM (its chunk is ready because it ticks): a missile launches upward and would burst against a roof.
         covered = Terrain.height(level, Heightmap.Types.MOTION_BLOCKING, pos.getX(), pos.getZ()) > pos.getY() + 1;
         if (ready > 0 && !covered) {

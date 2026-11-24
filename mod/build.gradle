@@ -50,6 +50,11 @@ repositories {
         forRepository { maven { url = 'https://modmaven.dev/' } }
         filter { includeGroup 'mekanism' }
     }
+    // CC:Tweaked API (MPL-2.0): PeripheralCapability, IPeripheral for compat/computercraft
+    exclusiveContent {
+        forRepository { maven { url = 'https://maven.squiddev.cc' } }
+        filter { includeGroup 'cc.tweaked' }
+    }
     // glsl-processor — parsing of Veil's GLSL (carried by Sable): ShaderSourceTest runs its shaders through it
     exclusiveContent {
         forRepository { maven { url = 'https://maven.blamejared.com' } }
@@ -285,6 +290,16 @@ dependencies {
     // unit tests use it too (the adapter against a stand-in shielding)
     compileOnly "mekanism:Mekanism:${minecraft_version}-${mekanism_version}:api"
     testImplementation "mekanism:Mekanism:${minecraft_version}-${mekanism_version}:api"
+    // Jade: only for compilation — the overlay plugin (compat/jade, found by Jade's @WailaPlugin scan); unit tests
+    // check its data field against Jade's interfaces
+    compileOnly "maven.modrinth:jade:${jade_version}"
+    testImplementation "maven.modrinth:jade:${jade_version}"
+    // CC:Tweaked: only the API for compilation — launcher and SAM peripherals (compat/computercraft); unit tests run the
+    // adapters against stand-in computers
+    compileOnly "cc.tweaked:cc-tweaked-${minecraft_version}-core-api:${cctweaked_version}"
+    compileOnly "cc.tweaked:cc-tweaked-${minecraft_version}-forge-api:${cctweaked_version}"
+    testImplementation "cc.tweaked:cc-tweaked-${minecraft_version}-core-api:${cctweaked_version}"
+    testImplementation "cc.tweaked:cc-tweaked-${minecraft_version}-forge-api:${cctweaked_version}"
     // a range, not an exact version: Sable carries the same companion with its own range, and FML picks one version
     // suitable for all — exactly [1.6.0] would not let in a game with Sable that brings 1.6.1
     jarJar("dev.ryanhcode.sable-companion:sable-companion-common-${minecraft_version}") {

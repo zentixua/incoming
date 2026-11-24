@@ -17,8 +17,37 @@ import java.util.List;
  * {@code powered} is the block's redstone output ({@link SubstationBlock#getSignal}): a change notifies its neighbours
  * ({@link SignalEdge}).
  */
-final class Substations {
+public final class Substations {
     private Substations() {}
+
+    /** What the grid says about one substation: its state and, knocked out, when repairs start. */
+    public enum State { WORKING, KNOCKED_OUT, DESTROYED }
+
+    /**
+     * @param repairIn world-clock ticks until power restoration starts in its area ({@link Outage#restoreAt}); {@link
+     *                 Outage#NEVER} — no restoration is scheduled (a command outage), or the state is not
+     *                 {@link State#KNOCKED_OUT}
+     */
+    public record Supply(State state, long repairIn) {}
+
+    /**
+     * The grid's state of the substation node at {@code pos} now, as {@link #works} decides it (the block's
+     * {@code powered}); null — no substation node there. Reads only the grid's saved data.
+     */
+    @org.jetbrains.annotations.Nullable
+    public static Supply supply(ServerLevel level, BlockPos pos) {
+        PowerGrid grid = PowerGrid.get(level);
+        Node node = grid.nodeAt(pos);
+        if (node == null || !node.block()) return null;
+        long now = Blackouts.now(level);
+        java.util.Optional<Outage> down = grid.downOutage(node.id(), now);
+        if (down.isPresent()) {
+            long at = down.get().restoreAt();
+            return new Supply(State.KNOCKED_OUT, at == Outage.NEVER ? Outage.NEVER : at - now);
+        }
+        if (grid.destroyed(pos.getX() >> 4, pos.getZ() >> 4, now)) return new Supply(State.DESTROYED, Outage.NEVER);
+        return new Supply(State.WORKING, Outage.NEVER);
+    }
 
     /** The node's substation works at {@code now}: no outage of its own before repairs, not in a destroyed zone. */
     static boolean works(ServerLevel level, PowerGrid grid, Node node, long now) {
