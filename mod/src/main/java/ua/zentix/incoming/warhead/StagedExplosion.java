@@ -264,6 +264,11 @@ final class StagedExplosion implements UnitQueue.Job {
     private static Explosion driving;
     @Nullable
     private static List<Entity> handed;
+    /** Job of {@link #driving} and that explosion's block list before claim handlers ({@link #onDetonateFirst}). */
+    @Nullable
+    private static StagedExplosion drivingJob;
+    @Nullable
+    private static long[] drivingOffered;
     /** Drops for entire explosion (like {@code Explosion.addOrAppendStack}). */
     private final List<Pair<ItemStack, BlockPos>> drops = new ArrayList<>();
     private boolean done;
@@ -465,7 +470,11 @@ final class StagedExplosion implements UnitQueue.Job {
         // Nested explosion (event handler) runs its own state: restore outer afterward.
         Explosion outer = driving;
         List<Entity> outerHanded = handed;
+        StagedExplosion outerJob = drivingJob;
+        long[] outerOffered = drivingOffered;
         driving = e;
+        drivingJob = this;
+        drivingOffered = null;
         handed = null;
         List<Entity> got;
         try {
@@ -474,6 +483,8 @@ final class StagedExplosion implements UnitQueue.Job {
             got = handed;
             handed = outerHanded;
             driving = outer;
+            drivingJob = outerJob;
+            drivingOffered = outerOffered;
         }
         time(ExplosionStage.VANILLA, t);
         if (got != null) {
@@ -1120,16 +1131,38 @@ final class StagedExplosion implements UnitQueue.Job {
 
     /** Charge not canceled ({@code ExplosionEvent.Start}): post-main strike work only if explosion happened. */
     /**
-     * A claim event on this strike's behalf ({@link StrikeCollapse}): a zero-radius explosion attributed as this one is
-     * (the same projectile and damage source, so a handler keyed to the attacker treats the collapse as the blast).
+     * A claim query on this strike's behalf ({@link BlastArea#claims}, {@link StrikeCollapse}): attributed as this
+     * explosion is (the same projectile and damage source, so a handler keyed to the attacker treats it as the blast).
      */
-    Explosion attributed(ServerLevel level, Vec3 centre) {
-        return new Explosion(level, direct, source, null, centre.x, centre.y, centre.z, 0f, false, Explosion.BlockInteraction.DESTROY_WITH_DECAY,
-                ModParticles.NONE.get(), ModParticles.NONE.get(), ModSounds.SILENT);
+    ua.zentix.incoming.api.ClaimQuery attributed(ServerLevel level, Vec3 centre) {
+        return new ua.zentix.incoming.api.ClaimQuery(level, direct, source != null ? source : ModDamageTypes.source(level, ModDamageTypes.STRIKE, direct, null), centre);
     }
 
     boolean happened() {
         return started && !cancelled;
+    }
+
+    private static long[] positions(List<BlockPos> list) {
+        long[] at = new long[list.size()];
+        for (int i = 0; i < at.length; i++) at[i] = list.get(i).asLong();
+        return at;
+    }
+
+    /**
+     * Claim handlers removed some of the {@code offered} positions from this explosion's {@code Detonate} list: their
+     * chunks are denied to every later writer of the strike ({@link BlastArea#claims}).
+     */
+    private void denied(long[] offered, List<BlockPos> kept) {
+        if (kept.size() == offered.length) {
+            boolean same = true;
+            for (int i = 0; i < offered.length && same; i++) same = kept.get(i).asLong() == offered[i];
+            if (same) return;
+        }
+        it.unimi.dsi.fastutil.longs.LongOpenHashSet left = new it.unimi.dsi.fastutil.longs.LongOpenHashSet(kept.size());
+        for (BlockPos p : kept) left.add(p.asLong());
+        for (long p : offered) {
+            if (!left.contains(p)) area.claims().deny(net.minecraft.world.level.ChunkPos.asLong(BlockPos.getX(p) >> 4, BlockPos.getZ(p) >> 4));
+        }
     }
 
     /** First unit ran (area ready), claim handler did not cancel. */
@@ -1151,7 +1184,9 @@ final class StagedExplosion implements UnitQueue.Job {
         entities = new ArrayList<>(level.getEntities((Entity) null, new AABB(x0, y0, z0, x1, y1, z1)));
         time(ExplosionStage.ENTITIES, t);
         t = System.nanoTime();
+        long[] offered = positions(e.getToBlow());
         EventHooks.onExplosionDetonate(level, e, entities, f2);
+        denied(offered, e.getToBlow());
         time(ExplosionStage.DETONATE, t);
         phase = Phase.SPLIT;
         return true;
@@ -1307,6 +1342,10 @@ final class StagedExplosion implements UnitQueue.Job {
      * handler-created nested ones) are distinct objects, untouched.
      */
     static void onDetonate(net.neoforged.neoforge.event.level.ExplosionEvent.Detonate event) {
+        if (driving != null && event.getExplosion() == driving && drivingJob != null && drivingOffered != null) {
+            drivingJob.denied(drivingOffered, event.getAffectedBlocks());
+            drivingOffered = null;
+        }
         if (craftCharge > 0 && CHARGES.get(event.getExplosion()) == null) {
             event.getAffectedEntities().clear();
             return;
@@ -1315,6 +1354,14 @@ final class StagedExplosion implements UnitQueue.Job {
         List<Entity> list = event.getAffectedEntities();
         handed = new ArrayList<>(list);
         list.clear();
+    }
+
+    /**
+     * {@code ExplosionEvent.Detonate}, {@code HIGHEST}: the block list of the explosion whose vanilla {@code explode()}
+     * mod runs, before claim handlers edit it ({@link #onDetonate} records what they removed).
+     */
+    static void onDetonateFirst(net.neoforged.neoforge.event.level.ExplosionEvent.Detonate event) {
+        if (driving != null && event.getExplosion() == driving && drivingJob != null) drivingOffered = positions(event.getAffectedBlocks());
     }
 
     /** Vanilla player explosion packet: own knockback, no blocks (clients see removals as they happen). */

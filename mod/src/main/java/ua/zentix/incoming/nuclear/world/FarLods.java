@@ -571,7 +571,9 @@ public final class FarLods {
         // Voxy-only request: send copy only if different from disk
         boolean fires = IncomingConfig.SERVER.nukeFires.get(), lights = (kind & LIGHTS) != 0 && !refreshFor.containsKey(r.chunk);
         // unplanned chunk may carry ground trace (district light included): snapshot, trace plan, copy
-        Ring ring = plan == null ? ringOf(r.chunk, now) : null;
+        Ring near = plan == null ? ringOf(r.chunk, now) : null;
+        // a chunk claim protection denied to the ring's detonation keeps its copy without trace (NuclearClaims)
+        Ring ring = near != null && ua.zentix.incoming.claim.NuclearClaims.get(level).denied(near.d.id(), r.chunk) ? null : near;
         long revision = generation;
         if (ring != null) {
             scorchReading.add(r.chunk);

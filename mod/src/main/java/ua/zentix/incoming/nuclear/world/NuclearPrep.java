@@ -751,7 +751,10 @@ public final class NuclearPrep {
             RuinPlan plan = p.plans.get(chunk);
             if (plan == null) continue;
             for (Detonation d : events.detonations()) {
-                if (d.id() == p.detonation && ScarQueue.due(d, new ChunkPos(chunk)) <= now) return plan;
+                // a chunk claim protection denied to the detonation gets no ruins in its copy either (NuclearClaims)
+                if (d.id() == p.detonation && ScarQueue.due(d, new ChunkPos(chunk)) <= now) {
+                    return ua.zentix.incoming.claim.NuclearClaims.get(level).denied(d.id(), chunk) ? RuinPlan.EMPTY : plan;
+                }
             }
         }
         return null;

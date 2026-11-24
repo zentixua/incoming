@@ -228,6 +228,37 @@ With LuckPerms, for example:
 /lp group veterans permission set incoming.nuclear true
 ```
 
+## Claim protection
+
+Claim mods that protect chunks from explosions (Open Parties and Claims, FTB Chunks and any other mod that filters
+explosion damage) protect them from every change Incoming makes to blocks: the warhead's blast, its crater, broken
+glass, fire from the fireball and the burning fuel, fragment marks, the B-2 bomb's bore and underground cavity,
+buildings that collapse and the rubble they drop, debris that lands; for a nuclear burst also the flash (scorched
+ground and walls, fires it lights, scorched biome colors), the ruins behind the wave, the crater, toppled trees and the
+far terrain seen through Voxy or Distant Horizons. In a protected chunk the wave, light, sound and injuries happen as
+everywhere else; only the blocks stay.
+
+- The claim mod decides as for any explosion: in Open Parties and Claims the claim's explosion protection, in FTB
+  Chunks the team's "Allow explosions" setting. A conventional strike carries its projectile as the source of the
+  explosion. A nuclear burst has no source, so FTB Chunks protects against it only with `protect_unknown_explosions`
+  on (its default).
+- A nuclear burst decides each chunk for good: a chunk found protected when the flash or the wave reaches it keeps its
+  blocks for that whole burst, even if the claim is removed a moment later, and a claim placed after the flash still
+  keeps the wave out. The decision is saved with the world: ruins built after a restart, or when a far chunk loads
+  later, follow it. The next burst decides again.
+- Nuclear ruins change a chunk as a whole: a mod that protects part of a chunk keeps the whole chunk from the nuclear
+  ruins. A conventional strike leaves exactly the protected blocks.
+- The far terrain of a chunk that is not loaded shows the ruins unless that chunk was already found protected; the
+  chunk itself is decided when it loads, and the far view follows it once the chunk is seen.
+- Fire that spreads afterwards is ordinary game fire: whether it crosses into a claim is up to the claim mod's fire
+  settings. Power outages are not block damage: a claim does not keep a substation from being knocked out, and a
+  blackout darkens claimed chunks too.
+
+For mod authors: Incoming asks through `ExplosionEvent.Detonate` with an explosion of class
+`ua.zentix.incoming.api.ClaimQuery` (zero radius, no entities) whose block list holds the positions about to change,
+only in chunks already loaded. It is a question, not an explosion: a listener that reacts to explosions themselves
+(effects, sounds) should skip it.
+
 ## Redstone
 
 Two blocks give redstone, so contraptions and computers react without any script. Both give weak power of strength 15

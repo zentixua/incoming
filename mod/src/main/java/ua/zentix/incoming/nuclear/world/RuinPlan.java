@@ -557,6 +557,27 @@ public final class RuinPlan {
         return new Debris(out, removed);
     }
 
+    /**
+     * World positions ({@link BlockPos#asLong}) this plan changes in {@code chunk}, for claim protection: block
+     * positions, fires, each scorched biome column cell at its lowest changed block, flash-charred faces.
+     */
+    public long[] writes(LevelChunk chunk) {
+        ChunkPos pos = chunk.getPos();
+        int x0 = pos.getMinBlockX(), z0 = pos.getMinBlockZ(), minY = chunk.getMinBuildHeight();
+        BlockPos.MutableBlockPos m = new BlockPos.MutableBlockPos();
+        int[] marks = flash == null ? NONE : flash;
+        LongArrayList at = new LongArrayList(cells.length + fires.length + marks.length + 16);
+        for (int c : cells) at.add(at(m, c, x0, z0, minY).asLong());
+        for (int c : fires) at.add(at(m, c, x0, z0, minY).asLong());
+        if (biomes != null) {
+            for (int column = 0; column < 16; column++) {
+                if (biomes.levels()[column] > 0) at.add(BlockPos.asLong(x0 + ((column & 3) << 2), Math.max(minY, biomes.from()[column]), z0 + ((column >> 2) << 2)));
+            }
+        }
+        for (int mark : marks) at.add(ua.zentix.incoming.nuclear.flash.FlashChar.pos(mark, pos.x, pos.z).asLong());
+        return at.toLongArray();
+    }
+
     /** Changed positions in the plan ({@link RuinCost}). */
     int cells() {
         return cells.length;

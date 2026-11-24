@@ -13,6 +13,7 @@ import net.minecraft.world.level.chunk.LevelChunk;
 import net.neoforged.neoforge.network.PacketDistributor;
 import org.jetbrains.annotations.Nullable;
 import ua.zentix.incoming.Incoming;
+import ua.zentix.incoming.claim.NuclearClaims;
 import ua.zentix.incoming.net.S2C;
 import ua.zentix.incoming.nuclear.Detonation;
 import ua.zentix.incoming.nuclear.NuclearEvents;
@@ -1012,6 +1013,7 @@ public final class ScarQueue {
         if (seen) st[2] = Math.max(st[2], lag);
         else st[5] = Math.max(st[5], lag);
         if (plan != null) {
+            plan = claimed(level, d, chunk, plan);
             List<LivingEntity> free = BlastBody.free(level, chunk);
             if (plan != RuinPlan.EMPTY) NuclearWorld.get(level).beforeRuins(level, d, chunk);
             RuinPlan.Debris debris = debris(level, chunk, plan);
@@ -1070,6 +1072,7 @@ public final class ScarQueue {
             diagSource = "server thread";
             server = true;
         }
+        plan = claimed(level, d, chunk, plan);
         List<LivingEntity> free = BlastBody.free(level, chunk);
         if (plan != RuinPlan.EMPTY) NuclearWorld.get(level).beforeRuins(level, d, chunk);
         RuinPlan.Debris debris = debris(level, chunk, plan);
@@ -1099,6 +1102,17 @@ public final class ScarQueue {
         st[8] = Math.max(st[8], took);
         deferLogs(level, d, plan);
         return RUINED;
+    }
+
+    /**
+     * Claim protection of the chunk's ruins ({@link NuclearClaims}): denied, the chunk keeps its blocks and its ruins are
+     * the empty plan (marked ruined as any chunk the wave left whole; flash-layer fire already there goes out, as under
+     * any empty plan, so it never stands unticked).
+     */
+    private static RuinPlan claimed(ServerLevel level, Detonation d, LevelChunk chunk, RuinPlan plan) {
+        if (plan == RuinPlan.EMPTY) return plan;
+        long[] at = plan.writes(chunk);
+        return NuclearClaims.get(level).allows(level, d, chunk.getPos().toLong(), at, at.length) ? plan : RuinPlan.EMPTY;
     }
 
     /**
@@ -1159,6 +1173,11 @@ public final class ScarQueue {
         byDue.add(job);
     }
 
+    /** Toppled trunk log into a neighboring chunk, unless claim protection keeps that chunk ({@link NuclearClaims}). */
+    private static void placeLog(ServerLevel level, Detonation d, long at, net.minecraft.world.level.block.state.BlockState log) {
+        if (NuclearClaims.gate(level, d).allows(level, BlockPos.of(at))) RuinPlan.placeLog(level, at, log);
+    }
+
     /** Trunks in neighboring chunks: immediately if neighbor already ruined/not queued, otherwise afterward. */
     private void deferLogs(ServerLevel level, Detonation d, RuinPlan plan) {
         for (int k = 0; k < plan.outsideCount(); k++) {
@@ -1170,7 +1189,7 @@ public final class ScarQueue {
                     : pendingPlan(d.id(), chunk)) {
                 logs.computeIfAbsent(chunk, c -> new ArrayList<>()).add(new Log(at, plan.outsideState(k)));
             } else {
-                RuinPlan.placeLog(level, at, plan.outsideState(k));
+                placeLog(level, d, at, plan.outsideState(k));
             }
         }
     }
@@ -1314,7 +1333,7 @@ public final class ScarQueue {
         placedFromMemory(d.id(), job.chunk);
         if (prepared.containsKey(d.id())) ruinedBy.computeIfAbsent(d.id(), k -> new it.unimi.dsi.fastutil.longs.LongOpenHashSet()).add(job.chunk);
         List<Log> fallen = logs.remove(job.chunk);
-        if (fallen != null) fallen.forEach(l -> RuinPlan.placeLog(level, l.at(), l.state()));
+        if (fallen != null) fallen.forEach(l -> placeLog(level, d, l.at(), l.state()));
         job.event++;
         if (job.event >= job.events.size()) {
             release(level, job);

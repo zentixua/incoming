@@ -347,7 +347,7 @@ public class BunkerBusterEntity extends StrikeProjectile {
         while (carved < path.steps().size() && path.steps().get(carved).s() <= s + 1e-6) {
             Step step = path.steps().get(carved++);
             armed = step.armed();
-            if (step.solid()) carve(level, step.pos(), rules().blockDamage());
+            if (step.solid()) carve(level, step.pos(), rules().blockDamage(), this);
         }
         Vec3 to = origin.add(flight.forward().scale(s));
         strike(level, from, to);
@@ -382,10 +382,14 @@ public class BunkerBusterEntity extends StrikeProjectile {
      * Bore: clear the block on the path axis (0.8 m caliber means one block); loose material above falls into it.
      * Only with ready neighboring chunks too: updates and Sable read neighbors.
      */
-    private static void carve(ServerLevel level, BlockPos p, boolean blockDamage) {
+    private static void carve(ServerLevel level, BlockPos p, boolean blockDamage, BunkerBusterEntity bomb) {
         if (!blockDamage || !Terrain.neighbourhoodReady(level, p.getX() >> 4, p.getZ() >> 4)) return;
         BlockState s = level.getBlockState(p);
         if (s.isAir()) return;
+        // claim protection before the charge exists: the bomb itself is the cause, its body stops at a protected block
+        // only as far as the world goes (the path is the kinetic model's, not changed here)
+        if (!ua.zentix.incoming.claim.Claims.allows(level, new ua.zentix.incoming.api.ClaimQuery(level, bomb,
+                ua.zentix.incoming.registry.ModDamageTypes.source(level, ua.zentix.incoming.registry.ModDamageTypes.KINETIC, bomb, null), bomb.position()), p)) return;
         ColumnScar.replace(level, p, s, Blocks.AIR.defaultBlockState(), Block.UPDATE_ALL);
     }
 

@@ -183,6 +183,9 @@ public class DebrisEntity extends Entity {
         if (!replaceable || !supported) return;
         // Burning debris ignites only fuel it lands on or beside; on stone and ground it burns out by itself.
         if (state.is(Blocks.FIRE) && (!rules.fire() || !touchesFuel(level, pos))) return;
+        // claim protection where it lands, attributed to the debris itself (it outlives its strike)
+        if (!ua.zentix.incoming.claim.Claims.allows(level, new ua.zentix.incoming.api.ClaimQuery(level, this,
+                ua.zentix.incoming.registry.ModDamageTypes.source(level, ua.zentix.incoming.registry.ModDamageTypes.DEBRIS, this, null), position()), pos)) return;
         if (state.hasProperty(BlockStateProperties.WATERLOGGED) && level.getFluidState(pos).getType() == Fluids.WATER) {
             state = state.setValue(BlockStateProperties.WATERLOGGED, true);
         }
