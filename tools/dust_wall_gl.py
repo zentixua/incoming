@@ -97,7 +97,9 @@ def resolve_cases(p):
     check(first[1, 1] > 0.999, f"resolve with history invalid: T={first[1, 1]:.4f}, expected 1")
     # Fixed view. Full-width 9 means centres at x=2, 6, 8.5 for a 3-column low target.
     result = resolve(p, 9, 4, [0, 0.5, 1], [0, 0.5, 1], [100.0] * 36)
-    check(abs(result[0, 1] - 0.5) < 1e-5, f"stationary 9-pixel view reprojection: T={result[0, 1]:.4f}, expected 0.5")
+    # (within the resolve's speck softening: a fresh ray moves halfway toward its depth-alike neighbours' mean, here a ramp
+    # of 0 / 0.5 / 1 with the rows above and below, about 0.01)
+    check(abs(result[0, 1] - 0.5) < 0.012, f"stationary 9-pixel view reprojection: T={result[0, 1]:.4f}, expected 0.5")
     check(abs(result[0, 2] - 1) < 1e-5, f"stationary 9-pixel view, last column (sample at 8.5): T={result[0, 2]:.4f}, expected 1")
     # 13 full pixels: three old cells at divisor 5, four new at divisor 4. At x=6 the old
     # centres at 2.5 and 7.5 contribute 30/70. The depth moments live three columns after light.
