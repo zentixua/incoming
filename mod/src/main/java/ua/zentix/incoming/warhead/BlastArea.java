@@ -6,11 +6,11 @@ import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.TicketType;
 import net.minecraft.util.Mth;
 import net.minecraft.world.level.ChunkPos;
-import net.minecraft.world.level.Explosion;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.phys.Vec3;
 import org.jetbrains.annotations.Nullable;
 import ua.zentix.incoming.Incoming;
+import ua.zentix.incoming.api.ClaimQuery;
 import ua.zentix.incoming.claim.StrikeClaims;
 import ua.zentix.incoming.compat.DhUpdates;
 import ua.zentix.incoming.nuclear.world.StrikeRemovals;
@@ -134,9 +134,9 @@ final class BlastArea {
         return claims;
     }
 
-    private ua.zentix.incoming.api.ClaimQuery claimQuery(ServerLevel level) {
+    private ClaimQuery claimQuery(ServerLevel level) {
         return first != null ? first.attributed(level, centre)
-                : new ua.zentix.incoming.api.ClaimQuery(level, null, ModDamageTypes.source(level, ModDamageTypes.STRIKE, null, null), centre);
+                : new ClaimQuery(level, null, ModDamageTypes.source(level, ModDamageTypes.STRIKE, null, null), centre);
     }
 
     /** World rules this strike's jobs change the world under ({@link StrikeRules}). */
@@ -224,7 +224,7 @@ final class BlastArea {
 
     void trackCollapse(ServerLevel level, List<StagedExplosion> blasts, Vec3 at) {
         collapseSource = StrikeWorld.get(level).collapseRemovals().source(l -> blasts.isEmpty()
-                ? new Explosion(l, null, at.x, at.y, at.z, 0f, false, Explosion.BlockInteraction.DESTROY_WITH_DECAY)
+                ? new ClaimQuery(l, null, ModDamageTypes.source(l, ModDamageTypes.STRIKE, null, null), at)
                 : blasts.getFirst().attributed(l, at));
     }
 

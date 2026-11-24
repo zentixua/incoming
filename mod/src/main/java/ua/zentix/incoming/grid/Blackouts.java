@@ -14,6 +14,7 @@ import net.neoforged.neoforge.event.level.ChunkEvent;
 import net.neoforged.neoforge.event.level.ExplosionEvent;
 import net.neoforged.neoforge.network.PacketDistributor;
 import org.jetbrains.annotations.Nullable;
+import ua.zentix.incoming.api.ClaimQuery;
 import ua.zentix.incoming.warhead.Warheads;
 import ua.zentix.incoming.Incoming;
 import ua.zentix.incoming.util.WorldClock;
@@ -90,7 +91,7 @@ public final class Blackouts {
     public static void onExplosion(ExplosionEvent.Detonate e) {
         if (!(e.getLevel() instanceof ServerLevel level)) return;
         // Incoming's claim question is no explosion (api.ClaimQuery)
-        if (e.getExplosion() instanceof ua.zentix.incoming.api.ClaimQuery) return;
+        if (e.getExplosion() instanceof ClaimQuery) return;
         // a strike's explosion follows the rules its order was made under; any other explosion, the config now
         StrikeRules rules = Warheads.rulesOf(e.getExplosion());
         if (!(rules != null ? rules : StrikeRules.live()).grid()) return;

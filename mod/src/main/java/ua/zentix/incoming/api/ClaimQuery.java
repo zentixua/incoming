@@ -15,7 +15,8 @@ import ua.zentix.incoming.registry.ModSounds;
  * copies), it posts {@code ExplosionEvent.Detonate} on {@code NeoForge.EVENT_BUS} with an explosion of this class: zero
  * radius, no affected entities, its block list the positions about to change. A handler removes the positions it
  * protects, as it does for any explosion, and Incoming leaves those positions as they are. The event is posted on the
- * server thread, only for positions in chunks already in memory. Nothing else follows: the query is never finalized and
+ * server thread, only for positions in chunks already in memory, and centred where the world is in memory around the
+ * centre (some explosion listeners read blocks near it). Nothing else follows: the query is never finalized and
  * sends no explosion packet. Listeners that react to explosions themselves (effects, sounds, power grids) should skip it
  * ({@code event.getExplosion() instanceof ClaimQuery}).
  * <p>
@@ -24,8 +25,20 @@ import ua.zentix.incoming.registry.ModSounds;
  * detonation is one cause whatever brought it).
  */
 public final class ClaimQuery extends Explosion {
+    @Nullable
+    private final Entity direct;
+    @Nullable
+    private final DamageSource source;
+
     public ClaimQuery(ServerLevel level, @Nullable Entity direct, @Nullable DamageSource source, Vec3 at) {
         super(level, direct, source, null, at.x, at.y, at.z, 0f, false, BlockInteraction.DESTROY_WITH_DECAY, ModParticles.NONE.get(),
                 ModParticles.NONE.get(), ModSounds.SILENT);
+        this.direct = direct;
+        this.source = source;
+    }
+
+    /** The same question centred at {@code at} (a handler may read the world around the centre). */
+    public ClaimQuery at(ServerLevel level, Vec3 at) {
+        return new ClaimQuery(level, direct, source, at);
     }
 }

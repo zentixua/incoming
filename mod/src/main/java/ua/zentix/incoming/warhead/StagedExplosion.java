@@ -10,6 +10,7 @@ import net.minecraft.core.Direction;
 import net.minecraft.tags.BlockTags;
 import net.minecraft.world.level.BlockGetter;
 import net.minecraft.world.level.block.LiquidBlock;
+import ua.zentix.incoming.api.ClaimQuery;
 import ua.zentix.incoming.nuclear.model.BlastDamage;
 import ua.zentix.incoming.nuclear.model.BlastModel;
 import ua.zentix.incoming.nuclear.world.BlastBody;
@@ -1134,8 +1135,8 @@ final class StagedExplosion implements UnitQueue.Job {
      * A claim query on this strike's behalf ({@link BlastArea#claims}, {@link StrikeCollapse}): attributed as this
      * explosion is (the same projectile and damage source, so a handler keyed to the attacker treats it as the blast).
      */
-    ua.zentix.incoming.api.ClaimQuery attributed(ServerLevel level, Vec3 centre) {
-        return new ua.zentix.incoming.api.ClaimQuery(level, direct, source != null ? source : ModDamageTypes.source(level, ModDamageTypes.STRIKE, direct, null), centre);
+    ClaimQuery attributed(ServerLevel level, Vec3 centre) {
+        return new ClaimQuery(level, direct, source != null ? source : ModDamageTypes.source(level, ModDamageTypes.STRIKE, direct, null), centre);
     }
 
     boolean happened() {
@@ -1158,10 +1159,10 @@ final class StagedExplosion implements UnitQueue.Job {
             for (int i = 0; i < offered.length && same; i++) same = kept.get(i).asLong() == offered[i];
             if (same) return;
         }
-        it.unimi.dsi.fastutil.longs.LongOpenHashSet left = new it.unimi.dsi.fastutil.longs.LongOpenHashSet(kept.size());
+        LongOpenHashSet left = new LongOpenHashSet(kept.size());
         for (BlockPos p : kept) left.add(p.asLong());
         for (long p : offered) {
-            if (!left.contains(p)) area.claims().deny(net.minecraft.world.level.ChunkPos.asLong(BlockPos.getX(p) >> 4, BlockPos.getZ(p) >> 4));
+            if (!left.contains(p)) area.claims().deny(ChunkPos.asLong(BlockPos.getX(p) >> 4, BlockPos.getZ(p) >> 4));
         }
     }
 

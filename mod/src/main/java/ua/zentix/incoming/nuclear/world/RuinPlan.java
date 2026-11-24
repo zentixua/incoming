@@ -35,6 +35,7 @@ import ua.zentix.incoming.compat.SableTerrain;
 import ua.zentix.incoming.grid.GridLights;
 import ua.zentix.incoming.net.S2C;
 import ua.zentix.incoming.nuclear.Detonation;
+import ua.zentix.incoming.nuclear.flash.FlashChar;
 import ua.zentix.incoming.util.Terrain;
 
 import java.util.List;
@@ -574,7 +575,7 @@ public final class RuinPlan {
                 if (biomes.levels()[column] > 0) at.add(BlockPos.asLong(x0 + ((column & 3) << 2), Math.max(minY, biomes.from()[column]), z0 + ((column >> 2) << 2)));
             }
         }
-        for (int mark : marks) at.add(ua.zentix.incoming.nuclear.flash.FlashChar.pos(mark, pos.x, pos.z).asLong());
+        for (int mark : marks) at.add(FlashChar.pos(mark, pos.x, pos.z).asLong());
         return at.toLongArray();
     }
 

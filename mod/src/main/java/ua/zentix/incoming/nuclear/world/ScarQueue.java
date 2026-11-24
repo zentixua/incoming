@@ -9,6 +9,7 @@ import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.entity.LivingEntity;
 import net.minecraft.world.level.ChunkPos;
+import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.chunk.LevelChunk;
 import net.neoforged.neoforge.network.PacketDistributor;
 import org.jetbrains.annotations.Nullable;
@@ -1174,7 +1175,7 @@ public final class ScarQueue {
     }
 
     /** Toppled trunk log into a neighboring chunk, unless claim protection keeps that chunk ({@link NuclearClaims}). */
-    private static void placeLog(ServerLevel level, Detonation d, long at, net.minecraft.world.level.block.state.BlockState log) {
+    private static void placeLog(ServerLevel level, Detonation d, long at, BlockState log) {
         if (NuclearClaims.gate(level, d).allows(level, BlockPos.of(at))) RuinPlan.placeLog(level, at, log);
     }
 

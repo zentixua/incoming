@@ -119,6 +119,59 @@ public final class ClaimGameTests {
     }
 
     /**
+     * The follow-up writers ask by themselves: a handler that filters only claim questions lets every real charge break
+     * what its own rays chose, also in the claimed chunks, and nothing else changes there (no crater, fuel, fire,
+     * fragments, glass job, bomb cavity, collapse, rubble or debris), while the unclaimed side does change.
+     */
+    @GameTest(template = "range", timeoutTicks = 20000, batch = "claim_followups", skyAccess = true)
+    public static void followUpsAskByThemselves(GameTestHelper h) {
+        ServerLevel level = h.getLevel();
+        int edge = edge(h);
+        LongOpenHashSet claimed = claimWest(h, edge);
+        arena(h, edge);
+        Map<BlockPos, BlockState> was = RuleGameTests.snapshot(h);
+        Handler handler = Handler.install(h, claimed);
+        handler.queriesOnly = true;
+        long[] before = Claims.counters();
+        Warheads.detonate(level, WeaponType.DRONE, Vec3.atBottomCenterOf(h.absolutePos(new BlockPos(edge + 3, 12, 14))), null, null,
+                RoundRef.of(UUID.randomUUID(), 0, "b2follow"));
+        Warheads.detonate(level, WeaponType.MISSILE, Vec3.atBottomCenterOf(h.absolutePos(new BlockPos(edge + 4, 12, 40))), null, null,
+                RoundRef.of(UUID.randomUUID(), 1, "b2follow"));
+        Warheads.detonate(level, WeaponType.ROCKET, Vec3.atBottomCenterOf(h.absolutePos(new BlockPos(edge + 2, 12, 26))), null, null,
+                RoundRef.of(UUID.randomUUID(), 2, "b2follow"));
+        Vec3 surface = Vec3.atBottomCenterOf(h.absolutePos(new BlockPos(edge - 4, 12, 52)));
+        BunkerBusterEntity bomb = ModEntities.BUNKER_BUSTER.get().create(level);
+        h.assertTrue(bomb != null, "no bomb");
+        bomb.drop(surface.add(0, 26, 0), new Vec3(0, -4, 0), surface, null, null);
+        bomb.attachRound(RoundRef.of(UUID.randomUUID(), 3, "b2follow"));
+        level.addFreshEntity(bomb);
+        boolean[] done = {false};
+        long start = level.getGameTime();
+        h.onEachTick(() -> {
+            if (!done[0] && bomb.isRemoved() && level.getGameTime() > start + 2 && StrikeWorld.get(level).idle()) done[0] = true;
+        });
+        h.succeedWhen(() -> {
+            h.assertTrue(done[0], "strikes still running");
+            h.assertTrue(level.getEntitiesOfClass(DebrisEntity.class, RuleGameTests.overPlatform(h)).isEmpty(), "debris still falling");
+            List<String> stray = new ArrayList<>();
+            int outside = 0, real = 0;
+            for (var e : was.entrySet()) {
+                BlockState now = h.getBlockState(e.getKey());
+                if (now.equals(e.getValue())) continue;
+                BlockPos abs = h.absolutePos(e.getKey());
+                if (!claimed.contains(ChunkPos.asLong(abs.getX() >> 4, abs.getZ() >> 4))) outside++;
+                else if (handler.realInClaim.contains(abs.asLong())) real++;
+                else stray.add(e.getKey().toShortString() + " " + e.getValue() + " -> " + now);
+            }
+            h.assertTrue(stray.isEmpty(), stray.size() + " blocks changed in claimed chunks beyond the charges' own lists, first "
+                    + stray.subList(0, Math.min(8, stray.size())));
+            h.assertTrue(outside > 20, "only " + outside + " blocks changed beside the claim");
+            h.assertTrue(real > 0, "no real charge reached the claimed side: the probe does not separate the follow-ups");
+            h.assertTrue(Claims.counters()[2] > before[2], "no claim question was refused");
+        });
+    }
+
+    /**
      * A real charge keeps its own {@code ExplosionEvent.Start} veto: a handler cancelling the start of every charge over
      * the arena (and filtering nothing) leaves every block, glass included, as it was.
      */
@@ -279,6 +332,9 @@ public final class ClaimGameTests {
         private static boolean listening;
         final LongOpenHashSet claimed;
         boolean cancelStart;
+        /** Filter claim questions only; the real charges' own lists pass, and their positions in claimed chunks are kept. */
+        boolean queriesOnly;
+        final LongOpenHashSet realInClaim = new LongOpenHashSet();
         int queries, queriesWithEntities, realRefused, cancelled;
 
         private Handler(LongOpenHashSet claimed) {
@@ -315,6 +371,10 @@ public final class ClaimGameTests {
                 if (!e.getAffectedEntities().isEmpty()) h.queriesWithEntities++;
             }
             if (h.claimed.isEmpty()) return;
+            if (h.queriesOnly && !query) {
+                for (BlockPos p : e.getAffectedBlocks()) if (h.claimed.contains(ChunkPos.asLong(p.getX() >> 4, p.getZ() >> 4))) h.realInClaim.add(p.asLong());
+                return;
+            }
             int before = e.getAffectedBlocks().size();
             e.getAffectedBlocks().removeIf(p -> h.claimed.contains(ChunkPos.asLong(p.getX() >> 4, p.getZ() >> 4)));
             if (!query) h.realRefused += before - e.getAffectedBlocks().size();

@@ -5,7 +5,9 @@ import it.unimi.dsi.fastutil.longs.LongOpenHashSet;
 import net.minecraft.core.BlockPos;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.entity.Entity;
+import net.minecraft.util.Mth;
 import net.minecraft.world.level.ChunkPos;
+import net.minecraft.world.phys.Vec3;
 import net.neoforged.neoforge.event.EventHooks;
 import org.jetbrains.annotations.Nullable;
 import ua.zentix.incoming.api.ClaimQuery;
@@ -42,6 +44,14 @@ public final class Claims {
     public static int offer(ServerLevel level, ClaimQuery query, long[] at, int from, int to, @Nullable LongConsumer onRefused, boolean stopAtRefusal) {
         long t = System.nanoTime();
         int count = 0;
+        // explosion listeners may read the world around the centre (Create Diesel Generators reads fluids within 2 blocks
+        // of it): a query is never centred where the world around it is not in memory
+        query = centred(level, query, at, from, to);
+        if (query == null) {
+            for (int k = from; k < to; k++) if (onRefused != null) onRefused.accept(at[k]);
+            refused += to - from;
+            return to - from;
+        }
         List<BlockPos> list = query.getToBlow();
         long[] asked = new long[Math.min(BATCH, Math.max(0, to - from))];
         // positions come chunk by chunk: one readiness lookup per run of the same chunk
@@ -91,6 +101,25 @@ public final class Claims {
             list.clear();
             nanos += System.nanoTime() - t;
         }
+    }
+
+    /**
+     * {@code query} if the chunks around its centre are in memory, else the same question centred in the middle of the
+     * first asked chunk in memory (2 blocks around the middle stay inside it); null if there is none.
+     */
+    @Nullable
+    private static ClaimQuery centred(ServerLevel level, ClaimQuery query, long[] at, int from, int to) {
+        Vec3 c = query.center();
+        if (Terrain.neighbourhoodReady(level, Mth.floor(c.x) >> 4, Mth.floor(c.z) >> 4)) return query;
+        long last = Long.MIN_VALUE;
+        for (int k = from; k < to; k++) {
+            int cx = BlockPos.getX(at[k]) >> 4, cz = BlockPos.getZ(at[k]) >> 4;
+            long chunk = ChunkPos.asLong(cx, cz);
+            if (chunk == last) continue;
+            last = chunk;
+            if (Terrain.ready(level, cx, cz)) return query.at(level, new Vec3((cx << 4) + 8.5, BlockPos.getY(at[k]) + 0.5, (cz << 4) + 8.5));
+        }
+        return null;
     }
 
     /** One position: whether handlers leave it ({@link #offer}). */

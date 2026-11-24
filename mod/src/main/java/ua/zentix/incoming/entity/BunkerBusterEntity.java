@@ -21,6 +21,8 @@ import net.minecraft.world.phys.Vec3;
 import net.minecraft.world.phys.shapes.VoxelShape;
 import org.jetbrains.annotations.Nullable;
 import org.joml.Vector3f;
+import ua.zentix.incoming.api.ClaimQuery;
+import ua.zentix.incoming.claim.Claims;
 import ua.zentix.incoming.guidance.BombDrop;
 import ua.zentix.incoming.guidance.FlightController;
 import ua.zentix.incoming.guidance.Mission;
@@ -386,10 +388,10 @@ public class BunkerBusterEntity extends StrikeProjectile {
         if (!blockDamage || !Terrain.neighbourhoodReady(level, p.getX() >> 4, p.getZ() >> 4)) return;
         BlockState s = level.getBlockState(p);
         if (s.isAir()) return;
-        // claim protection before the charge exists: the bomb itself is the cause, its body stops at a protected block
-        // only as far as the world goes (the path is the kinetic model's, not changed here)
-        if (!ua.zentix.incoming.claim.Claims.allows(level, new ua.zentix.incoming.api.ClaimQuery(level, bomb,
-                ua.zentix.incoming.registry.ModDamageTypes.source(level, ua.zentix.incoming.registry.ModDamageTypes.KINETIC, bomb, null), bomb.position()), p)) return;
+        // claim protection before the charge exists: the bomb itself is the cause; a protected block stays (the bomb's
+        // path follows its penetration law either way)
+        if (!Claims.allows(level, new ClaimQuery(level, bomb,
+                ModDamageTypes.source(level, ModDamageTypes.KINETIC, bomb, null), bomb.position()), p)) return;
         ColumnScar.replace(level, p, s, Blocks.AIR.defaultBlockState(), Block.UPDATE_ALL);
     }
 

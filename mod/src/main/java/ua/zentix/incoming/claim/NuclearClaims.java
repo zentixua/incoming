@@ -1,15 +1,22 @@
 package ua.zentix.incoming.claim;
 
 import it.unimi.dsi.fastutil.ints.Int2ObjectOpenHashMap;
+import it.unimi.dsi.fastutil.ints.IntOpenHashSet;
+import it.unimi.dsi.fastutil.longs.Long2ObjectOpenHashMap;
+import it.unimi.dsi.fastutil.longs.LongArrayList;
 import it.unimi.dsi.fastutil.longs.LongOpenHashSet;
+import net.minecraft.core.BlockPos;
 import net.minecraft.core.HolderLookup;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.server.level.ServerLevel;
+import net.minecraft.util.Mth;
 import net.minecraft.world.level.ChunkPos;
 import net.minecraft.world.level.saveddata.SavedData;
+import net.minecraft.world.phys.Vec3;
 import ua.zentix.incoming.Incoming;
 import ua.zentix.incoming.api.ClaimQuery;
 import ua.zentix.incoming.nuclear.Detonation;
+import ua.zentix.incoming.nuclear.NuclearEvents;
 import ua.zentix.incoming.registry.ModDamageTypes;
 import ua.zentix.incoming.util.Terrain;
 
@@ -21,15 +28,13 @@ import ua.zentix.incoming.util.Terrain;
  * they would leave floating blocks and stale heightmaps). A denial is never lifted, so a claim removed between the flash
  * and the wave keeps the chunk as it was, and a claim placed after the flash keeps the wave out. A chunk not in memory is
  * not asked ({@link Claims}): a LOD copy of it follows a stored denial only, and its world write asks when it loads.
- * Another detonation asks on its own.
+ * Another detonation asks on its own. A detonation the world no longer keeps ({@link NuclearEvents}) loses its record.
  */
 public final class NuclearClaims extends SavedData {
     private static final String NAME = Incoming.MOD_ID + "_nuclear_claims";
 
     /** Denied chunks ({@code ChunkPos.toLong}) by detonation id. */
     private final Int2ObjectOpenHashMap<LongOpenHashSet> denied = new Int2ObjectOpenHashMap<>();
-    /** Each detonation's query (not saved): no source entity, nuclear blast damage, at the burst point. */
-    private final Int2ObjectOpenHashMap<ClaimQuery> queries = new Int2ObjectOpenHashMap<>();
 
     public static NuclearClaims get(ServerLevel level) {
         return level.getDataStorage().computeIfAbsent(new Factory<>(NuclearClaims::new, NuclearClaims::load, null), NAME);
@@ -49,8 +54,8 @@ public final class NuclearClaims extends SavedData {
     public boolean allows(ServerLevel level, Detonation d, long chunk, long[] at, int n) {
         if (denied(d.id(), chunk)) return false;
         if (n == 0 || !Terrain.ready(level, ChunkPos.getX(chunk), ChunkPos.getZ(chunk))) return true;
-        if (Claims.offer(level, query(level, d), at, 0, n, null, true) == 0) return true;
-        deny(d.id(), chunk);
+        if (Claims.offer(level, query(level, d, chunk), at, 0, n, null, true) == 0) return true;
+        deny(level, d.id(), chunk);
         return false;
     }
 
@@ -61,11 +66,9 @@ public final class NuclearClaims extends SavedData {
     public static BlockGate gate(ServerLevel level, Detonation d) {
         NuclearClaims claims = get(level);
         return (l, positions) -> {
-            it.unimi.dsi.fastutil.longs.Long2ObjectOpenHashMap<it.unimi.dsi.fastutil.longs.LongArrayList> byChunk = new it.unimi.dsi.fastutil.longs.Long2ObjectOpenHashMap<>();
-            for (net.minecraft.core.BlockPos p : positions) {
-                byChunk.computeIfAbsent(ChunkPos.asLong(p.getX() >> 4, p.getZ() >> 4), k -> new it.unimi.dsi.fastutil.longs.LongArrayList()).add(p.asLong());
-            }
-            it.unimi.dsi.fastutil.longs.LongOpenHashSet refused = new it.unimi.dsi.fastutil.longs.LongOpenHashSet();
+            Long2ObjectOpenHashMap<LongArrayList> byChunk = new Long2ObjectOpenHashMap<>();
+            for (BlockPos p : positions) byChunk.computeIfAbsent(ChunkPos.asLong(p.getX() >> 4, p.getZ() >> 4), k -> new LongArrayList()).add(p.asLong());
+            LongOpenHashSet refused = new LongOpenHashSet();
             byChunk.long2ObjectEntrySet().forEach(e -> {
                 long[] at = e.getValue().toLongArray();
                 if (!claims.allows(l, d, e.getLongKey(), at, at.length)) refused.add(e.getLongKey());
@@ -74,14 +77,29 @@ public final class NuclearClaims extends SavedData {
         };
     }
 
-    /** Deny {@code chunk} to detonation {@code id} (a writer that asked by itself was refused). */
-    public void deny(int id, long chunk) {
-        if (denied.computeIfAbsent(id, k -> new LongOpenHashSet()).add(chunk)) setDirty();
+    /**
+     * Deny {@code chunk} to detonation {@code id}; records of detonations the world no longer keeps go (a denial is rare,
+     * so the walk is too).
+     */
+    public void deny(ServerLevel level, int id, long chunk) {
+        if (!denied.computeIfAbsent(id, k -> new LongOpenHashSet()).add(chunk)) return;
+        NuclearEvents events = NuclearEvents.get(level);
+        IntOpenHashSet kept = new IntOpenHashSet();
+        events.detonations().forEach(x -> kept.add(x.id()));
+        events.past().forEach(x -> kept.add(x.id()));
+        kept.add(id);
+        denied.keySet().removeIf(k -> !kept.contains(k));
+        setDirty();
     }
 
-    /** Detonation {@code d}'s query. */
-    public ClaimQuery query(ServerLevel level, Detonation d) {
-        return queries.computeIfAbsent(d.id(), k -> new ClaimQuery(level, null, ModDamageTypes.source(level, ModDamageTypes.NUCLEAR_BLAST, null, null), d.burst()));
+    /**
+     * Detonation {@code d}'s question about {@code chunk}: no source entity, nuclear blast damage, centred in the middle
+     * of the chunk at the burst height (never at ground zero, which need not be in memory).
+     */
+    static ClaimQuery query(ServerLevel level, Detonation d, long chunk) {
+        double y = Mth.clamp(d.burst().y, level.getMinBuildHeight(), level.getMaxBuildHeight() - 1);
+        return new ClaimQuery(level, null, ModDamageTypes.source(level, ModDamageTypes.NUCLEAR_BLAST, null, null),
+                new Vec3((ChunkPos.getX(chunk) << 4) + 8.5, y, (ChunkPos.getZ(chunk) << 4) + 8.5));
     }
 
     /** Denied chunk count of detonation {@code id} (logs, tests). */
@@ -94,13 +112,11 @@ public final class NuclearClaims extends SavedData {
         NuclearClaims c = new NuclearClaims();
         CompoundTag all = tag.getCompound("denied");
         for (String k : all.getAllKeys()) {
-            int id;
             try {
-                id = Integer.parseInt(k);
+                c.denied.put(Integer.parseInt(k), new LongOpenHashSet(all.getLongArray(k)));
             } catch (NumberFormatException e) {
-                continue;
+                Incoming.LOG.warn("Nuclear claim record: skipping detonation key {}", k);
             }
-            c.denied.put(id, new LongOpenHashSet(all.getLongArray(k)));
         }
         return c;
     }

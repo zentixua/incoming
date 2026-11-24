@@ -14,6 +14,7 @@ import net.minecraft.world.level.ChunkPos;
 import net.minecraft.world.level.chunk.LevelChunk;
 import net.minecraft.world.phys.Vec3;
 import org.jetbrains.annotations.Nullable;
+import ua.zentix.incoming.claim.NuclearClaims;
 import ua.zentix.incoming.Incoming;
 import ua.zentix.incoming.IncomingConfig;
 import ua.zentix.incoming.registry.ModAttachments;
@@ -753,7 +754,7 @@ public final class NuclearPrep {
             for (Detonation d : events.detonations()) {
                 // a chunk claim protection denied to the detonation gets no ruins in its copy either (NuclearClaims)
                 if (d.id() == p.detonation && ScarQueue.due(d, new ChunkPos(chunk)) <= now) {
-                    return ua.zentix.incoming.claim.NuclearClaims.get(level).denied(d.id(), chunk) ? RuinPlan.EMPTY : plan;
+                    return NuclearClaims.get(level).denied(d.id(), chunk) ? RuinPlan.EMPTY : plan;
                 }
             }
         }
