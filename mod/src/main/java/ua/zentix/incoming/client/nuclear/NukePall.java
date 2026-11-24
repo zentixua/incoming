@@ -415,7 +415,7 @@ public final class NukePall {
         if (WALL[18] > 0) HI.y = Math.max(HI.y, (float) (ground + WALL[19] + a.wall.wilsonReach(seconds)));
         CULL.set(LO.x, Math.min(LO.y, bottom), LO.z);
         if (frustum.intersectAab(CULL, HI, SIDES_AND_NEAR) >= 0) return false;
-        System.arraycopy(ROW, 0, f.table, k * ROW.length, ROW.length);
+        System.arraycopy(ROW, 0, f.table, PallField.hazeOffset(k, PallPass.WIDTH), ROW.length);
         double ys = Math.cbrt(d.yieldKt() / 15);
         org.joml.Matrix4f m = k == 0 ? f.slot0 : f.slot1;
         m.m00(cx).m01(cz).m02(ground).m03((float) p.reach());

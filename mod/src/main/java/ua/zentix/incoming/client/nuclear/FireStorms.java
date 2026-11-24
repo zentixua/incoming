@@ -182,7 +182,7 @@ final class FireStorms {
         fire.source = s;
         fire.version = s.version();
         // table haze glow (uniform in rings) gives way to fire-map glow: slot haze row, channel b
-        int base = (2 * k + 1) * PallPass.WIDTH * 4;
+        int base = PallField.hazeOffset(k, PallPass.WIDTH);
         for (int i = 0; i < PallPass.WIDTH; i++) f.table[base + 4 * i + 2] *= (float) (1 - gate);
         // bounds: map, downwind columns, lowlands below ground zero
         double bend = FireStorm.bend(top, hb), r = half + FireStorm.width(top, cell);

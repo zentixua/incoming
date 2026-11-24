@@ -31,6 +31,15 @@ class PallFieldTest {
         assertEquals(PallPass.WIDTH, PallField.BINS);
     }
 
+    /** Both detonation slots' haze rows lie inside the frame table and apart (a second detonation's fire storm writes its row). */
+    @Test
+    void slotHazeRowsFitTheTable() {
+        int row = PallField.ROWS * PallPass.WIDTH * 4, table = PallPass.ROWS * PallPass.WIDTH * 4;
+        assertEquals(0, PallField.hazeOffset(0, PallPass.WIDTH));
+        assertEquals(row, PallField.hazeOffset(1, PallPass.WIDTH));
+        assertTrue(PallField.hazeOffset(1, PallPass.WIDTH) + row <= table);
+    }
+
     /**
      * Dust table - layer {@link DustModel} of the node: thickness above the ground (weakening at the ground × profile column × top) - thickness of the
      *  layer without the one still in the head of the wall, and without the one in the fireball on the ground; top — the top of the layer in blocks (not lower than

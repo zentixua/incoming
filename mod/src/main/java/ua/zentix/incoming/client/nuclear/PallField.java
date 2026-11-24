@@ -583,6 +583,11 @@ public final class PallField {
     /** Table rows per detonation: the haze. */
     public static final int ROWS = 1;
 
+    /** First float of detonation slot {@code slot}'s haze row in the frame table ({@link #ROWS} rows of {@code width} RGBA nodes per slot). */
+    public static int hazeOffset(int slot, int width) {
+        return slot * ROWS * width * 4;
+    }
+
     /**
      * Table row at {@code ticks} since detonation (client ticks): 4 numbers per {@link #BINS} nodes — the haze ({@link #haze}),
      * all the pall volume draws of the field. Writes into {@code out} (length ≥ 4·BINS). {@code land} indicates land beneath the
