@@ -126,3 +126,6 @@ while the sky is clear and shut on alarm (more examples in [For server owners an
 - In an unloaded chunk the SAM keeps the signal it had and looks again within half a second once its chunk works.
   Within 32 blocks of ground that is not loaded (the edge of the loaded world), what it powers learns of a change
   only once that ground loads: a circuit reaching there would otherwise load it.
+- A CC:Tweaked computer attached to the SAM reads its missiles and radar, and receives the event `incoming_alert` on
+  every sweep while the radar tracks a hostile target ([For server owners and pack makers](packs.md#computers-cctweaked)).
+  With Jade, looking at the SAM shows its missiles and what its radar tracks.

@@ -35,5 +35,7 @@ Ingredients: 3 lightning rods, 2 copper ingots, 1 redstone block and 3 iron ingo
   stays: it tells whether this substation works, not whether the lamps around it are lit. A substation placed where
   the grid is destroyed never works and gives no signal. Examples:
   [For server owners and pack makers](packs.md#redstone).
+- With Jade, looking at a substation shows whether it works and, knocked out, in how many hours of the world's day
+  repairs start.
 - The world is saved with ordinary lamps and opens without the mod. Only Create contraptions assembled in a dark
   district are better disassembled before you remove the mod.

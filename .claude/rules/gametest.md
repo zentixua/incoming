@@ -138,6 +138,11 @@ paths:
   place it before the block it reads changes (loading a magazine updates it), then allow its 2-tick delay
   (`RedstoneGameTests`).
 
+- Unit tests share one JVM: a test calling `Bootstrap.bootStrap()` must first stub the mod list as `PackDocsTest` does
+  (`if (LoadingModList.get() == null) LoadingModList.of(…)`), or NeoForge's feature flags throw inside `Blocks`'
+  static init, the class stays failed for the whole JVM, and dozens of unrelated tests (Voxy, LSS, Mockito mocks of
+  `MinecraftServer`) fail after it with `NoClassDefFoundError`.
+
 - Fixed surface-baseline seeds and `blast_crater_seed` regression: see `warhead.md`.
 
 - Late-exposure fixtures measure pulse/wave damage, independently of ground fire. Saved-zone settlement can lay

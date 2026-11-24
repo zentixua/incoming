@@ -85,6 +85,9 @@ public final class Incoming {
         modBus.addListener(ua.zentix.incoming.registry.ModDataMaps::register);
         // Mekanism's worn radiation shielding: the compat class names Mekanism's API, so it loads only with Mekanism
         if (ModList.get().isLoaded("mekanism")) ua.zentix.incoming.compat.mekanism.MekanismShielding.install();
+        // CC:Tweaked peripherals of the launcher and the SAM: the compat package names CC:Tweaked's API, so it loads only
+        // with CC:Tweaked (Jade finds its overlay plugin by its own annotation scan; nothing here names it)
+        if (ModList.get().isLoaded("computercraft")) modBus.addListener(ua.zentix.incoming.compat.computercraft.Peripherals::register);
         modBus.addListener(SamBlockEntity::registerCapabilities);
         modBus.addListener(FixedLauncherBlockEntity::registerCapabilities);
         // advancements and statistics (progress.Progress): no legacy ids to alias
