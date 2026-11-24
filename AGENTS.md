@@ -11,7 +11,7 @@ Doppler 3D sound. Public repository, public product with a large audience: no sl
 (Minecraft blocks, entities, characters). Played single-player, as an opened host world and on a whitelisted server; only the host is operator.
 Player-visible changes update the player guide in the same PR, both languages: docs/guide English, docs/guide/ru
 Russian (frames: `tools/client_scenario.sh guide`, `tools/guide_images.sh`). Nuclear design/deviations:
-docs/DESIGN-nuke.md. Neighbors: Open Skies pack (zentixua/open-skies), Almighty AI game-master bridge (zentixua/almighty).
+docs/DESIGN-nuke.md. Neighbors: Open Skies pack (zentixua/open-skies-friends), Almighty AI game-master bridge (zentixua/almighty).
 
 Read this file in full before work. **Before reading or editing files, open every area rule whose `paths:` header
 covers them; a path often belongs to several areas.** When planning before opening files, read the area rules by
@@ -21,7 +21,7 @@ path rules by themselves.
 **Where knowledge lives (one home per fact; no copies, no history, dates only as origin).** This file: session-wide
 rules, concepts and Artem's permanent decisions about the mod and the process. `.claude/rules/<area>.md`: one code
 area's structure and pitfalls. Plugin skills: procedures. Team and operations (roles, machines, servers, what needs
-Artem's word): the private `open-skies` repository's `.claude/rules/team.md`, loaded by project threads and, through
+Artem's word): open-skies-friends' `.claude/rules/team.md`, loaded by project threads and, through
 the laptop plugin, by laptop sessions. Live status: the lead's project memory. Claude Code auto memory is no home:
 other agents never see it. A changed fact is rewritten in its home in the same PR, and a rule that must always hold
 gets a test or check (`tools/check_knowledge.py` guards this layout). A checkout behind `origin/main` has outdated
@@ -181,7 +181,7 @@ Artem, 26.10: standard Minecraft mod practice, no extra custom principles.
   with source entity, own damage type); expose ours through tags/data/events too. No specific-mod code in main code.
   Truly needed integrations are optional `compat/` modules using public APIs, loaded only with that mod. Never adopt
   or disable other mods' mechanics/look (smoke/fire/sound).
-- **A mod conflicts with ours:** first its settings or pack choice (open-skies); its bug gets an issue to author;
+- **A mod conflicts with ours:** first its settings or pack choice (open-skies-friends); its bug gets an issue to author;
   needed integration goes in optional API `compat/` as above (Sable/DH/Voxy); crash without API gets narrow guard with
   code reason, removed when fixed upstream; fundamental incompatibility declared in `mods.toml`.
 
@@ -279,16 +279,16 @@ queues, little rework; each mission's budget is checked against its measured loa
   window/host OpenAL audio, scenario audio to file); without KWin (cloud), `xvfb-run` with same muted host audio (`rigs.md`).
 
 ## `.claude/rules/` files
-- `tools.md`: layout, every `tools/` script, CI.
+- `tools.md`: layout, `tools/` scripts, CI.
 - `strike.md` (`strike/`, `target/`, `progress/`: orders/spec/launch/virtual flight/areas/hits/credit); `entity.md` (`entity/`,
   `guidance/`: flight/autopilots/virtual projectile/client entity tracking); `work.md` (tick budget, bulk damage in
   units); `warhead.md` (staged blast/glass/crater falls/vanilla-blast particles); `defense.md` (air defense, allowed/
-  forbidden targets); `launcher.md` (fixed launcher, redstone launch).
+  forbidden targets); `launcher.md` (fixed launcher, redstone launch); `claims.md` (claim protection).
 - `nuclear.md` (nuke except ruins: model/detonation/radiation/client); `nuclear-world.md` (ruins, zone behind wave,
   player chunk delivery); `grid.md` (blackout/lamps/chunk light).
-- `server-chunks.md` (chunks/tickets/world exit/entities/ground); `sable.md`; `dh.md` (Distant Horizons/LOD Server
-  Support API terrain for map/rays/sound, distant LODs, world leaks); `voxy.md` (Voxy via Roxy, depth/distant changes/LSS).
-- `client-smoke.md` (blast clouds, dust terrain cache); `dust-wave.md` (nuclear ground dust).
+- `server-chunks.md` (chunks/tickets/world exit/entities/ground); `sable.md`; `dh.md` (Distant Horizons/LSS API
+  terrain for map/rays/sound, distant LODs, world leaks); `voxy.md` (Voxy via Roxy, depth/distant changes/LSS).
+- `client-smoke.md` (blast clouds, terrain cache); `dust-wave.md` (nuclear dust).
 - `client.md` (client structure/heightmaps/Iris/`AFTER_LEVEL`); `client-fx.md` (particles/effects layer/trail/alpha
   discard); `client-models.md` (OBJ); `client-sound.md` (OpenAL/volume/loops); `replay.md` (Flashback).
 - `gametest.md` (GameTest/flight scenarios, no wall clocks); `client-scenario.md` (headless client); `rigs.md`

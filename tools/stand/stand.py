@@ -56,7 +56,7 @@ def _main_checkout():
 
 STAND = Path(os.environ.get("INCOMING_STAND_ROOT") or _main_checkout() / "mod" / "run" / "stand")
 DL, GAME, OUT = STAND / "dl", STAND / "game", STAND / "out"
-REPO, PACK_REPO = "zentixua/incoming", "zentixua/open-skies"
+REPO, PACK_REPO = "zentixua/incoming", "zentixua/open-skies-friends"
 # Bench pack → pw.toml in modpack pack/shaderpacks (None means Iris without shader pack)
 PACKS = {"none": None, "complementary": "complementary-unbound", "photon": "photon-shader"}
 MODS = ("sodium", "iris")
@@ -91,7 +91,7 @@ def gh(*args, json_out=False) -> Any:
 # ---------------------------------------------------------------- modpack mods and packs
 
 def pw_toml(kind, name):
-    """open-skies pack/<kind>/<name>.pw.toml (private repo, access through gh)."""
+    """open-skies-friends pack/<kind>/<name>.pw.toml (read through gh)."""
     import base64
     data = gh("api", f"repos/{PACK_REPO}/contents/pack/{kind}/{name}.pw.toml", "--jq", ".content")
     return tomllib.loads(base64.b64decode(data).decode())

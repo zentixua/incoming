@@ -21,10 +21,11 @@ import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.material.FluidState;
 import net.minecraft.world.phys.Vec3;
 import net.neoforged.neoforge.capabilities.Capabilities;
-import net.neoforged.neoforge.event.EventHooks;
 import net.neoforged.neoforge.network.PacketDistributor;
 import org.jetbrains.annotations.Nullable;
 import ua.zentix.incoming.Incoming;
+import ua.zentix.incoming.claim.Claims;
+import ua.zentix.incoming.api.ClaimQuery;
 import ua.zentix.incoming.IncomingConfig;
 import ua.zentix.incoming.compat.SubLevels;
 import ua.zentix.incoming.net.S2C;
@@ -352,7 +353,7 @@ final class StrikeCollapse implements UnitQueue.Job {
             StrikeRemovals.Source source = area.collapseSource();
             Explosion e = source != null ? source.explosion(level)
                     : after.getFirst().attributed(level, centre);
-            BlockPos protectedBlock = protectedBearing(level, e, null, offered, end);
+            BlockPos protectedBlock = protectedBearing(level, e, null, offered, end, true);
             if (protectedBlock != null) {
                 Incoming.LOG.info("Collapse at {} kept standing: claim protection keeps load-bearing {}",
                         BlockPos.containing(centre).toShortString(), protectedBlock.toShortString());
@@ -370,7 +371,7 @@ final class StrikeCollapse implements UnitQueue.Job {
             StrikeRemovals.Source source = peer.sources().get(peerSource);
             if (!support.excludedPeer(source)) {
                 Explosion e = source.explosion(level);
-                BlockPos protectedBlock = protectedBearing(level, e, peer.indices(), peerOffered, end);
+                BlockPos protectedBlock = protectedBearing(level, e, peer.indices(), peerOffered, end, false);
                 if (protectedBlock == null && end < peer.indices().length) {
                     peerOffered = end;
                     return;
@@ -418,18 +419,27 @@ final class StrikeCollapse implements UnitQueue.Job {
         }
     }
 
-    /** Keep decorative blocks directly and return the first protected bearing block for a support-based retry. */
-    private @Nullable BlockPos protectedBearing(ServerLevel level, Explosion e, @Nullable int[] indices, int from, int end) {
+    /**
+     * Keep decorative blocks directly and return the first protected bearing block for a support-based retry. In the
+     * strike's {@code own} context a chunk its real explosion's claim handlers denied stays denied ({@link BlastArea#claims}).
+     */
+    private @Nullable BlockPos protectedBearing(ServerLevel level, Explosion e, @Nullable int[] indices, int from, int end, boolean own) {
         long[] all = result.at();
-        List<BlockPos> list = e.getToBlow();
-        for (int i = from; i < end; i++) list.add(BlockPos.of(all[indices == null ? i : indices[i]]));
-        EventHooks.onExplosionDetonate(level, e, new ArrayList<>(), 0);
-        LongOpenHashSet allowed = new LongOpenHashSet(list.size());
-        for (BlockPos p : list) allowed.add(p.asLong());
+        // asked through Claims (centre and readiness guards); a position in a chunk not in memory is not asked and not
+        // protected: the fall skips it unwritten (writable), so it must not stop the collapse as a protected bearing block
+        long[] ask = new long[end - from];
+        int n = 0;
+        for (int i = from; i < end; i++) {
+            long at = all[indices == null ? i : indices[i]];
+            if (Terrain.ready(level, BlockPos.getX(at) >> 4, BlockPos.getZ(at) >> 4)) ask[n++] = at;
+        }
+        ClaimQuery q = e instanceof ClaimQuery c ? c : new ClaimQuery(level, e.getDirectSourceEntity(), null, e.center());
+        LongOpenHashSet refused = new LongOpenHashSet();
+        if (n > 0) Claims.offer(level, q, ask, 0, n, refused::add, false);
         for (int i = from; i < end; i++) {
             int index = indices == null ? i : indices[i];
             long at = all[index];
-            if (allowed.contains(at)) continue;
+            if (!refused.contains(at) && !(own && area.claims().denied(ChunkPos.asLong(BlockPos.getX(at) >> 4, BlockPos.getZ(at) >> 4)))) continue;
             if (StrikeSupport.bearing(result.was()[index])) return BlockPos.of(at);
             kept.add(at);
         }
@@ -619,6 +629,10 @@ final class StrikeCollapse implements UnitQueue.Job {
         double[] off = StrikeSupport.spread(from.getX(), from.getY(), from.getZ(), fall);
         FallingBlockEntity e = FallingBlockEntity.fall(level, from, rubble);
         CraterFalls.markRubble(e, area.rules().debrisStay());
+        // where it comes to rest (as the direct landing puts it): claim-protected there, it falls but places nothing
+        int x = Mth.floor(from.getX() + 0.5 + off[0]), z = Mth.floor(from.getZ() + 0.5 + off[1]);
+        if (area.rules().debrisStay() && Terrain.ready(level, x >> 4, z >> 4)
+                && !area.claims().allows(level, new BlockPos(x, rest(level, x, from.getY(), z, m) + 1, z))) e.disableDrop();
         double ticks = fallTicks(Math.max(1, fall));
         e.setDeltaMovement(off[0] / ticks, 0, off[1] / ticks);
         stats.live++;
@@ -666,7 +680,7 @@ final class StrikeCollapse implements UnitQueue.Job {
                 BlockPos at = new BlockPos(x, y, z);
                 BlockState there = level.getBlockState(at);
                 // under water rubble sinks away, as in the nuclear pile (RuinPlanner#buries)
-                if (y < level.getMaxBuildHeight() && FallingBlock.isFree(there) && there.getFluidState().isEmpty()) {
+                if (y < level.getMaxBuildHeight() && FallingBlock.isFree(there) && there.getFluidState().isEmpty() && area.claims().allows(level, at)) {
                     ColumnScar.replace(level, at, there, l.state());
                     stats.placed++;
                     n++;

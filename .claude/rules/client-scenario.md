@@ -296,7 +296,7 @@ times and the pall's budget are not frame costs: frame cost belongs to the GPU a
   draws vertical pall stripes: compare runs on same world.
 - Iris installed without shaderpack plus DH (like host laptop): `INCOMING_SHADERS=1 INCOMING_DH=1`, `-PmcModsDir`
   pointing to directory with `fetch_runtime_mods.py` mods plus Sodium/Iris/DH jar matching pack version (Modrinth,
-  sha512 from open-skies `pack/mods/*.pw.toml`); do not write `iris.properties`, shaders off. Cloud DH builds little:
+  sha512 from open-skies-friends `pack/mods/*.pw.toml`); do not write `iris.properties`, shaders off. Cloud DH builds little:
   frame share covered by LOD beyond render distance in `SCENARIO … depth:`.
 - Accessibility welcome screen/unfocused pause break headless client; `client_scenario.sh` writes own `options.txt`.
 - Headless client works in cloud without KWin/shaders:

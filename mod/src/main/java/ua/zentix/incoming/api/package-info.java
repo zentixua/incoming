@@ -19,5 +19,8 @@
  * A pack that charges its own cost or cooldown checks in {@code Request}, debits in {@code Accepted} and settles in
  * {@code Ended}; Incoming rolls back no foreign debit. Rounds saved before these events existed post no round events;
  * their detonations and outages are still reported, with no order or round id.
+ * <p>
+ * Claim protection: before Incoming changes blocks outside a real charge's own explosion, it asks claim mods through
+ * {@code ExplosionEvent.Detonate} with a {@link ua.zentix.incoming.api.ClaimQuery}, a question and not an explosion.
  */
 package ua.zentix.incoming.api;

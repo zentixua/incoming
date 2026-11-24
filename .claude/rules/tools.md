@@ -54,6 +54,13 @@ Prism: `~/.var/app/org.prismlauncher.PrismLauncher/data/PrismLauncher/` (`tools/
                                            sound only, its take in a 160×90 window at 20 fps);
                                            a nuke at the camera: `nuke 15 near`; how to work: client-scenario.md,
                                            “Effects sandbox”; check without a client: test_sandbox.sh (CI)
+    amd_shader_check.py [--only R] [--record] [--tree D] ← every core and post program through AMD's OpenGL compiler offline
+                                           (glc of RGA 2.13, gfx1032 = RX 6600 XT; vanilla stages and includes from the 1.21.1
+                                           client jar; both hash-checked into mod/run/rga): VGPRs, scratch, code of both stages,
+                                           compiler memory, seconds; fails past tools/fixtures/amd_shader_budget.json (+10 % code or
+                                           memory per stage, new scratch, a program that does not compile, a new one over 128 KB or 1 GB). CI job
+                                           “Компилятор AMD” on shader changes; --record --jobs 1 on an idle machine after a
+                                           deliberate change, the reason in the PR
     see_through_check.sh [graphics] [start options] ← regression check of effects behind see-through blocks: a blast seen
                                            through a sandbox `pane` of each translucent block and stone, visible share 2 s
                                            after it by see_through.py, fails outside its bounds; run it on changes to the
@@ -155,7 +162,7 @@ Prism: `~/.var/app/org.prismlauncher.PrismLauncher/data/PrismLauncher/` (`tools/
                                            leak — who holds the world after leaving to the menu: entries into the world with commands (incoming.leak.*),
                                            in the menu — a class histogram and a JFR sample with paths to roots (needs -XX:VMThreadStackSize=8192:
                                            with the default stack the path search crashes the JVM), into the log — lines `SCENARIO leak … holder`;
-                                           replay — replay of a Flashback in the directory of tools/pack_dir.py of the build (zentixua/open-skies) with the recording mods and quicksave: saved, opened and played back — the projectile's frames and the places where it vanished; rewinds backward and forward through strikes and the nuke — without live explosions and flashes
+                                           replay — replay of a Flashback in the directory of tools/pack_dir.py of the build (zentixua/open-skies-friends) with the recording mods and quicksave: saved, opened and played back — the projectile's frames and the places where it vanished; rewinds backward and forward through strikes and the nuke — without live explosions and flashes
     replayscan/                          ← analysis of a Flashback replay by the game itself into tables: a client mod without a window (events, paths,
                                            visibility through the player's eyes or set cameras, ground measurements at explosions) and replaydb.py —
                                            a DuckDB database with queries for video plans (launches, flybys, ground strikes); filming plans of
@@ -213,7 +220,8 @@ Prism: `~/.var/app/org.prismlauncher.PrismLauncher/data/PrismLauncher/` (`tools/
   does not build the mod or run GameTest (`tools/replayscan` has its own build and unit tests, `tools/look_gate` the run
   validity test, `tools/stand` the wrapper build, its unit tests and test_gate.py); store pages (`docs/store`,
   `docs/media`, `docs/guide`, README, `.github/scripts`, `publish.yml`) only their check `test_store*.py`; `mod/`, CI and
-  unknown paths get the full check, and a manual run (release) always runs everything. The jar is the artifact
+  unknown paths get the full check, and a manual run (release) always runs everything. Shader changes (and
+  `amd_shader_check.py`, its test and budget) also run “Компилятор AMD”. The jar is the artifact
   `incoming-jar`.
 - A push to `main` and a release do not recheck a tree that already fully passed a successful run of this repository
   (a PR merged without `main` moving gives the same tree): `Что изменилось` finds the tag `tested-tree-<tree>`
@@ -224,7 +232,7 @@ Prism: `~/.var/app/org.prismlauncher.PrismLauncher/data/PrismLauncher/` (`tools/
   manually on `main` with `release=true`: after all checks, the workflow releases `v<version>` with the jar (friends take it
   from there), and `publish` then uploads the same jar to Modrinth and CurseForge by itself (step `release`; a manual
   `publish release` re-sends a version and skips stores that already have the jar). If `main` has moved on from the commit checked in the game, a branch `claude/release-…` from that commit with only
-  the notes, and the run on it. After the release, the open-skies build takes the jar by itself (its `update` workflow
+  the notes, and the run on it. After the release, the open-skies-friends build takes the jar by itself (its `update` workflow
   runs there every 3 hours; to run it at once, start it manually on `main`), checks it and releases it; players with
   auto-update get it on their next launch. Create, Sable and Aeronautics are pinned in the pack: a new version of them is a PR in
-  open-skies together with the pins here (`gradle.properties`, `tools/fetch_runtime_mods.py`).
+  open-skies-friends together with the pins here (`gradle.properties`, `tools/fetch_runtime_mods.py`).

@@ -19,6 +19,7 @@ import net.neoforged.neoforge.event.tick.LevelTickEvent;
 import org.jetbrains.annotations.Nullable;
 import ua.zentix.incoming.Incoming;
 import ua.zentix.incoming.IncomingConfig;
+import ua.zentix.incoming.claim.NuclearClaims;
 import ua.zentix.incoming.compat.DhUpdates;
 import ua.zentix.incoming.grid.ChunkLights;
 import ua.zentix.incoming.grid.PowerGrid;
@@ -262,8 +263,11 @@ public final class FarLods {
         // already queued for own reason: copy will go to everyone including this player
         if (f.queued.containsKey(chunk) || f.reading.contains(chunk)) return;
         byte kind;
-        if (NuclearWorld.get(level).prep().arrivedPlan(level, NuclearEvents.get(level), chunk, now) != null) kind = RUINS;
-        else if (f.ringOf(chunk, now) != null && !f.inHeavyZone(chunk, now)) kind = SCORCH;
+        RuinPlan arrived = NuclearWorld.get(level).prep().arrivedPlan(level, NuclearEvents.get(level), chunk, now);
+        Ring ring = f.ringOf(chunk, now);
+        // a chunk claim protection denied (empty plan, NuclearClaims) has no ruins or trace to send
+        if (arrived != null && arrived != RuinPlan.EMPTY) kind = RUINS;
+        else if (arrived == null && ring != null && !f.inHeavyZone(chunk, now) && !NuclearClaims.get(level).denied(ring.d.id(), chunk)) kind = SCORCH;
         else if (PowerGrid.get(level).dark(ChunkPos.getX(chunk), ChunkPos.getZ(chunk), ua.zentix.incoming.grid.Blackouts.now(level))) kind = LIGHTS;
         // no plan, trace outside heavy zone or darkness: copy equals disk chunk already sent by LSS
         else return;
@@ -571,7 +575,9 @@ public final class FarLods {
         // Voxy-only request: send copy only if different from disk
         boolean fires = IncomingConfig.SERVER.nukeFires.get(), lights = (kind & LIGHTS) != 0 && !refreshFor.containsKey(r.chunk);
         // unplanned chunk may carry ground trace (district light included): snapshot, trace plan, copy
-        Ring ring = plan == null ? ringOf(r.chunk, now) : null;
+        Ring near = plan == null ? ringOf(r.chunk, now) : null;
+        // a chunk claim protection denied to the ring's detonation keeps its copy without trace (NuclearClaims)
+        Ring ring = near != null && NuclearClaims.get(level).denied(near.d.id(), r.chunk) ? null : near;
         long revision = generation;
         if (ring != null) {
             scorchReading.add(r.chunk);

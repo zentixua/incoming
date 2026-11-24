@@ -297,7 +297,8 @@ final class Shatter implements UnitQueue.Job {
             if (!st.is(tag) || !zone.breaks(st, x, y, z)) continue;
             m.set(x, y, z);
             if ((!zone.airborne() || open(level, x, y, z, tag))
-                    && (edgesReady || Terrain.readyAround(level, Vec3.atCenterOf(m), Warheads.EDGE))) {
+                    && (edgesReady || Terrain.readyAround(level, Vec3.atCenterOf(m), Warheads.EDGE))
+                    && (area == null || area.claims().allows(level, m))) {
                 ua.zentix.incoming.work.BlockLighting.changed(level, m);
                 level.setBlock(m, Blocks.AIR.defaultBlockState(), edgesReady ? Block.UPDATE_ALL : Warheads.EDGE_FLAGS);
                 touched.add(ChunkPos.asLong(sx, sz));
@@ -409,6 +410,8 @@ final class Shatter implements UnitQueue.Job {
 
     @Override
     public boolean step(ServerLevel level) {
+        // a charge claim protection cancelled (ExplosionEvent.Start) sends no wave: no glass breaks
+        if (!after.isEmpty() && after.stream().noneMatch(StagedExplosion::happened)) return false;
         long t0 = System.nanoTime();
         int broken = SKIPPED;
         // Palette-rejected sections in same unit: work is a portion of a section whose blocks needed inspection.

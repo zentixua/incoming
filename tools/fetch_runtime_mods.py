@@ -1,6 +1,6 @@
 """Downloads from Modrinth mods for launches from Gradle (Create, Sable, Aeronautics, Lithium) - for CI and machines without an instance.
 
-Versions - as in the assembly “Open Skies” (zentixua/open-skies, pack/mods); files are checked against sha512 from Modrinth.
+Versions - as in the assembly “Open Skies” (zentixua/open-skies-friends, pack/mods); files are checked against sha512 from Modrinth.
 Then: ./gradlew runGameTestServer -PmcModsDir=<folder> [-PwithLithium]
 (Lithium is launched only with -PwithLithium - checking compatibility with it, like the host.)
 Folder - only for these mods: other jar in it (former versions) are removed, otherwise the launch would take both versions of the mod.

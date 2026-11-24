@@ -85,6 +85,8 @@ Where: Artem's laptop, only when he is not playing (`tools/gpu_lease.sh --wait`)
 - **GPU clocks**: `nvidia-smi` log once a second; 45 s warm-up; the clock is written beside each view.
 - **Frames**: the same spot, the same moment after the strike, against `main` (`tools/sandbox.sh shot`); the scene
   bench for frame cost.
+- **Other vendors' drivers** (AMD, no such GPU here): `tools/amd_shader_check.py` gives AMD's own compiler output
+  per program (VGPRs, scratch, code size, compiler memory and seconds); Mesa llvmpipe is the second compiler.
 - **Shaders**: the hold rig (age the cloud once, keep the client, hot reload), a probe channel per term.
 
 Traps: Dynamic FPS caps to 15 FPS exactly after 300 s (`dynamic_fps.json` `{"idle":{"timeout":0}}`); scenarios pin a

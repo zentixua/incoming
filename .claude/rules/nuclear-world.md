@@ -327,6 +327,8 @@ paths:
   changes both classes.
 
 ## Pitfalls
+- Claim protection (`claims.md`): every world write of a detonation (flash layer, silhouettes, ruins, crater, trunks,
+  LOD copies) follows `NuclearClaims` per detonation and chunk; a denied chunk's ruins are `RuinPlan.EMPTY`.
 - Fire ignition (`RuinPlanner.land` → `fire`) compares exposure facing the fireball (`RuinContext.Grid.lit`, `min(q, lit)`)
   with `ThermalModel.ignite(yield)`: the fluence formula already is the exposure on a surface facing the ball, so a
   slope cannot exceed it. The ×2.5 slope gain on ignition plus a fixed 5 cal/cm² lit fires 12.7 km from a 500 kt

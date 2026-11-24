@@ -370,7 +370,7 @@ public final class RuleGameTests {
     }
 
     /** Every block of the platform and the air above it. */
-    private static Map<BlockPos, BlockState> snapshot(GameTestHelper h) {
+    static Map<BlockPos, BlockState> snapshot(GameTestHelper h) {
         Map<BlockPos, BlockState> out = new HashMap<>();
         for (int x = 0; x < 64; x++) for (int y = 0; y < 40; y++) for (int z = 0; z < 64; z++) {
             BlockPos p = new BlockPos(x, y, z);
@@ -379,7 +379,7 @@ public final class RuleGameTests {
         return out;
     }
 
-    private static List<String> changes(GameTestHelper h, Map<BlockPos, BlockState> was) {
+    static List<String> changes(GameTestHelper h, Map<BlockPos, BlockState> was) {
         List<String> out = new ArrayList<>();
         for (var e : was.entrySet()) {
             BlockState now = h.getBlockState(e.getKey());
