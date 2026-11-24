@@ -1391,8 +1391,10 @@ vec4 dwMarch(vec3 rd, float tEnd, float jitter, float foot, int maxSteps) {
             gDwSamples += 1;
             c /= s;
             // the thin soft edge, veil and puffs over the dense top: four cells per sample (at grazing views they are
-            // hundreds of metres of ray); thin dust: the span grows while each cell holds little optical depth
-            float cells = max(hqMax > 2.0 ? 4.0 : 1.0, n);
+            // hundreds of metres of ray); thin dust: the span grows while each cell holds little optical depth. A dense
+            // sample spans its own cell: with the span grown over the thin samples before it (7 m), the sample where a ray
+            // enters the wall's face stood for the lit skin and the next one landed 9-17 blocks deep in its shadow
+            float cells = dense ? 1.0 : max(hqMax > 2.0 ? 4.0 : 1.0, n);
             bool cut = capK > k;
             if (cut) cells = min(cells, capK - k);
             capK = -1.0;
