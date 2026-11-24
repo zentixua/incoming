@@ -43,6 +43,8 @@ GROWTH = 0.10
 # A program not in the budget: an ordinary effect shader is 1–60 KB of code; the nuclear volume programs that freeze
 # AMD machines are 200–800 KB and take 0.5–5 GB of compiler memory.
 NEW_CODE = 128 * 1024
+# Compiler memory of a small program is mostly RGA's own ~60 MB, which moves by a few MB between runs and machines
+MEMORY_SLACK_MB = 32
 NEW_MEMORY_MB = 1024
 
 
@@ -132,13 +134,16 @@ def compile_one(rga, asic, tree, name):
         (d / "s.frag").write_text(frag)
         start = time.monotonic()
         proc = subprocess.Popen([str(rga), "-s", "opengl", "-c", asic, "-a", str(d / "a.csv"), "--vert", str(d / "s.vert"),
-                                 "--frag", str(d / "s.frag")], stdout=subprocess.PIPE, stderr=subprocess.STDOUT, cwd=d)
+                                 "--frag", str(d / "s.frag")], stdout=subprocess.PIPE, stderr=subprocess.STDOUT, cwd=d,
+                                # RGA keeps its intermediate files and glc's log under $HOME/.rga, one fixed log name
+                                # for every run: parallel runs would read each other's results
+                                env=dict(os.environ, HOME=str(d)))
         out = proc.stdout.read().decode(errors="replace")
         _, status, usage = os.wait4(proc.pid, 0)
         seconds = time.monotonic() - start
         frag_stats = d / f"{asic}_a_frag.csv"
         if os.waitstatus_to_exitcode(status) != 0 or not frag_stats.exists():
-            return name, {"error": out.strip().splitlines()[-3:]}
+            return name, {"error": [line for line in out.strip().splitlines() if line.strip()][-8:]}
         result = stats(frag_stats.read_text())
         # ru_maxrss of a reaped child includes its own reaped children (glc), in KiB
         result["memory_mb"] = round(usage.ru_maxrss / 1024)
@@ -161,7 +166,7 @@ def judge(name, got, budget):
         return fails
     if got["code"] > budget["code"] * (1 + GROWTH):
         fails.append(f"{name}: AMD code {got['code'] // 1024} KB, budget {budget['code'] // 1024} KB (+{GROWTH:.0%} allowed)")
-    if got["memory_mb"] > budget["memory_mb"] * (1 + GROWTH):
+    if got["memory_mb"] > max(budget["memory_mb"] * (1 + GROWTH), budget["memory_mb"] + MEMORY_SLACK_MB):
         fails.append(f"{name}: AMD compiler memory {got['memory_mb']} MB, budget {budget['memory_mb']} MB (+{GROWTH:.0%} allowed)")
     if got["scratch"] > budget["scratch"]:
         fails.append(f"{name}: spills {got['scratch']} bytes per lane to scratch memory, budget {budget['scratch']}")

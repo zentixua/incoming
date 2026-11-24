@@ -24,6 +24,11 @@ class Judge(unittest.TestCase):
         self.assertEqual([], judge("fx_pall", ok, budget))
         self.assertEqual(1, len(judge("fx_pall", dict(ok, code=ok["code"] + 4), budget)))
 
+    def test_small_program_memory_has_slack(self):
+        budget = {"code": 1000, "memory_mb": 60, "scratch": 0}
+        self.assertEqual([], judge("fx_see", dict(MAIN, code=1000, memory_mb=92, scratch=0), budget))
+        self.assertEqual(1, len(judge("fx_see", dict(MAIN, code=1000, memory_mb=93, scratch=0), budget)))
+
     def test_new_scratch_fails(self):
         budget = {"code": 400000, "memory_mb": 900, "scratch": 0}
         fails = judge("fx_pall_foot", dict(MAIN, code=1000, memory_mb=60, scratch=16), budget)
