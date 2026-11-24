@@ -870,7 +870,7 @@ context()
 
 LATTICE_BODY = """
 uniform vec3 Fwd, Right, Up;
-uniform float TanX, TanY, Steps, Foot, Frame, W, H;
+uniform float TanX, TanY, Steps, Foot, Frame, W, H, Scheme;
 out vec4 fragColor;
 void main() {
     gDwForceF = -1.0;
@@ -880,6 +880,15 @@ void main() {
     vec3 rd = normalize(Fwd + Right * uv.x * TanX + Up * uv.y * TanY);
     float tEnd = rd.y < 0.0 ? DwEye.y / -rd.y : 60000.0;
     float jitter = fract(52.9829189 * fract(dot(lowPix, vec2(0.06711056, 0.00583715))) + Frame * 0.618034);
+    if (Scheme > 0.5) {
+        // per-pixel hashed offsets: each pixel its own random phase of the golden sequence and of R2 (no spatial structure)
+        float h1 = fract(sin(dot(lowPix, vec2(12.9898, 78.233))) * 43758.5453), h2 = fract(sin(dot(lowPix, vec2(39.3468, 11.135))) * 24634.6345);
+        jitter = fract(h1 + Frame * 0.618034);
+        sub = fract(vec2(h2, h1) + vec2(0.7548777, 0.5698403) * Frame) - 0.5;
+        uv = (lowPix + 0.5 + sub) / vec2(W, H) * 2.0 - 1.0;
+        rd = normalize(Fwd + Right * uv.x * TanX + Up * uv.y * TanY);
+        tEnd = rd.y < 0.0 ? DwEye.y / -rd.y : 60000.0;
+    }
     fragColor = dwMarch(rd, tEnd, jitter, Foot, int(Steps));
 }
 """
@@ -999,6 +1008,41 @@ def resolve_emulation(law, age=-1.0, frames=40, fps=0.0):
         Image.fromarray((img[::-1] * 255).astype(np.uint8)).resize((W * 4, H * 4), Image.NEAREST).save(OUT / f"resolve-{mode}.png")
     REPORT["resolve_emulation"] = out
 
+
+def ema_view(law, R, eye_h, t_off, frames=40, scheme=0.0, tag="ema", yaw_pitch=2.0):
+    """The wall from a ground eye at R, t_off s from the front, the 1/6 lattice of 1600 x 900, every pixel traced each frame,
+    an exponential history (current weight 0.1, as fx_dustwall_resolve) without clamp; the result upsampled bilinear to
+    1600 x 900 as a frame, saved for tools/clip_metrics.py lattice."""
+    from PIL import Image
+    p = program(LATTICE_BODY, "new")
+    g.glUseProgram(p); noise(p)
+    W, H = 267, 150
+    t = law.arrival_at(R) + t_off
+    bind_new(p, law, t, (R, eye_h, 0.0))
+    scene_light(p, 4)
+    pitch = np.radians(yaw_pitch)
+    fwd = np.array([-np.cos(pitch), np.sin(pitch), 0.0]); right = np.array([0.0, 0.0, 1.0]); up = np.cross(right, fwd)
+    tan_y = np.tan(np.radians(35.0)); tan_x = tan_y * 16 / 9
+    g.glUniform3f(loc(p, "Fwd"), *fwd); g.glUniform3f(loc(p, "Right"), *right); g.glUniform3f(loc(p, "Up"), *up)
+    g.glUniform1f(loc(p, "TanX"), tan_x); g.glUniform1f(loc(p, "TanY"), tan_y)
+    g.glUniform1f(loc(p, "Steps"), 104); g.glUniform1f(loc(p, "Foot"), 2 * tan_x / W)
+    g.glUniform1f(loc(p, "W"), W); g.glUniform1f(loc(p, "H"), H); g.glUniform1f(loc(p, "DwDetail"), 2.0)
+    g.glUniform1f(loc(p, "Scheme"), scheme)
+    hist = None
+    for f in range(frames):
+        g.glUniform1f(loc(p, "Frame"), float(f))
+        target(W, H, [(g.GL_RGBA32F, g.GL_RGBA)])
+        quad(p)
+        v = read(W, H).reshape(H, W, 4).astype(np.float64)
+        hist = v if hist is None else hist * 0.9 + v * 0.1
+    sky = np.array([0.47, 0.65, 1.0]); ground = np.array([0.35, 0.33, 0.15])
+    rows = np.arange(H)[:, None] / H
+    back = np.where(rows[..., None] > 0.45, sky, ground)
+    col = hist[..., :3] / max(hist[..., :3].max(), 1e-9) * 0.9 + back * hist[..., 3:4]
+    img = (np.clip(col, 0, 1) ** (1 / 2.2) * 255).astype(np.uint8)[::-1]
+    Image.fromarray(img).resize((1600, 900), Image.BILINEAR).save(OUT / f"ema-{tag}.png")
+    print(f"ema view {tag}: saved")
+
 laws = {"1000": Law("1000"), "15": Law("15")}
 if "--only" in sys.argv:
     which = sys.argv[sys.argv.index("--only") + 1].split(",")
@@ -1032,6 +1076,10 @@ if "lattice" in which:
     lattice(laws["1000"])
 if "resolve" in which:
     resolve_emulation(laws["1000"])
+if "ema" in which:
+    for tt in (-1.5, -0.8):
+        ema_view(laws["15"], 1750.0, 2.0, tt, tag=f"15kt{tt:+.1f}")
+        ema_view(laws["15"], 1750.0, 2.0, tt, scheme=1.0, tag=f"15kt{tt:+.1f}-hash")
 if "resolvemoving" in which:
     resolve_emulation(laws["1000"], fps=18.0)
 (OUT / "probe-report.json").write_text(json.dumps(REPORT, indent=1, default=float))

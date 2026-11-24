@@ -16,7 +16,7 @@ export MC_DIR=${MC_DIR:-$(ls -d "$HOME/.var/app/org.prismlauncher.PrismLauncher/
 rm -rf "$D/saves/world" "$D/screenshots" && cp -a "$UW/silo-golden/world" "$D/saves/world"
 sed -i "s/^enableShaders=.*/enableShaders=$([ "$SH" = 1 ] && echo true || echo false)/" "$D/config/iris.properties"
 L=$(echo "$TAG" | tr -c 'a-z0-9\n' '_')
-C="gamemode spectator;time set 6000;gamerule doDaylightCycle false;gamerule doWeatherCycle false;weather clear;tp @s $CAM;wait:3600;hud:off;maxyield:1000;wave:0.35;pall:$Q;dw:rung=-2;shot:${L}_before"
+C="gamemode spectator;time set 6000;gamerule doDaylightCycle false;gamerule doWeatherCycle false;weather clear;tp @s $CAM;wait:3600;hud:off;maxyield:1000;wave:0.35;pall:$Q;dw:rung=-2${UW_DW:+;$UW_DW};shot:${L}_before"
 C="$C;incoming nuke now at $GZ $KT ground;wait:front;wait:20;shot:${L}_f1s;shot:${L}_f2s;wait:20;shot:${L}_f4s;wait:20;shot:${L}_f6s;wait:20;shot:${L}_f8s;wait:60;shot:${L}_f12s;wait:220;shot:${L}_f24s;wait:700;shot:${L}_f60s"
 C="$C;wait:$((LATE / 2));shot:${L}_mid;wait:$((LATE - LATE / 2));shot:${L}_10min;skip:1200;wait:100;shot:${L}_20min"
 echo "$C" > "$OUT/commands.txt"

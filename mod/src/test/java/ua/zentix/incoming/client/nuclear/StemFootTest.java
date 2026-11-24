@@ -44,6 +44,7 @@ class StemFootTest {
         static Case of(double yieldKt, double hob, double seconds) {
             Detonation d = burst(yieldKt, hob);
             PallField pall = new PallField(d);
+            pall.waveTableNow();
             double ticks = 20 * seconds, front = d.metres(d.frontRadius(ticks));
             MushroomModel.Shape s = MushroomModel.shape(seconds, yieldKt, hob, d.surface(), Math.sqrt(Math.max(0, front * front - hob * hob)),
                     StemDust.of(yieldKt, hob, d.surface(), d.visibility()));

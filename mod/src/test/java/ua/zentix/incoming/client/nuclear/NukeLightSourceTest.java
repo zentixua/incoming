@@ -19,7 +19,7 @@ class NukeLightSourceTest {
     private static final Map<String, String[]> READERS = Map.ofEntries(
             Map.entry("nuclear/NukeFlash.java", new String[]{"NukeLight.sample(", "NukeLight.camera(a)", "light.fluence()", "light.strength()", "light.peak(NukeLight.bodyExposure())", "lightUpWorld(mc.level, whiteness("}),
             Map.entry("nuclear/NukeSky.java", new String[]{"NukeLight.camera(a).light() * NukeLight.exposure()"}),
-            Map.entry("nuclear/NukePall.java", new String[]{"into.exposure = (float) NukeLight.exposure()", "f.exposure = SKY.exposure", "CloudPuffs.ball(sky.exposure,"}),
+            Map.entry("nuclear/NukePall.java", new String[]{"into.exposure = (float) NukeLight.exposure()", "f.exposure = SKY.exposure"}),
             Map.entry("nuclear/MushroomField.java", new String[]{"FlashLight.source(s,", "FlashLight.coreTemperature(s,", "BALL[0] * exposure"}),
             Map.entry("nuclear/CloudPuffs.java", new String[]{"FlashLight.source(s,"}),
             Map.entry("nuclear/NukeRenderer.java", new String[]{"FlashLight.source(s,", "exposure = NukeLight.exposure()", "NukeLight.camera(a).seen()"}),

@@ -24,7 +24,9 @@ read one at a time and taken to 720 rows (as a video is decoded), so a long 1080
           strongest repeat of the face's fine detail (luma - Gaussian blur sigma 3 px at 720 rows) at lags of 6-30 px, its
           normalised 2D autocorrelation over the warm dust pixels of the region (red over blue, eroded 8 px). Billows and
           lobes stay under 0.15 (main's wall at 3.9 km: 0.08-0.13); a dot lattice the eye reads as a screen door repeats above
-          it (the new wave's step-3 frames near the passage: 0.18-0.62). Exit 1 above LATTICE.
+          it (the new wave's step-3 frames near the passage: 0.18-0.62). Exit 1 above LATTICE. Limit: a smooth face upsampled
+          from a coarse lattice (1/6) repeats at its own period too (0.4-0.6 on a dot-free harness image): compare takes at
+          the same divisor, and judge the frames themselves.
   period  <png> [--band y0,y1] [--x1 f] [--edge]
           Repetition along x inside a band: normalised autocorrelation of the band's high-passed column-mean luma
           (--edge: of the band's lower edge, the strongest dark-over-light step per column at sub-pixel row). Prints
