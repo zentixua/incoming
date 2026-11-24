@@ -7,7 +7,7 @@
 # A main push or release whose tree a successful same-repository run already checked in full (the PR's merge
 # commit is the squash result when main did not move) reuses that run's jar instead of building and testing the
 # same files again (tools/ci_reuse.py).
-# Open Skies pack and Almighty game-master bridge have separate repositories (zentixua/open-skies, zentixua/almighty).
+# Open Skies pack and Almighty game-master bridge have separate repositories (zentixua/open-skies-friends, zentixua/almighty).
 # Manual run on main (or claude/release-* to release exactly a tested commit) with release=true:
 # full checks, then GitHub release v<mod_version> with this jar and docs/releases/<mod_version>.md notes.
 name: build

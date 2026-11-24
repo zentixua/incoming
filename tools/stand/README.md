@@ -72,7 +72,7 @@ does not run the paired scene acceptance gate or certify visible terrain publica
   projectiles or removals awaiting explosion remain for 30 s after the last hit; otherwise timeout
   (valid only with all hits). Off-world projectiles (`VirtualFlights`) are not entities, so "no
   projectiles" alone is insufficient.
-- Alongside mods: only open-skies Sodium and Iris; packs: no pack (Iris disabled), Complementary Unbound,
+- Alongside mods: only open-skies-friends Sodium and Iris; packs: no pack (Iris disabled), Complementary Unbound,
   Photon; files by sha512 from modpack `pack/*.pw.toml`. Window 2560×1600, vsync off, unlimited fps,
   render distance 12, particles all. Driver shader cache disabled (`__GL_SHADER_DISK_CACHE=0`): every
   first strike includes shader compilation, like a fresh game. `__GL_YIELD` is player default: inside

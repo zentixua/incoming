@@ -10,7 +10,7 @@
 # (resourcepacks/"Airstrike Sounds"|"Shahed Sounds") are transferred to incoming-backup/< time>/ next to mods/.
 # The mod replaces them completely; It transfers the datapack settings to its config itself when the world is first launched.
 # After installation, restart the game. Friends need the same jar (dist/incoming-*.jar) in their mods/.
-# The instance with auto-updating of the assembly (zentixua/open-skies) deploy.sh does not touch: jar the mod there is from the assembly on its main.
+# The instance with auto-updating of the assembly (zentixua/open-skies-friends) deploy.sh does not touch: jar the mod there is from the assembly on its main.
 set -euo pipefail
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 path() { python3 "$ROOT/tools/paths.py" "$1"; }
@@ -47,7 +47,7 @@ fi
 if [ "$DRY" = 1 ]; then echo "--dry: game untouched"; exit 0; fi
 # Before launching such an instance, packwiz-installer installs an assembly: it will return the removed jar assembly, and Incoming will become two.
 if grep -qs '^PreLaunchCommand=.*packwiz-installer' "$(dirname "$MC")/instance.cfg"; then
-  echo "the instance is updated itself from the assembly open-skies (packwiz-installer): the mod comes to the game with the release of the PR assembly;" \
+  echo "the instance is updated itself from the assembly open-skies-friends (packwiz-installer): the mod comes to the game with the release of the PR assembly;" \
     "the game is untouched" >&2
   exit 1
 fi
