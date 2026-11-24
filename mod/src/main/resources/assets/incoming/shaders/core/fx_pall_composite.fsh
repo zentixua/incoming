@@ -8,6 +8,10 @@
 #moj_import <incoming:wall_layer.glsl>
 // the dust pass's resolve divisor (DustWallPass); 0 — no dust pass this frame (Sampler6, its atlas, is then a placeholder)
 uniform float DwDiv;
+// 1 — only the dust wave's haze level is left this frame (DustWallPass.hazeOnly): a thin layer around the eye, laid in front of
+// the pall's other air in one step (the per-pixel split against smoke and mushrooms in front, 1.8–2.1 ms at 1600 × 900,
+// changed nothing on screen for a haze that surrounds the eye)
+uniform float DwHazeOnly;
 uniform int PallLayerFrame;
 
 // Pall onto frame (client/fx/layer/PallPass): ONE, SRC_ALPHA blending, pall light plus world behind, attenuated
@@ -457,8 +461,6 @@ void main() {
         nearWorld = froxelNear(Sampler11, PallFroxel, vec2(full) + 0.5, nearDepth);
         pall = froxelOver(nearWorld, pall);
     }
-    // Slot one is empty whenever the dust pass draws. Its fire-map unit
-    // then carries the resolved wall atlas, keeping the fragment sampler count at 16.
     WallLayer wall;
     wall.light = vec4(0.0, 0.0, 0.0, 1.0);
     wall.depth = vec3(0.0);
@@ -470,7 +472,7 @@ void main() {
     if (DwDiv > 0.0) {
         wall = wallLayer(Sampler6, Sampler1, vec2(full) + 0.5, depth, DwDiv);
         if (wall.light.a < 1.0) {
-            if (air.a < 1.0 || any(greaterThan(air.rgb, vec3(0.0)))) {
+            if (DwHazeOnly < 0.5 && (air.a < 1.0 || any(greaterThan(air.rgb, vec3(0.0))))) {
                 spans = mediumSpans(dir0);
                 haveSpans = true;
                 entry = mediumTo(wall.depth.x, full, dir0, nearEnd, nearDepth, nearWorld, rays, air, spans);
