@@ -10,6 +10,7 @@ import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.level.saveddata.SavedData;
 import net.minecraft.world.phys.Vec3;
 import ua.zentix.incoming.Incoming;
+import ua.zentix.incoming.nuclear.material.MaterialBirth;
 import ua.zentix.incoming.strike.RoundRef;
 
 import java.util.ArrayList;
@@ -125,6 +126,49 @@ public final class NuclearEvents extends SavedData {
     private final Map<Integer, Double> steps = new java.util.HashMap<>();
     /** Detonation number → world-clock anchors ({@link Anchor}); detonations saved before them have none (estimated). */
     private final Map<Integer, Anchor> clocks = new LinkedHashMap<>();
+    private long materialEpoch;
+    public long materialEpoch() { return materialEpoch; }
+    public java.util.Collection<MaterialBirth> currentMaterials() { return materials.values(); }
+    private final Map<Integer, MaterialBirth> materials = new LinkedHashMap<>();
+    private final java.util.ArrayDeque<MaterialBirth> encoding = new java.util.ArrayDeque<>();
+    /** Start at most one new background encoding per tick even when seventeen source maps are sealed together. */
+    public void encodeMaterial() {
+        MaterialBirth birth = encoding.peek();
+        if (birth != null && birth.encoded() != null) {
+            encoding.remove();
+            setDirty(); // a save during encoding wrote sealed inputs; the next one can store compact cells
+        }
+    }
+    public MaterialBirth material(int id) { return materials.get(id); }
+    public List<MaterialBirth> visibleMaterials() {
+        return detonations.stream().map(d -> materials.get(d.id())).filter(java.util.Objects::nonNull).toList();
+    }
+    public void material(int id, MaterialBirth birth) {
+        materialEpoch++;
+        materials.put(id, birth);
+        if (!birth.surveying()) encoding.add(birth);
+        setDirty();
+    }
+    public void forgetMaterial(int id) {
+        if (materials.remove(id) != null) { materialEpoch++; setDirty(); }
+    }
+    public MaterialBirth moveMaterial(int strike, int detonation) {
+        MaterialBirth birth = materials.remove(strike);
+        if (birth != null) {
+            materialEpoch++;
+            materials.put(detonation, birth);
+            setDirty();
+        }
+        return birth;
+    }
+    Map<Integer, UUID> materialIds() {
+        Map<Integer, UUID> ids = new LinkedHashMap<>();
+        for (Detonation d : detonations) {
+            MaterialBirth birth = material(d.id());
+            if (birth != null) ids.put(d.id(), birth.id);
+        }
+        return ids;
+    }
     private int nextId = 1;
     /**
      * First detonation number whose flash, prompt radiation and wave reach bodies loaded later ({@code LateExposure}). A world
@@ -320,6 +364,9 @@ public final class NuclearEvents extends SavedData {
         detonations.clear();
         impacts.clear();
         past.clear();
+        materialEpoch++;
+        materials.clear();
+        encoding.clear();
         craters.clear();
         craterGrounds.clear();
         clocks.clear();
@@ -334,6 +381,7 @@ public final class NuclearEvents extends SavedData {
         if (!faded.isEmpty()) {
             detonations.removeAll(faded);
             past.addAll(faded);
+            faded.forEach(d -> forgetMaterial(d.id()));
             setDirty();
         }
         if (clocks.keySet().removeIf(id -> detonations.stream().noneMatch(d -> d.id() == id))) setDirty();
@@ -342,7 +390,7 @@ public final class NuclearEvents extends SavedData {
         if (craterGrounds.keySet().removeIf(id -> !craters.containsKey(id))) setDirty();
     }
 
-    private static NuclearEvents load(CompoundTag tag, HolderLookup.Provider registries) {
+    public static NuclearEvents load(CompoundTag tag, HolderLookup.Provider registries) {
         NuclearEvents e = new NuclearEvents();
         e.nextId = Math.max(1, tag.getInt("next_id"));
         e.lateFrom = tag.contains("late_from") ? tag.getInt("late_from") : e.nextId;
@@ -356,6 +404,17 @@ public final class NuclearEvents extends SavedData {
         // saved before order status: detonations from then have no impact work
         if (tag.contains("impacts")) Impact.CODEC.listOf().parse(NbtOps.INSTANCE, tag.get("impacts")).resultOrPartial(Incoming.LOG::error)
                 .ifPresent(l -> l.forEach(i -> e.impacts.put(i.detonation(), i)));
+        var saved = tag.getList("materials", net.minecraft.nbt.Tag.TAG_COMPOUND);
+        for (int i = 0; i < saved.size(); i++) {
+            CompoundTag entry = saved.getCompound(i);
+            try {
+                MaterialBirth birth = MaterialBirth.load(entry);
+                e.materials.put(entry.getInt("source"), birth);
+                if (!entry.contains("map") && !birth.surveying()) e.encoding.add(birth);
+            } catch (RuntimeException ex) {
+                Incoming.LOG.warn("Ignoring invalid ground material entry {} for source {}", i, entry.getInt("source"), ex);
+            }
+        }
         return e;
     }
 
@@ -370,6 +429,19 @@ public final class NuclearEvents extends SavedData {
         GROUNDS_CODEC.encodeStart(NbtOps.INSTANCE, craterGrounds).resultOrPartial(Incoming.LOG::error).ifPresent(t -> tag.put("crater_grounds", t));
         Anchor.CODEC.listOf().encodeStart(NbtOps.INSTANCE, List.copyOf(clocks.values())).resultOrPartial(Incoming.LOG::error).ifPresent(t -> tag.put("clocks", t));
         Impact.CODEC.listOf().encodeStart(NbtOps.INSTANCE, List.copyOf(impacts.values())).resultOrPartial(Incoming.LOG::error).ifPresent(t -> tag.put("impacts", t));
+        if (!materials.isEmpty()) {
+            var list = new net.minecraft.nbt.ListTag();
+            materials.forEach((id, birth) -> {
+                try {
+                    CompoundTag entry = birth.save();
+                    entry.putInt("source", id);
+                    list.add(entry);
+                } catch (RuntimeException ex) {
+                    Incoming.LOG.warn("Cannot save ground material for source {}", id, ex);
+                }
+            });
+            tag.put("materials", list);
+        }
         return tag;
     }
 }

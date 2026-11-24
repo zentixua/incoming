@@ -264,6 +264,11 @@ public final class WorkClock {
         return took;
     }
 
+    /** Discretionary time left for work sharing this lane's current window. */
+    public long remainingNanos() {
+        return Math.max(0, (spare.getAsBoolean() ? deadline : busyDeadline) - time.getAsLong());
+    }
+
     /**
      * Include a whole queue window, whose units may already be charged. Readiness, dependency checks and release
      * consume the same tick allowance, without changing step estimates or the one-unit progress guarantee.

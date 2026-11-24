@@ -197,7 +197,7 @@ public final class HiddenLaunchGameTests {
         });
     }
 
-    private static final class Watcher extends ServerGamePacketListenerImpl {
+    static final class Watcher extends ServerGamePacketListenerImpl {
         final List<CustomPacketPayload> got = new ArrayList<>();
         int sounds;
         final MunitionGameTests.Listener player;

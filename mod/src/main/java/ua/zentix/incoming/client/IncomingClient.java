@@ -516,6 +516,16 @@ public final class IncomingClient {
         }
 
         @Override
+        public void nukeMaterialSources(S2C.NukeMaterialSources p) {
+            ua.zentix.incoming.client.nuclear.ClientNuclear.materialSources(p);
+        }
+
+        @Override
+        public void nukeMaterial(S2C.NukeMaterial p) {
+            ClientNuclear.material(p);
+        }
+
+        @Override
         public void nukeSync(S2C.NukeSync p) {
             ClientNuclear.sync(p);
         }

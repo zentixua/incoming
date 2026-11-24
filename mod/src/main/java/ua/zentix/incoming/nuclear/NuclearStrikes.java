@@ -290,7 +290,15 @@ public final class NuclearStrikes {
      * ({@code RuinWorkers}) is outside the clock.
      */
     public static void work(List<ServerLevel> levels, WorkClock clock) {
-        for (ServerLevel level : levels) tick(level, clock);
+        long materialBudget = 500_000;
+        for (ServerLevel level : levels) {
+            long start = System.nanoTime();
+            long began = clock.begin();
+            NuclearWorld.get(level).materials.tick(level, NuclearEvents.get(level), start + Math.min(materialBudget, clock.remainingNanos()));
+            clock.spent(began);
+            materialBudget = Math.max(0, materialBudget - (System.nanoTime() - start));
+            tick(level, clock);
+        }
     }
 
     /** Whether nuclear queues have server-thread work (in any dimension). */
@@ -398,6 +406,7 @@ public final class NuclearStrikes {
     /** Login and dimension change: this dimension's active detonations and missiles in flight. */
     public static void onLogin(PlayerEvent.PlayerLoggedInEvent e) {
         if (e.getEntity() instanceof ServerPlayer p) {
+            ua.zentix.incoming.compat.FlashbackReplay.materialViewer(p);
             sync(p);
             RadiationTicker.sync(p);
             FlashEyes.sync(p);
@@ -427,8 +436,18 @@ public final class NuclearStrikes {
 
     private static void sync(ServerPlayer p) {
         NuclearEvents events = NuclearEvents.get(p.serverLevel());
-        PacketDistributor.sendToPlayer(p, new S2C.NukeSync(List.copyOf(events.detonations()),
-                events.scheduled().stream().filter(s -> warns(s, p)).map(s -> warning(s, p)).toList()));
+        var warnings = events.scheduled().stream().filter(s -> warns(s, p)).map(s -> warning(s, p)).toList();
+        var ids = events.materialIds();
+        var announced = new ArrayList<ua.zentix.incoming.nuclear.material.MaterialBirth>();
+        for (var w : warnings) {
+            var birth = events.material(w.strikeId());
+            if (birth != null) {
+                announced.add(birth);
+                ids.put(w.strikeId(), birth.id);
+            }
+        }
+        PacketDistributor.sendToPlayer(p, new S2C.NukeSync(List.copyOf(events.detonations()), warnings, ids));
+        ua.zentix.incoming.nuclear.material.MaterialDelivery.snapshot(p, events.visibleMaterials(), announced);
         PacketDistributor.sendToPlayer(p, new S2C.NukeApproach(p.serverLevel().getGameTime(),
                 events.scheduled().stream().flatMap(s -> s.arrival().stream()).toList()));
         PacketDistributor.sendToPlayer(p, clockPacket(events, p.serverLevel().getGameTime(), ua.zentix.incoming.util.WorldClock.now(p.serverLevel())));

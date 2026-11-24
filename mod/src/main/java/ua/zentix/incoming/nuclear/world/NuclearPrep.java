@@ -96,8 +96,8 @@ public final class NuclearPrep {
      */
     static final long PLANS_CAP = 512L << 20;
     /** Concurrent disk reads and estimated memory per read (parsed city chunk tens of KB). */
-    private static final int READS = 64;
-    private static final long READ_BYTES = 96L << 10;
+    static final int READS = 64;
+    static final long READ_BYTES = 96L << 10;
     /** Allowed detonation-location difference from plan, blocks. */
     private static final double SAME_PLACE = 8;
 
@@ -325,6 +325,28 @@ public final class NuclearPrep {
             bytes += (long) (p.order.length + p.edge.length + p.toScan.size()) * Long.BYTES;
         }
         return bytes;
+    }
+
+    static final int MATERIAL_WINDOW = 32;
+
+    /** Each preparation retains its own window. Concurrent surveys reserve half of one window across dimensions. */
+    static int preparationSlots(int outstanding, boolean surveying) {
+        return Math.max(0, (surveying ? READS - MATERIAL_WINDOW : READS) - outstanding);
+    }
+    private static boolean surveying(ServerLevel level) {
+        for (var other : level.getServer().getAllLevels()) {
+            if (other.hasData(ModAttachments.NUCLEAR_WORLD) && NuclearWorld.get(other).materials.wantsReads()) return true;
+        }
+        return false;
+    }
+    static int readSlots(ServerLevel level) {
+        long bytes = 0;
+        for (var other : level.getServer().getAllLevels())
+            if (other.hasData(ModAttachments.NUCLEAR_WORLD)) bytes += NuclearWorld.get(other).materials.reservedBytes();
+        return materialSlots(bytes);
+    }
+    static int materialSlots(long reservedBytes) {
+        return Math.max(0, MATERIAL_WINDOW - (int) (reservedBytes / READ_BYTES));
     }
 
     /** One server-wide preparation admission estimate; multiple strikes/dimensions share the cap. */
@@ -603,17 +625,19 @@ public final class NuclearPrep {
             }
         }
         // window read-ahead in wave order
-        while (p.nextRead < p.order.length && p.reading.size() < READS && memory(level) + READ_BYTES <= PLANS_CAP) {
+        int slots = preparationSlots(p.reading.size(), surveying(level));
+        while (p.nextRead < p.order.length && slots > 0 && memory(level) + READ_BYTES <= PLANS_CAP) {
             long c = p.order[p.nextRead];
             boolean all = true;
             for (int dx = -RuinPlanner.REACH; all && dx <= RuinPlanner.REACH; dx++) {
                 for (int dz = -RuinPlanner.REACH; all && dz <= RuinPlanner.REACH; dz++) {
                     long k = ChunkPos.asLong(ChunkPos.getX(c) + dx, ChunkPos.getZ(c) + dz);
                     if (p.reading.contains(k) || p.unreadable.contains(k) || p.ruins.shotAvailable(level, k)) continue;
-                    if (p.reading.size() >= READS || memory(level) + READ_BYTES > PLANS_CAP) {
+                    if (slots == 0 || memory(level) + READ_BYTES > PLANS_CAP) {
                         all = false;
                         continue;
                     }
+                    slots--;
                     p.reading.add(k);
                     DiskShots.read(p.format, new ChunkPos(k), RuinWorkers.Priority.FAR).thenAccept(p.reads.expect());
                 }

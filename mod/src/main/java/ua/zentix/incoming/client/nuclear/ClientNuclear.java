@@ -15,6 +15,8 @@ import ua.zentix.incoming.net.S2C;
 import ua.zentix.incoming.nuclear.NuclearStrikes;
 import ua.zentix.incoming.nuclear.Detonation;
 import ua.zentix.incoming.nuclear.NukeClock;
+import ua.zentix.incoming.nuclear.material.DustMaterial;
+import ua.zentix.incoming.nuclear.material.MaterialInbox;
 import ua.zentix.incoming.nuclear.radiation.RetinaScars;
 
 import java.util.ArrayList;
@@ -25,6 +27,7 @@ import java.util.Iterator;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.UUID;
 import java.util.function.DoubleSupplier;
 
 /**
@@ -54,6 +57,30 @@ public final class ClientNuclear {
         public final FireStorm storm;
         /** Terrain under pall ({@link PallGround}): end of its ray where no world lies behind. */
         final PallGround ground;
+        private SourceMaterial source;
+        private UUID revision;
+        private int seed = -1;
+
+        /** Stable server revision, or the first local answer at each legacy world cell. */
+        public SourceMaterial sourceMaterial() {
+            if (source == null) source = new SourceMaterial(d, revision == null ? null : inbox(revision), seed, (x, z) -> {
+                ClientLevel level = Minecraft.getInstance().level;
+                if (level != null) {
+                    double wet = FarTerrain.water(level).at(x, z);
+                    if (Double.isFinite(wet)) {
+                        if (wet >= 0.5) return DustMaterial.WATER;
+                        if (FarTerrain.hard(level).at(x, z) >= 0.5) return DustMaterial.HARD;
+                        if (FarTerrain.sand(level).at(x, z) >= 0.5) return DustMaterial.SAND;
+                        return DustMaterial.SOIL;
+                    }
+                }
+                if (ground.water(x, z) >= 0.5) return DustMaterial.WATER;
+                if (ground.hard(x, z) >= 0.5) return DustMaterial.HARD;
+                return ground.sand(x, z) >= 0.5 ? DustMaterial.SAND : DustMaterial.SOIL;
+            });
+            return source;
+        }
+
         /** Own client ticks since packet arrival (since replay seek afterward). */
         private long age;
         /** Detonation age shown on this client ({@link AgeClock}). */
@@ -77,6 +104,9 @@ public final class ClientNuclear {
         /** Same detonation after replay seek: past, without flash/sound, age from this recording position's clock. */
         Active(Active a, long clientNow) {
             this(a.d, false, clientNow, a);
+            revision = a.revision;
+            seed = a.seed;
+            source = a.source;
         }
 
         private Active(Detonation d, boolean live, long clientNow, @Nullable Active known) {
@@ -334,6 +364,20 @@ public final class ClientNuclear {
     @Nullable
     private static S2C.Radiation radiation;
 
+    // Packets may precede the burst or NukeSync in a Flashback snapshot.
+    private static final Map<UUID, MaterialInbox> MATERIALS = new LinkedHashMap<>();
+    private static MaterialInbox inbox(UUID id) {
+        return MATERIALS.computeIfAbsent(id, unused -> new MaterialInbox());
+    }
+    public static void materialSources(S2C.NukeMaterialSources p) {
+        var active = new java.util.HashSet<>(p.sources());
+        MATERIALS.keySet().retainAll(active);
+    }
+    public static void material(S2C.NukeMaterial p) {
+        if (p.tombstone()) MATERIALS.remove(p.id());
+        else inbox(p.id()).receive(p);
+    }
+
     private ClientNuclear() {}
 
     // ---------------------------------------------------------------- packets
@@ -375,6 +419,8 @@ public final class ClientNuclear {
         // previous display of same detonation (from seek): remove its burning-city loops
         if (known != null) known.sounds.stop();
         Active a = new Active(d, live, level.getGameTime());
+        a.revision = p.material().orElse(null);
+        a.seed = p.ground();
         DETONATIONS.put(d.id(), a);
         if (live) {
             NukeLight.detonation(level);
@@ -425,8 +471,18 @@ public final class ClientNuclear {
             // same detonation (respawn, replay position after it): as after seek, dust/pall/storm
             // retain history (cannot repeat the young storm's comparison with fire later)
             Active known = old.get(d.id());
-            DETONATIONS.put(d.id(), known != null && known.d.equals(d) ? new Active(known, now) : new Active(d, false, now));
+            Active a = known != null && known.d.equals(d) ? new Active(known, now) : new Active(d, false, now);
+            UUID revision = p.materials().get(d.id());
+            if (!java.util.Objects.equals(a.revision, revision)) {
+                a.revision = revision;
+                a.seed = -1;
+                a.source = null;
+            }
+            DETONATIONS.put(d.id(), a);
         }
+        // A live sync supersedes the dimension, including recalled sources. Recording snapshots can deliver
+        // their batches before the matching detonation and retain them until the seek finishes.
+        if (!ua.zentix.incoming.client.replay.Replay.active()) MATERIALS.keySet().retainAll(p.materials().values());
         for (S2C.NukeWarning w : p.warnings()) WARNINGS.put(w.strikeId(), w);
         NukeDust.reset();
         NukePall.reset();
@@ -550,6 +606,7 @@ public final class ClientNuclear {
 
     public static void reset() {
         playbackEpoch++;
+        MATERIALS.clear();
         stopAll();
         DETONATIONS.clear();
         SHOW_ENDS.clear();
@@ -621,6 +678,9 @@ public final class ClientNuclear {
             NukeDust.front(a, eye);
             if (a.ticks(0) > lifeTicks(a.d) && a.clockSeconds(0) > a.d.blackRainEndSeconds() && !a.pall.visible(a.ticks(0))) {
                 a.sounds.stop();
+                if (a.revision != null && !ua.zentix.incoming.client.replay.Replay.active())
+                    net.neoforged.neoforge.network.PacketDistributor.sendToServer(new ua.zentix.incoming.net.C2S.MaterialRetired(a.revision));
+                MATERIALS.remove(a.revision);
                 it.remove();
             }
         }

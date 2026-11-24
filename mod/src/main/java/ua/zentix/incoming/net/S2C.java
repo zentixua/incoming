@@ -653,10 +653,17 @@ public final class S2C {
      * each appended to packet end; recordings predating them read “as before”: wall speed {@link Detonation#OLD_WAVE},
      * no EMP, time of day unknown, fires enabled, no strike, black rain enabled.
      */
-    public record NukeDetonation(Detonation detonation, float blackout, int strikeId) implements CustomPacketPayload {
+    public record NukeDetonation(Detonation detonation, float blackout, int strikeId, @org.jetbrains.annotations.Nullable UUID id, byte ground) implements CustomPacketPayload {
+        public NukeDetonation {
+            if (ground < -1 || ground > 3) throw new IllegalArgumentException("Ground material class");
+        }
+        public NukeDetonation(Detonation d, float blackout, int strikeId, UUID id) { this(d, blackout, strikeId, id, (byte) -1); }
+        // Flashback snapshots group independent instances of a payload by their UUID record component.
+        public Optional<UUID> material() { return Optional.ofNullable(id); }
+        public NukeDetonation(Detonation d, float blackout, int strikeId) { this(d, blackout, strikeId, null); }
         public NukeDetonation(Detonation detonation, float blackout) { this(detonation, blackout, -1); }
         public static final Type<NukeDetonation> TYPE = new Type<>(Incoming.id("nuke_detonation"));
-        public static final StreamCodec<ByteBuf, NukeDetonation> CODEC = NeoForgeStreamCodecs.composite(
+        private static final StreamCodec<ByteBuf, NukeDetonation> BASE = NeoForgeStreamCodecs.composite(
                 Detonation.STREAM_CODEC, NukeDetonation::detonation,
                 StreamCodecs.trailing(ByteBufCodecs.FLOAT, Detonation.OLD_WAVE), p -> p.detonation.wave(),
                 StreamCodecs.trailing(ByteBufCodecs.FLOAT, 0f), NukeDetonation::blackout,
@@ -666,11 +673,40 @@ public final class S2C {
                 StreamCodecs.trailing(ByteBufCodecs.BOOL, true), p -> p.detonation.rain(),
                 (d, wave, blackout, dayTime, fires, strikeId, rain) -> new NukeDetonation(
                         d.withWave(wave).withDayTime(dayTime).withFires(fires).withRain(rain), blackout, strikeId));
+        public static final StreamCodec<ByteBuf, NukeDetonation> CODEC = StreamCodec.composite(
+                BASE, p -> p, StreamCodecs.trailing(ByteBufCodecs.optional(UUIDUtil.STREAM_CODEC), Optional.empty()), NukeDetonation::material,
+                StreamCodecs.trailing(ByteBufCodecs.BYTE, (byte) -1), NukeDetonation::ground,
+                (p, material, ground) -> new NukeDetonation(p.detonation, p.blackout, p.strikeId, material.orElse(null), ground));
 
         @Override
         public Type<? extends CustomPacketPayload> type() {
             return TYPE;
         }
+    }
+
+    /** Complete current source membership, one replaceable record in a Flashback snapshot. */
+    public record NukeMaterialSources(List<UUID> sources) implements CustomPacketPayload {
+        public static final Type<NukeMaterialSources> TYPE = new Type<>(Incoming.id("nuke_material_sources"));
+        public static final StreamCodec<ByteBuf, NukeMaterialSources> CODEC = UUIDUtil.STREAM_CODEC
+                .apply(ByteBufCodecs.list()).map(NukeMaterialSources::new, NukeMaterialSources::sources);
+        @Override public Type<NukeMaterialSources> type() { return TYPE; }
+    }
+
+    /** Ordered revision batch. The UUID and remaining-batch count also identify complete Flashback snapshots. */
+    public record NukeMaterial(UUID id, int part, int remainingBatches, byte[] data) implements CustomPacketPayload {
+        public static final int PART = 12_500;
+        public boolean tombstone() { return part == 0 && remainingBatches == 0 && data.length == 1 && data[0] == 0; }
+        public static final Type<NukeMaterial> TYPE = new Type<>(Incoming.id("nuke_material"));
+        public static final StreamCodec<ByteBuf, NukeMaterial> CODEC = StreamCodec.composite(
+                UUIDUtil.STREAM_CODEC, NukeMaterial::id, ByteBufCodecs.VAR_INT, NukeMaterial::part,
+                ByteBufCodecs.VAR_INT, NukeMaterial::remainingBatches, ByteBufCodecs.byteArray(PART), NukeMaterial::data,
+                NukeMaterial::new);
+        public NukeMaterial {
+            if (part < 0 || remainingBatches < 0 || (long) part + remainingBatches >= 128
+                    || data.length == 0 || data.length > PART || remainingBatches > 0 && data.length != PART)
+                throw new IllegalArgumentException("Dust material batch");
+        }
+        @Override public Type<NukeMaterial> type() { return TYPE; }
     }
 
     /**
@@ -727,10 +763,11 @@ public final class S2C {
      * of day {@link Detonation#dayTime}, fires {@link Detonation#fires}, black rain {@link Detonation#rain}) in trailing
      * packet lists, one entry per detonation (format grows at end, replay.md): older recordings lack lists — “as before”.
      */
-    public record NukeSync(List<Detonation> detonations, List<NukeWarning> warnings)
+    public record NukeSync(List<Detonation> detonations, List<NukeWarning> warnings, java.util.Map<Integer, UUID> materials)
             implements CustomPacketPayload {
+        public NukeSync(List<Detonation> detonations, List<NukeWarning> warnings) { this(detonations, warnings, java.util.Map.of()); }
         public static final Type<NukeSync> TYPE = new Type<>(Incoming.id("nuke_sync"));
-        public static final StreamCodec<ByteBuf, NukeSync> CODEC = StreamCodec.composite(
+        public static final StreamCodec<ByteBuf, NukeSync> CODEC = NeoForgeStreamCodecs.composite(
                 Detonation.STREAM_CODEC.apply(ByteBufCodecs.list()), NukeSync::detonations,
                 NukeWarning.CODEC.apply(ByteBufCodecs.list()), NukeSync::warnings,
                 StreamCodecs.trailing(ByteBufCodecs.FLOAT.apply(ByteBufCodecs.list()), List.of()),
@@ -741,7 +778,8 @@ public final class S2C {
                 p -> p.detonations.stream().map(Detonation::fires).toList(),
                 StreamCodecs.trailing(ByteBufCodecs.BOOL.apply(ByteBufCodecs.list()), List.of()),
                 p -> p.detonations.stream().map(Detonation::rain).toList(),
-                (detonations, warnings, waves, dayTimes, fires, rain) -> new NukeSync(extended(detonations, waves, dayTimes, fires, rain), warnings));
+                StreamCodecs.trailing(ByteBufCodecs.map(java.util.HashMap::new, ByteBufCodecs.VAR_INT, UUIDUtil.STREAM_CODEC), java.util.Map.of()), NukeSync::materials,
+                (detonations, warnings, waves, dayTimes, fires, rain, materials) -> new NukeSync(extended(detonations, waves, dayTimes, fires, rain), warnings, materials));
 
         /** Detonations with trailing-list fields (empty list: field absent from recording). */
         private static List<Detonation> extended(List<Detonation> detonations, List<Float> waves, List<Long> dayTimes,

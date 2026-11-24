@@ -11,7 +11,7 @@ import ua.zentix.incoming.strike.ServerActions;
  * incompatible change, letting NeoForge report different mod versions instead of crashing.
  */
 public final class IncomingNetwork {
-    public static final String PROTOCOL = "60";
+    public static final String PROTOCOL = "61";
 
     private IncomingNetwork() {}
 
@@ -34,6 +34,8 @@ public final class IncomingNetwork {
         r.playToClient(S2C.NukeDetonation.TYPE, S2C.NukeDetonation.CODEC, (p, ctx) -> ClientHooks.get().nukeDetonation(p));
         r.playToClient(S2C.NukeDebris.TYPE, S2C.NukeDebris.CODEC, (p, ctx) -> ClientHooks.get().nukeDebris(p));
         r.playToClient(S2C.NukeFlashMarks.TYPE, S2C.NukeFlashMarks.CODEC, (p, ctx) -> ClientHooks.get().nukeFlashMarks(p));
+        r.playToClient(S2C.NukeMaterialSources.TYPE, S2C.NukeMaterialSources.CODEC, (p, ctx) -> ClientHooks.get().nukeMaterialSources(p));
+        r.playToClient(S2C.NukeMaterial.TYPE, S2C.NukeMaterial.CODEC, (p, ctx) -> ClientHooks.get().nukeMaterial(p));
         r.playToClient(S2C.NukeSync.TYPE, S2C.NukeSync.CODEC, (p, ctx) -> ClientHooks.get().nukeSync(p));
         r.playToClient(S2C.NukeClock.TYPE, S2C.NukeClock.CODEC, (p, ctx) -> ClientHooks.get().nukeClock(p));
         r.playToClient(S2C.NukeTick.TYPE, S2C.NukeTick.CODEC, (p, ctx) -> ClientHooks.get().nukeTick(p));
@@ -49,6 +51,10 @@ public final class IncomingNetwork {
         r.playToClient(S2C.RadarScope.TYPE, S2C.RadarScope.CODEC, (p, ctx) -> ClientHooks.get().radarScope(p));
 
         r.playToClient(S2C.NuclearReview.TYPE, S2C.NuclearReview.CODEC, (p, ctx) -> ClientHooks.get().nuclearReview(p));
+        r.playToServer(C2S.MaterialRetired.TYPE, C2S.MaterialRetired.CODEC, (p, ctx) -> {
+            if (ctx.player() instanceof net.minecraft.server.level.ServerPlayer viewer)
+                ua.zentix.incoming.nuclear.material.MaterialDelivery.retire(viewer, p.id());
+        });
         r.playToServer(C2S.ReviewNuclear.TYPE, C2S.ReviewNuclear.CODEC, ua.zentix.incoming.strike.NuclearReview::request);
         r.playToServer(C2S.NuclearAction.TYPE, C2S.NuclearAction.CODEC, ua.zentix.incoming.strike.NuclearReview::action);
         r.playToServer(C2S.Fire.TYPE, C2S.Fire.CODEC, ServerActions::fire);

@@ -478,3 +478,19 @@ paths:
 - Measure ruin cost on dense city chunks (cities on big real-terrain maps are denser than on small ones), never on
   natural terrain samples; a map's pre-generated area is not the whole map (Artem, 04.11).
 
+
+## Surface samples for dust
+
+`MaterialSurveys` refreshes four surface columns per ready chunk and pins a copy-on-write snapshot at birth.
+Ready observations supersede disk votes. `DiskShots` extracts the same columns on detached palettes, and ruin
+reads entering `RuinContext.putDisk` also feed the open surveys. Beyond the heavy preparation window each
+addressable fine or coarse cell has one representative chunk. The planner checks each region off-thread and orders
+the reads by cell deadline. Restarted surveys skip expired requests. A completed read enters the current tick's
+inbox fence before the next I/O window is calculated.
+
+Each ruin preparation has its own 64-read window. While a material survey wants reads, each preparation may admit
+32 and the material surveys share a separate 32 across the server's dimensions. Completed and outstanding reads
+each reserve 96 KiB until collection or cancellation. All copies share the 512 MiB memory admission estimate.
+Material commit, dispatch and survey work run inside the nuclear WorkClock, with a 0.5 ms server-wide allowance
+across dimensions. Cell reduction, packing and packet construction run on a worker. The coast fixture records
+direct coverage, sea classifications and post-burst reads.

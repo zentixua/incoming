@@ -65,9 +65,9 @@ final class DiskShots {
      * snapshot for that detonation reads fire as air, like in-memory chunk snapshot ({@link ChunkShot#fromDisk}).
      */
     record Read(ChunkPos pos, int minY, PalettedContainer<BlockState>[] states, int[] heights, int unprimed, @Nullable String skip, int flashLayer,
-                int cured) {
+                int cured, int surfaceVotes) {
         static Read skipped(ChunkPos pos, String why) {
-            return new Read(pos, 0, empty(), new int[0], 0, why, 0, 0);
+            return new Read(pos, 0, empty(), new int[0], 0, why, 0, 0, 0);
         }
 
         /**
@@ -104,7 +104,7 @@ final class DiskShots {
                     }
                 }
             }
-            return new Read(pos, minY, states, out, 0, null, flashLayer, cured);
+            return new Read(pos, minY, states, out, 0, null, flashLayer, cured, surfaceVotes);
         }
 
         /**
@@ -149,6 +149,20 @@ final class DiskShots {
                 RuinWorkers.executor(priority)).exceptionally(e -> Read.skipped(pos, "read error: " + e));
     }
 
+    /** A dust-only read checks the region file and parses block palettes on workers. No heightmaps or biome palettes. */
+    static CompletableFuture<Integer> readSurface(Format f, ChunkPos pos) {
+        var executor = RuinWorkers.executor(RuinWorkers.Priority.FAR);
+        return CompletableFuture.supplyAsync(() -> ua.zentix.incoming.util.RegionFiles.read(f.storage, f.regions, pos), executor)
+                .thenCompose(read -> read).thenApplyAsync(raw -> {
+                    if (raw.isEmpty()) return 0;
+                    var checked = check(f, raw.get());
+                    if (checked.skip != null) return 0;
+                    var states = blankStates(f);
+                    var sections = checked.tag.getList("sections", Tag.TAG_COMPOUND);
+                    return decodeStates(f, sections, states) < 0 ? MaterialSurvey.sample(states) : 0;
+                }, executor).exceptionally(error -> 0);
+    }
+
     /** Parse chunk data (any thread). */
     static Read parse(ServerLevel level, ChunkPos pos, CompoundTag tag) {
         return parse(Format.of(level), pos, tag);
@@ -161,16 +175,22 @@ final class DiskShots {
         int unprimed = heights(f, checked.tag, heights);
         PalettedContainer<BlockState>[] states = blankStates(f);
         ListTag list = checked.tag.getList("sections", Tag.TAG_COMPOUND);
+        int failed = decodeStates(f, list, states);
+        if (failed >= 0) return Read.skipped(pos, "section " + failed + " not parsed");
+        return new Read(pos, f.minY, states, heights, unprimed, null, flashLayer(f, checked.tag), cured(f, list, states, heights, unprimed), MaterialSurvey.sample(states));
+    }
+
+    private static int decodeStates(Format f, ListTag list, PalettedContainer<BlockState>[] states) {
         for (int i = 0; i < list.size(); i++) {
             CompoundTag section = list.getCompound(i);
             int index = section.getByte("Y") - f.minSection;
             if (index < 0 || index >= f.sections || !section.contains("block_states", Tag.TAG_COMPOUND)) continue;
             Optional<PalettedContainer<BlockState>> parsed = BLOCK_STATE_CODEC.parse(NbtOps.INSTANCE, section.getCompound("block_states")).result();
-            if (parsed.isEmpty()) return Read.skipped(pos, "section " + index + " not parsed");
+            if (parsed.isEmpty()) return index;
             PalettedContainer<BlockState> c = parsed.get();
             if (c.maybeHas(st -> !st.isAir())) states[index] = c;
         }
-        return new Read(pos, f.minY, states, heights, unprimed, null, flashLayer(f, checked.tag), cured(f, list, states, heights, unprimed));
+        return -1;
     }
 
     /**
@@ -350,7 +370,7 @@ final class DiskShots {
             int index = (y - f.minY) >> 4;
             return index < 0 || index >= all.length ? null : all[index].getNoiseBiome(lx >> 2, (y >> 2) & 3, lz >> 2);
         });
-        return new Scorch(sections, new Read(pos, f.minY, states, heights, unprimed, null, flashLayer(f, checked.tag), cured));
+        return new Scorch(sections, new Read(pos, f.minY, states, heights, unprimed, null, flashLayer(f, checked.tag), cured, 0));
     }
 
     private static Scorch skippedScorch(ChunkPos pos, String why) {
