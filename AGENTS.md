@@ -101,8 +101,8 @@ defense, `launcher/`, `grid/` blackout, `sound/`, `client/`, `work/` tick budget
   single-player world changes.
 - `sound/`: Minecraft-free projectile sound shared by server/client (source, ISO 9613 propagation, recording spectra
   from `tools/build_sounds.py`); audible reach: `strike/Hearing`.
-- New `/incoming` commands/syntax (`command/IncomingCommand`) also update Almighty's AI notes
-  `data/incoming/almighty/notes/strikes.md`. Munition recipes use Create with vanilla fallback via `neoforge:mod_loaded`.
+- New `/incoming` commands/syntax (`command/IncomingCommand`) and `api/` events also update Almighty's AI notes
+  `data/incoming/almighty/notes/strikes.md` (`AlmightyNoteTest`: its commands parse, its event fields match `api/`). Munition recipes use Create with vanilla fallback via `neoforge:mod_loaded`.
 
 ## Principles: picture, physics and settings
 **Concept** (Artem, 19.11, permanent; governs every edit from now on):
