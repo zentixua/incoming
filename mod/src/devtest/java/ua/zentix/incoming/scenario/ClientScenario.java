@@ -3976,8 +3976,9 @@ public final class ClientScenario {
                     ? level.getHeight(net.minecraft.world.level.levelgen.Heightmap.Types.MOTION_BLOCKING, x, z) : p.getY();
             double r = a.d.burst().distanceTo(new net.minecraft.world.phys.Vec3(p.getX(), ground, p.getZ()));
             if (a.ticks(0) >= a.d.arrivalTicks(r)) {
-                Incoming.LOG.info("SCENARIO commands: the front passed the camera's ground point ({} m from the burst, {} s after it); "
-                        + "the steps were waiting {} tick", Math.round(r), String.format(java.util.Locale.ROOT, "%.2f", a.ticks(0) / 20), frontGateWaited);
+                Incoming.LOG.info("SCENARIO commands: the front passed the camera's ground point ({} m from the burst, {} s after it, "
+                        + "world game time {}); the steps were waiting {} tick", Math.round(r), String.format(java.util.Locale.ROOT, "%.2f", a.ticks(0) / 20),
+                        level == null ? -1 : level.getGameTime(), frontGateWaited);
                 frontGate = -1;
                 return;
             }
