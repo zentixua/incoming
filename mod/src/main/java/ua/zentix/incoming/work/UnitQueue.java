@@ -14,10 +14,11 @@ import java.util.List;
  * Heads run their first unit in enqueue order before any continuations. Continuations take one unit per turn,
  * retaining their rotation between windows and ticks, so an old fire sweep cannot monopolize a new blast front.
  * <p>
- * Unready areas wait up to {@link #GIVE_UP_TICKS}; jobs waiting on dependencies are skipped. Continuation readiness
- * and dependencies are sampled once per work window, after heads have run: a first unit can introduce a dependency.
- * A later window, including Post in the same world tick, refreshes that sample. Jobs are not saved; shutdown drains
- * available work through {@link #finish(ServerLevel)} and releases the rest.
+ * A job that cannot run waits up to {@link #GIVE_UP_TICKS} after its last unit (or its enqueue); jobs waiting on
+ * dependencies are skipped. Continuation readiness and dependencies are sampled once per work window, after heads have
+ * run: a first unit can introduce a dependency. A later window, including Post in the same world tick, refreshes that
+ * sample. Jobs are not saved; shutdown drains available work to completion through {@link #finish(ServerLevel)} and
+ * releases only jobs that cannot run.
  */
 public final class UnitQueue {
     /** A chain of units, continuing while {@link #step} returns true. */
@@ -43,6 +44,12 @@ public final class UnitQueue {
         /** Execute one unit; false means the job is complete. */
         boolean step(ServerLevel level);
 
+        /**
+         * Shutdown drain ({@link UnitQueue#finish}): world time no longer advances, so a unit that waits for a later
+         * world tick does that work now. A step returning true without progress would repeat forever in finish's window.
+         */
+        default void drain() {}
+
         /** Release held resources, including tickets, when completed, cancelled or failed. */
         default void end(ServerLevel level) {}
 
@@ -50,18 +57,21 @@ public final class UnitQueue {
         String describe();
     }
 
-    /** Maximum wait for area readiness, in ticks, before cancellation. */
+    /** Maximum wait without a unit (area readiness, an outstanding fence), in ticks, before cancellation. */
     public static final int GIVE_UP_TICKS = 6000;
 
     private static final class Entry {
         final Job job;
         final long added;
+        /** World time of the last unit, or of the enqueue: {@link #GIVE_UP_TICKS} counts inactivity from it. */
+        long progressed;
         long checkedWindow = -1;
         Outcome availability;
 
         Entry(Job job, long added) {
             this.job = job;
             this.added = added;
+            this.progressed = added;
         }
     }
 
@@ -72,6 +82,10 @@ public final class UnitQueue {
     /** Started jobs with remaining units. */
     private final Deque<Entry> tails = new ArrayDeque<>();
     private long window;
+    /** Units executed so far: {@link #finish} drains while windows make progress. */
+    private long units;
+    /** Inside {@link #finish}: jobs enqueued meanwhile drain too. */
+    private boolean draining;
 
     public void add(ServerLevel level, Job job) {
         add(level.getGameTime(), job);
@@ -79,6 +93,7 @@ public final class UnitQueue {
 
     /** Enqueue with an explicit world time for tests without a world. */
     public void add(long now, Job job) {
+        if (draining) job.drain();
         heads.add(new Entry(job, now));
     }
 
@@ -145,7 +160,7 @@ public final class UnitQueue {
     }
 
     /** One unit; continuation readiness and dependencies are sampled once per work window. */
-    private static Outcome run(ServerLevel level, long now, Entry e, WorkClock clock, long window, boolean continuation) {
+    private Outcome run(ServerLevel level, long now, Entry e, WorkClock clock, long window, boolean continuation) {
         try {
             if (!continuation || e.checkedWindow != window || e.job.dynamicReadiness()) {
                 e.availability = availability(level, now, e);
@@ -157,6 +172,8 @@ public final class UnitQueue {
             int kind = e.job.unitKind();
             if (!clock.canStart(kind)) return Outcome.OUT_OF_TIME;
             long c0 = clock.begin();
+            units++;
+            e.progressed = now;
             try {
                 return e.job.step(level) ? Outcome.MORE : Outcome.DONE;
             } finally {
@@ -171,8 +188,10 @@ public final class UnitQueue {
     private static Outcome availability(ServerLevel level, long now, Entry e) {
         if (e.job.blocked()) return Outcome.SKIPPED;
         if (e.job.ready(level)) return Outcome.MORE;
-        if (now - e.added < GIVE_UP_TICKS) return Outcome.SKIPPED;
-        Incoming.LOG.warn("{} cancelled: area did not load within {} ticks", e.job.describe(), GIVE_UP_TICKS);
+        // Inactivity, not age: a job that ran units until a moment ago (a light repair waiting one tick for its fence)
+        // has not failed to load its area.
+        if (now - e.progressed < GIVE_UP_TICKS) return Outcome.SKIPPED;
+        Incoming.LOG.warn("{} cancelled: not ready for {} ticks", e.job.describe(), GIVE_UP_TICKS);
         return Outcome.DONE;
     }
 
@@ -184,9 +203,15 @@ public final class UnitQueue {
         }
     }
 
+    /** Drain window: the first available unit of each always runs, so a window without a unit means nothing can run. */
+    private static final long DRAIN_WINDOW_NANOS = 1_000_000_000L;
+    /** A drain running longer than this logs what it is still working on (the stop waits; started work is never dropped). */
+    static final long SLOW_DRAIN_NANOS = 30_000_000_000L;
+
     /**
-     * On shutdown, complete available work without a deadline. Unready areas are still never read, and jobs that
-     * remain unavailable or depend on unavailable jobs are released.
+     * On shutdown, complete all available work. Unready areas are still never read; jobs that remain unavailable or depend
+     * on unavailable jobs are released. Started work is never cut short: jobs are not saved, so a job released midway
+     * would leave its edits half applied.
      */
     public void finish(ServerLevel level) {
         finish(level, level.getGameTime());
@@ -194,13 +219,40 @@ public final class UnitQueue {
 
     /** Explicit world time for tests without a world. */
     public void finish(ServerLevel level, long now) {
-        WorkClock unlimited = new WorkClock();
-        for (int before = -1; !isEmpty() && size() != before; ) {
-            before = size();
-            unlimited.start(Long.MAX_VALUE / 4);
-            work(level, now, unlimited);
+        finish(level, now, new WorkClock());
+    }
+
+    /**
+     * Same with the clock (tests). Windows repeat while units run: a unit that enqueues a ready successor is progress
+     * even when the queue length stays the same. World time stops during the drain, so each job is told to do now what
+     * waits for a later tick ({@link Job#drain}); a step returning true without progress would otherwise repeat forever.
+     * Returns whether the drain logged as slow.
+     */
+    boolean finish(ServerLevel level, long now, WorkClock clock) {
+        draining = true;
+        boolean slow = false;
+        try {
+            for (Entry e : heads) e.job.drain();
+            for (Entry e : tails) e.job.drain();
+            long began = clock.begin();
+            while (!isEmpty()) {
+                long before = units;
+                clock.start(DRAIN_WINDOW_NANOS);
+                work(level, now, clock);
+                if (units == before) break;
+                if (!slow && clock.begin() - began > SLOW_DRAIN_NANOS) {
+                    slow = true;
+                    List<String> left = new ArrayList<>();
+                    for (Entry e : heads) left.add(e.job.describe());
+                    for (Entry e : tails) left.add(e.job.describe());
+                    Incoming.LOG.warn("Shutdown: impact work still draining after {} s, finishing: {}", SLOW_DRAIN_NANOS / 1_000_000_000L, left);
+                }
+            }
+        } finally {
+            draining = false;
         }
         clear(level);
+        return slow;
     }
 
     /** Release all jobs without doing work; jobs are not saved. */

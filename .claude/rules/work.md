@@ -47,10 +47,18 @@ paths:
   cost, mid-lane requests, neighbor decodes, uneven ticks and the factor; a new background loader
   of disk chunks goes through it too.
 - `UnitQueue` runs new heads in enqueue order, then one unit per continuation in a persistent round-robin order.
-  Unready areas and blocked dependencies are skipped. Continuation `ready`/`blocked` results are cached once per
+  Unready areas and blocked dependencies are skipped; a job is cancelled after `GIVE_UP_TICKS` without a unit (since
+  its last unit or its enqueue), not by age: a light repair that ran a unit every tick for five minutes may wait a
+  tick for its fence (`UnitQueueTest.giveUpCountsTicksWithoutProgressNotAge`). Continuation `ready`/`blocked` results are cached once per
   work window, after heads (whose first step can introduce a dependency). Post refreshes them even within the same
-  world tick. Unit kinds keep separate clock estimates. Shutdown drains available work without a deadline via
-  `finish`, then releases jobs that cannot proceed. Strike timelines enqueue into `StrikeWorld.impacts()` rather
+  world tick. Unit kinds keep separate clock estimates. Shutdown drains available work to completion via `finish` while
+  its windows run units (a last continuation that enqueues a ready successor keeps the queue length and is still
+  progress), then releases only jobs that cannot run (unready areas, waiting for them). Started work is never cut
+  short: jobs are not saved, so a release midway would save half-applied edits (GameTest `work_stop_front`); a drain
+  past `UnitQueue.SLOW_DRAIN_NANOS` (30 s) only logs. World time stops during the drain: `Job.drain` tells each job
+  (also one enqueued meanwhile) to do now what waits for a later tick (the explosion front's arrival); a step
+  returning true without progress would otherwise repeat forever in finish's window (`UnitQueueTest`,
+  `blast_front_stop`). Strike timelines enqueue into `StrikeWorld.impacts()` rather
   than executing directly; an empty queue can start the job that tick.
 - `StallWatch` samples the server stack every 0.5 s while stalled. After a stall longer than 2 s, within or between
   ticks, it logs `Server thread stalled for N s` with common stack locations. A single-player pause is not a stall.
@@ -96,6 +104,14 @@ paths:
   Legacy admission is itself a budgeted unit: pending positions own no tickets, a bounded scan drops unloaded or
   already marked entries and chooses the nearest player chunk. Only one repair can hold its source-context ring;
   normal live-edit leases remain independent. Shutdown drops pending legacy positions and drains committed edits.
+  Recovery checks go to vanilla's one light-engine queue in slices of at most `BlockLighting.LIGHT_SLICE` (256)
+  checks in one chunk (the engine orders tasks by chunk, so a fence on one chunk does not cover another's checks):
+  the next slice waits until the engine processed the last. The scan resumes at a cell; every move to another section
+  (including past one whose storage vanished between slices) or chunk starts at its first cell (GameTest
+  `light_repair_cursor`). A pending slice or fence is `blocked`, admitted work rather than an unready area. Server-thread budgets do not bound that queue, and a moving
+  player's synchronous chunk load needs a light task from it: whole sections per unit queued 195,000 checks in the
+  minute after a 1 Mt blackout (every pre-existing chunk under the outage counts as legacy) and held such loads
+  0.3–0.8 s (GameTest `light_repair_slices`).
 - A walk over chunks that skips most of them still charges its time budget for the skips and stays bounded to the
   area it searches (`FireWatch.box`).
 

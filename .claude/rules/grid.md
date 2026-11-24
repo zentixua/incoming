@@ -72,6 +72,16 @@ paths:
   substation textures: `tools/gen_textures.py`. Vanilla assigns the cutout layer to lanterns and end rods in code
   (`ItemBlockRenderTypes`), not the model — twins need it in the model (`render_type`). `ofFullCopy` does not transfer
   the loot table by block name — twins need `lootFrom(lamp)`.
+- `ChunkSaves.onSave` restores lamps by renaming twin entries of each saved section's palette list; the packed block
+  data stays as vanilla wrote it. Decoding and re-encoding sections on save costs more than vanilla's whole chunk
+  serialization when a wave saves a dark city (276 ms per second of server thread, 1 Mt over the Silo map). The rename
+  is the lossless fast path only: it reads the saved tag (a snapshot: the live chunk may have relit since), changes
+  only an entry's `Name` (other keys belong to other writers), and declines without touching the tag when the lamp
+  state is already listed, a twin entry does not decode or omits a property, or the packed data does not read as
+  vanilla's (length, an index beyond the list). A declined section goes the full way: rebuilt only if its tag equals
+  vanilla's encoding of the live section, otherwise left with its twins. Each section is handled on its own; the
+  light flag drops for every converted one. GameTests `savedTwinsRestoreByPaletteRename`, `grid_save_foreign`,
+  `grid_save_collision`; `grid_save_cost` logs the cost beside vanilla's serialization.
 - Chunk light from disk: `ChunkSerializer.read` queues saved light arrays before `ChunkDataEvent.Load`, and
   `lightChunk(…, isLighted=false)` only adds source light — old light from a lamp removed in the palette remains.
   Remove it with `LightEngine.checkBlock` at the lamp position (the level decrease also propagates to adjacent chunks).
