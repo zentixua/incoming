@@ -76,6 +76,12 @@ paths:
   write tick it would show new blocks in old light. While it waits, vanilla's light broadcast for that chunk is held
   (`onLevelTickPre` clears its holder's light bits, AT; each hold lasts up to `HOLD_LIMIT` ticks, a write after expiry
   starts a new hold): light from new blocks or a changed neighbour would otherwise reach the client's old blocks.
+  Fenced chunks wait in a ready queue sent at the world tick's start, in fence order, at most `PER_TICK` (12: vanilla's
+  7 ms client chunk budget per tick, `ChunkBatchSizeCalculator`, at `CHUNK_NANOS`) to each viewer per tick, none later
+  than `READY_LIMIT` (20 ticks, inside the ruins' 1 s acceptance); a waiting chunk keeps its hold and later writes join
+  it (a superseded revision leaves the queue, its new fence queues it again). Unpaced, a 1 Mt wave crossing the Silo
+  city in view sent a viewer at 3.9 km up to 105 whole chunks in one tick, ~600 in 3 s; GameTests
+  `readyChunksGoPacedToEachViewer`, `readyChunkGoesAtItsWaitLimit`.
   GameTests: `heavyRuinsGoWholeAfterTheirLight` (the client's light is rebuilt from its light before the write and every
   payload's data/empty masks in order, unmentioned sections kept, and must equal the server's right after the whole
   chunk: comparing payload and server while skipping absent sections passed a packet with no light at all),
