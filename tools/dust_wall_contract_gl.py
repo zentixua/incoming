@@ -182,7 +182,7 @@ def composite(program, scene, samples, glass=None, cloud=None, rays=None, mushro
     empty_ray = np.broadcast_to((0, 0, 0, 1), (low, low, 4))
     bind(program, 0, texture(*rgba, low, low, empty_ray if rays is None else rays))
     bind(program, 1, scene)
-    bind(program, 4, atlas)
+    bind(program, 6, atlas)
     slot = np.zeros((4, 4), dtype=np.float32)
     if haze:
         # The wall and the ground haze below its surface belong to the same dry burst.

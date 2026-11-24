@@ -52,16 +52,21 @@ def scene(w, h, depths):
 def resolve(p, w, h, current, past, depths, history=1, before=None, previous_div=4, read_span=False):
     size = ((w + 3) // 4, (h + 3) // 4)
     past_size = ((w + previous_div - 1) // previous_div, (h + previous_div - 1) // previous_div)
-    target(2 * size[0], size[1], [(g.GL_RGBA32F, g.GL_RGBA)])
+    target(3 * size[0], size[1], [(g.GL_RGBA32F, g.GL_RGBA)])
     g.glUseProgram(p)
 
     def atlas(shape, values):
+        # the march's three thirds on one lattice (DustWallPass): light, depth span, interval split (one interval: A is the
+        # whole span, its exit the span's end moment and its opacity the ray's, as dust_wall_contract_gl.split_of)
         tile = np.asarray(values).reshape(shape[1], shape[0])
         light = np.zeros((*tile.shape, 4), np.float32)
         light[:, :, 3] = tile
         span = light.copy()
         span[:, :, :3] = (1 - tile[:, :, None]) * np.array([2, 6, 4])
-        return texture(g.GL_RGBA16F, g.GL_RGBA, 2 * shape[0], shape[1], np.concatenate((light, span), axis=1))
+        split = np.zeros_like(light)
+        split[:, :, 0] = split[:, :, 1] = span[:, :, 1]
+        split[:, :, 2] = split[:, :, 3] = 1 - tile
+        return texture(g.GL_RGBA16F, g.GL_RGBA, 3 * shape[0], shape[1], np.concatenate((light, span, split), axis=1))
 
     bind(p, 0, atlas(size, current))
     bind(p, 1, atlas(past_size, past))
@@ -81,7 +86,7 @@ def resolve(p, w, h, current, past, depths, history=1, before=None, previous_div
     g.glUniform1f(loc(p, "DwPrevScene"), 1)
     quad(p)
     if read_span:
-        return read(2 * size[0], size[1])[:, size[0]:]
+        return read(3 * size[0], size[1])[:, size[0]:2 * size[0]]
     return read(*size)[:, :, 3]
 
 
@@ -97,9 +102,7 @@ def resolve_cases(p):
     check(first[1, 1] > 0.999, f"resolve with history invalid: T={first[1, 1]:.4f}, expected 1")
     # Fixed view. Full-width 9 means centres at x=2, 6, 8.5 for a 3-column low target.
     result = resolve(p, 9, 4, [0, 0.5, 1], [0, 0.5, 1], [100.0] * 36)
-    # (within the resolve's speck softening: a fresh ray moves halfway toward its depth-alike neighbours' mean, here a ramp
-    # of 0 / 0.5 / 1 with the rows above and below, about 0.01)
-    check(abs(result[0, 1] - 0.5) < 0.012, f"stationary 9-pixel view reprojection: T={result[0, 1]:.4f}, expected 0.5")
+    check(abs(result[0, 1] - 0.5) < 1e-5, f"stationary 9-pixel view reprojection: T={result[0, 1]:.4f}, expected 0.5")
     check(abs(result[0, 2] - 1) < 1e-5, f"stationary 9-pixel view, last column (sample at 8.5): T={result[0, 2]:.4f}, expected 1")
     # 13 full pixels: three old cells at divisor 5, four new at divisor 4. At x=6 the old
     # centres at 2.5 and 7.5 contribute 30/70. The depth moments live three columns after light.
@@ -283,10 +286,14 @@ void main() {
 
 
 def period_case():
-    """No staircase along the wall: its lower edge (where the dust 3 blocks up begins behind the front) and its top (the
-    highest dust 100 blocks behind the front) along a 60 degree arc at 4.5 km vary (std over 1 m) and their slope is
-    near-normal (kurtosis under 6): one value per noise cell, flat inside with a step to the next, gives a heavy-tailed
-    slope (flat runs and sudden steps). A smooth periodic profile is not caught here: the seeds' noise has no period."""
+    """No staircase along the wall: its lower edge (where the dust 3 blocks up begins behind the front: the birth line) and
+    its top (the highest dust 100 blocks behind the front) along a 15 degree arc of the front at 4.95 km, seen from 400 m
+    inside it (the seeds' variation fades to their mean 2-3 km from the eye, where it is under a pixel: the far arc shows
+    the model's LOD, not its foot), vary (std over 1 m) and have no flat runs (under a quarter of the steps between
+    neighbouring samples below 1 mm; one value per noise cell gives 0.96, the control below). The birth line's slope is
+    also near-normal (kurtosis under 6); the top's is not tested so: where a higher billow lobe begins, the highest dusty
+    point jumps (overhangs of the 3D billows), heavy-tailed without any flat run. A smooth periodic profile is not caught
+    here: the seeds' noise has no period."""
     core, expand = gl["CORE"], gl["expand"]
     src = expand("""#version 150
 uniform vec4 DwEye; uniform vec4 DwRing; uniform vec4 DwLife; uniform vec4 DwBall; uniform vec3 DwBallLight; uniform float DwCut;
@@ -301,18 +308,35 @@ uniform float Front;
 uniform float Upper;
 out vec4 fragColor;
 void main() {
-    float b = radians(-120.0 + 60.0 * gl_FragCoord.x / 2048.0);
+    float b = radians(-97.5 + 15.0 * gl_FragCoord.x / 2048.0);
     vec2 d = vec2(cos(b), sin(b));
     float edge = 0.0;
     if (Upper > 0.5) {
         for (int i = 0; i < 240; i++) {
             float y = 240.0 - float(i);
-            if (dwDensity(vec3(d.x * (Front - 100.0), y, d.y * (Front - 100.0)), false) > 2e-3) { edge = y; break; }
+            if (dwDensity(vec3(d.x * (Front - 100.0), y, d.y * (Front - 100.0)), false) > 2e-3) {
+                // the crossing between this metre and the one above, by bisection (a whole-metre edge is itself a staircase)
+                float lo = y, hi = y + 1.0;
+                for (int j = 0; j < 12; j++) {
+                    float m = 0.5 * (lo + hi);
+                    if (dwDensity(vec3(d.x * (Front - 100.0), m, d.y * (Front - 100.0)), false) > 2e-3) lo = m; else hi = m;
+                }
+                edge = lo;
+                break;
+            }
         }
     } else {
         for (int i = 0; i < 300; i++) {
             float r = Front + 5.0 - float(i);
-            if (dwDensity(vec3(d.x * r, 3.0, d.y * r), false) > 2e-3) { edge = r - Front; break; }
+            if (dwDensity(vec3(d.x * r, 3.0, d.y * r), false) > 2e-3) {
+                float lo = r, hi = r + 1.0;
+                for (int j = 0; j < 12; j++) {
+                    float m = 0.5 * (lo + hi);
+                    if (dwDensity(vec3(d.x * m, 3.0, d.y * m), false) > 2e-3) lo = m; else hi = m;
+                }
+                edge = lo - Front;
+                break;
+            }
         }
     }
     fragColor = vec4(edge, 0.0, 0.0, 1.0);
@@ -338,11 +362,17 @@ void main() {
     g.glUniform4f(loc(p, "DwBall"), 0, 1200, 0, 1700)
     t = arrive + 1.0
     front = 4500 * (t / arrive) ** 0.8
-    g.glUniform4f(loc(p, "DwEye"), 0, 120, 4500, t)
+    g.glUniform4f(loc(p, "DwEye"), 0, 120, -(front - 400.0), t)
     g.glUniform4f(loc(p, "PallYoung"), 0, 1, 0, reach)
     g.glUniform4f(loc(p, "DwRing"), front, 0, 400, reach)
     g.glUniform1f(loc(p, "Front"), front)
-    step = np.radians(60.0) * front / 2048
+    step = np.radians(15.0) * front / 2048
+    def flat(e):
+        return float((np.abs(np.diff(e)) < 1e-3).mean())
+
+    # the control: one value per 60 m cell along the same arc, flat inside with a step to the next
+    control = np.sin(np.floor(np.arange(2048) * step / 60.0) * 12.9898) * 4.0
+    check(flat(control) > 0.25, f"the staircase control has flat runs (share {flat(control):.2f})")
     for upper, name in ((0, "lower edge"), (1, "top")):
         g.glUniform1f(loc(p, "Upper"), upper)
         quad(p)
@@ -352,9 +382,11 @@ void main() {
         sl = np.diff(np.convolve(e, np.ones(3) / 3, "valid"))
         sl = sl - sl.mean()
         kurt = float((sl ** 4).mean() / max((sl ** 2).mean() ** 2, 1e-12))
-        print(f"period: the wall's {name} (std {e.std():.1f} m) slope kurtosis {kurt:.1f} over the arc")
+        print(f"period: the wall's {name} (std {e.std():.1f} m) slope kurtosis {kurt:.1f}, flat share {flat(e):.3f} over the arc")
         check(e.std() > 1.0, f"the wall's {name} varies along the front (std {e.std():.2f} m > 1)")
-        check(kurt < 6.0, f"the wall's {name} steps like a staircase (slope kurtosis {kurt:.1f}), expected smooth noise (< 6)")
+        check(flat(e) < 0.25, f"the wall's {name} has flat runs like a staircase (share {flat(e):.3f}), expected under 0.25")
+        if not upper:
+            check(kurt < 6.0, f"the wall's {name} steps like a staircase (slope kurtosis {kurt:.1f}), expected smooth noise (< 6)")
 
 
 def link_after_veil(name, java, classpath):
