@@ -100,8 +100,8 @@ Ruins and everything in `nuclear/world/` are in `nuclear-world.md`.
   peak (g 0.85: 82 versus ~11 for a 30° disk) made the shell several times brighter than the sphere. Flash frame
   (`NukeFlash.overexposed`): overexposure X = K^(e^(−u/0.2 s)) after the second maximum (K is camera flash light versus
   exposure, `FlashLight.Eye.peak`); frame gain X^(1/2.2) via “frame × (1 + c)” blending and lens-scattered light
-  X/100; at 15 kt, 1.4 km, white until ~0.25 s, ×3 at 0.5 s, back by one second (previously white for full 1.24 s pulse
-  plus 2–4 s). Eye-glare veil starts at pulse maximum. Volume noise prepares from world entry (`IncomingClient.login`):
+  X/100; at 15 kt, 1.4 km, white until ~0.25 s, ×3 at 0.5 s, back by one second.
+  Eye-glare veil starts at pulse maximum. Volume noise prepares from world entry (`IncomingClient.login`):
   `/incoming nuke now` has no warning, otherwise the sphere has no body for its first second. Mushroom daytime world
   shadow is a shadow map (`fx_mush_shadow`, output `fx_pall_composite`; `client-fx.md`; tile and world top: texels 17, 18).
   - `flash/` — flash traces on faces (DESIGN-nuke §3.7): `FlashChar` (material by `nuke_chars`/`nuke_soots` tags,
@@ -167,8 +167,7 @@ Ruins and everything in `nuclear/world/` are in `nuclear-world.md`.
   e-fold over `DustModel.RISE_S`, dust-row fourth channel) to fluctuations `MIXED` = 0.2 of mean (`clumps`, `pallMixed`;
   Willis and Deardorff 1976, (est.)), while thermals make the top bumpy, top not holes: `topD` × (1 ± `BUMPS` = 0.3,
   entrainment zone, Stull 1988, (est.); `topBumps` in `fx_pall`, last `pallField` parameter, 1 without noise). Light in
-  troughs equals layer-top light (depth overhead from the same layer); previously rays through billow gaps reached
-  bottom, lit by mean optical depth (and fires), producing dark/orange patches seen only from above.
+  troughs equals layer-top light (depth overhead from the same layer).
   `PallFieldTest.oldPallIsOneBlanket`: after 6–7 minutes, where mean depth ≥ 5, thinnest column ≥ 3. Wind carries dust
   and spray from the moment lofted (`PallField.share`, age-based drift share `drift`, haze-row fourth channel;
   `source`), not the entire pall by wind travel since detonation: otherwise downwind dust edge/head led the server
@@ -356,9 +355,8 @@ Ruins and everything in `nuclear/world/` are in `nuclear-world.md`.
   of a billow tile, phase starts shifted by smooth spatial noise so the whole band does not pulse together. Influence
   (`mushFootInfluence`) starts outside 0.6 stem radius, extends at most two carpet heights beyond wall and no higher
   than merge; this map leaves distant haze and inner stem jets unchanged. Inflow is at wall and outward
-  (`mushFootWall`, from 0.6 stem radius): stem interior has its own dust. First version filled the whole stem with
-  carpet-density inflow and bent flow across the whole stem, producing a ring across the stem (inflow dust front
-  inside) and “herringbone” jets above; `StemFootTest.stemAwayFromTheFootIsAsBefore` checks unchanged field/pattern above
+  (`mushFootWall`, from 0.6 stem radius): stem interior has its own dust.
+  `StemFootTest.stemAwayFromTheFootIsAsBefore` checks unchanged field/pattern above
   merge and inside stem. Bounds include full band width (`MushroomField.reach`); empty-space steps use actual tapered
   band (`mushFootBandAt`), old stem clearance above merge. Slope bound below merge includes both derivatives:
   width ≤0.385 and taper ≤1.5/(merge−start). Inflow cylinder checked once per pixel; inside, one flow map per slot is
@@ -577,20 +575,17 @@ renewal and so sees one tick less right after a tick (`NukeFlashSkyTest`).
 
 ## Dust source material
 
-- The server uses 64-block cells through optical depth 1 at one second and 256-block cells through depth 0.05.
-  Presentation owns its separate thresholds. Each cell closes 200 game ticks before the front reaches its nearest
-  ground point. Surveys continue after detonation. Instant sources start with the observations available at birth.
-- Column plurality decides the class, with ties in water, sand, soil, hard order. Unread cells use the nearest
-  measured, closed centre (ties by world X then Z). Cells due together share their samples. Ground-zero wetness
-  uses the origin block, then surveyed ground, then soil.
-- `NuclearEvents` retains the UUID across detonation. An open source saves its birth samples, timestamped
-  observations and frontier tick. A finished source saves packed cells. A malformed entry is isolated. A worker
-  failure publishes uniform seed material.
-- Each checkpoint stands alone. Partial maps include the fractional origin and sealed extent. Four cells pack
-  into one byte, with byte runs when smaller. The 64 KB hard limit is per framed packet. A typical 1 Mt source
-  fits in 64 KB total. An incompressible 330,870-cell airburst needs 82,718 B for values alone. Seventeen sources
-  fit in 1.5 MB with framing and geometry. Cold delivery is nearest first, with 12,500 material bytes per part
-  and 20 parts per rolling second per viewer.
-- `ClientNuclear.Active.sourceMaterial()` returns class, commit status and origin wetness. Detonation carries
-  the frozen seed for an unwarned viewer. `frozenFallback()` identifies it until the cell arrives. Outside the
-  footprint the answer is empty. Sources without a revision freeze the first local terrain answer per cell.
+- Server cells: 64 blocks out to optical depth 1 at one second, 256 blocks out to 0.05 (presentation keeps its own
+  thresholds). A cell closes 200 ticks before the front reaches its nearest ground point; surveys continue after
+  detonation; instant sources start from the observations at birth.
+- Class by column plurality, ties water, sand, soil, hard; unread cells take the nearest measured closed centre (ties
+  by world X, then Z); cells due together share samples. Ground-zero wetness: origin block, surveyed ground, soil.
+- `NuclearEvents` keeps the UUID across detonation: open sources save birth samples, timestamped observations and
+  frontier tick; finished ones packed cells. A malformed entry is isolated; a worker failure publishes uniform seed.
+- Checkpoints stand alone (partial maps carry fractional origin and sealed extent); four cells per byte, byte runs
+  when smaller. 64 KB is per framed packet: a typical 1 Mt source fits whole, an incompressible 330,870-cell airburst
+  needs 82,718 B of values, 17 sources fit in 1.5 MB. Cold delivery nearest first, 12,500 material bytes per part,
+  20 parts per rolling second per viewer.
+- `ClientNuclear.Active.sourceMaterial()`: class, commit status, origin wetness; the detonation packet carries the
+  frozen seed for an unwarned viewer (`frozenFallback()` until the cell arrives); empty outside the footprint;
+  sources without a revision freeze the first local terrain answer per cell.
