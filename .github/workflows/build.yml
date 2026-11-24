@@ -470,7 +470,7 @@ jobs:
       - name: Parsing, planning and look gate
         run: python3 -m unittest discover -s tools/stand -p 'test_*.py' -v
 
-  # Every core shader program through AMD's offline OpenGL compiler (RGA, no GPU): code size, compiler memory and spills
+  # Every shader program through AMD's offline OpenGL compiler (glc from RGA, no GPU): code size, compiler memory and spills
   # against tools/fixtures/amd_shader_budget.json. AMD's Windows driver runs this compiler inside the game; a program
   # past its budget freezes AMD machines on its first use (#656).
   amd_shaders:
@@ -484,7 +484,8 @@ jobs:
       - uses: actions/cache@v4
         with:
           path: mod/run/rga
-          key: rga-linux-2.13.0.27
+          # unpacked glc tree and vanilla shaders only (the archives are deleted after a checked unpack)
+          key: amd-glc-2.13.0.27-mc-1.21.1
       - name: Budget rule
         run: python3 -m unittest discover -s tools -p 'test_amd_shader_check.py' -v
       - name: AMD compiler budget

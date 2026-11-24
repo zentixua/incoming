@@ -54,11 +54,13 @@ Prism: `~/.var/app/org.prismlauncher.PrismLauncher/data/PrismLauncher/` (`tools/
                                            sound only, its take in a 160×90 window at 20 fps);
                                            a nuke at the camera: `nuke 15 near`; how to work: client-scenario.md,
                                            “Effects sandbox”; check without a client: test_sandbox.sh (CI)
-    amd_shader_check.py [--only R] [--record] [--tree D] ← every core program through AMD's OpenGL compiler offline (RGA 2.13
-                                           glc, gfx1032 = RX 6600 XT; downloaded and sha256-checked into mod/run/rga): VGPRs,
-                                           scratch, code bytes, compiler memory, seconds; fails past tools/fixtures/amd_shader_budget.json
-                                           (+10 % code or memory, any new scratch, a new program over 128 KB or 1 GB). CI job
-                                           “Компилятор AMD” on shader changes; --record after a deliberate change, the reason in the PR
+    amd_shader_check.py [--only R] [--record] [--tree D] ← every core and post program through AMD's OpenGL compiler offline
+                                           (glc of RGA 2.13, gfx1032 = RX 6600 XT; vanilla stages and includes from the 1.21.1
+                                           client jar; both hash-checked into mod/run/rga): VGPRs, scratch, code of both stages,
+                                           compiler memory, seconds; fails past tools/fixtures/amd_shader_budget.json (+10 % code or
+                                           memory, new scratch, a program that does not build, a new one over 128 KB or 1 GB). CI job
+                                           “Компилятор AMD” on shader changes; --record --jobs 1 on an idle machine after a
+                                           deliberate change, the reason in the PR
     see_through_check.sh [graphics] [start options] ← regression check of effects behind see-through blocks: a blast seen
                                            through a sandbox `pane` of each translucent block and stone, visible share 2 s
                                            after it by see_through.py, fails outside its bounds; run it on changes to the

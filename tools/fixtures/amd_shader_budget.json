@@ -2,143 +2,153 @@
  "rga": "2.13.0.27",
  "asic": "gfx1032",
  "programs": {
+  "far_model": {
+   "code": 2848,
+   "memory_mb": 64,
+   "scratch": 0
+  },
   "fx": {
-   "code": 8800,
-   "memory_mb": 390,
+   "code": 178296,
+   "memory_mb": 391,
    "scratch": 0
   },
   "fx_bloom": {
-   "code": 740,
-   "memory_mb": 60,
+   "code": 1216,
+   "memory_mb": 63,
    "scratch": 0
   },
   "fx_bloom_down": {
-   "code": 824,
-   "memory_mb": 62,
+   "code": 1300,
+   "memory_mb": 63,
    "scratch": 0
   },
   "fx_bloom_gather": {
-   "code": 4592,
-   "memory_mb": 61,
+   "code": 5068,
+   "memory_mb": 63,
    "scratch": 0
   },
   "fx_bloom_up": {
-   "code": 648,
-   "memory_mb": 58,
+   "code": 1124,
+   "memory_mb": 63,
    "scratch": 0
   },
   "fx_depth": {
-   "code": 1748,
-   "memory_mb": 65,
+   "code": 2224,
+   "memory_mb": 69,
    "scratch": 0
   },
   "fx_dustwall": {
-   "code": 31320,
-   "memory_mb": 119,
+   "code": 31796,
+   "memory_mb": 120,
    "scratch": 0
   },
   "fx_dustwall_pack": {
-   "code": 440,
-   "memory_mb": 58,
+   "code": 916,
+   "memory_mb": 63,
    "scratch": 0
   },
   "fx_dustwall_resolve": {
-   "code": 7360,
-   "memory_mb": 62,
+   "code": 7836,
+   "memory_mb": 65,
    "scratch": 0
   },
   "fx_half_composite": {
-   "code": 1956,
-   "memory_mb": 59,
+   "code": 2432,
+   "memory_mb": 64,
    "scratch": 0
   },
   "fx_half_depth": {
-   "code": 1480,
-   "memory_mb": 66,
+   "code": 1956,
+   "memory_mb": 69,
    "scratch": 0
   },
   "fx_heat": {
-   "code": 35080,
+   "code": 35556,
    "memory_mb": 84,
    "scratch": 0
   },
   "fx_heat_shadow": {
-   "code": 44288,
-   "memory_mb": 103,
+   "code": 44764,
+   "memory_mb": 104,
    "scratch": 0
   },
   "fx_mush_shadow": {
-   "code": 7508,
-   "memory_mb": 67,
+   "code": 7984,
+   "memory_mb": 68,
    "scratch": 0
   },
   "fx_mush_taus": {
-   "code": 55820,
+   "code": 56296,
    "memory_mb": 113,
    "scratch": 0
   },
   "fx_pall": {
-   "code": 433848,
+   "code": 434324,
    "memory_mb": 938,
    "scratch": 212
   },
   "fx_pall_composite": {
-   "code": 804844,
-   "memory_mb": 4972,
+   "code": 805320,
+   "memory_mb": 4974,
    "scratch": 0
   },
   "fx_pall_foot": {
-   "code": 80636,
-   "memory_mb": 213,
+   "code": 81112,
+   "memory_mb": 214,
    "scratch": 0
   },
   "fx_pall_froxel": {
-   "code": 353048,
-   "memory_mb": 606,
+   "code": 353524,
+   "memory_mb": 607,
    "scratch": 48
   },
   "fx_pall_froxel_sum": {
-   "code": 2324,
+   "code": 2800,
    "memory_mb": 65,
    "scratch": 0
   },
   "fx_pall_mix": {
-   "code": 4088,
-   "memory_mb": 59,
+   "code": 4564,
+   "memory_mb": 60,
    "scratch": 0
   },
   "fx_pall_resolve": {
-   "code": 12376,
+   "code": 12852,
    "memory_mb": 65,
    "scratch": 0
   },
   "fx_pall_single": {
-   "code": 216400,
-   "memory_mb": 468,
+   "code": 216876,
+   "memory_mb": 469,
    "scratch": 40
   },
   "fx_probe": {
-   "code": 168632,
-   "memory_mb": 238,
+   "code": 169616,
+   "memory_mb": 239,
    "scratch": 0
   },
   "fx_see": {
-   "code": 504,
-   "memory_mb": 62,
-   "scratch": 0
-  },
-  "fx_smoke_fill": {
-   "code": 1140,
-   "memory_mb": 62,
-   "scratch": 0
-  },
-  "fx_water": {
-   "code": 8616,
+   "code": 980,
    "memory_mb": 63,
    "scratch": 0
   },
+  "fx_smoke_fill": {
+   "code": 1612,
+   "memory_mb": 61,
+   "scratch": 0
+  },
+  "fx_water": {
+   "code": 9092,
+   "memory_mb": 64,
+   "scratch": 0
+  },
   "nuke_flare": {
-   "code": 552,
+   "code": 2616,
+   "memory_mb": 64,
+   "scratch": 0
+  },
+  "program/concussion": {
+   "code": 1624,
    "memory_mb": 63,
    "scratch": 0
   }
