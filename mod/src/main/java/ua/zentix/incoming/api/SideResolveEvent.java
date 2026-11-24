@@ -20,8 +20,8 @@ import java.util.UUID;
  * memory, never from storage.
  * <p>
  * The first answer wins, so precedence is listener priority (NeoForge runs {@code HIGHEST} first). Incoming answers the
- * vanilla team at {@code HIGH} ({@code minecraft:team/<name>}); its optional bridges answer FTB Teams party and server
- * teams at {@code NORMAL} ({@code ftbteams:<team id>}) and Open Parties and Claims parties at {@code LOW}
+ * vanilla team at {@code HIGH} ({@code minecraft:team/<name>}); its optional bridges answer FTB Teams parties at
+ * {@code NORMAL} ({@code ftbteams:<team id>}) and Open Parties and Claims parties at {@code LOW}
  * ({@code openpartiesandclaims:<party id>}). Unanswered, the player is their own side ({@code incoming:player/<uuid>}).
  * A provider abstains for a personal or absent membership, so a lower provider can still answer.
  */

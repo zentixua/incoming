@@ -18,17 +18,17 @@ import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
- * The FTB Teams adapter against FTB Teams' API with stand-in teams (FTB Teams is not in the GameTest runtime): a party or
- * server team answers its id, the personal team every player has and no team abstain, an earlier answer stands, and
+ * The FTB Teams adapter against FTB Teams' API with stand-in teams (FTB Teams is not in the GameTest runtime): a party
+ * answers its id, the personal team every player has, a server team (it takes no members) and no team abstain, an earlier answer stands, and
  * every membership event invalidates the cached sides.
  */
 class FtbTeamsSidesTest {
     private static final UUID PARTY = UUID.randomUUID(), SERVER = UUID.randomUUID(), PERSONAL = UUID.randomUUID();
 
     @Test
-    void partyAndServerTeamsAnswer() {
+    void partyAnswers() {
         assertEquals("ftbteams:" + PARTY, FtbTeamsSides.key(team(PARTY, "party")));
-        assertEquals("ftbteams:" + SERVER, FtbTeamsSides.key(team(SERVER, "server")));
+        assertNull(FtbTeamsSides.key(team(SERVER, "server")), "a server team, which no player's effective team can be");
     }
 
     @Test

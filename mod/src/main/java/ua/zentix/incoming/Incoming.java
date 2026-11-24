@@ -91,7 +91,7 @@ public final class Incoming {
         if (ModList.get().isLoaded("computercraft")) modBus.addListener(ua.zentix.incoming.compat.computercraft.Peripherals::register);
         // Sides (target.Sides, api.SideResolveEvent): the vanilla team answers first, then FTB Teams, then Open Parties and
         // Claims; each bridge names its mod's API, so it loads only with that mod
-        NeoForge.EVENT_BUS.addListener(EventPriority.HIGH, Sides::answerTeam);
+        NeoForge.EVENT_BUS.addListener(Sides.PRIORITY, Sides::answerTeam);
         if (ModList.get().isLoaded("ftbteams")) ua.zentix.incoming.compat.ftbteams.FtbTeamsSides.install();
         if (ModList.get().isLoaded("openpartiesandclaims")) ua.zentix.incoming.compat.opac.OpacSides.install();
         NeoForge.EVENT_BUS.addListener(Sides::onLogin);

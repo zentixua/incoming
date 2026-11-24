@@ -20,11 +20,13 @@ import xaero.pac.common.server.parties.party.api.IServerPartyAPI;
  */
 public final class OpacSides {
     static final String NAMESPACE = "openpartiesandclaims";
+    /** After the vanilla team and FTB Teams. */
+    public static final EventPriority PRIORITY = EventPriority.LOW;
 
     private OpacSides() {}
 
     public static void install() {
-        NeoForge.EVENT_BUS.addListener(EventPriority.LOW, OpacSides::onResolve);
+        NeoForge.EVENT_BUS.addListener(PRIORITY, OpacSides::onResolve);
     }
 
     static void onResolve(SideResolveEvent event) {
@@ -45,7 +47,7 @@ public final class OpacSides {
     /** OPAC's party manager; null before OPAC's server data exists (its API dereferences that data without a check). */
     @Nullable
     private static IPartyManagerAPI manager(@Nullable MinecraftServer server) {
-        if (server == null) return null;
+        if (server == null || !server.isReady()) return null;
         try {
             return OpenPACServerAPI.get(server).getPartyManager();
         } catch (NullPointerException beforeServerData) {

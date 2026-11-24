@@ -7,6 +7,7 @@ import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.server.players.GameProfileCache;
 import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.scores.PlayerTeam;
+import net.neoforged.bus.api.EventPriority;
 import net.neoforged.neoforge.attachment.IAttachmentHolder;
 import net.neoforged.neoforge.common.NeoForge;
 import net.neoforged.neoforge.event.entity.player.PlayerEvent;
@@ -32,6 +33,8 @@ import java.util.function.Function;
  * Parties and Claims). Offline owners resolve the same way, from memory only. Server thread only.
  */
 public final class Sides {
+    /** Priority of Incoming's vanilla-team answer: before the bridges, after a listener at {@code HIGHEST}. */
+    public static final EventPriority PRIORITY = EventPriority.HIGH;
     /** Oldest cached answer reused, server ticks (1 s): an OPAC party change applies within it. */
     public static final int RECHECK = 20;
     /** Prefix of a vanilla team's key ({@code minecraft:team/<name>}). */

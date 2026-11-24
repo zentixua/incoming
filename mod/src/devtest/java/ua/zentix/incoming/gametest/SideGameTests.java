@@ -14,6 +14,7 @@ import net.minecraft.server.players.GameProfileCache;
 import net.minecraft.world.phys.Vec3;
 import net.minecraft.world.scores.PlayerTeam;
 import net.minecraft.world.scores.Scoreboard;
+import net.neoforged.neoforge.event.entity.player.PlayerEvent;
 import net.neoforged.neoforge.gametest.GameTestHolder;
 import net.neoforged.neoforge.gametest.PrefixGameTestTemplate;
 import org.jetbrains.annotations.Nullable;
@@ -225,8 +226,31 @@ public final class SideGameTests {
     }
 
     /**
+     * Login forgets the player's cached side: an offline player unknown by name resolves to their party; on login their
+     * vanilla team (joined while offline, by name) is their side at once, not after the age bound.
+     */
+    @GameTest(template = "pad", batch = "side_login")
+    public static void loginForgetsTheSide(GameTestHelper h) {
+        ServerLevel level = h.getLevel();
+        MinecraftServer server = level.getServer();
+        Scoreboard board = level.getScoreboard();
+        PlayerTeam team = board.addPlayerTeam("side_login");
+        StrikeGameTests.afterTest(h, () -> board.removePlayerTeam(team));
+        SamGameTests.Listener p = new SamGameTests.Listener(level, "side_login_p");
+        board.addPlayerToTeam(p.getScoreboardName(), team);
+        TestParties.join(h, p.getUUID(), "login", true);
+        h.assertValueEqual(Sides.side(server, p.getUUID()), TestParties.key("login"), "the offline side (no name known)");
+        Map<UUID, ServerPlayer> online = SamGameTests.playersByUuid(server.getPlayerList());
+        online.put(p.getUUID(), p);
+        StrikeGameTests.afterTest(h, () -> online.remove(p.getUUID(), p));
+        Sides.onLogin(new PlayerEvent.PlayerLoggedInEvent(p));
+        h.assertValueEqual(Sides.side(server, p.getUUID()), "minecraft:team/side_login", "the side right after login");
+        h.succeed();
+    }
+
+    /**
      * Radar cost with the cache, counted in questions asked (no wall time): one per distinct owner (and the radar's own)
-     * after an invalidation however many tracks and sweeps, none for further sweeps in the same second; a track's
+     * after an invalidation however many tracks and sweeps, none for further sweeps while the cache lives; a track's
      * friend-or-foe is otherwise a cached lookup. Twelve Shaheds of three owners, a hundred sweeps.
      */
     @GameTest(template = "runway", timeoutTicks = 200, batch = "side_radar_cost", skyAccess = true)

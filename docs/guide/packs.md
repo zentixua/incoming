@@ -212,12 +212,12 @@ A datapack advancement for surviving a 20 psi blast of an ICBM-sized yield:
 
 ## Sides
 
-Spotting, the SAM, air-raid alerts, launcher links, Jade's private lines and interception credit follow one rule: two
-players are on the same side when they are on the same vanilla team (`/team`), in the same FTB Teams party or server
-team, or in the same Open Parties and Claims party. A player in none of these is a side alone.
+Spotting, the SAM, air-raid alerts, launcher links, Jade's private lines and interception credit follow one rule. Each
+player has one side: their vanilla team (`/team`) if they have one, else their FTB Teams party, else their Open Parties
+and Claims party, else themselves alone. Two players are friends when their sides are the same.
 
-- A player in several: the vanilla team counts, then the FTB Teams team, then the Open Parties and Claims party. Only
-  operators and datapacks set `/team`, so an arena round set by command holds whatever parties the players have.
+- Only operators and datapacks set `/team`, so an arena round set by command holds whatever parties the players have: a
+  player on a team and in a party belongs to the team's side, not the party's.
 - The personal team FTB Teams gives every player is not a side. Allied parties stay separate sides.
 - A change of `/team` or FTB Teams applies at once, an Open Parties and Claims party change within a second.
 - An offline owner keeps their side: their launchers, SAMs and flying rounds still know their teammates.

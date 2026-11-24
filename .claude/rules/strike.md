@@ -222,17 +222,20 @@ paths:
 - One key per player, friendly = same UUID or equal keys: symmetric by construction; null owner is friendly to nobody.
   Every friend-or-foe rule asks `Sides` (spotting, map marks, `sighted`, nuclear review, radar, SAM crew, `AirAlert`,
   interceptor pursuit, `LauncherLinks.refusal`, `Readout.privileged`, interception credit); never `Entity.isAlliedTo` or
-  a pairwise team test. A key is posted once per cache miss as `SideResolveEvent` (server thread; the first answer
+  a pairwise team test. Exception: damage keeps vanilla PvP and `/team` friendly fire (`Player.canHarmPlayer` in the burn
+  and flash paths, like an arrow); a party mod's own PvP option is that mod's. A key is posted once per cache miss as `SideResolveEvent` (server thread; the first answer
   wins, so priority is precedence): `Sides.answerTeam` at `HIGH` (`minecraft:team/<name>`), `compat/ftbteams` at
-  `NORMAL` (party/server team; the personal team abstains), `compat/opac` at `LOW`; unanswered `incoming:player/<uuid>`.
+  `NORMAL` (party; the personal team abstains), `compat/opac` at `LOW`; unanswered `incoming:player/<uuid>`.
 - Cache: overworld attachment `SIDES` (unsaved: dies with the server). Whole-cache invalidation is the static
   `Sides.EPOCH` (any thread): `ServerScoreboard.addDirtyListener` (team changes and every score change), FTB Teams
   `TeamEvent`s, `SideResolveEvent.invalidate()`; login/logout forget that player; an answer older than `RECHECK` (20
   ticks) is asked again, the bound for OPAC, whose API has no party event. The event's name is the player list's, else
   the in-memory profile cache's (`GameProfileCache.get(UUID)`, no storage), else the live player's own (fake players
   outside the list); an entry resolved without a name is re-asked once a live player supplies one.
-- A radar sweep costs one cached lookup per track and at most one question per distinct owner per `RECHECK`
-  (`SideGameTests.radarAsksOncePerOwner`, counted by `Sides.Cache.resolutions`). Contacts and alerts stay under the key
+- A radar sweep costs one cached lookup per track and at most one question per distinct owner per cache lifetime
+  (`SideGameTests.radarAsksOncePerOwner`, counted by `Sides.Cache.resolutions`): `RECHECK`, or one tick on a server whose
+  scores change every tick (every score change marks the scoreboard dirty; player ticks run after the level ticks, so a
+  sweep still hits the cache). Contacts and alerts stay under the key
   that recorded them. Regressions: `SideGameTests`, `SightGameTests.sidesFollowTeams`, `SideResolveEventTest`,
   `FtbTeamsSidesTest`, `OpacSidesTest` (neither mod is in the GameTest runtime; `TestParties` answers as they do),
   `OptionalModsTest`.
