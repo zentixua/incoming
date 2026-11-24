@@ -193,6 +193,7 @@ public final class NukePall {
         FRAME.fire0.clear();
         FRAME.fire1.clear();
         ua.zentix.incoming.client.fx.layer.DustWallPass.clearHistory();
+        ua.zentix.incoming.client.fx.layer.DustWallPass.clearSlots();
         DustSources.reset();
         PallPass.reset();
         NukeAsh.reset();

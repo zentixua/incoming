@@ -47,7 +47,7 @@ public final class ClientNuclear {
         public final CloudPuffs puffs;
         /** The blast wave: its shock front and the Wilson cloud ({@link BlastWall}; the dust it lofts is the dust wave's, {@link DustSources}). */
         public final BlastWall wall;
-        /** Water under burst ({@link NukeWater#resolve}): column in mushroom volume, base surge in pall. */
+        /** Water under burst ({@link NukeWater#resolve}): the column in the mushroom volume; the base surge is the dust wave's. */
         final BurstWater water;
         /**
          * Post-wave pall ({@link NukePall}): dust on real time, fire haze on the detonation's clock ({@link #clockTicksAt}).

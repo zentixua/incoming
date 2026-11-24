@@ -674,7 +674,7 @@ public final class DustWallPass {
         private int limitTex = -1, limitFbo = -1, limitW, limitH;
         private int target = -1, fbo = -1, bounds = -1, split = -1, packed = -1, packedFbo = -1, width, height, div, fullW, fullH, marchW, latest,
                 marchId = -1, baseDiv = 4;
-        private boolean builtInterleave, history, hazeOnly;
+        private boolean builtInterleave, history, hazeOnly, preparedHazeOnly;
         /** This view's frame counter (interleave parity and jitter run per view). */
         private long frame;
         private final int[] historyTex = {-1, -1}, historyFbo = {-1, -1}, historyDivs = new int[2];
@@ -707,6 +707,7 @@ public final class DustWallPass {
             boolean b = DustWallPass.builtInterleave; DustWallPass.builtInterleave = builtInterleave; builtInterleave = b;
             b = DustWallPass.history; DustWallPass.history = history; history = b;
             b = DustWallPass.hazeOnly; DustWallPass.hazeOnly = hazeOnly; hazeOnly = b;
+            b = DustWallPass.preparedHazeOnly; DustWallPass.preparedHazeOnly = preparedHazeOnly; preparedHazeOnly = b;
             long fr = DustWallPass.frame; DustWallPass.frame = frame; frame = fr;
             for (int i = 0; i < 2; i++) {
                 t = HISTORY_TEX[i]; HISTORY_TEX[i] = historyTex[i]; historyTex[i] = t;
@@ -812,7 +813,10 @@ public final class DustWallPass {
     public static void clearHistory() {
         previousSource = null;
         history = false;
-        // the slots' detonations (their fields, terrain and material tiles) are not kept past a clear, a seek or a world exit
+    }
+
+    /** The slots' detonations (their fields, terrain and material tiles) are not kept past a clear, a seek or a world exit. */
+    public static void clearSlots() {
         java.util.Arrays.fill(SLOT_ID, null);
         java.util.Arrays.fill(TABLE_IN, null);
         java.util.Arrays.fill(GROUND_IN, null);

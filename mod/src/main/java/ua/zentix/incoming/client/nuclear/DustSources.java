@@ -57,7 +57,7 @@ public final class DustSources {
     }
 
     /** Per detonation: the dust exposure its eye has reached (value, the detonation clock's second). */
-    private static final Map<ClientNuclear.Active, double[]> ADAPTED = new WeakHashMap<>(), ADAPTED_SECONDARY = new WeakHashMap<>();
+    private static final Map<Object, Map<ClientNuclear.Active, double[]>> ADAPTED = new WeakHashMap<>();
     /**
      * Per detonation: when it was first drawn (client millis) and whether it was then already aged (a late join, a relog into a
      * running show, programs ready after the wave began): such a source fades in over {@link #FADE_IN_MS} of own time.
@@ -289,7 +289,8 @@ public final class DustSources {
         double target = adapt * Math.exp(DUST_ADAPT_INSIDE * DUST_K * eyeDepth(table, n, end, reach, t, at, m.hard(at[0], at[2])) * haze);
         // the eye takes it over time (presentation, as NukeExposure and Sight.adapted: opening ~2 s, closing ~8 s, est.), on the
         // detonation's clock (the time the player watches; a seek or jump restarts it at the target)
-        double[] state = perView(ADAPTED, ADAPTED_SECONDARY).computeIfAbsent(a, k -> new double[] {target, t});
+        double[] state = ADAPTED.computeIfAbsent(ua.zentix.incoming.client.fx.layer.FxViews.viewKey(), k -> new WeakHashMap<>())
+                .computeIfAbsent(a, k -> new double[] {target, t});
         double dt = t - state[1];
         if (dt < 0 || dt > 1) {
             state[0] = target;
@@ -387,7 +388,6 @@ public final class DustSources {
         visibleFrames = 0;
         DRAWN.clear();
         ADAPTED.clear();
-        ADAPTED_SECONDARY.clear();
         UNDRAWN_SECONDARY.clear();
         FIRST.clear();
         UNDRAWN.clear();

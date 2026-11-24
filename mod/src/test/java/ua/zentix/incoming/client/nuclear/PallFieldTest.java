@@ -40,9 +40,8 @@ class PallFieldTest {
     void lifetimeEndAndTableAreBuiltOnce() {
         PallField f = new PallField(GROUND);
         double end = f.lifetimeEnd();
-        long t0 = System.nanoTime();
         for (int i = 0; i < 10_000; i++) assertEquals(end, f.lifetimeEnd());
-        assertTrue(System.nanoTime() - t0 < 50_000_000L, "10 000 reads of the cached lifetime end in under 50 ms");
+        assertEquals(1, f.lifetimeEndRuns, "the bisection runs once");
         float[] table = f.waveTableNow();
         assertTrue(table == f.waveTable() && table == f.waveTableNow(), "one table");
     }

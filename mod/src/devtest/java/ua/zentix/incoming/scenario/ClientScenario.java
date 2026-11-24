@@ -1388,10 +1388,6 @@ public final class ClientScenario {
         }
     }
 
-    /**
-     * Time skip to {@code ageSeconds} after the detonation: the server clock goes there (all players get a time packet), the
-     *  client has a rewind, like a replay: storm, pall and everything nuclear - according to the new age of the detonation.
-     */
     /** A {@code dw:} step: one dust-wave diagnostic ({@link ua.zentix.incoming.client.fx.layer.DustWallDiag}). */
     private void dustWallDiag(String arg) {
         String[] kv = arg.split("=", 2);
@@ -1408,6 +1404,10 @@ public final class ClientScenario {
         Incoming.LOG.info("SCENARIO dw {}", arg);
     }
 
+    /**
+     * Time skip to {@code ageSeconds} after the detonation: the server clock goes there (all players get a time packet), the
+     *  client has a rewind, like a replay: storm, pall and everything nuclear - according to the new age of the detonation.
+     */
     private void fsSkip(double ageSeconds) {
         var server = Minecraft.getInstance().getSingleplayerServer();
         var d = ua.zentix.incoming.client.nuclear.ClientNuclear.detonations().getLast().d;

@@ -48,4 +48,24 @@ class DustWallInputsTest {
             assertTrue(worst < 0.03, "arrival off by " + worst + " s between nodes at " + at + " blocks of " + reach + ", " + d.yieldKt() + " kt, HOB " + d.hobMetres());
         }
     }
+
+    /**
+     * No dust where the fireball touches the ground: the march cuts every radius under the ball's ground footprint
+     * ({@code DwCut} = {@link BlastWall#underBall}, the frame input's fourth texel's w, read by {@code dwDensity} and the bound).
+     */
+    @Test
+    void noDustWhereTheFireballTouchesTheGround() throws java.io.IOException {
+        Detonation d = detonation(0, 15, 1);
+        BlastWall w = new BlastWall(d, false);
+        for (double t : new double[] {0.2, 0.45, 1, 2, 4}) {
+            double ball = FireballModel.groundRadius(t, 0, 15, true);
+            assertTrue(w.underBall(t) >= ball, t + " s: the cut " + w.underBall(t) + " m covers the footprint " + ball + " m");
+        }
+        assertTrue(FireballModel.groundRadius(0.45, 0, 15, true) > 100, "the 15 kt ball touches the ground at 0.45 s");
+        String sources = java.nio.file.Files.readString(java.nio.file.Path.of("src/main/java/ua/zentix/incoming/client/nuclear/DustSources.java"));
+        String glsl = java.nio.file.Files.readString(java.nio.file.Path.of("src/main/resources/assets/incoming/shaders/include/dustwall.glsl"));
+        assertTrue(sources.contains("(float) d.blocks(a.wall.underBall(t)));"), "the frame input carries the footprint's cut");
+        assertTrue(glsl.contains("DwCut = b.a;") && glsl.contains("r < DwCut - 50.0) return 0.0;") && glsl.contains("r < DwCut) return -1.0;"),
+                "the march reads the cut: no density and no bound under the footprint");
+    }
 }

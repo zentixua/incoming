@@ -29,6 +29,8 @@ public final class DustMaterialTiles {
     /** RGBA8 of both tiles, tile-major, x fastest; known flags in the alpha byte. */
     public final byte[] rgba = new byte[2 * SIDE * SIDE * 4];
     private int cursor, version, uploaded = -1, left = 2 * SIDE * SIDE;
+    /** The server's map the cursor last restarted for ({@link SourceMaterial#committedMap}). */
+    private Object lastMap;
     /** Both tiles' cells in fill order: rings outward from ground zero's cell, the fine and coarse tile's ring r together. */
     private static final int[] ORDER = order();
 
@@ -70,6 +72,12 @@ public final class DustMaterialTiles {
     /** Ask up to {@link #PER_FRAME} cells not yet known; true if any changed. */
     public boolean fill() {
         if (left <= 0) return false;
+        // a new map from the server commits cells at once: ask again from ground zero outward, where the front lofts dust first
+        Object map = source.committedMap();
+        if (map != lastMap) {
+            lastMap = map;
+            cursor = 0;
+        }
         boolean changed = false;
         int n = 2 * SIDE * SIDE;
         for (int asked = 0, scanned = 0; asked < PER_FRAME && scanned < n; scanned++) {

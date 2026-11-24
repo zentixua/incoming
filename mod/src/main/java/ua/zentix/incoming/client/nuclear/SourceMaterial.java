@@ -56,6 +56,11 @@ public final class SourceMaterial {
         if (i < 0) return PENDING;
         return frozen.computeIfAbsent(i, unused -> new Answer(Optional.of(terrain.apply(x, z)), false, false));
     }
+    /** The server's map this source answers from now (a new one commits cells at once); null before it arrives or without one. */
+    public Object committedMap() {
+        return server == null ? null : server.map();
+    }
+
     public Optional<Boolean> wet() {
         if (server != null) {
             if (seed >= 0) return Optional.of(seed == DustMaterial.WATER.ordinal());

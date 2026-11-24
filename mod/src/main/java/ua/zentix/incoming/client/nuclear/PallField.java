@@ -230,12 +230,15 @@ public final class PallField {
             end = 60;
             for (int i = 0; i < BINS; i++) end = Math.max(end, settledBy(columns[i]));
             lifetimeEnd = end;
+            lifetimeEndRuns++;
         }
         return end;
     }
 
     /** {@link #lifetimeEnd}, once computed (a bisection per node: read every frame by every reader of the drawn dust). */
     private volatile double lifetimeEnd = -1;
+    /** Times {@link #lifetimeEnd} ran its bisection (tests: once per field). */
+    int lifetimeEndRuns;
 
     /** Age of table node u (fractional), model seconds. */
     public static double lifetimeAge(double u, double end) {
@@ -977,9 +980,20 @@ public final class PallField {
 
     /** Start building {@link #waveTable} in the background, once. */
     public synchronized void prepareWave() {
-        if (wave != null || building != null) return;
-        building = java.util.concurrent.CompletableFuture.runAsync(() -> wave = buildWave(), net.minecraft.Util.backgroundExecutor());
+        if (wave != null || building != null || buildFailures > 1) return;
+        building = java.util.concurrent.CompletableFuture.runAsync(() -> wave = buildWave(), net.minecraft.Util.backgroundExecutor())
+                .exceptionally(e -> {
+                    // logged, and built once more (a second failure leaves this detonation without its dust wave)
+                    ua.zentix.incoming.Incoming.LOG.warn("Nuclear dust wave: the table of detonation {} was not built", d.id(), e);
+                    synchronized (this) {
+                        buildFailures++;
+                        building = null;
+                    }
+                    return null;
+                });
     }
+
+    private int buildFailures;
 
     /** {@link #waveTable}, built on this thread if it is not ready (tests, tools). */
     public float[] waveTableNow() {
