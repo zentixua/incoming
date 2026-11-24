@@ -76,7 +76,8 @@ Prism: `~/.var/app/org.prismlauncher.PrismLauncher/data/PrismLauncher/` (`tools/
                                            occluder and on an uneven lattice, the march at the world's edge, straight down
                                            and on a valley floor; exit 1 on a failed check; run it on dust wall shader changes
     dust_wall_contract_gl.py [checkout] [case ...] ← Mesa GL contracts for depth ordering and reprojection.
-                                           Use motion for camera translation/rotation and edge for slopes and convex corners.
+                                           Use motion for camera translation/rotation, edge for slopes and convex corners, skin for the march reaching the
+                                           wall's dense face cell by cell after a thin span.
                                            dust_wall_gl.py runs every case.
     wall_layer_identity.py               ← fixed-seed llvmpipe comparison with fixtures/wall_layer_7de91b6d1.glsl, run by
                                            dust_wall_gl.py. Checks light, depth and clipped transmission across 672 cases.

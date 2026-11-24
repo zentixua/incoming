@@ -34,6 +34,9 @@ uniform vec3 PallForward;
 uniform float DwDiv;
 // frame counter (wraps), and the march's step cap
 uniform vec2 DwFrame;
+// diagnostics (DustWallDiag.probe): k + 1 — the outputs hold the k-th occupied sample's terms (dustwall.glsl gDwProbe*),
+// 0 — the picture
+uniform float DwProbe;
 // interleaved rays (DustWallPass): x 1 when on; y this frame's parity; z the full march width.
 // Each frame marches half of the march pixels, a checkerboard alternating by frame (this target holds them packed two to
 // a column pair: pixel (x, y) is march pixel (2x + (y + parity) mod 2, y)); fx_dustwall_resolve fills the rest from history
@@ -84,6 +87,7 @@ void main() {
     // pixel size per block of distance at this resolution
     vec4 side = InvViewProj * vec4(ndc + vec2(2.0 * DwDiv / float(size.x), 0.0), 1.0, 1.0);
     float foot = length(normalize(side.xyz / side.w) - dir);
+    gDwProbeK = DwProbe - 1.0;
     fragColor = dwMarch(dir, min(tEnd, 30000.0), jitter, foot, int(DwFrame.y));
     float cover = 1.0 - fragColor.a;
     float axisShare = max(dot(dir, PallForward), 1e-3);
@@ -94,4 +98,9 @@ void main() {
     wallSplit = vec4(gDwSplit.xy * cover * axisShare, 1.0 - gDwSplit.z, shareA * cover);
     // (a clear ray: no interval; the march returns before closing one)
     if (cover <= 0.0) wallSplit = vec4(0.0);
+    if (DwProbe > 0.5) {
+        fragColor = gDwProbeA;
+        wallDepth = gDwProbeB;
+        wallSplit = vec4(float(gDwSamples), gDwProbeC.yzw);
+    }
 }

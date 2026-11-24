@@ -27,6 +27,7 @@
         { "name": "PallAirSky", "type": "float", "count": 3, "values": [0.0, 0.0, 0.0] },
         { "name": "PallAirFog", "type": "float", "count": 4, "values": [0.0, 0.0, 0.0, 0.0] },
         { "name": "DwFrame", "type": "float", "count": 2, "values": [0.0, 128.0] },
+        { "name": "DwProbe", "type": "float", "count": 1, "values": [ 0.0 ] },
         { "name": "PallOpenAt", "type": "float", "count": 4, "values": [0.0, 0.0, 0.0, 0.0] },
         { "name": "PallOpenWrap", "type": "float", "count": 3, "values": [0.0, 0.0, 0.0] },
         { "name": "DwSourceCount", "type": "float", "count": 1, "values": [0.0] },

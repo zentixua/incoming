@@ -42,7 +42,7 @@ def make_scene(opaque, near=None):
 def march_setup():
     program = link("fx_dustwall")
     # a new program starts from the default source (each case's inputs are its own)
-    SOURCE.update(eye=(100, 9, 0, 10), ring=(800, 0, 100, 800), inner=0, relief=(0, 0), ground=(0, 0, 0, 0))
+    SOURCE.update(eye=(100, 9, 0, 10), ring=(800, 0, 100, 800), inner=0, relief=(0, 0), ground=(0, 0, 0, 0), law=None)
     GROUND["rows"] = None
     g.glUseProgram(program)
     g.glUniformMatrix4fv(loc(program, "InvViewProj"), 1, True, np.linalg.inv(projection).astype(np.float32))
@@ -100,6 +100,12 @@ def source_table():
     t[0, :, 0] = np.where(np.arange(128) / 127 * reach < SOURCE["inner"], 1e6, 0)
     t[1:33, :, 0] = 20
     t[1:33, :, 1] = 2
+    if SOURCE.get("law"):
+        # a 1 Mt-like front (arrival 7.63 s at 4.5 km, r^1.25) and the settled layer: 68 blocks, optical depth 100
+        arrive, at = SOURCE["law"]
+        t[0, :, 0] = arrive * (np.arange(128) / 127 * reach / at) ** 1.25
+        t[1:33, :, 0] = 68
+        t[1:33, :, 1] = 100
     p = t[34]
     p[0] = SOURCE["eye"]
     p[1] = SOURCE["ring"]
@@ -352,10 +358,7 @@ def motion_case():
     turning = motion_resolve(previous, prev_depth=previous, forward=0, yaw=yaw)
     ceiling = motion_resolve(100, prev_depth=100)
     print(f"Current T=0.7000, moving={moving:.4f}, control={control:.4f}, turning={turning:.4f}, new ceiling={ceiling:.4f}")
-    # the current field is a fine checker (0.7 / 0.5): the resolve softens such single-ray specks toward their neighbours, so
-    # the values are not the raw ones; the contract is that moving and turning keep the same history as a still eye, and a new
-    # ceiling drops it (the current ray alone, above the history's 0.4)
-    check(np.allclose([moving, turning], control, atol=.001) and 0.45 < control < 0.52 and ceiling > control + 0.1,
+    check(np.allclose([moving, control, turning, ceiling], [.4858, .4858, .4858, .7], atol=.001),
           "translation and rotation preserve dust history until a new ceiling occludes it")
 
 
@@ -725,6 +728,63 @@ def ray_limit():
     g.glClearColor(0, 0, 0, 0)
 
 
+def skin_case():
+    """The march reaches the wall's dense dust cell by cell after a multi-cell thin span (the veil over the billowed top, thin
+    dust whose span grew): a ground-level eye 120 blocks outside a 1 Mt-like front, the real noise texture, sun from the
+    side. For every ray (the probe: its k-th occupied sample's extinction, span and depth in the layer), the first dense
+    sample (extinction over 0.05) never follows a span longer than one cell while lying more than 8 blocks deep in the layer:
+    a span that lands there has skipped the lit skin (a dark speck in the picture, 3:1 against the skin's light in game).
+    Without the march's back-up the fixture has 1-6 such rays per frame."""
+    global low, size, projection
+    saved = low, size, projection
+    low, size = 64, 256
+    projection = np.array([[1.2, 0, 0, 0], [0, 2.1, 0, 0], [0, 0, -1.02, -0.2], [0, 0, -1, 0]], dtype=np.float32)
+    try:
+        program = march_setup()
+        reach, arrive = 9000.0, 7.63
+        t = arrive + 1.0
+        front = 4500 * (t / arrive) ** 0.8
+        SOURCE["law"] = (arrive, 4500.0)
+        source(program, eye=(0, 2, front + 120, t), ring=(front, 0, 400, reach))
+        g.glActiveTexture(g.GL_TEXTURE0 + 12)
+        g.glBindTexture(g.GL_TEXTURE_3D, g.glGenTextures(1))
+        for f in (g.GL_TEXTURE_MIN_FILTER, g.GL_TEXTURE_MAG_FILTER):
+            g.glTexParameteri(g.GL_TEXTURE_3D, f, g.GL_LINEAR)
+        for f in (g.GL_TEXTURE_WRAP_S, g.GL_TEXTURE_WRAP_T, g.GL_TEXTURE_WRAP_R):
+            g.glTexParameteri(g.GL_TEXTURE_3D, f, g.GL_REPEAT)
+        g.glTexImage3D(g.GL_TEXTURE_3D, 0, g.GL_R32F, 128, 128, 128, 0, g.GL_RED, g.GL_FLOAT,
+                       np.random.default_rng(7).random((128, 128, 128), dtype=np.float32))
+        g.glUniform1i(loc(program, "DwNoise"), 12)
+        g.glUniform3f(loc(program, "DwSunLight"), 1.0, 0.95, 0.9)
+        g.glUniform3f(loc(program, "DwSunDir"), 0.2, 0.75, 0.63)
+        g.glUniform3f(loc(program, "DwSkyLight"), 0.2, 0.22, 0.25)
+        scene = make_scene(1e9)
+        for frame in (0, 5, 11):
+            records = []
+            for k in range(24):
+                g.glUseProgram(program)
+                g.glUniform1f(loc(program, "DwProbe"), k + 1)
+                records.append(march(program, scene, frame))
+            count = records[0][2][..., 0]
+            rays = skipped = 0
+            for y, x in np.ndindex(count.shape):
+                before = None
+                for k in range(min(int(count[y, x]), 24)):
+                    sample, span = records[k][0][y, x], records[k][1][y, x]
+                    if sample[0] > 0.05:
+                        rays += 1
+                        skipped += bool(span[3] > 8 and before is not None and before > 3.6)
+                        break
+                    before = span[0]
+            check(rays > 1000 and skipped == 0,
+                  f"frame {frame}: {rays} rays reach dense dust, {skipped} of them past the skin after a multi-cell span")
+        g.glUseProgram(program)
+        g.glUniform1f(loc(program, "DwProbe"), 0)
+    finally:
+        low, size, projection = saved
+        SOURCE["law"] = None
+
+
 def main():
     context()
     composite_program = link("fx_pall_composite")
@@ -745,6 +805,7 @@ def main():
         "relief": relief_cases,
         "fog": bright_air,
         "limit": ray_limit,
+        "skin": skin_case,
     }
     for name in names or cases:
         cases[name]()

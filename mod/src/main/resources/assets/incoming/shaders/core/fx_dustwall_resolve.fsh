@@ -37,8 +37,8 @@ uniform vec2 DwHistory;
 uniform vec4 DwInterleave;
 uniform vec2 DwLow;
 // diagnostics (DustWallDiag): x > 0 — the clamp's width in standard deviations (0: the shipped 1.5); y 1 — each pixel's own
-// history (a still eye), no reprojection; z 1 — a fresh ray's value is not held within its neighbours' range
-uniform vec3 DwDiag;
+// history (a still eye), no reprojection
+uniform vec2 DwDiag;
 out vec4 fragColor;
 
 bool interleaved() {
@@ -88,9 +88,6 @@ void main() {
     // neighbourhood at the same world distance (a neighbour across an object's edge is another place): this frame's rays
     vec4 m1 = traced ? cur : vec4(0.0), m2 = traced ? cur * cur : vec4(0.0);
     float count = traced ? 1.0 : 0.0;
-    // the depth-alike rays around (not this one): their range bounds this ray's value
-    vec4 lo = vec4(1e30), hi = vec4(-1e30);
-    float around = 0.0;
     for (int k = 0; k < 9; k++) {
         if (k == 4) continue;
         ivec2 c = clamp(p + ivec2(k % 3 - 1, k / 3 - 1), ivec2(0), low - 1);
@@ -102,21 +99,6 @@ void main() {
         m1 += v;
         m2 += v * v;
         count += 1.0;
-        lo = min(lo, v);
-        hi = max(hi, v);
-        around += 1.0;
-    }
-    // One ray's sample along a march cell is noisy (a dense or a clear sub-cell): a single march pixel darker or lighter than
-    // every depth-alike ray around it is that noise, not dust structure (at a fifth of the frame a pixel is 5 screen pixels).
-    // On a near, moving wall the history kept those pixels, and the bilinear lay drew them as a lattice of dark "+" dots. A clear
-    // ray stays clear (a gap among dust is real: pulled into the neighbours' dust it filled holes and edges). Light only: the
-    // depth thirds keep each ray's own interval.
-    if (traced && around >= 2.0 && DwDiag.z < 0.5 && half_ == 0 && cur != clearValue()) {
-        // and halfway toward their mean: one ray's sub-cell noise, not the dust's billows, which span many march pixels
-        vec4 held = mix(clamp(cur, lo, hi), (m1 - cur) / around, 0.5);
-        m1 += held - cur;
-        m2 += held * held - cur * cur;
-        cur = held;
     }
     // between rays without a depth-alike ray around: the nearest rays at any depth (a lone pixel across an edge)
     if (count < 0.5) {

@@ -25,8 +25,17 @@ public final class DustWallDiag {
     public static volatile boolean reprojection = true;
     /** div > 0: the march at this divisor. */
     public static volatile int div;
-    /** False: a fresh ray's value is not held within its depth-alike neighbours' range (the shipped resolve holds it). */
-    public static volatile boolean outliers = true;
+    /** k ≥ 0: the march writes every ray's k-th occupied sample's terms instead of the picture (−1: the picture). */
+    public static volatile int probe = -1;
+    /**
+     * Not null: the next drawn frame redraws its march once per occupied sample k = 0 .. {@link #sweepSamples} − 1 with the probe
+     * on and writes each pass's targets to {@code <prefix>_p<k>_*.f32} (one frame: every record walks the same ray), then
+     * clears it.
+     */
+    public static volatile String sweep;
+    public static volatile int sweepSamples = 48;
+    /** Above 0: the client scenario turns {@link #freezeAge} on once the front is this many blocks from the camera. */
+    public static volatile float freezeAt = -1;
     /** Not null: the next drawn frame writes the pass's targets to files with this path prefix, then clears it. */
     public static volatile String dump;
 

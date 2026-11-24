@@ -329,6 +329,7 @@ public final class ClientScenario {
         if (nukeGate >= 0 && tick >= nukeGate) holdForNuke();
         if (frontGate >= 0 && tick >= frontGate && nukeGate < 0) holdForFront();
         if (!blastGates.isEmpty() && tick >= blastGates.getFirst()) holdForBlast();
+        if (ua.zentix.incoming.client.fx.layer.DustWallDiag.freezeAt > 0) holdForFreeze();
         for (Step s : List.copyOf(steps)) {
             if (s.at == tick) s.action.run();
         }
@@ -1402,7 +1403,15 @@ public final class ClientScenario {
             case "material" -> ua.zentix.incoming.client.fx.layer.DustWallDiag.material = !v.equals("0");
             case "openair" -> ua.zentix.incoming.client.fx.layer.DustWallDiag.openAir = !v.equals("0");
             case "clamp" -> ua.zentix.incoming.client.fx.layer.DustWallDiag.clampWidth = Float.parseFloat(v);
-            case "outliers" -> ua.zentix.incoming.client.fx.layer.DustWallDiag.outliers = !v.equals("0");
+            case "probe" -> ua.zentix.incoming.client.fx.layer.DustWallDiag.probe = Integer.parseInt(v);
+            case "rdc" -> renderDocCapture();
+            case "sweep" -> {
+                String[] nk = v.split(":");
+                if (nk.length > 1) ua.zentix.incoming.client.fx.layer.DustWallDiag.sweepSamples = Integer.parseInt(nk[1]);
+                ua.zentix.incoming.client.fx.layer.DustWallDiag.sweep =
+                        Minecraft.getInstance().gameDirectory.toPath().resolve("screenshots").resolve(nk[0]).toString();
+            }
+            case "freezeat" -> ua.zentix.incoming.client.fx.layer.DustWallDiag.freezeAt = Float.parseFloat(v);
             case "div" -> ua.zentix.incoming.client.fx.layer.DustWallDiag.div = Integer.parseInt(v);
             case "reprojection" -> ua.zentix.incoming.client.fx.layer.DustWallDiag.reprojection = !v.equals("0");
             case "dump" -> ua.zentix.incoming.client.fx.layer.DustWallDiag.dump =
@@ -1410,6 +1419,26 @@ public final class ClientScenario {
             default -> throw new IllegalArgumentException("dw: " + arg);
         }
         Incoming.LOG.info("SCENARIO dw {}", arg);
+    }
+
+    /**
+     * {@code dw:rdc}: RenderDoc takes the next frame. The client runs under {@code renderdoccmd capture} (prod_client.py
+     * {@code INCOMING_JAVA_WRAP}); its in-app API ({@code RENDERDOC_GetAPI}, version 1.1.2) is asked from the injected library,
+     * so no UI is needed to trigger the capture. Without RenderDoc in the process the step logs that and does nothing.
+     */
+    private static void renderDocCapture() {
+        long lib = org.lwjgl.system.linux.DynamicLinkLoader.dlopen("librenderdoc.so", 2 | 4); // RTLD_NOW | RTLD_NOLOAD
+        if (lib == 0) { Incoming.LOG.warn("SCENARIO dw rdc: RenderDoc is not in the process"); return; }
+        long getApi = org.lwjgl.system.linux.DynamicLinkLoader.dlsym(lib, "RENDERDOC_GetAPI");
+        try (org.lwjgl.system.MemoryStack stack = org.lwjgl.system.MemoryStack.stackPush()) {
+            org.lwjgl.PointerBuffer api = stack.mallocPointer(1);
+            int ok = org.lwjgl.system.JNI.invokePI(10102, org.lwjgl.system.MemoryUtil.memAddress(api), getApi);
+            if (ok != 1 || api.get(0) == 0) { Incoming.LOG.warn("SCENARIO dw rdc: RENDERDOC_GetAPI returned {}", ok); return; }
+            // RENDERDOC_API_1_1_2: TriggerCapture is the 16th entry of the function table
+            long trigger = org.lwjgl.system.MemoryUtil.memGetAddress(api.get(0) + 15L * org.lwjgl.system.Pointer.POINTER_SIZE);
+            org.lwjgl.system.JNI.invokeV(trigger);
+            Incoming.LOG.info("SCENARIO dw rdc: capture triggered");
+        }
     }
 
     /**
@@ -4015,6 +4044,29 @@ public final class ClientScenario {
         }
         frontGateWaited++;
         steps.replaceAll(s -> s.at >= tick ? new Step(s.at + 1, s.action) : s);
+    }
+
+    /**
+     * {@code dw:freezeat=<m>}: the later steps wait (shift by a tick) until the newest detonation's front is within m blocks of the
+     * camera's ground point; then the dust wave's age freezes there ({@code DustWallDiag.freezeAge}).
+     */
+    private void holdForFreeze() {
+        var p = Minecraft.getInstance().player;
+        var newest = ua.zentix.incoming.client.nuclear.ClientNuclear.detonations().stream()
+                .min(java.util.Comparator.comparingDouble(a -> a.ticks(0)));
+        if (newest.isPresent() && p != null) {
+            var a = newest.get();
+            double r = a.d.burst().distanceTo(new net.minecraft.world.phys.Vec3(p.getX(), a.d.burst().y, p.getZ()));
+            float m = ua.zentix.incoming.client.fx.layer.DustWallDiag.freezeAt;
+            if (a.ticks(0) >= a.d.arrivalTicks(Math.max(r - m, 0))) {
+                ua.zentix.incoming.client.fx.layer.DustWallDiag.freezeAge = true;
+                ua.zentix.incoming.client.fx.layer.DustWallDiag.freezeAt = -1;
+                Incoming.LOG.info("SCENARIO dw frozen with the front {} m from the camera ({} s after the burst)", Math.round(m),
+                        String.format(java.util.Locale.ROOT, "%.2f", a.ticks(0) / 20));
+                return;
+            }
+        }
+        steps.replaceAll(s -> s.at > tick ? new Step(s.at + 1, s.action) : s);
     }
 
     /** Longest wait for an explosion ({@code wait:blast}): Shahed's flight at 5 km, tick. */

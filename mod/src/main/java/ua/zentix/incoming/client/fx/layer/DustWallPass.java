@@ -310,6 +310,7 @@ public final class DustWallPass {
             m.safeGetUniform("PallForward").set(FORWARD.x, FORWARD.y, FORWARD.z);
             m.safeGetUniform("DwDiv").set((float) div);
             m.safeGetUniform("DwInterleave").set(builtInterleave ? 1f : 0f, (float) (frame & 1), (float) width, 0f);
+            m.safeGetUniform("DwProbe").set((float) (DustWallDiag.probe + 1));
             m.safeGetUniform("DwFrame").set(DustWallDiag.freeze ? 0f : (float) (frame % 4096), (float) step.wallSteps());
             // every source's table, terrain and material tiles and frame inputs; the outdoor-air window: the dust lies on the
             // local ground, never indoors
@@ -344,6 +345,11 @@ public final class DustWallPass {
             int part = warming ? -1 : GPU_MARCH.begin();
             fullScreen(m, () -> Uniform.uploadInteger(Uniform.glGetUniformLocation(m.getId(), "DwNoise"), NOISE_UNIT), true, warming);
             GPU_MARCH.end(part);
+            String sweepTo = DustWallDiag.sweep;
+            if (sweepTo != null && !warming) {
+                DustWallDiag.sweep = null;
+                sweep(m, sweepTo);
+            }
             PallPass.stamp(timing, 6);
             // Pack the three simultaneous outputs into one atlas. The thirds share
             // temporal weights, and all readers need only one texture unit.
@@ -374,7 +380,7 @@ public final class DustWallPass {
                 r.safeGetUniform("DwDiv").set((float) div);
                 r.safeGetUniform("DwInterleave").set(builtInterleave ? 1f : 0f, (float) (frame & 1), 0f, 0f);
                 r.safeGetUniform("DwLow").set((float) width, (float) height);
-                r.safeGetUniform("DwDiag").set(DustWallDiag.clampWidth, DustWallDiag.reprojection ? 0f : 1f, DustWallDiag.outliers ? 0f : 1f);
+                r.safeGetUniform("DwDiag").set(DustWallDiag.clampWidth, DustWallDiag.reprojection ? 0f : 1f);
                 r.safeGetUniform("DwPrevDiv").set((float) historyDiv[latest]);
                 r.safeGetUniform("DwReproject").set(dx, dy, dz, past ? 1f : 0f);
                 r.safeGetUniform("DwHistory").set(HISTORY, f.layerTop - f.eye[1]);
@@ -774,11 +780,40 @@ public final class DustWallPass {
      * float32 files {@code <prefix>_<name>.f32} with their sizes and the frame's lattice in {@code <prefix>_dw.json}.
      */
     private static void dump(String prefix) {
+        write(prefix, new int[][] {{target, marchW, height}, {bounds, marchW, height}, {split, marchW, height}, {HISTORY_TEX[latest], 3 * width, height}},
+                new String[] {"march", "span", "split", "atlas"});
+        try {
+            java.nio.file.Files.writeString(java.nio.file.Path.of(prefix + "_dw.json"), String.format(java.util.Locale.ROOT,
+                    "{\"march\": [%d, %d], \"atlas\": [%d, %d], \"div\": %d, \"interleave\": %b, \"parity\": %d, \"frame\": %d, \"history\": %b, \"full\": [%d, %d]}",
+                    marchW, height, 3 * width, height, div, builtInterleave, (frame - 1) & 1, frame - 1, history && DustWallDiag.history, fullW, fullH));
+            Incoming.LOG.info("Nuclear dust wave: diagnostic targets written to {}_*.f32 (div {}, interleave {})", prefix, div, builtInterleave);
+        } catch (java.io.IOException e) {
+            Incoming.LOG.warn("Nuclear dust wave: diagnostic targets not written to {}", prefix, e);
+        }
+    }
+
+    /**
+     * Diagnostics ({@link DustWallDiag#sweep}): this frame's march again once per occupied sample k with the probe on, each pass's
+     * three targets written as {@code <prefix>_p<k>_{march,span,split}.f32}, then the march once more as drawn (the frame's
+     * picture). All passes see the same inputs, so every record walks the same ray.
+     */
+    private static void sweep(ShaderInstance m, String prefix) {
+        int n = Math.max(1, DustWallDiag.sweepSamples);
+        for (int k = 0; k <= n; k++) {
+            m.safeGetUniform("DwProbe").set(k == n ? (float) (DustWallDiag.probe + 1) : (float) (k + 1));
+            fullScreen(m, () -> Uniform.uploadInteger(Uniform.glGetUniformLocation(m.getId(), "DwNoise"), NOISE_UNIT), true, false);
+            if (k < n) {
+                write(prefix + "_p" + k, new int[][] {{target, marchW, height}, {bounds, marchW, height}, {split, marchW, height}},
+                        new String[] {"march", "span", "split"});
+            }
+        }
+        Incoming.LOG.info("Nuclear dust wave: probe sweep of {} samples written to {}_p*_*.f32", n, prefix);
+    }
+
+    private static void write(String prefix, int[][] parts, String[] names) {
         try {
             java.nio.file.Path base = java.nio.file.Path.of(prefix);
             java.nio.file.Files.createDirectories(base.toAbsolutePath().getParent());
-            int[][] parts = {{target, marchW, height}, {bounds, marchW, height}, {split, marchW, height}, {HISTORY_TEX[latest], 3 * width, height}};
-            String[] names = {"march", "span", "split", "atlas"};
             for (int i = 0; i < parts.length; i++) {
                 int w = parts[i][1], h = parts[i][2];
                 java.nio.FloatBuffer px = MemoryUtil.memAllocFloat(w * h * 4);
@@ -792,10 +827,6 @@ public final class DustWallPass {
                     MemoryUtil.memFree(px);
                 }
             }
-            java.nio.file.Files.writeString(java.nio.file.Path.of(prefix + "_dw.json"), String.format(java.util.Locale.ROOT,
-                    "{\"march\": [%d, %d], \"atlas\": [%d, %d], \"div\": %d, \"interleave\": %b, \"parity\": %d, \"frame\": %d, \"history\": %b, \"full\": [%d, %d]}",
-                    marchW, height, 3 * width, height, div, builtInterleave, (frame - 1) & 1, frame - 1, history && DustWallDiag.history, fullW, fullH));
-            Incoming.LOG.info("Nuclear dust wave: diagnostic targets written to {}_*.f32 (div {}, interleave {})", prefix, div, builtInterleave);
         } catch (java.io.IOException | RuntimeException e) {
             Incoming.LOG.warn("Nuclear dust wave: diagnostic targets not written to {}", prefix, e);
         }

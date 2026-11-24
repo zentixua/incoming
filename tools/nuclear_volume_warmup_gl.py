@@ -170,7 +170,7 @@ def main(mode):
                 # the dust pass's divisor gates the wall insertion (0: no dust pass this frame)
                 g.glUniform1f(h.loc(program, "DwDiv"), 4 if wall else 0)
                 if wall:
-                    h.bind(program, 4, targets[RESOLVE].textures[0])
+                    h.bind(program, 6, targets[RESOLVE].textures[0])
         h.quad(program)
 
     def frame(names, preparing):

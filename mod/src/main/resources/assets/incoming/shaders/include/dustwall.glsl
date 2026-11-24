@@ -213,6 +213,11 @@ float gDwFoot = 0.0;
 // set by dwDensity at its sample: the billowed dust surface above it, its full extinction and its share of sand (the light
 // reads them)
 float gDwSurf = 0.0, gDwSigma = 0.0, gDwSand = 0.0;
+// diagnostics (DustWallDiag.probe, fx_dustwall: DwProbe): the k-th occupied sample's terms of this ray; the light's terms of
+// the last sample lit (shadow depths toward the ball and the sun, depth into the layer, the swell's lift)
+float gDwProbeK = -1.0;
+vec4 gDwProbeA = vec4(0.0), gDwProbeB = vec4(0.0), gDwProbeC = vec4(0.0);
+float gDwPrTaub = 0.0, gDwPrTaus = 0.0, gDwPrDepth = 0.0, gDwPrLift = 0.0;
 // set by dwDensity: the swell at the sample (dwBulge, share of the layer): sags sit in the shade of the swells around them
 float gDwSwell = 0.0;
 
@@ -1000,6 +1005,10 @@ vec3 dwTexturedLight(vec3 q, vec3 rd) {
             + dwSkyOnDust() * (0.03 + 0.15 * exp(-0.3 * depth));
     vec3 albedo = mix(mix(DwAlbedo, DwSandAlbedo, gDwSand), DwMistAlbedo, gDwWet);
     vec3 bulk = mix(mix(DwBulk, DwSandBulk, gDwSand), DwMistBulk, gDwWet);
+    gDwPrTaub = taub;
+    gDwPrTaus = taus;
+    gDwPrDepth = depth;
+    gDwPrLift = lift;
     return DW_EXPOSURE * max(DwAdapt, 1.0) * (albedo * single + bulk * multiple + bulk * DwGroundLight);
 }
 
@@ -1272,6 +1281,16 @@ vec4 dwMarch(vec3 rd, float tEnd, float jitter, float foot, int maxSteps) {
     float n = 1.0, kLast = k - 1.0;
     float T = 1.0, t = t0;
     bool inDust = false, capped = false;
+    // the state before the last multi-cell thin span (the veil over the top, or thin dust whose span grew): a dense sample
+    // right after it goes back there and samples cell by cell (fine) until the dense dust. The span's own thin sample says
+    // nothing about the cells it covers: near the wall's leaning face a 14-28 m span from the veil over the billowed top lands
+    // up to 18 m deep in the layer, past the lit skin (light 0.10 there against 0.32 in the skin; a third of the face's rays
+    // with the front 120 m away), and which ray skips moves with its per-frame offset: the history keeps those 3:1 jumps as
+    // dark specks
+    float spanK = -1.0, spanT = 1.0, spanEnd = -1.0, spanSamples = 0.0;
+    vec3 spanLight = vec3(0.0), spanDepth = vec3(0.0);
+    vec4 spanSplit = vec4(0.0);
+    bool spanInB = false, fine = false;
     // the step cap counts occupied samples (each with its light), not strides over clear air: a cap on every stride
     // handed the far thin spans to the noise-free tail, which saw none of them (the march's accuracy: 0.29 at HIGH)
     for (int i = 0; i < 640; i++) {
@@ -1306,6 +1325,8 @@ vec4 dwMarch(vec3 rd, float tEnd, float jitter, float foot, int maxSteps) {
                 if (gDwSpan[m].x > tt && gDwSpan[m].x < gDwSpan[m].y) kn = min(kn, max(floor(dwGridK(gDwSpan[m].x)), k + 1.0));
             }
             kLast = k; k = kn; n = min(n * 2.0, 16.0); inDust = false;
+            spanK = -1.0;
+            fine = false;
             continue;
         }
         if (!inside) {
@@ -1316,6 +1337,8 @@ vec4 dwMarch(vec3 rd, float tEnd, float jitter, float foot, int maxSteps) {
             k = rd.y < 0.0 ? kNext : k + n;
             n = rd.y < 0.0 ? 1.0 : min(n * 2.0, 8.0);
             inDust = false;
+            spanK = -1.0;
+            fine = false;
             continue;
         }
         if (s > 1e-5) {
@@ -1326,14 +1349,35 @@ vec4 dwMarch(vec3 rd, float tEnd, float jitter, float foot, int maxSteps) {
                 inDust = true;
                 continue;
             }
+            bool dense = s * dt >= mix(0.1, 0.01, gDwF);
+            if (dense && spanK >= 0.0) {
+                // a multi-cell thin span ended in dense dust: back to its start, cell by cell
+                k = spanK; T = spanT; light = spanLight; gDwDepth = spanDepth; gDwLastEnd = spanEnd; gDwInB = spanInB;
+                gDwSplit = spanSplit; gDwSamples = int(spanSamples);
+                kLast = k - 1.0; n = 1.0;
+                spanK = -1.0;
+                fine = true;
+                continue;
+            }
             inDust = true;
             gDwSamples += 1;
             c /= s;
             // the thin soft edge, veil and puffs over the dense top: four cells per sample (at grazing views they are
             // hundreds of metres of ray); thin dust: the span grows while each cell holds little optical depth
-            float cells = max(hqMax > 2.0 ? 4.0 : 1.0, n);
+            float cells = fine ? 1.0 : max(hqMax > 2.0 ? 4.0 : 1.0, n);
+            spanK = -1.0;
+            if (cells > 1.0 && !dense) {
+                spanK = k; spanT = T; spanLight = light; spanDepth = gDwDepth; spanEnd = gDwLastEnd; spanInB = gDwInB;
+                spanSplit = gDwSplit; spanSamples = float(gDwSamples - 1);
+            }
+            if (dense) fine = false;
             float span = min(dwGridT(k + cells), tMarch) - t;
             float al = exp(-s * span), air = dwAirT(tt, rd.y);
+            if (float(gDwSamples - 1) == gDwProbeK) {
+                gDwProbeA = vec4(s, dot(c, DW_LUMA), T, tt);
+                gDwProbeB = vec4(span, gDwPrTaub, gDwPrTaus, gDwPrDepth);
+                gDwProbeC = vec4(0.0, gDwPrLift, gDwF, hqMax);
+            }
             dwInterval(t, t + span, T, light);
             // the air between the eye and the dust (haze, weather) shows its own light in front of it, as for the pall
             light += T * (1.0 - al) * (air * c + (1.0 - air) * airLight);
@@ -1343,7 +1387,7 @@ vec4 dwMarch(vec3 rd, float tEnd, float jitter, float foot, int maxSteps) {
             T *= al;
             kLast = k + cells - 1.0; k += cells;
             // (the haze level is smooth: its spans grow while a cell holds under 0.1 of optical depth)
-            n = s * dt < mix(0.1, 0.01, gDwF) ? min(cells * 2.0, 8.0) : 1.0;
+            n = fine ? 1.0 : s * dt < mix(0.1, 0.01, gDwF) ? min(cells * 2.0, 8.0) : 1.0;
         } else {
 #ifdef DW_DIAG
             gDwKinds.w += 1.0;
@@ -1354,6 +1398,8 @@ vec4 dwMarch(vec3 rd, float tEnd, float jitter, float foot, int maxSteps) {
             // (a swell's crest, another source's layer) is never stepped over (the march's accuracy: five 50-block spans were missed at LOW)
             kLast = k; k += n; n = min(n * 2.0, max(1.0, floor(dwGap() / max(dt, 1e-3))));
             inDust = false;
+            spanK = -1.0;
+            fine = false;
         }
     }
     // the rest of the ray past the step cap (the thin tail), from the noise-free column
