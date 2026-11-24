@@ -47,7 +47,7 @@ public final class Readout {
 
     /**
      * {@code viewer} may see the owner and the mission of something owned by {@code owner}: an operator (permission
-     * level 2), or the owner's side by the side rule ({@link Sides#friendly}: the owner, the owner's vanilla team). Null
+     * level 2), or the owner's side by the side rule ({@link Sides#friendly}: the owner and their team or party). Null
      * owner (placed or launched by command): operators only.
      */
     public static boolean privileged(MinecraftServer server, @Nullable UUID owner, ServerPlayer viewer) {

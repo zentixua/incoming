@@ -50,7 +50,8 @@ softens both. Hearing damage can be turned off in the [settings](settings.md).
 ## Surface-to-Air Missile System (SAM)
 
 The SAM is a block that shoots down other players' Shaheds, Lancets, cruise missiles and B-2s by itself. It leaves the
-projectiles of the player who placed it, and of that player's team, alone.
+projectiles of the player who placed it, and of that player's team, alone ([who is on a team](rules.md#spotting)). If a
+target's owner joins the team while a missile chases it, the missile blows itself up in the air.
 
 The block itself is the radar cabin. Four missile canisters stand upright on top of it, so the whole SAM is about five
 and a half blocks tall. An interceptor leaves its canister straight up, then turns in a short arc toward the point where it will meet the

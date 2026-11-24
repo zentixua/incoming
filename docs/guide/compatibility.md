@@ -18,6 +18,8 @@ On a server, install the same Incoming version for everyone.
 | Flashback | Recording and replaying strikes | Clients only |
 | Mekanism | Its hazmat suit and other radiation-shielding items protect from nuclear radiation ([pack makers](packs.md#radiation-shielding-incomingradiation_shielding)) | Server and clients |
 | Jade | Looking at a launcher, SAM, substation or strike projectile shows its state; owner and mission only to the owner's side and operators ([details](packs.md#jade)) | Server and clients |
+| FTB Teams | Players in one party are one side: they share spotting, the SAM spares their rounds, they link each other's launchers ([sides](packs.md#sides)) | Server and clients |
+| Open Parties and Claims | Players in one party are one side, as with FTB Teams ([sides](packs.md#sides)) | Server and clients |
 | CC:Tweaked | Computers read the fixed launcher and the SAM, fire a launcher's mission and receive air-raid events ([details](packs.md#computers-cctweaked)) | Server and clients |
 
 Explosions, smoke, trails and the nuclear cloud stay visible behind stained and tinted glass, ice, slime, honey and water,

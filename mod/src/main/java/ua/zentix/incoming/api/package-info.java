@@ -20,6 +20,9 @@
  * {@code Ended}; Incoming rolls back no foreign debit. Rounds saved before these events existed post no round events;
  * their detonations and outages are still reported, with no order or round id.
  * <p>
+ * Sides: {@link ua.zentix.incoming.api.SideResolveEvent} asks a provider (a party mod, a script) for one player's side
+ * key; it is posted while Incoming needs the answer, on the server thread, and the first answer wins.
+ * <p>
  * Claim protection: before Incoming changes blocks outside a real charge's own explosion, it asks claim mods through
  * {@code ExplosionEvent.Detonate} with a {@link ua.zentix.incoming.api.ClaimQuery}, a question and not an explosion.
  */

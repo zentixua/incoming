@@ -79,7 +79,8 @@ What already connects:
   operator can give it a mission, and it then fires without player rules: a ready tool for map makers.
 - Data: block tags for nuclear wave classes, ignition, glass, passable blocks; data map `incoming:penetration` for
   how far bombs and charges get through each block (bunker materials); entity tag `aim_ignore`.
-- Sides: identity plus vanilla `/team` (`J/target/Sides.java`).
+- Sides: one key per player from `SideResolveEvent`: vanilla `/team`, FTB Teams, Open Parties and Claims
+  (`J/target/Sides.java`, `J/api/SideResolveEvent.java`).
 - Commands: `/incoming` covers single strikes, salvos with routes, nukes, launchers, the grid and radiation; console
   and command blocks pay no munitions.
 - Almighty note `D/incoming/almighty/notes/strikes.md`: strike, salvo, nuke and launcher syntax (with owner),
@@ -364,7 +365,7 @@ round and detonation events with no Almighty change. Add to the note: the grid a
 | 10 | B3 owner identity | done | #754 |
 | 11 | C1 radiation shielding, Mekanism compat | done | #755 |
 | 12 | D2 Jade, D1 CC:Tweaked | done | #756 |
-| 13 | B5 sides from party mods | planned | |
+| 13 | B5 sides from party mods | done | #757 |
 | later | 5F Component items for progression | planned | |
 | later | 5F Blackout of modded lamps | planned | |
 | later | 5F Foreign air-defense targets | planned | |

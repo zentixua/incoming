@@ -46,6 +46,7 @@ import ua.zentix.incoming.strike.FlightStatus;
 import ua.zentix.incoming.strike.NuclearKeys;
 import ua.zentix.incoming.strike.PickHints;
 import ua.zentix.incoming.strike.StrikeWorld;
+import ua.zentix.incoming.target.Sides;
 import ua.zentix.incoming.target.Sightings;
 import ua.zentix.incoming.warhead.CraterFalls;
 import ua.zentix.incoming.work.StallWatch;
@@ -88,6 +89,13 @@ public final class Incoming {
         // CC:Tweaked peripherals of the launcher and the SAM: the compat package names CC:Tweaked's API, so it loads only
         // with CC:Tweaked (Jade finds its overlay plugin by its own annotation scan; nothing here names it)
         if (ModList.get().isLoaded("computercraft")) modBus.addListener(ua.zentix.incoming.compat.computercraft.Peripherals::register);
+        // Sides (target.Sides, api.SideResolveEvent): the vanilla team answers first, then FTB Teams, then Open Parties and
+        // Claims; each bridge names its mod's API, so it loads only with that mod
+        NeoForge.EVENT_BUS.addListener(Sides.PRIORITY, Sides::answerTeam);
+        if (ModList.get().isLoaded("ftbteams")) ua.zentix.incoming.compat.ftbteams.FtbTeamsSides.install();
+        if (ModList.get().isLoaded("openpartiesandclaims")) ua.zentix.incoming.compat.opac.OpacSides.install();
+        NeoForge.EVENT_BUS.addListener(Sides::onLogin);
+        NeoForge.EVENT_BUS.addListener(Sides::onLogout);
         modBus.addListener(SamBlockEntity::registerCapabilities);
         modBus.addListener(FixedLauncherBlockEntity::registerCapabilities);
         // advancements and statistics (progress.Progress): no legacy ids to alias

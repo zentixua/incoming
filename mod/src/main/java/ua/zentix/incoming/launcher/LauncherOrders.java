@@ -35,7 +35,7 @@ import java.util.UUID;
  * Fixed launcher orders ({@link FixedLauncherBlockEntity}): mission from linked designator ({@link #assign}) and
  * launch on redstone signal ({@link #fire}). Launch follows player order path ({@link
  * ServerActions#fromLauncher}): single projectile or salvo ({@link SalvoData}) from this launcher's firing
- * position ({@link LaunchOrigin.Fixed}); projectiles belong to launcher owner, so {@code /team} friend/foe, their
+ * position ({@link LaunchOrigin.Fixed}); projectiles belong to launcher owner, so side friend/foe ({@link ua.zentix.incoming.target.Sides}), their
  * “Abort”, and active-projectile limit match their designator orders. Launcher inventory pays: must cover the
  * whole order immediately (never truncate it), but deduct one projectile as it takes the rail; canceled salvos
  * and failed launches remain in storage.

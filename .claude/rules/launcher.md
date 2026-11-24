@@ -43,7 +43,7 @@ paths:
   `incoming:launchers`: `GlobalPos` list, up to 16). While the list is nonempty, the remote's “Fire”
   (`ServerActions.fire`) assigns missions to linked launchers (`LauncherOrders.assign`): target follows player rules
   (`ServerActions.ruled`); each launcher must be in this world, in a ready chunk (do not load for a mission), owned by
-  the player or their team (`LauncherLinks.refusal`: `Authority` LINK first), idle; target within `map_range` of it, route within weapon range from it (`routeProblem`
+  the player or their side (`LauncherLinks.refusal`: `Authority` LINK first), idle; target within `map_range` of it, route within weapon range from it (`routeProblem`
   with launch origin `LaunchOrigin.Fixed`). Missing launcher (chunk ready, block absent) is unlinked
   (`LauncherLinks.forget`): otherwise the remote would remain in mission mode forever.
 - Launch follows the player-order path (`ServerActions.fromLauncher`): single via `StrikeService.launch`, salvo via
@@ -64,7 +64,7 @@ paths:
 - Overlays and computers (`info/`, no foreign type): `LauncherOrders.problem` is the redstone path's own checks before
   the launch (`fire` = `problem` + launch), so "why it cannot fire" is one law. `info/Readout` builds Jade lines on the
   server; owner and mission (and any refusal outside `Readout.PUBLIC_REFUSALS`) only for `Readout.privileged` (operator
-  level 2, or `Sides.friendly` with the owner; ownerless: operators). One rule for every channel: the empty-hand status
+  level 2, or `Sides.friendly` with the owner, any side provider; ownerless: operators). One rule for every channel: the empty-hand status
   line (`status(viewer)`) and a computer (no identity: always the stranger's view, private refusals read `private`) too
   (`MissionPrivacyGameTests`). `info/Automation` is the CC:Tweaked tables and `fire` (= `FixedLauncherBlockEntity.fire`,
   the redstone tick's call); nothing changes a mission. Bridges: `compat/jade` (found by Jade's `@WailaPlugin` scan, never named), `compat/computercraft`

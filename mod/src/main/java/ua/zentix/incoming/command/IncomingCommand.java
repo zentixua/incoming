@@ -475,7 +475,7 @@ public final class IncomingCommand {
     /**
      * “launcher x y z …” — fixed launcher for the game master and scripts (operator only): status; fire its mission,
      * as with a redstone signal; mission as from the designator, without player rules (target is a position); clear mission;
-     * stock munitions for the mission's weapon; owner (projectiles act on their behalf, allies by {@code /team}) or unowned
+     * stock munitions for the mission's weapon; owner (projectiles act on their behalf, allies by side, {@link ua.zentix.incoming.target.Sides}) or unowned
      * (without owner rules).
      */
     private static LiteralArgumentBuilder<CommandSourceStack> launcher() {

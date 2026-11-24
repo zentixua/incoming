@@ -198,10 +198,10 @@ public final class IncomingConfig {
             designatorForEveryone = b.comment("The designator works for every player, not only operators (default of the permission node incoming.launch).")
                     .translation("incoming.config.designator_for_everyone").define("designator_for_everyone", true);
             mapPlayers = b.comment("The targeting map shows players in the same dimension (within map_range, except invisible players and spectators):",
-                            "teammates (/team) always, others where they were last seen (with sight_rules) or all of them (without).",
+                            "teammates (/team or a party mod's team) always, others where they were last seen (with sight_rules) or all of them (without).",
                             "Off: the map does not draw them; the player target list on the console stays.")
                     .translation("incoming.config.map_players").define("map_players", true);
-            sightRules = b.comment("Spotting: the designator strikes another player or aircraft only if the shooter or their /team sees it now or saw it",
+            sightRules = b.comment("Spotting: the designator strikes another player or aircraft only if the shooter or their side (/team, FTB Teams, OPAC) sees it now or saw it",
                             "within sight_memory, directly or through their projectile camera; one seen earlier is struck at its last known place.",
                             "The map shows others the same way. /incoming from operators and the console ignores these rules.")
                     .translation("incoming.config.sight_rules").define("sight_rules", true);
