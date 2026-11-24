@@ -9,7 +9,6 @@ import net.minecraft.core.BlockPos;
 import net.minecraft.core.HolderLookup;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.server.level.ServerLevel;
-import net.minecraft.util.Mth;
 import net.minecraft.world.level.ChunkPos;
 import net.minecraft.world.level.saveddata.SavedData;
 import net.minecraft.world.phys.Vec3;
@@ -94,10 +93,11 @@ public final class NuclearClaims extends SavedData {
 
     /**
      * Detonation {@code d}'s question about {@code chunk}: no source entity, nuclear blast damage, centred in the middle
-     * of the chunk at the burst height (never at ground zero, which need not be in memory).
+     * of the chunk under the build limit (never at ground zero, which need not be in memory; a listener that acts around
+     * an explosion's centre finds only air there).
      */
     static ClaimQuery query(ServerLevel level, Detonation d, long chunk) {
-        double y = Mth.clamp(d.burst().y, level.getMinBuildHeight(), level.getMaxBuildHeight() - 1);
+        double y = level.getMaxBuildHeight() - 3;
         return new ClaimQuery(level, null, ModDamageTypes.source(level, ModDamageTypes.NUCLEAR_BLAST, null, null),
                 new Vec3((ChunkPos.getX(chunk) << 4) + 8.5, y, (ChunkPos.getZ(chunk) << 4) + 8.5));
     }

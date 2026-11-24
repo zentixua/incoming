@@ -152,6 +152,7 @@ public final class ClaimGameTests {
         h.onEachTick(() -> {
             if (!done[0] && bomb.isRemoved() && level.getGameTime() > start + 2 && StrikeWorld.get(level).idle()) done[0] = true;
         });
+        boolean[] logged = {false};
         h.succeedWhen(() -> {
             h.assertTrue(done[0], "strikes still running");
             h.assertTrue(level.getEntitiesOfClass(DebrisEntity.class, RuleGameTests.overPlatform(h)).isEmpty(), "debris still falling");
@@ -165,8 +166,11 @@ public final class ClaimGameTests {
                 else if (handler.realInClaim.contains(abs.asLong())) real++;
                 else stray.add(e.getKey().toShortString() + " " + e.getValue() + " -> " + now);
             }
-            Incoming.LOG.info("CLAIMFOLLOW changed in claimed chunks by the charges {}, beyond them {}, beside the claim {}; charges' claimed positions {}",
-                    real, stray.size(), outside, handler.realInClaim.size());
+            if (!logged[0]) {
+                logged[0] = true;
+                Incoming.LOG.info("CLAIMFOLLOW changed in claimed chunks by the charges {}, beyond them {}, beside the claim {}; charges' claimed positions {}",
+                        real, stray.size(), outside, handler.realInClaim.size());
+            }
             h.assertTrue(stray.isEmpty(), stray.size() + " blocks changed in claimed chunks beyond the charges' own lists, first "
                     + stray.subList(0, Math.min(8, stray.size())));
             h.assertTrue(outside > 20, "only " + outside + " blocks changed beside the claim");

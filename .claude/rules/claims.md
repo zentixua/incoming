@@ -52,10 +52,13 @@ paths:
   Diesel Generators 1.3.15 reads `getFluidState` within 2 blocks of it on every `Detonate`, no load check), a
   synchronous load on the tick. Nuclear questions are centred in the middle of the chunk asked (`NuclearClaims.query`),
   and `Claims.offer` moves any other query to the middle of its first ready chunk (`ClaimQuery.at`); GameTest
-  `claim_review_centre`. Such a listener also treats each question as an explosion near its centre (CDG removes fuel
+  `claim_review_centre`; the collapse's questions go through `Claims.offer` too (`StrikeCollapse.protectedBearing`:
+  an unready position is neither asked nor protected). Nuclear centres sit under the build limit, in air. Such a listener also treats each question as an explosion near its centre (CDG removes fuel
   there): a foreign effect, kept in mind when choosing centres.
 - Ask a portion at once (`Writes`, `BlockGate.filter`): each event runs every listener. Glass (32 panes a unit), fireball
   cells and direct rubble landings still ask one position at a time, bounded by their unit size.
+- A strike area without a charge (the test collapse, `Warheads.testCollapse`) asks sourceless: FTB Chunks with
+  `protect_unknown_explosions` off would not protect against it. Every play path has a charge or an entity as source.
 - Chunks already denied are still planned in the background (preparation, prechecks) and dropped at `ScarQueue.claimed`:
   wasted work bounded by the claimed area.
 - Our own `Detonate` listeners must skip `ClaimQuery` (`Blackouts.onExplosion`); an Incoming explosion map

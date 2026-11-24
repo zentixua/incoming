@@ -21,10 +21,11 @@ import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.material.FluidState;
 import net.minecraft.world.phys.Vec3;
 import net.neoforged.neoforge.capabilities.Capabilities;
-import net.neoforged.neoforge.event.EventHooks;
 import net.neoforged.neoforge.network.PacketDistributor;
 import org.jetbrains.annotations.Nullable;
 import ua.zentix.incoming.Incoming;
+import ua.zentix.incoming.claim.Claims;
+import ua.zentix.incoming.api.ClaimQuery;
 import ua.zentix.incoming.IncomingConfig;
 import ua.zentix.incoming.compat.SubLevels;
 import ua.zentix.incoming.net.S2C;
@@ -424,15 +425,21 @@ final class StrikeCollapse implements UnitQueue.Job {
      */
     private @Nullable BlockPos protectedBearing(ServerLevel level, Explosion e, @Nullable int[] indices, int from, int end, boolean own) {
         long[] all = result.at();
-        List<BlockPos> list = e.getToBlow();
-        for (int i = from; i < end; i++) list.add(BlockPos.of(all[indices == null ? i : indices[i]]));
-        EventHooks.onExplosionDetonate(level, e, new ArrayList<>(), 0);
-        LongOpenHashSet allowed = new LongOpenHashSet(list.size());
-        for (BlockPos p : list) allowed.add(p.asLong());
+        // asked through Claims (centre and readiness guards); a position in a chunk not in memory is not asked and not
+        // protected: the fall skips it unwritten (writable), so it must not stop the collapse as a protected bearing block
+        long[] ask = new long[end - from];
+        int n = 0;
+        for (int i = from; i < end; i++) {
+            long at = all[indices == null ? i : indices[i]];
+            if (Terrain.ready(level, BlockPos.getX(at) >> 4, BlockPos.getZ(at) >> 4)) ask[n++] = at;
+        }
+        ClaimQuery q = e instanceof ClaimQuery c ? c : new ClaimQuery(level, e.getDirectSourceEntity(), null, e.center());
+        LongOpenHashSet refused = new LongOpenHashSet();
+        if (n > 0) Claims.offer(level, q, ask, 0, n, refused::add, false);
         for (int i = from; i < end; i++) {
             int index = indices == null ? i : indices[i];
             long at = all[index];
-            if (allowed.contains(at) && !(own && area.claims().denied(ChunkPos.asLong(BlockPos.getX(at) >> 4, BlockPos.getZ(at) >> 4)))) continue;
+            if (!refused.contains(at) && !(own && area.claims().denied(ChunkPos.asLong(BlockPos.getX(at) >> 4, BlockPos.getZ(at) >> 4)))) continue;
             if (StrikeSupport.bearing(result.was()[index])) return BlockPos.of(at);
             kept.add(at);
         }
