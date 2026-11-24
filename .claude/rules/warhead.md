@@ -203,7 +203,7 @@ paths:
     `vaultCapacity` spawns its whole contents in one removal.
   - Rubble: falls as vanilla falling blocks while `CraterFalls.room` allows, otherwise lands at once where it would
     rest, spread by `Debris.spread`; fluid ticks and landings in their own portions; rubble lands in claimed land as
-    vanilla falling sand does. With `world.debris_stay` off, live rubble disappears on landing and direct landing
+    vanilla falling sand does. With the strike's `world.debris_stay` off (`BlastArea.rules`, as the order was made), live rubble disappears on landing and direct landing
     skips placement. A single strike sends `S2C.Collapse` for its fall. A shared plan sends one packet per chunk over
     the load-bearing blocks it actually removed there (`StrikeSupport.MATERIAL` m³ a block). Packet sends share the
     fall deadline. GameTest `everyCollapsedHouseReceivesDustOverItsFootprint` watches the 100-house salvo away from the

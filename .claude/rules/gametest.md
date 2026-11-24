@@ -132,6 +132,12 @@ paths:
   The camouflet's three-column displacement limit remains; fallen-block count is a separate quantity, not a crater
   radius adjustment.
 
+- Redstone fixtures: a piston base is a `moving_piston` while it moves, so reading `EXTENDED` from it throws inside
+  `onEachTick` and crashes the whole GameTest server (every later batch is lost); check the block first. A comparator
+  placed by `setBlock` never reads its input until a neighbour update reaches it (none comes from its own placement):
+  place it before the block it reads changes (loading a magazine updates it), then allow its 2-tick delay
+  (`RedstoneGameTests`).
+
 - Fixed surface-baseline seeds and `blast_crater_seed` regression: see `warhead.md`.
 
 - Late-exposure fixtures measure pulse/wave damage, independently of ground fire. Saved-zone settlement can lay
@@ -179,7 +185,23 @@ paths:
   for a slot or state) must report its failed bound with another exception (`IllegalStateException`), or the retry skips
   the done fixture and passes (`CollapseGameTests.snapshotStepsStayInTheirSlice`).
 
+- A check that needs a pack maker's datapack (the guide's examples, a foreign item in a `c:` tag) loads a real one with
+  `DataPackFixture`: files in the world's `datapacks/`, then the reload `/datapack enable` makes. On the server thread
+  `reloadResources` finishes inside the call (`managedBlock`, 2–4 s with Create) and swaps tags, data maps, recipes and
+  advancements server-wide, so each such test has its own batch and unloads the pack before it succeeds (on failure too).
+  A test sequence step may throw only `GameTestAssertException`: any other exception there (a failed reload, a file
+  error) crashes the whole GameTest server. The GameTest server always has Create:
+  recipes without it are checked by `RecipeTagsTest` against the tag files on the classpath (`RecipeContract`: the four
+  bulk materials go in as `c:` tags, counts pinned).
 
+- A test that saves the server config (`/incoming rule`, `SERVER_SPEC.save()`) writes every value in memory, other
+  tests' temporary ones too, into `run/gametest/config/incoming-server.toml`, which outlives the run, and FML's watcher
+  reloads that file about 500 ms later on its own thread, replacing every value in memory. GameTest runs with values
+  set only in memory (`TestScale.realWaveOnStart`: CUSTOM preset, wave 1.0, over the file's GAME), so a reload in the
+  middle of a run hands every later nuclear test the wrong scale (`nuke_prep_border`, `dh_front` and
+  `nuke_settle_budget` failed; restoring the file can raise more than one reload). Set rules in memory (`set()`), as
+  `RuleGameTests.setArena` does; the one test that must prove the file (`rule_command`) puts back the original bytes,
+  waits until the watcher has been quiet for 2 s, then sets every server value back as it was (`RuleGameTests.Fence`).
 - The GameTest server has no profile cache (`MinecraftServer.getProfileCache()` is null): an offline UUID never resolves
   to an operator there, so offline-operator rights (`Authority.level`) cannot be probed in GameTest; online rights come
   from `MunitionGameTests.Listener`'s permission level. A fake player put into the server's player list needs a

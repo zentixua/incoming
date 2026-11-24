@@ -16,6 +16,7 @@ import ua.zentix.incoming.nuclear.world.StrikeRemovals;
 import ua.zentix.incoming.strike.AreaLoader;
 import ua.zentix.incoming.strike.ImpactCost;
 import ua.zentix.incoming.strike.ImpactWork;
+import ua.zentix.incoming.strike.StrikeRules;
 import ua.zentix.incoming.strike.StrikeWorld;
 import ua.zentix.incoming.util.Terrain;
 
@@ -80,12 +81,15 @@ final class BlastArea {
     private @Nullable StrikeRemovals.Source collapseSource;
     /** The order round whose impact this area is ({@link ImpactWork}); null without one (tests, crashes). */
     private final ImpactWork.@Nullable Impact impact;
+    /** World rules every job of this strike changes the world under: its round's, or the config's when the area opened. */
+    private final StrikeRules rules;
 
     private record Queued(StagedExplosion explosion, long tick) {}
 
     private BlastArea(Vec3 centre, double reach, ImpactWork.@Nullable Impact impact) {
         this.centre = centre;
         this.impact = impact;
+        this.rules = impact != null ? impact.round().rules() : StrikeRules.live();
         this.reach = reach;
         this.chunk = new ChunkPos(Mth.floor(centre.x) >> 4, Mth.floor(centre.z) >> 4);
         int west = chunk.x - (Mth.floor(centre.x - reach) >> 4);
@@ -115,6 +119,11 @@ final class BlastArea {
         // last: a failed setup above leaves no round counted with nothing to release it
         if (impact != null) world.impactWork().hold(impact);
         return area;
+    }
+
+    /** World rules this strike's jobs change the world under ({@link StrikeRules}). */
+    StrikeRules rules() {
+        return rules;
     }
 
     /** Area explosion queued at {@code tick}. */

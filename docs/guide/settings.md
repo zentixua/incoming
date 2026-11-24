@@ -43,6 +43,8 @@ Start the world/server once to create it. NeoForge uses a world override instead
 
 Edits to the active file reload automatically unless NeoForge's config watcher is disabled; then restart the
 world/server. The most useful settings are below; the rest are in the same file, each with a comment.
+Operators can also read and change some of these world rules in the game with
+[`/incoming rule`](commands.md#world-rules), which writes the same file.
 
 | Key | Default | What it does |
 |---|---|---|
@@ -52,6 +54,7 @@ world/server. The most useful settings are below; the rest are in the same file,
 | `launch.sight_rules` | on | [spotting](rules.md#spotting): strike only spotted targets |
 | `world.early_warning` | on | an early-warning network exists: sirens, target banners and nuclear launch notices. Off: only the owner gets flight data/countdowns; other players rely on sight, sound or their SAM radar. Legacy `world.siren` migrates automatically; an explicit new key takes precedence |
 | `world.block_damage`, `world.fire` | on | conventional strike destruction and fires; nuclear strikes have separate switches below |
+| `world.shatter_glass`, `world.debris_stay` | on, on | the blast wave breaks glass; clods, rubble and wreck parts stay as blocks |
 | `world.collapse` | on | [what a blast leaves without support falls](weapons.md#what-a-blast-does): storeys above blown-out walls and floors, the roof of a cavity above an underground bomb |
 | `nuclear.enabled`, `ops_only` | on, on | nuclear weapons exist; only operators and the host of a single-player or LAN world launch them (a permission mod can grant others the right, [permissions](packs.md#permissions)) |
 | `nuclear.default_yield`, `max_yield` | 15, 100 | yield of a command without a number; largest allowed yield, kt (up to 1000 = 1 Mt) |

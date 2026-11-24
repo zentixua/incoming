@@ -39,6 +39,40 @@ public final class FlashbackReplay {
     @Nullable
     private static Field fastForwarding, exportJob;
 
+    private static Method partialPosition, exportPosition, settings, startTick, getConfig, metadata;
+    private static Field internal, recent, identifier;
+
+    public record Recording(java.nio.file.Path path, java.util.UUID id) {}
+
+    /** openReplayWorld puts the opened archive first, including recordings outside the replay folder. */
+    @Nullable
+    public static Recording recording(MinecraftServer server) {
+        if (!isReplay(server) || recent == null) return null;
+        try {
+            Object config = internal.get(getConfig.invoke(null));
+            var paths = (java.util.List<?>) recent.get(config);
+            if (paths.isEmpty()) return null;
+            return new Recording(java.nio.file.Path.of((String) paths.getFirst()),
+                    (java.util.UUID) identifier.get(metadata.invoke(server)));
+        } catch (ReflectiveOperationException | RuntimeException e) {
+            Incoming.LOG.warn("Cannot locate the current Flashback recording", e);
+            return null;
+        }
+    }
+
+    /** The editor's fractional playback tick, or the exact video frame's position during export. */
+    public static double position(MinecraftServer server, int marker) {
+        if (!isReplay(server)) return marker;
+        try {
+            Object job = exportJob.get(null);
+            if (job != null && startTick != null) return (int) startTick.invoke(settings.invoke(job)) + ((Number) exportPosition.invoke(job)).doubleValue();
+            if (partialPosition == null) return marker;
+            return ((Number) partialPosition.invoke(server)).doubleValue();
+        } catch (ReflectiveOperationException | RuntimeException e) {
+            return marker;
+        }
+    }
+
     private FlashbackReplay() {}
 
     /** {@code s} is a Flashback replay server understood by the mod. */
@@ -90,6 +124,19 @@ public final class FlashbackReplay {
             viewers = c.getMethod("getReplayViewers");
             fastForwarding = c.getField("fastForwarding");
             exportJob = Class.forName("com.moulberry.flashback.Flashback", false, FlashbackReplay.class.getClassLoader()).getField("EXPORT_JOB");
+            try {
+                partialPosition = c.getMethod("getPartialReplayTick");
+                metadata = c.getMethod("getMetadata");
+                identifier = metadata.getReturnType().getField("replayIdentifier");
+                getConfig = exportJob.getDeclaringClass().getMethod("getConfig");
+                internal = getConfig.getReturnType().getField("internal");
+                recent = internal.getType().getField("recentReplays");
+                exportPosition = exportJob.getType().getMethod("getCurrentTickDouble");
+                settings = exportJob.getType().getMethod("getSettings");
+                startTick = settings.getReturnType().getMethod("startTick");
+            } catch (ReflectiveOperationException ex) {
+                Incoming.LOG.warn("Flashback recording clock integration is incomplete: {}", ex.toString());
+            }
             serverClass = c;
         } catch (ReflectiveOperationException | LinkageError ex) {
             off(ex);

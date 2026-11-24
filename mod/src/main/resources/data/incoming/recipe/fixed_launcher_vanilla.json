@@ -17,7 +17,7 @@
   ],
   "key": {
     "I": {
-      "item": "minecraft:iron_ingot"
+      "tag": "c:ingots/iron"
     },
     "D": {
       "item": "minecraft:dispenser"
@@ -29,7 +29,7 @@
       "item": "minecraft:clock"
     },
     "X": {
-      "item": "minecraft:iron_block"
+      "tag": "c:storage_blocks/iron"
     }
   },
   "result": {

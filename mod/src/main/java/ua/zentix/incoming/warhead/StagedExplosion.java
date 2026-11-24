@@ -50,6 +50,7 @@ import ua.zentix.incoming.registry.ModDamageTypes;
 import ua.zentix.incoming.registry.ModParticles;
 import ua.zentix.incoming.registry.ModSounds;
 import ua.zentix.incoming.strike.ImpactCost;
+import ua.zentix.incoming.strike.StrikeRules;
 import ua.zentix.incoming.util.PoiRecords;
 import ua.zentix.incoming.util.Terrain;
 import ua.zentix.incoming.work.UnitQueue;
@@ -430,6 +431,7 @@ final class StagedExplosion implements UnitQueue.Job {
         Explosion e = new Explosion(level, direct, source, calculator,
                 at.x, at.y, at.z, power, fire, destroy, ModParticles.NONE.get(), ModParticles.NONE.get(), ModSounds.SILENT);
         explosion = e;
+        RULES.put(e, area.rules());
         if (calculator != null) damage = calculator;
         boolean cancelled = EventHooks.onExplosionStart(level, e);
         time(ExplosionStage.START, t);
@@ -580,8 +582,9 @@ final class StagedExplosion implements UnitQueue.Job {
         Explosion e = new Explosion(level, direct, source, null, centre.x, centre.y, centre.z, power, false, destroy,
                 ModParticles.NONE.get(), ModParticles.NONE.get(), ModSounds.SILENT);
         explosion = e;
-        // Start handlers already see charge ({@link #chargeOf}).
+        // Start handlers already see charge ({@link #chargeOf}) and rules ({@link #rulesOf}).
         CHARGES.put(e, charge);
+        RULES.put(e, area.rules());
         cancelled = EventHooks.onExplosionStart(level, e);
         started = true;
         time(ExplosionStage.START, t);
@@ -1005,18 +1008,22 @@ final class StagedExplosion implements UnitQueue.Job {
         Vec3 c = centre;
         double tnt = charge;
         boolean destroy = blocks;
+        StrikeRules rules = area.rules();
         Entity by = direct, from = owner;
         Warheads.whenReady(level, c, craftReach(craftPower), l -> {
             // During this explosion, handlers see charge ({@link #chargeOf}), and its entity list
             // in {@code Detonate} is empty ({@link #onDetonate}): no damage/knockback or body visibility rays.
             double outer = craftCharge;
+            StrikeRules outerRules = craftRules;
             craftCharge = tnt;
+            craftRules = rules;
             try {
                 l.explode(by, ModDamageTypes.source(l, ModDamageTypes.STRIKE, by, from), new CraftCharge(l, c, tnt, hit.id()),
                         c.x, c.y, c.z, craftPower, false, destroy ? Level.ExplosionInteraction.BLOCK : Level.ExplosionInteraction.NONE,
                         ModParticles.NONE.get(), ModParticles.NONE.get(), ModSounds.SILENT);
             } finally {
                 craftCharge = outer;
+                craftRules = outerRules;
             }
         });
     }
@@ -1091,6 +1098,19 @@ final class StagedExplosion implements UnitQueue.Job {
 
     /** Charges of ongoing charge explosions (event handlers, {@link #chargeOf}). */
     private static final java.util.Map<Explosion, Double> CHARGES = java.util.Collections.synchronizedMap(new java.util.WeakHashMap<>());
+
+    /** World rules of ongoing mod explosions ({@link #rulesOf}). */
+    private static final java.util.Map<Explosion, StrikeRules> RULES = java.util.Collections.synchronizedMap(new java.util.WeakHashMap<>());
+    /** Rules of the craft explosion running now ({@link #craftCharge}). */
+    @Nullable
+    private static StrikeRules craftRules;
+
+    /** World rules of a mod strike explosion ({@link BlastArea#rules}); null for vanilla/other explosions. */
+    @Nullable
+    static StrikeRules rulesOf(Explosion e) {
+        StrikeRules r = RULES.get(e);
+        return r != null ? r : craftCharge > 0 ? craftRules : null;
+    }
 
     /** Physical mod explosion charge, kg TNT; 0 vanilla/other explosion. */
     static double chargeOf(Explosion e) {

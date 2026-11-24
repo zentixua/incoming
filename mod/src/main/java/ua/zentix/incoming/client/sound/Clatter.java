@@ -43,6 +43,11 @@ public final class Clatter {
      */
     public record Play(int kind, double x, double y, double z, double level, double margin, int events) {}
 
+    @FunctionalInterface
+    public interface ArrivalTrace {
+        void accept(Event source, double dueAtEar, boolean arrived);
+    }
+
     /** Arrivals at the ear in a quarter: octave power (fractions, A), direction and distance weighted by strength. */
     private static final class Bin {
         final double[] bands = new double[Propagation.BANDS];
@@ -101,6 +106,13 @@ public final class Clatter {
         if (e.lw > Noise.SILENT) pending.add(e);
     }
 
+    /** A last batch can be waiting for a quadrant's output window after all sources have reached the ear. */
+    public boolean idle() {
+        if (!pending.isEmpty()) return false;
+        for (Bin b : bins) if (!Double.isNaN(b.since)) return false;
+        return true;
+    }
+
     /** Events travelling to the ear. */
     public int pending() {
         return pending.size();
@@ -119,15 +131,23 @@ public final class Clatter {
      * enter {@code out}. Audible ones have positive headroom above background.
      */
     public void tick(double now, double ex, double ey, double ez, Propagation.Weather weather, List<Play> out) {
+        tick(now, ex, ey, ez, weather, out, null);
+    }
+
+    public void tick(double now, double ex, double ey, double ez, Propagation.Weather weather, List<Play> out,
+                     @org.jetbrains.annotations.Nullable ArrivalTrace trace) {
         for (Iterator<Event> it = pending.iterator(); it.hasNext(); ) {
             Event e = it.next();
-            if (now - e.startTick > MAX_TICKS) {
-                it.remove();
-                continue;
-            }
             double dx = e.x - ex, dy = e.y - ey, dz = e.z - ez, d = Math.sqrt(dx * dx + dy * dy + dz * dz);
             // sound travels from the site starting when the front reached it
-            if (now < e.startTick + 20 * d / Noise.SOUND) continue;
+            double travelTicks = 20 * d / Noise.SOUND;
+            if (travelTicks > MAX_TICKS && now - e.startTick > MAX_TICKS) {
+                it.remove();
+                if (trace != null) trace.accept(e, e.startTick + travelTicks, false);
+                continue;
+            }
+            if (now < e.startTick + travelTicks) continue;
+            if (trace != null) trace.accept(e, e.startTick + travelTicks, true);
             it.remove();
             Bin b = bins[e.kind * QUADRANTS + quadrant(dx, dz)];
             Propagation.level(e.lw, spectra[e.kind], Propagation.Path.over(d, Math.max(0, e.y - ey + Propagation.EAR), weather), scratch);

@@ -112,8 +112,8 @@ with a nuclear warhead still waits 90 seconds before launch, even with early war
   game day or two). From 50 Gy it strikes the brain: within minutes you stagger at a quarter of your speed until you
   die. Milk does not cure it. Animals and villagers get the same dose and sickness; the undead do not.
 
-A Geiger Counter in hand clicks and shows the dose rate and your dose. Operators give it out. In creative mode the
-dose does not build up.
+A Geiger Counter in hand clicks and shows the dose rate and your dose. Craft it from copper and iron ingots, redstone
+dust, a note block and an electron tube ([recipe](munitions.md#recipes)). In creative mode the dose does not build up.
 
 ## What happens
 

@@ -88,6 +88,7 @@ public final class Incoming {
         Progress.register(modBus);
 
         NeoForge.EVENT_BUS.addListener(IncomingCommand::register);
+        NeoForge.EVENT_BUS.addListener(ua.zentix.incoming.util.SignalEdge::onLevelTick);
         NeoForge.EVENT_BUS.addListener(Progress::onReleased);
         NeoForge.EVENT_BUS.addListener(Progress::onEnded);
         NeoForge.EVENT_BUS.addListener(Progress::onRelit);
@@ -142,7 +143,6 @@ public final class Incoming {
         NeoForge.EVENT_BUS.addListener(LegacyMigration::onServerStarted);
         NeoForge.EVENT_BUS.addListener(LegacyMigration::onEntityJoin);
         NeoForge.EVENT_BUS.addListener(CraterFalls::onEntityJoin);
-        NeoForge.EVENT_BUS.addListener(CraterFalls::onEntityTick);
         NeoForge.EVENT_BUS.addListener(ua.zentix.incoming.nuclear.MobPanic::onJoin);
 
         NeoForge.EVENT_BUS.addListener(NuclearStrikes::onChunkLoad);

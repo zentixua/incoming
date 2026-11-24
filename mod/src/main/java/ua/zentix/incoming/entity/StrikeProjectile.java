@@ -45,6 +45,7 @@ import ua.zentix.incoming.nuclear.NuclearWarhead;
 import ua.zentix.incoming.strike.CameraLink;
 import ua.zentix.incoming.strike.ChunkTickets;
 import ua.zentix.incoming.strike.FlightLog;
+import ua.zentix.incoming.strike.StrikeRules;
 import ua.zentix.incoming.strike.FlightTickets;
 import ua.zentix.incoming.strike.Loadout;
 import ua.zentix.incoming.strike.Orders;
@@ -222,6 +223,13 @@ public abstract class StrikeProjectile extends Entity implements IEntityWithComp
      */
     @Nullable
     private RoundRef round;
+    /**
+     * World rules of the order this projectile flies for ({@link StrikeRules}), kept apart from {@link #round}: a B-2 hands
+     * its round to the bomb and flies on, and a SAM downing it then must still throw its wreck under those rules. Saved;
+     * null — no order (none attached, an old save without a round).
+     */
+    @Nullable
+    private StrikeRules orderRules;
     /**
      * How the round ends when the warhead it set off bursts (shot down armed): the shooter's interception, not the
      * impact; unsaved, used within the same call.
@@ -461,11 +469,20 @@ public abstract class StrikeProjectile extends Entity implements IEntityWithComp
     /** Carry order round {@code r} from its release on ({@link ua.zentix.incoming.strike.StrikeService}). */
     public void attachRound(@Nullable RoundRef r) {
         this.round = r;
+        if (r != null) orderRules = r.rules();
     }
 
     @Nullable
     public RoundRef round() {
         return round;
+    }
+
+    /**
+     * World rules this projectile changes the world under ({@link StrikeRules}): its order's, also after it handed its
+     * round on (a B-2 after release); the config's for a projectile no order made.
+     */
+    public StrikeRules rules() {
+        return round != null ? round.rules() : orderRules != null ? orderRules : StrikeRules.live();
     }
 
     /** Hand the round on (the B-2's bomb, an off-world copy that loaded it): this entity no longer ends it. */
@@ -1552,6 +1569,7 @@ public abstract class StrikeProjectile extends Entity implements IEntityWithComp
     public void intercepted(ServerLevel level, String by, @Nullable BlockPos sam, @Nullable UUID samOwner) {
         if (isRemoved()) return;
         Vec3 at = position();
+        StrikeRules rules = rules();
         endRound(RoundEnd.intercepted(at, sam, samOwner));
         StrikeWorld.get(level).flightLog().note(getType().getDescriptionId(), FlightLog.Event.INTERCEPTED, BlockPos.containing(at), targetLost(), 0, by);
         if (virtual) {
@@ -1560,7 +1578,7 @@ public abstract class StrikeProjectile extends Entity implements IEntityWithComp
         }
         Vec3 v = getDeltaMovement();
         discard();
-        if (level.isPositionEntityTicking(BlockPos.containing(at))) DebrisSpawner.wreck(level, at, v, noseLength());
+        if (level.isPositionEntityTicking(BlockPos.containing(at))) DebrisSpawner.wreck(level, at, v, noseLength(), rules);
     }
 
     // ---------------------------------------------------------------- synchronization and interpolation
@@ -1684,6 +1702,8 @@ public abstract class StrikeProjectile extends Entity implements IEntityWithComp
         setNuclear(tag.contains("nuclear") ? Loadout.Nuke.CODEC.parse(NbtOps.INSTANCE, tag.get("nuclear")).result().orElse(null) : null);
         // Saved before order events: no round, no events for it.
         round = tag.contains("round") ? RoundRef.load(tag.getCompound("round")) : null;
+        orderRules = tag.contains("order_rules", net.minecraft.nbt.Tag.TAG_INT) ? StrikeRules.of(tag.getInt("order_rules"))
+                : round != null ? round.rules() : null;
         cameraGuided = tag.getBoolean("camera_guided");
         syncAim();
         syncSpeed();
@@ -1714,6 +1734,7 @@ public abstract class StrikeProjectile extends Entity implements IEntityWithComp
         tag.putInt("siren_lead", sirenLead);
         if (nuclear != null) Loadout.Nuke.CODEC.encodeStart(NbtOps.INSTANCE, nuclear).result().ifPresent(n -> tag.put("nuclear", n));
         if (round != null) tag.put("round", round.save());
+        if (orderRules != null) tag.putInt("order_rules", orderRules.bits());
         if (cameraGuided) tag.putBoolean("camera_guided", true);
     }
 

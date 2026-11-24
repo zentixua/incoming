@@ -21,6 +21,7 @@ import ua.zentix.incoming.IncomingConfig;
 import ua.zentix.incoming.api.GridOutageEvent;
 import ua.zentix.incoming.api.GridRestoreEvent;
 import ua.zentix.incoming.strike.Orders;
+import ua.zentix.incoming.strike.StrikeRules;
 import dev.ryanhcode.sable.companion.SubLevelAccess;
 import ua.zentix.incoming.compat.SubLevels;
 import ua.zentix.incoming.net.S2C;
@@ -87,7 +88,10 @@ public final class Blackouts {
      * (wind charge, breeze) and very weak pops do not count as explosions for it.
      */
     public static void onExplosion(ExplosionEvent.Detonate e) {
-        if (!(e.getLevel() instanceof ServerLevel level) || !IncomingConfig.SERVER.gridEnabled.get()) return;
+        if (!(e.getLevel() instanceof ServerLevel level)) return;
+        // a strike's explosion follows the rules its order was made under; any other explosion, the config now
+        StrikeRules rules = Warheads.rulesOf(e.getExplosion());
+        if (!(rules != null ? rules : StrikeRules.live()).grid()) return;
         if (e.getExplosion().getBlockInteraction() == Explosion.BlockInteraction.TRIGGER_BLOCK || e.getExplosion().radius() < MIN_BLAST) return;
         Vec3 at = e.getExplosion().center();
         // Warhead explosion by charge: substation equipment is outdoors; disabled where the wave breaks
@@ -134,8 +138,8 @@ public final class Blackouts {
      * disabled — each also darkens its own area until repaired as its own district is (a destroyed one: until supply is
      * rerouted around it, {@link Outage#rerouteAt}).
      */
-    public static void nuke(ServerLevel level, Detonation d) {
-        double radius = nukeRadius(d);
+    public static void nuke(ServerLevel level, Detonation d, boolean grid) {
+        double radius = nukeRadius(d, grid);
         if (radius <= 0) return;
         double dead = d.groundRange(BlastModel.kpa(DEAD_PSI)), damaged = Math.max(dead, d.groundRange(BlastModel.kpa(DAMAGED_PSI)));
         Outage o = blackout(level, d.burst(), radius, NUKE_SPEED, -1, Outage.NEVER, dead, damaged);
@@ -151,10 +155,11 @@ public final class Blackouts {
 
     /**
      * Nuclear grid-outage radius ({@link #nuke}; sent to clients with detonation: lamps short with EMP arcs),
-     * blocks; 0 — no grid outage (blackout or grid damage disabled by setting).
+     * blocks; 0 — no grid outage (blackout or grid damage disabled by setting). {@code grid}: {@code grid.enabled} of the
+     * strike's order ({@code StrikeRules}).
      */
-    public static double nukeRadius(Detonation d) {
-        if (!IncomingConfig.SERVER.gridEnabled.get() || !IncomingConfig.SERVER.gridNuke.get()) return 0;
+    public static double nukeRadius(Detonation d, boolean grid) {
+        if (!grid || !IncomingConfig.SERVER.gridNuke.get()) return 0;
         return Math.min(d.radiusMax(), NUKE_MAX_RADIUS);
     }
 

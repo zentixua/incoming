@@ -22,7 +22,7 @@
       "conditions": {
         "items": [
           {
-            "items": "minecraft:copper_ingot"
+            "items": "#c:ingots/copper"
           }
         ]
       }
@@ -32,7 +32,7 @@
       "conditions": {
         "items": [
           {
-            "items": "minecraft:iron_ingot"
+            "items": "#c:ingots/iron"
           }
         ]
       }

@@ -382,8 +382,8 @@ Ruins and everything in `nuclear/world/` are in `nuclear-world.md`.
   plane through hills and above valleys): map is coarser than world, so head extends a quarter to half its height
   below it, avoiding hovering in lowlands beneath the map.
 - Removed debris is client cosmetic: server sends removed chunk positions (`S2C.NukeDebris`) only to chunk viewers on
-  ruin-replacement tick; client tears off pieces when its clock's front reaches the position (`NukeDust.debris`:
-  delay up to `Fragments.DELAY_MAX`; ruins more than a second after front mean no debris, wind is already gone).
+  ruin-replacement tick. `WaveEvents` admits each sampled position against the server tick at receipt and dispatches
+  it to `NukeDust.debris` during the displayed front's wind window (clock limits below).
   Pieces ride local wave wind at removal origin (`BlastGust`: Friedlander with `blastWind` and local positive phase,
   same air path as head dust, `BlastWall.carriedShare`); masonry-breach dust (mass for all positions represented by
   sample, `S2C.NukeDebris.weight`) forms downwind effects-layer billow streaks (`BlastDust`: grouped in 4-block cells
@@ -435,26 +435,33 @@ Ruins and everything in `nuclear/world/` are in `nuclear-world.md`.
   restore the mark, same hash. Changes without neighbor notification (`setBlock` without flag 1, used by some mods)
   are invisible to event: next chunk save/send prunes (`FlashMarks.pruned`), unless same-type block replaced it first.
   Client mesh checks same hash while awaiting packet. Block hash is 6 bits; all 32 mark bits are used.
-- Client detonation age (`ClientNuclear.AgeClock`) is anchored to the server, never to the client level clock (vanilla
-  increments it itself and time packets set it: a lead or lag at arrival or alternating delayed syncs became false age —
-  reviews of #668: a lead of 30 made a fresh 15 kt front 621 m instead of 174 m, alternating 10-tick delays showed 200 for
-  160, a lag of 30 showed 50 for 20). Anchors carry the server's age for the detonation at send: the live detonation
-  packet (0) and `S2C.NukeTick` (server game time, every server tick while the dimension holds a show,
-  `NuclearStrikes.showing`). The shown age is continuous in the client's own time (ticks plus frame partial): it advances
-  every frame at the server's measured rate (anchor ages per own tick over `RATE_WINDOW`) × steering 1 + error/`RESPONSE`
-  in [`SLOWEST` 0.8, `FASTEST` 3] toward the estimated server age less `DELAY` (one tick of jitter buffer); never back, at
-  most `LEAD` 3 ticks past the latest anchor (ruins and debris arrive ≥ 2 ticks after the wave); eases to a stop over
-  `EASE` only after `STALE` ticks of frames without an anchor (server stall; packets a frozen client could not read do not
-  count). Without a stream (after the show, `ended`; in a Flashback replay, a live burst with no per-tick anchor within
-  `PROBE` 1 s is a recording made before them; a live server's late first anchor only holds the burst at `LEAD`) it follows own time, uncapped; tick-time callers ask the tick's own age (`ticks(0)`: a partial ahead
-  advances the clock past every frame of the tick, review of #678); a past detonation
-  (entry, seek) with a running show takes the first anchor whole. The reconstructed age classifies the show at
-  `NukeClock.SHOW_TICKS`, allowing one time-packet interval for lag. Ended shows ignore stream anchors in either
-  Flashback snapshot packet order. #668's law (at most one tick past the anchor, whole-tick steps) held
-  40–43 % of frames up to 149 ms on a 1 Mt rig: the wall moved in 20 Hz steps (19.11). Own ticks alone lagged the server
-  31–55 ticks in the full host pack. `ClientNuclearTest`: recorded rig anchor streams (`age-clock/J3.txt`, `J6.txt`) with
-  jitter, lagging server, heavy client, alternating delays, server stall and backward anchor, client freeze, no stream,
-  past snap, frames.
+- Live detonation age (`ClientNuclear.AgeClock`) advances on processed client ticks plus the frame fraction.
+  The birth packet confirms age zero. Each ordered `NukeTick` confirms server game time minus detonation time.
+  Steering targets that age plus elapsed own time (up to 40 ticks), buffered by two ticks. Small errors within the
+  buffer receive proportionally less correction. Normal speed is 0.85–1.2× before the 140–200 tick linear lead brake.
+  The final speed slews at 0.2×/s, the lead stops at 200 ticks, and show end releases it to uncapped own time.
+  A late client's first estimate may be replaced before the first draw. Once shown it stays monotone. A frozen or
+  half-rate client and a client behind at admission can catch up at up to 3× for two seconds. A displayed estimate
+  above its first anchor advances at half speed until the target reaches it. Tick callers use `ticks(0)`.
+- Two viewers must agree within ten ticks after ten seconds of normal service following a steady server or a short
+  stall. After 20 s steady, 60 s at 10 TPS and recovery to 20 TPS, a cold join has 60 s to reach that band and stay
+  there. At +10 s the reachable gap is ≥31.733 ticks (server age 1200, resident ≥1271.733, joiner ≤1240).
+  The independent trajectory and all recovery checkpoints are in the [join calculation](https://github.com/zentixua/incoming/pull/742#clock-contract-and-cold-joins).
+- Ruin packets take their server age from the preceding anchor. The detonation, epoch, server tick and batch
+  ordinal identify a delivery. Each sampled site must be fresh at receipt (up to 20 server ticks after crossing).
+  At dispatch the drawn front must have reached the site within the last 20 displayed ticks (`DEBRIS_LATE`).
+  A site beyond that window produces neither wind-driven debris nor its clatter. Accepted clatter from a live
+  burst travels from the original site arrival, including later arrivals at the ear. A reconstructed show stays
+  silent for clatter. Seek or world entry rebuilds pending and consumed state. Replay clocks are in `replay.md`.
+- **Server timing limit.** Ruin replacement and damage follow the server. They can lag the drawn wave by its lead:
+  up to 4.7 s with the 5.15 s stall on Artem's recorded stream, and 8.3 s after 60 s at 10 TPS
+  (`AgeClockLeadProbeTest`). The client applies authoritative changes at receipt.
+- `PresentationClockTest` checks all 1,445 deliveries in the recording through the final drain, overload, restart,
+  joins and frame pacing. `ReplayExportFramesProbeTest` compares editor and export ages and wall extinction.
+  `ClientNuclearTest` checks freeze, the half-rate client and the J3/J6 recorded frame streams
+  with ±25 ms arrival jitter. With `-Dincoming.nukeDiag=true`, `nukeFrame` logs epoch, detonation, receive-clock
+  nanoseconds, shown age, confirmed age, lead, steering and held status. `nukeAnchor` logs receipt time and server
+  age, and `nukeEvent` logs server tick, ordinal, due age, shown age, signed skew (shown minus due), decision and reason.
 - `Detonation.dayTime` (time of day at detonation) is no longer read: kept only for the save/packet formats. Slow
   consequences use the world clock (`WorldClock` on the server, `ClientClock` mirroring it from the client's day) and the
   detonation clock; server anchors per detonation (`NuclearEvents.Anchor`: world clock at burst and show end) are

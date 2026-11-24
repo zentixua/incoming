@@ -20,13 +20,13 @@
       "item": "minecraft:compass"
     },
     "I": {
-      "item": "minecraft:iron_ingot"
+      "tag": "c:ingots/iron"
     },
     "P": {
       "item": "create:precision_mechanism"
     },
     "X": {
-      "item": "minecraft:iron_block"
+      "tag": "c:storage_blocks/iron"
     }
   },
   "result": {

@@ -97,7 +97,9 @@ public final class NuclearWarhead {
                 IncomingConfig.SERVER.nukeBlackRain.get());
         events.add(d, ua.zentix.incoming.util.WorldClock.now(level));
         if (round != null) events.impact(d.id(), round, owner);
-        PacketDistributor.sendToPlayersInDimension(level, new S2C.NukeDetonation(d, (float) Blackouts.nukeRadius(d), strikeId));
+        // grid.enabled as the order was made (a strike without one: the config now)
+        boolean grid = (round != null ? round.rules() : ua.zentix.incoming.strike.StrikeRules.live()).grid();
+        PacketDistributor.sendToPlayersInDimension(level, new S2C.NukeDetonation(d, (float) Blackouts.nukeRadius(d, grid), strikeId));
         Orders.queue(level, new NuclearDetonationEvent(level.dimension(), d.id(), d.burst(), yieldKt, !d.surface(), owner,
                 round == null ? null : round.order(), round == null ? null : round.round(), round == null ? null : round.tag()));
 
@@ -106,7 +108,7 @@ public final class NuclearWarhead {
         long w0 = System.nanoTime();
         NuclearWorld.get(level).onDetonation(level, d, owner);
         long w1 = System.nanoTime();
-        Blackouts.nuke(level, d);
+        Blackouts.nuke(level, d, grid);
         if (ua.zentix.incoming.nuclear.world.NukeDiag.ON) Incoming.LOG.info("DIAG detonation #{}: before world {} ms, world {} ms, blackout {} ms", d.id(),
                 (w0 - started) / 100_000 / 10.0, (w1 - w0) / 100_000 / 10.0, (System.nanoTime() - w1) / 100_000 / 10.0);
         Incoming.LOG.info("Nuclear detonation #{}: {} kt, {}, {} {} {}, scale {}, {} ms", d.id(), Math.round(yieldKt), d.surface() ? "ground burst" : "air burst",

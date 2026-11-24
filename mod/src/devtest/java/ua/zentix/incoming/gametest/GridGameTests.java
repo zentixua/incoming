@@ -97,8 +97,8 @@ import java.util.stream.Collectors;
 @GameTestHolder(Incoming.MOD_ID)
 @PrefixGameTestTemplate(false)
 public final class GridGameTests {
-    private static final BlockPos CENTER = new BlockPos(32, 12, 32);
-    private static final TicketType<ChunkPos> HOLD = TicketType.create("incoming_test_grid_hold", Comparator.comparingLong(ChunkPos::toLong));
+    static final BlockPos CENTER = new BlockPos(32, 12, 32);
+    static final TicketType<ChunkPos> HOLD = TicketType.create("incoming_test_grid_hold", Comparator.comparingLong(ChunkPos::toLong));
 
     private GridGameTests() {}
 
@@ -106,7 +106,7 @@ public final class GridGameTests {
      * Disabling other checks - the lights are on in all blocks now, so that they don’t turn off the site in the middle of this
      *  (with the spread of the team, the site block would remain dark until 10 s - longer than the period of other checks).
      */
-    private static void quiet(ServerLevel level) {
+    static void quiet(ServerLevel level) {
         Blackouts.restore(level, null, 0, 0);
         // substations of other checks remain in the world: a nuclear strike from this one would knock them out (batch order - by name hash)
         PowerGrid grid = PowerGrid.get(level);
@@ -444,7 +444,7 @@ public final class GridGameTests {
         Detonation d = new Detonation(NuclearGameTests.IDS.incrementAndGet(), new Vec3(g.getX() + 0.5, g.getY() + 300, g.getZ() + 0.5), g.getY(),
                 15, false, level.getGameTime(), 0, 0, 20_000, 7, 0.1f, false, Detonation.OLD_WAVE);
         h.assertTrue(d.radiusMax() > 64, "detonation radius " + d.radiusMax() + " does not cover the area");
-        Blackouts.nuke(level, d);
+        Blackouts.nuke(level, d, ua.zentix.incoming.IncomingConfig.SERVER.gridEnabled.get());
         h.assertTrue(PowerGrid.get(level).downOutage(node.id(), level.getGameTime()).isPresent(), "nuclear strike did not knock out the substation");
         h.startSequence()
                 .thenWaitUntil(() -> {
@@ -943,7 +943,7 @@ public final class GridGameTests {
                 15, true, level.getGameTime(), 0, 0, 20_000, 7, 0.1f, false, Detonation.OLD_WAVE);
         double dead = d.groundRange(BlastModel.kpa(Blackouts.DEAD_PSI));
         h.assertTrue(dead > 64, "destroyed zone " + dead + " does not cover the platform");
-        Blackouts.nuke(level, d);
+        Blackouts.nuke(level, d, ua.zentix.incoming.IncomingConfig.SERVER.gridEnabled.get());
         PowerGrid grid = PowerGrid.get(level);
         // this strike's outage: the newest (other nuclear checks leave restored outages until they are pruned)
         Outage o = grid.outages().stream().filter(Outage::byDamage).max(java.util.Comparator.comparingInt(Outage::id)).orElseThrow();
@@ -1442,7 +1442,18 @@ public final class GridGameTests {
      * Keep a chunk and its neighbors and load them immediately (from disk or generation): the GameTest server on CI ticks
      *  tens of times faster than the game, and the test period passes before the background loading.
      */
-    private static void hold(ServerLevel level, ChunkPos p) {
+    /**
+     * {@link #hold}, with the whole ticket area (two chunks around) loaded now: a redstone notice of our sources reaches
+     * that far ({@code SignalEdge.REACH}) and waits until it is ready.
+     */
+    static void holdWide(ServerLevel level, ChunkPos p) {
+        hold(level, p);
+        for (int dx = -2; dx <= 2; dx++) {
+            for (int dz = -2; dz <= 2; dz++) level.getChunk(p.x + dx, p.z + dz);
+        }
+    }
+
+    static void hold(ServerLevel level, ChunkPos p) {
         level.getChunkSource().addRegionTicket(HOLD, p, 2, p);
         for (int dx = -1; dx <= 1; dx++) {
             for (int dz = -1; dz <= 1; dz++) level.getChunk(p.x + dx, p.z + dz);
@@ -1507,7 +1518,7 @@ public final class GridGameTests {
      *  (queue {@code unloadQueue}) only during the remaining tick time - as any live server does.
      *  Here this time is given to it: one unloading pass per waiting step.
      */
-    private static void unloaded(GameTestHelper h, ServerLevel level, ChunkPos p) {
+    static void unloaded(GameTestHelper h, ServerLevel level, ChunkPos p) {
         level.getChunkSource().tick(() -> true, false);
         var holder = level.getChunkSource().chunkMap.getVisibleChunkIfPresent(p.toLong());
         h.assertTrue(holder == null, "chunk not unloaded: level " + (holder == null ? 0 : holder.getTicketLevel()));

@@ -22,9 +22,9 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 /**
  * Every recipe of the mod appears in the vanilla recipe book: the book shows only unlocked recipes, and vanilla unlocks
  * them by a hidden advancement under {@code recipes/}. Each advancement
- * rewards its recipe, unlocks when the player holds any of its item ingredients (or the designator, for everything it
- * launches or links), and carries the recipe's own load conditions (Create or vanilla variant), so it never names a
- * recipe that is not loaded.
+ * rewards its recipe, unlocks when the player holds any of its ingredients (a tag ingredient by the same tag, so a
+ * foreign ingot counts too), or the designator for everything it launches or links, and carries the recipe's own load
+ * conditions (Create or vanilla variant), so it never names a recipe that is not loaded.
  */
 class RecipeUnlockTest {
     @Test
@@ -58,8 +58,10 @@ class RecipeUnlockTest {
             for (JsonElement in : recipe.getAsJsonObject("key").asMap().values()) {
                 JsonObject i = in.getAsJsonObject();
                 if (i.has("item")) assertTrue(triggers.contains(i.get("item").getAsString()), id + ": not unlocked by " + i.get("item"));
+                if (i.has("tag")) assertTrue(triggers.contains("#" + i.get("tag").getAsString()), id + ": not unlocked by #" + i.get("tag"));
             }
-            if (!e.getKey().equals("strike_designator")) assertTrue(triggers.contains("incoming:strike_designator"), id + ": not unlocked by the designator");
+            // the Geiger counter is neither launched nor linked by the designator
+            if (!e.getKey().equals("strike_designator") && !e.getKey().startsWith("geiger_counter")) assertTrue(triggers.contains("incoming:strike_designator"), id + ": not unlocked by the designator");
             // one requirement group: any criterion unlocks
             assertEquals(1, unlock.getAsJsonArray("requirements").size(), id);
             Set<String> group = new HashSet<>();

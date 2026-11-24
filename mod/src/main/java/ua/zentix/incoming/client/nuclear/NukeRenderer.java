@@ -82,6 +82,7 @@ public final class NukeRenderer {
     public static void render(RenderLevelStageEvent e) {
         if (e.getStage() != RenderLevelStageEvent.Stage.AFTER_LEVEL || ClientNuclear.isEmpty()) return;
         if (FxViews.secondary(e.getCamera())) return;
+        if (ClientNuclear.DIAG) ClientNuclear.traceFrame(e.getPartialTick().getGameTimeDeltaPartialTick(false));
         renderView(e);
     }
 

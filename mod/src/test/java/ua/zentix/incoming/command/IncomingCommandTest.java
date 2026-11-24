@@ -1,28 +1,19 @@
 package ua.zentix.incoming.command;
 
-import com.electronwill.nightconfig.core.CommentedConfig;
 import com.mojang.brigadier.CommandDispatcher;
 import com.mojang.brigadier.exceptions.CommandSyntaxException;
 import com.mojang.brigadier.tree.CommandNode;
-import net.minecraft.SharedConstants;
 import net.minecraft.core.BlockPos;
-import net.minecraft.commands.CommandBuildContext;
 import net.minecraft.commands.CommandSource;
 import net.minecraft.commands.CommandSourceStack;
-import net.minecraft.commands.Commands;
 import net.minecraft.network.chat.Component;
 import net.minecraft.network.chat.contents.TranslatableContents;
-import net.minecraft.server.Bootstrap;
 import net.minecraft.server.level.ServerChunkCache;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.level.chunk.LevelChunk;
 import net.minecraft.world.phys.Vec2;
 import net.minecraft.world.phys.Vec3;
-import net.neoforged.fml.config.IConfigSpec;
-import net.neoforged.fml.config.ModConfig;
-import net.neoforged.fml.loading.LoadingModList;
-import net.neoforged.neoforge.event.RegisterCommandsEvent;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
@@ -37,7 +28,6 @@ import ua.zentix.incoming.strike.Waypoints;
 import ua.zentix.incoming.strike.WeaponType;
 import ua.zentix.incoming.target.Target;
 
-import java.nio.file.Path;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -64,32 +54,21 @@ class IncomingCommandTest {
 
     @BeforeAll
     static void bootstrap() {
-        SharedConstants.tryDetectVersion();
-        if (LoadingModList.get() == null) LoadingModList.of(List.of(), List.of(), List.of(), List.of(), Map.of());
-        Bootstrap.bootStrap();
+        CommandFixture.bootstrap();
     }
 
     @BeforeEach
     void register() throws ReflectiveOperationException {
-        CommentedConfig config = CommentedConfig.inMemory();
-        IncomingConfig.SERVER_SPEC.correct(config);
-        // ILoadedConfig is sealed and its only implementation is package-private. Attach an in-memory instance
-        // without starting the loader, writing a server config or changing any production permission predicates.
-        var constructor = Class.forName("net.neoforged.fml.config.LoadedConfig")
-                .getDeclaredConstructor(CommentedConfig.class, Path.class, ModConfig.class);
-        constructor.setAccessible(true);
-        IConfigSpec.ILoadedConfig loaded = (IConfigSpec.ILoadedConfig) constructor.newInstance(config, null, null);
-        IncomingConfig.SERVER_SPEC.acceptConfig(loaded);
+        CommandFixture.loadConfig();
         IncomingConfig.SERVER.designatorForEveryone.set(true);
         IncomingConfig.SERVER.nukeEnabled.set(true);
         IncomingConfig.SERVER.nukeOpsOnly.set(true);
-        dispatcher = new CommandDispatcher<>();
-        IncomingCommand.register(new RegisterCommandsEvent(dispatcher, Commands.CommandSelection.ALL, mock(CommandBuildContext.class)));
+        dispatcher = CommandFixture.dispatcher();
     }
 
     @AfterEach
     void unloadConfig() {
-        IncomingConfig.SERVER_SPEC.acceptConfig(null);
+        CommandFixture.unloadConfig();
     }
 
     private static CommandSourceStack source(int permission, boolean player) {
@@ -153,7 +132,7 @@ class IncomingCommandTest {
     @Test
     void rootAndAllWeaponAliasesHaveExecutableTargets() {
         assertEquals(Set.of("incoming"), children(dispatcher.getRoot()));
-        assertEquals(Set.of("help", "menu", "clear", "give", "nuke", "grid", "launcher", "radiation", "salvo", "status",
+        assertEquals(Set.of("help", "menu", "clear", "give", "nuke", "grid", "launcher", "radiation", "rule", "salvo", "status",
                 "drone", "shahed", "missile", "bunker", "rocket", "grad", "loiter", "lancet"), children(node("incoming")));
         assertEquals(WEAPONS, children(node("incoming", "salvo")));
         for (String weapon : WEAPONS) {
@@ -251,7 +230,7 @@ class IncomingCommandTest {
                 for (int permission = 0; permission <= 4; permission++) {
                     CommandSourceStack s = source(permission, player);
                     assertEquals(permission >= 2 || player && everyone, node("incoming").canUse(s));
-                    for (String branch : List.of("give", "grid", "launcher", "radiation")) {
+                    for (String branch : List.of("give", "grid", "launcher", "radiation", "rule")) {
                         assertEquals(permission >= 2, node("incoming", branch).canUse(s), branch);
                     }
                     assertEquals(permission >= 2, node("incoming", "salvo", "missile", "count", "spread", "from").canUse(s));
