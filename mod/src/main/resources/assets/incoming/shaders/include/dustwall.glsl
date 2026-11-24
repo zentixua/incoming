@@ -1203,6 +1203,9 @@ vec3 dwSegment(vec3 rd, float ta, float tb, int n, inout float T, vec3 airLight,
 }
 
 // source m's part of a march sample at ray distance tt (dwMarch): none / above its bound (kNext) / clear inside / matter
+// the march's search for a span's first dense cell (dwMarch): extinction only, no light. The search runs through the march's
+// one call of the density: every call site inlines the whole density (on AMD a second one took the program from 114 to 137 KB)
+bool gDwDensityOnly = false;
 void dwAccumulate(int m, vec3 rd, float tt, float t, float k, float n, inout float s, inout vec3 c, inout bool none,
         inout bool inside, inout float kNext, inout float hqMax) {
     dwLoad(m);
@@ -1222,24 +1225,10 @@ void dwAccumulate(int m, vec3 rd, float tt, float t, float k, float n, inout flo
     inside = true;
     float sm = dwSourceDensity(q, m);
     if (sm > 1e-5) {
-        c += sm * dwLight(q, rd);
+        if (!gDwDensityOnly) c += sm * dwLight(q, rd);
         s += sm;
         hqMax = max(hqMax, hq - gDwSurf);
     }
-}
-
-// the sources' extinction at ray distance tt (dwAccumulate without the light): the march's search for a span's first dense cell
-float dwDensityOnRay(vec3 rd, float tt, int sources) {
-    float s = 0.0;
-    for (int m = 0; m < sources; m++) {
-        if (tt < gDwSpan[m].x || tt > gDwSpan[m].y) continue;
-        dwLoad(m);
-        vec3 q = DwEye.xyz + rd * tt;
-        float bound = dwBound(q);
-        if (bound < 0.0 || q.y - dwFloor(q.xz) > bound) continue;
-        s += dwSourceDensity(q, m);
-    }
-    return s;
 }
 
 // march of one ray from the eye (direction rd, unit) up to tEnd blocks (the world behind the pixel); jitter in [0, 1);
@@ -1299,10 +1288,10 @@ vec4 dwMarch(vec3 rd, float tEnd, float jitter, float foot, int maxSteps) {
     // thin sample says nothing about the cells it covers: near the wall's leaning face a 14-28 m span from the veil over the
     // billowed top lands up to 18 m deep in the layer, past the lit skin (light 0.10 there against 0.32 in the skin; a third
     // of the face's rays with the front 120 m away), and which ray skips moves with its per-frame offset: the history keeps
-    // those 3:1 jumps as dark specks. A dense sample right after such a span finds the span's first dense cell by density
-    // alone, goes back, and takes the thin sample again with its span ending there (capK): the skin is sampled at its own
-    // cell, for a few density evaluations, not a lit sample per cell
-    float spanK = -1.0, spanT = 1.0, spanEnd = -1.0, spanSamples = 0.0, capK = -1.0;
+    // those 3:1 jumps as dark specks. A dense sample right after such a span searches the span's cells for the first dense
+    // one by extinction alone (searchTo), goes back, and takes the thin sample again with its span ending there (capK): the
+    // skin is sampled at its own cell, for a few density evaluations, not a lit sample per cell
+    float spanK = -1.0, spanT = 1.0, spanEnd = -1.0, spanSamples = 0.0, capK = -1.0, searchTo = -1.0;
     vec3 spanLight = vec3(0.0), spanDepth = vec3(0.0);
     vec4 spanSplit = vec4(0.0);
     bool spanInB = false;
@@ -1328,6 +1317,28 @@ vec4 dwMarch(vec3 rd, float tEnd, float jitter, float foot, int maxSteps) {
         for (int m = 0; m < sources; m++) {
             if (tt < gDwSpan[m].x || tt > gDwSpan[m].y) continue;
             dwAccumulate(m, rd, tt, t, k, n, s, c, none, inside, kNext, hqMax);
+        }
+        if (searchTo >= 0.0) {
+            // the search for the span's first dense cell (below), one cell per pass, extinction only
+            bool hit = s * dt >= mix(0.1, 0.01, gDwF);
+            if (!hit && k + 1.0 < searchTo) {
+                k += 1.0;
+                continue;
+            }
+            float first = hit ? k : searchTo;
+            gDwDensityOnly = false;
+            if (first < searchTo) {
+                // back to the span's start: its thin sample again, its span ending at that cell
+                k = spanK; T = spanT; light = spanLight; gDwDepth = spanDepth; gDwLastEnd = spanEnd; gDwInB = spanInB;
+                gDwSplit = spanSplit; gDwSamples = int(spanSamples);
+                capK = first;
+            } else {
+                k = searchTo;
+            }
+            kLast = k - 1.0; n = 1.0;
+            spanK = -1.0;
+            searchTo = -1.0;
+            continue;
         }
         if (none) {
 #ifdef DW_DIAG
@@ -1365,27 +1376,12 @@ vec4 dwMarch(vec3 rd, float tEnd, float jitter, float foot, int maxSteps) {
                 continue;
             }
             bool dense = s * dt >= mix(0.1, 0.01, gDwF);
-            if (dense && spanK >= 0.0) {
-                // a multi-cell thin span ended in dense dust: its first dense cell, by density alone
-                float first = k, thin = mix(0.1, 0.01, gDwF);
-                for (float j = spanK + 1.0; j < k; j += 1.0) {
-                    float tj = dwGridT(j), dj = dwGridT(j + 1.0) - tj, tq = tj + dj * jitter;
-                    gDwFoot = max(tq * foot, dj * 0.3);
-                    if (dwDensityOnRay(rd, tq, sources) * dj >= thin) {
-                        first = j;
-                        break;
-                    }
-                }
-                if (first < k) {
-                    // back to the span's start: its thin sample again, its span ending at that cell
-                    k = spanK; T = spanT; light = spanLight; gDwDepth = spanDepth; gDwLastEnd = spanEnd; gDwInB = spanInB;
-                    gDwSplit = spanSplit; gDwSamples = int(spanSamples);
-                    kLast = k - 1.0; n = 1.0;
-                    spanK = -1.0;
-                    capK = first;
-                    continue;
-                }
-                gDwFoot = max(tt * foot, dt * 0.3);
+            if (dense && spanK >= 0.0 && k - spanK > 1.0) {
+                // a multi-cell thin span ended in dense dust: search its cells for the first dense one (extinction only)
+                searchTo = k;
+                k = spanK + 1.0;
+                gDwDensityOnly = true;
+                continue;
             }
             inDust = true;
             gDwSamples += 1;
@@ -1434,6 +1430,7 @@ vec4 dwMarch(vec3 rd, float tEnd, float jitter, float foot, int maxSteps) {
             capK = -1.0;
         }
     }
+    gDwDensityOnly = false;
     // the rest of the ray past the step cap (the thin tail), from the noise-free column
     if (T >= 0.01 && capped) {
         float from = t;
