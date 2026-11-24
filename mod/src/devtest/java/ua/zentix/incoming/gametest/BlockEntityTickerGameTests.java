@@ -23,7 +23,6 @@ import java.util.Map;
  * ({@code mixin/level/BlockEntityTickerRemovalMixin}), not one {@code ArrayList} removal each: the client re-creates every
  * chest of a ruined chunk it receives whole, and on the Zearth Silo map (20,074 chests in view) removing them one by one
  * held single client ticks for 200–300 ms while the wave crossed the city (passage-burst run 24.11.2026).
- * <p>
  */
 @GameTestHolder(Incoming.MOD_ID)
 @PrefixGameTestTemplate(false)
@@ -82,19 +81,19 @@ public final class BlockEntityTickerGameTests {
         });
     }
 
-    @GameTest(template = "range", timeoutTicks = 60, batch = "be_ticker_rebind")
     /**
      * A chunk's ticker wrapper whose block entity a mod marks removed after the wrapper's turn, and which the chunk
      * rebinds to a new block entity at that position before the next loop, stays listed and ticks, as in vanilla: the
      * one-pass removal drops only what the loop itself found removed (review probe, round 1).
      */
+    @GameTest(template = "range", timeoutTicks = 60, batch = "be_ticker_rebind")
     public static void reboundWrapperKeepsTicking(GameTestHelper h) {
         ServerLevel level = h.getLevel();
         BlockPos furnace = h.absolutePos(new BlockPos(3, 2, 3));
         List<TickingBlockEntity> list = tickers(level);
         Object[] wrapper = {null};
         Fake marker = new Fake(furnace), remover = new Fake(furnace);
-        marker.removed = true; // any ticker removed this tick: sets the one-pass flag, as in a live world
+        marker.removed = true; // any ticker removed this tick, as in a live world: the loop has something to compact
         int[] phase = {0};
         h.runAfterDelay(1, () -> {
             level.setBlock(furnace, Blocks.FURNACE.defaultBlockState(), 2);
@@ -172,6 +171,7 @@ public final class BlockEntityTickerGameTests {
         original.clear();
         original.addAll(c);
         set(level, original);
+        original = null;
     }
 
     private static void set(Level level, List<TickingBlockEntity> list) {

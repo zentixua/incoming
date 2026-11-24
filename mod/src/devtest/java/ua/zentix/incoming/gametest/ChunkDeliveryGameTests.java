@@ -201,18 +201,35 @@ public final class ChunkDeliveryGameTests {
      */
     @GameTest(template = "range", timeoutTicks = 200, batch = "nuke_delivery_pace", skyAccess = true)
     public static void readyChunksGoPacedToEachViewer(GameTestHelper h) {
-        paced(h, false);
+        paced(h, 5, Pace.BUDGET);
     }
 
-    /** With no budget at all a ready chunk still goes, {@link ChunkDelivery#READY_LIMIT} ticks after its write. */
+    /**
+     * Past {@link ChunkDelivery#READY_LIMIT} after its write a chunk may use twice the budget: with one chunk a tick, the
+     * fences ready 10 ticks after the write leave about 10 one a tick, and those still waiting at the limit go two a tick.
+     */
     @GameTest(template = "range", timeoutTicks = 200, batch = "nuke_delivery_pace_limit", skyAccess = true)
     public static void readyChunkGoesAtItsWaitLimit(GameTestHelper h) {
-        int was = ChunkDelivery.perTick(0);
+        int was = ChunkDelivery.perTick(1);
         StrikeGameTests.afterTest(h, () -> ChunkDelivery.perTick(was));
-        paced(h, true);
+        paced(h, 10, Pace.LIMIT);
     }
 
-    private static void paced(GameTestHelper h, boolean limitOnly) {
+    /**
+     * Fences that complete together after the limit (light thread busy: write-to-send lag reaches 35 ticks) still
+     * spread: at most twice the budget a tick (review round 2 probe, budget 4 here, so 8 and 8).
+     */
+    @GameTest(template = "range", timeoutTicks = 200, batch = "nuke_delivery_pace_late", skyAccess = true)
+    public static void lateFencesStillSpread(GameTestHelper h) {
+        int was = ChunkDelivery.perTick(4);
+        StrikeGameTests.afterTest(h, () -> ChunkDelivery.perTick(was));
+        paced(h, ChunkDelivery.READY_LIMIT + 2, Pace.LATE);
+    }
+
+    private enum Pace { BUDGET, LIMIT, LATE }
+
+    /** 16 chunks written in one tick while the light thread is held, released {@code lag} ticks later. */
+    private static void paced(GameTestHelper h, int lag, Pace pace) {
         StrikeGameTests.gameSpeed(h);
         ServerLevel level = h.getLevel();
         List<LevelChunk> chunks = new ArrayList<>();
@@ -245,7 +262,7 @@ public final class ChunkDeliveryGameTests {
             }
             rec.applied = level.getGameTime();
         });
-        h.runAfterDelay(25, light::countDown);
+        h.runAfterDelay(20 + lag, light::countDown);
         h.succeedWhen(() -> {
             h.assertTrue(rec.applied > 0, "not written yet");
             Map<Long, Integer> perTick = new java.util.TreeMap<>();
@@ -261,18 +278,22 @@ public final class ChunkDeliveryGameTests {
                 perTick.merge(at.get(0), 1, Integer::sum);
             }
             long first = perTick.keySet().iterator().next(), last = ((java.util.TreeMap<Long, Integer>) perTick).lastKey();
-            String sent = "sent at ticks after the write " + perTick;
+            String sent = "sent at ticks after the write " + perTick.entrySet().stream()
+                    .map(en -> (en.getKey() - rec.applied) + "=" + en.getValue()).toList();
+            int max = perTick.values().stream().mapToInt(Integer::intValue).max().orElse(0);
             // the fences complete on the light thread: they may reach the server thread over more than one tick
             h.assertTrue(last - rec.applied <= ChunkDelivery.READY_LIMIT + 10, "too late: " + sent);
-            if (limitOnly) {
-                h.assertTrue(first - rec.applied >= ChunkDelivery.READY_LIMIT,
-                        "with no budget a chunk goes " + ChunkDelivery.READY_LIMIT + " ticks after its write, not before: " + sent);
-            } else {
-                for (var en : perTick.entrySet()) {
-                    h.assertTrue(en.getValue() <= ChunkDelivery.PER_TICK, en.getValue() + " whole chunks in one tick, budget "
-                            + ChunkDelivery.PER_TICK + ": " + sent);
+            switch (pace) {
+                case BUDGET -> h.assertTrue(max <= ChunkDelivery.PER_TICK && perTick.size() >= 2 && first - rec.applied < ChunkDelivery.READY_LIMIT,
+                        "expected at most " + ChunkDelivery.PER_TICK + " a tick over two ticks or more: " + sent);
+                case LIMIT -> {
+                    h.assertTrue(max <= 2, "one a tick, two at the limit: " + sent);
+                    for (var en : perTick.entrySet()) {
+                        if (en.getValue() == 2) h.assertTrue(en.getKey() - rec.applied >= ChunkDelivery.READY_LIMIT, "two before the limit: " + sent);
+                    }
+                    h.assertTrue(perTick.containsValue(2), "the chunks left at the limit did not use the late budget: " + sent);
                 }
-                h.assertTrue(perTick.size() >= 2 && first - rec.applied < ChunkDelivery.READY_LIMIT, "not paced: " + sent);
+                case LATE -> h.assertTrue(max <= 8 && perTick.size() >= 2, "a late clump of 16 must go at most 8 a tick: " + sent);
             }
         });
     }

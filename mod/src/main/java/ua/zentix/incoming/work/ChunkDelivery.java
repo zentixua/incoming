@@ -41,10 +41,10 @@ import java.util.List;
  * <p>
  * Chunks whose light is done go out at the next world tick in the order they became ready, at most {@link #PER_TICK}
  * a tick to each viewer: a wave crossing a city in view readies hundreds of chunks within seconds, up to a hundred in
- * one tick, and the client handles every packet that arrived before its next frame. A ready chunk waits for budget only
- * until {@link #READY_LIMIT} ticks after its first write; it stays in its pending delivery meanwhile, so its light
- * broadcast stays held and a later write still joins it. Chunks at the limit go together, beyond the budget: readiness
- * faster than {@link #PER_TICK} a tick for over a second sends each tick's backlog unpaced, a second late.
+ * one tick, and the client handles every packet that arrived before its next frame. From {@link #READY_LIMIT} ticks
+ * after its first write a chunk may use twice the budget ({@link #LATE_PER_TICK}): pacing then adds only what a late
+ * clump needs to spread. A waiting chunk stays in its pending delivery, so its light broadcast stays held and a later
+ * write still joins it.
  */
 public final class ChunkDelivery {
     /** Client render-thread cost of one whole chunk from the server, ns (host pack, wave-hitch run 19.11.2026). */
@@ -76,7 +76,12 @@ public final class ChunkDelivery {
      * it; the write's own lag behind the front and a slower light fence come on top, as before pacing.
      */
     public static final int READY_LIMIT = 20;
-    /** Whole chunks per viewer and tick in force ({@link #PER_TICK}; a GameTest sets 0 to reach the wait limit). */
+    /**
+     * Whole chunks per viewer and tick once they are past {@link #READY_LIMIT}: twice the budget (14 ms of client time),
+     * so a late clump of fences spreads over a few ticks instead of reaching the client in one.
+     */
+    public static final int LATE_PER_TICK = 2 * PER_TICK;
+    /** Whole chunks per viewer and tick in force ({@link #PER_TICK}, late ones twice that; GameTests set less). */
     private static int perTick = PER_TICK;
 
     /** Chunks waiting to go to their viewers whole (world attachment, never saved). */
@@ -91,7 +96,7 @@ public final class ChunkDelivery {
 
     /** Statistics for the ruin summary line (server thread). */
     static long wholeChunks, wholePositions, deltaChunks, deltaPositions, lagTicksSum, lagTicksMax, gone, held, expired;
-    /** Ticks ready chunks waited for their viewers' budget (sum, max) and those sent beyond it at {@link #READY_LIMIT}. */
+    /** Ticks ready chunks waited for their viewers' budget (sum, max) and those sent beyond it, late. */
     static long paceSum, paceMax, paceForced;
     /** Blackout lamp positions among them (whole, deltas). */
     static long lampWhole, lampDeltas;
@@ -196,13 +201,13 @@ public final class ChunkDelivery {
 
     /**
      * Send ready chunks in order while their viewers have budget this tick; a chunk {@link #READY_LIMIT} ticks after its
-     * first write goes regardless. A chunk goes to all its viewers at once, charging each.
+     * first write may use twice the budget. A chunk goes to all its viewers at once, charging each.
      */
     private void sendReady(ServerLevel level) {
         if (ready.isEmpty()) return;
         long now = level.getGameTime();
         Object2IntOpenHashMap<ServerPlayer> spent = new Object2IntOpenHashMap<>();
-        int exhausted = 0, players = level.players().size();
+        int full = 0, lateFull = 0, players = level.players().size();
         for (Iterator<Ready> it = ready.iterator(); it.hasNext(); ) {
             Ready r = it.next();
             PendingWhole pending = wholeWaiting.get(r.key());
@@ -212,8 +217,9 @@ public final class ChunkDelivery {
                 continue;
             }
             long pace = now - pending.readySince;
-            boolean forced = now - pending.firstWrite >= READY_LIMIT;
-            if (!forced && players > 0 && exhausted >= players) continue;
+            boolean late = now - pending.firstWrite >= READY_LIMIT;
+            // every player in the level used up this entry's budget: skip the lookups
+            if (players > 0 && (late ? lateFull : full) >= players) continue;
             ChunkHolder holder = level.getChunkSource().chunkMap.getVisibleChunkIfPresent(r.key());
             LevelChunk chunk = level.getChunkSource().getChunkNow(ChunkPos.getX(r.key()), ChunkPos.getZ(r.key()));
             if (chunk != pending.chunk || holder == null) {
@@ -224,15 +230,17 @@ public final class ChunkDelivery {
                 continue;
             }
             List<ServerPlayer> viewers = viewers(holder);
-            boolean within = budget(viewers, spent);
-            if (!forced && !within) continue;
+            boolean within = budget(viewers, spent, perTick);
+            if (!within && !(late && budget(viewers, spent, 2 * perTick))) continue;
             it.remove();
             wholeWaiting.remove(r.key());
             if (viewers.isEmpty()) continue;
             var packet = new ClientboundLevelChunkWithLightPacket(chunk, level.getLightEngine(), null, null);
             for (ServerPlayer p : viewers) {
                 p.connection.send(packet);
-                if (spent.addTo(p, 1) + 1 == perTick) exhausted++;
+                int sent = spent.addTo(p, 1) + 1;
+                if (sent == perTick) full++;
+                if (sent == 2 * perTick) lateFull++;
             }
             long lag = now - pending.firstWrite;
             wholeChunks++;
@@ -245,9 +253,9 @@ public final class ChunkDelivery {
         }
     }
 
-    /** Whether every viewer still has budget this tick. */
-    private static boolean budget(List<ServerPlayer> players, Object2IntOpenHashMap<ServerPlayer> spent) {
-        for (ServerPlayer p : players) if (spent.getInt(p) >= perTick) return false;
+    /** Whether every viewer has had fewer than {@code limit} whole chunks this tick. */
+    private static boolean budget(List<ServerPlayer> players, Object2IntOpenHashMap<ServerPlayer> spent, int limit) {
+        for (ServerPlayer p : players) if (spent.getInt(p) >= limit) return false;
         return true;
     }
 
@@ -325,7 +333,7 @@ public final class ChunkDelivery {
     public static String describe() {
         String s = String.format(java.util.Locale.ROOT,
                 "whole chunks %d (%d positions, sent %.1f ticks after the write on average, at most %d; waited for the "
-                        + "viewers' %d a tick %.1f ticks on average, at most %d, sent beyond it at %d ticks after the write %d; unloaded first %d; "
+                        + "viewers' %d a tick %.1f ticks on average, at most %d, sent beyond it %d ticks after the write %d; unloaded first %d; "
                         + "light broadcasts held for them %d, holds expired %d), section deltas %d positions in %d chunks; "
                         + "of the positions blackout lamps: %d whole, %d as deltas",
                 wholeChunks, wholePositions, wholeChunks == 0 ? 0.0 : (double) lagTicksSum / wholeChunks, lagTicksMax, PER_TICK,

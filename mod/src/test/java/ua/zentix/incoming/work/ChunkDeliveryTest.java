@@ -24,6 +24,7 @@ class ChunkDeliveryTest {
         assertEquals(12, ChunkDelivery.PER_TICK);
         assertEquals(20, ChunkDelivery.READY_LIMIT, "ruins in view: p99 1 s behind their wave");
         assertTrue(ChunkDelivery.READY_LIMIT < ChunkDelivery.HOLD_LIMIT, "a ready chunk must go while its light broadcast is still held");
+        assertEquals(2 * ChunkDelivery.PER_TICK, ChunkDelivery.LATE_PER_TICK, "late chunks: twice the budget, 14 ms of client time");
     }
 
     /** The GameTest seam restores the threshold it replaced. */

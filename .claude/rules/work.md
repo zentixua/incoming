@@ -81,9 +81,9 @@ paths:
   7 ms client chunk budget per tick, `ChunkBatchSizeCalculator`, at `CHUNK_NANOS`, a world-load figure; a ruined city
   chunk also re-creates its block entities and Sodium sections, not measured apart) to each viewer per tick, a chunk
   for all its viewers at once. From `READY_LIMIT` (20 ticks, the ruins' 1 s acceptance) after its first write a chunk
-  no longer waits for budget: pacing adds no lag past 1 s, the write's lag and a slow fence come on top; chunks at the
-  limit go together, so readiness above 12 a tick for over a second sends each tick's backlog unpaced, 1 s late (a
-  passage of ~600 chunks in 3 s stays below). A waiting chunk keeps its light hold and later writes join it (a
+  may use `LATE_PER_TICK` (twice the budget): a late clump of fences (light thread behind, write-to-send lag up to 35
+  ticks) or readiness above 12 a tick for over a second spreads at 24 a tick instead of reaching the client at once;
+  pacing past 1 s adds only that spread (GameTest `lateFencesStillSpread`). A waiting chunk keeps its light hold and later writes join it (a
   superseded revision leaves the queue, its new fence queues it again); vanilla's own block deltas for it (fire, player
   edits) still reach the client's old blocks meanwhile. Unpaced, a 1 Mt wave crossing the Silo city in view sent a
   viewer at 3.9 km up to 95–105 whole chunks in one tick, ~600 in 3 s; GameTests `readyChunksGoPacedToEachViewer` (two
