@@ -1411,6 +1411,50 @@ public final class RuinBackgroundGameTests {
     }
 
     /**
+     * A player-visible chunk without a plan (a detonation without a flight: nothing prebuilt) gets its background plan
+     * long before its wave, not in the {@code LOOKAHEAD} precheck: planning the whole view in the second the front
+     * crosses it took 4–9 of 16 cores while the client received the ruins (2 FPS for 6 s) and left ruins in view up to
+     * 58 ticks behind the front. 100 ticks before the wave the visible chunk is planning and the unseen one is not;
+     * at the wave the visible chunk's ruins stand.
+     */
+    @GameTest(template = "range", timeoutTicks = 40, batch = "nuke_plan_ahead", skyAccess = true)
+    public static void seenChunkPlannedLongBeforeWave(GameTestHelper h) {
+        ServerLevel level = h.getLevel();
+        BlockPos seenGlass = NuclearGameTests.CENTER.west(8), unseenGlass = NuclearGameTests.CENTER.east(8);
+        h.setBlock(seenGlass, Blocks.GLASS);
+        h.setBlock(unseenGlass, Blocks.GLASS);
+        Detonation d = NuclearGameTests.detonation(h, NuclearGameTests.CENTER, 0, 15, 0.025f);
+        LevelChunk seen = level.getChunkAt(h.absolutePos(seenGlass)), unseen = level.getChunkAt(h.absolutePos(unseenGlass));
+        long seenKey = seen.getPos().toLong(), unseenKey = unseen.getPos().toLong();
+        for (LevelChunk c : List.of(seen, unseen)) {
+            for (int dx = -RuinPlanner.REACH; dx <= RuinPlanner.REACH; dx++) {
+                for (int dz = -RuinPlanner.REACH; dz <= RuinPlanner.REACH; dz++) level.getChunk(c.getPos().x + dx, c.getPos().z + dz);
+            }
+        }
+        ScarQueue q = new ScarQueue();
+        ScarQueue.seenForTest(c -> c == seenKey);
+        try {
+            q.scanLoaded(d, new it.unimi.dsi.fastutil.longs.Long2ObjectOpenHashMap<>());
+            long seenWave = ScarQueue.due(d, seen.getPos());
+            ua.zentix.incoming.nuclear.world.WorkClock clock = ua.zentix.incoming.nuclear.world.WorkClock.counting(1_000_000);
+            clock.start(10_000_000_000L);
+            q.work(level, seenWave - 100, clock);
+            h.assertTrue(ScarQueue.planning(level, d.id(), seenKey), "the visible chunk is not planned 100 ticks before its wave");
+            h.assertFalse(ScarQueue.planning(level, d.id(), unseenKey), "the unseen chunk is planned ahead: only the view needs it");
+            h.assertTrue(ua.zentix.incoming.nuclear.world.RuinWorkers.awaitForTest(ua.zentix.incoming.nuclear.world.RuinWorkers.Priority.SEEN, 60_000),
+                    "the background plan of the visible chunk is not ready in a minute");
+            clock.start(10_000_000_000L);
+            q.work(level, seenWave - 1, clock);
+            h.assertTrue(seen.getExistingData(ModAttachments.CHUNK_SCAR).orElse(0) == d.id(), "ruins of the visible chunk not on time");
+            h.assertBlockNotPresent(Blocks.GLASS, seenGlass);
+        } finally {
+            ScarQueue.seenForTest(null);
+            q.clear(level);
+        }
+        h.succeed();
+    }
+
+    /**
      * The background plan, which became outdated while it was being built (the player replaced the glass between snapshots and replacement), is not placed and is not
      *  counted: the chunk receives the plan in the server thread on its own, as is, in the same queue. Previously, the replacement did not silently
      * , and the chunk received the mark of ruins and remained intact.
