@@ -65,3 +65,13 @@ reason = "Map strike, sight lines and sound: far terrain from LOD Server Support
 versionRange = "[0,)"
 ordering = "NONE"
 side = "CLIENT"
+
+# Mekanism is optional: its radiation-shielding item capability (hazmat suit, MekaSuit) counts as worn shielding
+# against nuclear radiation (compat/mekanism); the incoming:radiation_shielding data map wins for an item it lists.
+[[dependencies.${mod_id}]]
+modId = "mekanism"
+type = "optional"
+reason = "Nuclear radiation: Mekanism's radiation shielding of worn items"
+versionRange = "[10.7,)"
+ordering = "NONE"
+side = "BOTH"

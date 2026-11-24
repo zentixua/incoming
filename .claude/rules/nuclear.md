@@ -32,7 +32,8 @@ Ruins and everything in `nuclear/world/` are in `nuclear-world.md`.
     `NuclearStrikes` (ICBM launch, timer, world events, client synchronization);
   - `radiation/` — player dose (attachment), `RadiationTicker` (once per second: fallout field × shielding +
     contamination), `Shielding` (block shielding by path mass: rays toward burst and sky for detonation, rays toward
-    surrounding sky-exposed surfaces for fallout), `FlashBurns` (light burns by armor slot: skin, clothes, metal; shock),
+    surrounding sky-exposed surfaces for fallout), `WornShielding` (worn items: data map, else Mekanism; sum ≤ 1;
+    new exposure only), `FlashBurns` (light burns by armor slot: skin, clothes, metal; shock),
     `FlashEyes` (retinal burns: visual-field spots, attachment `RETINA`, packet `S2C.RetinaScars`, full list/state;
     client calculates field glare, `NukeFlash`), radiation-sickness and burn effects (burns cap health while healing).
 - Mushroom is a volume in the pall pass (`fx_pall`), not billows: shape, cap matter and cooling laws in
@@ -460,9 +461,8 @@ Ruins and everything in `nuclear/world/` are in `nuclear-world.md`.
   with ±25 ms arrival jitter. With `-Dincoming.nukeDiag=true`, `nukeFrame` logs epoch, detonation, receive-clock
   nanoseconds, shown age, confirmed age, lead, steering and held status. `nukeAnchor` logs receipt time and server
   age, and `nukeEvent` logs server tick, ordinal, due age, shown age, signed skew (shown minus due), decision and reason.
-- `Detonation.dayTime` (time of day at detonation) is no longer read: kept only for the save/packet formats. Slow
-  consequences use the world clock (`WorldClock` on the server, `ClientClock` mirroring it from the client's day) and the
-  detonation clock; server anchors per detonation (`NuclearEvents.Anchor`: world clock at burst and show end) are
+- `Detonation.dayTime` is unread, kept for the save/packet formats. Slow consequences use the world clock
+  (`WorldClock`; the client's `ClientClock` mirrors its day) and the detonation clock; server anchors per detonation (`NuclearEvents.Anchor`: world clock at burst and show end) are
   persisted, and doses step per detonation by Δτ (`NuclearEvents.stepFrom`, `FalloutModel.decayHours` for a sleep's
   long step). A burst-clock anchor for a detonation dated in the past (tests) uses `NuclearEvents.add(d, level)`, which
   backdates it as a vanilla day. Detonation stream codec (`Detonation.STREAM_CODEC`, 3.1.0 fields)

@@ -24,7 +24,8 @@ import java.util.function.LongToDoubleFunction;
  * saved with the mob): local fallout rate over that time with wall and roof shielding ({@link Shielding#fallout}). A mob that was
  * not in memory for hours (its chunk unloaded, or first loaded after the detonation) receives the fallout of those hours when it
  * loads, as the decaying rate's integral, not the current rate times the gap, and its sickness runs from the hour that dose
- * passed 1 Gy ({@link #crossing}). Estimate: shielding is the one it has now. The
+ * passed 1 Gy ({@link #crossing}). Estimate: shielding, of walls and of what it wears ({@link WornShielding}), is the one
+ * it has now. The
  * snapshot and each mob are work units under the shared nuclear work budget ({@link WorkClock}), as light and destruction are.
  * Clothing contamination and black rain are player-only.
  */
@@ -118,7 +119,8 @@ public final class MobFallout {
         mob.setData(ModAttachments.NUKE_SEEN, seen.withFallout(now, clock));
         // background rate over the span adds nothing (same as players): skip shielding rays
         if (roentgens < BACKGROUND * spanHours) return;
-        double gyPerR = Shielding.fallout(level, RadiationTicker.middle(mob)) * RadiationTicker.GY_PER_R;
+        // walls and roof, then what the mob wears; both as they are now (estimate for a long account)
+        double gyPerR = Shielding.fallout(level, RadiationTicker.middle(mob)) * WornShielding.transmitted(mob) * RadiationTicker.GY_PER_R;
         double gy = roentgens * gyPerR, before = RadiationTicker.dose(mob).doseGy();
         long at = now;
         if (span > SHORT && before < SicknessModel.MIN_DOSE && before + gy >= SicknessModel.MIN_DOSE) {

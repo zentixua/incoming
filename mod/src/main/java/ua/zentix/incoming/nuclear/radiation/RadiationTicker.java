@@ -39,7 +39,8 @@ import java.util.List;
 
 /**
  * Radiation (DESIGN-nuke §4). Players once a second: local fallout dose rate with wall and roof shielding
- * ({@link Shielding#fallout}), black-rain contamination (washed off by water), accumulated dose and sickness stages
+ * ({@link Shielding#fallout}) and worn shielding ({@link WornShielding}), black-rain contamination (washed off by water),
+ * accumulated dose and sickness stages
  * from {@link SicknessModel}: death depends on dose and individual randomness ({@link #fate}). Mobs (except undead)
  * have the same dose and sickness without scanning thousands each second: {@code MobFallout} adds fallout doses in
  * batches under the nuclear work budget, while sickness ticks on the mob itself via {@link RadiationSicknessEffect}
@@ -107,9 +108,14 @@ public final class RadiationTicker {
 
     public static void tick(ServerLevel level) {
         if (!IncomingConfig.SERVER.nukeRadiation.get() || level.getGameTime() % 20 != 0) return;
+        List<Detonation> list = NuclearEvents.get(level).detonations();
+        step(level, level.players(), list);
+    }
+
+    /** One radiation second of {@code players} under detonations {@code list}: the clocks step once for all of them. */
+    static void step(ServerLevel level, List<? extends ServerPlayer> players, List<Detonation> list) {
         NuclearEvents events = NuclearEvents.get(level);
         // each detonation's clock now and a second ago (NukeClock): the field at its own time, the dose over its own step
-        List<Detonation> list = events.detonations();
         long now = level.getGameTime();
         double clock = WorldClock.now(level);
         Clocks c = new Clocks(list.size());
@@ -119,7 +125,7 @@ public final class RadiationTicker {
             c.before[i] = events.stepFrom(d, c.now[i]);
             if (d.hasFallout() && (c.newest < 0 || c.now[i] < c.now[c.newest])) c.newest = i;
         }
-        for (ServerPlayer p : level.players()) {
+        for (ServerPlayer p : players) {
             if (p.isSpectator()) continue;
             tick(level, p, list, c);
         }
@@ -153,13 +159,14 @@ public final class RadiationTicker {
             if (d.blackRainAt(p.getX(), p.getZ(), c.now[i])) blackRain = true;
         }
         RadiationDose r = dose(p);
+        // what the body wears stops a share of new exposure: fallout and new rain dust, not the dust already on it
+        double worn = roentgens > 0 || blackRain ? WornShielding.transmitted(p) : 1;
         // the dust on the body is the same fission products as the ground under it: it decays by the same law and clock
         double contamination = c.newest < 0 ? r.contamination()
                 : decay(r.contamination(), c.now[c.newest] / 3600, (c.now[c.newest] - c.before[c.newest]) / 3600);
         // the rule also applies live: detonations saved before it was stored with them read as rain on
         if (blackRain && IncomingConfig.SERVER.nukeBlackRain.get() && Detonation.underOpenSky(level, p.getEyePosition())) {
-            // rain contaminates instead of washing off: contamination rises toward twice the field rate; rain never lowers it
-            contamination = Math.max(contamination, Math.min(contamination + field * 0.05, field * 2));
+            contamination = rained(contamination, field, worn);
         }
         if (p.isInWater()) contamination *= 0.8;
         if (contamination < 0.01) contamination = 0;
@@ -167,11 +174,20 @@ public final class RadiationTicker {
         double rate = field * shield + contamination;
         double contaminationHours = c.newest < 0 ? REAL_SECOND_HOURS : c.doseHours(c.newest);
         // in creative mode the counter shows the field, but no dose accumulates and no sickness develops
-        double gy = r.doseGy() + (p.isCreative() ? 0 : (roentgens * shield + contamination * contaminationHours) * GY_PER_R);
+        double gy = r.doseGy() + (p.isCreative() ? 0 : (roentgens * shield * worn + contamination * contaminationHours) * GY_PER_R);
         long exposed = r.isExposed() || gy < 1 ? r.exposedAt() : WorldClock.ticks(level);
         RadiationDose next = new RadiationDose((float) gy, (float) contamination, exposed, (float) rate);
         set(p, next);
         sickness(level, p, next);
+    }
+
+    /**
+     * Contamination after a second of black rain, R/h: rain contaminates instead of washing off, rising toward twice the field
+     * rate; rain never lowers it. Under worn shielding only the share {@code transmitted} of the new rain dust reaches clothes
+     * and skin: both the rise and its ceiling scale with it.
+     */
+    static double rained(double contamination, double field, double transmitted) {
+        return Math.max(contamination, Math.min(contamination + field * 0.05 * transmitted, field * 2 * transmitted));
     }
 
     /**

@@ -31,6 +31,7 @@ import ua.zentix.incoming.nuclear.radiation.FlashBurns;
 import ua.zentix.incoming.nuclear.radiation.FlashEyes;
 import ua.zentix.incoming.nuclear.radiation.RadiationTicker;
 import ua.zentix.incoming.nuclear.radiation.Shielding;
+import ua.zentix.incoming.nuclear.radiation.WornShielding;
 import ua.zentix.incoming.nuclear.world.NuclearWorld;
 import ua.zentix.incoming.nuclear.world.NukeSeen;
 import ua.zentix.incoming.nuclear.world.ThermalShadow;
@@ -197,7 +198,8 @@ public final class NuclearWarhead {
         double rem = PromptRadiationModel.doseRem(Math.max(1, d.metres(eye.distanceTo(d.burst()))), d.yieldKt());
         // less than a rem unshielded: no shielding rays needed (players reach retinal-burn range, tens of kilometers)
         if (rem < 1) return true;
-        rem *= Shielding.prompt(level, eye, d.burst());
+        // walls and ground on the way, then what the body wears (both stop new exposure only)
+        rem *= Shielding.prompt(level, eye, d.burst()) * WornShielding.transmitted(living);
         if (rem < 1) return true;
         float gy = (float) (rem / PromptRadiationModel.REM_PER_GY);
         if (living instanceof ServerPlayer player) {

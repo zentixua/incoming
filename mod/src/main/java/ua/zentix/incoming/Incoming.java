@@ -6,6 +6,7 @@ import net.minecraft.resources.ResourceLocation;
 import net.neoforged.bus.api.EventPriority;
 import net.neoforged.bus.api.IEventBus;
 import net.neoforged.fml.ModContainer;
+import net.neoforged.fml.ModList;
 import net.neoforged.fml.common.Mod;
 import net.neoforged.fml.config.ModConfig;
 import net.neoforged.neoforge.common.NeoForge;
@@ -82,6 +83,8 @@ public final class Incoming {
 
         modBus.addListener(IncomingNetwork::register);
         modBus.addListener(ua.zentix.incoming.registry.ModDataMaps::register);
+        // Mekanism's worn radiation shielding: the compat class names Mekanism's API, so it loads only with Mekanism
+        if (ModList.get().isLoaded("mekanism")) ua.zentix.incoming.compat.mekanism.MekanismShielding.install();
         modBus.addListener(SamBlockEntity::registerCapabilities);
         modBus.addListener(FixedLauncherBlockEntity::registerCapabilities);
         // advancements and statistics (progress.Progress): no legacy ids to alias
