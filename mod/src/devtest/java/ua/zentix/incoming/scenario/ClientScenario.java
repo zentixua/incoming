@@ -175,6 +175,7 @@ public final class ClientScenario {
         if (scenario == null) return;
         ua.zentix.incoming.gametest.TestScale.realWaveOnStart();
         FrameTimes.startIfRequested();
+        HitchProbe.startIfRequested();
         // script lines, sandbox and samples write the layer time on the GPU in parts: the sample is always running
         ua.zentix.incoming.client.fx.layer.LayerTimes.always();
         if ("release-check".equals(scenario)) {
@@ -274,6 +275,19 @@ public final class ClientScenario {
     }
 
     private void onScreen(ScreenEvent.Init.Post e) {
+        // a world copy made with experimental settings (a server's world, Zearth Silo) asks once before loading: the scenario
+        // answers "I know what I'm doing" itself (a client without a window has nobody to click)
+        if (started && System.getProperty("incoming.world") != null) {
+            for (var child : e.getScreen().children()) {
+                if (child instanceof net.minecraft.client.gui.components.Button b
+                        && b.getMessage().getContents() instanceof net.minecraft.network.chat.contents.TranslatableContents t
+                        && t.getKey().equals("selectWorld.backupJoinSkipButton")) {
+                    Incoming.LOG.info("SCENARIO world copy with experimental settings: loading it as it is");
+                    b.onPress();
+                    return;
+                }
+            }
+        }
         if (started || !(e.getScreen() instanceof TitleScreen)) return;
         started = true;
         Minecraft mc = Minecraft.getInstance();

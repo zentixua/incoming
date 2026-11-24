@@ -27,7 +27,15 @@ paths:
   r4 run3, GameTest `seenChunkEnqueuedPastDiskPlans`); a chunk
   needing another unit (neighbor
   fracture for an on-site plan, stale plan) returns to its queue's tail, not head: several-ms window fractures would
-  hold up dozens of ready visible chunks (0.2 ms replacement) for 38 ticks; visible chunks are prechecked
+  hold up dozens of ready visible chunks (0.2 ms replacement) for 38 ticks; visible chunks without a plan get their background plan `ScarQueue.PLAN_AHEAD` (300) ticks
+  before the wave under the lane's ordinary deadline (planned only in the precheck, a flight-less 1 Mt planned the
+  whole view in the second the front crossed it: 4–9 cores of ruin pool and JIT while the client received the ruins,
+  2 FPS, ruins up to 58 ticks late; GameTest `seenChunkPlannedLongBeforeWave`), in its own lane stage after the urgent
+  flash layers and before craters (`NuclearWorld.afterFront`), bounded by the heap guard and the view (not the
+  preparation cap, which a long flight fills); chunks whose window is still reading from disk wait aside while the queue
+  goes on (GameTest `coldWindowsDoNotHoldPlanAhead`); the
+  precheck checks a finished planned-ahead plan against the chunk like a prepared one (stale: rebuilt in the background,
+  GameTest `plannedAheadThenStaleReplannedBeforeWave`); visible chunks are prechecked
   `ScarQueue.LOOKAHEAD` (20) ticks before the wave: plans that became stale during flight (grass grew, player placed a
   block) and chunks without plans receive a background plan now, ready by the wave (GameTest
   `staleSeenPlanReplannedBeforeWave`); a background plan stale at replacement is not applied — rebuild on the server
@@ -117,13 +125,8 @@ paths:
   `RuinPlan.sameBlocks`: section fingerprints, then positions in differing sections, allowing darkened lamps; the mod
   does not listen for chunk changes — rescan all columns with plan positions in one pass from their highest plan
   position; AT), `checkBlock` at each column's highest changed point and below its surviving top, one light-engine task
-  per chunk (AT); to players already holding the chunk (`RuinDelivery`: viewers from the holder's player provider, as
-  vanilla's broadcast): fewer than `RuinDelivery.WHOLE_FROM` (35) changed positions go as section packets in the same
-  tick unless a whole-chunk delivery is pending. Further writes join that delivery, and only the light fence for the
-  latest write revision can build the packet (on the chunk cache's main-thread queue, like `BlockLighting`). While it
-  waits, vanilla's light broadcast for that chunk is held (`RuinDelivery.onLevelTickPre` clears its holder's light bits,
-  AT; each hold lasts up to `HOLD_LIMIT` ticks, and a write after expiry starts a new hold). Light from new blocks
-  or a ruined neighbour would otherwise reach the client's old blocks. Those viewers also get up to 24 removed
+  per chunk (AT); to players already holding the chunk as section deltas or the whole chunk after its light
+  (`work/ChunkDelivery`, `work.md`). Those viewers also get up to 24 removed
   blocks as client debris (`ScarQueue.thrown`, `RuinPlan.thrown`); Distant Horizons LODs:
   `compat/DhChunks` (`overwriteChunkDataAsync`); block entities and POIs go through the world after replacement;
   mismatching old-state hash at plan positions means replan; lamp and blackout twin hash identically), `NuclearPrep`
@@ -427,22 +430,6 @@ paths:
   separately; checking a waiting job is not a lane-clock unit but continues until tick deadline and its time counts
   toward the lane: `WorkClock.overdue`, `spent`); every run keeps a JFR ring in `<run dir>/run.jfr` and GC/safepoint
   pauses in `gc.log` (`INCOMING_JFR=profile` for the profile settings).
-- Section deltas cost the client per position on its render thread: `ClientLevel.setBlock` (in the host pack 55–63 % of
-  it is Voxy re-snapshotting the whole section per block, `VoxelIngestService.rawIngest`) and the client's own light
-  propagation for every changed block, though the server sends the computed light. A 15 kt wave sends ~247 thousand
-  positions in 10 s around a viewer at 1.5 km: one 2.2 s frame of packets, then a 1.8 s light frame (wave-hitch run
-  19.11.2026). A whole chunk costs ~0.55 ms (`RuinDelivery.CHUNK_NANOS`, `POSITION_NANOS`). It goes after the light
-  fence: built on the write tick it shows new blocks in old light until light updates arrive (GameTest
-  `heavyRuinsGoWholeAfterTheirLight`: stale sky light without the fence; the client's light is rebuilt from its
-  pre-wave light and every payload's data/empty masks in order, unmentioned sections kept, and must equal the ruins'
-  light right after the whole chunk: comparing payload and server while skipping absent sections passed a packet with
-  no light at all, review of #673; `heavyRuinsAsDeltasGiveTheSameChunk`: the
-  same ruins through deltas, both client chunks equal the server's; `lightWaitsForTheWholeChunk`: light thread held,
-  a light mark on the waiting chunk reaches the client without the hold). `firstFenceCannotSendSecondWritesWithUnprocessedLight`
-  holds the second write's light, requiring one packet with both sources at light 15.
-  `lightHoldExpiresBeforeALaterWriteRestartsIt` checks the 200-tick deadline and restart. Measuring stalls: `jstack -l` and
-  `ThreadMXBean.dumpAllThreads(true, true)` walk the heap at a safepoint, 115–250 ms each on the full-pack client:
-  probes every 0.5 s turned a 4 s stall into 13 s; subtract `-Xlog:safepoint` ThreadDump/PrintThreads time.
 - `ChunkMap.getPlayers(pos, false)` (`isChunkTracked`) excludes players whose chunk is still queued for sending;
   `ChunkSendGate` holds unruined chunks there, so the ruin queue checks “player sees chunk” with
   `getChunkTrackingView().contains` (`ScarQueue.watched`). Otherwise chunks awaited after teleport queue behind unseen

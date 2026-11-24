@@ -37,6 +37,7 @@ import ua.zentix.incoming.net.S2C;
 import ua.zentix.incoming.nuclear.Detonation;
 import ua.zentix.incoming.nuclear.flash.FlashChar;
 import ua.zentix.incoming.util.Terrain;
+import ua.zentix.incoming.work.ChunkDelivery;
 
 import java.util.List;
 
@@ -61,7 +62,7 @@ import java.util.List;
  * section emptiness to light engine; light checks (highest changed column point, new/removed blocks beneath
  * surviving top, new/removed light sources) in one light-engine task. Chunk viewers receive same-tick section
  * packets for small writes ({@code ChunkHolder.blockChanged}, like {@code setBlock}), or a whole chunk after the
- * latest write's light checks when a whole delivery is pending ({@link RuinDelivery}). Distant Horizons LODs are
+ * latest write's light checks when a whole delivery is pending ({@link ChunkDelivery}). Distant Horizons LODs are
  * queued in the same tick ({@link DhUpdates}). Block entities/POIs change through the world afterward
  * ({@link ColumnScar#replace}: {@code onRemove} and consequences, no inventory drops, deferred data removed).
  * Queue places trunks in neighboring chunks after their ruins. Fires applied with
@@ -1044,7 +1045,7 @@ public final class RuinPlan {
         t = System.nanoTime();
         // Small changes go as section packets unless a pending whole delivery will carry this write too.
         ChunkHolder holder = level.getChunkSource().chunkMap.getVisibleChunkIfPresent(pos.toLong());
-        List<ServerPlayer> players = holder == null ? List.of() : RuinDelivery.viewers(holder);
+        List<ServerPlayer> players = holder == null ? List.of() : ChunkDelivery.viewers(holder);
         boolean watched = !players.isEmpty(), ticking = watched && holder.getTickingChunk() != null;
         int changed = 0;
         if (ticking) {
@@ -1052,10 +1053,10 @@ public final class RuinPlan {
             if (out != null) changed += out.size();
             for (int k = 0; k < n; k++) if (fireWas[k] != states[(burning[k] >>> STATE_SHIFT) & STATE_MASK]) changed++;
         }
-        boolean whole = (ticking && RuinDelivery.whole(changed)) || RuinDelivery.waiting(level, chunk);
+        boolean whole = (ticking && ChunkDelivery.whole(changed)) || ChunkDelivery.waiting(level, chunk);
         boolean sections = ticking && !whole;
         if (sections) {
-            RuinDelivery.deltas(changed);
+            ChunkDelivery.deltas(changed);
             for (int c : cells) if ((c & SLOW) == 0) holder.blockChanged(at(m, c, x0, z0, minY));
             for (int k = 0; out != null && k < out.size(); k++) holder.blockChanged(m.set(out.getLong(k)));
         }
@@ -1134,7 +1135,7 @@ public final class RuinPlan {
             for (ServerPlayer p : players) p.connection.chunkSender.markChunkPendingToSend(chunk);
         }
         // after the block entities: the whole chunk carries them too
-        if (whole) RuinDelivery.wholeAfterLight(level, chunk, changed);
+        if (whole) ChunkDelivery.wholeAfterLight(level, chunk, changed);
         // Distant Horizons LOD: ruins with wave, not next chunk save
         long dh = System.nanoTime();
         DhUpdates.mark(level, pos, level.getGameTime());

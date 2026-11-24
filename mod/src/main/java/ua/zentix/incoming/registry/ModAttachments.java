@@ -67,6 +67,10 @@ public final class ModAttachments {
     public static final Supplier<AttachmentType<ua.zentix.incoming.work.BlockLighting>> BLOCK_LIGHTING = REGISTER.register("block_lighting",
             () -> AttachmentType.builder(ua.zentix.incoming.work.BlockLighting::new).build());
 
+    /** World: chunks waiting to reach their viewers whole after their light; never saved. */
+    public static final Supplier<AttachmentType<ua.zentix.incoming.work.ChunkDelivery>> CHUNK_DELIVERY = REGISTER.register("chunk_delivery",
+            () -> AttachmentType.builder(ua.zentix.incoming.work.ChunkDelivery::new).build());
+
     /** Chunk: generated with current lighting or completed legacy recovery; ignored by vanilla. */
     public static final Supplier<AttachmentType<Boolean>> LIGHT_REPAIRED = REGISTER.register("light_repaired",
             () -> AttachmentType.builder(() -> false).serialize(Codec.BOOL).build());

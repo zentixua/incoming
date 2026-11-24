@@ -1,5 +1,8 @@
-package ua.zentix.incoming.nuclear.world;
+package ua.zentix.incoming.work;
 
+import it.unimi.dsi.fastutil.longs.Long2ObjectOpenHashMap;
+import it.unimi.dsi.fastutil.longs.LongList;
+import net.minecraft.core.BlockPos;
 import net.minecraft.network.protocol.game.ClientboundLevelChunkWithLightPacket;
 import net.minecraft.server.level.ChunkHolder;
 import net.minecraft.server.level.ServerLevel;
@@ -7,29 +10,33 @@ import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.level.ChunkPos;
 import net.minecraft.world.level.chunk.LevelChunk;
 import net.neoforged.neoforge.event.tick.LevelTickEvent;
+import ua.zentix.incoming.registry.ModAttachments;
 
 import java.util.List;
 
 /**
- * How a ruined chunk reaches the players already holding it.
+ * How our in-place block changes (nuclear ruins, blackout lamps) reach the players already holding the chunk.
  * <p>
- * Few changed positions go as vanilla section deltas ({@code ChunkHolder.blockChanged}, like {@code setBlock}). A heavily
- * ruined chunk goes as one whole-chunk packet, the way a chunk normally reaches a client: the client copies its sections
- * at once and takes the light from the packet. Section deltas make the client set every block one by one on its render
- * thread and propagate light for each itself (the server's light is already computed): about 16 µs a block in the host
- * pack (9 setting it, 55–63 % of that Voxy re-snapshotting the section per block; 7 client light), so the 247 thousand
- * positions a 15 kt wave sends within 10 s around a viewer at 1.5 km froze the client 2.2 s and then 1.8 s (wave-hitch
- * run 19.11.2026). A whole chunk costs the client about 0.55 ms (decode, light from the packet, Voxy and Sodium once
- * per chunk; same run, world load).
+ * Few changed positions go as vanilla section deltas ({@code ChunkHolder.blockChanged}, like {@code setBlock}). A chunk
+ * changed in many positions goes as one whole-chunk packet, the way a chunk normally reaches a client: the client copies
+ * its sections at once and takes the light from the packet. Section deltas make the client set every block one by one
+ * on its render thread and propagate light for each itself (the server's light is already computed): about 16 µs a
+ * block in the host pack (9 setting it, 55–63 % of that Voxy re-snapshotting the section per block; 7 client light), so
+ * the 247 thousand positions a 15 kt wave sends within 10 s around a viewer at 1.5 km froze the client 2.2 s and then
+ * 1.8 s (wave-hitch run 19.11.2026). A lamp switching off costs the client more: its block-light removal spreads over
+ * the lamp's whole light radius, and the 91.6 thousand lamps a 1 Mt blackout darkens around a viewer at 3.9 km during
+ * the wave's passage put 42 % of the client's render thread into light updates (passage-stutter run 24.11.2026). A whole
+ * chunk costs the client about 0.55 ms (decode, light from the packet, Voxy and Sodium once per chunk; same run, world
+ * load).
  * <p>
  * A whole chunk waits for light because a packet built on the write tick could show new blocks in old light.
- * Consecutive ruin writes share one pending send, fenced by the light checks of the latest write. The fence completes
+ * Consecutive writes share one pending send, fenced by the light checks of the latest write. The fence completes
  * on the light thread and the send runs on the chunk cache's main-thread queue, after the section light marks queued
  * there. An earlier fence could send newer blocks in older light. While a delivery waits, vanilla's light broadcast
  * for that chunk is held for up to {@link #HOLD_LIMIT} ticks per hold ({@link #onLevelTickPre}). Light from the
- * chunk's new blocks or from a ruined neighbour could otherwise reach the client's old blocks.
+ * chunk's new blocks or from a changed neighbour could otherwise reach the client's old blocks.
  */
-public final class RuinDelivery {
+public final class ChunkDelivery {
     /** Client render-thread cost of one whole chunk from the server, ns (host pack, wave-hitch run 19.11.2026). */
     static final long CHUNK_NANOS = 550_000;
     /** Client render-thread cost of one position in a section delta, ns: setting it 9 µs plus its light 7 µs (same run). */
@@ -46,8 +53,15 @@ public final class RuinDelivery {
      */
     static final int HOLD_LIMIT = 200;
 
+    /** Chunks waiting to go to their viewers whole (world attachment, never saved). */
+    private final Long2ObjectOpenHashMap<PendingWhole> wholeWaiting = new Long2ObjectOpenHashMap<>();
+    /** Unique write revisions for whole deliveries, including across chunk reloads. */
+    private long wholeRevision;
+
     /** Statistics for the ruin summary line (server thread). */
     static long wholeChunks, wholePositions, deltaChunks, deltaPositions, lagTicksSum, lagTicksMax, gone, held, expired;
+    /** Blackout lamp positions among them (whole, deltas). */
+    static long lampWhole, lampDeltas;
 
     /** One pending whole-chunk delivery, owned by the server thread. */
     static final class PendingWhole {
@@ -72,7 +86,12 @@ public final class RuinDelivery {
         }
     }
 
-    private RuinDelivery() {}
+    /** World attachment ({@link ModAttachments#CHUNK_DELIVERY}). */
+    public ChunkDelivery() {}
+
+    private static ChunkDelivery get(ServerLevel level) {
+        return level.getData(ModAttachments.CHUNK_DELIVERY);
+    }
 
     /** Whether a chunk with {@code changed} positions goes to its viewers whole. */
     public static boolean whole(int changed) {
@@ -87,12 +106,12 @@ public final class RuinDelivery {
     }
 
     /** Viewers holding the chunk, as vanilla's own broadcast finds them ({@code ChunkHolder.broadcastChanges}). */
-    static List<ServerPlayer> viewers(ChunkHolder holder) {
+    public static List<ServerPlayer> viewers(ChunkHolder holder) {
         return holder.playerProvider.getPlayers(holder.getPos(), false);
     }
 
     /** Count a chunk sent as {@code positions} section-delta positions. */
-    static void deltas(int positions) {
+    public static void deltas(int positions) {
         deltaChunks++;
         deltaPositions += positions;
     }
@@ -101,10 +120,10 @@ public final class RuinDelivery {
      * Fence this revision of a pending whole-chunk delivery (server thread; the chunk's sections and light checks
      * are already written and queued). Only the latest revision can serialize the live chunk.
      */
-    static void wholeAfterLight(ServerLevel level, LevelChunk chunk, int positions) {
+    public static void wholeAfterLight(ServerLevel level, LevelChunk chunk, int positions) {
         ChunkPos pos = chunk.getPos();
         long key = pos.toLong();
-        NuclearWorld world = NuclearWorld.get(level);
+        ChunkDelivery world = get(level);
         PendingWhole pending = world.wholeWaiting.get(key);
         long written = level.getGameTime();
         if (pending == null || pending.chunk != chunk) {
@@ -125,7 +144,7 @@ public final class RuinDelivery {
     }
 
     private static void send(ServerLevel level, ChunkPos pos, long revision) {
-        var waiting = NuclearWorld.get(level).wholeWaiting;
+        var waiting = get(level).wholeWaiting;
         long key = pos.toLong();
         PendingWhole pending = waiting.get(key);
         if (pending == null || pending.revision != revision) return;
@@ -154,7 +173,7 @@ public final class RuinDelivery {
      */
     public static void onLevelTickPre(LevelTickEvent.Pre e) {
         if (!(e.getLevel() instanceof ServerLevel level)) return;
-        NuclearWorld w = NuclearWorld.get(level);
+        ChunkDelivery w = get(level);
         if (w.wholeWaiting.isEmpty()) return;
         long now = level.getGameTime();
         for (var it = w.wholeWaiting.long2ObjectEntrySet().fastIterator(); it.hasNext(); ) {
@@ -185,23 +204,48 @@ public final class RuinDelivery {
 
     /** Whether the chunk waits to go whole (GameTests). */
     public static boolean waiting(ServerLevel level, ChunkPos pos) {
-        return NuclearWorld.get(level).wholeWaiting.containsKey(pos.toLong());
+        return get(level).wholeWaiting.containsKey(pos.toLong());
     }
 
-    /** A further ruin write to the same live chunk joins its pending whole delivery, regardless of size. */
-    static boolean waiting(ServerLevel level, LevelChunk chunk) {
-        PendingWhole pending = NuclearWorld.get(level).wholeWaiting.get(chunk.getPos().toLong());
+    /** A further write to the same live chunk joins its pending whole delivery, regardless of size. */
+    public static boolean waiting(ServerLevel level, LevelChunk chunk) {
+        PendingWhole pending = get(level).wholeWaiting.get(chunk.getPos().toLong());
         return pending != null && pending.chunk == chunk;
     }
 
+    /**
+     * Deliver blackout lamps switched in place in a live chunk (server thread; the sections are written and their light
+     * checks queued): as section deltas, or whole after its light when they are many, the chunk has more lamps to switch
+     * in a later pass ({@code more}: a budgeted unit stops mid-chunk, and the threshold is about the chunk, not the
+     * pass), or a whole delivery is already pending. The ruins decide the same way ({@code RuinPlan.write}).
+     */
+    public static void lamps(ServerLevel level, LevelChunk chunk, LongList positions, boolean more) {
+        if (positions.isEmpty()) return;
+        ChunkHolder holder = level.getChunkSource().chunkMap.getVisibleChunkIfPresent(chunk.getPos().toLong());
+        boolean ticking = holder != null && holder.getTickingChunk() != null && !viewers(holder).isEmpty();
+        if ((ticking && (more || whole(positions.size()))) || waiting(level, chunk)) {
+            lampWhole += positions.size();
+            wholeAfterLight(level, chunk, positions.size());
+            return;
+        }
+        if (ticking) {
+            deltas(positions.size());
+            lampDeltas += positions.size();
+        }
+        BlockPos.MutableBlockPos m = new BlockPos.MutableBlockPos();
+        for (int i = 0; i < positions.size(); i++) level.getChunkSource().blockChanged(m.set(positions.getLong(i)));
+    }
+
     /** Summary line part; resets the counters. */
-    static String describe() {
+    public static String describe() {
         String s = String.format(java.util.Locale.ROOT,
                 "whole chunks %d (%d positions, sent %.1f ticks after the write on average, at most %d; unloaded first %d; "
-                        + "light broadcasts held for them %d, holds expired %d), section deltas %d positions in %d chunks",
+                        + "light broadcasts held for them %d, holds expired %d), section deltas %d positions in %d chunks; "
+                        + "of the positions blackout lamps: %d whole, %d as deltas",
                 wholeChunks, wholePositions, wholeChunks == 0 ? 0.0 : (double) lagTicksSum / wholeChunks, lagTicksMax, gone, held, expired,
-                deltaPositions, deltaChunks);
+                deltaPositions, deltaChunks, lampWhole, lampDeltas);
         wholeChunks = wholePositions = deltaChunks = deltaPositions = lagTicksSum = lagTicksMax = gone = held = expired = 0;
+        lampWhole = lampDeltas = 0;
         return s;
     }
 }

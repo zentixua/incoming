@@ -140,6 +140,10 @@ go in run files and the PR, not in chat. New knowledge (a gauge trap, a new prob
 into that area's `.claude/rules` or this skill by PR in the same thread; status and numbers go into the report.
 
 ## Gauges that lie
+- Client JFR: the render thread is `main` in `ExecutionSample` (not "Render thread"), and JFR samples only a few
+  threads per period, so with the client's dozens of busy threads its render-thread sample count is a small, uneven
+  fraction of wall time: use it for shares inside the thread, never for milliseconds. Per-frame cost comes from a
+  render-thread sampler and frame log in the scenario client (the `incoming.hitch` probe).
 - `MinecraftServer.getTickTimesNanos` misses work done in `ServerTickEvent.Post`: take tick cost from spark
   tickmonitor or tick-start intervals. GC-log "Reaching safepoint" lines inside ZGC concurrent phases are not game
   stops: game threads keep running.

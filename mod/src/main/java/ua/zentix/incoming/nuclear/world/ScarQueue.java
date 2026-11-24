@@ -125,6 +125,20 @@ public final class ScarQueue {
      */
     private static final int LOOKAHEAD = 20;
     /**
+     * Ticks before its wave a player-visible chunk without a plan gets its background plan ({@link #planAhead}), under
+     * the lane's ordinary deadline. A detonation without a flight (no prebuilt ruins) left the whole view to the
+     * {@link #LOOKAHEAD} precheck: about 600 city chunks planned within the second the front crossed the view, the ruin
+     * pool and the JIT compiling its solvers took 4–9 of 16 cores exactly while the client received the ruins, its
+     * render thread waited for a core 45 % of the time (2 FPS for 6 s), and ruins in view fell up to 58 ticks behind
+     * the front with the lane saturated (1 Mt over the Silo map, viewer at 3.9 km, passage-stutter runs 24.11.2026).
+     * Planned from 15 s ahead, ruin workers took 0.06 cores in the passage, ruins in view lagged at most 1 tick and the
+     * passage held 30 FPS (same run). 15 s: the view planned at the measured ~47 chunks/s with margin, and after the
+     * flash's own work (the flash layer, its whole-chunk sends and their JIT warm-up end about 10 s after the burst at
+     * that distance; planned from the burst instead, they stacked there). A nearer viewer's wave is closer than 15 s:
+     * its chunks are planned from the detonation.
+     */
+    static final int PLAN_AHEAD = 300;
+    /**
      * Extra time beyond short lane deadline (server without spare tick time, {@link WorkClock#canStartVisible}) for
      * player-visible ruins/prechecks, ns. Wave crosses player's city when server already
      * busy (bots, chunk loads, other nuclear queues): netcup 16.10 (15 kt, bot at 1 km), no spare
@@ -192,6 +206,16 @@ public final class ScarQueue {
     private final PriorityQueue<Job> byDue = new PriorityQueue<>(Comparator.comparingLong(j -> j.due));
     /** Jobs by wave arrival: precheck ({@link #lookAhead}) {@link #LOOKAHEAD} ticks before. */
     private final PriorityQueue<Ahead> ahead = new PriorityQueue<>(Comparator.comparingLong(Ahead::wave));
+    /** Jobs by wave arrival: background plan for a visible chunk without one ({@link #planAhead}) {@link #PLAN_AHEAD} ticks before. */
+    private final PriorityQueue<Ahead> planAhead = new PriorityQueue<>(Comparator.comparingLong(Ahead::wave));
+    /** Tick on which the ruin pool refused a plan-ahead task: no further tries that tick. */
+    private long planAheadFull = Long.MIN_VALUE;
+    /** Plan-ahead chunks whose window neighbours are still reading from disk ({@link #planAhead}). */
+    private final java.util.ArrayList<Ahead> planAheadReading = new java.util.ArrayList<>();
+    /** Plan-ahead tasks submitted, ticks the pool was full (ruin summary line). */
+    private long plannedAhead, planAheadRefused;
+    /** Heap guard for plan-ahead plans held until their wave. */
+    private final HeapWatch.Tracker heap = new HeapWatch.Tracker();
 
     /** Job, detonation ID ({@link Detonation#id}: location in {@code events} changes if earlier detonation arrives), wave arrival. */
     private record Ahead(Job job, int detonation, long wave) {}
@@ -327,7 +351,9 @@ public final class ScarQueue {
         long[] ph = RuinPlan.PHASES;
         Incoming.LOG.info("Ruins: chunk swap by phase (total since start, ms) — check {}, sections {}, heightmaps {}, light and packets {}, block entities {}",
                 ph[0] / 1_000_000, ph[1] / 1_000_000, ph[2] / 1_000_000, ph[3] / 1_000_000, ph[4] / 1_000_000);
-        Incoming.LOG.info("Ruins: delivery to viewers — {}", RuinDelivery.describe());
+        Incoming.LOG.info("Ruins: delivery to viewers — {}; visible chunks planned ahead of the wave {} (ruin pool full on {} ticks)",
+                ua.zentix.incoming.work.ChunkDelivery.describe(), plannedAhead, planAheadRefused);
+        plannedAhead = planAheadRefused = 0;
         if (RuinPlan.slowestWorldNanos > 0) {
             Incoming.LOG.info("Ruins: slowest through the world — chunk {}: {} cells, {} ms (block entities, POI, Distant Horizons LOD); "
                             + "slowest block {} — {} ms, Distant Horizons LOD {} ms",
@@ -469,6 +495,17 @@ public final class ScarQueue {
         return plans != null && plans.containsKey(chunk);
     }
 
+    /** Plan-ahead chunks waiting for their window's disk reads (tests). */
+    public int planAheadReading() {
+        return planAheadReading.size();
+    }
+
+    /** Chunk has a running or uncollected background plan for the detonation (tests). */
+    public static boolean planning(ServerLevel level, int detonation, long chunk) {
+        RuinContext ctx = NuclearWorld.get(level).ruinsIfKept(detonation);
+        return ctx != null && ctx.running(chunk);
+    }
+
     /** Ready-plan, on-site, stale-plan counts (tests, status). */
     public int[] ruinStats() {
         return new int[]{appliedPrepared, appliedFresh, stalePlans};
@@ -544,6 +581,88 @@ public final class ScarQueue {
         if (job.aheadEvent == id) return;
         job.aheadEvent = id;
         ahead.add(new Ahead(job, id, job.wave));
+        planAhead.add(new Ahead(job, id, job.wave));
+    }
+
+    /** Outcome of one plan-ahead try. */
+    private enum AheadTry { DROP, FULL, READING, SUBMITTED }
+
+    /**
+     * Plan player-visible chunks ahead of their wave ({@link #PLAN_AHEAD}), under the lane's ordinary deadline. Its own
+     * stage in {@code NuclearWorld.afterFront}, after the urgent flash layers and before craters: due ruins and
+     * prechecks come first, the flash layer due now must not wait for plans 15 s ahead, and craters held the lane
+     * for seconds after a ground burst (they would push the plans back into the precheck). Chunks whose window is
+     * still reading from disk wait in {@link #planAheadReading} (retried first each tick) while the queue goes on: a
+     * cold window at the head would otherwise hold every chunk behind it, one read latency each (the view's outer rings
+     * have cold windows).
+     */
+    public void planAhead(ServerLevel level, long now, WorkClock clock) {
+        if (queueTick != now) {
+            queueTick = now;
+            inspected = waitedThisTick = 0;
+        }
+        for (int i = 0; i < planAheadReading.size() && planAheadFull != now && canPlanAhead(clock); ) {
+            switch (planAheadTry(level, now, clock, planAheadReading.get(i))) {
+                case FULL -> planAheadFull = now;
+                case READING -> i++;
+                default -> planAheadReading.remove(i);
+            }
+        }
+        while (planAheadFull != now && canPlanAhead(clock)) {
+            Ahead a = planAhead.peek();
+            if (a == null || a.wave() - PLAN_AHEAD > now) return;
+            // reads in flight bounded like the pool's tasks: the rest waits in the queue for a later tick
+            if (planAheadReading.size() >= RuinWorkers.capacity()) return;
+            switch (planAheadTry(level, now, clock, a)) {
+                case FULL -> planAheadFull = now;
+                case READING -> planAheadReading.add(planAhead.poll());
+                default -> planAhead.poll();
+            }
+        }
+    }
+
+    private boolean canPlanAhead(WorkClock clock) {
+        return clock.canStart() && !(inspected > 0 && clock.overdue());
+    }
+
+    /**
+     * One chunk of {@link #planAhead}: a player-visible chunk whose wave arrives within {@link #PLAN_AHEAD} ticks and has
+     * neither a plan nor a background task gets its background plan now, first in the ruin pool. Chunks closer than
+     * the {@link #LOOKAHEAD} precheck, unseen ones and planned ones are dropped (the precheck and the due path have
+     * them). A full pool or a tight heap stops the stage for the tick. Held plans are bounded by the view (its chunks,
+     * a few hundred), not by the preparation cap: a preparation filling that cap during a long flight would switch
+     * plan-ahead off for the passage.
+     */
+    private AheadTry planAheadTry(ServerLevel level, long now, WorkClock clock, Ahead a) {
+        Job job = a.job();
+        if (jobs.get(job.chunk) != job || job.event >= job.events.size() || job.events.get(job.event).id() != a.detonation()
+                || job.ready || job.wave - LOOKAHEAD <= now) return AheadTry.DROP;
+        ChunkPos pos = new ChunkPos(job.chunk);
+        LevelChunk chunk = level.getChunkSource().getChunkNow(pos.x, pos.z);
+        if (chunk == null || !watched(level, pos)) return AheadTry.DROP;
+        Detonation d = job.events.get(job.event);
+        Long2ObjectOpenHashMap<RuinPlan> plans = prepared.get(d.id());
+        RuinContext ctx = NuclearWorld.get(level).ruins(level, d, now);
+        if (plans != null && plans.containsKey(job.chunk) || !background(ctx, job.chunk) || ctx.running(job.chunk)) return AheadTry.DROP;
+        if (!RuinWorkers.admit(RuinWorkers.Priority.SEEN) || heap.tight()) {
+            planAheadRefused++;
+            return AheadTry.FULL;
+        }
+        long c0 = clock.begin();
+        boolean submitted = false;
+        try {
+            if (ctx.requestWindow(level, pos, RuinWorkers.Priority.SEEN) > 0) {
+                waitedThisTick++;
+                return AheadTry.READING;
+            }
+            submitted = ctx.submit(level, chunk, RuinWorkers.Priority.SEEN);
+            if (submitted) plannedAhead++;
+            return submitted ? AheadTry.SUBMITTED : AheadTry.DROP;
+        } finally {
+            if (submitted) clock.end(c0);
+            else clock.spent(c0);
+            inspected++;
+        }
     }
 
     /**
@@ -702,6 +821,8 @@ public final class ScarQueue {
         jobs.clear();
         byDue.clear();
         ahead.clear();
+        planAhead.clear();
+        planAheadReading.clear();
         readySeen.clear();
         readyUnseen.clear();
         logs.clear();
@@ -971,8 +1092,23 @@ public final class ScarQueue {
             st[1]++;
         }
         RuinContext ctx = NuclearWorld.get(level).ruins(level, d, now);
+        if (background(ctx, job.chunk) && ctx.done(job.chunk)) {
+            // a finished background plan (planned ahead, PLAN_AHEAD): check it against the chunk like a prepared one;
+            // a current one waits parked for its wave, a stale one is rebuilt below
+            RuinPlan ready = ctx.collect(level, chunk);
+            if (ready != null && ready.current(chunk, d)) {
+                parked.put(job.chunk, new Parked(d.id(), ready));
+                return true;
+            }
+            if (ready != null) {
+                if (NukeDiag.ON) Incoming.LOG.info("DIAG stale planned-ahead plan {} ahead of the wave: {}", pos, ready.staleCells(chunk, d));
+                stalePlans++;
+                st[1]++;
+            }
+        }
         if (background(ctx, job.chunk) && ctx.running(job.chunk)) {
-            // plan running (preparation submitted at far priority): promote if still queued
+            // plan running (preparation submitted at far priority, or planned ahead): promote if still queued; a
+            // plan-ahead plan still building now is checked against the chunk when applied
             ctx.promote(job.chunk, RuinWorkers.Priority.SEEN);
             return plan != null;
         }

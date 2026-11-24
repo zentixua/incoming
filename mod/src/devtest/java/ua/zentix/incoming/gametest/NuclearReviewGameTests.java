@@ -68,7 +68,8 @@ public final class NuclearReviewGameTests {
         });
     }
 
-    @GameTest(template = "range", batch = "nuclear_review", timeoutTicks = 100, skyAccess = true)
+    /** Own batch: it lowers the global yield cap mid-flow, and another test's restore must not land in between. */
+    @GameTest(template = "range", batch = "nuclear_review_edit", timeoutTicks = 100, skyAccess = true)
     public static void editedOrdersAndConfigChangesInvalidateTheOldHold(GameTestHelper h) {
         var p = setup(h);
         NuclearReview.request(p, order(h, 15));

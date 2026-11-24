@@ -1411,6 +1411,168 @@ public final class RuinBackgroundGameTests {
     }
 
     /**
+     * A player-visible chunk without a plan (a detonation without a flight: nothing prebuilt) gets its background plan
+     * long before its wave, not in the {@code LOOKAHEAD} precheck: planning the whole view in the second the front
+     * crosses it took 4–9 of 16 cores while the client received the ruins (2 FPS for 6 s) and left ruins in view up to
+     * 58 ticks behind the front. 100 ticks before the wave the visible chunk is planning and the unseen one is not;
+     * at the wave the visible chunk's ruins stand.
+     */
+    @GameTest(template = "range", timeoutTicks = 40, batch = "nuke_plan_ahead", skyAccess = true)
+    public static void seenChunkPlannedLongBeforeWave(GameTestHelper h) {
+        ServerLevel level = h.getLevel();
+        BlockPos seenGlass = NuclearGameTests.CENTER.west(8), unseenGlass = NuclearGameTests.CENTER.east(8);
+        h.setBlock(seenGlass, Blocks.GLASS);
+        h.setBlock(unseenGlass, Blocks.GLASS);
+        Detonation d = NuclearGameTests.detonation(h, NuclearGameTests.CENTER, 0, 15, 0.025f);
+        LevelChunk seen = level.getChunkAt(h.absolutePos(seenGlass)), unseen = level.getChunkAt(h.absolutePos(unseenGlass));
+        long seenKey = seen.getPos().toLong(), unseenKey = unseen.getPos().toLong();
+        for (LevelChunk c : List.of(seen, unseen)) {
+            for (int dx = -RuinPlanner.REACH; dx <= RuinPlanner.REACH; dx++) {
+                for (int dz = -RuinPlanner.REACH; dz <= RuinPlanner.REACH; dz++) level.getChunk(c.getPos().x + dx, c.getPos().z + dz);
+            }
+        }
+        ScarQueue q = new ScarQueue();
+        ScarQueue.seenForTest(c -> c == seenKey);
+        try {
+            q.scanLoaded(d, new it.unimi.dsi.fastutil.longs.Long2ObjectOpenHashMap<>());
+            long seenWave = ScarQueue.due(d, seen.getPos());
+            ua.zentix.incoming.nuclear.world.WorkClock clock = ua.zentix.incoming.nuclear.world.WorkClock.counting(1_000_000);
+            clock.start(10_000_000_000L);
+            q.work(level, seenWave - 100, clock);
+            q.planAhead(level, seenWave - 100, clock);
+            h.assertTrue(ScarQueue.planning(level, d.id(), seenKey), "the visible chunk is not planned 100 ticks before its wave");
+            h.assertFalse(ScarQueue.planning(level, d.id(), unseenKey), "the unseen chunk is planned ahead: only the view needs it");
+            h.assertTrue(ua.zentix.incoming.nuclear.world.RuinWorkers.awaitForTest(ua.zentix.incoming.nuclear.world.RuinWorkers.Priority.SEEN, 60_000),
+                    "the background plan of the visible chunk is not ready in a minute");
+            clock.start(10_000_000_000L);
+            q.work(level, seenWave - 1, clock);
+            h.assertTrue(seen.getExistingData(ModAttachments.CHUNK_SCAR).orElse(0) == d.id(), "ruins of the visible chunk not on time");
+            h.assertBlockNotPresent(Blocks.GLASS, seenGlass);
+        } finally {
+            ScarQueue.seenForTest(null);
+            q.clear(level);
+        }
+        h.succeed();
+    }
+
+    /**
+     * Visible chunks whose window still needs disk reads (the edge of the loaded world: no neighbours in memory) do not
+     * hold the plan-ahead queue: on the first tick every eligible chunk is either planning or waiting for its reads
+     * (unless the ruin pool is full), and all get their plan before their precheck. Stopping the stage at a cold head planned them one per read
+     * latency, and the warm chunks behind waited too (review probe, round 2).
+     */
+    @GameTest(template = "range", timeoutTicks = 300, batch = "nuke_plan_ahead_cold", skyAccess = true)
+    public static void coldWindowsDoNotHoldPlanAhead(GameTestHelper h) {
+        final int k = 8;
+        ServerLevel level = h.getLevel();
+        var chunks = level.getChunkSource();
+        ChunkPos pad = new ChunkPos(h.absolutePos(NuclearGameTests.CENTER));
+        ChunkPos[] row = new ChunkPos[k];
+        for (int i = 0; i < k; i++) row[i] = new ChunkPos(pad.x - 40, pad.z - 14 + 4 * i);
+        ScarQueue q = new ScarQueue();
+        StrikeGameTests.afterTest(h, () -> {
+            for (ChunkPos c : row) chunks.removeRegionTicket(NuclearGameTests.HOLD, c, 0, c);
+            ScarQueue.seenForTest(null);
+            q.clear(level);
+            NuclearStrikes.clear(level);
+        });
+        for (ChunkPos c : row) {
+            chunks.addRegionTicket(NuclearGameTests.HOLD, c, 0, c);
+            level.getChunk(c.x, c.z);
+        }
+        long[] t = {0};
+        int[] tick = {0};
+        Detonation[] det = {null};
+        h.startSequence().thenExecute(() -> {
+            for (ChunkPos c : row) h.assertTrue(chunks.getChunkNow(c.x, c.z) != null, "held chunk " + c + " not loaded");
+            ChunkPos mid = row[k / 2];
+            Detonation d = NuclearGameTests.atPsi(h, NuclearGameTests.CENTER, true,
+                    h.relativePos(new BlockPos(mid.getMiddleBlockX(), 200, mid.getMiddleBlockZ())), 6);
+            det[0] = d;
+            java.util.Set<Long> seen = new java.util.HashSet<>();
+            long first = Long.MAX_VALUE, last = Long.MIN_VALUE;
+            for (ChunkPos c : row) {
+                seen.add(c.toLong());
+                first = Math.min(first, ScarQueue.due(d, c));
+                last = Math.max(last, ScarQueue.due(d, c));
+            }
+            // every chunk eligible for plan-ahead from tick t on, all of them far from their precheck
+            t[0] = last - 290;
+            h.assertTrue(first - 20 > t[0] + 200, "setup: waves spread too far (" + first + ".." + last + ")");
+            ScarQueue.seenForTest(seen::contains);
+            q.scanLoaded(d, new it.unimi.dsi.fastutil.longs.Long2ObjectOpenHashMap<>());
+            WorkClock clock = WorkClock.counting(1_000_000);
+            clock.start(10_000_000_000L);
+            q.work(level, t[0], clock);
+            q.planAhead(level, t[0], clock);
+            int planning = 0;
+            for (ChunkPos c : row) if (ScarQueue.planning(level, d.id(), c.toLong())) planning++;
+            // a full ruin pool stops the stage on its own (a small CI runner: capacity 4, the reads' parse tasks count);
+            // a cold window must not, while the pool still has room
+            boolean poolFull = !RuinWorkers.admit(RuinWorkers.Priority.SEEN);
+            h.assertTrue(planning + q.planAheadReading() == k || poolFull, "first tick: " + planning + " planning and "
+                    + q.planAheadReading() + " reading of " + k + " eligible chunks with room in the pool: the rest wait behind a cold window");
+        }).thenWaitUntil(() -> {
+            // game-paced: one queue tick per server tick while the reads land
+            WorkClock clock = WorkClock.counting(1_000_000);
+            clock.start(10_000_000_000L);
+            long now = t[0] + ++tick[0];
+            q.work(level, now, clock);
+            q.planAhead(level, now, clock);
+            int planned = 0;
+            for (ChunkPos c : row) if (ScarQueue.planning(level, det[0].id(), c.toLong())) planned++;
+            h.assertTrue(planned == k, planned + " of " + k + " planned after " + tick[0] + " ticks");
+        }).thenSucceed();
+    }
+
+    /**
+     * A plan made ahead of the wave ({@code PLAN_AHEAD}) goes stale in the seconds before it (the player replaces the
+     * glass): the {@code LOOKAHEAD} precheck checks the finished plan against the chunk and rebuilds it in the background,
+     * as a stale prepared plan; found only at the wave, the chunk would be planned on the server thread there.
+     */
+    @GameTest(template = "range", timeoutTicks = 40, batch = "nuke_plan_ahead_stale", skyAccess = true)
+    public static void plannedAheadThenStaleReplannedBeforeWave(GameTestHelper h) {
+        ServerLevel level = h.getLevel();
+        BlockPos seenGlass = NuclearGameTests.CENTER.west(8);
+        h.setBlock(seenGlass, Blocks.GLASS);
+        Detonation d = NuclearGameTests.detonation(h, NuclearGameTests.CENTER, 0, 15, 0.025f);
+        LevelChunk seen = level.getChunkAt(h.absolutePos(seenGlass));
+        long seenKey = seen.getPos().toLong();
+        for (int dx = -RuinPlanner.REACH; dx <= RuinPlanner.REACH; dx++) {
+            for (int dz = -RuinPlanner.REACH; dz <= RuinPlanner.REACH; dz++) level.getChunk(seen.getPos().x + dx, seen.getPos().z + dz);
+        }
+        ScarQueue q = new ScarQueue();
+        ScarQueue.seenForTest(c -> c == seenKey);
+        try {
+            q.scanLoaded(d, new it.unimi.dsi.fastutil.longs.Long2ObjectOpenHashMap<>());
+            long wave = ScarQueue.due(d, seen.getPos());
+            WorkClock clock = WorkClock.counting(1_000_000);
+            clock.start(10_000_000_000L);
+            q.work(level, wave - 100, clock);
+            q.planAhead(level, wave - 100, clock);
+            h.assertTrue(ScarQueue.planning(level, d.id(), seenKey), "the visible chunk is not planned ahead");
+            h.assertTrue(RuinWorkers.awaitForTest(RuinWorkers.Priority.SEEN, 60_000), "plan-ahead plan not ready in a minute");
+            // between the plan-ahead snapshot and the precheck, the player replaces the glass (a plan position)
+            h.setBlock(seenGlass, Blocks.WHITE_STAINED_GLASS);
+            clock.start(10_000_000_000L);
+            q.work(level, wave - 20, clock);
+            h.assertTrue(q.ruinStats()[2] == 1,
+                    "the precheck did not catch the stale plan-ahead plan (stale plans " + q.ruinStats()[2]
+                            + "): it is found at the wave and rebuilt on the server thread");
+            h.assertTrue(RuinWorkers.awaitForTest(RuinWorkers.Priority.SEEN, 60_000), "replanned plan not ready in a minute");
+            clock.start(10_000_000_000L);
+            q.work(level, wave - 1, clock);
+            h.assertTrue(seen.getExistingData(ModAttachments.CHUNK_SCAR).orElse(0) == d.id(), "ruins of the visible chunk not on time");
+            h.assertBlockNotPresent(Blocks.WHITE_STAINED_GLASS, seenGlass);
+            h.assertTrue(q.ruinStats()[2] == 1, "a stale plan was found at the wave: " + q.ruinStats()[2]);
+        } finally {
+            ScarQueue.seenForTest(null);
+            q.clear(level);
+        }
+        h.succeed();
+    }
+
+    /**
      * The background plan, which became outdated while it was being built (the player replaced the glass between snapshots and replacement), is not placed and is not
      *  counted: the chunk receives the plan in the server thread on its own, as is, in the same queue. Previously, the replacement did not silently
      * , and the chunk received the mark of ruins and remained intact.
