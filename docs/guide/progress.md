@@ -44,7 +44,8 @@ The tab appears once you hold any Incoming item or launch your first round.
   while you are away kills in nobody's name.
 - Yours: the warhead's blast, the B-2 bomb's hit and its underground shockwave, fragments, debris the strike throws
   (also the falling parts of your round shot down), the nuclear wave, the light's burns and prompt radiation. A burn
-  shock that kills hours later is yours if the light of your burst caused it and you are online then.
+  shock that kills hours later is yours if the light of your burst caused it and you are online then and allowed to
+  harm that player or mob.
 - Nobody's: a round that crashes before its fuze arms, radiation sickness from the dose a body has gathered and
   fallout, fire that spreads on its own, and mobs in chunks that load long after a burst. As in vanilla, a death
   within seconds of your strike's hit, by fire or a fall, still counts as yours.

@@ -257,6 +257,25 @@ public final class OwnerGameTests {
     }
 
     /**
+     * The light alone (no wave after it): a cow burned by the flash of an owner in the Nether credits them and keeps no
+     * revenge mark ({@code FlashBurns} through {@link StrikeOwner#hurt}).
+     */
+    @GameTest(template = "range", timeoutTicks = 20, batch = "owner_light", skyAccess = true)
+    public static void lightBurnCreditsOwnerWithoutRevenge(GameTestHelper h) {
+        ServerLevel level = h.getLevel();
+        ServerPlayer owner = elsewhere(h, UUID.randomUUID(), "owner_light");
+        double yield = 15;
+        Detonation d = NuclearGameTests.detonation(h, CENTER, 0, yield, 1f, false);
+        double third = BurnInjury.median(3, yield) * Math.exp(BurnInjury.BETA * Fragility.TAIL) * 1.01;
+        Cow cow = still(h, EntityType.COW, CENTER.offset(-6, 1, 6));
+        List<LivingEntity> hurt = hurtBy(h, owner);
+        FlashBurns.burn(level, d, cow, third, owner.getUUID());
+        noRevenge(h, hurt, owner);
+        h.assertTrue(cow.getKillCredit() == owner, "a cow burned by the owner's light does not credit them");
+        h.succeed();
+    }
+
+    /**
      * Revenge, not credit, stays in the level: damage from an owner in another level leaves a zombie without a revenge
      * target but with the owner as its killer to be; the same damage from an owner in its own level makes the owner its
      * revenge target, as vanilla does.

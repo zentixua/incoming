@@ -45,6 +45,7 @@ import ua.zentix.incoming.nuclear.NuclearWarhead;
 import ua.zentix.incoming.strike.CameraLink;
 import ua.zentix.incoming.strike.ChunkTickets;
 import ua.zentix.incoming.strike.FlightLog;
+import ua.zentix.incoming.strike.StrikeOwner;
 import ua.zentix.incoming.strike.StrikeRules;
 import ua.zentix.incoming.strike.FlightTickets;
 import ua.zentix.incoming.strike.Loadout;
@@ -523,10 +524,10 @@ public abstract class StrikeProjectile extends Entity implements IEntityWithComp
         return entityData.get(DATA_OWNER).orElse(null);
     }
 
-    /** The owner online in any level, or null ({@link ua.zentix.incoming.strike.StrikeOwner}). */
+    /** The owner online in any level, or null ({@link StrikeOwner}). */
     @Nullable
     public ServerPlayer ownerPlayer() {
-        return level() instanceof ServerLevel sl ? ua.zentix.incoming.strike.StrikeOwner.online(sl, ownerId()) : null;
+        return level() instanceof ServerLevel sl ? StrikeOwner.online(sl, ownerId()) : null;
     }
 
     /** Operator camera tracks sighted target (synchronized for camera presentation). */
