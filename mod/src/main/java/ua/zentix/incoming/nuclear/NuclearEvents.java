@@ -390,6 +390,9 @@ public final class NuclearEvents extends SavedData {
             faded.forEach(d -> forgetMaterial(d.id()));
             setDirty();
         }
+        // a material whose strike was called off by any path, not only cancel(): nothing will ever read it
+        if (materials.keySet().removeIf(id -> scheduled.stream().noneMatch(s -> s.id() == id)
+                && detonations.stream().noneMatch(d -> d.id() == id))) { materialEpoch++; setDirty(); }
         if (clocks.keySet().removeIf(id -> detonations.stream().noneMatch(d -> d.id() == id))) setDirty();
         steps.keySet().removeIf(id -> detonations.stream().noneMatch(d -> d.id() == id));
         if (craters.keySet().removeIf(id -> detonations.stream().noneMatch(d -> d.id() == id))) setDirty();

@@ -686,9 +686,9 @@ public final class SmokePuffs {
         return lastLevel;
     }
 
-    /** The last filled veil's Gaussians ({@link Veil#describe}): a copy, formatted only when the shot log asks. */
     private static final double[] NO_VEIL = new double[0];
-    private static volatile double[] lastVeilGaussians = new double[0];
+    /** The last filled veil's Gaussians ({@link Veil#describe}): a copy, formatted only when the shot log asks. */
+    private static volatile double[] lastVeilGaussians = NO_VEIL;
 
     /**
      * The frame's veil Gaussians for the shot log (centre from the eye, σh, σv, extinction of the mass m², drawn share,

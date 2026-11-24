@@ -25,7 +25,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 /**
  * A scheduled ICBM cancelled after its dust-material birth was committed ({@code MaterialSurveys.tick} records it about
  * 10 s before the burst; {@code NuclearStrikes.cancelTagged} cancels it) forgets that birth: it is no longer saved with
- * the world or listed in warned viewers' manifests.
+ * the world or listed in warned viewers' manifests. A strike removed by any other path loses its birth at the next prune.
  */
 class NuclearCancelledMaterialTest {
     @BeforeAll
@@ -69,5 +69,16 @@ class NuclearCancelledMaterialTest {
         CompoundTag saved = events.save(new CompoundTag(), RegistryAccess.EMPTY);
         int entries = saved.getList("materials", Tag.TAG_COMPOUND).size();
         assertEquals(0, entries, "cancelled strike's material entry (observations journal) is written to disk on every save");
+    }
+
+    @Test
+    void strikeRemovedOtherwiseLosesItsMaterialAtPrune() {
+        NuclearEvents events = new NuclearEvents();
+        var s = committedStrike(events);
+        var kept = committedStrike(events);
+        events.unschedule(s);
+        events.prune(0, 0);
+        assertNull(events.material(s.id()), "a strike's material outlived the strike");
+        assertTrue(events.material(kept.id()) != null, "prune forgot a scheduled strike's material");
     }
 }
