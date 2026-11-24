@@ -91,6 +91,14 @@ execute store result score #wave arena run incoming salvo rocket 20 25 at 120 70
 execute store result score #left arena run incoming status tag wave1
 ```
 
+## A game master
+
+Incoming carries a note for the [Almighty](https://github.com/zentixua/almighty) AI game master:
+`data/incoming/almighty/notes/strikes.md`. It tells the game master the strike, grid and radiation commands and what
+each returns, the strike events its rules can follow, and two ready rules: raid waves, each started once
+`status tag` of the last returns 0, and a reaction to a nuclear detonation. A datapack replaces the note with its own
+file at the same path; an empty file removes it.
+
 ## World rules for a minigame
 
 `/incoming rule` (operators, the console, command blocks and functions) changes world rules while the world runs and
