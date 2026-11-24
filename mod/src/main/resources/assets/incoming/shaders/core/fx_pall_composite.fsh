@@ -8,10 +8,13 @@
 #moj_import <incoming:wall_layer.glsl>
 // the dust pass's resolve divisor (DustWallPass); 0 — no dust pass this frame (Sampler6, its atlas, is then a placeholder)
 uniform float DwDiv;
-// 1 — only the dust wave's haze level is left this frame (DustWallPass.hazeOnly): a thin layer around the eye, laid in front of
-// the pall's other air in one step (the per-pixel split against smoke and mushrooms in front, 1.8–2.1 ms at 1600 × 900,
-// changed nothing on screen for a haze that surrounds the eye)
+// 1 — only the dust wave's haze level is left this frame (DustWallPass.hazeOnly). Where its first occupied depth is at the
+// eye (under DW_HAZE_AT_EYE blocks) the haze surrounds the eye and is laid in front of the pall's other air in one step: no
+// smoke or mushroom stands in front of it, and the per-pixel split against them costs 1.8–2.1 ms at 1600 × 900. An eye above
+// the layer (a hill, a tower, a craft) sees the haze start further down the ray, behind whatever stands in front of it: the
+// split orders them as for the young wall
 uniform float DwHazeOnly;
+const float DW_HAZE_AT_EYE = 8.0;
 uniform int PallLayerFrame;
 
 // Pall onto frame (client/fx/layer/PallPass): ONE, SRC_ALPHA blending, pall light plus world behind, attenuated
@@ -472,7 +475,8 @@ void main() {
     if (DwDiv > 0.0) {
         wall = wallLayer(Sampler6, Sampler1, vec2(full) + 0.5, depth, DwDiv);
         if (wall.light.a < 1.0) {
-            if (DwHazeOnly < 0.5 && (air.a < 1.0 || any(greaterThan(air.rgb, vec3(0.0))))) {
+            bool aroundEye = DwHazeOnly > 0.5 && wall.depth.x < DW_HAZE_AT_EYE;
+            if (!aroundEye && (air.a < 1.0 || any(greaterThan(air.rgb, vec3(0.0))))) {
                 spans = mediumSpans(dir0);
                 haveSpans = true;
                 entry = mediumTo(wall.depth.x, full, dir0, nearEnd, nearDepth, nearWorld, rays, air, spans);

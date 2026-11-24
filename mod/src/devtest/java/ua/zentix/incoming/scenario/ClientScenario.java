@@ -53,7 +53,7 @@ public final class ClientScenario {
      * Scenario commands, {@code wait:nuke}: tick, from which the steps are waiting for the detonation packet ({@code -1} - they are not waiting), and how many
      *  ticks they are already waiting for; the detonations that the client knew when the steps stood up are not the same detonations.
      */
-    private int nukeGate = -1, nukeGateWaited, frontGate = -1, frontGateWaited;
+    private int nukeGate = -1, nukeGateWaited, frontGate = -1, frontGateWaited, freezeWaited;
     /** {@code wait:blast}: tick, from which steps wait for the next explosion on the embedded server; explosions from launch. */
     private final java.util.ArrayDeque<Integer> blastGates = new java.util.ArrayDeque<>();
     private final java.util.concurrent.atomic.AtomicInteger serverBlasts = new java.util.concurrent.atomic.AtomicInteger();
@@ -1424,9 +1424,13 @@ public final class ClientScenario {
     /**
      * {@code dw:rdc}: RenderDoc takes the next frame. The client runs under {@code renderdoccmd capture} (prod_client.py
      * {@code INCOMING_JAVA_WRAP}); its in-app API ({@code RENDERDOC_GetAPI}, version 1.1.2) is asked from the injected library,
-     * so no UI is needed to trigger the capture. Without RenderDoc in the process the step logs that and does nothing.
+     * so no UI is needed to trigger the capture. Linux only; without RenderDoc in the process the step logs that and does nothing.
      */
     private static void renderDocCapture() {
+        if (org.lwjgl.system.Platform.get() != org.lwjgl.system.Platform.LINUX) {
+            Incoming.LOG.warn("SCENARIO dw rdc: the RenderDoc trigger is Linux only");
+            return;
+        }
         long lib = org.lwjgl.system.linux.DynamicLinkLoader.dlopen("librenderdoc.so", 2 | 4); // RTLD_NOW | RTLD_NOLOAD
         if (lib == 0) { Incoming.LOG.warn("SCENARIO dw rdc: RenderDoc is not in the process"); return; }
         long getApi = org.lwjgl.system.linux.DynamicLinkLoader.dlsym(lib, "RENDERDOC_GetAPI");
@@ -1438,6 +1442,8 @@ public final class ClientScenario {
             long trigger = org.lwjgl.system.MemoryUtil.memGetAddress(api.get(0) + 15L * org.lwjgl.system.Pointer.POINTER_SIZE);
             org.lwjgl.system.JNI.invokeV(trigger);
             Incoming.LOG.info("SCENARIO dw rdc: capture triggered");
+        } finally {
+            org.lwjgl.system.linux.DynamicLinkLoader.dlclose(lib); // the RTLD_NOLOAD open's reference
         }
     }
 
@@ -4048,7 +4054,8 @@ public final class ClientScenario {
 
     /**
      * {@code dw:freezeat=<m>}: the later steps wait (shift by a tick) until the newest detonation's front is within m blocks of the
-     * camera's ground point; then the dust wave's age freezes there ({@code DustWallDiag.freezeAge}).
+     * camera's ground point; then the dust wave's age freezes there ({@code DustWallDiag.freezeAge}). No such front within
+     * {@value CommandPlan#MAX_WAIT} ticks: a line in the log, and the steps go on.
      */
     private void holdForFreeze() {
         var p = Minecraft.getInstance().player;
@@ -4065,6 +4072,12 @@ public final class ClientScenario {
                         String.format(java.util.Locale.ROOT, "%.2f", a.ticks(0) / 20));
                 return;
             }
+        }
+        if (++freezeWaited >= CommandPlan.MAX_WAIT) {
+            Incoming.LOG.warn("SCENARIO dw: the front did not come within {} m for {} tick - steps go further",
+                    Math.round(ua.zentix.incoming.client.fx.layer.DustWallDiag.freezeAt), freezeWaited);
+            ua.zentix.incoming.client.fx.layer.DustWallDiag.freezeAt = -1;
+            return;
         }
         steps.replaceAll(s -> s.at > tick ? new Step(s.at + 1, s.action) : s);
     }

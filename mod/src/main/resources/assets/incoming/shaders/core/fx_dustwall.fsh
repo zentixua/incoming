@@ -47,6 +47,15 @@ out vec4 wallDepth;
 // the light × coverage
 out vec4 wallSplit;
 
+// pcg3d (Jarzynski and Olano 2020, "Hash Functions for GPU Rendering"): three independent uniform values in [0, 1)
+vec3 dwPcg3(uvec3 v) {
+    v = v * 1664525u + 1013904223u;
+    v.x += v.y * v.z; v.y += v.z * v.x; v.z += v.x * v.y;
+    v ^= v >> 16u;
+    v.x += v.y * v.z; v.y += v.z * v.x; v.z += v.x * v.y;
+    return vec3(v >> 8u) * (1.0 / 16777216.0);
+}
+
 void main() {
     ivec2 size = textureSize(Sampler1, 0);
     vec2 lowPix = floor(gl_FragCoord.xy);
@@ -59,13 +68,14 @@ void main() {
             return;
         }
     }
-    // the ray moves within its march pixel every frame (R2 sequence) and the history averages it: a quarter-resolution
-    // silhouette (the wall's lower edge, nearly level) drew a staircase of identical 4-pixel rows
+    // the ray moves within its march pixel every frame (R2 sequence) and the history averages it: a fixed ray would draw a
+    // quarter-resolution silhouette (the wall's lower edge, nearly level) as a staircase of identical rows of march pixels
     vec2 centre = min((lowPix + 0.5) * DwDiv, vec2(size) - 0.5);
-    // each march pixel starts both sequences at its own hashed phase: a spatial noise pattern (interleaved gradient noise)
-    // showed through the history on a near, moving wall as a regular lattice of dots
-    vec2 phase = fract(sin(vec2(dot(lowPix, vec2(12.9898, 78.233)), dot(lowPix, vec2(39.3468, 11.135)))) * vec2(43758.5453, 24634.6345));
-    vec2 sub = fract(phase + vec2(0.7548777, 0.5698403) * DwFrame.x) - 0.5;
+    // each march pixel starts its sequences (the ray within the pixel, the sample offset along it) at its own phases from an
+    // integer hash: a spatial noise pattern (interleaved gradient noise) keeps its pattern through the history on a near,
+    // moving wall (a regular lattice of dots), and a float sin() hash of large arguments is vendor-dependent and structured
+    vec3 phase = dwPcg3(uvec3(uvec2(lowPix), 12142u));
+    vec2 sub = fract(phase.xy + vec2(0.7548777, 0.5698403) * DwFrame.x) - 0.5;
     vec2 at = clamp(centre + sub * DwDiv, vec2(0.5), vec2(size) - 0.5);
     // ... within the centre's depth class: the resolve and composite classify the sample by the centre's depth (an offset
     // across a foreground edge put the background's dust onto the foreground)
@@ -79,7 +89,7 @@ void main() {
     vec4 farPoint = InvViewProj * vec4(ndc, 1.0, 1.0);
     vec3 dir = normalize(farPoint.xyz / farPoint.w);
     float tEnd = axis / max(dot(dir, PallForward), 1e-3);
-    float jitter = fract(phase.y + DwFrame.x * 0.618034);
+    float jitter = fract(phase.z + DwFrame.x * 0.618034);
     // no world behind the pixel (beyond the drawn chunks, between LODs): the ray ends on the relief map traced from the eye,
     // as the pall's (pallFloor); where the world is drawn its depth alone ends the ray (the coarse map stood over open
     // streets and hid the dust down them)

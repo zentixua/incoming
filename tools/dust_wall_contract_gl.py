@@ -249,6 +249,16 @@ def slab(start, end, transmission):
     return light, depth
 
 
+def pcg3(v):
+    """fx_dustwall.fsh dwPcg3: three uniform values in [0, 1) of an integer triple (pcg3d, 32-bit unsigned arithmetic)."""
+    m = 0xFFFFFFFF
+    x, y, z = ((c * 1664525 + 1013904223) & m for c in v)
+    x = (x + y * z) & m; y = (y + z * x) & m; z = (z + x * y) & m
+    x ^= x >> 16; y ^= y >> 16; z ^= z >> 16
+    x = (x + y * z) & m; y = (y + z * x) & m; z = (z + x * y) & m
+    return tuple((c >> 8) / 16777216.0 for c in (x, y, z))
+
+
 def jitter_occluder(march_program, composite_program):
     # A stationary opaque edge after column 2. The wall contributes along the
     # sky ray; a foreground end at two blocks allows only two blocks of dust.
@@ -261,12 +271,14 @@ def jitter_occluder(march_program, composite_program):
     check(a > 0.8 and b > 0.8 and abs(a - b) < 0.03,
           "opaque pixel remains foreground at both R2 phases")
 
-    # Jitter on a continuous slope marches to the sampled depth in both directions.
+    # Jitter on a continuous slope marches to the sampled depth in both directions: march pixel (0, 1) at frame 1 samples
+    # the full-resolution column its hashed phase and the R2 step put it in (fx_dustwall.fsh), at that column's depth.
+    column = int(np.clip(0.5 * 4 + (np.modf(pcg3((0, 1, 12142))[0] + 0.7548777)[0] - 0.5) * 4, 0.5, size - 0.5))
     for depths in (10 + .25 * np.arange(size), 11 - .25 * np.arange(size)):
         light, span, _ = march(march_program, make_scene(depths), 1)
         last = span[1, 0, 1] / (1.0 - light[1, 0, 3])
-        print(f"depth at lattice centre {depths[2]}, jittered depth {depths[3]}, last dusty point {last:.4f}")
-        check(abs(last - depths[3]) < .001, "a continuous surface ends the jittered ray at its own depth")
+        print(f"depth at lattice centre {depths[2]}, jittered depth {depths[column]} (column {column}), last dusty point {last:.4f}")
+        check(abs(last - depths[column]) < .001, "a continuous surface ends the jittered ray at its own depth")
 
 
 def history_occluder(far=0.10, here=20, far_depth=100, enabled=1, sparse=False):
@@ -785,6 +797,30 @@ def skin_case():
         SOURCE["law"] = None
 
 
+def haze_only_cases(composite_program):
+    """The foreground-order contracts again with the composite's haze-only path on (DwHazeOnly 1: only the haze level is
+    left). Their dust starts 20-200 blocks from the eye, so the haze does not surround the eye there and smoke, mushroom
+    caps, near-volume clouds and panes in front of it still hide it (an eye above the layer: a hill, a tower, a craft)."""
+    global quad
+    plain = quad
+
+    def haze_quad(program):
+        if program == composite_program:
+            g.glUniform1f(loc(program, "DwHazeOnly"), 1.0)
+        plain(program)
+
+    quad = haze_quad
+    try:
+        foreground_volume(march_setup(), composite_program)
+        pane_order(composite_program)
+        crossing_volume(composite_program)
+        weather_haze(march_setup(), composite_program)
+    finally:
+        quad = plain
+        g.glUseProgram(composite_program)
+        g.glUniform1f(loc(composite_program, "DwHazeOnly"), 0.0)
+
+
 def main():
     context()
     composite_program = link("fx_pall_composite")
@@ -806,6 +842,7 @@ def main():
         "fog": bright_air,
         "limit": ray_limit,
         "skin": skin_case,
+        "hazeonly": lambda: haze_only_cases(composite_program),
     }
     for name in names or cases:
         cases[name]()

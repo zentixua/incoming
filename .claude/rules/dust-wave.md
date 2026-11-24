@@ -67,7 +67,8 @@ paths:
   `wallPrefixT`, `wallPrefixShare`, `wallTo`, `wallCut`; Java copy `DustIntervals`, `DustIntervalsTest`).
 - The pall composite reconstructs the foreground to the first occupied depth; inside the interval each visible smoke or
   mushroom sample obscures the share of wall opacity behind it; a pane truncates both the wall and the integration
-  interval. Quads and source probes take the atlas's transmission on screen (`pall_front.glsl`: `dustWallThrough`; `DwDiv`
+  interval. Once only the haze level is left, a pixel whose haze starts at the eye (first occupied depth under 8 blocks)
+  takes it in front of the pall's other air in one step; an eye above the layer keeps the split (contract `hazeonly`). Quads and source probes take the atlas's transmission on screen (`pall_front.glsl`: `dustWallThrough`; `DwDiv`
   0: no pass this frame) behind the pall's haze in front of them. Each tap contributes only its dust in front of the pixel's
   depth.
 - Java readers read the drawn wave, not the law's carpet: mushroom ground under the cap (`PallField.drawnTau` in
@@ -119,6 +120,12 @@ paths:
   sample against the previous depth, clamps to the depth-alike 3 × 3 neighbourhood with the pixel's own sample, and restarts
   on another detonation, a clock jump or a view resize. A fixed offset sparkles along the far top where 9–18 m steps cross
   the moving billowed surface. A shadow tap reading the fine texture re-shades the approaching face every frame.
+- A long thin span (the veil over the billowed top, thin dust whose span grew) knows nothing of the cells it covers: near the
+  leaning face its next sample lands deep in the layer, past the lit skin (light 0.10 against 0.32), and which ray skips
+  moves with its per-frame offset, so the history keeps dark specks. A dense sample right after such a span finds the span's
+  first dense cell by density alone and the thin sample is taken again with its span ending there (contract `skin`). Each
+  march pixel's offsets start at its own integer-hashed phases: a spatial pattern (interleaved gradient noise) keeps its
+  pattern through the history as a lattice of dots.
 - Where the scene has no depth the ray ends on the nearest source's relief traced from the eye in 64 steps (`dwRayFloor`;
   24 stepped over a 64-block ridge 400 blocks out); where the world is drawn its depth alone ends it. The march, resolve and
   composite judge "the same place" by one rule (`pallSamePlace`: a looser rule in one pass let dust from behind a foreground

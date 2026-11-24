@@ -288,12 +288,12 @@ void main() {
 def period_case():
     """No staircase along the wall: its lower edge (where the dust 3 blocks up begins behind the front: the birth line) and
     its top (the highest dust 100 blocks behind the front) along a 15 degree arc of the front at 4.95 km, seen from 400 m
-    inside it (the seeds' variation fades to their mean 2-3 km from the eye, where it is under a pixel: the far arc shows
-    the model's LOD, not its foot), vary (std over 1 m) and have no flat runs (under a quarter of the steps between
-    neighbouring samples below 1 mm; one value per noise cell gives 0.96, the control below). The birth line's slope is
-    also near-normal (kurtosis under 6); the top's is not tested so: where a higher billow lobe begins, the highest dusty
-    point jumps (overhangs of the 3D billows), heavy-tailed without any flat run. A smooth periodic profile is not caught
-    here: the seeds' noise has no period."""
+    inside it (the seeds' variation fades to their mean 2-3 km from the eye, where it is under a pixel), vary (std over 1 m)
+    and have no flat runs (under a quarter of the steps between neighbouring samples below 1 mm; one value per noise cell
+    gives 0.96, the control below); the birth line's slope is near-normal (kurtosis under 6). The top's slope there is
+    heavy-tailed without any flat run (where a higher billow lobe begins, the highest dusty point jumps), so its kurtosis is
+    checked where the eye sees the far wall: a 60 degree arc seen from 9.4 km, where a lobe is under a sample. A smooth
+    periodic profile is not caught here: the seeds' noise has no period."""
     core, expand = gl["CORE"], gl["expand"]
     src = expand("""#version 150
 uniform vec4 DwEye; uniform vec4 DwRing; uniform vec4 DwLife; uniform vec4 DwBall; uniform vec3 DwBallLight; uniform float DwCut;
@@ -306,9 +306,10 @@ vec3 dwAirLight(vec3 rd) { return vec3(0.0); }
 #moj_import <incoming:dustwall.glsl>
 uniform float Front;
 uniform float Upper;
+uniform vec2 Arc;
 out vec4 fragColor;
 void main() {
-    float b = radians(-97.5 + 15.0 * gl_FragCoord.x / 2048.0);
+    float b = radians(Arc.x + Arc.y * gl_FragCoord.x / 2048.0);
     vec2 d = vec2(cos(b), sin(b));
     float edge = 0.0;
     if (Upper > 0.5) {
@@ -362,31 +363,44 @@ void main() {
     g.glUniform4f(loc(p, "DwBall"), 0, 1200, 0, 1700)
     t = arrive + 1.0
     front = 4500 * (t / arrive) ** 0.8
-    g.glUniform4f(loc(p, "DwEye"), 0, 120, -(front - 400.0), t)
     g.glUniform4f(loc(p, "PallYoung"), 0, 1, 0, reach)
     g.glUniform4f(loc(p, "DwRing"), front, 0, 400, reach)
     g.glUniform1f(loc(p, "Front"), front)
-    step = np.radians(15.0) * front / 2048
-    def flat(e):
-        return float((np.abs(np.diff(e)) < 1e-3).mean())
 
-    # the control: one value per 60 m cell along the same arc, flat inside with a step to the next
-    control = np.sin(np.floor(np.arange(2048) * step / 60.0) * 12.9898) * 4.0
-    check(flat(control) > 0.25, f"the staircase control has flat runs (share {flat(control):.2f})")
-    for upper, name in ((0, "lower edge"), (1, "top")):
+    def edge(upper, near):
+        # near: 15 degrees seen from 400 m inside the front; far: 60 degrees seen from 9.4 km (the eye across ground zero)
+        g.glUniform4f(loc(p, "DwEye"), 0, 120, -(front - 400.0) if near else 4500.0, t)
+        g.glUniform2f(loc(p, "Arc"), *((-97.5, 15.0) if near else (-120.0, 60.0)))
         g.glUniform1f(loc(p, "Upper"), upper)
         quad(p)
-        e = read(2048, 1)[0, :, 0].astype(np.float64)
+        return read(2048, 1)[0, :, 0].astype(np.float64)
+
+    def kurtosis(e):
         # a staircase (one value per noise cell, flat inside, a step to the next) has a heavy-tailed slope: flat runs and
         # sudden steps; smooth multi-scale noise has a near-normal slope (kurtosis ~3)
         sl = np.diff(np.convolve(e, np.ones(3) / 3, "valid"))
         sl = sl - sl.mean()
-        kurt = float((sl ** 4).mean() / max((sl ** 2).mean() ** 2, 1e-12))
-        print(f"period: the wall's {name} (std {e.std():.1f} m) slope kurtosis {kurt:.1f}, flat share {flat(e):.3f} over the arc")
+        return float((sl ** 4).mean() / max((sl ** 2).mean() ** 2, 1e-12))
+
+    def flat(e):
+        return float((np.abs(np.diff(e)) < 1e-3).mean())
+
+    # the control: one value per 60 m cell along the near arc, flat inside with a step to the next
+    step = np.radians(15.0) * front / 2048
+    control = np.sin(np.floor(np.arange(2048) * step / 60.0) * 12.9898) * 4.0
+    check(flat(control) > 0.25 and kurtosis(control) > 6.0,
+          f"the staircase control has flat runs (share {flat(control):.2f}) and a heavy-tailed slope ({kurtosis(control):.0f})")
+    for upper, name in ((0, "lower edge"), (1, "top")):
+        e = edge(upper, True)
+        print(f"period: the wall's {name} (std {e.std():.1f} m) slope kurtosis {kurtosis(e):.1f}, flat share {flat(e):.3f} over the near arc")
         check(e.std() > 1.0, f"the wall's {name} varies along the front (std {e.std():.2f} m > 1)")
         check(flat(e) < 0.25, f"the wall's {name} has flat runs like a staircase (share {flat(e):.3f}), expected under 0.25")
         if not upper:
-            check(kurt < 6.0, f"the wall's {name} steps like a staircase (slope kurtosis {kurt:.1f}), expected smooth noise (< 6)")
+            check(kurtosis(e) < 6.0, f"the wall's {name} steps like a staircase (slope kurtosis {kurtosis(e):.1f}), expected smooth noise (< 6)")
+    far = edge(1, False)
+    print(f"period: the far wall's top (std {far.std():.1f} m) slope kurtosis {kurtosis(far):.1f} over the far arc")
+    check(far.std() > 1.0 and kurtosis(far) < 6.0,
+          f"the far wall's top varies (std {far.std():.2f} m > 1) without steps (slope kurtosis {kurtosis(far):.1f} < 6)")
 
 
 def link_after_veil(name, java, classpath):
