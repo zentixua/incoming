@@ -5,6 +5,7 @@ paths:
   - "mod/src/main/java/ua/zentix/incoming/nuclear/world/**"
   - "mod/src/test/java/ua/zentix/incoming/work/**"
   - "mod/src/main/java/ua/zentix/incoming/client/fx/FireWatch.java"
+  - "mod/src/main/java/ua/zentix/incoming/mixin/level/**"
 ---
 
 # Server work budget (`work/`)
@@ -81,7 +82,11 @@ paths:
   than `READY_LIMIT` (20 ticks, inside the ruins' 1 s acceptance); a waiting chunk keeps its hold and later writes join
   it (a superseded revision leaves the queue, its new fence queues it again). Unpaced, a 1 Mt wave crossing the Silo
   city in view sent a viewer at 3.9 km up to 105 whole chunks in one tick, ~600 in 3 s; GameTests
-  `readyChunksGoPacedToEachViewer`, `readyChunkGoesAtItsWaitLimit`.
+  `readyChunksGoPacedToEachViewer`, `readyChunkGoesAtItsWaitLimit`. The client re-creates every block entity of a
+  whole chunk, and vanilla drops each replaced ticker from the level's list by a single `ArrayList` removal (MC-117075,
+  removed × tickers a tick): with 20,074 chests ticking in view on the Silo map, the tick after a frame that loaded
+  30–134 ruined chunks took 200–300 ms, worst during G1 concurrent marking. `mixin/level/BlockEntityTickerRemovalMixin`
+  removes them in one pass at the end of the loop (GameTest `removedTickersLeaveInOnePass`, fails without it).
   GameTests: `heavyRuinsGoWholeAfterTheirLight` (the client's light is rebuilt from its light before the write and every
   payload's data/empty masks in order, unmentioned sections kept, and must equal the server's right after the whole
   chunk: comparing payload and server while skipping absent sections passed a packet with no light at all),
@@ -92,7 +97,9 @@ paths:
   `lightHoldExpiresBeforeALaterWriteRestartsIt` (the 200-tick deadline and restart). Measuring client stalls:
   `jstack -l` and `ThreadMXBean.dumpAllThreads(true, true)` walk the heap at a safepoint, 115–250 ms each on the
   full-pack client (probes every 0.5 s turned a 4 s stall into 13 s); sample the render thread with
-  `Thread.getStackTrace` (the scenario client's `incoming.hitch` probe) and subtract `-Xlog:safepoint` dump time. A
+  `Thread.getStackTrace` (the scenario client's `incoming.hitch` probe) and subtract `-Xlog:safepoint` dump time. Its
+  stall stacks carry Mojang's own line numbers, not the decompiled sources': map a line with `javap -l -c` on the
+  class in Prism's `libraries/net/neoforged/neoforge/<version>/neoforge-<version>-client.jar`. A
   whole chunk costs the wire more than its deltas (Silo city chunks ~11 KB compressed against ~0.2 KB for 35 deltas);
   vanilla sends chunks at that size as a player moves, unpaced by our code: not measured for a conventional blackout
   over a home uplink.
