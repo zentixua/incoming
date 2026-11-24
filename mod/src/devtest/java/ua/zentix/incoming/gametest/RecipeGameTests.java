@@ -50,7 +50,9 @@ public final class RecipeGameTests {
     @GameTest(template = "range", batch = "recipe_tags")
     public static void recipesResolveAndCraft(GameTestHelper h) {
         ServerLevel level = h.getLevel();
+        // the GameTest server always runs with Create (it cannot start without Sable): the path without it is RecipeTagsTest's
         boolean create = ModList.get().isLoaded("create");
+        h.assertTrue(create, "GameTest server without Create");
         for (var e : RecipeContract.TAGS.entrySet()) {
             Set<String> items = tagItems(e.getKey());
             Incoming.LOG.info("RECIPETAGS #{} with Create {}: {}", e.getKey(), create, items);
@@ -59,7 +61,7 @@ public final class RecipeGameTests {
         Map<String, List<ResourceLocation>> byOutput = new TreeMap<>();
         for (RecipeHolder<CraftingRecipe> r : level.getServer().getRecipeManager().getAllRecipesFor(RecipeType.CRAFTING)) {
             if (!r.id().getNamespace().equals(Incoming.MOD_ID)) continue;
-            h.assertTrue(r.id().getPath().endsWith("_vanilla") != create, r.id() + " loaded with Create " + create);
+            h.assertFalse(r.id().getPath().endsWith("_vanilla"), r.id() + ": a vanilla fallback loaded with Create");
             ItemStack out = craft(h, r, i -> i.getItems()[0]);
             byOutput.computeIfAbsent(BuiltInRegistries.ITEM.getKey(out.getItem()).toString(), k -> new ArrayList<>()).add(r.id());
             Integer count = RecipeContract.COUNTS.get(BuiltInRegistries.ITEM.getKey(out.getItem()).toString());
@@ -69,7 +71,7 @@ public final class RecipeGameTests {
         for (var e : byOutput.entrySet()) h.assertTrue(e.getValue().size() == 1, e.getKey() + ": recipes " + e.getValue());
 
         // the Geiger counter in survival: picking up one ingredient shows the recipe, and the ingredients make one counter
-        ResourceLocation geiger = Incoming.id(create ? "geiger_counter" : "geiger_counter_vanilla");
+        ResourceLocation geiger = Incoming.id("geiger_counter");
         ServerPlayer p = ProgressGameTests.Credited.online(h, "recipe_geiger", 0, new BlockPos(32, 2, 32));
         p.setGameMode(GameType.SURVIVAL);
         h.assertFalse(p.getRecipeBook().contains(geiger), "Geiger counter recipe known before any ingredient");
@@ -82,7 +84,7 @@ public final class RecipeGameTests {
      * A datapack tags a foreign item (a brick) {@code c:ingots/iron}: the designator crafts with bricks for its iron, and
      * holding a brick unlocks its recipe. Without the pack the same grid crafts nothing.
      */
-    @GameTest(template = "range", batch = "recipe_tags_pack", timeoutTicks = 2400)
+    @GameTest(template = "range", batch = "recipe_tags_pack")
     public static void foreignIronCrafts(GameTestHelper h) {
         ResourceLocation designator = Incoming.id("strike_designator");
         Function<Ingredient, ItemStack> bricks = i -> i.test(new ItemStack(Items.IRON_INGOT)) ? new ItemStack(Items.BRICK) : i.getItems()[0];

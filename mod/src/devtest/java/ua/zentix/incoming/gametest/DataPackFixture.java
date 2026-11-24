@@ -22,10 +22,11 @@ import java.util.stream.Stream;
 
 /**
  * A datapack as a pack maker ships one: files written into the world's {@code datapacks/} folder and enabled the way
- * {@code /datapack enable} does (rescan, then reload with the pack on top), then disabled and deleted again. The reload
- * replaces tags, data maps, recipes and advancements server-wide, so each test that uses it has its own batch; the
- * test waits for the reload in wall time ({@link StrikeGameTests#gameSpeed}) and leaves the server's data as it found
- * it, also when it fails.
+ * {@code /datapack enable} does (rescan, then reload with the pack on top), then disabled and deleted again. Called on
+ * the server thread, {@code MinecraftServer.reloadResources} finishes inside the call ({@code managedBlock}), holding
+ * the thread 2–4 s with Create; it replaces tags, data maps, recipes and advancements server-wide, so each test that
+ * uses it has its own batch, and leaves the server's data as it found it, also when it fails. Every error becomes a
+ * {@link GameTestAssertException}: anything else thrown in a test sequence crashes the whole GameTest server.
  */
 final class DataPackFixture {
     private DataPackFixture() {}
@@ -37,7 +38,6 @@ final class DataPackFixture {
      */
     static void run(GameTestHelper h, String name, Map<String, String> files, Runnable before, Runnable with, Runnable after) {
         MinecraftServer server = h.getLevel().getServer();
-        StrikeGameTests.gameSpeed(h);
         List<CompletableFuture<Void>> reloads = new ArrayList<>();
         StrikeGameTests.afterTest(h, () -> {
             // a failure before the pack was taken off leaves it on: take it off for the next batches
@@ -56,10 +56,16 @@ final class DataPackFixture {
                 .thenSucceed();
     }
 
+    /** The reload is over (it completes within the call; the check guards a caller off the server thread). */
     private static void done(CompletableFuture<Void> reload, String what) {
-        if (!reload.isDone()) throw new GameTestAssertException(what);
-        // a failed reload throws here, outside the waiting retry
-        reload.join();
+        if (!reload.isDone()) throw new GameTestAssertException(what + ": not finished");
+        if (reload.isCompletedExceptionally()) {
+            try {
+                reload.join();
+            } catch (RuntimeException e) {
+                throw new GameTestAssertException(what + " failed: " + e);
+            }
+        }
     }
 
     private static String id(String name) {
@@ -78,7 +84,7 @@ final class DataPackFixture {
                     + ", \"description\": \"Incoming GameTest " + name + "\"}}");
             for (var f : files.entrySet()) write(root.resolve(f.getKey()), f.getValue());
         } catch (IOException e) {
-            throw new UncheckedIOException(e);
+            throw new GameTestAssertException("writing datapack " + name + ": " + e);
         }
         PackRepository repo = server.getPackRepository();
         repo.reload();
@@ -97,6 +103,7 @@ final class DataPackFixture {
             try {
                 delete(dir(server, name));
             } catch (IOException e) {
+                // completes the future exceptionally: done() reports it as a test failure
                 throw new UncheckedIOException(e);
             }
             repo.reload();

@@ -37,7 +37,8 @@ import static org.junit.jupiter.api.Assertions.fail;
  * Recipes against the default datapack without a game server, the path the GameTest server (which always has Create)
  * cannot take: which recipes load with and without Create, what each common {@code c:} tag ingredient resolves to
  * through the tag files on the classpath (NeoForge's {@code data/c/tags/item}), and that every item a loaded recipe
- * names exists. Counts ({@link RecipeContract}) and patterns are pinned, so tags change no recipe's shape or yield.
+ * names exists. Counts are pinned ({@link RecipeContract}), and a vanilla fallback keeps its Create twin's pattern and
+ * every ingredient but the Create items.
  */
 class RecipeTagsTest {
     private static final Map<String, Set<String>> TAGS = RecipeContract.TAGS;

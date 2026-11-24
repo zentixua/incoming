@@ -299,15 +299,17 @@ A mod's reinforced concrete as a bunker wall, one full metre of reinforced concr
 }
 ```
 
-With it the B-2's bomb goes about 4 blocks into this concrete at game flight speeds (about 9 with `scale.flight_speed`
-1), where it goes through about 20 blocks of vanilla concrete. A cruise missile's warhead blows through a wall of up to 2
+With it the B-2's bomb goes about 4 blocks into this concrete at game flight speeds (about 9 with real ones, preset
+`REAL`), where it goes through about 20 blocks of vanilla concrete. A cruise missile's warhead blows through a wall of up to 2
 blocks of it into the room behind, a Shahed-136's through 1 block, a Grad rocket's or a Lancet's through none.
 
 ### Blast classes: `incoming:nuke_*` tags
 
 A blast wave breaks a block once its overpressure passes the block's threshold; the threshold of each block varies by
 ±15 % with its position, so a row of the same blocks does not break along a straight line. The same classes hold for
-the wave of every warhead, nuclear or not (a short conventional wave also needs enough impulse).
+the wave of every warhead, nuclear or not (a short conventional wave also needs enough impulse). In a nuclear wave the
+thresholds are those of a wall or floor one block thick: two blocks thick hold twice the pressure, three blocks 3.5
+times, and a wall facing the burst takes the stronger reflected pressure.
 
 | Tag | Breaks at | Vanilla blocks in it |
 |---|---|---|
@@ -335,8 +337,10 @@ A mod's sheet-metal wall as a light structure, in `data/incoming/tags/block/nuke
 }
 ```
 
-The wall then breaks at about 4 psi (3.4 to 4.6 by its position) instead of the threshold of its hardness, 12 psi for a
-block as hard as an iron block. `"required": false` lets the datapack load when that mod is not installed.
+A wall of it one block thick then breaks at about 4 psi (3.4 to 4.6 by its position) instead of the threshold of its
+hardness, 12 psi for a block as hard as an iron block. Keep `"required": false` on blocks of other mods: when such a
+mod is not installed, an entry without it empties the whole tag, Incoming's own doors, planks and chests included. In
+the data map a block that does not exist only skips its own entry.
 
 ### Ignition: `incoming:pulse_*` tags
 
@@ -352,8 +356,8 @@ The heat of a burst sets fire only to thin, dry fuel; each class needs its own a
 
 The flash of a nuclear burst ignites only paper, fabric and dry plants, and the turf of dry biomes; live grass, leaves
 and wood char and smoke but do not catch. The fireball of a Shahed-136's or a cruise missile's burning fuel ignites
-every class in the table; a block in none of them counts as grass when vanilla fire spreads over it quickly, and
-otherwise does not catch from a flash that short (wood only chars).
+every class in the table, but only blocks that vanilla fire can burn; a block in none of them counts as grass when
+vanilla fire spreads over it quickly, and otherwise does not catch from a flash that short (wood only chars).
 
 A mod's straw bale as dry fuel, in `data/incoming/tags/block/pulse_dry.json`:
 
@@ -365,5 +369,5 @@ A mod's straw bale as dry fuel, in `data/incoming/tags/block/pulse_dry.json`:
 }
 ```
 
-A nuclear flash then sets it alight like a hay bale, and a fuel fireball like dry grass. To break it like a hay bale
-too, put it in `incoming:nuke_light` as well.
+A nuclear flash then sets it alight like a hay bale, and a fuel fireball like dry grass if the mod makes the bale
+flammable, as hay is. To break it like a hay bale too, put it in `incoming:nuke_light` as well.

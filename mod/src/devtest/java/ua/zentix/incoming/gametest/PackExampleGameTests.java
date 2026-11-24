@@ -1,6 +1,7 @@
 package ua.zentix.incoming.gametest;
 
 import net.minecraft.core.BlockPos;
+import net.minecraft.core.Direction;
 import net.minecraft.gametest.framework.GameTest;
 import net.minecraft.gametest.framework.GameTestHelper;
 import net.minecraft.server.level.ServerLevel;
@@ -20,6 +21,7 @@ import ua.zentix.incoming.registry.ModDataMaps;
 import ua.zentix.incoming.registry.ModTags;
 import ua.zentix.incoming.strike.WeaponType;
 import ua.zentix.incoming.warhead.BreachModel;
+import ua.zentix.incoming.warhead.FuelProbe;
 import ua.zentix.incoming.warhead.Penetration;
 import ua.zentix.incoming.warhead.Warheads;
 
@@ -45,7 +47,7 @@ public final class PackExampleGameTests {
      * 4 blocks) instead of the unlisted brick (S 1), and a cruise missile's charge breaches it with the reinforced-concrete
      * radius: 2 blocks over a void are breached, 3 hold.
      */
-    @GameTest(template = "range", batch = "pack_penetration", skyAccess = true, timeoutTicks = 2400)
+    @GameTest(template = "range", batch = "pack_penetration", skyAccess = true)
     public static void reinforcedConcreteEntry(GameTestHelper h) {
         BlockState block = Blocks.PACKED_MUD.defaultBlockState();
         Penetration.Body mop = BunkerBusterEntity.body();
@@ -75,10 +77,11 @@ public final class PackExampleGameTests {
 
     /**
      * Sheet metal as a light structure ({@link PackExamples#BLOCK_CLASS}, an iron block standing in): its hardness puts it
-     * at 12 psi; tagged {@code incoming:nuke_light} it breaks at 4 psi within the ±15 % spread, in a nuclear front
-     * ({@link BlockResponse#breaksAt(double, int)}) and in a conventional wave with a long impulse.
+     * at 12 psi; tagged {@code incoming:nuke_light} its threshold is 4 psi within the ±15 % spread, as both the nuclear
+     * front ({@link BlockResponse#breaksAt(double, int)}, for a one-block element) and a conventional wave with a long
+     * impulse read it. The before step fills the response cache at 12 psi: the reload must clear it.
      */
-    @GameTest(template = "range", batch = "pack_block_class", timeoutTicks = 2400)
+    @GameTest(template = "range", batch = "pack_block_class")
     public static void lightStructureTag(GameTestHelper h) {
         BlockState block = Blocks.IRON_BLOCK.defaultBlockState();
         DataPackFixture.run(h, "incoming_test_block_class", Map.of("data/incoming/tags/block/nuke_light.json",
@@ -97,20 +100,30 @@ public final class PackExampleGameTests {
     }
 
     /**
-     * Straw as dry fuel ({@link PackExamples#IGNITION}, a sponge standing in): the nuclear flash's fuel classes
-     * ({@link Kindling}) take it as dry grass, and through {@code pulse_grass} a burning-fuel fireball does too.
+     * Straw as dry fuel ({@link PackExamples#IGNITION}, a target block standing in: flammable for vanilla fire, which the
+     * fireball needs, and slow-burning, so untagged it counts as wood): the nuclear flash's fuel classes ({@link Kindling})
+     * and the fuel fireball's ({@code Craters.fuel}, through {@code pulse_grass}) take it as dry grass.
      */
-    @GameTest(template = "range", batch = "pack_ignition", timeoutTicks = 2400)
+    @GameTest(template = "range", batch = "pack_ignition")
     public static void dryFuelTag(GameTestHelper h) {
-        BlockState block = Blocks.SPONGE.defaultBlockState();
+        BlockState block = Blocks.TARGET.defaultBlockState();
+        ServerLevel level = h.getLevel();
+        BlockPos at = h.absolutePos(new BlockPos(32, 2, 32));
         DataPackFixture.run(h, "incoming_test_ignition", Map.of("data/incoming/tags/block/pulse_dry.json",
-                        PackExamples.IGNITION.replace(PackExamples.STRAW, "minecraft:sponge")),
-                () -> h.assertTrue(Kindling.of(block) == null && !block.is(ModTags.PULSE_GRASS), "sponge is fuel before the pack"),
+                        PackExamples.IGNITION.replace(PackExamples.STRAW, "minecraft:target")),
+                () -> {
+                    h.assertTrue(block.isFlammable(level, at, Direction.UP), "the stand-in is not flammable for vanilla fire");
+                    h.assertTrue(Kindling.of(block) == null, "flash fuel before the pack: " + Kindling.of(block));
+                    h.assertTrue(FuelProbe.fireball(level, at, block) == PulseIgnition.Fuel.SOLID, "fireball fuel before the pack: "
+                            + FuelProbe.fireball(level, at, block));
+                },
                 () -> {
                     h.assertTrue(Kindling.of(block) == PulseIgnition.Fuel.GRASS, "flash fuel class: " + Kindling.of(block));
-                    h.assertTrue(block.is(ModTags.PULSE_GRASS), "not fireball grass fuel through pulse_grass");
+                    h.assertTrue(FuelProbe.fireball(level, at, block) == PulseIgnition.Fuel.GRASS, "fireball fuel class: "
+                            + FuelProbe.fireball(level, at, block));
                 },
-                () -> h.assertTrue(Kindling.of(block) == null, "fuel class left after the pack"));
+                () -> h.assertTrue(Kindling.of(block) == null && FuelProbe.fireball(level, at, block) == PulseIgnition.Fuel.SOLID,
+                        "fuel class left after the pack"));
     }
 
     // ---------------------------------------------------------------- helpers
