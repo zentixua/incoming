@@ -28,8 +28,8 @@ import ua.zentix.incoming.nuclear.NuclearWarhead;
 import ua.zentix.incoming.nuclear.model.BlastInjury;
 import ua.zentix.incoming.nuclear.model.BlastModel;
 import ua.zentix.incoming.registry.ModDamageTypes;
-import ua.zentix.incoming.strike.StrikeOwner;
 import ua.zentix.incoming.registry.ModTags;
+import ua.zentix.incoming.strike.StrikeOwner;
 import ua.zentix.incoming.util.Terrain;
 
 import java.util.ArrayList;

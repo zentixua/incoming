@@ -1,6 +1,8 @@
 package ua.zentix.incoming.registry;
 
 import com.mojang.serialization.Codec;
+import net.minecraft.Util;
+import net.minecraft.core.UUIDUtil;
 import net.neoforged.neoforge.attachment.AttachmentType;
 import net.neoforged.neoforge.registries.DeferredRegister;
 import net.neoforged.neoforge.registries.NeoForgeRegistries;
@@ -23,6 +25,7 @@ import ua.zentix.incoming.work.WorkScheduler;
 import ua.zentix.incoming.warhead.CraterFalls;
 
 import java.util.Optional;
+import java.util.UUID;
 import java.util.function.Supplier;
 
 public final class ModAttachments {
@@ -48,8 +51,8 @@ public final class ModAttachments {
      * Living entity: owner of the nuclear flash whose burn brought it to burn shock ({@code FlashBurns}), named when the
      * shock kills; saved with the entity, as the burn is. Absent for an unowned detonation.
      */
-    public static final Supplier<AttachmentType<java.util.UUID>> BURN_SHOCK_OWNER = REGISTER.register("burn_shock_owner",
-            () -> AttachmentType.builder(() -> net.minecraft.Util.NIL_UUID).serialize(net.minecraft.core.UUIDUtil.CODEC).build());
+    public static final Supplier<AttachmentType<UUID>> BURN_SHOCK_OWNER = REGISTER.register("burn_shock_owner",
+            () -> AttachmentType.builder(() -> Util.NIL_UUID).serialize(UUIDUtil.CODEC).build());
 
     /** Player retinal burns — flash blind spots; reset on death (not copied). */
     public static final Supplier<AttachmentType<RetinaScars>> RETINA = REGISTER.register("retina",

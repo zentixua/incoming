@@ -45,8 +45,8 @@ The tab appears once you hold any Incoming item or launch your first round.
 - Yours: the warhead's blast, the B-2 bomb's hit and its underground shockwave, fragments, debris the strike throws
   (also the falling parts of your round shot down), the nuclear wave, the light's burns and prompt radiation. A burn
   shock that kills hours later is yours if the light of your burst caused it and you are online then.
-- Nobody's: radiation sickness from the dose a body has gathered and fallout, fire that spreads on its own, and mobs
-  in chunks that load long after a burst. As in vanilla, a death within seconds of your strike's hit, by fire or a
-  fall, still counts as yours.
+- Nobody's: a round that crashes before its fuze arms, radiation sickness from the dose a body has gathered and
+  fallout, fire that spreads on its own, and mobs in chunks that load long after a burst. As in vanilla, a death
+  within seconds of your strike's hit, by fire or a fall, still counts as yours.
 - Damage in your name follows the server's PvP setting and `/team` friendly fire, as your arrows do. While you are
   offline the strike has no attacker and these rules do not apply to it.

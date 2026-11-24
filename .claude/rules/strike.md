@@ -204,15 +204,18 @@ paths:
   `ScheduledStrike`, `NuclearEvents.Impact`, `DebrisEntity` `owner`, the living attachment `BURN_SHOCK_OWNER`) and on
   the api events, whatever the owner's online state. Credit is the attacker entity in the damage source, looked up from
   that UUID at the moment of damage with `StrikeOwner.online` (player list: any level; offline or fake profile: null;
-  dead before respawn: still credited, as vanilla credits an arrow). Never `level.getPlayerByUUID` (same level only) and
-  never an attacker entity held across ticks (a logout or respawn would credit a stale object): jobs keep the UUID.
+  dead before respawn: still credited, as vanilla credits an arrow). Never `level.getPlayerByUUID` (same level only).
+  Jobs keep the UUID and resolve at each hit; only one explosion's source (`StagedExplosion.source`, its craft blast)
+  holds the attacker resolved at its start for the few ticks of its damage units.
 - Every strike `hurt` goes through `StrikeOwner.hurt`: an attacker in another level is dropped as the victim's revenge
   target (`setLastHurtByMob`; vanilla target goals measure across levels by raw coordinates), kill credit stays. The
   vanilla-explosion paths (plot grid, craft) hurt through vanilla and skip it.
 - One cause, one attacker: blast, shockwave, kinetic hit, fragments, debris (a wreck's pieces carry the shot-down
   round's owner), nuclear wave, light, prompt radiation, burn shock (`FlashBurns` records the owner of the flash that
   brought shock; `player_burn_shock` names them). No attacker: radiation sickness (merged dose, fallout, rain),
-  `LateExposure` catch-up (an estimate at load, no owner kept after the front), the wave's craft blasts, spreading fire.
+  `LateExposure` catch-up (an estimate at load, no owner kept after the front), the wave's craft blasts, spreading fire,
+  a crash before arming (vanilla `explode`). Burn shock drops an attacker the damage rules now refuse: the flash decided
+  harm (`owner_shock_team`).
 - Claim queries keep B2's attribution: `ClaimQuery` direct source is the projectile, never the owner (indirect source
   null); nuclear queries have none. Regressions: `OwnerGameTests` (batches `owner_*`).
 

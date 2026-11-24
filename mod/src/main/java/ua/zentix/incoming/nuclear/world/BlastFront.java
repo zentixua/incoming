@@ -27,9 +27,9 @@ import ua.zentix.incoming.nuclear.Detonation;
 import ua.zentix.incoming.progress.Progress;
 import ua.zentix.incoming.registry.ModAttachments;
 import ua.zentix.incoming.registry.ModDamageTypes;
-import ua.zentix.incoming.strike.StrikeOwner;
 import ua.zentix.incoming.registry.ModParticles;
 import ua.zentix.incoming.registry.ModSounds;
+import ua.zentix.incoming.strike.StrikeOwner;
 import ua.zentix.incoming.warhead.Warheads;
 
 import java.util.ArrayDeque;

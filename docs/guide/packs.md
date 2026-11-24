@@ -203,8 +203,8 @@ A datapack advancement for surviving a 20 psi blast of an ICBM-sized yield:
 - One cause has one attacker: the blast, the B-2 bomb's hit and shockwave, fragments, debris (the falling parts of a
   round shot down belong to the round's owner), the nuclear wave, its light, prompt radiation, and burn shock from the
   burst whose light caused it. No attacker: radiation sickness from the gathered dose and fallout (bursts and the rain
-  add up), fire spreading as game fire, mobs that load after a burst and receive what their place received, and the
-  wave's blasts on Create Aeronautics craft.
+  add up), a round that crashes before its fuze arms (a plain vanilla explosion), fire spreading as game fire, mobs
+  that load after a burst and receive what their place received, and the wave's blasts on Create Aeronautics craft.
 - PvP and `/team` friendly fire apply to that damage as to an arrow. A mob hurt by an owner in another dimension takes
   no revenge target: it cannot reach them.
 - Rounds from the console, command blocks and ownerless launchers have no owner. A fake player is credited only under

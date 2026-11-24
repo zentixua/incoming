@@ -10,6 +10,7 @@ import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.stats.Stats;
 import net.minecraft.world.damagesource.DamageSource;
+import net.minecraft.world.effect.MobEffectInstance;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.EntityType;
 import net.minecraft.world.entity.LivingEntity;
@@ -22,8 +23,11 @@ import net.minecraft.world.level.Level;
 import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.phys.AABB;
 import net.minecraft.world.phys.Vec3;
+import net.minecraft.world.scores.PlayerTeam;
+import net.minecraft.world.scores.Scoreboard;
 import net.neoforged.bus.api.Event;
 import net.neoforged.bus.api.EventPriority;
+import net.neoforged.fml.util.ObfuscationReflectionHelper;
 import net.neoforged.neoforge.common.NeoForge;
 import net.neoforged.neoforge.event.entity.living.LivingDamageEvent;
 import net.neoforged.neoforge.event.entity.living.LivingDeathEvent;
@@ -31,6 +35,7 @@ import net.neoforged.neoforge.event.level.ExplosionEvent;
 import net.neoforged.neoforge.gametest.GameTestHolder;
 import net.neoforged.neoforge.gametest.PrefixGameTestTemplate;
 import ua.zentix.incoming.Incoming;
+import ua.zentix.incoming.IncomingConfig;
 import ua.zentix.incoming.api.ClaimQuery;
 import ua.zentix.incoming.api.StrikeRoundEvent;
 import ua.zentix.incoming.entity.DebrisEntity;
@@ -39,6 +44,8 @@ import ua.zentix.incoming.launcher.FixedLauncherBlockEntity;
 import ua.zentix.incoming.launcher.LauncherOrders;
 import ua.zentix.incoming.launcher.Mission;
 import ua.zentix.incoming.nuclear.Detonation;
+import ua.zentix.incoming.nuclear.NuclearStrikes;
+import ua.zentix.incoming.nuclear.NuclearWarhead;
 import ua.zentix.incoming.nuclear.model.BurnInjury;
 import ua.zentix.incoming.nuclear.model.Fragility;
 import ua.zentix.incoming.nuclear.radiation.BurnsEffect;
@@ -80,23 +87,71 @@ public final class OwnerGameTests {
     /**
      * A Shahed-136 burst whose owner is online in the Nether kills cows beside it: every dead cow credits the owner (the
      * killer vanilla credits, also when the fuel fire gives the last blow), and the owner's kill statistic counts each.
+     * Every damage naming the owner (blast, fragments, whatever reached a cow) leaves no revenge mark on them.
      */
     @GameTest(template = "range", timeoutTicks = 400, batch = "owner_blast", skyAccess = true)
     public static void blastCreditsOwnerInAnotherLevel(GameTestHelper h) {
         ServerLevel level = h.getLevel();
         ServerPlayer owner = elsewhere(h, UUID.randomUUID(), "owner_blast");
         List<Cow> cows = new ArrayList<>();
-        for (int[] o : new int[][]{{3, 0}, {-3, 0}, {0, 3}, {0, -3}}) cows.add(still(h, EntityType.COW, CENTER.offset(o[0], 1, o[1])));
+        for (int[] o : new int[][]{{3, 0}, {-3, 0}, {0, 3}, {0, -3}, {10, 0}, {-10, 0}, {0, 10}, {0, -10}}) {
+            cows.add(still(h, EntityType.COW, CENTER.offset(o[0], 1, o[1])));
+        }
         Map<Entity, LivingEntity> killers = new HashMap<>();
         listen(h, LivingDeathEvent.class, e -> {
             if (cows.contains(e.getEntity())) killers.put(e.getEntity(), e.getEntity().getKillCredit());
         });
+        List<LivingEntity> hurt = hurtBy(h, owner);
         Warheads.detonate(level, WeaponType.DRONE, surface(h, CENTER), null, owner.getUUID());
         h.succeedWhen(() -> {
             h.assertTrue(StrikeWorld.get(level).idle(), "the strike still runs");
             h.assertFalse(killers.isEmpty(), "no cow died beside a Shahed-136 burst");
+            noRevenge(h, hurt, owner);
             for (LivingEntity k : killers.values()) h.assertTrue(k == owner, "a dead cow credits " + k + ", not the owner");
             h.assertValueEqual(owner.getStats().getValue(Stats.ENTITY_KILLED.get(EntityType.COW)), killers.size(), "cows killed, owner's statistic");
+        });
+    }
+
+    /**
+     * A nuclear burst whose owner is online in the Nether: the light (pulse job) and the wave (front) name the owner in
+     * every injury they give cows around it, leave no revenge mark, and every cow they kill credits the owner.
+     */
+    @GameTest(template = "range", timeoutTicks = 600, batch = "owner_nuke", skyAccess = true)
+    public static void nuclearPulseAndWaveCreditOwnerInAnotherLevel(GameTestHelper h) {
+        ServerLevel level = h.getLevel();
+        ServerPlayer owner = elsewhere(h, UUID.randomUUID(), "owner_nuke");
+        boolean fires = IncomingConfig.SERVER.nukeFires.get(), damage = IncomingConfig.SERVER.nukeBlockDamage.get(), grid = IncomingConfig.SERVER.gridNuke.get();
+        IncomingConfig.SERVER.nukeFires.set(false);
+        IncomingConfig.SERVER.nukeBlockDamage.set(false);
+        IncomingConfig.SERVER.gridNuke.set(false);
+        StrikeGameTests.afterTest(h, () -> {
+            NuclearStrikes.clear(level);
+            IncomingConfig.SERVER.nukeFires.set(fires);
+            IncomingConfig.SERVER.nukeBlockDamage.set(damage);
+            IncomingConfig.SERVER.gridNuke.set(grid);
+        });
+        List<Cow> cows = new ArrayList<>();
+        for (int r : new int[]{4, 8, 14, 20, 26}) {
+            for (int[] o : new int[][]{{r, 0}, {-r, 0}, {0, r}, {0, -r}}) cows.add(still(h, EntityType.COW, CENTER.offset(o[0], 1, o[1])));
+        }
+        Map<Entity, LivingEntity> killers = new HashMap<>();
+        listen(h, LivingDeathEvent.class, e -> {
+            if (cows.contains(e.getEntity())) killers.put(e.getEntity(), e.getEntity().getKillCredit());
+        });
+        List<String> types = new ArrayList<>(), strangers = new ArrayList<>();
+        listen(h, LivingDamageEvent.Post.class, e -> {
+            if (!cows.contains(e.getEntity()) || !e.getSource().typeHolder().unwrapKey().map(k -> k.location().getNamespace().equals(Incoming.MOD_ID)).orElse(false)) return;
+            types.add(e.getSource().getMsgId());
+            if (e.getSource().getEntity() != owner) strangers.add(describe(e.getSource()));
+        });
+        List<LivingEntity> hurt = hurtBy(h, owner);
+        NuclearWarhead.detonate(level, surface(h, CENTER), 0.1, false, owner.getUUID(), 0.2f);
+        h.succeedWhen(() -> {
+            h.assertTrue(types.contains("incoming.player_nuclear_blast"), "the wave named no owner; injuries: " + types);
+            h.assertTrue(types.contains("incoming.player_nuclear_thermal"), "the light named no owner; injuries: " + types);
+            h.assertTrue(strangers.isEmpty(), "nuclear injuries without the owner: " + strangers);
+            noRevenge(h, hurt, owner);
+            for (LivingEntity k : killers.values()) h.assertTrue(k == owner, "a dead cow credits " + k + ", not the owner");
         });
     }
 
@@ -161,6 +216,44 @@ public final class OwnerGameTests {
             h.assertTrue(s.is(ModDamageTypes.PLAYER_BURN_SHOCK) && s.getEntity() == owner, "the shock death does not name the owner: " + describe(s));
             h.assertValueEqual(owner.getStats().getValue(Stats.ENTITY_KILLED.get(EntityType.COW)), 1, "cow killed, owner's statistic");
         });
+    }
+
+    /**
+     * The damage rules (PvP, a team without friendly fire) decide a burn at its flash: a shock from the flash of an owner
+     * who was offline then still kills a teammate after the owner logs in, as it kills a body burned by an unowned flash.
+     */
+    @GameTest(template = "range", timeoutTicks = 40, batch = "owner_shock_team", skyAccess = true)
+    public static void shockFromAnOfflineTeammatesFlashStillKills(GameTestHelper h) {
+        ServerLevel level = h.getLevel();
+        Detonation d = NuclearGameTests.detonation(h, CENTER, 0, 15, 1f, false);
+        UUID ownerId = UUID.randomUUID();
+        String ownerName = "owner_teammate";
+        ServerPlayer victim = ProgressGameTests.Credited.online(h, "owner_victim", 0, CENTER.offset(-6, 1, -6));
+        ServerPlayer control = ProgressGameTests.Credited.online(h, "owner_control", 0, CENTER.offset(6, 1, -6));
+        for (ServerPlayer p : List.of(victim, control)) ObfuscationReflectionHelper.setPrivateValue(ServerPlayer.class, p, 0, "spawnInvulnerableTime");
+        Scoreboard board = level.getServer().getScoreboard();
+        PlayerTeam team = board.addPlayerTeam("owner_shock_team");
+        team.setAllowFriendlyFire(false);
+        board.addPlayerToTeam(victim.getScoreboardName(), team);
+        board.addPlayerToTeam(ownerName, team);
+        StrikeGameTests.afterTest(h, () -> board.removePlayerTeam(team));
+        // the flash: owner offline (not in the player list), control unowned
+        FlashBurns.burn(level, d, victim, 60, ownerId);
+        FlashBurns.burn(level, d, control, 60, null);
+        for (ServerPlayer p : List.of(victim, control)) {
+            MobEffectInstance burns = p.getEffect(ModEffects.BURNS);
+            h.assertTrue(burns != null && burns.getAmplifier() == BurnsEffect.SHOCK, p.getScoreboardName() + " is not in burn shock: " + burns);
+        }
+        // hours later the owner is online when the shock comes due
+        ProgressGameTests.Credited.online(h, ownerId, ownerName, 0, CENTER.offset(0, 1, 10));
+        for (ServerPlayer p : List.of(victim, control)) {
+            p.getEffect(ModEffects.BURNS).duration = 1;
+            ModEffects.BURNS.value().applyEffectTick(p, BurnsEffect.SHOCK);
+        }
+        h.assertTrue(control.isDeadOrDying(), "shock from an unowned flash did not kill (fixture broken)");
+        h.assertTrue(victim.isDeadOrDying(), "fatal burn shock of a teammate did not kill once the flash's owner logged in: health "
+                + victim.getHealth() + "/" + victim.getMaxHealth());
+        h.succeed();
     }
 
     /**
@@ -297,6 +390,21 @@ public final class OwnerGameTests {
         T mob = h.spawn(type, at);
         mob.setNoAi(true);
         return mob;
+    }
+
+    /** Living entities hurt in {@code owner}'s name during the test (the real damage paths, not a direct call). */
+    private static List<LivingEntity> hurtBy(GameTestHelper h, ServerPlayer owner) {
+        List<LivingEntity> out = new ArrayList<>();
+        listen(h, LivingDamageEvent.Post.class, e -> {
+            if (e.getSource().getEntity() == owner && !out.contains(e.getEntity())) out.add(e.getEntity());
+        });
+        return out;
+    }
+
+    /** No body hurt by an owner in another level keeps them as its revenge target ({@link StrikeOwner#hurt}). */
+    private static void noRevenge(GameTestHelper h, List<LivingEntity> hurt, ServerPlayer owner) {
+        h.assertFalse(hurt.isEmpty(), "nothing was hurt in the owner's name");
+        for (LivingEntity e : hurt) h.assertTrue(e.getLastHurtByMob() != owner, e + " took the owner in another level as its revenge target");
     }
 
     /** Death sources of {@code watched}, by entity. */
