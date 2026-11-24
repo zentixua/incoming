@@ -24,11 +24,10 @@ import java.util.OptionalInt;
 /**
  * Nuclear wave on water (DESIGN-nuke §6, "Water"): dark front ring on water — ripples in the wind behind the front, with foam
  * near ground zero (water decal in the effects layer, {@link WaterDecal}: model ring profile evaluated here per frame);
- * drops from wave crests behind the front near the camera (particles, {@link FxBudget#SPRAY}; the pall wall head renders mist there,
+ * drops from wave crests behind the front near the camera (particles, {@link FxBudget#SPRAY}; the pall wall head renders the mist,
  * {@link #front}); a burst on water produces a crowned water column in the mushroom
  * volume ({@link MushroomField}) and a base surge in the pall ({@link PallField#water}). Ground dust does not rise over water:
- * the wall head there is spray and mist ({@link BlastWall}, water from the map beneath the pall, {@link PallGround}); camera dust
- * particles appear over land only ({@link NukeDust#front}).
+ * the wall head there is spray and mist ({@link BlastWall}, water from the map beneath the pall, {@link PallGround}).
  * <p>
  * Water is known only from what the client already has: client chunks and terrain-map tiles ({@link FarTerrain#water}).
  * Water beneath ground zero far beyond render distance (no chunk or tile) is inferred from height: level ground exactly at sea level means sea.
@@ -43,7 +42,7 @@ public final class NukeWater {
     /** Spray-location spacing along the front arc near the camera, blocks; maximum locations per tick. */
     private static final double STEP = 4;
     private static final int MAX_SPOTS = 64;
-    /** Maximum front-spray speed, blocks per tick (like dust, {@code NukeDust}). */
+    /** Maximum crest-drop speed, blocks per tick. */
     private static final double SPRAY_SPEED = 4;
     /**
      * Guessed water beneath ground zero (no chunk or tile) is resolved again while the detonation on this client is younger than this many
@@ -52,8 +51,8 @@ public final class NukeWater {
      * the joining player take seconds to arrive.
      */
     static final long GUESS_TICKS = 30, GUESS_TICKS_PAST = 100;
-    /** Spray color: brighter near the crest, whiter in the air. */
-    private static final int SPRAY_DARK = 0xC9D2D8, SPRAY_LIGHT = 0xF2F5F7;
+    /** Crest-drop color: brighter near the top. */
+    private static final int SPRAY_LIGHT = 0xF2F5F7;
 
     /** Frame ring profile (render thread; {@link WaterDecal#ring} immediately copies it to the texture). */
     private static final float[] DARK = new float[WaterDecal.SAMPLES], FOAM = new float[WaterDecal.SAMPLES];
@@ -161,9 +160,7 @@ public final class NukeWater {
     /**
      * Camera spray: while the water front is within {@link NukeDust#NEAR} of the camera, drops fly from crests along its arc over water (loaded
      * chunks), denser in stronger wind. The pall volume renders the mist itself up to the height at which wind behind the front
-     * tears off crests ({@link WaterModel#sprayHeight}) — the wall head over water
-     * ({@link NukePall#drawsHead}), just as for camera dust over land ({@link NukeDust}); billows are only a fallback when
-     * the pall does not render it, and are smooth: a billow wider than the screen at the eye, sampled by nearest pixel, makes a staircase of squares across the frame.
+     * tears off crests ({@link WaterModel#sprayHeight}) — the wall head over water.
      */
     private static void front(ClientNuclear.Active a, ClientLevel level, Vec3 eye) {
         lastSpots = 0;
@@ -185,7 +182,6 @@ public final class NukeWater {
         double back = WaterModel.SPRAY_LAG * 20 * d.scale();
         double lag = Math.max(0, slant - d.frontRadius(Math.max(0, ticks - back)));
         int n = Math.min(MAX_SPOTS, (int) Math.round(2 * half * r / STEP * spray * Fx.density(eye)));
-        boolean puffs = !NukePall.drawsHead(a, eye);
         BlockPos.MutableBlockPos pos = new BlockPos.MutableBlockPos();
         for (int i = 0; i < n; i++) {
             double ang = toward + (RANDOM.nextDouble() * 2 - 1) * half;
@@ -198,16 +194,7 @@ public final class NukeWater {
             if (chunk == null || !water(chunk, bx, bz, pos)) continue;
             double surface = pos.getY() + 0.9;
             lastSpots++;
-            // mist: a pall right above water (large transparent billows merge rather than hang as balls), higher up —
-            // sparser and larger, rolling with the front more slowly than it
             double up = Math.pow(RANDOM.nextDouble(), 2.2), h = height * 0.85 * up;
-            if (puffs) {
-                double v = speed * (0.35 + 0.45 * RANDOM.nextDouble());
-                Fx.smoke().vel(cos * v, (0.03 + 0.12 * RANDOM.nextDouble()) * (1 - up), sin * v)
-                        .size((float) (2 + 0.1 * h), (float) (6 + Math.min(14, height * 0.3) + 4 * RANDOM.nextDouble())).growFast()
-                        .life(40 + RANDOM.nextInt(50)).color(SPRAY_DARK, SPRAY_LIGHT).alpha((float) (0.22 + 0.25 * spray)).drag(0.94f)
-                        .smooth().wind(0).fadeIn(6).fadeFrom(0.3f).budget(FxBudget.SPRAY).spawn(level, x, surface + 0.3 + h, z);
-            }
             // crest drops: carried by wind and falling
             if (RANDOM.nextDouble() < 0.4 + 0.6 * spray) {
                 for (int k = 0; k < 2; k++) {

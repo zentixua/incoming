@@ -15,7 +15,7 @@ import java.util.List;
  * Dust leaves the breach while the positive-phase wind blows, more with stronger wind (fraction removed by a time is
  * the fraction of air displacement, {@link BlastWall#carriedShare}), forming a downwind streak: earliest dust travels farthest, by the air displacement since
  * front arrival; latest dust stays at the breach ({@link #parcel}). Dust-layer eddies spread the streak; it merges into the layer
- * when the layer (wall head, {@link DustModel#waveTop}) grows above it — then the pall itself draws it ({@link #apart}).
+ * when the dust wave's drawn layer ({@link PallField#drawnTop}) grows above it — then the dust wave draws it ({@link #apart}).
  * <p>
  * Dust amount: in the pall model, city debris dust is {@code DustModel.Surface.REFERENCE.debris} = 0.1 kg/m² where
  * everything collapses (tuned to Hiroshima). Per kilogram of demolished mineral material this is {@link #FINES}: the fraction lofted as fine
@@ -54,6 +54,8 @@ final class BlastDust implements SmokeGrid.Source {
          * table; evaluating it each frame for hundreds of streaks is expensive, while it changes by fractions of a percent per tick.
          */
         double top, aloft;
+        /** The dust wave's drawn top over the streak's place, blocks: the layer it merges into ({@link #apart}). */
+        double drawnTop = 1;
         long tick = Long.MIN_VALUE;
 
         Streak(double x, double y, double z, BlastGust gust, double mass, double r0, double groundM) {
@@ -67,12 +69,14 @@ final class BlastDust implements SmokeGrid.Source {
         }
 
         /** Layer top and airborne fraction at {@code t} (ticks since detonation), evaluated at the integer tick. */
-        void layer(Detonation d, double t) {
+        void layer(ClientNuclear.Active a, double t) {
+            Detonation d = a.d;
             long k = (long) Math.floor(t);
             if (k == tick) return;
             tick = k;
             double age = k - gust.arrival;
             top = layerTop(d, groundM, age);
+            drawnTop = a.pall.drawnTop(x - d.burst().x, z - d.burst().z, k);
             // coarse material settles from a layer as high as the head top (at least a meter); extinction follows what remains airborne
             aloft = DustModel.extinctionAloft(Math.max(0, age) / (20.0 * d.scale()) / Math.max(1, d.metres(top)));
         }
@@ -139,10 +143,9 @@ final class BlastDust implements SmokeGrid.Source {
 
     /**
      * Share of a streak with σ {@code sigma} not yet mixed into a dust layer with top {@code top} (blocks): a layer of height h is uniformly
-     * mixed, with σ = h/√12; a streak outgrown by the layer is already its dust, drawn by the pall (like the wall head handing over to
-     * the pall, {@link BlastWall#handoff}): share = σ²/(σ² + σ_layer²) (est.) (transition shape). Do not expand the streak to the layer:
-     * the frame would show a second dust over the pall — sky-lit, without the wall head's shadow above it ({@code film} scene:
-     * a uniform beige veil over the whole frame).
+     * mixed, with σ = h/√12; a streak outgrown by the layer is already its dust, drawn by the dust wave: share = σ²/(σ² + σ_layer²)
+     * (est.) (transition shape). Do not expand the streak to the layer: the frame would show a second dust over the wave's,
+     * sky-lit, without the layer's shadow above it ({@code film} scene: a uniform beige veil over the whole frame).
      */
     static double apart(double sigma, double top) {
         double layer = top / Math.sqrt(12);
@@ -174,9 +177,9 @@ final class BlastDust implements SmokeGrid.Source {
             double hx = parcel[0], hy = parcel[1], hz = parcel[2], spreadHead = parcel[3];
             parcel(g, last, t, parcel);
             double tx = parcel[0], ty = parcel[1], tz = parcel[2], spreadTail = parcel[3];
-            s.layer(d, t);
+            s.layer(a, t);
             double sigma = s.r0 + 0.5 * (spreadHead + spreadTail);
-            double mass = s.mass * released * s.aloft * apart(sigma, s.top);
+            double mass = s.mass * released * s.aloft * apart(sigma, s.drawnTop);
             double half = 0.5 * Math.sqrt((hx - tx) * (hx - tx) + (hz - tz) * (hz - tz) + (hy - ty) * (hy - ty));
             // transverse optical depth through the streak center: Gaussian spread over length 2·half
             double tau = DustModel.K_MIX * mass / (2 * Math.PI * sigma * (sigma + 2 * half / Math.sqrt(2 * Math.PI)));

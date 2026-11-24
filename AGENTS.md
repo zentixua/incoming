@@ -288,7 +288,7 @@ queues, little rework; each mission's budget is checked against its measured loa
   player chunk delivery); `grid.md` (blackout/lamps/chunk light).
 - `server-chunks.md` (chunks/tickets/world exit/entities/ground); `sable.md`; `dh.md` (Distant Horizons/LOD Server
   Support API terrain for map/rays/sound, distant LODs, world leaks); `voxy.md` (Voxy via Roxy, depth/distant changes/LSS).
-- `client-smoke.md` (blast cloud bounds, bounded preparation, shared dust terrain cache).
+- `client-smoke.md` (blast clouds, dust terrain cache); `dust-wave.md` (nuclear ground dust).
 - `client.md` (client structure/heightmaps/Iris/`AFTER_LEVEL`); `client-fx.md` (particles/effects layer/trail/alpha
   discard); `client-models.md` (OBJ); `client-sound.md` (OpenAL/volume/loops); `replay.md` (Flashback).
 - `gametest.md` (GameTest/flight scenarios, no wall clocks); `client-scenario.md` (headless client); `rigs.md`

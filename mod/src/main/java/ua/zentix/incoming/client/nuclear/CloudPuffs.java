@@ -8,7 +8,7 @@ import ua.zentix.incoming.nuclear.model.ThermalModel;
 
 /**
  * Detonation light on dust (DESIGN-nuke §6): ball above and fires below illuminate the dust wall, Wilson cloud and the pall
- * behind them ({@code fx_pall}, slot parameters — {@link #pallLight}), and dust at the camera ({@code NukePall.dustColor}). The ball is the same
+ * behind them ({@code fx_pall}, slot parameters — {@link #pallLight}). The ball is the same
  * source that lights the stem and particles ({@link MushroomModel#light}: Lambertian sphere of cap radius, black body at its visible
  * temperature, L·R²/d²); fires use {@link #burn} with the fires' own flame ({@link PallField#fireLight}). This no longer has its own billows (the name remains): mushroom
  * and water column are volumes ({@link MushroomField}); dust wall, Wilson cloud and base surge are volumes in the pall
@@ -72,8 +72,8 @@ public final class CloudPuffs {
 
     /**
      * Ball and fire light on the dust wall, Wilson cloud and pall behind them for mushroom {@code s} ({@code MushroomField.shape})
-     * — used by {@code fx_pall} to light dust (ball — {@link #ball} beam from the cap center; fires — {@link #burn} from below), and
-     * by {@code NukePall.dustColor} for camera dust. Into {@code into}: cap radius (ball radius for a ball), fires' flame {@code fire}
+     * — used by {@code fx_pall} to light dust (ball — {@link #ball} beam from the cap center; fires — {@link #burn} from below)
+     * and by the wall probe. Into {@code into}: cap radius (ball radius for a ball), fires' flame {@code fire}
      * (0..1, {@link PallField#fireLight}: the same fire that lights the haze from below), downwind
      * drift of the cap center, fire-zone edge (blocks), black-body light at the visible cap temperature
      * ({@link FlashLight#source}: linear r, g, b, fractions of a white wall at noon), cap-center height above
@@ -97,7 +97,7 @@ public final class CloudPuffs {
 
     /**
      * {@link #pallLight} of detonation {@code a}'s mushroom at its time without partial tick — one calculation per time: mushroom shape and black-body
-     * spectrum cost tens of microseconds, while camera dust ({@code NukePall.dustColor}) reads light for every billow.
+     * spectrum cost tens of microseconds.
      */
     boolean pallLightNow(ClientNuclear.Active a, float[] into) {
         double t = a.seconds(0);

@@ -92,7 +92,7 @@ class DustWallInputsTest {
             int j = (int) (r / spacing);
             if (field.sigma(x, z, 4, 0, t * 20, PallField.Water.DRY) <= 0) continue;
             samples++;
-            assertTrue(NukePall.youngSigma(table[4 * j + 2]) > 0 || NukePall.youngSigma(table[4 * (j + 1) + 2]) > 0,
+            assertTrue(table[4 * j + 2] > 0 || table[4 * (j + 1) + 2] > 0,
                     "the wall draws dust where the pall has it, at " + r);
         }
         assertTrue(samples > 0, "tangent crosses lofted dust");

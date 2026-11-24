@@ -259,25 +259,21 @@ class ShaderSourceTest {
     }
 
     /**
-     * The dust-wall head nearer than the near volume's far boundary is marched by the rays per pixel, not sampled by the
-     * volume's cells (one point per cell drew the moving roller as clumps with holes): every reader of the volume ends it
-     * where the rays begin, at froxelEnd, or near pall is counted twice or not at all.
+     * The rays take the pall beyond the near volume's far boundary only, and every reader of the volume ends it there: otherwise
+     * near pall is counted twice or not at all.
      */
     @Test
-    void nearVolumeEndsBeforeTheHead() throws IOException, URISyntaxException {
+    void nearVolumeEndsWhereTheRaysBegin() throws IOException, URISyntaxException {
         Path include = Path.of(ShaderSourceTest.class.getResource("/assets/incoming/shaders/include").toURI());
         Path core = include.resolveSibling("core");
-        assertTrue(blankComments(body(Files.readString(include.resolve("pall.glsl")), "float froxelEnd(")).contains("pallWallSpans("),
-                "froxelEnd: the volume does not end at the head");
         String march = blankComments(body(Files.readString(include.resolve("fx_pall.glsl")), "void main("));
-        assertTrue(march.contains("nearT = froxelEnd(") && march.contains("t0 = max(t0, nearT)"), "fx_pall: rays do not begin at froxelEnd");
-        assertFalse(march.contains("PallFroxel.z / axis"), "fx_pall: a ray part begins at the volume's far boundary, not at froxelEnd");
+        assertTrue(march.contains("nearT = PallFroxel.z / axis") && march.contains("t0 = max(t0, nearT)"),
+                "fx_pall: rays do not begin at the volume's far boundary");
         String composite = blankComments(body(Files.readString(core.resolve("fx_pall_composite.fsh")), "void main("));
-        assertTrue(composite.contains("froxelEnd(") && composite.contains("min(depth, nearEnd)"), "composite: volume read past froxelEnd");
-        String upsample = blankComments(body(Files.readString(core.resolve("fx_pall_composite.fsh")), "vec4 upsample("));
-        assertFalse(upsample.contains("PallFroxel.z / axis"), "composite: upsample correction past froxelEnd");
+        assertTrue(composite.contains("nearEnd = PallFroxel.z") && composite.contains("min(depth, nearEnd)"),
+                "composite: volume read past its far boundary");
         String mix = blankComments(body(Files.readString(core.resolve("fx_pall_mix.fsh")), "void main("));
-        assertTrue(mix.contains("froxelEnd(") && mix.contains("min(depth, end)"), "fx_pall_mix: volume read past froxelEnd");
+        assertTrue(mix.contains("min(depth, PallFroxel.z)"), "fx_pall_mix: volume read past its far boundary");
     }
 
     /**
@@ -329,7 +325,7 @@ class ShaderSourceTest {
         assertFalse(dense.contains("mushStemLobes("), "the original stem pattern is not re-rendered");
         String slot = blankComments(body(pall, "void slot("));
         assertEquals(1, slot.split("carpetFlowAt\\(", -1).length - 1, "the flow map is shared by all offset samples of the slot");
-        assertTrue(slot.contains("f.column.x += up") && slot.contains("f.slab.x += total"), "lifted dust shades itself");
+        assertTrue(slot.contains("s.tau += f.column + liftedUp;") && slot.contains("s.slab += f.slab + liftedSlab;"), "lifted dust shades itself");
         assertTrue(slot.contains("mushFootRemoved(Sampler7, k, m, rho - r)"), "the column is limited by the radius of the narrowing band");
         assertTrue(slot.contains("mushFootColumn(Sampler7, k, m, q.y) - removed"));
         assertTrue(slot.contains("mushFootColumn(Sampler7, k, m, 0.0) - removed"), "the shared layer does not include dust outside the given radius");

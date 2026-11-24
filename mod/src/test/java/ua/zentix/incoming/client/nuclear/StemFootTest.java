@@ -16,7 +16,7 @@ import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
- * The carpet of dust and stem of the fungus at its base is one field: medium weakening of the pall ({@link PallField#sigma}) and stem with
+ * The carpet of dust and stem of the fungus at its base is one field: medium weakening of the drawn carpet ({@link PallField#drawnSigma}) and stem with
  *  suction ({@code mushMean}: stem, and where the suction is thicker - it is, {@link MushroomField#footDensity}) where the carpet goes into the
  *  leg. Previously, the stem stood on the flat top of the layer: at the wall above the top of the layer, the density dropped several times to half the height of the layer, and
  *  the surface of the dust rose vertically from the top of the carpet.
@@ -114,7 +114,7 @@ class StemFootTest {
         double dust(double rho, double carpet, double h, boolean withFoot) {
             double stem = stem(rho, h);
             if (withFoot) stem = Math.max(stem, foot(rho, h));
-            return pall.sigma(carpet, 0, h, 0, ticks, PallField.Water.DRY) + stem;
+            return pall.drawnSigma(carpet, 0, h, 0, ticks, PallField.Water.DRY) + stem;
         }
     }
 
@@ -174,8 +174,15 @@ class StemFootTest {
             // in the late, shallow and early air carpets, the carpet is against the wall and touches the stem without suction - there was no void there
             if (thinnestOld < 0.1) hollow++;
         }
-        // there was emptiness in the ground 15 kt in 45 and 60 s (the carpet against the wall in 4–7 times thicker than the stem - host frames) and in the air in 120 s
-        assertTrue(hollow >= 3, "without suction there would be a void between the carpet and the stem " + hollow + " moments");
+        // the carpet is the drawn dust wave's (its thick dust drawn thinner, presentation): at the wall it is no denser than the stem
+        // in these moments, so the stem stands on it and there is no inflow band (merge height 0) and no void to bridge; where the carpet
+        // is denser than the stem the path check above runs
+        for (Case c : CASES) {
+            double wall = c.wall(0.3 * c.top());
+            assertTrue(c.foot[4] > 0 || c.dust(wall, 0.3 * c.top(), false) - c.stem(wall, 0.3 * c.top()) <= c.stemSigma(0.3 * c.top()),
+                    c.name + ": no inflow, yet the carpet at the wall is denser than the stem");
+        }
+        System.out.printf(Locale.ROOT, "void bridged by the inflow in %d moments%n", hollow);
     }
 
     /**
@@ -238,7 +245,8 @@ class StemFootTest {
             for (double h = 0; h <= 5 * top; h += 0.002 * top) {
                 double share = light.call(Map.of("h", h, "top", top, "merge", merge, "carried", 0.4, "total", 0.4));
                 assertTrue(share >= 0 && share <= before + 1e-9, c.name + ": jump in carpet light share");
-                if (h <= Math.min(top, 0.5 * merge)) {
+                // (no merge height: no inflow and no entrance; the stem stands on the carpet)
+                if (merge > 0 && h <= Math.min(top, 0.5 * merge)) {
                     // brown carpet and gray stem in different light: all the channels at the entrance are exactly carpet.
                     for (double[] colors : new double[][]{{0.42, 0.12}, {0.26, 0.20}, {0.10, 0.35}}) {
                         double radiance = colors[1] + (colors[0] - colors[1]) * share;
@@ -266,7 +274,8 @@ class StemFootTest {
                 }
             }
             double h = 0.2 * Math.min(top, merge), r = c.wall(h);
-            assertTrue(flow.call(Map.of("h", h, "rho", r + 0.5 * top, "r", r, "top", top, "share", c.foot[2], "merge", merge)) > 0);
+            // an inflow exists only where the carpet at the wall is denser than the stem (merge height above 0)
+            if (merge > 0) assertTrue(flow.call(Map.of("h", h, "rho", r + 0.5 * top, "r", r, "top", top, "share", c.foot[2], "merge", merge)) > 0);
         }
     }
 

@@ -1,0 +1,12 @@
+{
+    "vertex": "incoming:fx_dustwall",
+    "fragment": "incoming:fx_dustwall_limit",
+    "samplers": [
+        { "name": "Sampler0" },
+        { "name": "Sampler1" }
+    ],
+    "uniforms": [
+        { "name": "DwDiv", "type": "float", "count": 1, "values": [ 4.0 ] },
+        { "name": "PallLimit", "type": "float", "count": 4, "values": [ 2.0, 1.0, 0.0, 0.0 ] }
+    ]
+}

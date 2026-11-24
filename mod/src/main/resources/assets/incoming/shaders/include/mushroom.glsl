@@ -219,6 +219,7 @@ float mushFootDensity(float h, float top, float sigma, float share, float rise) 
 // inflow-band share at height h: tapers from layer top (or half merge height if lower) to
 // merge height merge (density does not: already stem density at merge) (+1e-6: ground-level merge has no edge, equal-edge smoothstep undefined)
 float mushFootNarrow(float h, float top, float merge) {
+    if (merge <= 0.0) return 0.0;
     return 1.0 - smoothstep(min(top, 0.5 * merge), merge + 1e-6, h);
 }
 
@@ -519,26 +520,19 @@ float mushFootRemoved(sampler2D data, int k, Mush m, float offset) {
 
 // Noiseless cap/stem/skirt/water-column extinction at q, billow mean (edge blurred over billow extent): for
 // light-path depth/layer quads; absent column skips edge (zero-thickness wall has zero-width edge)
-vec4 mushMeanWithInflow(Mush m, vec3 q, out float lifted) {
+vec4 mushMean(Mush m, vec3 q) {
     vec4 d = mushDist(m, q);
     float r = mushStemAt(m, q.y), rho = length(q.xz), soft = 0.5 * MUSH_STEM_LOBES * r;
     float stem = mushStemSigma(q.y, m.capBot, m.stemTau, r) * mushEdge(d.y, soft);
-    float core = stem;
     // No addition above merge: avoid evaluating carpet profile at every whole-cap/stem depth sample.
     if (m.footShare > 0.0 && q.y >= 0.0 && q.y < m.footMerge) {
         float band = mushFootBandAt(m, q.y);
         if (rho < r + band + soft) stem = max(stem, mushFootSigma(m, q.y) * mushFootWall(rho, r) * mushEdge(rho - r - band, soft));
     }
-    lifted = stem - core;
     vec4 s = vec4(m.capSigma * mushEdge(d.x, 0.5 * MUSH_CAP_LOBES * m.billows * mushCapUnit(m)), stem,
             m.skirtSigma * mushEdge(d.z, 0.5 * MUSH_SKIRT_LOBES * mushSkirtUnit(m)), 0.0);
     if (m.colSigma > 0.0) s.w = m.colSigma * mushEdge(d.w, 0.5 * MUSH_COLUMN_LOBES * mushColumnUnit(m));
     return s;
-}
-
-vec4 mushMean(Mush m, vec3 q) {
-    float lifted;
-    return mushMeanWithInflow(m, q, lifted);
 }
 
 // Distance to mushroom matter from q, world blocks, conservative (0 inside/near): empty-space ray step. Ellipse
@@ -733,47 +727,37 @@ vec3 mushBallCap(vec3 e, float adapt) {
     return mushFilm3(e * mushBallGain(dot(e, vec3(0.2126, 0.7152, 0.0722)), adapt));
 }
 
-// Total extinction and the part embedded in the wall owner's soil column.
-vec2 mushDepthAt(Mush m, vec3 q, bool ownsStem) {
-    float lifted;
-    vec4 sigma = mushMeanWithInflow(m, q, lifted);
-    float backing = 0.0;
-    if (ownsStem && m.footShare > 0.0) {
-        // The soil column that supplies the stem also covers its embedded core.
-        // Above the layer, only the separate inflow joins the wall's backing.
-        float column = m.footSigma * m.footTop * pallColumn(q.y / max(m.footTop, 1.0));
-        backing = mix(lifted, sigma.y, m.footShare * (1.0 - exp(-column)));
-    }
-    return vec2(dot(sigma, vec4(1.0)), backing);
+// Noiseless extinction of all the mushroom's parts at local q, 1/block
+float mushDepthAt(Mush m, vec3 q) {
+    return dot(mushMean(m, q), vec4(1.0));
 }
 
 // Accumulate one body's clipped interval at its own midpoint spacing.
-void mushAddDepth(inout vec2 depth, Mush m, vec3 dir, vec2 span, int steps, vec2 owner) {
+void mushAddDepth(inout float depth, Mush m, vec3 dir, vec2 span, int steps) {
     if (span.y <= span.x) return;
     float ds = (span.y - span.x) / float(steps);
-    bool ownsStem = length(m.base.xz - owner) < 1.0;
     for (int i = 0; i < steps; i++) {
         vec3 q = mushLocal(m, dir * (span.x + (float(i) + 0.5) * ds));
-        depth += mushDepthAt(m, q, ownsStem) * ds;
+        depth += mushDepthAt(m, q) * ds;
     }
 }
 
-// Integrated mushroom depth and the part supplied by the wall owner's lifted soil.
-vec2 mushDepthRange(sampler2D data, vec3 dir, float start, float len, int steps, vec2 owner) {
-    vec2 depth = vec2(0.0);
+// Integrated noiseless mushroom depth on the eye ray dir over [start, len]
+float mushDepthRange(sampler2D data, vec3 dir, float start, float len, int steps) {
+    float depth = 0.0;
     for (int k = 0; k < MUSHROOMS; k++) {
         if (!mushOn(data, k)) continue;
         Mush m = mushLoad(data, k);
         vec2 span = mushSpan(m, dir);
         span.x = max(span.x, start);
         span.y = min(span.y, len);
-        mushAddDepth(depth, m, dir, span, steps, owner);
+        mushAddDepth(depth, m, dir, span, steps);
     }
     return depth;
 }
 
 float mushTransmitRange(sampler2D data, vec3 dir, float start, float len, int steps) {
-    return exp(-mushDepthRange(data, dir, start, len, steps, vec2(0.0)).x);
+    return exp(-mushDepthRange(data, dir, start, len, steps));
 }
 
 float mushTransmit(sampler2D data, vec3 dir, float len, int steps) {

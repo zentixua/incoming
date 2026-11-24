@@ -158,6 +158,10 @@ neoForge {
             // effects-layer GPU time per pass and part (drain frames, LayerTimes): INCOMING_FX_DRAIN=1 tools/sandbox.sh
             // start
             if (System.getenv('INCOMING_FX_DRAIN')) systemProperty 'incoming.fx.drain', 'true'
+            // the dust wave counts as not ready for this many frames after it first has visible dust (A3: the WARN, and no other dust)
+            if (System.getenv('INCOMING_DUSTWAVE_NOT_READY')) systemProperty 'incoming.dustwave.notReadyFrames', System.getenv('INCOMING_DUSTWAVE_NOT_READY')
+            // the nuclear diagnostics (clock CSV, dust wave A1/A4 lines) in scenario and sandbox runs
+            if (System.getenv('INCOMING_NUKE_DIAG')) systemProperty 'incoming.nukeDiag', 'true'
         }
         server {
             server()

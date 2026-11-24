@@ -158,6 +158,9 @@ class NuclearVolumeBudgetTest {
              var smoke = mockStatic(SmokePass.class); var ball = mockStatic(NukeBallSurface.class);
              var depth = mockStatic(SceneDepth.class); var nuke = mockStatic(NukePall.class); var replay = mockStatic(FlashbackReplay.class)) {
             storage.swap();
+            // the dust march's three outputs at their declared order (light 0, depth span 1, interval split 2)
+            gl30.when(() -> GL30.glGetFragDataLocation(anyInt(), eq("wallDepth"))).thenReturn(1);
+            gl30.when(() -> GL30.glGetFragDataLocation(anyInt(), eq("wallSplit"))).thenReturn(2);
             try {
                 saveWallResources();
                 client(minecraft);
@@ -201,9 +204,15 @@ class NuclearVolumeBudgetTest {
                     draws.add(bound);
                     // The rest of the pall costs 5 ms; the wall time is split across all three draws.
                     if (bound.equals("composite")) gpuNs += 5_000_000L;
-                    if (bound.startsWith("wall.")) {
-                        int side = (12 + DustWallPass.divisor() - 1) / DustWallPass.divisor();
-                        assertArrayEquals(new int[] {bound.equals("wall.march") ? side : 2 * side, side}, viewport);
+                    if (bound.equals("wall.limit")) {
+                        // the rays' end at the dust: the whole frame
+                        assertArrayEquals(new int[] {12, 12}, viewport);
+                    } else if (bound.startsWith("wall.")) {
+                        int side = (12 + DustWallPass.divisor() - 1) / DustWallPass.divisor(), half = (side + 1) / 2;
+                        // interleaved rays: the march traces half the lattice (packed), the pack lays its three outputs side by side,
+                        // the resolve fills the whole lattice's three thirds
+                        int wide = bound.equals("wall.march") ? half : bound.equals("wall.pack") ? 3 * half : 3 * side;
+                        assertArrayEquals(new int[] {wide, side}, viewport);
                         gpuNs += wallDrawNs;
                     }
                     return null;
@@ -211,7 +220,7 @@ class NuclearVolumeBudgetTest {
                 for (String name : List.of("march", "singleMarch", "froxel", "froxelSum", "footLighting", "mushTaus", "shadow", "resolve", "mix", "composite")) {
                     shader(PallPass.class, name, name);
                 }
-                for (String name : List.of("march", "pack", "resolve")) shader(DustWallPass.class, name, "wall." + name);
+                for (String name : List.of("march", "pack", "resolve", "limit")) shader(DustWallPass.class, name, "wall." + name);
                 Uniform layer = mock(Uniform.class);
                 when(PallPass.composite.safeGetUniform("PallLayerFrame")).thenReturn(layer);
                 AtomicInteger layerMode = new AtomicInteger();
@@ -225,7 +234,7 @@ class NuclearVolumeBudgetTest {
                 when(DustWallPass.march.safeGetUniform("DwDiv")).thenReturn(divisor);
                 when(DustWallPass.march.safeGetUniform("DwFrame")).thenReturn(frame);
                 List<String> all = List.of("shadow", "footLighting", "mushTaus", "froxel", "froxelSum", "march",
-                        "resolve", "mix", "composite", "singleMarch", "wall.march", "wall.pack", "wall.resolve", "layer", "composite");
+                        "resolve", "mix", "composite", "singleMarch", "wall.march", "wall.pack", "wall.resolve", "wall.limit", "layer", "composite");
                 PallPass.beginFrame(PallPass.Quality.HIGH);
                 assertFalse(PallPass.available());
                 assertFalse(PallPass.draw(PallPass.warmupFrame(), 8, new Matrix4f(), new Matrix4f(), Vec3.ZERO, new Vector4f()));
@@ -240,11 +249,15 @@ class NuclearVolumeBudgetTest {
                 assertTrue(DustWallPass.ready());
                 gl12.verify(() -> GL12.glTexImage3D(eq(GL12.GL_TEXTURE_3D), eq(0), eq(GL30.GL_R8), eq(128), eq(128), eq(128),
                         eq(0), eq(GL11.GL_RED), eq(GL11.GL_UNSIGNED_BYTE), any(ByteBuffer.class)));
+                // interleaved rays: the march's three outputs hold half the 3×3 lattice (2×3), the pack three times that,
+                // the two histories the whole lattice's three thirds (9×3)
                 state.verify(() -> GlStateManager._texImage2D(eq(GL11.GL_TEXTURE_2D), eq(0), eq(GL30.GL_RGBA16F),
-                        eq(3), eq(3), eq(0), eq(GL11.GL_RGBA), eq(GL11.GL_FLOAT), isNull()), times(2));
+                        eq(2), eq(3), eq(0), eq(GL11.GL_RGBA), eq(GL11.GL_FLOAT), isNull()), times(3));
                 state.verify(() -> GlStateManager._texImage2D(eq(GL11.GL_TEXTURE_2D), eq(0), eq(GL30.GL_RGBA16F),
-                        eq(6), eq(3), eq(0), eq(GL11.GL_RGBA), eq(GL11.GL_FLOAT), isNull()), times(3));
-                gl20.verify(() -> GL20.glDrawBuffers(new int[] {GL30.GL_COLOR_ATTACHMENT0, GL30.GL_COLOR_ATTACHMENT1}));
+                        eq(6), eq(3), eq(0), eq(GL11.GL_RGBA), eq(GL11.GL_FLOAT), isNull()), times(1));
+                state.verify(() -> GlStateManager._texImage2D(eq(GL11.GL_TEXTURE_2D), eq(0), eq(GL30.GL_RGBA16F),
+                        eq(9), eq(3), eq(0), eq(GL11.GL_RGBA), eq(GL11.GL_FLOAT), isNull()), times(2));
+                gl20.verify(() -> GL20.glDrawBuffers(new int[] {GL30.GL_COLOR_ATTACHMENT0, GL30.GL_COLOR_ATTACHMENT1, GL30.GL_COLOR_ATTACHMENT2}));
                 gl11.verify(GL11::glFinish, times(2));
 
                 // A changed pall program also invalidates the shared preparation.
@@ -253,15 +266,16 @@ class NuclearVolumeBudgetTest {
                 when(PallPass.footLighting.getId()).thenReturn(0);
                 assertTrue(PallPass.available());
 
-                // An in-place relink can reverse the two GLSL 150 output locations.
+                // An in-place relink can reorder the GLSL 150 output locations.
                 when(DustWallPass.march.getId()).thenReturn(9);
                 gl30.when(() -> GL30.glGetFragDataLocation(9, "fragColor")).thenReturn(1);
+                gl30.when(() -> GL30.glGetFragDataLocation(9, "wallDepth")).thenReturn(0);
                 assertFalse(PallPass.available());
                 assertFalse(DustWallPass.ready());
                 draws.clear();
                 PallPass.beginFrame(PallPass.Quality.HIGH);
                 loadOnSeparateFrames(render, all);
-                gl20.verify(() -> GL20.glDrawBuffers(new int[] {GL30.GL_COLOR_ATTACHMENT1, GL30.GL_COLOR_ATTACHMENT0}));
+                gl20.verify(() -> GL20.glDrawBuffers(new int[] {GL30.GL_COLOR_ATTACHMENT1, GL30.GL_COLOR_ATTACHMENT0, GL30.GL_COLOR_ATTACHMENT2}));
 
                 gl33.verify(() -> GL33.glQueryCounter(anyInt(), anyInt()), never());
                 assertTrue(timestamps.isEmpty(), "loading frames must never issue a GPU time sample");
@@ -288,8 +302,6 @@ class NuclearVolumeBudgetTest {
                 PallPass.Frame burst = new PallPass.Frame();
                 burst.quality = PallPass.Quality.HIGH;
                 burst.dustWall.active = true;
-                burst.young.w = 800;
-                burst.water0.zero();
                 burst.slot0.m13(1);
                 burst.mushroomCount = 1;
                 burst.mushrooms[3] = 1;
@@ -306,8 +318,8 @@ class NuclearVolumeBudgetTest {
                 assertEquals(GpuWatch.State.WATCHING, PallPass.watch().state());
                 draw(burst);
                 gl20.verify(() -> GL20.glUniform4fv(eq(bodyLocation), any(FloatBuffer.class)));
-                assertEquals(List.of("mushTaus", "froxel", "froxelSum", "singleMarch", "resolve",
-                        "wall.march", "wall.pack", "wall.resolve", "layer", "composite"), draws);
+                assertEquals(List.of("wall.march", "wall.pack", "wall.resolve", "wall.limit", "mushTaus", "froxel", "froxelSum", "singleMarch",
+                        "resolve", "layer", "composite"), draws);
                 state.verify(GlStateManager::_genTexture, never());
                 state.verify(() -> GlStateManager._texImage2D(anyInt(), anyInt(), anyInt(), anyInt(), anyInt(), anyInt(),
                         anyInt(), anyInt(), any()), never());
@@ -343,21 +355,16 @@ class NuclearVolumeBudgetTest {
     void singleBurstRayRequiresExactlyTheMediaItDraws() {
         PallPass.Frame f = new PallPass.Frame();
         f.dustWall.active = true;
-        f.young.w = 800;
         f.slot0.m13(1);
-        f.water0.zero();
         f.mushroomCount = 1;
         assertTrue(f.singleRay(false));
         assertFalse(f.singleRay(true), "conventional smoke in the same frame");
         f.whirlShape.m31(0.1f);
         assertFalse(f.singleRay(false), "whirl in the last column");
         f.whirlShape.zero();
-        f.water0.z = 0.1f;
-        assertFalse(f.singleRay(false), "water surge without a water map");
-        f.water0.z = 0;
-        f.water0.w = 1;
-        assertFalse(f.singleRay(false), "spray");
-        f.water0.w = 0;
+        f.slot0.m33(1);
+        assertFalse(f.singleRay(false), "water under the pall");
+        f.slot0.m33(0);
         f.slot1.m13(1);
         assertFalse(f.singleRay(false), "second active slot");
         f.slot1.zero();
@@ -366,8 +373,8 @@ class NuclearVolumeBudgetTest {
         f.mushroomCount = 0;
         assertFalse(f.singleRay(false), "a wall without a body");
         f.mushroomCount = 1;
-        f.young.w = 0;
-        assertFalse(f.singleRay(false), "disabled handoff");
+        f.dustWall.active = false;
+        assertFalse(f.singleRay(false), "no dust pass");
     }
 
     @Test

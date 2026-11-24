@@ -62,7 +62,7 @@ the host name's letter case. Other ports keep separate caches.
 
 First distinguish a slow frame from a slow server tick:
 
-- If the view stutters while the world keeps moving normally, lower "Mushroom cloud, dust wall and pall" to LOW,
+- If the view stutters while the world keeps moving normally, lower "Mushroom cloud and dust wave" to LOW,
   reduce shader quality or try without shaders. Client graphics settings affect frame cost.
 - If mobs, redstone and impacts slow down for everyone, the server is behind: 20 TPS needs ticks within 50 ms.
   Reduce simultaneous orders and avoid many far targets in unexplored terrain, which need chunk generation.

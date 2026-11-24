@@ -256,7 +256,6 @@ public final class NukeFlash {
     public static void render(GuiGraphics g, DeltaTracker delta) {
         float partial = delta.getGameTimeDeltaPartialTick(false);
         int w = g.guiWidth(), h = g.guiHeight();
-        NukeDust.render(g);
         overexposed(g, partial, w, h);
         if (eyes(Minecraft.getInstance().player)) {
             if (!scars.isEmpty()) scars(g, w, h);

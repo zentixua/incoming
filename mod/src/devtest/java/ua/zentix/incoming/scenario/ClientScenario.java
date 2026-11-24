@@ -53,7 +53,7 @@ public final class ClientScenario {
      * Scenario commands, {@code wait:nuke}: tick, from which the steps are waiting for the detonation packet ({@code -1} - they are not waiting), and how many
      *  ticks they are already waiting for; the detonations that the client knew when the steps stood up are not the same detonations.
      */
-    private int nukeGate = -1, nukeGateWaited;
+    private int nukeGate = -1, nukeGateWaited, frontGate = -1, frontGateWaited;
     /** {@code wait:blast}: tick, from which steps wait for the next explosion on the embedded server; explosions from launch. */
     private final java.util.ArrayDeque<Integer> blastGates = new java.util.ArrayDeque<>();
     private final java.util.concurrent.atomic.AtomicInteger serverBlasts = new java.util.concurrent.atomic.AtomicInteger();
@@ -274,6 +274,19 @@ public final class ClientScenario {
     }
 
     private void onScreen(ScreenEvent.Init.Post e) {
+        // a world copy made with experimental settings (a server's world, Zearth Silo) asks once before loading: the scenario
+        // answers "I know what I'm doing" itself (a client without a window has nobody to click)
+        if (started && System.getProperty("incoming.world") != null) {
+            for (var child : e.getScreen().children()) {
+                if (child instanceof net.minecraft.client.gui.components.Button b
+                        && b.getMessage().getContents() instanceof net.minecraft.network.chat.contents.TranslatableContents t
+                        && t.getKey().equals("selectWorld.backupJoinSkipButton")) {
+                    Incoming.LOG.info("SCENARIO world copy with experimental settings: loading it as it is");
+                    b.onPress();
+                    return;
+                }
+            }
+        }
         if (started || !(e.getScreen() instanceof TitleScreen)) return;
         started = true;
         Minecraft mc = Minecraft.getInstance();
@@ -314,6 +327,7 @@ public final class ClientScenario {
         if (p == null || mc.level == null) return;
         tick++;
         if (nukeGate >= 0 && tick >= nukeGate) holdForNuke();
+        if (frontGate >= 0 && tick >= frontGate && nukeGate < 0) holdForFront();
         if (!blastGates.isEmpty() && tick >= blastGates.getFirst()) holdForBlast();
         for (Step s : List.copyOf(steps)) {
             if (s.at == tick) s.action.run();
@@ -3590,6 +3604,7 @@ public final class ClientScenario {
                 Math.max(1, Integer.getInteger("incoming.commands.gap", 40)));
         for (String w : plan.warnings()) Incoming.LOG.warn("SCENARIO commands: {}", w);
         if (plan.nukeGate() >= 0) nukeGate = plan.nukeGate();
+        if (plan.frontGate() >= 0) frontGate = plan.frontGate();
         blastGates.addAll(plan.blastGates());
         if (!blastGates.isEmpty()) {
             NeoForge.EVENT_BUS.addListener((net.neoforged.neoforge.event.level.ExplosionEvent.Start e) -> {
@@ -3942,6 +3957,38 @@ public final class ClientScenario {
         blastGates.clear();
         blastGates.add(first);
         for (int g : rest) blastGates.add(g + 1);
+    }
+
+    /**
+     * {@code wait:front}: until the newest detonation's in-game front has passed the camera's ground point (the burst's distance to
+     * the ground under the player), all later steps shift by a tick: frames at fixed times after the front passes the camera.
+     * No detonation or no passage within {@value CommandPlan#MAX_WAIT} ticks: a line in the log, and the steps go on.
+     */
+    private void holdForFront() {
+        var p = Minecraft.getInstance().player;
+        var newest = ua.zentix.incoming.client.nuclear.ClientNuclear.detonations().stream()
+                .min(java.util.Comparator.comparingDouble(a -> a.ticks(0)));
+        if (newest.isPresent() && p != null) {
+            var a = newest.get();
+            var level = Minecraft.getInstance().level;
+            int x = net.minecraft.util.Mth.floor(p.getX()), z = net.minecraft.util.Mth.floor(p.getZ());
+            double ground = level != null && level.getChunkSource().hasChunk(x >> 4, z >> 4)
+                    ? level.getHeight(net.minecraft.world.level.levelgen.Heightmap.Types.MOTION_BLOCKING, x, z) : p.getY();
+            double r = a.d.burst().distanceTo(new net.minecraft.world.phys.Vec3(p.getX(), ground, p.getZ()));
+            if (a.ticks(0) >= a.d.arrivalTicks(r)) {
+                Incoming.LOG.info("SCENARIO commands: the front passed the camera's ground point ({} m from the burst, {} s after it); "
+                        + "the steps were waiting {} tick", Math.round(r), String.format(java.util.Locale.ROOT, "%.2f", a.ticks(0) / 20), frontGateWaited);
+                frontGate = -1;
+                return;
+            }
+        }
+        if (frontGateWaited >= CommandPlan.MAX_WAIT) {
+            Incoming.LOG.warn("SCENARIO commands: no front passage for {} tick - steps go further", frontGateWaited);
+            frontGate = -1;
+            return;
+        }
+        frontGateWaited++;
+        steps.replaceAll(s -> s.at >= tick ? new Step(s.at + 1, s.action) : s);
     }
 
     /** Longest wait for an explosion ({@code wait:blast}): Shahed's flight at 5 km, tick. */

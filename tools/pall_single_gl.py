@@ -40,7 +40,7 @@ for name in ("fx_pall", "fx_pall_single"):
         assert not unused, f"Inactive single-burst bindings: {unused}"
 
 
-def draw(program, *, offset=180, haze=0, inner=0, soot=0, wilson=0, body=0, clear_uniform=False):
+def draw(program, *, offset=180, haze=0, soot=0, wilson=0, body=0, clear_uniform=False):
     # Shift the active cap across the narrow field of view between draws.
     table = np.zeros((5, 256, 4), np.float32)
     cap = table[0]
@@ -64,7 +64,6 @@ def draw(program, *, offset=180, haze=0, inner=0, soot=0, wilson=0, body=0, clea
     slot = np.array([(offset, -80, -20, 800), (0, 0, 0, 1), (1, 0, .25, .75),
                      (0.03, 64, 0, 0)], np.float32)
     g.glUniformMatrix4fv(h.loc(program, "PallSlot0"), 1, False, slot)
-    g.glUniform4f(h.loc(program, "PallYoung"), inner, inner * 2, 0, 800)
     g.glUniform4f(h.loc(program, "PallWilson0"), 45, 4, wilson, 20)
     storm = np.array([(128 if soot else 0, 32, 120, 90), (0, 0, 2, 0),
                       (0, soot, 4, 0), (1, .4, .15, 0)], np.float32)
@@ -76,13 +75,13 @@ def draw(program, *, offset=180, haze=0, inner=0, soot=0, wilson=0, body=0, clea
 
 
 for name, params in [
-    ("full soil handoff", {}),
+    # the table's first row is ground dust the pall never reads (the dust pass draws it): an empty pall
+    ("ground dust only", {}),
     ("haze only", {"haze": .012}),
-    ("partial soil handoff", {"offset": 0, "inner": 45}),
     ("Wilson crossings", {"offset": 0, "wilson": .022}),
     ("fire-column soot", {"soot": .04}),
     ("cap on ray", {"offset": 0, "body": .08}),
-    ("cap, Wilson, partial soil and haze", {"offset": 0, "body": .08, "wilson": .022, "inner": 45, "haze": .012}),
+    ("cap, Wilson and haze", {"offset": 0, "body": .08, "wilson": .022, "haze": .012}),
 ]:
     full, single = [draw(p, **params) for p in programs]
     delta = np.abs(full - single).max()

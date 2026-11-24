@@ -29,7 +29,8 @@ import java.util.Locale;
  *   {@code town} — a stone brick block on paving (houses 10×10×12 m, streets 6 m wide along X and Z, ±48 m), a strike at
  *   the intersection: wind at ground level in the street ({@code LocalWind}); {@code block} — a four-storey brick block of flats
  *   on paving (16 × 8 m), the strike inside a ground-floor flat: the collapse of what lost support;</li>
- *   <li>{@code nuke <kt> [air|ground] [near [meters]]} — a nuclear detonation without flight ({@code /incoming nuke now}) at a new
+ *   <li>{@code nuke <kt> [air|ground] [near [meters]] [also <dx> <dz> <delay s>]...} — a nuclear detonation without flight
+ *       ({@code /incoming nuke now}) at a new
  *       place; with {@code near} — the view from the camera: the houses and oaks of the {@code debris} scene at the point, the detonation that many meters to the north
  *       (by default {@link #NEAR_RANGE}), effect time — from the arrival of the front at the houses (frames also before it, from −10 s));</li>
  *   <li>{@code icbm} — an ICBM launch from a pad at the point, target 40 km north: the whole first-stage burn; time — from ignition;</li>
@@ -159,7 +160,8 @@ record SandboxCommand(Verb verb, List<String> args) {
                 if (args.size() > (own() ? 2 : 1) && !(number(1) >= 50 && number(1) <= 5000)) throw new IllegalArgumentException("from the point 50–5000 blocks");
             }
             case NUKE -> {
-                need(1, 5);
+                int n = baseEnd();
+                if (n < 1 || n > 5) throw new IllegalArgumentException("nuke: arguments 1–5 before also");
                 int kt = (int) number(0);
                 if (kt < 1 || kt > 1000) throw new IllegalArgumentException("yield 1–1000 kt");
                 if (flashCamera()) {
@@ -168,14 +170,20 @@ record SandboxCommand(Verb verb, List<String> args) {
                     break;
                 }
                 int i = 1;
-                if (args.size() > i && List.of("air", "ground").contains(args.get(i))) i++;
-                if (args.size() > i && args.get(i).equals("near")) {
+                if (n > i && List.of("air", "ground").contains(args.get(i))) i++;
+                if (n > i && args.get(i).equals("near")) {
                     i++;
-                    if (args.size() > i && !args.get(i).equals("dry") && (number(i) < 100 || number(i) > 10000)) throw new IllegalArgumentException("near distance 100–10000 m");
-                    if (args.size() > i && !args.get(i).equals("dry")) i++;
-                    if (args.size() > i && args.get(i).equals("dry")) i++;
+                    if (n > i && !args.get(i).equals("dry") && (number(i) < 100 || number(i) > 10000)) throw new IllegalArgumentException("near distance 100–10000 m");
+                    if (n > i && !args.get(i).equals("dry")) i++;
+                    if (n > i && args.get(i).equals("dry")) i++;
                 }
-                if (args.size() > i) throw new IllegalArgumentException("nuke <kt> [air|ground] [near [meters] [dry]]");
+                if (n > i) throw new IllegalArgumentException("nuke <kt> [air|ground] [near [meters] [dry]] [also <dx> <dz> <delay s>]...");
+                if ((args.size() - n) % 4 != 0 || (args.size() - n) / 4 > ALSO_MAX) throw new IllegalArgumentException("also <dx> <dz> <delay s>, at most " + ALSO_MAX);
+                for (int g = n; g < args.size(); g += 4) {
+                    if (!args.get(g).equals("also")) throw new IllegalArgumentException("also <dx> <dz> <delay s>");
+                    if (Math.abs(number(g + 1)) > 20000 || Math.abs(number(g + 2)) > 20000) throw new IllegalArgumentException("also offset within 20 km");
+                    if (number(g + 3) < 0 || number(g + 3) > 3600) throw new IllegalArgumentException("also delay 0–3600 s");
+                }
             }
             case RAID -> {
                 need(0, water() ? 5 : 4);
@@ -311,7 +319,27 @@ record SandboxCommand(Verb verb, List<String> args) {
 
     /** {@code nuke … near … dry}: the site in a savanna (cured grass, {@code Kindling}). */
     boolean dry() {
-        return near() && args.getLast().equals("dry");
+        return near() && args.get(baseEnd() - 1).equals("dry");
+    }
+
+    /** At most this many {@code also} detonations: the dust wave draws 16 sources a frame. */
+    static final int ALSO_MAX = 15;
+
+    /** {@code nuke}: arguments before the first {@code also}. */
+    int baseEnd() {
+        int i = args.indexOf("also");
+        return i < 0 ? args.size() : i;
+    }
+
+    /**
+     * {@code nuke … also <dx> <dz> <delay s>}: further detonations of the same yield and burst, (dx, dz) metres from the first
+     * and that many seconds after it: several sources in one shot (crossing waves, a nuke into old haze).
+     */
+    List<double[]> also() {
+        List<double[]> out = new java.util.ArrayList<>();
+        if (verb != Verb.NUKE) return out;
+        for (int g = baseEnd(); g + 3 < args.size(); g += 4) out.add(new double[] {number(g + 1), number(g + 2), number(g + 3)});
+        return out;
     }
 
     /**
@@ -465,7 +493,7 @@ record SandboxCommand(Verb verb, List<String> args) {
                 throw new IllegalArgumentException("frame time — seconds separated by commas: " + args.get(1));
             }
             // before the effect starts (−10…0 s) — only for an effect whose start is known in advance (nuke … near: the front's arrival)
-            if (t[i] < -10 || t[i] > 600) throw new IllegalArgumentException("frame time −10…600 s");
+            if (t[i] < -10 || t[i] > 3700) throw new IllegalArgumentException("frame time −10…3700 s");
             if (i > 0 && t[i] < t[i - 1]) throw new IllegalArgumentException("frame times must ascend");
         }
         return t;

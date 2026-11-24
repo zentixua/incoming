@@ -362,16 +362,17 @@ class PallFieldTest {
         assertTrue(ended, "dust doesn't settle");
     }
 
-    /** The attenuation at a point is the same as what the table gives (the shader calculates from it), and the wind blows away the dust. */
+    /** The attenuation at a point is the same as its node's dust gives, and the wind blows away the dust. */
     @Test
-    void sigmaFollowsTheTable() {
+    void sigmaFollowsTheNodes() {
         PallField p = new PallField(GROUND);
         double ticks = 20 * 120;
-        float[] row = new float[4 * PallField.ROWS * PallField.BINS];
-        p.row(ticks, true, false, row);
+        double[] dust = new double[4], haze = new double[4];
         double[] w = new double[2];
         p.drift(ticks, w);
         int i = 30;
+        p.dust(i, ticks, dust);
+        p.haze(2, ticks, haze);
         double r = p.radius(i), k = p.share(i, ticks);
         // downwind from the epicenter, near the ground: the dust of the i node, carried to its share (haze also reaches here)
         double ux = Math.cos(GROUND.windDir()), uz = Math.sin(GROUND.windDir());
@@ -379,10 +380,10 @@ class PallFieldTest {
         w[0] *= k;
         w[1] *= k;
         double s = p.sigma(w[0] + ux * r, w[1] + uz * r, 0, 0, ticks, PallField.Water.DRY);
-        assertTrue(s >= row[4 * i] * 0.98, "dust on the ground " + s + " < tables " + row[4 * i]);
-        assertTrue(s <= row[4 * i] + row[4 * (2 * PallField.BINS + 2)] * 1.01 + 1e-9);
+        assertTrue(s >= dust[0] * 0.98, "dust on the ground " + s + " < node " + dust[0]);
+        assertTrue(s <= dust[0] + haze[0] * 1.01 + 1e-9);
         // above pall - nothing
-        assertEquals(0, p.sigma(w[0] + ux * r, w[1] + uz * r, row[4 * i + 1] * 2 + 400, 0, ticks, PallField.Water.DRY), 1e-12);
+        assertEquals(0, p.sigma(w[0] + ux * r, w[1] + uz * r, dust[1] * 2 + 400, 0, ticks, PallField.Water.DRY), 1e-12);
         assertTrue(w[0] > 0 && w[1] > 0, "wind at 0,5 rad - drift along +x and +z");
     }
 
@@ -485,31 +486,23 @@ class PallFieldTest {
     }
 
     /**
-     * What is not under pall ({@link PallGround#hasLand}, {@link PallGround#hasWater}) is not in the table: an explosion in the middle of the
-     *  sea - without dust and haze, over land - without splashes; the top of the layers remains.
+     * What is not under pall ({@link PallGround#hasLand}) is not in the pall's table: an explosion in the middle of the sea has no haze
+     * or fires there; the top of the layer remains.
      */
     @Test
     void tableHoldsOnlyWhatIsUnderThePall() {
         PallField p = new PallField(GROUND);
         float[] row = new float[4 * PallField.ROWS * PallField.BINS];
-        int dustRow = PallField.DUST_ROW * PallField.BINS, sprayRow = PallField.SPRAY_ROW * PallField.BINS, hazeRow = PallField.HAZE_ROW * PallField.BINS;
-        p.row(20 * 120, true, false, row);
-        boolean dust = false, haze = false;
+        p.row(20 * 120, true, row);
+        boolean haze = false;
+        for (int i = 0; i < PallField.BINS; i++) haze |= row[4 * i] > 0;
+        assertTrue(haze);
+        p.row(20 * 120, false, row);
         for (int i = 0; i < PallField.BINS; i++) {
-            assertEquals(0, row[4 * (sprayRow + i)], 0, "splashes over land, knot " + i);
-            dust |= row[4 * (dustRow + i)] > 0;
-            haze |= row[4 * (hazeRow + i)] > 0;
+            assertEquals(0, row[4 * i], 0, "haze over the sea, knot " + i);
+            assertEquals(0, row[4 * i + 2], 0, "fires over the sea, knot " + i);
+            assertTrue(row[4 * i + 1] > 0, "top of layer, node " + i);
         }
-        assertTrue(dust && haze);
-        p.row(20 * 30, false, true, row);
-        boolean spray = false;
-        for (int i = 0; i < PallField.BINS; i++) {
-            assertEquals(0, row[4 * (dustRow + i)], 0, "dust over the sea, knot " + i);
-            assertEquals(0, row[4 * (hazeRow + i)], 0, "haze over the sea, knot " + i);
-            assertTrue(row[4 * (dustRow + i) + 1] > 0 && row[4 * (sprayRow + i) + 1] > 0, "top of layer, node " + i);
-            spray |= row[4 * (sprayRow + i)] > 0;
-        }
-        assertTrue(spray);
     }
 
     /**

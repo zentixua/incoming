@@ -272,7 +272,7 @@ void main() {
     vec4 rays = vec4(0.3, 0.3, 0.3, 0.5);
     vec3 dir = vec3(0, 0, -1);
     vec4 near = froxelNear(Sampler11, PallFroxel, vec2(0.5), 256.0);
-    vec4 front = mediumTo(300.0, ivec2(0), dir, 256.0, 256.0, near, rays, rays, false, mediumSpans(dir));
+    vec4 front = mediumTo(300.0, ivec2(0), dir, 256.0, 256.0, near, rays, rays, mediumSpans(dir));
     float frame = 0.1 + 0.5 * 0.6;
     float branch = seeMediumLight(rays.r, rays.a, front.r, front.a, 0.1, 0.5) + rays.a * frame;
     float exact = rays.r + rays.a * frame;

@@ -31,6 +31,20 @@ context, link, target, texture, bind, quad, read, loc, check = (
 )
 
 
+AGES = 32
+
+
+def lifetime(p, nodes, end=1e4):
+    """The whole-lifetime table (PallField.lifetime: row 0 arrival and paved, rows 1.. top and depth per log age, slopes 0)
+    from per-node (arrival, layer top, law depth, paved), the same at every age; binds it on unit 2 with DwLife."""
+    data = np.zeros((1 + AGES, len(nodes), 4), np.float32)
+    for i, (arrival, top, depth, paved) in enumerate(nodes):
+        data[0, i] = (arrival, paved, 0, 0)
+        data[1:, i] = (top, depth, 0, 0)
+    bind(p, 2, texture(g.GL_RGBA32F, g.GL_RGBA, len(nodes), 1 + AGES, data.reshape(-1, 4)))
+    g.glUniform4f(loc(p, "DwLife"), end, 0.05, 0, 0)
+
+
 def scene(w, h, depths):
     return texture(g.GL_RG32F, g.GL_RG, w, h, [(d, d) for d in depths])
 
@@ -105,6 +119,8 @@ def march_cases():
 uniform float Floor;
 uniform vec2 Shelf;
 // the ground: Floor, or Shelf.y blocks from Shelf.x blocks ahead of the eye on x (a rise)
+uniform vec4 DwEye; uniform vec4 DwRing; uniform vec4 DwLife; uniform vec4 DwBall; uniform vec3 DwBallLight; uniform float DwCut;
+uniform vec3 DwFire; uniform vec2 DwRelief; uniform vec4 DwSurge;
 float dwFloorEye(vec2 xz) { return Shelf.y > 0.0 && xz.x > Shelf.x ? Shelf.y : Floor; }
 float dwOpenEye(vec3 p) { return 1.0; }
 vec2 dwSoilAt(vec2 xz) { return vec2(0.0); }
@@ -123,7 +139,7 @@ void main() {
                              gl["compileShader"](src, g.GL_FRAGMENT_SHADER), validate=False)
     target(1, 1, [(g.GL_RGBA32F, g.GL_RGBA)])
     g.glUseProgram(p)
-    bind(p, 2, texture(g.GL_RGBA32F, g.GL_RGBA, 128, 1, [(0, 20, 0.11, 0)] * 128))
+    lifetime(p, [(0, 20, 10.0, 0)] * 128)
     g.glActiveTexture(g.GL_TEXTURE0 + 12)
     noise = g.glGenTextures(1)
     g.glBindTexture(g.GL_TEXTURE_3D, noise)
@@ -195,6 +211,8 @@ def turning_case():
     arc. Features placed by bearing x the front's current radius slid along it at bearing x the front's speed (~15 m here)."""
     core, expand = gl["CORE"], gl["expand"]
     src = expand("""#version 150
+uniform vec4 DwEye; uniform vec4 DwRing; uniform vec4 DwLife; uniform vec4 DwBall; uniform vec3 DwBallLight; uniform float DwCut;
+uniform vec3 DwFire; uniform vec2 DwRelief; uniform vec4 DwSurge;
 float dwFloorEye(vec2 xz) { return 0.0; }
 float dwOpenEye(vec3 p) { return 1.0; }
 vec2 dwSoilAt(vec2 xz) { return vec2(0.0); }
@@ -216,8 +234,8 @@ void main() {
     target(2048, 1, [(g.GL_RGBA32F, g.GL_RGBA)])
     g.glUseProgram(p)
     reach, arrive = 9000.0, 7.63
-    nodes = [(arrive * (i / 127 * reach / 4500.0) ** 1.25, 68.0, 0.11, 0.0) for i in range(128)]
-    bind(p, 2, texture(g.GL_RGBA32F, g.GL_RGBA, 128, 1, nodes))
+    nodes = [(arrive * (i / 127 * reach / 4500.0) ** 1.25, 68.0, 100.0, 0.0) for i in range(128)]
+    lifetime(p, nodes)
     g.glActiveTexture(g.GL_TEXTURE0 + 12)
     noise = g.glGenTextures(1)
     g.glBindTexture(g.GL_TEXTURE_3D, noise)
@@ -269,6 +287,8 @@ def period_case():
     slope (flat runs and sudden steps). A smooth periodic profile is not caught here: the seeds' noise has no period."""
     core, expand = gl["CORE"], gl["expand"]
     src = expand("""#version 150
+uniform vec4 DwEye; uniform vec4 DwRing; uniform vec4 DwLife; uniform vec4 DwBall; uniform vec3 DwBallLight; uniform float DwCut;
+uniform vec3 DwFire; uniform vec2 DwRelief; uniform vec4 DwSurge;
 float dwFloorEye(vec2 xz) { return 0.0; }
 float dwOpenEye(vec3 p) { return 1.0; }
 vec2 dwSoilAt(vec2 xz) { return vec2(0.0); }
@@ -301,8 +321,8 @@ void main() {
     target(2048, 1, [(g.GL_RGBA32F, g.GL_RGBA)])
     g.glUseProgram(p)
     reach, arrive = 9000.0, 7.63
-    nodes = [(arrive * (i / 127 * reach / 4500.0) ** 1.25, 68.0, 0.11, 0.0) for i in range(128)]
-    bind(p, 2, texture(g.GL_RGBA32F, g.GL_RGBA, 128, 1, nodes))
+    nodes = [(arrive * (i / 127 * reach / 4500.0) ** 1.25, 68.0, 100.0, 0.0) for i in range(128)]
+    lifetime(p, nodes)
     g.glActiveTexture(g.GL_TEXTURE0 + 12)
     noise = g.glGenTextures(1)
     g.glBindTexture(g.GL_TEXTURE_3D, noise)

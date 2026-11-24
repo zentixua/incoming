@@ -426,7 +426,7 @@ public final class NukeSounds {
          * model positive phase, {@link Detonation#positivePhaseSeconds}) on own source from direct-hit onset, while a distant huge
          * explosion recording ({@code nuke.boom_far}) supplies roll; terrain echo repeats it ({@link NukeEchoes}). Nearby: deafening
          * hit (several sources together; OpenAL limits one to unity). Post-front wind noise, glass (eye-local
-         * dust follows wall head, {@link NukeDust#veil}). Hearing/lean belong to body ({@link #hit}); {@code hit} means front reaches
+         * dust follows wall head). Hearing/lean belong to body ({@link #hit}); {@code hit} means front reaches
          * body this tick too: wave sounds heard as before it.
          */
         private void arrive(Vec3 ear, boolean hit) {

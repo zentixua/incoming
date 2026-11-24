@@ -33,7 +33,7 @@ class DustWallGlslTest {
     @Test
     void javaCopiesMatchTheShader() throws IOException {
         String s = glsl();
-        assertEquals(DustWallPass.NODES, (int) constant(Files.readString(GLSL.resolveSibling("wall_ownership.glsl")), "DW_NODES"));
+        assertEquals(DustWallPass.NODES, (int) constant(s, "DW_NODES"));
         // the ray's slab top over the layer: the bound over the largest hump (dwHump: 1.54 + 0.22), the bulges and the haze over them
         assertEquals(DustWallPass.TOP_OVER_LAYER, 1.8 * (1 + constant(s, "DW_BULGE")) * constant(s, "DW_HAZE"), 1e-9);
         assertTrue(s.contains("return 1.54 + 0.22 * smoothstep"), "dwHump spans 1.54–1.76, under the bound 1.8");

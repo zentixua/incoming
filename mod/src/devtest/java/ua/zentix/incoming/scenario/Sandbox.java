@@ -127,14 +127,28 @@ final class Sandbox {
     /** CPU renderer (Mesa llvmpipe, tools/soft_gl.sh): frames pace the world ({@link #paceFrame}). */
     private Boolean soft;
     /** Frames per tick while frames are due on a CPU renderer: a frame lands within half a tick of its second. */
-    private static final double FRAMES_PER_TICK = 2;
+    private static final double FRAMES_PER_TICK = framesPerTick(2);
     /**
      * Frames per tick while frames are due on a GPU: a frame is taken at the first render whose age reaches its second, so
      * it lands within a few milliseconds of it, also after a frame that wrote its PNG (~0.1 s on the render thread); at whole
      * ticks a 30 fps take's frames advanced 25–28 ms with a 45–145 ms jump
      * every half second, and every moving thing in the clip lurched at ~2 Hz.
      */
-    private static final double GPU_FRAMES_PER_TICK = 48;
+    private static final double GPU_FRAMES_PER_TICK = framesPerTick(48);
+
+    /**
+     * Probe override of the frames per tick while frames are due ({@code fx/frames_per_tick} in the sandbox directory): a time
+     * lapse at 1 frame/s needs no 48 renders a tick, which stretched 10 game minutes over hours.
+     */
+    private static double framesPerTick(double otherwise) {
+        try {
+            double v = Double.parseDouble(java.nio.file.Files.readString(java.nio.file.Path.of("fx/frames_per_tick")).trim());
+            Incoming.LOG.info("SANDBOX frames per tick while frames are due: {}", v);
+            return v;
+        } catch (Exception e) {
+            return otherwise;
+        }
+    }
     /** Seconds before a due frame from which the CPU renderer's world is slowed ({@link #paceFrame}). */
     private static final double PACE_LEAD = 2;
     /** Rate from arming to the first measured frames (≈ 2 frames per tick at 4 frames/s, the smoke-filled llvmpipe rate). */
@@ -229,6 +243,8 @@ final class Sandbox {
      * NuclearStrikes.detonateNow}).
      */
     private final java.util.Set<Integer> knownNukes = new java.util.HashSet<>();
+    /** {@code nuke … also}: (client tick due, server command) of detonations still to fire. */
+    private final List<Object[]> also = new java.util.ArrayList<>();
     private Vec3 firstSeen = Vec3.ZERO;
     private double closest = Double.MAX_VALUE;
     /** Nuke near the camera: how many runs there were (site — {@link #nearSite}). */
@@ -334,6 +350,12 @@ final class Sandbox {
         // effect clocks are world ticks: paused (resource reload, menu), effects stand still and frames wait
         if (mc.isPaused()) return;
         tick++;
+        for (var it = also.iterator(); it.hasNext(); ) {
+            Object[] a = it.next();
+            if ((int) a[0] > tick) continue;
+            it.remove();
+            onServer(false, server -> run(server, (String) a[1]));
+        }
         if (!ready) {
             if (tick == 1) setup();
             // ground under the point and the camera at the client
@@ -1208,6 +1230,7 @@ final class Sandbox {
         paved = -1;
         pending = Pending.SERVER;
         knownNukes.clear();
+        also.clear();
         ua.zentix.incoming.client.nuclear.ClientNuclear.detonations().forEach(a -> knownNukes.add(a.d.id()));
         Vec3 at = c.near() ? new Vec3(site.x, GROUND + 1, site.z - c.nearRange()) : new Vec3(site.x, GROUND + 1, site.z);
         onServer(true, server -> {
@@ -1265,6 +1288,12 @@ final class Sandbox {
             run(server, String.format(Locale.ROOT, "incoming nuke now at %.1f %.1f %.1f %d %s", at.x, at.y, at.z, (int) c.number(0),
                     c.air() ? "air" : "ground"));
         });
+        // nuke … also: the further detonations on the client's tick clock (world ticks: a paused client waits with them)
+        for (double[] a : c.also()) {
+            String order = String.format(Locale.ROOT, "incoming nuke now at %.1f %.1f %.1f %d %s", at.x + a[0], at.y, at.z + a[1],
+                    (int) c.number(0), c.air() ? "air" : "ground");
+            also.add(new Object[] {tick + (int) Math.round(a[2] * 20), order});
+        }
     }
 
     /**

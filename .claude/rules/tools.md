@@ -68,12 +68,12 @@ Prism: `~/.var/app/org.prismlauncher.PrismLauncher/data/PrismLauncher/` (`tools/
                                            harness): thin foreground, hand and pane in its composite, history at a new
                                            occluder and on an uneven lattice, the march at the world's edge, straight down
                                            and on a valley floor; exit 1 on a failed check; run it on dust wall shader changes
-    dust_wall_contract_gl.py [checkout] [case ...] ← Mesa GL contracts for depth ordering, ownership and reprojection.
+    dust_wall_contract_gl.py [checkout] [case ...] ← Mesa GL contracts for depth ordering and reprojection.
                                            Use motion for camera translation/rotation and edge for slopes and convex corners.
                                            dust_wall_gl.py runs every case.
     wall_layer_identity.py               ← fixed-seed llvmpipe comparison with fixtures/wall_layer_7de91b6d1.glsl, run by
                                            dust_wall_gl.py. Checks light, depth and clipped transmission across 672 cases.
-    pall_single_gl.py                    ← compares the general and single-burst ray in seven llvmpipe scenes, including
+    pall_single_gl.py                    ← compares the general and single-burst ray in six llvmpipe scenes, including
                                            haze, soot and a populated cap with a missing-body negative control. Run by dust_wall_gl.py.
     dust_wall_ray_cost.py <checkout> [readbacks.npz] ← llvmpipe timings and optional RGBA32F readbacks for the pall ray pass
     nested_kwin.sh                       ← nested KWin for the client: no window and no host sound, its own D-Bus bus without starting services

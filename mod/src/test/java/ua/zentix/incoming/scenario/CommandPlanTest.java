@@ -63,4 +63,15 @@ class CommandPlanTest {
         assertEquals(302, p.steps().get(3).tick());
         assertEquals(322 + CommandPlan.TAIL, p.end());
     }
+
+    @Test
+    void waitFrontSetsItsGateOnce() {
+        CommandPlan p = CommandPlan.parse("incoming nuke now at 0 64 0 1000 ground;wait:front;wait:20;shot:s1_1s;wait:front");
+        // command 100 (+40), wait:front - 140, wait:20 - snapshot on 160
+        assertEquals(140, p.frontGate());
+        assertEquals(-1, p.nukeGate());
+        assertEquals(160, p.steps().get(1).tick());
+        assertEquals(1, p.warnings().size(), p.warnings().toString());
+        assertEquals(-1, CommandPlan.parse("shot:x").frontGate());
+    }
 }

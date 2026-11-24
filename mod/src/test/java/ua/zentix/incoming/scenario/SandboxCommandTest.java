@@ -112,6 +112,26 @@ class SandboxCommandTest {
         }
     }
 
+    /** Several detonations in one shot: {@code also <dx> <dz> <delay s>} groups after the first burst's arguments. */
+    @Test
+    void nukeAlsoAddsDetonations() {
+        SandboxCommand c = SandboxCommand.parse("nuke 1000 ground near 4500 also 6000 0 10 also 0 0 300");
+        assertTrue(c.near());
+        assertEquals(4500, c.nearRange());
+        assertEquals(2, c.also().size());
+        assertEquals(6000, c.also().get(0)[0]);
+        assertEquals(300, c.also().get(1)[2]);
+        assertTrue(SandboxCommand.parse("nuke 15 near dry also 100 100 0").dry());
+        assertTrue(SandboxCommand.parse("nuke 15 ground").also().isEmpty());
+        StringBuilder eight = new StringBuilder("nuke 1000 ground near 4500");
+        for (int k = 1; k < 8; k++) eight.append(" also ").append(1500 * k).append(" 0 ").append(k);
+        assertEquals(7, SandboxCommand.parse(eight.toString()).also().size());
+        for (String bad : new String[]{"nuke 15 also 1 2", "nuke 15 also 1 2 x", "nuke 15 also 1 2 -1", "nuke 15 also 30000 0 0",
+                "nuke 15 also 0 0 0 extra", "nuke 15 near also 0 0 0 dry"}) {
+            assertThrows(IllegalArgumentException.class, () -> SandboxCommand.parse(bad), bad);
+        }
+    }
+
     /** A real explosion in the middle of the bridge: stone flooring 1–6 m above the riverbed (breach of the slab). */
     @Test
     void realTakesBridgeDeck() {

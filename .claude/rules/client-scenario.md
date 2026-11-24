@@ -34,7 +34,9 @@ Client scenarios log `SCENARIO …` lines (sounds, fps, flash; `SCENARIO far`: d
 `SCENARIO nuke-sound`: nuclear echo, rays, reflection delay/level, tracks, start anchor `by sound|tick`; burning city,
 own OpenAL sources with obstruction, per-tick `FireWatch` cost). Use these and frames to check look/sound.
 `commands` scenario (`incoming.commands`, semicolon-separated steps, `ScenarioCommands`/`CommandPlan`): commands,
-`wait:N`, `shot:<name>`, `hud:off|on`, `wait:nuke` (wait for detonation packet), `wait:blast` (wait for next server
+`wait:N`, `shot:<name>`, `hud:off|on`, `wait:nuke` (wait for detonation packet), `wait:front` (once: later steps wait until the newest detonation's
+in-game front has passed the ground under the camera; after `incoming nuke now` use it alone, since `wait:nuke` after
+the command's own gap waits for a second detonation), `wait:blast` (wait for next server
 explosion, at most 3600 ticks), `maxyield:<kt>` (server yield ceiling), `burnable` (to the most flammable land
 within 4 km, 200 blocks up), `skip:<s>` (time skip to that many seconds after the last detonation, as scenario
 `firestorm`), `storm:on|off`, `frames:<name>:<count>:<yaw>:<blocks>` (consecutive frames while turning/moving, each
@@ -105,7 +107,8 @@ with Iris.
   white/black concrete marker pairs along the street, faces 4.5–59.5 m from the camera `cam 15 1.6 0 1.6`, n ≤ 12 rounds at
   once at the side-street crossings, none in the marker street: the eye inside a B-2 ×12 salvo's dust; the shot log's
   `veil set` lists the veil Gaussians, from which the law's transmittance to each marker follows). `nuke <kt> [air|ground]`: `/incoming nuke now`
-  6 km away; `airburst`: SAM burst 30 m above point; `sam`: loaded SAM at point and Shahed from 1400 blocks north
+  6 km away (`… also <dx> <dz> <delay s>`, up to 15 groups: more detonations of that yield (dx, dz) m from the
+  first, delay s after it on the client's world-tick clock: crossing waves, a nuke into old haze); `airburst`: SAM burst 30 m above point; `sam`: loaded SAM at point and Shahed from 1400 blocks north
   through it (like probe `sam-side`), time from interceptor launch rail exit (trail, rail-exit cloud, motor;
   `track on` follows it), `clear` removes SAM; `sam` starts at gameTime 6000 (same branch-comparison air, leaves
   time of day unchanged). `launch`/`flight <weapon> [from]`: real launch (`/incoming salvo … from`; final `own`

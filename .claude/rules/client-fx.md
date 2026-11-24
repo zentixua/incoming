@@ -74,9 +74,9 @@ paths:
   view also stages in-place program replacements detected by shader instance and GL ID. Secondary views reuse
   the shared programs with their own targets and histories. The completion log follows the primary GPU drain.
   Dust OFF prepares only the mushroom and pall programs. With dust enabled, the lattice and wall targets are ready
-  before handoff. The single-burst pall ray warms on a separate loading frame. It reads one mushroom body from draw
-  uniforms and skips fully handed-off dry samples with neither haze nor fire-column soot. Water, multiple bodies,
-  a second slot, fire whirls or an active conventional smoke grid use the general ray. The wall march writes two RGBA16F attachments. The pack and both history targets are twice the march width.
+  at first use. The single-burst pall ray warms on a separate loading frame. It reads one mushroom body from draw
+  uniforms. Water, multiple bodies,
+  a second slot, fire whirls or an active conventional smoke grid use the general ray. The wall march writes three RGBA16F attachments. The pack and both history targets are three times the march width.
   The shared composite warms the unblended layer target and blended display in separate loading frames. Terrain and fire maps upload when a real frame supplies them.
   Verify first use in a fresh process with the driver cache disabled. A second detonation uses compiled programs;
   a one-pixel dummy pass with placeholder textures misses first-use specialization on the real targets.
@@ -88,7 +88,7 @@ paths:
   messages per nuke scenario). `GpuWatch` acts on one pall frame far past any budget: ≥ 250 ms GPU holds the detail at
   its floor, ≥ 1 s turns the volume off for the session with one chat line (`incoming.pall.gpu_off`). It takes GPU time
   minus the render thread's time between the pair's stamps (`PallPass.SUBMIT`): a cold-cache driver compile idles the
-  GPU between stamps for seconds. Software renderers (llvmpipe) are not watched. The interval includes the young wall through its composite.
+  GPU between stamps for seconds. Software renderers (llvmpipe) are not watched. The interval includes the dust wave through its composite.
   The wall divisor and step cap follow the effective pall rung. The watch belongs to the session, not to a view: it lives outside `PallPass.ViewState` (a view's own timer init once replaced it, re-enabling OFF), OFF also
   stops the cold warm-up (`cold`, `draw`), and FLOOR is a latch each view's detail takes at its next sample or draw
   (`PallPass.latch`; a per-view floor on the transition alone left the other views at HIGH), `PallWatchViewsTest`.
@@ -179,8 +179,7 @@ paths:
   light in the eye comes from the source, not from the quad's corners, and a corner inside its own cap would dim the glare
   above it, and the dust would be counted twice. The probe runs after the pall pass, which lays the frame's maps and
   mushroom table. Under Iris the layer runs after the shaderpack passes: the pack does not light the smoke and it is not in
-  the pack's fog (light is the Minecraft light map, except for particles with an already-lit color, `Fx.Spec.prelit`: dust
-  at the nuke's camera is lit by its own wall, `nuclear.md`; where the client has no chunk, it is open sky, as for a trail
+  the pack's fog (light is the Minecraft light map, except for particles with an already-lit color, `Fx.Spec.prelit`; where the client has no chunk, it is open sky, as for a trail
   ribbon: vanilla is dark there, and the puffs of a salvo's trail the viewer has left would land on the bright ribbon as
   black beads). On top of that comes the light of the frame's fireballs (`fx/layer/FxLights`: up to 4 most visible, in the
   layer's shader, as (r/d)² against the light around the eye, not brighter than day; without it, at night the dust near a
@@ -635,8 +634,8 @@ paths:
   ground under the epicentre: a camera in a valley below it looks below the horizon, and the ray goes under the plane
   right at the eye — emptiness without a pall, and a flat cut at the horizon (the dark line on the trailer frames). The
   height map is 128² cells around the epicentre for the pall at the source (`PallField.sourceExtent`: the table, the
-  haze trail, the base wave — without drift), the head of the dust wall (`BlastWall.reach`: its fading edge — up to
-  0.3 psi, twice as far as the pall's dust; beyond the map, the head would stand on the terrain of its edge), and the
+  haze trail, the base wave — without drift), the dust wave's reach (`BlastWall.reach`: its fading edge — up to
+  0.3 psi, twice as far as the pall's dust; beyond the map, the wave would stand on the terrain of its edge), and the
   camera with a margin of 2 km (`PallGround.AROUND_EYE_M`), no wider than the whole box of the pall
   (`PallField.extent`); it grows — the map becomes larger, the known part stays. It does not grow to the whole drift: in
   an hour the wind carries dust tens of kilometres away, and a map covering the whole box would have coarsened even near
@@ -654,17 +653,19 @@ paths:
   and below it. Where the coarse map at the start is above the ray, it is lowered beneath the ray (down to four cells —
   as is, again). The cost is only at pixels without world and within the map's heights (sky above the terrain is one
   box check). Flame on surfaces is also there (`fx_pall_composite`, 16 steps).
-  Over water, water spray takes the place of dust (spray in the dust layer; the base wave, from the slot's numbers
-  `PallWater0/1`: radius, top, attenuation, whether there is water under the pall; `pallField` returns `PallAt` with three
-  substances): white (`MIST` = `CloudPuffs.SPRAY`, checked by `PallGlslTest`). Droplets of tens of microns barely absorb
+  The pall's own matter is the fire-zone haze: the table holds one row per slot (`PallField.row`), `pallField` returns
+  `PallAt` for the haze alone, and all ground dust, spray and the base surge are the dust pass's (`DustWallPass`). Water
+  droplets (dust the stem's foot inflow lifts over water, the Wilson shell) are white (`MIST` = `CloudPuffs.SPRAY`,
+  checked by `PallGlslTest`). Droplets of tens of microns barely absorb
   and scatter forward (g ≈ 0.85). The light in it is the same as for the whole pall (below): the table's attenuation is
   already the delta-Eddington σ' (the forward peak goes into unscattered light), and both the view ray (volume step,
   `fx.vsh`) and the light toward the point use it, while droplets scatter with albedo ω' ≈ 0.996 and residual phase
   g' ≈ 0.46 (`PALL_MIST_W`, `PALL_MIST_G`). Not a “transport optical depth” for one light (0.28 of the full) with full
   scattering at the same residual phase: that counted the forward peak twice, and thin water spray glowed up to 3.6 times
-  brighter — a white wall across half the frame for a minute (frames `nuke-water`, step 6). Fires under dust (`pallBurn`)
-  do not glow over water (× (1 − the water share where it was lifted from)). The water map is read in `pallField` only if
-  there is water under the pall (`W.w`); for haze, only where haze or fires are: over land, not one extra sample.
+  brighter — a white wall across half the frame for a minute (frames `nuke-water`, step 6). Fires under the matter
+  (`pallBurn`) do not glow over water (× (1 − the water share under the point)). The water map is read in `pallField` only
+  if there is water under the pall (slot `S[3].w`) and only where haze or fires are: the haze's source on the trail axis
+  (no fires over water) and the ground under the layer; over land, not one extra sample.
   Light of the pall (`client/nuclear/PallLight`; in the shader `pallDiffuse`, `pallK` — checked by `PallGlslTest`, the
   physics by `PallLightTest`): the pall above the point and below it is a flat layer by the noise-free table (optical
   depth τ above the point, τc from the floor, `PallAt.slab`), in which two Eddington streams after delta-Eddington. The
@@ -715,17 +716,11 @@ paths:
   dayTime 12600, zero by 12750), and a cap lit by it alone draws flat blue-grey in vanilla's sky light against a golden
   shader-pack dusk. A cap 10 km up at a 3° sun keeps 0.78/0.68/0.46, at −1.9° red 0.20/0.09/0.01; the earth's shadow
   climbs the cloud (dip √(2z/R)); `SightTest.capAloftKeepsTheSunAfterGroundSunset`, `shaderSunIsThisLaw`. The light of the ball and of fires on dust follows the same
-  laws for the pall, the wall's head, Wilson clouds and dust near the camera (the slot's numbers — `CloudPuffs.pallLight`;
-  dust near the camera — `NukePall.dustColor`). The ball is the same source as the mushroom's body
+  laws for the pall and Wilson clouds (the slot's numbers — `CloudPuffs.pallLight`). The ball is the same source as the mushroom's body
   (`MushroomModel.light`): a Lambertian ball of the cap's radius with the brightness of a black body at its visible
   temperature, L·R²/d² × `PallExposure`, directly in the frame's linear units (`pallBallLight` ↔ `CloudPuffs.ball`), as a
   beam from the cap's centre (`pallBall`: the epicentre, the cap's drift with the wind `MushroomField.driftAlong`, height).
-  The scattered light of the ball enters the wall's head through the near side it lights: its own depth `capDeep` =
-  min(optical depth to the cap, optical depth above the point + the depth in front of the ball that its beam still passes
-  to the top above the point: max(to the cap − above the point / μ, 0)) − depth; the layer is slab + `capDeep`. A ball low
-  and behind the head: with one optical depth above the point, the outer side would glow orange by day with light that
-  does not reach there, and with the sun's depth at night, where its light is thousands of times brighter than the sky,
-  no shadows would remain in the head. The light of the ball and of fires, in choosing the main light (`keyDir`), is in
+  The light of the ball and of fires, in choosing the main light (`keyDir`), is in
   the same units: linear light on a white wall.
   Fires under dust — light from below with strength `pallBurn` × `PallGlowOnSmoke` / `DUST` — on screen on top of the sky
   light (`PallBase` = `FarView.ambient`), into linear by the difference of conversions (`pallLift`: (base + x)^γ − base^γ):
@@ -748,14 +743,14 @@ paths:
   (half as from a bright half-space). In a thick pall the light is seen from a depth of one mean free path (less than a
   large puff), and at uniform light the colour is even: the structure comes from differences in light and from puffs,
   which the eye tells apart.
-  Puffs mix with the layer (`pallMixed` by `PallAt.mixed`), and the layer's top is bumpy (`topBumps` → `pallField`, one
-  noise sample per step; the bumps are the top, not holes, and the light in a dip is as at the top). The laws are in
-  `nuclear.md`. Noise is a cascade (`coarseAt`, `fineAt`): large puffs by tile (`VolumeNoise.shape`: smoothly from gaps
+  The haze is a mixed layer (`pallMixed` at full mixing, half its puffs' contrast); the dust the stem's foot inflow lifts
+  keeps its patches. The laws are in `nuclear.md`. Noise is a cascade (`coarseAt`, `fineAt`): large puffs by tile (`VolumeNoise.shape`: smoothly from gaps
   to twice as dense as the average — a “there / not there” step gave one density and one shadow); within them, small ones
   by tile four times finer (`pallDetail`, 0.3–1.7, averaging 1: density and visibility of the field are the same,
   `PallNoiseTest`), as long as the ray distinguishes them (pixel width or a third of a step no more than 1/32 of a tile;
   beyond that — their average, without a sample). The field is one at any eye position: from the eye more detail is
-  visible, not other puffs. The puffs' shadow is the deviation of optical depth toward the main light from the average,
+  visible, not other puffs. The puffs' shadow (the foot inflow's dust only; the thin mixed haze casts none) is the
+  deviation of optical depth toward the main light from the average,
   summed over the cascade's scales: large ones by two samples at 0.06 and 0.22 tile, small ones at 0.015 and 0.055 (its
   quarters), × the density of the large puff (`clumpShade`). For each light: how far it is from the main one's side. It
   shifts the point deeper into the layer (light from above) or farther from the floor (fires), and cuts beams as
@@ -767,22 +762,22 @@ paths:
   the 3D noise is not declared in the JSON: its own texture unit (7), and the binding and sampler number are set by hand
   after `apply()`. An undeclared `sampler3D` would have stayed on unit 0 together with `sampler2D` — a draw failure.
   Samplers of different types cannot share one unit. Haze holds until morning, but is not visible in the frame all the
-  time: only detonations that have something in the table and whose box is in the view pyramid go into the frame
+  time: only detonations with haze in the table, a Wilson shell, a mushroom or a firestorm (`NukePall.visible`; ground dust
+  alone takes no slot) and whose box is in the view pyramid go into the frame
   (`NukePall.frame`; without a far plane, the pall is visible beyond 4 draw distances), otherwise null, and the layer
   computes neither pall passes nor `SceneDepth` (if there are no squares either). The frame's cost is bounded by
   construction: rays — the frame's pixels / factor² (LOW — 1/16 and 20 steps; MEDIUM — 1/4 and 28; HIGH — 1/4 and 48);
-  per step — no more than two detonations, each with up to 11 noise samples (8 where small puffs are finer than the ray
-  distinguishes; one of them is the bumps of the dust top), 2 table lookups and 1 terrain-map lookup (the layer's floor);
-  the light — 3 two-stream solutions per step (6 where fires are under dust; 7 exponentials each, without samples); if
-  there is water under the pall, one more table sample (the spray row: the slot has three rows — dust, spray, haze,
-  `PallField.ROWS`) and one water-map sample (and one at the haze source, where there is haze or fires; the base wave
-  has no samples, it comes from the slot's numbers); at a pixel without world, up to 26 more terrain-map samples per
-  detonation. Accumulation and output per frame take 9 and 4 samples per pixel. By day the output also has a shadow: 2
-  table lookups per detonation, 1–2 water-map lookups, and one two-stream solution (direct sun, and the light scattered by
+  per step — no more than two detonations, each with up to 4 noise samples (3 where small puffs are finer than the ray
+  distinguishes; 10 inside the foot inflow's dust, with its puffs' shadow), 1 table lookup (the haze row,
+  `PallField.ROWS`) and 1 terrain-map lookup (the layer's floor); the light — 3 two-stream solutions per step (6 where fires
+  are under the matter; 7 exponentials each, without samples); if there is water under the pall, where there is haze or
+  fires, two water-map samples (the haze's source and the ground under the point); at a pixel without world, up to 26 more
+  terrain-map samples per detonation. Accumulation and output per frame take 9 and 4 samples per pixel. By day the output
+  also has a shadow: 1 table lookup per detonation, 0–2 water-map lookups, and one two-stream solution (direct sun, and the light scattered by
   the pall onto the ground, versus the sky without it). Per mushroom: 3 samples of the mushroom table, and in its shadow
   tile 4, plus 1 sample of the shadow map. While the ball shines on the world: a frame copy, per pixel 4 depth samples and
-  1 frame-copy sample; for the ball, a two-stream solution; and at night the pall above the point, as for the shadow: 2
-  tables per detonation, 1–2 water-map lookups. The shadow map is computed once per frame: 128² straight lines per
+  1 frame-copy sample; for the ball, a two-stream solution; and at night the pall above the point, as for the shadow: 1
+  table lookup per detonation, 0–2 water-map lookups. The shadow map is computed once per frame: 128² straight lines per
   mushroom, up to 129 steps (empty space — a jump to the substance), per step the mushroom field's average without noise,
   since the shadow on the ground is smooth (the cloud's edge is hundreds of metres); per straight line, three two-stream
   solutions. In the cloud (llvmpipe, scenario `mushroom` with `INCOMING_MUSHROOM=shadow`) the 128² map is +2–8 % to the
@@ -810,12 +805,9 @@ paths:
   and joins it with the rays beyond in linear light (`froxelOver`); layer quads read `fx_pall_mix` (volume plus rays per
   reduced pixel). Mushrooms (with the eye's optical depth through them, `mushEyeTau`), explosion smoke and fire whirls
   (`whirlCell`) nearer than the boundary are injected into the cells; the rays take them only from the boundary, so
-  near matter is ordered against near dust. The Wilson cloud stays in the rays, and so does the dust-wall head: on each
-  ray the volume ends at the last slice boundary before the ray enters a slot's head span (`froxelEnd`, `pallWallSpans`)
-  and the rays begin there; the march, the composite (read-out and upsample correction) and `fx_pall_mix` take the same
-  boundary. The head is a roller a few dozen blocks thick moving with the wave: one point per cell averaged over frames
-  drew it as clumps with holes and stippled the ground dust right after the front (laptop check of 3.11.0, bisected to
-  #641), and the ground in front of the volume's boundary took a thinner head than behind it (a straight seam at 256). Emission past half-float range is
+  near matter is ordered against near haze. The Wilson cloud stays in the rays. The rays begin at the volume's far
+  boundary; the march, the composite (read-out and upsample correction) and `fx_pall_mix` take the same boundary
+  (`ShaderSourceTest.nearVolumeEndsWhereTheRaysBegin`). Emission past half-float range is
   clamped, not dropped (a hole). Same-frame checks (32-px checker tiles, history off): the volume over 0–256 equals the
   per-pixel ray over that span (up view red 100.8 vs 101.2); sequential shots drift with fires and history, so A/B only
   within one frame.
@@ -866,92 +858,19 @@ paths:
   pixel — offset by half a full-frame pixel: a blur with neighbours every frame and when the gaze is still) and clamps
   it within the neighbours of only the same distance to the world: with neighbours beyond an object's edge, the
   background's pall dug into the edge when the gaze moved.
-- The blast-wave dust wall and the Wilson cloud are in the same pall passes (`client/nuclear/BlastWall`, the laws —
-  `nuclear.md`), not as square puffs: puffs on a ring tens of kilometres across either punched holes in the wall or cost
-  thousands of quads, and a rim of flat squares does not curl. The slot has a head (`PallWall0/1`, mat4: the dust edge,
-  the wedge's length and its top, extinction, the path of dust with the wind behind the front, spray above water, the
-  noise tile, density at the edge and at the end of the wedge) and the Wilson shell (`PallWilson0/1`). The head is read
-  in `slot` (`fx_pall`) next to the pall: the same light and the same matter (dust; over fires with smoke, spray over
-  water), but its own noise (`wallNoise`: in the coordinates of the dust itself, `pallWallOrigin` — puffs stand where
-  the dust was torn off; the puff shape is the same `pallShape` as the pall's, denser in thick matter) and its own
-  thicknesses toward the light along the middle head: the head is not a flat plane but a low long wedge, and light comes
-  in from the side too. Scattered light — `wallChord` up to the top of the wedge at that place, sideways up to the exit
-  from the wedge at its height, down to the terrain; beams toward the sun and the ball — `wallChordNear` up to the top
-  of the head (no farther than 1.5 wedges and the top), cells denser at a point by the square's number: four even steps
-  over the whole length stepped over the wedge at its edge, and deep in the head there was even light. Each sample of
-  these thicknesses (and of the puffs' shadow) has its own extinction (`wallMove`: the frame `pallWallInside`, from the
-  edge toward the end of the wedge `pallWallDensity`), as in `BlastWall.sigma`: from the edge to the end of the wedge it
-  changes many times over. The Java copy of the light is `NukePall.dustLight` (its laws — `BlastWallTest`);
-  `PallGlslTest` checks the head at a point and the ray samples against `BlastWall.sigma` (it assembles them with the
-  same text as the shader), and the handoff to the pall beyond the wedge is one constant `PALL_WALL_HANDOFF_TO` =
-  `BlastWall.HANDOFF_TO` in the frame, the ring of segments and the ray to the light. The ray at the head is denser: its
-  segments on the ray (`pallWallSpans`: a ring from the dust edge to 1.5 wedge lengths, by height — the terrain map with
-  the head) run on their own grid with an offset per frame, a step of an eighth of the head's height (a head thicker
-  than the step, the ray either went straight through or passed by, and accumulation gave ripple), over all segments —
-  no more than `steps` steps beyond the usual ones; inside a segment the step boundary is the nearer of its grid and the
-  usual one (at the eye the usual are denser: a wall passing through the viewer otherwise lost the near dust). What the
-  ray distinguishes (`cone`: small puffs, storm columns) — by the grid step there, not by a step cut by the entry into
-  the segment (that one is random from frame to frame, and small puffs would flicker). The Wilson cloud is a thin shell:
-  its two passes by the ray are events, like tornadoes (light and transmission in advance, into the ray when the step
-  reaches the pass). The quads of the layer take in front of them both the middle head and the shell (`fx.vsh`:
-  `pallWallThrough` — `pallWallTau`, four steps per segment, `pallWilsonThrough`; each segment and pass is in haze at
-  its place). The slot's frame grows to include the head and the shell (`NukePall.slot`), and the blast is in the frame
-  even when the pall's table has nothing yet. The cost in the head: up to 5 noise samples per step (the tile shift,
-  puffs and small puffs in the dust's coordinates; the puffs' shadow — two puff samples), small ones only at the eye;
-  and 24 middle-head evaluations (21 — thicknesses toward the light and the puffs' shadow, 3 — under the puffs) —
-  arithmetic without samples: two powers and an exponent each (the top of the wedge u^(5/6), raised by `pallLifted`),
-  and one more power per step (exit sideways) and the top of the wedge above the point — the head's ALU is about 10–20 %
-  more than the former wall envelope, with the same number of samples. The pall with the head and the Wilson cloud far
-  away fades in the air haze like a mushroom (`pallAir`, the frame's air `PallAir` — `Sight.Air` in the model's blocks):
+- The Wilson cloud is in the same pall passes (`client/nuclear/BlastWall`, the laws — `nuclear.md`; slot numbers
+  `PallWilson0/1`, `pallWilson`), not as square puffs: a thin shell whose two passes by the ray are events, like tornadoes
+  (light and transmission in advance, into the ray when the step reaches the pass). The quads of the layer take it in
+  front of them (`pallWilsonThrough`, in haze at its place). The slot's frame grows to include the shell
+  (`NukePall.slot`). The pall draws no ground dust: the dust wall, the settled dust, spray and the base surge are the dust
+  pass's (below), and `BlastWall`'s head laws serve only the camera (`NukePall.tick`: dust at the eye, sound). The pall
+  and the Wilson cloud far
+  away fade in the air haze like a mushroom (`pallAir`, the frame's air `PallAir` — `Sight.Air` in the model's blocks):
   the share of their opacity that the haze took up to the place (`haze`, `passMatter` in `fx_pall`) shows airlight
   (`pallAirLight`: vanilla's sky along the pixel from the sky/fog colours, added after `pallShown`), their opacity stays whole; quads and probes behind them take the real transmittance
   (`pall_front`, `fx_probe`, `mushTransmit` in `fx.vsh`): in rain the wall at 8 km does not stand as a dark ring on
   the horizon, and the sun quad never shows through it.
-- The young dust wall (front to `DustWallPass.SPAN` 24 model s behind it) is its own ray-marched pass, one presentation
-  model (`include/dustwall.glsl`, `DustWallPass`, `NukePall.youngWall`, inputs `PallField.young`): a dust envelope born
-  on the contact line as a ramp leaning back (never ahead of the front: dust there is cut by the ring, a seam), a
-  hump whose crest is 1.4–1.6 of the settled layer (drawn ×68/58 of the law's, `NukePall.YOUNG_PRESENT_HEIGHT`:
-  the crest just under a 120 m camera's horizon at 4.5 km from 1 Mt; on the horizon line its ragged top flickered), back to the layer within 0.5–1 s (`DustWallGlslTest`), billows and bulges
-  fixed in the air across the ground and carried in height by the dust's own column. One model, per-point birth (LOOK
-  Trait 0): the front is a line of births; each ground point's seed (world-fixed noise) sets its birth delay after the
-  front's arrival, amount, column height and overshoot, its column rises, overshoots and settles by its own age and stays
-  where it was born; behind the front one law of time since the passage per point moves it (the blast wind's outward
-  surge, the weaker longer reverse, the afterwind drawing low dust in, eddies turning either way decaying over ~25 s,
-  swells, tongues, the wind). Nothing rides with the front or
-  is placed by bearing × the front's radius: texture riding out with it slides at its speed and flutters as the front
-  passes under the eye, a ramp shared by every point reads as one mass carried out from the centre, features placed by
-  bearing × the current radius slide along the front (`DustWallGlslTest`, the turning and births checks in
-  `tools/dust_wall_gl.py`); light from the fireball, sun and sky with multiply scattered light in the soil's bulk colour (no
-  near-black). The pall hands its young dust, head and eye dust over across `PallYoung` (a crossfade over `FADE`) only
-  when the pass can draw it: all three programs ready, primary view, one detonation in the slots, no water under the
-  pall (spray and surge stay the pall's), lofted dust left in the young ring. The dust lies on the pall's terrain map
-  (`pallRelief`) and never indoors (`pallOpen`), none under the fireball's ground footprint (the pall keeps its own dust
-  there, fading across the inner 40 blocks of the footprint's rim, `PallYoung.z`). The last table spacing fades back to the pall head. One radial share in
-  `wall_ownership.glsl` governs the wall, lofted soil, head and the corresponding part of the eye ray limit. Where the scene has no depth the ray ends on the relief traced from the eye (`pallFloor`, as the
-  pall's); where the world is drawn its depth alone ends it. The march, resolve and composite judge "the same place" by one
-  rule (`pallSamePlace`: a looser rule in one pass let dust from behind a foreground edge through another). The frame air
-  (haze, weather) lies in front of the dust as for the pall (`pallAir`, `pallAirLightOf`). Flicker is fixed in time,
-  not by blur: the sample grid is fixed along each ray from the eye, its offset moves every frame, the ray moves within its
-  march pixel every frame (a quarter-resolution silhouette otherwise draws a staircase of 4-pixel rows), and
-  `fx_dustwall_resolve` averages ~10 frames (reprojected through the settled layer top, read on the march lattice,
-  each history sample checked against the previous depth, clamped to the depth-alike 3 × 3 neighbourhood with the pixel's
-  own sample, restarted on another detonation, a clock jump or a view resize); a
-  fixed offset sparkles along the far top where 9–18 m steps cross the moving billowed surface. Light paths see the large shapes only: a shadow tap
-  reading the fine texture or the head's front-riding lumps re-shaded the approaching face every frame. The march records its occupied view depths and opacity-weighted distance. The pall composite reconstructs the foreground to the first occupied depth. Inside the interval each
-  visible smoke or mushroom sample obscures the share of wall opacity behind it. A pane truncates both the wall
-  and the integration interval. Before the inner handoff starts, the wall owns soil to the centre outside the fireball footprint.
-  Its ground haze and lifted soil back its rolling surface. The
-  stem core contributes foreground extinction in proportion to the part visible through its source soil column
-  (`pallColumn` at the sample height). An exposed core, a detached cap and other mushrooms keep their extinction.
-  The `volume` and `crossing` cases in `tools/dust_wall_contract_gl.py` isolate the crest and pane from texture noise.
-  As for a pane, the far field assigns light in proportion to extinction: dark smoke in front of the
-  wall can receive some light from a bright mushroom behind it. Quads and source probes use the atlas on screen and
-  the full dust field outside it. Each tap contributes only its dust in front of the pixel's depth, including where
-  one continuous surface crosses several depth samples. In RGBA16F, one transmission step changes reconstructed depth
-  by about 5% at 1% opacity and 1% at 5% opacity. Cost at HIGH
-  (1/4 resolution, 128 steps, 2560×1600, RTX 4060): ~1–2 ms approaching, ~5–7 ms after the passage; the ray bound must stay
-  under a 120 m camera, or every near-eye ray marches fine steps through empty air. Shader checks without a
-  game: `tools/dust_wall_gl.py`.
+- The dust wave (all nuclear ground dust: `DustWallPass`, `include/dustwall.glsl`, `DustSources`): `dust-wave.md`.
 - The nuke's fire storm is in the same pall passes (`client/nuclear/FireStorm`, `FireStorms`): at the blast slot the
   fire map is RGBA16F by cells of 32 blocks (R — flame, G — smoke presentation, B — it × column rise), with mip levels.
   The levels are themselves clusters of sources (instead of the list of lamps `FxLights` or clusters per frame): glow at
@@ -971,7 +890,7 @@ paths:
   epicentre, with the dust's phase and extinction by haze from the zone's edge: without it the dust around a burning
   city glowed at night only above the fire, and from 2 km the city stood as a dark mass behind a kilometre of unlit
   dust. Smoke of the columns — in the same ray march of `fx_pall` (the storm frame `PallFireMin/Max`: its own grid up to
-  half the steps with the ordinary ones already there, on top of them like the head's segments; ordinary steps stay the same on every ray: taking
+  half the steps with the ordinary ones already there, on top of them; ordinary steps stay the same on every ray: taking
   the frame's steps from the rest of the ray sampled the pall behind it coarser than beside it, and coarse steps pass more
   light through clumped dust, so the frame stood far away as a lighter rectangle); tornadoes (up to 4 in the frame, the
   near ones) — their own short march along the cylinder, merged into the ray when the step reaches the entry. Flame on surfaces — in `fx_pall_composite` by the world's depth: not nearer than
