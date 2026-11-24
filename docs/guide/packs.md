@@ -381,8 +381,8 @@ while true do
   local _, _, hostile, distance = os.pullEvent("incoming_alert")
   print(("Air raid: %d hostile, nearest %d blocks"):format(hostile, distance))
   for _, launcher in ipairs(launchers) do
-    local ok, _, message = launcher.fire()
-    if not ok then print(message) end
+    local ok, reason, message = launcher.fire()
+    if not ok then print(message or reason) end
   end
   while sam.isTracking() do sleep(1) end
 end

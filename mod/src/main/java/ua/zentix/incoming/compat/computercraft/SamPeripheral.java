@@ -58,8 +58,10 @@ final class SamPeripheral implements IPeripheral, SamBlockEntity.Watcher {
     /**
      * A sweep of this SAM sees a hostile track (server thread): every attached computer gets {@code incoming_alert}. A
      * computer shutting down detaches from its own thread, possibly between the set read and the call; its access then
-     * throws {@link NotAttachedException} and is skipped: the sweep must never fail inside the SAM's tick. No lock is
-     * held here (the computer's detach holds its own and calls ours: the reverse order would deadlock).
+     * throws {@link NotAttachedException} and is skipped: the sweep must never fail inside the SAM's tick. CC:Tweaked has
+     * already called {@link #detach} by then, so nothing is removed here (a reboot re-attaching the same access must not
+     * lose it). No lock is held here (the computer's detach holds its own and calls ours: the reverse order would
+     * deadlock).
      */
     @Override
     public void tracking(int hostile, double nearest) {
@@ -67,8 +69,8 @@ final class SamPeripheral implements IPeripheral, SamBlockEntity.Watcher {
         for (IComputerAccess c : computers) {
             try {
                 c.queueEvent(Automation.ALERT_EVENT, c.getAttachmentName(), tail[0], tail[1]);
-            } catch (NotAttachedException e) {
-                computers.remove(c);
+            } catch (NotAttachedException ignored) {
+                // detached on its own thread after the set was read: detach() already took it out
             }
         }
     }

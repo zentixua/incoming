@@ -77,8 +77,8 @@ ordering = "NONE"
 side = "BOTH"
 
 # Jade is optional: overlay lines for the launcher, the SAM, the substation and strike projectiles (compat/jade, found by
-# Jade's own plugin scan); owner and mission only for the owner's side and operators. 15.1.7, Jade's first 1.21.1 build,
-# has every API call the plugin makes.
+# Jade's own plugin scan); owner and mission only for the owner's side and operators. 15.1.7 (checked: the same API as 15.1.6,
+# the first 1.21 build) has every API call the plugin makes.
 [[dependencies.${mod_id}]]
 modId = "jade"
 type = "optional"

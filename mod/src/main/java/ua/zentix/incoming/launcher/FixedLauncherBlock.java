@@ -137,7 +137,7 @@ public class FixedLauncherBlock extends BaseEntityBlock {
     @Override
     protected InteractionResult useWithoutItem(BlockState state, Level level, BlockPos pos, Player player, BlockHitResult hit) {
         if (!level.isClientSide && level.getBlockEntity(pos) instanceof FixedLauncherBlockEntity be) {
-            if (player instanceof net.minecraft.server.level.ServerPlayer sp) player.displayClientMessage(be.status(sp), true);
+            if (player instanceof ServerPlayer sp) player.displayClientMessage(be.status(sp), true);
         }
         return InteractionResult.sidedSuccess(level.isClientSide);
     }

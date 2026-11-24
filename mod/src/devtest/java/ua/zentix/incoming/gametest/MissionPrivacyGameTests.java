@@ -19,6 +19,7 @@ import ua.zentix.incoming.strike.WeaponType;
 import ua.zentix.incoming.strike.Waypoints;
 import ua.zentix.incoming.target.Target;
 
+import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 
@@ -62,7 +63,7 @@ public final class MissionPrivacyGameTests {
         String line = be.status(stranger).getString();
         h.assertFalse(line.contains(Long.toString(z)), "the empty-hand status line gives anyone the target: " + line);
         h.assertValueEqual(status.get("reason"), Automation.PRIVATE, "the computer's reason for a shortage of the mission");
-        h.assertValueEqual(java.util.List.of(Automation.fire(level, be)), java.util.List.of(false, Automation.PRIVATE), "the computer's fire refusal");
+        h.assertValueEqual(List.of(Automation.fire(level, be)), List.of(false, Automation.PRIVATE), "the computer's fire refusal");
         String own = be.status(owner).getString();
         h.assertTrue(own.contains(Long.toString(z)), "the owner's status line lacks the target: " + own);
         h.succeed();

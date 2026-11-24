@@ -8,7 +8,9 @@ import net.minecraft.network.chat.Component;
 import net.minecraft.network.protocol.Packet;
 import net.minecraft.network.protocol.game.ClientGamePacketListener;
 import net.minecraft.network.protocol.game.ClientboundBlockEntityDataPacket;
+import net.minecraft.network.chat.contents.TranslatableContents;
 import net.minecraft.server.level.ServerLevel;
+import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.level.block.Block;
@@ -23,6 +25,7 @@ import ua.zentix.incoming.entity.LaunchQueue;
 import ua.zentix.incoming.entity.Launcher;
 import ua.zentix.incoming.entity.LauncherMount;
 import ua.zentix.incoming.guidance.FlightController;
+import ua.zentix.incoming.info.Readout;
 import ua.zentix.incoming.registry.ModBlockEntities;
 import ua.zentix.incoming.strike.Munitions;
 import ua.zentix.incoming.strike.WeaponType;
@@ -188,16 +191,16 @@ public class FixedLauncherBlockEntity extends BlockEntity implements Launcher {
 
     /**
      * Status line for {@code viewer} at the launcher: the full line ({@link #status()}) for the owner's side and operators
-     * ({@link ua.zentix.incoming.info.Readout#privileged}); for anyone else the rack's weapon and the stock, and the last
+     * ({@link Readout#privileged}); for anyone else the rack's weapon and the stock, and the last
      * result only when it tells nothing about the owner or the mission.
      */
-    public Component status(net.minecraft.server.level.ServerPlayer viewer) {
-        if (ua.zentix.incoming.info.Readout.privileged(viewer.server, owner, viewer)) return status();
+    public Component status(ServerPlayer viewer) {
+        if (Readout.privileged(viewer.server, owner, viewer)) return status();
         Component state = mission == null ? Component.translatable("incoming.fixed_launcher.no_mission", stockCount())
                 : Component.translatable("incoming.fixed_launcher.status.public", mission.weapon().displayName(),
                 Munitions.held(stock, mission.weapon().spec().munition().item().get(), mission.weapon().spec().munition().rounds()));
-        boolean shown = last != null && (ua.zentix.incoming.info.Readout.publicRefusal(last)
-                || last.getContents() instanceof net.minecraft.network.chat.contents.TranslatableContents t && t.getKey().equals("incoming.fixed_launcher.fired"));
+        boolean shown = last != null && (Readout.publicRefusal(last)
+                || last.getContents() instanceof TranslatableContents t && t.getKey().equals("incoming.fixed_launcher.fired"));
         return shown ? Component.translatable("incoming.fixed_launcher.status.last", state, last) : state;
     }
 
