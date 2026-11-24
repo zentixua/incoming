@@ -56,7 +56,7 @@ CHECKLIST = (
     "1. Mod rule, concept, process step or Artem's engineering/product decision -> incoming AGENTS.md, or the area "
     "rule .claude/rules/<area>.md for one code area, in the PR (public repo: no hosts, IPs, private paths), with a "
     "test or check that fails if it drifts.\n"
-    "2. Team or ops rule (roles, what needs Artem's word, laptop, servers, media) -> open-skies "
+    "2. Team or ops rule (roles, what needs Artem's word, laptop, servers, media) -> open-skies-friends "
     ".claude/rules/team.md by PR.\n"
     "3. Status, measurements, open questions -> your report or final message; the lead keeps project memory.\n"
     "4. A procedure -> the skill that owns it.\n"

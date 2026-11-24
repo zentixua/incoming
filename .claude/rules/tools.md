@@ -162,7 +162,7 @@ Prism: `~/.var/app/org.prismlauncher.PrismLauncher/data/PrismLauncher/` (`tools/
                                            leak — who holds the world after leaving to the menu: entries into the world with commands (incoming.leak.*),
                                            in the menu — a class histogram and a JFR sample with paths to roots (needs -XX:VMThreadStackSize=8192:
                                            with the default stack the path search crashes the JVM), into the log — lines `SCENARIO leak … holder`;
-                                           replay — replay of a Flashback in the directory of tools/pack_dir.py of the build (zentixua/open-skies) with the recording mods and quicksave: saved, opened and played back — the projectile's frames and the places where it vanished; rewinds backward and forward through strikes and the nuke — without live explosions and flashes
+                                           replay — replay of a Flashback in the directory of tools/pack_dir.py of the build (zentixua/open-skies-friends) with the recording mods and quicksave: saved, opened and played back — the projectile's frames and the places where it vanished; rewinds backward and forward through strikes and the nuke — without live explosions and flashes
     replayscan/                          ← analysis of a Flashback replay by the game itself into tables: a client mod without a window (events, paths,
                                            visibility through the player's eyes or set cameras, ground measurements at explosions) and replaydb.py —
                                            a DuckDB database with queries for video plans (launches, flybys, ground strikes); filming plans of
@@ -232,7 +232,7 @@ Prism: `~/.var/app/org.prismlauncher.PrismLauncher/data/PrismLauncher/` (`tools/
   manually on `main` with `release=true`: after all checks, the workflow releases `v<version>` with the jar (friends take it
   from there), and `publish` then uploads the same jar to Modrinth and CurseForge by itself (step `release`; a manual
   `publish release` re-sends a version and skips stores that already have the jar). If `main` has moved on from the commit checked in the game, a branch `claude/release-…` from that commit with only
-  the notes, and the run on it. After the release, the open-skies build takes the jar by itself (its `update` workflow
+  the notes, and the run on it. After the release, the open-skies-friends build takes the jar by itself (its `update` workflow
   runs there every 3 hours; to run it at once, start it manually on `main`), checks it and releases it; players with
   auto-update get it on their next launch. Create, Sable and Aeronautics are pinned in the pack: a new version of them is a PR in
-  open-skies together with the pins here (`gradle.properties`, `tools/fetch_runtime_mods.py`).
+  open-skies-friends together with the pins here (`gradle.properties`, `tools/fetch_runtime_mods.py`).
