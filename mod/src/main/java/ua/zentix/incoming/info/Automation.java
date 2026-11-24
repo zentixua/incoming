@@ -15,37 +15,38 @@ import java.util.Map;
 /**
  * What a computer attached to a fixed launcher or a SAM reads and does (CC:Tweaked, {@code compat/computercraft}), as
  * plain tables (string keys; strings, numbers, booleans, nested tables). Called on the server thread. The launcher's
- * {@link #fire} is the redstone signal's own entry; nothing here changes a mission. A computer stands at the block (or on
- * its modem network), so it reads what the block's status line shows anyone there; the owner is not exposed.
+ * {@link #fire} is the redstone signal's own entry; nothing here changes a mission. A computer has no viewer: anyone can
+ * attach one, so it reads what {@link Readout} gives a viewer without rights (the rack's weapon, stock, readiness, a
+ * refusal only when it tells nothing about the owner or the mission); owner and mission never reach it.
  */
 public final class Automation {
     private Automation() {}
 
+    /** Reason code of a refusal that names the owner or the mission: the computer learns only that it cannot fire. */
+    public static final String PRIVATE = "private";
+
     /**
-     * {@code mission} (absent without one: weapon, count, spread, x, y, z), {@code ready}, {@code busy}, and for a
-     * launcher a signal would not fire, {@code reason} ({@link #code}) and {@code message} (its English text).
+     * {@code weapon} (the mission's, shown on the rack; absent without a mission), {@code ready}, {@code busy}, and for a
+     * launcher a signal would not fire, {@code reason} ({@link #code}, or {@link #PRIVATE}) and, for a public reason,
+     * {@code message} (its English text).
      */
     public static Map<String, Object> status(ServerLevel level, FixedLauncherBlockEntity be) {
         Map<String, Object> t = new LinkedHashMap<>();
         Mission m = be.mission();
-        if (m != null) {
-            Map<String, Object> mission = new LinkedHashMap<>();
-            mission.put("weapon", m.weapon().getSerializedName());
-            mission.put("count", m.count());
-            mission.put("spread", m.spread());
-            mission.put("x", m.point().x);
-            mission.put("y", m.point().y);
-            mission.put("z", m.point().z);
-            t.put("mission", mission);
-        }
+        if (m != null) t.put("weapon", m.weapon().getSerializedName());
         Component problem = LauncherOrders.problem(level, be);
         t.put("ready", problem == null);
         t.put("busy", LauncherOrders.busy(level, be));
         if (problem != null) {
-            t.put("reason", code(problem));
-            t.put("message", problem.getString());
+            t.put("reason", reason(problem));
+            if (Readout.publicRefusal(problem)) t.put("message", problem.getString());
         }
         return t;
+    }
+
+    /** {@link #code} of a public refusal, otherwise {@link #PRIVATE}. */
+    static String reason(Component refusal) {
+        return Readout.publicRefusal(refusal) ? code(refusal) : PRIVATE;
     }
 
     /** Rounds held per weapon the launcher accepts, by command name (a Grad pack counts its rockets). */
@@ -63,11 +64,13 @@ public final class Automation {
      * the owner's rights and limit, map range, busy rack, route, the magazine paid per round as it takes the rail, the
      * launch's work budget, order and round events, the click and the status line on refusal.
      *
-     * @return {@code {true}} when ordered, otherwise {@code {false, reason, message}}
+     * @return {@code {true}} when ordered, {@code {false, reason, message}} for a public refusal, {@code {false, "private"}}
+     *         for one that names the owner or the mission
      */
     public static Object[] fire(ServerLevel level, FixedLauncherBlockEntity be) {
         Component problem = be.fire(level);
-        return problem == null ? new Object[]{true} : new Object[]{false, code(problem), problem.getString()};
+        if (problem == null) return new Object[]{true};
+        return Readout.publicRefusal(problem) ? new Object[]{false, code(problem), problem.getString()} : new Object[]{false, PRIVATE};
     }
 
     /** {@code ready} (on rails), {@code rails}, {@code stored}. */

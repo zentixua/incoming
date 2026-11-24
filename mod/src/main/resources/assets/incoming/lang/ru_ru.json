@@ -591,6 +591,7 @@
   "incoming.fixed_launcher.no_mission.short": "задачи нет",
   "incoming.fixed_launcher.status": "Пусковая: %s ×%s по %s %s, разброс %s; снарядов в запасе: %s",
   "incoming.fixed_launcher.status.last": "%s. Последний сигнал: %s",
+  "incoming.fixed_launcher.status.public": "Пусковая: %s; снарядов в запасе: %s",
   "incoming.fixed_launcher.linked": "Пусковая привязана к пульту (всего %s): «Огонь» теперь ставит задачу пусковым",
   "incoming.fixed_launcher.unlinked": "Пусковая отвязана от пульта (осталось %s)",
   "incoming.fixed_launcher.not_yours": "чужая пусковая",

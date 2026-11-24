@@ -186,7 +186,22 @@ public class FixedLauncherBlockEntity extends BlockEntity implements Launcher {
         return last;
     }
 
-    /** Status line for the player looking at the launcher. */
+    /**
+     * Status line for {@code viewer} at the launcher: the full line ({@link #status()}) for the owner's side and operators
+     * ({@link ua.zentix.incoming.info.Readout#privileged}); for anyone else the rack's weapon and the stock, and the last
+     * result only when it tells nothing about the owner or the mission.
+     */
+    public Component status(net.minecraft.server.level.ServerPlayer viewer) {
+        if (ua.zentix.incoming.info.Readout.privileged(viewer.server, owner, viewer)) return status();
+        Component state = mission == null ? Component.translatable("incoming.fixed_launcher.no_mission", stockCount())
+                : Component.translatable("incoming.fixed_launcher.status.public", mission.weapon().displayName(),
+                Munitions.held(stock, mission.weapon().spec().munition().item().get(), mission.weapon().spec().munition().rounds()));
+        boolean shown = last != null && (ua.zentix.incoming.info.Readout.publicRefusal(last)
+                || last.getContents() instanceof net.minecraft.network.chat.contents.TranslatableContents t && t.getKey().equals("incoming.fixed_launcher.fired"));
+        return shown ? Component.translatable("incoming.fixed_launcher.status.last", state, last) : state;
+    }
+
+    /** Full status line (owner's side, operators, the operator's {@code /incoming launcher} command). */
     public Component status() {
         Component state = mission == null ? Component.translatable("incoming.fixed_launcher.no_mission", stockCount())
                 : Component.translatable("incoming.fixed_launcher.status", mission.weapon().displayName(), mission.count(),

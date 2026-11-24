@@ -4,6 +4,7 @@ import dan200.computercraft.api.lua.LuaException;
 import dan200.computercraft.api.lua.LuaFunction;
 import dan200.computercraft.api.peripheral.IComputerAccess;
 import dan200.computercraft.api.peripheral.IPeripheral;
+import dan200.computercraft.api.peripheral.NotAttachedException;
 import org.jetbrains.annotations.Nullable;
 import ua.zentix.incoming.defense.SamBlockEntity;
 import ua.zentix.incoming.info.Automation;
@@ -54,11 +55,22 @@ final class SamPeripheral implements IPeripheral, SamBlockEntity.Watcher {
         if (computers.isEmpty()) be.unwatch(this);
     }
 
-    /** A sweep of this SAM sees a hostile track (server thread): every attached computer gets {@code incoming_alert}. */
+    /**
+     * A sweep of this SAM sees a hostile track (server thread): every attached computer gets {@code incoming_alert}. A
+     * computer shutting down detaches from its own thread, possibly between the set read and the call; its access then
+     * throws {@link NotAttachedException} and is skipped: the sweep must never fail inside the SAM's tick. No lock is
+     * held here (the computer's detach holds its own and calls ours: the reverse order would deadlock).
+     */
     @Override
     public void tracking(int hostile, double nearest) {
         Object[] tail = Automation.alert(hostile, nearest);
-        for (IComputerAccess c : computers) c.queueEvent(Automation.ALERT_EVENT, c.getAttachmentName(), tail[0], tail[1]);
+        for (IComputerAccess c : computers) {
+            try {
+                c.queueEvent(Automation.ALERT_EVENT, c.getAttachmentName(), tail[0], tail[1]);
+            } catch (NotAttachedException e) {
+                computers.remove(c);
+            }
+        }
     }
 
     /** {@code { ready, rails, stored }}. */

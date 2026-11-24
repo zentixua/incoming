@@ -78,7 +78,7 @@ public class SamBlockEntity extends BlockEntity {
      * Told on every sweep that sees a hostile track (not saved): computers attached to this SAM. Attach and detach may
      * come from another thread (a computer's), so the list is copy-on-write; the sweep reads it on the server thread.
      */
-    private final List<Watcher> watchers = new CopyOnWriteArrayList<>();
+    private final CopyOnWriteArrayList<Watcher> watchers = new CopyOnWriteArrayList<>();
     /** Sky above the SAM is blocked: it does not fire under a roof. */
     private boolean covered;
     /**
@@ -156,7 +156,7 @@ public class SamBlockEntity extends BlockEntity {
     }
 
     public void watch(Watcher w) {
-        if (!watchers.contains(w)) watchers.add(w);
+        watchers.addIfAbsent(w);
     }
 
     public void unwatch(Watcher w) {

@@ -30,8 +30,11 @@ paths:
   writes suppress updates); frozen with its chunk (`RedstoneGameTests`, `RedstoneReviewGameTests`).
 - The sweep keeps `tracks`, `hostile`, `nearestHostile`, `covered` (Jade lines, computer tables) and calls the SAM's
   `Watcher`s (not saved; copy-on-write list, attach may come from a computer thread) on every sweep with a hostile
-  track, the alarm's condition: CC:Tweaked's `SamPeripheral` watches while a computer is attached and queues
-  `incoming_alert` to those computers only (`AutomationGameTests.alertOnlyWhileItsSamTracks`).
+  track, the alarm's condition (`AutomationGameTests.alertOnlyWhileItsSamTracks`): CC:Tweaked's `SamPeripheral` watches
+  while a computer is attached and queues `incoming_alert` to those computers only (`PeripheralsTest`). A computer
+  shutting down detaches from its own thread mid-alert: its access throws `NotAttachedException`, caught per computer,
+  or the SAM's tick crashes the server (`SamPeripheralDetachTest`); never hold the peripheral's lock while calling a
+  computer (its detach locks itself, then ours).
 - Air defense uses its own game model (Artem's decision, 21.10): ranges, missile flight and fuze are game numbers in
   `InterceptorSpec`, not data or laws of a real system (guidance, radar equation and kill probability are not modeled).
 - Separate parts, reusable by a portable SAM: `Radar` (only world projectiles in `StrikeWorld.projectiles`, one snapshot

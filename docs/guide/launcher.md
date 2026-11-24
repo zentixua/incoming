@@ -34,11 +34,13 @@ launcher's owner, even when the owner is offline, and Abort on the owner's desig
 fires only while its chunk is loaded, and never from an aircraft.
 
 If the launcher clicks but does not fire, RMB on it with an empty hand shows why: no mission, not enough stock, the
-previous order still running, or buildings blocking the launch sector.
+previous order still running, or buildings blocking the launch sector. The mission's count, target and spread, and the
+reasons about them, are shown only to the owner's side and operators; other players see the weapon, the stock and the
+reasons about the launcher itself.
 
-With Jade, looking at the launcher shows its stock and whether it is ready to fire; its owner, mission and the reasons
-about them only to the owner's side and operators. A CC:Tweaked computer next to it reads its status and fires its
-mission like a signal, but cannot change the mission ([For server owners and pack makers](packs.md#computers-cctweaked)).
+With Jade, looking at the launcher shows the same, and its owner to the owner's side and operators. A CC:Tweaked
+computer next to it reads what any player may and fires its mission like a signal, but cannot change the mission ([For
+server owners and pack makers](packs.md#computers-cctweaked)).
 
 ## Crafting
 

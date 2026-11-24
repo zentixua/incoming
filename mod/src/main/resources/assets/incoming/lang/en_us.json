@@ -591,6 +591,7 @@
   "incoming.fixed_launcher.no_mission.short": "no mission",
   "incoming.fixed_launcher.status": "Launcher: %s ×%s at %s %s, spread %s; rounds in stock: %s",
   "incoming.fixed_launcher.status.last": "%s. Last signal: %s",
+  "incoming.fixed_launcher.status.public": "Launcher: %s; rounds in stock: %s",
   "incoming.fixed_launcher.linked": "Launcher linked to the designator (%s total): Fire now gives the launchers a mission",
   "incoming.fixed_launcher.unlinked": "Launcher unlinked from the designator (%s left)",
   "incoming.fixed_launcher.not_yours": "not your launcher",

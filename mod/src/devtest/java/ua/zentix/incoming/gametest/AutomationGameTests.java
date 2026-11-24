@@ -19,6 +19,7 @@ import ua.zentix.incoming.api.StrikeRoundEvent;
 import ua.zentix.incoming.defense.SamBlockEntity;
 import ua.zentix.incoming.entity.DroneEntity;
 import ua.zentix.incoming.info.Automation;
+import ua.zentix.incoming.info.Readout;
 import ua.zentix.incoming.launcher.FixedLauncherBlockEntity;
 import ua.zentix.incoming.launcher.LauncherOrders;
 import ua.zentix.incoming.launcher.Mission;
@@ -225,7 +226,10 @@ public final class AutomationGameTests {
         static Outcome of(FixedLauncherBlockEntity be, List<String> events, int mark, Object[] computer) {
             String reason = FixedLauncherGameTests.key(be.lastReport());
             String result = computer == null ? null : computer[0] == Boolean.TRUE ? "ordered" : String.valueOf(computer[1]);
-            if (computer != null && computer[0] != Boolean.TRUE && !("incoming." + result).equals(reason)) {
+            // the computer reads a refusal as a player without rights does: its code only when it is public
+            String expected = computer == null || computer[0] == Boolean.TRUE ? null
+                    : Readout.publicRefusal(be.lastReport()) ? reason.substring("incoming.".length()) : Automation.PRIVATE;
+            if (expected != null && !expected.equals(result)) {
                 throw new net.minecraft.gametest.framework.GameTestAssertException("computer reason " + result + " vs status line " + reason);
             }
             return new Outcome(reason, List.copyOf(events.subList(mark, events.size())), be.stockCount(), result);

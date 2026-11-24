@@ -335,7 +335,8 @@ not:
 
 The owner's side is the owner and the players on the owner's team (`/team`); operators have permission level 2. A
 launcher placed or a projectile launched by command has no owner: its owner line and mission are for operators. The
-server sends each player only what that player may see. Each of the four can be turned off in Jade's plugin settings.
+launcher's own status line (a right click with an empty hand) follows the same rule. Each of the four can be turned off
+in Jade's plugin settings.
 
 ## Computers (CC:Tweaked)
 
@@ -346,15 +347,19 @@ Fixed launcher, peripheral type `incoming_launcher`:
 
 | Method | Returns |
 |---|---|
-| `getStatus()` | a table: `mission` (`weapon`, `count`, `spread`, `x`, `y`, `z`; absent without a mission), `ready` (a signal now would fire it), `busy`, and when it is not ready, `reason` (a code) and `message` (the English text) |
+| `getStatus()` | a table: `weapon` (the mission's, as on the rack; absent without a mission), `ready` (a signal now would fire it), `busy`, and when it is not ready, `reason` (a code) and, for a reason about the launcher itself, `message` (the English text) |
 | `getStock()` | rounds held per weapon: `drone` (Shahed-136), `missile`, `rocket` (Grad), `loiter` (Lancet) |
-| `fire()` | `true` when the order is given, otherwise `false, reason, message` |
+| `fire()` | `true` when the order is given, otherwise `false, reason, message` (`false, "private"` for a reason about the owner or the mission) |
 
 `fire()` is a redstone signal: the same order in the owner's name with the owner's rights and limit, the same refusals,
 the same strike events, munitions paid as each round takes the rail. A computer cannot set or clear a mission: that
-stays the designator's and `/incoming launcher … mission`. A reason code is the refusal's language key without
-`incoming.`, for example `fixed_launcher.no_mission.short`, `fixed_launcher.busy`, `fixed_launcher.no_rights`,
-`fixed_launcher.out_of_range`, `fixed_launcher.sector` and `munitions.short`.
+stays the designator's and `/incoming launcher … mission`. A refused `fire()` clicks like a refused signal.
+
+Anyone can put a computer at a launcher, so a computer learns what a player without rights would: never the owner or
+the mission's count, target and spread. A reason about the launcher itself comes as its code, the refusal's language key
+without `incoming.`: `fixed_launcher.no_mission.short`, `fixed_launcher.busy`, `fixed_launcher.on_craft`,
+`fixed_launcher.sector` (buildings block the launch) or `fixed_launcher.failed`; any other reason (stock short of the
+mission, the owner's rights or limit, the target's range or route) comes as `private`.
 
 SAM, peripheral type `incoming_sam`:
 

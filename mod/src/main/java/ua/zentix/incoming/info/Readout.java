@@ -36,9 +36,14 @@ public final class Readout {
      * every viewer; any other refusal reads only "cannot fire" to a viewer without rights.
      */
     static final Set<String> PUBLIC_REFUSALS = Set.of("incoming.fixed_launcher.no_mission.short", "incoming.fixed_launcher.on_craft",
-            "incoming.fixed_launcher.busy");
+            "incoming.fixed_launcher.busy", "incoming.fixed_launcher.sector", "incoming.fixed_launcher.failed");
 
     private Readout() {}
+
+    /** {@code refusal} tells nothing about the owner or the mission: any viewer, and any computer, may read it. */
+    public static boolean publicRefusal(Component refusal) {
+        return PUBLIC_REFUSALS.contains(key(refusal));
+    }
 
     /**
      * {@code viewer} may see the owner and the mission of something owned by {@code owner}: an operator (permission
@@ -66,7 +71,7 @@ public final class Readout {
                 : Component.translatable("incoming.info.stock.rounds", rounds(be, m), m.weapon().displayName()));
         Component problem = LauncherOrders.problem(level, be);
         if (problem == null) lines.add(Component.translatable("incoming.info.ready").withStyle(ChatFormatting.GREEN));
-        else if (rights || PUBLIC_REFUSALS.contains(key(problem))) lines.add(Component.translatable("incoming.info.cannot", problem).withStyle(ChatFormatting.RED));
+        else if (rights || publicRefusal(problem)) lines.add(Component.translatable("incoming.info.cannot", problem).withStyle(ChatFormatting.RED));
         else lines.add(Component.translatable("incoming.info.cannot.private").withStyle(ChatFormatting.RED));
         return lines;
     }

@@ -4,12 +4,14 @@ import net.minecraft.core.BlockPos;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.state.BlockState;
+import org.jetbrains.annotations.Nullable;
 import ua.zentix.incoming.nuclear.world.NuclearTickets;
 import ua.zentix.incoming.util.SignalEdge;
 import ua.zentix.incoming.util.Terrain;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Optional;
 
 /**
  * Substation blocks follow the grid: knocked out — {@code powered=false} until power restoration starts in their area;
@@ -34,13 +36,13 @@ public final class Substations {
      * The grid's state of the substation node at {@code pos} now, as {@link #works} decides it (the block's
      * {@code powered}); null — no substation node there. Reads only the grid's saved data.
      */
-    @org.jetbrains.annotations.Nullable
+    @Nullable
     public static Supply supply(ServerLevel level, BlockPos pos) {
         PowerGrid grid = PowerGrid.get(level);
         Node node = grid.nodeAt(pos);
         if (node == null || !node.block()) return null;
         long now = Blackouts.now(level);
-        java.util.Optional<Outage> down = grid.downOutage(node.id(), now);
+        Optional<Outage> down = grid.downOutage(node.id(), now);
         if (down.isPresent()) {
             long at = down.get().restoreAt();
             return new Supply(State.KNOCKED_OUT, at == Outage.NEVER ? Outage.NEVER : at - now);
