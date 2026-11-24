@@ -126,8 +126,8 @@ public final class SalvoData extends SavedData {
     public void rounds(java.util.function.Consumer<OrderStatus.Round> out) {
         for (Salvo s : salvos) {
             if (s.order == null) continue;
-            for (int i : s.failedRounds) out.accept(OrderStatus.Round.queued(RoundRef.of(s.order, i, s.tag), s.owner, s.weapon));
-            for (int i = s.total - s.remaining; i < s.total; i++) out.accept(OrderStatus.Round.queued(RoundRef.of(s.order, i, s.tag), s.owner, s.weapon));
+            for (int i : s.failedRounds) out.accept(OrderStatus.Round.queued(RoundRef.of(s.order, i, s.tag, s.rules), s.owner, s.weapon));
+            for (int i = s.total - s.remaining; i < s.total; i++) out.accept(OrderStatus.Round.queued(RoundRef.of(s.order, i, s.tag, s.rules), s.owner, s.weapon));
         }
     }
 
@@ -178,10 +178,10 @@ public final class SalvoData extends SavedData {
         }
         if (s.order != null) {
             for (int i : s.failedRounds) {
-                Orders.ended(level, RoundRef.of(s.order, i, s.tag), s.weapon, s.owner, RoundEnd.unreleased(Outcome.FAILED, refunded));
+                Orders.ended(level, RoundRef.of(s.order, i, s.tag, s.rules), s.weapon, s.owner, RoundEnd.unreleased(Outcome.FAILED, refunded));
             }
             for (int i = s.total - s.remaining; i < s.total; i++) {
-                Orders.ended(level, RoundRef.of(s.order, i, s.tag), s.weapon, s.owner, RoundEnd.unreleased(unlaunched, refunded));
+                Orders.ended(level, RoundRef.of(s.order, i, s.tag, s.rules), s.weapon, s.owner, RoundEnd.unreleased(unlaunched, refunded));
             }
         }
         s.failed = 0;
@@ -239,6 +239,7 @@ public final class SalvoData extends SavedData {
         if (order != null) {
             salvo.order = order.id();
             salvo.tag = order.tag();
+            salvo.rules = order.rules();
         }
         get(level).add(salvo);
         ServerPlayer player = salvo.reporter(level);
@@ -297,6 +298,8 @@ public final class SalvoData extends SavedData {
         UUID order;
         @Nullable
         String tag;
+        /** World rules of the order ({@link Order#rules}): its rounds carry them; a salvo saved without them takes the config when loaded. */
+        StrikeRules rules = StrikeRules.ALL;
         /** Rounds (launch indices) whose launch failed: they end with the salvo's refund ({@link #settle}). */
         final IntArrayList failedRounds = new IntArrayList();
 
@@ -431,7 +434,7 @@ public final class SalvoData extends SavedData {
             float shotYaw = yaw + (level.random.nextInt(7001) - 3500) / 100f;
             double lane = weapon.spec().lanes().offset(seed, total - remaining, total);
             // One siren per salvo: first projectile enables it when “seen” approaching.
-            RoundRef round = order == null ? null : RoundRef.of(order, index, tag);
+            RoundRef round = order == null ? null : RoundRef.of(order, index, tag, rules);
             return StrikeService.launch(level, weapon, shot, point, shotYaw, owner, remaining == total, nuke, via, from, lane, round);
         }
 
@@ -481,6 +484,7 @@ public final class SalvoData extends SavedData {
             t.putLong("seed", seed);
             if (order != null) t.putUUID("order", order);
             if (tag != null) t.putString("tag", tag);
+            t.putInt("rules", rules.bits());
             if (!failedRounds.isEmpty()) t.putIntArray("failed_rounds", failedRounds.toIntArray());
             return t;
         }
@@ -504,6 +508,7 @@ public final class SalvoData extends SavedData {
             // Saved before order events: no order, its rounds post no events.
             if (t.hasUUID("order")) s.order = t.getUUID("order");
             if (t.contains("tag")) s.tag = t.getString("tag");
+            s.rules = t.contains("rules", Tag.TAG_INT) ? StrikeRules.of(t.getInt("rules")) : StrikeRules.live();
             s.failedRounds.addElements(0, t.getIntArray("failed_rounds"));
             return Optional.of(s);
         }

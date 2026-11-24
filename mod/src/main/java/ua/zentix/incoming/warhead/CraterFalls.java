@@ -15,9 +15,7 @@ import net.minecraft.world.level.block.FallingBlock;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.phys.Vec3;
 import net.neoforged.neoforge.event.entity.EntityJoinLevelEvent;
-import net.neoforged.neoforge.event.tick.EntityTickEvent;
 import org.jetbrains.annotations.Nullable;
-import ua.zentix.incoming.IncomingConfig;
 import ua.zentix.incoming.registry.ModAttachments;
 
 import java.util.ArrayList;
@@ -98,20 +96,14 @@ public final class CraterFalls {
     }
 
     /** Vanilla keeps the falling-block picture while suppressing placement and item drops on impact. */
-    static void markRubble(FallingBlockEntity falling) {
+    /**
+     * {@code stays}: the strike's {@code world.debris_stay} ({@link BlastArea#rules}), decided once: vanilla saves the
+     * cancelled placement with the entity, so a rule changed while it falls does not reach it.
+     */
+    static void markRubble(FallingBlockEntity falling, boolean stays) {
         falling.addTag(COLLAPSE_RUBBLE);
         falling.dropItem = false;
-        if (!rubbleStays()) falling.disableDrop();
-    }
-
-    public static void onEntityTick(EntityTickEvent.Pre event) {
-        // Config can reload while a block is airborne (including after an unload and reload).
-        if (event.getEntity() instanceof FallingBlockEntity falling && falling.level() instanceof ServerLevel
-                && falling.getTags().contains(COLLAPSE_RUBBLE) && !rubbleStays()) falling.disableDrop();
-    }
-
-    static boolean rubbleStays() {
-        return IncomingConfig.SERVER.debrisStay.get();
+        if (!stays) falling.disableDrop();
     }
 
     /**

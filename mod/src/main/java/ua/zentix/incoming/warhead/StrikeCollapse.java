@@ -176,7 +176,7 @@ final class StrikeCollapse implements UnitQueue.Job {
         if (support == null && !removedAt.isEmpty() && !StrikeSupport.slotFree()) return false;
         if (!area.ready(level)) return false;
         if (support == null) {
-            if (removedAt.isEmpty() || !IncomingConfig.SERVER.blockDamage.get()) return true;
+            if (removedAt.isEmpty() || !area.rules().blockDamage()) return true;
             // the slot first: a waiting collapse holds nothing but its strike area
             if (!StrikeSupport.tryReserve()) return false;
             support = new StrikeSupport(level, removedAt, removedWas, area.collapseSource());
@@ -618,7 +618,7 @@ final class StrikeCollapse implements UnitQueue.Job {
         int fall = from.getY() - rest(level, from.getX(), from.getY(), from.getZ(), m);
         double[] off = StrikeSupport.spread(from.getX(), from.getY(), from.getZ(), fall);
         FallingBlockEntity e = FallingBlockEntity.fall(level, from, rubble);
-        CraterFalls.markRubble(e);
+        CraterFalls.markRubble(e, area.rules().debrisStay());
         double ticks = fallTicks(Math.max(1, fall));
         e.setDeltaMovement(off[0] / ticks, 0, off[1] / ticks);
         stats.live++;
@@ -641,7 +641,7 @@ final class StrikeCollapse implements UnitQueue.Job {
 
     /** Rubble without a live falling block, in timed portions, after every fall is out of the way. */
     private int land(ServerLevel level) {
-        if (!CraterFalls.rubbleStays()) {
+        if (!area.rules().debrisStay()) {
             landed = landings.size();
             return 0;
         }

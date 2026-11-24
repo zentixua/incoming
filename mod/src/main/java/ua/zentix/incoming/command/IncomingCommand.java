@@ -80,6 +80,7 @@ import java.util.function.Consumer;
  *   /incoming nuke now [at x y z] [kt] [air|ground]   immediate detonation, no flight (operator only)
  *   /incoming radiation [player] | radiation clear [players]
  *   /incoming grid …                                  power grid and blackout ({@link GridCommand})
+ *   /incoming rule [key [value]]                      world rules: list, read, set ({@link RuleCommand})
  *   /incoming launcher x y z                          fixed launcher (operator): status;
  *          … fire | clear | load N | owner player|none   fire mission, clear mission, mission munitions, owner;
  *          … mission weapon N spread x y z|x z [via x z …] mission, as from the designator, without rules
@@ -134,6 +135,7 @@ public final class IncomingCommand {
 
         root.then(nuke());
         root.then(GridCommand.build());
+        root.then(RuleCommand.build());
         root.then(launcher());
         root.then(Commands.literal("radiation").requires(s -> s.hasPermission(2))
                 .executes(ctx -> radiation(ctx, ctx.getSource().getPlayerOrException()))
@@ -610,7 +612,7 @@ public final class IncomingCommand {
     private static int help(CommandContext<CommandSourceStack> ctx) {
         CommandSourceStack s = ctx.getSource();
         s.sendSystemMessage(Component.translatable("incoming.help.title").withStyle(ChatFormatting.DARK_RED, ChatFormatting.BOLD));
-        for (int i = 1; i <= 15; i++) {
+        for (int i = 1; i <= 16; i++) {
             s.sendSystemMessage(Component.translatable("incoming.help." + i).withStyle(ChatFormatting.GRAY));
         }
         return 1;

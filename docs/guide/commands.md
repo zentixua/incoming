@@ -64,6 +64,49 @@ A tag is one word of up to 32 letters, digits and `_ - . +`; capital letters cou
 player, may share a tag, and it stays with them after a server restart. `status` returns the number of unfinished
 rounds: a datapack can wait for it to reach 0 (see [For server owners and pack makers](packs.md#command-results-status-and-tags)).
 
+## World rules
+
+Operators only (the console and command blocks too). `/incoming rule` reads and changes the world rules below while
+the world runs and saves them at once to the world's settings file, the same values as in
+[World settings](settings.md#world-settings): they stay after a restart and show in the settings screen.
+
+| Command | What it does |
+|---|---|
+| `/incoming rule` | list every rule with its value and what it accepts |
+| `/incoming rule <key>` | show one rule; returns its value as a number (on 1, off 0) for `execute store result` |
+| `/incoming rule <key> <value>` | change it: `true` or `false`, or a whole number in the rule's range; returns 1 |
+
+An unknown rule or a value it does not accept is refused with what it accepts, and nothing changes.
+
+A change applies to orders given after it. Orders already given keep the rules they were given under: the rest of a
+salvo still launching, rounds in flight (also out of sight), a scheduled ICBM, and what a strike that has already hit
+still does (its debris landing, its fuel burning). `nuclear.enabled` is also the off switch for nuclear launches not yet
+under way: switched off, a nuclear order waiting for a second key or its launch site does not leave and its munitions
+come back; an ICBM already flying still arrives. `nuclear.ops_only` and `launch.designator_for_everyone` decide who has
+the right to launch, and a nuclear launch waiting for a second key asks its owner's rights again when the key turns
+([permissions](packs.md#permissions)): a right lost in the meantime cancels it and returns the munitions.
+
+| Rule | What it governs |
+|---|---|
+| `world.block_damage` | conventional blasts remove blocks: craters, breached walls, floors and slabs, the bunker-buster's bore and cavity, fragment damage to blocks. Off: blasts still hurt players and mobs |
+| `world.shatter_glass` | the blast wave and fragments break glass beyond the crater |
+| `world.fire` | the fuel fireball sets grass and foliage alight, fuel in the crater burns, burning debris lights what it lands on |
+| `world.debris_stay` | ground clods, collapse rubble, airframe parts and burning debris stay as blocks. Off: they vanish on landing |
+| `world.collapse` | what a blast leaves without support falls (needs `world.block_damage`) |
+| `grid.enabled` | a strike near a [substation](blackout.md) knocks it out and darkens its area; a nuclear strike's blackout needs it too. TNT and creepers near a substation follow its current value |
+| `nuclear.enabled` | nuclear weapons: the ICBM, nuclear warheads, `/incoming nuke` |
+| `nuclear.ops_only` | only operators and the host launch nuclear strikes; off: other players need a second key |
+| `nuclear.carrier_nukes` | a nuclear warhead on the cruise missile and the B-2 |
+| `launch.designator_for_everyone` | the designator works for every player, not only operators |
+| `launch.max_salvo` | largest salvo, 1–100 rounds |
+| `launch.max_spread` | largest salvo spread, 0–500 blocks |
+| `launch.max_active_per_player` | how many unfinished rounds a player may have for a new order to be accepted, 0–100000; 0: no limit |
+
+With the five `world.*` rules and `grid.enabled` off, conventional strikes change no block and cut no power: an arena
+keeps its shape round after round ([example](packs.md#world-rules-for-a-minigame)). Nuclear strikes have their own
+settings and are outside this: switch `nuclear.enabled` off for such an arena. Other settings (flight times, nuclear
+effects, scale, performance) stay in the [settings file](settings.md#world-settings).
+
 ## Power grid
 
 Operators only. Coordinates and node IDs refer to the command's dimension, except `status` and a bare `restore`,
@@ -113,6 +156,7 @@ console.
 /incoming status tag wave1
 /incoming nuke at 2000 64 0 1 ground
 /incoming launcher 100 64 -20 mission missile 2 10 120 70 -340
+/incoming rule world.block_damage false
 ```
 
 1. A cruise missile at the player Steve (if spotted).
@@ -124,3 +168,4 @@ console.
 7. How many rounds of `wave1` are still waiting, flying or exploding.
 8. A 1 kt ground burst at a point.
 9. A mission for the launcher at 100 64 -20: two cruise missiles with a spread of 10 blocks at a point (operator).
+10. From now on, conventional strikes break no blocks (operator).

@@ -153,7 +153,7 @@ class IncomingCommandTest {
     @Test
     void rootAndAllWeaponAliasesHaveExecutableTargets() {
         assertEquals(Set.of("incoming"), children(dispatcher.getRoot()));
-        assertEquals(Set.of("help", "menu", "clear", "give", "nuke", "grid", "launcher", "radiation", "salvo", "status",
+        assertEquals(Set.of("help", "menu", "clear", "give", "nuke", "grid", "launcher", "radiation", "rule", "salvo", "status",
                 "drone", "shahed", "missile", "bunker", "rocket", "grad", "loiter", "lancet"), children(node("incoming")));
         assertEquals(WEAPONS, children(node("incoming", "salvo")));
         for (String weapon : WEAPONS) {
@@ -251,7 +251,7 @@ class IncomingCommandTest {
                 for (int permission = 0; permission <= 4; permission++) {
                     CommandSourceStack s = source(permission, player);
                     assertEquals(permission >= 2 || player && everyone, node("incoming").canUse(s));
-                    for (String branch : List.of("give", "grid", "launcher", "radiation")) {
+                    for (String branch : List.of("give", "grid", "launcher", "radiation", "rule")) {
                         assertEquals(permission >= 2, node("incoming", branch).canUse(s), branch);
                     }
                     assertEquals(permission >= 2, node("incoming", "salvo", "missile", "count", "spread", "from").canUse(s));

@@ -44,6 +44,8 @@ public final class Order {
     /** Where a refusal is told: the ordering player's action bar, a command source, a launcher's status. */
     @Nullable
     private final Consumer<Component> feedback;
+    /** World rules taken when the order is made: its rounds carry them ({@link RoundRef#rules}). */
+    private final StrikeRules rules;
     @Nullable
     private StrikeOrderEvent.Reason rejected;
     private int accepted = -1;
@@ -66,6 +68,7 @@ public final class Order {
         this.payment = payment;
         this.tag = tag;
         this.feedback = feedback;
+        this.rules = StrikeRules.live();
     }
 
     /** Player's order (designator or their command); {@code l} already clamped. */
@@ -111,6 +114,7 @@ public final class Order {
         this.payment = o.payment;
         this.tag = tag;
         this.feedback = o.feedback;
+        this.rules = o.rules;
     }
 
     public UUID id() {
@@ -191,9 +195,14 @@ public final class Order {
         return feedback;
     }
 
+    /** World rules this order and its rounds change the world under: the config's when the order was made. */
+    public StrikeRules rules() {
+        return rules;
+    }
+
     /** Round {@code index} (0-based) of this order. */
     public RoundRef round(int index) {
-        return RoundRef.of(id, index, tag);
+        return RoundRef.of(id, index, tag, rules);
     }
 
     /** Rounds admitted ({@link #accept}); 0 while unanswered or if rejected. */

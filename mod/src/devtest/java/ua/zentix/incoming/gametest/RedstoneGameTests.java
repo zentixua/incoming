@@ -342,6 +342,10 @@ public final class RedstoneGameTests {
                 })
                 .thenExecute(() -> {
                     timed[0] = false;
+                    // the timed phase is over: back to hours, or this outage returns 2 world-clock ticks later, which is
+                    // 2 game ticks while the day runs (a daylight state earlier batches leave behind) and lights the
+                    // district before the check below
+                    cfg.gridRestoreHours.set(hours0);
                     Blackouts.blackout(level, c, 64, 1000, -1);
                 })
                 .thenIdle(25)
@@ -352,7 +356,7 @@ public final class RedstoneGameTests {
                     BlockPos g = h.absolutePos(center.east(8));
                     Detonation det = new Detonation(NuclearGameTests.IDS.incrementAndGet(), new Vec3(g.getX() + 0.5, g.getY() + 300, g.getZ() + 0.5), g.getY(),
                             15, false, level.getGameTime(), 0, 0, 20_000, 7, 0.1f, false, Detonation.OLD_WAVE);
-                    Blackouts.nuke(level, det);
+                    Blackouts.nuke(level, det, ua.zentix.incoming.IncomingConfig.SERVER.gridEnabled.get());
                     h.assertFalse(powered(h, center), "a nuclear outage over the substation left it working");
                     assertDust(h, dust, false);
                 })

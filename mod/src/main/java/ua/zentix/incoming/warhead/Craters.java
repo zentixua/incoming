@@ -14,7 +14,6 @@ import net.minecraft.util.RandomSource;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.levelgen.Heightmap;
 import net.minecraft.world.phys.Vec3;
-import ua.zentix.incoming.IncomingConfig;
 import ua.zentix.incoming.nuclear.model.CraterModel;
 import ua.zentix.incoming.nuclear.model.FuelFireball;
 import ua.zentix.incoming.nuclear.model.PulseIgnition;
@@ -120,10 +119,10 @@ final class Craters {
      * on nearby stone/sand. At Shahed impact, one fifth dry grass and three quarters foliage ignite, less toward
      * edge; missile almost all grass/leaves inside, leaves also at 1.5 radii (quarter) and canopy above ball;
      * fabric rarely ({@code FuelFireballTest}). Queue traversal ({@link Ignition}) after {@code after} explosions
-     * if explosion {@code happened}.
+     * if explosion {@code happened}. The caller holds the strike's {@code world.fire} ({@link BlastArea#rules}).
      */
     static void ignite(ServerLevel level, BlastArea area, List<StagedExplosion> after, BooleanSupplier happened, Vec3 pos, double fuelKg) {
-        if (!IncomingConfig.SERVER.fire.get() || FuelFireball.ballKg(fuelKg) <= 0) return;
+        if (FuelFireball.ballKg(fuelKg) <= 0) return;
         StrikeWorld.get(level).impacts().add(level, new Ignition(area.retain(), after, happened, pos, FuelFireball.ballKg(fuelKg)));
     }
 

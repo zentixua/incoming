@@ -91,6 +91,30 @@ execute store result score #wave arena run incoming salvo rocket 20 25 at 120 70
 execute store result score #left arena run incoming status tag wave1
 ```
 
+## Правила мира для мини-игры
+
+`/incoming rule` (операторы, консоль, командные блоки и функции) меняет правила мира, пока мир идёт, и сохраняет их в
+файл настроек мира; что задаёт каждое правило, сказано в [списке правил](commands.md#правила-мира). Изменение действует
+для приказов, отданных после него: волна, которая уже в воздухе, идёт по правилам, при которых её заказали, поэтому
+включить правила обратно сразу после волны безопасно. Когда `world.block_damage`, `world.shatter_glass`, `world.fire`,
+`world.debris_stay`, `world.collapse` и `grid.enabled` выключены, обычные удары не меняют ни одного блока и не
+отключают свет. У ядерных ударов свои правила: на арене выключи `nuclear.enabled`.
+
+```mcfunction
+# раунд на арене: удары ранят игроков, но карта остаётся как есть
+incoming rule world.block_damage false
+incoming rule world.shatter_glass false
+incoming rule world.fire false
+incoming rule world.debris_stay false
+incoming rule world.collapse false
+incoming rule grid.enabled false
+incoming rule nuclear.enabled false
+execute store result score #wave arena run incoming salvo rocket 20 25 at 120 70 -340 tag wave1
+```
+
+`/incoming rule <ключ>` возвращает значение числом (вкл 1, выкл 0), так что функция может проверить состояние арены через
+`execute store result`.
+
 ## Достижения и статистика
 
 Достижения и статистика Incoming — ванильные, поэтому моды заданий (задания на достижение и статистику в FTB Quests),
