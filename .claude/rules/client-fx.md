@@ -98,20 +98,22 @@ paths:
   dots smaller than a pixel) vanish entirely, so the effects layer draws with its own `fx` shader. The vertex color
   (`BufferBuilder.setColor(float…)`) is a byte without clamping: above 1 it overflows. Vanilla fog turns blue in rain
   (`FogRenderer`: red and green × 0.5, blue × 0.6), so do not mix distant haze with its color.
-- The layer's GPU cost is measured by the probe `fx/layer/LayerTimes` (the `FxLayer.describeTiming` line, F3 on the right;
-  it runs while the line is read: F3, the line over the last 5 s, in the scene bench, or `always()` for scenarios and the
-  sandbox). Without it there are no marks at all, and neither is there for `GpuTimer`. Marks sit at pass boundaries
-  (`LayerTimes.Pass`: model atlas, depth, water, pall with volumetric smoke, heat, probes, quads, glow): every frame, read
-  2–3 frames later. A mark between adjacent passes “leaks” (the tail of the previous work lands in the next pass), so on
-  request (F3 or `-Dincoming.fx.drain=true`; the scenarios and the bench that only read the line run without it, since a
-  20–28 ms hitch every 2 s was in their own measurement, look_gate 25.10) every 2 s a drain frame runs: `glFinish`
-  before each mark, the passes are exact, and the quads are split again by part (`FxQuads.Part`: puffs, veil, ribbons,
-  fire, glare, particles, debris trails, other), each part with its own sort segments in one `glMultiDrawElements`, with
-  time and pixels (GL_SAMPLES_PASSED) measured separately. The frame before the parts is copied and then restored, so the
-  screen shows the same frame. A quad's part is set by whoever writes it (`FxQuads.part`; the previous version back:
-  `LayerPartsTest`). A new drawing in the layer comes with its own part, otherwise it is “other”.
-  With half-resolution smoke (`HalfPass`) each part draws as the frame drew it: its quads behind their tiles' cuts in the
-  frame, the rest into the target and laid; target samples count four frame pixels in the part's screens.
+- The layer's GPU cost is measured by the probe `fx/layer/LayerTimes` (the `FxLayer.describeTiming` line, F3 on the
+  right; it runs while the line is read: F3, the line over the last 5 s, the scene bench, `always()` for scenarios and
+  the sandbox). Without it there are no marks, nor `GpuTimer`. Marks sit at pass boundaries (`LayerTimes.Pass`:
+  atlas, depth, water, pall with smoke, heat, probes, quads, glow): every frame, read 2–3 frames later. A mark between
+  adjacent passes “leaks” (the previous pass's tail lands in the next), so on request (F3 or
+  `-Dincoming.fx.drain=true`; scenarios and the bench run without it: the drain is a 20–28 ms hitch every 2 s) every 2 s
+  a drain frame runs: `glFinish` before each mark, the passes are exact, and the quads are split again by part
+  (`FxQuads.Part`: puffs, veil, ribbons, fire, glare, particles, debris trails, other), each part with its own sort
+  segments in one `glMultiDrawElements`, with time and pixels (GL_SAMPLES_PASSED) measured separately. The frame is
+  copied before the parts and restored after. A quad's part is set by its writer (`FxQuads.part`, `LayerPartsTest`). New
+  drawings get their own part, not “other”. With half-resolution smoke (`HalfPass`) each part draws as the frame drew
+  it: its quads behind their tiles' cuts in the frame, the rest into the target and laid; target samples count four
+  frame pixels in the part's screens.
+- AMD's Windows driver compiles each program (glc) in the game, unseen by `GpuWatch`; the nuclear volume programs
+  are its largest. CI “Компилятор AMD” (`tools/amd_shader_check.py`) fails past `tools/fixtures/amd_shader_budget.json`;
+  growth needs a reason in the PR and `--record`.
 - Soft smoke at half resolution — `fx/layer/HalfPass` (off-screen particles, GPU Gems 3 ch. 23; the low-resolution
   translucency of Unreal/Unity). Puff cost is the fragment count: 0.73–0.80 ms per screen of fill at 2560×1600 (RTX 4060
   laptop, sandbox raid of 40, drain frame), of which raster and blending of the quad area is ~0.2 ms per screen even with a

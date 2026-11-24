@@ -54,6 +54,11 @@ Prism: `~/.var/app/org.prismlauncher.PrismLauncher/data/PrismLauncher/` (`tools/
                                            sound only, its take in a 160×90 window at 20 fps);
                                            a nuke at the camera: `nuke 15 near`; how to work: client-scenario.md,
                                            “Effects sandbox”; check without a client: test_sandbox.sh (CI)
+    amd_shader_check.py [--only R] [--record] [--tree D] ← every core program through AMD's OpenGL compiler offline (RGA 2.13
+                                           glc, gfx1032 = RX 6600 XT; downloaded and sha256-checked into mod/run/rga): VGPRs,
+                                           scratch, code bytes, compiler memory, seconds; fails past tools/fixtures/amd_shader_budget.json
+                                           (+10 % code or memory, any new scratch, a new program over 128 KB or 1 GB). CI job
+                                           “Компилятор AMD” on shader changes; --record after a deliberate change, the reason in the PR
     see_through_check.sh [graphics] [start options] ← regression check of effects behind see-through blocks: a blast seen
                                            through a sandbox `pane` of each translucent block and stone, visible share 2 s
                                            after it by see_through.py, fails outside its bounds; run it on changes to the
@@ -213,7 +218,8 @@ Prism: `~/.var/app/org.prismlauncher.PrismLauncher/data/PrismLauncher/` (`tools/
   does not build the mod or run GameTest (`tools/replayscan` has its own build and unit tests, `tools/look_gate` the run
   validity test, `tools/stand` the wrapper build, its unit tests and test_gate.py); store pages (`docs/store`,
   `docs/media`, `docs/guide`, README, `.github/scripts`, `publish.yml`) only their check `test_store*.py`; `mod/`, CI and
-  unknown paths get the full check, and a manual run (release) always runs everything. The jar is the artifact
+  unknown paths get the full check, and a manual run (release) always runs everything. Shader changes (and
+  `amd_shader_check.py`, its test and budget) also run “Компилятор AMD”. The jar is the artifact
   `incoming-jar`.
 - A push to `main` and a release do not recheck a tree that already fully passed a successful run of this repository
   (a PR merged without `main` moving gives the same tree): `Что изменилось` finds the tag `tested-tree-<tree>`

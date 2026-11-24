@@ -63,6 +63,7 @@ jobs:
       replayscan: ${{ steps.diff.outputs.replayscan }}
       lookgate: ${{ steps.diff.outputs.lookgate }}
       stand: ${{ steps.diff.outputs.stand }}
+      amd: ${{ steps.diff.outputs.amd }}
     steps:
       - uses: actions/checkout@v5
         with:
@@ -83,10 +84,10 @@ jobs:
             *) base= ;;
           esac
           if [ -z "$base" ]; then
-            mod=true; rig=true; replayscan=true; lookgate=true; stand=true; store=true
+            mod=true; rig=true; replayscan=true; lookgate=true; stand=true; store=true; amd=true
             echo "Full checks ($GITHUB_EVENT_NAME)" >> "$GITHUB_STEP_SUMMARY"
           else
-            mod=false; rig=false; replayscan=false; lookgate=false; stand=false; store=false
+            mod=false; rig=false; replayscan=false; lookgate=false; stand=false; store=false; amd=false
             # --no-renames: moving out of mod/ is also deletion within mod/.
             files=$(git diff --name-only --no-renames "$base" HEAD)
             while IFS= read -r f; do
@@ -96,6 +97,9 @@ jobs:
                 # Probe log lines parsed by tools/look_gate/check.py.
                 mod/src/devtest/java/ua/zentix/incoming/scenario/ProbeScenario.java) mod=true; lookgate=true ;;
                 tools/release_checks.py|tools/prepare_publish.py|tools/test_release_checks.py|tools/ci_reuse.py|tools/test_ci_reuse.py) mod=true; rig=true ;;
+                # Shaders also go through AMD's compiler (tools/amd_shader_check.py).
+                mod/src/main/resources/assets/incoming/shaders/*) mod=true; amd=true ;;
+                tools/amd_shader_check.py|tools/test_amd_shader_check.py|tools/fixtures/amd_shader_budget.json) amd=true ;;
                 mod/*|tools/fetch_runtime_mods.py|tools/paths.py|tools/clean_install.py) mod=true ;;
                 tools/rig_procs.sh|tools/test_rig_procs.sh|tools/gpu_lease.sh|tools/test_gpu_lease.sh|tools/laptop_job.sh|tools/sandbox.sh|tools/test_sandbox.sh|tools/nested_kwin.sh|tools/soft_gl.sh|tools/stress.sh|tools/mp_scenario.sh|tools/client_scenario.sh|tools/probes/*) rig=true ;;
                 tools/replayscan/*) replayscan=true ;;
@@ -104,12 +108,12 @@ jobs:
                 tools/stand/*) stand=true ;;
                 # Store publishing (publish.yml) and the pages and gallery it uploads (guide images too): test_store*.py only.
                 .github/scripts/*|.github/workflows/publish.yml|docs/store/*|docs/media/*|docs/guide/*|README.md|README.ru.md) store=true ;;
-                .github/*) mod=true; rig=true; replayscan=true; lookgate=true; stand=true; store=true ;;
+                .github/*) mod=true; rig=true; replayscan=true; lookgate=true; stand=true; store=true; amd=true ;;
                 tools/*|docs/*|*.md|.claude/*|.claude-plugin/*|.gitignore) ;;
                 *) mod=true ;;
               esac
             done <<< "$files"
-            { echo "Mod (build, unit tests, GameTest): $mod; rig shutdown: $rig; replay analysis: $replayscan; look gate: $lookgate; scene bench: $stand; store pages: $store"; echo; echo '```'; echo "$files"; echo '```'; } >> "$GITHUB_STEP_SUMMARY"
+            { echo "Mod (build, unit tests, GameTest): $mod; rig shutdown: $rig; replay analysis: $replayscan; look gate: $lookgate; scene bench: $stand; store pages: $store; AMD compiler: $amd"; echo; echo '```'; echo "$files"; echo '```'; } >> "$GITHUB_STEP_SUMMARY"
           fi
           echo "mod=$mod" >> "$GITHUB_OUTPUT"
           echo "rig=$rig" >> "$GITHUB_OUTPUT"
@@ -117,6 +121,7 @@ jobs:
           echo "lookgate=$lookgate" >> "$GITHUB_OUTPUT"
           echo "stand=$stand" >> "$GITHUB_OUTPUT"
           echo "store=$store" >> "$GITHUB_OUTPUT"
+          echo "amd=$amd" >> "$GITHUB_OUTPUT"
       # Main push or release: the same tree may already have passed every mod check.
       - name: Already checked tree
         id: reuse
@@ -465,6 +470,26 @@ jobs:
       - name: Parsing, planning and look gate
         run: python3 -m unittest discover -s tools/stand -p 'test_*.py' -v
 
+  # Every core shader program through AMD's offline OpenGL compiler (RGA, no GPU): code size, compiler memory and spills
+  # against tools/fixtures/amd_shader_budget.json. AMD's Windows driver runs this compiler inside the game; a program
+  # past its budget freezes AMD machines on its first use (#656).
+  amd_shaders:
+    name: Компилятор AMD
+    needs: changes
+    if: needs.changes.outputs.amd == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/cache@v4
+        with:
+          path: mod/run/rga
+          key: rga-linux-2.13.0.27
+      - name: Budget rule
+        run: python3 -m unittest discover -s tools -p 'test_amd_shader_check.py' -v
+      - name: AMD compiler budget
+        run: python3 tools/amd_shader_check.py --jobs 2
+
   lss_gametest:
     name: LSS GameTest ${{ matrix.version }}
     needs: changes
@@ -509,7 +534,7 @@ jobs:
   # One status per commit: everything required passed; unnecessary checks skipped.
   ci:
     name: Итог
-    needs: [changes, knowledge, build, unit, gametest, lss_gametest, clean_install, reuse, store, rig, replayscan, lookgate, stand]
+    needs: [changes, knowledge, build, unit, gametest, lss_gametest, clean_install, reuse, store, rig, replayscan, lookgate, stand, amd_shaders]
     # Runs after failed/skipped/canceled jobs too: skipped jobs count as success, so “Итог” skipped
     # in a canceled run would be green without build/GameTest — instead it runs and fails in canceled runs.
     if: always()
@@ -518,11 +543,11 @@ jobs:
     steps:
       - name: Required checks passed
         run: |
-          echo 'changes: ${{ needs.changes.result }}; knowledge: ${{ needs.knowledge.result }}; build: ${{ needs.build.result }}; unit tests: ${{ needs.unit.result }}; GameTest: ${{ needs.gametest.result }}; LSS integration: ${{ needs.lss_gametest.result }}; clean install: ${{ needs.clean_install.result }}; reused checked run: ${{ needs.reuse.result }}; store pages: ${{ needs.store.result }}; rig shutdown: ${{ needs.rig.result }}; replay analysis: ${{ needs.replayscan.result }}; look gate: ${{ needs.lookgate.result }}; scene bench: ${{ needs.stand.result }}'
+          echo 'changes: ${{ needs.changes.result }}; knowledge: ${{ needs.knowledge.result }}; build: ${{ needs.build.result }}; unit tests: ${{ needs.unit.result }}; GameTest: ${{ needs.gametest.result }}; LSS integration: ${{ needs.lss_gametest.result }}; clean install: ${{ needs.clean_install.result }}; reused checked run: ${{ needs.reuse.result }}; store pages: ${{ needs.store.result }}; rig shutdown: ${{ needs.rig.result }}; replay analysis: ${{ needs.replayscan.result }}; look gate: ${{ needs.lookgate.result }}; scene bench: ${{ needs.stand.result }}; AMD compiler: ${{ needs.amd_shaders.result }}'
           [ '${{ contains(needs.*.result, 'failure') || contains(needs.*.result, 'cancelled') }}' = false ]
           # Release: every check ran here, except mod checks reused from the run that passed them on this very tree.
           if [ '${{ github.event_name == 'workflow_dispatch' && inputs.release }}' = true ]; then
-            for result in '${{ needs.knowledge.result }}' '${{ needs.store.result }}' '${{ needs.rig.result }}' '${{ needs.replayscan.result }}' '${{ needs.lookgate.result }}' '${{ needs.stand.result }}'; do
+            for result in '${{ needs.knowledge.result }}' '${{ needs.store.result }}' '${{ needs.rig.result }}' '${{ needs.replayscan.result }}' '${{ needs.lookgate.result }}' '${{ needs.stand.result }}' '${{ needs.amd_shaders.result }}'; do
               [ "$result" != skipped ]
             done
             [ '${{ needs.reuse.result }}' = success ] || \
