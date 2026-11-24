@@ -41,7 +41,7 @@ paths:
   `/run/user/1000/doc` (`fusermount3 -u -z`), and its own on exit; Flatpak apps (Prism) fail to start (“bwrap: Can't find
   source path …/doc/by-app/…”; restore with `systemctl --user restart xdg-document-portal.service`). Check:
   `findmnt /run/user/1000/doc` before and after must show the same mount.
-- The host's pack (zentixua/open-skies, includes Sinytra Connector) does not start in a Gradle run: Connector requires
+- The host's pack (zentixua/open-skies-friends, includes Sinytra Connector) does not start in a Gradle run: Connector requires
   Minecraft's launcher file layout (“Could not determine clean minecraft artifact path”). Use `tools/prod_client.py`
   for full-pack checks (libraries and ForgeWrapper from the Prism directory, instance copy in `mod/run/prod`; Artem's
   instance is untouched).
