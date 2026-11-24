@@ -687,6 +687,7 @@ public final class SmokePuffs {
     }
 
     /** The last filled veil's Gaussians ({@link Veil#describe}): a copy, formatted only when the shot log asks. */
+    private static final double[] NO_VEIL = new double[0];
     private static volatile double[] lastVeilGaussians = new double[0];
 
     /**
@@ -707,7 +708,7 @@ public final class SmokePuffs {
 
     /** No veil this frame: the shot log lists none. */
     static void noVeilGaussians() {
-        lastVeilGaussians = new double[0];
+        lastVeilGaussians = NO_VEIL;
     }
 
     static int lastVeils() {

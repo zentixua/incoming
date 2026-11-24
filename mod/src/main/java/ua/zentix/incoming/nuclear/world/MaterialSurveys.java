@@ -130,9 +130,12 @@ public final class MaterialSurveys {
                 survey.work(level, deadline, slots);
             }
         }
-        open.values().removeIf(survey -> {
-            if (!survey.publishedFinal()) return false;
-            survey.close();
+        // finished, or its strike called off before the birth was recorded: nothing will read it
+        open.entrySet().removeIf(e -> {
+            int id = e.getKey();
+            if (!e.getValue().publishedFinal() && (events.scheduled().stream().anyMatch(s -> s.id() == id)
+                    || events.detonations().stream().anyMatch(d -> d.id() == id))) return false;
+            e.getValue().close();
             return true;
         });
         if (System.nanoTime() < deadline) events.encodeMaterial();

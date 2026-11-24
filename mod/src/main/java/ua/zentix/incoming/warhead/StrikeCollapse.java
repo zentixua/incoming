@@ -6,14 +6,18 @@ import it.unimi.dsi.fastutil.longs.LongIterator;
 import it.unimi.dsi.fastutil.longs.LongOpenHashSet;
 import it.unimi.dsi.fastutil.objects.Reference2IntOpenHashMap;
 import net.minecraft.core.BlockPos;
+import net.minecraft.core.component.DataComponents;
 import net.minecraft.core.Direction;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.util.Mth;
 import net.minecraft.world.Container;
 import net.minecraft.world.RandomizableContainer;
 import net.minecraft.world.entity.item.FallingBlockEntity;
+import net.minecraft.world.item.ItemStack;
+import net.minecraft.world.item.component.SeededContainerLoot;
 import net.minecraft.world.level.ChunkPos;
 import net.minecraft.world.level.Explosion;
+import net.minecraft.world.level.GameRules;
 import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.FallingBlock;
 import net.minecraft.world.level.block.entity.BlockEntity;
@@ -587,7 +591,7 @@ final class StrikeCollapse implements UnitQueue.Job {
      * drops it ({@link Block#dropResources} with its block entity: a shulker box keeps its contents in the item), then the
      * block's own removal ({@code onRemove}) spills what it keeps inside: a chest's contents, a Create vault's or depot's,
      * a jukebox's disc. Nothing is cleared first (the nuclear ruins clear, {@link ColumnScar#replace}). An unopened loot
-     * chest keeps its table unrolled (rolling it reads structures for maps, hundreds of ms).
+     * container drops with its loot unrolled ({@link #dropWithLoot}).
      *
      * @return the block dropped as an item (it lands as no rubble then)
      */
@@ -596,14 +600,35 @@ final class StrikeCollapse implements UnitQueue.Job {
         if (st.hasBlockEntity()) {
             BlockEntity be = level.getBlockEntity(p);
             if (be != null && isStorage(level, p, st, be)) {
-                Block.dropResources(st, level, p, be);
+                if (be instanceof RandomizableContainer r && r.getLootTable() != null) dropWithLoot(level, p, st, be, r);
+                else Block.dropResources(st, level, p, be);
                 item = true;
             }
-            // Loot can be copied to the item as a component. Prevent onRemove from rolling it into loose items.
-            if (be instanceof RandomizableContainer r && r.getLootTable() != null) r.setLootTable(null);
         }
         ColumnScar.replaceKeeping(level, p, st, to);
         return item;
+    }
+
+    /**
+     * An unopened loot container (a village or ruin chest, barrel, dispenser) drops as a vanilla explosion drops it
+     * ({@link Block#getDrops}, {@link Block#popResource}), its own item carrying the unrolled table and seed
+     * ({@code container_loot}, as a shulker box's loot table copies it): placed again, it rolls on first opening, as it
+     * would have in place. Rolling it here reads structures for explorer maps, hundreds of ms in one fall portion. With no
+     * own item among the drops (a loot table dropping something else, or {@code doTileDrops} off) the table stays and the
+     * block's {@code onRemove} rolls it into loose items, as when broken by hand: the loot is never lost.
+     */
+    private static void dropWithLoot(ServerLevel level, BlockPos p, BlockState st, BlockEntity be, RandomizableContainer r) {
+        SeededContainerLoot loot = new SeededContainerLoot(r.getLootTable(), r.getLootTableSeed());
+        boolean carried = false, drops = level.getGameRules().getBoolean(GameRules.RULE_DOBLOCKDROPS);
+        for (ItemStack stack : Block.getDrops(st, level, p, be)) {
+            if (drops && !carried && stack.is(st.getBlock().asItem())) {
+                if (!stack.has(DataComponents.CONTAINER_LOOT)) stack.set(DataComponents.CONTAINER_LOOT, loot);
+                carried = true;
+            }
+            Block.popResource(level, p, stack);
+        }
+        st.spawnAfterBreak(level, p, ItemStack.EMPTY, true);
+        if (carried) r.setLootTable(null);
     }
 
     /** Storage can be empty and still carry item components, such as a custom name. */

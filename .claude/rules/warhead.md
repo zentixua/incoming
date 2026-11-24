@@ -198,7 +198,10 @@ paths:
     drops even when empty (`Block.dropResources` with its block entity: a shulker box keeps its name and
     contents in the item) and is removed without clearing (`ColumnScar.replaceKeeping`), so its own `onRemove` spills
     what it keeps (chest; Create vault, depot, saw: many Create block entities are `Clearable`, and the saw's handler
-    gives nothing out); it lands as no rubble; an unrolled loot table stays unrolled. GameTest `storageContentsSurvive`.
+    gives nothing out); it lands as no rubble. An unrolled loot table stays unrolled (rolling reads structures for explorer
+    maps, hundreds of ms): its own dropped item carries the table and seed (`container_loot`), so the loot is never
+    lost; with no own item among the drops (or `doTileDrops` off) `onRemove` rolls it as a hand break does.
+    GameTests `storageContentsSurvive`, `lootChestKeepsLoot`.
     As in vanilla, `doTileDrops=false` loses a shulker box's contents, and a vault with an enlarged
     `vaultCapacity` spawns its whole contents in one removal.
   - Rubble: falls as vanilla falling blocks while `CraterFalls.room` allows, otherwise lands at once where it would

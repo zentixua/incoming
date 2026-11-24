@@ -137,6 +137,9 @@ public final class RuleCommand {
         Object v = parse(r, text);
         if (v == null) throw BAD_VALUE.create(r.key(), text, r.accepts());
         store(r, v);
+        // rules gate /incoming branches (designator for everyone, nuclear on, operators only): resend the trees, as /op does
+        var server = ctx.getSource().getServer();
+        for (var player : server.getPlayerList().getPlayers()) server.getCommands().sendCommands(player);
         ctx.getSource().sendSuccess(() -> Component.translatable("incoming.rule.set", r.key(), r.shown()), true);
         return 1;
     }

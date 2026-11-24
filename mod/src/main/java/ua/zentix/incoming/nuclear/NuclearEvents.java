@@ -305,6 +305,12 @@ public final class NuclearEvents extends SavedData {
         if (scheduled.remove(s)) setDirty();
     }
 
+    /** A strike called off before its burst: unscheduled, and the ground material surveyed for it is forgotten. */
+    public void cancel(ScheduledStrike s) {
+        unschedule(s);
+        forgetMaterial(s.id());
+    }
+
     public Map<Integer, Integer> craters() {
         return craters;
     }
