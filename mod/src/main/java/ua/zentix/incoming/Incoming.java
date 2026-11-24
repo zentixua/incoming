@@ -83,6 +83,7 @@ public final class Incoming {
         Util.backgroundExecutor().execute(HobBlast::warm);
 
         modBus.addListener(IncomingNetwork::register);
+        modBus.addListener(ua.zentix.incoming.command.RuleCommand::onConfigReload);
         modBus.addListener(ua.zentix.incoming.registry.ModDataMaps::register);
         // Mekanism's worn radiation shielding: the compat class names Mekanism's API, so it loads only with Mekanism
         if (ModList.get().isLoaded("mekanism")) ua.zentix.incoming.compat.mekanism.MekanismShielding.install();

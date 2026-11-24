@@ -6,21 +6,29 @@ import it.unimi.dsi.fastutil.longs.LongIterator;
 import it.unimi.dsi.fastutil.longs.LongOpenHashSet;
 import it.unimi.dsi.fastutil.objects.Reference2IntOpenHashMap;
 import net.minecraft.core.BlockPos;
+import net.minecraft.core.component.DataComponents;
 import net.minecraft.core.Direction;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.util.Mth;
 import net.minecraft.world.Container;
-import net.minecraft.world.RandomizableContainer;
 import net.minecraft.world.entity.item.FallingBlockEntity;
+import net.minecraft.world.entity.item.ItemEntity;
+import net.minecraft.world.entity.EntityType;
+import net.minecraft.world.item.ItemStack;
+import net.minecraft.world.item.component.SeededContainerLoot;
 import net.minecraft.world.level.ChunkPos;
 import net.minecraft.world.level.Explosion;
+import net.minecraft.world.level.GameRules;
 import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.FallingBlock;
 import net.minecraft.world.level.block.entity.BlockEntity;
+import net.minecraft.world.level.block.entity.RandomizableContainerBlockEntity;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.material.FluidState;
 import net.minecraft.world.phys.Vec3;
 import net.neoforged.neoforge.capabilities.Capabilities;
+import net.neoforged.neoforge.common.NeoForge;
+import net.neoforged.neoforge.event.level.BlockDropsEvent;
 import net.neoforged.neoforge.network.PacketDistributor;
 import org.jetbrains.annotations.Nullable;
 import ua.zentix.incoming.Incoming;
@@ -587,7 +595,7 @@ final class StrikeCollapse implements UnitQueue.Job {
      * drops it ({@link Block#dropResources} with its block entity: a shulker box keeps its contents in the item), then the
      * block's own removal ({@code onRemove}) spills what it keeps inside: a chest's contents, a Create vault's or depot's,
      * a jukebox's disc. Nothing is cleared first (the nuclear ruins clear, {@link ColumnScar#replace}). An unopened loot
-     * chest keeps its table unrolled (rolling it reads structures for maps, hundreds of ms).
+     * container drops with its loot unrolled ({@link #dropWithLoot}).
      *
      * @return the block dropped as an item (it lands as no rubble then)
      */
@@ -596,14 +604,53 @@ final class StrikeCollapse implements UnitQueue.Job {
         if (st.hasBlockEntity()) {
             BlockEntity be = level.getBlockEntity(p);
             if (be != null && isStorage(level, p, st, be)) {
-                Block.dropResources(st, level, p, be);
+                if (be instanceof RandomizableContainerBlockEntity r && r.getLootTable() != null) dropWithLoot(level, p, st, r);
+                else Block.dropResources(st, level, p, be);
                 item = true;
             }
-            // Loot can be copied to the item as a component. Prevent onRemove from rolling it into loose items.
-            if (be instanceof RandomizableContainer r && r.getLootTable() != null) r.setLootTable(null);
         }
         ColumnScar.replaceKeeping(level, p, st, to);
         return item;
+    }
+
+    /**
+     * An unopened loot container (a village or ruin chest, barrel, dispenser) drops as {@link Block#dropResources} drops
+     * it, drop event included, its own item carrying the unrolled table and seed ({@code container_loot}, which
+     * {@link RandomizableContainerBlockEntity} restores when placed): placed and opened, it rolls them then. Rolling here
+     * reads structures for explorer maps, hundreds of ms in one fall portion. Other loot containers (a decorated pot
+     * restores no {@code container_loot}) drop as usual and their {@code onRemove} rolls the loot, as a hand break does;
+     * so does a chest whose drops a mod's {@link BlockDropsEvent} listener cancelled. With {@code doTileDrops} off the
+     * table is dropped unrolled (no roll inside the fall).
+     */
+    private static void dropWithLoot(ServerLevel level, BlockPos p, BlockState st, RandomizableContainerBlockEntity be) {
+        if (!level.getGameRules().getBoolean(GameRules.RULE_DOBLOCKDROPS)) {
+            Block.dropResources(st, level, p, be);
+            be.setLootTable(null);
+            return;
+        }
+        SeededContainerLoot loot = new SeededContainerLoot(be.getLootTable(), be.getLootTableSeed());
+        boolean carried = false;
+        List<ItemEntity> drops = new ArrayList<>();
+        for (ItemStack stack : Block.getDrops(st, level, p, be)) {
+            if (stack.isEmpty()) continue;
+            if (!carried && stack.is(st.getBlock().asItem())) {
+                if (!stack.has(DataComponents.CONTAINER_LOOT)) stack.set(DataComponents.CONTAINER_LOOT, loot);
+                carried = true;
+            }
+            // Block.popResource's placement; NeoForge's capture that feeds the drop event is private to Block
+            double h = EntityType.ITEM.getHeight() / 2.0;
+            ItemEntity e = new ItemEntity(level, p.getX() + 0.5 + Mth.nextDouble(level.random, -0.25, 0.25),
+                    p.getY() + 0.5 + Mth.nextDouble(level.random, -0.25, 0.25) - h, p.getZ() + 0.5 + Mth.nextDouble(level.random, -0.25, 0.25), stack);
+            e.setDefaultPickUpDelay();
+            drops.add(e);
+        }
+        // CommonHooks.handleBlockDrops, which does not tell whether a listener cancelled the drops
+        BlockDropsEvent event = NeoForge.EVENT_BUS.post(new BlockDropsEvent(level, p, st, be, drops, null, ItemStack.EMPTY));
+        if (event.isCanceled()) return;
+        for (ItemEntity e : event.getDrops()) level.addFreshEntity(e);
+        st.spawnAfterBreak(level, p, ItemStack.EMPTY, false);
+        if (event.getDroppedExperience() > 0) st.getBlock().popExperience(level, p, event.getDroppedExperience());
+        if (carried) be.setLootTable(null);
     }
 
     /** Storage can be empty and still carry item components, such as a custom name. */

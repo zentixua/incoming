@@ -119,7 +119,7 @@ public final class LauncherOrders {
     /**
      * Rules for owner {@code owner}'s launcher order of {@code weapon} at {@code at} aimed at {@code aim}; null means
      * allowed. The owner's rights come from {@link Authority} (the designator, the weapon); an offline owner's from the
-     * handler's last answer or the node default, never a storage lookup.
+     * node's own resolver, never the permission handler or a storage lookup.
      */
     @Nullable
     private static MutableComponent rules(MinecraftServer server, UUID owner, WeaponType weapon, Vec3 at, Vec3 aim) {

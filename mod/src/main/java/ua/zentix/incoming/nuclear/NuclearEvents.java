@@ -305,6 +305,12 @@ public final class NuclearEvents extends SavedData {
         if (scheduled.remove(s)) setDirty();
     }
 
+    /** A strike called off before its burst: unscheduled, and the ground material surveyed for it is forgotten. */
+    public void cancel(ScheduledStrike s) {
+        unschedule(s);
+        forgetMaterial(s.id());
+    }
+
     public Map<Integer, Integer> craters() {
         return craters;
     }
@@ -384,6 +390,9 @@ public final class NuclearEvents extends SavedData {
             faded.forEach(d -> forgetMaterial(d.id()));
             setDirty();
         }
+        // a material whose strike was called off by any path, not only cancel(): nothing will ever read it
+        if (materials.keySet().removeIf(id -> scheduled.stream().noneMatch(s -> s.id() == id)
+                && detonations.stream().noneMatch(d -> d.id() == id))) { materialEpoch++; setDirty(); }
         if (clocks.keySet().removeIf(id -> detonations.stream().noneMatch(d -> d.id() == id))) setDirty();
         steps.keySet().removeIf(id -> detonations.stream().noneMatch(d -> d.id() == id));
         if (craters.keySet().removeIf(id -> detonations.stream().noneMatch(d -> d.id() == id))) setDirty();
