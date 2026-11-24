@@ -12,7 +12,7 @@ paths:
 The short layout is in AGENTS.md; here, what each script does.
 
 Prism: `~/.var/app/org.prismlauncher.PrismLauncher/data/PrismLauncher/` (`tools/paths.py`: PRISM);
-`instances/Open Skies/minecraft/` is Artem's playing instance (MC; folder name only in `tools/paths.py`, read by
+`instances/Open-Skies/minecraft/` is Artem's playing instance (MC; folder name only in `tools/paths.py`, read by
 `build.gradle`, overridden by `MC_DIR`): `mods/` also supplies Create/Sable/Aeronautics for dev runs,
 `logs/latest.log`, `incoming-backup/` for `deploy.sh` removals; `java/java-runtime-delta` is JDK 21.
 
