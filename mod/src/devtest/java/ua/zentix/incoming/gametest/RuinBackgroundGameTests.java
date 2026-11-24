@@ -1456,6 +1456,73 @@ public final class RuinBackgroundGameTests {
     }
 
     /**
+     * Visible chunks whose window still needs disk reads (the edge of the loaded world: no neighbours in memory) do not
+     * hold the plan-ahead queue: on the first tick every eligible chunk is either planning or waiting for its reads,
+     * and all get their plan before their precheck. Stopping the stage at a cold head planned them one per read
+     * latency, and the warm chunks behind waited too (review probe, round 2).
+     */
+    @GameTest(template = "range", timeoutTicks = 300, batch = "nuke_plan_ahead_cold", skyAccess = true)
+    public static void coldWindowsDoNotHoldPlanAhead(GameTestHelper h) {
+        final int k = 8;
+        ServerLevel level = h.getLevel();
+        var chunks = level.getChunkSource();
+        ChunkPos pad = new ChunkPos(h.absolutePos(NuclearGameTests.CENTER));
+        ChunkPos[] row = new ChunkPos[k];
+        for (int i = 0; i < k; i++) row[i] = new ChunkPos(pad.x - 40, pad.z - 14 + 4 * i);
+        ScarQueue q = new ScarQueue();
+        StrikeGameTests.afterTest(h, () -> {
+            for (ChunkPos c : row) chunks.removeRegionTicket(NuclearGameTests.HOLD, c, 0, c);
+            ScarQueue.seenForTest(null);
+            q.clear(level);
+            NuclearStrikes.clear(level);
+        });
+        for (ChunkPos c : row) {
+            chunks.addRegionTicket(NuclearGameTests.HOLD, c, 0, c);
+            level.getChunk(c.x, c.z);
+        }
+        long[] t = {0};
+        int[] tick = {0};
+        Detonation[] det = {null};
+        h.startSequence().thenExecute(() -> {
+            for (ChunkPos c : row) h.assertTrue(chunks.getChunkNow(c.x, c.z) != null, "held chunk " + c + " not loaded");
+            ChunkPos mid = row[k / 2];
+            Detonation d = NuclearGameTests.atPsi(h, NuclearGameTests.CENTER, true,
+                    h.relativePos(new BlockPos(mid.getMiddleBlockX(), 200, mid.getMiddleBlockZ())), 6);
+            det[0] = d;
+            java.util.Set<Long> seen = new java.util.HashSet<>();
+            long first = Long.MAX_VALUE, last = Long.MIN_VALUE;
+            for (ChunkPos c : row) {
+                seen.add(c.toLong());
+                first = Math.min(first, ScarQueue.due(d, c));
+                last = Math.max(last, ScarQueue.due(d, c));
+            }
+            // every chunk eligible for plan-ahead from tick t on, all of them far from their precheck
+            t[0] = last - 290;
+            h.assertTrue(first - 20 > t[0] + 200, "setup: waves spread too far (" + first + ".." + last + ")");
+            ScarQueue.seenForTest(seen::contains);
+            q.scanLoaded(d, new it.unimi.dsi.fastutil.longs.Long2ObjectOpenHashMap<>());
+            WorkClock clock = WorkClock.counting(1_000_000);
+            clock.start(10_000_000_000L);
+            q.work(level, t[0], clock);
+            q.planAhead(level, t[0], clock);
+            int planning = 0;
+            for (ChunkPos c : row) if (ScarQueue.planning(level, d.id(), c.toLong())) planning++;
+            h.assertTrue(planning + q.planAheadReading() == k, "first tick: " + planning + " planning and " + q.planAheadReading()
+                    + " reading of " + k + " eligible chunks: the rest wait behind a cold window");
+        }).thenWaitUntil(() -> {
+            // game-paced: one queue tick per server tick while the reads land
+            WorkClock clock = WorkClock.counting(1_000_000);
+            clock.start(10_000_000_000L);
+            long now = t[0] + ++tick[0];
+            q.work(level, now, clock);
+            q.planAhead(level, now, clock);
+            int planned = 0;
+            for (ChunkPos c : row) if (ScarQueue.planning(level, det[0].id(), c.toLong())) planned++;
+            h.assertTrue(planned == k, planned + " of " + k + " planned after " + tick[0] + " ticks");
+        }).thenSucceed();
+    }
+
+    /**
      * A plan made ahead of the wave ({@code PLAN_AHEAD}) goes stale in the seconds before it (the player replaces the
      * glass): the {@code LOOKAHEAD} precheck checks the finished plan against the chunk and rebuilds it in the background,
      * as a stale prepared plan; found only at the wave, the chunk would be planned on the server thread there.

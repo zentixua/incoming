@@ -31,7 +31,9 @@ paths:
   before the wave under the lane's ordinary deadline (planned only in the precheck, a flight-less 1 Mt planned the
   whole view in the second the front crossed it: 4–9 cores of ruin pool and JIT while the client received the ruins,
   2 FPS, ruins up to 58 ticks late; GameTest `seenChunkPlannedLongBeforeWave`), in its own lane stage after the urgent
-  flash layers and before craters (`NuclearWorld.afterFront`), bounded by the ruin memory cap and the heap guard; the
+  flash layers and before craters (`NuclearWorld.afterFront`), bounded by the heap guard and the view (not the
+  preparation cap, which a long flight fills); chunks whose window is still reading from disk wait aside while the queue
+  goes on (GameTest `coldWindowsDoNotHoldPlanAhead`); the
   precheck checks a finished planned-ahead plan against the chunk like a prepared one (stale: rebuilt in the background,
   GameTest `plannedAheadThenStaleReplannedBeforeWave`); visible chunks are prechecked
   `ScarQueue.LOOKAHEAD` (20) ticks before the wave: plans that became stale during flight (grass grew, player placed a
