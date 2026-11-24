@@ -108,8 +108,9 @@ void main() {
     }
     // One ray's sample along a march cell is noisy (a dense or a clear sub-cell): a single march pixel darker or lighter than
     // every depth-alike ray around it is that noise, not dust structure (at a fifth of the frame a pixel is 5 screen pixels).
-    // On a near, moving wall the history kept those pixels, and the bilinear lay drew them as a lattice of dark "+" dots.
-    if (traced && around >= 2.0 && DwDiag.z < 0.5) {
+    // On a near, moving wall the history kept those pixels, and the bilinear lay drew them as a lattice of dark "+" dots. A clear
+    // ray stays clear (a gap among dust is real: pulled into the neighbours' dust it filled holes and edges).
+    if (traced && around >= 2.0 && DwDiag.z < 0.5 && cur != clearValue()) {
         vec4 held = clamp(cur, lo, hi);
         m1 += held - cur;
         m2 += held * held - cur * cur;
