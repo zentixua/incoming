@@ -5,6 +5,7 @@ import it.unimi.dsi.fastutil.longs.LongOpenHashSet;
 import net.minecraft.core.BlockPos;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.entity.Entity;
+import net.minecraft.world.level.ChunkPos;
 import net.neoforged.neoforge.event.EventHooks;
 import org.jetbrains.annotations.Nullable;
 import ua.zentix.incoming.api.ClaimQuery;
@@ -42,36 +43,45 @@ public final class Claims {
         long t = System.nanoTime();
         int count = 0;
         List<BlockPos> list = query.getToBlow();
+        long[] asked = new long[Math.min(BATCH, Math.max(0, to - from))];
+        // positions come chunk by chunk: one readiness lookup per run of the same chunk
+        long lastChunk = Long.MIN_VALUE;
+        boolean lastReady = false;
         try {
             for (int i = from; i < to; i += BATCH) {
                 int end = Math.min(to, i + BATCH);
                 list.clear();
-                int asked = 0;
+                int n = 0;
                 for (int k = i; k < end; k++) {
-                    if (!inMemory(level, at[k])) {
+                    long p = at[k];
+                    int cx = BlockPos.getX(p) >> 4, cz = BlockPos.getZ(p) >> 4;
+                    long chunk = ChunkPos.asLong(cx, cz);
+                    if (chunk != lastChunk) {
+                        lastChunk = chunk;
+                        lastReady = Terrain.ready(level, cx, cz);
+                    }
+                    if (!lastReady) {
                         count++;
                         refused++;
-                        if (onRefused != null) onRefused.accept(at[k]);
+                        if (onRefused != null) onRefused.accept(p);
                         continue;
                     }
-                    list.add(BlockPos.of(at[k]));
-                    asked++;
+                    list.add(BlockPos.of(p));
+                    asked[n++] = p;
                 }
-                if (asked == 0) {
-                    if (stopAtRefusal && count > 0) return count;
-                    continue;
-                }
-                events++;
-                offered += asked;
-                EventHooks.onExplosionDetonate(level, query, new ArrayList<Entity>(), 0);
-                if (!unchanged(list, at, i, end, level)) {
-                    LongOpenHashSet kept = new LongOpenHashSet(list.size());
-                    for (BlockPos p : list) kept.add(p.asLong());
-                    for (int k = i; k < end; k++) {
-                        if (kept.contains(at[k]) || !inMemory(level, at[k])) continue;
-                        count++;
-                        refused++;
-                        if (onRefused != null) onRefused.accept(at[k]);
+                if (n > 0) {
+                    events++;
+                    offered += n;
+                    EventHooks.onExplosionDetonate(level, query, new ArrayList<Entity>(), 0);
+                    if (!unchanged(list, asked, n)) {
+                        LongOpenHashSet kept = new LongOpenHashSet(list.size());
+                        for (BlockPos p : list) kept.add(p.asLong());
+                        for (int k = 0; k < n; k++) {
+                            if (kept.contains(asked[k])) continue;
+                            count++;
+                            refused++;
+                            if (onRefused != null) onRefused.accept(asked[k]);
+                        }
                     }
                 }
                 if (stopAtRefusal && count > 0) return count;
@@ -88,20 +98,11 @@ public final class Claims {
         return offer(level, query, new long[] {pos.asLong()}, 0, 1, null, true) == 0;
     }
 
-    /** Handlers left every offered position, in order (a handler that only removes keeps the order). */
-    private static boolean unchanged(List<BlockPos> list, long[] at, int from, int to, ServerLevel level) {
-        int k = from;
-        for (BlockPos p : list) {
-            while (k < to && !inMemory(level, at[k])) k++;
-            if (k >= to || p.asLong() != at[k]) return false;
-            k++;
-        }
-        while (k < to && !inMemory(level, at[k])) k++;
-        return k == to;
-    }
-
-    static boolean inMemory(ServerLevel level, long pos) {
-        return Terrain.ready(level, BlockPos.getX(pos) >> 4, BlockPos.getZ(pos) >> 4);
+    /** Handlers left every asked position, in order (a handler that only removes keeps the order). */
+    private static boolean unchanged(List<BlockPos> list, long[] asked, int n) {
+        if (list.size() != n) return false;
+        for (int k = 0; k < n; k++) if (list.get(k).asLong() != asked[k]) return false;
+        return true;
     }
 
     /** Log fragment: events, positions offered and refused, handler time since the last call; resets the counters. */

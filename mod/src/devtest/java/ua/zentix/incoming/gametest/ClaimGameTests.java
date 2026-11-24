@@ -172,16 +172,23 @@ public final class ClaimGameTests {
         for (int x = 16; x < 48 && n < at.length; x++) for (int z = 16; z < 48 && n < at.length; z++) for (int y = 12; y < 76 && n < at.length; y++) {
             at[n++] = h.absolutePos(new BlockPos(x, y, z)).asLong();
         }
-        long t0 = System.nanoTime();
-        int open = Claims.offer(level, q, at, 0, n, null, false);
-        long t1 = System.nanoTime();
+        // warm (the first passes run interpreted): the fastest of eight passes each
+        long unclaimed = Long.MAX_VALUE, full = Long.MAX_VALUE;
+        int open = -1, shut = -1;
+        for (int pass = 0; pass < 8; pass++) {
+            long t0 = System.nanoTime();
+            open = Claims.offer(level, q, at, 0, n, null, false);
+            unclaimed = Math.min(unclaimed, System.nanoTime() - t0);
+        }
         for (int i = 0; i < n; i++) handler.claimed.add(ChunkPos.asLong(BlockPos.getX(at[i]) >> 4, BlockPos.getZ(at[i]) >> 4));
-        long t2 = System.nanoTime();
-        int shut = Claims.offer(level, q, at, 0, n, null, false);
-        long t3 = System.nanoTime();
+        for (int pass = 0; pass < 8; pass++) {
+            long t0 = System.nanoTime();
+            shut = Claims.offer(level, q, at, 0, n, null, false);
+            full = Math.min(full, System.nanoTime() - t0);
+        }
         h.assertTrue(open == 0 && shut == n, "refused " + open + " unclaimed and " + shut + " of " + n + " claimed positions");
         Incoming.LOG.info("CLAIMBENCH {} positions: {} ns a position unclaimed, {} ns claimed (test handler, batches of {})", n,
-                (t1 - t0) / n, (t3 - t2) / n, Claims.BATCH);
+                unclaimed / n, full / n, Claims.BATCH);
         handler.claimed.clear();
         ua.zentix.incoming.grid.Blackouts.restore(level, null, 0, 0);
         PowerGrid.get(level).removeNode(node.id());
