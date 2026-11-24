@@ -33,7 +33,8 @@ paths:
   assembly writes blocks straight into sections, blocks do not tick in a plot, Sable saves the plot itself; a twin in
   a plot relights on a neighbor update during assembly, `Unlit.neighborChanged`: autosave precedes the end of the server
   tick, and Sable has no plot-save event). Lamps change directly in the section palette (`ChunkLights.applyInPlace`,
-  light via `checkBlock`, clients via `blockChanged`): the lamp/twin pair is one block to the world except for light
+  light via `checkBlock`, clients through `work/ChunkDelivery`: a chunk with many switched lamps goes whole after its
+  light, since each lamp delta makes the client spread its light removal itself, `work.md`): the lamp/twin pair is one block to the world except for light
   (`GridLights.inPlace`, GameTest), whereas `setBlock` with the host's pack costs ≈10 µs per lamp — Greenfield has
   2.5 million invisible `minecraft:light` blocks (up to 7400 per chunk), so the queue would take minutes. Only Sable plots
   use `setBlock`. A chunk at the edge of the loaded world (neighbors unloaded) is converted immediately too: waiting
