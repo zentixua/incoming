@@ -1457,8 +1457,8 @@ public final class RuinBackgroundGameTests {
 
     /**
      * Visible chunks whose window still needs disk reads (the edge of the loaded world: no neighbours in memory) do not
-     * hold the plan-ahead queue: on the first tick every eligible chunk is either planning or waiting for its reads,
-     * and all get their plan before their precheck. Stopping the stage at a cold head planned them one per read
+     * hold the plan-ahead queue: on the first tick every eligible chunk is either planning or waiting for its reads
+     * (unless the ruin pool is full), and all get their plan before their precheck. Stopping the stage at a cold head planned them one per read
      * latency, and the warm chunks behind waited too (review probe, round 2).
      */
     @GameTest(template = "range", timeoutTicks = 300, batch = "nuke_plan_ahead_cold", skyAccess = true)
@@ -1507,8 +1507,11 @@ public final class RuinBackgroundGameTests {
             q.planAhead(level, t[0], clock);
             int planning = 0;
             for (ChunkPos c : row) if (ScarQueue.planning(level, d.id(), c.toLong())) planning++;
-            h.assertTrue(planning + q.planAheadReading() == k, "first tick: " + planning + " planning and " + q.planAheadReading()
-                    + " reading of " + k + " eligible chunks: the rest wait behind a cold window");
+            // a full ruin pool stops the stage on its own (a small CI runner: capacity 4, the reads' parse tasks count);
+            // a cold window must not, while the pool still has room
+            boolean poolFull = !RuinWorkers.admit(RuinWorkers.Priority.SEEN);
+            h.assertTrue(planning + q.planAheadReading() == k || poolFull, "first tick: " + planning + " planning and "
+                    + q.planAheadReading() + " reading of " + k + " eligible chunks with room in the pool: the rest wait behind a cold window");
         }).thenWaitUntil(() -> {
             // game-paced: one queue tick per server tick while the reads land
             WorkClock clock = WorkClock.counting(1_000_000);
