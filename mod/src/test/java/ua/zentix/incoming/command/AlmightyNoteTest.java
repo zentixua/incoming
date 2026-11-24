@@ -23,6 +23,13 @@ import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.mockito.ArgumentCaptor;
+import org.mockito.invocation.InvocationOnMock;
+import ua.zentix.incoming.IncomingConfig;
+import ua.zentix.incoming.grid.Blackouts;
+import ua.zentix.incoming.nuclear.model.SicknessModel;
+import ua.zentix.incoming.strike.ServerActions;
+import ua.zentix.incoming.strike.WeaponType;
 import ua.zentix.incoming.api.NuclearDetonationEvent;
 import ua.zentix.incoming.api.StrikeRoundEvent;
 import ua.zentix.incoming.nuclear.radiation.RadiationDose;
@@ -51,11 +58,18 @@ import java.util.stream.Collectors;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assertions.fail;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyDouble;
+import static org.mockito.ArgumentMatchers.anyFloat;
+import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.ArgumentMatchers.isNull;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.mockStatic;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.when;
 
 /**
@@ -118,7 +132,7 @@ class AlmightyNoteTest {
             n++;
         }
         // the grid, radiation and status examples are there
-        assertTrue(n >= 13, "commands in the note: " + n);
+        assertTrue(n >= 14, "commands in the note: " + n);
     }
 
     /** {@code radiation <player>} returns the dose in hundredths of a gray, {@code radiation clear} the players cleared. */
@@ -136,6 +150,66 @@ class AlmightyNoteTest {
             radiation.verify(() -> RadiationTicker.clear(steve));
             radiation.verify(() -> RadiationTicker.clear(any()), org.mockito.Mockito.times(1));
         }
+    }
+
+    /**
+     * The note's lethality line ("below 2 Gy almost nobody dies, 4.5 Gy kills half, 10 Gy everyone") against the untreated
+     * death curve the mod uses.
+     */
+    @Test
+    void radiationLethalityInTheNoteFollowsTheSicknessModel() throws IOException {
+        assertTrue(note().replaceAll("\\s+", " ").contains("below 2 Gy almost nobody dies, 4.5 Gy kills half, 10 Gy everyone"));
+        assertTrue(SicknessModel.deathChance(2) < 0.02, "at 2 Gy: " + SicknessModel.deathChance(2));
+        assertEquals(0.5, SicknessModel.deathChance(4.5), 1e-9);
+        assertTrue(SicknessModel.deathChance(10) > 0.98, "at 10 Gy: " + SicknessModel.deathChance(10));
+    }
+
+    /**
+     * What the note says about forms without a target for the game master (level 4, no entity, at world spawn): a salvo
+     * without a target and {@code me} strike the source position; {@code look}, a weapon without a target, {@code nuke}
+     * without {@code at} and {@code radiation} without a player fail.
+     */
+    @Test
+    void formsWithoutATargetStrikeTheGameMastersPositionOrFail() throws IOException, CommandSyntaxException {
+        String text = note().replaceAll("\\s+", " ");
+        assertTrue(text.contains("«incoming salvo <weapon> <count> <spread>» and «… me» strike world spawn"), "the note's line on forms without a target");
+        assertTrue(text.contains("Forms that need a player fail: look, «incoming <weapon>» without a target, «incoming nuke» without at, «incoming radiation» without a player"));
+        Vec3 spawn = new Vec3(8.5, 70, -24.5);
+        MinecraftServer server = mock(MinecraftServer.class);
+        CommandSourceStack gm = new CommandSourceStack(CommandSource.NULL, spawn, Vec2.ZERO, mock(ServerLevel.class), 4, "Almighty",
+                Component.literal("Almighty"), server, null);
+        IncomingConfig.SERVER.nukeEnabled.set(true);
+        try (var actions = mockStatic(ServerActions.class)) {
+            for (String command : List.of("incoming salvo grad 1 0", "incoming salvo grad 1 0 me")) dispatcher.execute(command, gm);
+            ArgumentCaptor<ServerActions.Aim> aim = ArgumentCaptor.forClass(ServerActions.Aim.class);
+            actions.verify(() -> ServerActions.dispatch(isNull(), any(), anyString(), anyFloat(), eq(WeaponType.ROCKET), eq(1), eq(0), aim.capture(),
+                    any(), any(), any(), any(), any(), any()), times(2));
+            assertEquals(List.of(spawn, spawn), aim.getAllValues().stream().map(ServerActions.Aim::point).toList());
+            for (String command : List.of("incoming salvo grad 1 0 look", "incoming grad", "incoming nuke", "incoming nuke 5 air", "incoming nuke now",
+                    "incoming radiation")) {
+                assertThrows(CommandSyntaxException.class, () -> dispatcher.execute(command, gm), command);
+            }
+        }
+    }
+
+    /** {@code grid restore} brings power back over about 10 seconds (the command's own pace), not the repair setting. */
+    @Test
+    void gridRestoreTakesAboutTenSeconds() throws CommandSyntaxException, IOException {
+        assertTrue(note().replaceAll("\\s+", " ").contains("brings power back over about 10 seconds"));
+        IncomingConfig.SERVER.gridRestoreSpread.set(90);
+        List<Integer> spreads = new ArrayList<>();
+        try (var blackouts = mockStatic(Blackouts.class, (InvocationOnMock inv) -> {
+            if (inv.getMethod().getName().equals("restore") && inv.getArguments().length == 4) {
+                spreads.add((Integer) inv.getArguments()[3]);
+                return 1;
+            }
+            return inv.callRealMethod();
+        })) {
+            assertEquals(1, dispatcher.execute("incoming grid restore at 100 64 -200 300", gameMaster(mock(MinecraftServer.class))));
+            blackouts.verify(() -> Blackouts.restore(any(), any(), anyDouble()));
+        }
+        // game ticks; Blackouts.restore keeps that real pace on the grid clock
+        assertEquals(List.of(200), spreads, "ticks over which grid restore brings power back");
     }
 
     // ---------------------------------------------------------------- events
@@ -307,43 +381,56 @@ class AlmightyNoteTest {
     }
 
     /**
-     * The raid recipe, run as its tick rule would run it: wave 1 starts at once; while {@code status tag} returns more than
-     * 0 nothing happens; at 0 it reports the wave over and starts the next; after the last it reports the raid over once
-     * and stays quiet. A refused wave (result 0) reports its errors and stops the raid.
+     * The raid recipe, run as its tick rule would run it over Almighty's one {@code state} map shared by every rule until
+     * the server stops ({@code GmServer.state}): wave 1 starts at once; while {@code status tag} returns more than 0
+     * nothing happens; at 0 it reports the wave over and starts the next; after the last it reports the raid over once and
+     * stays quiet. The same recipe added again (a new rule id) runs its own raid with its own tags over the same {@code
+     * state}, also while the first still runs; a refused wave (result 0) reports its errors and stops only its own raid.
      */
     @Test
     void raidRecipeStartsTheNextWaveWhenStatusReturnsZero() throws IOException {
         String code = recipes().get("raid").script();
         Map<String, Integer> left = new HashMap<>();
-        Gm gm = new Gm(this, c -> {
-            Matcher salvo = Pattern.compile("incoming salvo \\w+ (\\d+) .* tag (raid\\d)").matcher(c);
+        Function<String, Map<String, Object>> server = c -> {
+            Matcher salvo = Pattern.compile("incoming salvo \\w+ (\\d+) .* tag (raid\\d+-\\d)").matcher(c);
             if (salvo.matches()) {
                 left.put(salvo.group(2), Integer.parseInt(salvo.group(1)));
                 return result(Integer.parseInt(salvo.group(1)));
             }
-            Matcher status = Pattern.compile("incoming status tag (raid\\d)").matcher(c);
+            Matcher status = Pattern.compile("incoming status tag (raid\\d+-\\d)").matcher(c);
             assertTrue(status.matches(), c);
             return result(left.getOrDefault(status.group(1), 0));
-        });
-        Map<String, Object> state = new HashMap<>();
+        };
+        Gm gm = new Gm(this, server);
+        // Almighty GmServer.state: one map for every script and rule of the server run
+        Map<String, Object> state = new LinkedHashMap<>();
         Script rule = compile(code, Map.of("gm", gm, "state", state, "server", mock(MinecraftServer.class), "rule", 1L));
 
         rule.run();
-        assertEquals(List.of(entry("raid", "wave started", "wave", 1, "rounds", 12)), gm.emitted);
-        assertEquals("incoming salvo grad 12 30 at 200 -150 tag raid1", gm.commands.getLast());
+        assertEquals(List.of(entry("raid", "wave started", "wave", 1, "tag", "raid1-1", "rounds", 12)), gm.emitted);
+        assertEquals("incoming salvo grad 12 30 at 200 -150 tag raid1-1", gm.commands.getLast());
         for (int rounds : new int[]{5, 1}) {
-            left.put("raid1", rounds);
+            left.put("raid1-1", rounds);
             rule.run();
             assertEquals(1, gm.emitted.size(), "emitted with " + rounds + " rounds unfinished");
-            assertEquals("incoming status tag raid1", gm.commands.getLast());
+            assertEquals("incoming status tag raid1-1", gm.commands.getLast());
         }
-        left.put("raid1", 0);
+
+        // a second raid from the recipe while the first flies: its own tags, the first's progress untouched
+        Gm other = new Gm(this, server);
+        Script second = compile(code, Map.of("gm", other, "state", state, "server", mock(MinecraftServer.class), "rule", 2L));
+        second.run();
+        assertEquals(List.of(entry("raid", "wave started", "wave", 1, "tag", "raid2-1", "rounds", 12)), other.emitted);
         rule.run();
-        assertEquals(List.of(entry("raid", "wave over", "wave", 1), entry("raid", "wave started", "wave", 2, "rounds", 6)),
+        assertEquals(1, gm.emitted.size(), "the second raid moved the first");
+
+        left.put("raid1-1", 0);
+        rule.run();
+        assertEquals(List.of(entry("raid", "wave over", "wave", 1), entry("raid", "wave started", "wave", 2, "tag", "raid1-2", "rounds", 6)),
                 gm.emitted.subList(1, 3));
-        left.put("raid2", 0);
+        left.put("raid1-2", 0);
         rule.run();
-        left.put("raid3", 0);
+        left.put("raid1-3", 0);
         rule.run();
         assertEquals(List.of(entry("raid", "wave over", "wave", 3), entry("raid", "over", "waves", 3)),
                 gm.emitted.subList(gm.emitted.size() - 2, gm.emitted.size()));
@@ -353,13 +440,21 @@ class AlmightyNoteTest {
         assertEquals(commands, gm.commands.size(), "commands after the raid is over");
         assertEquals(emits, gm.emitted.size(), "feed entries after the raid is over");
 
+        // the recipe added again after the first raid ended (a new rule id): it starts its first wave
+        Gm again = new Gm(this, server);
+        compile(code, Map.of("gm", again, "state", state, "server", mock(MinecraftServer.class), "rule", 3L)).run();
+        assertEquals(List.of(entry("raid", "wave started", "wave", 1, "tag", "raid3-1", "rounds", 12)), again.emitted);
+
         Gm refusing = new Gm(this, c -> Map.of("ok", false, "result", 0, "errors", List.of("Strike order refused")));
-        Map<String, Object> fresh = new HashMap<>();
-        Script refused = compile(code, Map.of("gm", refusing, "state", fresh, "server", mock(MinecraftServer.class), "rule", 2L));
+        Script refused = compile(code, Map.of("gm", refusing, "state", state, "server", mock(MinecraftServer.class), "rule", 4L));
         refused.run();
         refused.run();
         assertEquals(List.of(entry("raid", "refused", "wave", 1, "errors", List.of("Strike order refused"), "output", null)), refusing.emitted);
         assertEquals(1, refusing.commands.size(), "commands after a refused wave");
+        // the refusal stopped only its own raid
+        left.put("raid2-1", 0);
+        second.run();
+        assertEquals(entry("raid", "wave started", "wave", 2, "tag", "raid2-2", "rounds", 6), other.emitted.getLast());
     }
 
     /** The detonation recipe: one feed entry with the burst and the online players within 3000 blocks in its dimension. */

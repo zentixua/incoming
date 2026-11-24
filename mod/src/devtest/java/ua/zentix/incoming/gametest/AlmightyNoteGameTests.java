@@ -7,9 +7,6 @@ import net.minecraft.gametest.framework.GameTestAssertException;
 import net.minecraft.gametest.framework.GameTestHelper;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.phys.Vec3;
-import net.neoforged.bus.api.Event;
-import net.neoforged.bus.api.EventPriority;
-import net.neoforged.neoforge.common.NeoForge;
 import net.neoforged.neoforge.gametest.GameTestHolder;
 import net.neoforged.neoforge.gametest.PrefixGameTestTemplate;
 import ua.zentix.incoming.Incoming;
@@ -25,11 +22,10 @@ import ua.zentix.incoming.strike.ServerActions;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.UUID;
-import java.util.function.Consumer;
 
 /**
- * The Almighty note ({@code data/incoming/almighty/notes/strikes.md}) on a real server, through the commands as the game
- * master runs them (level 4, no entity): a raid wave is over when {@code status tag} returns 0, and the grid commands
+ * The Almighty note ({@code data/incoming/almighty/notes/strikes.md}) on a real server, through the commands with the game
+ * master's rights (level 4, no entity): a raid wave is over when {@code status tag} returns 0, and the grid commands
  * return what the note says. Parsing, the events and the recipes' scripts: {@code AlmightyNoteTest}.
  */
 @GameTestHolder(Incoming.MOD_ID)
@@ -53,15 +49,15 @@ public final class AlmightyNoteGameTests {
         UUID[] order = {null};
         Map<UUID, StrikeRoundEvent.Outcome> ended = new HashMap<>();
         Map<UUID, Integer> released = new HashMap<>();
-        listen(h, StrikeOrderEvent.Accepted.class, a -> {
+        OrderStatusGameTests.listen(h, StrikeOrderEvent.Accepted.class, a -> {
             if ("almighty_raid".equals(a.getActorName())) order[0] = a.getOrderId();
         });
-        listen(h, StrikeRoundEvent.Released.class, e -> {
+        OrderStatusGameTests.listen(h, StrikeRoundEvent.Released.class, e -> {
             if (tag.equals(e.getTag())) released.merge(e.getRoundId(), 1, Integer::sum);
         });
         int[] twice = {0};
         // a listener runs in the server's event delivery, not in the test: it only records
-        listen(h, StrikeRoundEvent.Ended.class, e -> {
+        OrderStatusGameTests.listen(h, StrikeRoundEvent.Ended.class, e -> {
             if (tag.equals(e.getTag()) && ended.put(e.getRoundId(), e.getOutcome()) != null) twice[0]++;
         });
         StrikeGameTests.afterTest(h, () -> ServerActions.clearTag(level.getServer(), tag, "test"));
@@ -146,10 +142,5 @@ public final class AlmightyNoteGameTests {
             return;
         }
         throw new GameTestAssertException("/" + command + " did not fail");
-    }
-
-    private static <T extends Event> void listen(GameTestHelper h, Class<T> type, Consumer<T> listener) {
-        NeoForge.EVENT_BUS.addListener(EventPriority.LOWEST, false, type, listener);
-        StrikeGameTests.afterTest(h, () -> NeoForge.EVENT_BUS.unregister(listener));
     }
 }

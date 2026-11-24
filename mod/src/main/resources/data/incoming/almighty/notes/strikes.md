@@ -1,6 +1,10 @@
 Incoming (https://github.com/zentixua/incoming): strikes by Shahed and Lancet drones, cruise missiles, Grad rocket salvos, a B-2, and a nuclear strike.
-- Your commands run at permission level 4 with no player, at world spawn: give every target as coordinates and every
-  player by name. Forms that aim where a player looks or stands (me, look, a command without a position) need a player.
+- Your commands run at permission level 4 with no player, at world spawn in the Overworld (gm.command always; the
+  command tool takes pos and dimension). A form without a target uses that position: «incoming salvo <weapon> <count>
+  <spread>» and «… me» strike world spawn, where players often are, and grid node add and grid blackout without x y z
+  act there. Give every target as coordinates and every player by name. Forms that need a player fail: look,
+  «incoming <weapon>» without a target, «incoming nuke» without at, «incoming radiation» without a player. For
+  another dimension run «execute in <dimension> run incoming …».
 - A strike is the command «incoming salvo <weapon> <count> <spread> at x z [from x z] [via x z …]»: at x z is a place
   on the ground, and the server finds its height itself, also where the chunks are not loaded. at x y z is exactly
   that point: above the ground a projectile bursts in the air (a bunker bomb is guided to a point underground and goes
@@ -22,11 +26,12 @@ Incoming (https://github.com/zentixua/incoming): strikes by Shahed and Lancet dr
 - incoming clear removes all launchers and every projectile in flight at once: an emergency stop. To stop a campaign,
   remove its rule first.
 - Results: every strike command returns the rounds its order admitted (a salvo of 12 returns 12 at once, an ICBM 1,
-  a refused order 0) and its output names the order id. salvo and nuke take «tag <name>» last: a group name that many
-  orders may share and that survives a restart. «incoming status tag <name>» returns the group's unfinished rounds
+  a refused order 0, also an order deferred to the next tick when given from a rule on StrikeOrderEvent.Request) and
+  its output names the order id. salvo and nuke take «tag <name>» last: a group name that many orders may share and
+  that survives a restart (one word of letters, digits and _ - . +, at most 32 characters). «incoming status tag <name>» returns the group's unfinished rounds
   (waiting to launch, in flight, or still exploding; a nuclear blast until its wave has passed) and lists each order
-  with its arrival time or «unknown»; 0 means the group is over. «incoming status» covers all orders, «incoming status
-  <player>» one player's. «incoming clear tag <name>» recalls one group, nuclear ones too, leaves other strikes and
+  with its arrival time or «unknown»; 0 means the group is over. «incoming status» covers all orders, `incoming status Steve` one
+  player's. «incoming clear tag <name>» recalls one group, nuclear ones too, leaves other strikes and
   returns the rounds it recalled. Example: `incoming salvo grad 12 30 at 200 -150 tag raid1` returns the rounds
   admitted; `incoming status tag raid1` returns 0 once that wave is over; `incoming clear tag raid1` stops it early.
 - World rules: «incoming rule» lists them, «incoming rule <key>» returns the value (true 1, false 0, numbers as they
@@ -58,8 +63,8 @@ Incoming (https://github.com/zentixua/incoming): strikes by Shahed and Lancet dr
   dimension's nodes, working or down, and returns their count. `incoming grid node knockout 1` knocks node 1 out as a
   strike would and returns 1 (an unknown number fails); power returns by itself after grid.restore_hours hours of the
   world's day. `incoming grid node remove 1` returns 1. `incoming grid blackout 100 64 -200 300` cuts power around a
-  point without a node and returns the outage number. `incoming grid restore at 100 64 -200 300` brings power back,
-  over grid.restore_spread_seconds, in outages centred within that radius and returns how many; `incoming grid restore`
+  point without a node and returns the outage number. `incoming grid restore at 100 64 -200 300` brings power back
+  over about 10 seconds in outages centred within that radius and returns how many; `incoming grid restore`
   does so in every dimension. `incoming grid status` returns the number of outages in all dimensions and lists each with
   when power returns (a nuclear outage returns by damage: never near the burst).
 - Radiation (operator): `incoming radiation Steve` reports the player's dose in Gy, dose rate and contamination, and
@@ -82,37 +87,40 @@ Incoming (https://github.com/zentixua/incoming): strikes by Shahed and Lancet dr
   one-per-burst events such as NuclearDetonationEvent.
 - Rule recipe: raid waves. One tick rule starts wave 1, checks incoming status tag every 5 s, and starts the next wave
   once the last one returns 0 (every round ended and its blast worked out). Replace the targets with yours; remove the
-  rule by name when the feed says the raid is over.
+  rule by name when the feed says the raid is over. Its progress and tags carry the rule's id, so the recipe can run
+  again later, or as two raids under two names, without one disturbing the other.
 ```json
 {"event": "tick", "name": "raid", "every": 100}
 ```
 ```groovy
-def waves = ['incoming salvo grad 12 30 at 200 -150 tag raid1',
-             'incoming salvo shahed 6 20 at 200 -150 from 900 -150 tag raid2',
-             'incoming salvo missile 4 10 at 200 -150 tag raid3']
-if (state.raidDone) return
-int wave = state.raidWave ?: 0
+def waves = ['incoming salvo grad 12 30 at 200 -150',
+             'incoming salvo shahed 6 20 at 200 -150 from 900 -150',
+             'incoming salvo missile 4 10 at 200 -150']
+def raid = state['raid' + rule] ?: (state['raid' + rule] = [wave: 0, done: false])
+if (raid.done) return
+int wave = raid.wave
 if (wave > 0) {
-    def left = gm.command('incoming status tag raid' + wave)[0]
+    def left = gm.command('incoming status tag raid' + rule + '-' + wave)[0]
     if (!left.ok || left.result > 0) return
     gm.emit([raid: 'wave over', wave: wave])
 }
 if (wave == waves.size()) {
-    state.raidDone = true
+    raid.done = true
     gm.emit([raid: 'over', waves: wave])
     return
 }
-def order = gm.command(waves[wave])[0]
+String tag = 'raid' + rule + '-' + (wave + 1)
+def order = gm.command(waves[wave] + ' tag ' + tag)[0]
 if (!order.ok || order.result == 0) {
-    state.raidDone = true
+    raid.done = true
     gm.emit([raid: 'refused', wave: wave + 1, errors: order.errors, output: order.output])
     return
 }
-state.raidWave = wave + 1
-gm.emit([raid: 'wave started', wave: wave + 1, rounds: order.result])
+raid.wave = wave + 1
+gm.emit([raid: 'wave started', wave: wave + 1, tag: tag, rounds: order.result])
 ```
-- Rule recipe: a nuclear detonation. One feed entry per burst with the players near it, for your follow-up (warn them,
-  check incoming radiation <player> later). It persists with the world.
+- Rule recipe: a nuclear detonation. One feed entry per burst with the players within 3000 blocks of it (your choice
+  of distance), for your follow-up (warn them, check incoming radiation <player> later). It persists with the world.
 ```json
 {"event": "ua.zentix.incoming.api.NuclearDetonationEvent", "name": "nuke-watch", "persist": true}
 ```

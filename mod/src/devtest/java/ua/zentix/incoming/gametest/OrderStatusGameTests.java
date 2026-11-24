@@ -388,12 +388,15 @@ public final class OrderStatusGameTests {
         return level.getServer().getScoreboard().getOrCreatePlayerScore(ScoreHolder.forNameOnly(holder), o).get();
     }
 
-    private static <T extends net.neoforged.bus.api.Event> void listen(GameTestHelper h, Class<T> type, Consumer<T> listener) {
+    static <T extends net.neoforged.bus.api.Event> void listen(GameTestHelper h, Class<T> type, Consumer<T> listener) {
         NeoForge.EVENT_BUS.addListener(net.neoforged.bus.api.EventPriority.LOWEST, false, type, listener);
         StrikeGameTests.afterTest(h, () -> NeoForge.EVENT_BUS.unregister(listener));
     }
 
-    /** A console of permission level 4 without an entity (as Almighty runs commands) that keeps what commands tell it. */
+    /**
+     * A console of permission level 4 without an entity, at the test platform, that keeps what commands tell it (Almighty's
+     * source is the same but at world spawn: only forms without a target see the difference).
+     */
     static final class Console implements CommandSource {
         final List<Component> said = new ArrayList<>();
         private CommandSourceStack source;
