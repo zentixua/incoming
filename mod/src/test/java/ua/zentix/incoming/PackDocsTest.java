@@ -42,7 +42,7 @@ class PackDocsTest {
     void guideShowsTheTestedFiles() throws Exception {
         for (Path page : PAGES) {
             String text = Files.readString(page);
-            for (String example : List.of(PackExamples.PENETRATION, PackExamples.BLOCK_CLASS, PackExamples.IGNITION)) {
+            for (String example : List.of(PackExamples.PENETRATION, PackExamples.BLOCK_CLASS, PackExamples.IGNITION, PackExamples.SHIELDING)) {
                 assertTrue(text.contains("```json\n" + example + "```"), page + " does not show the tested example:\n" + example);
             }
         }

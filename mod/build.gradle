@@ -45,6 +45,11 @@ repositories {
         forRepository { maven { url = 'https://api.modrinth.com/maven' } }
         filter { includeGroup 'maven.modrinth' }
     }
+    // Mekanism API (MIT): IRadiationShielding for compat/mekanism
+    exclusiveContent {
+        forRepository { maven { url = 'https://modmaven.dev/' } }
+        filter { includeGroup 'mekanism' }
+    }
     // glsl-processor — parsing of Veil's GLSL (carried by Sable): ShaderSourceTest runs its shaders through it
     exclusiveContent {
         forRepository { maven { url = 'https://maven.blamejared.com' } }
@@ -276,6 +281,10 @@ dependencies {
     // LOD Server Support (MIT): only for compilation — far terrain from the server through its client API
     // (client/map/LssTerrain)
     compileOnly "maven.modrinth:lod-server-support:${lss_version}"
+    // Mekanism: only the API for compilation — worn radiation shielding from its item capability (compat/mekanism);
+    // unit tests use it too (the adapter against a stand-in shielding)
+    compileOnly "mekanism:Mekanism:${minecraft_version}-${mekanism_version}:api"
+    testImplementation "mekanism:Mekanism:${minecraft_version}-${mekanism_version}:api"
     // a range, not an exact version: Sable carries the same companion with its own range, and FML picks one version
     // suitable for all — exactly [1.6.0] would not let in a game with Sable that brings 1.6.1
     jarJar("dev.ryanhcode.sable-companion:sable-companion-common-${minecraft_version}") {

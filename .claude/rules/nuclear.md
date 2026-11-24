@@ -32,7 +32,9 @@ Ruins and everything in `nuclear/world/` are in `nuclear-world.md`.
     `NuclearStrikes` (ICBM launch, timer, world events, client synchronization);
   - `radiation/` — player dose (attachment), `RadiationTicker` (once per second: fallout field × shielding +
     contamination), `Shielding` (block shielding by path mass: rays toward burst and sky for detonation, rays toward
-    surrounding sky-exposed surfaces for fallout), `FlashBurns` (light burns by armor slot: skin, clothes, metal; shock),
+    surrounding sky-exposed surfaces for fallout), `WornShielding` (worn items: data map `incoming:radiation_shielding`,
+    else the `compat/mekanism` capability source, summed and capped at 1; multiplies every new exposure — prompt,
+    fallout of players and mobs, black-rain contamination gain — never the accumulated dose; `ShieldingGameTests`), `FlashBurns` (light burns by armor slot: skin, clothes, metal; shock),
     `FlashEyes` (retinal burns: visual-field spots, attachment `RETINA`, packet `S2C.RetinaScars`, full list/state;
     client calculates field glare, `NukeFlash`), radiation-sickness and burn effects (burns cap health while healing).
 - Mushroom is a volume in the pall pass (`fx_pall`), not billows: shape, cap matter and cooling laws in

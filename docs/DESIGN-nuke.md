@@ -535,6 +535,11 @@ Like Hiroshima photos: wood charred toward sphere, stone soot-darkened, light hu
   - **Contamination:** black rain/fallout zone adds dust (`contamination`) irradiating until washed and decaying
     t^(−1.2) like its fallout (age from the newest detonation with fallout); water, not rain, removes over 5 s, real
     decontamination.
+  - **Worn shielding** (`radiation/WornShielding`): data map `incoming:radiation_shielding` per item (share in [0, 1],
+    invalid file rejected), else Mekanism's `mekanism:radiation_shielding` capability (`compat/mekanism`, data map wins
+    per item); armor and body slots summed, capped at 1 (Mekanism's own combination). Scales new exposure only:
+    prompt dose, fallout (players and `MobFallout`), black-rain contamination gain and ceiling. Accumulated dose,
+    running sickness, dust already on the body and the Geiger rate (the place's) unchanged. No suit of our own.
   - **Radiation sickness** `incoming:radiation_sickness`, no medicine (`fillEffectCures` override, milk no cure),
     course by Gy/game hours, `SicknessModel`, G&D table 12.108: prodrome (vomiting after 3 h at 1 Gy … immediately at
     50), latent period (weeks at 1–6 Gy, days gastrointestinal, none cerebral), manifest illness, recovery 5–10 weeks

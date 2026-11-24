@@ -433,3 +433,35 @@ A mod's straw bale as dry fuel, in `data/incoming/tags/block/pulse_dry.json`:
 
 A nuclear flash then sets it alight like a hay bale, and a fuel fireball like dry grass if the mod makes the bale
 flammable, as hay is. To break it like a hay bale too, put it in `incoming:nuke_light` as well.
+
+## Items from other mods
+
+### Radiation shielding: `incoming:radiation_shielding`
+
+`data/incoming/data_maps/item/radiation_shielding.json` gives an item the share of radiation it stops while it is
+worn, a number from 0 to 1 (an item or a `#tag`). The shares of the pieces a body wears add up, capped at 1: four
+pieces at 0.25 stop everything, one of them a quarter. A piece counts in the four armor slots and in the armor slot of a
+horse or a wolf, not in a hand. It works against all the radiation of a nuclear strike, for players and mobs alike:
+the radiation of the burst, fallout, and the black-rain dust that settles on a player. It stops only what comes while
+the piece is worn: a dose already taken, a sickness already begun and dust already on the body stay as they are.
+
+With Mekanism installed, its items that shield from radiation (the hazmat suit, the MekaSuit) count without a
+datapack, at Mekanism's own shares; an entry here replaces Mekanism's share for that item. Incoming lists no items of
+its own. A value outside 0 to 1 makes the whole file fail to load, with an error in the server log, so none of its
+entries apply; an item that does not exist only skips its own entry. After `/reload` the new shares apply at once.
+
+A mod's protective suit, a quarter per piece:
+
+```json
+{
+  "values": {
+    "examplemod:hazmat_helmet": 0.25,
+    "examplemod:hazmat_chestplate": 0.25,
+    "examplemod:hazmat_leggings": 0.25,
+    "examplemod:hazmat_boots": 0.25
+  }
+}
+```
+
+With all four pieces on, a player in the fallout trail or in black rain takes no new dose; with only the helmet,
+three quarters of it.
