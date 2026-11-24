@@ -185,6 +185,12 @@ paths:
   for a slot or state) must report its failed bound with another exception (`IllegalStateException`), or the retry skips
   the done fixture and passes (`CollapseGameTests.snapshotStepsStayInTheirSlice`).
 
+- A check that needs a pack maker's datapack (the guide's examples, a foreign item in a `c:` tag) loads a real one with
+  `DataPackFixture`: files in the world's `datapacks/`, then the reload `/datapack enable` makes. The reload swaps tags,
+  data maps, recipes and advancements server-wide and holds the server thread 2–4 s, so each such test has its own batch,
+  runs at game speed and unloads the pack before it succeeds (on failure too). The GameTest server always has Create:
+  recipes without it are checked by `RecipeTagsTest` against the tag files on the classpath (`RecipeContract`: the four
+  bulk materials go in as `c:` tags, counts pinned).
 
 - A test that saves the server config (`/incoming rule`, `SERVER_SPEC.save()`) writes every value in memory, other
   tests' temporary ones too, into `run/gametest/config/incoming-server.toml`, which outlives the run, and FML's watcher

@@ -8,7 +8,7 @@
   ],
   "key": {
     "R": { "item": "minecraft:redstone" },
-    "I": { "item": "minecraft:iron_ingot" },
+    "I": { "tag": "c:ingots/iron" },
     "S": { "item": "minecraft:spyglass" },
     "C": { "item": "minecraft:compass" }
   },
