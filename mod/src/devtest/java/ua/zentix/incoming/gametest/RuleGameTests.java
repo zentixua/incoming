@@ -37,7 +37,6 @@ import ua.zentix.incoming.entity.DroneEntity;
 import ua.zentix.incoming.entity.StrikeProjectile;
 import ua.zentix.incoming.grid.Node;
 import ua.zentix.incoming.grid.PowerGrid;
-import ua.zentix.incoming.nuclear.NuclearEvents;
 import ua.zentix.incoming.registry.ModBlocks;
 import ua.zentix.incoming.registry.ModEntities;
 import ua.zentix.incoming.strike.RoundRef;
@@ -60,7 +59,7 @@ import java.util.UUID;
 /**
  * World rules by command (roadmap B4, {@link RuleCommand}): a set value is read back by the command and by the code that
  * uses it and is in the world's config file; an order keeps the rules it was made under through its salvo, flight, off-world
- * flight, scheduled nuclear strike and their saves; with the arena rules off, conventional strikes of every weapon change no
+ * flight and their saves; with the arena rules off, conventional strikes of every weapon change no
  * block and cut no power even when the rules are switched back on before they hit; a player without permission is refused.
  * The rules are server-wide: each probe is its own batch.
  */
@@ -140,30 +139,24 @@ public final class RuleGameTests {
     /**
      * Orders keep the rules they were made under: a console salvo made with every captured rule on keeps them for its
      * queued and flying rounds (also off-world, also read back from their saves) after the rules are switched off, and a
-     * salvo made after the change carries the new ones; a scheduled ICBM keeps {@code grid.enabled} across its save.
+     * salvo made after the change carries the new ones. (A scheduled ICBM's save: {@code StrikeRulesTest}; a real one here
+     * would start nuclear ruin preparation that later batches' nuclear tests share.)
      */
     @GameTest(template = "range", timeoutTicks = 20000, batch = "rule_capture", skyAccess = true)
     public static void ordersKeepTheirRules(GameTestHelper h) {
         ServerLevel level = h.getLevel();
-        Fence fence = Fence.open(h);
-        boolean enabled = IncomingConfig.SERVER.nukeEnabled.get();
-        int flight = IncomingConfig.SERVER.nukeFlightTime.get();
-        String before = "b4before", after = "b4after", nuke = "b4nuke";
+        keepRules(h);
+        String before = "b4before", after = "b4after";
         StrikeGameTests.afterTest(h, () -> {
-            for (String t : new String[]{before, after, nuke}) ServerActions.clearTag(level.getServer(), t, "test");
-            IncomingConfig.SERVER.nukeEnabled.set(enabled);
-            IncomingConfig.SERVER.nukeFlightTime.set(flight);
+            for (String t : new String[]{before, after}) ServerActions.clearTag(level.getServer(), t, "test");
         });
-        IncomingConfig.SERVER.nukeEnabled.set(true);
-        IncomingConfig.SERVER.nukeFlightTime.set(6000);
         CommandSourceStack op = console(h, "rule_capture");
         BlockPos c = h.absolutePos(CENTER);
         String at = " at " + c.getX() + " " + c.getY() + " " + c.getZ();
 
-        setAll(h, op, true);
+        setArena(true);
         h.assertValueEqual(run(h, op, "incoming salvo drone 3 20" + at + " tag " + before), 3, "salvo before");
-        h.assertValueEqual(run(h, op, "incoming nuke" + at + " 1 air tag " + nuke), 1, "ICBM before");
-        setAll(h, op, false);
+        setArena(false);
         h.assertValueEqual(run(h, op, "incoming salvo drone 2 20" + at + " tag " + after), 2, "salvo after");
 
         // queued salvo rounds, live and read back from the save
@@ -171,9 +164,6 @@ public final class RuleGameTests {
         h.assertValueEqual(salvoRules(SalvoData.readBackForTest(level), before), List.of(StrikeRules.ALL), "earlier salvo after a restart");
         h.assertValueEqual(salvoRules(SalvoData.get(level), after), List.of(OFF), "queued rounds of the later salvo");
         h.assertValueEqual(salvoRules(SalvoData.readBackForTest(level), after), List.of(OFF), "later salvo after a restart");
-        // the scheduled nuclear strike, live and read back
-        h.assertValueEqual(scheduledGrid(NuclearEvents.get(level), nuke), List.of(true), "scheduled ICBM grid rule");
-        h.assertValueEqual(scheduledGrid(NuclearEvents.readBackForTest(level), nuke), List.of(true), "scheduled ICBM grid rule after a restart");
 
         // debris keeps the rules of the strike that threw it across a save; one saved without them takes the config
         DebrisEntity debris = DebrisEntity.create(level, Vec3.atCenterOf(c), Blocks.COBBLESTONE.defaultBlockState(), false, false, Vec3.ZERO).under(OFF);
@@ -203,7 +193,6 @@ public final class RuleGameTests {
         });
         h.succeedWhen(() -> {
             h.assertTrue(seen[0] && seen[1], "rounds checked in flight: before " + seen[0] + ", after " + seen[1]);
-            fence.settle(h);
         });
     }
 
@@ -216,20 +205,19 @@ public final class RuleGameTests {
     @GameTest(template = "range", timeoutTicks = 20000, batch = "rule_arena", skyAccess = true)
     public static void arenaKeepsItsBlocks(GameTestHelper h) {
         ServerLevel level = h.getLevel();
-        Fence fence = Fence.open(h);
-        CommandSourceStack op = console(h, "rule_arena");
+        keepRules(h);
         GridQuiet grid = new GridQuiet();
         BlockPos substation = arena(h);
         Node node = PowerGrid.get(level).nodeAt(h.absolutePos(substation));
         h.assertTrue(node != null, "the substation is not a grid node");
         Map<BlockPos, BlockState> was = snapshot(h);
 
-        setAll(h, op, false);
+        setArena(false);
         List<RoundRef> rounds = new ArrayList<>();
         for (int i = 0; i < 6; i++) rounds.add(RoundRef.of(UUID.randomUUID(), i, "b4arena"));
         h.assertTrue(rounds.stream().allMatch(r -> r.rules().equals(OFF)), "rounds made with the rules off carry " + rounds.getFirst().rules());
         // the config turns everything back on: the rounds keep what they were made under
-        setAll(h, op, true);
+        setArena(true);
 
         Warheads.detonate(level, WeaponType.DRONE, Vec3.atBottomCenterOf(h.absolutePos(new BlockPos(24, 12, 24))), null, null, rounds.get(0));
         Warheads.detonate(level, WeaponType.MISSILE, Vec3.atBottomCenterOf(h.absolutePos(new BlockPos(40, 12, 24))), null, null, rounds.get(1));
@@ -261,14 +249,13 @@ public final class RuleGameTests {
             if (!held[0]) {
                 h.assertTrue(bomb.isRemoved(), "the bomb has not gone off");
                 h.assertTrue(struck[0], "strikes still running");
-                h.assertTrue(level.getEntitiesOfClass(DebrisEntity.class, new AABB(h.absolutePos(BlockPos.ZERO)).inflate(80)).isEmpty(), "debris still falling");
+                h.assertTrue(level.getEntitiesOfClass(DebrisEntity.class, overPlatform(h)).isEmpty(), "debris still falling");
                 h.assertTrue(PowerGrid.get(level).downOutage(node.id(), level.getGameTime()).isEmpty(), "the substation was knocked out");
                 List<String> changed = changes(h, was);
                 h.assertTrue(changed.isEmpty(), changed.size() + " blocks changed, first " + changed.subList(0, Math.min(8, changed.size())));
                 held[0] = true;
             }
             grid.settle(h, level, node);
-            fence.settle(h);
         });
     }
 
@@ -279,16 +266,15 @@ public final class RuleGameTests {
     @GameTest(template = "range", timeoutTicks = 20000, batch = "rule_arena_control", skyAccess = true)
     public static void roundsMadeUnderRulesOnStillDamage(GameTestHelper h) {
         ServerLevel level = h.getLevel();
-        Fence fence = Fence.open(h);
-        CommandSourceStack op = console(h, "rule_arena_control");
+        keepRules(h);
         GridQuiet grid = new GridQuiet();
         BlockPos substation = arena(h);
         Node node = PowerGrid.get(level).nodeAt(h.absolutePos(substation));
         h.assertTrue(node != null, "the substation is not a grid node");
         Map<BlockPos, BlockState> was = snapshot(h);
-        setAll(h, op, true);
+        setArena(true);
         RoundRef drone = RoundRef.of(UUID.randomUUID(), 0, "b4control"), missile = RoundRef.of(UUID.randomUUID(), 1, "b4control");
-        setAll(h, op, false);
+        setArena(false);
         Warheads.detonate(level, WeaponType.DRONE, Vec3.atBottomCenterOf(h.absolutePos(new BlockPos(24, 12, 24))), null, null, drone);
         Warheads.detonate(level, WeaponType.MISSILE, Vec3.atBottomCenterOf(h.absolutePos(new BlockPos(40, 12, 24))), null, null, missile);
         boolean[] held = {false};
@@ -302,7 +288,6 @@ public final class RuleGameTests {
                 held[0] = true;
             }
             grid.settle(h, level, node);
-            fence.settle(h);
         });
     }
 
@@ -313,15 +298,14 @@ public final class RuleGameTests {
     @GameTest(template = "range", timeoutTicks = 20000, batch = "rule_arena_control_entities", skyAccess = true)
     public static void entityLegsMadeUnderRulesOnStillChangeBlocks(GameTestHelper h) {
         ServerLevel level = h.getLevel();
-        Fence fence = Fence.open(h);
-        CommandSourceStack op = console(h, "rule_arena_control_entities");
+        keepRules(h);
         GridQuiet grid = new GridQuiet();
         Node node = PowerGrid.get(level).nodeAt(h.absolutePos(arena(h)));
         h.assertTrue(node != null, "the substation is not a grid node");
         Map<BlockPos, BlockState> was = snapshot(h);
-        setAll(h, op, true);
+        setArena(true);
         RoundRef bombRound = RoundRef.of(UUID.randomUUID(), 0, "b4control2"), droneRound = RoundRef.of(UUID.randomUUID(), 1, "b4control2");
-        setAll(h, op, false);
+        setArena(false);
         Vec3 surface = Vec3.atBottomCenterOf(h.absolutePos(new BlockPos(32, 12, 20)));
         BunkerBusterEntity bomb = ModEntities.BUNKER_BUSTER.get().create(level);
         h.assertTrue(bomb != null, "no bomb");
@@ -339,7 +323,7 @@ public final class RuleGameTests {
             // the checks once (the cleanup below changes what they read), then the cleanup and its waits
             if (!held[0]) {
                 h.assertTrue(bomb.isRemoved() && StrikeWorld.get(level).idle(), "the bomb has not gone off");
-                h.assertTrue(level.getEntitiesOfClass(DebrisEntity.class, new AABB(h.absolutePos(BlockPos.ZERO)).inflate(80)).isEmpty(), "debris still falling");
+                h.assertTrue(level.getEntitiesOfClass(DebrisEntity.class, overPlatform(h)).isEmpty(), "debris still falling");
                 long bore = 0, wreck = 0;
                 for (var e : was.entrySet()) {
                     if (h.getBlockState(e.getKey()).equals(e.getValue())) continue;
@@ -352,7 +336,6 @@ public final class RuleGameTests {
                 held[0] = true;
             }
             grid.settle(h, level, node);
-            fence.settle(h);
         });
     }
 
@@ -376,6 +359,14 @@ public final class RuleGameTests {
         BlockPos substation = new BlockPos(32, 12, 28);
         h.setBlock(substation, ModBlocks.SUBSTATION.get());
         return substation;
+    }
+
+    /**
+     * The platform and the air above it, where the tests compare blocks: debris that drifts beyond it lands where entities
+     * do not tick (GameTest chunks past the platform) and never goes away, but cannot touch the compared blocks either.
+     */
+    static AABB overPlatform(GameTestHelper h) {
+        return new AABB(h.absolutePos(BlockPos.ZERO).getCenter(), h.absolutePos(new BlockPos(63, 39, 63)).getCenter()).inflate(1);
     }
 
     /** Every block of the platform and the air above it. */
@@ -403,8 +394,10 @@ public final class RuleGameTests {
      * The world's server config as it was before the test, put back and settled. {@code /incoming rule} saves the file,
      * and FML's watcher reloads it on its own thread about 500 ms after the last write (NightConfig debounce), replacing
      * every value in memory: a reload landing in a later batch would undo that batch's own settings, and a save would
-     * carry other tests' temporary values into the file. So the test puts back the original bytes and values, then
-     * waits, before passing, for the reload of that write ({@link #settle}). Without a working watcher it times out.
+     * carry other tests' temporary values into the file. So the test puts back the original bytes, waits for the reload
+     * of that write, then sets every value back as it was in memory before the test ({@link #settle}): GameTest runs
+     * with values only in memory ({@code TestScale.realWaveOnStart}: CUSTOM preset, wave 1.0, over the file's GAME), and
+     * a reload alone would hand later batches the file's. Without a working watcher it times out.
      */
     /**
      * The arena's substation leaves the grid as it found it: power back everywhere, its node gone, the blackout queue
@@ -429,10 +422,14 @@ public final class RuleGameTests {
         private static boolean listening;
         /** NightConfig's debounce is 500 ms: a reload this long after the write follows it. */
         private static final long AFTER_WRITE_NANOS = 450_000_000L;
+        /** No reload for this long after the last one: the write's file events are all reloaded. */
+        private static final long QUIET_NANOS = 2_000_000_000L;
         private final java.nio.file.Path file;
         private final byte[] bytes;
+        /** Every server config value as it was in memory when the test began. */
         private final Map<ModConfigSpec.ConfigValue<?>, Object> values = new HashMap<>();
         private long writtenAt = Long.MIN_VALUE;
+        private boolean reapplied;
 
         private Fence(GameTestHelper h) {
             listen();
@@ -442,13 +439,21 @@ public final class RuleGameTests {
             } catch (java.io.IOException e) {
                 throw new GameTestAssertException("config file " + file + ": " + e);
             }
-            for (RuleCommand.Rule r : RuleCommand.rules()) values.put(r.config(), r.config().get());
+            collect(IncomingConfig.SERVER_SPEC.getValues(), values);
             // a failed test still leaves the file and values as they were (no wait: it has failed)
             StrikeGameTests.afterTest(h, this::restore);
         }
 
         static Fence open(GameTestHelper h) {
             return new Fence(h);
+        }
+
+        private static void collect(com.electronwill.nightconfig.core.UnmodifiableConfig config, Map<ModConfigSpec.ConfigValue<?>, Object> out) {
+            for (com.electronwill.nightconfig.core.UnmodifiableConfig.Entry entry : config.entrySet()) {
+                Object o = entry.getValue();
+                if (o instanceof com.electronwill.nightconfig.core.UnmodifiableConfig sub) collect(sub, out);
+                else if (o instanceof ModConfigSpec.ConfigValue<?> v) out.put(v, v.get());
+            }
         }
 
         private static synchronized void listen() {
@@ -477,6 +482,11 @@ public final class RuleGameTests {
                 writtenAt = System.nanoTime();
             }
             h.assertTrue(LAST_RELOAD.get() - writtenAt >= AFTER_WRITE_NANOS, "waiting for the config file's reload");
+            h.assertTrue(System.nanoTime() - LAST_RELOAD.get() >= QUIET_NANOS, "waiting until the config file stops reloading");
+            if (!reapplied) {
+                reapplied = true;
+                values.forEach(RuleGameTests::put);
+            }
             for (var e : values.entrySet()) {
                 h.assertValueEqual(e.getKey().getRaw(), e.getValue(), "config after its reload: " + String.join(".", e.getKey().getPath()));
             }
@@ -488,9 +498,19 @@ public final class RuleGameTests {
         v.set((T) value);
     }
 
-    /** The arena rules, by command. */
-    private static void setAll(GameTestHelper h, CommandSourceStack op, boolean on) {
-        for (String key : ARENA) h.assertValueEqual(run(h, op, "incoming rule " + key + " " + on), 1, "rule " + key);
+    /**
+     * The six arena rules set in memory, as the command sets them (`rule_command` proves the command does exactly this
+     * and saves the file); tests that write the file need a {@link Fence}.
+     */
+    private static void setArena(boolean on) {
+        for (RuleCommand.Rule r : RuleCommand.rules()) if (java.util.Arrays.asList(ARENA).contains(r.key())) put(r.config(), on);
+    }
+
+    /** Every exposed rule back to its value before the test, in memory. */
+    private static void keepRules(GameTestHelper h) {
+        Map<ModConfigSpec.ConfigValue<?>, Object> was = new HashMap<>();
+        for (RuleCommand.Rule r : RuleCommand.rules()) was.put(r.config(), r.config().get());
+        StrikeGameTests.afterTest(h, () -> was.forEach(RuleGameTests::put));
     }
 
     private static List<StrikeRules> salvoRules(SalvoData data, String tag) {
@@ -499,10 +519,6 @@ public final class RuleGameTests {
             if (tag.equals(r.ref().tag()) && !out.contains(r.ref().rules())) out.add(r.ref().rules());
         });
         return out;
-    }
-
-    private static List<Boolean> scheduledGrid(NuclearEvents events, String tag) {
-        return events.scheduled().stream().flatMap(s -> s.round().stream()).filter(r -> tag.equals(r.tag())).map(r -> r.rules().grid()).toList();
     }
 
     /** Projectiles in the world and off-world. */

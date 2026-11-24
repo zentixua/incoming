@@ -76,9 +76,8 @@ public final class RuleReviewGameTests {
         b2.intercepted(level, "rule_review", null, null);
         h.assertFalse(level.getEntitiesOfClass(DebrisEntity.class, new AABB(h.absolutePos(BlockPos.ZERO)).inflate(96)).isEmpty(), "no wreck spawned");
         StrikeRules wreckRules = round.rules();
-        AABB around = new AABB(h.absolutePos(BlockPos.ZERO)).inflate(96);
         h.succeedWhen(() -> {
-            h.assertTrue(level.getEntitiesOfClass(DebrisEntity.class, around).isEmpty(), "wreck still falling");
+            h.assertTrue(level.getEntitiesOfClass(DebrisEntity.class, RuleGameTests.overPlatform(h)).isEmpty(), "wreck still falling");
             List<String> changed = new ArrayList<>();
             before.forEach((p, s) -> {
                 BlockState now = h.getBlockState(p);

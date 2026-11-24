@@ -42,6 +42,17 @@ class StrikeRulesTest {
     }
 
     @Test
+    void scheduledNuclearStrikeKeepsItsOrdersRules() {
+        RoundRef r = RoundRef.of(new UUID(5, 5), 0, "nuke", new StrikeRules(true, true, true, true, true, false));
+        var s = new ua.zentix.incoming.nuclear.NuclearEvents.ScheduledStrike(1, new net.minecraft.world.phys.Vec3(1, 2, 3), 1, true, 10, 20,
+                new net.minecraft.world.phys.Vec3(4, 5, 6), java.util.Optional.empty(), false, java.util.Optional.empty(), java.util.Optional.of(r));
+        var codec = ua.zentix.incoming.nuclear.NuclearEvents.ScheduledStrike.CODEC;
+        var back = codec.parse(JsonOps.INSTANCE, codec.encodeStart(JsonOps.INSTANCE, s).getOrThrow()).getOrThrow();
+        assertEquals(r, back.round().orElseThrow(), "the scheduled strike's round after a restart");
+        assertEquals(false, back.round().orElseThrow().rules().grid(), "grid.enabled as the order was made");
+    }
+
+    @Test
     void sameRoundIdUnderAnyRules() {
         UUID order = new UUID(1, 2);
         assertEquals(RoundRef.of(order, 4, "t", StrikeRules.ALL).round(), RoundRef.of(order, 4, "t", StrikeRules.of(0)).round(),
