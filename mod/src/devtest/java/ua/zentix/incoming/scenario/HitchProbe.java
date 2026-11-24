@@ -50,7 +50,8 @@ import java.util.concurrent.atomic.AtomicLong;
  * strings, client light queue, block-entity tickers (all, removed and waiting for removal, pending, fresh block entities
  * waiting for {@code onLoad}), chunks loaded from packets since the last tick, entities, particles, Incoming fragments,
  * integrated server last tick ms.</li>
- * <li>{@code logs/hitch-be.txt}: ticking block entities by type at the first live tick and every 200 live ticks.</li>
+ * <li>{@code logs/hitch-be.txt}: ticking block entities by type at the first live tick and every 200 live ticks. The
+ * ticker walk behind it and behind {@code beRemoved} costs the probe about 0.1 ms a tick with 20 thousand tickers.</li>
  * </ul>
  */
 final class HitchProbe {

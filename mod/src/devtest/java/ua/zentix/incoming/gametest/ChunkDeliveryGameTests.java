@@ -194,8 +194,8 @@ public final class ChunkDeliveryGameTests {
     }
 
     /**
-     * Chunks whose light completes together reach a viewer at most {@link ChunkDelivery#PER_TICK} a tick, in order, the
-     * rest on the next ticks: the client handles every packet that arrived before its frame, and a wave crossing the Silo
+     * Chunks whose light completes together reach each of their two viewers at most {@link ChunkDelivery#PER_TICK} a
+     * tick, both in the same tick, the rest on the next ticks: the client handles every packet that arrived before its frame, and a wave crossing the Silo
      * city in view (1 Mt, viewer at 3.9 km) readied up to 105 whole chunks in one tick, about 600 within 3 s; the client's
      * frames went to 0.5–0.7 s for 2 s (passage-burst run 24.11.2026).
      */
@@ -204,7 +204,7 @@ public final class ChunkDeliveryGameTests {
         paced(h, false);
     }
 
-    /** With no budget at all a ready chunk still goes, {@link ChunkDelivery#READY_LIMIT} ticks after its light. */
+    /** With no budget at all a ready chunk still goes, {@link ChunkDelivery#READY_LIMIT} ticks after its write. */
     @GameTest(template = "range", timeoutTicks = 200, batch = "nuke_delivery_pace_limit", skyAccess = true)
     public static void readyChunkGoesAtItsWaitLimit(GameTestHelper h) {
         int was = ChunkDelivery.perTick(0);
@@ -221,13 +221,15 @@ public final class ChunkDeliveryGameTests {
             if (!chunks.contains(c)) chunks.add(c);
         }
         h.assertTrue(chunks.size() > ChunkDelivery.PER_TICK, "need more chunks than one tick's budget: " + chunks.size());
-        Recorder rec = Recorder.attach(h, chunks.stream().map(LevelChunk::getPos).toList());
+        List<Recorder> recs = Recorder.attach(h, chunks.stream().map(LevelChunk::getPos).toList(), 2);
+        Recorder rec = recs.get(0), other = recs.get(1);
         int y = h.absolutePos(new BlockPos(0, 12, 0)).getY() + 1;
         // the light thread is held while the chunks are written, so all their fences complete at once, as a wave's do
         java.util.concurrent.CountDownLatch light = new java.util.concurrent.CountDownLatch(1);
         StrikeGameTests.afterTest(h, light::countDown);
         h.runAfterDelay(20, () -> {
             rec.started = true;
+            other.started = true;
             ChunkPos first = chunks.get(0).getPos();
             level.getChunkSource().getLightEngine().addTask(first.x, first.z,
                     net.minecraft.server.level.ThreadedLevelLightEngine.TaskType.PRE_UPDATE, () -> {
@@ -248,6 +250,8 @@ public final class ChunkDeliveryGameTests {
             h.assertTrue(rec.applied > 0, "not written yet");
             Map<Long, Integer> perTick = new java.util.TreeMap<>();
             for (LevelChunk c : chunks) {
+                h.assertTrue(other.wholeAt.getOrDefault(c.getPos(), List.of()).equals(rec.wholeAt.getOrDefault(c.getPos(), List.of())),
+                        "a chunk held by both viewers reached them at different ticks: " + c.getPos());
                 List<Long> at = rec.wholeAt.getOrDefault(c.getPos(), List.of());
                 h.assertTrue(at.size() <= 1, c.getPos() + " went whole " + at.size() + " times");
                 if (at.isEmpty()) {
@@ -257,16 +261,18 @@ public final class ChunkDeliveryGameTests {
                 perTick.merge(at.get(0), 1, Integer::sum);
             }
             long first = perTick.keySet().iterator().next(), last = ((java.util.TreeMap<Long, Integer>) perTick).lastKey();
+            String sent = "sent at ticks after the write " + perTick;
+            // the fences complete on the light thread: they may reach the server thread over more than one tick
+            h.assertTrue(last - rec.applied <= ChunkDelivery.READY_LIMIT + 10, "too late: " + sent);
             if (limitOnly) {
-                h.assertTrue(perTick.size() == 1 && first - rec.applied >= ChunkDelivery.READY_LIMIT + 5,
-                        "with no budget all go together at the wait limit, " + ChunkDelivery.READY_LIMIT + " ticks after their light; "
-                                + "sent at ticks after the write " + perTick.keySet().stream().map(t -> t - rec.applied).toList());
+                h.assertTrue(first - rec.applied >= ChunkDelivery.READY_LIMIT,
+                        "with no budget a chunk goes " + ChunkDelivery.READY_LIMIT + " ticks after its write, not before: " + sent);
             } else {
                 for (var en : perTick.entrySet()) {
-                    h.assertTrue(en.getValue() <= ChunkDelivery.PER_TICK, en.getValue() + " whole chunks in one tick, budget " + ChunkDelivery.PER_TICK);
+                    h.assertTrue(en.getValue() <= ChunkDelivery.PER_TICK, en.getValue() + " whole chunks in one tick, budget "
+                            + ChunkDelivery.PER_TICK + ": " + sent);
                 }
-                h.assertTrue(perTick.get(first) == ChunkDelivery.PER_TICK && last - first < ChunkDelivery.READY_LIMIT,
-                        "expected a full first tick and the rest right after, got " + perTick);
+                h.assertTrue(perTick.size() >= 2 && first - rec.applied < ChunkDelivery.READY_LIMIT, "not paced: " + sent);
             }
         });
     }
@@ -546,26 +552,39 @@ public final class ChunkDeliveryGameTests {
         }
 
         static Recorder attach(GameTestHelper h, List<ChunkPos> chunks) {
+            return attach(h, chunks, 1).get(0);
+        }
+
+        /** {@code viewers} recorders that all hold every chosen chunk. */
+        static List<Recorder> attach(GameTestHelper h, List<ChunkPos> chunks, int viewers) {
             ServerLevel level = h.getLevel();
-            FakePlayer player = new FakePlayer(level, new GameProfile(UUID.randomUUID(), "ruin-delivery"));
-            Connection connection = new Connection(PacketFlow.SERVERBOUND);
-            EmbeddedChannel channel = new EmbeddedChannel(connection);
-            Recorder rec = new Recorder(player, connection);
-            player.connection = rec;
+            List<Recorder> recs = new ArrayList<>();
+            List<net.minecraft.server.level.ServerPlayer> players = new ArrayList<>();
+            List<EmbeddedChannel> channels = new ArrayList<>();
+            for (int i = 0; i < viewers; i++) {
+                FakePlayer player = new FakePlayer(level, new GameProfile(UUID.randomUUID(), "ruin-delivery-" + i));
+                Connection connection = new Connection(PacketFlow.SERVERBOUND);
+                channels.add(new EmbeddedChannel(connection));
+                Recorder rec = new Recorder(player, connection);
+                player.connection = rec;
+                recs.add(rec);
+                players.add(player);
+            }
+            List<net.minecraft.server.level.ServerPlayer> all = List.copyOf(players);
             Map<ChunkHolder, ChunkHolder.PlayerProvider> old = new HashMap<>();
             for (ChunkPos c : chunks) {
                 ChunkHolder holder = level.getChunkSource().chunkMap.getVisibleChunkIfPresent(c.toLong());
                 h.assertTrue(holder != null && holder.getTickingChunk() != null, "fixture chunk is not ticking");
                 old.put(holder, holder.playerProvider);
-                ObfuscationReflectionHelper.setPrivateValue(ChunkHolder.class, holder, (ChunkHolder.PlayerProvider) (pos, border) -> List.of(player),
+                ObfuscationReflectionHelper.setPrivateValue(ChunkHolder.class, holder, (ChunkHolder.PlayerProvider) (pos, border) -> all,
                         "playerProvider");
-                rec.got.put(c, new ArrayList<>());
+                for (Recorder rec : recs) rec.got.put(c, new ArrayList<>());
             }
             StrikeGameTests.afterTest(h, () -> {
                 old.forEach((holder, provider) -> ObfuscationReflectionHelper.setPrivateValue(ChunkHolder.class, holder, provider, "playerProvider"));
-                channel.finishAndReleaseAll();
+                channels.forEach(EmbeddedChannel::finishAndReleaseAll);
             });
-            return rec;
+            return recs;
         }
 
         List<Object> got(ChunkPos c) {

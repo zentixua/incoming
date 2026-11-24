@@ -115,7 +115,9 @@ paths:
   entity ticking rule (Artem: mod does not change game/other mods globally): mixin on
   `LevelChunk$BoundTickingBlockEntity.tick` (tick only with ready `ChunkHolder.getTickingChunk`) would delay all pack
   block entities; Lithium replaces same call. Rig stall ≤ 13 s (trial spawner by target area, server view 8/simulation
-  6) also vanilla: player steps beyond pre-ready square, neighbor still generating. Lithium “sleeping” block entities
+  6) also vanilla: player steps beyond pre-ready square, neighbor still generating. The one-pass ticker removal
+  (`mixin/level/BlockEntityTickerRemovalMixin`, work.md) is no ticking rule: the same tickers tick at the same time,
+  only vanilla's per-element list removal (MC-117075) becomes one compaction. Lithium “sleeping” block entities
   use dummy ticker, `getPos()` null; code iterating `Level.blockEntityTickers` checks null. Mixin `@Shadow` only on
   members declared by target class itself (no refMap, game Mojang names); nested outer reference `this$0`, like Lithium.
 - Vanilla unload (`ChunkMap.processUnloads`) uses spare tick time; without it, 200 `toDrop` holders/tick; above 2000 in `toDrop`

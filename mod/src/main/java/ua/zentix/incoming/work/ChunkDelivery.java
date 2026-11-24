@@ -41,9 +41,10 @@ import java.util.List;
  * <p>
  * Chunks whose light is done go out at the next world tick in the order they became ready, at most {@link #PER_TICK}
  * a tick to each viewer: a wave crossing a city in view readies hundreds of chunks within seconds, up to a hundred in
- * one tick, and the client handles every packet that arrived before its next frame. A ready chunk never waits longer
- * than {@link #READY_LIMIT}; it stays in its pending delivery meanwhile, so its light broadcast stays held and a later
- * write still joins it.
+ * one tick, and the client handles every packet that arrived before its next frame. A ready chunk waits for budget only
+ * until {@link #READY_LIMIT} ticks after its first write; it stays in its pending delivery meanwhile, so its light
+ * broadcast stays held and a later write still joins it. Chunks at the limit go together, beyond the budget: readiness
+ * faster than {@link #PER_TICK} a tick for over a second sends each tick's backlog unpaced, a second late.
  */
 public final class ChunkDelivery {
     /** Client render-thread cost of one whole chunk from the server, ns (host pack, wave-hitch run 19.11.2026). */
@@ -70,8 +71,9 @@ public final class ChunkDelivery {
     /** Whole chunks sent to one viewer per server tick: {@link #CLIENT_TICK_NANOS} at {@link #CHUNK_NANOS} a chunk. */
     public static final int PER_TICK = (int) (CLIENT_TICK_NANOS / CHUNK_NANOS);
     /**
-     * Ticks a ready chunk may wait for its viewers' {@link #PER_TICK} before it goes regardless: 1 s, so ruins in view
-     * keep within the acceptance (p99 1 s, at most 2 s behind their wave; nuclear-world.md).
+     * Ticks after its first write from which a ready chunk no longer waits for its viewers' {@link #PER_TICK}: 1 s, the
+     * ruins' acceptance (in view p99 1 s, at most 2 s behind their wave; nuclear-world.md). Pacing adds no delay past
+     * it; the write's own lag behind the front and a slower light fence come on top, as before pacing.
      */
     public static final int READY_LIMIT = 20;
     /** Whole chunks per viewer and tick in force ({@link #PER_TICK}; a GameTest sets 0 to reach the wait limit). */
@@ -89,7 +91,7 @@ public final class ChunkDelivery {
 
     /** Statistics for the ruin summary line (server thread). */
     static long wholeChunks, wholePositions, deltaChunks, deltaPositions, lagTicksSum, lagTicksMax, gone, held, expired;
-    /** Ticks ready chunks waited for their viewers' budget (sum, max) and those sent at {@link #READY_LIMIT}. */
+    /** Ticks ready chunks waited for their viewers' budget (sum, max) and those sent beyond it at {@link #READY_LIMIT}. */
     static long paceSum, paceMax, paceForced;
     /** Blackout lamp positions among them (whole, deltas). */
     static long lampWhole, lampDeltas;
@@ -193,8 +195,8 @@ public final class ChunkDelivery {
     }
 
     /**
-     * Send ready chunks in order while their viewers have budget this tick; a chunk that waited {@link #READY_LIMIT}
-     * goes regardless. A chunk goes to all its viewers at once, charging each.
+     * Send ready chunks in order while their viewers have budget this tick; a chunk {@link #READY_LIMIT} ticks after its
+     * first write goes regardless. A chunk goes to all its viewers at once, charging each.
      */
     private void sendReady(ServerLevel level) {
         if (ready.isEmpty()) return;
@@ -210,7 +212,7 @@ public final class ChunkDelivery {
                 continue;
             }
             long pace = now - pending.readySince;
-            boolean forced = pace >= READY_LIMIT;
+            boolean forced = now - pending.firstWrite >= READY_LIMIT;
             if (!forced && players > 0 && exhausted >= players) continue;
             ChunkHolder holder = level.getChunkSource().chunkMap.getVisibleChunkIfPresent(r.key());
             LevelChunk chunk = level.getChunkSource().getChunkNow(ChunkPos.getX(r.key()), ChunkPos.getZ(r.key()));
@@ -222,7 +224,8 @@ public final class ChunkDelivery {
                 continue;
             }
             List<ServerPlayer> viewers = viewers(holder);
-            if (!forced && !budget(viewers, spent)) continue;
+            boolean within = budget(viewers, spent);
+            if (!forced && !within) continue;
             it.remove();
             wholeWaiting.remove(r.key());
             if (viewers.isEmpty()) continue;
@@ -238,7 +241,7 @@ public final class ChunkDelivery {
             lagTicksMax = Math.max(lagTicksMax, lag);
             paceSum += pace;
             paceMax = Math.max(paceMax, pace);
-            if (forced) paceForced++;
+            if (!within) paceForced++;
         }
     }
 
@@ -322,7 +325,7 @@ public final class ChunkDelivery {
     public static String describe() {
         String s = String.format(java.util.Locale.ROOT,
                 "whole chunks %d (%d positions, sent %.1f ticks after the write on average, at most %d; waited for the "
-                        + "viewers' %d a tick %.1f ticks on average, at most %d, sent at the %d-tick limit %d; unloaded first %d; "
+                        + "viewers' %d a tick %.1f ticks on average, at most %d, sent beyond it at %d ticks after the write %d; unloaded first %d; "
                         + "light broadcasts held for them %d, holds expired %d), section deltas %d positions in %d chunks; "
                         + "of the positions blackout lamps: %d whole, %d as deltas",
                 wholeChunks, wholePositions, wholeChunks == 0 ? 0.0 : (double) lagTicksSum / wholeChunks, lagTicksMax, PER_TICK,

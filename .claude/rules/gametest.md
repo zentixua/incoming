@@ -26,7 +26,8 @@ paths:
   balance by `gametest-durations.json`; `tools/gametest_durations.py` refreshes the table from shard logs when durations
   diverge noticeably. CI has no Lithium run: the mod does not touch what Lithium replaces (block-entity ticking,
   `Explosion.explode` loop); `-PwithLithium` runs GameTest with Lithium as on the host (absent from the jar and
-  `mods.toml`), for manual compatibility checks.
+  `mods.toml`), for manual compatibility checks. Lithium also wraps calls inside `Level.tickBlockEntities`, where our
+  ticker-removal mixin wraps others: a change to that mixin reruns `be_ticker_.*` with `-PwithLithium`.
 - Optional LSS integration: `./gradlew runGameTestServer -PwithLss '-PgametestOnly=lss_.*'`. The runtime jar defaults
   to `lss_version`; `-PlssTestVersion=<Modrinth version ID>` checks another supported LSS runtime without changing the
   compile API. The GameTest server needs `lss.test.integratedServer=true` (the Gradle flag supplies it). Tests register
