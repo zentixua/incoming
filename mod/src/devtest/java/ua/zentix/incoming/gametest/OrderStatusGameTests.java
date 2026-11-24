@@ -393,8 +393,8 @@ public final class OrderStatusGameTests {
         StrikeGameTests.afterTest(h, () -> NeoForge.EVENT_BUS.unregister(listener));
     }
 
-    /** A console that keeps what commands tell it. */
-    private static final class Console implements CommandSource {
+    /** A console of permission level 4 without an entity (as Almighty runs commands) that keeps what commands tell it. */
+    static final class Console implements CommandSource {
         final List<Component> said = new ArrayList<>();
         private CommandSourceStack source;
         private GameTestHelper h;
@@ -410,6 +410,10 @@ public final class OrderStatusGameTests {
 
         int run(String command) {
             return OrderStatusGameTests.run(h, source, command);
+        }
+
+        CommandSourceStack source() {
+            return source;
         }
 
         /** Through the server's command execution ({@code execute} forks need it). */
