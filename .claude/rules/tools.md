@@ -58,7 +58,7 @@ Prism: `~/.var/app/org.prismlauncher.PrismLauncher/data/PrismLauncher/` (`tools/
                                            (glc of RGA 2.13, gfx1032 = RX 6600 XT; vanilla stages and includes from the 1.21.1
                                            client jar; both hash-checked into mod/run/rga): VGPRs, scratch, code of both stages,
                                            compiler memory, seconds; fails past tools/fixtures/amd_shader_budget.json (+10 % code or
-                                           memory, new scratch, a program that does not build, a new one over 128 KB or 1 GB). CI job
+                                           memory per stage, new scratch, a program that does not compile, a new one over 128 KB or 1 GB). CI job
                                            “Компилятор AMD” on shader changes; --record --jobs 1 on an idle machine after a
                                            deliberate change, the reason in the PR
     see_through_check.sh [graphics] [start options] ← regression check of effects behind see-through blocks: a blast seen

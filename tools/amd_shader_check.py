@@ -12,7 +12,7 @@ AMD's Windows OpenGL driver compiles a program with the same compiler (glc) insi
 for an RX 6600 XT (gfx1032, RDNA2): fragment-stage vector registers (256 is the hardware limit), scratch (registers
 spilled to memory, dwords per lane, the larger stage), machine code of both stages, the compiler's peak memory and its
 time. The check fails when a program's code or the compiler's memory grows past its budget, when a program gains
-scratch, when a budgeted program does not compile, or when a new program is born above the limits for new programs.
+scratch, when a program does not compile (glc compiles each stage; link errors are the game's and Mesa's), or when a new program is born above the limits for new programs.
 Code and scratch are exact for a given source; seconds depend on the machine and are only reported.
 
 Compiler memory is the peak resident size of the compiler process tree (wait4). Memory pressure on the host lowers it
@@ -55,6 +55,8 @@ ASIC = "gfx1032"
 # Allowed growth over a program's budget: code bytes and compiler memory move by a few percent with ordinary edits; the
 # regressions this check exists for were ×2.4 (fx_pall_composite: 412 KB → 986 KB of code, one PR) and ×7 in memory.
 GROWTH = 0.10
+# A one-line edit of a tiny shader moves its code by more than 10 %
+CODE_SLACK = 2048
 # Compiler memory of a small program is mostly RGA's own ~60 MB, which moves by a few MB between runs and machines
 MEMORY_SLACK_MB = 32
 # A program not in the budget: an ordinary effect shader is 1–60 KB of code; the nuclear volume programs that freeze
@@ -83,18 +85,25 @@ def fetch(url, kind, want, base):
     """url into a fresh file under base, hash-checked; three tries."""
     fd, name = tempfile.mkstemp(dir=base, prefix=".download-")
     os.close(fd)
+    try:
+        return fetch_into(url, kind, want, Path(name))
+    except BaseException:
+        os.unlink(name)
+        raise
+
+
+def fetch_into(url, kind, want, name):
     for attempt in range(3):
         try:
             print(f"downloading {url} …", flush=True)
             with urllib.request.urlopen(url, timeout=300) as r, open(name, "wb") as f:
                 shutil.copyfileobj(r, f, 1 << 20)
             if digest(name, kind) == want:
-                return Path(name)
+                return name
             print(f"{url}: {kind} mismatch", flush=True)
         except OSError as e:
             print(f"{url}: {e}", flush=True)
         time.sleep(5 * (attempt + 1))
-    os.unlink(name)
     sys.exit(f"{url}: no verified download")
 
 
@@ -107,9 +116,15 @@ def unpacked(base, name, unpack):
     try:
         unpack(tmp)
         (tmp / ".complete").write_text("")
-        if target.exists():
-            shutil.rmtree(target)
-        tmp.rename(target)
+        # another run may have finished the same unpack meanwhile: a complete target is never replaced
+        if not (target / ".complete").exists():
+            if target.exists():
+                shutil.rmtree(target)
+            try:
+                tmp.rename(target)
+            except OSError:
+                if not (target / ".complete").exists():
+                    raise
     finally:
         if tmp.exists():
             shutil.rmtree(tmp)
@@ -186,7 +201,8 @@ def expand(source, dirs, seen=None):
         if key in seen:
             return ""
         seen.add(key)
-        # GlslPreprocessor keeps the importing file's #version only (vanilla includes carry their own)
+        # GlslPreprocessor comments out an import's #version (vanilla includes carry #version 150) and raises the main
+        # file's to the highest seen; every include here is 150 or has none, so dropping the line gives the same text
         text = re.sub(r"^\s*#version\b.*$", "", path.read_text(), flags=re.M)
         return expand(text, dirs, seen)
 
@@ -227,7 +243,7 @@ def stats(text):
     return {"vgpr": value("NumVgprs"), "scratch": value("ScratchSize"), "code": value("codeLenInByte")}
 
 
-def compile_one(glc, tree, mc, name, kind):
+def compile_one(glc, tree, mc, name, kind, deadline=None):
     try:
         vert, frag = sources(tree, mc, name, kind)
     except BuildError as e:
@@ -244,7 +260,8 @@ def compile_one(glc, tree, mc, name, kind):
             args += [f"out.{stage}.isaText={d / (stage + '.isa')}", f"out.{stage}.isaInfo={d / (stage + '.info')}"]
         start = time.monotonic()
         proc = subprocess.Popen(args, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, cwd=d)
-        timer = threading.Timer(TIMEOUT_S, proc.kill)
+        limit = TIMEOUT_S if deadline is None else max(1.0, min(TIMEOUT_S, deadline - time.monotonic()))
+        timer = threading.Timer(limit, proc.kill)
         timer.start()
         out = proc.stdout.read().decode(errors="replace")
         proc.stdout.close()
@@ -256,14 +273,15 @@ def compile_one(glc, tree, mc, name, kind):
         if proc.returncode != 0 or not all(i.exists() for i in infos):
             log = d / "log.txt"
             lines = [line for line in (log.read_text(errors="replace") if log.exists() else out).splitlines() if line.strip()]
-            if seconds >= TIMEOUT_S:
-                lines.append(f"killed after {TIMEOUT_S} s")
+            if seconds >= limit:
+                lines.append(f"killed after {limit:.0f} s")
             return name, {"error": lines[-12:] or [f"glc exit {proc.returncode}"]}
         try:
             vs, fs = (stats(i.read_text()) for i in infos)
         except BuildError as e:
             return name, {"error": [str(e)]}
         return name, {"vgpr": fs["vgpr"], "scratch": max(vs["scratch"], fs["scratch"]), "code": vs["code"] + fs["code"],
+                      "code_vert": vs["code"], "code_frag": fs["code"],
                       "memory_mb": round(usage.ru_maxrss / 1024), "seconds": round(seconds, 1)}
 
 
@@ -278,8 +296,14 @@ def judge(name, got, budget):
         if got["memory_mb"] > NEW_MEMORY_MB:
             fails.append(f"{name}: new program needs {got['memory_mb']} MB of AMD compiler memory (limit {NEW_MEMORY_MB} MB)")
         return fails
-    if got["code"] > budget["code"] * (1 + GROWTH):
-        fails.append(f"{name}: AMD code {got['code'] // 1024} KB, budget {budget['code'] // 1024} KB (+{GROWTH:.0%} allowed)")
+    # each stage on its own: in fx the vertex stage is 95 % of the code, a sum would hide a fragment ×3
+    missing = [k for k in ("code_vert", "code_frag", "memory_mb", "scratch") if k not in budget]
+    if missing:
+        return [f"{name}: budget entry has no {', '.join(missing)} (record it: --record --jobs 1)"]
+    for stage in ("vert", "frag"):
+        key = "code_" + stage
+        if got[key] > max(budget[key] * (1 + GROWTH), budget[key] + CODE_SLACK):
+            fails.append(f"{name}: AMD {stage} code {got[key] // 1024} KB, budget {budget[key] // 1024} KB (+{GROWTH:.0%} allowed)")
     if got["memory_mb"] > max(budget["memory_mb"] * (1 + GROWTH), budget["memory_mb"] + MEMORY_SLACK_MB):
         fails.append(f"{name}: AMD compiler memory {got['memory_mb']} MB, budget {budget['memory_mb']} MB (+{GROWTH:.0%} allowed)")
     if got["scratch"] > budget["scratch"]:
@@ -294,7 +318,7 @@ def record(budget, results, names, only):
         raise BuildError("not recorded, these programs did not compile: " + ", ".join(failed))
     programs = dict(budget["programs"]) if only else {}
     for n in names:
-        programs[n] = {k: results[n][k] for k in ("code", "memory_mb", "scratch")}
+        programs[n] = {k: results[n][k] for k in ("code_vert", "code_frag", "memory_mb", "scratch")}
     return {"rga": RGA_VERSION, "asic": ASIC, "programs": dict(sorted(programs.items()))}
 
 
@@ -305,14 +329,21 @@ def main():
     ap.add_argument("--record", action="store_true", help="write the measured values as the new budget (use --jobs 1)")
     ap.add_argument("--jobs", type=int, default=max(1, min(4, (os.cpu_count() or 2) // 2)))
     ap.add_argument("--json", type=Path, help="write all measurements here")
+    ap.add_argument("--deadline", type=float, default=900, help="seconds for the whole run (CI job limit 20 min)")
     args = ap.parse_args()
     exe, mc = glc(), vanilla()
     todo = programs(args.tree)
     if args.only:
         todo = [(n, k) for n, k in todo if re.search(args.only, n)]
     names = [n for n, _ in todo]
+    deadline = time.monotonic() + args.deadline
+    results = {}
     with ThreadPoolExecutor(args.jobs) as pool:
-        results = dict(pool.map(lambda nk: compile_one(exe, args.tree, mc, *nk), todo))
+        # printed as each program finishes: a hang in a shared include is named before any job limit
+        for name, got in pool.map(lambda nk: compile_one(exe, args.tree, mc, *nk, deadline), todo):
+            results[name] = got
+            print(f"{name}: " + (f"FAILED {' / '.join(got['error'])}" if "error" in got
+                                 else f"{got['code'] // 1024} KB, {got['memory_mb']} MB, {got['seconds']} s"), flush=True)
     budget = json.loads(BUDGET.read_text()) if BUDGET.exists() else {"programs": {}}
     rows = ["| program | VGPR | scratch dw | code KB | compiler MB | s | budget code KB / MB |", "|---|---|---|---|---|---|---|"]
     fails = []
@@ -321,7 +352,7 @@ def main():
         if "error" in got:
             rows.append(f"| {name} | FAILED ||||||")
         else:
-            limit = f"{b['code'] // 1024} / {b['memory_mb']}" if b else "new"
+            limit = f"{(b.get('code_vert', 0) + b.get('code_frag', 0)) // 1024} / {b.get('memory_mb')}" if b else "new"
             rows.append(f"| {name} | {got['vgpr']} | {got['scratch']} | {got['code'] // 1024} | {got['memory_mb']} | {got['seconds']} | {limit} |")
         fails += judge(name, got, b)
     gone = sorted(set(budget["programs"]) - {n for n, _ in programs(args.tree)})
