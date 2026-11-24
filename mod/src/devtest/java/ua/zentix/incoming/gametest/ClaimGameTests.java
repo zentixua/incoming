@@ -263,6 +263,9 @@ public final class ClaimGameTests {
      */
     @GameTest(template = "range", timeoutTicks = 1200, batch = "claim_nuke", skyAccess = true)
     public static void claimedChunkKeepsItsBlocksUnderANuke(GameTestHelper h) {
+        // ruins are planned by background workers in wall time: at CI's unthrottled tick rate 1200 ticks pass in under a
+        // second (gametest.md), so the wave and its ruins run at game speed
+        StrikeGameTests.gameSpeed(h);
         ServerLevel level = h.getLevel();
         BlockPos centre = NuclearGameTests.CENTER;
         LevelChunk home = level.getChunkAt(h.absolutePos(centre));
