@@ -11,13 +11,13 @@
       "item": "minecraft:lightning_rod"
     },
     "C": {
-      "item": "minecraft:copper_ingot"
+      "tag": "c:ingots/copper"
     },
     "R": {
       "item": "minecraft:redstone_block"
     },
     "I": {
-      "item": "minecraft:iron_ingot"
+      "tag": "c:ingots/iron"
     }
   },
   "result": {

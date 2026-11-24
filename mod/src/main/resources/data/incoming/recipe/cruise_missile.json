@@ -14,7 +14,7 @@
   ],
   "key": {
     "I": {
-      "item": "minecraft:iron_ingot"
+      "tag": "c:ingots/iron"
     },
     "M": {
       "item": "create:precision_mechanism"

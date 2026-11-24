@@ -358,7 +358,7 @@ round and detonation events with no Almighty change. Add to the note: the grid a
 | 4 | A3 advancements and statistics | done | #746 |
 | 5 | A4 redstone from the SAM and the substation | done | #747 |
 | 6 | B4 world rules by command | done | #748 |
-| 7 | C2 common tags in recipes, C3 Geiger counter recipe and pack-author documentation | planned | |
+| 7 | C2 common tags in recipes, C3 Geiger counter recipe and pack-author documentation | done | #749 |
 | 8 | E Almighty note update | planned | |
 | 9 | B2 claim protection for every block-changing path | planned | |
 | 10 | B3 owner identity | planned | |

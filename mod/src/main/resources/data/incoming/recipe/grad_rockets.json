@@ -8,13 +8,13 @@
   ],
   "key": {
     "G": {
-      "item": "minecraft:gunpowder"
+      "tag": "c:gunpowders"
     },
     "I": {
-      "item": "minecraft:iron_ingot"
+      "tag": "c:ingots/iron"
     },
     "B": {
-      "item": "minecraft:iron_block"
+      "tag": "c:storage_blocks/iron"
     }
   },
   "result": {

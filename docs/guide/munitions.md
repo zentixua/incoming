@@ -15,7 +15,9 @@ rockets come in a pack of 40, and a salvo takes one rocket from the pack per sho
 
 Every recipe works on a crafting table or in a Create mechanical crafter, so munitions can be made in a factory. A recipe
 appears in the recipe book once you carry the designator or any of its ingredients. With JEI installed, hover over an item and press `R` to see its recipe. Without Create, a clock takes the place of the precision
-mechanism (a comparator in the SAM Interceptor) and an iron trapdoor takes the place of the propeller.
+mechanism (a comparator in the SAM Interceptor) and an iron trapdoor takes the place of the propeller. Iron and copper
+ingots, gunpowder and iron blocks from other mods work as well when those mods give them the common tags
+(`c:ingots/iron`, `c:ingots/copper`, `c:gunpowders`, `c:storage_blocks/iron`).
 
 | Munition | Recipe | Ingredients per craft |
 |---|---|---|
@@ -30,5 +32,9 @@ mechanism (a comparator in the SAM Interceptor) and an iron trapdoor takes the p
 Each row makes one item; a Grad pack contains 40 rockets. The Create/vanilla substitutions above keep the same counts.
 
 Other recipes: [Strike Designator](designator.md#crafting), [SAM and interceptors](defense.md#crafting-and-loading),
-[fixed launcher](launcher.md#crafting), [substation](blackout.md). The Geiger Counter has no recipe; an operator gives
-it out (`/give @s incoming:geiger_counter`).
+[fixed launcher](launcher.md#crafting), [substation](blackout.md).
+
+The **Geiger Counter** takes 2 copper ingots, 1 electron tube, 2 iron ingots, 1 redstone dust and 1 note block:
+copper, tube, copper in the top row; iron, redstone, iron in the middle; the note block in the middle of the bottom row.
+Without Create a glass bottle takes the place of the electron tube. Its recipe appears in the book once you carry any of
+its ingredients or a Nuclear Warhead.

@@ -1,0 +1,36 @@
+{
+  "neoforge:conditions": [
+    {
+      "type": "neoforge:mod_loaded",
+      "modid": "create"
+    }
+  ],
+  "type": "minecraft:crafting_shaped",
+  "category": "equipment",
+  "pattern": [
+    "CTC",
+    "IRI",
+    " N "
+  ],
+  "key": {
+    "C": {
+      "tag": "c:ingots/copper"
+    },
+    "T": {
+      "item": "create:electron_tube"
+    },
+    "I": {
+      "tag": "c:ingots/iron"
+    },
+    "R": {
+      "item": "minecraft:redstone"
+    },
+    "N": {
+      "item": "minecraft:note_block"
+    }
+  },
+  "result": {
+    "id": "incoming:geiger_counter",
+    "count": 1
+  }
+}

@@ -17,10 +17,10 @@
       "item": "create:precision_mechanism"
     },
     "I": {
-      "item": "minecraft:iron_ingot"
+      "tag": "c:ingots/iron"
     },
     "G": {
-      "item": "minecraft:gunpowder"
+      "tag": "c:gunpowders"
     }
   },
   "result": {

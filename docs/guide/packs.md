@@ -258,3 +258,116 @@ while true do
   check()
 end
 ```
+
+## Blocks from other mods
+
+How a block holds up in a strike comes from data that a datapack or a mod can extend: a data map for what a bomb and a
+charge in contact go through, block tags for what a blast wave breaks, and block tags for what the heat of a burst
+sets alight. A file in your datapack at the same path adds its entries to Incoming's own (a block or a `#tag`); with
+`"replace": true` at its top it drops Incoming's entries instead. Strikes made after `/reload` use the new data.
+
+### Material: `incoming:penetration`
+
+`data/incoming/data_maps/block/penetration.json` gives a block its material:
+
+| Field | Values | What it sets |
+|---|---|---|
+| `kind` | `soil`, `rock`, `concrete`, `fluid`, `stop` | the medium the B-2's bomb goes through (Young's equations): soil right under `concrete` is twice as hard for the first 5 blocks; `fluid` slows the bomb by density alone; `stop` stops the bomb and every charge |
+| `s` | number | Young's penetrability, larger is softer (for `fluid`, the density in kg/m³). Vanilla: dirt 12, sand 7.5, gravel 5, stone and concrete 0.84, deepslate 0.67 |
+| `breach` | `earth`, `poor`, `rock`, `dense`, `reinforced` | how hard a charge in contact finds it to blow through (U.S. Army FM 5-250): earth; timber and poor masonry; stone, brick and plain concrete; dense concrete; reinforced concrete. Without it: `soil` is earth, `rock` and `concrete` are rock |
+| `thickness` | metres, 1 if left out | how much material one full block stands for: a vanilla concrete block is a 0.2 m wall, a plank 0.04 m of boards. Slabs, stairs and other partial blocks count only the part of the path inside their shape |
+
+An entry changes how far the B-2's bomb goes into the block, how far the charge of any warhead that goes off against it
+blows through into a room or cave behind, and whether the bomb's underground blast crushes it: blocks of kind `rock` or
+`concrete` turn to gravel around the charge (natural stone to cobblestone or cobbled deepslate). A block without an entry
+counts as brick for the bomb (`s` 1, a full metre), is not crushed (chests and machines stay), and resists a charge by the tool that mines
+it: axe as timber, shovel or hoe as earth, pickaxe up to cobblestone's hardness as stone, anything harder as reinforced
+concrete. No charge blows through a block with blast resistance 1200 or more.
+
+A mod's reinforced concrete as a bunker wall, one full metre of reinforced concrete per block:
+
+```json
+{
+  "values": {
+    "examplemod:reinforced_concrete": {
+      "kind": "concrete",
+      "s": 0.84,
+      "breach": "reinforced",
+      "thickness": 1.0
+    }
+  }
+}
+```
+
+With it the B-2's bomb goes about 4 blocks into this concrete at game flight speeds (about 9 with real ones, preset
+`REAL`), where it goes through about 20 blocks of vanilla concrete. A cruise missile's warhead blows through a wall of up to 2
+blocks of it into the room behind, a Shahed-136's through 1 block, a Grad rocket's or a Lancet's through none.
+
+### Blast classes: `incoming:nuke_*` tags
+
+A blast wave breaks a block once its overpressure passes the block's threshold; the threshold of each block varies by
+±15 % with its position, so a row of the same blocks does not break along a straight line. The same classes hold for
+the wave of every warhead, nuclear or not (a short conventional wave also needs enough impulse). In a nuclear wave the
+thresholds are those of a wall or floor one block thick: two blocks thick hold twice the pressure, three blocks 3.5
+times, and a wall facing the burst takes the stronger reflected pressure.
+
+| Tag | Breaks at | Vanilla blocks in it |
+|---|---|---|
+| `incoming:nuke_fragile` | 0.8 psi | glass and panes, torches, lanterns, candles, flower pots, cobwebs, snow layers |
+| `incoming:nuke_plants` | 8 psi, when the wave strips the turf; the light of a nuclear burst burns them farther out | grass, ferns, flowers, saplings, crops, vines |
+| `incoming:nuke_light` | 4 psi | doors, fences, trapdoors, planks, wool, beds, signs, chests, barrels, bookshelves |
+| `incoming:nuke_masonry` | 12 psi | bricks, stone bricks, cobblestone, smooth stone, concrete |
+| `incoming:nuke_ground` | 15 psi, but thick ground withstands the wave and shields what is behind it; a crater digs it out | dirt, sand, gravel, stone, deepslate, terracotta, ores, ice |
+
+A block in several of them takes the first in this order: `nuke_ground`, `nuke_fragile`, `nuke_plants`, then leaves
+(`minecraft:leaves`, 2 psi), tree trunks (`minecraft:logs`, which fall by the blowdown of a forest:
+`incoming:nuke_conifers` as a conifer stand, which takes more, the rest as broadleaf trees), `nuke_light`,
+`nuke_masonry`. A block in none of them breaks by its hardness: up to 0.5 at 1 psi, up to 3 at 5 psi, up to 6 at
+12 psi, up to 9 at 25 psi, anything harder never. Blocks of hardness 50 or more and unbreakable blocks (obsidian,
+bedrock) never break, whatever their tags. The flash of a nuclear burst marks the faces it lights: it chars
+`incoming:nuke_chars` black (wood, wool, hay) and leaves soot on `incoming:nuke_soots` (masonry, concrete, terracotta).
+
+A mod's sheet-metal wall as a light structure, in `data/incoming/tags/block/nuke_light.json`:
+
+```json
+{
+  "values": [
+    { "id": "examplemod:sheet_metal_wall", "required": false }
+  ]
+}
+```
+
+A wall of it one block thick then breaks at about 4 psi (3.4 to 4.6 by its position) instead of the threshold of its
+hardness, 12 psi for a block as hard as an iron block. Keep `"required": false` on blocks of other mods: when such a
+mod is not installed, an entry without it empties the whole tag, Incoming's own doors, planks and chests included. In
+the data map a block that does not exist only skips its own entry.
+
+### Ignition: `incoming:pulse_*` tags
+
+The heat of a burst sets fire only to thin, dry fuel; each class needs its own amount of heat.
+
+| Tag | Fuel | Vanilla blocks in it | Set alight by |
+|---|---|---|---|
+| `incoming:pulse_paper` | paper | bookshelves, lecterns | a nuclear flash, a fuel fireball |
+| `incoming:pulse_fabric` | fabric | wool, carpets, beds, banners | a nuclear flash, a fuel fireball |
+| `incoming:pulse_dry` | dry plants | hay bales, dried kelp blocks, dead bushes, scaffolding | a nuclear flash, a fuel fireball |
+| `incoming:pulse_grass` | thin plants: everything in `pulse_dry` and `nuke_plants`, azaleas, bamboo | | a fuel fireball |
+| `incoming:pulse_leaves` | leaves | leaves | a fuel fireball |
+
+The flash of a nuclear burst ignites only paper, fabric and dry plants, and the turf of dry biomes; live grass, leaves
+and wood char and smoke but do not catch. The fireball of a Shahed-136's or a cruise missile's burning fuel ignites
+every class in the table, but only blocks that vanilla fire can burn; a block in none of them counts as grass when
+vanilla fire spreads over it quickly, and otherwise does not catch from a flash that short (wood only chars).
+
+A mod's straw bale as dry fuel, in `data/incoming/tags/block/pulse_dry.json`:
+
+```json
+{
+  "values": [
+    { "id": "examplemod:straw_bale", "required": false }
+  ]
+}
+```
+
+A nuclear flash then sets it alight like a hay bale, and a fuel fireball like dry grass if the mod makes the bale
+flammable, as hay is. To break it like a hay bale too, put it in `incoming:nuke_light` as well.
