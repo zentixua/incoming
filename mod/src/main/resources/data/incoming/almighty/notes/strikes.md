@@ -25,15 +25,16 @@ Incoming (https://github.com/zentixua/incoming): strikes by Shahed and Lancet dr
   rocket (grad) and nuke (ICBM) are ballistic: they take no via, and a command with via fails.
 - incoming clear removes all launchers and every projectile in flight at once: an emergency stop. To stop a campaign,
   remove its rule first.
-- Results: every strike command returns the rounds its order admitted (a salvo of 12 returns 12 at once, an ICBM 1,
-  a refused order 0, also an order deferred to the next tick when given from a rule on StrikeOrderEvent.Request) and
-  its output names the order id. salvo and nuke take «tag <name>» last: a group name that many orders may share and
-  that survives a restart (one word of letters, digits and _ - . +, at most 32 characters). «incoming status tag <name>» returns the group's unfinished rounds
-  (waiting to launch, in flight, or still exploding; a nuclear blast until its wave has passed) and lists each order
-  with its arrival time or «unknown»; 0 means the group is over. «incoming status» covers all orders, `incoming status Steve` one
-  player's. «incoming clear tag <name>» recalls one group, nuclear ones too, leaves other strikes and
-  returns the rounds it recalled. Example: `incoming salvo grad 12 30 at 200 -150 tag raid1` returns the rounds
-  admitted; `incoming status tag raid1` returns 0 once that wave is over; `incoming clear tag raid1` stops it early.
+- Results: every strike command returns the rounds its order admitted (a salvo of 12 returns 12 at once, an ICBM 1, a
+  refused order 0, also an order deferred to the next tick when given from a rule on StrikeOrderEvent.Request) and its
+  output names the order id. salvo and nuke take «tag <name>» last: a group name that many orders may share and that
+  survives a restart (one word of letters, digits and _ - . +, at most 32 characters). «incoming status tag <name>»
+  returns the group's unfinished rounds (waiting to launch, in flight, or still exploding; a nuclear blast until its
+  wave has passed) and lists each order with its arrival time or «unknown»; 0 means the group is over. «incoming
+  status» covers all orders, `incoming status Steve` one player's. «incoming clear tag <name>» recalls one group,
+  nuclear ones too, leaves other strikes and returns the rounds it recalled. Example: `incoming salvo grad 12 30 at
+  200 -150 tag raid1` returns the rounds admitted; `incoming status tag raid1` returns 0 once that wave is over;
+  `incoming clear tag raid1` stops it early.
 - World rules: «incoming rule» lists them, «incoming rule <key>» returns the value (true 1, false 0, numbers as they
   are), «incoming rule <key> <value>» sets and saves it (true/false or a whole number in range; returns 1, a bad key or
   value fails and changes nothing). Keys: world.block_damage, world.shatter_glass, world.fire, world.debris_stay,
@@ -87,8 +88,9 @@ Incoming (https://github.com/zentixua/incoming): strikes by Shahed and Lancet dr
   one-per-burst events such as NuclearDetonationEvent.
 - Rule recipe: raid waves. One tick rule starts wave 1, checks incoming status tag every 5 s, and starts the next wave
   once the last one returns 0 (every round ended and its blast worked out). Replace the targets with yours; remove the
-  rule by name when the feed says the raid is over. Its progress and tags carry the rule's id, so the recipe can run
-  again later, or as two raids under two names, without one disturbing the other.
+  rule by name when the feed says the raid is over. Give the waves without a tag: the script adds its own,
+  raid<rule id>-<random word>-<wave>, and names it in the feed. Progress and tags are the rule's own, so the recipe can
+  run again later, after a restart too, or as two raids under two names, without one disturbing the other.
 ```json
 {"event": "tick", "name": "raid", "every": 100}
 ```
@@ -96,11 +98,12 @@ Incoming (https://github.com/zentixua/incoming): strikes by Shahed and Lancet dr
 def waves = ['incoming salvo grad 12 30 at 200 -150',
              'incoming salvo shahed 6 20 at 200 -150 from 900 -150',
              'incoming salvo missile 4 10 at 200 -150']
-def raid = state['raid' + rule] ?: (state['raid' + rule] = [wave: 0, done: false])
+def key = 'raid' + rule
+def raid = state[key] ?: (state[key] = [wave: 0, done: false, run: UUID.randomUUID().toString().take(8)])
 if (raid.done) return
 int wave = raid.wave
 if (wave > 0) {
-    def left = gm.command('incoming status tag raid' + rule + '-' + wave)[0]
+    def left = gm.command('incoming status tag raid' + rule + '-' + raid.run + '-' + wave)[0]
     if (!left.ok || left.result > 0) return
     gm.emit([raid: 'wave over', wave: wave])
 }
@@ -109,7 +112,7 @@ if (wave == waves.size()) {
     gm.emit([raid: 'over', waves: wave])
     return
 }
-String tag = 'raid' + rule + '-' + (wave + 1)
+String tag = 'raid' + rule + '-' + raid.run + '-' + (wave + 1)
 def order = gm.command(waves[wave] + ' tag ' + tag)[0]
 if (!order.ok || order.result == 0) {
     raid.done = true
@@ -126,7 +129,9 @@ gm.emit([raid: 'wave started', wave: wave + 1, tag: tag, rounds: order.result])
 ```
 ```groovy
 def at = event.position
-def near = server.playerList.players.findAll { it.level().dimension() == event.dimension && it.position().distanceTo(at) < 3000 }
+def near = server.playerList.players.findAll {
+    it.level().dimension() == event.dimension && it.position().distanceTo(at) < 3000
+}
 gm.emit([nuke: event.yieldKt, air: event.airBurst, at: at, dimension: event.dimension, tag: event.tag,
          near: near.collectEntries { [(it.gameProfile.name): Math.round(it.position().distanceTo(at))] }])
 ```

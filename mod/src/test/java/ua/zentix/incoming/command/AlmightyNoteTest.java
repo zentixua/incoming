@@ -9,6 +9,7 @@ import groovy.lang.Binding;
 import groovy.lang.GroovyShell;
 import groovy.lang.Script;
 import net.minecraft.commands.CommandSource;
+import net.minecraft.core.BlockPos;
 import net.minecraft.commands.CommandSourceStack;
 import net.minecraft.network.chat.Component;
 import net.minecraft.server.MinecraftServer;
@@ -27,7 +28,11 @@ import org.mockito.ArgumentCaptor;
 import org.mockito.invocation.InvocationOnMock;
 import ua.zentix.incoming.IncomingConfig;
 import ua.zentix.incoming.grid.Blackouts;
+import ua.zentix.incoming.grid.Node;
+import ua.zentix.incoming.grid.Outage;
+import ua.zentix.incoming.grid.PowerGrid;
 import ua.zentix.incoming.nuclear.model.SicknessModel;
+import ua.zentix.incoming.strike.Orders;
 import ua.zentix.incoming.strike.ServerActions;
 import ua.zentix.incoming.strike.WeaponType;
 import ua.zentix.incoming.api.NuclearDetonationEvent;
@@ -58,6 +63,7 @@ import java.util.stream.Collectors;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assertions.fail;
@@ -128,7 +134,8 @@ class AlmightyNoteTest {
         Matcher m = Pattern.compile("`(incoming [^`]+)`").matcher(note());
         int n = 0;
         while (m.find()) {
-            parses(m.group(1));
+            // a command may wrap across lines of the note
+            parses(m.group(1).replaceAll("\\s+", " "));
             n++;
         }
         // the grid, radiation and status examples are there
@@ -186,9 +193,56 @@ class AlmightyNoteTest {
                     any(), any(), any(), any(), any(), any()), times(2));
             assertEquals(List.of(spawn, spawn), aim.getAllValues().stream().map(ServerActions.Aim::point).toList());
             for (String command : List.of("incoming salvo grad 1 0 look", "incoming grad", "incoming nuke", "incoming nuke 5 air", "incoming nuke now",
-                    "incoming radiation")) {
-                assertThrows(CommandSyntaxException.class, () -> dispatcher.execute(command, gm), command);
+                    "incoming radiation", "incoming radiation clear")) {
+                CommandSyntaxException e = assertThrows(CommandSyntaxException.class, () -> dispatcher.execute(command, gm), command);
+                assertSame(CommandSourceStack.ERROR_NOT_PLAYER, e.getType(), command + ": " + e.getMessage());
             }
+        }
+    }
+
+    /**
+     * The Results line: a strike command deferred to the next tick (given while another order is being checked, as from a
+     * rule on {@code StrikeOrderEvent.Request}) returns 0; a tag is one word of letters, digits and {@code _ - . +}, at most
+     * {@link StatusCommand#TAG_MAX} characters.
+     */
+    @Test
+    void deferredOrdersReturnZeroAndTagsAreOneShortWord() throws IOException, CommandSyntaxException {
+        String text = note().replaceAll("\\s+", " ");
+        assertTrue(text.contains("also an order deferred to the next tick when given from a rule on StrikeOrderEvent.Request"));
+        assertTrue(text.contains("one word of letters, digits and _ - . +, at most " + StatusCommand.TAG_MAX + " characters"));
+        CommandSourceStack gm = gameMaster(mock(MinecraftServer.class));
+        try (var actions = mockStatic(ServerActions.class); var orders = mockStatic(Orders.class)) {
+            orders.when(() -> Orders.deferred(any())).thenReturn(true);
+            assertEquals(0, dispatcher.execute("incoming salvo grad 12 30 at 200 64 -150 tag raid1", gm));
+            actions.verify(() -> ServerActions.dispatch(any(), any(), anyString(), anyFloat(), eq(WeaponType.ROCKET), eq(12), eq(30), any(),
+                    any(), any(), any(), eq("raid1"), any(), any()));
+        }
+        String word = "aZ09_-.+" + "x".repeat(StatusCommand.TAG_MAX - 8);
+        parses("incoming salvo grad 1 0 at 1 2 tag " + word);
+        parses("incoming status tag " + word);
+        assertFalse(dispatcher.parse("incoming status tag a,b", gm).getReader().getRemaining().isEmpty(), "a comma in a tag");
+        assertThrows(CommandSyntaxException.class, () -> dispatcher.execute("incoming status tag " + word + "x", gm), "a tag over the limit");
+    }
+
+    /** {@code grid node add} and {@code grid blackout} without x y z act at the game master's own position (world spawn). */
+    @Test
+    void gridFormsWithoutAPositionActAtTheGameMastersPosition() throws IOException, CommandSyntaxException {
+        assertTrue(note().replaceAll("\\s+", " ").contains("grid node add and grid blackout without x y z act there"));
+        Vec3 spawn = new Vec3(8.5, 70, -24.5);
+        ServerLevel level = mock(ServerLevel.class);
+        CommandSourceStack gm = new CommandSourceStack(CommandSource.NULL, spawn, Vec2.ZERO, level, 4, "Almighty", Component.literal("Almighty"),
+                mock(MinecraftServer.class), null);
+        PowerGrid grid = mock(PowerGrid.class);
+        Outage outage = mock(Outage.class);
+        when(outage.id()).thenReturn(7);
+        try (var grids = mockStatic(PowerGrid.class); var blackouts = mockStatic(Blackouts.class)) {
+            grids.when(() -> PowerGrid.get(level)).thenReturn(grid);
+            when(grid.addNode(any(), anyDouble(), eq(false))).thenAnswer(inv -> new Node(5, inv.getArgument(0), inv.getArgument(1), false));
+            blackouts.when(() -> Blackouts.blackout(eq(level), any(), anyDouble(), anyDouble(), eq(-1))).thenReturn(outage);
+            assertEquals(5, dispatcher.execute("incoming grid node add", gm));
+            org.mockito.Mockito.verify(grid).addNode(eq(BlockPos.containing(spawn)), anyDouble(), eq(false));
+            assertEquals(7, dispatcher.execute("incoming grid blackout", gm));
+            blackouts.verify(() -> Blackouts.blackout(eq(level), eq(spawn), anyDouble(), anyDouble(), eq(-1)));
         }
     }
 
@@ -380,24 +434,36 @@ class AlmightyNoteTest {
         return s;
     }
 
+    /** The tag the raid's last "wave started" entry names; it must be {@code raid<rule>-<8 hex>-<wave>}. */
+    private static String startedTag(Gm gm, long rule, int wave) {
+        @SuppressWarnings("unchecked")
+        Map<String, Object> e = (Map<String, Object>) gm.emitted.getLast();
+        assertEquals("wave started", e.get("raid"), e.toString());
+        String tag = (String) e.get("tag");
+        assertTrue(tag.matches("raid" + rule + "-[0-9a-f]{8}-" + wave) && tag.length() <= StatusCommand.TAG_MAX, tag);
+        return tag;
+    }
+
     /**
      * The raid recipe, run as its tick rule would run it over Almighty's one {@code state} map shared by every rule until
      * the server stops ({@code GmServer.state}): wave 1 starts at once; while {@code status tag} returns more than 0
      * nothing happens; at 0 it reports the wave over and starts the next; after the last it reports the raid over once and
      * stays quiet. The same recipe added again (a new rule id) runs its own raid with its own tags over the same {@code
-     * state}, also while the first still runs; a refused wave (result 0) reports its errors and stops only its own raid.
+     * state}, also while the first still runs; after a restart (empty {@code state}, rule ids from 1 again, the old
+     * run's tagged rounds still flying) the same id gets new tags; a refused wave (result 0) reports its errors and stops
+     * only its own raid.
      */
     @Test
     void raidRecipeStartsTheNextWaveWhenStatusReturnsZero() throws IOException {
         String code = recipes().get("raid").script();
         Map<String, Integer> left = new HashMap<>();
         Function<String, Map<String, Object>> server = c -> {
-            Matcher salvo = Pattern.compile("incoming salvo \\w+ (\\d+) .* tag (raid\\d+-\\d)").matcher(c);
+            Matcher salvo = Pattern.compile("incoming salvo \\w+ (\\d+) .* tag (\\S+)").matcher(c);
             if (salvo.matches()) {
                 left.put(salvo.group(2), Integer.parseInt(salvo.group(1)));
                 return result(Integer.parseInt(salvo.group(1)));
             }
-            Matcher status = Pattern.compile("incoming status tag (raid\\d+-\\d)").matcher(c);
+            Matcher status = Pattern.compile("incoming status tag (\\S+)").matcher(c);
             assertTrue(status.matches(), c);
             return result(left.getOrDefault(status.group(1), 0));
         };
@@ -407,30 +473,32 @@ class AlmightyNoteTest {
         Script rule = compile(code, Map.of("gm", gm, "state", state, "server", mock(MinecraftServer.class), "rule", 1L));
 
         rule.run();
-        assertEquals(List.of(entry("raid", "wave started", "wave", 1, "tag", "raid1-1", "rounds", 12)), gm.emitted);
-        assertEquals("incoming salvo grad 12 30 at 200 -150 tag raid1-1", gm.commands.getLast());
+        String wave1 = startedTag(gm, 1, 1);
+        String run = wave1.substring(0, wave1.length() - 1);
+        assertEquals(List.of(entry("raid", "wave started", "wave", 1, "tag", wave1, "rounds", 12)), gm.emitted);
+        assertEquals("incoming salvo grad 12 30 at 200 -150 tag " + wave1, gm.commands.getLast());
         for (int rounds : new int[]{5, 1}) {
-            left.put("raid1-1", rounds);
+            left.put(wave1, rounds);
             rule.run();
             assertEquals(1, gm.emitted.size(), "emitted with " + rounds + " rounds unfinished");
-            assertEquals("incoming status tag raid1-1", gm.commands.getLast());
+            assertEquals("incoming status tag " + wave1, gm.commands.getLast());
         }
 
         // a second raid from the recipe while the first flies: its own tags, the first's progress untouched
         Gm other = new Gm(this, server);
         Script second = compile(code, Map.of("gm", other, "state", state, "server", mock(MinecraftServer.class), "rule", 2L));
         second.run();
-        assertEquals(List.of(entry("raid", "wave started", "wave", 1, "tag", "raid2-1", "rounds", 12)), other.emitted);
+        String other1 = startedTag(other, 2, 1);
         rule.run();
         assertEquals(1, gm.emitted.size(), "the second raid moved the first");
 
-        left.put("raid1-1", 0);
+        left.put(wave1, 0);
         rule.run();
-        assertEquals(List.of(entry("raid", "wave over", "wave", 1), entry("raid", "wave started", "wave", 2, "tag", "raid1-2", "rounds", 6)),
+        assertEquals(List.of(entry("raid", "wave over", "wave", 1), entry("raid", "wave started", "wave", 2, "tag", run + 2, "rounds", 6)),
                 gm.emitted.subList(1, 3));
-        left.put("raid1-2", 0);
+        left.put(run + 2, 0);
         rule.run();
-        left.put("raid1-3", 0);
+        left.put(run + 3, 0);
         rule.run();
         assertEquals(List.of(entry("raid", "wave over", "wave", 3), entry("raid", "over", "waves", 3)),
                 gm.emitted.subList(gm.emitted.size() - 2, gm.emitted.size()));
@@ -443,7 +511,7 @@ class AlmightyNoteTest {
         // the recipe added again after the first raid ended (a new rule id): it starts its first wave
         Gm again = new Gm(this, server);
         compile(code, Map.of("gm", again, "state", state, "server", mock(MinecraftServer.class), "rule", 3L)).run();
-        assertEquals(List.of(entry("raid", "wave started", "wave", 1, "tag", "raid3-1", "rounds", 12)), again.emitted);
+        startedTag(again, 3, 1);
 
         Gm refusing = new Gm(this, c -> Map.of("ok", false, "result", 0, "errors", List.of("Strike order refused")));
         Script refused = compile(code, Map.of("gm", refusing, "state", state, "server", mock(MinecraftServer.class), "rule", 4L));
@@ -452,9 +520,24 @@ class AlmightyNoteTest {
         assertEquals(List.of(entry("raid", "refused", "wave", 1, "errors", List.of("Strike order refused"), "output", null)), refusing.emitted);
         assertEquals(1, refusing.commands.size(), "commands after a refused wave");
         // the refusal stopped only its own raid
-        left.put("raid2-1", 0);
+        left.put(other1, 0);
         second.run();
-        assertEquals(entry("raid", "wave started", "wave", 2, "tag", "raid2-2", "rounds", 6), other.emitted.getLast());
+        assertEquals(other1.substring(0, other1.length() - 1) + 2, startedTag(other, 2, 2));
+
+        // a restart: state is empty and rule ids start at 1 again, while the old run's wave 2 still has 6 rounds out
+        left.put(run + 2, 6);
+        Gm restarted = new Gm(this, server);
+        Script after = compile(code, Map.of("gm", restarted, "state", new LinkedHashMap<>(), "server", mock(MinecraftServer.class), "rule", 1L));
+        after.run();
+        String fresh = startedTag(restarted, 1, 1);
+        assertFalse(fresh.startsWith(run), "the restarted raid took the old run's tags: " + fresh);
+        left.put(fresh, 0);
+        after.run();
+        String fresh2 = startedTag(restarted, 1, 2);
+        left.put(fresh2, 0);
+        after.run();
+        assertEquals(entry("raid", "wave started", "wave", 3, "tag", fresh.substring(0, fresh.length() - 1) + 3, "rounds", 4),
+                restarted.emitted.getLast(), "the new raid waited for the old run's rounds");
     }
 
     /** The detonation recipe: one feed entry with the burst and the online players within 3000 blocks in its dimension. */
