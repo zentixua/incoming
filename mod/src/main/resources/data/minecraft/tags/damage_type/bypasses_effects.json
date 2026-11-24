@@ -1,5 +1,6 @@
 {
   "values": [
-    "incoming:burn_shock"
+    "incoming:burn_shock",
+    "incoming:player_burn_shock"
   ]
 }

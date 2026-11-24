@@ -31,6 +31,7 @@ import ua.zentix.incoming.registry.ModDamageTypes;
 import ua.zentix.incoming.registry.ModDataMaps.Penetrability;
 import ua.zentix.incoming.strike.RoundEnd;
 import ua.zentix.incoming.strike.RoundRef;
+import ua.zentix.incoming.strike.StrikeOwner;
 import ua.zentix.incoming.strike.WeaponSpec;
 import ua.zentix.incoming.strike.WeaponType;
 import ua.zentix.incoming.target.Target;
@@ -401,7 +402,7 @@ public class BunkerBusterEntity extends StrikeProjectile {
         AABB box = new AABB(from, to).inflate(r + 0.5);
         for (LivingEntity e : level.getEntitiesOfClass(LivingEntity.class, box, LivingEntity::isAlive)) {
             if (e.getBoundingBox().inflate(r).clip(from, to).isPresent() || e.getBoundingBox().inflate(r).contains(from)) {
-                e.hurt(ModDamageTypes.source(level, ModDamageTypes.KINETIC, this, ownerPlayer()), Float.MAX_VALUE);
+                StrikeOwner.hurt(e, ModDamageTypes.source(level, ModDamageTypes.KINETIC, this, ownerPlayer()), Float.MAX_VALUE);
             }
         }
     }

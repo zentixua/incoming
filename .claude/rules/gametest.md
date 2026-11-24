@@ -175,7 +175,10 @@ paths:
   reshuffles the shards, so order-dependent tests fail on unrelated PRs. Reproduce locally with the same
   `-PgametestShard=i/6` after rebasing on `origin/main` (the split is deterministic), run the batch alone a few times,
   name the shared state by number; never skip the test.
-- `FakePlayer.die()` is a no-op: test death with a real `ServerPlayer`. After a blast, fire as well as rubble may fill
+- `FakePlayer.die()` is a no-op: test death with a real `ServerPlayer`. A "restart" probe of a `noSave` entity type
+  (debris, SAM missile) cannot use `Entity.save` (returns false): read its data back with `saveWithoutId` + `load` on a
+  new entity, as `RuleGameTests`/`OwnerGameTests` do. An owner in another level is a real `ServerPlayer` built on that
+  level and put in the player list (`OwnerGameTests.elsewhere`). After a blast, fire as well as rubble may fill
   a broken block's spot: assert the block is gone, not that the spot is air.
 - A check that every position a blast chose ends empty holds only for the explosion alone: the collapse's rubble (the
   building's own material) and settled debris rightly fall into the holes, at positions that vary with where the runner

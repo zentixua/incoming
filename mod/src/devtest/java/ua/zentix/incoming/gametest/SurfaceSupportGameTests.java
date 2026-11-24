@@ -375,9 +375,9 @@ public final class SurfaceSupportGameTests {
         BlockPos paving = earth.east(10), wreck = earth.west(8);
         level.setBlock(earth, Blocks.DIRT.defaultBlockState(), 2);
         level.setBlock(paving, Blocks.BLACK_CONCRETE.defaultBlockState(), 2);
-        ua.zentix.incoming.warhead.DebrisSpawner.drone(level, earth.getCenter(), ua.zentix.incoming.warhead.GroundMaterial.DIRT, ua.zentix.incoming.strike.StrikeRules.live());
-        ua.zentix.incoming.warhead.DebrisSpawner.drone(level, paving.getCenter(), ua.zentix.incoming.warhead.GroundMaterial.STONE, ua.zentix.incoming.strike.StrikeRules.live());
-        ua.zentix.incoming.warhead.DebrisSpawner.wreck(level, wreck.getCenter(), Vec3.ZERO, 12, ua.zentix.incoming.strike.StrikeRules.live());
+        ua.zentix.incoming.warhead.DebrisSpawner.drone(level, earth.getCenter(), ua.zentix.incoming.warhead.GroundMaterial.DIRT, ua.zentix.incoming.strike.StrikeRules.live(), null);
+        ua.zentix.incoming.warhead.DebrisSpawner.drone(level, paving.getCenter(), ua.zentix.incoming.warhead.GroundMaterial.STONE, ua.zentix.incoming.strike.StrikeRules.live(), null);
+        ua.zentix.incoming.warhead.DebrisSpawner.wreck(level, wreck.getCenter(), Vec3.ZERO, 12, ua.zentix.incoming.strike.StrikeRules.live(), null);
         var clods = level.getEntitiesOfClass(ua.zentix.incoming.entity.DebrisEntity.class, new AABB(earth).inflate(3));
         var chips = level.getEntitiesOfClass(ua.zentix.incoming.entity.DebrisEntity.class, new AABB(paving).inflate(3));
         var aircraft = level.getEntitiesOfClass(ua.zentix.incoming.entity.DebrisEntity.class, new AABB(wreck).inflate(3));

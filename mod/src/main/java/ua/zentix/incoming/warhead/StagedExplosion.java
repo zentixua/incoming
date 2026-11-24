@@ -51,6 +51,7 @@ import ua.zentix.incoming.registry.ModDamageTypes;
 import ua.zentix.incoming.registry.ModParticles;
 import ua.zentix.incoming.registry.ModSounds;
 import ua.zentix.incoming.strike.ImpactCost;
+import ua.zentix.incoming.strike.StrikeOwner;
 import ua.zentix.incoming.strike.StrikeRules;
 import ua.zentix.incoming.util.PoiRecords;
 import ua.zentix.incoming.util.Terrain;
@@ -212,8 +213,9 @@ final class StagedExplosion implements UnitQueue.Job {
     private final boolean blocks;
     @Nullable
     private final Entity direct;
+    /** Owner UUID; the attacker is looked up when the explosion starts ({@link StrikeOwner}). */
     @Nullable
-    private final Entity owner;
+    private final UUID owner;
     @Nullable
     private final ExplosionDamageCalculator calculator;
 
@@ -301,20 +303,20 @@ final class StagedExplosion implements UnitQueue.Job {
     }
 
     StagedExplosion(BlastArea area, List<StagedExplosion> after, Vec3 at, float power, boolean fire, boolean blocks, @Nullable Entity direct,
-                    @Nullable Entity owner, @Nullable ExplosionDamageCalculator calculator) {
+                    @Nullable UUID owner, @Nullable ExplosionDamageCalculator calculator) {
         this(area, after, at, power, 0, fire, blocks, direct, owner, calculator);
     }
 
     /** Physical charge explosion {@code tntKg} kg TNT with {@code placement} contact. */
     StagedExplosion(BlastArea area, List<StagedExplosion> after, Vec3 at, double tntKg, SlabBreach.Placement placement, @Nullable Vec3 axis,
-                    boolean blocks, @Nullable Entity direct, @Nullable Entity owner) {
+                    boolean blocks, @Nullable Entity direct, @Nullable UUID owner) {
         this(area, after, at, (float) breakReach(tntKg), tntKg, false, blocks, direct, owner, null);
         this.placement = placement;
         this.axis = axis;
     }
 
     private StagedExplosion(BlastArea area, List<StagedExplosion> after, Vec3 at, float power, double charge, boolean fire, boolean blocks,
-                            @Nullable Entity direct, @Nullable Entity owner, @Nullable ExplosionDamageCalculator calculator) {
+                            @Nullable Entity direct, @Nullable UUID owner, @Nullable ExplosionDamageCalculator calculator) {
         this.area = area;
         this.after = after;
         this.at = at;
@@ -428,12 +430,12 @@ final class StagedExplosion implements UnitQueue.Job {
         Level.ExplosionInteraction interaction = blocks ? Level.ExplosionInteraction.BLOCK : Level.ExplosionInteraction.NONE;
         if (SubLevels.inPlotGrid(level, new ChunkPos(BlockPos.containing(at)))) {
             counts.vanilla++;
-            explosion = level.explode(direct, ModDamageTypes.source(level, ModDamageTypes.STRIKE, direct, owner), calculator,
+            explosion = level.explode(direct, ModDamageTypes.source(level, ModDamageTypes.STRIKE, direct, StrikeOwner.online(level, owner)), calculator,
                     at.x, at.y, at.z, power, fire, interaction, ModParticles.NONE.get(), ModParticles.NONE.get(), ModSounds.SILENT);
             return false;
         }
         Explosion.BlockInteraction destroy = blocks ? Explosion.BlockInteraction.DESTROY_WITH_DECAY : Explosion.BlockInteraction.KEEP;
-        source = ModDamageTypes.source(level, ModDamageTypes.STRIKE, direct, owner);
+        source = ModDamageTypes.source(level, ModDamageTypes.STRIKE, direct, StrikeOwner.online(level, owner));
         Explosion e = new Explosion(level, direct, source, calculator,
                 at.x, at.y, at.z, power, fire, destroy, ModParticles.NONE.get(), ModParticles.NONE.get(), ModSounds.SILENT);
         explosion = e;
@@ -590,7 +592,7 @@ final class StagedExplosion implements UnitQueue.Job {
         long t = System.nanoTime();
         if (SubLevels.inPlotGrid(level, new ChunkPos(BlockPos.containing(at)))) centre = SubLevels.toWorld(level, at);
         Explosion.BlockInteraction destroy = blocks ? Explosion.BlockInteraction.DESTROY_WITH_DECAY : Explosion.BlockInteraction.KEEP;
-        source = ModDamageTypes.source(level, ModDamageTypes.STRIKE, direct, owner);
+        source = ModDamageTypes.source(level, ModDamageTypes.STRIKE, direct, StrikeOwner.online(level, owner));
         Explosion e = new Explosion(level, direct, source, null, centre.x, centre.y, centre.z, power, false, destroy,
                 ModParticles.NONE.get(), ModParticles.NONE.get(), ModSounds.SILENT);
         explosion = e;
@@ -971,11 +973,11 @@ final class StagedExplosion implements UnitQueue.Job {
         if (entity instanceof LivingEntity living) {
             BlastBody.Before before = bodyBefore.remove(entity);
             if (before != null) before = before.drifted(entity.position());
-            if (!living.isSpectator() && !living.isPassenger()) BlastBody.hit(level, wave(), living, direct, owner, before);
+            if (!living.isSpectator() && !living.isPassenger()) BlastBody.hit(level, wave(), living, direct, source.getEntity(), before);
         } else {
             if (lightReach < 0) lightReach = reachFor(LIGHT_PSI, charge);
             if (entity.distanceToSqr(centre) <= lightReach * lightReach && Explosion.getSeenPercent(airOrigin(), entity) > 0)
-                entity.hurt(source, BREAKS_ANYTHING);
+                StrikeOwner.hurt(entity, source, BREAKS_ANYTHING);
         }
     }
 
@@ -1021,7 +1023,7 @@ final class StagedExplosion implements UnitQueue.Job {
         double tnt = charge;
         boolean destroy = blocks;
         StrikeRules rules = area.rules();
-        Entity by = direct, from = owner;
+        Entity by = direct, from = source != null ? source.getEntity() : StrikeOwner.online(level, owner);
         Warheads.whenReady(level, c, craftReach(craftPower), l -> {
             // During this explosion, handlers see charge ({@link #chargeOf}), and its entity list
             // in {@code Detonate} is empty ({@link #onDetonate}): no damage/knockback or body visibility rays.
@@ -1309,7 +1311,7 @@ final class StagedExplosion implements UnitQueue.Job {
             d5 /= d12;
             d7 /= d12;
             d9 /= d12;
-            if (damage.shouldDamageEntity(e, entity)) entity.hurt(source, damage.getEntityDamageAmount(e, entity));
+            if (damage.shouldDamageEntity(e, entity)) StrikeOwner.hurt(entity, source, damage.getEntityDamageAmount(e, entity));
             double d13 = (1.0 - d11) * (double) Explosion.getSeenPercent(at, entity) * (double) damage.getKnockbackMultiplier(entity);
             double d10 = entity instanceof LivingEntity living ? d13 * (1.0 - living.getAttributeValue(Attributes.EXPLOSION_KNOCKBACK_RESISTANCE)) : d13;
             Vec3 push = EventHooks.getExplosionKnockback(level, e, entity, new Vec3(d5 * d10, d7 * d10, d9 * d10));

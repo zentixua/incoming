@@ -361,7 +361,7 @@ round and detonation events with no Almighty change. Add to the note: the grid a
 | 7 | C2 common tags in recipes, C3 Geiger counter recipe and pack-author documentation | done | #749 |
 | 8 | E Almighty note update | done | #750 |
 | 9 | B2 claim protection for every block-changing path | done | #752 |
-| 10 | B3 owner identity | planned | |
+| 10 | B3 owner identity | done | #754 |
 | 11 | C1 radiation shielding, Mekanism compat | planned | |
 | 12 | D2 Jade, D1 CC:Tweaked | planned | |
 | 13 | B5 sides from party mods | planned | |
