@@ -302,7 +302,8 @@ file changes.
   Minecraft: sound power is a fraction of dislodged energy (`Clatter.watts`: m(v²/2 + g·h) × `IMPACT_EFFICIENCY` over
   √(2h/g)) or flame heat (`FLAME_EFFICIENCY`), path `Propagation`, volume `Loudness` with nuclear ceiling. Thousands of
   sources, hundreds of engine channels: `Clatter` sums arrived power into quarters around the ear (first immediately,
-  next summed after `HOLD` ticks; events shorter than the window spread their energy over it); `FireRoar` uses quarters
+  next summed after `HOLD` ticks, including the last occupied bin after the input queue empties; events shorter than
+  the window spread their energy over it); `FireRoar` uses quarters
   and logarithmic distance rings (exact spreading within a ring, air/ground at power-mean distance; exact-sum comparison
   within 0.5 dB, `FireRoarTest`). Roar volume follows modeled storm (`FireStorm.map`, same flame drawn by the pall) and
   real fire in local chunks, not server fire count: one law for look and sound.

@@ -506,10 +506,7 @@ public final class IncomingClient {
 
         @Override
         public void nukeDebris(S2C.NukeDebris p) {
-            // debris from seeking is in the past: it landed long ago
-            Replay.event("nuke_debris", live -> {
-                if (live) ClientNuclear.debris(p);
-            });
+            Replay.event("nuke_debris", live -> ClientNuclear.debris(p, live));
         }
 
         @Override
@@ -616,7 +613,7 @@ public final class IncomingClient {
 
         @Override
         public void replayTick(S2C.ReplayTick p) {
-            Replay.marker(p.place(), p.seeking(), IncomingClient::rewound);
+            Replay.marker(p.place(), p.seeking(), ClientNuclear::seekStarted, IncomingClient::rewound);
         }
     }
 }
