@@ -216,7 +216,7 @@ public final class NuclearStrikes {
         java.util.Set<Integer> ids = new java.util.HashSet<>();
         for (NuclearEvents.ScheduledStrike s : List.copyOf(events.scheduled())) {
             if (!s.round().map(r -> tag.equals(r.tag())).orElse(false)) continue;
-            events.unschedule(s);
+            events.cancel(s);
             holdGround(level, s, false);
             s.round().ifPresent(r -> Orders.ended(level, r, WeaponType.NUKE, s.owner().orElse(null), RoundEnd.recalled(null)));
             Incoming.LOG.info("ICBM #{} cancelled with its tag {}", s.id(), tag);

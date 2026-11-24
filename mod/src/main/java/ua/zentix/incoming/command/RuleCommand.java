@@ -10,7 +10,11 @@ import net.minecraft.commands.CommandSourceStack;
 import net.minecraft.commands.Commands;
 import net.minecraft.commands.SharedSuggestionProvider;
 import net.minecraft.network.chat.Component;
+import net.minecraft.server.MinecraftServer;
+import net.neoforged.fml.config.ModConfig;
+import net.neoforged.fml.event.config.ModConfigEvent;
 import net.neoforged.neoforge.common.ModConfigSpec;
+import net.neoforged.neoforge.server.ServerLifecycleHooks;
 import org.jetbrains.annotations.Nullable;
 import ua.zentix.incoming.IncomingConfig;
 import ua.zentix.incoming.strike.StrikeRules;
@@ -150,6 +154,21 @@ public final class RuleCommand {
     static void store(Rule r, Object v) {
         r.set(v);
         IncomingConfig.SERVER_SPEC.save();
+    }
+
+    /**
+     * Server rules gate {@code /incoming} branches (designator for everyone, nuclear on, operators only): on every reload
+     * of the server config (this command's save, the config screen, a hand edit of the file) each online player gets
+     * the command tree again, as {@code /op} sends it. The reload runs on FML's watcher thread; the trees go out on the
+     * server thread.
+     */
+    public static void onConfigReload(ModConfigEvent.Reloading e) {
+        if (e.getConfig().getType() != ModConfig.Type.SERVER) return;
+        MinecraftServer server = ServerLifecycleHooks.getCurrentServer();
+        if (server == null) return;
+        server.execute(() -> {
+            for (var player : server.getPlayerList().getPlayers()) server.getCommands().sendCommands(player);
+        });
     }
 
     /** {@code text} as a value of {@code r}: {@code true}/{@code false}, or a whole number in the key's range; null otherwise. */

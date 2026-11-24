@@ -475,7 +475,8 @@ Ready observations supersede disk votes. `DiskShots` extracts the same columns o
 reads entering `RuinContext.putDisk` also feed the open surveys. Beyond the heavy preparation window each
 addressable fine or coarse cell has one representative chunk. The planner checks each region off-thread and orders
 the reads by cell deadline. Restarted surveys skip expired requests. A completed read enters the current tick's
-inbox fence before the next I/O window is calculated.
+inbox fence before the next I/O window is calculated. A strike called off before its burst forgets its birth
+(`NuclearEvents.cancel`, `NuclearCancelledMaterialTest`), and a survey whose strike or detonation is gone closes.
 
 Each ruin preparation has its own 64-read window. While a material survey wants reads, each preparation may admit
 32 and the material surveys share a separate 32 across the server's dimensions. Completed and outstanding reads

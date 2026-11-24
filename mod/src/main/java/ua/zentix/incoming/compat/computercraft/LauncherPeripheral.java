@@ -38,7 +38,7 @@ final class LauncherPeripheral implements IPeripheral {
         return other instanceof LauncherPeripheral o && o.be == be;
     }
 
-    /** {@code { mission = {weapon, count, spread, x, y, z} | nil, ready, busy, reason, message }}. */
+    /** {@code { weapon | nil, ready, busy, reason, message }} ({@link Automation#status}): the mission's count and target are not reported. */
     @LuaFunction(mainThread = true)
     public final Map<String, Object> getStatus() throws LuaException {
         return Automation.status(level(), be);
