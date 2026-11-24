@@ -31,6 +31,7 @@ import net.minecraft.world.phys.Vec3;
 import net.neoforged.neoforge.network.PacketDistributor;
 import org.jetbrains.annotations.Nullable;
 import ua.zentix.incoming.Incoming;
+import ua.zentix.incoming.claim.Writes;
 import ua.zentix.incoming.IncomingConfig;
 import ua.zentix.incoming.compat.SubLevels;
 import ua.zentix.incoming.net.S2C;
@@ -326,6 +327,11 @@ public final class Warheads {
         public int breached() {
             return job.breached;
         }
+    }
+
+    /** {@code ExplosionEvent.Detonate}, {@code HIGHEST}: a craft blast's block list before claim handlers edit it. */
+    public static void onDetonateFirst(net.neoforged.neoforge.event.level.ExplosionEvent.Detonate event) {
+        StagedExplosion.onDetonateFirst(event);
     }
 
     /** {@code ExplosionEvent.Detonate}, {@code LOWEST}: vanilla craft-blast damage handed to mod units. */
@@ -681,14 +687,14 @@ public final class Warheads {
             // Post-main work only if explosion happened: claim-canceled blast neither digs nor ignites.
             if (main.isEmpty()) return false;
             if (area.rules().blockDamage() && !onCraft) {
-                unit(level, area, main, ImpactCost.Kind.GROUND, "Crater", l -> happened() ? Craters.dig(l, pos, weapon.spec().charge(), mat, seed) : 0);
+                unit(level, area, main, ImpactCost.Kind.GROUND, "Crater", l -> happened() ? Craters.dig(l, area.claims(), pos, weapon.spec().charge(), mat, seed) : 0);
                 // what the blast left without support falls (the explosion's removals are known once it ends)
                 if (area.rules().collapse()) StrikeCollapse.queue(level, area, main, pos);
             }
             if (weapon.spec().fuelAtImpact() > 0 && !onCraft && area.rules().fire()) {
                 Craters.ignite(level, area, main, this::happened, pos, weapon.spec().fuelAtImpact());
                 // Crater fuel after crater: settles on bottom, burns as block fire while available.
-                unit(level, area, main, ImpactCost.Kind.GROUND, "Fuel fire", l -> happened() ? FuelFires.pour(l, pos, weapon, born, reach) : 0);
+                unit(level, area, main, ImpactCost.Kind.GROUND, "Fuel fire", l -> happened() ? FuelFires.pour(l, area.claims(), pos, weapon, born, reach) : 0);
             }
             unit(level, area, main, ImpactCost.Kind.DEBRIS, "Debris",
                     l -> !happened() ? 0 : missile ? DebrisSpawner.missile(l, pos, mat, area.rules()) : DebrisSpawner.drone(l, pos, mat, area.rules()));
@@ -894,6 +900,7 @@ public final class Warheads {
             double rc = law.cavity(), rk = law.crush();
             int r = Mth.ceil(rk), n = 0;
             BlockPos.MutableBlockPos p = new BlockPos.MutableBlockPos();
+            Writes writes = new Writes(Block.UPDATE_ALL);
             for (int dx = -r; dx <= r; dx++) {
                 for (int dz = -r; dz <= r; dz++) {
                     double d = Math.sqrt(dx * dx + dy * dy + dz * dz);
@@ -906,14 +913,15 @@ public final class Warheads {
                     ModDataMaps.Penetrability m = ModDataMaps.Penetrability.of(s);
                     if (m.kind() == Penetration.Kind.STOP || m.kind() == Penetration.Kind.FLUID) continue;
                     if (d <= rc) {
-                        ColumnScar.replace(level, p.immutable(), s, Blocks.AIR.defaultBlockState(), Block.UPDATE_ALL);
+                        writes.add(p, s, Blocks.AIR.defaultBlockState());
                         continue;
                     }
                     // Crush mapped rock/masonry, not others (chest, mod mechanism).
                     BlockState rubble = rubble(s, ModDataMaps.Penetrability.find(s));
-                    if (rubble != null && !s.is(rubble.getBlock())) ColumnScar.replace(level, p.immutable(), s, rubble, Block.UPDATE_ALL);
+                    if (rubble != null && !s.is(rubble.getBlock())) writes.add(p, s, rubble);
                 }
             }
+            writes.flush(level, area.claims());
             return n;
         }
 
@@ -940,6 +948,7 @@ public final class Warheads {
             int r = Mth.ceil(rf), n = 0;
             RandomSource random = level.random;
             BlockPos.MutableBlockPos p = new BlockPos.MutableBlockPos(), up = new BlockPos.MutableBlockPos();
+            Writes writes = new Writes(Block.UPDATE_ALL);
             for (int dx = -r; dx <= r; dx++) {
                 for (int dz = -r; dz <= r; dz++) {
                     double d = Math.sqrt(dx * dx + dy * dy + dz * dz);
@@ -953,9 +962,10 @@ public final class Warheads {
                     if (!roof.is(ModTags.NUKE_GROUND) || random.nextDouble() > 1 - d / rf) continue;
                     ModDataMaps.Penetrability m = ModDataMaps.Penetrability.of(roof);
                     if (m.kind() != Penetration.Kind.ROCK && m.kind() != Penetration.Kind.SOIL) continue;
-                    ColumnScar.replace(level, up.immutable(), roof, Blocks.GRAVEL.defaultBlockState(), Block.UPDATE_ALL);
+                    writes.add(up, roof, Blocks.GRAVEL.defaultBlockState());
                 }
             }
+            writes.flush(level, area.claims());
             return n;
         }
 
@@ -968,6 +978,7 @@ public final class Warheads {
             double rc = law.cavity();
             int r = Mth.ceil(rc), top = Math.min(cover, c.getY() + Mth.ceil(law.chimney())), n = 0;
             BlockPos.MutableBlockPos p = new BlockPos.MutableBlockPos();
+            Writes writes = new Writes(Block.UPDATE_ALL);
             for (int y = c.getY() + 1; y <= top; y++) {
                 for (int dx = -r; dx <= r; dx++) {
                     for (int dz = -r; dz <= r; dz++) {
@@ -979,10 +990,11 @@ public final class Warheads {
                         if (s.isAir()) continue;
                         ModDataMaps.Penetrability m = ModDataMaps.Penetrability.of(s);
                         if (m.kind() == Penetration.Kind.STOP || m.kind() == Penetration.Kind.FLUID || s.is(Blocks.GRAVEL)) continue;
-                        ColumnScar.replace(level, p.immutable(), s, Blocks.GRAVEL.defaultBlockState(), Block.UPDATE_ALL);
+                        writes.add(p, s, Blocks.GRAVEL.defaultBlockState());
                     }
                 }
             }
+            writes.flush(level, area.claims());
             if (law.subsides()) {
                 Vec3 sv = new Vec3(pos.x, cover, pos.z);
                 // Subsidence dust: fraction of ground lost into hole (cavity volume), raised by falling (like crater).
@@ -999,7 +1011,7 @@ public final class Warheads {
          */
         private int crater(ServerLevel level) {
             CraterModel.Soil soil = ventMat.soil();
-            return Craters.dig(level, new Vec3(pos.x, cover, pos.z), law.craterRadius(soil), law.craterDepth(soil), ventMat);
+            return Craters.dig(level, area.claims(), new Vec3(pos.x, cover, pos.z), law.craterRadius(soil), law.craterDepth(soil), ventMat);
         }
     }
 }

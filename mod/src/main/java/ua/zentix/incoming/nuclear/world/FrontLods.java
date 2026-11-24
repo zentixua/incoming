@@ -7,6 +7,7 @@ import net.minecraft.world.level.ChunkPos;
 import net.minecraft.world.level.chunk.LevelChunkSection;
 import net.minecraft.world.level.chunk.ProtoChunk;
 import org.jetbrains.annotations.Nullable;
+import ua.zentix.incoming.claim.NuclearClaims;
 import ua.zentix.incoming.Incoming;
 import ua.zentix.incoming.IncomingConfig;
 import ua.zentix.incoming.compat.DhUpdates;
@@ -197,6 +198,8 @@ final class FrontLods {
             int index = next++;
             long chunk = candidates.getLong(index);
             RuinPlan plan = plans.get(chunk);
+            // a chunk claim protection denied to the detonation keeps its LOD (NuclearClaims)
+            if (plan != null && d != null && NuclearClaims.get(level).denied(d.id(), chunk)) continue;
             // chunk in world (world supplies ruins/LODs), far from players (DH does not send), front precedes copy
             if (plan == null || copies.containsKey(chunk) || FarLods.inWorld(level, chunk) || !FarLods.nearPlayer(level, chunk)
                     || d != null && ScarQueue.due(d, new ChunkPos(chunk)) - now <= DhUpdates.LEAD) continue;

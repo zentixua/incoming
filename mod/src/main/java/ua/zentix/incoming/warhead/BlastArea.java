@@ -6,13 +6,15 @@ import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.TicketType;
 import net.minecraft.util.Mth;
 import net.minecraft.world.level.ChunkPos;
-import net.minecraft.world.level.Explosion;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.phys.Vec3;
 import org.jetbrains.annotations.Nullable;
 import ua.zentix.incoming.Incoming;
+import ua.zentix.incoming.api.ClaimQuery;
+import ua.zentix.incoming.claim.StrikeClaims;
 import ua.zentix.incoming.compat.DhUpdates;
 import ua.zentix.incoming.nuclear.world.StrikeRemovals;
+import ua.zentix.incoming.registry.ModDamageTypes;
 import ua.zentix.incoming.strike.AreaLoader;
 import ua.zentix.incoming.strike.ImpactCost;
 import ua.zentix.incoming.strike.ImpactWork;
@@ -84,6 +86,12 @@ final class BlastArea {
     /** World rules every job of this strike changes the world under: its round's, or the config's when the area opened. */
     private final StrikeRules rules;
 
+    /** The strike's first explosion: its projectile and damage source attribute the strike's claim queries. */
+    @Nullable
+    private StagedExplosion first;
+    /** Claim decisions of this strike's writers ({@link StrikeClaims}). */
+    private final StrikeClaims claims = new StrikeClaims(this::claimQuery);
+
     private record Queued(StagedExplosion explosion, long tick) {}
 
     private BlastArea(Vec3 centre, double reach, ImpactWork.@Nullable Impact impact) {
@@ -121,6 +129,16 @@ final class BlastArea {
         return area;
     }
 
+    /** Claim decisions every writer of this strike follows. */
+    StrikeClaims claims() {
+        return claims;
+    }
+
+    private ClaimQuery claimQuery(ServerLevel level) {
+        return first != null ? first.attributed(level, centre)
+                : new ClaimQuery(level, null, ModDamageTypes.source(level, ModDamageTypes.STRIKE, null, null), centre);
+    }
+
     /** World rules this strike's jobs change the world under ({@link StrikeRules}). */
     StrikeRules rules() {
         return rules;
@@ -128,6 +146,7 @@ final class BlastArea {
 
     /** Area explosion queued at {@code tick}. */
     void queued(StagedExplosion e, long tick) {
+        if (first == null) first = e;
         explosions.removeIf(q -> q.explosion().done());
         explosions.add(new Queued(e, tick));
     }
@@ -205,7 +224,7 @@ final class BlastArea {
 
     void trackCollapse(ServerLevel level, List<StagedExplosion> blasts, Vec3 at) {
         collapseSource = StrikeWorld.get(level).collapseRemovals().source(l -> blasts.isEmpty()
-                ? new Explosion(l, null, at.x, at.y, at.z, 0f, false, Explosion.BlockInteraction.DESTROY_WITH_DECAY)
+                ? new ClaimQuery(l, null, ModDamageTypes.source(l, ModDamageTypes.STRIKE, null, null), at)
                 : blasts.getFirst().attributed(l, at));
     }
 

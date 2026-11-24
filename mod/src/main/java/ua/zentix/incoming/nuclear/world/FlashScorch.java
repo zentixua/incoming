@@ -14,6 +14,7 @@ import net.minecraft.world.level.chunk.LevelChunkSection;
 import net.minecraft.world.phys.Vec3;
 import org.jetbrains.annotations.Nullable;
 import ua.zentix.incoming.Incoming;
+import ua.zentix.incoming.claim.NuclearClaims;
 import ua.zentix.incoming.compat.SableTerrain;
 import ua.zentix.incoming.nuclear.Detonation;
 import ua.zentix.incoming.nuclear.NuclearEvents;
@@ -105,7 +106,7 @@ public final class FlashScorch {
     private int next, seenCount;
     /** Layers submitted to background: chunk index in {@link #order} → task. In submission order. */
     private final Map<Integer, Build> building = new LinkedHashMap<>();
-    private int applied, stale, late, gone, waiting, skipped, failures, blocks, fires;
+    private int applied, stale, late, gone, waiting, skipped, failures, blocks, fires, kept;
     /** Late chunks (“after the wave”): nearest and farthest ground range from epicenter, blocks. */
     private double lateNear = Double.MAX_VALUE, lateFar;
     /** Chunks (indexes in {@link #order}) waiting for disk reads of their window; chunks that waited. */
@@ -273,10 +274,10 @@ public final class FlashScorch {
         if (!building.isEmpty() || !reading.isEmpty()) return false;
         Incoming.LOG.info("Nuclear detonation #{}: flash scorch — {} of {} chunks ({} seen by players) in {} ticks (pulse {} ticks), {} ms on the server thread; "
                         + "{} blocks, {} fires lit; {} stale, {} after the wave{}, {} unloaded, {} at aircraft without neighbours, {} over the memory limit, "
-                        + "{} read window neighbours from disk first{}",
+                        + "{} kept by claim protection, {} read window neighbours from disk first{}",
                 d.id(), applied, order.length, seenCount, lastApplied < 0 ? 0 : lastApplied - d.gameTime(),
                 String.format(java.util.Locale.ROOT, "%.1f", d.pulseTicks()), nanos / 1_000_000, blocks, fires, stale, late,
-                late > 0 ? String.format(java.util.Locale.ROOT, " (%.0f–%.0f blocks from ground zero)", lateNear, lateFar) : "", gone, waiting, skipped, read,
+                late > 0 ? String.format(java.util.Locale.ROOT, " (%.0f–%.0f blocks from ground zero)", lateNear, lateFar) : "", gone, waiting, skipped, kept, read,
                 failures > 0 ? ", " + failures + " failed" : "");
         return true;
     }
@@ -530,6 +531,12 @@ public final class FlashScorch {
         // writing needs neighbors (nearby Sable craft, edge block entity), but absent: ruins wait for them themselves
         if (plan.waitsNeighbours(level, chunk) > 0) {
             waiting++;
+            return;
+        }
+        long[] at = plan.writes(chunk);
+        if (!NuclearClaims.get(level).allows(level, d, key, at, at.length)) {
+            // claim protection keeps the chunk: no layer (its ruins are denied too, NuclearClaims)
+            kept++;
             return;
         }
         int lit = plan.applyFlash(level, chunk, d, budget);

@@ -96,7 +96,7 @@ public final class ThicknessGameTests {
                 public double rim(double r) { return 0; }
             };
             CraterJob.digColumn(level, top.getX(), top.getZ(), Vec3.atBottomCenterOf(top.above()), 1, 0, profile,
-                    List.of(), null, CraterJob.Mode.DIG, RandomSource.create(1));
+                    List.of(), null, CraterJob.Mode.DIG, RandomSource.create(1), ua.zentix.incoming.claim.BlockGate.ALL);
             BlockPos remainder = i == 3 ? top.below(2) : i == 1 ? top.below() : top;
             double expected = i == 0 ? 0.5 : i == 2 ? 0.3 : 0.1;
             h.assertTrue(level.getBlockState(top).isAir() == (i == 1 || i == 3), "full represented layer removal wrong at " + top);
