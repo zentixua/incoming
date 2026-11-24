@@ -26,7 +26,8 @@ paths:
 - `NuclearClaims` (SavedData `incoming_nuclear_claims`): denied chunks per detonation id, never lifted; a chunk is
   asked at every position its write changes (`RuinPlan.writes`: cells, fires, one position per scorched biome column
   cell, flash-charred faces); any refusal denies the whole chunk for that detonation (a chunk's ruins are one physical
-  result). Sourceless query at the burst point. A chunk not in memory gets only its stored answer.
+  result). Sourceless query, centred in the chunk asked. A chunk not in memory gets only its stored answer. Records of
+  detonations `NuclearEvents` no longer keeps are pruned at the next denial.
 - `BlockGate`: a writer's view (`StrikeClaims`, `NuclearClaims.gate`, `ALL` in tests); `CraterJob.digColumn` asks a
   column's writes together and keeps a refused block with the column under it (no floor glazing, no partial-depth mark).
 
@@ -47,10 +48,20 @@ paths:
 
 ## Pitfalls
 - Never post a query for a position in a chunk not in memory, and never post one off the server thread.
+- Never centre a query where the world around it is not in memory: explosion listeners read near `center()` (Create
+  Diesel Generators 1.3.15 reads `getFluidState` within 2 blocks of it on every `Detonate`, no load check), a
+  synchronous load on the tick. Nuclear questions are centred in the middle of the chunk asked (`NuclearClaims.query`),
+  and `Claims.offer` moves any other query to the middle of its first ready chunk (`ClaimQuery.at`); GameTest
+  `claim_review_centre`. Such a listener also treats each question as an explosion near its centre (CDG removes fuel
+  there): a foreign effect, kept in mind when choosing centres.
+- Ask a portion at once (`Writes`, `BlockGate.filter`): each event runs every listener. Glass (32 panes a unit), fireball
+  cells and direct rubble landings still ask one position at a time, bounded by their unit size.
+- Chunks already denied are still planned in the background (preparation, prechecks) and dropped at `ScarQueue.claimed`:
+  wasted work bounded by the claimed area.
 - Our own `Detonate` listeners must skip `ClaimQuery` (`Blackouts.onExplosion`); an Incoming explosion map
   (`CHARGES`, `RULES`) never holds a query.
 - A LOD copy of a disk-only chunk cannot be asked: it shows ruins unless the chunk was already denied; the world write
   asks when the chunk loads, and the far view follows the loaded chunk.
 - GameTests `ClaimGameTests` (batches `claim_*`): every weapon, bomb and wreck beside a claim edge; cancelled `Start`;
-  query is no explosion and loads nothing; nuclear claimed chunk, stored and per-detonation denial; claim change
-  between flash and wave, save and load.
+  follow-ups asking alone (a handler filtering only questions); query is no explosion and loads nothing; nuclear
+  claimed chunk, stored and per-detonation denial; claim change between flash and wave, save and load; query centre.

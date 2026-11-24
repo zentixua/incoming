@@ -121,7 +121,8 @@ public final class ClaimGameTests {
     /**
      * The follow-up writers ask by themselves: a handler that filters only claim questions lets every real charge break
      * what its own rays chose, also in the claimed chunks, and nothing else changes there (no crater, fuel, fire,
-     * fragments, glass job, bomb cavity, collapse, rubble or debris), while the unclaimed side does change.
+     * fragments, glass job, bomb cavity, collapse, rubble or debris), while the unclaimed side does change. Impacts one
+     * block from the claim edge: the craters' bowls and the fuel pools cross it.
      */
     @GameTest(template = "range", timeoutTicks = 20000, batch = "claim_followups", skyAccess = true)
     public static void followUpsAskByThemselves(GameTestHelper h) {
@@ -133,11 +134,11 @@ public final class ClaimGameTests {
         Handler handler = Handler.install(h, claimed);
         handler.queriesOnly = true;
         long[] before = Claims.counters();
-        Warheads.detonate(level, WeaponType.DRONE, Vec3.atBottomCenterOf(h.absolutePos(new BlockPos(edge + 3, 12, 14))), null, null,
+        Warheads.detonate(level, WeaponType.DRONE, Vec3.atBottomCenterOf(h.absolutePos(new BlockPos(edge + 1, 12, 14))), null, null,
                 RoundRef.of(UUID.randomUUID(), 0, "b2follow"));
-        Warheads.detonate(level, WeaponType.MISSILE, Vec3.atBottomCenterOf(h.absolutePos(new BlockPos(edge + 4, 12, 40))), null, null,
+        Warheads.detonate(level, WeaponType.MISSILE, Vec3.atBottomCenterOf(h.absolutePos(new BlockPos(edge + 1, 12, 40))), null, null,
                 RoundRef.of(UUID.randomUUID(), 1, "b2follow"));
-        Warheads.detonate(level, WeaponType.ROCKET, Vec3.atBottomCenterOf(h.absolutePos(new BlockPos(edge + 2, 12, 26))), null, null,
+        Warheads.detonate(level, WeaponType.ROCKET, Vec3.atBottomCenterOf(h.absolutePos(new BlockPos(edge + 1, 12, 26))), null, null,
                 RoundRef.of(UUID.randomUUID(), 2, "b2follow"));
         Vec3 surface = Vec3.atBottomCenterOf(h.absolutePos(new BlockPos(edge - 4, 12, 52)));
         BunkerBusterEntity bomb = ModEntities.BUNKER_BUSTER.get().create(level);
