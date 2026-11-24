@@ -24,10 +24,9 @@ import java.util.OptionalInt;
 /**
  * Nuclear wave on water (DESIGN-nuke §6, "Water"): dark front ring on water — ripples in the wind behind the front, with foam
  * near ground zero (water decal in the effects layer, {@link WaterDecal}: model ring profile evaluated here per frame);
- * drops from wave crests behind the front near the camera (particles, {@link FxBudget#SPRAY}; the pall wall head renders the mist,
- * {@link #front}); a burst on water produces a crowned water column in the mushroom
- * volume ({@link MushroomField}) and a base surge in the pall ({@link PallField#water}). Ground dust does not rise over water:
- * the wall head there is spray and mist ({@link BlastWall}, water from the map beneath the pall, {@link PallGround}).
+ * drops from wave crests behind the front near the camera (particles, {@link FxBudget#SPRAY}, {@link #front}); a burst on water
+ * produces a crowned water column in the mushroom volume ({@link MushroomField}). The spray, mist and base surge are the dust
+ * wave's water material ({@link DustSources}: water from the server's material map); no ground dust rises over water.
  * <p>
  * Water is known only from what the client already has: client chunks and terrain-map tiles ({@link FarTerrain#water}).
  * Water beneath ground zero far beyond render distance (no chunk or tile) is inferred from height: level ground exactly at sea level means sea.
@@ -159,8 +158,8 @@ public final class NukeWater {
 
     /**
      * Camera spray: while the water front is within {@link NukeDust#NEAR} of the camera, drops fly from crests along its arc over water (loaded
-     * chunks), denser in stronger wind. The pall volume renders the mist itself up to the height at which wind behind the front
-     * tears off crests ({@link WaterModel#sprayHeight}) — the wall head over water.
+     * chunks), denser in stronger wind. The dust wave draws the mist itself (its water material) up to the height at which wind
+     * behind the front tears off crests ({@link WaterModel#sprayHeight}).
      */
     private static void front(ClientNuclear.Active a, ClientLevel level, Vec3 eye) {
         lastSpots = 0;

@@ -11,8 +11,8 @@ import ua.zentix.incoming.nuclear.model.ThermalModel;
  * behind them ({@code fx_pall}, slot parameters — {@link #pallLight}). The ball is the same
  * source that lights the stem and particles ({@link MushroomModel#light}: Lambertian sphere of cap radius, black body at its visible
  * temperature, L·R²/d²); fires use {@link #burn} with the fires' own flame ({@link PallField#fireLight}). This no longer has its own billows (the name remains): mushroom
- * and water column are volumes ({@link MushroomField}); dust wall, Wilson cloud and base surge are volumes in the pall
- * ({@link BlastWall}, {@link PallField}).
+ * and water column are volumes ({@link MushroomField}); the Wilson cloud is a volume in the pall ({@link BlastWall}); the dust
+ * wave with its spray and base surge is its own pass ({@link DustSources}).
  */
 public final class CloudPuffs {
     /** Cap black-body light: r, g, b, brightness (client thread). */

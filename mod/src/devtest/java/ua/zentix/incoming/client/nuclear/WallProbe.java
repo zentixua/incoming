@@ -8,9 +8,8 @@ import java.util.Locale;
 
 /**
  * Scenario probe (wave-color measurement): per detonation, the dust-wall head model behind a frame — model time, dust edge vs
- * shock radius, wedge, top, fire-zone edge, fire glow, frame sun/sky/exposure — and the head colour {@code fx_pall} would give
- * ({@link NukePall#dustLight}, the shader's Java copy) on the camera's line to ground zero: wedge share u, height share of the
- * top, with the soot share ({@link PallField#smoke}) and fire light from below that apply there. Logged by the {@code commands}
+ * shock radius, wedge, top, fire-zone edge, fire glow, frame sun/sky/exposure — and on the camera's line to ground zero, at
+ * wedge shares u, the soot share ({@link PallField#smoke}), sand share and fire light from below that apply there. Logged by the {@code commands}
  * scenario with every shot that has a detonation ({@code SCENARIO shot … wall:}).
  */
 public final class WallProbe {
@@ -50,11 +49,6 @@ public final class WallProbe {
                 double burn = CloudPuffs.burn(r, 0, glow[1], glow[3]) * (1 - 0.75 * sky.day);
                 b.append(String.format(Locale.ROOT, "; u %.2f (r %.0f smoke %.2f sand %.2f burn %.3f, sigma@0.1top %.3g):", u, r, smoke, sand, burn,
                         BlastWall.sigma(s, ux * r, uz * r, 0.1 * s[2], 0)));
-                for (double zf : new double[]{0.9, 0.5, 0.1}) {
-                    double up = zf * s[2] * BlastWall.top(Math.min(u, 1));
-                    NukePall.dustLight(s, glow, sky, d.windDir(), ux * r, up, uz * r, up, smoke, sand, c);
-                    b.append(String.format(Locale.ROOT, " z%.1f %s", zf, rgb(c)));
-                }
             }
         }
         return b.toString();

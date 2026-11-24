@@ -38,6 +38,16 @@ class DustWaveCopiesTest {
         }
     }
 
+    /** The source table's layout in the shader is the one the pass uploads (rows per source, the spray and frame-input rows, nodes). */
+    @Test
+    void tableLayoutIsTheShaders() throws Exception {
+        String s = Files.readString(GLSL);
+        int rows = ua.zentix.incoming.client.fx.layer.DustWallPass.ROWS;
+        assertTrue(s.contains("const int DW_SPRAY_ROW = " + rows + ", DW_PARAMS_ROW = " + (rows + 1) + ", DW_ROWS = "
+                + ua.zentix.incoming.client.fx.layer.DustWallPass.SOURCE_ROWS + ";"), "row layout");
+        assertTrue(s.contains("const float DW_NODES = " + ua.zentix.incoming.client.fx.layer.DustWallPass.NODES + ".0;"), "nodes");
+    }
+
     /** Over fully hard ground the Java readers take the paved share of the column, as dwHaze does (not the soil's 10–100×). */
     @Test
     void readersTakeHardGround() {

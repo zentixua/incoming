@@ -28,13 +28,12 @@ import java.nio.FloatBuffer;
 import java.util.Random;
 
 /**
- * Young nuclear dust wall, from the front to {@link #SPAN} seconds behind it, as its own ray-marched pass
- * ({@code include/dustwall.glsl}): one presentation model (presentation, not physical) of the wall's birth at the contact line,
- * small uneven hump, settling, billows, their motion and light; the physics enters only as its inputs ({@link Frame}: the game
- * front, where and how much dust is lofted, the pall's layer height, wind, fireball, sun and sky light). Older dust is the
- * pall's ({@link PallPass}), which takes the wall over across the last {@link #FADE} seconds (the pall's handover ring), a crossfade.
- * Only in the primary view, on land, with one detonation in the pall's slots ({@code NukePall.youngWall}): elsewhere the pall
- * draws the whole wall as before.
+ * The nuclear dust wave, all of it, as its own ray-marched pass ({@code include/dustwall.glsl}): one presentation model
+ * (presentation, not physical) of the dust from its birth at the contact line through the hump, settling, billows, their
+ * motion and light, to the thin haze hours later, for every detonation of the frame, in every view (each view with its own
+ * targets and history, {@link ViewState}); the physics enters only as its inputs ({@link Frame}, {@link Source}: the game
+ * front, where and how much dust is lofted and how it settles, the ground's material, wind, fireball, sun and sky light).
+ * The pall draws no ground dust.
  * <p>
  * The low-resolution march returns premultiplied light, transmission and the depth of the contributing dust.
  * The three thirds of its atlas (light, depth span, interval split: {@code wall_layer.glsl}) share one temporal resolve. The pall composite samples that atlas at the world
@@ -44,13 +43,6 @@ import java.util.Random;
  * mass, so the pattern does not slide as the front grows.
  */
 public final class DustWallPass {
-    /**
-     * Seconds of young wall behind the front this pass draws: the model owns the whole visible wall in
-     * the judging view (front passes a camera 4.5 km out, then 12 s), where the pall's law top would rise over a 120 m camera.
-     */
-    public static final double SPAN = 24;
-    /** Seconds over which the pall takes the wall over at its back, a crossfade. */
-    public static final double FADE = 6;
     /**
      * Highest the young dust reaches over its settled layer height (copies: the bound over the largest hump 1.8, {@code DW_BULGE},
      * {@code DW_HAZE}; the ray's slab top, {@code DwRing.z}).
@@ -214,8 +206,6 @@ public final class DustWallPass {
         public float layerTop;
         /** The nearest source (history continuity). */
         public Object source;
-        /** Kept for the warm-up frame's shape. */
-        public final float[] ring = new float[4];
         /** The dust's presentation exposure ({@code DwAdapt}). */
         public float adapt = 1;
         /** Linear light (white wall at noon — 1): sun, sky, ground bounce; dust albedo, its bulk colour. */
@@ -288,7 +278,7 @@ public final class DustWallPass {
 
     /**
      * Builds the current wall atlas before the pall reads it. {@code scene}: the world-distance texture
-     * ({@link SceneDepth}). Primary view only (NukePall hands the wall over only there).
+     * ({@link SceneDepth}), in the view being drawn (its own targets and history: {@link ViewState}).
      */
     static void draw(PallPass.Frame pall, int scene, Matrix4f view, Matrix4f projection, PallPass.Step step, boolean warming, int timing) {
         assert scene >= 0 && width > 0 && height > 0;
@@ -581,7 +571,7 @@ public final class DustWallPass {
         }
         GlStateManager._glBindFramebuffer(GL30.GL_DRAW_FRAMEBUFFER, draw);
         if (!ok) {
-            Incoming.LOG.error("Nuclear dust wall: targets {}×{} not created, no young wall pass", lw, lh);
+            Incoming.LOG.error("Nuclear dust wave: targets {}×{} not created, no dust wave pass", lw, lh);
             fullW = fullH = 0;
             failed = true;
             return false;
@@ -822,6 +812,11 @@ public final class DustWallPass {
     public static void clearHistory() {
         previousSource = null;
         history = false;
+        // the slots' detonations (their fields, terrain and material tiles) are not kept past a clear, a seek or a world exit
+        java.util.Arrays.fill(SLOT_ID, null);
+        java.util.Arrays.fill(TABLE_IN, null);
+        java.util.Arrays.fill(GROUND_IN, null);
+        java.util.Arrays.fill(MATERIAL_IN, null);
     }
 
     /** The pass's state for the timing log: resolution, step cap, history. */

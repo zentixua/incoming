@@ -389,9 +389,7 @@ class PallGlslTest {
      *  and fires according to the laws of the shader (pallDiffuse; ball - black body, like the body of a mushroom, pallBallShare × eye addiction;
      * fires - strength {@link CloudPuffs#glowOnSmoke}, divided by the color of dust {@code DUST}, on the screen above the sky light - in
      *  linear difference, pallLift; sky light - {@link NukePall#nightSky} in linear; result - on the screen, pallDisplay).
-     * Top, under the ball and cap in the first seconds (beam, pallBallLight), - the same color as the top of the
-     *  head of the wall in the same place ({@link NukePall#dustLight} - the light of the head, as in the frame), with an accuracy of a third: the head is not a
-     *  flat layer. And not dark at the epicenter. The glow of the fires pall ({@code PallFireLight}) flares up later, for a minute,
+     * Not dark at the epicenter. The glow of the fires pall ({@code PallFireLight}) flares up later, for a minute,
      *  - it is not here.
      * <p>
      * The light of fires is no brighter than the flame ({@code pallFlame}, {@link PallLight#flame}). At night, above the fire zone, the reflection on the screen
@@ -414,14 +412,14 @@ class PallGlslTest {
         BlastWall blast = new BlastWall(GROUND, false);
         float ambient = 0.17f;
         double k = CloudPuffs.glowOnSmoke(ambient), sky = linear.call(Map.of("v", (double) NukePall.nightSky(ambient, 1))), tc = 8;
-        float[] wall = new float[8], high = new float[3], slot = new float[BlastWall.SLOT];
+        float[] wall = new float[8], slot = new float[BlastWall.SLOT];
         NukePall.Sky night = new NukePall.Sky();
         night.sy = -1;
         java.util.Arrays.fill(night.sky, (float) sky);
         night.base = ambient;
         night.exposure = (float) Sight.adapted(1, ambient);
         night.glowOnSmoke = (float) k;
-        int checked = 0, burning = 0;
+        int burning = 0;
         for (double t : new double[]{2, 6, 10, 20, 40}) {
             // fires at full flame (PallField.fireLight = 1: a burning city under its pall) — the strongest light from below
             assertTrue(puffs.pallLight(MushroomModel.shape(t, 15, 0, true, GROUND.metres(blast.wall(t).head())), 1, wall));
@@ -437,8 +435,6 @@ class PallGlslTest {
                 double a = ball.call(Map.of("radius", (double) wall[0], "d", toBall)) * night.exposure;
                 double b = burn.call(Map.of("r", r, "up", 0.0, "glow", (double) wall[1], "fireR", (double) wall[3]));
                 double mu = ly / toBall;
-                // the top of the head of the wall, if the end of the wedge were here (the point is in the middle of its thickness), - before it, the pall was here
-                NukePall.dustLight(here, wall, night, wind, r, 0.9 * here[2], 0, 0.9 * here[2], 0, 0, high);
                 double sum = 0, fires = 0;
                 double[] side = new double[3], top = new double[3], luma = {0.2126, 0.7152, 0.0722};
                 // the reflection of fires on the dust is already the color of fire in all channels: pall light - flame (pallFlame); at the edge of the fire zone,
@@ -465,15 +461,6 @@ class PallGlslTest {
                     top[c] = light.call(args);
                     sum += Math.max(below, Math.min(1, display.call(Map.of("v", top[c]))));
                 }
-                if (mu > 0.9 && t <= 10) {
-                    // to the screen - like pall (to white, shoulder): under the ball in the first seconds it is overexposed
-                    float[] shown = new float[3];
-                    PallLight.screen(top, shown);
-                    for (int c = 0; c < 3; c++) {
-                        assertEquals(high[c], shown[c], 0.03 + 0.3 * high[c], t + " s, " + r + " blocks, top, channel " + c);
-                        checked++;
-                    }
-                }
                 // fires shine brighter than a ball (fx_pall: main light - from below; both - linear light on a white wall)
                 if (flames && fires > (luma[0] * wall[4] + luma[1] * wall[5] + luma[2] * wall[6]) * a) {
                     String at = t + " s, " + r + " blocks, near the floor on the side: ";
@@ -485,7 +472,6 @@ class PallGlslTest {
                 if (r < 1000) assertTrue(sum / 3 > 0.25, t + " s, " + r + " blocks: the pall at the epicenter is dark, " + sum / 3);
             }
         }
-        assertTrue(checked > 15, "comparisons with the top of the wall " + checked);
         assertTrue(burning > 10, "comparisons near the floor above the fires " + burning);
     }
 

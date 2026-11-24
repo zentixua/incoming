@@ -45,7 +45,7 @@ public final class ClientNuclear {
         public final boolean live;
         /** Fireball/fire light on dust and water under epicenter ({@link CloudPuffs}). */
         public final CloudPuffs puffs;
-        /** Shock-wave dust wall: rolling head and Wilson cloud ({@link BlastWall}; pall renders it, {@link NukePall}). */
+        /** The blast wave: its shock front and the Wilson cloud ({@link BlastWall}; the dust it lofts is the dust wave's, {@link DustSources}). */
         public final BlastWall wall;
         /** Water under burst ({@link NukeWater#resolve}): column in mushroom volume, base surge in pall. */
         final BurstWater water;

@@ -1299,8 +1299,13 @@ vec4 dwMarch(vec3 rd, float tEnd, float jitter, float foot, int maxSteps) {
 #ifdef DW_DIAG
             gDwKinds.x += 1.0;
 #endif
-            // no dust at this radius: long strides
-            kLast = k; k += n; n = min(n * 2.0, 16.0); inDust = false;
+            // no dust at this radius: long strides, never past another source's span entry ahead (a short span, a small
+            // burst or a steep ray through a far slab, is never stepped over)
+            float kn = k + n;
+            for (int m = 0; m < sources; m++) {
+                if (gDwSpan[m].x > tt && gDwSpan[m].x < gDwSpan[m].y) kn = min(kn, max(floor(dwGridK(gDwSpan[m].x)), k + 1.0));
+            }
+            kLast = k; k = kn; n = min(n * 2.0, 16.0); inDust = false;
             continue;
         }
         if (!inside) {

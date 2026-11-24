@@ -10,6 +10,9 @@ D=$UW/silo-take
 OUT=$UW/step4/$TAG
 mkdir -p "$OUT"
 export JAVA_HOME=$HOME/.var/app/org.prismlauncher.PrismLauncher/data/PrismLauncher/java/java-runtime-delta
+# the instance folder (tools/paths.py names "Open Skies"; the host renamed it): MC_DIR overrides when given
+export MC_DIR=${MC_DIR:-$(ls -d "$HOME/.var/app/org.prismlauncher.PrismLauncher/data/PrismLauncher/instances/Open-Skies/minecraft" "$HOME/.var/app/org.prismlauncher.PrismLauncher/data/PrismLauncher/instances/Open Skies/minecraft" 2>/dev/null | head -1)}
+[ -n "$D" ] && [ -d "$D" ] || exit 1
 rm -rf "$D/saves/world" "$D/screenshots" && cp -a "$UW/silo-golden/world" "$D/saves/world"
 sed -i "s/^enableShaders=.*/enableShaders=false/" "$D/config/iris.properties"
 C="gamemode spectator;time set 6000;gamerule doDaylightCycle false;gamerule doWeatherCycle false;weather clear;tp @s 3514 73 -2298 55 -2"

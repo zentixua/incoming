@@ -867,6 +867,138 @@ def view_cost(law):
 
 
 context()
+
+LATTICE_BODY = """
+uniform vec3 Fwd, Right, Up;
+uniform float TanX, TanY, Steps, Foot, Frame, W, H;
+out vec4 fragColor;
+void main() {
+    gDwForceF = -1.0;
+    vec2 lowPix = floor(gl_FragCoord.xy);
+    vec2 sub = fract(vec2(0.7548777, 0.5698403) * Frame) - 0.5;
+    vec2 uv = (lowPix + 0.5 + sub) / vec2(W, H) * 2.0 - 1.0;
+    vec3 rd = normalize(Fwd + Right * uv.x * TanX + Up * uv.y * TanY);
+    float tEnd = rd.y < 0.0 ? DwEye.y / -rd.y : 60000.0;
+    float jitter = fract(52.9829189 * fract(dot(lowPix, vec2(0.06711056, 0.00583715))) + Frame * 0.618034);
+    fragColor = dwMarch(rd, tEnd, jitter, Foot, int(Steps));
+}
+"""
+
+
+def lattice(law, defines="", tag="shipped", frames=20, save=True, t_off=-2.5):
+    """The dot lattice on the wall face (step 4): his spot's view, a ground eye 3.9 km from the 1 Mt burst 2.5 s before the
+    front, the 1/6 march lattice of a 1600 x 900 frame with the march's own per-pixel offsets, averaged over `frames` frames
+    (the history at its ideal: no clamp, equal weights). Lattice = mean |L - median 3x3(L)| / mean L over the wall's pixels of
+    the averaged image (single dark or light march pixels the history keeps); also of one frame."""
+    from scipy.ndimage import median_filter
+    p = program(LATTICE_BODY, "new", defines)
+    g.glUseProgram(p); noise(p)
+    R, eye_h = 3900.0, 4.0
+    W, H = 267, 150
+    t = law.arrival_at(R) + t_off
+    bind_new(p, law, t, (R, eye_h, 0.0))
+    scene_light(p, 4)
+    pitch = np.radians(2.0)
+    fwd = np.array([-np.cos(pitch), np.sin(pitch), 0.0]); right = np.array([0.0, 0.0, 1.0]); up = np.cross(right, fwd)
+    tan_y = np.tan(np.radians(35.0)); tan_x = tan_y * 16 / 9
+    g.glUniform3f(loc(p, "Fwd"), *fwd); g.glUniform3f(loc(p, "Right"), *right); g.glUniform3f(loc(p, "Up"), *up)
+    g.glUniform1f(loc(p, "TanX"), tan_x); g.glUniform1f(loc(p, "TanY"), tan_y)
+    g.glUniform1f(loc(p, "Steps"), 96); g.glUniform1f(loc(p, "Foot"), 2 * tan_x / W)
+    g.glUniform1f(loc(p, "W"), W); g.glUniform1f(loc(p, "H"), H); g.glUniform1f(loc(p, "DwDetail"), 2.0)
+    acc = np.zeros((H, W, 4))
+    one = None
+    for f in range(frames):
+        g.glUniform1f(loc(p, "Frame"), float(f))
+        target(W, H, [(g.GL_RGBA32F, g.GL_RGBA)])
+        quad(p)
+        v = read(W, H).reshape(H, W, 4).astype(np.float64)
+        if one is None: one = v
+        acc += v
+    acc /= frames
+    def measure(img):
+        lum = img[..., :3] @ np.array([0.2126, 0.7152, 0.0722])
+        wall = (img[..., 3] < 0.5)
+        wall &= median_filter(wall.astype(np.uint8), 5).astype(bool)
+        med = median_filter(lum, 3)
+        return float(np.abs(lum - med)[wall].mean() / max(lum[wall].mean(), 1e-9)), int(wall.sum())
+    la, n = measure(acc); l1, _ = measure(one)
+    print(f"lattice {tag}: averaged {frames} frames {la:.4f}, one frame {l1:.4f} ({n} wall pixels)")
+    REPORT.setdefault("lattice", {})[tag] = {"averaged": la, "one": l1, "wall": n}
+    if save:
+        from PIL import Image
+        lum = acc[..., :3]
+        img = np.clip(lum / max(lum.max(), 1e-9), 0, 1) ** (1 / 2.2)
+        Image.fromarray((img[::-1] * 255).astype(np.uint8)).resize((W * 4, H * 4), Image.NEAREST).save(OUT / f"lattice-{tag}.png")
+    return la
+
+
+def resolve_emulation(law, age=-1.0, frames=40, fps=0.0):
+    """The march at the full 1/6 lattice each frame on llvmpipe, then fx_dustwall_resolve's rule in numpy (static view: the
+    history at its own pixel): weight 0.1 on a traced pixel, history clamped to the traced 3 x 3 neighbourhood (mean +- 1.5 sd,
+    and the pixel's own value); between rays the held history clamped likewise, cur = mean of the traced neighbours. Variants:
+    interleaved with the offsets' sequence by frame (shipped), interleaved with each pixel's own trace count (frame // 2), no
+    interleave. Lattice = mean |L - median 3x3 L| / mean L over the wall."""
+    from scipy.ndimage import median_filter
+    p = program(LATTICE_BODY, "new")
+    g.glUseProgram(p); noise(p)
+    R, eye_h = 3900.0, 4.0
+    W, H = 267, 150
+    t = law.arrival_at(R) + age
+    bind_new(p, law, t, (R, eye_h, 0.0))
+    scene_light(p, 4)
+    pitch = np.radians(2.0)
+    fwd = np.array([-np.cos(pitch), np.sin(pitch), 0.0]); right = np.array([0.0, 0.0, 1.0]); up = np.cross(right, fwd)
+    tan_y = np.tan(np.radians(35.0)); tan_x = tan_y * 16 / 9
+    g.glUniform3f(loc(p, "Fwd"), *fwd); g.glUniform3f(loc(p, "Right"), *right); g.glUniform3f(loc(p, "Up"), *up)
+    g.glUniform1f(loc(p, "TanX"), tan_x); g.glUniform1f(loc(p, "TanY"), tan_y)
+    g.glUniform1f(loc(p, "Steps"), 96); g.glUniform1f(loc(p, "Foot"), 2 * tan_x / W)
+    g.glUniform1f(loc(p, "W"), W); g.glUniform1f(loc(p, "H"), H); g.glUniform1f(loc(p, "DwDetail"), 2.0)
+    cache = {}
+    def march(seq, f=0):
+        key = (seq, f if fps > 0 else 0)
+        if key not in cache:
+            if fps > 0:
+                bind_new(p, law, t + f / fps - frames / fps, (R, eye_h, 0.0))
+            g.glUniform1f(loc(p, "Frame"), float(seq))
+            target(W, H, [(g.GL_RGBA32F, g.GL_RGBA)])
+            quad(p)
+            cache[key] = read(W, H).reshape(H, W, 4).astype(np.float64)
+        return cache[key]
+    yy, xx = np.mgrid[0:H, 0:W]
+    def run(mode):
+        hist = None
+        for f in range(frames):
+            if mode == "full":
+                cur = march(f, f); traced = np.ones((H, W), bool)
+            else:
+                cur = march(f if mode == "frame" else f // 2, f); traced = ((xx + yy + (f & 1)) & 1) == 0
+            # traced 3x3 neighbourhood statistics
+            m1 = np.zeros_like(cur); m2 = np.zeros_like(cur); cnt = np.zeros((H, W, 1))
+            pad = np.pad(cur, ((1, 1), (1, 1), (0, 0)), mode="edge"); tp = np.pad(traced, 1, mode="edge")
+            for dy in (-1, 0, 1):
+                for dx in (-1, 0, 1):
+                    v = pad[1 + dy:1 + dy + H, 1 + dx:1 + dx + W]; tr = tp[1 + dy:1 + dy + H, 1 + dx:1 + dx + W][..., None]
+                    m1 += v * tr; m2 += v * v * tr; cnt += tr
+            m1 /= np.maximum(cnt, 1); sd = np.sqrt(np.maximum(m2 / np.maximum(cnt, 1) - m1 * m1, 0))
+            c = np.where(traced[..., None], cur, m1)
+            if hist is None:
+                hist = c; continue
+            h = np.clip(hist, np.minimum(m1 - 1.5 * sd, c), np.maximum(m1 + 1.5 * sd, c))
+            hist = np.where(traced[..., None], h * 0.9 + c * 0.1, h)
+        lum = hist[..., :3] @ np.array([0.2126, 0.7152, 0.0722])
+        wall = hist[..., 3] < 0.5
+        wall &= median_filter(wall.astype(np.uint8), 5).astype(bool)
+        return float(np.abs(lum - median_filter(lum, 3))[wall].mean() / max(lum[wall].mean(), 1e-9)), int(wall.sum()), hist
+    out = {}
+    for mode in ("frame", "own", "full"):
+        la, n, hist = run(mode)
+        out[mode] = la
+        print(f"resolve emulation at front {age:+.1f} s, {fps:g} fps: {mode:5s} lattice {la:.4f} ({n} wall pixels)")
+        from PIL import Image
+        img = np.clip(hist[..., :3] / max(hist[..., :3].max(), 1e-9), 0, 1) ** (1 / 2.2)
+        Image.fromarray((img[::-1] * 255).astype(np.uint8)).resize((W * 4, H * 4), Image.NEAREST).save(OUT / f"resolve-{mode}.png")
+    REPORT["resolve_emulation"] = out
+
 laws = {"1000": Law("1000"), "15": Law("15")}
 if "--only" in sys.argv:
     which = sys.argv[sys.argv.index("--only") + 1].split(",")
@@ -896,5 +1028,11 @@ if "drift" in which:
     drift_inverse(laws["1000"])
 if "tuftnear" in which:
     tuft_near(laws["1000"])
+if "lattice" in which:
+    lattice(laws["1000"])
+if "resolve" in which:
+    resolve_emulation(laws["1000"])
+if "resolvemoving" in which:
+    resolve_emulation(laws["1000"], fps=18.0)
 (OUT / "probe-report.json").write_text(json.dumps(REPORT, indent=1, default=float))
 sys.exit(1 if gl["FAILED"] else 0)

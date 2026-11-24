@@ -137,7 +137,7 @@ public final class PallPass {
         /**
          * GPU budget in ms for the whole volume. Calibration on the RTX 4060 Laptop at 2560×1600 uses pall-only
          * timings in a 150 kt firestorm: LOW 2.5–6.1 ms, MEDIUM 6.2–12.5, HIGH 4.8–19.2 (PallDetailTest).
-         * The separate young wall also contributes to each measured window when it is in view.
+         * The dust wave's pass also contributes to each measured window when it is in view.
          */
         final double budget;
 
@@ -416,7 +416,7 @@ public final class PallPass {
 
     /** Frame pall — renderer input ({@code client/nuclear/NukePall#frame}). */
     public static final class Frame {
-        /** The young wall's pass inputs ({@link DustWallPass}); inactive — no young wall this frame. */
+        /** The dust wave's pass inputs ({@link DustWallPass}); inactive — no dust wave this frame. */
         public final DustWallPass.Frame dustWall = new DustWallPass.Frame();
         /** Detonation slots ({@code pall.glsl}): at most two most prominent. */
         public final Matrix4f slot0 = new Matrix4f().zero(), slot1 = new Matrix4f().zero();
@@ -555,7 +555,6 @@ public final class PallPass {
     static {
         WARMUP.mushroomCount = 1;
         WARMUP.ballsLit = true;
-        WARMUP.dustWall.ring[3] = 1;
     }
     private static Detail DETAIL = new Detail();
     /** Noise failed (background error): no pall until restart. */
@@ -1642,7 +1641,7 @@ public final class PallPass {
             gpuSum += ms;
             gpuMax = Math.max(gpuMax, ms);
             gpuFrames++;
-            if (ms - SUBMIT[i] / 1e6 >= GpuWatch.FLOOR_MS) {
+            if (ms - SUBMIT[i] / 1e6 >= GpuWatch.FLOOR_MS && watch().watched()) {
                 // a frame the watch takes: its parts, the render thread's wall and CPU time between the stamps, what it did
                 Incoming.LOG.warn(String.format(Locale.ROOT, "Nuclear dust pall: %.1f ms on the GPU (parts%s); render thread %.1f ms between "
                         + "the stamps, %.1f ms of it on CPU; %s", ms, parts, SUBMIT[i] / 1e6, CPU[i] / 1e6, EVENTS[i]));

@@ -161,7 +161,7 @@ reverse wind stalls it and brings part of it back, then the air drawn in under t
 toward ground zero. For tens of seconds the layer stays restless: swells rise and sag, tongues of dust lift, gusts shove
 patches aside; then it calms to the slow roll of a dust storm, swirling a little and drifting with the wind. The same dust
 thins over the following hours into a haze that drifts with the wind; where the dust of several nukes meets, it adds up.
-With **Mushroom cloud and dust wave** set to OFF, none of this dust, spray or surge is drawn.
+With **Mushroom cloud and dust wave** set to OFF, the dust wave is not drawn: none of this dust, mist or base surge. Spray drops near you and dust from breaking buildings remain.
 Burns, radiation and falling debris can still hurt you after the flash, so stay under cover and watch your dose.
 
 ![A dust wave approaches beneath the mushroom cloud at dusk](../media/blast-wave-dusk-hq.jpg)

@@ -11,10 +11,14 @@ import ua.zentix.incoming.client.fx.layer.DustWallPass;
 import ua.zentix.incoming.nuclear.Detonation;
 import ua.zentix.incoming.nuclear.model.DustModel;
 
-/** Probe (unified-wave step 1, not merged): the dust law's numbers the whole-lifetime dust wave reads, as JSON for the harness. */
+/**
+ * The dust law's numbers the dust wave reads, as JSON for the shader harness ({@code tools/uw_probe/probe_gl.py}), with the
+ * reference take's young-wall inputs it compares against. Runs only with {@code -Duw.probe=true} (it writes files).
+ */
 class DustLawDumpProbe {
     @Test
     void dump() throws IOException {
+        org.junit.jupiter.api.Assumptions.assumeTrue(Boolean.getBoolean("uw.probe"), "harness dump: -Duw.probe=true");
         Path out = Path.of("build/uw-probe");
         Files.createDirectories(out);
         for (double kt : new double[] {1000, 15}) {
@@ -29,8 +33,7 @@ class DustLawDumpProbe {
             for (int i = 0; i < table.length; i++) s.append(i == 0 ? "" : ",").append(String.format(Locale.ROOT, "%.7g", table[i]));
             s.append("],\n");
             // take 33's young table at 30 s (arrival, presentation layer at 1 s, presentation sigma, paved)
-            float[] young = new float[DustWallPass.NODES * 4];
-            f.young(30, 1, 24, DustWallPass.NODES, young);
+            float[] young = young(f, d, 30, 1, 24, DustWallPass.NODES);
             s.append("\"young\": [");
             for (int j = 0; j < DustWallPass.NODES; j++) {
                 young[4 * j + 1] *= (float) DustSources.PRESENT_HEIGHT;
@@ -60,5 +63,25 @@ class DustLawDumpProbe {
                 fb.append(String.format(Locale.ROOT, "%.0f %.1f%n", t, ua.zentix.incoming.nuclear.model.FireballModel.groundRadius(t, 0, kt, true)));
             Files.writeString(out.resolve(String.format(Locale.ROOT, "footprint-%.0fkt.txt", kt)), fb);
         }
+    }
+
+    /**
+     * The reference take's young-wall inputs at model second t (the harness's take-33 model): per node, the front's arrival,
+     * the layer top at settleS, the lofted depth at handoffS (none under the fireball's footprint) and the paved share.
+     */
+    private static float[] young(PallField f, Detonation d, double t, double settleS, double handoffS, int n) {
+        float[] out = new float[n * 4];
+        double hob = Math.max(0, d.hobMetres()), reach = f.reach();
+        double ball = ua.zentix.incoming.nuclear.model.FireballModel.groundRadius(t, hob, d.yieldKt(), d.surface());
+        for (int j = 0; j < n; j++) {
+            double rb = j / (n - 1.0) * reach, slant = Math.hypot(d.metres(rb), hob);
+            int i = Math.min(PallField.BINS - 1, Math.max(0, (int) (rb / reach * PallField.BINS)));
+            DustModel.Column c = f.layer(i);
+            out[4 * j] = (float) (d.arrivalTicks(d.blocks(slant)) / (20.0 * d.scale()));
+            out[4 * j + 1] = (float) Math.max(d.blocks(c.height(settleS)), PallField.MIN_TOP_BLOCKS);
+            out[4 * j + 2] = d.metres(rb) < ball ? 0f : (float) c.depth(handoffS);
+            out[4 * j + 3] = (float) f.paved(i);
+        }
+        return out;
     }
 }

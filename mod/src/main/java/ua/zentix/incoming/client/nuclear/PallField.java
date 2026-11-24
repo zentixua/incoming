@@ -218,28 +218,6 @@ public final class PallField {
         return reach;
     }
 
-    /**
-     * Inputs of the young dust wall ({@code DustWallPass}, a presentation model; physics only as these inputs) at model second
-     * {@code t}: for node j of n at ground radius j/(n − 1) of {@link #reach} (blocks), the game front's arrival (model seconds
-     * since the burst), the dust layer top at age {@code settleS} model seconds, when the wall has settled (blocks; the slow
-     * rise over the hot ground afterwards is the pall's), and the layer's vertical optical depth at age {@code handoffS}, where
-     * the pall takes the wall over ({@link DustModel.Column#depth}; how much dust was lofted there) — none where the fireball
-     * touches the ground at {@code t} ({@link FireballModel#groundRadius}, as the pall's {@link #pallShare}) — and the dust over
-     * hard ground relative to soil ({@link #paved}). 4 numbers per node.
-     */
-    public void young(double t, double settleS, double handoffS, int n, float[] out) {
-        double hob = Math.max(0, d.hobMetres());
-        double ball = FireballModel.groundRadius(t, hob, d.yieldKt(), d.surface());
-        for (int j = 0; j < n; j++) {
-            double rb = j / (n - 1.0) * reach, slant = Math.hypot(d.metres(rb), hob);
-            DustModel.Column c = columns[Math.min(BINS - 1, Math.max(0, (int) (rb / reach * BINS)))];
-            out[4 * j] = (float) (d.arrivalTicks(d.blocks(slant)) / (20.0 * d.scale()));
-            out[4 * j + 1] = (float) Math.max(d.blocks(c.height(settleS)), MIN_TOP_BLOCKS);
-            out[4 * j + 2] = d.metres(rb) < ball ? 0f : (float) c.depth(handoffS);
-            out[4 * j + 3] = (float) paved[Math.min(BINS - 1, Math.max(0, (int) (rb / reach * BINS)))];
-        }
-    }
-
     /** Log-spaced age nodes of the whole-lifetime dust table ({@link #lifetime}). */
     public static final int AGES = 32;
     /** Age scale of the table's log coordinate log(1 + age / AGE0), model seconds. */
@@ -486,6 +464,11 @@ public final class PallField {
     /** Node i dust layer ({@link DustModel}). */
     DustModel.Column layer(int i) {
         return columns[i];
+    }
+
+    /** Node i's dust over hard ground relative to soil (table row 0's paved share). */
+    double paved(int i) {
+        return paved[i];
     }
 
     /**
@@ -1027,14 +1010,13 @@ public final class PallField {
      * profile's 1.25 at the ground) and {@code l[2]} (top); the spray, haze and surge stay the law's.
      */
     private void waveDust(double dx, double dz, double ticks, Water water, double[] l) {
-        double[] w = new double[2];
+        double[] w = waveW, c = waveC;
         source(dx, dz, ticks, w);
         float[] table = waveTable();
         l[0] = 0;
         l[2] = 1;
         if (table == null) return;
         DustMaterialTiles m = materials;
-        double[] c = new double[2];
         drawnColumn(table, ua.zentix.incoming.client.fx.layer.DustWallPass.NODES, lifetimeEnd(), reach, ticks / (20.0 * d.scale()),
                 w[0], w[1], m == null ? 0 : m.hard(w[0], w[1]), c);
         if (c[0] <= 0) return;
@@ -1043,6 +1025,9 @@ public final class PallField {
         l[0] = 1.25 * c[0] / Math.max(0.9483 * top - 2.854, 1) * (1 - wet);
         l[2] = Math.max(top, 1);
     }
+
+    /** {@link #waveDust}'s scratch (its readers run on the client thread). */
+    private final double[] waveW = new double[2], waveC = new double[2];
 
     /** The material tiles the dust wave draws for this detonation ({@link #drawnColumn}'s hard ground); null until they exist. */
     private volatile DustMaterialTiles materials;

@@ -420,92 +420,6 @@ class BlastWallTest {
         return s;
     }
 
-    /**
-     * The wall's dust takes the sun of its own altitude (as {@code fx_pall}'s {@code pallSunAt}): at a 3° sun the ground lies under
-     * a long path of haze (0.6 % of noon green at sea level), while the same dust 6 km up keeps a golden beam. The point's altitude reaches the sun
-     * term ({@link NukePall.Sky#sunAt}); the ball's light is left out so that the sun decides.
-     */
-    @Test
-    void wallDustTakesTheSunOfItsAltitude() {
-        CloudPuffs puffs = new CloudPuffs(GROUND);
-        BlastWall w = new BlastWall(GROUND, false);
-        float[] s = new float[BlastWall.SLOT], glow = new float[8], low = new float[3], high = new float[3];
-        double t = 0.5;
-        while (GROUND.metres(w.wall(t).head()) < 1500) t += 0.05;
-        slot(puffs, w, t, 0, s, glow);
-        glow[4] = glow[5] = glow[6] = 0;
-        NukePall.Sky dusk = sky(true);
-        dusk.sy = (float) Math.sin(Math.toRadians(3));
-        double head = s[0], len = s[1], h = s[2];
-        NukePall.dustLight(s, glow, dusk, GROUND.windDir(), head - len, 0.9 * h, 0, 0.9 * h, 0, 0, 0, low);
-        NukePall.dustLight(s, glow, dusk, GROUND.windDir(), head - len, 0.9 * h, 0, 0.9 * h, 0, 0, 6000, high);
-        assertTrue(high[0] > low[0] + 0.03, "the sun of 6 km lights the same dust brighter: " + Arrays.toString(high) + " vs " + Arrays.toString(low));
-        assertTrue(high[0] - low[0] > 3 * (high[2] - low[2]), "the beam aloft is golden, it adds red: " + Arrays.toString(high) + " vs " + Arrays.toString(low));
-    }
-
-    /**
-     * Dust near the camera - the color of the head there, as the frame shines on it ({@link NukePall#dustLight}). The head is a thick layer (visible at
-     *  meters): light enters it thickly to the top of the wedge, to its front edge and from below. Fires light its bottom with their own flame
-     *  ({@link PallField#fireLight}): under a burning city (flame 1) the bottom of the head at night is not dark and has the colour of fire, but in the
-     *  depth of the layer there is a shadow of its thickness; under fires the flash lit seconds before the wave (flame ≈ 0) the bottom is as dark as with
-     *  no fires at all — no orange under a fresh wall (18.11). During the day, the top of the wedge is brown (red, followed by green, blue) in the light of
-     *  the sun and sky, in depth there is a shadow; at night, too, as soon as the ball on the head stops blinding the eye accustomed to the dark (its light
-     *  is about of a white wall; before, everything that it illuminates is overexposed).
-     */
-    @Test
-    void nearDustTakesWallLight() {
-        CloudPuffs puffs = new CloudPuffs(GROUND);
-        PallField pall = new PallField(GROUND);
-        BlastWall w = new BlastWall(GROUND, false);
-        float[] s = new float[BlastWall.SLOT], glow = new float[8], c = new float[3], top = new float[3], fresh = new float[3], none = new float[3];
-        double t = 0.5;
-        while (GROUND.metres(w.wall(t).head()) < 1500) t += 0.05;
-        slot(puffs, w, t, 1, s, glow);
-        double head = s[0], len = s[1], h = s[2];
-        assertTrue(head < glow[3], "head at 1,5 km - not above fires");
-        double flame = pall.fireLight(t * 20 * GROUND.scale());
-        assertTrue(flame < 1e-3, "fires the flash lit " + t + " s ago have not grown: " + flame);
-        double bottom = Double.MAX_VALUE;
-        for (double u : new double[]{0.03, 0.1, 0.3}) {
-            double here = h * BlastWall.top(u);
-            for (double up : new double[]{0.005, 0.01}) {
-                NukePall.dustLight(s, glow, sky(false), GROUND.windDir(), head - u * len, up * here, 0, up * here, 0, 0, c);
-                assertTrue(luminance(c) > 0.2, u + " wedge, " + up + " top: at night the bottom of the head over burning fires is dark, " + luminance(c));
-                bottom = Math.min(bottom, luminance(c));
-                assertTrue(c[0] > c[1] && c[1] > c[2], u + " wedge, " + up + " top: at night fires are not the color of fire, " + Arrays.toString(c));
-                float[] lit = glow.clone();
-                lit[1] = (float) flame;
-                NukePall.dustLight(s, lit, sky(false), GROUND.windDir(), head - u * len, up * here, 0, up * here, 0, 0, fresh);
-                lit[1] = 0;
-                NukePall.dustLight(s, lit, sky(false), GROUND.windDir(), head - u * len, up * here, 0, up * here, 0, 0, none);
-                assertEquals(luminance(none), luminance(fresh), 0.01 + 0.05 * luminance(none),
-                        u + " wedge, " + up + " top: fresh fires light a fresh wall from below: " + Arrays.toString(fresh) + " vs " + Arrays.toString(none));
-            }
-        }
-        // deeper than the young front part, which is still rising (BlastWall.develop) and thinner
-        NukePall.dustLight(s, glow, sky(false), GROUND.windDir(), head - 0.5 * len, 0.2 * h * BlastWall.top(0.5), 0, 0.2 * h * BlastWall.top(0.5), 0, 0, c);
-        assertTrue(luminance(c) < 0.2 * bottom, "at night there is no shadow in the depths of the head above the fires: " + luminance(c) + ", bottom " + bottom);
-        NukePall.dustLight(s, glow, sky(true), GROUND.windDir(), head - len, 0.9 * h, 0, 0.9 * h, 0, 0, top);
-        assertTrue(top[0] > top[1] && top[1] > top[2], "during the day, the top of the head is not brown: " + Arrays.toString(top));
-        assertTrue(luminance(top) > 0.5 && luminance(top) < 0.9, "head up during the day " + luminance(top));
-        NukePall.dustLight(s, glow, sky(true), GROUND.windDir(), head - len, 0.1 * h, 0, 0.1 * h, 0, 0, c);
-        assertTrue(luminance(top) > 3 * luminance(c), "during the day there is no shadow in the depths of my head: " + luminance(c) + " at the top " + luminance(top));
-        // at night: the light of the ball on the head, the eyes accustomed to the darkness - already on the order of a white wall; the fires
-        // under it as they are seconds after the flash
-        double night = sky(false).exposure;
-        while (CloudPuffs.ball(0.2126 * glow[4] + 0.7152 * glow[5] + 0.0722 * glow[6], glow[0], Math.hypot(s[0], glow[7])) * night > 3) {
-            t += 0.05;
-            slot(puffs, w, t, pall.fireLight(t * 20 * GROUND.scale()), s, glow);
-        }
-        assertTrue(t < 12, "the ball is blinding at night " + t + " s");
-        head = s[0];
-        len = s[1];
-        h = s[2];
-        NukePall.dustLight(s, glow, sky(false), GROUND.windDir(), head - len, 0.9 * h, 0, 0.9 * h, 0, 0, top);
-        NukePall.dustLight(s, glow, sky(false), GROUND.windDir(), head - len, 0.1 * h, 0, 0.1 * h, 0, 0, c);
-        assertTrue(luminance(top) > 2.5 * luminance(c), t + " s: no shadow deep inside the head at night: " + luminance(c) + " at the top " + luminance(top));
-    }
-
     /** Wall and light of the ball and fires (flame {@code fire}) at 15 kt at the moment t: at {@code wall} and {@code glow}. */
     private static void slot(CloudPuffs puffs, BlastWall w, double t, double fire, float[] wall, float[] glow) {
         assertTrue(w.slot(t, wall));
@@ -513,10 +427,8 @@ class BlastWallTest {
     }
 
     /**
-     * 18.11 (Artem's 1 Mt): the wall inside the flash-ignition range was a black disk with a hard edge at its boundary — the head carried 77 %
-     * soot from the first second. The head takes the pall's soot (fire zone × fire growth): while it crosses the zone the fires have barely
-     * grown, so its colour inside and just outside the zone is the same dust (top within 3 % in luminance, mid-height within 10 %), and it is
-     * brown, not grey (red over blue).
+     * The dust inside the flash-ignition range is not a black disk: the soot in fresh dust follows the fires' growth (fire zone ×
+     * fire growth, {@link PallField#smoke}), so while the front crosses the zone its dust holds under 1 % soot, and none outside it.
      */
     @Test
     void headInsideTheFireZoneIsDust() {
@@ -524,7 +436,7 @@ class BlastWallTest {
         PallField pall = new PallField(d);
         CloudPuffs puffs = new CloudPuffs(d);
         BlastWall w = new BlastWall(d, false);
-        float[] s = new float[BlastWall.SLOT], glow = new float[8], in = new float[3], out = new float[3];
+        float[] s = new float[BlastWall.SLOT], glow = new float[8];
         double edge = pall.fireReach(), t = 0.5;
         while (d.metres(w.wall(t).head()) < 0.7 * edge) t += 0.05;
         double ticks = t * 20 * d.scale();
@@ -535,18 +447,6 @@ class BlastWallTest {
         double soot = pall.smoke(inside, ticks);
         assertTrue(soot < 0.01, t + " s: soot share in fresh dust " + soot);
         assertEquals(0, pall.smoke(outside, ticks), 0, "no soot outside the fire zone");
-        for (double z : new double[]{0.9, 0.5}) {
-            double up = z * s[2] * BlastWall.top(0.5);
-            NukePall.dustLight(s, glow, sky(true), d.windDir(), inside, up, 0, up, soot, 0, in);
-            // the same wedge point, as if it lay beyond the zone edge (same wall, no soot, no fire light)
-            float[] dark = glow.clone();
-            dark[1] = 0;
-            NukePall.dustLight(s, dark, sky(true), d.windDir(), inside, up, 0, up, 0, 0, out);
-            assertEquals(luminance(out), luminance(in), (z > 0.7 ? 0.03 : 0.1) * luminance(out),
-                    z + " top: fire zone " + Arrays.toString(in) + " vs dust " + Arrays.toString(out));
-        }
-        NukePall.dustLight(s, glow, sky(true), d.windDir(), inside, 0.5 * s[2] * BlastWall.top(0.5), 0, 0.5 * s[2] * BlastWall.top(0.5), soot, 0, in);
-        assertTrue(in[0] > in[2], "brown dust, not grey: " + Arrays.toString(in));
     }
 
     /**

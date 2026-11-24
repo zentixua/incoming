@@ -305,7 +305,7 @@ public final class NukePall {
      */
     public static PallPass.Frame lightFrame(ClientLevel level, Vec3 eye, float partial) {
         PallPass.Frame f = FRAME;
-        // no detonation: no young wall (the shared frame keeps the last nuclear frame's inputs otherwise)
+        // no detonation: no dust wave (the shared frame keeps the last nuclear frame's inputs otherwise)
         f.dustWall.active = false;
         double range = Sight.range(level.getRainLevel(partial), level.getThunderLevel(partial));
         Sight.Air a = Sight.Air.at(eye.y - ua.zentix.incoming.client.fx.layer.WaterDecal.SEA_LEVEL, range);
@@ -566,115 +566,6 @@ public final class NukePall {
     }
 
     /**
-     * On-screen wall-head dust color, as lit by {@code fx_pall} ({@code wall}, light in {@code main}), for the mean
-     * head without billows (their shadows go both ways, averaging to zero), outside water: diffuse sun and sky light at the smaller optical depth to head top or leading
-     * edge; ball light beneath the nearest ball-lit side, toward ball or from above if its beam to the top over the point does not pass through
-     * the head (ball behind the head, closer to ground zero and low); sun and ball beams pass through head optical depth toward them; fires
-     * light from below. Thus by day dust is brown in sun and sky light rather than ball light from behind the wall;
-     * at night, the wall side away from the ball is in shadow, the top in its light. Beam phase is averaged over directions: the billow is seen from
-     * every side.
-     *
-     * @param wall  slot wall ({@link BlastWall#slot})
-     * @param glow  wall light ({@link CloudPuffs#pallLight})
-     * @param wind  wind direction (radians, {@link Detonation#windDir}): cap center drifts along it
-     * @param gx    point x from ground zero (blocks), gy above ground zero, gz along z
-     * @param up    point height above its terrain (blocks)
-     * @param smoke soot share in the dust there ({@link PallField#smoke}: fire zone × fire growth, as the pall's table)
-     * @param sand  sand's share of the dust mass there ({@link PallField#sandShare}): desert dust instead of the reference soil's
-     */
-    static void dustLight(float[] wall, float[] glow, Sky sky, double wind, double gx, double gy, double gz, double up, double smoke, double sand,
-                          float[] into) {
-        dustLight(wall, glow, sky, wind, gx, gy, gz, up, smoke, sand, gy, into);
-    }
-
-    /** {@link #dustLight}, the point {@code altitude} blocks above sea level ({@link Sky#sunAt}: its sun). */
-    static void dustLight(float[] wall, float[] glow, Sky sky, double wind, double gx, double gy, double gz, double up, double smoke, double sand,
-                          double altitude, float[] into) {
-        double rx = gx, rz = gz, len = Math.hypot(rx, rz);
-        double top = wall[2], reach = BlastWall.HANDOFF_TO * wall[1] + top, s = wall[0] - len, toTop = Math.max(top - up, 0);
-        double ox = len > 1e-3 ? rx / len : 1, oz = len > 1e-3 ? rz / len : 0;
-        // above point, to local wedge top; toward edge, until wedge falls below point; toward light, no higher than head top (fx_pall: wall)
-        double above = chord(wall, rx, rz, up, 0, 1, 0, Math.max(top * BlastWall.top(s / Math.max(wall[1], 1e-3)) - up, 0), 4);
-        double side = chord(wall, rx, rz, up, ox, 0, oz, Math.max(s - wall[1] * Math.pow(Mth.clamp(up / Math.max(top, 1e-3), 0, 1), 1.2), 0), 4);
-        double below = chord(wall, rx, rz, up, 0, -1, 0, Math.max(up, 0), 2);
-        double depth = Math.min(above, side), slab = depth + below;
-        double toSun = chordNear(wall, rx, rz, up, sky.sx, sky.sy, 0, toLight(sky.sy, toTop, reach), 4);
-        double lx = Math.cos(wind) * glow[2] - gx, ly = glow[7] - gy, lz = Math.sin(wind) * glow[2] - gz;
-        double ll = Math.max(Math.sqrt(lx * lx + ly * ly + lz * lz), 1e-3);
-        double toBall = chordNear(wall, rx, rz, up, lx / ll, ly / ll, lz / ll, toLight(ly / ll, toTop, reach), 4);
-        // diffuse ball light enters through the nearest ball-lit head side (fx_pall: capDeep): toward ball, its optical depth;
-        // from above, optical depth over the point plus head optical depth in front of the ball still crossed by its beam toward the top above the point
-        // (ball low and behind head: the beam to the top at the leading edge crosses the whole head)
-        double muS = Math.max(sky.sy, 0.12), muB = Mth.clamp(ly / ll, 0.12, 1);
-        double deepB = Math.min(toBall, above + Math.max(toBall - above / muB, 0)), slabB = deepB + below;
-        double r = Math.hypot(gx, gz);
-        // ball light is a beam from cap center, like the mushroom body (CloudPuffs.ball), × eye adaptation
-        double lit = CloudPuffs.ball(sky.exposure, glow[0], ll);
-        double burn = CloudPuffs.burn(r, 0, glow[1], glow[3]) * (1 - 0.75 * sky.day);
-        // sun at the point's altitude, as fx_pall's pallSunAt (Sky.sunAt)
-        double[] lin = new double[3], sun = new double[3];
-        sky.sunAt(altitude, sun);
-        for (int c = 0; c < 3; c++) {
-            double w = Mth.lerp(smoke, Mth.lerp(sand, DUST_W[c], SAND_W[c]), SMOKE_W[c]);
-            double fire = FIRE[c];
-            double ball = glow[4 + c] * lit;
-            double field = PallLight.diffuse(w, DUST_G, depth, slab, PallLight.LAND, muS, sun[c], 1, 0, sky.sky[c], 0, 0)
-                    + PallLight.diffuse(w, DUST_G, deepB, slabB, PallLight.LAND, muS, 0, muB, ball, 0, 0, 0);
-            double beams = 0.25 * (sun[c] * Math.exp(-toSun) + ball * Math.exp(-toBall));
-            double from = 0;
-            if (burn > 0) {
-                double flame = PallLight.flame(sky.base, fire * burn * sky.glowOnSmoke / DUST[c], fire);
-                from = Math.min(Math.max(PallLight.diffuse(w, DUST_G, depth, slab, PallLight.LAND, 1, 0, 1, 0, 0, flame, 0), 0), PallLight.linear(fire));
-            }
-            lin[c] = w * (Math.max(field, 0) + beams + from);
-        }
-        // to screen like pall (fx_pall: toward white, shoulder)
-        PallLight.screen(lin, into);
-    }
-
-    /**
-     * Haze table row of slot k ({@link PallField#row}) in its mat4 (column-major, like shader {@code mat4}): S[2].w; S[2].z, the
-     * slot's half of the slots' shared terrain texture ({@code pall.glsl}: {@code pallGroundUv}); and S[3].w, 1 — water beneath
-     * the pall ({@code pallField} reads the map's water channel only then), 0 — land everywhere.
-     */
-    static void tableRows(org.joml.Matrix4f m, int k, boolean water) {
-        m.m22(k).m23(tableRow(k)).m33(water ? 1 : 0);
-    }
-
-    /** Center of slot k's haze table row in the pall-table texture, height 0..1. */
-    static float tableRow(int k) {
-        return (PallField.ROWS * k + 0.5f) / PallPass.ROWS;
-    }
-
-    /**
-     * Ray length toward light through the head: along direction with rise {@code vy}, up to its top ({@code toTop} above point), capped at
-     * {@code reach}; nearly along ground — {@code reach}. Wedge is low and long: steps across its full length would pass above it.
-     */
-    private static double toLight(double vy, double toTop, double reach) {
-        return vy > 0.05 ? Math.min(reach, toTop / vy) : reach;
-    }
-
-    /** Mean wall-head optical depth ({@link BlastWall#sigma}) from point along (vx, vy, vz) for length len, n steps ({@code wallChord}). */
-    private static double chord(float[] wall, double rx, double rz, double up, double vx, double vy, double vz, double len, int n) {
-        double sum = 0, ds = len / n;
-        for (int i = 0; i < n; i++) {
-            double l = (i + 0.5) * ds;
-            sum += BlastWall.sigma(wall, rx + vx * l, rz + vz * l, up + vy * l, 0);
-        }
-        return sum * ds;
-    }
-
-    /** {@link #chord}, with cells denser near the point (boundaries quadratic in index), like {@code wallChordNear}: toward light. */
-    private static double chordNear(float[] wall, double rx, double rz, double up, double vx, double vy, double vz, double len, int n) {
-        double sum = 0, nn = n * n;
-        for (int i = 0; i < n; i++) {
-            double a = i * i / nn, b = (i + 1) * (i + 1) / nn, l = 0.5 * (a + b) * len;
-            sum += BlastWall.sigma(wall, rx + vx * l, rz + vz * l, up + vy * l, 0) * (b - a);
-        }
-        return sum * len;
-    }
-
-    /**
      * On-screen thin-dust color in channel c for the frame: light it scatters ({@link PallLight#thin}, albedo from linear
      * dust color in {@code fx_pall}) per unit extinction — its source function, converted to a screen value.
      */
@@ -784,4 +675,19 @@ public final class NukePall {
                 ua.zentix.incoming.client.fx.layer.DustWallPass.describe(), DustSources.describe(w), w.eye[3], w.adapt, w.sunDir.x, w.sunDir.y,
                 w.sunLight.x, w.sunLight.y, w.sunLight.z, w.skyLight.x, w.skyLight.y, w.skyLight.z, w.groundLight.x, w.groundLight.y, w.groundLight.z);
     }
+
+    /**
+     * Haze table row of slot k ({@link PallField#row}) in its mat4 (column-major, like shader {@code mat4}): S[2].w; S[2].z, the
+     * slot's half of the slots' shared terrain texture ({@code pall.glsl}: {@code pallGroundUv}); and S[3].w, 1 — water beneath
+     * the pall ({@code pallField} reads the map's water channel only then), 0 — land everywhere.
+     */
+    static void tableRows(org.joml.Matrix4f m, int k, boolean water) {
+        m.m22(k).m23(tableRow(k)).m33(water ? 1 : 0);
+    }
+
+    /** Center of slot k's haze table row in the pall-table texture, height 0..1. */
+    static float tableRow(int k) {
+        return (PallField.ROWS * k + 0.5f) / PallPass.ROWS;
+    }
+
 }

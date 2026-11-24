@@ -57,7 +57,7 @@ public final class DustSources {
     }
 
     /** Per detonation: the dust exposure its eye has reached (value, the detonation clock's second). */
-    private static final Map<ClientNuclear.Active, double[]> ADAPTED = new WeakHashMap<>();
+    private static final Map<ClientNuclear.Active, double[]> ADAPTED = new WeakHashMap<>(), ADAPTED_SECONDARY = new WeakHashMap<>();
     /**
      * Per detonation: when it was first drawn (client millis) and whether it was then already aged (a late join, a relog into a
      * running show, programs ready after the wave began): such a source fades in over {@link #FADE_IN_MS} of own time.
@@ -68,7 +68,11 @@ public final class DustSources {
     /** Model seconds after the burst from which a first draw counts as already aged. */
     static final double AGED_S = 1.0;
     /** Per detonation: frames its visible dust went undrawn, and whether that was reported (A3). */
-    private static final Map<ClientNuclear.Active, int[]> UNDRAWN = new WeakHashMap<>();
+    private static final Map<ClientNuclear.Active, int[]> UNDRAWN = new WeakHashMap<>(), UNDRAWN_SECONDARY = new WeakHashMap<>();
+    /** Per view (primary, secondary): exposure belongs to the view, and each view's own undrawn frames warn. */
+    private static <V> Map<ClientNuclear.Active, V> perView(Map<ClientNuclear.Active, V> primary, Map<ClientNuclear.Active, V> secondary) {
+        return ua.zentix.incoming.client.fx.layer.FxViews.secondary() ? secondary : primary;
+    }
     /** Frames a visible show's dust may go undrawn before the WARN (A3). */
     static final int UNDRAWN_FRAMES = 20;
     /**
@@ -79,7 +83,7 @@ public final class DustSources {
     private static int visibleFrames;
     /** A4: once a second under {@code -Dincoming.nukeDiag=true}, per view: the eligible and the drawn sources. */
     private static final boolean DIAG = Boolean.getBoolean("incoming.nukeDiag");
-    private static long lastSummary;
+    private static final long[] lastSummary = new long[2];
 
     /** Presentation exposure of the dust lit by sun and sky alone ({@code DwAdapt}, tools/uw_probe: the reference curtain's luma). */
     static final double DUST_ADAPT = 3.1;
@@ -95,6 +99,10 @@ public final class DustSources {
     static final double PRESENT_HEIGHT = PallField.PRESENT_HEIGHT;
 
     private static final float[] GLOW = new float[8];
+    /** Per-frame scratch (client thread): the frame's drawn sources, a source's surge, fire colours, the eye's column. */
+    private static final List<ClientNuclear.Active> DRAWN = new ArrayList<>();
+    private static final double[] SURGE = new double[3], COLUMN = new double[2];
+    private static final float[] FIRE_COLOUR = new float[3], LIT = new float[3];
 
     /**
      * The dust wave's inputs for this frame into {@code f.dustWall} (frame light already in {@code f}); false — no source (none
@@ -106,17 +114,27 @@ public final class DustSources {
         w.count = 0;
         DustWallPass.hazeOnly = false;
         if (!wanted() || all.isEmpty()) return false;
-        List<ClientNuclear.Active> drawn = new ArrayList<>();
+        List<ClientNuclear.Active> drawn = DRAWN;
+        drawn.clear();
         for (ClientNuclear.Active a : all) if (visible(a, partial)) drawn.add(a);
         if (drawn.isEmpty()) return false;
         visibleFrames++;
         boolean ready = DustWallPass.ready() && visibleFrames > FORCE_NOT_READY;
         for (ClientNuclear.Active a : drawn) undrawn(a, ready);
-        if (!ready) {
+        // the one owner decision (A2, DustOwnershipTest): the dust wave, or nothing
+        boolean water = false;
+        for (ClientNuclear.Active a : drawn) water |= a.ground.hasWater();
+        if (owner(new Conditions(water, drawn.size(), ua.zentix.incoming.client.fx.layer.FxViews.secondary(), NukePall.quality(),
+                ready)).isEmpty()) {
             summary(drawn, w);
             return false;
         }
         drawn.sort(Comparator.comparingDouble(a -> outside(a, eye, partial)));
+        if (drawn.size() > DustWallPass.MAX_SOURCES && !warnedCap) {
+            warnedCap = true;
+            Incoming.LOG.warn("Nuclear dust wave: {} detonations' dust in view, the nearest {} drawn (once per session)", drawn.size(),
+                    DustWallPass.MAX_SOURCES);
+        }
         // the haze level alone once every drawn source's youngest dust is past the textured level's window (dwTextured: 0 from
         // 60 s): the next frame's march takes a quarter of the rays
         boolean hazeOnly = true;
@@ -140,8 +158,9 @@ public final class DustSources {
     /** A4: the eligible and drawn sources of this view (once a second under nukeDiag); every eligible source beyond the frame's cap is named. */
     private static void summary(List<ClientNuclear.Active> eligible, DustWallPass.Frame w) {
         long now = net.minecraft.Util.getMillis();
-        if (!DIAG || now - lastSummary < 1000) return;
-        lastSummary = now;
+        boolean secondary = ua.zentix.incoming.client.fx.layer.FxViews.secondary();
+        if (!DIAG || now - lastSummary[secondary ? 1 : 0] < 1000) return;
+        lastSummary[secondary ? 1 : 0] = now;
         StringBuilder e = new StringBuilder(), d = new StringBuilder();
         for (ClientNuclear.Active a : eligible) e.append(e.isEmpty() ? "" : ",").append(a.d.id());
         for (int k = 0; k < w.count; k++) d.append(d.isEmpty() ? "" : ",").append(((ClientNuclear.Active) w.sources[k].id).d.id());
@@ -185,7 +204,7 @@ public final class DustSources {
 
     /** A3: a visible show's dust undrawn for more than {@link #UNDRAWN_FRAMES} frames warns once per detonation, with the reason. */
     private static void undrawn(ClientNuclear.Active a, boolean ready) {
-        int[] n = UNDRAWN.computeIfAbsent(a, k -> new int[2]);
+        int[] n = perView(UNDRAWN, UNDRAWN_SECONDARY).computeIfAbsent(a, k -> new int[2]);
         if (ready) {
             n[0] = 0;
             return;
@@ -220,7 +239,7 @@ public final class DustSources {
         float ex = (float) (eye.x - d.burst().x), ey = (float) (eye.y - d.groundY()), ez = (float) (eye.z - d.burst().z);
         double front = d.blocks(a.wall.shock(t));
         // the base surge of a water burst (radius, top, densest extinction; the same law and clock as the mushroom's column)
-        double[] surge = new double[3];
+        double[] surge = SURGE;
         a.pall.surge(ticks, surge);
         put(p, 0, ex, ey, ez, (float) t);
         put(p, 1, (float) front, (float) (1 - fadeIn(a, t)),
@@ -236,8 +255,10 @@ public final class DustSources {
         // fire light from below on a fully burning zone's dust (the pall's: pallFlame of the fire light at the detonation's fire
         // clock over the frame's sky base, capped at the flame's colour)
         double fl = a.pall.fireLight(ticks);
-        float[] fc = {f.fireLight.x, f.fireLight.y, f.fireLight.z};
-        float[] lit = new float[3];
+        float[] fc = FIRE_COLOUR, lit = LIT;
+        fc[0] = f.fireLight.x;
+        fc[1] = f.fireLight.y;
+        fc[2] = f.fireLight.z;
         for (int c = 0; c < 3; c++) lit[c] = fc[0] <= 0 ? 0 : (float) PallLight.flame(f.base, fl * fc[c], fc[c] / fc[0]);
         put(p, 5, lit[0], lit[1], lit[2], 0);
         a.ground.frame(s.ground);
@@ -268,7 +289,7 @@ public final class DustSources {
         double target = adapt * Math.exp(DUST_ADAPT_INSIDE * DUST_K * eyeDepth(table, n, end, reach, t, at, m.hard(at[0], at[2])) * haze);
         // the eye takes it over time (presentation, as NukeExposure and Sight.adapted: opening ~2 s, closing ~8 s, est.), on the
         // detonation's clock (the time the player watches; a seek or jump restarts it at the target)
-        double[] state = ADAPTED.computeIfAbsent(a, k -> new double[] {target, t});
+        double[] state = perView(ADAPTED, ADAPTED_SECONDARY).computeIfAbsent(a, k -> new double[] {target, t});
         double dt = t - state[1];
         if (dt < 0 || dt > 1) {
             state[0] = target;
@@ -287,8 +308,11 @@ public final class DustSources {
             double x = Math.min(Math.hypot(ex, ez) / Math.max(reach, 1), 1) * (n - 1);
             int j0 = (int) Math.min(Math.floor(x), n - 2);
             double ageEye = Math.max(t - table[4 * j0], 0);
+            // (interpolated between age nodes and 0.95 of the table's, as drawn: the reprojection plane never steps)
             double ue = Math.min(Math.log1p(ageEye / PallField.AGE0) / Math.log1p(end / PallField.AGE0) * (PallField.AGES - 1), PallField.AGES - 1);
-            lead.layerTop = table[4 * ((1 + (int) Math.round(ue)) * n + j0)];
+            int ke = (int) Math.min(Math.floor(ue), PallField.AGES - 2);
+            double fe = ue - ke, top0 = table[4 * ((1 + ke) * n + j0)], top1 = table[4 * ((2 + ke) * n + j0)];
+            lead.layerTop = (float) (0.95 * (top0 + fe * (top1 - top0)));
         }
         return state[0];
     }
@@ -336,7 +360,7 @@ public final class DustSources {
      * {@code dwHaze}'s column, its top 0.95 of the table's, the share above by the profile's stratification.
      */
     static double eyeDepth(float[] table, int n, double end, double reach, double t, float[] eye, double hard) {
-        double[] c = new double[2];
+        double[] c = COLUMN;
         PallField.drawnColumn(table, n, end, reach, t, eye[0], eye[2], hard, c);
         if (c[0] <= 0) return 0;
         double h = Math.max(eye[1], 0) / Math.max(c[1], 1);
@@ -356,9 +380,15 @@ public final class DustSources {
         return b.toString();
     }
 
+    /** More than {@link DustWallPass#MAX_SOURCES} sources were visible once (warned). */
+    private static boolean warnedCap;
+
     static void reset() {
         visibleFrames = 0;
+        DRAWN.clear();
         ADAPTED.clear();
+        ADAPTED_SECONDARY.clear();
+        UNDRAWN_SECONDARY.clear();
         FIRST.clear();
         UNDRAWN.clear();
     }
