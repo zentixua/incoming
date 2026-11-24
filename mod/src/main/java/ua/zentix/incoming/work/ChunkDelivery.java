@@ -2,6 +2,7 @@ package ua.zentix.incoming.work;
 
 import it.unimi.dsi.fastutil.longs.Long2ObjectOpenHashMap;
 import it.unimi.dsi.fastutil.longs.LongList;
+import it.unimi.dsi.fastutil.objects.Object2IntOpenHashMap;
 import net.minecraft.core.BlockPos;
 import net.minecraft.network.protocol.game.ClientboundLevelChunkWithLightPacket;
 import net.minecraft.server.level.ChunkHolder;
@@ -12,6 +13,8 @@ import net.minecraft.world.level.chunk.LevelChunk;
 import net.neoforged.neoforge.event.tick.LevelTickEvent;
 import ua.zentix.incoming.registry.ModAttachments;
 
+import java.util.ArrayDeque;
+import java.util.Iterator;
 import java.util.List;
 
 /**
@@ -35,6 +38,12 @@ import java.util.List;
  * there. An earlier fence could send newer blocks in older light. While a delivery waits, vanilla's light broadcast
  * for that chunk is held for up to {@link #HOLD_LIMIT} ticks per hold ({@link #onLevelTickPre}). Light from the
  * chunk's new blocks or from a changed neighbour could otherwise reach the client's old blocks.
+ * <p>
+ * Chunks whose light is done go out at the next world tick in the order they became ready, at most {@link #PER_TICK}
+ * a tick to each viewer: a wave crossing a city in view readies hundreds of chunks within seconds, up to a hundred in
+ * one tick, and the client handles every packet that arrived before its next frame. A ready chunk never waits longer
+ * than {@link #READY_LIMIT}; it stays in its pending delivery meanwhile, so its light broadcast stays held and a later
+ * write still joins it.
  */
 public final class ChunkDelivery {
     /** Client render-thread cost of one whole chunk from the server, ns (host pack, wave-hitch run 19.11.2026). */
@@ -53,13 +62,35 @@ public final class ChunkDelivery {
      */
     static final int HOLD_LIMIT = 200;
 
+    /**
+     * Client render-thread time per server tick vanilla gives chunk packets: the client asks for as many chunks a tick
+     * as it handles in 7 ms ({@code ChunkBatchSizeCalculator.getDesiredChunksPerTick}).
+     */
+    static final long CLIENT_TICK_NANOS = 7_000_000;
+    /** Whole chunks sent to one viewer per server tick: {@link #CLIENT_TICK_NANOS} at {@link #CHUNK_NANOS} a chunk. */
+    public static final int PER_TICK = (int) (CLIENT_TICK_NANOS / CHUNK_NANOS);
+    /**
+     * Ticks a ready chunk may wait for its viewers' {@link #PER_TICK} before it goes regardless: 1 s, so ruins in view
+     * keep within the acceptance (p99 1 s, at most 2 s behind their wave; nuclear-world.md).
+     */
+    public static final int READY_LIMIT = 20;
+    /** Whole chunks per viewer and tick in force ({@link #PER_TICK}; a GameTest sets 0 to reach the wait limit). */
+    private static int perTick = PER_TICK;
+
     /** Chunks waiting to go to their viewers whole (world attachment, never saved). */
     private final Long2ObjectOpenHashMap<PendingWhole> wholeWaiting = new Long2ObjectOpenHashMap<>();
+    /** Fenced revisions ready to send, in the order their light completed (server thread). */
+    private final ArrayDeque<Ready> ready = new ArrayDeque<>();
+
+    /** A fenced revision of a pending delivery. */
+    private record Ready(long key, long revision) {}
     /** Unique write revisions for whole deliveries, including across chunk reloads. */
     private long wholeRevision;
 
     /** Statistics for the ruin summary line (server thread). */
     static long wholeChunks, wholePositions, deltaChunks, deltaPositions, lagTicksSum, lagTicksMax, gone, held, expired;
+    /** Ticks ready chunks waited for their viewers' budget (sum, max) and those sent at {@link #READY_LIMIT}. */
+    static long paceSum, paceMax, paceForced;
     /** Blackout lamp positions among them (whole, deltas). */
     static long lampWhole, lampDeltas;
 
@@ -70,6 +101,8 @@ public final class ChunkDelivery {
         private long holdSince;
         private long revision;
         private long positions;
+        /** Game time its first fence completed (-1: none yet): the wait for the viewers' budget counts from it. */
+        private long readySince = -1;
         private boolean holding = true;
 
         private PendingWhole(LevelChunk chunk, long firstWrite) {
@@ -96,6 +129,13 @@ public final class ChunkDelivery {
     /** Whether a chunk with {@code changed} positions goes to its viewers whole. */
     public static boolean whole(int changed) {
         return changed >= wholeFrom;
+    }
+
+    /** GameTest only: set the whole chunks per viewer and tick, return the previous value. */
+    public static int perTick(int n) {
+        int was = perTick;
+        perTick = n;
+        return was;
     }
 
     /** GameTest only: set the threshold, return the previous one. */
@@ -140,40 +180,82 @@ public final class ChunkDelivery {
         pending.revision = revision;
         var main = level.getChunkSource().chunkMap.mainThreadExecutor;
         level.getChunkSource().getLightEngine().waitForPendingTasks(pos.x, pos.z)
-                .thenRunAsync(() -> send(level, pos, revision), main::tell);
+                .thenRunAsync(() -> fenced(level, pos, revision), main::tell);
     }
 
-    private static void send(ServerLevel level, ChunkPos pos, long revision) {
-        var waiting = get(level).wholeWaiting;
-        long key = pos.toLong();
-        PendingWhole pending = waiting.get(key);
+    /** The fence of {@code revision} completed (server thread): the latest revision joins the send queue. */
+    private static void fenced(ServerLevel level, ChunkPos pos, long revision) {
+        ChunkDelivery world = get(level);
+        PendingWhole pending = world.wholeWaiting.get(pos.toLong());
         if (pending == null || pending.revision != revision) return;
-        waiting.remove(key);
-        LevelChunk chunk = level.getChunkSource().getChunkNow(pos.x, pos.z);
-        ChunkHolder holder = level.getChunkSource().chunkMap.getVisibleChunkIfPresent(key);
-        if (chunk != pending.chunk || holder == null) {
-            // unloaded meanwhile: a player who loads it again gets it as it is now
-            gone++;
-            return;
-        }
-        List<ServerPlayer> players = viewers(holder);
-        if (players.isEmpty()) return;
-        var packet = new ClientboundLevelChunkWithLightPacket(chunk, level.getLightEngine(), null, null);
-        for (ServerPlayer p : players) p.connection.send(packet);
-        long lag = level.getGameTime() - pending.firstWrite;
-        wholeChunks++;
-        wholePositions += pending.positions;
-        lagTicksSum += lag;
-        lagTicksMax = Math.max(lagTicksMax, lag);
+        if (pending.readySince < 0) pending.readySince = level.getGameTime();
+        world.ready.add(new Ready(pos.toLong(), revision));
     }
 
     /**
-     * Before the world ticks (its chunk cache broadcasts light changes at the end of its tick): drop the pending light
-     * broadcast of chunks waiting to go whole; the whole chunk carries their light.
+     * Send ready chunks in order while their viewers have budget this tick; a chunk that waited {@link #READY_LIMIT}
+     * goes regardless. A chunk goes to all its viewers at once, charging each.
+     */
+    private void sendReady(ServerLevel level) {
+        if (ready.isEmpty()) return;
+        long now = level.getGameTime();
+        Object2IntOpenHashMap<ServerPlayer> spent = new Object2IntOpenHashMap<>();
+        int exhausted = 0, players = level.players().size();
+        for (Iterator<Ready> it = ready.iterator(); it.hasNext(); ) {
+            Ready r = it.next();
+            PendingWhole pending = wholeWaiting.get(r.key());
+            if (pending == null || pending.revision != r.revision()) {
+                // a later write superseded this revision; its own fence queues it again
+                it.remove();
+                continue;
+            }
+            long pace = now - pending.readySince;
+            boolean forced = pace >= READY_LIMIT;
+            if (!forced && players > 0 && exhausted >= players) continue;
+            ChunkHolder holder = level.getChunkSource().chunkMap.getVisibleChunkIfPresent(r.key());
+            LevelChunk chunk = level.getChunkSource().getChunkNow(ChunkPos.getX(r.key()), ChunkPos.getZ(r.key()));
+            if (chunk != pending.chunk || holder == null) {
+                // unloaded meanwhile: a player who loads it again gets it as it is now
+                it.remove();
+                wholeWaiting.remove(r.key());
+                gone++;
+                continue;
+            }
+            List<ServerPlayer> viewers = viewers(holder);
+            if (!forced && !budget(viewers, spent)) continue;
+            it.remove();
+            wholeWaiting.remove(r.key());
+            if (viewers.isEmpty()) continue;
+            var packet = new ClientboundLevelChunkWithLightPacket(chunk, level.getLightEngine(), null, null);
+            for (ServerPlayer p : viewers) {
+                p.connection.send(packet);
+                if (spent.addTo(p, 1) + 1 == perTick) exhausted++;
+            }
+            long lag = now - pending.firstWrite;
+            wholeChunks++;
+            wholePositions += pending.positions;
+            lagTicksSum += lag;
+            lagTicksMax = Math.max(lagTicksMax, lag);
+            paceSum += pace;
+            paceMax = Math.max(paceMax, pace);
+            if (forced) paceForced++;
+        }
+    }
+
+    /** Whether every viewer still has budget this tick. */
+    private static boolean budget(List<ServerPlayer> players, Object2IntOpenHashMap<ServerPlayer> spent) {
+        for (ServerPlayer p : players) if (spent.getInt(p) >= perTick) return false;
+        return true;
+    }
+
+    /**
+     * Before the world ticks (its chunk cache broadcasts light changes at the end of its tick): send ready chunks, then
+     * drop the pending light broadcast of chunks still waiting to go whole; the whole chunk carries their light.
      */
     public static void onLevelTickPre(LevelTickEvent.Pre e) {
         if (!(e.getLevel() instanceof ServerLevel level)) return;
         ChunkDelivery w = get(level);
+        w.sendReady(level);
         if (w.wholeWaiting.isEmpty()) return;
         long now = level.getGameTime();
         for (var it = w.wholeWaiting.long2ObjectEntrySet().fastIterator(); it.hasNext(); ) {
@@ -239,12 +321,15 @@ public final class ChunkDelivery {
     /** Summary line part; resets the counters. */
     public static String describe() {
         String s = String.format(java.util.Locale.ROOT,
-                "whole chunks %d (%d positions, sent %.1f ticks after the write on average, at most %d; unloaded first %d; "
+                "whole chunks %d (%d positions, sent %.1f ticks after the write on average, at most %d; waited for the "
+                        + "viewers' %d a tick %.1f ticks on average, at most %d, sent at the %d-tick limit %d; unloaded first %d; "
                         + "light broadcasts held for them %d, holds expired %d), section deltas %d positions in %d chunks; "
                         + "of the positions blackout lamps: %d whole, %d as deltas",
-                wholeChunks, wholePositions, wholeChunks == 0 ? 0.0 : (double) lagTicksSum / wholeChunks, lagTicksMax, gone, held, expired,
+                wholeChunks, wholePositions, wholeChunks == 0 ? 0.0 : (double) lagTicksSum / wholeChunks, lagTicksMax, PER_TICK,
+                wholeChunks == 0 ? 0.0 : (double) paceSum / wholeChunks, paceMax, READY_LIMIT, paceForced, gone, held, expired,
                 deltaPositions, deltaChunks, lampWhole, lampDeltas);
         wholeChunks = wholePositions = deltaChunks = deltaPositions = lagTicksSum = lagTicksMax = gone = held = expired = 0;
+        paceSum = paceMax = paceForced = 0;
         lampWhole = lampDeltas = 0;
         return s;
     }

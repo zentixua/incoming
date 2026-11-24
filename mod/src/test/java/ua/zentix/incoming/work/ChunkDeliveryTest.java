@@ -16,6 +16,16 @@ class ChunkDeliveryTest {
         assertFalse(ChunkDelivery.whole(1), "a lone broken pane stays a delta");
     }
 
+    /** A viewer gets as many whole chunks a tick as vanilla's 7 ms client chunk budget holds, and waits at most 1 s. */
+    @Test
+    void perTickFillsTheClientChunkBudget() {
+        assertTrue(ChunkDelivery.PER_TICK * ChunkDelivery.CHUNK_NANOS <= ChunkDelivery.CLIENT_TICK_NANOS);
+        assertTrue((ChunkDelivery.PER_TICK + 1) * ChunkDelivery.CHUNK_NANOS > ChunkDelivery.CLIENT_TICK_NANOS);
+        assertEquals(12, ChunkDelivery.PER_TICK);
+        assertEquals(20, ChunkDelivery.READY_LIMIT, "ruins in view: p99 1 s behind their wave");
+        assertTrue(ChunkDelivery.READY_LIMIT < ChunkDelivery.HOLD_LIMIT, "a ready chunk must go while its light broadcast is still held");
+    }
+
     /** The GameTest seam restores the threshold it replaced. */
     @Test
     void seamRestores() {

@@ -193,6 +193,84 @@ public final class ChunkDeliveryGameTests {
         });
     }
 
+    /**
+     * Chunks whose light completes together reach a viewer at most {@link ChunkDelivery#PER_TICK} a tick, in order, the
+     * rest on the next ticks: the client handles every packet that arrived before its frame, and a wave crossing the Silo
+     * city in view (1 Mt, viewer at 3.9 km) readied up to 105 whole chunks in one tick, about 600 within 3 s; the client's
+     * frames went to 0.5–0.7 s for 2 s (passage-burst run 24.11.2026).
+     */
+    @GameTest(template = "range", timeoutTicks = 200, batch = "nuke_delivery_pace", skyAccess = true)
+    public static void readyChunksGoPacedToEachViewer(GameTestHelper h) {
+        paced(h, false);
+    }
+
+    /** With no budget at all a ready chunk still goes, {@link ChunkDelivery#READY_LIMIT} ticks after its light. */
+    @GameTest(template = "range", timeoutTicks = 200, batch = "nuke_delivery_pace_limit", skyAccess = true)
+    public static void readyChunkGoesAtItsWaitLimit(GameTestHelper h) {
+        int was = ChunkDelivery.perTick(0);
+        StrikeGameTests.afterTest(h, () -> ChunkDelivery.perTick(was));
+        paced(h, true);
+    }
+
+    private static void paced(GameTestHelper h, boolean limitOnly) {
+        StrikeGameTests.gameSpeed(h);
+        ServerLevel level = h.getLevel();
+        List<LevelChunk> chunks = new ArrayList<>();
+        for (int x = 0; x < 64; x += 16) for (int z = 0; z < 64; z += 16) {
+            LevelChunk c = level.getChunkAt(h.absolutePos(new BlockPos(x, 12, z)));
+            if (!chunks.contains(c)) chunks.add(c);
+        }
+        h.assertTrue(chunks.size() > ChunkDelivery.PER_TICK, "need more chunks than one tick's budget: " + chunks.size());
+        Recorder rec = Recorder.attach(h, chunks.stream().map(LevelChunk::getPos).toList());
+        int y = h.absolutePos(new BlockPos(0, 12, 0)).getY() + 1;
+        // the light thread is held while the chunks are written, so all their fences complete at once, as a wave's do
+        java.util.concurrent.CountDownLatch light = new java.util.concurrent.CountDownLatch(1);
+        StrikeGameTests.afterTest(h, light::countDown);
+        h.runAfterDelay(20, () -> {
+            rec.started = true;
+            ChunkPos first = chunks.get(0).getPos();
+            level.getChunkSource().getLightEngine().addTask(first.x, first.z,
+                    net.minecraft.server.level.ThreadedLevelLightEngine.TaskType.PRE_UPDATE, () -> {
+                        try {
+                            light.await(20, java.util.concurrent.TimeUnit.SECONDS);
+                        } catch (InterruptedException e) {
+                            Thread.currentThread().interrupt();
+                        }
+                    });
+            for (LevelChunk c : chunks) {
+                level.setBlock(c.getPos().getBlockAt(8, y, 8), Blocks.GLOWSTONE.defaultBlockState(), 2);
+                ChunkDelivery.wholeAfterLight(level, c, ChunkDelivery.WHOLE_FROM);
+            }
+            rec.applied = level.getGameTime();
+        });
+        h.runAfterDelay(25, light::countDown);
+        h.succeedWhen(() -> {
+            h.assertTrue(rec.applied > 0, "not written yet");
+            Map<Long, Integer> perTick = new java.util.TreeMap<>();
+            for (LevelChunk c : chunks) {
+                List<Long> at = rec.wholeAt.getOrDefault(c.getPos(), List.of());
+                h.assertTrue(at.size() <= 1, c.getPos() + " went whole " + at.size() + " times");
+                if (at.isEmpty()) {
+                    h.assertTrue(level.getGameTime() < rec.applied + ChunkDelivery.READY_LIMIT + 40, c.getPos() + " never went");
+                    h.fail("waiting for " + c.getPos());
+                }
+                perTick.merge(at.get(0), 1, Integer::sum);
+            }
+            long first = perTick.keySet().iterator().next(), last = ((java.util.TreeMap<Long, Integer>) perTick).lastKey();
+            if (limitOnly) {
+                h.assertTrue(perTick.size() == 1 && first - rec.applied >= ChunkDelivery.READY_LIMIT + 5,
+                        "with no budget all go together at the wait limit, " + ChunkDelivery.READY_LIMIT + " ticks after their light; "
+                                + "sent at ticks after the write " + perTick.keySet().stream().map(t -> t - rec.applied).toList());
+            } else {
+                for (var en : perTick.entrySet()) {
+                    h.assertTrue(en.getValue() <= ChunkDelivery.PER_TICK, en.getValue() + " whole chunks in one tick, budget " + ChunkDelivery.PER_TICK);
+                }
+                h.assertTrue(perTick.get(first) == ChunkDelivery.PER_TICK && last - first < ChunkDelivery.READY_LIMIT,
+                        "expected a full first tick and the rest right after, got " + perTick);
+            }
+        });
+    }
+
     private static void run(GameTestHelper h, boolean wholeExpected) {
         StrikeGameTests.gameSpeed(h);
         ServerLevel level = h.getLevel();
@@ -458,6 +536,8 @@ public final class ChunkDeliveryGameTests {
     /** Stands in for every viewer of the chosen chunks: records what vanilla and Incoming send them, in order. */
     private static final class Recorder extends ServerGamePacketListenerImpl {
         final Map<ChunkPos, List<Object>> got = new HashMap<>();
+        /** Game time of each whole chunk sent, by chunk. */
+        final Map<ChunkPos, List<Long>> wholeAt = new HashMap<>();
         volatile boolean started;
         long applied;
 
@@ -511,6 +591,8 @@ public final class ChunkDeliveryGameTests {
             if (at == null) return;
             List<Object> list = got.get(at);
             if (list != null) list.add(packet);
+            if (list != null && packet instanceof ClientboundLevelChunkWithLightPacket)
+                wholeAt.computeIfAbsent(at, k -> new ArrayList<>()).add(player.serverLevel().getGameTime());
         }
     }
 }
