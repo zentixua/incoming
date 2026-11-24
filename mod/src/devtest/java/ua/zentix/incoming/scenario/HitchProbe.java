@@ -36,7 +36,8 @@ import java.util.concurrent.atomic.AtomicLong;
  * <ul>
  * <li>{@code logs/hitch-frames.txt}: every frame — epoch ms, game time, frame interval ms (post→post), render part ms
  * (pre→post), client tick ms inside the frame, GPU ms of the frame (GL timestamps, read 4 frames later; -1 if not
- * ready).</li>
+ * ready), the part before the first client tick ms (swap of the previous frame, then queued tasks and packets), and
+ * client chunks loaded from packets in the frame ({@code ChunkEvent.Load}: whole chunks, new or replacing).</li>
  * <li>{@code logs/hitch-stacks.txt}: render-thread stack every 10 ms while no frame/tick progress for over 100 ms (no
  * heap-walking thread dumps: they freeze the JVM 115-250 ms each).</li>
  * <li>{@code logs/hitch-net.txt}: per client tick, packets received (netty side) by class; section-update block
@@ -46,7 +47,10 @@ import java.util.concurrent.atomic.AtomicLong;
  * detonation is live.</li>
  * <li>{@code logs/hitch-sched.txt}: CPU and run-queue wait per thread group every 250 ms (/proc schedstat).</li>
  * <li>{@code logs/hitch-state.txt}: per client tick from the detonation (else every 100 ticks): Sodium debug
- * strings, client light queue, entities, particles, Incoming fragments, integrated server last tick ms.</li>
+ * strings, client light queue, block-entity tickers (all, removed and waiting for removal, pending, fresh block entities
+ * waiting for {@code onLoad}), chunks loaded from packets since the last tick, entities, particles, Incoming fragments,
+ * integrated server last tick ms.</li>
+ * <li>{@code logs/hitch-be.txt}: ticking block entities by type at the first live tick and every 200 live ticks.</li>
  * </ul>
  */
 final class HitchProbe {
@@ -54,7 +58,12 @@ final class HitchProbe {
     private static volatile long progress = System.nanoTime();
     private static volatile String phase = "start";
     private static volatile Thread render;
-    private static BufferedWriter frames, stacks, netOut, state, samples, sched;
+    private static BufferedWriter frames, stacks, netOut, state, samples, sched, beTypes;
+    /** Client chunks loaded from packets in this frame and since the last client tick. */
+    private static int chunksInFrame, chunksInTick;
+    /** Start of the frame's first client tick (0: none yet). */
+    private static long firstTick;
+    private static int liveTicks;
     /** Client ticks run inside the current frame. */
     private static int ticksInFrame;
     private static final Map<String, AtomicLong> counts = new ConcurrentHashMap<>();
@@ -82,7 +91,8 @@ final class HitchProbe {
             state = Files.newBufferedWriter(dir.resolve("hitch-state.txt"));
             samples = Files.newBufferedWriter(dir.resolve("hitch-samples.txt"));
             sched = Files.newBufferedWriter(dir.resolve("hitch-sched.txt"));
-            frames.write("epoch_ms game frame_ms render_ms tick_ms ticks gpu_ms_of(epoch_ms)\n");
+            beTypes = Files.newBufferedWriter(dir.resolve("hitch-be.txt"));
+            frames.write("epoch_ms game frame_ms render_ms tick_ms ticks gpu_ms_of(epoch_ms) pre_ms chunks\n");
             sched.write("epoch_ms then per thread group: name cpu_ms wait_ms (schedstat deltas over the interval); load\n");
         } catch (IOException e) {
             Incoming.LOG.warn("HITCH probe files", e);
@@ -93,6 +103,7 @@ final class HitchProbe {
         NeoForge.EVENT_BUS.addListener(HitchProbe::tickPre);
         NeoForge.EVENT_BUS.addListener(HitchProbe::tickPost);
         NeoForge.EVENT_BUS.addListener(HitchProbe::login);
+        NeoForge.EVENT_BUS.addListener(HitchProbe::chunkLoad);
         Thread w = new Thread(HitchProbe::watch, "Incoming hitch watchdog");
         w.setDaemon(true);
         w.start();
@@ -105,9 +116,16 @@ final class HitchProbe {
         phase = p;
     }
 
+    private static void chunkLoad(net.neoforged.neoforge.event.level.ChunkEvent.Load e) {
+        if (!e.getLevel().isClientSide()) return;
+        chunksInFrame++;
+        chunksInTick++;
+    }
+
     private static void framePre(RenderFrameEvent.Pre e) {
         if (render == null) render = Thread.currentThread();
         pre = System.nanoTime();
+        if (firstTick == 0) firstTick = pre;
         mark("render");
         if (qs == null) {
             qs = new int[RING * 2];
@@ -140,19 +158,23 @@ final class HitchProbe {
         if (lastPost != 0 && mc.level != null) {
             try {
                 frames.write(epoch + " " + mc.level.getGameTime() + " " + fmt((now - lastPost) / 1e6) + " " + fmt((now - pre) / 1e6) + " "
-                        + fmt(tickNs / 1e6) + " " + ticksInFrame + " " + fmt(gpu) + "(" + gpuEpoch + ")\n");
+                        + fmt(tickNs / 1e6) + " " + ticksInFrame + " " + fmt(gpu) + "(" + gpuEpoch + ") " + fmt((firstTick - lastPost) / 1e6)
+                        + " " + chunksInFrame + "\n");
             } catch (IOException ignored) {
                 // measurement file
             }
         }
         tickNs = 0;
         ticksInFrame = 0;
+        chunksInFrame = 0;
+        firstTick = 0;
         lastPost = now;
         mark("between frames (swap, tasks/packets, ticks)");
     }
 
     private static void tickPre(ClientTickEvent.Pre e) {
         tickPre = System.nanoTime();
+        if (firstTick == 0) firstTick = tickPre;
         mark("client tick");
     }
 
@@ -176,6 +198,7 @@ final class HitchProbe {
             live = det;
             if (clientTick % 200 == 0) flushAll();
             if (det || clientTick % 100 == 0) state.write(epoch + " " + game + " " + state(mc) + "\n");
+            if (det && liveTicks++ % 200 == 0) beTypes.write(epoch + " " + game + " " + beTypes(mc) + "\n");
         } catch (IOException ignored) {
             // measurement file
         }
@@ -210,6 +233,9 @@ final class HitchProbe {
         } catch (ReflectiveOperationException | RuntimeException e) {
             b.append(" beTickers? ").append(e);
         }
+        b.append(blockEntities(mc));
+        b.append(" chunksLoadedSinceTick=").append(chunksInTick);
+        chunksInTick = 0;
         b.append(" chunks=").append(mc.level.getChunkSource().getLoadedChunksCount());
         b.append(" entities=").append(mc.level.getEntityCount());
         b.append(" particles=").append(mc.particleEngine.countParticles());
@@ -221,6 +247,42 @@ final class HitchProbe {
             b.append(" srvTick=").append(server.getTickCount()).append(" srvLastMs=").append(fmt(t[Math.max(0, i)] / 1e6));
             b.append(" srvGame=").append(server.overworld().getGameTime());
         }
+        return b.toString();
+    }
+
+    private static java.util.List<?> levelList(Minecraft mc, String name) throws ReflectiveOperationException {
+        java.lang.reflect.Field f = net.minecraft.world.level.Level.class.getDeclaredField(name);
+        f.setAccessible(true);
+        return (java.util.List<?>) f.get(mc.level);
+    }
+
+    /** Block-entity ticker list state: the client re-creates every block entity of a chunk it receives whole. */
+    private static String blockEntities(Minecraft mc) {
+        try {
+            int removed = 0;
+            for (Object t : levelList(mc, "blockEntityTickers"))
+                if (((net.minecraft.world.level.block.entity.TickingBlockEntity) t).isRemoved()) removed++;
+            return " beRemoved=" + removed + " bePending=" + levelList(mc, "pendingBlockEntityTickers").size() + " beFresh="
+                    + (levelList(mc, "freshBlockEntities").size() + levelList(mc, "pendingFreshBlockEntities").size());
+        } catch (ReflectiveOperationException | RuntimeException e) {
+            return " beState? " + e;
+        }
+    }
+
+    /** Live tickers by block-entity type, most first. */
+    private static String beTypes(Minecraft mc) {
+        Map<String, Integer> n = new java.util.HashMap<>();
+        try {
+            for (Object t : levelList(mc, "blockEntityTickers")) {
+                var ticker = (net.minecraft.world.level.block.entity.TickingBlockEntity) t;
+                if (!ticker.isRemoved()) n.merge(ticker.getType(), 1, Integer::sum);
+            }
+        } catch (ReflectiveOperationException | RuntimeException e) {
+            return "? " + e;
+        }
+        StringBuilder b = new StringBuilder();
+        n.entrySet().stream().sorted((x, y) -> y.getValue() - x.getValue()).limit(40)
+                .forEach(en -> b.append(en.getKey()).append('=').append(en.getValue()).append(' '));
         return b.toString();
     }
 
@@ -452,7 +514,7 @@ final class HitchProbe {
     }
 
     private static synchronized void flushAll() {
-        for (BufferedWriter w : new BufferedWriter[]{frames, stacks, netOut, state, samples, sched}) {
+        for (BufferedWriter w : new BufferedWriter[]{frames, stacks, netOut, state, samples, sched, beTypes}) {
             try {
                 if (w != null) w.flush();
             } catch (IOException ignored) {
@@ -462,7 +524,7 @@ final class HitchProbe {
     }
 
     private static void flush() {
-        for (BufferedWriter w : new BufferedWriter[]{frames, stacks, netOut, state, samples, sched}) {
+        for (BufferedWriter w : new BufferedWriter[]{frames, stacks, netOut, state, samples, sched, beTypes}) {
             try {
                 if (w != null) w.close();
             } catch (IOException ignored) {
