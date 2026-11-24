@@ -29,6 +29,8 @@ import net.minecraft.world.level.block.state.properties.BlockStateProperties;
 import net.minecraft.world.level.material.Fluids;
 import net.minecraft.world.phys.Vec3;
 import org.jetbrains.annotations.Nullable;
+import ua.zentix.incoming.api.ClaimQuery;
+import ua.zentix.incoming.claim.Claims;
 import ua.zentix.incoming.strike.StrikeRules;
 import ua.zentix.incoming.registry.ModDamageTypes;
 import ua.zentix.incoming.registry.ModEntities;
@@ -183,6 +185,9 @@ public class DebrisEntity extends Entity {
         if (!replaceable || !supported) return;
         // Burning debris ignites only fuel it lands on or beside; on stone and ground it burns out by itself.
         if (state.is(Blocks.FIRE) && (!rules.fire() || !touchesFuel(level, pos))) return;
+        // claim protection where it lands, attributed to the debris itself (it outlives its strike)
+        if (!Claims.allows(level, new ClaimQuery(level, this,
+                ModDamageTypes.source(level, ModDamageTypes.DEBRIS, this, null), position()), pos)) return;
         if (state.hasProperty(BlockStateProperties.WATERLOGGED) && level.getFluidState(pos).getType() == Fluids.WATER) {
             state = state.setValue(BlockStateProperties.WATERLOGGED, true);
         }

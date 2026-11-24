@@ -26,8 +26,10 @@ import ua.zentix.incoming.work.UnitQueue;
 
 import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.SplittableRandom;
 import java.util.UUID;
 import java.util.function.BooleanSupplier;
@@ -246,6 +248,18 @@ public final class FragmentStrike implements UnitQueue.Job {
     private int applyBlocks(ServerLevel level) {
         int n = 0;
         BlockPos.MutableBlockPos m = new BlockPos.MutableBlockPos();
+        // the portion's positions asked of claim protection in one question
+        LongOpenHashSet refused = new LongOpenHashSet();
+        if (area != null) {
+            List<BlockPos> portion = new ArrayList<>();
+            for (int k = blockNext; k < Math.min(blockList.length, blockNext + BLOCK_PORTION); k++) portion.add(BlockPos.of(blockList[k]));
+            List<BlockPos> allowed = new ArrayList<>(portion);
+            area.claims().filter(level, allowed);
+            if (allowed.size() < portion.size()) {
+                Set<BlockPos> may = new HashSet<>(allowed);
+                for (BlockPos p : portion) if (!may.contains(p)) refused.add(p.asLong());
+            }
+        }
         for (; blockNext < blockList.length && n < BLOCK_PORTION; blockNext++, n++) {
             long p = blockList[blockNext];
             m.set(p);
@@ -262,6 +276,7 @@ public final class FragmentStrike implements UnitQueue.Job {
             }
             boolean edgesReady = Terrain.neighbourhoodReady(level, cx, cz);
             if (!edgesReady && !Terrain.readyAround(level, Vec3.atCenterOf(m), Warheads.EDGE)) continue;
+            if (refused.contains(p)) continue;
             ua.zentix.incoming.work.BlockLighting.changed(level, m);
             level.setBlock(m, to, edgesReady ? Block.UPDATE_ALL : Warheads.EDGE_FLAGS);
             touched.add(ChunkPos.asLong(cx, cz));

@@ -17,6 +17,7 @@ import net.minecraft.world.level.chunk.LevelChunk;
 import net.minecraft.world.phys.AABB;
 import net.minecraft.world.phys.Vec3;
 import org.jetbrains.annotations.Nullable;
+import ua.zentix.incoming.claim.NuclearClaims;
 import ua.zentix.incoming.Incoming;
 import ua.zentix.incoming.nuclear.Detonation;
 import ua.zentix.incoming.nuclear.model.WorldNoise;
@@ -412,7 +413,12 @@ public final class FlashShadows {
             long key = e.getLongKey();
             LevelChunk chunk = level.getChunkSource().getChunkNow(ChunkPos.getX(key), ChunkPos.getZ(key));
             if (chunk == null) continue;
-            FlashSync.shadows(level, chunk, d, e.getValue().toIntArray(), pendingMasks.get(key).toLongArray());
+            int[] faces = e.getValue().toIntArray();
+            // silhouettes are flash marks on the chunk's blocks: claim protection keeps them out ({@code NuclearClaims})
+            long[] at = new long[faces.length];
+            for (int i = 0; i < faces.length; i++) at[i] = FlashChar.pos(faces[i], chunk.getPos().x, chunk.getPos().z).asLong();
+            if (!NuclearClaims.get(level).allows(level, d, key, at, at.length)) continue;
+            FlashSync.shadows(level, chunk, d, faces, pendingMasks.get(key).toLongArray());
         }
         pendingFaces.clear();
         pendingMasks.clear();

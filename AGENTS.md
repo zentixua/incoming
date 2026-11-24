@@ -279,16 +279,16 @@ queues, little rework; each mission's budget is checked against its measured loa
   window/host OpenAL audio, scenario audio to file); without KWin (cloud), `xvfb-run` with same muted host audio (`rigs.md`).
 
 ## `.claude/rules/` files
-- `tools.md`: layout, every `tools/` script, CI.
+- `tools.md`: layout, `tools/` scripts, CI.
 - `strike.md` (`strike/`, `target/`, `progress/`: orders/spec/launch/virtual flight/areas/hits/credit); `entity.md` (`entity/`,
   `guidance/`: flight/autopilots/virtual projectile/client entity tracking); `work.md` (tick budget, bulk damage in
   units); `warhead.md` (staged blast/glass/crater falls/vanilla-blast particles); `defense.md` (air defense, allowed/
-  forbidden targets); `launcher.md` (fixed launcher, redstone launch).
+  forbidden targets); `launcher.md` (fixed launcher, redstone launch); `claims.md` (claim protection).
 - `nuclear.md` (nuke except ruins: model/detonation/radiation/client); `nuclear-world.md` (ruins, zone behind wave,
   player chunk delivery); `grid.md` (blackout/lamps/chunk light).
-- `server-chunks.md` (chunks/tickets/world exit/entities/ground); `sable.md`; `dh.md` (Distant Horizons/LOD Server
-  Support API terrain for map/rays/sound, distant LODs, world leaks); `voxy.md` (Voxy via Roxy, depth/distant changes/LSS).
-- `client-smoke.md` (blast cloud bounds, bounded preparation, shared dust terrain cache).
+- `server-chunks.md` (chunks/tickets/world exit/entities/ground); `sable.md`; `dh.md` (Distant Horizons/LSS API
+  terrain for map/rays/sound, distant LODs, world leaks); `voxy.md` (Voxy via Roxy, depth/distant changes/LSS).
+- `client-smoke.md` (blast cloud bounds, bounded preparation, dust terrain cache).
 - `client.md` (client structure/heightmaps/Iris/`AFTER_LEVEL`); `client-fx.md` (particles/effects layer/trail/alpha
   discard); `client-models.md` (OBJ); `client-sound.md` (OpenAL/volume/loops); `replay.md` (Flashback).
 - `gametest.md` (GameTest/flight scenarios, no wall clocks); `client-scenario.md` (headless client); `rigs.md`

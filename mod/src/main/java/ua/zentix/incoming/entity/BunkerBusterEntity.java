@@ -21,6 +21,8 @@ import net.minecraft.world.phys.Vec3;
 import net.minecraft.world.phys.shapes.VoxelShape;
 import org.jetbrains.annotations.Nullable;
 import org.joml.Vector3f;
+import ua.zentix.incoming.api.ClaimQuery;
+import ua.zentix.incoming.claim.Claims;
 import ua.zentix.incoming.guidance.BombDrop;
 import ua.zentix.incoming.guidance.FlightController;
 import ua.zentix.incoming.guidance.Mission;
@@ -347,7 +349,7 @@ public class BunkerBusterEntity extends StrikeProjectile {
         while (carved < path.steps().size() && path.steps().get(carved).s() <= s + 1e-6) {
             Step step = path.steps().get(carved++);
             armed = step.armed();
-            if (step.solid()) carve(level, step.pos(), rules().blockDamage());
+            if (step.solid()) carve(level, step.pos(), rules().blockDamage(), this);
         }
         Vec3 to = origin.add(flight.forward().scale(s));
         strike(level, from, to);
@@ -382,10 +384,14 @@ public class BunkerBusterEntity extends StrikeProjectile {
      * Bore: clear the block on the path axis (0.8 m caliber means one block); loose material above falls into it.
      * Only with ready neighboring chunks too: updates and Sable read neighbors.
      */
-    private static void carve(ServerLevel level, BlockPos p, boolean blockDamage) {
+    private static void carve(ServerLevel level, BlockPos p, boolean blockDamage, BunkerBusterEntity bomb) {
         if (!blockDamage || !Terrain.neighbourhoodReady(level, p.getX() >> 4, p.getZ() >> 4)) return;
         BlockState s = level.getBlockState(p);
         if (s.isAir()) return;
+        // claim protection before the charge exists: the bomb itself is the cause; a protected block stays (the bomb's
+        // path follows its penetration law either way)
+        if (!Claims.allows(level, new ClaimQuery(level, bomb,
+                ModDamageTypes.source(level, ModDamageTypes.KINETIC, bomb, null), bomb.position()), p)) return;
         ColumnScar.replace(level, p, s, Blocks.AIR.defaultBlockState(), Block.UPDATE_ALL);
     }
 
