@@ -140,6 +140,9 @@ go in run files and the PR, not in chat. New knowledge (a gauge trap, a new prob
 into that area's `.claude/rules` or this skill by PR in the same thread; status and numbers go into the report.
 
 ## Gauges that lie
+- JFR names the client's render thread `main` (its OS name, in `/proc` schedstat and `top`, is `Render thread`);
+  filtering JFR samples by `Render thread` finds none. Render-thread stall stacks carry Mojang's line numbers: map them
+  with `javap -l -c` on the runtime class (work.md), never on the decompiled sources.
 - Client JFR: the render thread is `main` in `ExecutionSample` (not "Render thread"), and JFR samples only a few
   threads per period, so with the client's dozens of busy threads its render-thread sample count is a small, uneven
   fraction of wall time: use it for shares inside the thread, never for milliseconds. Per-frame cost comes from a
