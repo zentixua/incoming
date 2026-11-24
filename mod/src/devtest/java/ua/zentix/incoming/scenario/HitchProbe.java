@@ -32,7 +32,7 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicLong;
 
 /**
- * Measurement only (wave-hitch, not for merge): {@code -Dincoming.hitch=true}.
+ * Render-thread stall probe for client scenarios: {@code -Dincoming.hitch=true}.
  * <ul>
  * <li>{@code logs/hitch-frames.txt}: every frame — epoch ms, game time, frame interval ms (post→post), render part ms
  * (pre→post), client tick ms inside the frame, GPU ms of the frame (GL timestamps, read 4 frames later; -1 if not
@@ -40,7 +40,11 @@ import java.util.concurrent.atomic.AtomicLong;
  * <li>{@code logs/hitch-stacks.txt}: render-thread stack every 10 ms while no frame/tick progress for over 100 ms (no
  * heap-walking thread dumps: they freeze the JVM 115-250 ms each).</li>
  * <li>{@code logs/hitch-net.txt}: per client tick, packets received (netty side) by class; section-update block
- * counts; bundle contents; custom payload ids.</li>
+ * counts and their new states (light emitters, fire, air, unlit lamp twins); bundle contents; custom payload ids; wire
+ * sizes with {@code -Dincoming.hitch.bytes=true}.</li>
+ * <li>{@code logs/hitch-samples.txt}: the render-thread stack every {@code incoming.hitch.sampleMs} (5) ms while a
+ * detonation is live.</li>
+ * <li>{@code logs/hitch-sched.txt}: CPU and run-queue wait per thread group every 250 ms (/proc schedstat).</li>
  * <li>{@code logs/hitch-state.txt}: per client tick from the detonation (else every 100 ticks): Sodium debug
  * strings, client light queue, entities, particles, Incoming fragments, integrated server last tick ms.</li>
  * </ul>
@@ -284,6 +288,7 @@ final class HitchProbe {
             if (lit != null && clientTick - lit <= 3) add("lightUpdateWithin3TicksBeforeChunk", 1);
             bytes("ChunkWithLight", w -> ClientboundLevelChunkWithLightPacket.STREAM_CODEC.encode(w, c));
         } else if (msg instanceof ClientboundLightUpdatePacket l) {
+            if (lightAt.size() > 100_000) lightAt.clear();
             lightAt.put(ChunkPos.asLong(l.getX(), l.getZ()), clientTick);
             bytes("LightUpdate", w -> ClientboundLightUpdatePacket.STREAM_CODEC.encode(w, l));
         } else if (msg instanceof ClientboundBlockUpdatePacket b) {
@@ -303,6 +308,8 @@ final class HitchProbe {
         if (id.getNamespace().equals("incoming") && id.getPath().startsWith("unlit")) add(kind + ".unlit", 1);
     }
 
+    /** Wire sizes of chunk, light and delta packets ({@code -Dincoming.hitch.bytes=true}; one Netty thread reads). */
+    private static final boolean BYTES = Boolean.getBoolean("incoming.hitch.bytes");
     private static final Map<Long, Integer> lightAt = new ConcurrentHashMap<>();
     private static final java.util.zip.Deflater DEFLATER = new java.util.zip.Deflater();
     private static final byte[] DEFLATED = new byte[1 << 21];
@@ -312,6 +319,8 @@ final class HitchProbe {
      * bytes, vanilla {@code CompressionEncoder}); netty thread.
      */
     private static void bytes(String kind, java.util.function.Consumer<RegistryFriendlyByteBuf> encode) {
+        // re-encoding and deflating every packet costs the measured client CPU on its Netty thread: only on request
+        if (!BYTES) return;
         var mc = Minecraft.getInstance();
         if (mc.level == null) return;
         var buf = new RegistryFriendlyByteBuf(io.netty.buffer.Unpooled.buffer(), mc.level.registryAccess(), net.neoforged.neoforge.network.connection.ConnectionType.NEOFORGE);

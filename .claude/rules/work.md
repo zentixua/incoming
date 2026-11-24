@@ -63,7 +63,8 @@ paths:
 - `ChunkDelivery` sends our in-place block changes (ruin writes `RuinPlan.write`, blackout lamps
   `ChunkLights.applyInPlace`) to the players already holding the chunk, the viewers vanilla's broadcast finds (the
   holder's player provider, AT). Fewer than `ChunkDelivery.WHOLE_FROM` (35) changed positions go as section deltas in
-  the same tick unless a whole delivery is pending; more go as one whole-chunk packet after the chunk's light. Section
+  the same tick unless a whole delivery is pending; more go as one whole-chunk packet after the chunk's light. Lamps
+  decide per chunk, not per budgeted pass: a pass that stops with lamps left in the chunk goes whole too. Section
   deltas cost the client per position on its render thread: `ClientLevel.setBlock` (in the host pack 55–63 % of it is
   Voxy re-snapshotting the whole section per block, `VoxelIngestService.rawIngest`) and the client's own light
   propagation for every changed block, though the server sends the computed light. A 15 kt wave sends ~247 thousand
@@ -80,12 +81,15 @@ paths:
   chunk: comparing payload and server while skipping absent sections passed a packet with no light at all),
   `heavyRuinsAsDeltasGiveTheSameChunk` (the same ruins through deltas, both client chunks equal the server's),
   `lightWaitsForTheWholeChunk` (light thread held, a light mark on the waiting chunk reaches the client without the
-  hold), `blackoutLampsGoWholeAfterTheirLight` (64 lamps whole, 3 lamps as deltas),
+  hold), `blackoutLampsGoWholeAfterTheirLight` (64 lamps in two budgeted passes whole, 3 lamps as deltas),
   `firstFenceCannotSendSecondWritesWithUnprocessedLight` (one packet with both writes' light),
   `lightHoldExpiresBeforeALaterWriteRestartsIt` (the 200-tick deadline and restart). Measuring client stalls:
   `jstack -l` and `ThreadMXBean.dumpAllThreads(true, true)` walk the heap at a safepoint, 115–250 ms each on the
   full-pack client (probes every 0.5 s turned a 4 s stall into 13 s); sample the render thread with
-  `Thread.getStackTrace` (the scenario client's `incoming.hitch` probe) and subtract `-Xlog:safepoint` dump time.
+  `Thread.getStackTrace` (the scenario client's `incoming.hitch` probe) and subtract `-Xlog:safepoint` dump time. A
+  whole chunk costs the wire more than its deltas (Silo city chunks ~11 KB compressed against ~0.2 KB for 35 deltas);
+  vanilla sends chunks at that size as a player moves, unpaced by our code: not measured for a conventional blackout
+  over a home uplink.
 - `StallWatch` samples the server stack every 0.5 s while stalled. After a stall longer than 2 s, within or between
   ticks, it logs `Server thread stalled for N s` with common stack locations. A single-player pause is not a stall.
   Vanilla's `Can't keep up` is accumulated lateness; the lane report only sees ticks.

@@ -148,8 +148,8 @@ public final class ChunkLights {
      * in the host's pack) is unnecessary; at the loaded-world edge (chunk in memory, neighbors unloaded) it is harmful — Sable
      * and neighbors would read and synchronously load a neighboring chunk. Light: {@code checkBlock} at position (decrease and increase
      * propagate to neighboring chunks too); clients: few lamps as block changes, many as the whole chunk after its light
- * ({@link ua.zentix.incoming.work.ChunkDelivery}: a lamp switched by a delta makes the client spread its light removal
- * itself, on its render thread). At most {@code limit} lamps.
+     * ({@link ua.zentix.incoming.work.ChunkDelivery#lamps}: a lamp switched by a delta makes the client spread its light
+     * removal itself, on its render thread). At most {@code limit} lamps.
      * <p>
      * Signal lamps relit here reconcile separately ({@link #resignal}): their positions go to
      * {@code signalled}. Starts at {@code from} ({@link Pass#next} from previous pass). A pair that cannot change in the palette
@@ -195,7 +195,7 @@ public final class ChunkLights {
             ua.zentix.incoming.work.BlockLighting.changed(level, chunk);
             chunk.setUnsaved(true);
         }
-        ua.zentix.incoming.work.ChunkDelivery.changed(level, chunk, inPlace);
+        ua.zentix.incoming.work.ChunkDelivery.lamps(level, chunk, inPlace, !done);
         return new Pass(changed, done, next, 0);
     }
 

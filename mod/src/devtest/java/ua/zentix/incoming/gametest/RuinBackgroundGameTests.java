@@ -1439,6 +1439,7 @@ public final class RuinBackgroundGameTests {
             ua.zentix.incoming.nuclear.world.WorkClock clock = ua.zentix.incoming.nuclear.world.WorkClock.counting(1_000_000);
             clock.start(10_000_000_000L);
             q.work(level, seenWave - 100, clock);
+            q.planAhead(level, seenWave - 100, clock);
             h.assertTrue(ScarQueue.planning(level, d.id(), seenKey), "the visible chunk is not planned 100 ticks before its wave");
             h.assertFalse(ScarQueue.planning(level, d.id(), unseenKey), "the unseen chunk is planned ahead: only the view needs it");
             h.assertTrue(ua.zentix.incoming.nuclear.world.RuinWorkers.awaitForTest(ua.zentix.incoming.nuclear.world.RuinWorkers.Priority.SEEN, 60_000),
@@ -1447,6 +1448,53 @@ public final class RuinBackgroundGameTests {
             q.work(level, seenWave - 1, clock);
             h.assertTrue(seen.getExistingData(ModAttachments.CHUNK_SCAR).orElse(0) == d.id(), "ruins of the visible chunk not on time");
             h.assertBlockNotPresent(Blocks.GLASS, seenGlass);
+        } finally {
+            ScarQueue.seenForTest(null);
+            q.clear(level);
+        }
+        h.succeed();
+    }
+
+    /**
+     * A plan made ahead of the wave ({@code PLAN_AHEAD}) goes stale in the seconds before it (the player replaces the
+     * glass): the {@code LOOKAHEAD} precheck checks the finished plan against the chunk and rebuilds it in the background,
+     * as a stale prepared plan; found only at the wave, the chunk would be planned on the server thread there.
+     */
+    @GameTest(template = "range", timeoutTicks = 40, batch = "nuke_plan_ahead_stale", skyAccess = true)
+    public static void plannedAheadThenStaleReplannedBeforeWave(GameTestHelper h) {
+        ServerLevel level = h.getLevel();
+        BlockPos seenGlass = NuclearGameTests.CENTER.west(8);
+        h.setBlock(seenGlass, Blocks.GLASS);
+        Detonation d = NuclearGameTests.detonation(h, NuclearGameTests.CENTER, 0, 15, 0.025f);
+        LevelChunk seen = level.getChunkAt(h.absolutePos(seenGlass));
+        long seenKey = seen.getPos().toLong();
+        for (int dx = -RuinPlanner.REACH; dx <= RuinPlanner.REACH; dx++) {
+            for (int dz = -RuinPlanner.REACH; dz <= RuinPlanner.REACH; dz++) level.getChunk(seen.getPos().x + dx, seen.getPos().z + dz);
+        }
+        ScarQueue q = new ScarQueue();
+        ScarQueue.seenForTest(c -> c == seenKey);
+        try {
+            q.scanLoaded(d, new it.unimi.dsi.fastutil.longs.Long2ObjectOpenHashMap<>());
+            long wave = ScarQueue.due(d, seen.getPos());
+            WorkClock clock = WorkClock.counting(1_000_000);
+            clock.start(10_000_000_000L);
+            q.work(level, wave - 100, clock);
+            q.planAhead(level, wave - 100, clock);
+            h.assertTrue(ScarQueue.planning(level, d.id(), seenKey), "the visible chunk is not planned ahead");
+            h.assertTrue(RuinWorkers.awaitForTest(RuinWorkers.Priority.SEEN, 60_000), "plan-ahead plan not ready in a minute");
+            // between the plan-ahead snapshot and the precheck, the player replaces the glass (a plan position)
+            h.setBlock(seenGlass, Blocks.WHITE_STAINED_GLASS);
+            clock.start(10_000_000_000L);
+            q.work(level, wave - 20, clock);
+            h.assertTrue(q.ruinStats()[2] == 1,
+                    "the precheck did not catch the stale plan-ahead plan (stale plans " + q.ruinStats()[2]
+                            + "): it is found at the wave and rebuilt on the server thread");
+            h.assertTrue(RuinWorkers.awaitForTest(RuinWorkers.Priority.SEEN, 60_000), "replanned plan not ready in a minute");
+            clock.start(10_000_000_000L);
+            q.work(level, wave - 1, clock);
+            h.assertTrue(seen.getExistingData(ModAttachments.CHUNK_SCAR).orElse(0) == d.id(), "ruins of the visible chunk not on time");
+            h.assertBlockNotPresent(Blocks.WHITE_STAINED_GLASS, seenGlass);
+            h.assertTrue(q.ruinStats()[2] == 1, "a stale plan was found at the wave: " + q.ruinStats()[2]);
         } finally {
             ScarQueue.seenForTest(null);
             q.clear(level);

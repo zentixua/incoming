@@ -60,6 +60,8 @@ public final class ChunkDelivery {
 
     /** Statistics for the ruin summary line (server thread). */
     static long wholeChunks, wholePositions, deltaChunks, deltaPositions, lagTicksSum, lagTicksMax, gone, held, expired;
+    /** Blackout lamp positions among them (whole, deltas). */
+    static long lampWhole, lampDeltas;
 
     /** One pending whole-chunk delivery, owned by the server thread. */
     static final class PendingWhole {
@@ -212,19 +214,24 @@ public final class ChunkDelivery {
     }
 
     /**
-     * Deliver positions changed in place in a live chunk (server thread; the sections are written and their light checks
-     * queued): as section deltas, or whole after its light when they are many or a whole delivery is already pending.
-     * The ruins decide the same way ({@code RuinPlan.write}).
+     * Deliver blackout lamps switched in place in a live chunk (server thread; the sections are written and their light
+     * checks queued): as section deltas, or whole after its light when they are many, the chunk has more lamps to switch
+     * in a later pass ({@code more}: a budgeted unit stops mid-chunk, and the threshold is about the chunk, not the
+     * pass), or a whole delivery is already pending. The ruins decide the same way ({@code RuinPlan.write}).
      */
-    public static void changed(ServerLevel level, LevelChunk chunk, LongList positions) {
+    public static void lamps(ServerLevel level, LevelChunk chunk, LongList positions, boolean more) {
         if (positions.isEmpty()) return;
         ChunkHolder holder = level.getChunkSource().chunkMap.getVisibleChunkIfPresent(chunk.getPos().toLong());
         boolean ticking = holder != null && holder.getTickingChunk() != null && !viewers(holder).isEmpty();
-        if ((ticking && whole(positions.size())) || waiting(level, chunk)) {
+        if ((ticking && (more || whole(positions.size()))) || waiting(level, chunk)) {
+            lampWhole += positions.size();
             wholeAfterLight(level, chunk, positions.size());
             return;
         }
-        if (ticking) deltas(positions.size());
+        if (ticking) {
+            deltas(positions.size());
+            lampDeltas += positions.size();
+        }
         BlockPos.MutableBlockPos m = new BlockPos.MutableBlockPos();
         for (int i = 0; i < positions.size(); i++) level.getChunkSource().blockChanged(m.set(positions.getLong(i)));
     }
@@ -233,10 +240,12 @@ public final class ChunkDelivery {
     public static String describe() {
         String s = String.format(java.util.Locale.ROOT,
                 "whole chunks %d (%d positions, sent %.1f ticks after the write on average, at most %d; unloaded first %d; "
-                        + "light broadcasts held for them %d, holds expired %d), section deltas %d positions in %d chunks",
+                        + "light broadcasts held for them %d, holds expired %d), section deltas %d positions in %d chunks; "
+                        + "of the positions blackout lamps: %d whole, %d as deltas",
                 wholeChunks, wholePositions, wholeChunks == 0 ? 0.0 : (double) lagTicksSum / wholeChunks, lagTicksMax, gone, held, expired,
-                deltaPositions, deltaChunks);
+                deltaPositions, deltaChunks, lampWhole, lampDeltas);
         wholeChunks = wholePositions = deltaChunks = deltaPositions = lagTicksSum = lagTicksMax = gone = held = expired = 0;
+        lampWhole = lampDeltas = 0;
         return s;
     }
 }

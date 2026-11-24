@@ -139,7 +139,8 @@ public final class ChunkDeliveryGameTests {
      * lamp switched by a delta makes the client spread its block-light removal itself, on its render thread (a 1 Mt
      * blackout over the Silo map sent 91.6 thousand lamp deltas to a viewer at 3.9 km during the wave's 10 s passage,
      * 42 % of the client's render thread in light updates, frames up to 1.3 s; passage-stutter run 24.11.2026). The
-     * client's blocks and light must equal the server's; a chunk with a few lamps keeps deltas.
+     * client's blocks and light must equal the server's; a chunk with a few lamps keeps deltas. The 64 lamps go in two
+     * budgeted passes of 30 and 34, each under the threshold alone: the threshold is about the chunk.
      */
     @GameTest(template = "range", timeoutTicks = 300, batch = "grid_delivery", skyAccess = true)
     public static void blackoutLampsGoWholeAfterTheirLight(GameTestHelper h) {
@@ -159,11 +160,16 @@ public final class ChunkDeliveryGameTests {
             manyClient.blocksFrom(many);
             fewClient.blocksFrom(few);
             rec.started = true;
-            for (LevelChunk c : List.of(many, few)) {
-                var pass = ua.zentix.incoming.grid.ChunkLights.applyInPlace(level, c, true, Integer.MAX_VALUE, 0, true,
-                        new it.unimi.dsi.fastutil.longs.LongArrayList(), null);
-                h.assertTrue(pass.done() && pass.changed() > 0, "no lamps darkened in " + c.getPos());
-            }
+            // the 64 lamps in two budgeted passes, as the blackout queue splits a chunk: 30 then the rest
+            var first = ua.zentix.incoming.grid.ChunkLights.applyInPlace(level, many, true, 30, 0, true,
+                    new it.unimi.dsi.fastutil.longs.LongArrayList(), null);
+            h.assertTrue(!first.done() && first.changed() == 30, "the first pass did not stop at its limit: " + first);
+            var rest = ua.zentix.incoming.grid.ChunkLights.applyInPlace(level, many, true, Integer.MAX_VALUE, first.next(), true,
+                    new it.unimi.dsi.fastutil.longs.LongArrayList(), null);
+            h.assertTrue(rest.done() && rest.changed() == 34, "the second pass did not finish the chunk: " + rest);
+            var three = ua.zentix.incoming.grid.ChunkLights.applyInPlace(level, few, true, Integer.MAX_VALUE, 0, true,
+                    new it.unimi.dsi.fastutil.longs.LongArrayList(), null);
+            h.assertTrue(three.done() && three.changed() == 3, "three lamps not darkened: " + three);
             rec.applied = level.getGameTime();
         });
         h.succeedWhen(() -> {

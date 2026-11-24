@@ -521,7 +521,8 @@ public final class ScorchGameTests {
                 lane(clock, time);
                 final long tick = now;
                 NuclearWorld.afterFront(() -> {
-                }, () -> flash.workUrgent(level, tick, clock), () -> busy(clock, time), () -> busy(clock, time), () -> flash.work(level, tick, clock));
+                }, () -> flash.workUrgent(level, tick, clock), () -> {
+                }, () -> busy(clock, time), () -> busy(clock, time), () -> flash.work(level, tick, clock));
                 RuinWorkers.awaitForTest(RuinWorkers.Priority.NEAR, 60_000);
                 if (flash.appliedChunks() == keys.length) {
                     doneAt = now;

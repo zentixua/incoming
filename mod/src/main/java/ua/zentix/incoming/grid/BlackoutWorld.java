@@ -57,7 +57,8 @@ import java.util.function.LongPredicate;
  *   <li>Lamps change directly in the section palette ({@link ChunkLights#applyInPlace}): for the world a lamp and its
  *   counterpart are identical except for light ({@link GridLights#inPlace}: no block entity or different shape), so
  *   neighbors, heightmaps and collisions need no updates; lighting uses {@code checkBlock} at the position, clients get
- *   a block change. With Create and Sable, a lamp via {@code setBlock} costs ≈10 µs; a city may have 2.5 million invisible
+ *   few lamps as block changes and many as the whole chunk after its light ({@link ua.zentix.incoming.work.ChunkDelivery#lamps}).
+ *   With Create and Sable, a lamp via {@code setBlock} costs ≈10 µs; a city may have 2.5 million invisible
  *   light blocks (up to 7400 per chunk): the queue would take minutes. Signal-controlled lamps are checked against their
  *   signal immediately if chunk neighbors are loaded; at the loaded world's edge (no neighbors, which on a dedicated
  *   server may never arrive), when those neighbors load. Only Sable craft plots go through the world
