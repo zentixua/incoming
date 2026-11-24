@@ -31,6 +31,22 @@ class PallFieldTest {
         assertEquals(PallPass.WIDTH, PallField.BINS);
     }
 
+    /**
+     * The wave table's readers never build it or re-run the lifetime's bisection on the render thread: {@code lifetimeEnd} is
+     * computed once (it was a bisection over every node per call, 0.3 ms, read per source per frame and per breach streak per
+     * tick), and the table is built once (waveTableNow here; the game builds it in the background from the detonation's arrival).
+     */
+    @Test
+    void lifetimeEndAndTableAreBuiltOnce() {
+        PallField f = new PallField(GROUND);
+        double end = f.lifetimeEnd();
+        long t0 = System.nanoTime();
+        for (int i = 0; i < 10_000; i++) assertEquals(end, f.lifetimeEnd());
+        assertTrue(System.nanoTime() - t0 < 50_000_000L, "10 000 reads of the cached lifetime end in under 50 ms");
+        float[] table = f.waveTableNow();
+        assertTrue(table == f.waveTable() && table == f.waveTableNow(), "one table");
+    }
+
     /** Both detonation slots' haze rows lie inside the frame table and apart (a second detonation's fire storm writes its row). */
     @Test
     void slotHazeRowsFitTheTable() {

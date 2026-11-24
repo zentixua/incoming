@@ -247,10 +247,17 @@ public final class PallField {
 
     /** Latest age at which any node's lofted layer is still thicker than {@link #GONE_DEPTH}, model seconds (the table's last age). */
     public double lifetimeEnd() {
-        double end = 60;
-        for (int i = 0; i < BINS; i++) end = Math.max(end, settledBy(columns[i]));
+        double end = lifetimeEnd;
+        if (end < 0) {
+            end = 60;
+            for (int i = 0; i < BINS; i++) end = Math.max(end, settledBy(columns[i]));
+            lifetimeEnd = end;
+        }
         return end;
     }
+
+    /** {@link #lifetimeEnd}, once computed (a bisection per node: read every frame by every reader of the drawn dust). */
+    private volatile double lifetimeEnd = -1;
 
     /** Age of table node u (fractional), model seconds. */
     public static double lifetimeAge(double u, double end) {
@@ -971,18 +978,39 @@ public final class PallField {
      * The drawn dust wave's presentation layer, built once ({@link #lifetime} at {@link #PRESENT_HEIGHT} and {@link #lifetimeSpray}:
      * the dust pass's source table, {@code DustSources}).
      */
-    private float[] wave;
+    private volatile float[] wave;
+    private java.util.concurrent.CompletableFuture<Void> building;
 
-    /** The dust wave's table ({@code DustWallPass.NODES} nodes; rows: arrival, the law by age, spray). */
+    /**
+     * The dust wave's table ({@code DustWallPass.NODES} nodes; rows: arrival, the law by age, spray); null until it is built.
+     * The build (120–340 ms) runs off the render thread from the detonation's arrival ({@link #prepareWave}); until it is
+     * ready no dust is drawn or read, and the drawn wave's one-second fade-in covers the start.
+     */
     public float[] waveTable() {
-        if (wave == null) {
-            int n = ua.zentix.incoming.client.fx.layer.DustWallPass.NODES;
-            float[] v = new float[n * (ua.zentix.incoming.client.fx.layer.DustWallPass.ROWS + 1) * 4];
-            lifetime(n, PRESENT_HEIGHT, v);
-            lifetimeSpray(n, v, n * ua.zentix.incoming.client.fx.layer.DustWallPass.ROWS * 4);
-            wave = v;
-        }
-        return wave;
+        float[] w = wave;
+        if (w == null) prepareWave();
+        return w;
+    }
+
+    /** Start building {@link #waveTable} in the background, once. */
+    public synchronized void prepareWave() {
+        if (wave != null || building != null) return;
+        building = java.util.concurrent.CompletableFuture.runAsync(() -> wave = buildWave(), net.minecraft.Util.backgroundExecutor());
+    }
+
+    /** {@link #waveTable}, built on this thread if it is not ready (tests, tools). */
+    public float[] waveTableNow() {
+        float[] w = wave;
+        if (w == null) wave = w = buildWave();
+        return w;
+    }
+
+    private float[] buildWave() {
+        int n = ua.zentix.incoming.client.fx.layer.DustWallPass.NODES;
+        float[] v = new float[n * (ua.zentix.incoming.client.fx.layer.DustWallPass.ROWS + 1) * 4];
+        lifetime(n, PRESENT_HEIGHT, v);
+        lifetimeSpray(n, v, n * ua.zentix.incoming.client.fx.layer.DustWallPass.ROWS * 4);
+        return v;
     }
 
     /**
@@ -1002,24 +1030,58 @@ public final class PallField {
         double[] w = new double[2];
         source(dx, dz, ticks, w);
         float[] table = waveTable();
-        int n = ua.zentix.incoming.client.fx.layer.DustWallPass.NODES;
-        double x = Math.min(Math.hypot(w[0], w[1]) / Math.max(reach, 1), 1) * (n - 1);
-        int j = (int) Math.min(Math.floor(x), n - 2);
-        double t = ticks / (20.0 * d.scale());
-        double age = t - (table[4 * j] + (x - j) * (table[4 * (j + 1)] - table[4 * j]));
         l[0] = 0;
         l[2] = 1;
+        if (table == null) return;
+        DustMaterialTiles m = materials;
+        double[] c = new double[2];
+        drawnColumn(table, ua.zentix.incoming.client.fx.layer.DustWallPass.NODES, lifetimeEnd(), reach, ticks / (20.0 * d.scale()),
+                w[0], w[1], m == null ? 0 : m.hard(w[0], w[1]), c);
+        if (c[0] <= 0) return;
+        double top = c[1];
+        double wet = water.at(w[0], w[1]);
+        l[0] = 1.25 * c[0] / Math.max(0.9483 * top - 2.854, 1) * (1 - wet);
+        l[2] = Math.max(top, 1);
+    }
+
+    /** The material tiles the dust wave draws for this detonation ({@link #drawnColumn}'s hard ground); null until they exist. */
+    private volatile DustMaterialTiles materials;
+
+    void materials(DustMaterialTiles m) {
+        materials = m;
+    }
+
+    /**
+     * The drawn dust wave's noise-free column at source point (rx, rz) from ground zero, model time t ({@code dustwall.glsl}:
+     * {@code dwHaze}'s column): out[0] its vertical optical depth (the law's through {@link #transfer}, the young head's density,
+     * over hard ground only its debris dust — the paved share of table row 0 — and the last table spacing's fade), out[1] its
+     * top, blocks (0.95 of the table's, as drawn); 0 where no dust. One copy for every Java reader of the drawn dust.
+     */
+    public static void drawnColumn(float[] table, int n, double end, double reach, double t, double rx, double rz, double hard,
+            double[] out) {
+        out[0] = 0;
+        out[1] = 1;
+        double r = Math.hypot(rx, rz), x = Math.min(r / Math.max(reach, 1), 1) * (n - 1);
+        int j = (int) Math.min(Math.floor(x), n - 2);
+        double fx = x - j;
+        double age = t - (table[4 * j] + fx * (table[4 * (j + 1)] - table[4 * j]));
         if (age <= 0) return;
-        double end = lifetimeEnd(), u = Math.log1p(age / AGE0) / Math.log1p(end / AGE0) * (AGES - 1);
+        double u = Math.log1p(age / AGE0) / Math.log1p(end / AGE0) * (AGES - 1);
         if (u >= AGES - 1) return;
         int k = (int) Math.floor(u);
         double f = u - k;
         int o0 = 4 * ((1 + k) * n + j), o1 = 4 * ((2 + k) * n + j);
         double top = 0.95 * (table[o0] + f * (table[o1] - table[o0])), tau = table[o0 + 1] + f * (table[o1 + 1] - table[o0 + 1]);
-        double drawn = transfer(tau) * (1 + 0.5 * Math.exp(-age / 1.1));
-        double wet = water.at(w[0], w[1]);
-        l[0] = 1.25 * drawn / Math.max(0.9483 * top - 2.854, 1) * (1 - wet);
-        l[2] = Math.max(top, 1);
+        double row = table[4 * j + 1] + fx * (table[4 * (j + 1) + 1] - table[4 * j + 1]);
+        double paved = 1 + hard * (row - 1);
+        double edge = reach * (1 - 1.0 / (n - 1)), fade = 1 - smoothstep(edge, reach, r);
+        out[0] = transfer(tau) * (1 + 0.5 * Math.exp(-age / 1.1)) * paved * fade;
+        out[1] = top;
+    }
+
+    private static double smoothstep(double a, double b, double x) {
+        double v = Math.clamp((x - a) / (b - a), 0, 1);
+        return v * v * (3 - 2 * v);
     }
 
     /** Number of values in {@link #layers}. */

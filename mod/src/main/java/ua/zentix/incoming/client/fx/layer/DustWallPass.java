@@ -103,8 +103,14 @@ public final class DustWallPass {
     /** Width of the march target: the march lattice's, halved while interleaved. */
     private static int marchW;
 
-    /** Only the haze level is left this frame ({@code NukePall.youngWall}): the march takes a quarter of the rays. */
+    /**
+     * Only the haze level is left in this view (every source it drew last is past the textured level's window,
+     * {@code DustSources.frame}): the march takes a quarter of the rays.
+     */
     public static boolean hazeOnly;
+    private static final Matrix4f SWAP = new Matrix4f();
+    /** {@link #hazeOnly} at the last {@link #prepare}. */
+    private static boolean preparedHazeOnly;
 
     /** The preset's own march divisor (the light's detail level reads it, not the scaled one). */
     private static int baseDiv = 4;
@@ -253,6 +259,11 @@ public final class DustWallPass {
         // once only the haze level is left (no dust younger than its fade's end anywhere on the table), a quarter of the rays:
         // the haze's light and shape are smooth at that scale (no visible difference), the young level's not
         if (hazeOnly) divisor *= 2;
+        // the ladder's window must not mix frames at both divisors (its estimate scales by this rung's samples)
+        if (hazeOnly != preparedHazeOnly) {
+            preparedHazeOnly = hazeOnly;
+            detail.restart();
+        }
         if (FORCED_DIV != null) {
             // A diagnostic override can request finer sampling only while the controller is at the chosen setting.
             int minimum = detail.floored || detail.level > detail.ceiling ? divisor : 1;
@@ -288,7 +299,7 @@ public final class DustWallPass {
         float dx = f.eye[0] - PREVIOUS_EYE[0], dy = f.eye[1] - PREVIOUS_EYE[1], dz = f.eye[2] - PREVIOUS_EYE[2];
         // the same detonation, its clock running on (not a replay seek), the eye not teleported
         float since = f.eye[3] - previousTime;
-        boolean past = !warming && HISTORY_ON && history && !transientView() && f.source == previousSource && since >= 0 && since < f.clockJump
+        boolean past = !warming && HISTORY_ON && DustWallDiag.history && history && !transientView() && f.source == previousSource && since >= 0 && since < f.clockJump
                 && dx * dx + dy * dy + dz * dz < JUMP * JUMP;
         VIEW_PROJECTION.set(projection).mul(view);
         VIEW_PROJECTION.invert(INVERSE);
@@ -308,7 +319,7 @@ public final class DustWallPass {
             m.safeGetUniform("PallForward").set(FORWARD.x, FORWARD.y, FORWARD.z);
             m.safeGetUniform("DwDiv").set((float) div);
             m.safeGetUniform("DwInterleave").set(builtInterleave ? 1f : 0f, (float) (frame & 1), (float) width, 0f);
-            m.safeGetUniform("DwFrame").set((float) (frame % 4096), (float) step.wallSteps());
+            m.safeGetUniform("DwFrame").set(DustWallDiag.freeze ? 0f : (float) (frame % 4096), (float) step.wallSteps());
             // every source's table, terrain and material tiles and frame inputs; the outdoor-air window: the dust lies on the
             // local ground, never indoors
             uploadSources(f, warming);
@@ -385,6 +396,11 @@ public final class DustWallPass {
                 history = !warming;
                 if (!warming) frame++;
                 if (DIAG && !warming) readBack();
+                String dumpTo = DustWallDiag.dump;
+                if (dumpTo != null && !warming) {
+                    DustWallDiag.dump = null;
+                    dump(dumpTo);
+                }
             }
         } finally {
             GlStateManager._glBindFramebuffer(GL30.GL_DRAW_FRAMEBUFFER, main);
@@ -519,7 +535,7 @@ public final class DustWallPass {
         if (lattice < 0) lattice = lattice();
         int program = march.getId();
         boolean sameFrame = w == fullW && h == fullH && program == marchId;
-        boolean il = !transientView();
+        boolean il = !transientView() && DustWallDiag.interleave;
         boolean sameMarch = target >= 0 && sameFrame && d == div && il == builtInterleave;
         if (sameMarch && historyDiv[1 - latest] == d) return true;
         PallPass.note(String.format(java.util.Locale.ROOT, "dust targets %dx%d div %d (was %d)", lw, lh, d, div));
@@ -668,7 +684,9 @@ public final class DustWallPass {
         private int limitTex = -1, limitFbo = -1, limitW, limitH;
         private int target = -1, fbo = -1, bounds = -1, split = -1, packed = -1, packedFbo = -1, width, height, div, fullW, fullH, marchW, latest,
                 marchId = -1, baseDiv = 4;
-        private boolean builtInterleave, history;
+        private boolean builtInterleave, history, hazeOnly;
+        /** This view's frame counter (interleave parity and jitter run per view). */
+        private long frame;
         private final int[] historyTex = {-1, -1}, historyFbo = {-1, -1}, historyDivs = new int[2];
         private final float[] previousEye = new float[3];
         private Object previousSource;
@@ -698,6 +716,8 @@ public final class DustWallPass {
             t = DustWallPass.limitH; DustWallPass.limitH = limitH; limitH = t;
             boolean b = DustWallPass.builtInterleave; DustWallPass.builtInterleave = builtInterleave; builtInterleave = b;
             b = DustWallPass.history; DustWallPass.history = history; history = b;
+            b = DustWallPass.hazeOnly; DustWallPass.hazeOnly = hazeOnly; hazeOnly = b;
+            long fr = DustWallPass.frame; DustWallPass.frame = frame; frame = fr;
             for (int i = 0; i < 2; i++) {
                 t = HISTORY_TEX[i]; HISTORY_TEX[i] = historyTex[i]; historyTex[i] = t;
                 t = HISTORY_FBO[i]; HISTORY_FBO[i] = historyFbo[i]; historyFbo[i] = t;
@@ -708,9 +728,9 @@ public final class DustWallPass {
             }
             Object o = DustWallPass.previousSource; DustWallPass.previousSource = previousSource; previousSource = o;
             float v = DustWallPass.previousTime; DustWallPass.previousTime = previousTime; previousTime = v;
-            Matrix4f m = new Matrix4f(PREVIOUS);
+            SWAP.set(PREVIOUS);
             PREVIOUS.set(previous);
-            previous.set(m);
+            previous.set(SWAP);
         }
 
         public void close() {
@@ -751,6 +771,39 @@ public final class DustWallPass {
         } finally {
             GlStateManager._glBindFramebuffer(GL30.GL_READ_FRAMEBUFFER, read);
             MemoryUtil.memFree(px);
+        }
+    }
+
+    /**
+     * Diagnostics ({@link DustWallDiag#dump}): this frame's march outputs (light, depth span, interval split at the march
+     * lattice, packed two to a column pair while interleaved) and the resolved atlas (three thirds), as little-endian RGBA
+     * float32 files {@code <prefix>_<name>.f32} with their sizes and the frame's lattice in {@code <prefix>_dw.json}.
+     */
+    private static void dump(String prefix) {
+        try {
+            java.nio.file.Path base = java.nio.file.Path.of(prefix);
+            java.nio.file.Files.createDirectories(base.toAbsolutePath().getParent());
+            int[][] parts = {{target, marchW, height}, {bounds, marchW, height}, {split, marchW, height}, {HISTORY_TEX[latest], 3 * width, height}};
+            String[] names = {"march", "span", "split", "atlas"};
+            for (int i = 0; i < parts.length; i++) {
+                int w = parts[i][1], h = parts[i][2];
+                java.nio.FloatBuffer px = MemoryUtil.memAllocFloat(w * h * 4);
+                try {
+                    GlStateManager._bindTexture(parts[i][0]);
+                    GL11.glGetTexImage(GL11.GL_TEXTURE_2D, 0, GL11.GL_RGBA, GL11.GL_FLOAT, px);
+                    java.nio.ByteBuffer out = java.nio.ByteBuffer.allocate(w * h * 16).order(java.nio.ByteOrder.LITTLE_ENDIAN);
+                    out.asFloatBuffer().put(px);
+                    java.nio.file.Files.write(java.nio.file.Path.of(prefix + "_" + names[i] + ".f32"), out.array());
+                } finally {
+                    MemoryUtil.memFree(px);
+                }
+            }
+            java.nio.file.Files.writeString(java.nio.file.Path.of(prefix + "_dw.json"), String.format(java.util.Locale.ROOT,
+                    "{\"march\": [%d, %d], \"atlas\": [%d, %d], \"div\": %d, \"interleave\": %b, \"parity\": %d, \"frame\": %d, \"history\": %b, \"full\": [%d, %d]}",
+                    marchW, height, 3 * width, height, div, builtInterleave, (frame - 1) & 1, frame - 1, history && DustWallDiag.history, fullW, fullH));
+            Incoming.LOG.info("Nuclear dust wave: diagnostic targets written to {}_*.f32 (div {}, interleave {})", prefix, div, builtInterleave);
+        } catch (java.io.IOException | RuntimeException e) {
+            Incoming.LOG.warn("Nuclear dust wave: diagnostic targets not written to {}", prefix, e);
         }
     }
 

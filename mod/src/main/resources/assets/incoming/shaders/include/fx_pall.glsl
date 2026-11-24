@@ -390,7 +390,7 @@ void slot(mat4 S, sampler2D ground, vec4 R, vec4 G, vec4 H, vec3 p, vec3 sunDir,
     vec3 dustW = PALL_DUST_W;
     if (inflow.w > 0.0 && length(inflow.xz - S[0].xy) < 1.0) {
         vec2 rel = p.xz - S[0].xy;
-        if (S[3].w > 0.5) wet = pallWater(ground, R, rel);
+        if (S[3].w > 0.5) wet = pallWater(ground, S, R, rel);
         dustW = pallDustW(pallSoil(ground, S, R, rel).y, 0.0, 1.0, 0.0);
         lifted = inflow.w;
         int k = length(inflow.xz - PallSlot0[0].xy) < 1.0 ? gFoot0 : gFoot1;

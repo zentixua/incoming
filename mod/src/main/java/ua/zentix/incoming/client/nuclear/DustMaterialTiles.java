@@ -9,8 +9,10 @@ import ua.zentix.incoming.nuclear.material.DustMaterial;
  * world-aligned cells around ground zero, a fine one at the server's dense cell ({@link DustGrid#FINE}) and a coarse one at its
  * outer cell ({@link DustGrid#COARSE}, doubled while the reach is wider than the tile), RGBA8 per cell: water, sand, hard ground,
  * known. Filled from {@link SourceMaterial} (the server's committed cells, or each client's frozen first answer for worlds and
- * recordings without them), a bounded number of cells a frame; a known cell never changes, so no point flips on screen.
- * Cells the server has not committed yet read as soil: it commits each cell at least 10 s before the front reaches it.
+ * recordings without them), a bounded number of cells a frame, in rings outward from ground zero (the front's order); a known
+ * cell never changes. A cell the server has not committed yet holds the detonation's provisional ground-zero material and is
+ * asked again until it is committed: the server commits each cell at least 10 s before the front reaches it, before any dust
+ * is born there, so no point flips on screen.
  */
 public final class DustMaterialTiles {
     /** Cells across a tile ({@code DW_MATERIAL_SIDE}). */
@@ -21,15 +23,38 @@ public final class DustMaterialTiles {
     private final SourceMaterial source;
     private final DustGrid grid;
     private final int gx, gz;
+    private final double burstX, burstZ;
     /** Per tile: first cell's world x, z (blocks), cell size (blocks). */
     private final int[] originX = new int[2], originZ = new int[2], cell = new int[2];
     /** RGBA8 of both tiles, tile-major, x fastest; known flags in the alpha byte. */
     public final byte[] rgba = new byte[2 * SIDE * SIDE * 4];
     private int cursor, version, uploaded = -1, left = 2 * SIDE * SIDE;
+    /** Both tiles' cells in fill order: rings outward from ground zero's cell, the fine and coarse tile's ring r together. */
+    private static final int[] ORDER = order();
+
+    private static int[] order() {
+        int[] o = new int[2 * SIDE * SIDE];
+        int k = 0, c = SIDE / 2;
+        for (int r = 0; r <= c; r++) {
+            for (int t = 0; t < 2; t++) {
+                for (int y = c - r; y <= c + r; y++) {
+                    if (y < 0 || y >= SIDE) continue;
+                    for (int x = c - r; x <= c + r; x++) {
+                        if (x < 0 || x >= SIDE || Math.max(Math.abs(x - c), Math.abs(y - c)) != r) continue;
+                        o[k++] = t * SIDE * SIDE + y * SIDE + x;
+                    }
+                }
+            }
+        }
+        if (k != o.length) throw new IllegalStateException("fill order covers " + k + " of " + o.length + " cells");
+        return o;
+    }
 
     public DustMaterialTiles(Detonation d, SourceMaterial source) {
         this.source = source;
         this.grid = new DustGrid(DustGrid.Bounds.of(d));
+        burstX = d.burst().x;
+        burstZ = d.burst().z;
         gx = (int) Math.floor(d.burst().x);
         gz = (int) Math.floor(d.burst().z);
         int reach = grid.bounds.reach();
@@ -48,7 +73,7 @@ public final class DustMaterialTiles {
         boolean changed = false;
         int n = 2 * SIDE * SIDE;
         for (int asked = 0, scanned = 0; asked < PER_FRAME && scanned < n; scanned++) {
-            int i = cursor;
+            int i = ORDER[cursor];
             cursor = (cursor + 1) % n;
             int o = 4 * i;
             if (rgba[o + 3] != 0) continue;
@@ -64,9 +89,14 @@ public final class DustMaterialTiles {
             SourceMaterial.Answer a = source.material(x, z);
             if (a.value().isEmpty()) continue;
             DustMaterial m = a.value().get();
-            rgba[o] = (byte) (m == DustMaterial.WATER ? 255 : 0);
-            rgba[o + 1] = (byte) (m == DustMaterial.SAND ? 255 : 0);
-            rgba[o + 2] = (byte) (m == DustMaterial.HARD ? 255 : 0);
+            byte w = (byte) (m == DustMaterial.WATER ? 255 : 0), sand = (byte) (m == DustMaterial.SAND ? 255 : 0),
+                    hard = (byte) (m == DustMaterial.HARD ? 255 : 0);
+            if (rgba[o] != w || rgba[o + 1] != sand || rgba[o + 2] != hard) changed = true;
+            rgba[o] = w;
+            rgba[o + 1] = sand;
+            rgba[o + 2] = hard;
+            // provisional (the ground-zero seed until the server commits the cell): drawn, asked again
+            if (!a.settled()) continue;
             rgba[o + 3] = (byte) 255;
             left--;
             changed = true;
@@ -82,6 +112,30 @@ public final class DustMaterialTiles {
 
     public void uploaded() {
         uploaded = version;
+    }
+
+    /**
+     * Hard ground's share at ground point (rx, rz) from ground zero, as the dust wave reads it ({@code dustwall.glsl}:
+     * {@code dwMaterial}: the fine tile inside its border, else the coarse one, bilinear between cell centres).
+     */
+    public double hard(double rx, double rz) {
+        double x = burstX + rx, z = burstZ + rz;
+        int t = 1;
+        double cx = (x - originX[0]) / cell[0], cz = (z - originZ[0]) / cell[0];
+        if (cx >= 1 && cz >= 1 && cx < SIDE - 1 && cz < SIDE - 1) t = 0;
+        else {
+            cx = (x - originX[1]) / cell[1];
+            cz = (z - originZ[1]) / cell[1];
+        }
+        cx = Math.clamp(cx, 0.5, SIDE - 0.5) - 0.5;
+        cz = Math.clamp(cz, 0.5, SIDE - 0.5) - 0.5;
+        int i = Math.min((int) cx, SIDE - 2), j = Math.min((int) cz, SIDE - 2);
+        double fx = cx - i, fz = cz - j;
+        return (1 - fz) * ((1 - fx) * hardAt(t, i, j) + fx * hardAt(t, i + 1, j)) + fz * ((1 - fx) * hardAt(t, i, j + 1) + fx * hardAt(t, i + 1, j + 1));
+    }
+
+    private double hardAt(int t, int i, int j) {
+        return (rgba[4 * (t * SIDE * SIDE + j * SIDE + i) + 2] & 255) / 255.0;
     }
 
     /** Tile t's origin from ground zero (x, z, blocks; the shader's frame of reference), cell size and cells across. */

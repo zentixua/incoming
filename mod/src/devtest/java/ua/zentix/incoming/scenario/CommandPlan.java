@@ -21,7 +21,7 @@ record CommandPlan(List<Step> steps, int nukeGate, List<Integer> blastGates, int
     /** At what tick do the steps begin and how long after the last one to wait until “SCENARIO done”. */
     static final int START = 100, TAIL = 100;
 
-    enum Kind { COMMAND, SHOT, HUD_OFF, HUD_ON, SKIP, FRAMES, STORM, BURNABLE, MAX_YIELD, WAVE, PALL, PAIR, SITE }
+    enum Kind { COMMAND, SHOT, HUD_OFF, HUD_ON, SKIP, FRAMES, STORM, BURNABLE, MAX_YIELD, WAVE, PALL, PAIR, SITE, DW }
 
     record Step(int tick, Kind kind, String arg) {}
 
@@ -72,6 +72,10 @@ record CommandPlan(List<Step> steps, int nukeGate, List<Integer> blastGates, int
             } else if (c.startsWith("wave:")) {
                 // world wave speed (CUSTOM preset, nuclear.wave_speed), as on the host servers
                 steps.add(new Step(t, Kind.WAVE, c.substring("wave:".length()).strip()));
+                t += 1;
+            } else if (c.startsWith("dw:")) {
+                // dust wave diagnostics (DustWallDiag): rung=N|-1|-2, history=0|1, interleave=0|1, dump=<name>
+                steps.add(new Step(t, Kind.DW, c.substring("dw:".length()).strip()));
                 t += 1;
             } else if (c.startsWith("pall:")) {
                 // client dust quality OFF|LOW|MEDIUM|HIGH

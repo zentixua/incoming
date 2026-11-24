@@ -1392,6 +1392,22 @@ public final class ClientScenario {
      * Time skip to {@code ageSeconds} after the detonation: the server clock goes there (all players get a time packet), the
      *  client has a rewind, like a replay: storm, pall and everything nuclear - according to the new age of the detonation.
      */
+    /** A {@code dw:} step: one dust-wave diagnostic ({@link ua.zentix.incoming.client.fx.layer.DustWallDiag}). */
+    private void dustWallDiag(String arg) {
+        String[] kv = arg.split("=", 2);
+        String v = kv.length > 1 ? kv[1].strip() : "";
+        switch (kv[0].strip()) {
+            case "rung" -> ua.zentix.incoming.client.fx.layer.DustWallDiag.rung = Integer.parseInt(v);
+            case "history" -> ua.zentix.incoming.client.fx.layer.DustWallDiag.history = !v.equals("0");
+            case "interleave" -> ua.zentix.incoming.client.fx.layer.DustWallDiag.interleave = !v.equals("0");
+            case "freeze" -> ua.zentix.incoming.client.fx.layer.DustWallDiag.freeze = v.equals("1");
+            case "dump" -> ua.zentix.incoming.client.fx.layer.DustWallDiag.dump =
+                    Minecraft.getInstance().gameDirectory.toPath().resolve("screenshots").resolve(v).toString();
+            default -> throw new IllegalArgumentException("dw: " + arg);
+        }
+        Incoming.LOG.info("SCENARIO dw {}", arg);
+    }
+
     private void fsSkip(double ageSeconds) {
         var server = Minecraft.getInstance().getSingleplayerServer();
         var d = ua.zentix.incoming.client.nuclear.ClientNuclear.detonations().getLast().d;
@@ -3636,6 +3652,7 @@ public final class ClientScenario {
                     shot(step.tick(), step.arg());
                     offShot(step.tick() + 1, step.arg() + "_off", 3);
                 }
+                case DW -> at(step.tick(), () -> dustWallDiag(step.arg()));
                 case SKIP -> at(step.tick(), () -> fsSkip(Double.parseDouble(step.arg())));
                 case FRAMES -> at(step.tick(), () -> frameRun(step.arg()));
             }

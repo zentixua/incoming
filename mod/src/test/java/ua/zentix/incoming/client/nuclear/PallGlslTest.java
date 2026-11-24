@@ -107,7 +107,7 @@ class PallGlslTest {
         String f = body(GLSL, "PallAt pallField(");
         assertTrue(f.contains("vec4 haze = texture(table, vec2(min(uh, 1.0), S[2].w));"), "haze - not in its own row");
         assertEquals(1, occurrences(f, "texture(table"), "the pall reads one table row");
-        assertTrue(f.contains("if (S[3].w > 0.5 && sh + fire > 0.0) {") && f.contains("float dry = 1.0 - pallWater(ground, G, source);"),
+        assertTrue(f.contains("if (S[3].w > 0.5 && sh + fire > 0.0) {") && f.contains("float dry = 1.0 - pallWater(ground, S, G, source);"),
                 "the haze's source water - read without water under the pall, or not at its source");
         assertTrue(body(GLSL, "vec2 pallSoil(").contains("if (G.x <= 0.0 || S[1].w < 1.5) return vec2(0.0);"), "soil read without hard ground or sand under the pall");
         for (String gone : new String[]{"pallWall", "pallSurge", "PallWater", "PallYoung", "wallShare", "froxelEnd"}) {

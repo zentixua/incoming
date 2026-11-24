@@ -345,6 +345,11 @@ public final class PallPass {
             changes++;
         }
 
+        /** Diagnostics ({@link DustWallDiag#rung}): this rung, pinned. */
+        void force(int to) {
+            set(to);
+        }
+
         private void set(int to) {
             level = floored ? LADDER.length - 1 : Math.max(ceiling, Math.min(LADDER.length - 1, to));
             generation++;
@@ -697,7 +702,7 @@ public final class PallPass {
         return FIRE_NOW[k];
     }
 
-    /** Frame slot {@code k} terrain/water map ({@code Sampler9}/{@code Sampler10} in {@code fx}); −1 — absent. */
+    /** Frame slot {@code k} terrain/water map (the slots' shared texture, {@code Sampler9} in {@code fx}); −1 — absent. */
     static int groundMap(int k) {
         return GROUND_NOW[k];
     }
@@ -714,12 +719,11 @@ public final class PallPass {
      */
     static void bindFront(ShaderInstance s, Frame f, boolean drawn, int fallback) {
         Frame front = drawn ? f : empty();
-        int ground0 = drawn ? GROUND_NOW[0] : -1, ground1 = drawn ? GROUND_NOW[1] : -1;
+        int ground = drawn && (GROUND_NOW[0] >= 0 || GROUND_NOW[1] >= 0) ? GROUND[0] : -1;
         RenderSystem.setShaderTexture(5, drawn ? table : fallback);
-        RenderSystem.setShaderTexture(9, ground0 >= 0 ? ground0 : fallback);
-        RenderSystem.setShaderTexture(10, ground1 >= 0 ? ground1 : fallback);
+        RenderSystem.setShaderTexture(9, ground >= 0 ? ground : fallback);
+        RenderSystem.setShaderTexture(10, front.dustWall.active ? DustWallPass.atlas() : fallback);
         RenderSystem.setShaderTexture(11, drawn ? mushrooms : fallback);
-        if (front.dustWall.active) RenderSystem.setShaderTexture(10, DustWallPass.atlas());
         // 0 — no dust pass atlas this frame (pall_front.glsl: dustWallThrough)
         s.safeGetUniform("DwDiv").set(front.dustWall.active ? (float) DustWallPass.divisor() : 0f);
         s.safeGetUniform("DwViewProj").set(VIEW_PROJECTION);
@@ -751,7 +755,8 @@ public final class PallPass {
         if (!supported()) return;
         Quality quality = FxViews.secondary() || setting == Quality.OFF ? Quality.LOW : setting;
         DETAIL.setting(quality);
-        if (DETAIL.pin(SCENARIO || FxViews.secondary() || FlashbackReplay.exporting())) {
+        int diagRung = DustWallDiag.rung;
+        if (DETAIL.pin(SCENARIO && diagRung != -2 || FxViews.secondary() || FlashbackReplay.exporting())) {
             Step at = LADDER[Math.max(0, DETAIL.level)];
             if (DETAIL.pinned) {
                 Incoming.LOG.info("Nuclear dust pall: {}, detail pinned at the setting {}", SCENARIO ? "client scenario" : FxViews.secondary() ? "secondary view" : "Flashback video export",
@@ -760,6 +765,7 @@ public final class PallPass {
                 Incoming.LOG.info("Nuclear dust pall: Flashback video export over, detail follows the GPU budget again from {}", at.describe());
             }
         }
+        if (diagRung >= 0 && DETAIL.pinned && DETAIL.level != Math.max(diagRung, DETAIL.ceiling)) DETAIL.force(diagRung);
         if (timer()) poll(System.nanoTime());
         latch();
         if (gpuOff()) return;
@@ -1056,15 +1062,15 @@ public final class PallPass {
         RenderSystem.setShaderTexture(1, scene);
         RenderSystem.setShaderTexture(2, table);
         RenderSystem.setShaderTexture(3, fire0);
-        RenderSystem.setShaderTexture(4, f.dustWall.active ? DustWallPass.atlas() : fire1);
-        RenderSystem.setShaderTexture(5, ground0);
-        RenderSystem.setShaderTexture(6, ground1);
+        RenderSystem.setShaderTexture(4, fire1);
+        RenderSystem.setShaderTexture(5, GROUND[0] >= 0 && (GROUND_NOW[0] >= 0 || GROUND_NOW[1] >= 0) ? GROUND[0] : table);
+        RenderSystem.setShaderTexture(6, f.dustWall.active ? DustWallPass.atlas() : table);
         RenderSystem.setShaderTexture(7, mushrooms);
         RenderSystem.setShaderTexture(8, shade ? shadowMap : table);
         RenderSystem.setShaderTexture(9, balls ? frameCopy : table);
         RenderSystem.setShaderTexture(10, lightmap);
         RenderSystem.setShaderTexture(11, VOLUME[2]);
-        // 0 — no dust pass this frame: Sampler4 is the second slot's fire map (fx_pall_composite)
+        // 0 — no dust pass this frame (fx_pall_composite: Sampler6 is the dust pass's atlas)
         c.safeGetUniform("DwDiv").set(f.dustWall.active ? (float) DustWallPass.divisor() : 0f);
         c.safeGetUniform("PallFroxel").set(f.quality.tile, VOLUME_NEAR, VOLUME_FAR, 0f);
         c.safeGetUniform("PallLamps").set(lamps ? 1f : 0f);
@@ -1270,22 +1276,28 @@ public final class PallPass {
         return FIRE[k];
     }
 
-    /** Upload slot {@code k} pall terrain/water map if changed (new detonation or fill generation); −1 — no map. */
+    /**
+     * Upload slot {@code k} pall terrain/water map if changed (new detonation or fill generation) into its half of the slots'
+     * shared terrain texture ({@code GROUND[0]}: slot k's map at x = k·side, read through {@code pallGroundUv} by the slot's
+     * {@code S[2].z}); its id, −1 — no map. One texture for both slots keeps a sampler unit free in the composite and the
+     * layer's front reads for the dust pass's atlas.
+     */
     private static int ground(int k, Ground g) {
         if (!g.on()) return -1;
         float[] map = g.map;
-        int n = g.side * g.side * 4;
-        if (map == null || map.length < n) return -1;
-        if (GROUND[k] < 0) {
-            GROUND[k] = GlStateManager._genTexture();
-            GlStateManager._bindTexture(GROUND[k]);
+        int side = DustWallPass.GROUND_SIDE, n = side * side * 4;
+        if (map == null || map.length < n || g.side != side) return -1;
+        if (GROUND[0] < 0) {
+            GROUND[0] = GlStateManager._genTexture();
+            GlStateManager._bindTexture(GROUND[0]);
             GlStateManager._texParameter(GlConst.GL_TEXTURE_2D, GlConst.GL_TEXTURE_MIN_FILTER, GlConst.GL_LINEAR);
             GlStateManager._texParameter(GlConst.GL_TEXTURE_2D, GlConst.GL_TEXTURE_MAG_FILTER, GlConst.GL_LINEAR);
             GlStateManager._texParameter(GlConst.GL_TEXTURE_2D, GlConst.GL_TEXTURE_WRAP_S, GlConst.GL_CLAMP_TO_EDGE);
             GlStateManager._texParameter(GlConst.GL_TEXTURE_2D, GlConst.GL_TEXTURE_WRAP_T, GlConst.GL_CLAMP_TO_EDGE);
-            GROUND_SIDE[k] = 0;
+            GL11.glTexImage2D(GL11.GL_TEXTURE_2D, 0, GL30.GL_RGBA16F, 2 * side, side, 0, GL11.GL_RGBA, GL11.GL_FLOAT, (FloatBuffer) null);
+            GROUND_SIDE[0] = GROUND_SIDE[1] = 0;
         }
-        if (g.source == GROUND_SOURCE[k] && g.version == GROUND_VERSION[k] && g.side == GROUND_SIDE[k]) return GROUND[k];
+        if (g.source == GROUND_SOURCE[k] && g.version == GROUND_VERSION[k] && g.side == GROUND_SIDE[k]) return GROUND[0];
         if (groundBuffer == null || groundBuffer.capacity() < n) {
             if (groundBuffer != null) MemoryUtil.memFree(groundBuffer);
             groundBuffer = MemoryUtil.memAllocFloat(n);
@@ -1293,15 +1305,15 @@ public final class PallPass {
         FloatBuffer buf = groundBuffer;
         buf.clear();
         buf.put(map, 0, n).flip();
-        GlStateManager._bindTexture(GROUND[k]);
+        GlStateManager._bindTexture(GROUND[0]);
         GlStateManager._pixelStore(GL11.GL_UNPACK_ROW_LENGTH, 0);
         GlStateManager._pixelStore(GL11.GL_UNPACK_SKIP_ROWS, 0);
         GlStateManager._pixelStore(GL11.GL_UNPACK_SKIP_PIXELS, 0);
-        GL11.glTexImage2D(GL11.GL_TEXTURE_2D, 0, GL30.GL_RGBA16F, g.side, g.side, 0, GL11.GL_RGBA, GL11.GL_FLOAT, buf);
+        GL11.glTexSubImage2D(GL11.GL_TEXTURE_2D, 0, k * side, 0, side, side, GL11.GL_RGBA, GL11.GL_FLOAT, buf);
         GROUND_SOURCE[k] = g.source;
         GROUND_VERSION[k] = g.version;
         GROUND_SIDE[k] = g.side;
-        return GROUND[k];
+        return GROUND[0];
     }
 
     /** Background noise to VRAM (once); false — not ready yet. */

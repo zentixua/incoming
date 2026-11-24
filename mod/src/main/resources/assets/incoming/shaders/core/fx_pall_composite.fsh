@@ -6,7 +6,7 @@
 #moj_import <incoming:scene.glsl>
 #moj_import <incoming:see.glsl>
 #moj_import <incoming:wall_layer.glsl>
-// the dust pass's resolve divisor (DustWallPass); 0 — no dust pass this frame (Sampler4 is then the second slot's fire map)
+// the dust pass's resolve divisor (DustWallPass); 0 — no dust pass this frame (Sampler6, its atlas, is then a placeholder)
 uniform float DwDiv;
 uniform int PallLayerFrame;
 
@@ -53,8 +53,9 @@ uniform vec3 PallOpenWrap;
 // Minecraft's lightmap (pall.glsl: pallLightmap); PallLamps 1 — the window holds block light (OpenAir, MovingLight)
 uniform sampler2D Sampler10;
 uniform float PallLamps;
-// terrain/water under slot pall (pall.glsl: pallFloor, pallWater)
+// terrain/water under both slots' pall, one texture (pall.glsl: pallGroundUv, pallFloor, pallWater)
 uniform sampler2D Sampler5;
+// the dust pass's resolved atlas (DustWallPass, wall_layer.glsl)
 uniform sampler2D Sampler6;
 uniform vec4 PallGround0;
 uniform vec4 PallGround1;
@@ -94,7 +95,7 @@ vec4 pallOver(vec3 p) {
         water += f.column * f.wet;
     }
     if (PallSlot1[1].w > 0.5) {
-        PallAt f = pallField(Sampler2, Sampler6, PallSlot1, PallGround1, p, pallRelief(Sampler6, PallSlot1, PallGround1, p.xz));
+        PallAt f = pallField(Sampler2, Sampler5, PallSlot1, PallGround1, p, pallRelief(Sampler5, PallSlot1, PallGround1, p.xz));
         tau += f.column;
         water += f.column * f.wet;
     }
@@ -172,7 +173,7 @@ vec3 flames(sampler2D map, mat4 S, mat4 F, vec3 p, float dist, float pixel) {
 // outdoor-air share at p (pall.glsl: pallOpen), beyond-window terrain from first available slot map
 float pallOpenHere(vec3 p) {
     if (PallSlot0[1].w > 0.5) return pallOpen(PallOpen, PallOpenAt, PallOpenWrap, Sampler5, PallSlot0, PallGround0, p);
-    return pallOpen(PallOpen, PallOpenAt, PallOpenWrap, Sampler6, PallSlot1, PallGround1, p);
+    return pallOpen(PallOpen, PallOpenAt, PallOpenWrap, Sampler5, PallSlot1, PallGround1, p);
 }
 
 // Noiseless pall depth on eye ray dir over [ta, tb]: six steps through both slots' haze (like pall before layer quads,
@@ -188,7 +189,7 @@ float pallTau(vec3 dir, float ta, float tb) {
             s += f.sigma;
         }
         if (PallSlot1[1].w > 0.5) {
-            PallAt f = pallField(Sampler2, Sampler6, PallSlot1, PallGround1, q, pallRelief(Sampler6, PallSlot1, PallGround1, q.xz));
+            PallAt f = pallField(Sampler2, Sampler5, PallSlot1, PallGround1, q, pallRelief(Sampler5, PallSlot1, PallGround1, q.xz));
             s += f.sigma;
         }
         tau += s * pallOpenHere(q) * ds;
@@ -467,7 +468,7 @@ void main() {
     MediumSpans spans;
     bool haveSpans = false;
     if (DwDiv > 0.0) {
-        wall = wallLayer(Sampler4, Sampler1, vec2(full) + 0.5, depth, DwDiv);
+        wall = wallLayer(Sampler6, Sampler1, vec2(full) + 0.5, depth, DwDiv);
         if (wall.light.a < 1.0) {
             if (air.a < 1.0 || any(greaterThan(air.rgb, vec3(0.0)))) {
                 spans = mediumSpans(dir0);
@@ -491,7 +492,7 @@ void main() {
             // no world behind pixel (beyond render distance without Distant Horizons, beyond LOD edge): ray ends at terrain
             // under pall, as in fx_pall; burning city beyond render distance is visible as lights on it
             dist = min(pallFloor(Sampler5, PallSlot0, PallGround0, dir, PallFloorFrom, 1e6, 16, 0.5),
-                    pallFloor(Sampler6, PallSlot1, PallGround1, dir, PallFloorFrom, 1e6, 16, 0.5));
+                    pallFloor(Sampler5, PallSlot1, PallGround1, dir, PallFloorFrom, 1e6, 16, 0.5));
             if (dist >= 1e8) dist = -1.0;
         }
         if (dist > 0.0) {

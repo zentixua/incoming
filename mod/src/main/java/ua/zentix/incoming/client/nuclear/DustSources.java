@@ -56,8 +56,6 @@ public final class DustSources {
         return w;
     }
 
-    /** Per detonation: its ground material tiles. */
-    private static final Map<ClientNuclear.Active, DustMaterialTiles> MATERIAL = new WeakHashMap<>();
     /** Per detonation: the dust exposure its eye has reached (value, the detonation clock's second). */
     private static final Map<ClientNuclear.Active, double[]> ADAPTED = new WeakHashMap<>();
     /**
@@ -106,6 +104,7 @@ public final class DustSources {
         DustWallPass.Frame w = f.dustWall;
         w.active = false;
         w.count = 0;
+        DustWallPass.hazeOnly = false;
         if (!wanted() || all.isEmpty()) return false;
         List<ClientNuclear.Active> drawn = new ArrayList<>();
         for (ClientNuclear.Active a : all) if (visible(a, partial)) drawn.add(a);
@@ -118,6 +117,11 @@ public final class DustSources {
             return false;
         }
         drawn.sort(Comparator.comparingDouble(a -> outside(a, eye, partial)));
+        // the haze level alone once every drawn source's youngest dust is past the textured level's window (dwTextured: 0 from
+        // 60 s): the next frame's march takes a quarter of the rays
+        boolean hazeOnly = true;
+        for (int i = 0; i < drawn.size() && i < DustWallPass.MAX_SOURCES; i++) hazeOnly &= pastTexture(drawn.get(i), partial);
+        DustWallPass.hazeOnly = hazeOnly;
         double adapt = 1;
         for (ClientNuclear.Active a : drawn) {
             if (w.count >= DustWallPass.MAX_SOURCES) break;
@@ -153,9 +157,19 @@ public final class DustSources {
         double t = a.seconds(partial);
         if (a.d.blocks(a.wall.shock(t)) <= 1) return false;
         float[] table = table(a);
+        if (table == null) return false;
         double end = a.pall.lifetimeEnd(), last = 0;
         for (int j = 0; j < DustWallPass.NODES; j++) last = Math.max(last, table[4 * j]);
         return t <= last + end;
+    }
+
+    /** Whether every node of a's table is past the textured level's window ({@code dwTextured}: 0 from 60 s after its birth). */
+    static boolean pastTexture(ClientNuclear.Active a, float partial) {
+        float[] table = table(a);
+        if (table == null) return false;
+        double last = 0;
+        for (int j = 0; j < DustWallPass.NODES; j++) last = Math.max(last, table[4 * j]);
+        return a.seconds(partial) > last + 60;
     }
 
     /** How far the eye is outside a's dust (along the ground), blocks; 0 — inside. Nearest first in the frame. */
@@ -231,7 +245,7 @@ public final class DustSources {
         put(p, 7, (float) surge[0], (float) surge[1], (float) surge[2], 0);
         if (s.ground.on()) put(p, 8, s.ground.params.x, s.ground.params.y, s.ground.params.z, s.ground.params.w);
         else put(p, 8, 0, 0, 0, 0);
-        DustMaterialTiles m = MATERIAL.computeIfAbsent(a, k -> new DustMaterialTiles(k.d, k.sourceMaterial()));
+        DustMaterialTiles m = a.materialTiles();
         m.fill();
         s.material = m;
         m.tile(0, p, 36, d.burst().x, d.burst().z);
@@ -251,7 +265,7 @@ public final class DustSources {
         double xe = Math.min(Math.hypot(ex, ez) / Math.max(reach, 1), 1) * (n - 1);
         int je = (int) Math.min(Math.floor(xe), n - 2);
         double haze = 1 - PallField.textured(t - (table[4 * je] + (xe - je) * (table[4 * (je + 1)] - table[4 * je])));
-        double target = adapt * Math.exp(DUST_ADAPT_INSIDE * DUST_K * eyeDepth(table, n, end, reach, t, at) * haze);
+        double target = adapt * Math.exp(DUST_ADAPT_INSIDE * DUST_K * eyeDepth(table, n, end, reach, t, at, m.hard(at[0], at[2])) * haze);
         // the eye takes it over time (presentation, as NukeExposure and Sight.adapted: opening ~2 s, closing ~8 s, est.), on the
         // detonation's clock (the time the player watches; a seek or jump restarts it at the target)
         double[] state = ADAPTED.computeIfAbsent(a, k -> new double[] {target, t});
@@ -275,10 +289,6 @@ public final class DustSources {
             double ageEye = Math.max(t - table[4 * j0], 0);
             double ue = Math.min(Math.log1p(ageEye / PallField.AGE0) / Math.log1p(end / PallField.AGE0) * (PallField.AGES - 1), PallField.AGES - 1);
             lead.layerTop = table[4 * ((1 + (int) Math.round(ue)) * n + j0)];
-            // the haze level alone once the youngest dust anywhere is past the textured level's window (dwTextured: 0 from 60 s)
-            double last = 0;
-            for (int j = 0; j < n; j++) last = Math.max(last, table[4 * j]);
-            DustWallPass.hazeOnly = t > last + 60;
         }
         return state[0];
     }
@@ -325,21 +335,14 @@ public final class DustSources {
      * Drawn optical depth of the dust above the eye (no drift: the eye's own ground point; the table's age nodes read linearly):
      * {@code dwHaze}'s column, its top 0.95 of the table's, the share above by the profile's stratification.
      */
-    static double eyeDepth(float[] table, int n, double end, double reach, double t, float[] eye) {
-        double x = Math.min(Math.hypot(eye[0], eye[2]) / Math.max(reach, 1), 1) * (n - 1);
-        int j = (int) Math.min(Math.floor(x), n - 2);
-        double age = t - (table[4 * j] + (x - j) * (table[4 * (j + 1)] - table[4 * j]));
-        if (age <= 0) return 0;
-        double u = Math.log1p(age / PallField.AGE0) / Math.log1p(end / PallField.AGE0) * (PallField.AGES - 1);
-        if (u >= PallField.AGES - 1) return 0;
-        int k = (int) Math.floor(u);
-        double fr = u - k;
-        int o0 = 4 * ((1 + k) * n + j), o1 = 4 * ((2 + k) * n + j);
-        double top = 0.95 * (table[o0] + fr * (table[o1] - table[o0])), tau = table[o0 + 1] + fr * (table[o1 + 1] - table[o0 + 1]);
-        double h = Math.max(eye[1], 0) / Math.max(top, 1);
+    static double eyeDepth(float[] table, int n, double end, double reach, double t, float[] eye, double hard) {
+        double[] c = new double[2];
+        PallField.drawnColumn(table, n, end, reach, t, eye[0], eye[2], hard, c);
+        if (c[0] <= 0) return 0;
+        double h = Math.max(eye[1], 0) / Math.max(c[1], 1);
         if (h >= 1) return 0;
         double above = 1.25 * (1 - h) - 0.25 * (1 - h * h);
-        return PallField.transfer(tau) * (1 + 0.5 * Math.exp(-age / 1.1)) * above;
+        return c[0] * above;
     }
 
     /** One line for the timing log: the frame's sources. */

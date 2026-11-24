@@ -123,8 +123,9 @@ float dwOpen(vec3 q) {
     if (any(lessThan(w, vec3(0.0))) || any(greaterThanEqual(w, vec3(96.0, 64.0, 96.0)))) return 1.0;
     return texelFetch(PallOpen, (ivec3(floor(w)) + ivec3(PallOpenWrap)) % ivec3(96, 64, 96), 0).r;
 }
-// the committed ground material at ground point xz (from ground zero), shares: water, sand, hard ground (cells not yet
-// committed read as soil: the server commits each cell before the front reaches it, so no point changes on screen)
+// the ground material at ground point xz (from ground zero), shares: water, sand, hard ground (a cell the server has not
+// committed yet holds the detonation's ground-zero material until it does: it commits each cell before the front reaches it,
+// so no point with dust changes on screen)
 vec3 dwMaterialTile(vec4 tile, float row, vec2 xz) {
     vec2 c = (xz - tile.xy) / tile.z;
     vec2 size = vec2(textureSize(Sampler4, 0));

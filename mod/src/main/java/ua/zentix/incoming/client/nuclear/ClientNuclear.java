@@ -58,8 +58,19 @@ public final class ClientNuclear {
         /** Terrain under pall ({@link PallGround}): end of its ray where no world lies behind. */
         final PallGround ground;
         private SourceMaterial source;
+        /** The dust wave's material tiles ({@link #materialTiles}): kept across a replay seek's copy, filled once. */
+        private DustMaterialTiles tiles;
         private UUID revision;
         private int seed = -1;
+
+        /** The ground material the dust wave draws for this detonation ({@link DustMaterialTiles}). */
+        public DustMaterialTiles materialTiles() {
+            if (tiles == null) {
+                tiles = new DustMaterialTiles(d, sourceMaterial());
+                pall.materials(tiles);
+            }
+            return tiles;
+        }
 
         /** Stable server revision, or the first local answer at each legacy world cell. */
         public SourceMaterial sourceMaterial() {
@@ -125,6 +136,8 @@ public final class ClientNuclear {
             this.wall = known == null ? new BlastWall(d) : known.wall;
             this.water = known == null ? new BurstWater() : known.water;
             this.pall = known == null ? new PallField(d) : known.pall;
+            if (known != null) this.tiles = known.tiles;
+            this.pall.prepareWave();
             this.pall.clock(this::clockTicksAt);
             this.storm = known == null ? new FireStorm(d, pall) : known.storm;
             if (known == null) NukeWater.resolve(this, Minecraft.getInstance().level);
@@ -477,6 +490,7 @@ public final class ClientNuclear {
                 a.revision = revision;
                 a.seed = -1;
                 a.source = null;
+                a.tiles = null;
             }
             DETONATIONS.put(d.id(), a);
         }

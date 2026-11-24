@@ -11,9 +11,8 @@ uniform vec3 PallMax;
 uniform vec4 PallAmbient;
 // frame air (pall.glsl: pallAir)
 uniform vec4 PallAir;
-// terrain/water under slot pall and their parameters: pall matter before point
+// terrain/water under both slots' pall, one texture (pall.glsl: pallGroundUv), and their parameters: pall matter before point
 uniform sampler2D Sampler9;
-uniform sampler2D Sampler10;
 uniform vec4 PallGround0;
 uniform vec4 PallGround1;
 // slot Wilson cloud (client/nuclear/BlastWall)
@@ -26,8 +25,8 @@ uniform sampler3D PallOpen;
 uniform vec4 PallOpenAt;
 uniform vec3 PallOpenWrap;
 
-// the dust pass's resolved atlas (DustWallPass: Sampler10 in place of the second slot's relief map, which is empty then), its
-// divisor (0 — no dust pass this frame) and view
+// the dust pass's resolved atlas (DustWallPass), its divisor (0 — no dust pass this frame) and view
+uniform sampler2D Sampler10;
 #moj_import <incoming:wall_layer.glsl>
 uniform mat4 DwViewProj;
 uniform float DwDiv;
@@ -49,7 +48,7 @@ float dustWallThrough(sampler2D scene, vec3 p) {
 // outdoor-air share at p (pall.glsl: pallOpen), outside-window terrain from first available slot map
 float pallOpenHere(vec3 p) {
     if (PallSlot0[1].w > 0.5) return pallOpen(PallOpen, PallOpenAt, PallOpenWrap, Sampler9, PallSlot0, PallGround0, p);
-    return pallOpen(PallOpen, PallOpenAt, PallOpenWrap, Sampler10, PallSlot1, PallGround1, p);
+    return pallOpen(PallOpen, PallOpenAt, PallOpenWrap, Sampler9, PallSlot1, PallGround1, p);
 }
 
 // Slot Wilson cloud before point (up to end): transmittance of both ray crossings
@@ -77,7 +76,7 @@ float pallThrough(sampler2D scene, vec3 dir, float len) {
             tau += f.sigma * ds;
         }
         if (PallSlot1[1].w > 0.5) {
-            PallAt f = pallField(Sampler5, Sampler10, PallSlot1, PallGround1, q, pallRelief(Sampler10, PallSlot1, PallGround1, q.xz));
+            PallAt f = pallField(Sampler5, Sampler9, PallSlot1, PallGround1, q, pallRelief(Sampler9, PallSlot1, PallGround1, q.xz));
             tau += f.sigma * ds;
         }
         through *= exp(-tau * pallOpenHere(q));

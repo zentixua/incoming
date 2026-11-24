@@ -633,11 +633,12 @@ public final class NukePall {
     }
 
     /**
-     * Haze table row of slot k ({@link PallField#row}) in its mat4 (column-major, like shader {@code mat4}): S[2].w; and S[3].w,
-     * 1 — water beneath the pall ({@code pallField} reads the map's water channel only then), 0 — land everywhere.
+     * Haze table row of slot k ({@link PallField#row}) in its mat4 (column-major, like shader {@code mat4}): S[2].w; S[2].z, the
+     * slot's half of the slots' shared terrain texture ({@code pall.glsl}: {@code pallGroundUv}); and S[3].w, 1 — water beneath
+     * the pall ({@code pallField} reads the map's water channel only then), 0 — land everywhere.
      */
     static void tableRows(org.joml.Matrix4f m, int k, boolean water) {
-        m.m22(0).m23(tableRow(k)).m33(water ? 1 : 0);
+        m.m22(k).m23(tableRow(k)).m33(water ? 1 : 0);
     }
 
     /** Center of slot k's haze table row in the pall-table texture, height 0..1. */

@@ -9,7 +9,7 @@
 //   [1] = (drift by wind x, z of what was lifted at the moment of detonation, blocks (billow noise drifts with it); length of
 //          the haze trail, blocks; 1 — slot exists, 2 — and there is hard ground or sand under its pall: channels b, a of the
 //          relief map are read)
-//   [2] = (wind x, z — unit; 0; v of the haze row in the table)
+//   [2] = (wind x, z — unit; the slot's half of the shared terrain texture, pallGroundUv; v of the haze row in the table)
 //   [3] = (0; noise tile, blocks; seconds after detonation; 1 — there is water under the pall and its map, channel g of the
 //          slot's relief map, PallGround; 0 — everywhere land)
 // Table: across the width — radius 0..reach; one row per slot — the haze (attenuation, height, fire light from below; 0).
@@ -123,9 +123,16 @@ float pallEdge(float u) {
 
 // share of water under the point rel (from the epicenter along the ground) by the slot's map (PallGround.water); no map
 // (G.x = 0) — land
-float pallWater(sampler2D ground, vec4 G, vec2 rel) {
+// A slot's map in the slots' shared terrain texture (PallPass.ground: slot k's square map at x = k·side, k = S[2].z), clamped to
+// its own texel centres so bilinear filtering never reads the other slot's map; a single map (side × side) is read whole.
+vec2 pallGroundUv(sampler2D ground, mat4 S, vec2 uv) {
+    vec2 size = vec2(textureSize(ground, 0));
+    float h = 0.5 / size.y;
+    return vec2((clamp(uv.x, h, 1.0 - h) + S[2].z) * size.y / size.x, uv.y);
+}
+float pallWater(sampler2D ground, mat4 S, vec4 G, vec2 rel) {
     if (G.x <= 0.0) return 0.0;
-    return clamp(textureLod(ground, rel / (2.0 * G.x) + 0.5, 0.0).g, 0.0, 1.0);
+    return clamp(textureLod(ground, pallGroundUv(ground, S, rel / (2.0 * G.x) + 0.5), 0.0).g, 0.0, 1.0);
 }
 
 // soil under the point rel (from the epicenter along the ground) by the slot's map: x — share of hard ground (PallGround.hard: rock,
@@ -133,7 +140,7 @@ float pallWater(sampler2D ground, vec4 G, vec2 rel) {
 // reference loamy soil); both fractions of the ground; no map or neither under the pall (S[1].w < 1.5) — reference soil
 vec2 pallSoil(sampler2D ground, mat4 S, vec4 G, vec2 rel) {
     if (G.x <= 0.0 || S[1].w < 1.5) return vec2(0.0);
-    return clamp(textureLod(ground, rel / (2.0 * G.x) + 0.5, 0.0).ba, 0.0, 1.0);
+    return clamp(textureLod(ground, pallGroundUv(ground, S, rel / (2.0 * G.x) + 0.5), 0.0).ba, 0.0, 1.0);
 }
 
 // Albedo ω' of lofted dust: sand's share of the lofted mass (PallField.sandShare) — sand and hard ground are fractions of the ground as the
@@ -160,10 +167,10 @@ PallAt pallField(sampler2D table, sampler2D ground, mat4 S, vec4 G, vec3 p, floa
     float top = max(haze.g, 1.0), sh = haze.r * (1.0 - 0.5 * along / max(len, 1.0)) * pallEdge(uh), fire = haze.b;
     float wet = 0.0;
     if (S[3].w > 0.5 && sh + fire > 0.0) {
-        float dry = 1.0 - pallWater(ground, G, source);
+        float dry = 1.0 - pallWater(ground, S, G, source);
         sh *= dry;
         fire *= dry;
-        wet = pallWater(ground, G, q);
+        wet = pallWater(ground, S, G, q);
     }
     PallAt a;
     a.height = above / top;
@@ -213,7 +220,7 @@ vec2 pallBox(vec3 dir, vec3 lo, vec3 hi) {
 
 // top of the relief under point xz (from the eye) — from the eye by y (PallGround.at)
 float pallGroundAt(sampler2D ground, mat4 S, vec4 G, vec2 xz) {
-    return S[0].z + textureLod(ground, (xz - S[0].xy) / (2.0 * G.x) + 0.5, 0.0).r;
+    return S[0].z + textureLod(ground, pallGroundUv(ground, S, (xz - S[0].xy) / (2.0 * G.x) + 0.5), 0.0).r;
 }
 
 // Relief under point xz (from the eye) above the ground under the epicenter, blocks: the floor of the pall layer (pallField:
