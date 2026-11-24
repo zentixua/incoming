@@ -17,6 +17,7 @@
         { "name": "DwHistory", "type": "float", "count": 2, "values": [ 1.0, -60.0 ] },
         { "name": "DwPrevScene", "type": "float", "count": 1, "values": [ 0.0 ] },
         { "name": "DwInterleave", "type": "float", "count": 4, "values": [ 0.0, 0.0, 0.0, 0.0 ] },
-        { "name": "DwLow", "type": "float", "count": 2, "values": [ 1.0, 1.0 ] }
+        { "name": "DwLow", "type": "float", "count": 2, "values": [ 1.0, 1.0 ] },
+        { "name": "DwDiag", "type": "float", "count": 3, "values": [ 0.0, 0.0, 0.0 ] }
     ]
 }

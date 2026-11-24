@@ -173,7 +173,7 @@ public final class DustSources {
 
     /** Whether detonation a has dust on its table now: the front has left ground zero and some node's dust is younger than the table's end. */
     static boolean visible(ClientNuclear.Active a, float partial) {
-        double t = a.seconds(partial);
+        double t = seconds(a, partial);
         if (a.d.blocks(a.wall.shock(t)) <= 1) return false;
         float[] table = table(a);
         if (table == null) return false;
@@ -182,18 +182,30 @@ public final class DustSources {
         return t <= last + end;
     }
 
+    /** Diagnostics ({@code DustWallDiag.freezeAge}): each source's age when the freeze began. */
+    private static final Map<ClientNuclear.Active, double[]> FROZEN = new WeakHashMap<>();
+
+    /** Source a's model seconds now, or its frozen age under the diagnostic freeze. */
+    private static double seconds(ClientNuclear.Active a, float partial) {
+        if (!ua.zentix.incoming.client.fx.layer.DustWallDiag.freezeAge) {
+            if (!FROZEN.isEmpty()) FROZEN.clear();
+            return a.seconds(partial);
+        }
+        return FROZEN.computeIfAbsent(a, k -> new double[] {k.seconds(partial)})[0];
+    }
+
     /** Whether every node of a's table is past the textured level's window ({@code dwTextured}: 0 from 60 s after its birth). */
     static boolean pastTexture(ClientNuclear.Active a, float partial) {
         float[] table = table(a);
         if (table == null) return false;
         double last = 0;
         for (int j = 0; j < DustWallPass.NODES; j++) last = Math.max(last, table[4 * j]);
-        return a.seconds(partial) > last + 60;
+        return seconds(a, partial) > last + 60;
     }
 
     /** How far the eye is outside a's dust (along the ground), blocks; 0 — inside. Nearest first in the frame. */
     private static double outside(ClientNuclear.Active a, Vec3 eye, float partial) {
-        double t = a.seconds(partial);
+        double t = seconds(a, partial);
         double r = a.d.blocks(a.wall.shock(t)) + a.d.blocks(a.d.windSpeed()) * PallField.DRIFT * a.d.scale() * t;
         return Math.max(0, Math.hypot(eye.x - a.d.burst().x, eye.z - a.d.burst().z) - r);
     }
@@ -220,7 +232,7 @@ public final class DustSources {
     private static double source(ClientNuclear.Active a, Vec3 eye, float partial, PallPass.Frame f, DustWallPass.Source s,
             DustWallPass.Frame lead) {
         Detonation d = a.d;
-        double t = a.seconds(partial), ticks = a.ticks(partial);
+        double t = seconds(a, partial), ticks = FROZEN.isEmpty() ? a.ticks(partial) : t * 20.0 * a.d.scale();
         int n = DustWallPass.NODES;
         float[] table = table(a);
         s.id = a;
@@ -262,15 +274,17 @@ public final class DustSources {
         for (int c = 0; c < 3; c++) lit[c] = fc[0] <= 0 ? 0 : (float) PallLight.flame(f.base, fl * fc[c], fc[c] / fc[0]);
         put(p, 5, lit[0], lit[1], lit[2], 0);
         a.ground.frame(s.ground);
-        put(p, 6, s.ground.on() ? s.ground.params.y : 0, s.ground.on() ? s.ground.params.z : 0, 0, 0);
+        boolean relief = s.ground.on() && ua.zentix.incoming.client.fx.layer.DustWallDiag.terrain;
+        put(p, 6, relief ? s.ground.params.y : 0, relief ? s.ground.params.z : 0, 0, 0);
         put(p, 7, (float) surge[0], (float) surge[1], (float) surge[2], 0);
-        if (s.ground.on()) put(p, 8, s.ground.params.x, s.ground.params.y, s.ground.params.z, s.ground.params.w);
+        if (relief) put(p, 8, s.ground.params.x, s.ground.params.y, s.ground.params.z, s.ground.params.w);
         else put(p, 8, 0, 0, 0, 0);
         DustMaterialTiles m = a.materialTiles();
         m.fill();
         s.material = m;
         m.tile(0, p, 36, d.burst().x, d.burst().z);
         m.tile(1, p, 40, d.burst().x, d.burst().z);
+        if (!ua.zentix.incoming.client.fx.layer.DustWallDiag.material) java.util.Arrays.fill(p, 36, 44, 0f);
         // the dust's exposure: DUST_ADAPT once sun and sky alone light it, 1 while the fireball outshines them (its light at the
         // eye, R²/d²), smooth as the fireball fades
         double dx = bx - ex, dy = by - ey, dz = bz - ez;

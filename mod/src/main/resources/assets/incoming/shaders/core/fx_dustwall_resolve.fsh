@@ -36,6 +36,9 @@ uniform vec2 DwHistory;
 // without history, their mean (the pall's interleave, PallPass.Step: 2 at most, 3–4 burnt a lattice into a still view)
 uniform vec4 DwInterleave;
 uniform vec2 DwLow;
+// diagnostics (DustWallDiag): x > 0 — the clamp's width in standard deviations (0: the shipped 1.5); y 1 — each pixel's own
+// history (a still eye), no reprojection; z 1 — a fresh ray's value is not held within its neighbours' range
+uniform vec3 DwDiag;
 out vec4 fragColor;
 
 bool interleaved() {
@@ -85,6 +88,9 @@ void main() {
     // neighbourhood at the same world distance (a neighbour across an object's edge is another place): this frame's rays
     vec4 m1 = traced ? cur : vec4(0.0), m2 = traced ? cur * cur : vec4(0.0);
     float count = traced ? 1.0 : 0.0;
+    // the depth-alike rays around (not this one): their range bounds this ray's value
+    vec4 lo = vec4(1e30), hi = vec4(-1e30);
+    float around = 0.0;
     for (int k = 0; k < 9; k++) {
         if (k == 4) continue;
         ivec2 c = clamp(p + ivec2(k % 3 - 1, k / 3 - 1), ivec2(0), low - 1);
@@ -96,6 +102,18 @@ void main() {
         m1 += v;
         m2 += v * v;
         count += 1.0;
+        lo = min(lo, v);
+        hi = max(hi, v);
+        around += 1.0;
+    }
+    // One ray's sample along a march cell is noisy (a dense or a clear sub-cell): a single march pixel darker or lighter than
+    // every depth-alike ray around it is that noise, not dust structure (at a fifth of the frame a pixel is 5 screen pixels).
+    // On a near, moving wall the history kept those pixels, and the bilinear lay drew them as a lattice of dark "+" dots.
+    if (traced && around >= 2.0 && DwDiag.z < 0.5) {
+        vec4 held = clamp(cur, lo, hi);
+        m1 += held - cur;
+        m2 += held * held - cur * cur;
+        cur = held;
     }
     // between rays without a depth-alike ray around: the nearest rays at any depth (a lone pixel across an edge)
     if (count < 0.5) {
@@ -144,7 +162,7 @@ void main() {
     }
     float expected = here >= 1e8 ? 1e9 : origin + previousAxis * world;
     float before = expected;
-    if (DwPrevScene > 0.5) {
+    if (DwPrevScene > 0.5 && DwDiag.y < 0.5) {
         before = pallScene(texelFetch(Sampler3, ivec2(prevPixel), 0).r);
         if (!pallSamePlace(before, expected)) {
             fragColor = cur;
@@ -154,6 +172,7 @@ void main() {
     ivec2 past = textureSize(Sampler1, 0);
     past.x /= 3;
     vec2 l = vec2(lattice(prevPixel.x, float(size.x), float(past.x)), lattice(prevPixel.y, float(size.y), float(past.y)));
+    if (DwDiag.y > 0.5) l = vec2(p);
     // the four history samples around it, each only where the previous frame saw the same distance (a bilinear read took
     // dust clipped by a far background into a pixel whose previous depth was the foreground's)
     vec2 f0 = floor(l), fr = l - f0;
@@ -163,7 +182,7 @@ void main() {
         ivec2 o = ivec2(k % 2, k / 2);
         ivec2 c = clamp(ivec2(f0) + o, ivec2(0), past - 1);
         float w = mix(1.0 - fr.x, fr.x, float(o.x)) * mix(1.0 - fr.y, fr.y, float(o.y));
-        if (DwPrevScene > 0.5) {
+        if (DwPrevScene > 0.5 && DwDiag.y < 0.5) {
             float was = pallScene(texelFetch(Sampler3, ivec2(min((vec2(c) + 0.5) * DwPrevDiv, vec2(size) - 0.5)), 0).r);
             if (!pallSamePlace(was, before)) continue;
         }
@@ -186,7 +205,8 @@ void main() {
     }
     // to the neighbourhood's range, which always holds this pixel's own sample (a clear pixel among dusty neighbours was
     // pulled toward their dust)
-    vec4 h = clamp(hs / ws, min(m1 - 1.5 * sd, cur), max(m1 + 1.5 * sd, cur));
+    float gamma = DwDiag.x > 0.0 ? DwDiag.x : 1.5;
+    vec4 h = clamp(hs / ws, min(m1 - gamma * sd, cur), max(m1 + gamma * sd, cur));
     // a pixel between rays this frame keeps its held history (weight 1 there: its ray comes next frame)
     fragColor = traced ? mix(h, cur, DwHistory.x) : h;
 }

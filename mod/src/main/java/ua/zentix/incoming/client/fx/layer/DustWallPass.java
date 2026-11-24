@@ -249,6 +249,7 @@ public final class DustWallPass {
         // once only the haze level is left (no dust younger than its fade's end anywhere on the table), a quarter of the rays:
         // the haze's light and shape are smooth at that scale (no visible difference), the young level's not
         if (hazeOnly) divisor *= 2;
+        if (DustWallDiag.div > 0) divisor = DustWallDiag.div;
         // the ladder's window must not mix frames at both divisors (its estimate scales by this rung's samples)
         if (hazeOnly != preparedHazeOnly) {
             preparedHazeOnly = hazeOnly;
@@ -317,6 +318,7 @@ public final class DustWallPass {
             RenderSystem.setShaderTexture(3, groundAtlas);
             RenderSystem.setShaderTexture(4, materialAtlas);
             if (PallPass.submits(m, warming)) OpenAir.bind(m, true, warming);
+            if (!DustWallDiag.openAir) m.safeGetUniform("PallOpenAt").set(0f, 0f, 0f, 0f);
             m.safeGetUniform("DwSourceCount").set((float) (warming ? 1 : f.count));
             m.safeGetUniform("DwSlotsA").set(SLOT_OF[0], SLOT_OF[1], SLOT_OF[2], SLOT_OF[3]);
             m.safeGetUniform("DwSlotsB").set(SLOT_OF[4], SLOT_OF[5], SLOT_OF[6], SLOT_OF[7]);
@@ -372,6 +374,7 @@ public final class DustWallPass {
                 r.safeGetUniform("DwDiv").set((float) div);
                 r.safeGetUniform("DwInterleave").set(builtInterleave ? 1f : 0f, (float) (frame & 1), 0f, 0f);
                 r.safeGetUniform("DwLow").set((float) width, (float) height);
+                r.safeGetUniform("DwDiag").set(DustWallDiag.clampWidth, DustWallDiag.reprojection ? 0f : 1f, DustWallDiag.outliers ? 0f : 1f);
                 r.safeGetUniform("DwPrevDiv").set((float) historyDiv[latest]);
                 r.safeGetUniform("DwReproject").set(dx, dy, dz, past ? 1f : 0f);
                 r.safeGetUniform("DwHistory").set(HISTORY, f.layerTop - f.eye[1]);

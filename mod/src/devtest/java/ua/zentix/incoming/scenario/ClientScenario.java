@@ -1397,6 +1397,14 @@ public final class ClientScenario {
             case "history" -> ua.zentix.incoming.client.fx.layer.DustWallDiag.history = !v.equals("0");
             case "interleave" -> ua.zentix.incoming.client.fx.layer.DustWallDiag.interleave = !v.equals("0");
             case "freeze" -> ua.zentix.incoming.client.fx.layer.DustWallDiag.freeze = v.equals("1");
+            case "freezeage" -> ua.zentix.incoming.client.fx.layer.DustWallDiag.freezeAge = v.equals("1");
+            case "terrain" -> ua.zentix.incoming.client.fx.layer.DustWallDiag.terrain = !v.equals("0");
+            case "material" -> ua.zentix.incoming.client.fx.layer.DustWallDiag.material = !v.equals("0");
+            case "openair" -> ua.zentix.incoming.client.fx.layer.DustWallDiag.openAir = !v.equals("0");
+            case "clamp" -> ua.zentix.incoming.client.fx.layer.DustWallDiag.clampWidth = Float.parseFloat(v);
+            case "outliers" -> ua.zentix.incoming.client.fx.layer.DustWallDiag.outliers = !v.equals("0");
+            case "div" -> ua.zentix.incoming.client.fx.layer.DustWallDiag.div = Integer.parseInt(v);
+            case "reprojection" -> ua.zentix.incoming.client.fx.layer.DustWallDiag.reprojection = !v.equals("0");
             case "dump" -> ua.zentix.incoming.client.fx.layer.DustWallDiag.dump =
                     Minecraft.getInstance().gameDirectory.toPath().resolve("screenshots").resolve(v).toString();
             default -> throw new IllegalArgumentException("dw: " + arg);
