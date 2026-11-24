@@ -523,10 +523,10 @@ public abstract class StrikeProjectile extends Entity implements IEntityWithComp
         return entityData.get(DATA_OWNER).orElse(null);
     }
 
+    /** The owner online in any level, or null ({@link ua.zentix.incoming.strike.StrikeOwner}). */
     @Nullable
     public ServerPlayer ownerPlayer() {
-        UUID id = ownerId();
-        return id != null && level() instanceof ServerLevel sl ? sl.getServer().getPlayerList().getPlayer(id) : null;
+        return level() instanceof ServerLevel sl ? ua.zentix.incoming.strike.StrikeOwner.online(sl, ownerId()) : null;
     }
 
     /** Operator camera tracks sighted target (synchronized for camera presentation). */
@@ -1578,7 +1578,7 @@ public abstract class StrikeProjectile extends Entity implements IEntityWithComp
         }
         Vec3 v = getDeltaMovement();
         discard();
-        if (level.isPositionEntityTicking(BlockPos.containing(at))) DebrisSpawner.wreck(level, at, v, noseLength(), rules);
+        if (level.isPositionEntityTicking(BlockPos.containing(at))) DebrisSpawner.wreck(level, at, v, noseLength(), rules, ownerId());
     }
 
     // ---------------------------------------------------------------- synchronization and interpolation

@@ -46,6 +46,7 @@ import ua.zentix.incoming.registry.ModDataMaps;
 import ua.zentix.incoming.registry.ModParticles;
 import ua.zentix.incoming.registry.ModTags;
 import ua.zentix.incoming.strike.ImpactCost;
+import ua.zentix.incoming.strike.StrikeOwner;
 import ua.zentix.incoming.strike.StrikeWorld;
 import ua.zentix.incoming.strike.Timeline;
 import ua.zentix.incoming.strike.ImpactWork;
@@ -183,7 +184,7 @@ public final class Warheads {
      * explosions selected rays/damaged entities ({@link BlastArea#peersPicking})
      */
     static StagedExplosion explode(ServerLevel level, @Nullable BlastArea area, List<StagedExplosion> after, Vec3 at, float power,
-                                   boolean fire, @Nullable Entity direct, @Nullable Entity owner, @Nullable ExplosionDamageCalculator calculator) {
+                                   boolean fire, @Nullable Entity direct, @Nullable UUID owner, @Nullable ExplosionDamageCalculator calculator) {
         BlastArea held = area != null ? area.retain() : BlastArea.hold(level, at, reach(power));
         boolean blocks = held.rules().blockDamage();
         boolean burns = fire && held.rules().fire();
@@ -501,7 +502,7 @@ public final class Warheads {
      * pressure–impulse curve, room gases, {@code BlastBody}) in impact-queue work units.
      */
     static StagedExplosion charge(ServerLevel level, BlastArea area, Vec3 at, double tntKg, SlabBreach.Placement placement,
-                                  @Nullable Vec3 axis, @Nullable Entity direct, @Nullable Entity owner) {
+                                  @Nullable Vec3 axis, @Nullable Entity direct, @Nullable UUID owner) {
         boolean blocks = area.rules().blockDamage();
         StagedExplosion job = new StagedExplosion(area.retain(), List.of(), at, tntKg, placement, axis, blocks, direct, owner);
         area.queued(job, level.getGameTime());
@@ -609,8 +610,9 @@ public final class Warheads {
         private final Vec3 pos;
         @Nullable
         private final Entity direct;
+        /** Owner UUID: each damage names them as attacker while online ({@link StrikeOwner}). */
         @Nullable
-        private final Entity owner;
+        private final UUID owner;
         private final GroundMaterial mat;
         private final BlastArea area;
         /** Main explosion: other strike work waits for its removals. */
@@ -628,7 +630,7 @@ public final class Warheads {
             this.area = BlastArea.hold(level, pos, held, impact);
             try {
                 this.direct = direct;
-                this.owner = ownerId == null ? null : level.getPlayerByUUID(ownerId);
+                this.owner = ownerId;
                 this.mat = GroundMaterial.sample(level, BlockPos.containing(pos));
                 int kind = switch (spec.blast()) {
                     case MISSILE -> S2C.Blast.MISSILE;
@@ -697,7 +699,7 @@ public final class Warheads {
                 unit(level, area, main, ImpactCost.Kind.GROUND, "Fuel fire", l -> happened() ? FuelFires.pour(l, area.claims(), pos, weapon, born, reach) : 0);
             }
             unit(level, area, main, ImpactCost.Kind.DEBRIS, "Debris",
-                    l -> !happened() ? 0 : missile ? DebrisSpawner.missile(l, pos, mat, area.rules()) : DebrisSpawner.drone(l, pos, mat, area.rules()));
+                    l -> !happened() ? 0 : missile ? DebrisSpawner.missile(l, pos, mat, area.rules(), owner) : DebrisSpawner.drone(l, pos, mat, area.rules(), owner));
             FragmentModel fragments = FragmentModel.of(weapon.spec());
             // In Sable plot grid, rays would hit craft blocks: fragments do not break craft.
             if (fragments != null && !inPlots) FragmentStrike.queue(level, area, main, this::happened, fragments, pos, axis, seed, direct, owner,
@@ -732,7 +734,7 @@ public final class Warheads {
         @Nullable
         private final Entity direct;
         @Nullable
-        private final Entity owner;
+        private final UUID owner;
         private final GroundMaterial ventMat;
         /** Material/depth/time sampled before excavation changes the source column. */
         private final S2C.Quake groundShock;
@@ -751,7 +753,7 @@ public final class Warheads {
             this.pos = pos;
             this.entry = entry;
             this.direct = direct;
-            this.owner = ownerId == null ? null : level.getPlayerByUUID(ownerId);
+            this.owner = ownerId;
             BlockPos c = BlockPos.containing(pos);
             GroundMaterial mat = GroundMaterial.sample(level, c);
             this.ventMat = GroundMaterial.sample(level, BlockPos.containing(entry));
@@ -884,7 +886,7 @@ public final class Warheads {
             int n = 0;
             for (LivingEntity e : level.getEntitiesOfClass(LivingEntity.class, new AABB(pos, pos).inflate(r), LivingEntity::isAlive)) {
                 if (e.position().distanceTo(pos) > r) continue;
-                e.hurt(ModDamageTypes.source(level, ModDamageTypes.SHOCKWAVE, direct, owner), Float.MAX_VALUE);
+                StrikeOwner.hurt(e, ModDamageTypes.source(level, ModDamageTypes.SHOCKWAVE, direct, StrikeOwner.online(level, owner)), Float.MAX_VALUE);
                 n++;
             }
             return n;

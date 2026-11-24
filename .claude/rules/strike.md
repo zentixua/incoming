@@ -199,6 +199,23 @@ paths:
   (`ProgressGameTests.Credited`): `FakePlayer` drops stats and advancements; connection before `moveTo`.
   Regressions: `ProgressGameTests`, `ProgressReviewGameTests`, `ProgressRoundTwoGameTests`, `ProgressTest`.
 
+## Owner identity (`strike/StrikeOwner`, roadmap B3)
+- Attribution is the owner UUID, saved on whatever carries a strike (orders, `RoundRef` carriers, projectile NBT,
+  `ScheduledStrike`, `NuclearEvents.Impact`, `DebrisEntity` `owner`, the living attachment `BURN_SHOCK_OWNER`) and on
+  the api events, whatever the owner's online state. Credit is the attacker entity in the damage source, looked up from
+  that UUID at the moment of damage with `StrikeOwner.online` (player list: any level; offline or fake profile: null;
+  dead before respawn: still credited, as vanilla credits an arrow). Never `level.getPlayerByUUID` (same level only) and
+  never an attacker entity held across ticks (a logout or respawn would credit a stale object): jobs keep the UUID.
+- Every strike `hurt` goes through `StrikeOwner.hurt`: an attacker in another level is dropped as the victim's revenge
+  target (`setLastHurtByMob`; vanilla target goals measure across levels by raw coordinates), kill credit stays. The
+  vanilla-explosion paths (plot grid, craft) hurt through vanilla and skip it.
+- One cause, one attacker: blast, shockwave, kinetic hit, fragments, debris (a wreck's pieces carry the shot-down
+  round's owner), nuclear wave, light, prompt radiation, burn shock (`FlashBurns` records the owner of the flash that
+  brought shock; `player_burn_shock` names them). No attacker: radiation sickness (merged dose, fallout, rain),
+  `LateExposure` catch-up (an estimate at load, no owner kept after the front), the wave's craft blasts, spreading fire.
+- Claim queries keep B2's attribution: `ClaimQuery` direct source is the projectile, never the owner (indirect source
+  null); nuclear queries have none. Regressions: `OwnerGameTests` (batches `owner_*`).
+
 ## Unpaid nuclear review
 - `NuclearReview` is separate player state, not a `NuclearKeys` order. Global nuclear abort invalidates it on the
   server before sending cancellation; actual death invalidates it through `LivingDeathEvent`, with dead/removed

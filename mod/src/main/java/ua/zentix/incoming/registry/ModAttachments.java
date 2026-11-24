@@ -44,6 +44,13 @@ public final class ModAttachments {
             () -> AttachmentType.builder(() -> ua.zentix.incoming.nuclear.world.NukeSeen.NONE)
                     .serialize(ua.zentix.incoming.nuclear.world.NukeSeen.CODEC, s -> !s.equals(ua.zentix.incoming.nuclear.world.NukeSeen.NONE)).build());
 
+    /**
+     * Living entity: owner of the nuclear flash whose burn brought it to burn shock ({@code FlashBurns}), named when the
+     * shock kills; saved with the entity, as the burn is. Absent for an unowned detonation.
+     */
+    public static final Supplier<AttachmentType<java.util.UUID>> BURN_SHOCK_OWNER = REGISTER.register("burn_shock_owner",
+            () -> AttachmentType.builder(() -> net.minecraft.Util.NIL_UUID).serialize(net.minecraft.core.UUIDUtil.CODEC).build());
+
     /** Player retinal burns — flash blind spots; reset on death (not copied). */
     public static final Supplier<AttachmentType<RetinaScars>> RETINA = REGISTER.register("retina",
             () -> AttachmentType.builder(() -> RetinaScars.NONE).serialize(RetinaScars.CODEC, s -> !s.isEmpty()).build());

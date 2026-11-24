@@ -401,7 +401,7 @@ public class BunkerBusterEntity extends StrikeProjectile {
         AABB box = new AABB(from, to).inflate(r + 0.5);
         for (LivingEntity e : level.getEntitiesOfClass(LivingEntity.class, box, LivingEntity::isAlive)) {
             if (e.getBoundingBox().inflate(r).clip(from, to).isPresent() || e.getBoundingBox().inflate(r).contains(from)) {
-                e.hurt(ModDamageTypes.source(level, ModDamageTypes.KINETIC, this, ownerPlayer()), Float.MAX_VALUE);
+                ua.zentix.incoming.strike.StrikeOwner.hurt(e, ModDamageTypes.source(level, ModDamageTypes.KINETIC, this, ownerPlayer()), Float.MAX_VALUE);
             }
         }
     }

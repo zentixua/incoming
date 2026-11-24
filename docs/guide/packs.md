@@ -187,6 +187,29 @@ A datapack advancement for surviving a 20 psi blast of an ICBM-sized yield:
 }
 ```
 
+## Kill credit
+
+- Every injury Incoming deals is vanilla damage of its own types (`incoming:strike`, `incoming:shockwave`,
+  `incoming:kinetic`, `incoming:fragment`, `incoming:debris`, the nuclear ones and their `incoming:player_…` pairs)
+  with the round's owner as the attacker (`DamageSource.getEntity()`) when the owner is online, in any dimension, at
+  the moment of the damage; the projectile or the debris, where there is one, is the direct source. Vanilla gives the
+  credit from there: death messages, `minecraft:player_killed_entity`, the kill statistics and their scoreboard
+  criteria (`playerKillCount`, `totalKillCount`, `minecraft.killed:minecraft.<entity>`), player-only loot and
+  experience. `LivingDeathEvent` listeners read the owner the same way.
+- The owner is kept as a UUID on everything that carries a strike, whoever is online: orders, rounds and their events,
+  projectiles in flight and off-world, debris, and a burn that will end in shock; all but debris (it lands within
+  seconds and is not saved) survive a restart. Only the attacker needs the owner online: an offline owner's strike
+  hurts with no attacker, and nothing is credited later.
+- One cause has one attacker: the blast, the B-2 bomb's hit and shockwave, fragments, debris (the falling parts of a
+  round shot down belong to the round's owner), the nuclear wave, its light, prompt radiation, and burn shock from the
+  burst whose light caused it. No attacker: radiation sickness from the gathered dose and fallout (bursts and the rain
+  add up), fire spreading as game fire, mobs that load after a burst and receive what their place received, and the
+  wave's blasts on Create Aeronautics craft.
+- PvP and `/team` friendly fire apply to that damage as to an arrow. A mob hurt by an owner in another dimension takes
+  no revenge target: it cannot reach them.
+- Rounds from the console, command blocks and ownerless launchers have no owner. A fake player is credited only under
+  an online player's profile, as in [Advancements and statistics](#advancements-and-statistics).
+
 ## Permissions
 
 Who may launch is decided by NeoForge permission nodes. Without a permission mod they follow the settings
@@ -240,8 +263,8 @@ everywhere else; only the blocks stay.
 
 - The claim mod decides as for any explosion: in Open Parties and Claims the claim's explosion protection, in FTB
   Chunks the team's "Allow explosions" setting. A conventional strike carries its projectile as the source of the
-  explosion. A nuclear burst has no source, so FTB Chunks protects against it only with `protect_unknown_explosions`
-  on (its default).
+  explosion, not its owner. A nuclear burst has no source, so FTB Chunks protects against it only with
+  `protect_unknown_explosions` on (its default).
 - A nuclear burst decides each chunk for good: a chunk found protected when the flash or the wave reaches it keeps its
   blocks for that whole burst, even if the claim is removed a moment later, and a claim placed after the flash still
   keeps the wave out. The decision is saved with the world: ruins built after a restart, or when a far chunk loads

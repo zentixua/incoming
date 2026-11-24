@@ -103,11 +103,12 @@ public final class BurnGameTests {
         h.assertTrue(left != null && left.getAmplifier() == BurnsEffect.SHOCK && left.getDuration() == 40, "the second explosion moved the shock: " + left);
 
         ServerLevel level = h.getLevel();
-        FakePlayer launcher = new FakePlayer(level, new GameProfile(UUID.randomUUID(), "burns_launcher"));
+        // the launcher is credited by UUID while online (StrikeOwner): a real player in the player list
+        ProgressGameTests.Credited launcher = ProgressGameTests.Credited.online(h, "burns_launcher", 0, new BlockPos(28, 12, 36));
         Player ally = player(h, "burns_ally", false, 32.5, 36.5);
         Player enemy = player(h, "burns_enemy", true, 36.5, 36.5);
-        FlashBurns.burn(level, d, ally, 30, launcher);
-        FlashBurns.burn(level, d, enemy, 30, launcher);
+        FlashBurns.burn(level, d, ally, 30, launcher.getUUID());
+        FlashBurns.burn(level, d, enemy, 30, launcher.getUUID());
         h.assertTrue(level(ally) < 0 && !ally.isOnFire(), "a player, whom the rules do not allow to be injured, was burned: " + about(ally) + (ally.isOnFire() ? ", lit" : ""));
         h.assertTrue(level(enemy) == BurnsEffect.SHOCK, "the player whom the rules allow to be wounded is not burned through the shirt: " + about(enemy));
 

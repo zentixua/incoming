@@ -28,6 +28,7 @@ import ua.zentix.incoming.nuclear.NuclearWarhead;
 import ua.zentix.incoming.nuclear.model.BlastInjury;
 import ua.zentix.incoming.nuclear.model.BlastModel;
 import ua.zentix.incoming.registry.ModDamageTypes;
+import ua.zentix.incoming.strike.StrikeOwner;
 import ua.zentix.incoming.registry.ModTags;
 import ua.zentix.incoming.util.Terrain;
 
@@ -364,7 +365,7 @@ public final class BlastBody {
         if (e instanceof Player p && p.getAbilities().invulnerable) return;
         double lost = BlastInjury.lostShare(death, injury, fate);
         float dmg = lost >= 1 ? Float.MAX_VALUE : (float) (lost * e.getMaxHealth());
-        if (dmg >= 0.5f) e.hurt(ModDamageTypes.source(level, wave.damage(), direct, owner), dmg);
+        if (dmg >= 0.5f) StrikeOwner.hurt(e, ModDamageTypes.source(level, wave.damage(), direct, owner), dmg);
     }
 
     /** Body randomness 0..1 ({@link BlastInjury#lostShare}): unique per body and wave. */

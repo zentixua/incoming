@@ -31,9 +31,12 @@ import net.minecraft.world.phys.Vec3;
 import org.jetbrains.annotations.Nullable;
 import ua.zentix.incoming.api.ClaimQuery;
 import ua.zentix.incoming.claim.Claims;
+import ua.zentix.incoming.strike.StrikeOwner;
 import ua.zentix.incoming.strike.StrikeRules;
 import ua.zentix.incoming.registry.ModDamageTypes;
 import ua.zentix.incoming.registry.ModEntities;
+
+import java.util.UUID;
 
 /**
  * Explosion debris: ground block, casing piece, or glowing ember. Flies ballistically (like falling_block),
@@ -54,6 +57,9 @@ public class DebrisEntity extends Entity {
     private boolean groundMaterial;
     /** World rules of the strike that threw it ({@code world.debris_stay}, {@code world.fire}); the config's when spawned otherwise. */
     private StrikeRules rules = StrikeRules.live();
+    /** Owner of the strike that threw it (saved): a hit names them as attacker while online ({@link StrikeOwner}). */
+    @Nullable
+    private UUID owner;
     private final IntSet hit = new IntOpenHashSet();
     /** Client: random rotation in flight (degrees per tick around two axes). */
     public final float spinX, spinZ;
@@ -91,10 +97,17 @@ public class DebrisEntity extends Entity {
         return debris;
     }
 
-    /** Lands under {@code rules}: those of the strike that threw it ({@link StrikeRules}). */
-    public DebrisEntity under(StrikeRules rules) {
+    /** Lands under {@code rules} and hits for {@code owner}: those of the strike that threw it ({@link StrikeRules}). */
+    public DebrisEntity under(StrikeRules rules, @Nullable UUID owner) {
         this.rules = rules;
+        this.owner = owner;
         return this;
+    }
+
+    /** Owner of the strike that threw it, or null. */
+    @Nullable
+    public UUID owner() {
+        return owner;
     }
 
     /** The rules it lands under. */
@@ -154,7 +167,7 @@ public class DebrisEntity extends Entity {
         for (Entity e : level.getEntities(this, getBoundingBox().expandTowards(v).inflate(0.2), e -> e instanceof LivingEntity && e.isAlive())) {
             if (!hit.add(e.getId())) continue;
             float dmg = (float) Math.min(16, Math.max(2, fallDistance * 2 + v.length() * 3));
-            e.hurt(ModDamageTypes.source(level, ModDamageTypes.DEBRIS, this, null), dmg);
+            StrikeOwner.hurt(e, ModDamageTypes.source(level, ModDamageTypes.DEBRIS, this, StrikeOwner.online(level, owner)), dmg);
         }
     }
 
@@ -225,6 +238,7 @@ public class DebrisEntity extends Entity {
         groundMaterial = tag.getBoolean("ground_material");
         // saved before world rules were captured: the config's at load
         rules = tag.contains("rules", Tag.TAG_INT) ? StrikeRules.of(tag.getInt("rules")) : StrikeRules.live();
+        owner = tag.hasUUID("owner") ? tag.getUUID("owner") : null;
     }
 
     @Override
@@ -236,6 +250,7 @@ public class DebrisEntity extends Entity {
         tag.putBoolean("chip", isChip());
         tag.putBoolean("ground_material", groundMaterial);
         tag.putInt("rules", rules.bits());
+        if (owner != null) tag.putUUID("owner", owner);
     }
 
     @Nullable

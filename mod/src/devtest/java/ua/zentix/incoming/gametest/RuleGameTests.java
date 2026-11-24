@@ -166,7 +166,7 @@ public final class RuleGameTests {
         h.assertValueEqual(salvoRules(SalvoData.readBackForTest(level), after), List.of(OFF), "later salvo after a restart");
 
         // debris keeps the rules of the strike that threw it across a save; one saved without them takes the config
-        DebrisEntity debris = DebrisEntity.create(level, Vec3.atCenterOf(c), Blocks.COBBLESTONE.defaultBlockState(), false, false, Vec3.ZERO).under(OFF);
+        DebrisEntity debris = DebrisEntity.create(level, Vec3.atCenterOf(c), Blocks.COBBLESTONE.defaultBlockState(), false, false, Vec3.ZERO).under(OFF, null);
         net.minecraft.nbt.CompoundTag debrisSave = new net.minecraft.nbt.CompoundTag();
         debris.saveWithoutId(debrisSave);
         DebrisEntity debrisBack = new DebrisEntity(ModEntities.DEBRIS.get(), level);
