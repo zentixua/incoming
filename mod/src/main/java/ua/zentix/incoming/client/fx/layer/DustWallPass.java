@@ -666,7 +666,7 @@ public final class DustWallPass {
     }
 
     /**
-     * A secondary view's own march targets and history (plan 4.6: a view's preparation never touches another's targets or
+     * A secondary view's own march targets and history (a view's preparation never touches another's targets or
      * matrices), swapped with the statics while that view draws ({@code PallPass.ViewState}); the source tables, terrain and
      * material atlases are shared (uploaded by whichever view draws first in a frame, each detonation's table once).
      */

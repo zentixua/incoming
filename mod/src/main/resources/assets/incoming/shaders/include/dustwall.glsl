@@ -278,7 +278,7 @@ float dwProfileInt(float h) {
     return max(0.9483 * h - 2.854, 1.0);
 }
 
-// Water is a material of the same wave (plan 4.4): where the source ground is water, the blast wind strips spray from the
+// Water is a material of the same wave: where the source ground is water, the blast wind strips spray from the
 // crests instead of soil (PallField: spray, sprayEnvelope, sprayTop; WaterModel.spray, SPRAY_LAG): white droplets, born by
 // the same birth and hump, lower (the stripping height, sinking to 0.6 of it as large drops fall), thinning over 30 s and gone
 // within minutes. The spray column at radius r and age a: (top, blocks; vertical optical depth, the pall's profile column)
@@ -583,7 +583,7 @@ float dwTopAt(vec2 xz) {
 // highest the lofted ground matter can reach above the local ground at a point (blocks), below 0 where none is
 float dwDustBound(vec3 g) {
 #ifdef DW_ANALYTIC
-    // the harness's analytic media (tools/uw_probe/probe_gl.py: E8 accuracy of the march)
+    // the harness's analytic media (tools/uw_probe/probe_gl.py: the march's accuracy)
     return dwAnalyticBound(g);
 #endif
 #ifdef DW_BOUND_ONESTEP
@@ -695,7 +695,7 @@ float dwHaze(vec3 g, vec3 q, float r, float a, vec2 law, bool coarse) {
     return sigma;
 }
 // the noise's gain on the column's extinction that keeps its mean transmission over the billow tile the noise-free column's
-// (review N6: equal mean extinction gives a higher mean transmission, by Jensen). The noisy column's mean optical depth is
+// (equal mean extinction gives a higher mean transmission, by Jensen). The noisy column's mean optical depth is
 // DW_NOISE_MEAN below the noise-free one (the swells' hollows, the texture's means), and a Gamma(k) model of its spread:
 // E[e^(−κτm)] = (1 + κτ/k)^(−k) = e^(−τ) for κ = k(e^(τ/k) − 1)/τ; above τ ≈ 4 nothing shows through either way, so κ holds
 // its value there (a soft min) instead of growing. Fitted on 11 columns (tools/uw_probe/probe_gl.py: thin, 0.05 ≤ τ ≤ 6)
@@ -706,7 +706,7 @@ float dwNoiseGain(float tau) {
     return DW_NOISE_MEAN * gain;
 }
 
-// The base surge of a water burst (plan 4.4: a second source term of the same model; PallField.surge, WaterModel.surge*):
+// The base surge of a water burst (a second source term of the same model; PallField.surge, WaterModel.surge*):
 // the fallen water column's ring of droplet fog, expanding and fading by its law, carried whole by the wind from the burst
 // (lofted in the first seconds); a denser, higher roller at its rim (PallField.surgeProfile, surgeTop), billowed by the
 // wave's texture. Extinction at g (from ground zero's ground point), hq above the local ground
@@ -1026,7 +1026,7 @@ const float DW_GAP = DW_GAP_OVERRIDE;
 #else
 const float DW_GAP = 24.0;
 #endif
-// the clear stride inside the bound per light detail level (MEDIUM and LOW 36 blocks: E8 holds at each rung; 48 at LOW
+// the clear stride inside the bound per light detail level (MEDIUM and LOW 36 blocks: the march's accuracy holds at each rung; 48 at LOW
 // missed thin spans by 0.034)
 float dwGap() {
     float k = DwDetail > 0.5 ? 1.5 : 1.0;
@@ -1040,7 +1040,7 @@ float gDwWhyHist[8] = float[8](0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0);
 float gDwWhyHq = 0.0;
 float gDwCapLeft = 0.0, gDwTailTau = 0.0;
 
-// The ray's occupied intervals (plan 4.13 N7, the readers' prefix: wall_layer.glsl wallTo): A from the first occupied
+// The ray's occupied intervals (the readers' prefix: wall_layer.glsl wallTo): A from the first occupied
 // sample to the last one before the first clear gap longer than max(48, 0.1 t) blocks, B the rest (later gaps merge into B).
 // gDwSplit: (A's exit, B's entry, the transmittance at A's exit, the luminance of the light in front of it); B empty while
 // gDwInB is false (dwMarch closes A at the ray's last occupied depth)
@@ -1063,7 +1063,7 @@ void dwInterval(float t, float end, float T, vec3 light) {
 // envelope, its disc of dust), and the sum of their extinction and extinction-weighted light at a sample. A source's light is
 // finished before the next is loaded (its globals: dwDensity's surface, share, material). Per ray the DW_RAY_SOURCES nearest
 // sources whose interval it crosses are drawn in full; any further ones by their noise-free column (the haze's mean: lower
-// detail, never ending before its law; plan 4.5's bounded per-pixel work)
+// detail, never ending before its law; the bounded per-pixel work)
 const int DW_FRAME_SOURCES = 16, DW_RAY_SOURCES = 8;
 vec2 gDwSpan[16] = vec2[16](vec2(0.0), vec2(0.0), vec2(0.0), vec2(0.0), vec2(0.0), vec2(0.0), vec2(0.0), vec2(0.0), vec2(0.0), vec2(0.0),
         vec2(0.0), vec2(0.0), vec2(0.0), vec2(0.0), vec2(0.0), vec2(0.0));
@@ -1116,7 +1116,7 @@ void dwRayTuft(int k, vec3 rd) {
         float dc = rd.y < -1e-4 ? (eye.y - band) / -rd.y * hl : 8000.0;
         // (a ray meeting the band nearer than ~1 km looks down into the near dust, not at the far top edge-on: no tuft there.
         // Clamped to 600 m, every such ray took the tuft of its azimuth's column point and lifted the near dust by screen
-        // column: vertical bands down to the frame's foot, judge 2f)
+        // column: vertical bands down to the frame's foot)
         float far = smoothstep(600.0, 1200.0, dc);
         dc = clamp(dc, 600.0, 8000.0);
         vec2 gc = dwSource(eye.xz + rd.xz / hl * dc);
@@ -1224,7 +1224,7 @@ void dwAccumulate(int m, vec3 rd, float tt, float t, float k, float n, inout flo
 // Samples sit on a grid fixed along the ray from the eye (geometric steps from the eye, independent of where the
 // dust starts), so they do not slide through the texture as the front grows; every sample and span ends at tEnd. The ray
 // covers the whole supported distance: empty air is skipped in growing strides, thin dust is taken in growing spans, and
-// what the step cap leaves of the ray is integrated from the noise-free column (no far haze is dropped, review finding 14).
+// what the step cap leaves of the ray is integrated from the noise-free column (no far haze is dropped).
 // Every source of the frame (DwSourceCount) is marched on the same grid: a sample sums the sources whose interval covers it.
 vec4 dwMarch(vec3 rd, float tEnd, float jitter, float foot, int maxSteps) {
     gDwSamples = 0;
@@ -1273,7 +1273,7 @@ vec4 dwMarch(vec3 rd, float tEnd, float jitter, float foot, int maxSteps) {
     float T = 1.0, t = t0;
     bool inDust = false, capped = false;
     // the step cap counts occupied samples (each with its light), not strides over clear air: a cap on every stride
-    // handed the far thin spans to the noise-free tail, which saw none of them (E8: 0.29 at HIGH)
+    // handed the far thin spans to the noise-free tail, which saw none of them (the march's accuracy: 0.29 at HIGH)
     for (int i = 0; i < 640; i++) {
         gDwIters = i + 1;
         t = dwGridT(k);
@@ -1351,7 +1351,7 @@ vec4 dwMarch(vec3 rd, float tEnd, float jitter, float foot, int maxSteps) {
             if (gDwWhy > 6.5) gDwWhyHist[3] += 1.0;
 #endif
             // inside the dust's bound but clear here: strides no longer than DW_GAP blocks, so a thin span the bound admits
-            // (a swell's crest, another source's layer) is never stepped over (E8: five 50-block spans were missed at LOW)
+            // (a swell's crest, another source's layer) is never stepped over (the march's accuracy: five 50-block spans were missed at LOW)
             kLast = k; k += n; n = min(n * 2.0, max(1.0, floor(dwGap() / max(dt, 1e-3))));
             inDust = false;
         }

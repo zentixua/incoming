@@ -1,7 +1,7 @@
 package ua.zentix.incoming.client.fx.layer;
 
 /**
- * The dust wave's transmittance along a view ray for its readers (plan 4.13 N7; GLSL {@code wall_layer.glsl}: {@code wallPrefixT},
+ * The dust wave's transmittance along a view ray for its readers (GLSL {@code wall_layer.glsl}: {@code wallPrefixT},
  * {@code wallPrefixShare}, held equal by {@code DustIntervalsTest}): up to two occupied intervals per march pixel, A from the first
  * dust to the last before the first clear gap, B the rest. Inside an interval its optical depth is spread evenly; the gap holds
  * no dust, so an object between two crossings takes the first crossing's share only. Depths along the view axis, blocks.

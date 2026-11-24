@@ -63,7 +63,7 @@ public final class DustSources {
      * running show, programs ready after the wave began): such a source fades in over {@link #FADE_IN_MS} of own time.
      */
     private static final Map<ClientNuclear.Active, long[]> FIRST = new WeakHashMap<>();
-    /** Fade-in of a source first drawn already aged, client milliseconds (plan 4.10: presentation, live clients only). */
+    /** Fade-in of a source first drawn already aged, client milliseconds (presentation, live clients only). */
     static final long FADE_IN_MS = 1000;
     /** Model seconds after the burst from which a first draw counts as already aged. */
     static final double AGED_S = 1.0;
@@ -280,7 +280,7 @@ public final class DustSources {
         // inside the dust the eye adapts to the light that reaches it: the drawn column's optical depth above the eye, the
         // two streams' diffuse decay e^(−kτ) (k of the reference dust), the eye taking back DUST_ADAPT_INSIDE of it (presentation)
         // (the haze level's light only: the textured level's multiply scattered light never falls below its floor inside the
-        // young dust, and the boost on it washed a noon view from inside the young wave to flat cream, Silo 24.11; its share is
+        // young dust, and the boost on it washed a noon view from inside the young wave to flat cream; its share is
         // the textured share at the eye's own age)
         float[] at = {ex, ey, ez};
         double xe = Math.min(Math.hypot(ex, ez) / Math.max(reach, 1), 1) * (n - 1);

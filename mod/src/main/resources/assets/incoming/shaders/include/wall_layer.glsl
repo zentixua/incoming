@@ -1,4 +1,4 @@
-// The dust wave's resolved light and its transmittance along the view (plan 4.13 N7): up to two occupied intervals per march
+// The dust wave's resolved light and its transmittance along the view: up to two occupied intervals per march
 // pixel, A from the first dust to the last before the first clear gap (dustwall.glsl: dwInterval), B the rest; gaps between them
 // hold no dust. Light and depths are premultiplied by coverage during filtering; depth is in blocks along the view axis.
 // Consumers ignore light.rgb and the depths when light.a == 1 (full transmission).
