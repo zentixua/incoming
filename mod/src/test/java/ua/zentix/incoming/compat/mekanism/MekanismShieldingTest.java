@@ -9,10 +9,11 @@ import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
- * The Mekanism adapter against Mekanism's API (Mekanism itself is not in the GameTest runtime): the capability looked up
- * under Mekanism's name and type is one instance, so it is the one Mekanism registers its items under
- * ({@code Capabilities.RADIATION_SHIELDING = ItemCapability.createVoid(Mekanism.rl("radiation_shielding"), IRadiationShielding.class)});
- * a piece's value is Mekanism's, and an item without the capability has none (the data map or nothing decides).
+ * The Mekanism adapter against Mekanism's API (Mekanism itself is not in the GameTest runtime): a capability is one
+ * registry entry per name and type, so the adapter's lookup is whatever Mekanism registers under that name; a piece's
+ * value is passed on as Mekanism gives it, and an item without the capability has none. These tests do not prove the
+ * name or the hazmat numbers are Mekanism's: those are cited from its 1.21.x sources ({@code Capabilities.java},
+ * {@code ItemHazmatSuitArmor.getShieldingByArmor}).
  */
 class MekanismShieldingTest {
     @Test

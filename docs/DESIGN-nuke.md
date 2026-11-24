@@ -537,7 +537,7 @@ Like Hiroshima photos: wood charred toward sphere, stone soot-darkened, light hu
     decontamination.
   - **Worn shielding** (`radiation/WornShielding`): data map `incoming:radiation_shielding` per item (share in [0, 1],
     invalid file rejected), else Mekanism's `mekanism:radiation_shielding` capability (`compat/mekanism`, data map wins
-    per item); armor and body slots summed, capped at 1 (Mekanism's own combination). Scales new exposure only:
+    per item); armor and body slots summed, capped at 1 (Mekanism's rule; no Curios slots). Scales new exposure only:
     prompt dose, fallout (players and `MobFallout`), black-rain contamination gain and ceiling. Accumulated dose,
     running sickness, dust already on the body and the Geiger rate (the place's) unchanged. No suit of our own.
   - **Radiation sickness** `incoming:radiation_sickness`, no medicine (`fillEffectCures` override, milk no cure),

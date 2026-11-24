@@ -87,8 +87,10 @@ public final class ShieldingGameTests {
         List<LivingEntity> spawned = new ArrayList<>();
         StrikeGameTests.afterTest(h, () -> {
             if (before[0] != null) WornShielding.install(before[0]);
+            // fake players are cached for the server's life: leave them without dose or sickness
             spawned.forEach(e -> {
-                if (!(e instanceof ServerPlayer)) e.discard();
+                if (e instanceof ServerPlayer p) RadiationTicker.clear(p);
+                else e.discard();
             });
         });
         DataPackFixture.run(h, "incoming_test_shielding", Map.of(FILE, pack()),

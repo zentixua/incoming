@@ -9,12 +9,13 @@ import ua.zentix.incoming.registry.ModDataMaps;
 /**
  * Radiation shielding a body wears (doc universal-integration C1). Each worn piece stops a share of new exposure: the
  * item's {@link ModDataMaps#RADIATION_SHIELDING} value, otherwise an installed {@link Source} (Mekanism's item capability,
- * {@code compat/mekanism}), otherwise nothing. The pieces add up, capped at 1, as Mekanism combines its own equipment, so
- * a full Mekanism hazmat set (0.25 + 0.4 + 0.2 + 0.15) stops everything. Prompt dose, fallout and black-rain contamination
+ * {@code compat/mekanism}), otherwise nothing. The pieces add up, capped at 1 (Mekanism's rule), so a full Mekanism hazmat
+ * set (0.25 + 0.4 + 0.2 + 0.15) stops everything. Prompt dose, fallout and black-rain contamination
  * are multiplied by {@link #transmitted}; the accumulated dose, the sickness it started and dust already on the body are
  * not: putting a suit on never lowers what was received.
  * <p>
- * Worn means the armor slots and the body slot (animal armor); an item in hand is carried, not worn.
+ * Worn means the armor slots and the body slot (animal armor); an item in hand is carried, not worn. Accessory slots of
+ * other mods (Curios, which Mekanism also reads) are not: there is no NeoForge-standard accessory slot.
  */
 public final class WornShielding {
     /** Another source of a piece's shielding; {@link Double#NaN} — it does not describe this item. */

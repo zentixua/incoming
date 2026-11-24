@@ -445,7 +445,7 @@ horse or a wolf, not in a hand. It works against all the radiation of a nuclear 
 the radiation of the burst, fallout, and the black-rain dust that settles on a player. It stops only what comes while
 the piece is worn: a dose already taken, a sickness already begun and dust already on the body stay as they are.
 
-With Mekanism installed, its items that shield from radiation (the hazmat suit, the MekaSuit) count without a
+With Mekanism installed, its items that shield from radiation (the hazmat suit, the MekaSuit with its radiation shielding unit) count without a
 datapack, at Mekanism's own shares; an entry here replaces Mekanism's share for that item. Incoming lists no items of
 its own. A value outside 0 to 1 makes the whole file fail to load, with an error in the server log, so none of its
 entries apply; an item that does not exist only skips its own entry. After `/reload` the new shares apply at once.

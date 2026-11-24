@@ -15,6 +15,7 @@ import ua.zentix.incoming.nuclear.radiation.WornShielding;
  * never loaded. The {@code incoming:radiation_shielding} data map wins for an item it lists ({@link WornShielding}).
  */
 public final class MekanismShielding {
+    /** Mekanism's own: {@code Capabilities.RADIATION_SHIELDING = ItemCapability.createVoid(Mekanism.rl("radiation_shielding"), …)} (1.21.x). */
     static final ResourceLocation NAME = ResourceLocation.fromNamespaceAndPath("mekanism", "radiation_shielding");
     static final ItemCapability<IRadiationShielding, Void> CAPABILITY = ItemCapability.createVoid(NAME, IRadiationShielding.class);
 
