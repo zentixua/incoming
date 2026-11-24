@@ -27,7 +27,10 @@ paths:
   r4 run3, GameTest `seenChunkEnqueuedPastDiskPlans`); a chunk
   needing another unit (neighbor
   fracture for an on-site plan, stale plan) returns to its queue's tail, not head: several-ms window fractures would
-  hold up dozens of ready visible chunks (0.2 ms replacement) for 38 ticks; visible chunks are prechecked
+  hold up dozens of ready visible chunks (0.2 ms replacement) for 38 ticks; visible chunks without a plan get their background plan `ScarQueue.PLAN_AHEAD` (300) ticks
+  before the wave under the lane's ordinary deadline (planned only in the precheck, a flight-less 1 Mt planned the
+  whole view in the second the front crossed it: 4–9 cores of ruin pool and JIT while the client received the ruins,
+  2 FPS, ruins up to 58 ticks late; GameTest `seenChunkPlannedLongBeforeWave`); visible chunks are prechecked
   `ScarQueue.LOOKAHEAD` (20) ticks before the wave: plans that became stale during flight (grass grew, player placed a
   block) and chunks without plans receive a background plan now, ready by the wave (GameTest
   `staleSeenPlanReplannedBeforeWave`); a background plan stale at replacement is not applied — rebuild on the server

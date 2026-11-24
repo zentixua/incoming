@@ -131,10 +131,11 @@ public final class ScarQueue {
      * pool and the JIT compiling its solvers took 4–9 of 16 cores exactly while the client received the ruins, its
      * render thread waited for a core 45 % of the time (2 FPS for 6 s), and ruins in view fell up to 58 ticks behind
      * the front with the lane saturated (1 Mt over the Silo map, viewer at 3.9 km, passage-stutter runs 24.11.2026).
-     * Planned from 15 s ahead, the same view was ready 14 s early at 1–2 cores, ruins lagged 0 ticks and the passage
-     * held 35 FPS. 15 s: the view planned at the measured ~47 chunks/s with margin, and late enough to stay out of the
-     * flash's own work (the flash layer and its whole-chunk sends end about 10 s after the burst at that distance). A
-     * nearer viewer's wave is closer than 15 s: its chunks are planned from the detonation.
+     * Planned from 15 s ahead, ruin workers took 0.06 cores in the passage, ruins in view lagged at most 1 tick and the
+     * passage held 30 FPS (same run). 15 s: the view planned at the measured ~47 chunks/s with margin, and after the
+     * flash's own work (the flash layer, its whole-chunk sends and their JIT warm-up end about 10 s after the burst at
+     * that distance; planned from the burst instead, they stacked there). A nearer viewer's wave is closer than 15 s:
+     * its chunks are planned from the detonation.
      */
     static final int PLAN_AHEAD = 300;
     /**
