@@ -121,8 +121,9 @@ public final class ClaimGameTests {
     /**
      * The follow-up writers ask by themselves: a handler that filters only claim questions lets every real charge break
      * what its own rays chose, also in the claimed chunks, and nothing else changes there (no crater, fuel, fire,
-     * fragments, glass job, bomb cavity, collapse, rubble or debris), while the unclaimed side does change. Impacts one
-     * block from the claim edge: the craters' bowls and the fuel pools cross it.
+     * fragments, glass job, bomb cavity, collapse, rubble or debris), while the unclaimed side does change. The Shahed and
+     * the missile hit two blocks inside the claim (their craters dig below what their rays break, their fuel pools land
+     * there), the Grad one block outside it.
      */
     @GameTest(template = "range", timeoutTicks = 20000, batch = "claim_followups", skyAccess = true)
     public static void followUpsAskByThemselves(GameTestHelper h) {
@@ -134,9 +135,9 @@ public final class ClaimGameTests {
         Handler handler = Handler.install(h, claimed);
         handler.queriesOnly = true;
         long[] before = Claims.counters();
-        Warheads.detonate(level, WeaponType.DRONE, Vec3.atBottomCenterOf(h.absolutePos(new BlockPos(edge + 1, 12, 14))), null, null,
+        Warheads.detonate(level, WeaponType.DRONE, Vec3.atBottomCenterOf(h.absolutePos(new BlockPos(edge - 2, 12, 14))), null, null,
                 RoundRef.of(UUID.randomUUID(), 0, "b2follow"));
-        Warheads.detonate(level, WeaponType.MISSILE, Vec3.atBottomCenterOf(h.absolutePos(new BlockPos(edge + 1, 12, 40))), null, null,
+        Warheads.detonate(level, WeaponType.MISSILE, Vec3.atBottomCenterOf(h.absolutePos(new BlockPos(edge - 2, 12, 40))), null, null,
                 RoundRef.of(UUID.randomUUID(), 1, "b2follow"));
         Warheads.detonate(level, WeaponType.ROCKET, Vec3.atBottomCenterOf(h.absolutePos(new BlockPos(edge + 1, 12, 26))), null, null,
                 RoundRef.of(UUID.randomUUID(), 2, "b2follow"));
@@ -164,6 +165,8 @@ public final class ClaimGameTests {
                 else if (handler.realInClaim.contains(abs.asLong())) real++;
                 else stray.add(e.getKey().toShortString() + " " + e.getValue() + " -> " + now);
             }
+            Incoming.LOG.info("CLAIMFOLLOW changed in claimed chunks by the charges {}, beyond them {}, beside the claim {}; charges' claimed positions {}",
+                    real, stray.size(), outside, handler.realInClaim.size());
             h.assertTrue(stray.isEmpty(), stray.size() + " blocks changed in claimed chunks beyond the charges' own lists, first "
                     + stray.subList(0, Math.min(8, stray.size())));
             h.assertTrue(outside > 20, "only " + outside + " blocks changed beside the claim");
