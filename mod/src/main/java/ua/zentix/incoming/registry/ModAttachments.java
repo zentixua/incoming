@@ -20,6 +20,7 @@ import ua.zentix.incoming.strike.ArrivalTickets;
 import ua.zentix.incoming.strike.CameraLink;
 import ua.zentix.incoming.strike.PickHints;
 import ua.zentix.incoming.strike.StrikeWorld;
+import ua.zentix.incoming.target.Sides;
 import ua.zentix.incoming.target.Sightings;
 import ua.zentix.incoming.work.WorkScheduler;
 import ua.zentix.incoming.warhead.CraterFalls;
@@ -218,6 +219,10 @@ public final class ModAttachments {
     /** World: whom and what each side saw ({@link Sightings}); not saved. */
     public static final Supplier<AttachmentType<Sightings>> SIGHTINGS = REGISTER.register("sightings",
             () -> AttachmentType.builder(Sightings::new).build());
+
+    /** Overworld: the server's cached side keys ({@link Sides.Cache}); not saved. */
+    public static final Supplier<AttachmentType<Sides.Cache>> SIDES = REGISTER.register("sides",
+            () -> AttachmentType.builder(Sides.Cache::new).build());
 
     /** World: flying interceptors, their targets and announced alerts ({@link DefenseWorld}); not saved. */
     public static final Supplier<AttachmentType<DefenseWorld>> DEFENSE_WORLD = REGISTER.register("defense_world",

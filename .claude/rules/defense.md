@@ -40,7 +40,8 @@ paths:
 - Separate parts, reusable by a portable SAM: `Radar` (only world projectiles in `StrikeWorld.projectiles`, one snapshot
   per tick in `DefenseWorld`; visible within the SAM spec's radar range (`InterceptorSpec.radarRange`) ×
   `WeaponSpec.Signature.visibility`, and only in line of sight — `util/LineOfSight` over ready-chunk heightmaps
-  (`MOTION_BLOCKING_NO_LEAVES`, unready chunks do not occlude); hostile means not `Sides.friendly` by owner UUID;
+  (`MOTION_BLOCKING_NO_LEAVES`, unready chunks do not occlude); hostile means not `Sides.friendly` by owner UUID
+(one side key per player, `strike.md`);
   ownerless projectiles are hostile to everyone; engage if hostile, `Signature.intercept`, unridden, within
   `InterceptorSpec.engageRange`), `FireControl` (nearest target not pursued by anyone's missile: one missile per target
   across the world, a miss releases it), `AirAlert` (alerts the side to a new hostile target: direction and distance
@@ -53,7 +54,8 @@ paths:
   acceleration, `InterceptorSpec.turnLimit`: tighter on boost; fuze at closest approach (closest point of the missile's
   and target's tick segments within the tick, not its end: if still closing, wait a tick) within `fuse` + target
   half-length: detonation means target down, no dice roll; if it passes farther away, it turns after the target while
-  fueled; target gone, ridden, or fuel exhausted means self-destruct; ground contact means detonation; kill shares by
+  fueled; target gone, ridden, friendly to the SAM's owner (a side change mid-flight, `End.FRIENDLY`), or fuel exhausted
+means self-destruct; ground contact means detonation; kill shares by
   target class: `InterceptShareTest`, numbers in `docs/guide/defense.md`), `InterceptorSpec` (flight numbers are for the
   game, not physical; flight scale brings maximum speed `maxSpeed()` and the boost motor (`boostAccel()`,
   `boostTicks()`: mean Tsiolkovsky acceleration over the 9M96's 11 s burn) to real values, no flight above `ceiling()`, the 9M96 zone's altitude ceiling; real 9M96E2 specs in `passport`: mass,
@@ -119,7 +121,7 @@ paths:
 - Interceptor flight is not saved: after a server restart mid-intercept, the missile is gone, the target keeps flying.
 - A nuclear warhead on a cruise missile or B-2 is intercepted like a conventional one (signature belongs to the carrier);
   an ICBM is not.
-- GameTest servers have no profile cache: `Sides` recognizes the owner's team by UUID only if the player is “online” —
+- GameTest servers have no profile cache: `Sides` finds the owner's vanilla team by UUID only if the player is “online” —
   `SamGameTests.listener` puts a `FakePlayer` into `PlayerList.playersByUUID` via reflection. The SAM would shoot down
   other tests' missiles: each SAM test has its own batch, and its SAM is removed afterward (`SamGameTests.sam`); old
   test structures remain, and a loaded SAM ticking beside the next structure would shoot at its projectiles too.

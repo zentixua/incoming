@@ -24,6 +24,7 @@ import ua.zentix.incoming.Incoming;
 import ua.zentix.incoming.target.Sides;
 import ua.zentix.incoming.target.Sight;
 
+import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 
@@ -134,12 +135,14 @@ public final class SightGameTests {
 
         UUID ua = a.getUUID();
         h.assertTrue(Sides.friendly(level.getServer(), ua, ua), "the same player by UUID is a stranger");
-        // by UUID (owner is offline): names are from the profile cache, the server GameTest does not have it - their own names
-        Map<UUID, String> names = Map.of(ua, a.getScoreboardName(), b.getUUID(), b.getScoreboardName(), c.getUUID(), c.getScoreboardName());
-        h.assertTrue(Sides.friendly(board, ua, b.getUUID(), names::get), "one team for UUID - strangers");
-        h.assertFalse(Sides.friendly(board, ua, c.getUUID(), names::get), "different teams for UUID - their own");
-        h.assertFalse(Sides.friendly(board, ua, UUID.randomUUID(), names::get), "player without name");
-        h.assertValueEqual(Sides.side(board, ua, names::get), Sides.side(a), "side by UUID and the player on the network are different");
+        // by UUID: the name comes from the player list (offline: the profile cache, SideGameTests.offlineOwnerFromMemory)
+        Map<UUID, ServerPlayer> online = SamGameTests.playersByUuid(level.getServer().getPlayerList());
+        for (FakePlayer p : List.of(a, b, c)) online.put(p.getUUID(), p);
+        StrikeGameTests.afterTest(h, () -> List.of(a, b, c).forEach(p -> online.remove(p.getUUID(), p)));
+        h.assertTrue(Sides.friendly(level.getServer(), ua, b.getUUID()), "one team for UUID - strangers");
+        h.assertFalse(Sides.friendly(level.getServer(), ua, c.getUUID()), "different teams for UUID - their own");
+        h.assertFalse(Sides.friendly(level.getServer(), ua, UUID.randomUUID()), "player without name");
+        h.assertValueEqual(Sides.side(level.getServer(), ua), Sides.side(a), "side by UUID and the player on the network are different");
         h.assertFalse(Sides.friendly(level.getServer(), ua, null), "no one's - yours");
         h.assertFalse(Sides.friendly(level.getServer(), null, null), "two draws are yours");
         h.assertFalse(Sides.side(level.getServer(), ua).equals(Sides.side(level.getServer(), c.getUUID())), "same side for different players");

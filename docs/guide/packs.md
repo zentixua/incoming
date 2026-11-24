@@ -160,7 +160,7 @@ Your own advancements can use the triggers with these conditions (all optional, 
   identity credit no one. `/execute as <player>` makes the round that player's, and so does a machine acting under the
   player's own profile (a Create deployer for its owner), as with a fixed launcher and with permissions.
 - A round shot down counts for the SAM's owner or for the player whose weapon brought it down, unless the round is
-  theirs or a teammate's (by `/team`, as the SAM decides whom to shoot).
+  theirs or a teammate's (by [sides](#sides), as the SAM decides whom to shoot).
 - Still Standing starts when the wave front actually hits the player: it reads the pressure at their position from
   the blast model, shelter or not, and waits until the positive phase there has passed plus one second for a thrown
   body to land. A player who left before the front, a cleared strike, creative and spectator mode get nothing; a
@@ -209,6 +209,28 @@ A datapack advancement for surviving a 20 psi blast of an ICBM-sized yield:
   no revenge target: it cannot reach them.
 - Rounds from the console, command blocks and ownerless launchers have no owner. A fake player is credited only under
   an online player's profile, as in [Advancements and statistics](#advancements-and-statistics).
+
+## Sides
+
+Spotting, the SAM, air-raid alerts, launcher links, Jade's private lines and interception credit follow one rule: two
+players are on the same side when they are on the same vanilla team (`/team`), in the same FTB Teams party or server
+team, or in the same Open Parties and Claims party. A player in none of these is a side alone.
+
+- A player in several: the vanilla team counts, then the FTB Teams team, then the Open Parties and Claims party. Only
+  operators and datapacks set `/team`, so an arena round set by command holds whatever parties the players have.
+- The personal team FTB Teams gives every player is not a side. Allied parties stay separate sides.
+- A change of `/team` or FTB Teams applies at once, an Open Parties and Claims party change within a second.
+- An offline owner keeps their side: their launchers, SAMs and flying rounds still know their teammates.
+- A player who changes side sees what the new side has spotted; the old side keeps what it spotted. A SAM no longer
+  fires at rounds that became friendly, and a missile already chasing one blows itself up.
+
+For mod and script authors: `ua.zentix.incoming.api.SideResolveEvent` asks for one player's side: their UUID, and their
+name if the server knows it without reading storage. A listener answers with a key in its own namespace,
+`<mod id>:<value>`, the same for every player of one side; the first answer wins, so priority decides: Incoming answers
+the vanilla team at `HIGH`, FTB Teams at `NORMAL`, Open Parties and Claims at `LOW`, and a listener at `HIGHEST` comes
+before all of them. The event comes from the server thread, and the player may be offline, so answer from memory.
+Incoming keeps each answer for up to a second; call `SideResolveEvent.invalidate()` when your sides change so the next
+question asks again.
 
 ## Permissions
 
@@ -333,7 +355,7 @@ not:
 | Transformer Substation | working; knocked out, and in how many hours of the world's day repairs start; or without power in a destroyed zone | |
 | Strike projectile | its weapon | its owner |
 
-The owner's side is the owner and the players on the owner's team (`/team`); operators have permission level 2. A
+The owner's side is the owner and the players on the owner's [side](#sides); operators have permission level 2. A
 launcher placed or a projectile launched by command has no owner: its owner line and mission are for operators. The
 launcher's own status line (a right click with an empty hand) follows the same rule. Each of the four can be turned off
 in Jade's plugin settings.

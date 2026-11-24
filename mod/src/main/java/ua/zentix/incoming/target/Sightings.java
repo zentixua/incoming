@@ -27,7 +27,7 @@ import java.util.Objects;
 import java.util.UUID;
 
 /**
- * Reconnaissance: each side's ({@link Sides}: player or {@code /team}) sightings through eyes, projectile
+ * Reconnaissance: each side's ({@link Sides}: one key per player) sightings through eyes, projectile
  * cameras, radar. Hostile player/Sable craft is a designator target while side sees it or saw within {@code
  * sight_memory}; map likewise shows last-seen positions. Friendlies always visible.
  * <p>

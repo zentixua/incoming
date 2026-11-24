@@ -95,3 +95,23 @@ reason = "Computer peripherals: launcher status and fire, SAM stock, tracking an
 versionRange = "[1.113,)"
 ordering = "NONE"
 side = "BOTH"
+
+# FTB Teams is optional: a party or server team is one side for spotting, the SAM, targeting and launcher links
+# (compat/ftbteams); 2101.1.0, its first 1.21.1 build, has every API call the bridge makes.
+[[dependencies.${mod_id}]]
+modId = "ftbteams"
+type = "optional"
+reason = "Sides: an FTB Teams party or server team spots, shares the SAM and links launchers as one side"
+versionRange = "[2101.1.0,)"
+ordering = "NONE"
+side = "BOTH"
+
+# Open Parties and Claims is optional: a party is one side (compat/opac); 0.23.4, its first 1.21.1 NeoForge build, has
+# every API call the bridge makes.
+[[dependencies.${mod_id}]]
+modId = "openpartiesandclaims"
+type = "optional"
+reason = "Sides: an Open Parties and Claims party spots, shares the SAM and links launchers as one side"
+versionRange = "[0.23.4,)"
+ordering = "NONE"
+side = "BOTH"

@@ -55,6 +55,16 @@ repositories {
         forRepository { maven { url = 'https://maven.squiddev.cc' } }
         filter { includeGroup 'cc.tweaked' }
     }
+    // FTB Teams (optional): its public API for compat/ftbteams, from FTB's own maven
+    exclusiveContent {
+        forRepository { maven { url = 'https://maven.ftb.dev/releases' } }
+        filter { includeGroup 'dev.ftb.mods' }
+    }
+    // Architectury (LGPL-3.0, FTB Teams' required dependency): the event type of FTB Teams' membership events
+    exclusiveContent {
+        forRepository { maven { url = 'https://maven.architectury.dev/' } }
+        filter { includeGroup 'dev.architectury' }
+    }
     // glsl-processor — parsing of Veil's GLSL (carried by Sable): ShaderSourceTest runs its shaders through it
     exclusiveContent {
         forRepository { maven { url = 'https://maven.blamejared.com' } }
@@ -300,6 +310,16 @@ dependencies {
     compileOnly "cc.tweaked:cc-tweaked-${minecraft_version}-forge-api:${cctweaked_version}"
     testImplementation "cc.tweaked:cc-tweaked-${minecraft_version}-core-api:${cctweaked_version}"
     testImplementation "cc.tweaked:cc-tweaked-${minecraft_version}-forge-api:${cctweaked_version}"
+    // FTB Teams, Architectury and Open Parties and Claims: only their APIs for compilation — sides from parties
+    // (compat/ftbteams, compat/opac); unit tests run the adapters against stand-in teams and parties
+    compileOnly("dev.ftb.mods:ftb-teams-neoforge:${ftbteams_version}") { transitive = false }
+    compileOnly("dev.architectury:architectury-neoforge:${architectury_version}") { transitive = false }
+    compileOnly "maven.modrinth:open-parties-and-claims:${opac_version}"
+    testImplementation("dev.ftb.mods:ftb-teams-neoforge:${ftbteams_version}") { transitive = false }
+    testImplementation("dev.architectury:architectury-neoforge:${architectury_version}") { transitive = false }
+    // FTB Library only for the unit tests' stand-in teams: FTB Teams' Team interface names its colour type
+    testRuntimeOnly("dev.ftb.mods:ftb-library-neoforge:${ftblibrary_version}") { transitive = false }
+    testImplementation "maven.modrinth:open-parties-and-claims:${opac_version}"
     // a range, not an exact version: Sable carries the same companion with its own range, and FML picks one version
     // suitable for all — exactly [1.6.0] would not let in a game with Sable that brings 1.6.1
     jarJar("dev.ryanhcode.sable-companion:sable-companion-common-${minecraft_version}") {
