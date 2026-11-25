@@ -14,6 +14,7 @@
 #                         (about 0.7 GB an hour), else no sound
 #   tools/dev_client.sh cmd '<command>' …      chat commands in order (without the slash): tp @s 3514 73 -2298 55 -2
 #   tools/dev_client.sh hud on|off              F1
+#   tools/dev_client.sh age                     the newest detonation's shown age (s), front radius and eye distance (blocks)
 #   tools/dev_client.sh dw <key>=<value> …      the dust wave's diagnostics, as the client scenario's dw: steps (devtest
 #                                               DustWallSteps: probe, dump, sweep, ground, freezeage, history, …)
 #   tools/dev_client.sh swap                    Gradle compiles; changed loaded classes are redefined (jdb); changed
@@ -206,6 +207,7 @@ case "$c" in
   hud) need_running; hand "hud ${1:-off}" ;;
   swap) need_running; swap ;;
   reload) need_running; reload ;;
+  age) need_running; hand age ;;
   dw) need_running; for a in "$@"; do hand "dw $a" || exit 1; done ;;
   shot) need_running; [ $# -ge 1 ] || { echo "shot <name> [--settle s]" >&2; exit 2; }; shot "$@" ;;
   stop) stop ;;

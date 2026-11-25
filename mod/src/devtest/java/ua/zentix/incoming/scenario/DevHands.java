@@ -120,11 +120,22 @@ public final class DevHands {
                 done(id, "ok");
             }
             case "press" -> presses.add(new Object[] {id, arg, tick});
+            case "age" -> {
+                // the newest detonation's shown age, its front's ground radius and the eye's ground distance (a hold at a
+                // front distance needs them: /tick step's pace varies with the frame rate)
+                var all = ua.zentix.incoming.client.nuclear.ClientNuclear.detonations();
+                if (all.isEmpty() || mc.player == null) throw new IllegalStateException("no detonation");
+                var a = all.getLast();
+                double t = a.seconds(0);
+                var e = mc.gameRenderer.getMainCamera().getPosition();
+                done(id, String.format(Locale.ROOT, "ok age %.2f front %.0f eye %.0f", t, a.wall.reach(t),
+                        Math.hypot(e.x - a.d.burst().x, e.z - a.d.burst().z)));
+            }
             case "dw" -> {
                 DustWallSteps.apply(arg);
                 done(id, "ok");
             }
-            default -> throw new IllegalArgumentException("unknown: " + line + " (cmd, reload, shot, hud, press, dw)");
+            default -> throw new IllegalArgumentException("unknown: " + line + " (cmd, reload, shot, hud, press, dw, age)");
         }
     }
 
