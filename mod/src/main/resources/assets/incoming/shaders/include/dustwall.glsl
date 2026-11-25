@@ -1031,7 +1031,7 @@ vec3 dwHazeLight(vec3 q, vec3 rd) {
 // reach the billow tops paler (size sorting: settling speed ∝ d², the column's coarse fraction falls with height, as `strat`
 // lays its density); each ground point's soil differs a little (its seed, ~60 m patches: redder or greyer); dust from hard
 // ground (roads, roofs, rock) is grey debris. Over the column's density (strat) the tint's mean is 0.99/0.97/0.95.
-// One soil colour draws the face as one tone whose rolls read only by light (step 7: chroma ±2.7 over the face against
+// One soil colour draws the face as one tone whose rolls read only by light (chroma ±2.7 over the face against
 // ±9.8 on the reference's wall, corr(L, C) ≈ 0)
 const vec3 DW_EARTH = vec3(0.95, 0.91, 0.86), DW_FINES = vec3(1.04, 1.045, 1.05);
 vec3 dwDustTint() {

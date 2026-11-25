@@ -224,19 +224,20 @@ public final class PallGround {
 
     /**
      * Learn heights from the dust's eye-centred coarse tile ({@link DustGround}): each map cell a quarter or more of whose area the
-     * tile knows takes their mean (four fixed columns per cell knew 4–13 of 16 384 cells of a 1 Mt map, the rest a fill ±25 m
-     * off the real ground; step 7).
+     * tile covers takes its mean there (the map's four fixed columns per cell know a few cells of a 1 Mt map near the eye, the
+     * rest is a fill up to ±25 m off the real ground).
      */
     void learnAround() {
         DustGround.Tile t = DustGround.coarse();
-        if (!t.on) return;
+        if (!t.on || t.knownFlag[0] <= 0) return;
         float[] sum = SUM, count = COUNT;
         Arrays.fill(sum, 0);
         Arrays.fill(count, 0);
-        for (int j = 0; j < DustGround.SIDE; j++) {
-            for (int i = 0; i < DustGround.SIDE; i++) {
-                float h = t.known[j * DustGround.SIDE + i];
-                if (Float.isNaN(h)) continue;
+        // the tile's heights inside its edge fade: what the client knows and, past it, the ground where it was last seen (the
+        // same floor the dust lies on there), so the map hands over at the tile's edge without a step
+        for (int j = 8; j < DustGround.SIDE - 8; j++) {
+            for (int i = 8; i < DustGround.SIDE - 8; i++) {
+                float h = t.filled[j * DustGround.SIDE + i];
                 double x = t.x0 + (i + 0.5) * t.cell, z = t.z0 + (j + 0.5) * t.cell;
                 int ci = Mth.floor((x - cx + half) / cell), cj = Mth.floor((z - cz + half) / cell);
                 if (ci < 0 || cj < 0 || ci >= SIDE || cj >= SIDE) continue;
@@ -251,6 +252,7 @@ public final class PallGround {
             tiled[i] = true;
         }
     }
+
 
     private static final float[] SUM = new float[SIDE * SIDE], COUNT = new float[SIDE * SIDE];
     /** Cells whose height came from the dust's tile (the coarser four-column survey leaves them). */

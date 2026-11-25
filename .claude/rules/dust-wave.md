@@ -42,9 +42,12 @@ paths:
   chunks by render distance, coarse 32 m over 4 km; the atlas's last two tiles, `DwTerrain0/1`), from what the client knows
   (`FarTerrain.dust`: client chunks below permeable canopies, then LSS/Voxy/DH map tiles); the fine tile takes each cell's lowest
   column, the coarse their mean. `dwFloor` blends fine → coarse → the source's own map by share: the fine tile hands over inside
-  what it knows (8 cells), the coarse one continues the known ground 512 m past it (`DustGroundTest`: no step over 1 m per 2 m
-  at the drawn chunks' edge); a re-centred tile refills in the same tick (`DustGroundRecentreTest`), and every view uses the
-  tiles' one height reference (`DustGround.refY`). The source's map learns the coarse tile's heights (`PallGround.learnAround`). Java readers of the
+  what it knows (8 cells), past what the client knows the coarse one holds the ground where it was last seen (nearest known cell)
+  out to its edge, where the source's map takes over (`DustGroundTest`: no step over 1 m per 2 m at the drawn chunks' edge;
+  `DustGroundRayEndTest`: a level ray down a valley runs on in vanilla; a mean of the known area or a blend into the map from
+  the known edge stood 1–11 m over a valley floor and ended rays 14–99 m past the drawn chunks with a third of the sky left); a re-centred tile refills in the same tick (`DustGroundRecentreTest`), and every view uses the
+  tiles' one height reference (`DustGround.refY`). The source's map learns the coarse tile's floor inside its edge fade (`PallGround.learnAround`), so the handover at the
+  tile's edge has no step. Java readers of the
   eye's height in the dust use the same floor (`DustGround.floor`). Each source also has its own 128² terrain map
   (`PallGround`, atlas `Sampler3`), the floor beyond the eye's tiles, and two ground-material tiles
   (`DustMaterialTiles`: fine at the server's dense cell, coarse at its outer cell; RGBA8 water/sand/hard/known, filled
