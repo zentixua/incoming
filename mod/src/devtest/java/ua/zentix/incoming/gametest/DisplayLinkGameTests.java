@@ -1,8 +1,10 @@
 package ua.zentix.incoming.gametest;
 
+import com.google.gson.JsonObject;
+import com.google.gson.JsonParser;
 import com.simibubi.create.api.behaviour.display.DisplaySource;
-import com.simibubi.create.content.redstone.displayLink.DisplayLinkBlockEntity;
 import com.simibubi.create.api.registry.CreateBuiltInRegistries;
+import com.simibubi.create.content.redstone.displayLink.DisplayLinkBlockEntity;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
 import net.minecraft.core.registries.BuiltInRegistries;
@@ -10,7 +12,7 @@ import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.level.block.state.properties.BlockStateProperties;
 import net.minecraft.gametest.framework.GameTest;
 import net.minecraft.gametest.framework.GameTestHelper;
-import net.minecraft.network.chat.Component;
+import net.minecraft.nbt.CompoundTag;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.level.block.Blocks;
@@ -30,6 +32,10 @@ import ua.zentix.incoming.strike.WeaponType;
 import ua.zentix.incoming.strike.Waypoints;
 import ua.zentix.incoming.target.Target;
 
+import java.io.IOException;
+import java.io.InputStreamReader;
+import java.io.UncheckedIOException;
+import java.nio.charset.StandardCharsets;
 import java.util.List;
 import java.util.UUID;
 
@@ -64,8 +70,8 @@ public final class DisplayLinkGameTests {
         SamBlockEntity friendly = SamGameTests.sam(h, SamGameTests.SAM.east(6), shooter, 0);
         Board hostileLink = Board.at(h, SamGameTests.SAM, Direction.EAST);
         Board friendlyLink = Board.at(h, SamGameTests.SAM.east(6), Direction.EAST);
-        String on = Component.translatable("incoming.display_source.sam_alert.on").getString();
-        String off = Component.translatable("incoming.display_source.sam_alert.off").getString();
+        String on = english(h, "incoming.display_source.sam_alert.on");
+        String off = english(h, "incoming.display_source.sam_alert.off");
         h.assertFalse(on.equals(off), "alert and clear read the same: " + on);
         DroneEntity[] drone = {null};
         long[] seen = {0};
@@ -100,7 +106,8 @@ public final class DisplayLinkGameTests {
     /**
      * One launcher with both of its sources. Empty and without a mission: 0 rounds, not ready. Two Shaheds and a Grad pack
      * with a one-Shahed mission: the pack's rockets counted with the Shaheds, ready. The same stock with a three-Shahed
-     * mission: not ready, exactly where a redstone signal would be refused (stock short). Reading changes nothing.
+     * mission: not ready, exactly where a redstone signal would be refused (stock short). Reading changes nothing; a
+     * label goes before the value.
      */
     @GameTest(template = "runway", timeoutTicks = 200, batch = "display_link_launcher", skyAccess = true)
     public static void launcherBoardsShowStockAndReadiness(GameTestHelper h) {
@@ -115,8 +122,8 @@ public final class DisplayLinkGameTests {
         h.assertTrue(offered.containsAll(List.of("incoming:launcher_munitions", "incoming:launcher_ready")) && !offered.contains("incoming:sam_alert"),
                 "Create offers the launcher " + offered);
         h.assertValueEqual(Board.offered(level, h.absolutePos(PAD.east(3))), List.of(), "Create's sources at air");
-        String ready = Component.translatable("incoming.display_source.launcher_ready.on").getString();
-        String notReady = Component.translatable("incoming.display_source.launcher_ready.off").getString();
+        String ready = english(h, "incoming.display_source.launcher_ready.on");
+        String notReady = english(h, "incoming.display_source.launcher_ready.off");
         h.assertFalse(ready.equals(notReady), "ready and not ready read the same: " + ready);
         Vec3 far = Vec3.atBottomCenterOf(h.absolutePos(PAD)).add(0, -1, 1000);
         Mission one = new Mission(WeaponType.DRONE, 1, 0, new Target.Point(far), far, Waypoints.NONE);
@@ -137,7 +144,25 @@ public final class DisplayLinkGameTests {
         h.assertValueEqual(link.read(Source.LAUNCHER_READY), notReady, "launcher short of stock for its mission");
         h.assertValueEqual(be.mission(), three, "the mission after the board's reads");
         h.assertValueEqual(link.read(Source.LAUNCHER_MUNITIONS), Integer.toString(2 + pack), "rounds after the reads");
+        // a player's label goes before the value, as with Create's own sources
+        link.label("Stock");
+        h.assertValueEqual(link.read(Source.LAUNCHER_MUNITIONS), "Stock " + (2 + pack), "labelled rounds");
         h.succeed();
+    }
+
+    /**
+     * {@code key}'s English text from our {@code en_us.json}, what the guide promises; the sign shows the server's
+     * translation, so a missing key (the raw key on the sign) or a different text fails.
+     */
+    private static String english(GameTestHelper h, String key) {
+        try (var in = DisplayLinkGameTests.class.getResourceAsStream("/assets/incoming/lang/en_us.json")) {
+            h.assertTrue(in != null, "no en_us.json");
+            JsonObject strings = JsonParser.parseReader(new InputStreamReader(in, StandardCharsets.UTF_8)).getAsJsonObject();
+            h.assertTrue(strings.has(key), "en_us.json has no " + key);
+            return strings.get(key).getAsString();
+        } catch (IOException e) {
+            throw new UncheckedIOException(e);
+        }
     }
 
     /** Our sources, by registry name: the test methods name no Create type (GameTest reflects over them). */
@@ -194,6 +219,13 @@ public final class DisplayLinkGameTests {
             link.updateGatheredData();
             h.assertValueEqual(link.activeSource, source, "Create dropped the source");
             return shown();
+        }
+
+        /** The label a player types in the link's screen (Create's "Attached Label"). */
+        void label(String text) {
+            CompoundTag config = link.getSourceConfig().copy();
+            config.putString("Label", text);
+            link.setSourceConfig(config);
         }
 
         /** The sign's first line as it stands. */
