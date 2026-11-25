@@ -25,6 +25,27 @@ class HalfPassUploadTest {
         for (String d : uploads) {
             assertTrue(d.endsWith("J)V"), "HalfPass uploads from client memory: glTexSubImage2D" + d);
         }
+        // the offset reads a bound buffer that holds the data (review r1: without the bind, offset 0 is a null pointer)
+        assertFalse(descriptors("HalfPass", "glBufferData").isEmpty(), "HalfPass fills no unpack buffer");
+        assertFalse(descriptors("HalfPass", "_glBindBuffer").isEmpty(), "HalfPass binds no unpack buffer");
+        assertTrue(descriptors("HalfPass", "_texSubImage2D").isEmpty(), "HalfPass uploads through GlStateManager._texSubImage2D");
+    }
+
+    /**
+     * The line's figure is the last whole second's (review r1 probe): a second of 15 ms uploads shows once it has passed,
+     * even with no draw after it, and a second without draws then reads 0.
+     */
+    @Test
+    void uploadFigureIsTheLastWholeSecond() {
+        long t = 1_000_000_000_000L;
+        HalfPass.second(t);
+        HalfPass.second(t + 2_000_000_000L);
+        t += 2_000_000_000L;
+        for (int i = 0; i < 30; i++) HalfPass.uploaded(15_000_000L, t + i * 20_000_000L);
+        String idle = HalfPass.describe(t + 1_500_000_000L);
+        assertTrue(idle.contains("uploads 15.000 ms a draw (longest 15.000"), idle);
+        String empty = HalfPass.describe(t + 2_600_000_000L);
+        assertTrue(empty.contains("uploads 0.000 ms a draw (longest 0.000"), empty);
     }
 
     /** The probe reads a client-memory call as one (the class below calls the buffer overload). */

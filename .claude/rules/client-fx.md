@@ -125,7 +125,7 @@ paths:
   distance (`fx_half_depth`) gives every 2×2 sample neighbourhood both sides of a silhouette, a pixel takes bilinear
   where the four samples lie at its depth (10 %) and the nearest-depth sample where they straddle an edge, so smoke
   stays sharp in front of and behind a roof edge. Thinner quads (a lying dust club edge-on, a few pixels thin) stay at
-  full resolution: at half they broke into steps and holes. Puffs mostly draw below their 128-pixel frames, (finest
+  full resolution: at half they broke into steps and holes. Puffs mostly draw below their 128-pixel frames (their finest
   octave already filtered; 1:1 crops show the same billows). The target has no hardware depth: smoke behind the world is
   hidden by the world distance (`FxHalf`: soft edge, or a hard test at softness 0), and outputs clamp to 0..1 as in the
   8-bit frame (a NaN in the float target drew black blocks). Order: per tile (64 px) the cut is the sorted place of its

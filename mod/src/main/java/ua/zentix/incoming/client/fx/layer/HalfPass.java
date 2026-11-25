@@ -73,7 +73,10 @@ final class HalfPass {
     private static int lastLow, lastFull, lastFlushes, lastScene = -1;
     /** This frame drew through the plan (the drain frame's parts follow it). */
     private static boolean planned;
-    /** Render-thread time of the cut and rectangle uploads, a frame's mean and longest over the last whole second. */
+    /**
+     * Render-thread time of the cut and rectangle uploads: mean and longest per half-pass draw (every view's) over the last
+     * whole second; a second without draws reads 0.
+     */
     private static long uploadNanos, uploadMax, uploadSince;
     private static int uploadFrames;
     private static double lastUploadMean, lastUploadMax;
@@ -317,7 +320,8 @@ final class HalfPass {
         long t0 = System.nanoTime();
         uploadCut(plan);
         uploadRects(plan, n, w, h);
-        uploaded(System.nanoTime() - t0);
+        long t1 = System.nanoTime();
+        uploaded(t1 - t0, t1);
         planned = true;
         lastScene = scene;
         try {
@@ -568,23 +572,32 @@ final class HalfPass {
         return Arrays.copyOf(out, m);
     }
 
-    private static void uploaded(long nanos) {
-        long now = System.nanoTime();
-        if (now - uploadSince >= 1_000_000_000L) {
-            lastUploadMean = uploadFrames == 0 ? 0 : uploadNanos / 1e6 / uploadFrames;
-            lastUploadMax = uploadMax / 1e6;
-            uploadNanos = uploadMax = uploadFrames = 0;
-            uploadSince = now;
-        }
+    /** One draw's uploads took nanos, ending at now (System.nanoTime). */
+    static void uploaded(long nanos, long now) {
+        second(now);
         uploadNanos += nanos;
         uploadMax = Math.max(uploadMax, nanos);
         uploadFrames++;
     }
 
+    /** Close the window once a second has passed since it opened (from a draw or from the line itself). */
+    static void second(long now) {
+        if (now - uploadSince < 1_000_000_000L) return;
+        lastUploadMean = uploadFrames == 0 ? 0 : uploadNanos / 1e6 / uploadFrames;
+        lastUploadMax = uploadMax / 1e6;
+        uploadNanos = uploadMax = uploadFrames = 0;
+        uploadSince = now;
+    }
+
     /** For the scenario line. */
     static String describe() {
+        return describe(System.nanoTime());
+    }
+
+    static String describe(long now) {
+        second(now);
         return String.format(java.util.Locale.ROOT, "half-resolution smoke %d quads, full %d (a quad over both kinds of tiles counts in each), lays %d, "
-                + "uploads %.3f ms a frame (longest %.3f)", lastLow, lastFull, lastFlushes, lastUploadMean, lastUploadMax);
+                + "uploads %.3f ms a draw (longest %.3f, all views)", lastLow, lastFull, lastFlushes, lastUploadMean, lastUploadMax);
     }
 
     /** Saved only for secondary views; swapping leaves the primary draw path and operation order unchanged. */
