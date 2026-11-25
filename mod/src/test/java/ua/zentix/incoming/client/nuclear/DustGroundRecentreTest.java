@@ -18,9 +18,15 @@ class DustGroundRecentreTest {
         return Math.floor(70 + 40 * (1 - Math.exp(-Math.pow(x / 150, 2))));
     }
 
+    @org.junit.jupiter.api.BeforeEach
+    void unbounded() {
+        DustGround.surveyNanos = Long.MAX_VALUE;
+    }
+
     @AfterEach
     void clear() {
         DustGround.reset();
+        DustGround.surveyNanos = DustGround.SURVEY_NANOS;
     }
 
     @Test

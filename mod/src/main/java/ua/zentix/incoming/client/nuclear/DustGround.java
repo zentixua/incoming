@@ -22,7 +22,8 @@ import java.util.stream.IntStream;
  * LOD map tiles of LSS, Voxy or Distant Horizons); past what it knows the fine tile gives way to the coarse one
  * ({@code dwFloor}), which holds the ground where it was last seen (its nearest known cell) out to its edge. The fine tile takes the lowest of each cell's four columns
  * (dust lies in streets between houses, under bridges' spans it stays outdoors by the open-air window), the coarse their
- * mean. Client tick: {@link #PER_TICK} cells per tile in order of distance from the eye; whole sweeps keep up with ruins.
+ * mean. Client tick: up to {@link #PER_TICK} cells a tile within {@link #SURVEY_NANOS}, in order of distance from the eye;
+ * whole sweeps keep up with ruins.
  */
 public final class DustGround {
     /** Cells per tile side. */
@@ -31,6 +32,14 @@ public final class DustGround {
     static final double COARSE_CELL = 32;
     /** Cells per tile surveyed per client tick: a full sweep of a tile in 32 ticks. */
     static final int PER_TICK = 512;
+    /**
+     * Render-thread time a tile's survey may take per client tick, ns: unbounded, 512 cells a tile cost 1.4 ms a tick steadily
+     * and 2.6–8 ms in the burst's first seconds on the Zearth Silo valley spot (forest: each column scans down through the
+     * canopy); bounded, a tile's sweep takes a few seconds, the cells nearest the eye first.
+     */
+    static final long SURVEY_NANOS = 250_000;
+    /** The survey's time bound in use (tests lift it: a cold JVM on a shared runner must not decide what a sweep learns). */
+    static long surveyNanos = SURVEY_NANOS;
     /** Cells over which the fine tile hands over to the coarse one inside what it knows. */
     static final float FINE_RAMP = 8;
     /** Refill (pull-push) and upload at most this often, ticks. */
@@ -91,8 +100,9 @@ public final class DustGround {
             return true;
         }
 
-        void survey(Sightline.Heights heights, int count) {
+        void survey(Sightline.Heights heights, int count, long until) {
             for (int n = 0; n < count; n++) {
+                if ((n & 31) == 31 && System.nanoTime() > until) return;
                 int i = ORDER[next];
                 next = (next + 1) % ORDER.length;
                 double h = measure(i, heights);
@@ -229,8 +239,8 @@ public final class DustGround {
         long start = System.nanoTime();
         boolean moved = FINE.centre(ex, ez, fineCell(renderChunks));
         moved |= COARSE.centre(ex, ez, COARSE_CELL);
-        FINE.survey(heights, PER_TICK);
-        COARSE.survey(heights, PER_TICK);
+        FINE.survey(heights, PER_TICK, System.nanoTime() + surveyNanos);
+        COARSE.survey(heights, PER_TICK, System.nanoTime() + surveyNanos);
         // a re-centred tile refills in the same tick: its origin reaches the shader and the Java readers with its heights
         if (moved || (++sinceFill >= FILL_TICKS || fill) && (FINE.dirty || COARSE.dirty)) {
             float ground = (float) (ey - 1.62);

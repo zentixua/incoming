@@ -22,9 +22,15 @@ class DustGroundTest {
         return 70 + 40 * (1 - Math.exp(-Math.pow(x / 150, 2)));
     }
 
+    @org.junit.jupiter.api.BeforeEach
+    void unbounded() {
+        DustGround.surveyNanos = Long.MAX_VALUE;
+    }
+
     @AfterEach
     void clear() {
         DustGround.reset();
+        DustGround.surveyNanos = DustGround.SURVEY_NANOS;
     }
 
     private static void sweep(double ex, double ey, double ez, double known) {
