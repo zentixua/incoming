@@ -178,10 +178,11 @@ paths:
 - Background ruin workers run in wall time (0.5–1.3 s for a 1 kt chunk locally, 50–510 unthrottled ticks): a test that
   waits for them runs at game speed (`chunkWithheldUntilRuins`), or CI's unthrottled ticks spend its timeout first.
   Game speed still races them: a check whose outcome depends on when background work lands finishes it at each tick
-  instead (`BackgroundSettle.settle`: zone layouts, chunk I/O answers, `RuinWorkers`, then `InstantChunks.settle` for
-  tickets) and paces disk loads on game ticks (`work.SteadyLoadPace`), so the result depends on ticks only; its
-  60 s wall limit only catches a hang. At 50 ms a tick, whether `nuke_prep_border`'s disk plans are ready by its
-  detonation follows the runner (ready in 20 of 26 CI runs), and with it what the zone behind the wave has to do.
+  instead (`BackgroundSettle.settle`: zone and settlement layouts, chunk I/O answers, `RuinWorkers`, then
+  `InstantChunks.settle` for tickets), with counting work clocks (the shared one and the preparation's own,
+  `usePreparationClockForTest`) and a load pace that admits every load (`work.OpenLoadPace`), so the result depends on
+  ticks only; its 60 s wall limit only catches a hang. At 50 ms a tick, whether `nuke_prep_border`'s disk plans are
+  ready by its detonation follows the runner, and with it what the zone behind the wave has to do.
 - Detonation numbers of a check come from the level's counter (`NuclearGameTests.nextId`), the one sequence real
   strikes use: a chunk a check ruined keeps that number (`CHUNK_SCAR`), and the ruin queue skips a chunk whose mark is
   not below a detonation's number, while the preparation still plans it, so its zone square is held to the end

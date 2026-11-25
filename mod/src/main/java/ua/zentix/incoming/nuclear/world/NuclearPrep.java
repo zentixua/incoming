@@ -284,7 +284,7 @@ public final class NuclearPrep {
     private final List<Prep> preps = new ArrayList<>();
     /** Strikes whose preparation failed: do not restart (otherwise error logged every tick). */
     private final java.util.Set<Integer> failed = new java.util.HashSet<>();
-    private final WorkClock clock = WorkClock.decaying(0.5);
+    private WorkClock clock = WorkClock.decaying(0.5);
 
     /** Total prebuilt ruins across strikes (tests, status). */
     public int plannedChunks() {
@@ -1185,6 +1185,11 @@ public final class NuclearPrep {
             }
         }
         return true;
+    }
+
+    /** For tests: the preparation's work clock (a counting clock keeps its units per tick off the wall); null: real. */
+    void useClockForTest(@Nullable WorkClock test) {
+        clock = test != null ? test : WorkClock.decaying(0.5);
     }
 
     /** For tests: stop all preparations as under memory pressure. */

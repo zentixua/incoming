@@ -555,8 +555,12 @@ public final class ScarQueue {
         // no mark means no prior detonation; getData would attach mark 0 to every in-range chunk
         int applied = chunk.getExistingData(ModAttachments.CHUNK_SCAR).orElse(0);
         if (d.id() <= applied) {
-            // a prepared plan the queue never takes holds its zone square (“finished plan, no queued work”)
-            if (NukeDiag.ON && pendingPlan(d.id(), chunk.getPos().toLong())) Incoming.LOG.info("DIAG prepared plan of {} not queued: its mark {} is not below detonation #{}", chunk.getPos(), applied, d.id());
+            // ruined already, by this detonation or a newer one: this detonation's prepared plan is never taken, and a
+            // pending plan holds its zone square behind the wave until the zone's hold ends (NuclearPrep.releaseDone)
+            Long2ObjectOpenHashMap<RuinPlan> plans = prepared.get(d.id());
+            if (plans != null && plans.remove(chunk.getPos().toLong()) != null && NukeDiag.ON) {
+                Incoming.LOG.info("DIAG prepared plan of {} dropped: its mark {} is not below detonation #{}", chunk.getPos(), applied, d.id());
+            }
             return;
         }
         long key = chunk.getPos().toLong();

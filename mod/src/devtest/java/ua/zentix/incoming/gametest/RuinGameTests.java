@@ -492,9 +492,10 @@ public final class RuinGameTests {
      *  border of squares on the site (1 times from 25 in its place), the wall stands on the usual border of chunks. Zone chunks
      *  earlier batches left on disk are planned from disk during the flight; within 2400 ticks of the detonation no plan
      *  is left and the zone behind the wave holds no square. On game ticks only: the mod's background work (zone layout, disk reads,
-     *  plans) is finished at each tick and tickets are loaded at once ({@link BackgroundSettle}), and the load pace sees a
-     *  whole tick's gap ({@link ua.zentix.incoming.work.SteadyLoadPace}). At a wall-clock pace (50 ms a tick) the runner
-     *  decides whether the preparation's disk plans are ready by the detonation, and with them what the zone has to do.
+     *  plans) is finished at each tick and tickets are loaded at once ({@link BackgroundSettle}), the work clocks count
+     *  units, and the load pace admits every load ({@link ua.zentix.incoming.work.OpenLoadPace}). At a wall-clock pace
+     *  (50 ms a tick) the runner decides whether the preparation's disk plans are ready by the detonation, and with them
+     *  what the zone has to do.
      */
     @GameTest(template = "range", timeoutTicks = 3000, batch = "nuke_prep_border", skyAccess = true)
     public static void wallOnPrepTileBorderFalls(GameTestHelper h) {
@@ -530,15 +531,16 @@ public final class RuinGameTests {
         }
         BlockPos wallAt = wall;
         boolean x = alongX;
-        // the wall's chunk was ruined by an earlier check beside this site, as GameTest grid neighbours leave it: a later
-        // strike ruins it again (a mark from outside the level's detonation sequence kept it out of the ruin queue)
+        // the wall's chunk was ruined by an earlier check beside this site, as GameTest grid neighbours leave it: the
+        // strike ruins it again, since its number is the newer one (NuclearGameTests.nextId)
         level.getChunkAt(h.absolutePos(wallAt)).setData(ModAttachments.CHUNK_SCAR, NuclearGameTests.nextId(level));
         detonation(h, CENTER, 0, 15, 0.05f); // only backfilling of the layer under the site: blasting - according to schedule
         double scale = IncomingConfig.SERVER.nukeEffectsScale.get();
         IncomingConfig.SERVER.nukeEffectsScale.set(0.05);
         NuclearWorld w = NuclearWorld.get(level);
         NuclearWorld.useClock(level.getServer(), WorkClock.counting(1_000_000L));
-        var pace = ua.zentix.incoming.work.SteadyLoadPace.install(level.getServer());
+        w.usePreparationClockForTest(WorkClock.counting(1_000_000L));
+        var pace = ua.zentix.incoming.work.OpenLoadPace.install(level.getServer());
         NuclearEvents events = NuclearEvents.get(level);
         long now = level.getGameTime();
         Vec3 target = Vec3.atBottomCenterOf(h.absolutePos(CENTER));
@@ -546,7 +548,8 @@ public final class RuinGameTests {
         StrikeGameTests.afterTest(h, () -> {
             IncomingConfig.SERVER.nukeEffectsScale.set(scale);
             NuclearWorld.useClock(level.getServer(), new WorkClock());
-            ua.zentix.incoming.work.SteadyLoadPace.restore(level.getServer(), pace);
+            w.usePreparationClockForTest(null);
+            ua.zentix.incoming.work.OpenLoadPace.restore(level.getServer(), pace);
             NuclearStrikes.clear(level);
         });
         h.onEachTick(() -> {

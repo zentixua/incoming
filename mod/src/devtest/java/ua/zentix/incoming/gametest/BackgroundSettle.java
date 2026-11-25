@@ -13,15 +13,16 @@ import java.util.concurrent.TimeoutException;
 
 /**
  * The mod's background ruin work finished at each test tick, so a check of it depends on game ticks only. Zone layouts
- * ({@code NuclearPrep}), disk header scans and chunk reads (the chunk I/O worker), their parsing and every ruin plan
- * ({@link RuinWorkers}) run in wall time on other threads: a GameTest server ticks without pauses (~2000 ticks a second
- * on CI), so how many ticks they took followed the runner, and a check paced at 50 ms a tick still raced them. Here each
+ * ({@code NuclearPrep}, {@code RuinSettle}), disk header scans and chunk reads (the chunk I/O worker), their parsing and
+ * every ruin plan ({@link RuinWorkers}) run in wall time on other threads, and a GameTest server ticks without pauses
+ * (~2000 ticks a second on CI): how many ticks they take follows the runner, at any fixed wall-clock pace too. Here each
  * tick waits until all of it submitted so far is done (a read's parsing, a parse's next read: until nothing is left),
  * then loads what tickets ask for in full ({@link InstantChunks#settle}): work a tick submits is ready by the next tick.
- * The wall-time limit only guards against a hang; reaching it fails the check.
+ * The check pairs it with counting work clocks ({@code WorkClock.counting}) and an open load pace
+ * ({@code work.OpenLoadPace}). The wall-time limit only guards against a hang; reaching it fails the check.
  */
 final class BackgroundSettle {
-    /** A hang, not a slow machine: the largest wait seen locally is under a second. */
+    /** A hang, not a slow machine: the longest wait seen is about a second (the I/O worker's pending writes). */
     private static final long LIMIT_MS = 60_000;
 
     private BackgroundSettle() {}
@@ -31,19 +32,14 @@ final class BackgroundSettle {
         IOWorker io = (IOWorker) level.getChunkSource().chunkMap.chunkScanner();
         boolean idle = false;
         while (!idle) {
-            if (!NuclearWorld.get(level).awaitPreparationLayoutsForTest(left(until))) fail("zone layout");
+            if (!NuclearWorld.get(level).awaitLayoutsForTest(left(until))) fail("zone or settlement layout");
             sync(io, until);
             if (!RuinWorkers.awaitForTest(RuinWorkers.Priority.FAR, left(until))) fail("ruin workers");
             // a finished task may have queued a read whose answer queues another task
             sync(io, until);
             idle = RuinWorkers.awaitForTest(RuinWorkers.Priority.FAR, 0);
         }
-        try {
-            InstantChunks.settle(level);
-        } catch (RuntimeException e) {
-            // any other exception in a test's tick stops the whole GameTest server
-            throw new GameTestAssertException("tickets' chunks did not load: " + e);
-        }
+        InstantChunks.settle(level);
     }
 
     /** Reads and header scans queued at the chunk I/O worker answered (their callbacks ran on its thread). */
