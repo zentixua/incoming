@@ -138,4 +138,25 @@ out=$(INCOMING_SOFT_RESERVE_MB=100000000 soft_mem_ok 2>&1); rc=$?
 # gpu_lease.sh tells a CPU session by its socket: nested_kwin refuses any other name on the CPU path, before KWin
 out=$(INCOMING_SOFT=1 "$ROOT/tools/nested_kwin.sh" wayland-incoming-sandbox 64 64 true 2>&1); rc=$?
 [ $rc = 2 ] && [[ $out == *"wayland-incoming-soft-"* ]] && ok "CPU session needs a soft socket name" || bad "nested_kwin soft socket: $rc $out"
+# Dev client (tools/dev_client.sh) without a client: a line goes to the inbox and its answer comes back; an "error"
+# answer fails; the java a rigLaunch script runs is found even after quoted environment values
+(
+  source "$ROOT/tools/dev_client.sh"
+  DEV=$tmp/dev; mkdir -p "$DEV"
+  running() { true; }
+  answer() { for _ in $(seq 100); do f=$(ls "$DEV"/inbox/*.cmd 2>/dev/null | head -n 1); [ -n "$f" ] && break; sleep 0.05; done
+    printf '%s\n' "$1" > "${f%.cmd}.done"; mv "$f" "$f.seen"; }
+  answer "ok" & a=$!
+  out=$(hand "cmd time set 6000" 5); rc=$?; wait $a
+  [ $rc = 0 ] && [[ $out == "cmd time set 6000 → ok" ]] && [ "$(cat "$DEV"/inbox/*.seen)" = "cmd time set 6000" ] \
+    && echo "ok: dev client hand: line in, answer out" || { echo "FAIL: dev client hand: $rc $out"; exit 1; }
+  rm -f "$DEV"/inbox/*
+  answer "error not in a world" & a=$!
+  out=$(hand "cmd tp @s 0 80 0" 5); rc=$?; wait $a
+  [ $rc = 1 ] && [[ $out == *"error not in a world"* ]] && echo "ok: dev client hand: an error answer fails" \
+    || { echo "FAIL: dev client hand error: $rc $out"; exit 1; }
+  printf "#!/usr/bin/env bash\nexec env 'A=x y' '/opt/jbr/bin/java' '@/x/args.txt' '-cp' 'a:b' Main\n" > "$tmp/rig.sh"
+  [ "$(rig_java "$tmp/rig.sh")" = /opt/jbr/bin/java ] && echo "ok: dev client java from the rig script" \
+    || { echo "FAIL: rig_java: $(rig_java "$tmp/rig.sh")"; exit 1; }
+) || fail=1
 exit $fail

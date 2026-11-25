@@ -46,8 +46,9 @@ ANCHORS = {
         (r"`/tick freeze`", "the defect's moment is held with vanilla /tick freeze, the burst plays once per session"),
     ],
     Path("AGENTS.md"): [
-        (r"Look changes iterate in the dev client", "look changes iterate in the dev client"),
-        (r"whole-pack takes and the matrix only for the\s+final set", "whole-pack takes and the matrix only for the final set"),
+        (r"Look\s+changes\s+iterate\s+in\s+the\s+dev\s+client", "look changes iterate in the dev client"),
+        (r"whole-pack\s+takes\s+and\s+the\s+matrix\s+only\s+for\s+the\s+final\s+set",
+         "whole-pack takes and the matrix only for the final set"),
     ],
     Path("docs/dev-pipeline.md"): [
         (r"--quickPlaySingleplayer", "the dev client opens the saved test world directly (vanilla quick play)"),

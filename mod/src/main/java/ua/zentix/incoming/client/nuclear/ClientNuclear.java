@@ -660,9 +660,13 @@ public final class ClientNuclear {
         // column-top water for pall map (its matter); absent under ceiling (Nether), like terrain
         FarTerrain.Water water = heights == null ? null : FarTerrain.water(level), hard = heights == null ? null : FarTerrain.hard(level),
                 sand = heights == null ? null : FarTerrain.sand(level);
+        // the show's age runs on world ticks like particles: it stands still under /tick freeze and moves with /tick step;
+        // everything that follows the eye (pall ground, water, dust front, sky, hearing) keeps updating. A replay's age is
+        // its editor position, which pauses by freezing the tick rate itself (replay.md)
+        boolean held = !level.tickRateManager().runsNormally() && !ua.zentix.incoming.client.replay.Replay.active();
         for (Iterator<Active> it = DETONATIONS.values().iterator(); it.hasNext(); ) {
             Active a = it.next();
-            a.tick();
+            if (!held) a.tick();
             if (!a.discarded) a.sounds.tick();
             // terrain/water under pall: for rays without world behind and for matter (ceiling dimensions use ground
             // under epicenter)

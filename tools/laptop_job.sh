@@ -150,16 +150,12 @@ acceptance=; [ -n "$full" ] && [ "${1:-}" = --acceptance ] && { acceptance=1; sh
 [ $# -ge 3 ] && [ "$2" = "--" ] || { echo "usage: $0 [--gpu [--wait]|--light|--soft] [--full --acceptance] <name> -- <command …> | --status | --ceiling <mode>" >&2; exit 2; }
 name=$1; shift 2
 # A whole-pack take is a final take, never the look loop (look skill, "Iterate in the dev client"): it states so with
-# --acceptance, and each one is counted for its task in the load log (`take` rows)
+# --acceptance, and each one that starts is counted for its task in the load log (`take` rows)
 if [ -n "$full" ]; then
   if [ -z "$acceptance" ]; then
     echo "laptop_job $name: a whole-pack job is a final take (an acceptance clip, page media, or a measurement only the pack gives: frame cost under his pack, a bug only the pack shows): add --acceptance. A look change iterates in the dev client in seconds (tools/dev_client.sh, client-scenario.md)" >&2
     exit 2
   fi
-  takes_log=${DELEGATE_LOAD_LOG:-${XDG_STATE_HOME:-$HOME/.local/state}/delegate/load.tsv}
-  mkdir -p "$(dirname "$takes_log")" 2>/dev/null
-  printf 'take\t%s\t%s\t%s\n' "$(date +%s)" "${DELEGATE_TASK:--}" "$name" >> "$takes_log" 2>/dev/null
-  echo "laptop_job $name: whole-pack take $(awk -F'\t' -v t="${DELEGATE_TASK:--}" '$1 == "take" && $3 == t' "$takes_log" 2>/dev/null | wc -l) of task ${DELEGATE_TASK:--}" >&2
 fi
 read -r mem_max mem_swap <<< "$(_ceiling "$([ -n "$full" ] && echo full || echo "$mode")")"
 
@@ -212,6 +208,13 @@ inhibit=(systemd-inhibit --what=sleep:idle --who="Incoming: $name" --why="mod ch
 # arguments, reach the description and the log
 code=0
 mkdir -p "$tmp_dir"
+# the whole-pack take is counted once it starts (past the lease and admission), as a `take` row of its task
+if [ -n "$full" ]; then
+  takes_log=${DELEGATE_LOAD_LOG:-${XDG_STATE_HOME:-$HOME/.local/state}/delegate/load.tsv}
+  mkdir -p "$(dirname "$takes_log")" 2>/dev/null
+  printf 'take\t%s\t%s\t%s\n' "$(date +%s)" "${DELEGATE_TASK:--}" "$name" >> "$takes_log" 2>/dev/null
+  echo "laptop_job $name: whole-pack take $(awk -F'\t' -v t="${DELEGATE_TASK:--}" '$1 == "take" && $3 == t' "$takes_log" 2>/dev/null | wc -l) of task ${DELEGATE_TASK:--}" >&2
+fi
 "${inhibit[@]}" \
   systemd-run --user --wait --pipe --collect --quiet --same-dir --unit="incoming-job-$name-$$" \
     --description="incoming job $name (task ${DELEGATE_TASK:--})" -E INCOMING_JOB_START="$(date +%s)" \

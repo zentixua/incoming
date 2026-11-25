@@ -51,9 +51,9 @@ Prism: `~/.var/app/org.prismlauncher.PrismLauncher/data/PrismLauncher/` (`tools/
     dev_client.sh start|cmd|key|swap|reload|shot|stop ← the look loop: ModDevGradle runClient (the mod and its dependencies) straight
                                            into a saved world (a reflinked copy of a real map), JetBrains Runtime from the Gradle
                                            toolchain with JDWP on loopback; `swap` compiles, redefines changed classes (jdb) and presses
-                                           F3+T for changed resources; vanilla commands and keys through xdotool on the client's own
-                                           nested display (shared GPU slot or CPU, laptop_job.sh --soft); frames by F2; how to work:
-                                           client-scenario.md, “Standard dev client”
+                                           the F3+T reload for changed resources; chat commands, reload, F2 and F1 as files the
+                                           client reads (devtest DevHands: the nested display passes it no keyboard input); shared
+                                           GPU slot or CPU (laptop_job.sh --soft); how to work: client-scenario.md, “Standard dev client”
     sandbox.sh start|fx|swap|shot|restart|stop|jbr ← effects sandbox (vanilla: shared GPU slot or CPU, unless shaders/sodium/dh/gpu): a client with only the mod (+ Iris with a shaderpack, Sodium without one, DH) in a
                                            flat world, an effect by the /fx command in seconds, hot code swap and
                                            resource reload without a new client, frames and WAV in one command (`shot`; `--at none`

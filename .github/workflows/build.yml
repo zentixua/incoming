@@ -101,7 +101,7 @@ jobs:
                 mod/src/main/resources/assets/incoming/shaders/*) mod=true; amd=true ;;
                 tools/amd_shader_check.py|tools/test_amd_shader_check.py|tools/fixtures/amd_shader_budget.json) amd=true ;;
                 mod/*|tools/fetch_runtime_mods.py|tools/paths.py|tools/clean_install.py) mod=true ;;
-                tools/rig_procs.sh|tools/test_rig_procs.sh|tools/gpu_lease.sh|tools/test_gpu_lease.sh|tools/laptop_job.sh|tools/sandbox.sh|tools/test_sandbox.sh|tools/nested_kwin.sh|tools/soft_gl.sh|tools/stress.sh|tools/mp_scenario.sh|tools/client_scenario.sh|tools/probes/*) rig=true ;;
+                tools/rig_procs.sh|tools/test_rig_procs.sh|tools/gpu_lease.sh|tools/test_gpu_lease.sh|tools/laptop_job.sh|tools/sandbox.sh|tools/dev_client.sh|tools/test_sandbox.sh|tools/nested_kwin.sh|tools/soft_gl.sh|tools/stress.sh|tools/mp_scenario.sh|tools/client_scenario.sh|tools/probes/*) rig=true ;;
                 tools/replayscan/*) replayscan=true ;;
                 # prod_client.py prepares look-gate client instance copy (no Dynamic FPS idle; tested there too).
                 tools/look_gate/*|tools/media/*|tools/prod_client.py) lookgate=true ;;

@@ -75,7 +75,6 @@ cd mod && ./gradlew runScenarioSweep      # flight scenarios, all seeds; -Pscena
 cd mod && ./gradlew runScenarioRecord     # rerecord trajectory baseline; explain shifts in the scenario PR
 tools/client_scenario.sh nuke            # headless: mod/run/scenario/screenshots/*.png, audio.wav, logs
 tools/dev_client.sh start <save>         # the look loop (client-scenario.md)
-tools/sandbox.sh shot <name> '<effect>'   # effect frames/WAV at set seconds (client-scenario.md)
 tools/stand/run.sh <name> ci:<branch> --packs none --scenes 100  # scene bench, ~3 GPU min; tools/stand/README.md
 tools/deploy.sh                          # jar → dist/ for friends and mods/ without pack auto-update
 python3 tools/logscan.py [--since 18:30]   # after play: mod errors, strikes, detonations, Sable
@@ -87,7 +86,8 @@ CI checks each commit once, on `main` push and PR; branches without PRs get none
 Checks follow changed paths (`tools.md`); Итог decides merge, failing if any needed check fails or is canceled.
 Release steps: `tools.md`.
 A PR changing packet/entity-data formats bumps `IncomingNetwork.PROTOCOL`. A release with behavior/lang keys different
-from the last shipped jar bumps it if not already bumped during that release: old jars must not join new hosts.
+from the last shipped jar bumps it if not already bumped during that release: old jars must not join new hosts
+(NeoForge reports different mod versions).
 
 ## Architecture (`ua.zentix.incoming` packages)
 Area packages: `strike/` orders/launch, `entity/`/`guidance/` flight, `warhead/` explosion, `nuclear/`, `defense/` air
@@ -218,17 +218,17 @@ queues, little rework; each mission's budget is checked against its measured loa
 - **Plan only large changes:** before coding, a few PR-description lines of what players see/hear and the law
   (existing mod law, new laws sourced). Small edits directly. A brief gives goal, decisions, references, done numbers,
   not the implementation. The player outcome stays fixed: fixing evidence stays in, new outcomes go to a follow-up PR.
-- **Validation:** code changes need build and touched-area GameTest (`./gradlew build`; GameTest via `tools/laptop_job.sh … --
+- **Validation:** code changes need build and touched-area GameTest (`./gradlew build`; GameTest through `tools/laptop_job.sh … --
   ./gradlew runGameTestServer -PgametestOnly=…`). Numeric claims get unit tests/GameTest; comment/guide promises held
-  by tests. Documentation-only changes: applicable CI checks, no game run. Split large work.
+  by tests. Documentation-only changes use the applicable CI checks, without a game run. Split large work.
 - **Visual/audio:** the `look` skill (scope, traits and mechanism before code; clips judged in motion); the player's
-  eye decides, numbers inform. Look changes iterate in the dev client (look
-  skill); whole-pack takes and the matrix only for the final set. Before/after frames/WAV in
-  PR; where frames render: `client-scenario.md`. Scene bench (100-strike frame cost versus `main`) only for changes that can change frame cost: render/FX code, shaders, particle or draw counts
-  (Artem, 30.10); once, on the final PR head after review; colors, textures, sounds, text, server, tools skip it. Never
-  merge above frame-cost limit or with a bench look flag unanswered in the PR (intended or fixed). A new
-  version for Artem's review (frames, clip, animation) first goes beside the one
-  he last saw, same times: what he accepted must still hold by number.
+  eye decides, numbers inform. Look changes iterate in the dev client (look skill); whole-pack takes and the matrix
+  only for the final set. Before/after frames/WAV in PR; where frames render: `client-scenario.md`. Scene bench
+  (100-strike frame cost versus `main`) only for changes that can change frame cost: render/FX code, shaders, particle
+  or draw counts (Artem, 30.10); once, on the final PR head after review; colors, textures, sounds, text, server, tools
+  skip it. Never merge above frame-cost limit or with a bench look flag unanswered in the PR (intended or fixed). No
+  full-pack Iris recording per PR. A new version for Artem's review (frames, clip, animation) first goes beside the
+  one he last saw, same times: what he accepted must still hold by number.
 - **Performance starts with measurement:** GPU time by layer parts (mod markers, bench line, F3), RenderDoc frame
   (`mod/run/renderdoc/`, Python analysis); edit the numerically identified cause, not a presumed model.
 - **One run answers everything** (Artem, 18.11): before any run that observes the system (test, measurement,

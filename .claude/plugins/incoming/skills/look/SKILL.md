@@ -68,12 +68,15 @@ world in the full pack) is the final acceptance set of section 5 and the matrix,
 - Start once: `tools/dev_client.sh start <save> --from <world>` (ModDevGradle `runClient` with the mod and its
   dependencies, straight into the save; JetBrains Runtime). A terrain-dependent defect (valley, coast, hills) runs in a
   copy of that real map, its spot reached by `/tp`; the copy is made once and kept, never a fresh map per try.
-- Set the scene by vanilla commands: `/tp`, `/time set`, `/weather`, the strike or `/incoming nuke now at …`; hold the
-  defect's moment with `/tick freeze` (the nuclear show and particles stand still) and move it with `/tick step <ticks>`;
-  the burst plays once per session, not per change.
+- Set the scene by vanilla commands (`tools/dev_client.sh cmd`): `/tp`, `/time set`, `/weather`, the strike or
+  `/incoming nuke now at …`; hold the defect's moment with `/tick freeze` and move it with `/tick step <ticks>`. The
+  freeze holds the nuclear show's age and particles; ordinary strike smoke and the effects layer keep running.
 - Change: Java by `tools/dev_client.sh swap` (compile, hot swap; a restart only for registrations, static initializers,
-  packet formats or mixins), shaders and textures by the same `swap` (F3+T), a shader pack's own files by Iris's `R`,
-  numbers by the config file (the game rereads it). `tools/dev_client.sh shot <name>` after each change.
+  packet formats or mixins), shaders and textures by the same `swap` (the F3+T reload), numbers by the config file
+  (the game rereads it). `tools/dev_client.sh shot <name>` after each change.
+- A held burst keeps what was built at its birth (the detonation's fields, seeds, sources, tables): a change there, or
+  to static state, needs a new burst; per-frame code and shaders show on the held one. One burst serves every change
+  of the second kind.
 - A shader term alone: the harness running the mod's include verbatim on Mesa llvmpipe (`tools/dust_wall_gl.py`,
   `tools/see_through_gl.py`); frames and WAV at exact effect seconds against `main`: the sandbox (`tools/sandbox.sh shot`).
 - Every round states its seconds per change. A whole-pack take runs only through `laptop_job.sh --full --acceptance`,

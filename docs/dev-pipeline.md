@@ -37,11 +37,12 @@ saved test world and each change goes into it in seconds.
 - F3+T reloads textures, models, sounds, language files and the mod's shaders; Iris reloads a shader pack with R;
   `/reload` reloads data. Values tuned by eye live in the config files, which the game rereads when they change.
 - Vanilla commands set the scene: `/tp`, `/time set`, `/weather`; `/tick freeze` holds a moment (entities,
-  particles and the mod's nuclear show stand still) and `/tick step <ticks>` moves it.
+  particles and the mod's nuclear show stand still; ordinary strike smoke runs on) and `/tick step <ticks>` moves it.
 - Logic is held by GameTest (section 3); the client is for what a test cannot judge: picture, sound, feel.
 
-`tools/dev_client.sh` runs this loop without a screen, for agents: the same `runClient`, keys and commands sent
-with `xdotool`, frames by F2 ([client-scenario.md](../.claude/rules/client-scenario.md), "Standard dev client").
+`tools/dev_client.sh` runs this loop without a screen, for agents: the same `runClient` on a headless display, whose
+keyboard the game never sees, so the commands, F3+T, F2 and F1 go in as files a devtest listener reads
+([client-scenario.md](../.claude/rules/client-scenario.md), "Standard dev client").
 `tools/sandbox.sh` adds what the loop lacks: frames and WAV at exact effect seconds, repeated against `main`.
 `tools/client_scenario.sh` runs scripted client scenarios. A whole-pack client is for the final acceptance set
 only (`tools/laptop_job.sh --full --acceptance`).
@@ -49,6 +50,7 @@ only (`tools/laptop_job.sh --full --acceptance`).
 Sources: [ModDevGradle](https://docs.neoforged.net/toolchain/docs/plugins/mdg/),
 [Quick Play](https://minecraft.wiki/w/Quick_Play),
 [AE2 build.gradle](https://github.com/AppliedEnergistics/Applied-Energistics-2/blob/1.21.1/build.gradle),
+[Mekanism build.gradle](https://github.com/mekanism/Mekanism/blob/1.21.x/build.gradle),
 [Create build.gradle](https://github.com/Creators-of-Create/Create/blob/mc1.21.1/dev/build.gradle),
 [Fabric hotswapping](https://wiki.fabricmc.net/tutorial:hotswapping),
 [Iris debugging](https://github.com/IrisShaders/Iris/blob/1.21.1/docs/usage/debugging.md),

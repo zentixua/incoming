@@ -145,9 +145,8 @@ neoForge {
                 def port = project.findProperty('hotSwap') ?: '5005'
                 jvmArgument '-XX:+AllowEnhancedClassRedefinition'
                 jvmArgument "-agentlib:jdwp=transport=dt_socket,server=y,suspend=n,address=127.0.0.1:${port}"
-                // vanilla's own reload timing ("Resource reload finished after N ms", ProfiledReloadInstance) runs only
-                // with its loggers at debug: a script waits for that line after F3+T
-                systemProperty 'forge.logging.mojang.level', 'debug'
+                // the agent's keyboard (tools/dev_client.sh, devtest DevHands): chat commands, F3+T, F2, F1 as files
+                systemProperty 'incoming.dev.inbox', project.file('run/client/dev/inbox').absolutePath
             }
         }
         // client without a window for the check scenario (see src/devtest/.../ClientScenario and
