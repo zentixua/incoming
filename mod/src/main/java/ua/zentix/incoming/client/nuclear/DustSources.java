@@ -337,7 +337,7 @@ public final class DustSources {
         int je = (int) Math.min(Math.floor(xe), n - 2);
         double haze = 1 - PallField.textured(t - (table[4 * je] + (xe - je) * (table[4 * (je + 1)] - table[4 * je])));
         double target = adapt * Math.exp(DUST_ADAPT_INSIDE * DUST_K * eyeDepth(table, n, end, reach, t, at, m.hard(at[0], at[2])) * haze);
-        if (DIAG && lead != null) {
+        if (DIAG && lead != null && !ua.zentix.incoming.client.fx.layer.FxViews.secondary()) {
             double[] c = COLUMN;
             PallField.drawnColumn(table, n, end, reach, t, at[0], at[2], m.hard(at[0], at[2]), c);
             eyeLine = String.format(java.util.Locale.ROOT, "eye %.1f m over the dust's floor (map's %.1f), material water %.2f sand %.2f "
