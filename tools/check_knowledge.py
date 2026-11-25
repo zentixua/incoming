@@ -15,6 +15,8 @@ changes what agents know. Checks:
     (Claude Code reads .claude/rules recursively, the list and the hooks do not).
   - The marketplace lists the `incoming` plugin at its folder; the plugin's hooks.json registers knowledge.py for
     SessionStart, InstructionsLoaded, PostToolUse and Stop; every hook script named exists.
+  - Rules that must always hold keep their anchor text in their home (ANCHORS), checked where the plugin's skills
+    exist: a rewrite that drops the rule fails here instead of silently.
   - Public repository: no IPv4 addresses (except loopback/any/multicast), private mounts, personal e-mail addresses
     or claude.ai links in AGENTS.md, rules or any plugin file.
 Run: python3 tools/check_knowledge.py [repo root]; exit 1 with the list of problems.
@@ -36,6 +38,13 @@ HOOK_EVENTS = {"SessionStart", "InstructionsLoaded", "PostToolUse", "Stop"}
 HOOK_COMMAND = 'python3 "${CLAUDE_PLUGIN_ROOT}/hooks/knowledge.py"'
 POST_TOOLS = {"Read", "Edit", "Write", "MultiEdit", "NotebookEdit", "Grep", "Glob", "Bash"}
 PLUGIN = Path(".claude/plugins/incoming")
+# home file -> (anchor regex, the rule it guards)
+ANCHORS = {
+    PLUGIN / "skills/look/SKILL.md": [
+        (r"## \d+\. Iterate in seconds; full takes only for acceptance",
+         "look changes iterate in a fast rig at seconds per change; full scenario takes only for acceptance clips"),
+    ],
+}
 PRIVATE = [
     (re.compile(r"\b(?!127\.0\.0\.1\b|0\.0\.0\.0\b|224\.)(?:\d{1,3}\.){3}\d{1,3}\b"), "IPv4 address"),
     (re.compile(r"/mnt/project-files"), "private claude.ai project files path"),
@@ -136,6 +145,14 @@ def check(root: Path) -> list[str]:
                                 registered.add(event)
             for event in sorted(HOOK_EVENTS - registered):
                 problems.append(f"hooks.json: {event} does not run hooks/knowledge.py")
+
+    if (root / PLUGIN / "skills").is_dir():
+        for home, anchors in ANCHORS.items():
+            text = (root / home).read_text(encoding="utf-8") if (root / home).is_file() else ""
+            for rx, rule in anchors:
+                if not re.search(rx, text):
+                    problems.append(f"{home}: lost the rule \"{rule}\" (anchor `{rx}`): restore it or move the anchor "
+                                    "with the rule")
 
     public = [agents_path, *rules, *[p for p in plugin.rglob("*") if p.is_file() and "__pycache__" not in p.parts]]
     for f in public:

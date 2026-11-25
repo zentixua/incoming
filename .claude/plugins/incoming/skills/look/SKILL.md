@@ -60,10 +60,21 @@ per lag, so shorten `--lag` for fast fronts) and from the law.
   30 fps clip in the judging view with its GPU frame cost; the owner picks by clip and records why in the PR.
 - The drawing takes where, when and how much from the law; physics, sound and gameplay read the law, never the
   drawing. A law and look corrections on one model are glue (AGENTS.md).
-- Iterate in a shader harness that runs the mod's shader include verbatim on Mesa llvmpipe (EGL), as
-  `tools/dust_wall_gl.py` and `tools/see_through_gl.py` do: seconds per try. A game take confirms; it is not the loop.
+## 4. Iterate in seconds; full takes only for acceptance
+Each look change is tried in the fastest rig that shows it, at seconds per change; a full scenario take (burst plus
+minutes of world, a real map) is the acceptance clip, never the loop.
+- A shader term: a harness that runs the mod's shader include verbatim on Mesa llvmpipe (EGL), as
+  `tools/dust_wall_gl.py` and `tools/see_through_gl.py` do.
+- An effect in the world: the running sandbox (`tools/sandbox.sh shot`, hot replacement, `client-scenario.md`); a late
+  moment of a long effect from the same start (`nuke … near` times frames from the front's arrival), not a replay of
+  its whole life per change.
+- A late state that takes minutes to build (an aged cloud, a front at the viewer): the hold rig (deep-debug skill)
+  builds it once and holds it, the front frozen at that moment; edits reload into the same client.
+- A real-map spot (city, coast, the Silo copy): pre-generate the spot once and load it into a client that stays up for
+  every try; a fresh map per take is not iteration.
+- Every round states its time per iteration. The full takes of section 5 run once the fast rig shows the traits.
 
-## 4. Judge in motion
+## 5. Judge in motion
 - Each round: frames at fixed times and a 30 fps clip in the judging view, beside the reference and the last version
   Artem saw at the same times. Check `capture.json` ages: the clip plays in real time.
 - Measure our take and the reference footage with the same tool: `tools/clip_metrics.py change` (detail change per
@@ -82,7 +93,7 @@ per lag, so shorten `--lag` for fast fronts) and from the law.
 - Under a shader pack the effect works and looks at least as good (AGENTS.md); one check on the last head, which does
   not replace a pack-specific functional test.
 
-## 5. Sound
+## 6. Sound
 - Take: a sandbox WAV (`tools/sandbox.sh shot … --at none`) or a scenario's `audio.wav`, beside `main`'s at the same
   distance and times; the reference is a real recording of the phenomenon at a stated distance.
 - Same measure on both, same settings: short-term loudness over time (`ffmpeg -af ebur128`), a spectrogram
@@ -91,7 +102,7 @@ per lag, so shorten `--lag` for fast fronts) and from the law.
   and the recording spectra of `tools/build_sounds.py`, never a tuned gain.
 - A fresh Claude session judges by the numbers and the waveform and spectrogram images against the traits.
 
-## 6. Rounds and stop
+## 7. Rounds and stop
 - One run per round answers all of its questions (deep-debug skill): probe channels for every suspect term in one
   instrumented take, never one guessed toggle per take.
 - Three rounds or the timebox without a measured shift toward the traits: stop and name the cause by number (AGENTS.md).

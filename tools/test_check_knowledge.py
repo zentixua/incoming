@@ -88,6 +88,13 @@ class GateTest(unittest.TestCase):
     def test_this_repository_passes(self):
         self.assertEqual(check_knowledge.check(ROOT), [])
 
+    def test_anchored_rule_must_stay(self):
+        home = check_knowledge.PLUGIN / "skills/look/SKILL.md"
+        self.repo.write(str(home), "# Look\n\n## 4. Iterate in seconds; full takes only for acceptance\n")
+        self.assertEqual(self.problems(), [])
+        self.repo.write(str(home), "# Look\n\n## 4. Judge in motion\n")
+        self.assertTrue(any("lost the rule" in p for p in self.problems()), self.problems())
+
     def test_size_inside_the_agreed_look_is_ours(self):
         # Artem 22.11: he sets the goal, not a height; a mission must never stop to ask him a size, height or shape
         agents = " ".join((ROOT / "AGENTS.md").read_text(encoding="utf-8").split())
