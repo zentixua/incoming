@@ -1417,6 +1417,7 @@ public final class ClientScenario {
             case "reprojection" -> ua.zentix.incoming.client.fx.layer.DustWallDiag.reprojection = !v.equals("0");
             case "ground" -> {
                 String base = Minecraft.getInstance().gameDirectory.toPath().resolve("screenshots").resolve(v).toString();
+                Incoming.LOG.info("SCENARIO dw {}", ua.zentix.incoming.client.nuclear.DustGround.describe());
                 int i = 0;
                 for (var a : ua.zentix.incoming.client.nuclear.ClientNuclear.detonations()) {
                     try {
