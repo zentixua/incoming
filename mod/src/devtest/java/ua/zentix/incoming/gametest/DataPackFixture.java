@@ -28,7 +28,7 @@ import java.util.stream.Stream;
  * uses it has its own batch, and leaves the server's data as it found it, also when it fails. Every error becomes a
  * {@link GameTestAssertException}: anything else thrown in a test sequence crashes the whole GameTest server.
  */
-final class DataPackFixture {
+public final class DataPackFixture {
     private DataPackFixture() {}
 
     /**
@@ -36,7 +36,7 @@ final class DataPackFixture {
      * root → content), runs {@code with}, unloads the pack and runs {@code after} (the effect is gone again), then
      * succeeds.
      */
-    static void run(GameTestHelper h, String name, Map<String, String> files, Runnable before, Runnable with, Runnable after) {
+    public static void run(GameTestHelper h, String name, Map<String, String> files, Runnable before, Runnable with, Runnable after) {
         MinecraftServer server = h.getLevel().getServer();
         List<CompletableFuture<Void>> reloads = new ArrayList<>();
         StrikeGameTests.afterTest(h, () -> {

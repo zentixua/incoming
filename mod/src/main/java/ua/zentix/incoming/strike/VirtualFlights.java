@@ -51,9 +51,10 @@ public final class VirtualFlights extends SavedData {
             boolean saved = p.save(tag);
             copy = saved ? create(level, tag) : null;
             if (copy != null) {
-                p.handOverTargetArea(copy);
-                // The copy loaded the round from the same save: the old entity's removal does not end it.
+                // The copy loaded the round from the same save: from here only the copy ends it, also when a step
+                // below throws and the copy is discarded (the old entity's removal does not end it a second time).
                 p.detachRound();
+                p.handOverTargetArea(copy);
                 get(level).add(copy);
             } else Incoming.LOG.warn("Projectile {} {} at {} could not switch to off-world flight ({}), removed", p.getType().getDescriptionId(), p.getUUID(),
                     p.blockPosition(), saved ? "copy not created" : "save failed");

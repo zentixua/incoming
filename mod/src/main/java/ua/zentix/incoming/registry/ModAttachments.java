@@ -1,6 +1,8 @@
 package ua.zentix.incoming.registry;
 
 import com.mojang.serialization.Codec;
+import net.minecraft.Util;
+import net.minecraft.core.UUIDUtil;
 import net.neoforged.neoforge.attachment.AttachmentType;
 import net.neoforged.neoforge.registries.DeferredRegister;
 import net.neoforged.neoforge.registries.NeoForgeRegistries;
@@ -18,11 +20,13 @@ import ua.zentix.incoming.strike.ArrivalTickets;
 import ua.zentix.incoming.strike.CameraLink;
 import ua.zentix.incoming.strike.PickHints;
 import ua.zentix.incoming.strike.StrikeWorld;
+import ua.zentix.incoming.target.Sides;
 import ua.zentix.incoming.target.Sightings;
 import ua.zentix.incoming.work.WorkScheduler;
 import ua.zentix.incoming.warhead.CraterFalls;
 
 import java.util.Optional;
+import java.util.UUID;
 import java.util.function.Supplier;
 
 public final class ModAttachments {
@@ -44,6 +48,13 @@ public final class ModAttachments {
             () -> AttachmentType.builder(() -> ua.zentix.incoming.nuclear.world.NukeSeen.NONE)
                     .serialize(ua.zentix.incoming.nuclear.world.NukeSeen.CODEC, s -> !s.equals(ua.zentix.incoming.nuclear.world.NukeSeen.NONE)).build());
 
+    /**
+     * Living entity: owner of the nuclear flash whose burn brought it to burn shock ({@code FlashBurns}), named when the
+     * shock kills; saved with the entity, as the burn is. Absent for an unowned detonation.
+     */
+    public static final Supplier<AttachmentType<UUID>> BURN_SHOCK_OWNER = REGISTER.register("burn_shock_owner",
+            () -> AttachmentType.builder(() -> Util.NIL_UUID).serialize(UUIDUtil.CODEC).build());
+
     /** Player retinal burns — flash blind spots; reset on death (not copied). */
     public static final Supplier<AttachmentType<RetinaScars>> RETINA = REGISTER.register("retina",
             () -> AttachmentType.builder(() -> RetinaScars.NONE).serialize(RetinaScars.CODEC, s -> !s.isEmpty()).build());
@@ -55,6 +66,10 @@ public final class ModAttachments {
     /** World: light leases and recovery queue; never saved across worlds. */
     public static final Supplier<AttachmentType<ua.zentix.incoming.work.BlockLighting>> BLOCK_LIGHTING = REGISTER.register("block_lighting",
             () -> AttachmentType.builder(ua.zentix.incoming.work.BlockLighting::new).build());
+
+    /** World: chunks waiting to reach their viewers whole after their light; never saved. */
+    public static final Supplier<AttachmentType<ua.zentix.incoming.work.ChunkDelivery>> CHUNK_DELIVERY = REGISTER.register("chunk_delivery",
+            () -> AttachmentType.builder(ua.zentix.incoming.work.ChunkDelivery::new).build());
 
     /** Chunk: generated with current lighting or completed legacy recovery; ignored by vanilla. */
     public static final Supplier<AttachmentType<Boolean>> LIGHT_REPAIRED = REGISTER.register("light_repaired",
@@ -208,6 +223,10 @@ public final class ModAttachments {
     /** World: whom and what each side saw ({@link Sightings}); not saved. */
     public static final Supplier<AttachmentType<Sightings>> SIGHTINGS = REGISTER.register("sightings",
             () -> AttachmentType.builder(Sightings::new).build());
+
+    /** Overworld: the server's cached side keys ({@link Sides.Cache}); not saved. */
+    public static final Supplier<AttachmentType<Sides.Cache>> SIDES = REGISTER.register("sides",
+            () -> AttachmentType.builder(Sides.Cache::new).build());
 
     /** World: flying interceptors, their targets and announced alerts ({@link DefenseWorld}); not saved. */
     public static final Supplier<AttachmentType<DefenseWorld>> DEFENSE_WORLD = REGISTER.register("defense_world",

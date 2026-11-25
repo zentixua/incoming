@@ -28,12 +28,20 @@ paths:
   changes without neighbour updates and `util/SignalEdge` tells the neighbours once every chunk within its reach is
   ready (a circuit would otherwise load one from the tick; `server-chunks.md`); removal while on rechecks them too (ruin
   writes suppress updates); frozen with its chunk (`RedstoneGameTests`, `RedstoneReviewGameTests`).
+- The sweep keeps `tracks`, `hostile`, `nearestHostile`, `covered` (Jade lines, computer tables) and calls the SAM's
+  `Watcher`s (not saved; copy-on-write list, attach may come from a computer thread) on every sweep with a hostile
+  track, the alarm's condition (`AutomationGameTests.alertOnlyWhileItsSamTracks`): CC:Tweaked's `SamPeripheral` watches
+  while a computer is attached and queues `incoming_alert` to those computers only (`PeripheralsTest`). A computer
+  shutting down detaches from its own thread mid-alert: its access throws `NotAttachedException`, caught per computer,
+  or the SAM's tick crashes the server (`SamPeripheralDetachTest`); never hold the peripheral's lock while calling a
+  computer (its detach locks itself, then ours).
 - Air defense uses its own game model (Artem's decision, 21.10): ranges, missile flight and fuze are game numbers in
   `InterceptorSpec`, not data or laws of a real system (guidance, radar equation and kill probability are not modeled).
 - Separate parts, reusable by a portable SAM: `Radar` (only world projectiles in `StrikeWorld.projectiles`, one snapshot
   per tick in `DefenseWorld`; visible within the SAM spec's radar range (`InterceptorSpec.radarRange`) ×
   `WeaponSpec.Signature.visibility`, and only in line of sight — `util/LineOfSight` over ready-chunk heightmaps
-  (`MOTION_BLOCKING_NO_LEAVES`, unready chunks do not occlude); hostile means not `Sides.friendly` by owner UUID;
+  (`MOTION_BLOCKING_NO_LEAVES`, unready chunks do not occlude); hostile means not `Sides.friendly` by owner UUID
+  (one side key per player, `strike.md`);
   ownerless projectiles are hostile to everyone; engage if hostile, `Signature.intercept`, unridden, within
   `InterceptorSpec.engageRange`), `FireControl` (nearest target not pursued by anyone's missile: one missile per target
   across the world, a miss releases it), `AirAlert` (alerts the side to a new hostile target: direction and distance
@@ -46,7 +54,8 @@ paths:
   acceleration, `InterceptorSpec.turnLimit`: tighter on boost; fuze at closest approach (closest point of the missile's
   and target's tick segments within the tick, not its end: if still closing, wait a tick) within `fuse` + target
   half-length: detonation means target down, no dice roll; if it passes farther away, it turns after the target while
-  fueled; target gone, ridden, or fuel exhausted means self-destruct; ground contact means detonation; kill shares by
+  fueled; target gone, ridden, friendly to the SAM's owner (a side change mid-flight, `End.FRIENDLY`), or fuel exhausted
+  means self-destruct; ground contact means detonation; kill shares by
   target class: `InterceptShareTest`, numbers in `docs/guide/defense.md`), `InterceptorSpec` (flight numbers are for the
   game, not physical; flight scale brings maximum speed `maxSpeed()` and the boost motor (`boostAccel()`,
   `boostTicks()`: mean Tsiolkovsky acceleration over the 9M96's 11 s burn) to real values, no flight above `ceiling()`, the 9M96 zone's altitude ceiling; real 9M96E2 specs in `passport`: mass,
@@ -112,7 +121,7 @@ paths:
 - Interceptor flight is not saved: after a server restart mid-intercept, the missile is gone, the target keeps flying.
 - A nuclear warhead on a cruise missile or B-2 is intercepted like a conventional one (signature belongs to the carrier);
   an ICBM is not.
-- GameTest servers have no profile cache: `Sides` recognizes the owner's team by UUID only if the player is “online” —
+- GameTest servers have no profile cache: `Sides` finds the owner's vanilla team by UUID only if the player is “online” —
   `SamGameTests.listener` puts a `FakePlayer` into `PlayerList.playersByUUID` via reflection. The SAM would shoot down
   other tests' missiles: each SAM test has its own batch, and its SAM is removed afterward (`SamGameTests.sam`); old
   test structures remain, and a loaded SAM ticking beside the next structure would shoot at its projectiles too.

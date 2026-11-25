@@ -36,7 +36,7 @@ import org.jetbrains.annotations.Nullable;
 import ua.zentix.incoming.Incoming;
 import ua.zentix.incoming.nuclear.Detonation;
 import ua.zentix.incoming.nuclear.world.ColumnScar;
-import ua.zentix.incoming.nuclear.world.RuinDelivery;
+import ua.zentix.incoming.work.ChunkDelivery;
 import ua.zentix.incoming.nuclear.world.RuinPlan;
 import ua.zentix.incoming.nuclear.world.RuinPlanner;
 
@@ -50,15 +50,15 @@ import java.util.UUID;
 import static ua.zentix.incoming.gametest.NuclearGameTests.atPsi;
 
 /**
- * How ruins reach players holding the chunk ({@link RuinDelivery}): a heavily ruined chunk as one whole-chunk packet
- * built after its light, a lightly ruined one as section deltas. A recorder in place of the chunk's viewers (its
+ * How in-place changes (ruins, blackout lamps) reach players holding the chunk ({@link ChunkDelivery}): a heavily changed
+ * chunk as one whole-chunk packet built after its light, a lightly changed one as section deltas. A recorder in place of the chunk's viewers (its
  * {@code ChunkHolder} player provider, the one vanilla's own broadcast uses) rebuilds what a client would hold from the
  * blocks before the wave and the packets in order; it must equal the server's chunk in every position, either way.
  */
 @GameTestHolder(Incoming.MOD_ID)
 @PrefixGameTestTemplate(false)
-public final class RuinDeliveryGameTests {
-    private RuinDeliveryGameTests() {}
+public final class ChunkDeliveryGameTests {
+    private ChunkDeliveryGameTests() {}
 
     /** Heavy chunk (house, glass, trees) goes whole after its light; a lone pane in a distant chunk goes as deltas. */
     @GameTest(template = "range", timeoutTicks = 400, batch = "nuke_delivery", skyAccess = true)
@@ -69,8 +69,8 @@ public final class RuinDeliveryGameTests {
     /** The same heavy ruins forced through section deltas give the client the same chunk. */
     @GameTest(template = "range", timeoutTicks = 400, batch = "nuke_delivery_deltas", skyAccess = true)
     public static void heavyRuinsAsDeltasGiveTheSameChunk(GameTestHelper h) {
-        int was = RuinDelivery.wholeFrom(Integer.MAX_VALUE);
-        StrikeGameTests.afterTest(h, () -> RuinDelivery.wholeFrom(was));
+        int was = ChunkDelivery.wholeFrom(Integer.MAX_VALUE);
+        StrikeGameTests.afterTest(h, () -> ChunkDelivery.wholeFrom(was));
         run(h, false);
     }
 
@@ -81,7 +81,7 @@ public final class RuinDeliveryGameTests {
      * would); nothing of it may reach the client before the whole chunk.
      * <p>
      * At game speed: the light fence completes in wall time on the light thread, while the hold lasts {@code
-     * RuinDelivery.HOLD_LIMIT} ticks. Unthrottled, a CI shard where {@code light_late_busy} left the light thread a
+     * ChunkDelivery.HOLD_LIMIT} ticks. Unthrottled, a CI shard where {@code light_late_busy} left the light thread a
      * backlog sent the chunk 234 and 381 ticks after the write: the hold expired and a light update went first, or the
      * test timed out (PR #683, 20.11.2026).
      */
@@ -111,13 +111,13 @@ public final class RuinDeliveryGameTests {
             rec.started = true;
             RuinPlan plan = RuinPlanner.plan(level, d, heavy);
             h.assertTrue(plan.apply(level, heavy, d, new ColumnScar.Budget(false)), "the new plan is outdated");
-            h.assertTrue(RuinDelivery.waiting(level, heavy.getPos()), "the heavy chunk does not wait to go whole");
+            h.assertTrue(ChunkDelivery.waiting(level, heavy.getPos()), "the heavy chunk does not wait to go whole");
             ChunkHolder holder = level.getChunkSource().chunkMap.getVisibleChunkIfPresent(heavy.getPos().toLong());
             holder.sectionLightChanged(LightLayer.SKY, SectionPos.blockToSectionCoord(y));
             applied[0] = level.getGameTime();
         });
         h.runAfterDelay(30, () -> {
-            h.assertTrue(RuinDelivery.waiting(level, heavy.getPos()), "the light fence passed while the light thread was held");
+            h.assertTrue(ChunkDelivery.waiting(level, heavy.getPos()), "the light fence passed while the light thread was held");
             List<Object> got = rec.got(heavy.getPos());
             h.assertTrue(count(got, ClientboundLightUpdatePacket.class) == 0 && count(got, ClientboundLevelChunkWithLightPacket.class) == 0,
                     "while waiting the client got " + got.stream().map(o -> o.getClass().getSimpleName()).toList());
@@ -131,6 +131,170 @@ public final class RuinDeliveryGameTests {
                 h.assertFalse(got.get(i) instanceof ClientboundLightUpdatePacket, "a light update reached the old blocks before the ruined chunk");
             }
             clientLight(h, level, heavy.getPos(), before[0], rec);
+        });
+    }
+
+    /**
+     * A blackout darkening many lamps of a watched chunk sends the chunk whole after its light, never lamp by lamp: each
+     * lamp switched by a delta makes the client spread its block-light removal itself, on its render thread (a 1 Mt
+     * blackout over the Silo map sent 91.6 thousand lamp deltas to a viewer at 3.9 km during the wave's 10 s passage,
+     * 42 % of the client's render thread in light updates, frames up to 1.3 s; passage-stutter run 24.11.2026). The
+     * client's blocks and light must equal the server's; a chunk with a few lamps keeps deltas. The 64 lamps go in two
+     * budgeted passes of 30 and 34, each under the threshold alone: the threshold is about the chunk.
+     */
+    @GameTest(template = "range", timeoutTicks = 300, batch = "grid_delivery", skyAccess = true)
+    public static void blackoutLampsGoWholeAfterTheirLight(GameTestHelper h) {
+        StrikeGameTests.gameSpeed(h);
+        ServerLevel level = h.getLevel();
+        LevelChunk many = level.getChunkAt(h.absolutePos(new BlockPos(16, 12, 16)));
+        LevelChunk few = level.getChunkAt(h.absolutePos(new BlockPos(48, 12, 48)));
+        int y = h.absolutePos(new BlockPos(0, 12, 0)).getY() + 1;
+        BlockState lamp = Blocks.GLOWSTONE.defaultBlockState();
+        // 64 lamps two blocks apart, their light overlapping like a lit street; the other chunk holds three
+        for (int x = 0; x < 16; x += 2) for (int z = 0; z < 16; z += 2) level.setBlock(many.getPos().getBlockAt(x, y, z), lamp, 2);
+        for (int i = 0; i < 3; i++) level.setBlock(few.getPos().getBlockAt(4 + 4 * i, y, 8), lamp, 2);
+        Recorder rec = Recorder.attach(h, List.of(many.getPos(), few.getPos()));
+        Client manyClient = new Client(level, many), fewClient = new Client(level, few);
+        h.runAfterDelay(20, () -> {
+            manyClient.lightBefore = Light.of(level, many.getPos());
+            manyClient.blocksFrom(many);
+            fewClient.blocksFrom(few);
+            rec.started = true;
+            // the 64 lamps in two budgeted passes, as the blackout queue splits a chunk: 30 then the rest
+            var first = ua.zentix.incoming.grid.ChunkLights.applyInPlace(level, many, true, 30, 0, true,
+                    new it.unimi.dsi.fastutil.longs.LongArrayList(), null);
+            h.assertTrue(!first.done() && first.changed() == 30, "the first pass did not stop at its limit: " + first);
+            var rest = ua.zentix.incoming.grid.ChunkLights.applyInPlace(level, many, true, Integer.MAX_VALUE, first.next(), true,
+                    new it.unimi.dsi.fastutil.longs.LongArrayList(), null);
+            h.assertTrue(rest.done() && rest.changed() == 34, "the second pass did not finish the chunk: " + rest);
+            var three = ua.zentix.incoming.grid.ChunkLights.applyInPlace(level, few, true, Integer.MAX_VALUE, 0, true,
+                    new it.unimi.dsi.fastutil.longs.LongArrayList(), null);
+            h.assertTrue(three.done() && three.changed() == 3, "three lamps not darkened: " + three);
+            rec.applied = level.getGameTime();
+        });
+        h.succeedWhen(() -> {
+            h.assertTrue(rec.applied > 0 && level.getGameTime() > rec.applied + 40, "waiting for delivery and light");
+            List<Object> manyGot = rec.got(many.getPos()), fewGot = rec.got(few.getPos());
+            int chunks = count(manyGot, ClientboundLevelChunkWithLightPacket.class), deltas = deltaPositions(manyGot);
+            h.assertTrue(chunks == 1 && deltas == 0,
+                    "64 lamps: expected one whole chunk and no deltas, got " + chunks + " chunks and " + deltas + " delta positions");
+            int first = indexOf(manyGot, ClientboundLevelChunkWithLightPacket.class);
+            for (int i = 0; i < first; i++) {
+                h.assertFalse(manyGot.get(i) instanceof ClientboundLightUpdatePacket, "a light update reached the old lamps before the dark chunk");
+            }
+            clientLight(h, level, many.getPos(), manyClient.lightBefore, rec);
+            int fewChunks = count(fewGot, ClientboundLevelChunkWithLightPacket.class), fewDeltas = deltaPositions(fewGot);
+            h.assertTrue(fewChunks == 0 && fewDeltas == 3,
+                    "3 lamps: expected 3 delta positions only, got " + fewChunks + " chunks and " + fewDeltas + " delta positions");
+            manyClient.apply(manyGot);
+            fewClient.apply(fewGot);
+            manyClient.matches(h, many);
+            fewClient.matches(h, few);
+        });
+    }
+
+    /**
+     * Chunks whose light completes together reach each of their two viewers at most {@link ChunkDelivery#PER_TICK} a
+     * tick, both in the same tick, the rest on the next ticks: the client handles every packet that arrived before its frame, and a wave crossing the Silo
+     * city in view (1 Mt, viewer at 3.9 km) readied up to 105 whole chunks in one tick, about 600 within 3 s; the client's
+     * frames went to 0.5–0.7 s for 2 s (passage-burst run 24.11.2026).
+     */
+    @GameTest(template = "range", timeoutTicks = 200, batch = "nuke_delivery_pace", skyAccess = true)
+    public static void readyChunksGoPacedToEachViewer(GameTestHelper h) {
+        paced(h, 5, Pace.BUDGET);
+    }
+
+    /**
+     * Past {@link ChunkDelivery#READY_LIMIT} after its write a chunk may use twice the budget: with one chunk a tick, the
+     * fences ready 10 ticks after the write leave about 10 one a tick, and those still waiting at the limit go two a tick.
+     */
+    @GameTest(template = "range", timeoutTicks = 200, batch = "nuke_delivery_pace_limit", skyAccess = true)
+    public static void readyChunkGoesAtItsWaitLimit(GameTestHelper h) {
+        int was = ChunkDelivery.perTick(1);
+        StrikeGameTests.afterTest(h, () -> ChunkDelivery.perTick(was));
+        paced(h, 10, Pace.LIMIT);
+    }
+
+    /**
+     * Fences that complete together after the limit (light thread busy: write-to-send lag reaches 35 ticks) still
+     * spread: at most twice the budget a tick (review round 2 probe, budget 4 here, so 8 and 8).
+     */
+    @GameTest(template = "range", timeoutTicks = 200, batch = "nuke_delivery_pace_late", skyAccess = true)
+    public static void lateFencesStillSpread(GameTestHelper h) {
+        int was = ChunkDelivery.perTick(4);
+        StrikeGameTests.afterTest(h, () -> ChunkDelivery.perTick(was));
+        paced(h, ChunkDelivery.READY_LIMIT + 2, Pace.LATE);
+    }
+
+    private enum Pace { BUDGET, LIMIT, LATE }
+
+    /** 16 chunks written in one tick while the light thread is held, released {@code lag} ticks later. */
+    private static void paced(GameTestHelper h, int lag, Pace pace) {
+        StrikeGameTests.gameSpeed(h);
+        ServerLevel level = h.getLevel();
+        List<LevelChunk> chunks = new ArrayList<>();
+        for (int x = 0; x < 64; x += 16) for (int z = 0; z < 64; z += 16) {
+            LevelChunk c = level.getChunkAt(h.absolutePos(new BlockPos(x, 12, z)));
+            if (!chunks.contains(c)) chunks.add(c);
+        }
+        h.assertTrue(chunks.size() > ChunkDelivery.PER_TICK, "need more chunks than one tick's budget: " + chunks.size());
+        List<Recorder> recs = Recorder.attach(h, chunks.stream().map(LevelChunk::getPos).toList(), 2);
+        Recorder rec = recs.get(0), other = recs.get(1);
+        int y = h.absolutePos(new BlockPos(0, 12, 0)).getY() + 1;
+        // the light thread is held while the chunks are written, so all their fences complete at once, as a wave's do
+        java.util.concurrent.CountDownLatch light = new java.util.concurrent.CountDownLatch(1);
+        StrikeGameTests.afterTest(h, light::countDown);
+        h.runAfterDelay(20, () -> {
+            rec.started = true;
+            other.started = true;
+            ChunkPos first = chunks.get(0).getPos();
+            level.getChunkSource().getLightEngine().addTask(first.x, first.z,
+                    net.minecraft.server.level.ThreadedLevelLightEngine.TaskType.PRE_UPDATE, () -> {
+                        try {
+                            light.await(20, java.util.concurrent.TimeUnit.SECONDS);
+                        } catch (InterruptedException e) {
+                            Thread.currentThread().interrupt();
+                        }
+                    });
+            for (LevelChunk c : chunks) {
+                level.setBlock(c.getPos().getBlockAt(8, y, 8), Blocks.GLOWSTONE.defaultBlockState(), 2);
+                ChunkDelivery.wholeAfterLight(level, c, ChunkDelivery.WHOLE_FROM);
+            }
+            rec.applied = level.getGameTime();
+        });
+        h.runAfterDelay(20 + lag, light::countDown);
+        h.succeedWhen(() -> {
+            h.assertTrue(rec.applied > 0, "not written yet");
+            Map<Long, Integer> perTick = new java.util.TreeMap<>();
+            for (LevelChunk c : chunks) {
+                h.assertTrue(other.wholeAt.getOrDefault(c.getPos(), List.of()).equals(rec.wholeAt.getOrDefault(c.getPos(), List.of())),
+                        "a chunk held by both viewers reached them at different ticks: " + c.getPos());
+                List<Long> at = rec.wholeAt.getOrDefault(c.getPos(), List.of());
+                h.assertTrue(at.size() <= 1, c.getPos() + " went whole " + at.size() + " times");
+                if (at.isEmpty()) {
+                    h.assertTrue(level.getGameTime() < rec.applied + ChunkDelivery.READY_LIMIT + 40, c.getPos() + " never went");
+                    h.fail("waiting for " + c.getPos());
+                }
+                perTick.merge(at.get(0), 1, Integer::sum);
+            }
+            long first = perTick.keySet().iterator().next(), last = ((java.util.TreeMap<Long, Integer>) perTick).lastKey();
+            String sent = "sent at ticks after the write " + perTick.entrySet().stream()
+                    .map(en -> (en.getKey() - rec.applied) + "=" + en.getValue()).toList();
+            int max = perTick.values().stream().mapToInt(Integer::intValue).max().orElse(0);
+            // the fences complete on the light thread: they may reach the server thread over more than one tick
+            h.assertTrue(last - rec.applied <= ChunkDelivery.READY_LIMIT + 10, "too late: " + sent);
+            switch (pace) {
+                case BUDGET -> h.assertTrue(max <= ChunkDelivery.PER_TICK && perTick.size() >= 2 && first - rec.applied < ChunkDelivery.READY_LIMIT,
+                        "expected at most " + ChunkDelivery.PER_TICK + " a tick over two ticks or more: " + sent);
+                case LIMIT -> {
+                    h.assertTrue(max <= 2, "one a tick, two at the limit: " + sent);
+                    for (var en : perTick.entrySet()) {
+                        if (en.getValue() == 2) h.assertTrue(en.getKey() - rec.applied >= ChunkDelivery.READY_LIMIT, "two before the limit: " + sent);
+                    }
+                    h.assertTrue(perTick.containsValue(2), "the chunks left at the limit did not use the late budget: " + sent);
+                }
+                case LATE -> h.assertTrue(max <= 8 && perTick.size() >= 2, "a late clump of 16 must go at most 8 a tick: " + sent);
+            }
         });
     }
 
@@ -181,11 +345,11 @@ public final class RuinDeliveryGameTests {
                 // and its light is the ruins' own, applied over the client's light before the wave
                 clientLight(h, level, heavy.getPos(), heavyClient.lightBefore, rec);
             } else {
-                h.assertTrue(heavyChunks == 0 && heavyDeltas >= RuinDelivery.WHOLE_FROM,
+                h.assertTrue(heavyChunks == 0 && heavyDeltas >= ChunkDelivery.WHOLE_FROM,
                         "forced deltas: got " + heavyChunks + " chunks and " + heavyDeltas + " delta positions");
             }
             int lightChunks = count(lightGot, ClientboundLevelChunkWithLightPacket.class), lightDeltas = deltaPositions(lightGot);
-            h.assertTrue(lightChunks == 0 && lightDeltas > 0 && !RuinDelivery.whole(lightDeltas),
+            h.assertTrue(lightChunks == 0 && lightDeltas > 0 && !ChunkDelivery.whole(lightDeltas),
                     "lone pane: expected deltas only, got " + lightChunks + " chunks and " + lightDeltas + " delta positions");
             heavyClient.apply(heavyGot);
             lightClient.apply(lightGot);
@@ -399,6 +563,8 @@ public final class RuinDeliveryGameTests {
     /** Stands in for every viewer of the chosen chunks: records what vanilla and Incoming send them, in order. */
     private static final class Recorder extends ServerGamePacketListenerImpl {
         final Map<ChunkPos, List<Object>> got = new HashMap<>();
+        /** Game time of each whole chunk sent, by chunk. */
+        final Map<ChunkPos, List<Long>> wholeAt = new HashMap<>();
         volatile boolean started;
         long applied;
 
@@ -407,26 +573,39 @@ public final class RuinDeliveryGameTests {
         }
 
         static Recorder attach(GameTestHelper h, List<ChunkPos> chunks) {
+            return attach(h, chunks, 1).get(0);
+        }
+
+        /** {@code viewers} recorders that all hold every chosen chunk. */
+        static List<Recorder> attach(GameTestHelper h, List<ChunkPos> chunks, int viewers) {
             ServerLevel level = h.getLevel();
-            FakePlayer player = new FakePlayer(level, new GameProfile(UUID.randomUUID(), "ruin-delivery"));
-            Connection connection = new Connection(PacketFlow.SERVERBOUND);
-            EmbeddedChannel channel = new EmbeddedChannel(connection);
-            Recorder rec = new Recorder(player, connection);
-            player.connection = rec;
+            List<Recorder> recs = new ArrayList<>();
+            List<net.minecraft.server.level.ServerPlayer> players = new ArrayList<>();
+            List<EmbeddedChannel> channels = new ArrayList<>();
+            for (int i = 0; i < viewers; i++) {
+                FakePlayer player = new FakePlayer(level, new GameProfile(UUID.randomUUID(), "ruin-delivery-" + i));
+                Connection connection = new Connection(PacketFlow.SERVERBOUND);
+                channels.add(new EmbeddedChannel(connection));
+                Recorder rec = new Recorder(player, connection);
+                player.connection = rec;
+                recs.add(rec);
+                players.add(player);
+            }
+            List<net.minecraft.server.level.ServerPlayer> all = List.copyOf(players);
             Map<ChunkHolder, ChunkHolder.PlayerProvider> old = new HashMap<>();
             for (ChunkPos c : chunks) {
                 ChunkHolder holder = level.getChunkSource().chunkMap.getVisibleChunkIfPresent(c.toLong());
                 h.assertTrue(holder != null && holder.getTickingChunk() != null, "fixture chunk is not ticking");
                 old.put(holder, holder.playerProvider);
-                ObfuscationReflectionHelper.setPrivateValue(ChunkHolder.class, holder, (ChunkHolder.PlayerProvider) (pos, border) -> List.of(player),
+                ObfuscationReflectionHelper.setPrivateValue(ChunkHolder.class, holder, (ChunkHolder.PlayerProvider) (pos, border) -> all,
                         "playerProvider");
-                rec.got.put(c, new ArrayList<>());
+                for (Recorder rec : recs) rec.got.put(c, new ArrayList<>());
             }
             StrikeGameTests.afterTest(h, () -> {
                 old.forEach((holder, provider) -> ObfuscationReflectionHelper.setPrivateValue(ChunkHolder.class, holder, provider, "playerProvider"));
-                channel.finishAndReleaseAll();
+                channels.forEach(EmbeddedChannel::finishAndReleaseAll);
             });
-            return rec;
+            return recs;
         }
 
         List<Object> got(ChunkPos c) {
@@ -452,6 +631,8 @@ public final class RuinDeliveryGameTests {
             if (at == null) return;
             List<Object> list = got.get(at);
             if (list != null) list.add(packet);
+            if (list != null && packet instanceof ClientboundLevelChunkWithLightPacket)
+                wholeAt.computeIfAbsent(at, k -> new ArrayList<>()).add(player.serverLevel().getGameTime());
         }
     }
 }

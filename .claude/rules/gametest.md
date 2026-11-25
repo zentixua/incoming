@@ -24,9 +24,10 @@ paths:
   the reproduced position and 31 more offsets.
 - CI shards GameTest over six machines (`-PgametestShard=i/n`, `GameTestShards`): each batch stays in one shard; shards
   balance by `gametest-durations.json`; `tools/gametest_durations.py` refreshes the table from shard logs when durations
-  diverge noticeably. CI has no Lithium run: the mod does not touch what Lithium replaces (block-entity ticking,
+  diverge noticeably. CI has no Lithium run: the mod does not touch what Lithium replaces (when block entities tick,
   `Explosion.explode` loop); `-PwithLithium` runs GameTest with Lithium as on the host (absent from the jar and
-  `mods.toml`), for manual compatibility checks.
+  `mods.toml`), for manual compatibility checks. In `Level.tickBlockEntities` Lithium wraps `shouldTickBlocksAt` and our
+  ticker-removal mixin wraps the removal calls: a change to that mixin reruns `be_ticker_.*` with `-PwithLithium`.
 - Optional LSS integration: `./gradlew runGameTestServer -PwithLss '-PgametestOnly=lss_.*'`. The runtime jar defaults
   to `lss_version`; `-PlssTestVersion=<Modrinth version ID>` checks another supported LSS runtime without changing the
   compile API. The GameTest server needs `lss.test.integratedServer=true` (the Gradle flag supplies it). Tests register
@@ -138,6 +139,11 @@ paths:
   place it before the block it reads changes (loading a magazine updates it), then allow its 2-tick delay
   (`RedstoneGameTests`).
 
+- Unit tests share one JVM: a test calling `Bootstrap.bootStrap()` must first stub the mod list as `PackDocsTest` does
+  (`if (LoadingModList.get() == null) LoadingModList.of(…)`), or NeoForge's feature flags throw inside `Blocks`'
+  static init, the class stays failed for the whole JVM, and dozens of unrelated tests (Voxy, LSS, Mockito mocks of
+  `MinecraftServer`) fail after it with `NoClassDefFoundError`.
+
 - Fixed surface-baseline seeds and `blast_crater_seed` regression: see `warhead.md`.
 
 - Late-exposure fixtures measure pulse/wave damage, independently of ground fire. Saved-zone settlement can lay
@@ -175,7 +181,10 @@ paths:
   reshuffles the shards, so order-dependent tests fail on unrelated PRs. Reproduce locally with the same
   `-PgametestShard=i/6` after rebasing on `origin/main` (the split is deterministic), run the batch alone a few times,
   name the shared state by number; never skip the test.
-- `FakePlayer.die()` is a no-op: test death with a real `ServerPlayer`. After a blast, fire as well as rubble may fill
+- `FakePlayer.die()` is a no-op: test death with a real `ServerPlayer`. A "restart" probe of a `noSave` entity type
+  (debris, SAM missile) cannot use `Entity.save` (returns false): read its data back with `saveWithoutId` + `load` on a
+  new entity, as `RuleGameTests`/`OwnerGameTests` do. An owner in another level is a real `ServerPlayer` built on that
+  level and put in the player list (`OwnerGameTests.elsewhere`). After a blast, fire as well as rubble may fill
   a broken block's spot: assert the block is gone, not that the spot is air.
 - A check that every position a blast chose ends empty holds only for the explosion alone: the collapse's rubble (the
   building's own material) and settled debris rightly fall into the holes, at positions that vary with where the runner

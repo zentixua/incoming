@@ -50,7 +50,8 @@ softens both. Hearing damage can be turned off in the [settings](settings.md).
 ## Surface-to-Air Missile System (SAM)
 
 The SAM is a block that shoots down other players' Shaheds, Lancets, cruise missiles and B-2s by itself. It leaves the
-projectiles of the player who placed it, and of that player's team, alone.
+projectiles of the player who placed it, and of that player's team, alone ([who is on a team](rules.md#spotting)). If a
+target's owner joins the team while a missile chases it, the missile blows itself up in the air.
 
 The block itself is the radar cabin. Four missile canisters stand upright on top of it, so the whole SAM is about five
 and a half blocks tall. An interceptor leaves its canister straight up, then turns in a short arc toward the point where it will meet the
@@ -126,3 +127,6 @@ while the sky is clear and shut on alarm (more examples in [For server owners an
 - In an unloaded chunk the SAM keeps the signal it had and looks again within half a second once its chunk works.
   Within 32 blocks of ground that is not loaded (the edge of the loaded world), what it powers learns of a change
   only once that ground loads: a circuit reaching there would otherwise load it.
+- A CC:Tweaked computer attached to the SAM reads its missiles and radar, and receives the event `incoming_alert` on
+  every sweep while the radar tracks a hostile target ([For server owners and pack makers](packs.md#computers-cctweaked)).
+  With Jade, looking at the SAM shows its missiles and what its radar tracks.

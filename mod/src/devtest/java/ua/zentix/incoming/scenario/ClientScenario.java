@@ -175,6 +175,7 @@ public final class ClientScenario {
         if (scenario == null) return;
         ua.zentix.incoming.gametest.TestScale.realWaveOnStart();
         FrameTimes.startIfRequested();
+        HitchProbe.startIfRequested();
         // script lines, sandbox and samples write the layer time on the GPU in parts: the sample is always running
         ua.zentix.incoming.client.fx.layer.LayerTimes.always();
         if ("release-check".equals(scenario)) {

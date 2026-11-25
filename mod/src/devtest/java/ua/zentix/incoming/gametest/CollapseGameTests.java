@@ -406,6 +406,43 @@ public final class CollapseGameTests {
         });
     }
 
+    /**
+     * An unopened loot chest on a floor that falls keeps its loot unrolled: the dropped chest carries its table and seed
+     * ({@code container_loot}) and rolls them when placed and opened, and nothing is rolled into loose items during the fall.
+     */
+    @GameTest(template = "range", batch = "collapse", timeoutTicks = 2400, skyAccess = true)
+    public static void lootChestKeepsLoot(GameTestHelper h) {
+        quiet(h);
+        ground(h);
+        ServerLevel level = h.getLevel();
+        Map<BlockPos, BlockState> house = block(h, 24, 39, 28, 35, 4, true);
+        BlockPos chest = new BlockPos(26, GROUND + 5, 30);
+        h.setBlock(chest, Blocks.CHEST);
+        var table = net.minecraft.world.level.storage.loot.BuiltInLootTables.SIMPLE_DUNGEON;
+        h.runAfterDelay(10, () -> {
+            ((net.minecraft.world.RandomizableContainer) h.getBlockEntity(chest)).setLootTable(table, 42L);
+            it.unimi.dsi.fastutil.longs.LongArrayList at = new it.unimi.dsi.fastutil.longs.LongArrayList();
+            java.util.List<BlockState> was = new java.util.ArrayList<>();
+            blowWestGroundFloor(h, house, at, was);
+            Warheads.CollapseProbe probe = Warheads.testCollapse(level, h.absoluteVec(new Vec3(28, GROUND + 2, 31.5)), 16, at, was, System::nanoTime);
+            h.succeedWhen(() -> {
+                h.assertTrue(probe.done() && probe.fell() > 100, "collapse " + probe.done() + ", fell " + probe.fell());
+                h.assertTrue(!h.getBlockState(chest).is(Blocks.CHEST), "the chest stayed: its floor did not fall");
+                int chests = 0, withTable = 0, loose = 0;
+                for (var item : level.getEntitiesOfClass(net.minecraft.world.entity.item.ItemEntity.class, new net.minecraft.world.phys.AABB(h.absolutePos(chest)).inflate(24))) {
+                    var st = item.getItem();
+                    if (st.is(net.minecraft.world.item.Items.CHEST)) {
+                        chests += st.getCount();
+                        var loot = st.get(net.minecraft.core.component.DataComponents.CONTAINER_LOOT);
+                        if (loot != null && loot.lootTable().equals(table) && loot.seed() == 42L) withTable++;
+                    } else if (!(st.getItem() instanceof net.minecraft.world.item.BlockItem)) loose++;
+                }
+                h.assertTrue(chests == 1 && withTable == 1 && loose == 0, "loot chest after the collapse: " + chests + " chest item(s), "
+                        + withTable + " carrying its table and seed, " + loose + " loose loot stacks");
+            });
+        });
+    }
+
     private static Block create(String id) {
         return net.minecraft.core.registries.BuiltInRegistries.BLOCK.get(net.minecraft.resources.ResourceLocation.fromNamespaceAndPath("create", id));
     }

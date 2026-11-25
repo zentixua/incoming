@@ -115,6 +115,13 @@ with a nuclear warhead still waits 90 seconds before launch, even with early war
 A Geiger Counter in hand clicks and shows the dose rate and your dose. Craft it from copper and iron ingots, redstone
 dust, a note block and an electron tube ([recipe](munitions.md#recipes)). In creative mode the dose does not build up.
 
+A protective suit from another mod shields you if it declares radiation shielding: Mekanism's hazmat suit does,
+and a datapack can give any armor a share ([for pack makers](packs.md#radiation-shielding-incomingradiation_shielding)).
+Each piece you wear stops its share of the burst's radiation, of fallout and of black-rain dust; a full Mekanism hazmat
+suit stops all of it. It does not lower a dose you already took or remove dust already on you: water washes that off.
+The Geiger Counter still shows the dose rate around you; with the suit your dose grows more slowly. Incoming adds no
+suit of its own.
+
 ## What happens
 
 The siren warns players near the target. The flash comes first; the fireball rises into a mushroom cloud.

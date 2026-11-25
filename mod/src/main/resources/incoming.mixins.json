@@ -4,6 +4,7 @@
   "package": "ua.zentix.incoming.mixin",
   "compatibilityLevel": "JAVA_21",
   "mixins": [
+    "level.BlockEntityTickerRemovalMixin",
     "net.PlayerChunkSenderMixin",
     "sable.SubLevelSplitGuardMixin"
   ],

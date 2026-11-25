@@ -241,15 +241,15 @@ kill $k; wait $k 2>/dev/null
 unset INCOMING_GPU_POLL
 
 # Artem's game is java in its instance directory; sandbox java with instance paths in its command line is not that game
-mkdir -p "$tmp/prism/instances/Open Skies/minecraft" "$tmp/bin" "$tmp/sandbox"
+mkdir -p "$tmp/prism/instances/Open-Skies/minecraft" "$tmp/bin" "$tmp/sandbox"
 printf '#!/bin/bash\nsleep 5\n' > "$tmp/bin/java"; chmod +x "$tmp/bin/java"
 real=0; artem_playing && real=1
-( cd "$tmp/sandbox" && exec "$tmp/bin/java" -Dfml.modFolders="$tmp/prism/instances/Open Skies/minecraft/mods" ) & j=$!
+( cd "$tmp/sandbox" && exec "$tmp/bin/java" -Dfml.modFolders="$tmp/prism/instances/Open-Skies/minecraft/mods" ) & j=$!
 sleep 0.3
 if [ $real = 1 ]; then echo "skip: Artem's game is running"
 else (PRISM=$tmp/prism; artem_playing) && bad "sandbox with instance paths mistaken for Artem's game" || ok "sandbox with instance paths is not Artem's game"; fi
 kill $j 2>/dev/null; wait $j 2>/dev/null
-( cd "$tmp/prism/instances/Open Skies/minecraft" && exec "$tmp/bin/java" -cp x ) & j=$!
+( cd "$tmp/prism/instances/Open-Skies/minecraft" && exec "$tmp/bin/java" -cp x ) & j=$!
 sleep 0.3
 (PRISM=$tmp/prism; artem_playing) && ok "java in instance directory is Artem's game" || bad "java in instance directory not detected"
 kill $j 2>/dev/null; wait $j 2>/dev/null
@@ -263,7 +263,7 @@ else
   PRISM_DIR=$tmp/prism INCOMING_GPU_OWNER=SH INCOMING_GAME_POLL=0.2 "$ROOT/tools/laptop_job.sh" --in-unit gpu run $$ -- \
     bash -c 'sleep 60 & echo $! > "$1/grandchild"; wait' _ "$tmp" > "$tmp/run" 2>&1 & r=$!
   sleep 1
-  ( cd "$tmp/prism/instances/Open Skies/minecraft" && exec "$tmp/bin/java" -cp x ) & j=$!
+  ( cd "$tmp/prism/instances/Open-Skies/minecraft" && exec "$tmp/bin/java" -cp x ) & j=$!
   wait $r; rc=$?
   took=$(( $(date +%s) - start ))
   [ $rc = 75 ] && grep -q "run: Artem's game started at [0-9:]*: job stopped" "$tmp/run" && [ $took -lt 5 ] \
@@ -275,7 +275,7 @@ else
   PRISM_DIR=$tmp/prism INCOMING_GPU_OWNER=SH INCOMING_GAME_POLL=0.2 "$ROOT/tools/laptop_job.sh" --in-unit gpu deaf $$ -- \
     bash -c 'trap "" TERM; sleep 60 & echo $! > "$1/deaf"; wait' _ "$tmp" > "$tmp/deaf.out" 2>&1 & r=$!
   sleep 1
-  ( cd "$tmp/prism/instances/Open Skies/minecraft" && exec "$tmp/bin/java" -cp x ) & j=$!
+  ( cd "$tmp/prism/instances/Open-Skies/minecraft" && exec "$tmp/bin/java" -cp x ) & j=$!
   wait $r; rc=$?
   took=$(( $(date +%s) - start ))
   [ $rc = 75 ] && [ $took -ge 9 ] && [ $took -lt 16 ] && ! kill -0 "$(cat "$tmp/deaf")" 2>/dev/null \
@@ -348,7 +348,7 @@ else
   start=$(date +%s)
   ( STUB_RUN=30 vd > "$tmp/vd.out" 2>&1; echo $? > "$tmp/vd.rc" ) & v=$!
   sleep 0.8
-  ( cd "$tmp/prism/instances/Open Skies/minecraft" && exec "$tmp/bin/java" -cp x ) & j=$!
+  ( cd "$tmp/prism/instances/Open-Skies/minecraft" && exec "$tmp/bin/java" -cp x ) & j=$!
   wait $v; took=$(( $(date +%s) - start ))
   [ "$(cat "$tmp/vd.rc")" = 75 ] && grep -q "Artem's game started at .*: shared GPU client stopped" "$tmp/vd.out" && [ $took -lt 5 ] \
     && ok "Artem's game stops a shared GPU client in ${took} s" || bad "shared client and game: rc $(cat "$tmp/vd.rc") after $took s: $(cat "$tmp/vd.out")"

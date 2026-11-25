@@ -4,6 +4,7 @@ import com.mojang.serialization.Codec;
 import com.mojang.serialization.DataResult;
 import com.mojang.serialization.codecs.RecordCodecBuilder;
 import net.minecraft.core.registries.Registries;
+import net.minecraft.world.item.Item;
 import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.state.BlockState;
 import net.neoforged.neoforge.registries.datamaps.DataMapType;
@@ -17,7 +18,8 @@ import java.util.Locale;
 import java.util.Optional;
 
 /**
- * Block data maps ({@code data/<mod>/data_maps/block/…}): law parameters mods and datapacks add to their blocks without code.
+ * Block and item data maps ({@code data/<mod>/data_maps/block/…}, {@code …/item/…}): law parameters mods and datapacks add
+ * to their blocks and items without code.
  */
 public final class ModDataMaps {
     /**
@@ -34,6 +36,14 @@ public final class ModDataMaps {
     public static final DataMapType<Block, List<Integer>> DEBRIS_EMBERS = debris("debris_embers");
     public static final DataMapType<Block, List<Integer>> DEBRIS_ASH = debris("debris_ash");
 
+    /**
+     * Radiation shielding of an item while worn ({@code data/incoming/data_maps/item/radiation_shielding.json}): the share of new
+     * radiation exposure it stops, in [0, 1] ({@code WornShielding}); a value outside fails to decode, and the loader
+     * rejects that file with an error. Incoming lists no items: suits come from armor mods and datapacks.
+     */
+    public static final DataMapType<Item, Float> RADIATION_SHIELDING = DataMapType.builder(Incoming.id("radiation_shielding"), Registries.ITEM,
+            Codec.floatRange(0, 1)).build();
+
     private static DataMapType<Block, List<Integer>> debris(String name) {
         return DataMapType.builder(Incoming.id(name), Registries.BLOCK, Codec.intRange(0, Integer.MAX_VALUE).listOf()).build();
     }
@@ -46,6 +56,7 @@ public final class ModDataMaps {
         event.register(DEBRIS_MISSILE);
         event.register(DEBRIS_EMBERS);
         event.register(DEBRIS_ASH);
+        event.register(RADIATION_SHIELDING);
     }
 
     /**

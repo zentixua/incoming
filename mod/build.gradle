@@ -45,6 +45,26 @@ repositories {
         forRepository { maven { url = 'https://api.modrinth.com/maven' } }
         filter { includeGroup 'maven.modrinth' }
     }
+    // Mekanism API (MIT): IRadiationShielding for compat/mekanism
+    exclusiveContent {
+        forRepository { maven { url = 'https://modmaven.dev/' } }
+        filter { includeGroup 'mekanism' }
+    }
+    // CC:Tweaked API (MPL-2.0): PeripheralCapability, IPeripheral for compat/computercraft
+    exclusiveContent {
+        forRepository { maven { url = 'https://maven.squiddev.cc' } }
+        filter { includeGroup 'cc.tweaked' }
+    }
+    // FTB Teams (optional): its public API for compat/ftbteams, from FTB's own maven
+    exclusiveContent {
+        forRepository { maven { url = 'https://maven.ftb.dev/releases' } }
+        filter { includeGroup 'dev.ftb.mods' }
+    }
+    // Architectury (LGPL-3.0, FTB Teams' required dependency): the event type of FTB Teams' membership events
+    exclusiveContent {
+        forRepository { maven { url = 'https://maven.architectury.dev/' } }
+        filter { includeGroup 'dev.architectury' }
+    }
     // glsl-processor — parsing of Veil's GLSL (carried by Sable): ShaderSourceTest runs its shaders through it
     exclusiveContent {
         forRepository { maven { url = 'https://maven.blamejared.com' } }
@@ -280,6 +300,30 @@ dependencies {
     // LOD Server Support (MIT): only for compilation — far terrain from the server through its client API
     // (client/map/LssTerrain)
     compileOnly "maven.modrinth:lod-server-support:${lss_version}"
+    // Mekanism: only the API for compilation — worn radiation shielding from its item capability (compat/mekanism);
+    // unit tests use it too (the adapter against a stand-in shielding)
+    compileOnly "mekanism:Mekanism:${minecraft_version}-${mekanism_version}:api"
+    testImplementation "mekanism:Mekanism:${minecraft_version}-${mekanism_version}:api"
+    // Jade: only for compilation — the overlay plugin (compat/jade, found by Jade's @WailaPlugin scan); unit tests
+    // check its data field against Jade's interfaces
+    compileOnly "maven.modrinth:jade:${jade_version}"
+    testImplementation "maven.modrinth:jade:${jade_version}"
+    // CC:Tweaked: only the API for compilation — launcher and SAM peripherals (compat/computercraft); unit tests run the
+    // adapters against stand-in computers
+    compileOnly "cc.tweaked:cc-tweaked-${minecraft_version}-core-api:${cctweaked_version}"
+    compileOnly "cc.tweaked:cc-tweaked-${minecraft_version}-forge-api:${cctweaked_version}"
+    testImplementation "cc.tweaked:cc-tweaked-${minecraft_version}-core-api:${cctweaked_version}"
+    testImplementation "cc.tweaked:cc-tweaked-${minecraft_version}-forge-api:${cctweaked_version}"
+    // FTB Teams, Architectury and Open Parties and Claims: only their APIs for compilation — sides from parties
+    // (compat/ftbteams, compat/opac); unit tests run the adapters against stand-in teams and parties
+    compileOnly("dev.ftb.mods:ftb-teams-neoforge:${ftbteams_version}") { transitive = false }
+    compileOnly("dev.architectury:architectury-neoforge:${architectury_version}") { transitive = false }
+    compileOnly "maven.modrinth:open-parties-and-claims:${opac_version}"
+    testImplementation("dev.ftb.mods:ftb-teams-neoforge:${ftbteams_version}") { transitive = false }
+    testImplementation("dev.architectury:architectury-neoforge:${architectury_version}") { transitive = false }
+    // FTB Library only for the unit tests' stand-in teams: FTB Teams' Team interface names its colour type
+    testRuntimeOnly("dev.ftb.mods:ftb-library-neoforge:${ftblibrary_version}") { transitive = false }
+    testImplementation "maven.modrinth:open-parties-and-claims:${opac_version}"
     // a range, not an exact version: Sable carries the same companion with its own range, and FML picks one version
     // suitable for all — exactly [1.6.0] would not let in a game with Sable that brings 1.6.1
     jarJar("dev.ryanhcode.sable-companion:sable-companion-common-${minecraft_version}") {

@@ -9,6 +9,9 @@ public final class PackExamples {
     public static final String CONCRETE = "examplemod:reinforced_concrete";
     public static final String SHEET_METAL = "examplemod:sheet_metal_wall";
     public static final String STRAW = "examplemod:straw_bale";
+    /** The example suit's pieces, head to feet. */
+    public static final java.util.List<String> SUIT = java.util.List.of("examplemod:hazmat_helmet", "examplemod:hazmat_chestplate",
+            "examplemod:hazmat_leggings", "examplemod:hazmat_boots");
 
     /** {@code data/incoming/data_maps/block/penetration.json}: a mod's reinforced concrete, a full metre per block. */
     public static final String PENETRATION = """
@@ -39,6 +42,18 @@ public final class PackExamples {
               "values": [
                 { "id": "examplemod:straw_bale", "required": false }
               ]
+            }
+            """;
+
+    /** {@code data/incoming/data_maps/item/radiation_shielding.json}: a mod's suit, a quarter per piece. */
+    public static final String SHIELDING = """
+            {
+              "values": {
+                "examplemod:hazmat_helmet": 0.25,
+                "examplemod:hazmat_chestplate": 0.25,
+                "examplemod:hazmat_leggings": 0.25,
+                "examplemod:hazmat_boots": 0.25
+              }
             }
             """;
 

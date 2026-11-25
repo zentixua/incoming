@@ -22,7 +22,7 @@ does not launch B-2s or ICBMs, and does not accept a nuclear warhead on a cruise
 3. The launcher turns toward the target and waits for a signal.
 
 A mission target is a place no more than 10,000 blocks from the launcher; a player or an aircraft becomes the place
-where it was at that moment. You can link only your own launcher or one belonging to your team (`/team`). One designator can link up to 16 launchers. A mission can only be assigned in the same dimension, while the
+where it was at that moment. You can link only your own launcher or one belonging to your team ([who is on a team](rules.md#spotting)). One designator can link up to 16 launchers. A mission can only be assigned in the same dimension, while the
 launcher's chunk is ready; a far target can be outside loaded chunks, but the launcher itself must be loaded.
 If assignment fails, go near the launcher, wait for its chunk to load and check the message: it may be busy, belong
 to another side, or be too far from the target. To make the designator fire by itself again, unlink all launchers.
@@ -33,8 +33,14 @@ Each new redstone signal is one order: a single round or the mission's whole sal
 launcher's owner, even when the owner is offline, and Abort on the owner's designator calls them off. The launcher
 fires only while its chunk is loaded, and never from an aircraft.
 
-If the launcher clicks but does not fire, RMB on it with an empty hand shows why: no mission, not enough stock, the
-previous order still running, or buildings blocking the launch sector.
+If the launcher clicks but does not fire, RMB on it with an empty hand shows the owner's side and operators why: no
+mission, not enough stock, the previous order still running, or buildings blocking the launch sector. Other players see
+the weapon, the stock and only the reasons about the launcher itself (no mission, busy, buildings in the way), never
+the mission's count, target and spread.
+
+With Jade, looking at the launcher shows its stock and whether a signal now would fire it, by the same rule, and its
+owner to the owner's side and operators. A CC:Tweaked computer next to it reads what any player may and fires its
+mission like a signal, but cannot change the mission ([For server owners and pack makers](packs.md#computers-cctweaked)).
 
 ## Crafting
 

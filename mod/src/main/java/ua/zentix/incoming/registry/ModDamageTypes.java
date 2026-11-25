@@ -36,12 +36,14 @@ public final class ModDamageTypes {
     public static final ResourceKey<DamageType> PLAYER_NUCLEAR_BLAST = key("player_nuclear_blast");
     public static final ResourceKey<DamageType> PLAYER_NUCLEAR_THERMAL = key("player_nuclear_thermal");
     public static final ResourceKey<DamageType> PLAYER_RADIATION = key("player_radiation");
+    public static final ResourceKey<DamageType> PLAYER_BURN_SHOCK = key("player_burn_shock");
 
     /** Type without attacker → attacker-naming pair (death message names them). */
     private static final Map<ResourceKey<DamageType>, ResourceKey<DamageType>> WITH_OWNER = Map.of(
             NUCLEAR_BLAST, PLAYER_NUCLEAR_BLAST,
             NUCLEAR_THERMAL, PLAYER_NUCLEAR_THERMAL,
-            RADIATION, PLAYER_RADIATION);
+            RADIATION, PLAYER_RADIATION,
+            BURN_SHOCK, PLAYER_BURN_SHOCK);
 
     private ModDamageTypes() {}
 

@@ -147,7 +147,9 @@ public final class ChunkLights {
      * ({@link GridLights#inPlace}), so {@code setBlock} with neighbor updates, heightmaps and Sable (≈10 µs per lamp
      * in the host's pack) is unnecessary; at the loaded-world edge (chunk in memory, neighbors unloaded) it is harmful — Sable
      * and neighbors would read and synchronously load a neighboring chunk. Light: {@code checkBlock} at position (decrease and increase
-     * propagate to neighboring chunks too); clients: block change (to chunk recipients). At most {@code limit} lamps.
+     * propagate to neighboring chunks too); clients: few lamps as block changes, many as the whole chunk after its light
+     * ({@link ua.zentix.incoming.work.ChunkDelivery#lamps}: a lamp switched by a delta makes the client spread its light
+     * removal itself, on its render thread). At most {@code limit} lamps.
      * <p>
      * Signal lamps relit here reconcile separately ({@link #resignal}): their positions go to
      * {@code signalled}. Starts at {@code from} ({@link Pass#next} from previous pass). A pair that cannot change in the palette
@@ -161,6 +163,7 @@ public final class ChunkLights {
         var light = level.getChunkSource().getLightEngine();
         int changed = 0, next = 0;
         boolean done = true;
+        LongArrayList inPlace = new LongArrayList();
         sections:
         for (int i = from >> 12; i < sections.length; i++) {
             LevelChunkSection section = sections[i];
@@ -179,7 +182,7 @@ public final class ChunkLights {
                 if (GridLights.inPlace(to)) {
                     section.setBlockState(x, y, z, to);
                     light.checkBlock(p);
-                    level.getChunkSource().blockChanged(p);
+                    inPlace.add(p.asLong());
                 } else if (!neighbours || !level.setBlock(p, to, FLAGS)) {
                     // At the edge, such a pair waits for the next trigger (load, cascade); grid lamps have no such pairs (GameTest).
                     continue;
@@ -192,6 +195,7 @@ public final class ChunkLights {
             ua.zentix.incoming.work.BlockLighting.changed(level, chunk);
             chunk.setUnsaved(true);
         }
+        ua.zentix.incoming.work.ChunkDelivery.lamps(level, chunk, inPlace, !done);
         return new Pass(changed, done, next, 0);
     }
 

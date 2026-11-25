@@ -31,11 +31,13 @@ import ua.zentix.incoming.nuclear.radiation.FlashBurns;
 import ua.zentix.incoming.nuclear.radiation.FlashEyes;
 import ua.zentix.incoming.nuclear.radiation.RadiationTicker;
 import ua.zentix.incoming.nuclear.radiation.Shielding;
+import ua.zentix.incoming.nuclear.radiation.WornShielding;
 import ua.zentix.incoming.nuclear.world.NuclearWorld;
 import ua.zentix.incoming.nuclear.world.NukeSeen;
 import ua.zentix.incoming.nuclear.world.ThermalShadow;
 import ua.zentix.incoming.registry.ModAttachments;
 import ua.zentix.incoming.registry.ModDamageTypes;
+import ua.zentix.incoming.strike.StrikeOwner;
 import ua.zentix.incoming.util.Terrain;
 import ua.zentix.incoming.util.Wind;
 
@@ -161,9 +163,10 @@ public final class NuclearWarhead {
      * Light and prompt radiation on one entity within {@link #exposureRange} (selected by caller).
      * Runs under budget ({@link NuclearWorld}), not on detonation tick.
      *
+     * @param owner the detonation's owner; credited when online in any level at this moment ({@link StrikeOwner})
      * @return whether affected (alive and not in creative mode)
      */
-    public static boolean expose(ServerLevel level, Detonation d, LivingEntity living, @Nullable Entity owner) {
+    public static boolean expose(ServerLevel level, Detonation d, LivingEntity living, @Nullable UUID owner) {
         return expose(level, d, living, owner, false);
     }
 
@@ -172,7 +175,7 @@ public final class NuclearWarhead {
      * the burns and dose of its place, its sickness runs from the detonation, but nothing that happens only at that moment
      * (fleeing the flash).
      */
-    public static boolean expose(ServerLevel level, Detonation d, LivingEntity living, @Nullable Entity owner, boolean late) {
+    public static boolean expose(ServerLevel level, Detonation d, LivingEntity living, @Nullable UUID owner, boolean late) {
         if (!living.isAlive()) return false;
         // once per body and detonation, whichever path comes first: the pulse list or a load after it (LateExposure;
         // players are not caught up, so they carry no mark)
@@ -185,8 +188,9 @@ public final class NuclearWarhead {
         if (living instanceof Player p && (p.isCreative() || p.isSpectator())) return false;
         Vec3 eye = living.getEyePosition();
         double share = seenShare(level, d, living);
+        ServerPlayer attacker = StrikeOwner.online(level, owner);
         if (share > 0) {
-            if (living instanceof ServerPlayer player) FlashEyes.flash(level, d, player, owner);
+            if (living instanceof ServerPlayer player) FlashEyes.flash(level, d, player, attacker);
             FlashBurns.burn(level, d, living, share * d.fluence(eye), owner);
             // saw flash: flee
             if (!late) MobPanic.flash(d, living, level.getGameTime());
@@ -194,7 +198,8 @@ public final class NuclearWarhead {
         double rem = PromptRadiationModel.doseRem(Math.max(1, d.metres(eye.distanceTo(d.burst()))), d.yieldKt());
         // less than a rem unshielded: no shielding rays needed (players reach retinal-burn range, tens of kilometers)
         if (rem < 1) return true;
-        rem *= Shielding.prompt(level, eye, d.burst());
+        // walls and ground on the way, then what the body wears (both stop new exposure only)
+        rem *= Shielding.prompt(level, eye, d.burst()) * WornShielding.transmitted(living);
         if (rem < 1) return true;
         float gy = (float) (rem / PromptRadiationModel.REM_PER_GY);
         if (living instanceof ServerPlayer player) {
@@ -205,9 +210,9 @@ public final class NuclearWarhead {
                     ? (long) Math.floor(NuclearEvents.get(level).burstClock(d, level.getGameTime(), ua.zentix.incoming.util.WorldClock.now(level)))
                     : ua.zentix.incoming.util.WorldClock.ticks(level));
         } else if (rem >= 1000) {
-            living.hurt(ModDamageTypes.source(level, ModDamageTypes.RADIATION, null, owner), Float.MAX_VALUE);
+            StrikeOwner.hurt(living, ModDamageTypes.source(level, ModDamageTypes.RADIATION, null, attacker), Float.MAX_VALUE);
         } else if (rem >= 400) {
-            living.hurt(ModDamageTypes.source(level, ModDamageTypes.RADIATION, null, owner), living.getMaxHealth() * 0.5f);
+            StrikeOwner.hurt(living, ModDamageTypes.source(level, ModDamageTypes.RADIATION, null, attacker), living.getMaxHealth() * 0.5f);
         }
         return true;
     }

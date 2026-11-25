@@ -2038,7 +2038,9 @@ public final class StrikeGameTests {
             lastPos[0] = l.position();
             last[0] = l.flightPhase() + " " + h.relativeVec(l.position()) + " v=" + l.speed();
             if (l.flightPhase() == FlightPhase.LOITER) {
-                loiter[0]++;
+                // circling time by the munition's own phase clock (saved across off-world flight): a tick on which
+                // the test does not find it (a handover between world and off-world flight) must not shorten it
+                loiter[0] = Math.max(loiter[0], l.phaseAge() + 1);
                 double off = Math.hypot(l.getX() - point.x, l.getZ() - point.z) - l.orbitRadius();
                 if (Math.abs(off) > Math.abs(drift[0])) {
                     drift[0] = off;

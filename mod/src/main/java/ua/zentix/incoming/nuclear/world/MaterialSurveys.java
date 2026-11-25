@@ -65,6 +65,20 @@ public final class MaterialSurveys {
     void disk(long key, int votes) {
         for (var survey : open.values()) survey.disk(key, votes);
     }
+    /**
+     * Close the surveys nothing will read: published in full, or their strike called off before the birth was recorded
+     * (its reserved bytes and read share go back to the other preparations).
+     */
+    void closeDone(NuclearEvents events) {
+        open.entrySet().removeIf(e -> {
+            int id = e.getKey();
+            if (!e.getValue().publishedFinal() && (events.scheduled().stream().anyMatch(s -> s.id() == id)
+                    || events.detonations().stream().anyMatch(d -> d.id() == id))) return false;
+            e.getValue().close();
+            return true;
+        });
+    }
+
     void clear() {
         open.values().forEach(MaterialSurvey::close);
         open.clear();
@@ -130,11 +144,7 @@ public final class MaterialSurveys {
                 survey.work(level, deadline, slots);
             }
         }
-        open.values().removeIf(survey -> {
-            if (!survey.publishedFinal()) return false;
-            survey.close();
-            return true;
-        });
+        closeDone(events);
         if (System.nanoTime() < deadline) events.encodeMaterial();
         refresh(level, deadline);
     }

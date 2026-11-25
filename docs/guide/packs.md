@@ -160,7 +160,7 @@ Your own advancements can use the triggers with these conditions (all optional, 
   identity credit no one. `/execute as <player>` makes the round that player's, and so does a machine acting under the
   player's own profile (a Create deployer for its owner), as with a fixed launcher and with permissions.
 - A round shot down counts for the SAM's owner or for the player whose weapon brought it down, unless the round is
-  theirs or a teammate's (by `/team`, as the SAM decides whom to shoot).
+  theirs or a teammate's (by [sides](#sides), as the SAM decides whom to shoot).
 - Still Standing starts when the wave front actually hits the player: it reads the pressure at their position from
   the blast model, shelter or not, and waits until the positive phase there has passed plus one second for a thrown
   body to land. A player who left before the front, a cleared strike, creative and spectator mode get nothing; a
@@ -186,6 +186,51 @@ A datapack advancement for surviving a 20 psi blast of an ICBM-sized yield:
   }
 }
 ```
+
+## Kill credit
+
+- Every injury Incoming deals is vanilla damage of its own types (`incoming:strike`, `incoming:shockwave`,
+  `incoming:kinetic`, `incoming:fragment`, `incoming:debris`, the nuclear ones and their `incoming:player_…` pairs)
+  with the round's owner as the attacker (`DamageSource.getEntity()`) when the owner is online, in any dimension, at
+  the moment of the damage; the projectile or the debris, where there is one, is the direct source. Vanilla gives the
+  credit from there: death messages, `minecraft:player_killed_entity`, the kill statistics and their scoreboard
+  criteria (`playerKillCount`, `totalKillCount`, `minecraft.killed:minecraft.<entity>`), player-only loot and
+  experience. `LivingDeathEvent` listeners read the owner the same way.
+- The owner is kept as a UUID on everything that carries a strike, whoever is online: orders, rounds and their events,
+  projectiles in flight and off-world, debris, and a burn that will end in shock; all but debris (it lands within
+  seconds and is not saved) survive a restart. Only the attacker needs the owner online: an offline owner's strike
+  hurts with no attacker, and nothing is credited later.
+- One cause has one attacker: the blast, the B-2 bomb's hit and shockwave, fragments, debris (the falling parts of a
+  round shot down belong to the round's owner), the nuclear wave, its light, prompt radiation, and burn shock from the
+  burst whose light caused it. No attacker: radiation sickness from the gathered dose and fallout (bursts and the rain
+  add up), a round that crashes before its fuze arms (a plain vanilla explosion), fire spreading as game fire, mobs
+  that load after a burst and receive what their place received, and the wave's blasts on Create Aeronautics craft.
+- PvP and `/team` friendly fire apply to that damage as to an arrow. A mob hurt by an owner in another dimension takes
+  no revenge target: it cannot reach them.
+- Rounds from the console, command blocks and ownerless launchers have no owner. A fake player is credited only under
+  an online player's profile, as in [Advancements and statistics](#advancements-and-statistics).
+
+## Sides
+
+Spotting, the SAM, air-raid alerts, launcher links, Jade's private lines and interception credit follow one rule. Each
+player has one side: their vanilla team (`/team`) if they have one, else their FTB Teams party, else their Open Parties
+and Claims party, else themselves alone. Two players are friends when their sides are the same.
+
+- Only operators and datapacks set `/team`, so an arena round set by command holds whatever parties the players have: a
+  player on a team and in a party belongs to the team's side, not the party's.
+- The personal team FTB Teams gives every player is not a side. Allied parties stay separate sides.
+- A change of `/team` or FTB Teams applies at once, an Open Parties and Claims party change within a second.
+- An offline owner keeps their side: their launchers, SAMs and flying rounds still know their teammates.
+- A player who changes side sees what the new side has spotted; the old side keeps what it spotted. A SAM no longer
+  fires at rounds that became friendly, and a missile already chasing one blows itself up.
+
+For mod and script authors: `ua.zentix.incoming.api.SideResolveEvent` asks for one player's side: their UUID, and their
+name if the server knows it without reading storage. A listener answers with a key in its own namespace,
+`<mod id>:<value>`, the same for every player of one side; the first answer wins, so priority decides: Incoming answers
+the vanilla team at `HIGH`, FTB Teams at `NORMAL`, Open Parties and Claims at `LOW`, and a listener at `HIGHEST` comes
+before all of them. The event comes from the server thread, and the player may be offline, so answer from memory.
+Incoming keeps each answer for up to a second; call `SideResolveEvent.invalidate()` when your sides change so the next
+question asks again.
 
 ## Permissions
 
@@ -240,8 +285,8 @@ everywhere else; only the blocks stay.
 
 - The claim mod decides as for any explosion: in Open Parties and Claims the claim's explosion protection, in FTB
   Chunks the team's "Allow explosions" setting. A conventional strike carries its projectile as the source of the
-  explosion. A nuclear burst has no source, so FTB Chunks protects against it only with `protect_unknown_explosions`
-  on (its default).
+  explosion, not its owner. A nuclear burst has no source, so FTB Chunks protects against it only with
+  `protect_unknown_explosions` on (its default).
 - A nuclear burst decides each chunk for good: a chunk found protected when the flash or the wave reaches it keeps its
   blocks for that whole burst, even if the claim is removed a moment later, and a claim placed after the flash still
   keeps the wave out. The decision is saved with the world: ruins built after a restart, or when a far chunk loads
@@ -295,6 +340,73 @@ check()
 while true do
   os.pullEvent("redstone")
   check()
+end
+```
+
+## Jade
+
+With Jade on the server and the client, looking at Incoming's blocks and projectiles shows what the block itself does
+not:
+
+| Looking at | Everyone sees | The owner's side and operators also see |
+|---|---|---|
+| Fixed launcher | rounds of its mission's weapon in stock (munitions held, without a mission); ready to fire, or cannot fire, with the reason when it is about the launcher itself: no mission, busy, on an aircraft | the owner, the mission (weapon, count, target, spread) and every reason it cannot fire |
+| SAM | missiles on the rails and in stock; how many hostile targets its radar tracks, or that a roof blinds it | |
+| Transformer Substation | working; knocked out, and in how many hours of the world's day repairs start; or without power in a destroyed zone | |
+| Strike projectile | its weapon | its owner |
+
+The owner's side is the owner and the players on the owner's [side](#sides); operators have permission level 2. A
+launcher placed or a projectile launched by command has no owner: its owner line and mission are for operators. The
+launcher's own status line (a right click with an empty hand) follows the same rule. Each of the four can be turned off
+in Jade's plugin settings.
+
+## Computers (CC:Tweaked)
+
+With CC:Tweaked, a computer next to a fixed launcher or a SAM, or connected to one by a wired modem, uses it as a
+peripheral. Every call runs on the server's main thread, so it takes at least one tick.
+
+Fixed launcher, peripheral type `incoming_launcher`:
+
+| Method | Returns |
+|---|---|
+| `getStatus()` | a table: `weapon` (the mission's, as on the rack; absent without a mission), `ready` (a signal now would fire it), `busy`, and when it is not ready, `reason` (a code) and, for a reason about the launcher itself, `message` (the English text) |
+| `getStock()` | rounds held per weapon: `drone` (Shahed-136), `missile`, `rocket` (Grad), `loiter` (Lancet) |
+| `fire()` | `true` when the order is given, otherwise `false, reason, message` (`false, "private"` for a reason about the owner or the mission) |
+
+`fire()` is a redstone signal: the same order in the owner's name with the owner's rights and limit, the same refusals,
+the same strike events, munitions paid as each round takes the rail. A computer cannot set or clear a mission: that
+stays the designator's and `/incoming launcher … mission`. A refused `fire()` clicks like a refused signal.
+
+Anyone can put a computer at a launcher, so a computer learns what a player without rights would: never the owner or
+the mission's count, target and spread. A reason about the launcher itself comes as its code, the refusal's language key
+without `incoming.`: `fixed_launcher.no_mission.short`, `fixed_launcher.busy`, `fixed_launcher.on_craft`,
+`fixed_launcher.sector` (buildings block the launch) or `fixed_launcher.failed`; any other reason (stock short of the
+mission, the owner's rights or limit, the target's range or route) comes as `private`.
+
+SAM, peripheral type `incoming_sam`:
+
+| Method | Returns |
+|---|---|
+| `getStock()` | `ready` (missiles on the rails), `rails`, `stored` |
+| `getTracking()` | from its radar's latest sweep: `tracking` (a hostile target, as the redstone signal), `hostile`, `tracks` (everything on the radar), `covered` (a roof blinds it) |
+| `isTracking()` | `true` while its radar tracks a hostile target |
+
+While its radar tracks a hostile target, every sweep (twice a second) sends the event `incoming_alert` to the computers
+attached to this SAM: the attachment name, the number of hostile targets and the distance to the nearest, in blocks.
+The events stop with the first sweep that sees none. No other computer receives them.
+
+```lua
+-- a SAM on the left, fixed launchers on the computer's wired modem network: one salvo per raid
+local sam = peripheral.wrap("left")
+local launchers = { peripheral.find("incoming_launcher") }
+while true do
+  local _, _, hostile, distance = os.pullEvent("incoming_alert")
+  print(("Air raid: %d hostile, nearest %d blocks"):format(hostile, distance))
+  for _, launcher in ipairs(launchers) do
+    local ok, reason, message = launcher.fire()
+    if not ok then print(message or reason) end
+  end
+  while sam.isTracking() do sleep(1) end
 end
 ```
 
@@ -410,3 +522,35 @@ A mod's straw bale as dry fuel, in `data/incoming/tags/block/pulse_dry.json`:
 
 A nuclear flash then sets it alight like a hay bale, and a fuel fireball like dry grass if the mod makes the bale
 flammable, as hay is. To break it like a hay bale too, put it in `incoming:nuke_light` as well.
+
+## Items from other mods
+
+### Radiation shielding: `incoming:radiation_shielding`
+
+`data/incoming/data_maps/item/radiation_shielding.json` gives an item the share of radiation it stops while it is
+worn, a number from 0 to 1 (an item or a `#tag`). The shares of the pieces a body wears add up, capped at 1: four
+pieces at 0.25 stop everything, one of them a quarter. A piece counts in the four armor slots and in the armor slot of a
+horse or a wolf, not in a hand. It works against all the radiation of a nuclear strike, for players and mobs alike:
+the radiation of the burst, fallout, and the black-rain dust that settles on a player. It stops only what comes while
+the piece is worn: a dose already taken, a sickness already begun and dust already on the body stay as they are.
+
+With Mekanism installed, its items that shield from radiation (the hazmat suit, the MekaSuit with its radiation shielding unit) count without a
+datapack, at Mekanism's own shares; an entry here replaces Mekanism's share for that item. Incoming lists no items of
+its own. A value outside 0 to 1 makes the whole file fail to load, with an error in the server log, so none of its
+entries apply; an item that does not exist only skips its own entry. After `/reload` the new shares apply at once.
+
+A mod's protective suit, a quarter per piece:
+
+```json
+{
+  "values": {
+    "examplemod:hazmat_helmet": 0.25,
+    "examplemod:hazmat_chestplate": 0.25,
+    "examplemod:hazmat_leggings": 0.25,
+    "examplemod:hazmat_boots": 0.25
+  }
+}
+```
+
+With all four pieces on, a player in the fallout trail or in black rain takes no new dose; with only the helmet,
+three quarters of it.

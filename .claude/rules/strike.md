@@ -115,9 +115,8 @@ paths:
   otherwise location stays and target is not lost. `Sight`: server line of sight without chunk loading,
   `sees(player, entity)` (not invisible, sent to client, horizontal range no farther than vanilla sends entity,
   `range`/`viewRange`, clear eyes-to-eyes/body-center), `within(player, point)`, `clear(world, from, to)`
-  (`ClipContext.Block.VISUAL`: glass transparent; unready path chunk means unseen); `Sides`: friendlies by `/team`
-  (same player/team; UUID also supports offline owner via profile cache). `Sightings`: side reconnaissance
-  (`Sides.side`: team/player, non-persistent world attachment): every 5 ticks each player marks hostile players and
+  (`ClipContext.Block.VISUAL`: glass transparent; unready path chunk means unseen); `Sides`: one side key per player
+  (roadmap B5, below). `Sightings`: side reconnaissance (keyed by `Sides.side`, non-persistent world attachment): every 5 ticks each player marks hostile players and
   Sable craft unobstructed in view (60° cone), through own eyes and own projectile-camera frame (same `CameraLink`
   view as guidance); radar/other sensors use `Sightings.spot`; retains `sight_memory` (30 s). Map (`mapPlayers`):
   friendlies always, hostiles/other spotted subjects at last seen place with age; without `sight_rules`, all players.
@@ -199,6 +198,47 @@ paths:
   (`ProgressGameTests.Credited`): `FakePlayer` drops stats and advancements; connection before `moveTo`.
   Regressions: `ProgressGameTests`, `ProgressReviewGameTests`, `ProgressRoundTwoGameTests`, `ProgressTest`.
 
+## Owner identity (`strike/StrikeOwner`, roadmap B3)
+- Attribution is the owner UUID, saved on whatever carries a strike (orders, `RoundRef` carriers, projectile NBT,
+  `ScheduledStrike`, `NuclearEvents.Impact`, `DebrisEntity` `owner`, the living attachment `BURN_SHOCK_OWNER`) and on
+  the api events, whatever the owner's online state. Credit is the attacker entity in the damage source, looked up from
+  that UUID at the moment of damage with `StrikeOwner.online` (player list: any level; offline or fake profile: null;
+  dead before respawn: still credited, as vanilla credits an arrow). Never `level.getPlayerByUUID` (same level only).
+  Jobs keep the UUID and resolve at each hit; only one explosion's source (`StagedExplosion.source`, its craft blast)
+  holds the attacker resolved at its start for the few ticks of its damage units.
+- Every strike `hurt` goes through `StrikeOwner.hurt`: an attacker in another level is dropped as the victim's revenge
+  target (`setLastHurtByMob`; vanilla target goals measure across levels by raw coordinates), kill credit stays. The
+  vanilla-explosion paths (plot grid, craft) hurt through vanilla and skip it.
+- One cause, one attacker: blast, shockwave, kinetic hit, fragments, debris (a wreck's pieces carry the shot-down
+  round's owner), nuclear wave, light, prompt radiation, burn shock (`FlashBurns` records the owner of the flash that
+  brought shock; `player_burn_shock` names them). No attacker: radiation sickness (merged dose, fallout, rain),
+  `LateExposure` catch-up (an estimate at load, no owner kept after the front), the wave's craft blasts, spreading fire,
+  a crash before arming (vanilla `explode`). Burn shock drops an attacker the damage rules now refuse: the flash decided
+  harm (`owner_shock_team`).
+- Claim queries keep B2's attribution: `ClaimQuery` direct source is the projectile, never the owner (indirect source
+  null); nuclear queries have none. Regressions: `OwnerGameTests` (batches `owner_*`).
+
+## Sides (`target/Sides`, `api/SideResolveEvent`, roadmap B5)
+- One key per player, friendly = same UUID or equal keys: symmetric by construction; null owner is friendly to nobody.
+  Every friend-or-foe rule asks `Sides` (spotting, map marks, `sighted`, nuclear review, radar, SAM crew, `AirAlert`,
+  interceptor pursuit, `LauncherLinks.refusal`, `Readout.privileged`, interception credit); never `Entity.isAlliedTo` or
+  a pairwise team test. Exception: damage keeps vanilla PvP and `/team` friendly fire (`Player.canHarmPlayer` in the burn
+  and flash paths, like an arrow); a party mod's own PvP option is that mod's. A key is posted once per cache miss as `SideResolveEvent` (server thread; the first answer
+  wins, so priority is precedence): `Sides.answerTeam` at `HIGH` (`minecraft:team/<name>`), `compat/ftbteams` at
+  `NORMAL` (party; the personal team abstains), `compat/opac` at `LOW`; unanswered `incoming:player/<uuid>`.
+- Cache: overworld attachment `SIDES` (unsaved: dies with the server). Whole-cache invalidation is the static
+  `Sides.EPOCH` (any thread): `ServerScoreboard.addDirtyListener` (team changes and every score change), FTB Teams
+  `TeamEvent`s, `SideResolveEvent.invalidate()`; login/logout forget that player; an answer older than `RECHECK` (20
+  ticks) is asked again, the bound for OPAC, whose API has no party event. The event's name is the player list's, else
+  the in-memory profile cache's (`GameProfileCache.get(UUID)`, no storage), else the live player's own (fake players
+  outside the list); an entry resolved without a name is re-asked once a live player supplies one.
+- A radar sweep costs one cached lookup per track and at most one question per distinct owner per cache lifetime
+  (`SideGameTests.radarAsksOncePerOwner`, counted by `Sides.Cache.resolutions`): `RECHECK`, or one tick on a server whose
+  scores change every tick (every score change marks the scoreboard dirty; player ticks run after the level ticks, so a
+  sweep still hits the cache). Contacts and alerts stay under the key
+  that recorded them. Regressions: `SideGameTests`, `SightGameTests.sidesFollowTeams`, `SideResolveEventTest`,
+  `FtbTeamsSidesTest`, `OpacSidesTest` (neither mod is in the GameTest runtime; `TestParties` answers as they do),
+  `OptionalModsTest`.
 ## Unpaid nuclear review
 - `NuclearReview` is separate player state, not a `NuclearKeys` order. Global nuclear abort invalidates it on the
   server before sending cancellation; actual death invalidates it through `LivingDeathEvent`, with dead/removed

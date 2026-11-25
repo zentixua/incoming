@@ -15,8 +15,9 @@ struck only if you or your team have spotted them: with your own eyes or through
 - A team shares its sight: once one member spots someone, anyone on the team can strike.
 - If you hide behind a wall or go over the horizon, the other side loses you after 30 seconds.
 
-An operator sets up teams: `/team add <name>`, then `/team join <name> <players>`. Without a team, your own side is you
-alone.
+Your team is a vanilla team that an operator sets up (`/team add <name>`, then `/team join <name> <players>`), or your
+party in FTB Teams or Open Parties and Claims if the server has one of them ([sides](packs.md#sides)). Without a team,
+your own side is you alone.
 
 ## Moving targets
 

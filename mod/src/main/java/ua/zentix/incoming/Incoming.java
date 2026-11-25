@@ -6,6 +6,7 @@ import net.minecraft.resources.ResourceLocation;
 import net.neoforged.bus.api.EventPriority;
 import net.neoforged.bus.api.IEventBus;
 import net.neoforged.fml.ModContainer;
+import net.neoforged.fml.ModList;
 import net.neoforged.fml.common.Mod;
 import net.neoforged.fml.config.ModConfig;
 import net.neoforged.neoforge.common.NeoForge;
@@ -45,6 +46,7 @@ import ua.zentix.incoming.strike.FlightStatus;
 import ua.zentix.incoming.strike.NuclearKeys;
 import ua.zentix.incoming.strike.PickHints;
 import ua.zentix.incoming.strike.StrikeWorld;
+import ua.zentix.incoming.target.Sides;
 import ua.zentix.incoming.target.Sightings;
 import ua.zentix.incoming.warhead.CraterFalls;
 import ua.zentix.incoming.work.StallWatch;
@@ -81,7 +83,20 @@ public final class Incoming {
         Util.backgroundExecutor().execute(HobBlast::warm);
 
         modBus.addListener(IncomingNetwork::register);
+        modBus.addListener(ua.zentix.incoming.command.RuleCommand::onConfigReload);
         modBus.addListener(ua.zentix.incoming.registry.ModDataMaps::register);
+        // Mekanism's worn radiation shielding: the compat class names Mekanism's API, so it loads only with Mekanism
+        if (ModList.get().isLoaded("mekanism")) ua.zentix.incoming.compat.mekanism.MekanismShielding.install();
+        // CC:Tweaked peripherals of the launcher and the SAM: the compat package names CC:Tweaked's API, so it loads only
+        // with CC:Tweaked (Jade finds its overlay plugin by its own annotation scan; nothing here names it)
+        if (ModList.get().isLoaded("computercraft")) modBus.addListener(ua.zentix.incoming.compat.computercraft.Peripherals::register);
+        // Sides (target.Sides, api.SideResolveEvent): the vanilla team answers first, then FTB Teams, then Open Parties and
+        // Claims; each bridge names its mod's API, so it loads only with that mod
+        NeoForge.EVENT_BUS.addListener(Sides.PRIORITY, Sides::answerTeam);
+        if (ModList.get().isLoaded("ftbteams")) ua.zentix.incoming.compat.ftbteams.FtbTeamsSides.install();
+        if (ModList.get().isLoaded("openpartiesandclaims")) ua.zentix.incoming.compat.opac.OpacSides.install();
+        NeoForge.EVENT_BUS.addListener(Sides::onLogin);
+        NeoForge.EVENT_BUS.addListener(Sides::onLogout);
         modBus.addListener(SamBlockEntity::registerCapabilities);
         modBus.addListener(FixedLauncherBlockEntity::registerCapabilities);
         // advancements and statistics (progress.Progress): no legacy ids to alias
@@ -162,7 +177,7 @@ public final class Incoming {
 
         NeoForge.EVENT_BUS.addListener(EventPriority.HIGHEST, WorkScheduler::onServerTickPre);
         NeoForge.EVENT_BUS.addListener(EventPriority.HIGHEST, WorkScheduler::onLevelTickPre);
-        NeoForge.EVENT_BUS.addListener(ua.zentix.incoming.nuclear.world.RuinDelivery::onLevelTickPre);
+        NeoForge.EVENT_BUS.addListener(ua.zentix.incoming.work.ChunkDelivery::onLevelTickPre);
         NeoForge.EVENT_BUS.addListener(WorkScheduler::onServerTick);
         NeoForge.EVENT_BUS.addListener(EventPriority.LOWEST, WorkScheduler::onServerTickEnd);
         NeoForge.EVENT_BUS.addListener(EventPriority.HIGHEST, ua.zentix.incoming.work.ChunkLoadPace::onTickStart);

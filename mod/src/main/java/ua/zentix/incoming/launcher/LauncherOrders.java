@@ -35,7 +35,7 @@ import java.util.UUID;
  * Fixed launcher orders ({@link FixedLauncherBlockEntity}): mission from linked designator ({@link #assign}) and
  * launch on redstone signal ({@link #fire}). Launch follows player order path ({@link
  * ServerActions#fromLauncher}): single projectile or salvo ({@link SalvoData}) from this launcher's firing
- * position ({@link LaunchOrigin.Fixed}); projectiles belong to launcher owner, so {@code /team} friend/foe, their
+ * position ({@link LaunchOrigin.Fixed}); projectiles belong to launcher owner, so side friend/foe ({@link ua.zentix.incoming.target.Sides}), their
  * “Abort”, and active-projectile limit match their designator orders. Launcher inventory pays: must cover the
  * whole order immediately (never truncate it), but deduct one projectile as it takes the rail; canceled salvos
  * and failed launches remain in storage.
@@ -65,6 +65,28 @@ public final class LauncherOrders {
 
     @Nullable
     private static Component fireReason(ServerLevel level, FixedLauncherBlockEntity be, @Nullable java.util.function.Consumer<ua.zentix.incoming.strike.Order> made) {
+        Component problem = problem(level, be);
+        if (problem != null) return problem;
+        Mission m = java.util.Objects.requireNonNull(be.mission());
+        BlockPos pos = be.getBlockPos();
+        Loadout l = loadout(m);
+        String who = "launcher " + pos.toShortString();
+        Component before = be.lastReport();
+        boolean ok = ServerActions.fromLauncher(level, who, be.owner(), l, new ServerActions.Aim(m.target(), m.point(), null), m.via(),
+                new LaunchOrigin.Fixed(pos), be::report, made);
+        if (ok) return null;
+        // Launch reported its own issue (blocked sector, inventory): this reason is more specific than the general one.
+        return be.lastReport() != before ? be.lastReport() : Component.translatable("incoming.fixed_launcher.failed");
+    }
+
+    /**
+     * Why a signal now would not issue the mission order, without issuing it: the checks {@link #fire} runs before the
+     * launch, in the same order (no mission, on a craft, the owner's rules, busy, route, stock). Null means a signal would
+     * order it; the launch itself can still fail (blocked sector), as it reports then. Reads only the launcher, its ready
+     * chunk and the owner's cached rights: an overlay or a computer may ask it often.
+     */
+    @Nullable
+    public static Component problem(ServerLevel level, FixedLauncherBlockEntity be) {
         Mission m = be.mission();
         if (m == null) return Component.translatable("incoming.fixed_launcher.no_mission.short");
         BlockPos pos = be.getBlockPos();
@@ -76,18 +98,14 @@ public final class LauncherOrders {
             if (rule != null) return rule;
         }
         if (busy(level, be)) return Component.translatable("incoming.fixed_launcher.busy");
-        LaunchOrigin.Fixed origin = new LaunchOrigin.Fixed(pos);
-        Loadout l = ServerActions.clamp(new Loadout(m.weapon(), m.count(), m.spread(), Loadout.DEFAULT.mode(), "", Loadout.Nuke.DEFAULT));
-        MutableComponent route = ServerActions.routeProblem(level, null, false, m.weapon(), origin, m.via(), m.point());
+        MutableComponent route = ServerActions.routeProblem(level, null, false, m.weapon(), new LaunchOrigin.Fixed(pos), m.via(), m.point());
         if (route != null) return route;
-        MutableComponent missing = Munitions.shortage(be.store().items(), Munitions.Bill.of(l));
-        if (missing != null) return missing;
-        String who = "launcher " + pos.toShortString();
-        Component before = be.lastReport();
-        boolean ok = ServerActions.fromLauncher(level, who, owner, l, new ServerActions.Aim(m.target(), m.point(), null), m.via(), origin, be::report, made);
-        if (ok) return null;
-        // Launch reported its own issue (blocked sector, inventory): this reason is more specific than the general one.
-        return be.lastReport() != before ? be.lastReport() : Component.translatable("incoming.fixed_launcher.failed");
+        return Munitions.shortage(be.store().items(), Munitions.Bill.of(loadout(m)));
+    }
+
+    /** The order a mission gives: its weapon, count and spread within the world's limits. */
+    private static Loadout loadout(Mission m) {
+        return ServerActions.clamp(new Loadout(m.weapon(), m.count(), m.spread(), Loadout.DEFAULT.mode(), "", Loadout.Nuke.DEFAULT));
     }
 
     /**
@@ -101,7 +119,7 @@ public final class LauncherOrders {
     /**
      * Rules for owner {@code owner}'s launcher order of {@code weapon} at {@code at} aimed at {@code aim}; null means
      * allowed. The owner's rights come from {@link Authority} (the designator, the weapon); an offline owner's from the
-     * handler's last answer or the node default, never a storage lookup.
+     * node's own resolver, never the permission handler or a storage lookup.
      */
     @Nullable
     private static MutableComponent rules(MinecraftServer server, UUID owner, WeaponType weapon, Vec3 at, Vec3 aim) {

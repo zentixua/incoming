@@ -39,7 +39,6 @@ import java.util.UUID;
  * ModAttachments#CRATER_FALLS}.
  */
 public final class CraterFalls {
-    private static final String COLLAPSE_RUBBLE = "incoming:collapse_rubble";
     /** Live falling blocks starting within blast area. */
     public static final int LIVE_CAP = 48;
     /** Live falling blocks across all world areas: widely dispersed salvo areas do not overlap. */
@@ -95,13 +94,12 @@ public final class CraterFalls {
         if (get(level).settle(level, falling, from)) event.setCanceled(true);
     }
 
-    /** Vanilla keeps the falling-block picture while suppressing placement and item drops on impact. */
     /**
-     * {@code stays}: the strike's {@code world.debris_stay} ({@link BlastArea#rules}), decided once: vanilla saves the
+     * Collapse rubble: vanilla keeps the falling-block picture while suppressing the item drop on impact, and with
+     * {@code stays} off the placement too. {@code stays}: the strike's {@code world.debris_stay} ({@link BlastArea#rules}), decided once: vanilla saves the
      * cancelled placement with the entity, so a rule changed while it falls does not reach it.
      */
     static void markRubble(FallingBlockEntity falling, boolean stays) {
-        falling.addTag(COLLAPSE_RUBBLE);
         falling.dropItem = false;
         if (!stays) falling.disableDrop();
     }

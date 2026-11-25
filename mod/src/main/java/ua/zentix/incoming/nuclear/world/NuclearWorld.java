@@ -57,11 +57,6 @@ public final class NuclearWorld {
      * ({@link FlashScorch#burnOut}; no ticks scheduled during chunk load).
      */
     private final it.unimi.dsi.fastutil.longs.LongOpenHashSet unburnt = new it.unimi.dsi.fastutil.longs.LongOpenHashSet();
-    /** Chunks waiting to go to their viewers whole ({@link RuinDelivery}). */
-    final it.unimi.dsi.fastutil.longs.Long2ObjectOpenHashMap<RuinDelivery.PendingWhole> wholeWaiting =
-            new it.unimi.dsi.fastutil.longs.Long2ObjectOpenHashMap<>();
-    /** Unique write revisions for whole deliveries, including across chunk reloads. */
-    long wholeRevision;
     /** Unfinished saved craters resumed (after world load). */
     private boolean restored;
     /** World game time of last slow-tick log. */
@@ -442,25 +437,29 @@ public final class NuclearWorld {
      * <li>{@code urgentFlash} — flash layers players see whose deadline is near ({@link FlashScorch#workUrgent}): ahead of
      * seen ruins due now, glass in view stayed whole 3 ticks after the wave (GameTest seenRuinsKeepUpWithCrater); after
      * craters and unseen ruins the layer got nothing until the wave (15 kt, full host pack: 904 of 915 chunks late);</li>
+     * <li>{@code planAhead} — background plans for chunks in view whose wave is up to 15 s away ({@link ScarQueue#planAhead}):
+     * after the layers due now, before the craters, which would push them back into the last second before the wave;</li>
      * <li>{@code craters}, then {@code ruins} — unseen ruins;</li>
      * <li>{@code flash} — the rest of each flash layer on what wave-reached ruins leave: when the front crosses many chunks
      * per tick, distant layers ahead delayed front ruins for ticks (25 tick units to layers, none to ruins). A wave-reached
      * layer is unnecessary: ruins apply everything (built from the pre-flash world). Detonations progress independently.</li>
      * </ol>
      */
-    public static long[] afterFront(Runnable seenRuins, Runnable urgentFlash, Runnable craters, Runnable ruins, Runnable flash) {
-        long[] at = new long[6];
+    public static long[] afterFront(Runnable seenRuins, Runnable urgentFlash, Runnable planAhead, Runnable craters, Runnable ruins, Runnable flash) {
+        long[] at = new long[7];
         at[0] = System.nanoTime();
         seenRuins.run();
         at[1] = System.nanoTime();
         urgentFlash.run();
         at[2] = System.nanoTime();
-        craters.run();
+        planAhead.run();
         at[3] = System.nanoTime();
-        ruins.run();
+        craters.run();
         at[4] = System.nanoTime();
-        flash.run();
+        ruins.run();
         at[5] = System.nanoTime();
+        flash.run();
+        at[6] = System.nanoTime();
         return at;
     }
 
@@ -536,7 +535,7 @@ public final class NuclearWorld {
                     Incoming.LOG.error("Flash scorch of detonation #{} failed with an exception (urgent pass)", job.detonation().id(), e);
                 }
             }
-        }, () -> digCraters(level, events, clock), () -> scars.work(level, now, clock), () -> {
+        }, () -> scars.planAhead(level, now, clock), () -> digCraters(level, events, clock), () -> scars.work(level, now, clock), () -> {
             for (java.util.Iterator<FlashScorch> it = scorches.iterator(); it.hasNext(); ) {
                 FlashScorch job = it.next();
                 try {
@@ -549,12 +548,12 @@ public final class NuclearWorld {
                 }
             }
         });
-        lastCraterNanos = at[3] - at[2];
-        lastScarNanos = at[1] - at[0] + at[4] - at[3];
+        lastCraterNanos = at[4] - at[3];
+        lastScarNanos = at[1] - at[0] + at[3] - at[2] + at[5] - at[4];
         long urgentNanos = at[2] - at[1];
         if (!unburnt.isEmpty()) burnOut(level);
         long prepStart = System.nanoTime();
-        lastScorchNanos = prepStart - at[4] + urgentNanos;
+        lastScorchNanos = prepStart - at[5] + urgentNanos;
         // prebuilt ruins use remaining budget: already traveling wave matters more
         try {
             prep.tick(level, events, scars, clock);

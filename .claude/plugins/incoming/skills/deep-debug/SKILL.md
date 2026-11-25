@@ -81,6 +81,11 @@ Where: Artem's laptop, only when he is not playing (`tools/gpu_lease.sh --wait`)
 - **GPU time per pass**: `LayerTimes` (`-Dincoming.fx.drain=true` or F3), the bench line.
 - **RenderDoc**: frame capture in `mod/run/renderdoc/`, cost per draw call, overdraw, analysis with its Python
   (`renderdoccmd` needs `-d "$PWD"`; run the qrenderdoc Python analysis outside nested KWin).
+- **Pixel defects** (dark spots, specks, holes, bands, flicker on an effect; Artem, 24.11: "no guessing, find the
+  exact cause"): a RenderDoc capture of the defect frame, then pixel history and shader debug of 2–3 bad pixels beside
+  a good neighbour. Log every term per pixel (march samples, density, transmittance, light and shadow terms, history
+  blend) and name the term that differs, with its numbers, before any fix attempt. Changing a knob and re-judging
+  frames is guessing.
 - **Client CPU**: spark on the client, render thread time, frame p50/p95.
 - **GPU clocks**: `nvidia-smi` log once a second; 45 s warm-up; the clock is written beside each view.
 - **Frames**: the same spot, the same moment after the strike, against `main` (`tools/sandbox.sh shot`); the scene
@@ -135,6 +140,13 @@ go in run files and the PR, not in chat. New knowledge (a gauge trap, a new prob
 into that area's `.claude/rules` or this skill by PR in the same thread; status and numbers go into the report.
 
 ## Gauges that lie
+- JFR names the client's render thread `main` (its OS name, in `/proc` schedstat and `top`, is `Render thread`);
+  filtering JFR samples by `Render thread` finds none. Render-thread stall stacks carry Mojang's line numbers: map them
+  with `javap -l -c` on the runtime class (work.md), never on the decompiled sources.
+- Client JFR: the render thread is `main` in `ExecutionSample` (not "Render thread"), and JFR samples only a few
+  threads per period, so with the client's dozens of busy threads its render-thread sample count is a small, uneven
+  fraction of wall time: use it for shares inside the thread, never for milliseconds. Per-frame cost comes from a
+  render-thread sampler and frame log in the scenario client (the `incoming.hitch` probe).
 - `MinecraftServer.getTickTimesNanos` misses work done in `ServerTickEvent.Post`: take tick cost from spark
   tickmonitor or tick-start intervals. GC-log "Reaching safepoint" lines inside ZGC concurrent phases are not game
   stops: game threads keep running.

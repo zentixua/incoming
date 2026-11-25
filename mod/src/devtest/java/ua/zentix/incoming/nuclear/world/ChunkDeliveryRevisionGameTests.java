@@ -34,6 +34,7 @@ import org.jetbrains.annotations.Nullable;
 import ua.zentix.incoming.Incoming;
 import ua.zentix.incoming.gametest.StrikeGameTests;
 import ua.zentix.incoming.nuclear.NuclearWarhead;
+import ua.zentix.incoming.work.ChunkDelivery;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -43,8 +44,8 @@ import java.util.concurrent.TimeUnit;
 
 @GameTestHolder(Incoming.MOD_ID)
 @PrefixGameTestTemplate(false)
-public final class RuinDeliveryRevisionGameTests {
-    private RuinDeliveryRevisionGameTests() {}
+public final class ChunkDeliveryRevisionGameTests {
+    private ChunkDeliveryRevisionGameTests() {}
 
     @GameTest(template = "range", batch = "nuke_delivery_revision", timeoutTicks = 250, skyAccess = true)
     public static void firstFenceCannotSendSecondWritesWithUnprocessedLight(GameTestHelper h) {
@@ -89,10 +90,10 @@ public final class RuinDeliveryRevisionGameTests {
                 if (smallWrite) applySingleSource(h, chunk, second);
                 else {
                     level.setBlock(second, Blocks.GLOWSTONE.defaultBlockState(), Block.UPDATE_CLIENTS);
-                    RuinDelivery.wholeAfterLight(level, chunk, RuinDelivery.WHOLE_FROM);
+                    ChunkDelivery.wholeAfterLight(level, chunk, ChunkDelivery.WHOLE_FROM);
                 }
             }, cache.chunkMap.mainThreadExecutor::tell);
-            RuinDelivery.wholeAfterLight(level, chunk, RuinDelivery.WHOLE_FROM);
+            ChunkDelivery.wholeAfterLight(level, chunk, ChunkDelivery.WHOLE_FROM);
             engine.waitForPendingTasks(pos.x, pos.z)
                     .thenRunAsync(() -> firstFenceDispatched[0] = true, cache.chunkMap.mainThreadExecutor::tell);
             // The newer write's light work cannot run until the test has checked the first send.
@@ -106,7 +107,7 @@ public final class RuinDeliveryRevisionGameTests {
                     h.assertTrue(level.getBrightness(LightLayer.BLOCK, first) == 15, "first source must be lit");
                     h.assertTrue(level.getBrightness(LightLayer.BLOCK, second) == 0, "second source must still be dark");
                     if (!packets.isEmpty()) assertSource(h, second, packets.getFirst());
-                    h.assertTrue(packets.isEmpty() && RuinDelivery.waiting(level, pos),
+                    h.assertTrue(packets.isEmpty() && ChunkDelivery.waiting(level, pos),
                             "only the second fence may send the whole chunk");
                     if (!smallWrite) releaseLight.countDown();
                 })
@@ -120,7 +121,7 @@ public final class RuinDeliveryRevisionGameTests {
                 .thenExecuteAfter(1, () -> {
                     if (smallWrite) {
                         assertHold(h, holder, y, false, "tick 200 from the first write");
-                        h.assertTrue(packets.isEmpty() && RuinDelivery.waiting(level, pos), "delivery must still wait for light");
+                        h.assertTrue(packets.isEmpty() && ChunkDelivery.waiting(level, pos), "delivery must still wait for light");
                     }
                 })
                 .thenExecuteAfter(1, () -> {
@@ -130,7 +131,7 @@ public final class RuinDeliveryRevisionGameTests {
                         releaseLight.countDown();
                     }
                 })
-                .thenWaitUntil(() -> h.assertTrue(!RuinDelivery.waiting(level, pos) && !packets.isEmpty(),
+                .thenWaitUntil(() -> h.assertTrue(!ChunkDelivery.waiting(level, pos) && !packets.isEmpty(),
                         "waiting for the latest revision to be delivered"))
                 .thenExecute(() -> {
                     h.assertTrue(packets.size() == 1, "expected one coalesced whole chunk, got " + packets.size());
@@ -159,7 +160,7 @@ public final class RuinDeliveryRevisionGameTests {
     private static void assertHold(GameTestHelper h, ChunkHolder holder, int y, boolean expected, String when) {
         ServerLevel level = h.getLevel();
         holder.sectionLightChanged(LightLayer.BLOCK, SectionPos.blockToSectionCoord(y));
-        RuinDelivery.onLevelTickPre(new LevelTickEvent.Pre(() -> true, level));
+        ChunkDelivery.onLevelTickPre(new LevelTickEvent.Pre(() -> true, level));
         h.assertTrue(holder.blockChangedLightSectionFilter.isEmpty() == expected,
                 "expected vanilla light hold " + expected + " at " + when);
     }
