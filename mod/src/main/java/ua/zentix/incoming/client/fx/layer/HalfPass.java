@@ -14,6 +14,7 @@ import net.minecraft.client.renderer.ShaderInstance;
 import org.jetbrains.annotations.Nullable;
 import org.joml.Matrix4fc;
 import org.lwjgl.opengl.GL11;
+import org.lwjgl.opengl.GL15;
 import org.lwjgl.opengl.GL21;
 import org.lwjgl.opengl.GL30;
 import org.lwjgl.system.MemoryUtil;
@@ -59,6 +60,8 @@ final class HalfPass {
     /** Clip rectangles of quads split by tile, NDC (texel k % 1024, k / 1024), a ring as the cuts. */
     private static int[] rects = {-1, -1, -1}, rectRows = new int[3];
     private static FloatBuffer rectData = MemoryUtil.memAllocFloat(4);
+    /** Unpack buffer of the cut and rectangle uploads (0 — not yet made); every view's uploads go through it. */
+    private static int unpack;
     static final int RECT_ROW = 1024;
     private static boolean failed;
     private static Plan PLAN = new Plan();
@@ -70,6 +73,10 @@ final class HalfPass {
     private static int lastLow, lastFull, lastFlushes, lastScene = -1;
     /** This frame drew through the plan (the drain frame's parts follow it). */
     private static boolean planned;
+    /** Render-thread time of the cut and rectangle uploads, a frame's mean and longest over the last whole second. */
+    private static long uploadNanos, uploadMax, uploadSince;
+    private static int uploadFrames;
+    private static double lastUploadMean, lastUploadMax;
 
     private HalfPass() {}
 
@@ -307,8 +314,10 @@ final class HalfPass {
         }
         int main = GlStateManager._getInteger(GL30.GL_DRAW_FRAMEBUFFER_BINDING);
         GL11.glGetIntegerv(GL11.GL_VIEWPORT, VIEWPORT);
+        long t0 = System.nanoTime();
         uploadCut(plan);
         uploadRects(plan, n, w, h);
+        uploaded(System.nanoTime() - t0);
         planned = true;
         lastScene = scene;
         try {
@@ -370,12 +379,26 @@ final class HalfPass {
             cutH[ring] = plan.tilesY;
         }
         GlStateManager._bindTexture(cuts[ring]);
-        GlStateManager._glBindBuffer(GL21.GL_PIXEL_UNPACK_BUFFER, 0);
         GlStateManager._pixelStore(GL11.GL_UNPACK_ROW_LENGTH, 0);
         GlStateManager._pixelStore(GL11.GL_UNPACK_SKIP_PIXELS, 0);
         GlStateManager._pixelStore(GL11.GL_UNPACK_SKIP_ROWS, 0);
         GlStateManager._pixelStore(GL11.GL_UNPACK_ALIGNMENT, 4);
-        GL11.glTexSubImage2D(GL11.GL_TEXTURE_2D, 0, 0, 0, plan.tilesX, plan.tilesY, GL11.GL_RED, GL11.GL_FLOAT, b);
+        upload(b, plan.tilesX, plan.tilesY, GL11.GL_RED);
+    }
+
+    /**
+     * b (w×h texels of format, floats) into the bound texture through the unpack buffer: new storage on every call (the
+     * driver keeps the old one while the GPU still reads it), the copy itself on the GPU, so the render thread never
+     * waits. From client memory the NVIDIA driver held the render thread in the rectangles' upload until the frame's
+     * GPU work before it was done: 14–18 ms a frame (200–340 ms a second) while a 1 Mt front crossed the camera at 3 km.
+     * The unpack binding returns to 0: other uploads read client memory.
+     */
+    private static void upload(FloatBuffer b, int w, int h, int format) {
+        if (unpack == 0) unpack = GL15.glGenBuffers();
+        GlStateManager._glBindBuffer(GL21.GL_PIXEL_UNPACK_BUFFER, unpack);
+        GL15.glBufferData(GL21.GL_PIXEL_UNPACK_BUFFER, b, GL15.GL_STREAM_DRAW);
+        GL11.glTexSubImage2D(GL11.GL_TEXTURE_2D, 0, 0, 0, w, h, format, GL11.GL_FLOAT, 0L);
+        GlStateManager._glBindBuffer(GL21.GL_PIXEL_UNPACK_BUFFER, 0);
     }
 
     private static int rectRows(int n) {
@@ -420,7 +443,7 @@ final class HalfPass {
             rectRows[ring] = size;
         }
         GlStateManager._bindTexture(rects[ring]);
-        GL11.glTexSubImage2D(GL11.GL_TEXTURE_2D, 0, 0, 0, RECT_ROW, 2 * rows, GL11.GL_RGBA, GL11.GL_FLOAT, b);
+        upload(b, RECT_ROW, 2 * rows, GL11.GL_RGBA);
     }
 
     /** Lay the target onto the frame over the tiles holding its smoke (rows of adjacent tiles as one rectangle). */
@@ -545,10 +568,23 @@ final class HalfPass {
         return Arrays.copyOf(out, m);
     }
 
+    private static void uploaded(long nanos) {
+        long now = System.nanoTime();
+        if (now - uploadSince >= 1_000_000_000L) {
+            lastUploadMean = uploadFrames == 0 ? 0 : uploadNanos / 1e6 / uploadFrames;
+            lastUploadMax = uploadMax / 1e6;
+            uploadNanos = uploadMax = uploadFrames = 0;
+            uploadSince = now;
+        }
+        uploadNanos += nanos;
+        uploadMax = Math.max(uploadMax, nanos);
+        uploadFrames++;
+    }
+
     /** For the scenario line. */
     static String describe() {
-        return String.format(java.util.Locale.ROOT, "half-resolution smoke %d quads, full %d (a quad over both kinds of tiles counts in each), lays %d",
-                lastLow, lastFull, lastFlushes);
+        return String.format(java.util.Locale.ROOT, "half-resolution smoke %d quads, full %d (a quad over both kinds of tiles counts in each), lays %d, "
+                + "uploads %.3f ms a frame (longest %.3f)", lastLow, lastFull, lastFlushes, lastUploadMean, lastUploadMax);
     }
 
     /** Saved only for secondary views; swapping leaves the primary draw path and operation order unchanged. */
