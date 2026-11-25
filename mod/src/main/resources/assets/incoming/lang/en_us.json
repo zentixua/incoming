@@ -686,5 +686,12 @@
   "stat.incoming.rounds_launched.rocket": "Grad Rockets Launched",
   "stat.incoming.rounds_launched.loiter": "Lancets Launched",
   "stat.incoming.interceptions": "Rounds Shot Down",
-  "stat.incoming.nuclear_detonations_witnessed": "Nuclear Detonations Witnessed"
+  "stat.incoming.nuclear_detonations_witnessed": "Nuclear Detonations Witnessed",
+  "incoming.display_source.sam_alert": "Air-raid alert",
+  "incoming.display_source.sam_alert.on": "ALERT",
+  "incoming.display_source.sam_alert.off": "Clear",
+  "incoming.display_source.launcher_munitions": "Launcher munitions",
+  "incoming.display_source.launcher_ready": "Launcher readiness",
+  "incoming.display_source.launcher_ready.on": "Ready",
+  "incoming.display_source.launcher_ready.off": "Not ready"
 }

@@ -686,5 +686,12 @@
   "stat.incoming.rounds_launched.rocket": "Запущено ракет «Града»",
   "stat.incoming.rounds_launched.loiter": "Запущено «Ланцетов»",
   "stat.incoming.interceptions": "Сбито боеприпасов",
-  "stat.incoming.nuclear_detonations_witnessed": "Ядерных взрывов рядом"
+  "stat.incoming.nuclear_detonations_witnessed": "Ядерных взрывов рядом",
+  "incoming.display_source.sam_alert": "Воздушная тревога",
+  "incoming.display_source.sam_alert.on": "ТРЕВОГА",
+  "incoming.display_source.sam_alert.off": "Отбой",
+  "incoming.display_source.launcher_munitions": "Боезапас пусковой",
+  "incoming.display_source.launcher_ready": "Готовность пусковой",
+  "incoming.display_source.launcher_ready.on": "Готова",
+  "incoming.display_source.launcher_ready.off": "Не готова"
 }

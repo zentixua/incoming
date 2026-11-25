@@ -42,6 +42,12 @@ With Jade, looking at the launcher shows its stock and whether a signal now woul
 owner to the owner's side and operators. A CC:Tweaked computer next to it reads what any player may and fires its
 mission like a signal, but cannot change the mission ([For server owners and pack makers](packs.md#computers-cctweaked)).
 
+With Create, a Display Link attached to the launcher offers two sources for a display board, sign or nixie tube:
+**Launcher munitions**, the rounds it holds of every weapon together (a Grad pack counts its rockets), and **Launcher
+readiness**, `Ready` when a signal now would fire it, by the same rule, and `Not ready` otherwise (a display board writes them in
+capitals). The link refreshes
+them every 5 seconds, as Create's own sources.
+
 ## On an aircraft
 
 A launcher built into a Create Aeronautics aircraft fires from it, in flight too. Its rack turns on the deck, and the

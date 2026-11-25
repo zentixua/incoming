@@ -372,7 +372,7 @@ round and detonation events with no Almighty change. Add to the note: the grid a
 | later | 5F Component items for progression | planned | |
 | later | 5F Blackout of modded lamps | planned | |
 | later | 5F Foreign air-defense targets | planned | |
-| later | 5F Create Display Link source | planned | |
+| later | 5F Create Display Link source | done | #764 |
 | later | 5F Data-driven munition variants | planned | |
 | later | 5F Launch from Create contraptions and Create Aeronautics craft | done | #763 |
 | later | 5F KubeJS event group | planned | |

@@ -12,6 +12,8 @@ paths:
   - "mod/src/main/java/ua/zentix/incoming/info/**"
   - "mod/src/main/java/ua/zentix/incoming/compat/jade/**"
   - "mod/src/main/java/ua/zentix/incoming/compat/computercraft/**"
+  - "mod/src/main/java/ua/zentix/incoming/compat/create/**"
+  - "mod/src/devtest/java/ua/zentix/incoming/gametest/DisplayLinkGameTests.java"
   - "mod/src/devtest/java/ua/zentix/incoming/gametest/ReadoutGameTests.java"
   - "mod/src/devtest/java/ua/zentix/incoming/gametest/AutomationGameTests.java"
 ---
@@ -71,6 +73,16 @@ paths:
   (`PeripheralCapability` listener added in `Incoming` behind `isLoaded("computercraft")`); `OptionalModsTest` scans
   the bytecode for any other reference. Neither mod is in the GameTest runtime: `ReadoutGameTests`, `AutomationGameTests`
   probe the core, `LinesTest`, `PeripheralsTest` the adapters (CC:Tweaked API compiled at 1.113.0, its first 1.21.1).
+- Create Display Link sources (`compat/create/DisplaySources`, `install` from `Incoming` behind `isLoaded("create")`):
+  Create's `display_source` registry plus `DisplaySource.BY_BLOCK_ENTITY` (filled in `enqueueWork`); SAM alert
+  (`hostile() > 0`, the alarm's condition), launcher munitions (`Automation.stock` summed) and readiness
+  (`LauncherOrders.problem == null`): the computer's values, never a refusal text. The SAM source refreshes every
+  `SamBlockEntity.SWEEP` (Create's default 100 ticks would trail the alarm by up to 5 s; each refresh pulses the link's
+  bulb), the launcher's at Create's default. A source's screen name is `incoming.display_source.<registry name>`, a key
+  `LangTest` cannot see (`DisplaySourceLangTest`). Create is in the GameTest runtime: `DisplayLinkGameTests` drives a real
+  link to a sign and compares with `en_us.json`; its Create types sit in a nested class (GameTest reflects over the test
+  methods, which must load without Create), and devtest compiles against Ponder (`VirtualBlockEntity`, a supertype of
+  Create's block entities).
 - For the game master and scripts: `/incoming launcher <x y z>` (operator, `IncomingCommand.launcher`): status, `fire`,
   `mission` (no player rules; target `x z` is a ground location, `x y z` a point; route via `routeProblem` from the
   launcher), `clear`, `load N`, `owner`; position must be in a ready chunk; `mission` and `clear` refuse a busy launcher.
