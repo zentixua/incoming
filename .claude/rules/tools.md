@@ -48,10 +48,10 @@ Prism: `~/.var/app/org.prismlauncher.PrismLauncher/data/PrismLauncher/` (`tools/
                                            its Gradle step and another Gradle run in the same tree (GameTest) collide on
                                            downloadAssets: start the second after the client's launch script exists;
                                            scenarios and what each captures: in the script header
-    dev_client.sh start|cmd|hud|swap|reload|shot|stop ← the look loop: ModDevGradle runClient (the mod and its dependencies) straight
+    dev_client.sh start|cmd|hud|dw|swap|reload|shot|stop ← the look loop: ModDevGradle runClient (the mod and its dependencies) straight
                                            into a saved world (a reflinked copy of a real map), JetBrains Runtime from the Gradle
                                            toolchain with JDWP on loopback; `swap` compiles, redefines changed classes (jdb) and presses
-                                           the F3+T reload for changed resources; chat commands, reload, F2 and F1 as files the
+                                           the F3+T reload for changed resources; chat commands, reload, F2, F1 and dust-wave diagnostics (dw) as files the
                                            client reads (devtest DevHands: the nested display passes it no keyboard input); shared
                                            GPU slot or CPU (laptop_job.sh --soft); how to work: client-scenario.md, “Standard dev client”
     sandbox.sh start|fx|swap|shot|restart|stop|jbr ← effects sandbox (vanilla: shared GPU slot or CPU, unless shaders/sodium/dh/gpu): a client with only the mod (+ Iris with a shaderpack, Sodium without one, DH) in a
