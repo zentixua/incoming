@@ -8,27 +8,29 @@ import java.io.InputStream;
 import java.util.LinkedHashMap;
 import java.util.Map;
 
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
- * The ruin write ({@link RuinPlan} {@code write}) stays in small phases. As one 2,550-byte method it compiled to a 100-135 kB
- * unit, and the branches a city chunk first takes at the front (fire layers, block entities) deoptimised it: six C2
- * recompiles, 3.85 CPU-s in the 4 s a 1 Mt front crossed a city viewer, on cores the client's render thread was waiting
- * for (passage-city-2, Zearth Silo at 3 km). Each phase now compiles on its own, and a new branch recompiles only its
- * phase. The bound is on bytecode, read from the class files without loading Minecraft.
+ * The ruin write ({@link RuinPlan} {@code write}) stays in small phases. A single write method compiles to a 100-135 kB
+ * unit and recompiles on each branch first taken at the front (1 Mt over a city at 3 km: six C2 recompiles, 3.85 CPU-s in
+ * the 4 s of the front, on cores the client's render thread waits for). Bytecode size stands in for compiled size: with
+ * small phases the largest compile of a write phase at that front is 35 kB. Read from the class files without loading Minecraft.
  */
 class RuinWriteShapeTest {
-    /** Bytecode bytes a write phase may have: about a fifth of the old single method. */
+    /** Bytecode bytes a write phase may have: under a quarter of the 2,550-byte single method. */
     private static final int PHASE_BYTES = 600;
+    /** {@code RuinPlan.write}'s descriptor start: other methods named write (serializers) are not the ruin write. */
+    private static final String WRITE = "write(Lnet/minecraft/server/level/ServerLevel;Lnet/minecraft/world/level/chunk/LevelChunk;";
 
     @Test
     void writeAndEachPhaseStaySmall() throws IOException {
         Map<String, Integer> plan = codeLengths("RuinPlan");
-        Integer write = plan.get("write");
-        assertNotNull(write, "RuinPlan.write not found: " + plan.keySet());
-        assertTrue(write <= PHASE_BYTES, "RuinPlan.write is " + write + " bytecode bytes");
+        Map.Entry<String, Integer> write = plan.entrySet().stream().filter(e -> e.getKey().startsWith(WRITE)).findFirst().orElse(null);
+        assertNotNull(write, "RuinPlan ruin write not found: " + plan.keySet());
+        assertTrue(write.getValue() <= PHASE_BYTES, "RuinPlan." + write.getKey() + " is " + write.getValue() + " bytecode bytes");
         Map<String, Integer> phases = codeLengths("RuinPlan$Write");
         assertFalse(phases.isEmpty(), "RuinPlan$Write not found");
         for (Map.Entry<String, Integer> e : phases.entrySet()) {
@@ -36,7 +38,27 @@ class RuinWriteShapeTest {
         }
     }
 
-    /** Largest code length per method name of a class in this package (JVMS 4.7.3 Code attribute). */
+    /** Overloads are separate entries (review r1 probe): a large serializer named write is not held to the bound. */
+    @Test
+    void overloadsAreKeptApart() throws IOException {
+        Map<String, Integer> twin = codeLengths("RuinWriteShapeTest$Twin");
+        assertEquals(2, twin.get("write(I)I"), "write(int) " + twin);
+        assertTrue(twin.get("write(JJJ)J") > 2, "write(long, long, long) " + twin);
+    }
+
+    static final class Twin {
+        int write(int a) {
+            return a;
+        }
+
+        long write(long a, long b, long c) {
+            long s = a;
+            for (int i = 0; i < 8; i++) s = s * 31 + b ^ c + i;
+            return s;
+        }
+    }
+
+    /** Code length per method, keyed name + descriptor, of a class in this package (JVMS 4.7.3 Code attribute). */
     private static Map<String, Integer> codeLengths(String simpleName) throws IOException {
         Map<String, Integer> out = new LinkedHashMap<>();
         try (InputStream raw = RuinWriteShapeTest.class.getResourceAsStream(simpleName + ".class")) {
@@ -74,8 +96,7 @@ class RuinWriteShapeTest {
             }
             for (int m = in.readUnsignedShort(); m > 0; m--) {
                 in.readUnsignedShort();
-                String name = utf8[in.readUnsignedShort()];
-                in.readUnsignedShort();
+                String name = utf8[in.readUnsignedShort()] + utf8[in.readUnsignedShort()];
                 for (int a = in.readUnsignedShort(); a > 0; a--) {
                     String attribute = utf8[in.readUnsignedShort()];
                     int length = in.readInt();
@@ -83,7 +104,7 @@ class RuinWriteShapeTest {
                         in.readUnsignedShort();
                         in.readUnsignedShort();
                         int code = in.readInt();
-                        out.merge(name, code, Math::max);
+                        out.put(name, code);
                         in.skipNBytes(length - 8L);
                     } else {
                         in.skipNBytes(length);

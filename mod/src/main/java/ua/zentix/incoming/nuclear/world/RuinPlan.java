@@ -902,10 +902,10 @@ public final class RuinPlan {
                       boolean marked, boolean layer) {
         PHASES[0] += System.nanoTime() - t;
         t = System.nanoTime();
-        // One write in phases, each loop its own small method (Write): the JIT compiles each phase once and a branch first
-        // taken in one phase (a city chunk at the front, after field chunks) recompiles that phase alone. As one method the
-        // write compiled to 100-135 kB and recompiled six times in the 4 s a 1 Mt front crossed a city viewer (3.85 s of C2
-        // on cores the render thread was waiting for). RuinWriteShapeTest holds the phase sizes.
+        // One write in phases, each loop its own small method (Write), so a deoptimisation on a branch first taken at the
+        // front (a city chunk after field chunks) costs C2 a small recompile: a single write method compiles to 100-135 kB
+        // and recompiles on each such branch (1 Mt over a city at 3 km: six recompiles, 3.85 CPU-s in the 4 s of the
+        // front, on cores the client's render thread waits for). RuinWriteShapeTest holds the phase sizes.
         Write w = new Write(level, chunk, budget, flash, marked, layer);
         w.cells();
         w.fires();
@@ -1021,7 +1021,8 @@ public final class RuinPlan {
 
         /**
          * Layer fire under plan position {@code c}: true where the plan's air keeps ruin fire (the position is left to
-         * {@link #fires}), else the fire is extinguished by the write.
+         * {@link #fires}); otherwise records the position for a light check ({@link #quenched}), returns a counted fire
+         * to the detonation counter and returns false, and the write then replaces the fire.
          */
         private boolean keepsLayerFire(int c, BlockState state) {
             // layer fire where plan says air with ruin fire (burned grass) continues, handled by fires below
