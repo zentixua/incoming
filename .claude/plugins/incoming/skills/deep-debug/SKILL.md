@@ -40,7 +40,9 @@ in the cloud VM. Never touch the play servers (25565–25567) or their worlds wi
 
 - **Always on in every Gradle run and `prod_client.py`** (build.gradle): a JFR ring of the last 30 minutes dumped on
   exit to `<run dir>/run.jfr` and the GC/safepoint log `<run dir>/gc.log` (`prod_client.py`: in its `logs/`); while running, `jcmd <pid> JFR.dump
-  name=incoming filename=…` saves the window around an event without stopping. `INCOMING_JFR=profile` for the profile
+  name=incoming filename=…` saves the window around an event without stopping. In `prod_client.py` launches the render
+  thread is named `main` in JFR (not `Render thread` as in its log); `jfr print` truncates stacks to 5 frames without
+  `--stack-depth`. `INCOMING_JFR=profile` for the profile
   settings: `ExecutionSample` on Server thread, GC and safepoint pauses, `ThreadPark`/`JavaMonitorEnter`/`ThreadSleep`
   > 10 ms, `CPULoad`, `ThreadCPULoad` (thread running or waiting), `ObjectAllocationSample`, file IO. A Crafty server
   needs the same flags added to its JVM arguments. A Gradle run crashes at its first JVM-raised OutOfMemoryError
