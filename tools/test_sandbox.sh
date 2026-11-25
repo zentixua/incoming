@@ -138,4 +138,49 @@ out=$(INCOMING_SOFT_RESERVE_MB=100000000 soft_mem_ok 2>&1); rc=$?
 # gpu_lease.sh tells a CPU session by its socket: nested_kwin refuses any other name on the CPU path, before KWin
 out=$(INCOMING_SOFT=1 "$ROOT/tools/nested_kwin.sh" wayland-incoming-sandbox 64 64 true 2>&1); rc=$?
 [ $rc = 2 ] && [[ $out == *"wayland-incoming-soft-"* ]] && ok "CPU session needs a soft socket name" || bad "nested_kwin soft socket: $rc $out"
+# Idle limit: a client whose job ended without `stop` (no command for INCOMING_SANDBOX_IDLE s) stops itself, its JVM
+# first (the client JVM is a grandchild of the display wrapper), and says why; a command keeps it alive; 0 never stops
+(
+  source "$ROOT/tools/sandbox.sh"
+  RUN=$tmp/idle-run FX=$tmp/idle-run/fx
+  mkdir -p "$RUN/logs" "$FX" "$tmp/bin"; cp "$(command -v sleep)" "$tmp/bin/java"
+  export INCOMING_SANDBOX_VANILLA=1 INCOMING_SANDBOX_POLL=0.2 INCOMING_SANDBOX_IDLE=60
+  vanilla_display() { "$tmp/bin/java" 300 & wait; }
+  jpid() { pgrep -f "^$tmp/bin/java 300" | head -1; }
+  ago() { touch -d "@$(( $(date +%s) - $1 ))" "${@:2}"; }
+  # idle since the world became ready two hours ago: stops within a poll
+  ago 7200 "$FX/ready"; rm -f "$FX/active" "$FX/stopped"
+  run_client 1280 720 & r=$!
+  for _ in $(seq 100); do kill -0 $r 2>/dev/null || break; sleep 0.1; done
+  kill -0 $r 2>/dev/null && { kill $(jpid) $r; echo "FAIL: idle sandbox still running after 10 s"; }
+  wait $r; rc=$?
+  [ $rc = 0 ] && [ -z "$(jpid)" ] && grep -q 'no command for 120 min (INCOMING_SANDBOX_IDLE=60 s): sandbox stopped' "$FX/stopped" \
+    && echo "ok: idle sandbox stops itself, JVM included, and says why" || echo "FAIL: idle stop: rc $rc java $(jpid) $(cat "$FX/stopped" 2>&1)"
+  # a recent command keeps it; the command aging past the limit stops it
+  rm -f "$FX/stopped"; touch "$FX/active"
+  run_client 1280 720 & r=$!
+  sleep 1.5
+  if [ -n "$(jpid)" ] && kill -0 $r 2>/dev/null; then echo "ok: a recent command keeps the sandbox"; else echo "FAIL: stopped despite a recent command"; fi
+  ago 120 "$FX/active"
+  for _ in $(seq 50); do kill -0 $r 2>/dev/null || break; sleep 0.1; done
+  kill -0 $r 2>/dev/null && { echo "FAIL: not stopped after its last command aged"; kill $(jpid) $r; } || echo "ok: stops once the last command ages past the limit"
+  # 0: never stops
+  rm -f "$FX/stopped"; INCOMING_SANDBOX_IDLE=0 run_client 1280 720 & r=$!
+  sleep 1
+  kill -0 $r 2>/dev/null && [ ! -f "$FX/stopped" ] && echo "ok: INCOMING_SANDBOX_IDLE=0 never stops" || echo "FAIL: IDLE=0 stopped"
+  kill $(jpid) 2>/dev/null; wait $r 2>/dev/null
+  # every command marks activity; a command finding the client gone tells why it stopped
+  running() { true; }
+  ago 7200 "$FX/active"
+  ( for _ in $(seq 50); do for c in "$FX"/inbox/*.cmd; do [ -f "$c" ] && { echo ok > "${c%.cmd}.done"; rm -f "$c"; exit; }; done; sleep 0.1; done ) &
+  fx 'blast drone' >/dev/null
+  [ "$(idle_seconds)" -le 2 ] && echo "ok: a command marks the sandbox active" || echo "FAIL: fx did not mark activity: $(idle_seconds)"
+  running() { false; }
+  echo "12:00:00 no command for 30 min (INCOMING_SANDBOX_IDLE=1800 s): sandbox stopped" > "$FX/stopped"
+  out=$(fx 'blast drone' 2>&1)
+  [[ $out == *"sandbox is not running"*"no command for 30 min"* ]] && echo "ok: a command after the idle stop says why" || echo "FAIL: not-running message: $out"
+) > "$tmp/idle.log" 2>&1
+cat "$tmp/idle.log"
+grep -q '^FAIL' "$tmp/idle.log" && fail=1
+[ "$(grep -c '^ok:' "$tmp/idle.log")" = 6 ] || { echo "FAIL: idle checks incomplete"; fail=1; }
 exit $fail

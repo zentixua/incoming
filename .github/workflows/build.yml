@@ -101,7 +101,7 @@ jobs:
                 mod/src/main/resources/assets/incoming/shaders/*) mod=true; amd=true ;;
                 tools/amd_shader_check.py|tools/test_amd_shader_check.py|tools/fixtures/amd_shader_budget.json) amd=true ;;
                 mod/*|tools/fetch_runtime_mods.py|tools/paths.py|tools/clean_install.py) mod=true ;;
-                tools/rig_procs.sh|tools/test_rig_procs.sh|tools/gpu_lease.sh|tools/test_gpu_lease.sh|tools/laptop_job.sh|tools/sandbox.sh|tools/test_sandbox.sh|tools/nested_kwin.sh|tools/soft_gl.sh|tools/stress.sh|tools/mp_scenario.sh|tools/client_scenario.sh|tools/probes/*) rig=true ;;
+                tools/rig_procs.sh|tools/test_rig_procs.sh|tools/gpu_lease.sh|tools/test_gpu_lease.sh|tools/laptop_job.sh|tools/sandbox.sh|tools/test_sandbox.sh|tools/stray_clients.sh|tools/test_stray_clients.sh|tools/nested_kwin.sh|tools/soft_gl.sh|tools/stress.sh|tools/mp_scenario.sh|tools/client_scenario.sh|tools/probes/*) rig=true ;;
                 tools/replayscan/*) replayscan=true ;;
                 # prod_client.py prepares look-gate client instance copy (no Dynamic FPS idle; tested there too).
                 tools/look_gate/*|tools/media/*|tools/prod_client.py) lookgate=true ;;
@@ -388,8 +388,8 @@ jobs:
           if-no-files-found: ignore
 
   # Rig/multiplayer processes stop entirely without orphans (tools/rig_procs.sh), ~4 s; GPU belongs to one session,
-  # waiters in order (tools/gpu_lease.sh); sandbox effect latency/mode mods (tools/test_sandbox.sh); no Java
-  # or mods.
+  # waiters in order (tools/gpu_lease.sh); sandbox effect latency/mode mods and idle stop (tools/test_sandbox.sh); stray
+  # client report (tools/test_stray_clients.sh); no Java or mods.
   rig:
     name: Остановка проверок
     needs: changes
@@ -407,6 +407,9 @@ jobs:
       - name: Sandbox without client
         timeout-minutes: 1
         run: tools/test_sandbox.sh
+      - name: Stray client report
+        timeout-minutes: 1
+        run: tools/test_stray_clients.sh
       - name: Release workflow regression checks
         run: python3 -m unittest discover -s tools -p 'test_release_checks.py' -v
       - name: Checked-tree reuse

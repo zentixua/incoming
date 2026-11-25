@@ -53,7 +53,11 @@ Prism: `~/.var/app/org.prismlauncher.PrismLauncher/data/PrismLauncher/` (`tools/
                                            resource reload without a new client, frames and WAV in one command (`shot`; `--at none`
                                            sound only, its take in a 160×90 window at 20 fps);
                                            a nuke at the camera: `nuke 15 near`; how to work: client-scenario.md,
-                                           “Effects sandbox”; check without a client: test_sandbox.sh (CI)
+                                           “Effects sandbox”; check without a client: test_sandbox.sh (CI);
+                                           no command for INCOMING_SANDBOX_IDLE s (1800; 0 never): the client stops itself
+    stray_clients.sh [--host vps] [--idle S] [--max-age S] ← report only: job units whose caller is gone, sandboxes idle past
+                                           the limit, jobs over 6 h, client JVMs reparented to init; exit 1 when any; never
+                                           stops anything; test: test_stray_clients.sh (CI)
     amd_shader_check.py [--only R] [--record] [--tree D] ← every core and post program through AMD's OpenGL compiler offline
                                            (glc of RGA 2.13, gfx1032 = RX 6600 XT; vanilla stages and includes from the 1.21.1
                                            client jar; both hash-checked into mod/run/rga): VGPRs, scratch, code of both stages,
@@ -103,7 +107,7 @@ Prism: `~/.var/app/org.prismlauncher.PrismLauncher/data/PrismLauncher/` (`tools/
                                            reached”; INCOMING_JOB_MEM/INCOMING_JOB_SWAP for one job; without a sleep inhibitor where none is allowed (a server);
                                            every job runs in agents.slice (laptop-agents: one ceiling for all agent work, rigs.md); a job
                                            killed because the slice is full says “agent work memory … is full”; TMPDIR: its own on disk, removed at stop;
-                                           TERM/Ctrl+C on laptop_job.sh stops its service (the client never outlives the command)
+                                           TERM/Ctrl+C/HUP on laptop_job.sh, or its systemd-run killed, stops its service (the client never outlives the command)
                                            task load: at stop (ExecStopPost `laptop_job.sh --account`) the unit's CPU from its cgroup
                                            goes to the load log (`cpu` row, task = DELEGATE_TASK set by `delegate`; job and task
                                            names only, never the command's arguments); laptop-agents mission-load sums it;

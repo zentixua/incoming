@@ -35,6 +35,9 @@
 #   tools/sandbox.sh jbr                   install JetBrains Runtime (shared by all trees, mod/run/jbr in the main tree):
 #                                          hot swap then accepts new fields, methods and lambdas; start selects it automatically
 #   tools/sandbox.sh stop | status          done with visuals: stop, then tools/gpu_lease.sh release
+#                                          A client with no command for INCOMING_SANDBOX_IDLE seconds (default 1800; 0: never)
+#                                          stops itself and says so in fx/stopped: a session that ended without `stop` (an
+#                                          agent's job on netcup) leaves no client burning CPU; the next command reports it
 #
 # INCOMING_SANDBOX_JAVA=<java>: custom sandbox JVM (JetBrains Runtime with -XX:+AllowEnhancedClassRedefinition).
 set -uo pipefail
@@ -57,16 +60,32 @@ source "$(dirname "$0")/gpu_lease.sh"
 export INCOMING_GPU_OWNER="${INCOMING_GPU_OWNER:-$(lease_owner "$ROOT")}"
 running() { [ -n "$(systemctl --user list-units "$UNIT-*" --state=active --no-legend --plain)" ]; }
 
+# Activity of the sandbox's job: every command (fx, swap) touches fx/active, also every 10 s while one runs; seconds
+# since the last one (or since the world became ready), nothing while the client is not ready yet
+mark_active() { mkdir -p "$FX" && touch "$FX/active"; }
+# why the client stopped by itself (idle limit, Artem's game), for a command that finds it gone
+stopped_note() { [ -s "$FX/stopped" ] && echo ": $(tail -n 1 "$FX/stopped")"; }
+idle_seconds() {
+  local f t last=0
+  for f in "$FX/ready" "$FX/active"; do
+    t=$(stat -c %Y "$f" 2>/dev/null) || continue
+    [ "$t" -gt "$last" ] && last=$t
+  done
+  [ -f "$FX/ready" ] && echo $(( $(date +%s) - last ))
+}
+
 # One /fx command: file in inbox, wait for its result (*.done); output is the result, code 1 is an error
 fx() {
   local id done res limit=${FX_LIMIT:-3600} t=0
+  mark_active
   id=$(date +%s%N)
   mkdir -p "$FX/inbox"
   printf '%s\n' "$1" > "$FX/inbox/$id.tmp" && mv "$FX/inbox/$id.tmp" "$FX/inbox/$id.cmd"
   done="$FX/inbox/$id.done"
   while [ ! -f "$done" ]; do
-    running || { echo "sandbox is not running (tools/sandbox.sh start)" >&2; return 1; }
+    running || { echo "sandbox is not running (tools/sandbox.sh start)$(stopped_note)" >&2; return 1; }
     sleep 0.1; t=$((t + 1))
+    [ $((t % 100)) = 0 ] && mark_active
     [ $t -gt $((limit * 10)) ] && { echo "no result after $limit s: $1" >&2; return 1; }
   done
   res=$(cat "$done"); rm -f "$done"
@@ -94,6 +113,7 @@ hotswap_n() { tail -n 1 "$FX/hotswap" 2>/dev/null | cut -d' ' -f1; }
 swap() {
   local stamp n0 classes res t0 done_ms w=0
   t0=$(date +%s.%N)
+  mark_active
   stamp=$(mktemp -p "$RUN" .swap.XXXX)
   n0=$(hotswap_n); n0=${n0:-0}
   (cd "$ROOT/mod" && INCOMING_SANDBOX=1 ./gradlew compileJava compileDevtestJava processResources processDevtestResources -q --console=plain) || { rm -f "$stamp"; return 2; }
@@ -242,7 +262,7 @@ start() {
   fi
   local t0; t0=$(date +%s.%N)
   mkdir -p "$RUN/logs" "$FX"
-  rm -f "$FX/ready" "$FX/stopped"
+  rm -f "$FX/ready" "$FX/stopped" "$FX/active"
   # renderer of this client for `shot` (a CPU take records sound separately); a vanilla client writes its own at launch
   rm -f "$FX/renderer"
   [ -n "${INCOMING_SANDBOX_VANILLA:-}" ] || echo gpu > "$FX/renderer"
@@ -308,11 +328,19 @@ run_client() {
   else
     "$ROOT/tools/nested_kwin.sh" wayland-incoming-sandbox "$1" "$2" "bash $ROOT/mod/build/rig/sandbox.sh" > "$RUN/logs/client.out" 2>&1 &
   fi
-  local pc=$!
+  local pc=$! idle limit=${INCOMING_SANDBOX_IDLE:-1800}
   # nested_kwin.sh (gpu_client_hold) renews the lease while the client is alive
   while kill -0 $pc 2>/dev/null; do
     if [ -z "${INCOMING_SANDBOX_VANILLA:-}" ] && artem_playing; then echo "$(date +%T) Artem's game started — stopping the sandbox" | tee "$FX/stopped"; kill -TERM $pc; wait $pc; exit 75; fi
-    sleep 5
+    # its job ended without `stop` (no command for the idle limit): the client goes, the unit ends with this script
+    idle=$(idle_seconds)
+    if [ "$limit" -gt 0 ] && [ -n "$idle" ] && [ "$idle" -ge "$limit" ]; then
+      echo "$(date +%T) no command for $((idle / 60)) min (INCOMING_SANDBOX_IDLE=$limit s): sandbox stopped" | tee "$FX/stopped"
+      stop_jvms $(jvms_under $pc)
+      kill -TERM $pc 2>/dev/null; wait $pc
+      return 0
+    fi
+    sleep "${INCOMING_SANDBOX_POLL:-5}"
   done
   wait $pc; local rc=$?
   # a shared GPU client stops when Artem's game starts (vanilla_display): say so like the exclusive one
@@ -334,12 +362,32 @@ jbr() {
   "$(jbr_java)" -XX:+AllowEnhancedClassRedefinition -version 2>&1 | head -1 && echo "installed: $(jbr_java)"
 }
 
+# java processes below process $1 (the client JVM is a grandchild of the display wrapper, rigs.md)
+jvms_under() {
+  local c
+  for c in $(ps -o pid= --ppid "$1" 2>/dev/null); do
+    [ "$(cat /proc/"$c"/comm 2>/dev/null)" = java ] && echo "$c"
+    jvms_under "$c"
+  done
+}
+
+# TERM the given JVMs alone first: their shutdown dumps the JFR ring (run.jfr); up to 30 s, a zombie counts as gone
+stop_jvms() {
+  [ $# -gt 0 ] || return 0
+  local p alive
+  kill -TERM "$@" 2>/dev/null
+  for _ in $(seq 300); do
+    alive=0; for p in "$@"; do [ -d /proc/"$p" ] && [ "$(awk '{print $3}' /proc/"$p"/stat 2>/dev/null)" != Z ] && alive=1; done
+    [ $alive = 0 ] && break; sleep 0.1
+  done
+}
+
 stop() {
   running || { echo "sandbox is not running"; return 0; }
   # the client JVM first, alone: its shutdown dumps the JFR ring (run.jfr); stopping the unit at once also takes KWin
   # and Xwayland, and the client dies with its display before the dump. JVMs anywhere in the unit's own cgroup subtree
   # only; a vanished unit (empty ControlGroup) signals nothing
-  local u cg p java=() alive
+  local u cg p java=()
   for u in $(systemctl --user list-units "$UNIT-*" --state=active --no-legend --plain | awk '{print $1}'); do
     cg=$(systemctl --user show "$u" -p ControlGroup --value)
     [[ $cg == */"$u" ]] && [ -d "/sys/fs/cgroup$cg" ] || continue
@@ -349,14 +397,7 @@ stop() {
       [ "$(cat /proc/"$p"/comm 2>/dev/null)" = java ] && { [ "$own" = "$cg" ] || [[ $own == "$cg"/* ]]; } && java+=("$p")
     done
   done
-  if [ ${#java[@]} -gt 0 ]; then
-    kill -TERM "${java[@]}" 2>/dev/null
-    # up to 30 s for the dump; a zombie (exited, unreaped) counts as gone
-    for _ in $(seq 300); do
-      alive=0; for p in "${java[@]}"; do [ -d /proc/"$p" ] && [ "$(awk '{print $3}' /proc/"$p"/stat 2>/dev/null)" != Z ] && alive=1; done
-      [ $alive = 0 ] && break; sleep 0.1
-    done
-  fi
+  stop_jvms "${java[@]}"
   systemctl --user stop "$UNIT-*"
   echo "sandbox stopped"
 }
@@ -446,7 +487,8 @@ case "$cmd" in
   restart) stop; sleep 2; start "$@" ;;
   stop) stop ;;
   jbr) jbr ;;
-  status) if running; then echo "running; ready in $(cat "$FX/ready" 2>/dev/null) s; hot swap: $(cat "$FX/hotswap" 2>/dev/null)"; else echo "not running"; fi; lease_status || true ;;
+  status) if running; then echo "running; ready in $(cat "$FX/ready" 2>/dev/null) s; last command $(idle_seconds) s ago; hot swap: $(cat "$FX/hotswap" 2>/dev/null)"
+          else echo "not running$(stopped_note)"; fi; lease_status || true ;;
   fx) for c in "$@"; do fx "$c" || exit 1; done ;;
   swap) swap ;;
   shot) [ $# -ge 2 ] || { echo "shot <name> '<effect>' [--at …] [--wav …] [--cam …]" >&2; exit 2; }; shot "$@" ;;

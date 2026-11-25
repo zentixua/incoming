@@ -69,8 +69,9 @@ with Iris.
 - `tools/sandbox.sh start [shaders] [dh] [gpu]`: vanilla (shared GPU slot or CPU, “Vanilla rendering”) unless `shaders`, `dh` or `gpu`; mod-only client (sable-companion alongside: not embedded in dev; `shaders`
   adds Sodium/Iris/host shaderpack from instance, `dh` Distant Horizons), flat world (`Sandbox`: bedrock, stone,
   dirt, grass, grass top y 64; noon, no weather/mobs; same world every launch), headless in nested KWin, as laptop
-  job (unit `incoming-job-sandbox-<tree_id>`); lives until `stop`; in GPU mode also until Artem's game starts
-  (`fx/stopped`; game running means immediate exit 75); other jobs cannot stop it. GPU mode, one GPU (`tools/gpu_lease.sh`): client (`nested_kwin.sh`, used by every client) acquires its
+  job (unit `incoming-job-sandbox-<tree_id>`); lives until `stop` or `INCOMING_SANDBOX_IDLE` seconds (1800; 0 never)
+  without a command (`fx`/`swap` mark `fx/active`); in GPU mode also until Artem's game starts
+  (`fx/stopped` says which; game running means immediate exit 75); other jobs cannot stop it. GPU mode, one GPU (`tools/gpu_lease.sh`): client (`nested_kwin.sh`, used by every client) acquires its
   session lease (owner from `wt-<S>…` tree) and GPU-client lock, holds/renews while alive; `start` requests them
   before building. Another session holds GPU: exit 75, line “GPU held by <owner> (<tree>), since <time>”; client
   already running (even own session's sandbox in another tree/look gate): exit 75, “client running on GPU …”;
@@ -245,6 +246,11 @@ times and the pall's budget are not frame costs: frame cost belongs to the GPU a
 - A host with little free memory (a server beside game servers): Gradle with `-PnoRecompile` (binary Minecraft:
   Vineflower's decompile needs ~4 GB and was OOM-killed under a 3.5 GB ceiling), mods from `tools/fetch_runtime_mods.py`
   (`-PmcModsDir=run/ci-mods`), no Gradle daemon, `INCOMING_SOFT_HEAP=1536m` (ceiling 3.5 GB); one client at a time.
+- A CPU client started on netcup is stopped by its job's end: `tools/sandbox.sh stop` when the work is done, and the
+  sandbox stops itself after its idle limit; `laptop_job.sh` stops its unit when its caller ends (TERM, Ctrl+C, HUP of
+  an `ssh -t` link, systemd-run killed). A plain `ssh vps cmd` that drops sends nothing: the job ends by its own
+  deadline. `tools/stray_clients.sh --host vps` lists clients that outlived their job (report only); a stray that is
+  not yours is reported to the lead, never killed.
 
 ## Pitfalls
 - Server may lag client ticks during world generation: client-scenario frames anchor to events, not a counter.
