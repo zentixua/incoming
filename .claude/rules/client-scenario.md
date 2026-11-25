@@ -250,7 +250,10 @@ times and the pall's budget are not frame costs: frame cost belongs to the GPU a
 - Server may lag client ticks during world generation: client-scenario frames anchor to events, not a counter.
 - Scenario frames compare across runs: with `incoming.scenario`, nuclear seed derives from ID (`NuclearWarhead`),
   wind from detonation game time (`Wind.at`), pall detail from setting without GPU budget (`PallPass.Detail.pin`:
-  llvmpipe budget would lower to LOW).
+  llvmpipe budget would lower to LOW). A frame-time run measures the game's cost only with the ladder on
+  (`-Dincoming.pall.adaptive=true`): pinned, a 1 Mt passage at 3 km held the pall at 30–59 ms a frame, a cost the game
+  steps down from within a second. While a detonation is live the scenario logs `SCENARIO nuke-layer` every half second
+  (layer GPU by pass, smoke fill, near dust); the `far` line exists only once distant blasts do.
 - `pall-front`: night post-front pall, camera 400 m from surface 15 kt, 120 m above ground (like host replay frame),
   frames relative to camera-front arrival. `INCOMING_EXPORT=2560x1440`: game frame larger than window, like Flashback
   video export; window reports output size (`Window.framebufferWidth/Height` fields via reflection; Flashback mixes

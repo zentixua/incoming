@@ -46,7 +46,7 @@ final class FrontDust implements SmokeGrid.Source {
      * presentation: patch grid discretizes the ring, rather than counting soil particles. Same step along and across the ring,
      * {@link #STEP} m, wider for a large charge — at most {@link #PATCHES} patches (for a salvo — {@link #share}); a
      * grown patch billow has σ = {@link #SPREAD} steps: neighbours overlap, no beads in the layer. Cost: {@code SmokePuffs}
-     * merges source billows pairwise every frame; the previous 24 × 64 grid (864 billows for Shahed, cross-ring step
+     * merges a source's billows every frame (pairwise below {@code SmokePuffs.INDEX_FROM} billows); the previous 24 × 64 grid (864 billows for Shahed, cross-ring step
      * 2.2 m versus 5.6 along) cost ~1 ms of frame time per blast, multiplied for a salvo.
      */
     static final double STEP = 5.6, SPREAD = 0.6;

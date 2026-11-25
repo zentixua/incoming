@@ -106,9 +106,9 @@ public final class SmokePuffs {
 
     /**
      * Puff count from which {@link #merge} finds candidates through a ground-plane cell index: the pairwise scan costs
-     * n² pair tests per pass, and a pass repeats after every absorb. Breach dust ({@code BlastDust}: up to 256 streaks of
-     * 12 billows, one source) as a 1 Mt wave crossed a city viewer took 85–265 ms a second of the render thread in
-     * {@code Draw.seal} (passage-city run, 25.11).
+     * n² pair tests per pass, and a pass repeats after every absorb. Scanned pairwise, breach dust ({@code BlastDust}: up
+     * to 256 streaks of 12 billows, one source) as a 1 Mt wave crosses a city viewer costs the render thread 85–265 ms a
+     * second in {@code Draw.seal} (Zearth Silo, viewer at 3 km, passage-city run 25.11).
      */
     static final int INDEX_FROM = 64;
 
