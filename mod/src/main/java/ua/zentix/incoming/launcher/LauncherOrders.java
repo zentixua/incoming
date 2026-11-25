@@ -9,12 +9,10 @@ import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.item.ItemStack;
-import net.minecraft.world.level.ChunkPos;
 import net.minecraft.world.phys.Vec3;
 import org.jetbrains.annotations.Nullable;
 import ua.zentix.incoming.Incoming;
 import ua.zentix.incoming.IncomingConfig;
-import ua.zentix.incoming.compat.SubLevels;
 import ua.zentix.incoming.strike.Authority;
 import ua.zentix.incoming.strike.LaunchOrigin;
 import ua.zentix.incoming.strike.Loadout;
@@ -90,8 +88,6 @@ public final class LauncherOrders {
         Mission m = be.mission();
         if (m == null) return Component.translatable("incoming.fixed_launcher.no_mission.short");
         BlockPos pos = be.getBlockPos();
-        // In Sable plot grid, block is not at its visible position: launch would leave from the distant plot.
-        if (SubLevels.inPlotGrid(level, new ChunkPos(pos))) return Component.translatable("incoming.fixed_launcher.on_craft");
         UUID owner = be.owner();
         if (owner != null) {
             MutableComponent rule = rules(level.getServer(), owner, m.weapon(), be.position(), m.point());

@@ -52,13 +52,18 @@ public final class LaunchPlaces {
      * search area); fixed launcher requires its chunk.
      */
     public static boolean ready(ServerLevel level, LaunchOrigin from) {
-        return from instanceof LaunchOrigin.Fixed f ? Terrain.ready(level, f.pos()) : Terrain.readyAround(level, from.at(), LaunchSite.PLACE_REACH);
+        return from instanceof LaunchOrigin.Fixed f ? Terrain.ready(level, f.pos()) : Terrain.readyAround(level, from.at(level), LaunchSite.PLACE_REACH);
     }
 
-    /** Acquire or renew salvo {@code key}'s {@code from} area. */
+    /**
+     * Acquire or renew salvo {@code key}'s {@code from} area. A launcher on a craft holds none: the craft moves, so an area
+     * at its place would trail it (each one 15×15 chunks), and its plot chunks are Sable's, never ticketed; the craft is
+     * in the loaded world where its crew is, and while it is not, the salvo waits for its launcher's chunk ({@link #ready}).
+     */
     public static void hold(ServerLevel level, LaunchOrigin from, UUID key) {
+        if (from instanceof LaunchOrigin.Fixed f && f.onCraft(level)) return;
         AreaLoader areas = StrikeWorld.get(level).areas();
-        AreaLoader.Area area = area(from, key);
+        AreaLoader.Area area = area(level, from, key);
         long until = level.getGameTime() + KEEP;
         if (areas.holds(area)) areas.renew(area, until);
         else areas.hold(level, area, until);
@@ -66,7 +71,7 @@ public final class LaunchPlaces {
 
     /** Whether salvo {@code key} holds its site area (tests). */
     public static boolean holds(ServerLevel level, LaunchOrigin from, UUID key) {
-        return StrikeWorld.get(level).areas().holds(area(from, key));
+        return StrikeWorld.get(level).areas().holds(area(level, from, key));
     }
 
     /**
@@ -75,7 +80,7 @@ public final class LaunchPlaces {
      */
     static final int DISTANCE = Mth.ceil(LaunchSite.PLACE_REACH / 16);
 
-    private static AreaLoader.Area area(LaunchOrigin from, UUID key) {
-        return new AreaLoader.Area(TYPE, new ChunkPos(BlockPos.containing(from.at())), DISTANCE, key);
+    private static AreaLoader.Area area(ServerLevel level, LaunchOrigin from, UUID key) {
+        return new AreaLoader.Area(TYPE, new ChunkPos(BlockPos.containing(from.at(level))), DISTANCE, key);
     }
 }

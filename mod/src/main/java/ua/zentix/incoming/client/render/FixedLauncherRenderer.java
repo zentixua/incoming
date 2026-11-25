@@ -26,7 +26,7 @@ public class FixedLauncherRenderer implements BlockEntityRenderer<FixedLauncherB
         int light = LevelRenderer.getLightColor(level, be.getBlockPos().above());
         pose.pushPose();
         pose.translate(0.5, 0, 0.5);
-        pose.mulPose(new Quaternionf().rotationY(-be.yaw() * Mth.DEG_TO_RAD));
+        pose.mulPose(new Quaternionf().rotationY(-be.rackYaw() * Mth.DEG_TO_RAD));
         LaunchModels.PAD.render(pose, buffers, light);
         if (be.hasRack()) LauncherRenderer.renderRack(be, level.getGameTime(), partialTick, pose, buffers, light);
         pose.popPose();

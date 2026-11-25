@@ -3,8 +3,10 @@ package ua.zentix.incoming.strike;
 import net.minecraft.core.BlockPos;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.server.level.ServerLevel;
+import net.minecraft.world.level.Level;
 import net.minecraft.world.phys.Vec3;
 import org.jetbrains.annotations.Nullable;
+import ua.zentix.incoming.compat.SubLevels;
 import ua.zentix.incoming.launcher.FixedLauncherBlockEntity;
 import ua.zentix.incoming.util.Nbt;
 import ua.zentix.incoming.util.Terrain;
@@ -16,11 +18,16 @@ import ua.zentix.incoming.util.Terrain;
  * ({@link ServerActions#routeProblem}) and approach heading; salvo stores it ({@link SalvoData}).
  */
 public sealed interface LaunchOrigin {
-    /** Launch point (horizontal; launch resolves height). */
-    Vec3 at();
+    /** Launch point in the world now (horizontal; launch resolves height). */
+    Vec3 at(Level level);
 
     /** Ordered launch site. */
-    record Place(Vec3 at) implements LaunchOrigin {}
+    record Place(Vec3 at) implements LaunchOrigin {
+        @Override
+        public Vec3 at(Level level) {
+            return at;
+        }
+    }
 
     /** Fixed launcher at {@code pos} ({@link FixedLauncherBlockEntity}). */
     record Fixed(BlockPos pos) implements LaunchOrigin {
@@ -28,9 +35,18 @@ public sealed interface LaunchOrigin {
             pos = pos.immutable();
         }
 
+        /**
+         * The launcher's bottom center in the world: on a craft (its block in the craft's plot) where the craft carries it
+         * now; the plot point itself while that craft is not loaded ({@link #onCraft}).
+         */
         @Override
-        public Vec3 at() {
-            return Vec3.atBottomCenterOf(pos);
+        public Vec3 at(Level level) {
+            return SubLevels.toWorld(level, Vec3.atBottomCenterOf(pos));
+        }
+
+        /** The launcher's block is in Sable's plot grid: it stands on a craft, whose chunks are Sable's, never ticketed. */
+        public boolean onCraft(Level level) {
+            return SubLevels.inPlotGrid(level, new net.minecraft.world.level.ChunkPos(pos));
         }
 
         /** Launcher at site; null if its chunk is unready (do not load for launch) or block is gone. */

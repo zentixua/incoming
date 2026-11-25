@@ -37,4 +37,12 @@ public enum LauncherMount {
         double[] at = rack.slotOffset(slot);
         return Local.at(pivot(pos, yaw), yaw, -rack.elevation(), at[0], at[1], at[2]);
     }
+
+    /** Every cell's rail of a fully raised {@code weapon} rack at launcher {@code pos} with heading {@code yaw}. */
+    public Rails rails(Vec3 pos, float yaw, WeaponType weapon) {
+        LauncherRack rack = LauncherRack.of(weapon);
+        java.util.List<Vec3> points = new java.util.ArrayList<>(rack.slots());
+        for (int slot = 0; slot < rack.slots(); slot++) points.add(railPoint(pos, yaw, weapon, slot));
+        return new Rails(points, yaw, rack.elevation());
+    }
 }

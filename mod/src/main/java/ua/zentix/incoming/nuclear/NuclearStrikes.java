@@ -115,7 +115,7 @@ public final class NuclearStrikes {
     public static boolean launchAt(ServerLevel level, Vec3 target, boolean surface, double yieldKt, boolean airBurst,
                                    ua.zentix.incoming.strike.LaunchOrigin from, @Nullable UUID owner, int flightTicks, @Nullable RoundRef round) {
         if (!IncomingConfig.SERVER.nukeEnabled.get()) return false;
-        int x = Mth.floor(from.at().x), z = Mth.floor(from.at().z);
+        int x = Mth.floor(from.at(level).x), z = Mth.floor(from.at(level).z);
         Terrain.Surface ground = Terrain.estimate(level, Heightmap.Types.MOTION_BLOCKING_NO_LEAVES, x, z, Terrain.Allowed.ORDER);
         Vec3 pad = new Vec3(x + 0.5, ground.y(), z + 0.5);
         IcbmEntity icbm = ModEntities.ICBM.get().create(level);

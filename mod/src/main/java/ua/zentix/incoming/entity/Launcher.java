@@ -15,13 +15,18 @@ public interface Launcher {
 
     WeaponType weapon();
 
-    /** Launcher position: trailer ground center, or center of the block's bottom. */
+    /** Launcher position in the world: trailer ground center, or center of the block's bottom (moved with its craft). */
     Vec3 position();
 
-    /** Rack heading, °. */
+    /** Rack heading in the world, °. */
     float yaw();
 
     LauncherMount mount();
+
+    /** A moving frame carries the launcher (a fixed launcher on a craft): its rails move with it. */
+    default boolean carried() {
+        return false;
+    }
 
     /** Tick when the rack started raising to elevation: placed or turned. */
     long deployedAt();
@@ -44,9 +49,22 @@ public interface Launcher {
         return rack().elevation();
     }
 
+    /**
+     * The rack's rails in the world, turned to world heading {@code yaw}: on its mount at {@link #position()}. A launcher
+     * on a moving frame (a craft) places them by that frame's pose.
+     */
+    default Rails rails(float yaw) {
+        return mount().rails(position(), yaw, weapon());
+    }
+
+    /** The rack's rails in the world at its current heading. */
+    default Rails rails() {
+        return rails(yaw());
+    }
+
     /** Projectile center on {@code slot}'s rail with rack fully raised. */
     default Vec3 railPoint(int slot) {
-        return mount().railPoint(position(), yaw(), weapon(), slot);
+        return rails().point(slot);
     }
 
     /** Ticks until rack finishes raising (0 means raised). */
