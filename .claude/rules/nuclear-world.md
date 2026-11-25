@@ -161,8 +161,10 @@ paths:
   an entire square for one non-whole ring chunk would lose its chunks' disk plans; GameTest `zoneLoadsEveryChunkWithPlan`),
   at most 6 squares at once (a square already fully in memory uses no slot and is held only if its chunks have ready
   plans: the detonation area is released on the detonation tick, otherwise such a chunk leaves memory before the wave
-  and loses its plan); the queue builds their ruins in background; release a square when its chunks' ruins are applied
-  or the remainder wait only for neighbors — each then takes its own neighbor ticket (`ScarQueue.holdForTile`;
+  and loses its plan); the queue builds their ruins in background; a chunk the queue refuses for a detonation (its
+  `CHUNK_SCAR` not below the detonation's number: a newer wave ruined it first) drops that detonation's prepared plan,
+  or the plan holds its square to the end of the hold (GameTest `refusedChunkDropsItsPreparedPlan`); release a square
+  when its chunks' ruins are applied or the remainder wait only for neighbors — each then takes its own neighbor ticket (`ScarQueue.holdForTile`;
   otherwise a chunk under another ticket takes none of its own, nobody loads its neighbors in an unloaded square,
   and zone slots stall for thousands of ticks; `-Dincoming.nukeDiag=true` logs “DIAG”) (line “zone behind the wave —
   X of Y chunks done”); preparation and ruin queue live only in memory (non-persistent `NuclearWorld`): a server restart
