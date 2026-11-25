@@ -150,6 +150,14 @@ into that area's `.claude/rules` or this skill by PR in the same thread; status 
   threads per period, so with the client's dozens of busy threads its render-thread sample count is a small, uneven
   fraction of wall time: use it for shares inside the thread, never for milliseconds. Per-frame cost comes from a
   render-thread sampler and frame log in the scenario client (the `incoming.hitch` probe).
+- The probe's per-frame GPU ms (GL timestamps) counts the GPU's idle gaps while the render thread waits for a core:
+  at a 1 Mt city front frames showed 57–61 ms "GPU" at 8–46 % `nvidia-smi` utilisation, CPU-bound. Read GPU utilisation
+  and `hitch-sched` run-queue wait before calling frames GPU-bound.
+- A JIT burst at an event is mostly recompiles, not warm-up: split C2 compile time in the window by each method's
+  history in the compile recording (first compile; recompile after a recorded `jdk.Deoptimization`; recompile without
+  one: cold code flushed after `CodeCache GC Threshold` collections, or a dependency invalidation, `-Xlog:codecache*,
+  dependencies`). At a 1 Mt city front 70–78 % of 20–27 CPU-s of C2 in 4 s were recompiles. Our own long methods compile
+  to units 50× their bytecode (`javap -c` sizes): a 2,550-byte one recompiled at 100–135 kB each time.
 - `MinecraftServer.getTickTimesNanos` misses work done in `ServerTickEvent.Post`: take tick cost from spark
   tickmonitor or tick-start intervals. GC-log "Reaching safepoint" lines inside ZGC concurrent phases are not game
   stops: game threads keep running.
