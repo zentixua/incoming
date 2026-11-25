@@ -18,7 +18,8 @@ Incoming (https://github.com/zentixua/incoming): strikes by Shahed and Lancet dr
   airburst at its yield-dependent height. Burst mode is not stored in incoming-server.toml.
 - Fixed launcher (block incoming:fixed_launcher): «incoming launcher x y z [mission <weapon> <count> <spread> x z
   [via …] | load N | fire | clear | owner <player>|none]»; the mission target is x z or x y z, as in salvo. A redstone
-  signal at the block does the same as fire.
+  signal at the block does the same as fire. A launcher on a Create Aeronautics craft is named by the position where
+  the craft carries it now (it also fires from the craft).
 - Strikes load their own areas: there is no need to load the place in advance.
 - Routes at the default GAME scale: drone (shahed) flies 45 blocks above the launch site and the target, loiter (lancet) circles 45 blocks above
   the target, missile flies 12 blocks above the terrain; all three follow via. bunker is a bomb from a B-2: it also follows via, then lines up a straight bomb run.

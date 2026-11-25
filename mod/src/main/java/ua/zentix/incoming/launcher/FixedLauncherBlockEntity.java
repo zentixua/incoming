@@ -243,7 +243,7 @@ public class FixedLauncherBlockEntity extends BlockEntity implements Launcher {
      * grid whose craft is not loaded has no world place, and its plot coordinates are a distant corner of the world.
      */
     public boolean located() {
-        return level == null || craft() != null || !SubLevels.inPlotGrid(level, new net.minecraft.world.level.ChunkPos(worldPosition));
+        return level == null || SubLevels.located(level, worldPosition);
     }
 
     /** A craft carries this launcher now: its rails move with the craft ({@code StrikeProjectile.rideRail}). */
@@ -278,14 +278,29 @@ public class FixedLauncherBlockEntity extends BlockEntity implements Launcher {
         return yaw;
     }
 
+    /**
+     * The rails as the rack stands: built from the turntable's own heading in its frame, the rack the renderer draws (a
+     * world heading's round trip through a pitched or rolled craft's pose is not exact).
+     */
+    @Override
+    public Rails rails() {
+        SubLevels.Frame craft = craft();
+        return craft == null ? mount().rails(position(), yaw, weapon()) : inWorld(craft, yaw);
+    }
+
     @Override
     public Rails rails(float yaw) {
         SubLevels.Frame craft = craft();
         if (craft == null) return mount().rails(position(), yaw, weapon());
-        Rails own = mount().rails(Vec3.atBottomCenterOf(worldPosition), ownYaw(craft, yaw), weapon());
-        java.util.List<Vec3> points = new java.util.ArrayList<>(own.slots());
-        for (Vec3 p : own.points()) points.add(craft.toWorld(p));
-        float[] axis = FlightController.anglesTo(Vec3.ZERO, craft.toWorldDirection(own.direction()));
+        return inWorld(craft, ownYaw(craft, yaw));
+    }
+
+    /** The rack's rails at turntable heading {@code own} in its frame, placed in the world by {@code craft}'s pose. */
+    private Rails inWorld(SubLevels.Frame craft, float own) {
+        Rails rack = mount().rails(Vec3.atBottomCenterOf(worldPosition), own, weapon());
+        java.util.List<Vec3> points = new java.util.ArrayList<>(rack.slots());
+        for (Vec3 p : rack.points()) points.add(craft.toWorld(p));
+        float[] axis = FlightController.anglesTo(Vec3.ZERO, craft.toWorldDirection(rack.direction()));
         return new Rails(points, axis[0], -axis[1]);
     }
 

@@ -24,6 +24,8 @@ import org.joml.Vector3dc;
 import ua.zentix.incoming.Incoming;
 import ua.zentix.incoming.compat.SubLevels;
 import ua.zentix.incoming.entity.FlightPhase;
+import ua.zentix.incoming.entity.LauncherMount;
+import ua.zentix.incoming.entity.flight.ProximityFuse;
 import ua.zentix.incoming.entity.Rails;
 import ua.zentix.incoming.entity.StrikeProjectile;
 import ua.zentix.incoming.guidance.FlightController;
@@ -207,6 +209,97 @@ public final class CraftLauncherGameTests {
     }
 
     /**
+     * On a pitched craft (25° about X) the rails a round is placed on are the rack the renderer draws: the turntable's own
+     * heading on its mount in the plot, mapped by the craft's pose (review 1, finding 2: through a world heading and back
+     * they were 0.18 blocks and 5.4° off).
+     */
+    @GameTest(template = "runway", timeoutTicks = 300, batch = "craft_launcher_tilt", skyAccess = true)
+    public static void tiltedRailsAreTheDrawnRack(GameTestHelper h) {
+        if (!sable()) {
+            h.succeed();
+            return;
+        }
+        ServerLevel level = h.getLevel();
+        FixedLauncherBlockEntity ground = deck(h, null);
+        shahedMission(h, ground);
+        ground.setYaw(45);
+        FixedLauncherBlockEntity[] be = new FixedLauncherBlockEntity[1];
+        Hold hold = new Hold(h);
+        SubLevelAccess[] craft = hold.craft;
+        h.startSequence()
+                .thenExecute(() -> assemble(h, 0))
+                .thenWaitUntil(() -> be[0] = carried(h, craft))
+                .thenExecute(() -> {
+                    hold.turn = new Quaterniond().rotateX(Math.toRadians(25));
+                    hold.start(3);
+                })
+                .thenWaitUntil(hold.reached(h))
+                .thenExecute(() -> {
+                    SubLevels.Frame frame = SubLevels.carrying(level, be[0].getBlockPos());
+                    h.assertTrue(frame != null, "no craft frame");
+                    Rails own = LauncherMount.PAD.rails(Vec3.atBottomCenterOf(be[0].getBlockPos()), be[0].rackYaw(), be[0].weapon());
+                    Rails placed = be[0].rails();
+                    double worst = 0;
+                    for (int i = 0; i < own.slots(); i++) worst = Math.max(worst, frame.toWorld(own.point(i)).distanceTo(placed.point(i)));
+                    double angle = Math.toDegrees(Math.acos(Mth.clamp(frame.toWorldDirection(own.direction()).dot(placed.direction()), -1, 1)));
+                    // the axis goes through float headings and Minecraft's table sine: a few tenths of a degree of rounding
+                    h.assertTrue(worst < 0.01 && angle < 0.5, "rails off the drawn rack by " + worst + " blocks, axis by " + angle + "°");
+                })
+                .thenSucceed();
+    }
+
+    /**
+     * The fuze arms {@link ProximityFuse#ARM_DISTANCE} from where the round left its rail, and its launch gate (the route's
+     * first point) stands that far ahead of there along the rail: the craft carrying the round meanwhile is no flight.
+     * A Shahed rides a turned rack while it raises again (about 50 ticks) on a craft moving 2 blocks/tick: about 100 blocks
+     * (review 1, finding 1: it left armed on its own rail, the gate 96 blocks behind).
+     */
+    @GameTest(template = "runway", timeoutTicks = 400, batch = "craft_launcher_arm", skyAccess = true)
+    public static void armingCountsFromRelease(GameTestHelper h) {
+        if (!sable()) {
+            h.succeed();
+            return;
+        }
+        ServerLevel level = h.getLevel();
+        FixedLauncherBlockEntity ground = deck(h, null);
+        shahedMission(h, ground);
+        // facing away from the target: the order turns the rack, which then raises again before ignition
+        ground.setYaw(180);
+        FixedLauncherBlockEntity[] be = new FixedLauncherBlockEntity[1];
+        Hold hold = new Hold(h);
+        SubLevelAccess[] craft = hold.craft;
+        StrikeProjectile[] shahed = new StrikeProjectile[1];
+        Vec3[] placed = new Vec3[1];
+        h.onEachTick(() -> {
+            if (shahed[0] != null && shahed[0].flightPhase().onLauncher()) hold.at = hold.at.add(0, 0, 2);
+        });
+        h.startSequence()
+                .thenExecute(() -> assemble(h, 0))
+                .thenWaitUntil(() -> be[0] = carried(h, craft))
+                .thenExecute(hold::start)
+                .thenWaitUntil(hold.reached(h))
+                .thenExecute(() -> {
+                    fired(h, level, be[0], "signal on a craft");
+                    shahed[0] = only(level, be[0]);
+                    placed[0] = shahed[0].position();
+                })
+                .thenWaitUntil(() -> h.assertTrue(shahed[0].flightPhase() == FlightPhase.BOOST, "Shahed still on the rail: " + shahed[0].flightPhase()))
+                .thenExecute(() -> {
+                    StrikeProjectile p = shahed[0];
+                    Vec3 origin = p.launchOrigin(), at = p.position();
+                    h.assertTrue(at.distanceTo(placed[0]) > ProximityFuse.ARM_DISTANCE, "the craft carried the Shahed only " + at.distanceTo(placed[0]));
+                    h.assertTrue(origin != null && origin.distanceTo(at) < 1, "arming counts from " + origin + ", the Shahed left its rail at " + at);
+                    Vec3 gate = p.route() == null ? null : p.route().current();
+                    h.assertTrue(gate != null, "no launch gate");
+                    double ahead = Math.hypot(gate.x - at.x, gate.z - at.z);
+                    float bearing = FlightController.anglesTo(at, new Vec3(gate.x, at.y, gate.z))[0];
+                    h.assertTrue(Math.abs(ahead - ProximityFuse.ARM_DISTANCE) < 1.5 && Math.abs(Mth.wrapDegrees(bearing - p.getYRot())) < 1,
+                            "gate " + ahead + " blocks ahead at " + bearing + "°, the Shahed heads " + p.getYRot() + "°");
+                })
+                .thenSucceed();
+    }
+
+    /**
      * The craft's own hull in front of its rack blocks the launch sector: a 4-block plank wall around the launcher on the
      * deck refuses a Shahed with "sector blocked" (stock kept, nothing launched); with the wall removed from the craft the
      * same signal launches.
@@ -344,10 +437,13 @@ public final class CraftLauncherGameTests {
         @Nullable
         Vec3 at;
         float yaw;
+        /** Full turn instead of {@link #yaw} (a pitched or rolled craft); null: {@link #yaw} about the vertical. */
+        @Nullable
+        Quaterniond turn;
 
         Hold(GameTestHelper h) {
             h.onEachTick(() -> {
-                if (at != null) teleport(h, craft[0], at, yaw);
+                if (at != null) teleport(h, craft[0], at, turn != null ? turn : new Quaterniond().rotateY(Math.toRadians(yaw)));
             });
         }
 
@@ -372,12 +468,12 @@ public final class CraftLauncherGameTests {
         }
     }
 
-    /** Put {@code craft} at {@code at}, turned to {@code yaw} about the vertical, at rest (Sable's physics pipeline). */
-    private static void teleport(GameTestHelper h, SubLevelAccess craft, Vec3 at, float yaw) {
+    /** Put {@code craft} at {@code at}, turned by {@code turn}, at rest (Sable's physics pipeline). */
+    private static void teleport(GameTestHelper h, SubLevelAccess craft, Vec3 at, Quaterniond turn) {
         ServerSubLevel sub = (ServerSubLevel) craft;
         PhysicsPipeline pipeline = SubLevelContainer.getContainer(h.getLevel()).physicsSystem().getPipeline();
         pipeline.resetVelocity(sub);
-        pipeline.teleport(sub, new Vector3d(at.x, at.y, at.z), new Quaterniond().rotateY(Math.toRadians(yaw)));
+        pipeline.teleport(sub, new Vector3d(at.x, at.y, at.z), new Quaterniond(turn));
     }
 
     private static void command(ServerLevel level, String command, boolean quiet) {

@@ -68,7 +68,8 @@ public final class LauncherOrders {
         Mission m = java.util.Objects.requireNonNull(be.mission());
         BlockPos pos = be.getBlockPos();
         Loadout l = loadout(m);
-        String who = "launcher " + pos.toShortString();
+        // on a craft the block's own position is in a distant plot: the log also names where the craft carries it
+        String who = "launcher " + pos.toShortString() + (be.carried() ? " on a craft at " + BlockPos.containing(be.position()).toShortString() : "");
         Component before = be.lastReport();
         boolean ok = ServerActions.fromLauncher(level, who, be.owner(), l, new ServerActions.Aim(m.target(), m.point(), null), m.via(),
                 new LaunchOrigin.Fixed(pos), be::report, made);
@@ -79,7 +80,7 @@ public final class LauncherOrders {
 
     /**
      * Why a signal now would not issue the mission order, without issuing it: the checks {@link #fire} runs before the
-     * launch, in the same order (no mission, on a craft, the owner's rules, busy, route, stock). Null means a signal would
+     * launch, in the same order (no mission, on a craft that is not loaded, the owner's rules, busy, route, stock). Null means a signal would
      * order it; the launch itself can still fail (blocked sector), as it reports then. Reads only the launcher, its ready
      * chunk and the owner's cached rights: an overlay or a computer may ask it often.
      */

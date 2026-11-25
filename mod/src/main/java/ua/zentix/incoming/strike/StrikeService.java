@@ -438,7 +438,7 @@ public final class StrikeService {
         if (p == null) return null;
         Slot slot = Slot.reserve(level, launcher);
         p.placeOnLauncher(slot.rail(), slot.yaw(), slot.elevation(), slot.ready(), slot.hidden(), target, point, owner);
-        slot.ride(p);
+        slot.ride(p, true);
         // First waypoint on launcher heading at arming distance: follow the checked sector straight
         // until there, then turn onto route armed; salvo projectile enters its lane after gate.
         Vec3 gate = gate(slot.rail(), slot.yaw());
@@ -475,7 +475,7 @@ public final class StrikeService {
         if (pick == null) return sectorClosed(be);
         be.turnTo(pick.yaw(), now);
         // Clear heading within small correction threshold: rack stayed at old heading, sector checked above.
-        if (be.yaw() != pick.yaw() && !LaunchSite.clearAhead(level, be, point, budget)) return sectorClosed(be);
+        if (Math.abs(Mth.wrapDegrees(be.yaw() - pick.yaw())) > 1e-3f && !LaunchSite.clearAhead(level, be, point, budget)) return sectorClosed(be);
         return Math.max(0, pick.preferred());
     }
 
@@ -530,8 +530,8 @@ public final class StrikeService {
          * Projectile {@code p} just placed on this cell: on a launcher a craft carries, it rides the rail until it leaves
          * ({@link StrikeProjectile#rideRail}); a ground rack stands still, so the placement holds.
          */
-        void ride(StrikeProjectile p) {
-            if (launcher instanceof FixedLauncherBlockEntity be && be.carried()) p.rideRail(be.getBlockPos(), cell);
+        void ride(StrikeProjectile p, boolean gated) {
+            if (launcher instanceof FixedLauncherBlockEntity be && be.carried()) p.rideRail(be.getBlockPos(), cell, gated);
         }
     }
 
@@ -616,7 +616,7 @@ public final class StrikeService {
             Slot slot = Slot.reserve(level, launcher);
             r.placeInTube(slot.rail(), slot.yaw(), slot.elevation(), slot.ready(), slot.hidden(), target,
                     point, owner);
-            slot.ride(r);
+            slot.ride(r, false);
             r.fireData(level.random);
             return r;
         }
@@ -644,8 +644,11 @@ public final class StrikeService {
         if (launcher != null) {
             Slot slot = Slot.reserve(level, launcher);
             e.placeOnLauncher(slot.rail(), slot.yaw(), slot.elevation(), slot.ready(), slot.hidden(), target, point, owner);
-            slot.ride(e);
-            e.setRoute(loiterRoute(via, slot.rail(), point, lane, gate(slot.rail(), slot.yaw())));
+            Vec3 gate = gate(slot.rail(), slot.yaw());
+            Route route = loiterRoute(via, slot.rail(), point, lane, gate);
+            e.setRoute(route);
+            Vec3 first = route == null ? null : route.current();
+            slot.ride(e, first != null && first.x == gate.x && first.z == gate.z);
             return e;
         }
         if (stand.fixed() != null) return null;

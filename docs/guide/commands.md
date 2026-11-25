@@ -130,7 +130,8 @@ Their whole districts recover over 10 seconds; restoration is not clipped to the
 
 ## Fixed launcher
 
-Operators only. The launcher has to be in a loaded chunk.
+Operators only. The launcher has to be in a loaded chunk. A launcher on an aircraft is named by the position where you
+see it now.
 
 | Command | What it does |
 |---|---|

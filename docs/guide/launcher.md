@@ -46,9 +46,11 @@ mission like a signal, but cannot change the mission ([For server owners and pac
 
 A launcher built into a Create Aeronautics aircraft fires from it, in flight too. Its rack turns on the deck, and the
 rounds wait on the rails moving and turning with the aircraft, then leave from where the rack is at that moment, along
-its rails. A Shahed, Lancet or cruise missile also keeps the aircraft's speed along its rails. The aircraft's own hull
-and masts in front of the rack block the launch as buildings do. Link and fire it as on the ground; a salvo waits while
-the aircraft is out of loaded chunks.
+its rails. A Shahed, Lancet or cruise missile also keeps the aircraft's speed along its rails; a Grad rocket aims
+itself at the target as it leaves the tube. The aircraft's own hull and masts in front of the rack block the launch as
+buildings do. The launch sector is checked when the order is given: a turn of the aircraft while the rounds wait can
+point them at a slope or a building. Link and fire it as on the ground; a salvo waits while the aircraft is out of
+loaded chunks.
 
 On other moving Create contraptions (bearings, pistons, carts) the launcher does not fire while it moves.
 

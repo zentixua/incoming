@@ -101,6 +101,14 @@ public final class SubLevels {
     /** Sable's rigid-body velocities are per second (Rapier); the mod's speeds are per tick. */
     public static final double VELOCITY_PER_TICK = 1.0 / 20;
 
+    /**
+     * Block {@code pos} has a place in the world now: off the plot grid, or in the plot of a loaded craft. A plot block
+     * whose craft is not loaded has none: its coordinates are a distant corner of the world.
+     */
+    public static boolean located(Level level, net.minecraft.core.BlockPos pos) {
+        return !inPlotGrid(level, new net.minecraft.world.level.ChunkPos(pos)) || carrying(level, pos) != null;
+    }
+
     /** The frame of the craft carrying block {@code pos} (its plot chunk); null on the ground or while that craft is not loaded. */
     @Nullable
     public static Frame carrying(Level level, net.minecraft.core.BlockPos pos) {
@@ -152,6 +160,16 @@ public final class SubLevels {
                 }
             }
         };
+    }
+
+    /** Plot blocks that craft carry at world point {@code at} now (one per craft whose bounds hold it), nearest craft first. */
+    public static List<net.minecraft.core.BlockPos> plotBlocksAt(Level level, Vec3 at) {
+        List<net.minecraft.core.BlockPos> out = new ArrayList<>();
+        for (SubLevelAccess s : near(level, at, 0.5)) {
+            net.minecraft.core.BlockPos b = net.minecraft.core.BlockPos.containing(toPlot(s, at));
+            if (inPlotGrid(level, new net.minecraft.world.level.ChunkPos(b))) out.add(b);
+        }
+        return out;
     }
 
     /** Craft center in the world. */

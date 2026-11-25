@@ -191,6 +191,7 @@ public class RocketEntity extends StrikeProjectile {
         if (ph == FlightPhase.IGNITION) {
             speed = 0;
             if (phaseAge() >= ROCKET.ignitionTicks()) {
+                leaveRail();
                 solve(position(), impactAt);
                 setPhase(FlightPhase.BOOST);
             }
