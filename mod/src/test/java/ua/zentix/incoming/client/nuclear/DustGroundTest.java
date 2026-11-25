@@ -71,7 +71,8 @@ class DustGroundTest {
     void theShaderBlendsAsTheJavaCopy() throws IOException {
         String s = Files.readString(Path.of("src/main/resources/assets/incoming/shaders/include/dustwall.glsl"));
         assertTrue(s.contains("DW_GROUND_SIDE - 1.0 - u.y)) / 8.0"), "edge fade over 8 cells (DustGround.edge)");
-        assertTrue(s.contains("h = mix(h, c.x, c.y);\n    return mix(h, f.x, f.y);"), "map, then coarse, then fine (DustGround.floor)");
+        assertTrue(s.contains("mix(dwFloorMap(xz), c.x, c.y)") && s.contains("mix(dwFloorCoarse(xz), f.x, f.y)"),
+                "map, then coarse, then fine (DustGround.floor)");
         assertEquals(1f, DustGround.edge(8, 64));
         assertEquals(0.5f, DustGround.edge(4, 64));
     }

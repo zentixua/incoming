@@ -125,19 +125,23 @@ vec2 dwTerrainTile(vec4 T, float k, vec2 xz) {
 // the terrain under ground point xz (from ground zero's ground point), blocks above that ground: the eye's fine tile where it
 // knows the ground, else its coarse tile, else the source's own map (its edge beyond it), each level fading into the next by its
 // known share (DustGround.floor: the same blend)
+// (program size: every inlined copy of the floor costs AMD's compiler code (+11 KB with a copy in every light path): the full
+// floor is read once per march sample by dwSourceDensity's caller; its density, light and light paths take it (gDwFloorAt)
+// the source's own map alone (the relief search past the drawn chunks: its 65-step loop takes one fetch a step)
+float dwFloorMap(vec2 xz) {
+    if (DwGround.x <= 0.0) return 0.0;
+    vec2 uv = clamp(xz / (2.0 * DwGround.x) + 0.5, 0.5 / DW_GROUND_SIDE, 1.0 - 0.5 / DW_GROUND_SIDE);
+    vec2 size = vec2(textureSize(Sampler3, 0));
+    vec2 at = (vec2(float(gDwSlot) * DW_GROUND_SIDE, 0.0) + uv * DW_GROUND_SIDE) / size;
+    return textureLod(Sampler3, at, 0.0).r;
+}
+float dwFloorCoarse(vec2 xz) {
+    vec2 c = dwTerrainTile(DwTerrain1, 1.0, xz);
+    return c.y >= 0.999 ? c.x : mix(dwFloorMap(xz), c.x, c.y);
+}
 float dwFloor(vec2 xz) {
     vec2 f = dwTerrainTile(DwTerrain0, 0.0, xz);
-    if (f.y >= 0.999) return f.x;
-    vec2 c = dwTerrainTile(DwTerrain1, 1.0, xz);
-    float h = 0.0;
-    if (c.y < 0.999 && DwGround.x > 0.0) {
-        vec2 uv = clamp(xz / (2.0 * DwGround.x) + 0.5, 0.5 / DW_GROUND_SIDE, 1.0 - 0.5 / DW_GROUND_SIDE);
-        vec2 size = vec2(textureSize(Sampler3, 0));
-        vec2 at = (vec2(float(gDwSlot) * DW_GROUND_SIDE, 0.0) + uv * DW_GROUND_SIDE) / size;
-        h = textureLod(Sampler3, at, 0.0).r;
-    }
-    h = mix(h, c.x, c.y);
-    return mix(h, f.x, f.y);
+    return f.y >= 0.999 ? f.x : mix(dwFloorCoarse(xz), f.x, f.y);
 }
 // the share of open air at q (from ground zero's ground point): Minecraft's sky light / 15 inside the outdoor-air window
 // around the eye (rooms, caves, adits; fx/layer/OpenAir); beyond it the dust is outdoors (the pall's test there compares with
@@ -184,14 +188,14 @@ float dwRayFloor(vec3 dir, float from, float jitter) {
     // the pall's law (pallFloor): where the map at the start stands over the ray (the ray passed over the real ground of the
     // drawn chunks), it drops under the ray there and is as it was four map cells farther; without it every ray past the drawn
     // chunks under a map standing over the eye ended at their edge with no dust (step 7: 100 % of them in a valley)
-    float fade = 4.0 * DwGround.w, d0 = q0.y - dwFloor(q0.xz);
+    float fade = 4.0 * DwGround.w, d0 = q0.y - dwFloorMap(q0.xz);
     float lift = max(1.0 - d0, 0.0) * step(ta, near + 1.0);
     float prevT = ta, prevD = d0 + lift;
     float t = ta * pow(ratio, jitter);
     for (int i = 0; i <= 64; i++) {
         float tt = min(t, tb);
         vec3 q = DwEye.xyz + dir * tt;
-        float d = q.y - dwFloor(q.xz) + lift * max(1.0 - (tt - ta) / fade, 0.0);
+        float d = q.y - dwFloorMap(q.xz) + lift * max(1.0 - (tt - ta) / fade, 0.0);
         if (d <= 0.0) return prevT + (tt - prevT) * max(prevD, 0.0) / max(prevD - d, 1e-6);
         prevT = tt;
         prevD = d;
@@ -209,6 +213,12 @@ void dwLoad(int k) {
 float gDwTuft = 0.0, gDwTuftD = 0.0;
 // the ground, open air and material from the harness's stubs (dwFloorEye, dwOpenEye, dwSoilAt from eye-relative points)
 float dwFloor(vec2 xz) {
+    return dwFloorEye(xz - DwEye.xz);
+}
+float dwFloorCoarse(vec2 xz) {
+    return dwFloorEye(xz - DwEye.xz);
+}
+float dwFloorMap(vec2 xz) {
     return dwFloorEye(xz - DwEye.xz);
 }
 float dwOpen(vec3 q) {
@@ -246,6 +256,8 @@ float gDwSurf = 0.0, gDwSigma = 0.0, gDwSand = 0.0;
 // the last dust sample's composition (dwDustTint): its height as a share of its column below the top (1 at the ground), its
 // ground point's soil seed and the hard-ground share of its source point
 float gDwLow = 0.5, gDwSoil = 0.5, gDwHard = 0.0;
+// the ground under the current march sample (dwSourceDensity: its caller's dwFloor), read by its density and light
+float gDwFloorAt = 0.0;
 // diagnostics (DustWallDiag.probe, fx_dustwall: DwProbe): the k-th occupied sample's terms of this ray; the light's terms of
 // the last sample lit (shadow depths toward the ball and the sun, depth into the layer, the swell's lift)
 float gDwProbeK = -1.0;
@@ -774,7 +786,8 @@ float dwDustDensity(vec3 g, bool coarse) {
     return dwAnalytic(g);
 #endif
     // heights above the local ground (the destination's terrain); the ground point the air came from (the law's drift)
-    float hq = g.y - dwFloor(g.xz);
+    // (light paths take the sample's own ground: their taps lie within ~70 m of it and see the large shapes only)
+    float hq = g.y - gDwFloorAt;
     vec2 src = dwSource(g.xz);
     vec3 q = vec3(src.x, hq, src.y);
     float r = length(q.xz);
@@ -938,7 +951,7 @@ float dwDensity(vec3 g, bool coarse) {
     float d = dwDustDensity(g, coarse);
     float wet = gDwMatNow.x;
     if (DwSurge.z > 0.0) {
-        float sg = dwSurge(g, g.y - dwFloor(g.xz), coarse) * dwOpen(g);
+        float sg = dwSurge(g, g.y - gDwFloorAt, coarse) * dwOpen(g);
         wet = (d * wet + sg) / max(d + sg, 1e-12);
         d += sg;
         if (!coarse) gDwSigma += sg;
@@ -966,7 +979,7 @@ float dwShadow(vec3 q, vec3 l) {
     float near = dwDensity(q + l * 12.0, true) * 26.0;
     if (DwDetail > 0.5) return near;
     vec3 p = q + l * 70.0;
-    return max(dwTopAt(p.xz) - (p.y - dwFloor(p.xz)), 0.0) * gDwSigma * 0.8 + near;
+    return max(dwTopAt(p.xz) - (p.y - gDwFloorAt), 0.0) * gDwSigma * 0.8 + near;
 }
 
 // light of a dust sample at q (presentation, follows the light on ground-coloured dust): single scattering of the fireball
@@ -1045,7 +1058,7 @@ vec3 dwTexturedLight(vec3 q, vec3 rd) {
         taub = dwShadow(q, lb);
         taus = dwShadow(q, DwSunDir);
     }
-    float depth = max(gDwSurf - (q.y - dwFloor(q.xz)), 0.0) * gDwSigma;
+    float depth = max(gDwSurf - (q.y - gDwFloorAt), 0.0) * gDwSigma;
     float ms = 0.3 + 0.3 * exp(-0.12 * depth);
     // presentation: the swells read from above as in the Silo frame, raised dust catching more light and sags in the shade
     // of the swells around them (an occlusion of the light the dust scatters, by the local swell)
@@ -1135,7 +1148,8 @@ vec2 gDwSpan[16] = vec2[16](vec2(0.0), vec2(0.0), vec2(0.0), vec2(0.0), vec2(0.0
 // whether the ray draws source k in full (one of its DW_RAY_SOURCES nearest crossings)
 bool gDwFull[16] = bool[16](true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true);
 // the density of the loaded source at q: in full, or its noise-free column when this ray takes it as a far extra
-float dwSourceDensity(vec3 q, int k) {
+float dwSourceDensity(vec3 q, int k, float floorAt) {
+    gDwFloorAt = floorAt;
     bool was = gDwMean;
     if (!gDwFull[k]) gDwMean = true;
     float s = dwDensity(q, false);
@@ -1212,7 +1226,7 @@ vec4 dwSamples(vec3 rd, float tt, int sources) {
         if (tt < gDwSpan[k].x || tt > gDwSpan[k].y) continue;
         dwLoad(k);
         vec3 q = DwEye.xyz + rd * tt;
-        float sk = dwSourceDensity(q, k);
+        float sk = dwSourceDensity(q, k, dwFloor(q.xz));
         gDwTailEvals += 1;
         if (sk <= 1e-7) continue;
         c += sk * dwLight(q, rd);
@@ -1269,7 +1283,7 @@ void dwAccumulate(int m, vec3 rd, float tt, float t, float k, float n, inout flo
     float bound = dwBound(q);
     if (bound < 0.0) return;
     none = false;
-    float hq = q.y - dwFloor(q.xz);
+    float fl = dwFloor(q.xz), hq = q.y - fl;
     if (hq > bound) {
         // above the dust here, going down: its bound over the highest ground of the map (rising ground ahead may lift the
         // dust toward the ray), onto the next grid cell (a stride that lands in dust backs up)
@@ -1279,7 +1293,7 @@ void dwAccumulate(int m, vec3 rd, float tt, float t, float k, float n, inout flo
         return;
     }
     inside = true;
-    float sm = dwSourceDensity(q, m);
+    float sm = dwSourceDensity(q, m, fl);
     if (sm > 1e-5) {
         if (!gDwDensityOnly) c += sm * dwLight(q, rd);
         s += sm;
