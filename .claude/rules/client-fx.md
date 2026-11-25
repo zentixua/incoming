@@ -142,6 +142,10 @@ paths:
   target), deciding whole quads chained nearly every puff behind some fire to full resolution, and a draw call per run
   (hundreds, each a full `apply`) starved the GPU. `HalfPassTest` composes random tile scenes against the layer's order.
   Sandbox raid 40, 2560×1600: puffs 0.26–0.34 ms per screen, quads pass 5.7–6.7 → 3.0 ms (edge, 45 s), 4.8 → 1.9 ms (60 s).
+  The per-frame cut and rectangle textures load through a pixel-unpack buffer given new storage each upload, as the
+  occluder window does: from client memory the rectangles' `glTexSubImage2D` held the render thread 14–18 ms a frame
+  (200–340 ms a second) while a 1 Mt front crossed a city camera at 3 km. `HalfPassUploadTest` fails on any
+  client-memory upload in `HalfPass`; the scenario layer line logs `uploads … ms a frame`.
 - Own particles (`client/fx/particle`) are not the vanilla engine but their own pool (`FxPool`) and their own layer after the
   world (`fx/layer/FxLayer`). Vanilla's layer has one queue without sorting (whoever was born later is on top: a launch smoke
   10 blocks away lies behind the impact columns hundreds of blocks off), an overfull queue silently evicts old clouds, and a
