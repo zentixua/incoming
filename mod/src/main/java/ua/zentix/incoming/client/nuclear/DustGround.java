@@ -16,9 +16,9 @@ import java.util.stream.IntStream;
  * The ground the nuclear dust wave lies on around the eye: two square height tiles centred on the eye (a clipmap, as
  * terrain-following fog and ground haze are drawn in engines), the fine one over the drawn chunks, the coarse one over the
  * near kilometres. Each detonation's own terrain map ({@link PallGround}) spans the pall's whole extent (tens of kilometres
- * for 1 Mt, cells of half a kilometre): the dust laid on it floated over valleys and sank into hills; on the Zearth Silo map
- * its floor stood 10 m above the eye in a valley, the drawn ground 13 m under the dust (none visible on it), and every ray
- * past the drawn chunks ended at their edge (step 7 measurement, mod/run/agents/unified-wave/step7). These tiles hold what
+ * for 1 Mt, cells of half a kilometre): dust laid on it alone floats over valleys and sinks into hills; on the Zearth Silo map
+ * its floor stands 10 m above the eye in a valley, the drawn ground 13 m under the dust (none visible on it), and every ray
+ * past the drawn chunks ends at their edge (step 7 measurement, mod/run/agents/unified-wave/step7). These tiles hold what
  * the client knows ({@link FarTerrain#dust}: the surface dust lies on — below permeable canopies; client chunks, then the
  * LOD map tiles of LSS, Voxy or Distant Horizons); unknown cells continue the known ones (pull-push) and are marked, so the
  * shader takes the next coarser level there ({@code dwFloor}). The fine tile takes the lowest of each cell's four columns

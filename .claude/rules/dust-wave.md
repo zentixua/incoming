@@ -138,16 +138,16 @@ paths:
   24 stepped over a 64-block ridge 400 blocks out); where the world is drawn its depth alone ends it. The march, resolve and
   composite judge "the same place" by one rule (`pallSamePlace`: a looser rule in one pass let dust from behind a foreground
   edge through another). The frame air (haze, weather) lies in front of the dust (`pallAir`, `pallAirLightOf`).
-- A source's terrain map spans its pall's whole extent (1 Mt: 508 m cells) and its four fixed columns per cell knew 4–13 of
-  16 384 cells on the Zearth Silo map: laid on it alone, the dust's floor stood 10 m over the eye in a valley, the drawn ground
-  13 m under it with no dust on it, and every ray past the drawn chunks ended at their edge (a clean strip under a
+- A source's terrain map spans its pall's whole extent (1 Mt: 508 m cells) and its four fixed columns per cell know 4–13 of
+  16 384 cells on the Zearth Silo map: laid on it alone, the dust's floor stands 10 m over the eye in a valley, the drawn ground
+  13 m under it with no dust on it, and every ray past the drawn chunks ends at their edge (a clean strip under a
   flat-bottomed deck; step 7, `DustWallDiag.probe` −2 writes each ray's end, the scene's distance, the relief's end and the floor
   there, `dw:ground=` dumps the maps). The relief search past the drawn chunks keeps the pall's lift law (the map dropped under
   the ray at the start, as it was four map cells on).
-- Program size: each inlined copy of `dwFloor` (three tile fetches) cost AMD's compiler ~1.5 KB; one copy in every light
-  path added 11 KB (127 against a 114 KB budget). The floor is read once per march sample (`dwSourceDensity`'s caller), its
+- Program size: each inlined copy of `dwFloor` (three tile fetches) costs AMD's compiler ~1.5 KB; one copy in every light
+  path adds 11 KB (127 against a 114 KB budget). The floor is read once per march sample (`dwSourceDensity`'s caller), its
   density, light and light paths take it (`gDwFloorAt`); the relief search reads the map alone.
-- Colour: one soil colour in white light drew the face as one tone whose rolls read only by light (chroma ±2.7 over the face
+- Colour: one soil colour in white light draws the face as one tone whose rolls read only by light (chroma ±2.7 over the face
   against ±9.8 on the reference wall, corr(lightness, chroma) ≈ 0). `dwDustTint` (presentation): coarse soil low darker and
   earthier, fines on the tops paler, ±4 % per-point soil tint (seed), debris over hard ground greyer; the textured level only.
 - Eye inside the dust: the adaptation boost applies to the haze level only (on the textured level it washed the view to
