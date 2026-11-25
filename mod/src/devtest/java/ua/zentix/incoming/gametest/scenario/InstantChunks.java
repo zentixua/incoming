@@ -41,7 +41,7 @@ import java.util.concurrent.locks.LockSupport;
  *  heaps with 11 thousand chunks in memory, CI (heap 4 GB) is falling {@code OutOfMemoryError}. Therefore, once every {@link #WRITE_PERIOD}
  *  tick the server waits until the queue finishes: the game server manages this between ticks.
  */
-final class InstantChunks {
+public final class InstantChunks {
     private static final int FULL = ChunkLevel.byStatus(FullChunkStatus.FULL);
     /** How many times tick to wait for the uploaded chunks to be recorded. */
     private static final int WRITE_PERIOD = 100;
@@ -91,7 +91,7 @@ final class InstantChunks {
      *  when the path ahead is ticking - without this “Lancet” script, {@code loiter_rail.player} left the world or not
      *  according to who recalculated the levels in tick ({@link ChunkChurn}).
      */
-    static void settle(ServerLevel level) {
+    public static void settle(ServerLevel level) {
         ServerChunkCache cache = level.getChunkSource();
         // tickets taken in this tick - to chunk levels now (opened AT)
         cache.runDistanceManagerUpdates();

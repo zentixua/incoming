@@ -555,7 +555,8 @@ public final class ScarQueue {
         // no mark means no prior detonation; getData would attach mark 0 to every in-range chunk
         int applied = chunk.getExistingData(ModAttachments.CHUNK_SCAR).orElse(0);
         if (d.id() <= applied) {
-            if (NukeDiag.ON && pendingPlan(d.id(), chunk.getPos().toLong())) Incoming.LOG.info("DIAG PROBE offer refused {}: scar {} >= detonation {} with a prepared plan", chunk.getPos(), applied, d.id());
+            // a prepared plan the queue never takes holds its zone square (“finished plan, no queued work”)
+            if (NukeDiag.ON && pendingPlan(d.id(), chunk.getPos().toLong())) Incoming.LOG.info("DIAG prepared plan of {} not queued: its mark {} is not below detonation #{}", chunk.getPos(), applied, d.id());
             return;
         }
         long key = chunk.getPos().toLong();
@@ -779,7 +780,6 @@ public final class ScarQueue {
 
     /** Unloaded: remove job (ticket-held chunk cannot unload: ticket removed earlier in {@link #clear}). */
     public void drop(ServerLevel level, ChunkPos pos) {
-        if (NukeDiag.ON) for (int id : prepared.keySet()) if (pendingPlan(id, pos.toLong())) Incoming.LOG.info("DIAG PROBE unload {} with a prepared plan of #{}, job {}", pos, id, jobs.containsKey(pos.toLong()));
         for (int id : new ArrayList<>(awaitingMemory.keySet())) placedFromMemory(id, pos.toLong());
         Job job = jobs.remove(pos.toLong());
         if (job != null) release(level, job);

@@ -1073,9 +1073,6 @@ public final class NuclearPrep {
                         if (state == null) continue;
                         why.merge(state, 1, Integer::sum);
                         if (example == null) example = new ChunkPos(c) + " — " + state;
-                        var probe = level.getChunkSource().getChunkNow(ChunkPos.getX(c), ChunkPos.getZ(c));
-                        Incoming.LOG.info("DIAG PROBE held {}: {}, full {}, scar {}", new ChunkPos(c), state, probe != null,
-                                probe == null ? -1 : probe.getExistingData(ModAttachments.CHUNK_SCAR).orElse(0));
                     }
                 }
                 Incoming.LOG.info("DIAG tile {} ready for {} ticks (loaded in {}): held by {}{}", t.centre, now - t.readyAt, t.readyAt - t.heldAt,
@@ -1165,6 +1162,29 @@ public final class NuclearPrep {
                     watch.available() ? "old generation" : "heap", live >> 20, Runtime.getRuntime().maxMemory() >> 20, heapStrikes);
         }
         return heapStrikes >= 2;
+    }
+
+    /**
+     * For tests: wait until every zone layout building in the background ({@link #layout}) is done, at most
+     * {@code millis}; whether all are. A GameTest that finishes the mod's background work at each tick waits here too.
+     */
+    boolean awaitLayoutsForTest(long millis) {
+        long until = System.nanoTime() + millis * 1_000_000L;
+        for (Prep p : preps) {
+            CompletableFuture<Layout> layout = p.layout;
+            if (layout == null) continue;
+            try {
+                layout.get(Math.max(0, until - System.nanoTime()), java.util.concurrent.TimeUnit.NANOSECONDS);
+            } catch (java.util.concurrent.TimeoutException e) {
+                return false;
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+                return false;
+            } catch (java.util.concurrent.ExecutionException e) {
+                // the preparation reports and drops a failed layout on its next tick
+            }
+        }
+        return true;
     }
 
     /** For tests: stop all preparations as under memory pressure. */

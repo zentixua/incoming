@@ -44,7 +44,7 @@ public final class ClaimReviewGameTests {
         // burst far from the platform, as ground zero is when a distant ruin chunk is asked
         BlockPos far = h.absolutePos(NuclearGameTests.CENTER).offset(1 << 16, 0, 0);
         h.assertTrue(level.getChunkSource().getChunkNow(far.getX() >> 4, far.getZ() >> 4) == null, "ground zero is in memory");
-        Detonation d = new Detonation(NuclearGameTests.IDS.incrementAndGet(), Vec3.atBottomCenterOf(far), far.getY(), 1, true,
+        Detonation d = new Detonation(NuclearGameTests.nextId(level), Vec3.atBottomCenterOf(far), far.getY(), 1, true,
                 level.getGameTime(), 0f, 0f, 1f, 0L, 0.1f, false, 0.35f);
         LevelChunk home = level.getChunkAt(h.absolutePos(NuclearGameTests.CENTER));
         long[] at = {h.absolutePos(NuclearGameTests.CENTER).asLong()};

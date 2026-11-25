@@ -258,7 +258,6 @@ neoForge {
             systemProperty 'incoming.gametest.shard', (project.findProperty('gametestShard') ?: '').toString()
             // only batches matching a regular expression: -PgametestOnly='nuke_scorch|nuke_fresh'
             systemProperty 'incoming.gametest.only', (project.findProperty('gametestOnly') ?: '').toString()
-            systemProperty 'incoming.nukeDiag', 'true' // PROBE: remove before merge
         }
         // Flight scenarios (gametest/scenario): all seeds (-PscenarioSeeds, 16 by default) without the other GameTests
         // — the scenario template in its own namespace incoming_sweep. -PscenarioOnly=<regular expression> — only

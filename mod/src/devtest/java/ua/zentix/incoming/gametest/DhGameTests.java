@@ -206,7 +206,7 @@ public final class DhGameTests {
         double scale = 0.0182;
         int ground = h.absolutePos(CENTER).getY() + 1;
         Vec3 burst = new Vec3(far.getMiddleBlockX() + 0.5 - 32, ground + ua.zentix.incoming.nuclear.model.Yield.optimalBurstHeight(15) * scale, far.getMiddleBlockZ() + 0.5);
-        Detonation d = new Detonation(NuclearGameTests.IDS.incrementAndGet(), burst, ground, 15, false, level.getGameTime(), 0, 0, 20_000, 7, (float) scale, false,
+        Detonation d = new Detonation(NuclearGameTests.nextId(level), burst, ground, 15, false, level.getGameTime(), 0, 0, 20_000, 7, (float) scale, false,
                 Detonation.OLD_WAVE);
         Vec3 mid = new Vec3(far.getMiddleBlockX() + 0.5, ground, far.getMiddleBlockZ() + 0.5);
         long due = d.gameTime() + (long) d.arrivalTicks(mid.distanceTo(burst));
@@ -272,7 +272,7 @@ public final class DhGameTests {
         Vec3 burst = new Vec3(c.getMiddleBlockX() + 0.5, ground + height, c.getMiddleBlockZ() + 0.5);
         Detonation probe = new Detonation(0, burst, ground, 15, false, 0, 0, 0, 20_000, 7, 0.05f, false, Detonation.OLD_WAVE);
         long now = level.getGameTime();
-        Detonation d = new Detonation(NuclearGameTests.IDS.incrementAndGet(), burst, ground, 15, false, now + wave - (long) probe.arrivalTicks(height), 0, 0,
+        Detonation d = new Detonation(NuclearGameTests.nextId(level), burst, ground, 15, false, now + wave - (long) probe.arrivalTicks(height), 0, 0,
                 20_000, 7, 0.05f, false, Detonation.OLD_WAVE);
         NuclearEvents.get(level).add(d, level);
         FarLods.request(level, c.toLong(), true);

@@ -95,6 +95,11 @@ public final class NuclearWorld {
         return prep.frontStats(strike);
     }
 
+    /** For tests: zone layouts of all preparations built ({@link NuclearPrep#awaitLayoutsForTest}). */
+    public boolean awaitPreparationLayoutsForTest(long millis) {
+        return prep.awaitLayoutsForTest(millis);
+    }
+
     /** Deterministic front send-budget clock for an existing preparation; other clocks stay real (tests). */
     public boolean useFrontClockForTest(int strike, java.util.function.LongSupplier time) {
         return prep.useFrontClockForTest(strike, time);

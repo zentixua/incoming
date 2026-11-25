@@ -1096,7 +1096,7 @@ public final class RuinBackgroundGameTests {
         // by place in the world, without relativePos: for GameTestHelper relativePos and absolutePos are not inverse to each other
         double scale = 0.0182;
         BlockPos g = base.offset(8, 2, 8);
-        return new Detonation(NuclearGameTests.IDS.incrementAndGet(), new Vec3(g.getX() + 0.5, g.getY() + Yield.optimalBurstHeight(15) * scale, g.getZ() + 0.5),
+        return new Detonation(NuclearGameTests.nextId(h.getLevel()), new Vec3(g.getX() + 0.5, g.getY() + Yield.optimalBurstHeight(15) * scale, g.getZ() + 0.5),
                 g.getY(), 15, false, h.getLevel().getGameTime(), 0, 0, 20_000, 7, (float) scale, false, Detonation.OLD_WAVE);
     }
 
