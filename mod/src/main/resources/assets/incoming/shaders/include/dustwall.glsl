@@ -1025,14 +1025,14 @@ vec3 dwHazeLight(vec3 q, vec3 rd) {
     return DW_HAZE_EXPOSURE * max(DwAdapt, 1.0) * w * (single + max(d, vec3(0.0)));
 }
 
-// presentation (est.), the dust's colour by what it is made of (slight: L* spread of the face's tone about ±8 %, chroma about
-// twice the flat soil's): the coarse, moister soil the blast tears up stays low and reads darker and earthier, the fines that
+// presentation (est.), the dust's colour by what it is made of (slight: base to top ±5–9 % per channel, inside young dust
+// about 3 L* darker and 5° redder than one soil colour): the coarse, moister soil the blast tears up stays low and reads darker and earthier, the fines that
 // reach the billow tops paler (size sorting: settling speed ∝ d², the column's coarse fraction falls with height, as `strat`
 // lays its density); each ground point's soil differs a little (its seed, ~60 m patches: redder or greyer); dust from hard
-// ground (roads, roofs, rock) is grey debris. Over the column's density (strat) the tint's mean stays within 4 % of 1.
-// Flat soil one colour drew the face as one tone whose rolls read only by light (step 7: chroma ±2.7 over the face against
+// ground (roads, roofs, rock) is grey debris. Over the column's density (strat) the tint's mean stays within 3 % of 1.
+// One soil colour draws the face as one tone whose rolls read only by light (step 7: chroma ±2.7 over the face against
 // ±9.8 on the reference's wall, corr(L, C) ≈ 0)
-const vec3 DW_EARTH = vec3(0.92, 0.85, 0.77), DW_FINES = vec3(1.07, 1.08, 1.08);
+const vec3 DW_EARTH = vec3(0.95, 0.91, 0.86), DW_FINES = vec3(1.04, 1.045, 1.05);
 vec3 dwDustTint() {
     vec3 t = mix(DW_FINES, DW_EARTH, gDwLow) * mix(vec3(1.04, 1.0, 0.95), vec3(0.96, 0.99, 1.04), gDwSoil);
     return mix(vec3(1.0), t, 1.0 - gDwWet);
