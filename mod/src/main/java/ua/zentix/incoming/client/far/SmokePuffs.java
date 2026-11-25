@@ -107,7 +107,7 @@ public final class SmokePuffs {
     /**
      * Puff count from which {@link #merge} finds candidates through a ground-plane cell index: the pairwise scan costs
      * n² pair tests per pass, and a pass repeats after every absorb. Scanned pairwise, breach dust ({@code BlastDust}: up
-     * to 256 streaks of 12 billows, one source) as a 1 Mt wave crosses a city viewer costs the render thread 85–265 ms a
+     * to 256 streaks of up to {@link #SEGMENT_CLUBS} billows, one source) as a 1 Mt wave crosses a city viewer costs the render thread 85–265 ms a
      * second in {@code Draw.seal} (Zearth Silo, viewer at 3 km, passage-city run 25.11).
      */
     static final int INDEX_FROM = 64;
@@ -152,7 +152,7 @@ public final class SmokePuffs {
         return !(dx * dx + dz * dz > h * h || Math.abs(dy) > v);
     }
 
-    /** Ground cells of {@link #mergeIndexed}, per thread (the client fills, the planner closes its last source). */
+    /** Ground cells of {@link #mergeIndexed}, per thread: the client thread merges in the game; inline and test planners merge on their own. */
     private static final ThreadLocal<MergeIndex> MERGE_INDEX = ThreadLocal.withInitial(MergeIndex::new);
 
     /**
@@ -161,7 +161,8 @@ public final class SmokePuffs {
      * its own square of half-side {@code reach}·σh covers; puffs after b never change before their own turn (they are only
      * absorbed), so the squares hold for the whole merge. A puff tests the cell under its current centre, and again after
      * every absorb moves it; a square over many cells, or a value the rule cannot bound (NaN, infinite, negative σ), is
-     * tested by every puff, and a puff whose own centre or σ is not finite falls back to the scan. Returns the pair tests.
+     * tested by every puff, and a puff whose own centre or σ is not finite, whose σh is negative or whose reach is so wide
+     * that the rule's squares overflow falls back to the scan. Returns the pair tests.
      */
     static long mergeIndexed(double[] held, int start, int n, boolean[] gone, double sootK, double dropK, double reach) {
         MergeIndex index = MERGE_INDEX.get();
@@ -175,7 +176,7 @@ public final class SmokePuffs {
                 again = false;
                 int after = i;
                 while (true) {
-                    if (!index.bounded(held, a)) {
+                    if (!index.bounded(held, a, reach)) {
                         // the rule's own arithmetic decides an unbounded puff (NaN distances pass it): the scan from here
                         for (int j = after + 1; j < n; j++) {
                             if (gone[j]) continue;
@@ -218,6 +219,10 @@ public final class SmokePuffs {
         static final int SPAN = 5;
         /** Squares are widened by this share: the rule's rounding never lets a merging pair fall outside its square. */
         static final double PAD = 1e-9;
+        /** Cell numbers up to this many cells from the origin: a long holds them, and their squares never wrap. */
+        static final double CELLS = 1e15;
+        /** Widest reach of a puff tested through cells: its square (about 1e300) stays finite. */
+        static final double WIDE = 1e150;
         double cell;
         final it.unimi.dsi.fastutil.longs.Long2IntOpenHashMap cells = new it.unimi.dsi.fastutil.longs.Long2IntOpenHashMap();
         /** Each cell's slice of {@code entries}: {@code [first, end)}. */
@@ -246,8 +251,9 @@ public final class SmokePuffs {
                     double x = held[b], z = held[b + 2];
                     // widened for the rule's rounding: relative to the reach, absolute to the coordinates
                     double r = reach * held[b + 3] * (1 + PAD) + PAD * (1 + Math.abs(x) + Math.abs(z));
-                    // a negative σ is unbounded too: with both σ negative the rule's reach is the other's |σ|
-                    if (!(held[b + 3] >= 0 && Double.isFinite(r) && Double.isFinite(held[b + 1]))) {
+                    // a negative σ is unbounded too: with both σ negative the rule's reach is the other's |σ|; a square
+                    // whose cell numbers a long cannot hold (finite garbage far out) is listed for everyone as well
+                    if (!(held[b + 3] >= 0 && Double.isFinite(r) && Math.abs(x) + r < CELLS * cell && Math.abs(z) + r < CELLS * cell)) {
                         if (pass == 0) addAlways(j);
                         continue;
                     }
@@ -295,10 +301,13 @@ public final class SmokePuffs {
             always[alwaysCount++] = j;
         }
 
-        /** Whether puff a's own centre is finite and its σh finite and not negative: its candidates are then in the cells. */
-        boolean bounded(double[] held, int a) {
+        /**
+         * Whether puff a's own centre is finite and its σh not negative and below {@link #WIDE}: its candidates are then in
+         * the cells. Beyond it the rule's squared reach overflows to infinity and passes any distance.
+         */
+        boolean bounded(double[] held, int a, double reach) {
             return Double.isFinite(held[a]) && Double.isFinite(held[a + 1]) && Double.isFinite(held[a + 2])
-                    && held[a + 3] >= 0 && Double.isFinite(held[a + 3]) && Double.isFinite(held[a + 4]);
+                    && held[a + 3] >= 0 && reach * held[a + 3] < WIDE && Double.isFinite(held[a + 4]);
         }
 
         /** Puffs after {@code after} that may merge into a, ascending, in {@code out[0, count)}. */

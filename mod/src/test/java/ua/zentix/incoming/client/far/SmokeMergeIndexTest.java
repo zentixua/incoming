@@ -4,19 +4,21 @@ import org.junit.jupiter.api.Test;
 import ua.zentix.incoming.client.fx.smoke.CloudModel;
 import ua.zentix.incoming.client.fx.smoke.SmokeGrid;
 
+import java.time.Duration;
 import java.util.Arrays;
 import java.util.SplittableRandom;
 
 import static org.junit.jupiter.api.Assertions.assertArrayEquals;
+import static org.junit.jupiter.api.Assertions.assertTimeoutPreemptively;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
  * A source's puff merge through ground cells ({@code SmokePuffs.mergeIndexed}) is the pairwise merge ({@code mergeScan})
- * exactly, at a fraction of its pair tests. Breach dust as a 1 Mt wave crossed a city viewer (256 streaks of up to 12
+ * exactly, at a fraction of its pair tests. Breach dust as a 1 Mt wave crosses a city viewer (256 streaks of up to 16
  * billows, one source) merged pairwise on the render thread for 85–265 ms a second (passage-city run, 25.11).
  */
 class SmokeMergeIndexTest {
-    /** Breach dust streaks emitted through the real sink: segments of 12 billows downwind of scattered breaches. */
+    /** Breach dust streaks emitted through the real sink: segments of up to 16 billows downwind of scattered breaches. */
     static final class Streaks implements SmokeGrid.Source {
         final double[][] s;
 
@@ -130,5 +132,55 @@ class SmokeMergeIndexTest {
             double reach = r.nextInt(4) == 0 ? r.nextDouble(0.2, 3) : SmokePuffs.MERGE;
             same(h, reach, "round " + round);
         }
+    }
+
+    /** One look and colour, σ 1, each puff its own segment: puffs merge by distance alone. */
+    private static double[] plain(int n) {
+        double[] h = new double[n * SmokePuffs.FIELDS];
+        for (int i = 0; i < n; i++) {
+            int o = i * SmokePuffs.FIELDS;
+            h[o + 3] = 1;
+            h[o + 4] = 1;
+            h[o + 6] = 1;
+            h[o + 8] = 0.6;
+            h[o + 9] = 0.5;
+            h[o + 10] = 0.4;
+            h[o + 11] = i * SmokePuffs.SEGMENT_CLUBS;
+            h[o + 13] = 1;
+            h[o + 17] = 1;
+        }
+        return h;
+    }
+
+    /**
+     * Review probe (round 1): finite puffs at x = z = 1e20 floor both square ends to the same long on both axes; the cell
+     * loop wrapped past Long.MAX_VALUE and never ended. Such squares are listed for every puff.
+     */
+    @Test
+    void hugeFiniteCoordinatesFinish() {
+        double[] h = plain(SmokePuffs.INDEX_FROM);
+        for (int i = 0; i < SmokePuffs.INDEX_FROM; i++) {
+            h[i * SmokePuffs.FIELDS] = 1e20 + i * 1e12;
+            h[i * SmokePuffs.FIELDS + 2] = 1e20 + i * 1e12;
+        }
+        assertTimeoutPreemptively(Duration.ofSeconds(5), () -> same(h, SmokePuffs.MERGE, "huge coordinates"));
+    }
+
+    /**
+     * Review probe (round 1): σ beyond 1e154 overflows the rule's squares to infinity, so the scan merges puffs 1e160
+     * apart; such a puff tests the others by the scan.
+     */
+    @Test
+    void overflowingRuleMergesAsTheScan() {
+        int n = SmokePuffs.INDEX_FROM;
+        double[] h = plain(n);
+        for (int i = 0; i < n; i++) {
+            int o = i * SmokePuffs.FIELDS;
+            h[o + 3] = 1e155;
+            h[o] = i == 1 ? 1e160 : 0;
+            // the other puffs have colours of their own: only puffs 0 and 1 may merge
+            if (i > 1) h[o + 8] = 0.001 * i;
+        }
+        same(h, SmokePuffs.MERGE, "overflowing reach");
     }
 }
