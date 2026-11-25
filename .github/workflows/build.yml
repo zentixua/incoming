@@ -408,7 +408,7 @@ jobs:
         timeout-minutes: 1
         run: tools/test_sandbox.sh
       - name: Stray client report
-        timeout-minutes: 1
+        timeout-minutes: 2
         run: tools/test_stray_clients.sh
       - name: Release workflow regression checks
         run: python3 -m unittest discover -s tools -p 'test_release_checks.py' -v

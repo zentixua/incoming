@@ -56,7 +56,7 @@ Prism: `~/.var/app/org.prismlauncher.PrismLauncher/data/PrismLauncher/` (`tools/
                                            “Effects sandbox”; check without a client: test_sandbox.sh (CI);
                                            no command for INCOMING_SANDBOX_IDLE s (1800; 0 never): the client stops itself
     stray_clients.sh [--host vps] [--idle S] [--max-age S] ← report only: job units whose caller is gone, sandboxes idle past
-                                           the limit, jobs over 6 h, client JVMs reparented to init; exit 1 when any; never
+                                           the limit, other jobs over 12 h, client JVMs whose wrapper is gone; exit 1 when any; never
                                            stops anything; test: test_stray_clients.sh (CI)
     amd_shader_check.py [--only R] [--record] [--tree D] ← every core and post program through AMD's OpenGL compiler offline
                                            (glc of RGA 2.13, gfx1032 = RX 6600 XT; vanilla stages and includes from the 1.21.1
@@ -139,7 +139,7 @@ Prism: `~/.var/app/org.prismlauncher.PrismLauncher/data/PrismLauncher/` (`tools/
     logtime.py                           ← time of Minecraft log lines for digests of laptop tasks
     free_port.py                         ← a free port on 127.0.0.1 for check servers (stress.sh, mp_scenario.sh)
     rig_procs.sh                         ← processes of checks in their own sessions (source from stress.sh, mp_scenario.sh): the script's exit kills them with the JVM
-    probes/                              ← review probes kept as regression tests (run by test_gpu_lease.sh, test_sandbox.sh)
+    probes/                              ← review probes kept as regression tests (run by test_gpu_lease.sh, test_sandbox.sh, test_stray_clients.sh)
     test_rig_procs.sh                    ← check of rig_procs.sh (CI): Ctrl+C, TERM, end of script, a foreign session, fd, RIG_GRACE timeout: no orphans
     look_gate/run.sh <name> <tree> [scenes] ← picture-and-sound gate: ProbeScenario scenes under Iris with the whole build (README.md
                                            there): only a one-off comparison with 3.4.1, then to be removed; hearing always without deafening, sampling in the order of the reference and in the air of its game time;

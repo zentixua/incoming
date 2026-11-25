@@ -8,9 +8,11 @@
 #   - its caller (the laptop_job.sh whose pid ends the unit name) is gone: nobody waits for it;
 #   - it is an effects sandbox (incoming-job-sandbox-*) whose tree had no command (fx/active, fx/inbox, fx/ready) for
 #     --idle seconds (default 1800, the sandbox's own INCOMING_SANDBOX_IDLE): its job ended without `stop`;
-#   - any other job running longer than --max-age seconds (default 21600): no client scenario runs that long.
-# A client JVM (launch script under mod/build/rig/) reparented to init outside any job unit is a stray too.
-# Output: one `stray …` line each with unit, tree, age, idle and CPU; exit 0 none, 1 strays listed, 2 usage or host
+#   - any other job running longer than --max-age seconds (default 43200: the longest measured job, a 7 h GameTest
+#     run, with margin; laptop_job.sh header).
+# A client JVM (launch script under mod/build/rig/) outside any job unit whose wrapper is gone is a stray too: its
+# parent no longer names the launch script (adopted by init, the systemd user manager or another subreaper).
+# Output: one `stray …` line each with unit, tree, age, idle and CPU over one second; exit 0 none, 1 strays listed, 2 usage or host
 # unreachable. Remote: the script itself runs there over ssh (BatchMode), nothing is installed.
 set -uo pipefail
 PROC=${STRAY_PROC:-/proc}
@@ -35,29 +37,51 @@ caller_alive() {
   [[ $pid =~ ^[0-9]+$ ]] && cmdline "$pid" | grep -q 'laptop_job\.sh$'
 }
 
-# tree of a job unit: its main process is `laptop_job.sh --in-unit …` by absolute path (readlink -f in laptop_job.sh)
+# tree of a job unit: the first absolute <tree>/tools/<script>.sh in its main process (`laptop_job.sh --in-unit` for
+# --gpu; other modes exec the command itself, e.g. `sandbox.sh _run`) or its caller (`laptop_job.sh`)
 unit_tree() {
-  local main p
+  local main caller=${1##*-} p
+  caller=${caller%.service}
   main=$(systemctl --user show "$1" -p MainPID --value 2>/dev/null)
-  p=$(cmdline "$main" | grep -m1 '/tools/laptop_job\.sh$')
+  p=$({ cmdline "$main"; cmdline "$caller"; } | grep -m1 '^/.*/tools/[^/]*\.sh$')
   [ -n "$p" ] && dirname "$(dirname "$p")"
 }
 
-# seconds the unit has been active
+# seconds the unit has been active, wall clock (its monotonic stamp leaves out suspend, /proc/uptime does not)
 unit_age() {
-  local us
-  us=$(systemctl --user show "$1" -p ActiveEnterTimestampMonotonic --value 2>/dev/null)
-  [[ $us =~ ^[0-9]+$ ]] && [ "$us" -gt 0 ] || { echo 0; return; }
-  awk -v u="$us" '{ printf "%d\n", $1 - u / 1e6 }' "$PROC/uptime"
+  local at
+  # "Wed 2026-11-25 20:12:39 CET": the weekday dropped, date -d reads the rest in any locale
+  at=$(systemctl --user show "$1" -p ActiveEnterTimestamp --value 2>/dev/null | cut -d' ' -f2-)
+  at=$(date -d "$at" +%s 2>/dev/null) && [ -n "$at" ] || { echo 0; return; }
+  echo $(( $(date +%s) - at ))
 }
 
-# CPU of the unit's processes now (% of one core, ps)
+# CPU of the unit now: its cgroup's usage over one second (% of one core; ps would give the lifetime average)
 unit_cpu() {
-  local cg pids
+  local cg a b
   cg=$(systemctl --user show "$1" -p ControlGroup --value 2>/dev/null)
-  [ -n "$cg" ] || { echo 0; return; }
-  pids=$(find "/sys/fs/cgroup$cg" -name cgroup.procs -exec cat {} + 2>/dev/null | paste -sd,)
-  [ -n "$pids" ] && ps -o pcpu= -p "$pids" 2>/dev/null | awk '{ s += $1 } END { printf "%.0f", s }' || echo 0
+  [ -n "$cg" ] || { echo ?; return; }
+  a=$(awk '$1 == "usage_usec" { print $2 }' "/sys/fs/cgroup$cg/cpu.stat" 2>/dev/null); sleep 1
+  b=$(awk '$1 == "usage_usec" { print $2 }' "/sys/fs/cgroup$cg/cpu.stat" 2>/dev/null)
+  [ -n "$a" ] && [ -n "$b" ] && echo $(( (b - a) / 10000 )) || echo ?
+}
+
+# CPU of process $1 now: utime + stime over one second (% of one core)
+pid_cpu() {
+  local a b hz
+  hz=$(getconf CLK_TCK)
+  a=$(awk '{ print $14 + $15 }' "$PROC/$1/stat" 2>/dev/null); sleep 1
+  b=$(awk '{ print $14 + $15 }' "$PROC/$1/stat" 2>/dev/null)
+  [ -n "$a" ] && [ -n "$b" ] && echo $(( (b - a) * 100 / hz )) || echo ?
+}
+
+# client JVM $1 (outside a job unit) lost its wrapper: its parent (xvfb-run, kwin_wayland or the rig session, each
+# naming the launch script under mod/build/rig/) is gone, so init or a subreaper adopted it
+orphan_jvm() {
+  local pp
+  pp=$(awk '{ print $4 }' "$PROC/$1/stat" 2>/dev/null) || return 1
+  [ -n "$pp" ] || return 1
+  ! cmdline "$pp" | grep -q '/mod/build/rig/'
 }
 
 # verdict for one unit: prints the reason when it is a stray (args: unit, caller alive 0/1, age s, idle s or empty)
@@ -84,10 +108,10 @@ report() {
   # client JVMs reparented to init outside any job unit (a wrapper killed without its session)
   for pid in $(pgrep -u "$(id -u)" -x java 2>/dev/null); do
     cmdline "$pid" | grep -q '/mod/build/rig/' || continue
-    [ "$(awk '{print $4}' "$PROC/$pid/stat" 2>/dev/null)" = 1 ] || continue
     grep -q 'incoming-job-' "$PROC/$pid/cgroup" 2>/dev/null && continue
+    orphan_jvm "$pid" || continue
     n=$((n + 1))
-    echo "stray $(hostname -s) java $pid up $(ps -o etime= -p "$pid" | tr -d ' '), cpu $(ps -o pcpu= -p "$pid" | tr -d ' ')%: client outside a job unit, parent gone ($(cmdline "$pid" | grep -m1 '/mod/build/rig/'))"
+    echo "stray $(hostname -s) java $pid up $(ps -o etime= -p "$pid" | tr -d ' '), cpu $(pid_cpu "$pid")%: client outside a job unit, its wrapper gone ($(cmdline "$pid" | grep -m1 '/mod/build/rig/'))"
   done
   [ $n = 0 ] && echo "no stray clients on $(hostname -s)"
   [ $n = 0 ]
@@ -96,16 +120,18 @@ report() {
 # source tools/stray_clients.sh: functions only (tools/test_stray_clients.sh)
 # (run over ssh as `bash -s`, it has no source file)
 [ -n "${BASH_SOURCE[0]:-}" ] && [ "${BASH_SOURCE[0]}" != "$0" ] && return 0
-host= IDLE=1800 MAX_AGE=21600
+host= IDLE=1800 MAX_AGE=43200
 while [ $# -gt 0 ]; do
   case "$1" in
-    --host) host=$2; shift ;;
-    --idle) IDLE=$2; shift ;;
-    --max-age) MAX_AGE=$2; shift ;;
-    *) awk 'NR > 1 && /^#/ { sub(/^# ?/, ""); print; next } NR > 1 { exit }' "$0"; exit 2 ;;
+    --host|--idle|--max-age)
+      [ $# -ge 2 ] || { echo "$1 needs a value" >&2; exit 2; }
+      case "$1" in --host) host=$2 ;; --idle) IDLE=$2 ;; --max-age) MAX_AGE=$2 ;; esac
+      shift ;;
+    *) echo "usage: tools/stray_clients.sh [--host <ssh host>] [--idle <s>] [--max-age <s>] (header of the script)" >&2; exit 2 ;;
   esac
   shift
 done
+[[ $IDLE =~ ^[0-9]+$ ]] && [[ $MAX_AGE =~ ^[0-9]+$ ]] || { echo "--idle and --max-age take whole seconds" >&2; exit 2; }
 if [ -n "$host" ]; then
   ssh -o BatchMode=yes -o ConnectTimeout=15 "$host" bash -s -- --idle "$IDLE" --max-age "$MAX_AGE" < "$0"; rc=$?
   [ $rc = 255 ] && { echo "$host unreachable" >&2; exit 2; }

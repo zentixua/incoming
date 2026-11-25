@@ -197,18 +197,19 @@ inhibit=(systemd-inhibit --what=sleep:idle --who="Incoming: $name" --why="mod ch
 # arguments, reach the description and the log
 code=0
 mkdir -p "$tmp_dir"
+# stopping this script (Ctrl+C, TERM from a caller's timeout, HUP when its terminal or `ssh -t` link closes) stops its
+# service: the client does not outlive the command. Set before the unit starts, so no signal falls between the two. A
+# caller started under nohup (sandbox.sh start) ignores HUP, so its long-lived job stays. A plain `ssh host cmd` link
+# that drops sends no signal and the service holds the output pipe itself (--pipe): such a job ends on its own (a
+# scenario's deadline, the sandbox's idle limit); tools/stray_clients.sh lists any that does not
+run=
+trap 'systemctl --user stop "incoming-job-$name-$$" 2>/dev/null; [ -n "$run" ] && wait $run; echo "laptop_job $name: stopped" 2>/dev/null; exit 143' TERM INT HUP
 "${inhibit[@]}" \
   systemd-run --user --wait --pipe --collect --quiet --same-dir --unit="incoming-job-$name-$$" \
     --description="incoming job $name (task ${DELEGATE_TASK:--})" -E INCOMING_JOB_START="$(date +%s)" \
     -p ExecStopPost="$(_sd_quote "$(readlink -f "$0")") --account" \
     "${props[@]}" "${envs[@]}" "${slice_props[@]}" -- "$(readlink -f "$0")" --in-unit "$mode" "$name" $$ -- "$@" 0<&0 198>&- &
 run=$!
-# stopping this script (Ctrl+C, TERM from a caller's timeout, HUP when its terminal or `ssh -t` link closes) stops its
-# service: the client does not outlive the command. A caller started under nohup (sandbox.sh start) ignores HUP, so its
-# long-lived job stays. A plain `ssh host cmd` link that drops sends no signal and the service holds the output pipe
-# itself (--pipe): such a job ends on its own (a scenario's deadline, the sandbox's idle limit); tools/stray_clients.sh
-# lists any that does not
-trap 'systemctl --user stop "incoming-job-$name-$$" 2>/dev/null; wait $run; echo "laptop_job $name: stopped" 2>/dev/null; exit 143' TERM INT HUP
 if [ "$mode" = soft ]; then
   # hold the admission lock until the unit (and its MemoryMax) exists or the start failed: never while it is pending
   until systemctl --user is-active -q "incoming-job-$name-$$" || ! kill -0 $run 2>/dev/null; do sleep 0.1; done
@@ -218,8 +219,8 @@ wait $run || code=$?
 # systemd-run --wait returns only when the unit has ended; a unit still active means systemd-run itself was killed: the
 # job is over for its caller, so its client goes too
 if systemctl --user is-active -q "incoming-job-$name-$$" 2>/dev/null; then
-  systemctl --user stop "incoming-job-$name-$$" 2>/dev/null
-  echo "laptop_job $name: systemd-run ended before its unit (caller gone): unit stopped" 2>/dev/null
+  systemctl --user stop "incoming-job-$name-$$" 2>/dev/null || true
+  echo "laptop_job $name: systemd-run ended before its unit (caller gone): unit stopped" 2>/dev/null || true
 fi
 rm -rf -- "$tmp_dir"   # also when the unit never started (its ExecStopPost removes it otherwise)
 if [ -s "$oomfile" ]; then

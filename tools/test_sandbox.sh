@@ -175,6 +175,12 @@ out=$(INCOMING_SOFT=1 "$ROOT/tools/nested_kwin.sh" wayland-incoming-sandbox 64 6
   ( for _ in $(seq 50); do for c in "$FX"/inbox/*.cmd; do [ -f "$c" ] && { echo ok > "${c%.cmd}.done"; rm -f "$c"; exit; }; done; sleep 0.1; done ) &
   fx 'blast drone' >/dev/null
   [ "$(idle_seconds)" -le 2 ] && echo "ok: a command marks the sandbox active" || echo "FAIL: fx did not mark activity: $(idle_seconds)"
+  # a long command (a nuke shot runs for minutes) keeps marking while it waits: answered after 13 s, fx/active is
+  # younger than the wait
+  ( sleep 13; for c in "$FX"/inbox/*.cmd; do echo ok > "${c%.cmd}.done"; rm -f "$c"; done ) &
+  fx 'nuke 15' >/dev/null &
+  sleep 0.5; ago 7200 "$FX/active"; wait
+  [ "$(idle_seconds)" -le 6 ] && echo "ok: a running command keeps marking the sandbox active" || echo "FAIL: long command not marked: $(idle_seconds)"
   running() { false; }
   echo "12:00:00 no command for 30 min (INCOMING_SANDBOX_IDLE=1800 s): sandbox stopped" > "$FX/stopped"
   out=$(fx 'blast drone' 2>&1)
@@ -182,5 +188,5 @@ out=$(INCOMING_SOFT=1 "$ROOT/tools/nested_kwin.sh" wayland-incoming-sandbox 64 6
 ) > "$tmp/idle.log" 2>&1
 cat "$tmp/idle.log"
 grep -q '^FAIL' "$tmp/idle.log" && fail=1
-[ "$(grep -c '^ok:' "$tmp/idle.log")" = 6 ] || { echo "FAIL: idle checks incomplete"; fail=1; }
+[ "$(grep -c '^ok:' "$tmp/idle.log")" = 7 ] || { echo "FAIL: idle checks incomplete"; fail=1; }
 exit $fail

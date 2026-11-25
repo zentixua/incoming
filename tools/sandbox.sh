@@ -117,6 +117,7 @@ swap() {
   stamp=$(mktemp -p "$RUN" .swap.XXXX)
   n0=$(hotswap_n); n0=${n0:-0}
   (cd "$ROOT/mod" && INCOMING_SANDBOX=1 ./gradlew compileJava compileDevtestJava processResources processDevtestResources -q --console=plain) || { rm -f "$stamp"; return 2; }
+  mark_active
   done_ms=$(date +%s%3N)
   classes=$(find "$ROOT/mod/build/classes/java/main" "$ROOT/mod/build/classes/java/devtest" -name '*.class' -newer "$stamp" | wc -l)
   res=$(find "$ROOT/mod/build/resources/main" "$ROOT/mod/build/resources/devtest" -type f -newer "$stamp" 2>/dev/null | wc -l)
@@ -487,7 +488,7 @@ case "$cmd" in
   restart) stop; sleep 2; start "$@" ;;
   stop) stop ;;
   jbr) jbr ;;
-  status) if running; then echo "running; ready in $(cat "$FX/ready" 2>/dev/null) s; last command $(idle_seconds) s ago; hot swap: $(cat "$FX/hotswap" 2>/dev/null)"
+  status) if running; then echo "running; ready in $(cat "$FX/ready" 2>/dev/null) s; last command $(idle_seconds || echo '–') s ago; hot swap: $(cat "$FX/hotswap" 2>/dev/null)"
           else echo "not running$(stopped_note)"; fi; lease_status || true ;;
   fx) for c in "$@"; do fx "$c" || exit 1; done ;;
   swap) swap ;;
