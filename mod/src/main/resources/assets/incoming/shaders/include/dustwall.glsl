@@ -1080,6 +1080,13 @@ vec3 dwTexturedLight(vec3 q, vec3 rd) {
     vec3 tint = dwDustTint();
     vec3 albedo = dwHardGrey(mix(mix(DwAlbedo, DwSandAlbedo, gDwSand), DwMistAlbedo, gDwWet) * tint);
     vec3 bulk = dwHardGrey(mix(mix(DwBulk, DwSandBulk, gDwSand), DwMistBulk, gDwWet) * tint);
+    // presentation (est.): light that reaches a fold in the shade has scattered more times inside the dust, each time taking
+    // the soil's colour again (the spectrum × albedo per event), so the shaded folds read deeper and earthier than the lit
+    // tops: the multiply scattered light's hue deepens with the main light's depth into the dust (up to one more event's
+    // worth in full shade; the same light, a deeper tone; never on water spray)
+    float shade = (1.0 - exp(-0.4 * min(taub, taus))) * (1.0 - gDwWet);
+    vec3 hue = bulk / max(max(bulk.r, bulk.g), max(bulk.b, 1e-4));
+    multiple *= pow(max(hue, vec3(1e-4)), vec3(shade));
     gDwPrTaub = taub;
     gDwPrTaus = taus;
     gDwPrDepth = depth;
