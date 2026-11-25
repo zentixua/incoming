@@ -158,10 +158,13 @@ less, a little earlier or later than its neighbours, and that dust shoots up and
 wave runs on. Each spot's dust rises to about one and a half times the height of the layer and settles back to it within
 about a second, so a small, uneven crest runs just behind the wave. Bare earth, fields and forests
 throw up thick dust; rock, roads, roofs and snow give only the dust of broken buildings, so there the wall is lower and
-thinner and the dust left behind is lighter.
+thinner and the dust left behind is lighter. The dust lies on the ground itself: it runs up over hills and down into
+valleys, and reaches all the way to the ground you see.
 For the first seconds a thin white condensation shell stands over the wave: the air behind it expands and cools below its dew
 point (Minecraft air is humid enough for it in clear weather and in rain).
-The dust has the colour of the ground it comes from: grey-brown over grass, fields and forest, pale tan over sand. Right
+The dust has the colour of the ground it comes from: grey-brown over grass, fields and forest, pale tan over sand, grey
+over roads, roofs and rock. Its coarse soil stays low and looks darker and earthier, the fine dust on the tops of the billows
+is paler, and patches of ground torn up side by side differ a little in tint. Right
 behind the wave it is clean dust; smoke darkens it only as the fires under it grow, over minutes, and only burning
 fires light it orange from below. The dust billows in lumps and eddies: the wave's wind throws it outward, the
 reverse wind stalls it and brings part of it back, then the air drawn in under the rising fireball lets the low dust creep

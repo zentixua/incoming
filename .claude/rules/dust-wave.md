@@ -5,6 +5,7 @@ paths:
   - "mod/src/main/java/ua/zentix/incoming/client/nuclear/DustSources.java"
   - "mod/src/main/java/ua/zentix/incoming/client/nuclear/DustMaterialTiles.java"
   - "mod/src/main/java/ua/zentix/incoming/client/nuclear/PallField.java"
+  - "mod/src/main/java/ua/zentix/incoming/client/nuclear/DustGround.java"
   - "mod/src/main/resources/assets/incoming/shaders/include/dustwall.glsl"
   - "mod/src/main/resources/assets/incoming/shaders/include/wall_layer.glsl"
   - "mod/src/main/resources/assets/incoming/shaders/core/fx_dustwall*"
@@ -37,7 +38,14 @@ paths:
   each: arrival row, 32 log-age rows, the spray row, the frame-input row; `dwLoad`); slots are stable per detonation
   (`SLOT_OF`, idle slots free after 120 frames). A ray draws its eight nearest source crossings in full, further ones
   noise-free (`gDwFull`). A source first drawn already aged fades in over 1 s (live only).
-- Ground: each source has its own 128² terrain map (`PallGround`, atlas `Sampler3`) and two ground-material tiles
+- Ground: the dust lies on the eye's own ground (`DustGround`: two 128² tiles centred on the eye, fine 4–16 m over the drawn
+  chunks by render distance, coarse 32 m over 4 km; the atlas's last two tiles, `DwTerrain0/1`), from what the client knows
+  (`FarTerrain.dust`: client chunks below permeable canopies, then LSS/Voxy/DH map tiles); the fine tile takes each cell's lowest
+  column, the coarse their mean. `dwFloor` blends fine → coarse → the source's own map by share: the fine tile hands over inside
+  what it knows (8 cells), the coarse one continues the known ground 128 m past it (`DustGroundTest`: no step over 1 m per 2 m
+  at the drawn chunks' edge). The source's map learns the coarse tile's heights (`PallGround.learnAround`). Java readers of the
+  eye's height in the dust use the same floor (`DustGround.floor`). Each source also has its own 128² terrain map
+  (`PallGround`, atlas `Sampler3`), the floor beyond the eye's tiles, and two ground-material tiles
   (`DustMaterialTiles`: fine at the server's dense cell, coarse at its outer cell; RGBA8 water/sand/hard/known, filled
   1024 cells a frame from `SourceMaterial`; a known cell never changes). Water is a material of the same wave: the material
   mixes the dust law's column with the spray's (`dwMaterialLaw`, spray row); a water burst's base surge is a second
@@ -130,8 +138,18 @@ paths:
   24 stepped over a 64-block ridge 400 blocks out); where the world is drawn its depth alone ends it. The march, resolve and
   composite judge "the same place" by one rule (`pallSamePlace`: a looser rule in one pass let dust from behind a foreground
   edge through another). The frame air (haze, weather) lies in front of the dust (`pallAir`, `pallAirLightOf`).
-- The terrain map is coarser than the world: the dust extends a quarter to half its height below it, so it never hovers
-  over lowlands beneath the map.
+- A source's terrain map spans its pall's whole extent (1 Mt: 508 m cells) and its four fixed columns per cell knew 4–13 of
+  16 384 cells on the Zearth Silo map: laid on it alone, the dust's floor stood 10 m over the eye in a valley, the drawn ground
+  13 m under it with no dust on it, and every ray past the drawn chunks ended at their edge (a clean strip under a
+  flat-bottomed deck; step 7, `DustWallDiag.probe` −2 writes each ray's end, the scene's distance, the relief's end and the floor
+  there, `dw:ground=` dumps the maps). The relief search past the drawn chunks keeps the pall's lift law (the map dropped under
+  the ray at the start, as it was four map cells on).
+- Program size: each inlined copy of `dwFloor` (three tile fetches) cost AMD's compiler ~1.5 KB; one copy in every light
+  path added 11 KB (127 against a 114 KB budget). The floor is read once per march sample (`dwSourceDensity`'s caller), its
+  density, light and light paths take it (`gDwFloorAt`); the relief search reads the map alone.
+- Colour: one soil colour in white light drew the face as one tone whose rolls read only by light (chroma ±2.7 over the face
+  against ±9.8 on the reference wall, corr(lightness, chroma) ≈ 0). `dwDustTint` (presentation): coarse soil low darker and
+  earthier, fines on the tops paler, ±4 % per-point soil tint (seed), debris over hard ground greyer; the textured level only.
 - Eye inside the dust: the adaptation boost applies to the haze level only (on the textured level it washed the view to
   white); crest tufts apply only while the eye is above the band (inside they drew vertical bands).
 - The ray bound must stay under a 120 m camera, or every near-eye ray marches fine steps through empty air.
