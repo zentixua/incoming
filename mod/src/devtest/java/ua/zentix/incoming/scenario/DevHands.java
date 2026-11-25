@@ -120,7 +120,11 @@ public final class DevHands {
                 done(id, "ok");
             }
             case "press" -> presses.add(new Object[] {id, arg, tick});
-            default -> throw new IllegalArgumentException("unknown: " + line + " (cmd, reload, shot, hud, press)");
+            case "dw" -> {
+                DustWallSteps.apply(arg);
+                done(id, "ok");
+            }
+            default -> throw new IllegalArgumentException("unknown: " + line + " (cmd, reload, shot, hud, press, dw)");
         }
     }
 

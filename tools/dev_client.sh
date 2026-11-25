@@ -14,6 +14,8 @@
 #                         (about 0.7 GB an hour), else no sound
 #   tools/dev_client.sh cmd '<command>' …      chat commands in order (without the slash): tp @s 3514 73 -2298 55 -2
 #   tools/dev_client.sh hud on|off              F1
+#   tools/dev_client.sh dw <key>=<value> …      the dust wave's diagnostics, as the client scenario's dw: steps (devtest
+#                                               DustWallSteps: probe, dump, sweep, ground, freezeage, history, …)
 #   tools/dev_client.sh swap                    Gradle compiles; changed loaded classes are redefined (jdb); changed
 #                                               resources: the F3+T reload, answered when it has finished
 #   tools/dev_client.sh reload                  the F3+T reload alone (resources, the mod's shaders)
@@ -204,6 +206,7 @@ case "$c" in
   hud) need_running; hand "hud ${1:-off}" ;;
   swap) need_running; swap ;;
   reload) need_running; reload ;;
+  dw) need_running; for a in "$@"; do hand "dw $a" || exit 1; done ;;
   shot) need_running; [ $# -ge 1 ] || { echo "shot <name> [--settle s]" >&2; exit 2; }; shot "$@" ;;
   stop) stop ;;
   status) if running; then echo "running ($UNIT)"; else echo "not running"; fi ;;
