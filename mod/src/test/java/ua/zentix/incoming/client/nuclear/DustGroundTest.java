@@ -22,20 +22,14 @@ class DustGroundTest {
         return 70 + 40 * (1 - Math.exp(-Math.pow(x / 150, 2)));
     }
 
-    @org.junit.jupiter.api.BeforeEach
-    void unbounded() {
-        DustGround.surveyNanos = Long.MAX_VALUE;
-    }
-
     @AfterEach
     void clear() {
         DustGround.reset();
-        DustGround.surveyNanos = DustGround.SURVEY_NANOS;
     }
 
     private static void sweep(double ex, double ey, double ez, double known) {
         for (int i = 0; i < 40; i++) {
-            DustGround.update((x, z) -> Math.hypot(x - ex, z - ez) <= known ? Math.floor(valley(x, z)) : Double.NaN, ex, ey, ez, 12, i == 39);
+            DustGround.update((x, z) -> Math.hypot(x - ex, z - ez) <= known ? Math.floor(valley(x, z)) : Double.NaN, ex, ey, ez, 12, i == 39, Long.MAX_VALUE);
         }
     }
 
@@ -69,7 +63,7 @@ class DustGroundTest {
         sweep(0, 71.6, 0, 192);
         double before = DustGround.floor(-100, 0, 0);
         // the eye walks 100 m east (the spot stays inside the fine tile); nothing new is learned: the cells it saw keep their heights
-        for (int i = 0; i < 40; i++) DustGround.update((x, z) -> Double.NaN, 100, 90, 0, 12, i == 39);
+        for (int i = 0; i < 40; i++) DustGround.update((x, z) -> Double.NaN, 100, 90, 0, 12, i == 39, Long.MAX_VALUE);
         assertEquals(before, DustGround.floor(-100, 0, 0), 0.25);
     }
 
@@ -112,6 +106,46 @@ class DustGroundTest {
         String search = s.substring(s.indexOf("float dwRayFloor("), s.indexOf("return 1e9;\n}", s.indexOf("float dwRayFloor(")));
         assertTrue(search.contains("q.y - dwFloorCoarse(q.xz)") && search.contains("q0.y - dwFloorCoarse(q0.xz)"),
                 "the shader's relief search reads the floor the dust lies on");
+    }
+
+    /** Rolling hills ±25 m in whole blocks. */
+    private static double hills(double x, double z) {
+        return Math.floor(80 + 12 * Math.sin(x / 70) * Math.cos(z / 90) + 8 * Math.sin((x + z) / 45) + 5 * Math.sin(x / 23 - z / 31));
+    }
+
+    /**
+     * Past what the client knows the floor is where the ground was last seen and stays there while the player moves (sprint and
+     * elytra over hills, the client knowing 12 chunks around the eye): taken afresh at each refill, the moving edge of the drawn
+     * chunks reset the floor 1–2 km out by up to 7.3 m sprinting and 18.6 m gliding, 4–17 times in 30 s.
+     */
+    @Test
+    void farFloorHoldsWhileMoving() {
+        double[][] points = {{1200, 0}, {850, 850}, {600, 300}, {0, 1200}};
+        for (double speed : new double[] {0.28, 1.5}) {
+            DustGround.reset();
+            for (int i = 0; i < 40; i++) {
+                DustGround.update((x, z) -> Math.hypot(x, z) <= 192 ? hills(x, z) : Double.NaN, 0, hills(0, 0) + 2.62, 0, 12, i == 39,
+                        Long.MAX_VALUE);
+            }
+            double[] last = new double[points.length];
+            for (int p = 0; p < points.length; p++) last[p] = DustGround.floor(points[p][0], points[p][1], 80);
+            long v = DustGround.version();
+            for (int t = 1; t <= 600; t++) {
+                final double ex = speed * t;
+                DustGround.update((x, z) -> Math.hypot(x - ex, z) <= 192 ? hills(x, z) : Double.NaN, ex, hills(ex, 0) + 2.62, 0, 12, false,
+                        Long.MAX_VALUE);
+                if (DustGround.version() == v) continue;
+                v = DustGround.version();
+                for (int p = 0; p < points.length; p++) {
+                    double f = DustGround.floor(points[p][0], points[p][1], 80);
+                    // (a point the drawn chunks reach, or near the tile's edge where the map takes over, may change: real data)
+                    boolean far = Math.hypot(points[p][0] - ex, points[p][1]) > 400;
+                    if (far) assertEquals(last[p], f, 1.0, String.format(java.util.Locale.ROOT,
+                            "speed %.2f, tick %d: the floor at (%.0f, %.0f) jumped", speed, t, points[p][0], points[p][1]));
+                    last[p] = f;
+                }
+            }
+        }
     }
 
     @Test

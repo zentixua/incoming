@@ -42,12 +42,16 @@ paths:
   chunks by render distance, coarse 32 m over 4 km; the atlas's last two tiles, `DwTerrain0/1`), from what the client knows
   (`FarTerrain.dust`: client chunks below permeable canopies, then LSS/Voxy/DH map tiles); the fine tile takes each cell's lowest
   column, the coarse their mean. `dwFloor` blends fine → coarse → the source's own map by share: the fine tile hands over inside
-  what it knows (8 cells), past what the client knows the coarse one holds the ground where it was last seen (nearest known cell)
-  out to its edge, where the source's map takes over (`DustGroundTest`: no step over 1 m per 2 m at the drawn chunks' edge;
-  `DustGroundRayEndTest`: a level ray down a valley runs on in vanilla; a mean of the known area or a blend into the map from
-  the known edge stood 1–11 m over a valley floor and ended rays 14–99 m past the drawn chunks with a third of the sky left); a re-centred tile refills in the same tick (`DustGroundRecentreTest`), and every view uses the
-  tiles' one height reference (`DustGround.refY`). The source's map learns the coarse tile's floor inside its edge fade (`PallGround.learnAround`), so the handover at the
-  tile's edge has no step. Java readers of the
+  what it knows (8 cells); past what the client knows the coarse one holds the ground where it was last seen: an unknown cell
+  takes its nearest known cell's height at its first fill and keeps it until it is known or leaves the tile, out to the tile's
+  edge, where the source's map takes over. A mean of the known area or a blend into the map from the known edge stands over a
+  valley floor and ends rays down it short of the ground (`DustGroundRayEndTest`); a nearest height taken afresh at each refill
+  moves the floor 1–2 km out by metres as the player moves (`DustGroundTest.farFloorHoldsWhileMoving`); `DustGroundTest` also
+  holds no step over 1 m per 2 m at the drawn chunks' edge. A re-centred tile refills in the same tick (`DustGroundRecentreTest`),
+  every view uses the tiles' one height reference (`DustGround.refY`), and the survey takes at most 0.25 ms a tile per client
+  tick (`DustGround.SURVEY_NANOS`). The source's map learns what the coarse tile knows (`PallGround.learnAround`). Known limit:
+  past the drawn chunks without an LOD map the held heights keep one height along each bearing from where they were seen
+  (radial ridges and grooves to 1.8 km, unseen beyond Minecraft's own fog). Java readers of the
   eye's height in the dust use the same floor (`DustGround.floor`). Each source also has its own 128² terrain map
   (`PallGround`, atlas `Sampler3`), the floor beyond the eye's tiles, and two ground-material tiles
   (`DustMaterialTiles`: fine at the server's dense cell, coarse at its outer cell; RGBA8 water/sand/hard/known, filled
@@ -155,7 +159,9 @@ paths:
   density, light and light paths take it (`gDwFloorAt`); the relief search's loop reads the coarse floor (116 KB).
 - Colour: one soil colour in white light draws the face as one tone whose rolls read only by light (chroma ±2.7 over the face
   against ±9.8 on the reference wall, corr(lightness, chroma) ≈ 0). `dwDustTint` (presentation): coarse soil low darker and
-  earthier, fines on the tops paler, ±4 % per-point soil tint (seed), debris over hard ground greyer; the textured level only.
+  earthier and fines on the billow tops paler (`gDwLow`: half the height in the column, half the billow texture), ±4 % per-point
+  soil tint (seed), debris over hard ground greyer; the multiply scattered light's hue deepens with the brighter light's depth
+  into the dust (a shaded fold reads earthier, `shade`); the textured level only.
 - Eye inside the dust: the adaptation boost applies to the haze level only (on the textured level it washed the view to
   white); crest tufts apply only while the eye is above the band (inside they drew vertical bands).
 - The ray bound must stay under a 120 m camera, or every near-eye ray marches fine steps through empty air.

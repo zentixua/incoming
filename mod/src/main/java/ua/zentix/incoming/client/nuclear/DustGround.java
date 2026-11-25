@@ -33,17 +33,12 @@ public final class DustGround {
     /** Cells per tile surveyed per client tick: a full sweep of a tile in 32 ticks. */
     static final int PER_TICK = 512;
     /**
-     * Render-thread time a tile's survey may take per client tick, ns: unbounded, 512 cells a tile cost 1.4 ms a tick steadily
-     * and 2.6–8 ms in the burst's first seconds on the Zearth Silo valley spot (forest: each column scans down through the
-     * canopy); bounded, a tile's sweep takes a few seconds, the cells nearest the eye first.
+     * Render-thread time a tile's survey may take per client tick, ns: a column costs 1.4–8 µs (a forest's columns scan down
+     * through the canopy), so 512 cells a tile would take 1.4–8 ms a tick; bounded, the fine tile knows the drawn chunks within
+     * 2.5–8 s, the cells nearest the eye first.
      */
     static final long SURVEY_NANOS = 250_000;
-    private static long deadline() {
-        return surveyNanos == Long.MAX_VALUE ? Long.MAX_VALUE : System.nanoTime() + surveyNanos;
-    }
 
-    /** The survey's time bound in use (tests lift it: a cold JVM on a shared runner must not decide what a sweep learns). */
-    static long surveyNanos = SURVEY_NANOS;
     /** Cells over which the fine tile hands over to the coarse one inside what it knows. */
     static final float FINE_RAMP = 8;
     /** Refill (pull-push) and upload at most this often, ticks. */
@@ -61,12 +56,20 @@ public final class DustGround {
         final float[] filled = new float[SIDE * SIDE];
         /** Its share over the next level per cell, 0..1 ({@link #fill}). */
         final float[] knownFlag = new float[SIDE * SIDE];
+        /**
+         * Coarse tile: the height an unknown cell took the first time it was filled (its nearest known cell's then), kept until
+         * the cell itself is known or leaves the tile; NaN never filled.
+         */
+        final float[] held = new float[SIDE * SIDE];
+        /** Whether any cell is known (the coarse tile's share is 1 everywhere then, else 0). */
+        boolean any;
         int next;
         boolean on, dirty;
 
         Tile(boolean fine) {
             this.fine = fine;
             Arrays.fill(known, Float.NaN);
+            Arrays.fill(held, Float.NaN);
         }
 
         /**
@@ -81,17 +84,20 @@ public final class DustGround {
             double nx = Math.floor((ex - span / 2) / step + 0.5) * step, nz = Math.floor((ez - span / 2) / step + 0.5) * step;
             boolean far = Math.abs(ex - (x0 + span / 2)) > step || Math.abs(ez - (z0 + span / 2)) > step;
             if (on && cellNow == cell && !far) return false;
-            float[] was = known.clone();
+            float[] was = known.clone(), wasHeld = held.clone();
             int di = (int) Math.round((nx - x0) / cellNow), dj = (int) Math.round((nz - z0) / cellNow);
             boolean keep = on && cellNow == cell;
             Arrays.fill(known, Float.NaN);
+            Arrays.fill(held, Float.NaN);
             if (keep) {
                 for (int j = 0; j < SIDE; j++) {
                     int oj = j + dj;
                     if (oj < 0 || oj >= SIDE) continue;
                     for (int i = 0; i < SIDE; i++) {
                         int oi = i + di;
-                        if (oi >= 0 && oi < SIDE) known[j * SIDE + i] = was[oj * SIDE + oi];
+                        if (oi < 0 || oi >= SIDE) continue;
+                        known[j * SIDE + i] = was[oj * SIDE + oi];
+                        held[j * SIDE + i] = wasHeld[oj * SIDE + oi];
                     }
                 }
             }
@@ -99,14 +105,14 @@ public final class DustGround {
             z0 = nz;
             cell = cellNow;
             on = true;
-            next = 0;
+            // (the sweep goes on where it was: restarting it at each re-centre left a gliding eye's leading side unknown)
             dirty = true;
             return true;
         }
 
         void survey(Sightline.Heights heights, int count, long until) {
             for (int n = 0; n < count; n++) {
-                if ((n & 31) == 31 && until != Long.MAX_VALUE && System.nanoTime() - until > 0) return;
+                if ((n & 7) == 7 && until != Long.MAX_VALUE && System.nanoTime() - until > 0) return;
                 int i = ORDER[next];
                 next = (next + 1) % ORDER.length;
                 double h = measure(i, heights);
@@ -135,7 +141,10 @@ public final class DustGround {
             return fine ? low : sum / n;
         }
 
-        /** Pull-push the unknown cells from the known ones (the eye's ground at the middle when nothing is known). */
+        /**
+         * Refill: the fine tile pulls and pushes its unknown cells from the known ones and hands over inside what it knows; the
+         * coarse one holds the ground where it was last seen (the eye's ground when nothing is known).
+         */
         void fill(float eyeGround) {
             float[] d = knownFlag;
             if (fine) {
@@ -148,20 +157,33 @@ public final class DustGround {
                 chamfer(d, null);
                 for (int i = 0; i < SIDE * SIDE; i++) d[i] = Math.min(d[i] / FINE_RAMP, 1f);
             } else {
-                // past what the client knows the coarse tile holds the ground where it was last seen, cell by cell the nearest
-                // known one's (the drawn chunks' edge continued outward, as the eye last saw it), up to the tile's edge, where the
-                // detonation's map takes over. A mean of the known area (ridges with the valley) or a blend into the map from the
-                // known edge on stood 1–11 m over a valley's floor 14–99 m past the drawn chunks, and the rays ended there with a
-                // third of the sky left (DustGroundTest.vanillaRaysRunDownTheValley)
-                boolean any = false;
+                // past what the client knows the coarse tile holds the ground where it was last seen: an unknown cell takes its
+                // nearest known cell's height the first time it is filled and keeps it until it is known itself or leaves the
+                // tile (taken afresh at every fill, the moving edge of the drawn chunks reset the floor 1–2 km out by 7–19 m at
+                // each refill as the player moved; DustGroundTest.farFloorHoldsWhileMoving). The detonation's map takes over at
+                // the tile's edge. A mean of the known area, or a blend into the map from the known edge, stands over a
+                // valley's floor and ends rays down it short of the ground (DustGroundRayEndTest)
+                any = false;
+                float[] carry = CARRY;
                 for (int i = 0; i < SIDE * SIDE; i++) {
                     boolean has = !Float.isNaN(known[i]);
                     any |= has;
                     d[i] = has ? 0 : Float.MAX_VALUE;
-                    filled[i] = has ? known[i] : eyeGround;
+                    carry[i] = has ? known[i] : eyeGround;
                 }
-                if (any) chamfer(d, filled);
-                java.util.Arrays.fill(d, any ? 1f : 0f);
+                if (any) chamfer(d, carry);
+                for (int i = 0; i < SIDE * SIDE; i++) {
+                    if (!Float.isNaN(known[i])) {
+                        filled[i] = known[i];
+                        held[i] = Float.NaN;
+                    } else if (any) {
+                        if (Float.isNaN(held[i])) held[i] = carry[i];
+                        filled[i] = held[i];
+                    } else {
+                        filled[i] = eyeGround;
+                    }
+                }
+                Arrays.fill(d, any ? 1f : 0f);
             }
             dirty = false;
         }
@@ -208,6 +230,8 @@ public final class DustGround {
     }
 
     private static final Tile FINE = new Tile(true), COARSE = new Tile(false);
+    /** The coarse fill's nearest-known carry (client tick thread). */
+    private static final float[] CARRY = new float[SIDE * SIDE];
     private static int sinceFill;
     private static long version;
     private static ClientLevel world;
@@ -235,16 +259,19 @@ public final class DustGround {
         update((x, z) -> {
             double h = heights.at(x, z);
             return h <= floor ? Double.NaN : h;
-        }, eye.x, eye.y, eye.z, renderChunks, false);
+        }, eye.x, eye.y, eye.z, renderChunks, false, SURVEY_NANOS);
     }
 
-    /** One tick's re-centring, survey ({@code heights}: NaN unknown) and, every {@link #FILL_TICKS} or when {@code fill}, refill. */
-    static void update(Sightline.Heights heights, double ex, double ey, double ez, int renderChunks, boolean fill) {
+    /**
+     * One tick's re-centring, survey ({@code heights}: NaN unknown; each tile within {@code bound} ns, {@code Long.MAX_VALUE}
+     * unbounded) and, every {@link #FILL_TICKS} or when {@code fill}, refill.
+     */
+    static void update(Sightline.Heights heights, double ex, double ey, double ez, int renderChunks, boolean fill, long bound) {
         long start = System.nanoTime();
         boolean moved = FINE.centre(ex, ez, fineCell(renderChunks));
         moved |= COARSE.centre(ex, ez, COARSE_CELL);
-        FINE.survey(heights, PER_TICK, deadline());
-        COARSE.survey(heights, PER_TICK, deadline());
+        FINE.survey(heights, PER_TICK, bound == Long.MAX_VALUE ? Long.MAX_VALUE : System.nanoTime() + bound);
+        COARSE.survey(heights, PER_TICK, bound == Long.MAX_VALUE ? Long.MAX_VALUE : System.nanoTime() + bound);
         // a re-centred tile refills in the same tick: its origin reaches the shader and the Java readers with its heights
         if (moved || (++sinceFill >= FILL_TICKS || fill) && (FINE.dirty || COARSE.dirty)) {
             float ground = (float) (ey - 1.62);
@@ -275,6 +302,8 @@ public final class DustGround {
             t.on = false;
             Arrays.fill(t.known, Float.NaN);
             Arrays.fill(t.knownFlag, 0);
+            Arrays.fill(t.held, Float.NaN);
+            t.any = false;
         }
         version++;
     }

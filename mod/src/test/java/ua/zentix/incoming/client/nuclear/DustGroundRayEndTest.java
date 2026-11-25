@@ -20,15 +20,9 @@ class DustGroundRayEndTest {
         return 70 + 40 * (1 - Math.exp(-Math.pow(x / 150, 2)));
     }
 
-    @org.junit.jupiter.api.BeforeEach
-    void unbounded() {
-        DustGround.surveyNanos = Long.MAX_VALUE;
-    }
-
     @AfterEach
     void clear() {
         DustGround.reset();
-        DustGround.surveyNanos = DustGround.SURVEY_NANOS;
     }
 
     /** dwRayFloor as DustGroundTest.rayEnd (horizontal start 168 = floorFrom at 12 chunks, fade 4 map cells). */
@@ -51,7 +45,7 @@ class DustGroundRayEndTest {
     private static double run(String name, double knownRadius) {
         DustGround.reset();
         for (int i = 0; i < 40; i++) {
-            DustGround.update((x, z) -> Math.hypot(x, z) <= knownRadius ? Math.floor(valley(x, z)) : Double.NaN, 0, 71.62, 0, 12, i == 39);
+            DustGround.update((x, z) -> Math.hypot(x, z) <= knownRadius ? Math.floor(valley(x, z)) : Double.NaN, 0, 71.62, 0, 12, i == 39, Long.MAX_VALUE);
         }
         double map = 0;
         for (double x = -254; x <= 254; x += 8) map += Math.floor(valley(x, 0)) / 64;

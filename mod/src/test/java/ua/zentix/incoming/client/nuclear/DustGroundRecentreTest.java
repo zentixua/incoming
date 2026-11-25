@@ -18,15 +18,9 @@ class DustGroundRecentreTest {
         return Math.floor(70 + 40 * (1 - Math.exp(-Math.pow(x / 150, 2))));
     }
 
-    @org.junit.jupiter.api.BeforeEach
-    void unbounded() {
-        DustGround.surveyNanos = Long.MAX_VALUE;
-    }
-
     @AfterEach
     void clear() {
         DustGround.reset();
-        DustGround.surveyNanos = DustGround.SURVEY_NANOS;
     }
 
     @Test
@@ -36,7 +30,7 @@ class DustGroundRecentreTest {
         double ex = 0, ez = 0;
         for (int i = 0; i < 40; i++) {
             final double cx = ex, cz = ez;
-            DustGround.update((x, z) -> Math.hypot(x - cx, z - cz) <= 192 ? ground(x, z) : Double.NaN, ex, ground(ex, ez) + 1.62, ez, 12, i == 39);
+            DustGround.update((x, z) -> Math.hypot(x - cx, z - cz) <= 192 ? ground(x, z) : Double.NaN, ex, ground(ex, ez) + 1.62, ez, 12, i == 39, Long.MAX_VALUE);
         }
         double worst = 0, worstAt = 0;
         int bad = 0;
@@ -44,7 +38,7 @@ class DustGroundRecentreTest {
         for (int tick = 0; tick < 1430; tick++) {
             ex += 0.28;
             final double cx = ex, cz = ez;
-            DustGround.update((x, z) -> Math.hypot(x - cx, z - cz) <= 192 ? ground(x, z) : Double.NaN, ex, ground(ex, ez) + 1.62, ez, 12, false);
+            DustGround.update((x, z) -> Math.hypot(x - cx, z - cz) <= 192 ? ground(x, z) : Double.NaN, ex, ground(ex, ez) + 1.62, ez, 12, false, Long.MAX_VALUE);
             // the floor at the eye and 40 m around it (the dust the player stands in)
             double e = 0;
             for (double dx = -40; dx <= 40; dx += 20) e = Math.max(e, Math.abs(DustGround.floor(ex + dx, ez, 0) - ground(ex + dx, ez)));
@@ -63,12 +57,12 @@ class DustGroundRecentreTest {
         // a camera jump (projectile camera, replay camera, /tp): the old place's heights stay readable at the new place
         double ex = 0;
         for (int i = 0; i < 40; i++) {
-            DustGround.update((x, z) -> Math.hypot(x, z) <= 192 ? ground(x, z) : Double.NaN, 0, 71.62, 0, 12, i == 39);
+            DustGround.update((x, z) -> Math.hypot(x, z) <= 192 ? ground(x, z) : Double.NaN, 0, 71.62, 0, 12, i == 39, Long.MAX_VALUE);
         }
         // a refill happened a tick ago (sinceFill < FILL_TICKS): a block changed near the eye (a ruin, a chunk arriving)
-        DustGround.update((x, z) -> Math.hypot(x, z) <= 192 ? ground(x, z) + 1 : Double.NaN, 0, 71.62, 0, 12, true);
+        DustGround.update((x, z) -> Math.hypot(x, z) <= 192 ? ground(x, z) + 1 : Double.NaN, 0, 71.62, 0, 12, true, Long.MAX_VALUE);
         // the camera is now 3 km east over flat ground at y 140, nothing known there yet
-        DustGround.update((x, z) -> Math.hypot(x - 3000, z) <= 192 ? 140.0 : Double.NaN, 3000, 141.62, 0, 12, false);
+        DustGround.update((x, z) -> Math.hypot(x - 3000, z) <= 192 ? 140.0 : Double.NaN, 3000, 141.62, 0, 12, false, Long.MAX_VALUE);
         double floor = DustGround.floor(3000, 0, 140);
         String msg = String.format(Locale.ROOT, "floor under the new eye %.1f, ground 140 (fallback map 140)", floor);
         assertTrue(Math.abs(floor - 140) < 2, msg);
