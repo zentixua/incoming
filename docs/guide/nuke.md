@@ -188,7 +188,9 @@ heal or are repaired. A game hour is an hour of the world's day:
 - with a mod that lengthens the day, the same hours take longer, up to real hours;
 - with the day cycle stopped (`doDaylightCycle false`), everything runs in real time;
 - sleeping or `/time add` moves the consequences forward with the clock: after a night's sleep the fires are out and
-  the fallout has decayed. `/time set` to an earlier time never turns them back.
+  the fallout has decayed. `/time set` to an earlier time never turns them back;
+- `/tick freeze` holds the strike's moment like the rest of the world: the flash, wave and clouds stand still while you
+  look around, and `/tick step` moves them on.
 
 An effect never comes before its cause: fallout lands as the cloud passes over, and black rain starts only once the
 firestorm has formed, at least 20 real minutes after the burst.

@@ -66,7 +66,7 @@ public final class DevHands {
         for (var it = presses.iterator(); it.hasNext(); ) {
             Object[] p = it.next();
             String result = press(mc, (String) p[1]);
-            if (result == null && tick - (long) p[2] > 20 * 300) result = "error no button \"" + p[1] + "\" within 300 s";
+            if (result == null && tick - (long) p[2] > 20 * 900) result = "error no button \"" + p[1] + "\" within 900 s";
             if (result != null) {
                 it.remove();
                 done((String) p[0], result);

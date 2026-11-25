@@ -54,8 +54,13 @@ hand() {
 }
 
 reload() {
-  local t0; t0=$(date +%s.%N)
+  local t0 failed; t0=$(date +%s.%N)
+  # the mod logs a shader that fails to compile and draws without it: say so instead of a silent "ok"
+  failed=$(grep -c 'failed to load' "$RUN/logs/latest.log" 2>/dev/null); failed=${failed:-0}
   hand reload || return 1
+  if [ "$(grep -c 'failed to load' "$RUN/logs/latest.log" 2>/dev/null || true)" -gt "$failed" ]; then
+    grep 'failed to load' "$RUN/logs/latest.log" | tail -n 3 >&2; echo "reload: a shader failed to load (above)" >&2; return 1
+  fi
   # the loading overlay fades out for a second after the reload ends
   sleep 1.2
   echo "reload: $(since "$t0") s"
