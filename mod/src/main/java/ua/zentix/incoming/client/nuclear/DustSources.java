@@ -149,10 +149,29 @@ public final class DustSources {
             w.count++;
         }
         light(f, w);
+        terrain(eye, w);
         w.adapt = (float) adapt;
         w.active = w.count > 0;
         summary(drawn, w);
         return w.active;
+    }
+
+    /** The eye-centred ground tiles' places from this view's eye ({@code DwTerrain0/1}; the tiles follow the player's eye). */
+    private static void terrain(Vec3 eye, DustWallPass.Frame w) {
+        double ref = 64 * Math.round(eye.y / 64);
+        w.terrainRef = ref;
+        for (int k = 0; k < 2; k++) {
+            float[] t = k == 0 ? w.terrain0 : w.terrain1;
+            double[] p = DustGround.place(k);
+            if (p == null) {
+                java.util.Arrays.fill(t, 0f);
+                continue;
+            }
+            t[0] = (float) (p[0] - eye.x);
+            t[1] = (float) (p[1] - eye.z);
+            t[2] = (float) p[2];
+            t[3] = (float) (ref - eye.y);
+        }
     }
 
     /** A4: the eligible and drawn sources of this view (once a second under nukeDiag); every eligible source beyond the frame's cap is named. */
@@ -296,7 +315,9 @@ public final class DustSources {
         // (the haze level's light only: the textured level's multiply scattered light never falls below its floor inside the
         // young dust, and the boost on it washed a noon view from inside the young wave to flat cream; its share is
         // the textured share at the eye's own age)
-        float[] at = {ex, ey, ez};
+        // the eye's height above the dust's ground (the march's floor, DustGround), not above ground zero's ground
+        float floor = (float) (DustGround.floor(eye.x, eye.z, d.groundY() + a.ground.at(eye.x, eye.z)) - d.groundY());
+        float[] at = {ex, ey - floor, ez};
         double xe = Math.min(Math.hypot(ex, ez) / Math.max(reach, 1), 1) * (n - 1);
         int je = (int) Math.min(Math.floor(xe), n - 2);
         double haze = 1 - PallField.textured(t - (table[4 * je] + (xe - je) * (table[4 * (je + 1)] - table[4 * je])));

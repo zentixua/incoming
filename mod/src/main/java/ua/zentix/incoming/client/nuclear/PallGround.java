@@ -128,6 +128,27 @@ public final class PallGround {
         fill();
     }
 
+    /**
+     * Diagnostics (client scenario {@code dw:ground=<prefix>}): the map as filled and as known, little-endian float32
+     * {@code <prefix>_filled.f32} (height, water, hard, sand per cell) and {@code <prefix>_known.f32} (height; NaN unknown), with its
+     * place in {@code <prefix>.json}.
+     */
+    public void writeDiag(String prefix) throws java.io.IOException {
+        java.nio.file.Path base = java.nio.file.Path.of(prefix);
+        java.nio.file.Files.createDirectories(base.toAbsolutePath().getParent());
+        java.nio.ByteBuffer a = java.nio.ByteBuffer.allocate(map.length * 4).order(java.nio.ByteOrder.LITTLE_ENDIAN);
+        a.asFloatBuffer().put(map);
+        java.nio.file.Files.write(java.nio.file.Path.of(prefix + "_filled.f32"), a.array());
+        java.nio.ByteBuffer b = java.nio.ByteBuffer.allocate(known.length * 4).order(java.nio.ByteOrder.LITTLE_ENDIAN);
+        b.asFloatBuffer().put(known);
+        java.nio.file.Files.write(java.nio.file.Path.of(prefix + "_known.f32"), b.array());
+        int n = 0;
+        for (float k : known) if (!Float.isNaN(k)) n++;
+        java.nio.file.Files.writeString(java.nio.file.Path.of(prefix + ".json"), String.format(java.util.Locale.ROOT,
+                "{\"side\": %d, \"cx\": %.3f, \"cz\": %.3f, \"groundY\": %.3f, \"half\": %.3f, \"cell\": %.3f, \"lo\": %.3f, \"hi\": %.3f, \"known\": %d, \"version\": %d}",
+                SIDE, cx, cz, groundY, half, cell, lo, hi, n, version));
+    }
+
     /** Map half-side, blocks. */
     double half() {
         return half;
@@ -182,7 +203,7 @@ public final class PallGround {
                 next = (next + 1) % ORDER.length;
                 if (heights != null) {
                     double h = measure(i, heights::at);
-                    if (!Double.isNaN(h)) dirty |= learn(known, i, (float) (h - groundY), 0.5f);
+                    if (!Double.isNaN(h) && !tiled[i]) dirty |= learn(known, i, (float) (h - groundY), 0.5f);
                 }
                 if (water != null) {
                     double w = measure(i, water::at);
@@ -200,6 +221,40 @@ public final class PallGround {
         }
         if (grew || (float) pall.under() != filledUnder || ++sinceFill >= FILL_TICKS && dirty) fill();
     }
+
+    /**
+     * Learn heights from the dust's eye-centred coarse tile ({@link DustGround}): each map cell a quarter or more of whose area the
+     * tile knows takes their mean (four fixed columns per cell knew 4–13 of 16 384 cells of a 1 Mt map, the rest a fill ±25 m
+     * off the real ground; step 7).
+     */
+    void learnAround() {
+        DustGround.Tile t = DustGround.coarse();
+        if (!t.on) return;
+        float[] sum = SUM, count = COUNT;
+        Arrays.fill(sum, 0);
+        Arrays.fill(count, 0);
+        for (int j = 0; j < DustGround.SIDE; j++) {
+            for (int i = 0; i < DustGround.SIDE; i++) {
+                float h = t.known[j * DustGround.SIDE + i];
+                if (Float.isNaN(h)) continue;
+                double x = t.x0 + (i + 0.5) * t.cell, z = t.z0 + (j + 0.5) * t.cell;
+                int ci = Mth.floor((x - cx + half) / cell), cj = Mth.floor((z - cz + half) / cell);
+                if (ci < 0 || cj < 0 || ci >= SIDE || cj >= SIDE) continue;
+                sum[cj * SIDE + ci] += h;
+                count[cj * SIDE + ci]++;
+            }
+        }
+        double need = Math.max(1, 0.25 * cell * cell / (t.cell * t.cell));
+        for (int i = 0; i < SIDE * SIDE; i++) {
+            if (count[i] < need) continue;
+            dirty |= learn(known, i, (float) (sum[i] / count[i] - groundY), 0.5f);
+            tiled[i] = true;
+        }
+    }
+
+    private static final float[] SUM = new float[SIDE * SIDE], COUNT = new float[SIDE * SIDE];
+    /** Cells whose height came from the dust's tile (the coarser four-column survey leaves them). */
+    private boolean[] tiled = new boolean[SIDE * SIDE];
 
     /** Cell i is now {@code v}: true for new data (previously unknown or difference exceeds {@code tolerance}). */
     private static boolean learn(float[] cells, int i, float v, float tolerance) {
@@ -226,6 +281,7 @@ public final class PallGround {
     private void resize(double to) {
         double h = Math.max(to, MIN_CELL * SIDE / 2), c = 2 * h / SIDE;
         if (half > 0) {
+            tiled = new boolean[SIDE * SIDE];
             known = moved(known, h, c);
             knownWet = moved(knownWet, h, c);
             knownHard = moved(knownHard, h, c);
@@ -297,7 +353,12 @@ public final class PallGround {
      * take a coarser copy (bilinear, no steps). Ground zero is always known — {@code centre} in its four surrounding cells
      * with weight one cell; if nothing is known, {@code centre} everywhere.
      */
-    private static void pullPush(float[] cells, float centre) {
+    /** The last {@link #pullPush} result (shared: client tick thread only); copy it before the next fill. */
+    static float[] pulled() {
+        return V[0];
+    }
+
+    static void pullPush(float[] cells, float centre) {
         int levels = LEVELS;
         float[][] v = V, w = W;
         if (v[0] == null) {
@@ -417,7 +478,7 @@ public final class PallGround {
      * An n × n copy at (x, y) in its cell coordinates (cell 0 center = 0), edges clamped; each cell has {@code stride} numbers,
      * taking the {@code offset}-th.
      */
-    private static float bilinear(float[] t, int n, int stride, int offset, float x, float y) {
+    static float bilinear(float[] t, int n, int stride, int offset, float x, float y) {
         if (n == 1) return t[offset];
         x = Mth.clamp(x, 0, n - 1);
         y = Mth.clamp(y, 0, n - 1);

@@ -36,6 +36,8 @@
         { "name": "DwSlotsC", "type": "float", "count": 4, "values": [8.0, 9.0, 10.0, 11.0] },
         { "name": "DwSlotsD", "type": "float", "count": 4, "values": [12.0, 13.0, 14.0, 15.0] },
         { "name": "DwMistAlbedo", "type": "float", "count": 3, "values": [0.99, 0.99, 0.99] },
-        { "name": "DwMistBulk", "type": "float", "count": 3, "values": [0.8, 0.82, 0.84] }
+        { "name": "DwMistBulk", "type": "float", "count": 3, "values": [0.8, 0.82, 0.84] },
+        { "name": "DwTerrain0", "type": "float", "count": 4, "values": [0.0, 0.0, 0.0, 0.0] },
+        { "name": "DwTerrain1", "type": "float", "count": 4, "values": [0.0, 0.0, 0.0, 0.0] }
     ]
 }

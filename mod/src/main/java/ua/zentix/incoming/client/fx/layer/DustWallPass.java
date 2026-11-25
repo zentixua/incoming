@@ -204,6 +204,12 @@ public final class DustWallPass {
         /** The nearest source's eye from its ground zero and its clock (history reprojection), and its layer top at the eye. */
         public final float[] eye = new float[4];
         public float layerTop;
+        /**
+         * The dust's eye-centred ground tiles ({@code DustGround}): fine, coarse — origin from the eye (x, z), cell (0: off), the
+         * tiles' height reference minus the eye's height ({@code DwTerrain0/1}); the reference (world y, 64-block steps).
+         */
+        public final float[] terrain0 = new float[4], terrain1 = new float[4];
+        public double terrainRef;
         /** The nearest source (history continuity). */
         public Object source;
         /** The dust's presentation exposure ({@code DwAdapt}). */
@@ -321,6 +327,9 @@ public final class DustWallPass {
             if (PallPass.submits(m, warming)) OpenAir.bind(m, true, warming);
             if (!DustWallDiag.openAir) m.safeGetUniform("PallOpenAt").set(0f, 0f, 0f, 0f);
             m.safeGetUniform("DwSourceCount").set((float) (warming ? 1 : f.count));
+            boolean terrain = !warming && terrainUploaded && DustWallDiag.terrain;
+            m.safeGetUniform("DwTerrain0").set(f.terrain0[0], f.terrain0[1], terrain ? f.terrain0[2] : 0f, f.terrain0[3]);
+            m.safeGetUniform("DwTerrain1").set(f.terrain1[0], f.terrain1[1], terrain ? f.terrain1[2] : 0f, f.terrain1[3]);
             m.safeGetUniform("DwSlotsA").set(SLOT_OF[0], SLOT_OF[1], SLOT_OF[2], SLOT_OF[3]);
             m.safeGetUniform("DwSlotsB").set(SLOT_OF[4], SLOT_OF[5], SLOT_OF[6], SLOT_OF[7]);
             m.safeGetUniform("DwSlotsC").set(SLOT_OF[8], SLOT_OF[9], SLOT_OF[10], SLOT_OF[11]);
@@ -472,7 +481,7 @@ public final class DustWallPass {
             table = texture(GlConst.GL_NEAREST);
             GlStateManager._texImage2D(GlConst.GL_TEXTURE_2D, 0, GL30.GL_RGBA32F, NODES, sl * MAX_SOURCES, 0, GL11.GL_RGBA, GL11.GL_FLOAT, null);
             groundAtlas = texture(GlConst.GL_LINEAR);
-            GlStateManager._texImage2D(GlConst.GL_TEXTURE_2D, 0, GL30.GL_RGBA16F, GROUND_SIDE * MAX_SOURCES, GROUND_SIDE, 0, GL11.GL_RGBA,
+            GlStateManager._texImage2D(GlConst.GL_TEXTURE_2D, 0, GL30.GL_RGBA16F, GROUND_SIDE * (MAX_SOURCES + 2), GROUND_SIDE, 0, GL11.GL_RGBA,
                     GL11.GL_FLOAT, null);
             int side = ua.zentix.incoming.client.nuclear.DustMaterialTiles.SIDE;
             materialAtlas = texture(GlConst.GL_LINEAR);
@@ -526,7 +535,41 @@ public final class DustWallPass {
                 MATERIAL_IN[s] = mat;
             }
         }
+        if (!warming) uploadTerrain(f);
         GlStateManager._pixelStore(GL11.GL_UNPACK_ALIGNMENT, 4);
+    }
+
+    /** The eye-centred ground tiles' generation and height reference in the atlas ({@code DustGround}); whether both are there. */
+    private static long terrainVersion = -1;
+    private static double terrainRefIn = Double.NaN;
+    private static boolean terrainUploaded;
+    private static final float[] TERRAIN_RG = new float[2 * GROUND_SIDE * GROUND_SIDE];
+
+    /** The eye's fine and coarse ground tiles into the atlas's last two tiles when they or their height reference changed. */
+    private static void uploadTerrain(Frame f) {
+        long v = ua.zentix.incoming.client.nuclear.DustGround.version();
+        if (v == terrainVersion && f.terrainRef == terrainRefIn) return;
+        boolean all = true;
+        int n = GROUND_SIDE * GROUND_SIDE * 4;
+        if (groundBuffer == null) groundBuffer = MemoryUtil.memAllocFloat(n);
+        GlStateManager._bindTexture(groundAtlas);
+        unpack(4);
+        for (int k = 0; k < 2; k++) {
+            if (!ua.zentix.incoming.client.nuclear.DustGround.pack(k, f.terrainRef, TERRAIN_RG)) {
+                all = false;
+                continue;
+            }
+            groundBuffer.clear();
+            for (int i = 0; i < GROUND_SIDE * GROUND_SIDE; i++) groundBuffer.put(TERRAIN_RG[2 * i]).put(TERRAIN_RG[2 * i + 1]).put(0f).put(0f);
+            groundBuffer.flip();
+            GL11.glTexSubImage2D(GL11.GL_TEXTURE_2D, 0, (MAX_SOURCES + k) * GROUND_SIDE, 0, GROUND_SIDE, GROUND_SIDE, GL11.GL_RGBA,
+                    GL11.GL_FLOAT, groundBuffer);
+        }
+        PallPass.note("dust eye ground");
+        // a source's map upload compares its own owner and generation: the atlas still holds it
+        terrainVersion = v;
+        terrainRefIn = f.terrainRef;
+        terrainUploaded = all;
     }
 
     private static boolean targets(int w, int h, int d) {
@@ -855,6 +898,8 @@ public final class DustWallPass {
         java.util.Arrays.fill(TABLE_IN, null);
         java.util.Arrays.fill(GROUND_IN, null);
         java.util.Arrays.fill(MATERIAL_IN, null);
+        terrainVersion = -1;
+        terrainUploaded = false;
     }
 
     /** The pass's state for the timing log: resolution, step cap, history. */

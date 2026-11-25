@@ -57,6 +57,11 @@ public final class ClientNuclear {
         public final FireStorm storm;
         /** Terrain under pall ({@link PallGround}): end of its ray where no world lies behind. */
         final PallGround ground;
+
+        /** Diagnostics: this detonation's terrain map ({@link PallGround#writeDiag}). */
+        public void writeGroundDiag(String prefix) throws java.io.IOException {
+            ground.writeDiag(prefix);
+        }
         private SourceMaterial source;
         /** The dust wave's material tiles ({@link #materialTiles}): kept across a replay seek's copy, filled once. */
         private DustMaterialTiles tiles;
@@ -623,6 +628,7 @@ public final class ClientNuclear {
         MATERIALS.clear();
         stopAll();
         DETONATIONS.clear();
+        DustGround.reset();
         SHOW_ENDS.clear();
         WARNINGS.clear();
         radiation = null;
@@ -674,6 +680,8 @@ public final class ClientNuclear {
         // column-top water for pall map (its matter); absent under ceiling (Nether), like terrain
         FarTerrain.Water water = heights == null ? null : FarTerrain.water(level), hard = heights == null ? null : FarTerrain.hard(level),
                 sand = heights == null ? null : FarTerrain.sand(level);
+        // the dust's eye-centred ground (its floor over the drawn chunks and the near kilometres)
+        if (!DETONATIONS.isEmpty()) DustGround.tick(level, eye, mc.options.getEffectiveRenderDistance());
         for (Iterator<Active> it = DETONATIONS.values().iterator(); it.hasNext(); ) {
             Active a = it.next();
             a.tick();
@@ -684,7 +692,10 @@ public final class ClientNuclear {
             NukeWater.resolve(a, level);
             double wall = a.wall.reach(a.seconds(0));
             double seen = Math.hypot(eye.x - a.d.burst().x, eye.z - a.d.burst().z);
-            if (a.pall.visible(a.ticks(0)) || wall > 0) a.ground.survey(a.ticks(0), wall, seen, heights, water, hard, sand);
+            if (a.pall.visible(a.ticks(0)) || wall > 0) {
+                if (now % 20 == 0) a.ground.learnAround();
+                a.ground.survey(a.ticks(0), wall, seen, heights, water, hard, sand);
+            }
             // firestorm tornadoes follow terrain beneath them
             // the tick's own age: a frame-fraction query of the next tick would advance the clock past every frame of this one
             if (heights != null) a.storm.track(a.ticks(0) / 20.0, heights);

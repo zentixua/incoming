@@ -293,7 +293,9 @@ public final class NukePall {
             double eye = camera.y - d.groundY(), floor = active.ground.at(camera.x, camera.z);
             if (active.pall.hazeVisible(ticks)) active.pall.addHazeEye(dx, dz, eye, floor, ticks, water(active), haze);
             // the dust wave's drawn dust ends the pall's rays too (it hides what lies behind it); with dust OFF it is not drawn
-            if (f.dustWall.active && DustSources.visible(active, partial)) active.pall.addDrawnEye(dx, dz, eye, floor, ticks, water(active), haze);
+            // (on the dust's own ground: the eye's tiles where they know it, as the march lays it)
+            if (f.dustWall.active && DustSources.visible(active, partial)) active.pall.addDrawnEye(dx, dz, eye,
+                    DustGround.floor(camera.x, camera.z, d.groundY() + floor) - d.groundY(), ticks, water(active), haze);
         }
         double open = level.dimensionType().hasSkyLight() ? level.getBrightness(LightLayer.SKY, BlockPos.containing(camera)) / 15.0 : 1;
         f.eyeDust.set((float) (haze.x * open), haze.y, haze.z);

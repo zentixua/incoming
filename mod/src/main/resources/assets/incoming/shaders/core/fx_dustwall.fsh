@@ -93,7 +93,8 @@ void main() {
     // no world behind the pixel (beyond the drawn chunks, between LODs): the ray ends on the relief map traced from the eye,
     // as the pall's (pallFloor); where the world is drawn its depth alone ends the ray (the coarse map stood over open
     // streets and hid the dust down them)
-    if (axis >= 1e8) tEnd = min(tEnd, dwRayFloor(dir, PallFloorFrom, jitter));
+    float floorT = axis >= 1e8 ? dwRayFloor(dir, PallFloorFrom, jitter) : -1.0;
+    if (axis >= 1e8) tEnd = min(tEnd, floorT);
     // pixel size per block of distance at this resolution
     vec4 side = InvViewProj * vec4(ndc + vec2(2.0 * DwDiv / float(size.x), 0.0), 1.0, 1.0);
     float foot = length(normalize(side.xyz / side.w) - dir);
@@ -108,6 +109,15 @@ void main() {
     wallSplit = vec4(gDwSplit.xy * cover * axisShare, 1.0 - gDwSplit.z, shareA * cover);
     // (a clear ray: no interval; the march returns before closing one)
     if (cover <= 0.0) wallSplit = vec4(0.0);
+    // diagnostics (DustWallDiag.probe −2, the ray ends): (ray end, scene view-axis distance, the relief's end or −1, the eye
+    // above source 0's relief); (the end's height and the relief under it, both from source 0's ground zero, opacity, samples)
+    if (DwProbe < -0.5) {
+        dwLoad(0);
+        vec3 e = DwEye.xyz + dir * min(tEnd, 30000.0);
+        fragColor = vec4(min(tEnd, 30000.0), min(axis, 1e8), floorT, DwEye.y - dwFloor(DwEye.xz));
+        wallDepth = vec4(e.y, dwFloor(e.xz), 1.0 - cover, float(gDwSamples));
+        wallSplit = vec4(e.xz, DwGround.xw);
+    }
     if (DwProbe > 0.5) {
         fragColor = gDwProbeA;
         wallDepth = gDwProbeB;

@@ -1415,6 +1415,17 @@ public final class ClientScenario {
             case "freezeat" -> ua.zentix.incoming.client.fx.layer.DustWallDiag.freezeAt = Float.parseFloat(v);
             case "div" -> ua.zentix.incoming.client.fx.layer.DustWallDiag.div = Integer.parseInt(v);
             case "reprojection" -> ua.zentix.incoming.client.fx.layer.DustWallDiag.reprojection = !v.equals("0");
+            case "ground" -> {
+                String base = Minecraft.getInstance().gameDirectory.toPath().resolve("screenshots").resolve(v).toString();
+                int i = 0;
+                for (var a : ua.zentix.incoming.client.nuclear.ClientNuclear.detonations()) {
+                    try {
+                        a.writeGroundDiag(base + "_" + i++);
+                    } catch (java.io.IOException e) {
+                        Incoming.LOG.warn("SCENARIO dw ground: not written", e);
+                    }
+                }
+            }
             case "dump" -> ua.zentix.incoming.client.fx.layer.DustWallDiag.dump =
                     Minecraft.getInstance().gameDirectory.toPath().resolve("screenshots").resolve(v).toString();
             default -> throw new IllegalArgumentException("dw: " + arg);

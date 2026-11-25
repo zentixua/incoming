@@ -56,6 +56,9 @@ uniform vec4 DwSlotsD;
 // a row of tiles) and the material atlas (the server's committed ground material, ClientNuclear.Active.sourceMaterial: r water,
 // g sand, b hard ground, a known; a fine and a coarse tile of DW_MATERIAL_SIDE² cells per source, one tile row per source)
 uniform sampler2D Sampler3;
+// the eye-centred ground tiles' places (dwTerrainTile; DustWallPass from DustGround)
+uniform vec4 DwTerrain0;
+uniform vec4 DwTerrain1;
 uniform sampler2D Sampler4;
 uniform sampler3D PallOpen;
 uniform vec4 PallOpenAt;
@@ -106,13 +109,35 @@ void dwLoad(int k) {
     gDwTuft = gDwTuftK[k];
     gDwTuftD = gDwTuftDK[k];
 }
-// the terrain under ground point xz (from ground zero's ground point), blocks above that ground; the map's edge beyond it
-float dwFloor(vec2 xz) {
-    if (DwGround.x <= 0.0) return 0.0;
-    vec2 uv = clamp(xz / (2.0 * DwGround.x) + 0.5, 0.5 / DW_GROUND_SIDE, 1.0 - 0.5 / DW_GROUND_SIDE);
+// the ground the dust lies on around the eye (client/nuclear/DustGround, the last two tiles of the terrain atlas): k 0 the
+// fine tile over the drawn chunks, 1 the coarse one over the near kilometres; T: origin from the eye (x, z), cell, the tiles'
+// height reference minus the eye's height (0 cell: off). Returns (height above the source's ground zero ground, share: the
+// known share × the fade over the tile's outer 8 cells; 0 outside)
+vec2 dwTerrainTile(vec4 T, float k, vec2 xz) {
+    if (T.z <= 0.0) return vec2(0.0);
+    vec2 u = (xz - DwEye.xz - T.xy) / T.z - 0.5;
+    if (any(lessThan(u, vec2(0.0))) || any(greaterThan(u, vec2(DW_GROUND_SIDE - 1.0)))) return vec2(0.0);
     vec2 size = vec2(textureSize(Sampler3, 0));
-    vec2 at = (vec2(float(gDwSlot) * DW_GROUND_SIDE, 0.0) + uv * DW_GROUND_SIDE) / size;
-    return textureLod(Sampler3, at, 0.0).r;
+    vec2 t = textureLod(Sampler3, (vec2(size.x - (2.0 - k) * DW_GROUND_SIDE, 0.0) + u + 0.5) / size, 0.0).rg;
+    float edge = clamp(min(min(u.x, u.y), min(DW_GROUND_SIDE - 1.0 - u.x, DW_GROUND_SIDE - 1.0 - u.y)) / 8.0, 0.0, 1.0);
+    return vec2(t.r + T.w + DwEye.y, t.g * edge);
+}
+// the terrain under ground point xz (from ground zero's ground point), blocks above that ground: the eye's fine tile where it
+// knows the ground, else its coarse tile, else the source's own map (its edge beyond it), each level fading into the next by its
+// known share (DustGround.floor: the same blend)
+float dwFloor(vec2 xz) {
+    vec2 f = dwTerrainTile(DwTerrain0, 0.0, xz);
+    if (f.y >= 0.999) return f.x;
+    vec2 c = dwTerrainTile(DwTerrain1, 1.0, xz);
+    float h = 0.0;
+    if (c.y < 0.999 && DwGround.x > 0.0) {
+        vec2 uv = clamp(xz / (2.0 * DwGround.x) + 0.5, 0.5 / DW_GROUND_SIDE, 1.0 - 0.5 / DW_GROUND_SIDE);
+        vec2 size = vec2(textureSize(Sampler3, 0));
+        vec2 at = (vec2(float(gDwSlot) * DW_GROUND_SIDE, 0.0) + uv * DW_GROUND_SIDE) / size;
+        h = textureLod(Sampler3, at, 0.0).r;
+    }
+    h = mix(h, c.x, c.y);
+    return mix(h, f.x, f.y);
 }
 // the share of open air at q (from ground zero's ground point): Minecraft's sky light / 15 inside the outdoor-air window
 // around the eye (rooms, caves, adits; fx/layer/OpenAir); beyond it the dust is outdoors (the pall's test there compares with
@@ -156,13 +181,18 @@ float dwRayFloor(vec3 dir, float from, float jitter) {
     if (tb <= ta) return 1e9;
     float ratio = pow(tb / ta, 1.0 / 64.0);
     vec3 q0 = DwEye.xyz + dir * ta;
-    float prevT = ta, prevD = max(q0.y - dwFloor(q0.xz), 0.0);
+    // the pall's law (pallFloor): where the map at the start stands over the ray (the ray passed over the real ground of the
+    // drawn chunks), it drops under the ray there and is as it was four map cells farther; without it every ray past the drawn
+    // chunks under a map standing over the eye ended at their edge with no dust (step 7: 100 % of them in a valley)
+    float fade = 4.0 * DwGround.w, d0 = q0.y - dwFloor(q0.xz);
+    float lift = max(1.0 - d0, 0.0) * step(ta, near + 1.0);
+    float prevT = ta, prevD = d0 + lift;
     float t = ta * pow(ratio, jitter);
     for (int i = 0; i <= 64; i++) {
         float tt = min(t, tb);
         vec3 q = DwEye.xyz + dir * tt;
-        float d = q.y - dwFloor(q.xz);
-        if (d <= 0.0) return prevT + (tt - prevT) * prevD / max(prevD - d, 1e-6);
+        float d = q.y - dwFloor(q.xz) + lift * max(1.0 - (tt - ta) / fade, 0.0);
+        if (d <= 0.0) return prevT + (tt - prevT) * max(prevD, 0.0) / max(prevD - d, 1e-6);
         prevT = tt;
         prevD = d;
         t *= ratio;
@@ -213,6 +243,9 @@ float gDwFoot = 0.0;
 // set by dwDensity at its sample: the billowed dust surface above it, its full extinction and its share of sand (the light
 // reads them)
 float gDwSurf = 0.0, gDwSigma = 0.0, gDwSand = 0.0;
+// the last dust sample's composition (dwDustTint): its height as a share of its column below the top (1 at the ground), its
+// ground point's soil seed and the hard-ground share of its source point
+float gDwLow = 0.5, gDwSoil = 0.5, gDwHard = 0.0;
 // diagnostics (DustWallDiag.probe, fx_dustwall: DwProbe): the k-th occupied sample's terms of this ray; the light's terms of
 // the last sample lit (shadow depths toward the ball and the sun, depth into the layer, the swell's lift)
 float gDwProbeK = -1.0;
@@ -812,6 +845,11 @@ float dwDustDensity(vec3 g, bool coarse) {
     float swell = mean ? 0.0 : dwSwellField(pw.xz, a, swellL);
     if (!coarse) gDwSwell = swell;
     top *= 1.0 + swell + dwTuftAt(g);
+    if (!coarse) {
+        gDwLow = 1.0 - clamp(q.y / max(top, 1.0), 0.0, 1.0);
+        gDwSoil = s1;
+        gDwHard = gDwMatNow.z;
+    }
     // One frame for the texture: fixed in the air across the ground and carried by the dust's own rise and fall in height
     // (height as a share of this point's envelope, scaled to the settled layer): each column's billows are born at the
     // ground as the front reaches it, rise into the crest and settle with it, and stay where they were torn up. Sliced
@@ -842,6 +880,7 @@ float dwDustDensity(vec3 g, bool coarse) {
             float taup = dwTransfer(law.y) * (1.0 + 0.5 * exp(-a / 1.1));
             float sigp = taup / dwProfileInt(h) * mix(1.0, mix(0.75, 1.25, 0.55 * s1 + 0.45 * s2), C) * dwNoiseGain(taup) * dwOpen(g);
             gDwSigma = sigp;
+            gDwLow = 0.0;
             float texp = sigp * pf * (1.0 - smoothstep(ceiling - 8.0, ceiling, q.y)) * smoothstep(0.0, 0.08, a);
             return F >= 0.999 ? texp : mix(haze, texp, F);
         }
@@ -973,6 +1012,22 @@ vec3 dwHazeLight(vec3 q, vec3 rd) {
     return DW_HAZE_EXPOSURE * max(DwAdapt, 1.0) * w * (single + max(d, vec3(0.0)));
 }
 
+// presentation (est.), the dust's colour by what it is made of (slight: L* spread of the face's tone about ±8 %, chroma about
+// twice the flat soil's): the coarse, moister soil the blast tears up stays low and reads darker and earthier, the fines that
+// reach the billow tops paler (size sorting: settling speed ∝ d², the column's coarse fraction falls with height, as `strat`
+// lays its density); each ground point's soil differs a little (its seed, ~60 m patches: redder or greyer); dust from hard
+// ground (roads, roofs, rock) is grey debris. Over the column's density (strat) the tint's mean stays within 4 % of 1.
+// Flat soil one colour drew the face as one tone whose rolls read only by light (step 7: chroma ±2.7 over the face against
+// ±9.8 on the reference's wall, corr(L, C) ≈ 0)
+const vec3 DW_EARTH = vec3(0.92, 0.85, 0.77), DW_FINES = vec3(1.07, 1.08, 1.08);
+vec3 dwDustTint() {
+    vec3 t = mix(DW_FINES, DW_EARTH, gDwLow) * mix(vec3(1.04, 1.0, 0.95), vec3(0.96, 0.99, 1.04), gDwSoil);
+    return mix(vec3(1.0), t, 1.0 - gDwWet);
+}
+vec3 dwHardGrey(vec3 c) {
+    return mix(c, vec3(dot(c, vec3(0.2126, 0.7152, 0.0722))), 0.5 * gDwHard * (1.0 - gDwWet));
+}
+
 vec3 dwTexturedLight(vec3 q, vec3 rd) {
     vec3 lb = normalize(DwBall.xyz - q + vec3(0.0, 1e-3, 0.0));
     float taub, taus;
@@ -1003,8 +1058,9 @@ vec3 dwTexturedLight(vec3 q, vec3 rd) {
             + DwSunLight * (0.5 * min(dwPhase(dot(rd, DwSunDir)), 6.0) * exp(-taus)) * sunUp;
     vec3 multiple = dwBallLight(q) * ms * (0.45 + 0.55 * exp(-0.25 * taub)) + DwSunLight * ms * (0.45 + 0.55 * exp(-0.25 * taus)) * sunUp
             + dwSkyOnDust() * (0.03 + 0.15 * exp(-0.3 * depth));
-    vec3 albedo = mix(mix(DwAlbedo, DwSandAlbedo, gDwSand), DwMistAlbedo, gDwWet);
-    vec3 bulk = mix(mix(DwBulk, DwSandBulk, gDwSand), DwMistBulk, gDwWet);
+    vec3 tint = dwDustTint();
+    vec3 albedo = dwHardGrey(mix(mix(DwAlbedo, DwSandAlbedo, gDwSand), DwMistAlbedo, gDwWet) * tint);
+    vec3 bulk = dwHardGrey(mix(mix(DwBulk, DwSandBulk, gDwSand), DwMistBulk, gDwWet) * tint);
     gDwPrTaub = taub;
     gDwPrTaus = taus;
     gDwPrDepth = depth;
