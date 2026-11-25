@@ -32,6 +32,8 @@ public final class DustGround {
     static final double COARSE_CELL = 32;
     /** Cells per tile surveyed per client tick: a full sweep of a tile in 32 ticks. */
     static final int PER_TICK = 512;
+    /** Cells over which the fine tile hands over to the coarse one inside what it knows, and the coarse one to the map outside it. */
+    static final float FINE_RAMP = 8, RAMP = 4;
     /** Refill (pull-push) and upload at most this often, ticks. */
     static final int FILL_TICKS = 10;
     private static final int[] ORDER = IntStream.range(0, SIDE * SIDE).boxed()
@@ -45,6 +47,7 @@ public final class DustGround {
         final float[] known = new float[SIDE * SIDE];
         /** Filled heights (absolute world y of the surface's top) and known flags, x fastest. */
         final float[] filled = new float[SIDE * SIDE];
+        /** Its share over the next level per cell, 0..1 ({@link #fill}). */
         final float[] knownFlag = new float[SIDE * SIDE];
         int next;
         boolean on, dirty;
@@ -116,8 +119,38 @@ public final class DustGround {
         void fill(float eyeGround) {
             PallGround.pullPush(known, eyeGround);
             System.arraycopy(PallGround.pulled(), 0, filled, 0, SIDE * SIDE);
-            for (int i = 0; i < SIDE * SIDE; i++) knownFlag[i] = Float.isNaN(known[i]) ? 0 : 1;
+            // the share each cell gives over the next level (chamfer distance, two passes). The fine tile hands over to the
+            // coarse one inside what it knows: 0 at an unknown cell, 1 FINE_RAMP cells into the known area. The coarse tile continues
+            // the known ground past it (its pull-push fill) and hands over to the detonation's map RAMP cells outside: there the
+            // floor goes from the real ground to the map's estimate over 128 m, not over one cell at the drawn chunks' edge
+            // (DustGroundTest: 4.6 m over 2 m with a known flag)
+            float[] d = knownFlag;
+            for (int i = 0; i < SIDE * SIDE; i++) d[i] = Float.isNaN(known[i]) == fine ? 0 : fine ? FINE_RAMP : RAMP;
+            chamfer(d);
+            for (int i = 0; i < SIDE * SIDE; i++) d[i] = fine ? Math.min(d[i] / FINE_RAMP, 1f) : 1f - Math.min(d[i] / RAMP, 1f);
             dirty = false;
+        }
+
+        /** Distance in cells to the nearest zero cell, capped at the cells' starting value (two-pass chamfer, 1 and √2). */
+        private static void chamfer(float[] d) {
+            for (int j = 0; j < SIDE; j++) {
+                for (int i = 0; i < SIDE; i++) {
+                    int c = j * SIDE + i;
+                    if (i > 0) d[c] = Math.min(d[c], d[c - 1] + 1);
+                    if (j > 0) d[c] = Math.min(d[c], d[c - SIDE] + 1);
+                    if (i > 0 && j > 0) d[c] = Math.min(d[c], d[c - SIDE - 1] + 1.4142f);
+                    if (i < SIDE - 1 && j > 0) d[c] = Math.min(d[c], d[c - SIDE + 1] + 1.4142f);
+                }
+            }
+            for (int j = SIDE - 1; j >= 0; j--) {
+                for (int i = SIDE - 1; i >= 0; i--) {
+                    int c = j * SIDE + i;
+                    if (i < SIDE - 1) d[c] = Math.min(d[c], d[c + 1] + 1);
+                    if (j < SIDE - 1) d[c] = Math.min(d[c], d[c + SIDE] + 1);
+                    if (i < SIDE - 1 && j < SIDE - 1) d[c] = Math.min(d[c], d[c + SIDE + 1] + 1.4142f);
+                    if (i > 0 && j < SIDE - 1) d[c] = Math.min(d[c], d[c + SIDE - 1] + 1.4142f);
+                }
+            }
         }
 
         /** Filled height at world (x, z) and the known share there (bilinear, as the shader reads it); NaN outside. */
@@ -161,18 +194,22 @@ public final class DustGround {
             FINE.on = COARSE.on = false;
             return;
         }
-        FINE.centre(eye.x, eye.z, fineCell(renderChunks));
-        COARSE.centre(eye.x, eye.z, COARSE_CELL);
         Sightline.Heights heights = FarTerrain.dust(level);
         int floor = level.getMinBuildHeight() + 1;
-        Sightline.Heights known = (x, z) -> {
+        update((x, z) -> {
             double h = heights.at(x, z);
             return h <= floor ? Double.NaN : h;
-        };
-        FINE.survey(known, PER_TICK);
-        COARSE.survey(known, PER_TICK);
-        if (++sinceFill >= FILL_TICKS && (FINE.dirty || COARSE.dirty)) {
-            float ground = (float) (eye.y - 1.62);
+        }, eye.x, eye.y, eye.z, renderChunks, false);
+    }
+
+    /** One tick's re-centring, survey ({@code heights}: NaN unknown) and, every {@link #FILL_TICKS} or when {@code fill}, refill. */
+    static void update(Sightline.Heights heights, double ex, double ey, double ez, int renderChunks, boolean fill) {
+        FINE.centre(ex, ez, fineCell(renderChunks));
+        COARSE.centre(ex, ez, COARSE_CELL);
+        FINE.survey(heights, PER_TICK);
+        COARSE.survey(heights, PER_TICK);
+        if ((++sinceFill >= FILL_TICKS || fill) && (FINE.dirty || COARSE.dirty)) {
+            float ground = (float) (ey - 1.62);
             COARSE.fill(ground);
             FINE.fill(ground);
             version++;
