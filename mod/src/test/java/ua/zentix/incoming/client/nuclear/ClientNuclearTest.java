@@ -41,6 +41,28 @@ class ClientNuclearTest {
         }
     }
 
+    /** /tick freeze holds a live show (age and spawners); a replay keeps its editor clock, whose pause is itself a freeze. */
+    @Test
+    void freezeHoldsLiveShowNotReplay() {
+        assertTrue(ClientNuclear.holds(false, false));
+        assertFalse(ClientNuclear.holds(true, false));
+        assertFalse(ClientNuclear.holds(false, true));
+        assertFalse(ClientNuclear.holds(true, true));
+    }
+
+    /** A held show gets no client ticks: server anchors arriving meanwhile leave its shown age where it stood. */
+    @Test
+    void heldClockStandsStillUnderAnchors() {
+        ClientNuclear.AgeClock clock = new ClientNuclear.AgeClock(0, true);
+        for (int t = 1; t <= 100; t++) {
+            clock.anchor(t);
+            clock.tick(t * 50_000_000L);
+        }
+        double held = clock.shown();
+        for (int t = 101; t <= 400; t++) clock.anchor(t);
+        assertEquals(held, clock.shown(), 1e-9);
+    }
+
     /** The jump back is forgotten in half a minute. */
     @Test
     void leadDecays() {

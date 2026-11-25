@@ -23,14 +23,38 @@ resolver is `tools/paths.py`. Without an instance, fetch the pinned runtime mods
 
 ## 2. Edit and inspect
 
-Use a running development client for visual and audio work. `tools/sandbox.sh` provides a flat world, effect
-commands and timed frame/WAV capture. `tools/client_scenario.sh` runs scripted client scenarios. See
-[client-scenario.md](../.claude/rules/client-scenario.md) for commands and capture timing.
+Visual, audio and gameplay changes follow the standard modder loop: one development client stays running in a
+saved test world and each change goes into it in seconds.
 
-JetBrains Runtime supports enhanced class redefinition; resource reload updates textures and effects-layer
-shaders. Restart the client for changes that cannot be hot-swapped reliably, including mixins and registration.
-The sandbox currently uses the project's swap agent. A replacement with HotswapAgent requires checking that it
-can redefine classes loaded through NeoForge before removing the existing agent.
+- `./gradlew runClient` starts the mod with only its dependencies (Create, Sable, Aeronautics), no modpack.
+  `-PquickPlay=<save>` passes the vanilla `--quickPlaySingleplayer <save>` flag and opens that world of
+  `run/client/saves` without the menu; AE2 and Mekanism launch their test worlds the same way. A defect that
+  depends on terrain is checked in a copy of the real map where it shows.
+- `-PhotSwap` runs the client on JetBrains Runtime with `-XX:+AllowEnhancedClassRedefinition` and a JDWP port on
+  loopback. An IDE's "reload changed classes", or `jdb`'s `redefine` after `./gradlew compileJava`, replaces the
+  classes in the running game; new fields, methods and lambdas swap too. Create sets the same flag in its runs.
+  Restart for registrations, static initializers, packet formats and mixins.
+- F3+T reloads textures, models, sounds, language files and the mod's shaders; Iris reloads a shader pack with R;
+  `/reload` reloads data. Values tuned by eye live in the config files, which the game rereads when they change.
+- Vanilla commands set the scene: `/tp`, `/time set`, `/weather`; `/tick freeze` holds a moment (entities,
+  particles and the mod's nuclear show stand still; ordinary strike smoke runs on) and `/tick step <ticks>` moves it.
+- Logic is held by GameTest (section 3); the client is for what a test cannot judge: picture, sound, feel.
+
+`tools/dev_client.sh` runs this loop without a screen, for agents: the same `runClient` on a headless display, whose
+keyboard the game never sees, so the commands, F3+T, F2 and F1 go in as files a devtest listener reads
+([client-scenario.md](../.claude/rules/client-scenario.md), "Standard dev client").
+`tools/sandbox.sh` adds what the loop lacks: frames and WAV at exact effect seconds, repeated against `main`.
+`tools/client_scenario.sh` runs scripted client scenarios. A whole-pack client is for the final acceptance set
+only (`tools/laptop_job.sh --full --acceptance`).
+
+Sources: [ModDevGradle](https://docs.neoforged.net/toolchain/docs/plugins/mdg/),
+[Quick Play](https://minecraft.wiki/w/Quick_Play),
+[AE2 build.gradle](https://github.com/AppliedEnergistics/Applied-Energistics-2/blob/1.21.1/build.gradle),
+[Mekanism build.gradle](https://github.com/mekanism/Mekanism/blob/1.21.x/build.gradle),
+[Create build.gradle](https://github.com/Creators-of-Create/Create/blob/mc1.21.1/dev/build.gradle),
+[Fabric hotswapping](https://wiki.fabricmc.net/tutorial:hotswapping),
+[Iris debugging](https://github.com/IrisShaders/Iris/blob/1.21.1/docs/usage/debugging.md),
+[/tick](https://minecraft.wiki/w/Commands/tick).
 
 ## 3. Automated checks
 
@@ -101,7 +125,8 @@ log extraction and GameTest sharding. Prefer a standard replacement when it pres
 
 Measure a demonstrated bottleneck before replacing a tool. Check the proposed replacement on the relevant
 workload and preserve the existing checks until it works. Potential changes include resolving runtime mods
-through Gradle, using HotswapAgent, or sharing command plans between the sandbox and scripted scenarios.
+through Gradle, moving the sandbox's own swap agent to the dev client's JDWP hot swap, or sharing command plans
+between the sandbox and scripted scenarios.
 These are implementation options, not prerequisites for contributing.
 
 Useful upstream references:

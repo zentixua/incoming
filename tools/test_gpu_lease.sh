@@ -401,4 +401,12 @@ fi
 [ "$("$ROOT/tools/laptop_job.sh" --ceiling heavy)" = "10G 4G" ] && [ "$("$ROOT/tools/laptop_job.sh" --ceiling gpu)" = "10G 4G" ] \
   && [ "$("$ROOT/tools/laptop_job.sh" --ceiling full)" = "20G 4G" ] && [ "$(INCOMING_SOFT_HEAP=3g "$ROOT/tools/laptop_job.sh" --ceiling soft)" = "5120M 0" ] \
   && [ "$(INCOMING_JOB_MEM=2G "$ROOT/tools/laptop_job.sh" --ceiling heavy)" = "2G 4G" ] && ok "memory ceiling for every mode" || bad "ceilings: $("$ROOT/tools/laptop_job.sh" --ceiling heavy)"
+# A whole-pack job is a final take: refused (2) without --acceptance before any lease or service; with it, a `take` row of
+# its task goes to the load log (systemd may be absent here: only the guard and the row are checked)
+out=$(DELEGATE_LOAD_LOG=$tmp/takes.tsv DELEGATE_TASK=t1 "$ROOT/tools/laptop_job.sh" --full take1 -- true 2>&1); rc=$?
+[ $rc = 2 ] && [[ $out == *"add --acceptance"* ]] && [ ! -s "$tmp/takes.tsv" ] && ok "--full without --acceptance refused (2), no take counted" \
+  || bad "--full without --acceptance: $rc $out"
+out=$(DELEGATE_LOAD_LOG=$tmp/takes.tsv DELEGATE_TASK=t1 INCOMING_GPU_OWNER=FZC timeout 20 "$ROOT/tools/laptop_job.sh" --full --acceptance take2 -- true 2>&1); rc=$?
+[[ $out == *"whole-pack take 1 of task t1"* ]] && [ "$(awk -F'\t' '$1 == "take" && $3 == "t1" && $4 == "take2"' "$tmp/takes.tsv" | wc -l)" = 1 ] \
+  && ok "--full --acceptance counted for its task (code $rc)" || bad "--full --acceptance: $rc $out"
 exit $fail

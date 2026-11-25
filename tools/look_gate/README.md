@@ -17,7 +17,7 @@ otherwise stops the run) - sampling frames are comparable to the full run and to
  stunning - always (`nuke_tinnitus = false` in the copy; the test writes what the game sees and stops if hearing is enabled). For a release - the same class in its tree (git worktree release + copy of the file and line in
 `ClientScenario`).
 
-- `run.sh <name> <worktree> [scenes] [mods]` — run (via `tools/laptop_job.sh --gpu --full`; waits until Artem's game closes),
+- `run.sh <name> <worktree> [scenes] [mods]` — run (via `tools/laptop_job.sh --gpu --full --acceptance`; waits until Artem's game closes),
   output in `mod/run/look-gate/out/<name>/`; ends with `check.py`: a run with hearing enabled or a scene at the wrong
   game time exits with code 1.
 - `check.py <latest.log>` — is the run valid for comparison (test: `test_check.py`, in CI).

@@ -625,6 +625,7 @@ public final class ClientNuclear {
 
     public static void reset() {
         playbackEpoch++;
+        held = false;
         MATERIALS.clear();
         stopAll();
         DETONATIONS.clear();
@@ -667,6 +668,23 @@ public final class ClientNuclear {
         };
     }
 
+    /** The show stands still this tick ({@link #holds}). */
+    private static boolean held;
+
+    /**
+     * The show's age runs on world ticks like particles: it stands still under {@code /tick freeze} and moves with
+     * {@code /tick step}, while everything that follows the eye (pall ground, sky, hearing) keeps updating. A replay's age
+     * is its editor position, and its editor pauses by freezing the tick rate itself (replay.md): a replay never holds.
+     */
+    static boolean holds(boolean runsNormally, boolean replay) {
+        return !runsNormally && !replay;
+    }
+
+    /** True while the show stands still: per-tick spawners add nothing. */
+    static boolean held() {
+        return held;
+    }
+
     public static void tick() {
         Minecraft mc = Minecraft.getInstance();
         ClientLevel level = mc.level;
@@ -682,10 +700,12 @@ public final class ClientNuclear {
                 sand = heights == null ? null : FarTerrain.sand(level);
         // the dust's eye-centred ground (its floor over the drawn chunks and the near kilometres)
         if (!DETONATIONS.isEmpty()) DustGround.tick(level, eye, mc.options.getEffectiveRenderDistance());
+        held = holds(level.tickRateManager().runsNormally(), ua.zentix.incoming.client.replay.Replay.active());
         for (Iterator<Active> it = DETONATIONS.values().iterator(); it.hasNext(); ) {
             Active a = it.next();
-            a.tick();
-            if (!a.discarded) a.sounds.tick();
+            if (!held) a.tick();
+            // the schedule plays sounds and the gust's puffs by age: nothing is due while it stands still
+            if (!a.discarded && !held) a.sounds.tick();
             // terrain/water under pall: for rays without world behind and for matter (ceiling dimensions use ground
             // under epicenter)
             // water under epicenter before pall map: map fills unknowns from it
@@ -699,8 +719,11 @@ public final class ClientNuclear {
             // firestorm tornadoes follow terrain beneath them
             // the tick's own age: a frame-fraction query of the next tick would advance the clock past every frame of this one
             if (heights != null) a.storm.track(a.ticks(0) / 20.0, heights);
-            NukeWater.tick(a, level, eye);
-            NukeDust.front(a, eye);
+            // spawners add particles per tick of elapsed age: none while held (the frozen particle pool would only pile up)
+            if (!held) {
+                NukeWater.tick(a, level, eye);
+                NukeDust.front(a, eye);
+            }
             if (a.ticks(0) > lifeTicks(a.d) && a.clockSeconds(0) > a.d.blackRainEndSeconds() && !a.pall.visible(a.ticks(0))) {
                 a.sounds.stop();
                 if (a.revision != null && !ua.zentix.incoming.client.replay.Replay.active())
