@@ -300,6 +300,9 @@ dependencies {
     // unit tests use it too (the adapter against a stand-in shielding)
     compileOnly "mekanism:Mekanism:${minecraft_version}-${mekanism_version}:api"
     testImplementation "mekanism:Mekanism:${minecraft_version}-${mekanism_version}:api"
+    // sable-companion is always in the mod jar (jarJar): unit tests load classes reaching SubLevels with it, as in game;
+    // without Sable its built-in stub answers "no craft"
+    testImplementation "dev.ryanhcode.sable-companion:sable-companion-common-${minecraft_version}:${sable_companion_version}"
     // Jade: only for compilation — the overlay plugin (compat/jade, found by Jade's @WailaPlugin scan); unit tests
     // check its data field against Jade's interfaces
     compileOnly "maven.modrinth:jade:${jade_version}"
