@@ -596,7 +596,6 @@
   "incoming.fixed_launcher.unlinked": "Launcher unlinked from the designator (%s left)",
   "incoming.fixed_launcher.not_yours": "not your launcher",
   "incoming.fixed_launcher.links_full": "%s launchers are already linked to this designator",
-  "incoming.fixed_launcher.on_craft": "the launcher does not fire from an aircraft",
   "incoming.fixed_launcher.no_rights": "the launcher's owner may not use the designator",
   "incoming.fixed_launcher.no_rights.weapon": "the launcher's owner may not launch %s",
   "incoming.fixed_launcher.out_of_range": "target is more than %s blocks from the launcher",

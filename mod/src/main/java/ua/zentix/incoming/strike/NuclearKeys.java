@@ -344,7 +344,7 @@ public final class NuclearKeys {
      */
     private static void detected(Order o, Collection<? extends ServerPlayer> online) {
         if (!IncomingConfig.SERVER.earlyWarning.get()) return;
-        Vec3 from = o.from == null ? o.lastPos : o.from.at();
+        Vec3 from = o.from == null ? o.lastPos : o.from.at(o.level);
         int x = cell(from.x), z = cell(from.z);
         Component line = (o.icbm() ? Component.translatable("incoming.nuke.launch_detected", x, z)
                 : Component.translatable("incoming.nuke.launch_detected.carrier", item(o.loadout).getDescription(), x, z)).withStyle(ChatFormatting.RED);

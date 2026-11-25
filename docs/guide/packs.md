@@ -350,7 +350,7 @@ not:
 
 | Looking at | Everyone sees | The owner's side and operators also see |
 |---|---|---|
-| Fixed launcher | rounds of its mission's weapon in stock (munitions held, without a mission); ready to fire, or cannot fire, with the reason when it is about the launcher itself: no mission, busy, on an aircraft | the owner, the mission (weapon, count, target, spread) and every reason it cannot fire |
+| Fixed launcher | rounds of its mission's weapon in stock (munitions held, without a mission); ready to fire, or cannot fire, with the reason when it is about the launcher itself: no mission, busy, buildings in the way | the owner, the mission (weapon, count, target, spread) and every reason it cannot fire |
 | SAM | missiles on the rails and in stock; how many hostile targets its radar tracks, or that a roof blinds it | |
 | Transformer Substation | working; knocked out, and in how many hours of the world's day repairs start; or without power in a destroyed zone | |
 | Strike projectile | its weapon | its owner |
@@ -379,7 +379,7 @@ stays the designator's and `/incoming launcher … mission`. A refused `fire()` 
 
 Anyone can put a computer at a launcher, so a computer learns what a player without rights would: never the owner or
 the mission's count, target and spread. A reason about the launcher itself comes as its code, the refusal's language key
-without `incoming.`: `fixed_launcher.no_mission.short`, `fixed_launcher.busy`, `fixed_launcher.on_craft`,
+without `incoming.`: `fixed_launcher.no_mission.short`, `fixed_launcher.busy`,
 `fixed_launcher.sector` (buildings block the launch) or `fixed_launcher.failed`; any other reason (stock short of the
 mission, the owner's rights or limit, the target's range or route) comes as `private`.
 

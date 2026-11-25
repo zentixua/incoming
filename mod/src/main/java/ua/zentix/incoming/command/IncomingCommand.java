@@ -31,6 +31,7 @@ import net.neoforged.neoforge.event.RegisterCommandsEvent;
 import net.neoforged.neoforge.network.PacketDistributor;
 import org.jetbrains.annotations.Nullable;
 import ua.zentix.incoming.IncomingConfig;
+import ua.zentix.incoming.compat.SubLevels;
 import ua.zentix.incoming.launcher.FixedLauncherBlockEntity;
 import ua.zentix.incoming.launcher.LauncherOrders;
 import ua.zentix.incoming.launcher.Mission;
@@ -538,6 +539,10 @@ public final class IncomingCommand {
         BlockPos pos = BlockPosArgument.getBlockPos(ctx, "launcher");
         if (!Terrain.ready(level, pos)) throw LAUNCHER_NOT_LOADED.create();
         if (level.getBlockEntity(pos) instanceof FixedLauncherBlockEntity be) return be;
+        // a launcher on a craft: its block is in the craft's plot, the command names where the craft carries it now
+        for (BlockPos plot : SubLevels.plotBlocksAt(level, Vec3.atCenterOf(pos))) {
+            if (Terrain.ready(level, plot) && level.getBlockEntity(plot) instanceof FixedLauncherBlockEntity be) return be;
+        }
         throw NO_LAUNCHER.create();
     }
 

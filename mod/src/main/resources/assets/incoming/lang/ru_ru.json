@@ -596,7 +596,6 @@
   "incoming.fixed_launcher.unlinked": "Пусковая отвязана от пульта (осталось %s)",
   "incoming.fixed_launcher.not_yours": "чужая пусковая",
   "incoming.fixed_launcher.links_full": "К пульту уже привязано %s пусковых",
-  "incoming.fixed_launcher.on_craft": "на аппарате пусковая не стреляет",
   "incoming.fixed_launcher.no_rights": "хозяину пусковой нельзя пульт",
   "incoming.fixed_launcher.no_rights.weapon": "хозяину пусковой запрещено оружие: %s",
   "incoming.fixed_launcher.out_of_range": "цель дальше %s блоков от пусковой",
