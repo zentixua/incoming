@@ -1073,6 +1073,9 @@ public final class NuclearPrep {
                         if (state == null) continue;
                         why.merge(state, 1, Integer::sum);
                         if (example == null) example = new ChunkPos(c) + " — " + state;
+                        var probe = level.getChunkSource().getChunkNow(ChunkPos.getX(c), ChunkPos.getZ(c));
+                        Incoming.LOG.info("DIAG PROBE held {}: {}, full {}, scar {}", new ChunkPos(c), state, probe != null,
+                                probe == null ? -1 : probe.getExistingData(ModAttachments.CHUNK_SCAR).orElse(0));
                     }
                 }
                 Incoming.LOG.info("DIAG tile {} ready for {} ticks (loaded in {}): held by {}{}", t.centre, now - t.readyAt, t.readyAt - t.heldAt,
