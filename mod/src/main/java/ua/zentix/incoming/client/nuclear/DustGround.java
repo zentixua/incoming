@@ -38,6 +38,10 @@ public final class DustGround {
      * canopy); bounded, a tile's sweep takes a few seconds, the cells nearest the eye first.
      */
     static final long SURVEY_NANOS = 250_000;
+    private static long deadline() {
+        return surveyNanos == Long.MAX_VALUE ? Long.MAX_VALUE : System.nanoTime() + surveyNanos;
+    }
+
     /** The survey's time bound in use (tests lift it: a cold JVM on a shared runner must not decide what a sweep learns). */
     static long surveyNanos = SURVEY_NANOS;
     /** Cells over which the fine tile hands over to the coarse one inside what it knows. */
@@ -102,7 +106,7 @@ public final class DustGround {
 
         void survey(Sightline.Heights heights, int count, long until) {
             for (int n = 0; n < count; n++) {
-                if ((n & 31) == 31 && System.nanoTime() > until) return;
+                if ((n & 31) == 31 && until != Long.MAX_VALUE && System.nanoTime() - until > 0) return;
                 int i = ORDER[next];
                 next = (next + 1) % ORDER.length;
                 double h = measure(i, heights);
@@ -239,8 +243,8 @@ public final class DustGround {
         long start = System.nanoTime();
         boolean moved = FINE.centre(ex, ez, fineCell(renderChunks));
         moved |= COARSE.centre(ex, ez, COARSE_CELL);
-        FINE.survey(heights, PER_TICK, System.nanoTime() + surveyNanos);
-        COARSE.survey(heights, PER_TICK, System.nanoTime() + surveyNanos);
+        FINE.survey(heights, PER_TICK, deadline());
+        COARSE.survey(heights, PER_TICK, deadline());
         // a re-centred tile refills in the same tick: its origin reaches the shader and the Java readers with its heights
         if (moved || (++sinceFill >= FILL_TICKS || fill) && (FINE.dirty || COARSE.dirty)) {
             float ground = (float) (ey - 1.62);
