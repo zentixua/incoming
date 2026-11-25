@@ -1507,13 +1507,15 @@ public final class RuinBackgroundGameTests {
             q.planAhead(level, t[0], clock);
             int planning = 0;
             for (ChunkPos c : row) if (ScarQueue.planning(level, d.id(), c.toLong())) planning++;
-            // a full ruin pool stops the stage on its own (a small CI runner: capacity 4, the reads' parse tasks count);
-            // a cold window must not, while the pool still has room
-            boolean poolFull = !RuinWorkers.admit(RuinWorkers.Priority.SEEN);
+            // a full ruin pool stops the stage on its own (a small CI runner: capacity 4, and the parse tasks of the reads
+            // count, landing while the stage runs); a cold window must not, while the pool still has room. Whether the
+            // pool filled is the stage's own stop in this call: sampled afterwards, the parses may be done already
+            boolean poolFull = q.planAheadStoppedFull(t[0]);
             h.assertTrue(planning + q.planAheadReading() == k || poolFull, "first tick: " + planning + " planning and "
                     + q.planAheadReading() + " reading of " + k + " eligible chunks with room in the pool: the rest wait behind a cold window");
         }).thenWaitUntil(() -> {
-            // game-paced: one queue tick per server tick while the reads land
+            // one queue tick per server tick; the reads and parses a tick started are done by the next one
+            BackgroundSettle.settle(level);
             WorkClock clock = WorkClock.counting(1_000_000);
             clock.start(10_000_000_000L);
             long now = t[0] + ++tick[0];

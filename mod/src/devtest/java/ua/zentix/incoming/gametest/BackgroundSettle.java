@@ -29,7 +29,7 @@ final class BackgroundSettle {
 
     static void settle(ServerLevel level) {
         long until = System.nanoTime() + LIMIT_MS * 1_000_000L;
-        IOWorker io = (IOWorker) level.getChunkSource().chunkMap.chunkScanner();
+        if (!(level.getChunkSource().chunkMap.chunkScanner() instanceof IOWorker io)) throw new GameTestAssertException("chunk storage without the vanilla I/O worker");
         boolean idle = false;
         while (!idle) {
             if (!NuclearWorld.get(level).awaitLayoutsForTest(left(until))) fail("zone or settlement layout");
@@ -39,7 +39,13 @@ final class BackgroundSettle {
             sync(io, until);
             idle = RuinWorkers.awaitForTest(RuinWorkers.Priority.FAR, 0);
         }
-        InstantChunks.settle(level);
+        try {
+            InstantChunks.settle(level);
+        } catch (RuntimeException e) {
+            // a test sequence step may throw only GameTestAssertException: any other stops the whole GameTest server
+            ua.zentix.incoming.Incoming.LOG.error("GameTest: tickets' chunks did not load", e);
+            throw new GameTestAssertException("tickets' chunks did not load: " + e);
+        }
     }
 
     /** Reads and header scans queued at the chunk I/O worker answered (their callbacks ran on its thread). */

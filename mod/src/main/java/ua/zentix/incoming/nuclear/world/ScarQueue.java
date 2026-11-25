@@ -500,6 +500,11 @@ public final class ScarQueue {
         return planAheadReading.size();
     }
 
+    /** Whether the plan-ahead stage stopped at tick {@code now} on a full ruin pool or a tight heap (tests). */
+    public boolean planAheadStoppedFull(long now) {
+        return planAheadFull == now;
+    }
+
     /** Chunk has a running or uncollected background plan for the detonation (tests). */
     public static boolean planning(ServerLevel level, int detonation, long chunk) {
         RuinContext ctx = NuclearWorld.get(level).ruinsIfKept(detonation);
