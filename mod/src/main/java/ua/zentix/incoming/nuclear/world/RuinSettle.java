@@ -290,6 +290,23 @@ final class RuinSettle {
         }
     }
 
+    /** For tests: wait until the pass layout building in the background is done, at most {@code millis}; whether it is. */
+    boolean awaitLayoutForTest(long millis) {
+        CompletableFuture<long[]> pending = layout;
+        if (pending == null) return true;
+        try {
+            pending.get(millis, java.util.concurrent.TimeUnit.MILLISECONDS);
+            return true;
+        } catch (java.util.concurrent.TimeoutException e) {
+            return false;
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            return false;
+        } catch (java.util.concurrent.ExecutionException | java.util.concurrent.CancellationException e) {
+            return true; // the pass handles a failed or cancelled layout on its tick
+        }
+    }
+
     /** Region files to scan; null: those on disk. Tests set it to scan a world they did not save. */
     @org.jetbrains.annotations.Nullable
     Regions regions;

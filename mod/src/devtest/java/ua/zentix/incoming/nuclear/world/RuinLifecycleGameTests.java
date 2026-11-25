@@ -173,6 +173,39 @@ public final class RuinLifecycleGameTests {
         h.succeed();
     }
 
+    /**
+     * A chunk whose mark is not below a detonation's number was ruined by it or by a newer one (the newer detonation's
+     * wave reached it first, then it unloaded and came back): the ruin queue does not take it for the older detonation and
+     * drops that detonation's prepared plan for it. A plan left behind would keep its zone square behind the wave loaded,
+     * waiting for a ruin that never comes, until the zone's 12 000-tick hold ends.
+     */
+    @GameTest(template = "range", timeoutTicks = 100, batch = "nuke_lifecycle_far", skyAccess = true)
+    public static void refusedChunkDropsItsPreparedPlan(GameTestHelper h) {
+        var level = h.getLevel();
+        var chunk = level.getChunkAt(h.absolutePos(new net.minecraft.core.BlockPos(32, 12, 32)));
+        long key = chunk.getPos().toLong();
+        var events = ua.zentix.incoming.nuclear.NuclearEvents.get(level);
+        var g = h.absolutePos(new net.minecraft.core.BlockPos(32, 12, 32));
+        var older = new ua.zentix.incoming.nuclear.Detonation(events.nextId(), net.minecraft.world.phys.Vec3.atBottomCenterOf(g), g.getY(), 15, true,
+                level.getGameTime(), 0, 0, 20_000, 7, 0.05f, false, ua.zentix.incoming.nuclear.Detonation.OLD_WAVE);
+        int newer = events.nextId();
+        var plans = new it.unimi.dsi.fastutil.longs.Long2ObjectOpenHashMap<RuinPlan>();
+        plans.put(key, RuinPlan.EMPTY);
+        ScarQueue q = new ScarQueue();
+        int mark = chunk.getExistingData(ua.zentix.incoming.registry.ModAttachments.CHUNK_SCAR).orElse(0);
+        try {
+            q.scanLoaded(older, plans);
+            chunk.setData(ua.zentix.incoming.registry.ModAttachments.CHUNK_SCAR, newer);
+            q.offer(chunk, older);
+            h.assertFalse(q.queued(key), "a chunk the newer detonation ruined was queued for the older one");
+            h.assertFalse(q.pendingPlan(older.id(), key), "the older detonation's prepared plan stayed for a chunk the queue refused: it holds its zone square");
+        } finally {
+            q.clear(level);
+            chunk.setData(ua.zentix.incoming.registry.ModAttachments.CHUNK_SCAR, mark);
+        }
+        h.succeed();
+    }
+
     @GameTest(template = "range", timeoutTicks = 100, batch = "nuke_lifecycle_far", skyAccess = true)
     @SuppressWarnings("unchecked")
     public static void cancelledFarCopyCannotPublishAfterRefire(GameTestHelper h) throws ReflectiveOperationException {

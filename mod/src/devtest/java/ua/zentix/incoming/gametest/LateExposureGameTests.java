@@ -47,7 +47,7 @@ public final class LateExposureGameTests {
             if (make(level, g, (float) mid, 0).psi(p) < PSI) lo = mid;
             else hi = mid;
         }
-        return make(level, g, (float) hi, NuclearGameTests.IDS.incrementAndGet());
+        return make(level, g, (float) hi, NuclearGameTests.nextId(level));
     }
 
     private static Detonation make(ServerLevel level, BlockPos g, float scale, int id) {

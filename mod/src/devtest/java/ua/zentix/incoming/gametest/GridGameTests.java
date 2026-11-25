@@ -441,7 +441,7 @@ public final class GridGameTests {
         for (BlockPos p : lamps) h.setBlock(p, Blocks.LANTERN);
         // air blast away from the substation (as in nuclear inspections: 15 kt, scale 0.1); the explosion itself is not needed here
         BlockPos g = h.absolutePos(CENTER.east(8));
-        Detonation d = new Detonation(NuclearGameTests.IDS.incrementAndGet(), new Vec3(g.getX() + 0.5, g.getY() + 300, g.getZ() + 0.5), g.getY(),
+        Detonation d = new Detonation(NuclearGameTests.nextId(level), new Vec3(g.getX() + 0.5, g.getY() + 300, g.getZ() + 0.5), g.getY(),
                 15, false, level.getGameTime(), 0, 0, 20_000, 7, 0.1f, false, Detonation.OLD_WAVE);
         h.assertTrue(d.radiusMax() > 64, "detonation radius " + d.radiusMax() + " does not cover the area");
         Blackouts.nuke(level, d, ua.zentix.incoming.IncomingConfig.SERVER.gridEnabled.get());
@@ -939,7 +939,7 @@ public final class GridGameTests {
         BlockPos lamp = new BlockPos(18, 12, 18);
         h.setBlock(lamp, Blocks.LANTERN);
         BlockPos g = h.absolutePos(CENTER.east(8));
-        Detonation d = new Detonation(NuclearGameTests.IDS.incrementAndGet(), new Vec3(g.getX() + 0.5, g.getY() + 1, g.getZ() + 0.5), g.getY(),
+        Detonation d = new Detonation(NuclearGameTests.nextId(level), new Vec3(g.getX() + 0.5, g.getY() + 1, g.getZ() + 0.5), g.getY(),
                 15, true, level.getGameTime(), 0, 0, 20_000, 7, 0.1f, false, Detonation.OLD_WAVE);
         double dead = d.groundRange(BlastModel.kpa(Blackouts.DEAD_PSI));
         h.assertTrue(dead > 64, "destroyed zone " + dead + " does not cover the platform");
