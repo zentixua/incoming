@@ -558,7 +558,8 @@ public final class RuinGameTests {
                 if (!scarred || w.plannedChunks() > 0 || w.prepTiles() > 0) {
                     RuinBackgroundGameTests.gamePace(tickAt);
                     if (level.getGameTime() < d.gameTime() + 2400) return;
-                    failure = "the ruins near the wall did not stand behind 2400 tick after the explosion: left " + w.plannedChunks() + ", squares " + w.prepTiles();
+                    failure = "the ruins near the wall did not stand behind 2400 tick after the explosion: left " + w.plannedChunks() + ", squares " + w.prepTiles()
+                            + ", wall and house chunks scarred " + scarred;
                 } else if (w.ruinStats()[0] == 0) {
                     failure = "not a single chunk fell into place according to a ready-made plan";
                 } else {
