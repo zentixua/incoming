@@ -177,6 +177,18 @@ paths:
   (`RuinPlanner.leavesRubble`): a lone test block must sit where it leaves none (`blastBreaksLightKeepsMasonryFellsTrees`).
 - Background ruin workers run in wall time (0.5–1.3 s for a 1 kt chunk locally, 50–510 unthrottled ticks): a test that
   waits for them runs at game speed (`chunkWithheldUntilRuins`), or CI's unthrottled ticks spend its timeout first.
+  Game speed still races them: a check whose outcome depends on when background work lands finishes it at each tick
+  instead (`BackgroundSettle.settle`: zone and settlement layouts, chunk I/O answers, `RuinWorkers`, then
+  `InstantChunks.settle` for tickets), with counting work clocks (the shared one and the preparation's own,
+  `usePreparationClockForTest`) and a load pace that admits every load (`work.OpenLoadPace`), so the result depends on
+  ticks only; its 60 s wall limit only catches a hang. At 50 ms a tick, whether `nuke_prep_border`'s disk plans are
+  ready by its detonation follows the runner, and with it what the zone behind the wave has to do.
+- Detonation numbers of a check come from the level's counter (`NuclearGameTests.nextId`), the one sequence real
+  strikes use: a chunk a check ruined keeps that number (`CHUNK_SCAR`), and the ruin queue skips a chunk whose mark is
+  not below a detonation's number, while the preparation still plans it, so its zone square is held to the end
+  (DIAG “finished plan, no queued work”; “prepared plan … not queued”). A number from a separate counter above the
+  level's outranks every later strike check on the grid beside it; `nuke_prep_border` marks its wall chunk from the
+  counter first and must still leave no plan and no held square.
 - Light leases retain chunks after a fixture removes its own ticket, until committed light changes can be saved.
   Assert partial conversion when removing that ticket, not at eventual unload (`grid_tower`). Fixtures isolating
   ScarQueue neighbor handoff seed current-light chunks with `LIGHT_REPAIRED`: prior batches' scar/outage contexts

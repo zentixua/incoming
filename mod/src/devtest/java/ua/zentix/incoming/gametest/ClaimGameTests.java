@@ -310,7 +310,7 @@ public final class ClaimGameTests {
     public static void claimChangeBetweenFlashAndWave(GameTestHelper h) {
         ServerLevel level = h.getLevel();
         Handler handler = Handler.install(h, new LongOpenHashSet());
-        Detonation d = new Detonation(NuclearGameTests.IDS.incrementAndGet(), Vec3.atBottomCenterOf(h.absolutePos(NuclearGameTests.CENTER)),
+        Detonation d = new Detonation(NuclearGameTests.nextId(level), Vec3.atBottomCenterOf(h.absolutePos(NuclearGameTests.CENTER)),
                 h.absolutePos(NuclearGameTests.CENTER).getY(), 1, true, level.getGameTime(), 0f, 0f, 1f, 0L, 0.1f, false, 0.35f);
         NuclearClaims claims = NuclearClaims.get(level);
         LevelChunk a = level.getChunkAt(h.absolutePos(NuclearGameTests.CENTER)), b = level.getChunkAt(h.absolutePos(NuclearGameTests.CENTER.east(16)));

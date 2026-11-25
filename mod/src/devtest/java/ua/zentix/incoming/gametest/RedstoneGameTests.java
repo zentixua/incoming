@@ -354,7 +354,7 @@ public final class RedstoneGameTests {
                     h.assertTrue(PowerGrid.get(level).dark(abs.getX() >> 4, abs.getZ() >> 4, Blackouts.now(level)), "the blackout did not reach the substation's district");
                     h.assertTrue(powered(h, center), "another outage darkening its district knocked the substation out");
                     BlockPos g = h.absolutePos(center.east(8));
-                    Detonation det = new Detonation(NuclearGameTests.IDS.incrementAndGet(), new Vec3(g.getX() + 0.5, g.getY() + 300, g.getZ() + 0.5), g.getY(),
+                    Detonation det = new Detonation(NuclearGameTests.nextId(level), new Vec3(g.getX() + 0.5, g.getY() + 300, g.getZ() + 0.5), g.getY(),
                             15, false, level.getGameTime(), 0, 0, 20_000, 7, 0.1f, false, Detonation.OLD_WAVE);
                     Blackouts.nuke(level, det, ua.zentix.incoming.IncomingConfig.SERVER.gridEnabled.get());
                     h.assertFalse(powered(h, center), "a nuclear outage over the substation left it working");

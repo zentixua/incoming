@@ -174,7 +174,7 @@ public final class EyeGameTests {
 
     /** 15 kt in air in {@code burst}; {@code scale} - blocks per meter. */
     private static Detonation detonation(GameTestHelper h, Vec3 burst, float scale) {
-        return new Detonation(NuclearGameTests.IDS.incrementAndGet(), burst, h.absolutePos(CENTER).getY(), 15, false, h.getLevel().getGameTime(),
+        return new Detonation(NuclearGameTests.nextId(h.getLevel()), burst, h.absolutePos(CENTER).getY(), 15, false, h.getLevel().getGameTime(),
                 0, 0, 20_000, 7, scale, false, Detonation.OLD_WAVE);
     }
 }
