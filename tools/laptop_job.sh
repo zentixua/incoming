@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Heavy job on the host laptop (scenario clients and sandbox, Blender, trailer editing, bench):
 #
-#   tools/laptop_job.sh [--gpu [--wait] | --light | --soft] [--full] <name> -- <command …>
+#   tools/laptop_job.sh [--gpu [--wait] | --light | --soft] [--full --acceptance] <name> -- <command …>
 #   tools/laptop_job.sh --status            ← running jobs, GPU holder, jobs waiting for Artem's game
 #   tools/laptop_job.sh --ceiling <mode>    ← memory ceiling of a mode (heavy, light, gpu, soft, full): "MemoryMax MemorySwapMax"
 #
@@ -32,7 +32,9 @@
 #   --light  same as no flag: immediate, no lease (GameTest, build, server need no GPU)
 #   --soft   vanilla client (tools/soft_gl.sh: shared GPU slot or CPU): immediate, no lease, idle CPU priority (CPUWeight=idle:
 #            Artem's game and every normal process go first), memory capped (soft_gl.sh soft_mem_cap) without swap; a CPU client keeps running while Artem plays
-#   --full   the whole pack (prod_client.py, look gate; with any mode but --soft): the larger memory ceiling
+#   --full   the whole pack (prod_client.py, look gate; with any mode but --soft): the larger memory ceiling; only with
+#            --acceptance (a final take: acceptance clip, page media, a measurement only the pack gives), refused (2) without
+#            it; every such take is a `take <epoch> <task> <name>` row in the load log, and the job prints the task's count
 set -euo pipefail
 
 # Artem's game: artem_playing (gpu_lease.sh), java in his Prism instance directory
@@ -144,8 +146,21 @@ mode=heavy wait= full=
 case "${1:-}" in --gpu) mode=gpu; shift ;; --light) mode=light; shift ;; --soft) mode=soft; shift ;; esac
 [ "$mode" = gpu ] && [ "${1:-}" = --wait ] && { wait=--wait; shift; }
 [ "${1:-}" = --full ] && [ "$mode" != soft ] && { full=1; shift; }
-[ $# -ge 3 ] && [ "$2" = "--" ] || { echo "usage: $0 [--gpu [--wait]|--light|--soft] [--full] <name> -- <command …> | --status | --ceiling <mode>" >&2; exit 2; }
+acceptance=; [ -n "$full" ] && [ "${1:-}" = --acceptance ] && { acceptance=1; shift; }
+[ $# -ge 3 ] && [ "$2" = "--" ] || { echo "usage: $0 [--gpu [--wait]|--light|--soft] [--full --acceptance] <name> -- <command …> | --status | --ceiling <mode>" >&2; exit 2; }
 name=$1; shift 2
+# A whole-pack take is a final take, never the look loop (look skill, "Iterate in the dev client"): it states so with
+# --acceptance, and each one is counted for its task in the load log (`take` rows)
+if [ -n "$full" ]; then
+  if [ -z "$acceptance" ]; then
+    echo "laptop_job $name: a whole-pack job is a final take (an acceptance clip, page media, or a measurement only the pack gives: frame cost under his pack, a bug only the pack shows): add --acceptance. A look change iterates in the dev client in seconds (tools/dev_client.sh, client-scenario.md)" >&2
+    exit 2
+  fi
+  takes_log=${DELEGATE_LOAD_LOG:-${XDG_STATE_HOME:-$HOME/.local/state}/delegate/load.tsv}
+  mkdir -p "$(dirname "$takes_log")" 2>/dev/null
+  printf 'take\t%s\t%s\t%s\n' "$(date +%s)" "${DELEGATE_TASK:--}" "$name" >> "$takes_log" 2>/dev/null
+  echo "laptop_job $name: whole-pack take $(awk -F'\t' -v t="${DELEGATE_TASK:--}" '$1 == "take" && $3 == t' "$takes_log" 2>/dev/null | wc -l) of task ${DELEGATE_TASK:--}" >&2
+fi
 read -r mem_max mem_swap <<< "$(_ceiling "$([ -n "$full" ] && echo full || echo "$mode")")"
 
 # GPU lease belongs to session: foreign holder refuses (or waits with --wait); before service for immediate refusal
@@ -219,7 +234,7 @@ if [ -s "$oomfile" ]; then
   elif [ "$where" = host ]; then
     echo "laptop_job $name: out of memory on the laptop (below its ceiling $mem_max): $killed process(es) killed inside its unit, peak $peak GB; job stopped"
   else
-    echo "laptop_job $name: memory ceiling $mem_max (+ $mem_swap swap) reached: $killed process(es) killed inside its unit, peak $peak GB; job stopped (laptop_job.sh --full or INCOMING_JOB_MEM for a larger job)"
+    echo "laptop_job $name: memory ceiling $mem_max (+ $mem_swap swap) reached: $killed process(es) killed inside its unit, peak $peak GB; job stopped (laptop_job.sh --full --acceptance or INCOMING_JOB_MEM for a larger job)"
   fi
   rm -f "$oomfile"
 fi

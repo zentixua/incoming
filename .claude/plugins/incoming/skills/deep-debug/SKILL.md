@@ -92,7 +92,8 @@ Where: Artem's laptop, only when he is not playing (`tools/gpu_lease.sh --wait`)
   bench for frame cost.
 - **Other vendors' drivers** (AMD, no such GPU here): `tools/amd_shader_check.py` gives AMD's own compiler output
   per program (VGPRs, scratch, code size, compiler memory and seconds); Mesa llvmpipe is the second compiler.
-- **Shaders**: the hold rig (age the cloud once, keep the client, hot reload), a probe channel per term.
+- **Shaders**: the dev client held at the defect (look skill section 4: the burst once, `/tick freeze`, F3+T per
+  change), a probe channel per term.
 
 Traps: Dynamic FPS caps to 15 FPS exactly after 300 s (`dynamic_fps.json` `{"idle":{"timeout":0}}`); scenarios pin a
 quality ladder step, compare only equal steps (frame time as in the game: `-Dincoming.pall.adaptive=true`);
@@ -157,7 +158,6 @@ into that area's `.claude/rules` or this skill by PR in the same thread; status 
   value of the string or pixel he sees).
 - A bug from Artem's game: his Flashback replay (instance `flashback/replays`, copy first) is a data source: the login
   packet gives the game mode, snapshots `set_time`, `move_entities` positions; read where he stood and when.
-- Shader probes: the hold rig ages the cloud once (dust off, render distance 2), then the client polls command files
-  (`tp <up> <pitch>`, `prop <key> <value>`, `reload`, `shot <name>`, `quit`); copy edited shaders into
-  `mod/build/resources/main` and `reload` (~50 s); after toggling a mode wait ~80 ticks (temporal history); a probe
-  channel writes one term's value as the pall output with alpha 0 (channel 39 = linear calibration ramp).
+- Shader probes: in the dev client (look skill section 4) the cloud ages once, then `/tick freeze` holds it; each edited
+  shader goes in by `tools/dev_client.sh swap` (F3+T); after toggling a mode wait ~80 ticks (temporal history); a
+  probe channel writes one term's value as the pall output with alpha 0 (channel 39 = linear calibration ramp).

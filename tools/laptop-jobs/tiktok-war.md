@@ -49,7 +49,7 @@ is.
 
 ## 3. Shoot (GPU)
 ```sh
-$S/laptop_job.sh --full tiktok-war10 -- python3 $S/prod_client.py --no-copy --dir $G --incoming-jar $J --jvm=-Xmx12g \
+$S/laptop_job.sh --full --acceptance tiktok-war10 -- python3 $S/prod_client.py --no-copy --dir $G --incoming-jar $J --jvm=-Xmx12g \
   --prop replayscan.film=$T/clips10/film/$R/plan.json
 ```
 Success: in `$G/logs/latest.log` — `Film: done`; before each plan —

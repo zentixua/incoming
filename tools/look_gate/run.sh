@@ -10,7 +10,7 @@
 # waits until Artem's game is closed and there is enough memory; if the game has started, the client
 # is shut down, code 75.
 # Result — $LOOK_ROOT/out/<name>/: frames, log, audio.wav, probe-frames.txt, gpu.csv. Run through
-# tools/laptop_job.sh --gpu --full (the whole pack: the larger memory ceiling).
+# tools/laptop_job.sh --gpu --full --acceptance (the whole pack: the larger memory ceiling).
 set -uo pipefail
 V=$1; TREE=$2; CASES=${3:-}; EXTRA=${4:--}
 ROOT=${LOOK_ROOT:-/mnt/data/projects/incoming/mod/run/look-gate}

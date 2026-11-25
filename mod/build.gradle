@@ -126,9 +126,29 @@ neoForge {
         minecraftVersion = project.parchment_minecraft_version
     }
     runs {
+        // The standard dev client (docs/dev-pipeline.md, section 2; tools/dev_client.sh runs it without a window).
+        // -PquickPlay=<save>: straight into that world of run/client/saves (vanilla --quickPlaySingleplayer).
+        // -PhotSwap[=<port>]: JetBrains Runtime from the Gradle toolchain (foojay downloads it; vendor JETBRAINS), enhanced
+        // class redefinition and a JDWP port on loopback (default 5005), where an IDE's "reload changed classes" or jdb's
+        // `redefine` replaces classes in the running client.
+        // -PclientSize=WxH: window size (vanilla --width/--height). INCOMING_CLIENT_HEAP: fixed heap (tools/soft_gl.sh).
         client {
             client()
             gameDirectory = project.file('run/client')
+            if (project.findProperty('quickPlay')) programArguments.addAll '--quickPlaySingleplayer', project.findProperty('quickPlay') as String
+            if (project.findProperty('clientSize')) {
+                def size = (project.findProperty('clientSize') as String).split('x')
+                programArguments.addAll '--width', size[0], '--height', size[1]
+            }
+            if (System.getenv('INCOMING_CLIENT_HEAP')) jvmArgument "-Xmx${System.getenv('INCOMING_CLIENT_HEAP')}"
+            if (project.hasProperty('hotSwap')) {
+                def port = project.findProperty('hotSwap') ?: '5005'
+                jvmArgument '-XX:+AllowEnhancedClassRedefinition'
+                jvmArgument "-agentlib:jdwp=transport=dt_socket,server=y,suspend=n,address=127.0.0.1:${port}"
+                // vanilla's own reload timing ("Resource reload finished after N ms", ProfiledReloadInstance) runs only
+                // with its loggers at debug: a script waits for that line after F3+T
+                systemProperty 'forge.logging.mojang.level', 'debug'
+            }
         }
         // client without a window for the check scenario (see src/devtest/.../ClientScenario and
         // tools/client_scenario.sh)
@@ -476,7 +496,14 @@ tasks.register('copyRuntimeMods_stress', Sync) {
     onlyIf { mcModsDir.isDirectory() }
 }
 tasks.matching { it.name in ['runStressServer', 'runStressClient'] }.configureEach { dependsOn 'copyRuntimeMods_stress' }
-tasks.matching { it.name == 'runClient' }.configureEach { dependsOn 'copyRuntimeMods_client' }
+tasks.matching { it.name == 'runClient' }.configureEach {
+    dependsOn 'copyRuntimeMods_client'
+    // -PhotSwap: the client runs on JetBrains Runtime (enhanced class redefinition); the build itself stays on the toolchain
+    if (project.hasProperty('hotSwap')) javaLauncher = javaToolchains.launcherFor {
+        languageVersion = JavaLanguageVersion.of(21)
+        vendor = JvmVendorSpec.JETBRAINS
+    }
+}
 tasks.matching { it.name == 'runServer' }.configureEach { dependsOn 'copyRuntimeMods_server' }
 tasks.matching { it.name == 'runClientScenario' }.configureEach {
     dependsOn 'copyRuntimeMods_scenario'

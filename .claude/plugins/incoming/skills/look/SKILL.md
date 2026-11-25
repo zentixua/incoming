@@ -60,10 +60,26 @@ per lag, so shorten `--lag` for fast fronts) and from the law.
   30 fps clip in the judging view with its GPU frame cost; the owner picks by clip and records why in the PR.
 - The drawing takes where, when and how much from the law; physics, sound and gameplay read the law, never the
   drawing. A law and look corrections on one model are glue (AGENTS.md).
-- Iterate in a shader harness that runs the mod's shader include verbatim on Mesa llvmpipe (EGL), as
-  `tools/dust_wall_gl.py` and `tools/see_through_gl.py` do: seconds per try. A game take confirms; it is not the loop.
 
-## 4. Judge in motion
+## 4. Iterate in the dev client; whole-pack takes only for acceptance
+The loop is the standard modder one (docs/dev-pipeline.md, section 2): one dev client stays up in a saved world, each
+change goes into it in seconds, and the frame is looked at in the same game. A whole-pack take (burst plus minutes of
+world in the full pack) is the final acceptance set of section 5 and the matrix, never a step of the loop.
+- Start once: `tools/dev_client.sh start <save> --from <world>` (ModDevGradle `runClient` with the mod and its
+  dependencies, straight into the save; JetBrains Runtime). A terrain-dependent defect (valley, coast, hills) runs in a
+  copy of that real map, its spot reached by `/tp`; the copy is made once and kept, never a fresh map per try.
+- Set the scene by vanilla commands: `/tp`, `/time set`, `/weather`, the strike or `/incoming nuke now at …`; hold the
+  defect's moment with `/tick freeze` (the nuclear show and particles stand still) and move it with `/tick step <ticks>`;
+  the burst plays once per session, not per change.
+- Change: Java by `tools/dev_client.sh swap` (compile, hot swap; a restart only for registrations, static initializers,
+  packet formats or mixins), shaders and textures by the same `swap` (F3+T), a shader pack's own files by Iris's `R`,
+  numbers by the config file (the game rereads it). `tools/dev_client.sh shot <name>` after each change.
+- A shader term alone: the harness running the mod's include verbatim on Mesa llvmpipe (`tools/dust_wall_gl.py`,
+  `tools/see_through_gl.py`); frames and WAV at exact effect seconds against `main`: the sandbox (`tools/sandbox.sh shot`).
+- Every round states its seconds per change. A whole-pack take runs only through `laptop_job.sh --full --acceptance`,
+  once the dev client shows the traits.
+
+## 5. Judge in motion
 - Each round: frames at fixed times and a 30 fps clip in the judging view, beside the reference and the last version
   Artem saw at the same times. Check `capture.json` ages: the clip plays in real time.
 - Measure our take and the reference footage with the same tool: `tools/clip_metrics.py change` (detail change per
@@ -82,7 +98,7 @@ per lag, so shorten `--lag` for fast fronts) and from the law.
 - Under a shader pack the effect works and looks at least as good (AGENTS.md); one check on the last head, which does
   not replace a pack-specific functional test.
 
-## 5. Sound
+## 6. Sound
 - Take: a sandbox WAV (`tools/sandbox.sh shot … --at none`) or a scenario's `audio.wav`, beside `main`'s at the same
   distance and times; the reference is a real recording of the phenomenon at a stated distance.
 - Same measure on both, same settings: short-term loudness over time (`ffmpeg -af ebur128`), a spectrogram
@@ -91,7 +107,7 @@ per lag, so shorten `--lag` for fast fronts) and from the law.
   and the recording spectra of `tools/build_sounds.py`, never a tuned gain.
 - A fresh Claude session judges by the numbers and the waveform and spectrogram images against the traits.
 
-## 6. Rounds and stop
+## 7. Rounds and stop
 - One run per round answers all of its questions (deep-debug skill): probe channels for every suspect term in one
   instrumented take, never one guessed toggle per take.
 - Three rounds or the timebox without a measured shift toward the traits: stop and name the cause by number (AGENTS.md).

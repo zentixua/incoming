@@ -274,7 +274,8 @@ public final class IncomingClient {
         Alerts.tick();
         RadarScope.tick();
         NukeArming.tick();
-        ClientNuclear.tick();
+        // the nuclear show runs on world ticks like particles: it stands still under /tick freeze and moves with /tick step
+        if (mc.level.tickRateManager().runsNormally()) ClientNuclear.tick();
     }
 
     /**
