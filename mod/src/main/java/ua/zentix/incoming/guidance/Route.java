@@ -74,6 +74,17 @@ public final class Route {
         return new Route(pts, new Vec3(origin.x, 0, origin.z), operator);
     }
 
+    /**
+     * The same route with its first point moved to {@code first} and its origin to {@code origin}, while that first point
+     * is still ahead: a launch gate re-anchored where its round actually left a moving rail ({@code StrikeProjectile}).
+     */
+    public Route reanchored(Vec3 first, Vec3 origin) {
+        if (next > 0 || points.isEmpty()) return this;
+        List<Vec3> pts = new ArrayList<>(points);
+        pts.set(0, new Vec3(first.x, 0, first.z));
+        return new Route(pts, new Vec3(origin.x, 0, origin.z), operator);
+    }
+
     /** Skip remaining points: straight to target (camera retargeting). */
     public void skip() {
         next = points.size();

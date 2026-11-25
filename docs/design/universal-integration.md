@@ -323,7 +323,10 @@ round and detonation events with no Almighty change. Add to the note: the grid a
 - **Create Display Link source (M):** air-raid state and launcher stock on Create display boards, in optional compat.
 - **Data-driven munition variants (L):** a separate design decision under the real-product rules: weapon numbers
   live in `WeaponSpec`, client ids follow `WeaponType` ordinals, real weapons keep real specs.
-- **Launch from Create contraptions and Create Aeronautics craft (L):** the fixed launcher refuses on a craft today.
+- **Launch from Create contraptions and Create Aeronautics craft (L):** the fixed launcher fires from a Create
+  Aeronautics craft in the craft's frame (rails, heading and sector through the craft's pose; rounds ride the rail and
+  keep its speed along it). Other Create contraptions carry the block as contraption data, with no block entity in the
+  world, so the launcher does not fire while they move.
 - **KubeJS event group (S, after A1):** named `IncomingEvents.*`; `NativeEvents` already works without it.
 
 ## 6. Play scenarios
@@ -369,9 +372,9 @@ round and detonation events with no Almighty change. Add to the note: the grid a
 | later | 5F Component items for progression | planned | |
 | later | 5F Blackout of modded lamps | planned | |
 | later | 5F Foreign air-defense targets | planned | |
-| later | 5F Create Display Link source | planned | |
+| later | 5F Create Display Link source | done | #764 |
 | later | 5F Data-driven munition variants | planned | |
-| later | 5F Launch from Create contraptions and Create Aeronautics craft | planned | |
+| later | 5F Launch from Create contraptions and Create Aeronautics craft | done | #763 |
 | later | 5F KubeJS event group | planned | |
 
 Items 1–8 are the first wave (small or foundational, high value), 9–13 the second wave, "later" the items of

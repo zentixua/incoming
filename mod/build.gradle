@@ -65,6 +65,12 @@ repositories {
         forRepository { maven { url = 'https://maven.architectury.dev/' } }
         filter { includeGroup 'dev.architectury' }
     }
+    // Ponder (MIT, Create's own library): its VirtualBlockEntity is a supertype of Create's block entities, so the
+    // GameTests that drive a Display Link compile (compat/create)
+    exclusiveContent {
+        forRepository { maven { url = 'https://maven.createmod.net' } }
+        filter { includeGroup 'net.createmod.ponder' }
+    }
     // glsl-processor — parsing of Veil's GLSL (carried by Sable): ShaderSourceTest runs its shaders through it
     exclusiveContent {
         forRepository { maven { url = 'https://maven.blamejared.com' } }
@@ -304,6 +310,9 @@ dependencies {
     // unit tests use it too (the adapter against a stand-in shielding)
     compileOnly "mekanism:Mekanism:${minecraft_version}-${mekanism_version}:api"
     testImplementation "mekanism:Mekanism:${minecraft_version}-${mekanism_version}:api"
+    // sable-companion is always in the mod jar (jarJar): unit tests load classes reaching SubLevels with it, as in game;
+    // without Sable its built-in stub answers "no craft"
+    testImplementation "dev.ryanhcode.sable-companion:sable-companion-common-${minecraft_version}:${sable_companion_version}"
     // Jade: only for compilation — the overlay plugin (compat/jade, found by Jade's @WailaPlugin scan); unit tests
     // check its data field against Jade's interfaces
     compileOnly "maven.modrinth:jade:${jade_version}"
@@ -314,6 +323,10 @@ dependencies {
     compileOnly "cc.tweaked:cc-tweaked-${minecraft_version}-forge-api:${cctweaked_version}"
     testImplementation "cc.tweaked:cc-tweaked-${minecraft_version}-core-api:${cctweaked_version}"
     testImplementation "cc.tweaked:cc-tweaked-${minecraft_version}-forge-api:${cctweaked_version}"
+    // Create: only for compilation — Display Link sources of the SAM and the launcher (compat/create); the GameTest
+    // runtime has the same Create jar from the pack (runtimeModPatterns), so GameTests read the sources through Create
+    compileOnly("maven.modrinth:create:${create_version}") { transitive = false }
+    devtestCompileOnly("net.createmod.ponder:ponder-neoforge:${ponder_version}") { transitive = false }
     // FTB Teams, Architectury and Open Parties and Claims: only their APIs for compilation — sides from parties
     // (compat/ftbteams, compat/opac); unit tests run the adapters against stand-in teams and parties
     compileOnly("dev.ftb.mods:ftb-teams-neoforge:${ftbteams_version}") { transitive = false }

@@ -9,12 +9,10 @@ import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.item.ItemStack;
-import net.minecraft.world.level.ChunkPos;
 import net.minecraft.world.phys.Vec3;
 import org.jetbrains.annotations.Nullable;
 import ua.zentix.incoming.Incoming;
 import ua.zentix.incoming.IncomingConfig;
-import ua.zentix.incoming.compat.SubLevels;
 import ua.zentix.incoming.strike.Authority;
 import ua.zentix.incoming.strike.LaunchOrigin;
 import ua.zentix.incoming.strike.Loadout;
@@ -70,7 +68,8 @@ public final class LauncherOrders {
         Mission m = java.util.Objects.requireNonNull(be.mission());
         BlockPos pos = be.getBlockPos();
         Loadout l = loadout(m);
-        String who = "launcher " + pos.toShortString();
+        // on a craft the block's own position is in a distant plot: the log also names where the craft carries it
+        String who = "launcher " + pos.toShortString() + (be.carried() ? " on a craft at " + BlockPos.containing(be.position()).toShortString() : "");
         Component before = be.lastReport();
         boolean ok = ServerActions.fromLauncher(level, who, be.owner(), l, new ServerActions.Aim(m.target(), m.point(), null), m.via(),
                 new LaunchOrigin.Fixed(pos), be::report, made);
@@ -81,7 +80,7 @@ public final class LauncherOrders {
 
     /**
      * Why a signal now would not issue the mission order, without issuing it: the checks {@link #fire} runs before the
-     * launch, in the same order (no mission, on a craft, the owner's rules, busy, route, stock). Null means a signal would
+     * launch, in the same order (no mission, on a craft that is not loaded, the owner's rules, busy, route, stock). Null means a signal would
      * order it; the launch itself can still fail (blocked sector), as it reports then. Reads only the launcher, its ready
      * chunk and the owner's cached rights: an overlay or a computer may ask it often.
      */
@@ -90,8 +89,8 @@ public final class LauncherOrders {
         Mission m = be.mission();
         if (m == null) return Component.translatable("incoming.fixed_launcher.no_mission.short");
         BlockPos pos = be.getBlockPos();
-        // In Sable plot grid, block is not at its visible position: launch would leave from the distant plot.
-        if (SubLevels.inPlotGrid(level, new ChunkPos(pos))) return Component.translatable("incoming.fixed_launcher.on_craft");
+        // on a craft that is not loaded now: no world place to fire from
+        if (!be.located()) return Component.translatable("incoming.fixed_launcher.not_loaded");
         UUID owner = be.owner();
         if (owner != null) {
             MutableComponent rule = rules(level.getServer(), owner, m.weapon(), be.position(), m.point());

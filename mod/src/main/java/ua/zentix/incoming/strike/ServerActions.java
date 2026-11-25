@@ -223,7 +223,7 @@ public final class ServerActions {
     @Nullable
     public static MutableComponent routeProblem(ServerLevel level, @Nullable ServerPlayer shooter, boolean rules, WeaponType weapon,
                                                 @Nullable LaunchOrigin from, Waypoints via, Vec3 aim) {
-        if (from != null && !inWorld(level, from.at())) return outsideWorld(from.at());
+        if (from != null && !inWorld(level, from.at(level))) return outsideWorld(from.at(level));
         if (via.isEmpty()) return null;
         WeaponSpec.Route route = weapon.spec().route();
         if (!route.waypoints()) return Component.translatable("incoming.route.unsupported", weapon.displayName());
@@ -233,7 +233,7 @@ public final class ServerActions {
                 return Component.translatable("incoming.route.out_of_range", IncomingConfig.SERVER.mapRange.get());
             }
         }
-        Vec3 start = from != null ? from.at() : shooter != null ? shooter.position() : via.points().getFirst();
+        Vec3 start = from != null ? from.at(level) : shooter != null ? shooter.position() : via.points().getFirst();
         if (!via.within(weapon, start, aim)) {
             return Component.translatable("incoming.route.too_long", weapon.displayName(), kilometres(via.length(start, aim)), kilometres(route.reach()));
         }
@@ -717,7 +717,7 @@ public final class ServerActions {
     private static boolean launch(ServerLevel level, String who, @Nullable ServerPlayer owner, @Nullable UUID ownerId, float yaw, Loadout l, Aim aim,
                                   Waypoints via, @Nullable LaunchOrigin from, @Nullable Munitions.Bill paid, Order order) {
         StrikeService.log(level, who, l.weapon(), l.count(), l.spread(), aim.target(), aim.point(), via, from);
-        float course = from != null ? FlightController.anglesTo(from.at(), aim.point())[0] : yaw;
+        float course = from != null ? FlightController.anglesTo(from.at(level), aim.point())[0] : yaw;
         // Unready launch site: even one projectile uses a salvo, which loads/waits for site (LaunchPlaces), rather than starting
         // outside the loaded world, already cruising, where launch is invisible.
         if (l.count() > 1 || l.spread() > 0 || LaunchPlaces.waits(level, l.weapon(), from)) {

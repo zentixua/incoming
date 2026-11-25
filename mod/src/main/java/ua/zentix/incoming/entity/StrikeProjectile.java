@@ -38,6 +38,7 @@ import ua.zentix.incoming.guidance.FlightController;
 import ua.zentix.incoming.guidance.Mission;
 import ua.zentix.incoming.guidance.Route;
 import ua.zentix.incoming.util.Air;
+import ua.zentix.incoming.util.Local;
 import ua.zentix.incoming.util.Terrain;
 import ua.zentix.incoming.util.TerrainSurvey;
 import ua.zentix.incoming.nuclear.Detonation;
@@ -94,6 +95,12 @@ public abstract class StrikeProjectile extends Entity implements IEntityWithComp
     private static final EntityDataAccessor<Boolean> DATA_NUCLEAR = SynchedEntityData.defineId(StrikeProjectile.class, EntityDataSerializers.BOOLEAN);
     /** First launcher ticks when projectile is invisible (rack still raising — projectile inside slot). */
     private static final EntityDataAccessor<Integer> DATA_HIDDEN = SynchedEntityData.defineId(StrikeProjectile.class, EntityDataSerializers.INT);
+    /**
+     * Launcher block on a craft whose rail this projectile rides while on it ({@link #rideRail}), and its rack cell: the
+     * client places it on the rail by the craft's own pose ({@link #clientRail}).
+     */
+    private static final EntityDataAccessor<Optional<BlockPos>> DATA_RAIL = SynchedEntityData.defineId(StrikeProjectile.class, EntityDataSerializers.OPTIONAL_BLOCK_POS);
+    private static final EntityDataAccessor<Integer> DATA_RAIL_CELL = SynchedEntityData.defineId(StrikeProjectile.class, EntityDataSerializers.INT);
     /** Whether operator camera tracks a sighted target ({@link Pursuit}), for camera presentation. */
     private static final EntityDataAccessor<Byte> DATA_PURSUIT = SynchedEntityData.defineId(StrikeProjectile.class, EntityDataSerializers.BYTE);
 
@@ -245,6 +252,10 @@ public abstract class StrikeProjectile extends Entity implements IEntityWithComp
     private byte clientPhase = -1;
     /** Launcher wait before ignition. */
     private int readyTicks;
+    /** World velocity of the ridden rail at the last ride step (its craft's motion there), blocks/tick: carried into the launch ({@link #launchTick}). */
+    private Vec3 railVelocity = Vec3.ZERO;
+    /** The route's first point is the launch gate ahead of the ridden rail ({@link #leaveRail} re-anchors it). */
+    private boolean railGated;
     /** Sound target siren this many ticks before impact; -1 — no siren. */
     private int sirenLead = -1;
     /** Flying outside loaded world (see {@link VirtualFlights}). */
@@ -386,6 +397,83 @@ public abstract class StrikeProjectile extends Entity implements IEntityWithComp
         this.readyTicks = readyTicks;
         altitude.reset(rail.y);
         setPhase(FlightPhase.READY);
+    }
+
+    /**
+     * Ride cell {@code cell}'s rail of the launcher at {@code launcher} while on it: a craft carries that launcher, so the
+     * rail moves and turns with the craft ({@link #followRail}).
+     */
+    public void rideRail(BlockPos launcher, int cell, boolean gated) {
+        entityData.set(DATA_RAIL, Optional.of(launcher.immutable()));
+        entityData.set(DATA_RAIL_CELL, cell);
+        railGated = gated;
+    }
+
+    /**
+     * Leaving a ridden rail (ignition over): the launch starts here, not where the rail was when the round was placed.
+     * The fuze arms {@link ProximityFuse#ARM_DISTANCE} from this point, and the launch gate (the route's first point, on
+     * the rail heading at arming distance) moves ahead of it: the craft carried the round meanwhile, and that carriage
+     * is no flight. Nothing on a round that rides no rail.
+     */
+    protected final void leaveRail() {
+        if (entityData.get(DATA_RAIL).isEmpty()) return;
+        launchPos = position();
+        if (railGated && route != null) route = route.reanchored(position().add(Local.horizontal(flight.yaw()).scale(ProximityFuse.ARM_DISTANCE)), position());
+        entityData.set(DATA_RAIL, Optional.empty());
+    }
+
+    /**
+     * The rail this projectile rides while on the launcher ({@link #rideRail}): where its launcher's craft carries it now,
+     * nose along the rail's world axis; null when it rides none, has left the launcher, or that launcher is not in this
+     * level's ready chunks or not on a craft here (a client that has not got the craft yet).
+     */
+    @Nullable
+    private Rails ridden() {
+        BlockPos at = entityData.get(DATA_RAIL).orElse(null);
+        if (at == null || !flightPhase().onLauncher() || !Terrain.ready(level(), at)) return null;
+        if (!(level().getBlockEntity(at) instanceof Launcher launcher) || !launcher.carried()) return null;
+        Rails rails = launcher.rails();
+        return entityData.get(DATA_RAIL_CELL) < rails.slots() ? rails : null;
+    }
+
+    /**
+     * On a craft's launcher: stand on the rail where the craft carries it now, nose along the rail's world axis
+     * ({@link Launcher#rails}), until leaving the launcher. A launcher that is gone or out of a ready chunk leaves the
+     * projectile where it was, as a ground rack's broken launcher does.
+     */
+    private void followRail(ServerLevel level) {
+        if (entityData.get(DATA_RAIL).isEmpty()) return;
+        if (!flightPhase().onLauncher()) {
+            entityData.set(DATA_RAIL, Optional.empty());
+            return;
+        }
+        BlockPos at = entityData.get(DATA_RAIL).orElseThrow();
+        Rails rails = ridden();
+        Vec3 to = rails == null ? null : rails.point(entityData.get(DATA_RAIL_CELL));
+        if (to == null || !Terrain.ready(level, BlockPos.containing(to)) || !(level.getBlockEntity(at) instanceof Launcher launcher)) {
+            // not carried this tick: it stands still, so it carries no speed into the launch
+            railVelocity = Vec3.ZERO;
+            return;
+        }
+        // the craft body's velocity, not this tick's step: Sable moves the pose on its own physics steps
+        railVelocity = launcher.velocity(to);
+        flight.set(rails.yaw(), -rails.elevation());
+        moveAlong(level, to, rails.direction());
+    }
+
+    /**
+     * Speed along the nose when leaving the rail: the ridden rail's velocity along it (a craft's motion; zero on the
+     * ground). Airspeed across the nose (sideslip) is not carried: a finned airframe turns into the airflow within its
+     * first ticks, so it is dropped at once (simple rule, concept 3).
+     */
+    protected double releaseSpeed() {
+        return Math.max(0, railVelocity.dot(flight.forward()));
+    }
+
+    /** Where the fuze counts its arming distance from: where the round left its launcher ({@link #leaveRail}). */
+    @Nullable
+    public Vec3 launchOrigin() {
+        return launchPos;
     }
 
     /** Target alert with {@code leadTicks} remaining (siren from approach detection). */
@@ -704,11 +792,13 @@ public abstract class StrikeProjectile extends Entity implements IEntityWithComp
                 return;
             }
             if (chunks.isEmpty()) chunks.update(level, getUUID(), position(), flight.forward(), speed, lookAhead(level));
+            followRail(level);
             serverTick(level);
             // Detonated or left for outside-world flight (copy now flies there): no siren or new tickets.
             if (isRemoved()) return;
             updateVelocity();
-            mission().spend(getDeltaMovement().length());
+            // carried on a craft's rail, not flying: no range spent
+            if (!flightPhase().onLauncher()) mission().spend(getDeltaMovement().length());
             checkSiren(level);
             holdTargetArea(level);
             surveyAhead(level);
@@ -938,7 +1028,11 @@ public abstract class StrikeProjectile extends Entity implements IEntityWithComp
             }
             case IGNITION -> {
                 speed = 0;
-                if (phaseAge() >= lp.ignitionTicks()) setPhase(FlightPhase.BOOST);
+                if (phaseAge() >= lp.ignitionTicks()) {
+                    setPhase(FlightPhase.BOOST);
+                    speed = releaseSpeed();
+                    leaveRail();
+                }
             }
             default -> {
                 speed = lp.boost(flight, speed, phaseAge());
@@ -1595,6 +1689,8 @@ public abstract class StrikeProjectile extends Entity implements IEntityWithComp
         builder.define(DATA_NUCLEAR, false);
         builder.define(DATA_HIDDEN, 0);
         builder.define(DATA_PURSUIT, (byte) Pursuit.NONE.ordinal());
+        builder.define(DATA_RAIL, Optional.empty());
+        builder.define(DATA_RAIL_CELL, 0);
     }
 
     @Override
@@ -1645,7 +1741,23 @@ public abstract class StrikeProjectile extends Entity implements IEntityWithComp
     /** This client tick's position from queue; empty — predict on credit from last received position ({@link ArrivalQueue}). */
     private void clientLerp() {
         ArrivalQueue.Sample s = arrivals.next(getX(), getY(), getZ(), getYRot(), getXRot());
+        if (clientRail()) return;
         if (s != null) lerpPositionAndRotationStep(1, s.x(), s.y(), s.z(), s.yRot(), s.xRot());
+    }
+
+    /**
+     * Client: a projectile on a craft launcher's rail stands where the client's craft carries the rack this tick (the
+     * craft's pose drives both), not at the server's position, which arrives a tick or two behind the craft's own pose
+     * and would let the round slide along its rack on a moving craft.
+     */
+    private boolean clientRail() {
+        Rails rails = ridden();
+        if (rails == null) return false;
+        Vec3 at = rails.point(entityData.get(DATA_RAIL_CELL));
+        setPos(at.x, at.y, at.z);
+        setYRot(rails.yaw());
+        setXRot(-rails.elevation());
+        return true;
     }
 
     @Override
@@ -1699,6 +1811,9 @@ public abstract class StrikeProjectile extends Entity implements IEntityWithComp
         mission = readMission(tag);
         grounded = Nbt.getVec(tag, "grounded");
         readyTicks = tag.getInt("ready_ticks");
+        entityData.set(DATA_RAIL, tag.contains("rail_of") ? Optional.of(BlockPos.of(tag.getLong("rail_of"))) : Optional.empty());
+        entityData.set(DATA_RAIL_CELL, tag.getInt("rail_cell"));
+        railGated = tag.getBoolean("rail_gated");
         sirenLead = tag.contains("siren_lead") ? tag.getInt("siren_lead") : -1;
         setNuclear(tag.contains("nuclear") ? Loadout.Nuke.CODEC.parse(NbtOps.INSTANCE, tag.get("nuclear")).result().orElse(null) : null);
         // Saved before order events: no round, no events for it.
@@ -1732,6 +1847,11 @@ public abstract class StrikeProjectile extends Entity implements IEntityWithComp
         tag.put("mission", mission().save());
         if (grounded != null) Nbt.putVec(tag, "grounded", grounded);
         tag.putInt("ready_ticks", readyTicks);
+        entityData.get(DATA_RAIL).ifPresent(at -> {
+            tag.putLong("rail_of", at.asLong());
+            tag.putInt("rail_cell", entityData.get(DATA_RAIL_CELL));
+            tag.putBoolean("rail_gated", railGated);
+        });
         tag.putInt("siren_lead", sirenLead);
         if (nuclear != null) Loadout.Nuke.CODEC.encodeStart(NbtOps.INSTANCE, nuclear).result().ifPresent(n -> tag.put("nuclear", n));
         if (round != null) tag.put("round", round.save());

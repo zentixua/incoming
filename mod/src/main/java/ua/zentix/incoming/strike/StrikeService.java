@@ -20,6 +20,7 @@ import ua.zentix.incoming.Incoming;
 import ua.zentix.incoming.IncomingConfig;
 import ua.zentix.incoming.entity.BomberEntity;
 import ua.zentix.incoming.entity.Launcher;
+import ua.zentix.incoming.entity.Rails;
 import ua.zentix.incoming.entity.LauncherEntity;
 import ua.zentix.incoming.entity.LoiterEntity;
 import ua.zentix.incoming.entity.RocketEntity;
@@ -135,7 +136,7 @@ public final class StrikeService {
         if (from instanceof LaunchOrigin.Fixed f) {
             // Fixed-launcher rack: launcher present, turntable carries this weapon's rack, pays projectile from inventory.
             fixed = f.launcher(level);
-            if (fixed == null || spec.rack() == null || !fixed.hasRack() || fixed.weapon() != weapon) return Result.FAILED;
+            if (fixed == null || !fixed.located() || spec.rack() == null || !fixed.hasRack() || fixed.weapon() != weapon) return Result.FAILED;
             shot = new Munitions.Bill(weapon, 1, 0);
             MutableComponent missing = Munitions.pay(fixed.store(), shot);
             if (missing != null) {
@@ -169,7 +170,7 @@ public final class StrikeService {
             return launchIcbm(level, target, point, nuke, shooter, owner, from, IncomingConfig.SERVER.nukeFlightTime.get(), round);
         }
         Loadout.Nuke warhead = nuke.onCarrier() && Loadout.carriesNuke(weapon) ? nuke : null;
-        Stand stand = fixed != null ? Stand.fixed(fixed) : new Stand(post(level, shooter, owner, from, point), null, from == null ? null : from.at());
+        Stand stand = fixed != null ? Stand.fixed(fixed) : new Stand(post(level, shooter, owner, from, point), null, from == null ? null : from.at(level));
         StrikeProjectile p = switch (spec.launch()) {
             case GUIDED -> launchGuided(level, weapon, target, point, approachYaw, owner, shooter, stand, via, lane);
             case ROCKET -> launchRocket(level, target, point, approachYaw, owner, shooter, stand);
@@ -240,7 +241,7 @@ public final class StrikeService {
      */
     @Nullable
     private static LaunchSite.Post post(ServerLevel level, @Nullable ServerPlayer shooter, @Nullable UUID owner, @Nullable LaunchOrigin from, Vec3 point) {
-        if (from != null) return LaunchSite.Post.ordered(level, from.at(), point, owner);
+        if (from != null) return LaunchSite.Post.ordered(level, from.at(level), point, owner);
         return shooter != null && IncomingConfig.SERVER.launchNearPlayer.get() ? LaunchSite.Post.of(shooter) : null;
     }
 
@@ -436,10 +437,11 @@ public final class StrikeService {
         StrikeProjectile p = create(level, weapon);
         if (p == null) return null;
         Slot slot = Slot.reserve(level, launcher);
-        p.placeOnLauncher(slot.rail(), launcher.yaw(), launcher.elevation(), slot.ready(), slot.hidden(), target, point, owner);
+        p.placeOnLauncher(slot.rail(), slot.yaw(), slot.elevation(), slot.ready(), slot.hidden(), target, point, owner);
+        slot.ride(p, true);
         // First waypoint on launcher heading at arming distance: follow the checked sector straight
         // until there, then turn onto route armed; salvo projectile enters its lane after gate.
-        Vec3 gate = gate(slot.rail(), launcher.yaw());
+        Vec3 gate = gate(slot.rail(), slot.yaw());
         p.setRoute(inLane(course.from(gate, ProximityFuse.ARM_DISTANCE, option), weapon, lane, point).after(gate, slot.rail()));
         return p;
     }
@@ -469,11 +471,11 @@ public final class StrikeService {
             if (LaunchSite.clearAhead(level, be, point, budget)) return option;
             if (!silent) return sectorClosed(be);
         }
-        LaunchSite.Pick pick = LaunchSite.pickOn(level, be.mount(), site, weapon, want, course.heading(), MAX_OFF_TARGET, budget);
+        LaunchSite.Pick pick = LaunchSite.pickOn(level, be, want, course.heading(), MAX_OFF_TARGET, budget);
         if (pick == null) return sectorClosed(be);
         be.turnTo(pick.yaw(), now);
         // Clear heading within small correction threshold: rack stayed at old heading, sector checked above.
-        if (be.yaw() != pick.yaw() && !LaunchSite.clearAhead(level, be, point, budget)) return sectorClosed(be);
+        if (Math.abs(Mth.wrapDegrees(be.yaw() - pick.yaw())) > 1e-3f && !LaunchSite.clearAhead(level, be, point, budget)) return sectorClosed(be);
         return Math.max(0, pick.preferred());
     }
 
@@ -515,11 +517,21 @@ public final class StrikeService {
      * @param ready ticks until ignition
      * @param hidden ticks projectile stays hidden in rack while raising
      */
-    private record Slot(Vec3 rail, int ready, int hidden) {
+    private record Slot(Launcher launcher, int cell, Vec3 rail, float yaw, float elevation, int ready, int hidden) {
+        /** @param yaw rail axis heading in the world, ° ({@link Rails}) @param elevation rail axis elevation in the world, ° */
         static Slot reserve(ServerLevel level, Launcher launcher) {
             long now = level.getGameTime();
             int[] slot = launcher.reserve(now, launcher.rack().minReady(), launcher.rack().busyTicks());
-            return new Slot(launcher.railPoint(slot[0]), slot[1], launcher.raisingTicks(now));
+            Rails rails = launcher.rails();
+            return new Slot(launcher, slot[0], rails.point(slot[0]), rails.yaw(), rails.elevation(), slot[1], launcher.raisingTicks(now));
+        }
+
+        /**
+         * Projectile {@code p} just placed on this cell: on a launcher a craft carries, it rides the rail until it leaves
+         * ({@link StrikeProjectile#rideRail}); a ground rack stands still, so the placement holds.
+         */
+        void ride(StrikeProjectile p, boolean gated) {
+            if (launcher instanceof FixedLauncherBlockEntity be && be.carried()) p.rideRail(be.getBlockPos(), cell, gated);
         }
     }
 
@@ -557,7 +569,7 @@ public final class StrikeService {
     private static Launcher aimedFixed(ServerLevel level, FixedLauncherBlockEntity be, WeaponType weapon, Vec3 point) {
         long now = level.getGameTime();
         float yaw = be.turnedYaw(FlightController.anglesTo(be.position(), point)[0], now);
-        if (!LaunchSite.clearAhead(level, be.mount(), be.position(), yaw, weapon, point, new LaunchSite.Budget())) {
+        if (!LaunchSite.clearAhead(level, be, yaw, point, new LaunchSite.Budget())) {
             sectorClosed(be);
             return null;
         }
@@ -602,8 +614,9 @@ public final class StrikeService {
         Launcher launcher = aimed(level, stand, shooter, WeaponType.ROCKET, point);
         if (launcher != null) {
             Slot slot = Slot.reserve(level, launcher);
-            r.placeInTube(slot.rail(), launcher.yaw(), launcher.elevation(), slot.ready(), slot.hidden(), target,
+            r.placeInTube(slot.rail(), slot.yaw(), slot.elevation(), slot.ready(), slot.hidden(), target,
                     point, owner);
+            slot.ride(r, false);
             r.fireData(level.random);
             return r;
         }
@@ -630,8 +643,12 @@ public final class StrikeService {
         Launcher launcher = aimed(level, stand, shooter, WeaponType.LOITER, via.isEmpty() ? point : via.points().getFirst());
         if (launcher != null) {
             Slot slot = Slot.reserve(level, launcher);
-            e.placeOnLauncher(slot.rail(), launcher.yaw(), launcher.elevation(), slot.ready(), slot.hidden(), target, point, owner);
-            e.setRoute(loiterRoute(via, slot.rail(), point, lane, gate(slot.rail(), launcher.yaw())));
+            e.placeOnLauncher(slot.rail(), slot.yaw(), slot.elevation(), slot.ready(), slot.hidden(), target, point, owner);
+            Vec3 gate = gate(slot.rail(), slot.yaw());
+            Route route = loiterRoute(via, slot.rail(), point, lane, gate);
+            e.setRoute(route);
+            Vec3 first = route == null ? null : route.current();
+            slot.ride(e, first != null && first.x == gate.x && first.z == gate.z);
             return e;
         }
         if (stand.fixed() != null) return null;

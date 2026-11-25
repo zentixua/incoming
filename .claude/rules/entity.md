@@ -84,6 +84,14 @@ paths:
   `AutopilotPropertiesTest` checks 10 000 random model-terrain flight scenarios.
 
 ## Pitfalls
+- A round on a craft launcher's rail (`rideRail`: synced `DATA_RAIL`, cell) is re-placed each server tick on the rail's
+  world point and axis (`followRail`, through `moveAlong`, no range spent) and, on the client, on the rail of the
+  client's own craft pose (`clientRail`; Sable ticks client sub-levels in `Minecraft.tick` before `level.tickEntities()`,
+  so the pose is this tick's): server positions arrive a tick or two behind the craft's pose and the round would slide
+  along a moving rack. Leaving, the fuze's arming origin and the launch gate move to the release point (`leaveRail`). Leaving the rail it keeps its craft's body velocity at the rail along its nose
+  (`Launcher.velocity`, Sable's per-second rigid-body velocity in blocks/tick; `releaseSpeed`, boosted weapons; across
+  the nose dropped, not physical, guide deviation list); Grad solves its arc from the release point. Never derive that
+  speed from pose steps: Sable moves the pose on its own physics steps (a steady 0.5 blocks/tick read 0 or 1.0 per tick).
 - Bomb ground path (`BunkerBusterEntity.plan`): remaining axial distance inside block but outside shape shorter than
   `GRAZE` (1 µm) is face float error, not void. Otherwise angled crossings between same-medium blocks “exited into
   void”, restarting Young layer: B-2 bomb at 89° penetrated 18–29 % beyond law (80° 40 %, vertical exact; GameTest

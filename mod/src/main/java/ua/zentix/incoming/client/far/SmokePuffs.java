@@ -100,6 +100,24 @@ public final class SmokePuffs {
      * substance.
      */
     static void merge(double[] held, int start, int n, boolean[] gone, double sootK, double dropK, double reach) {
+        if (n - start >= INDEX_FROM && reach > 0 && Double.isFinite(reach)) mergeIndexed(held, start, n, gone, sootK, dropK, reach);
+        else mergeScan(held, start, n, gone, sootK, dropK, reach);
+    }
+
+    /**
+     * Puff count from which {@link #merge} finds candidates through a ground-plane cell index: the pairwise scan costs
+     * n² pair tests per pass, and a pass repeats after every absorb. Scanned pairwise, breach dust ({@code BlastDust}: up
+     * to 256 streaks of up to {@link #SEGMENT_CLUBS} billows, one source) as a 1 Mt wave crosses a city viewer costs the render thread 85–265 ms a
+     * second in {@code Draw.seal} (Zearth Silo, viewer at 3 km, passage-city run 25.11).
+     */
+    static final int INDEX_FROM = 64;
+
+    /**
+     * The pairwise merge: for each puff in order, later puffs in order are absorbed while close; after an absorb the pass
+     * repeats (the grown puff may now reach skipped ones). Returns the pair tests made (tests compare the two paths).
+     */
+    static long mergeScan(double[] held, int start, int n, boolean[] gone, double sootK, double dropK, double reach) {
+        long tests = 0;
         for (int i = start; i < n; i++) {
             if (gone[i]) continue;
             int a = i * FIELDS;
@@ -108,23 +126,209 @@ public final class SmokePuffs {
                 again = false;
                 for (int j = i + 1; j < n; j++) {
                     if (gone[j]) continue;
-                    int b = j * FIELDS;
-                    if (held[a + 8] != held[b + 8] || held[a + 9] != held[b + 9] || held[a + 10] != held[b + 10]) continue;
-                    // puffs of different looks (smoke, emission curtain, crushing dust) — different frames: they do not
-                    // merge into one Gaussian
-                    if (held[a + 15] != held[b + 15]) continue;
-                    // puffs of one segment are laid out along it deliberately: merged, they would gather into one
-                    // Gaussian, and a flat row (launch dust: step by the smaller σ, neighbors closer than σh) would
-                    // lose its length
-                    if (held[a + 14] > 0.5 && held[b + 14] > 0.5 && (long) held[a + 11] / SEGMENT_CLUBS == (long) held[b + 11] / SEGMENT_CLUBS) continue;
-                    double dx = held[b] - held[a], dy = held[b + 1] - held[a + 1], dz = held[b + 2] - held[a + 2];
-                    double h = reach * Math.min(held[a + 3], held[b + 3]), v = reach * Math.min(held[a + 4], held[b + 4]);
-                    if (dx * dx + dz * dz > h * h || Math.abs(dy) > v) continue;
-                    absorb(held, a, b, sootK, dropK);
+                    tests++;
+                    if (!close(held, a, j * FIELDS, reach)) continue;
+                    absorb(held, a, j * FIELDS, sootK, dropK);
                     gone[j] = true;
                     again = true;
                 }
             }
+        }
+        return tests;
+    }
+
+    /** Whether puff b merges into puff a now ({@link #merge}'s pair rule). */
+    private static boolean close(double[] held, int a, int b, double reach) {
+        if (held[a + 8] != held[b + 8] || held[a + 9] != held[b + 9] || held[a + 10] != held[b + 10]) return false;
+        // puffs of different looks (smoke, emission curtain, crushing dust) — different frames: they do not
+        // merge into one Gaussian
+        if (held[a + 15] != held[b + 15]) return false;
+        // puffs of one segment are laid out along it deliberately: merged, they would gather into one
+        // Gaussian, and a flat row (launch dust: step by the smaller σ, neighbors closer than σh) would
+        // lose its length
+        if (held[a + 14] > 0.5 && held[b + 14] > 0.5 && (long) held[a + 11] / SEGMENT_CLUBS == (long) held[b + 11] / SEGMENT_CLUBS) return false;
+        double dx = held[b] - held[a], dy = held[b + 1] - held[a + 1], dz = held[b + 2] - held[a + 2];
+        double h = reach * Math.min(held[a + 3], held[b + 3]), v = reach * Math.min(held[a + 4], held[b + 4]);
+        return !(dx * dx + dz * dz > h * h || Math.abs(dy) > v);
+    }
+
+    /** Ground cells of {@link #mergeIndexed}, per thread: the client thread merges in the game; inline and test planners merge on their own. */
+    private static final ThreadLocal<MergeIndex> MERGE_INDEX = ThreadLocal.withInitial(MergeIndex::new);
+
+    /**
+     * {@link #mergeScan}'s result exactly (the same absorbs in the same order), testing only puffs that can merge. Puff b
+     * merges into a only within {@code reach}·min(σa, σb) ≤ {@code reach}·σb horizontally, so b is listed in the ground cells
+     * its own square of half-side {@code reach}·σh covers; puffs after b never change before their own turn (they are only
+     * absorbed), so the squares hold for the whole merge. A puff tests the cell under its current centre, and again after
+     * every absorb moves it; a square over many cells, or a value the rule cannot bound (NaN, infinite, negative σ), is
+     * tested by every puff, and a puff whose own centre or σ is not finite, whose σh is negative or whose reach is so wide
+     * that the rule's squares overflow falls back to the scan. Returns the pair tests.
+     */
+    static long mergeIndexed(double[] held, int start, int n, boolean[] gone, double sootK, double dropK, double reach) {
+        MergeIndex index = MERGE_INDEX.get();
+        index.build(held, start, n, gone, reach);
+        long tests = 0;
+        for (int i = start; i < n; i++) {
+            if (gone[i]) continue;
+            int a = i * FIELDS;
+            boolean again = true;
+            while (again) {
+                again = false;
+                int after = i;
+                while (true) {
+                    if (!index.bounded(held, a, reach)) {
+                        // the rule's own arithmetic decides an unbounded puff (NaN distances pass it): the scan from here
+                        for (int j = after + 1; j < n; j++) {
+                            if (gone[j]) continue;
+                            tests++;
+                            if (!close(held, a, j * FIELDS, reach)) continue;
+                            absorb(held, a, j * FIELDS, sootK, dropK);
+                            gone[j] = true;
+                            again = true;
+                        }
+                        break;
+                    }
+                    int found = -1;
+                    int[] c = index.candidates(held, a, after);
+                    for (int k = 0, m = index.count; k < m; k++) {
+                        int j = c[k];
+                        if (gone[j]) continue;
+                        tests++;
+                        if (!close(held, a, j * FIELDS, reach)) continue;
+                        absorb(held, a, j * FIELDS, sootK, dropK);
+                        gone[j] = true;
+                        again = true;
+                        found = j;
+                        break;
+                    }
+                    // a moved and grew: the puffs after the absorbed one are found again around its new centre
+                    if (found < 0) break;
+                    after = found;
+                }
+            }
+        }
+        return tests;
+    }
+
+    /**
+     * Ground-plane cells for {@link #mergeIndexed}: each puff listed, in index order, in the cells its reach square covers
+     * (cell side about two median reaches, so most squares cover one to four cells); squares over more than
+     * {@link #SPAN} cells per side and unbounded puffs are in every candidate list. Arrays are reused between merges.
+     */
+    private static final class MergeIndex {
+        static final int SPAN = 5;
+        /** Squares are widened by this share: the rule's rounding never lets a merging pair fall outside its square. */
+        static final double PAD = 1e-9;
+        /** Cell numbers up to this many cells from the origin: a long holds them, and their squares never wrap. */
+        static final double CELLS = 1e15;
+        /** Widest reach of a puff tested through cells: its square (about 1e300) stays finite. */
+        static final double WIDE = 1e150;
+        double cell;
+        final it.unimi.dsi.fastutil.longs.Long2IntOpenHashMap cells = new it.unimi.dsi.fastutil.longs.Long2IntOpenHashMap();
+        /** Each cell's slice of {@code entries}: {@code [first, end)}. */
+        int[] first = new int[64], end = new int[64], entries = new int[256], always = new int[16], out = new int[64];
+        double[] sample = new double[64];
+        int alwaysCount, count;
+
+        void build(double[] held, int start, int n, boolean[] gone, double reach) {
+            cells.clear();
+            cells.defaultReturnValue(-1);
+            alwaysCount = 0;
+            // cell side: twice the median reach of a sample of the bounded puffs
+            int s = 0, step = Math.max(1, (n - start) / sample.length);
+            for (int j = start; j < n && s < sample.length; j += step) {
+                double r = reach * held[j * FIELDS + 3];
+                if (!gone[j] && r > 0 && Double.isFinite(r)) sample[s++] = r;
+            }
+            java.util.Arrays.sort(sample, 0, s);
+            cell = s == 0 ? 1 : Math.max(2 * sample[s / 2], 1e-3);
+            // pass 0 counts each cell's puffs, pass 1 lays each cell's slice of entries in index order
+            int cellCount = 0, total = 0;
+            for (int pass = 0; pass < 2; pass++) {
+                for (int j = start; j < n; j++) {
+                    if (gone[j]) continue;
+                    int b = j * FIELDS;
+                    double x = held[b], z = held[b + 2];
+                    // widened for the rule's rounding: relative to the reach, absolute to the coordinates
+                    double r = reach * held[b + 3] * (1 + PAD) + PAD * (1 + Math.abs(x) + Math.abs(z));
+                    // a negative σ is unbounded too: with both σ negative the rule's reach is the other's |σ|; a square
+                    // whose cell numbers a long cannot hold (finite garbage far out) is listed for everyone as well
+                    if (!(held[b + 3] >= 0 && Double.isFinite(r) && Math.abs(x) + r < CELLS * cell && Math.abs(z) + r < CELLS * cell)) {
+                        if (pass == 0) addAlways(j);
+                        continue;
+                    }
+                    long x0 = (long) Math.floor((x - r) / cell), x1 = (long) Math.floor((x + r) / cell);
+                    long z0 = (long) Math.floor((z - r) / cell), z1 = (long) Math.floor((z + r) / cell);
+                    if (x1 - x0 >= SPAN || z1 - z0 >= SPAN) {
+                        if (pass == 0) addAlways(j);
+                        continue;
+                    }
+                    for (long cx = x0; cx <= x1; cx++) {
+                        for (long cz = z0; cz <= z1; cz++) {
+                            long key = key(cx, cz);
+                            int c = cells.get(key);
+                            if (pass == 1) {
+                                entries[end[c]++] = j;
+                                continue;
+                            }
+                            if (c < 0) {
+                                c = cellCount++;
+                                cells.put(key, c);
+                                if (first.length <= c) {
+                                    first = java.util.Arrays.copyOf(first, 2 * first.length);
+                                    end = java.util.Arrays.copyOf(end, 2 * end.length);
+                                }
+                                end[c] = 0;
+                            }
+                            end[c]++;
+                            total++;
+                        }
+                    }
+                }
+                if (pass == 0) {
+                    if (entries.length < total) entries = new int[Math.max(total, 2 * entries.length)];
+                    for (int c = 0, at = 0; c < cellCount; c++) {
+                        int size = end[c];
+                        first[c] = end[c] = at;
+                        at += size;
+                    }
+                }
+            }
+        }
+
+        private void addAlways(int j) {
+            if (alwaysCount == always.length) always = java.util.Arrays.copyOf(always, 2 * always.length);
+            always[alwaysCount++] = j;
+        }
+
+        /**
+         * Whether puff a's own centre is finite and its σh not negative and below {@link #WIDE}: its candidates are then in
+         * the cells. Beyond it the rule's squared reach overflows to infinity and passes any distance.
+         */
+        boolean bounded(double[] held, int a, double reach) {
+            return Double.isFinite(held[a]) && Double.isFinite(held[a + 1]) && Double.isFinite(held[a + 2])
+                    && held[a + 3] >= 0 && reach * held[a + 3] < WIDE && Double.isFinite(held[a + 4]);
+        }
+
+        /** Puffs after {@code after} that may merge into a, ascending, in {@code out[0, count)}. */
+        int[] candidates(double[] held, int a, int after) {
+            int c = cells.get(key((long) Math.floor(held[a] / cell), (long) Math.floor(held[a + 2] / cell)));
+            int from = c < 0 ? 0 : first[c], to = c < 0 ? 0 : end[c];
+            if (out.length < (to - from) + alwaysCount) out = new int[2 * ((to - from) + alwaysCount)];
+            // two ascending lists, merged
+            int p = from, q = 0, k = 0;
+            while (p < to && entries[p] <= after) p++;
+            while (q < alwaysCount && always[q] <= after) q++;
+            while (p < to || q < alwaysCount) {
+                if (q >= alwaysCount || p < to && entries[p] < always[q]) out[k++] = entries[p++];
+                else out[k++] = always[q++];
+            }
+            count = k;
+            return out;
+        }
+
+        private static long key(long cx, long cz) {
+            return cx << 32 ^ (cz & 0xFFFFFFFFL);
         }
     }
 

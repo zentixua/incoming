@@ -97,7 +97,10 @@ Where: Artem's laptop, only when he is not playing (`tools/gpu_lease.sh --wait`)
 - **Shaders**: the hold rig (age the cloud once, keep the client, hot reload), a probe channel per term.
 
 Traps: Dynamic FPS caps to 15 FPS exactly after 300 s (`dynamic_fps.json` `{"idle":{"timeout":0}}`); scenarios pin a
-quality ladder step, compare only equal steps; in the `mushroom` scenario the firestorm sometimes dies out (check
+quality ladder step, compare only equal steps (frame time as in the game: `-Dincoming.pall.adaptive=true`);
+`-Dincoming.nukeDiag=true` logs a client line per debris piece, 170–190 ms/s of the render thread as the wave reaches
+the viewer: frame-time windows at the front run without it; a recorder or a starved client drops debris as late
+(`nukeEvent … drop,server_late`), so its breach dust and their cost vanish from that run; in the `mushroom` scenario the firestorm sometimes dies out (check
 `burning` in SCENARIO lines before comparing); GPU clocks jump.
 
 ## Checklist: look defect

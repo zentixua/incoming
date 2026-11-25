@@ -35,7 +35,7 @@ public final class Readout {
      * Refusals that tell nothing about the owner or the mission (whose numbers, rights and route stay private): shown to
      * every viewer; any other refusal reads only "cannot fire" to a viewer without rights.
      */
-    static final Set<String> PUBLIC_REFUSALS = Set.of("incoming.fixed_launcher.no_mission.short", "incoming.fixed_launcher.on_craft",
+    static final Set<String> PUBLIC_REFUSALS = Set.of("incoming.fixed_launcher.no_mission.short",
             "incoming.fixed_launcher.busy", "incoming.fixed_launcher.sector", "incoming.fixed_launcher.failed");
 
     private Readout() {}

@@ -12,6 +12,8 @@ paths:
   - "mod/src/main/java/ua/zentix/incoming/info/**"
   - "mod/src/main/java/ua/zentix/incoming/compat/jade/**"
   - "mod/src/main/java/ua/zentix/incoming/compat/computercraft/**"
+  - "mod/src/main/java/ua/zentix/incoming/compat/create/**"
+  - "mod/src/devtest/java/ua/zentix/incoming/gametest/DisplayLinkGameTests.java"
   - "mod/src/devtest/java/ua/zentix/incoming/gametest/ReadoutGameTests.java"
   - "mod/src/devtest/java/ua/zentix/incoming/gametest/AutomationGameTests.java"
 ---
@@ -71,6 +73,16 @@ paths:
   (`PeripheralCapability` listener added in `Incoming` behind `isLoaded("computercraft")`); `OptionalModsTest` scans
   the bytecode for any other reference. Neither mod is in the GameTest runtime: `ReadoutGameTests`, `AutomationGameTests`
   probe the core, `LinesTest`, `PeripheralsTest` the adapters (CC:Tweaked API compiled at 1.113.0, its first 1.21.1).
+- Create Display Link sources (`compat/create/DisplaySources`, `install` from `Incoming` behind `isLoaded("create")`):
+  Create's `display_source` registry plus `DisplaySource.BY_BLOCK_ENTITY` (filled in `enqueueWork`); SAM alert
+  (`hostile() > 0`, the alarm's condition), launcher munitions (`Automation.stock` summed) and readiness
+  (`LauncherOrders.problem == null`): the computer's values, never a refusal text. The SAM source refreshes every
+  `SamBlockEntity.SWEEP` (Create's default 100 ticks would trail the alarm by up to 5 s; each refresh pulses the link's
+  bulb), the launcher's at Create's default. A source's screen name is `incoming.display_source.<registry name>`, a key
+  `LangTest` cannot see (`DisplaySourceLangTest`). Create is in the GameTest runtime: `DisplayLinkGameTests` drives a real
+  link to a sign and compares with `en_us.json`; its Create types sit in a nested class (GameTest reflects over the test
+  methods, which must load without Create), and devtest compiles against Ponder (`VirtualBlockEntity`, a supertype of
+  Create's block entities).
 - For the game master and scripts: `/incoming launcher <x y z>` (operator, `IncomingCommand.launcher`): status, `fire`,
   `mission` (no player rules; target `x z` is a ground location, `x y z` a point; route via `routeProblem` from the
   launcher), `clear`, `load N`, `owner`; position must be in a ready chunk; `mission` and `clear` refuse a busy launcher.
@@ -82,7 +94,17 @@ paths:
 - A launcher salvo waits while its chunk is unready (`Terrain.ready`), loads it in the background
   (`strike/LaunchPlaces`: `AreaLoader` area for the duration of the salvo), and ends if the block is absent: a broken
   launcher has already dropped its stock.
-- Launchers do not fire in Sable's plot grid (`SubLevels.inPlotGrid`): a craft's block sits in a distant plot, and the
-  projectile would leave from there.
+- On a Create Aeronautics craft the block sits in Sable's plot grid, far from where the craft is. The launcher keeps its
+  rack heading (`rackYaw`, what the renderer turns) and rails in that plot frame; `position()`, `yaw()` and `rails(yaw)`
+  are world values through the craft's current pose (`SubLevels.carrying`, `toWorld`, `toWorldDirection`), and so are
+  `LaunchOrigin.at(level)` (route reach, map range, approach heading) and every sector ray (`LaunchSite.clearAhead` on
+  `entity/Rails`; `Level.clip` with Sable hits the craft's own blocks too). Never use the block position or
+  `Vec3.atBottomCenterOf(pos)` as a world place. A plot block whose craft is not loaded has no world place
+  (`located()`): orders refuse "not loaded" and a salvo waits. A craft launcher's salvo holds no `LaunchPlaces` area
+  (its plot chunks are Sable's, and an area at a moving craft would trail it). A round placed on a carried rack rides
+  its rail (`StrikeProjectile.rideRail`, below) until it leaves. GameTests: `CraftLauncherGameTests` (batches
+  `craft_launcher_*`: pose, ride, release speed, own hull and world blocks in the sector).
+- Create contraptions that are not Sable craft (bearings, pistons, carts) carry the block as contraption data: no block
+  entity in the world, so the launcher does nothing while it moves (no `MovementBehaviour`; a guide-stated limit).
 - `getUpdateTag` writes only what the client sees; `loadAdditional` reads owner, stock and mission only when present
   in the tag: update packets do not erase them.

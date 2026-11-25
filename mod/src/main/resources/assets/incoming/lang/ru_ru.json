@@ -596,7 +596,6 @@
   "incoming.fixed_launcher.unlinked": "Пусковая отвязана от пульта (осталось %s)",
   "incoming.fixed_launcher.not_yours": "чужая пусковая",
   "incoming.fixed_launcher.links_full": "К пульту уже привязано %s пусковых",
-  "incoming.fixed_launcher.on_craft": "на аппарате пусковая не стреляет",
   "incoming.fixed_launcher.no_rights": "хозяину пусковой нельзя пульт",
   "incoming.fixed_launcher.no_rights.weapon": "хозяину пусковой запрещено оружие: %s",
   "incoming.fixed_launcher.out_of_range": "цель дальше %s блоков от пусковой",
@@ -687,5 +686,12 @@
   "stat.incoming.rounds_launched.rocket": "Запущено ракет «Града»",
   "stat.incoming.rounds_launched.loiter": "Запущено «Ланцетов»",
   "stat.incoming.interceptions": "Сбито боеприпасов",
-  "stat.incoming.nuclear_detonations_witnessed": "Ядерных взрывов рядом"
+  "stat.incoming.nuclear_detonations_witnessed": "Ядерных взрывов рядом",
+  "incoming.display_source.sam_alert": "Воздушная тревога",
+  "incoming.display_source.sam_alert.on": "ТРЕВОГА",
+  "incoming.display_source.sam_alert.off": "Отбой",
+  "incoming.display_source.launcher_munitions": "Боезапас пусковой",
+  "incoming.display_source.launcher_ready": "Готовность пусковой",
+  "incoming.display_source.launcher_ready.on": "Готова",
+  "incoming.display_source.launcher_ready.off": "Не готова"
 }

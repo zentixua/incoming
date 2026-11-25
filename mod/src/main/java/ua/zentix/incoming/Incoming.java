@@ -90,6 +90,9 @@ public final class Incoming {
         // CC:Tweaked peripherals of the launcher and the SAM: the compat package names CC:Tweaked's API, so it loads only
         // with CC:Tweaked (Jade finds its overlay plugin by its own annotation scan; nothing here names it)
         if (ModList.get().isLoaded("computercraft")) modBus.addListener(ua.zentix.incoming.compat.computercraft.Peripherals::register);
+        // Create Display Link sources of the SAM and the launcher: the compat package names Create's API, so it loads only
+        // with Create
+        if (ModList.get().isLoaded("create")) ua.zentix.incoming.compat.create.DisplaySources.install(modBus);
         // Sides (target.Sides, api.SideResolveEvent): the vanilla team answers first, then FTB Teams, then Open Parties and
         // Claims; each bridge names its mod's API, so it loads only with that mod
         NeoForge.EVENT_BUS.addListener(Sides.PRIORITY, Sides::answerTeam);

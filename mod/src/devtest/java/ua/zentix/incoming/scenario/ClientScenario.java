@@ -368,6 +368,11 @@ public final class ClientScenario {
             String blast = ua.zentix.incoming.client.sound.BlastSounds.describe();
             if (!blast.isEmpty()) Incoming.LOG.info("SCENARIO blast-sound {}", blast);
         }
+        // a live detonation in view is not "far": its layer GPU by pass, smoke fill and near dust every half second, from
+        // the flash on (the "far" line above starts only once distant blasts exist)
+        if (tick % 10 == 0 && !ua.zentix.incoming.client.nuclear.ClientNuclear.detonations().isEmpty())
+            Incoming.LOG.info("SCENARIO nuke-layer smoke {}; near {}; layer {}", FarRenderer.describeSmoke(),
+                    ua.zentix.incoming.client.nuclear.NukeDust.describe(), ua.zentix.incoming.client.fx.layer.FxLayer.describeTiming());
     }
 
     private void plan() {

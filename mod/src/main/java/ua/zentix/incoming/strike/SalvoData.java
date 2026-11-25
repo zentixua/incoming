@@ -349,7 +349,7 @@ public final class SalvoData extends SavedData {
                     }
                     if (waited++ == LaunchPlaces.WAIT) {
                         Incoming.LOG.warn("Salvo: {} — launch place {} {} not loaded in {} ticks, launching from it without a launcher",
-                                weapon.getSerializedName(), Mth.floor(from.at().x), Mth.floor(from.at().z), LaunchPlaces.WAIT);
+                                weapon.getSerializedName(), Mth.floor(from.at(level).x), Mth.floor(from.at(level).z), LaunchPlaces.WAIT);
                     }
                 }
             }

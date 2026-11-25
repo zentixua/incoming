@@ -31,7 +31,7 @@ to another side, or be too far from the target. To make the designator fire by i
 
 Each new redstone signal is one order: a single round or the mission's whole salvo. The rounds fly in the name of the
 launcher's owner, even when the owner is offline, and Abort on the owner's designator calls them off. The launcher
-fires only while its chunk is loaded, and never from an aircraft.
+fires only while its chunk is loaded.
 
 If the launcher clicks but does not fire, RMB on it with an empty hand shows the owner's side and operators why: no
 mission, not enough stock, the previous order still running, or buildings blocking the launch sector. Other players see
@@ -41,6 +41,24 @@ the mission's count, target and spread.
 With Jade, looking at the launcher shows its stock and whether a signal now would fire it, by the same rule, and its
 owner to the owner's side and operators. A CC:Tweaked computer next to it reads what any player may and fires its
 mission like a signal, but cannot change the mission ([For server owners and pack makers](packs.md#computers-cctweaked)).
+
+With Create, a Display Link attached to the launcher offers two sources for a display board, sign or nixie tube:
+**Launcher munitions**, the rounds it holds of every weapon together (a Grad pack counts its rockets), and **Launcher
+readiness**, `Ready` when a signal now would fire it, by the same rule, and `Not ready` otherwise (a display board writes them in
+capitals). The link refreshes
+them every 5 seconds, as Create's own sources.
+
+## On an aircraft
+
+A launcher built into a Create Aeronautics aircraft fires from it, in flight too. Its rack turns on the deck, and the
+rounds wait on the rails moving and turning with the aircraft, then leave from where the rack is at that moment, along
+its rails. A Shahed, Lancet or cruise missile also keeps the aircraft's speed along its rails; a Grad rocket aims
+itself at the target as it leaves the tube. The aircraft's own hull and masts in front of the rack block the launch as
+buildings do. The launch sector is checked when the order is given: a turn of the aircraft while the rounds wait can
+point them at a slope or a building. Link and fire it as on the ground; a salvo waits while the aircraft is out of
+loaded chunks.
+
+On other moving Create contraptions (bearings, pistons, carts) the launcher does not fire while it moves.
 
 ## Crafting
 
