@@ -81,6 +81,9 @@ public final class DustSources {
      */
     private static final int FORCE_NOT_READY = Integer.getInteger("incoming.dustwave.notReadyFrames", 0);
     private static int visibleFrames;
+    /** nukeDiag: the primary eye in the lead source's dust (its floor, material and drawn column) for the per-second line. */
+    private static String eyeLine = "";
+
     /** A4: once a second under {@code -Dincoming.nukeDiag=true}, per view: the eligible and the drawn sources. */
     private static final boolean DIAG = Boolean.getBoolean("incoming.nukeDiag");
     private static final long[] lastSummary = new long[2];
@@ -191,7 +194,7 @@ public final class DustSources {
         Incoming.LOG.info("Nuclear dust wave: {} view, eligible [{}], drawn [{}]{}; wave channel {}; pall ground-dust rows {}{}",
                 secondary ? "secondary" : "primary", e, d,
                 eligible.size() == w.count ? "" : " MISMATCH", w.count > 0 ? DustWallPass.channel() : "0 (not drawn)", PallField.ROWS - 1,
-                secondary ? "" : "; " + DustGround.describe());
+                secondary ? "" : "; " + DustGround.describe() + "; " + eyeLine);
     }
 
     /** Whether detonation a has dust on its table now: the front has left ground zero and some node's dust is younger than the table's end. */
@@ -326,6 +329,13 @@ public final class DustSources {
         int je = (int) Math.min(Math.floor(xe), n - 2);
         double haze = 1 - PallField.textured(t - (table[4 * je] + (xe - je) * (table[4 * (je + 1)] - table[4 * je])));
         double target = adapt * Math.exp(DUST_ADAPT_INSIDE * DUST_K * eyeDepth(table, n, end, reach, t, at, m.hard(at[0], at[2])) * haze);
+        if (DIAG && lead != null) {
+            double[] c = COLUMN;
+            PallField.drawnColumn(table, n, end, reach, t, at[0], at[2], m.hard(at[0], at[2]), c);
+            eyeLine = String.format(java.util.Locale.ROOT, "eye %.1f m over the dust's floor (map's %.1f), material water %.2f sand %.2f "
+                    + "hard %.2f, drawn column depth %.2f top %.0f m", at[1], ey - a.ground.at(eye.x, eye.z), m.share(at[0], at[2], 0),
+                    m.share(at[0], at[2], 1), m.share(at[0], at[2], 2), c[0], c[1]);
+        }
         // the eye takes it over time (presentation, as NukeExposure and Sight.adapted: opening ~2 s, closing ~8 s, est.), on the
         // detonation's clock (the time the player watches; a seek or jump restarts it at the target)
         double[] state = ADAPTED.computeIfAbsent(ua.zentix.incoming.client.fx.layer.FxViews.viewKey(), k -> new WeakHashMap<>())

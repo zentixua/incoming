@@ -127,6 +127,11 @@ public final class DustMaterialTiles {
      * {@code dwMaterial}: the fine tile inside its border, else the coarse one, bilinear between cell centres).
      */
     public double hard(double rx, double rz) {
+        return share(rx, rz, 2);
+    }
+
+    /** Channel c's share (0 water, 1 sand, 2 hard ground) at ground point (rx, rz), as {@link #hard}. */
+    public double share(double rx, double rz, int c) {
         double x = burstX + rx, z = burstZ + rz;
         int t = 1;
         double cx = (x - originX[0]) / cell[0], cz = (z - originZ[0]) / cell[0];
@@ -139,11 +144,11 @@ public final class DustMaterialTiles {
         cz = Math.clamp(cz, 0.5, SIDE - 0.5) - 0.5;
         int i = Math.min((int) cx, SIDE - 2), j = Math.min((int) cz, SIDE - 2);
         double fx = cx - i, fz = cz - j;
-        return (1 - fz) * ((1 - fx) * hardAt(t, i, j) + fx * hardAt(t, i + 1, j)) + fz * ((1 - fx) * hardAt(t, i, j + 1) + fx * hardAt(t, i + 1, j + 1));
+        return (1 - fz) * ((1 - fx) * at(t, i, j, c) + fx * at(t, i + 1, j, c)) + fz * ((1 - fx) * at(t, i, j + 1, c) + fx * at(t, i + 1, j + 1, c));
     }
 
-    private double hardAt(int t, int i, int j) {
-        return (rgba[4 * (t * SIDE * SIDE + j * SIDE + i) + 2] & 255) / 255.0;
+    private double at(int t, int i, int j, int c) {
+        return (rgba[4 * (t * SIDE * SIDE + j * SIDE + i) + c] & 255) / 255.0;
     }
 
     /** Tile t's origin from ground zero (x, z, blocks; the shader's frame of reference), cell size and cells across. */
