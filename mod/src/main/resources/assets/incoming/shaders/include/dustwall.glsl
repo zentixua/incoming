@@ -1061,16 +1061,21 @@ vec3 dwTexturedLight(vec3 q, vec3 rd) {
 #else
     bool oneTap = DwDetail > 0.5;
 #endif
+    float depth = max(gDwSurf - (q.y - gDwFloorAt), 0.0) * gDwSigma;
     if (oneTap) {
-        // MEDIUM and LOW: one shadow tap, toward the brighter of the fireball and the sun; the other light takes the same depth
+        // MEDIUM and LOW: one shadow tap, toward the brighter of the fireball and the sun; the other light takes the depth to
+        // the layer's top along its own direction (closed form, no fetch). One depth for both held their ratio over the face:
+        // one hue, the rolls read by luminance alone (step 8: chroma detail 2.7 against HIGH's two taps 3.8). Where the two
+        // lights are equal the choice swaps sides with no step in their sum.
         bool ball = dot(dwBallLight(q), vec3(1.0)) > dot(DwSunLight, vec3(1.0));
-        taub = dwShadow(q, ball ? lb : DwSunDir);
-        taus = taub;
+        float tap = dwShadow(q, ball ? lb : DwSunDir);
+        float other = depth / max(ball ? DwSunDir.y : lb.y, 0.25);
+        taub = ball ? tap : other;
+        taus = ball ? other : tap;
     } else {
         taub = dwShadow(q, lb);
         taus = dwShadow(q, DwSunDir);
     }
-    float depth = max(gDwSurf - (q.y - gDwFloorAt), 0.0) * gDwSigma;
     float ms = 0.3 + 0.3 * exp(-0.12 * depth);
     // presentation: the swells read from above as in the Silo frame, raised dust catching more light and sags in the shade
     // of the swells around them (an occlusion of the light the dust scatters, by the local swell)

@@ -163,7 +163,12 @@ paths:
   earthier and fines on the billow tops paler (`gDwLow`: half the height in the column, half the billow texture), ±4 % per-point
   soil tint (seed), debris over hard ground greyer; the textured level only. A hue deepened with the main light's depth draws a
   grey disc with a light ring where the main light switches between the fireball and the sun (the one-tap light's own
-  boundary) and a dark grey swath down the face, so the light term keeps one hue.
+  boundary) and a dark grey swath down the face, so the light term keeps one hue. On MEDIUM and LOW the one shadow tap goes toward the
+  brighter light and the other light takes its depth to the layer top along its own direction (one depth for both held
+  their ratio over the face: one hue; chroma detail 2.7 against HIGH's 3.8, now 3.6). At approach distances the frame air
+  in front of the face carries ~45 % of its luminance and ~80 % of its blue (13 % air share at 700 m, the 20 km law, against
+  a face 4–5 times darker than the horizon sky at noon): an albedo tint reaches the screen at under half its amplitude,
+  so colour work goes through the light, not the tint (step 8, dev client: tint off or ×3 moved chroma by 0.2).
 - Eye inside the dust: the adaptation boost applies to the haze level only (on the textured level it washed the view to
   white); crest tufts apply only while the eye is above the band (inside they drew vertical bands).
 - The ray bound must stay under a 120 m camera, or every near-eye ray marches fine steps through empty air.
