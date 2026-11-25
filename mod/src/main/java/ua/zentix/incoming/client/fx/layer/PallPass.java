@@ -641,8 +641,12 @@ public final class PallPass {
     private static int ring;
     /** Timestamps: 0 — unchecked, 1 — supported, −1 — unsupported (detail follows setting then). */
     private static int timer;
-    /** Client scenario ({@code tools/client_scenario.sh}): frames are not real-time; detail follows setting. */
-    private static final boolean SCENARIO = System.getProperty("incoming.scenario") != null;
+    /**
+     * Client scenario ({@code tools/client_scenario.sh}): frames are not real-time; detail follows setting. A scenario that
+     * measures frame time as the game has it ({@code -Dincoming.pall.adaptive=true}) keeps the GPU-budget ladder: pinned, a
+     * frame-time run reports the setting rung's cost the game never holds past a second.
+     */
+    private static final boolean SCENARIO = System.getProperty("incoming.scenario") != null && !Boolean.getBoolean("incoming.pall.adaptive");
     private static double gpuSum, gpuMax, lastGpuMean, lastGpuMax;
     /** GPU time per part (preparation, near volume medium and sums, rays, accumulation, composite) over the last second, ms per frame. */
     private static double[] PART_SUM = new double[STAMPS - 1], LAST_PART = new double[STAMPS - 1];

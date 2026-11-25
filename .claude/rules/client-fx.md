@@ -1078,19 +1078,8 @@ paths:
   transmission; the frame — by the plan (`SmokePuffs.flush` at the end of `collect`, after the projectiles' trails): the
   cloud puffs and the places of tubes (trails, fire plumes, stems — `SmokePuffs.tube` does not draw them but holds them,
   `Draw.holdPlace`) wait; near ones (closer than σ) of a source's puffs merge into one with the same mass and moments
-  (`merge`, as the merging of SCIPUFF puffs); the plan — how many screens each puff and place will cover as one quad
-  (the floor) and as a cluster (`cover`, the sum of areas on screen with overlap). In the game this plan is made off the
-  client thread one frame behind and drawn at the current eye (`client-smoke.md`, frame planning). Frame cost is bounded
-  at any strike count by `FILL_BUDGET` screens (16, about 4.8 ms on the 4060 at 2560×1600; at 8, the edge/inside views
-  of 40 strikes already lost dark spreading clouds and plumes to smooth veil haze). Above that floor, first conceal
-  occluded matter in world directions (`Draw.conceal`), then merge overlapping clumps and places from different sources
-  with the same moment-preserving law at successive levels (`Draw.mergeLevel`: world cells at 0.5/1/2 of the puff's edge
-  by octaves of the edge — not of the screen: turning the gaze does not disturb the merge; puffs of different looks
-  (`SmokeGrid.Look`: smoke, the ejecta curtain, crushing dust, the burst cloud) and spray with smoke do not merge, spray
-  stays round; places of one tube do not merge at any level — for a group of merged places all its tubes stay in it
-  (`SmokePuffs.TubeGroups`, lives between levels: the group's holder remembered one tube, and the groups A+B and B+A of
-  the next level merged); a cell holds up to `SLOTS` groups; the places of neighbouring tubes converge in pairs; a row
-  of tube places merged along the axis,
+  (`merge`, as the merging of SCIPUFF puffs; from 64 puffs via ground cells, absorbs as pairwise: `SmokeMergeIndexTest`); the plan — how many screens each puff and place will cover as one quad
+  (the floor) and as a cluster (`cover`, the sum of areas on screen with overlap).
   In the game this plan is made off the client thread one frame behind and drawn at the current eye (`client-smoke.md`,
   frame planning).
   Frame cost is bounded at any strike count by `FILL_BUDGET` screens (16, about 4.8 ms on the 4060 at 2560×1600;
