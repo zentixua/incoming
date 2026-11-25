@@ -187,9 +187,11 @@ public final class DustSources {
         for (int k = 0; k < w.count; k++) d.append(d.isEmpty() ? "" : ",").append(((ClientNuclear.Active) w.sources[k].id).d.id());
         // A1: the wave's ground-dust channel (readback of its last image; none while it does not draw) and the pall's dust
         // rows (its table holds the haze alone)
-        Incoming.LOG.info("Nuclear dust wave: {} view, eligible [{}], drawn [{}]{}; wave channel {}; pall ground-dust rows {}",
-                ua.zentix.incoming.client.fx.layer.FxViews.secondary() ? "secondary" : "primary", e, d,
-                eligible.size() == w.count ? "" : " MISMATCH", w.count > 0 ? DustWallPass.channel() : "0 (not drawn)", PallField.ROWS - 1);
+        // (the eye's ground tiles and their client-tick cost since the last line: primary view only)
+        Incoming.LOG.info("Nuclear dust wave: {} view, eligible [{}], drawn [{}]{}; wave channel {}; pall ground-dust rows {}{}",
+                secondary ? "secondary" : "primary", e, d,
+                eligible.size() == w.count ? "" : " MISMATCH", w.count > 0 ? DustWallPass.channel() : "0 (not drawn)", PallField.ROWS - 1,
+                secondary ? "" : "; " + DustGround.describe());
     }
 
     /** Whether detonation a has dust on its table now: the front has left ground zero and some node's dust is younger than the table's end. */
