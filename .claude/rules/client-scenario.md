@@ -48,9 +48,34 @@ the camera line with its soot share, sand share and fire term). With the shaderp
 fog/clouds: frames of a wall kilometres away show it against sky, not against ground. Detailed city for client-fire measurements: `INCOMING_CITY=N@tick` (`FireCity`:
 surface section plus N − 1 below per client chunk, with global palette, client-only).
 
+## Standard dev client: the look loop
+The loop of the look skill (section 4; docs/dev-pipeline.md, section 2): ModDevGradle's `runClient` (the mod with
+Create, Sable and Aeronautics, no pack) kept up in a saved world, `tools/dev_client.sh` as the agent's hands.
+- `start <save> --from <world dir>`: the world is copied once into `mod/run/client/saves/<save>` (`cp --reflink`: a
+  4.7 GB Silo copy in 4 s, no extra disk) and kept; later starts reuse it. `-PquickPlay` opens it, `-PhotSwap` runs
+  JetBrains Runtime (Gradle toolchain, foojay) with `-XX:+AllowEnhancedClassRedefinition` and JDWP on a free loopback
+  port. The display is `soft_gl.sh` `vanilla_display` (shared GPU slot or CPU, `laptop_job.sh --soft`); its unit
+  ceiling is the heap plus 6 GB: with a 4 GB heap a real map with a 100 kt burst peaked at 8.85 GB, and heap + 2 GB
+  (the sandbox's) was killed while loading the world. A map made in the pack carries experimental datapack settings:
+  vanilla asks once, `start` confirms it (`press`).
+- Keys: XTEST events (xdotool) never reach the game's Xwayland window inside a nested KWin `--virtual`, so the devtest
+  `DevHands` reads one-line files from `mod/run/client/dev/inbox` (`incoming.dev.inbox`, set by `-PhotSwap`): `cmd`,
+  `reload` (answered when the reload has finished), `shot`, `hud`, `press <button>`; it logs every opened screen
+  (`DEV screen`).
+- The scene: `cmd 'tp @s …'`, `time set`, the burst once, `tick freeze` at the moment, `tick step <ticks>` to move it.
+  A server burst leaves its ruins in the copy (the client saves it on `stop`): an untouched map is a new `<save>` name
+  with `--from` again.
+  The freeze holds the nuclear show's age (`ClientNuclear`: eye-following state still updates) and particles; ordinary
+  strike smoke and the effects layer run on. Config values (`mod/run/client/config/incoming-server.toml` and
+  `-client.toml`) are reread when the file changes; `max_yield` is a config value there, not an `/incoming rule`.
+- Measured 25.11 (laptop, shared GPU slot, Silo copy at 3514 73 −2298, a held 100 kt front): start 44.6 s to the
+  player in the world; a shader edit to its frame 37.2 s cold, 16.6 s warm (the F3+T reload 27.8 / 13.8 s of it);
+  a Java method edit hot-swapped and running in 3.0 s; two held frames 3 s apart differ by 0.19 of 255 on average.
+  A whole Silo take per change took 14 min 31 s per spot.
+
 ## Effects sandbox: frames during work; full pack under Iris only for one comparison with 3.4.1
-Rule ([visual/audio checks](../../docs/dev-pipeline.md#4-visual-and-audio-checks)): inspect look/sound during work,
-like a modder in a dev game: edit → sandbox frame/WAV in seconds; before/after frames/WAV in PR for reviewer.
+Rule ([visual/audio checks](../../docs/dev-pipeline.md#4-visual-and-audio-checks)): the look loop is the dev client
+above; the sandbox gives frames/WAV at exact effect seconds in a flat world, before/after against `main` for the reviewer.
 Sandbox is an MDG dev client with `devtest` (like JEI's `clientGameTest`); custom parts are only frame-to-file at a
 specified tick and chatless commands (Claude cannot see screen; NeoForge has no screenshot client tests,
 NeoForge #3624). Full-pack Iris client (`look_gate`, `prod_client.py`: ~3 min to first frame, 10–25 min per scene set,
