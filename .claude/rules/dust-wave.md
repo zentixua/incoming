@@ -161,8 +161,9 @@ paths:
 - Colour: one soil colour in white light draws the face as one tone whose rolls read only by light (chroma ±2.7 over the face
   against ±9.8 on the reference wall, corr(lightness, chroma) ≈ 0). `dwDustTint` (presentation): coarse soil low darker and
   earthier and fines on the billow tops paler (`gDwLow`: half the height in the column, half the billow texture), ±4 % per-point
-  soil tint (seed), debris over hard ground greyer; the multiply scattered light's hue deepens with the brighter light's depth
-  into the dust (a shaded fold reads earthier, `shade`); the textured level only.
+  soil tint (seed), debris over hard ground greyer; the textured level only. A hue deepened with the main light's depth draws a
+  grey disc with a light ring where the main light switches between the fireball and the sun (the one-tap light's own
+  boundary) and a dark grey swath down the face, so the light term keeps one hue.
 - Eye inside the dust: the adaptation boost applies to the haze level only (on the textured level it washed the view to
   white); crest tufts apply only while the eye is above the band (inside they drew vertical bands).
 - The ray bound must stay under a 120 m camera, or every near-eye ray marches fine steps through empty air.
