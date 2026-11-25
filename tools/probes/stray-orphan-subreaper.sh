@@ -6,10 +6,12 @@
 set -uo pipefail
 ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
 tmp=$(mktemp -d); mkdir -p "$tmp/mod/build/rig"
-cp "$(command -v sleep)" "$tmp/mod/build/rig/java"
+# a script named java (process name java): a copy of sleep fails where coreutils is one multicall binary
+printf '#!/bin/bash\ntrap '"'"'kill $s 2>/dev/null; exit 0'"'"' TERM\nsleep "$1" & s=$!\nwait $s\n' > "$tmp/mod/build/rig/java"
+chmod +x "$tmp/mod/build/rig/java"
 ( "$tmp/mod/build/rig/java" 60 & )
 sleep 0.5
-pid=$(pgrep -f "^$tmp/mod/build/rig/java 60" | head -1)
+pid=$(pgrep -f "$tmp/mod/build/rig/java 60" | head -1)
 trap 'kill $pid 2>/dev/null; rm -rf "$tmp"' EXIT
 ppid=$(awk '{print $4}' /proc/$pid/stat)
 echo "orphan java $pid, parent $ppid ($(cat /proc/$ppid/comm))"

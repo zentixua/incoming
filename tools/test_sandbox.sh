@@ -143,10 +143,13 @@ out=$(INCOMING_SOFT=1 "$ROOT/tools/nested_kwin.sh" wayland-incoming-sandbox 64 6
 (
   source "$ROOT/tools/sandbox.sh"
   RUN=$tmp/idle-run FX=$tmp/idle-run/fx
-  mkdir -p "$RUN/logs" "$FX" "$tmp/bin"; cp "$(command -v sleep)" "$tmp/bin/java"
+  # fake JVM: a script named java (with a direct #!/bin/bash its process name is java); a copy of sleep fails where coreutils is one multicall
+  # binary (GitHub runners: "coreutils: unknown program 'java'")
+  mkdir -p "$RUN/logs" "$FX" "$tmp/bin"
+  printf '#!/bin/bash\ntrap '"'"'kill $s 2>/dev/null; exit 0'"'"' TERM\nsleep "$1" & s=$!\nwait $s\n' > "$tmp/bin/java"; chmod +x "$tmp/bin/java"
   export INCOMING_SANDBOX_VANILLA=1 INCOMING_SANDBOX_POLL=0.2 INCOMING_SANDBOX_IDLE=60
   vanilla_display() { "$tmp/bin/java" 300 & wait; }
-  jpid() { pgrep -f "^$tmp/bin/java 300" | head -1; }
+  jpid() { pgrep -f "$tmp/bin/java 300" | head -1; }
   ago() { touch -d "@$(( $(date +%s) - $1 ))" "${@:2}"; }
   # the fake JVM itself must run, or every case below passes or fails for nothing
   "$tmp/bin/java" 0 || echo "FAIL: fake JVM does not run: $(ls -l "$tmp/bin/java") $(findmnt -no OPTIONS -T "$tmp" 2>&1) $(command -v sleep)"
