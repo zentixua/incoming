@@ -148,6 +148,8 @@ out=$(INCOMING_SOFT=1 "$ROOT/tools/nested_kwin.sh" wayland-incoming-sandbox 64 6
   vanilla_display() { "$tmp/bin/java" 300 & wait; }
   jpid() { pgrep -f "^$tmp/bin/java 300" | head -1; }
   ago() { touch -d "@$(( $(date +%s) - $1 ))" "${@:2}"; }
+  # the fake JVM itself must run, or every case below passes or fails for nothing
+  "$tmp/bin/java" 0 || echo "FAIL: fake JVM does not run: $(ls -l "$tmp/bin/java") $(findmnt -no OPTIONS -T "$tmp" 2>&1) $(command -v sleep)"
   # idle since the world became ready two hours ago: stops within a poll
   ago 7200 "$FX/ready"; rm -f "$FX/active" "$FX/stopped"
   run_client 1280 720 & r=$!
@@ -160,7 +162,8 @@ out=$(INCOMING_SOFT=1 "$ROOT/tools/nested_kwin.sh" wayland-incoming-sandbox 64 6
   rm -f "$FX/stopped"; touch "$FX/active"
   run_client 1280 720 & r=$!
   sleep 1.5
-  if [ -n "$(jpid)" ] && kill -0 $r 2>/dev/null; then echo "ok: a recent command keeps the sandbox"; else echo "FAIL: stopped despite a recent command"; fi
+  if [ -n "$(jpid)" ] && kill -0 $r 2>/dev/null; then echo "ok: a recent command keeps the sandbox"
+  else echo "FAIL: stopped despite a recent command: java '$(jpid)', run_client $(kill -0 $r 2>/dev/null && echo alive || echo gone), idle $(idle_seconds), stopped '$(cat "$FX/stopped" 2>/dev/null)', client.out '$(cat "$RUN/logs/client.out" 2>/dev/null)', $(ps -eo pid,ppid,stat,args | grep -F "$tmp" | grep -v grep)"; fi
   ago 120 "$FX/active"
   for _ in $(seq 50); do kill -0 $r 2>/dev/null || break; sleep 0.1; done
   kill -0 $r 2>/dev/null && { echo "FAIL: not stopped after its last command aged"; kill $(jpid) $r; } || echo "ok: stops once the last command ages past the limit"
