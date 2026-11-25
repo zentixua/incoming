@@ -130,3 +130,6 @@ while the sky is clear and shut on alarm (more examples in [For server owners an
 - A CC:Tweaked computer attached to the SAM reads its missiles and radar, and receives the event `incoming_alert` on
   every sweep while the radar tracks a hostile target ([For server owners and pack makers](packs.md#computers-cctweaked)).
   With Jade, looking at the SAM shows its missiles and what its radar tracks.
+- With Create, a Display Link attached to the SAM offers the source **Air-raid alert**: a sign or nixie tube reads
+  `ALERT` while the signal is on and `Clear` while it is off (a display board writes both in capitals), at most half a
+  second behind the signal. An attached label goes before the text, as with Create's own sources.

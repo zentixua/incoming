@@ -9,7 +9,7 @@ On a server, install the same Incoming version for everyone.
 
 | Mod | What it adds to Incoming | Install it on |
 |---|---|---|
-| Create | Munition recipes using Create parts; vanilla recipes are available without it | Server and clients |
+| Create | Munition recipes using Create parts; vanilla recipes are available without it. A Display Link shows the SAM's air-raid alert ([SAM](defense.md#redstone)) and a fixed launcher's munitions and readiness ([launcher](launcher.md#firing)) on display boards, signs and nixie tubes | Server and clients |
 | Create Aeronautics with Sable 2.0.6+ | Flying craft as targets; explosions break and push them | Server and clients |
 | Distant Horizons 3.3.3 | Distant terrain on the map and visible changes after strikes | Clients; also the host or dedicated server for damage updates |
 | Voxy through Roxy | Distant terrain on the map and in the world | Clients only |

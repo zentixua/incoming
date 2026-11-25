@@ -87,6 +87,15 @@ versionRange = "[15.1.7,)"
 ordering = "NONE"
 side = "BOTH"
 
+# Create is optional: Display Link sources of the SAM and the fixed launcher (compat/create); its 6.0 public display API.
+[[dependencies.${mod_id}]]
+modId = "create"
+type = "optional"
+reason = "Display Link sources: the SAM's air-raid alert, a fixed launcher's munitions and readiness"
+versionRange = "[6.0.0,)"
+ordering = "NONE"
+side = "BOTH"
+
 # CC:Tweaked is optional: computer peripherals of the fixed launcher and the SAM (compat/computercraft).
 [[dependencies.${mod_id}]]
 modId = "computercraft"
