@@ -49,7 +49,8 @@ paths:
   moves the floor 1–2 km out by metres as the player moves (`DustGroundTest.farFloorHoldsWhileMoving`); `DustGroundTest` also
   holds no step over 1 m per 2 m at the drawn chunks' edge. A re-centred tile refills in the same tick (`DustGroundRecentreTest`),
   every view uses the tiles' one height reference (`DustGround.refY`), and the survey takes at most 0.25 ms a tile per client
-  tick (`DustGround.SURVEY_NANOS`). The source's map learns what the coarse tile knows (`PallGround.learnAround`). Known limit:
+  tick (`DustGround.SURVEY_NANOS`). The dust thins to its floor over 0.5 m where the fine tile knows the ground, 3 m where the floor is a
+  coarser estimate (`gDwFloorSoft`: a 3 m thinning on the true ground left an eye 1.6 m up in clear air under young dust). The source's map learns what the coarse tile knows (`PallGround.learnAround`). Known limit:
   past the drawn chunks without an LOD map the held heights keep one height along each bearing from where they were seen
   (radial ridges and grooves to 1.8 km, unseen beyond Minecraft's own fog). Java readers of the
   eye's height in the dust use the same floor (`DustGround.floor`). Each source also has its own 128² terrain map

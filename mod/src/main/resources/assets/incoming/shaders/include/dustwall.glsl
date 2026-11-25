@@ -42,6 +42,8 @@ const int DW_SPRAY_ROW = 33, DW_PARAMS_ROW = 34, DW_ROWS = 35;
 const float DW_NODES = 128.0;
 // the source table: the rows above per source (DW_NODES × DW_ROWS each, RGBA32F)
 uniform sampler2D Sampler2;
+// the height over which the dust thins to its floor at the current march sample (dwFloor: by the fine tile's share)
+float gDwFloorSoft = 3.0;
 #ifdef DW_SOURCES
 // Several detonations: one table (Sampler2) holds every source of the frame at DW_ROWS rows each; the march
 // sums their extinction and extinction-weighted light at every sample (each source's light finished before the next). The
@@ -141,6 +143,9 @@ float dwFloorCoarse(vec2 xz) {
 }
 float dwFloor(vec2 xz) {
     vec2 f = dwTerrainTile(DwTerrain0, 0.0, xz);
+    // the dust thins to the ground over half a metre where the fine tile knows it, three where the floor is a coarser estimate
+    // (a 3 m thinning on the true ground left an eye 1.6 m up looking through clear air under the young dust)
+    gDwFloorSoft = mix(3.0, 0.5, f.y);
     return f.y >= 0.999 ? f.x : mix(dwFloorCoarse(xz), f.x, f.y);
 }
 // the share of open air at q (from ground zero's ground point): Minecraft's sky light / 15 inside the outdoor-air window
@@ -733,7 +738,7 @@ float dwHaze(vec3 g, vec3 q, float r, float a, vec2 law, bool coarse) {
             * (1.0 - smoothstep(DwRing.w * (1.0 - 1.0 / (DW_NODES - 1.0)), DwRing.w, r));
     // (normalised over its own swollen top: the swells and plumes reshape the column, its optical depth stays the law's
     // through g, so the consumers' noise-free reference holds)
-    float sigma = tc / dwProfileInt(top) * prof * strat * smoothstep(0.0, 3.0, q.y) * smoothstep(0.0, 0.08, a);
+    float sigma = tc / dwProfileInt(top) * prof * strat * smoothstep(0.0, gDwFloorSoft, q.y) * smoothstep(0.0, 0.08, a);
     if (!coarse) {
         sigma *= dwOpen(g);
         gDwSand = clamp(gDwMatNow.y / max(paved, 1e-6), 0.0, 1.0);
@@ -945,7 +950,7 @@ float dwDustDensity(vec3 g, bool coarse) {
     float veil = (1.0 - smoothstep(surf, surf * 1.12 + 4.0, q.y)) * smoothstep(surf * 0.8, surf, q.y) * 0.03;
     float puff = coarse || mean || q.y < top * 0.8 ? 0.0 : dwPuff(vec3(pw.x, q.y, pw.z), top, a) * (1.0 - smoothstep(ceiling - 8.0, ceiling, q.y));
     // the lowest metres thin to the ground (soft where no terrain stands under the dust)
-    float textured = sigma * smoothstep(0.0, 0.08, a) * smoothstep(0.0, 3.0, q.y)
+    float textured = sigma * smoothstep(0.0, 0.08, a) * smoothstep(0.0, gDwFloorSoft, q.y)
             * (prof * strat * (0.5 + 1.0 * n) * (0.7 + 0.6 * fs) + (veil + puff) * (0.6 + 0.8 * n));
     return F >= 0.999 ? textured : mix(haze, textured, F);
 }
