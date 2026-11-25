@@ -914,7 +914,12 @@ float dwDustDensity(vec3 g, bool coarse) {
     // DW_BILLOW of the top: the hump's excess (+30–50 %) stays well above the billows, so the crest reads as a crest
     float torn = 1.0 + 0.5 * exp(-a / 0.25);
     float surf = top * (1.0 + DW_BILLOW * dwSoft(((bl - 0.42) * 3.0 + (n - 0.5) * 2.0) * torn));
-    if (!coarse) gDwSurf = surf;
+    if (!coarse) {
+        gDwSurf = surf;
+        // the composition follows the billows too: the folds between lumps hold the coarse, earthier dust the lumps' outer
+        // skin has shed (the texture's value: gaps low, lumps high), half and half with the height in the column
+        gDwLow = 0.5 * gDwLow + 0.5 * (1.0 - clamp((n - 0.2) / 0.6, 0.0, 1.0));
+    }
     // a soft top: billow tops thin out over ~a quarter of the layer (an opaque top popped where dips passed in and out of
     // view at grazing angles)
     float edge = 0.22 * top + 4.0;
@@ -1033,7 +1038,7 @@ vec3 dwHazeLight(vec3 q, vec3 rd) {
 // ground (roads, roofs, rock) is grey debris. Over the column's density (strat) the tint's mean is 0.99/0.97/0.95.
 // One soil colour draws the face as one tone whose rolls read only by light (chroma ±2.7 over the face against
 // ±9.8 on the reference's wall, corr(L, C) ≈ 0)
-const vec3 DW_EARTH = vec3(0.95, 0.91, 0.86), DW_FINES = vec3(1.04, 1.045, 1.05);
+const vec3 DW_EARTH = vec3(0.90, 0.84, 0.76), DW_FINES = vec3(1.06, 1.07, 1.08);
 vec3 dwDustTint() {
     vec3 t = mix(DW_FINES, DW_EARTH, gDwLow) * mix(vec3(1.04, 1.0, 0.95), vec3(0.96, 0.99, 1.04), gDwSoil);
     return mix(vec3(1.0), t, 1.0 - gDwWet);
