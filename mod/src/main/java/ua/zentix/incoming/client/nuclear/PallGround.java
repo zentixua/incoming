@@ -347,17 +347,17 @@ public final class PallGround {
         dirty = false;
     }
 
+    /** The last {@link #pullPush} result (shared: client tick thread only); copy it before the next fill. */
+    static float[] pulled() {
+        return V[0];
+    }
+
     /**
      * Fill {@code cells} (NaN — unknown) into {@code V[0]} (pull-push): smaller copies average known data by cell
      * count (copy weight is the known data beneath it), then top-down unknown and partly known areas (weight below 1)
      * take a coarser copy (bilinear, no steps). Ground zero is always known — {@code centre} in its four surrounding cells
      * with weight one cell; if nothing is known, {@code centre} everywhere.
      */
-    /** The last {@link #pullPush} result (shared: client tick thread only); copy it before the next fill. */
-    static float[] pulled() {
-        return V[0];
-    }
-
     static void pullPush(float[] cells, float centre) {
         int levels = LEVELS;
         float[][] v = V, w = W;

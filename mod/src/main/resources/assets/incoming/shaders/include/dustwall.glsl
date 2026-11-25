@@ -125,9 +125,9 @@ vec2 dwTerrainTile(vec4 T, float k, vec2 xz) {
 // the terrain under ground point xz (from ground zero's ground point), blocks above that ground: the eye's fine tile where it
 // knows the ground, else its coarse tile, else the source's own map (its edge beyond it), each level fading into the next by its
 // known share (DustGround.floor: the same blend)
-// (program size: every inlined copy of the floor costs AMD's compiler code (+11 KB with a copy in every light path): the full
-// floor is read once per march sample by dwSourceDensity's caller; its density, light and light paths take it (gDwFloorAt)
-// the source's own map alone (the relief search past the drawn chunks: its 65-step loop takes one fetch a step)
+// (program size: every inlined copy of the floor costs AMD's compiler code, +11 KB with a copy in every light path; the full
+// floor is read once per march sample by dwSourceDensity's caller, and its density, light and light paths take it, gDwFloorAt)
+// the source's own map alone
 float dwFloorMap(vec2 xz) {
     if (DwGround.x <= 0.0) return 0.0;
     vec2 uv = clamp(xz / (2.0 * DwGround.x) + 0.5, 0.5 / DW_GROUND_SIDE, 1.0 - 0.5 / DW_GROUND_SIDE);
@@ -185,17 +185,18 @@ float dwRayFloor(vec3 dir, float from, float jitter) {
     if (tb <= ta) return 1e9;
     float ratio = pow(tb / ta, 1.0 / 64.0);
     vec3 q0 = DwEye.xyz + dir * ta;
-    // the pall's law (pallFloor): where the map at the start stands over the ray (the ray passed over the real ground of the
-    // drawn chunks), it drops under the ray there and is as it was four map cells farther; without it every ray past the drawn
-    // chunks under a map standing over the eye ended at their edge with no dust (step 7: 100 % of them in a valley)
-    float fade = 4.0 * DwGround.w, d0 = q0.y - dwFloorMap(q0.xz);
+    // the ray ends on the floor the dust lies on (the eye's coarse tile, then the map). The pall's law (pallFloor): where that
+    // floor at the start stands over the ray (the ray passed over the real ground of the drawn chunks), it drops under the ray
+    // there and is as it was four map cells farther; without it every ray past the drawn chunks under a map standing over the
+    // eye ends at their edge with no dust
+    float fade = 4.0 * DwGround.w, d0 = q0.y - dwFloorCoarse(q0.xz);
     float lift = max(1.0 - d0, 0.0) * step(ta, near + 1.0);
     float prevT = ta, prevD = d0 + lift;
     float t = ta * pow(ratio, jitter);
     for (int i = 0; i <= 64; i++) {
         float tt = min(t, tb);
         vec3 q = DwEye.xyz + dir * tt;
-        float d = q.y - dwFloorMap(q.xz) + lift * max(1.0 - (tt - ta) / fade, 0.0);
+        float d = q.y - dwFloorCoarse(q.xz) + lift * max(1.0 - (tt - ta) / fade, 0.0);
         if (d <= 0.0) return prevT + (tt - prevT) * max(prevD, 0.0) / max(prevD - d, 1e-6);
         prevT = tt;
         prevD = d;
@@ -1025,11 +1026,11 @@ vec3 dwHazeLight(vec3 q, vec3 rd) {
     return DW_HAZE_EXPOSURE * max(DwAdapt, 1.0) * w * (single + max(d, vec3(0.0)));
 }
 
-// presentation (est.), the dust's colour by what it is made of (slight: base to top ±5–9 % per channel, inside young dust
-// about 3 L* darker and 5° redder than one soil colour): the coarse, moister soil the blast tears up stays low and reads darker and earthier, the fines that
+// presentation (est.), the dust's colour by what it is made of (slight: the base 9/13/18 % darker than the tops in red/green/
+// blue; inside young dust about 3 L* darker and a few degrees redder than one soil colour): the coarse, moister soil the blast tears up stays low and reads darker and earthier, the fines that
 // reach the billow tops paler (size sorting: settling speed ∝ d², the column's coarse fraction falls with height, as `strat`
 // lays its density); each ground point's soil differs a little (its seed, ~60 m patches: redder or greyer); dust from hard
-// ground (roads, roofs, rock) is grey debris. Over the column's density (strat) the tint's mean stays within 3 % of 1.
+// ground (roads, roofs, rock) is grey debris. Over the column's density (strat) the tint's mean is 0.99/0.97/0.95.
 // One soil colour draws the face as one tone whose rolls read only by light (step 7: chroma ±2.7 over the face against
 // ±9.8 on the reference's wall, corr(L, C) ≈ 0)
 const vec3 DW_EARTH = vec3(0.95, 0.91, 0.86), DW_FINES = vec3(1.04, 1.045, 1.05);

@@ -109,14 +109,15 @@ void main() {
     wallSplit = vec4(gDwSplit.xy * cover * axisShare, 1.0 - gDwSplit.z, shareA * cover);
     // (a clear ray: no interval; the march returns before closing one)
     if (cover <= 0.0) wallSplit = vec4(0.0);
-    // diagnostics (DustWallDiag.probe −2, the ray ends): (ray end, scene view-axis distance, the relief's end or −1, the eye
-    // above source 0's relief); (the end's height and the relief under it, both from source 0's ground zero, opacity, samples)
+    // diagnostics (DustWallDiag.probe −2, the ray ends; RGBA16F, so every value stays under 6·10⁴): (ray end, scene view-axis
+    // distance, the relief's end, 6·10⁴ where none; the eye above source 0's floor); (the end's height and the floor under it,
+    // both from source 0's ground zero, transmittance, samples); (the end from the eye, x and z; source 0's map half side, cell)
     if (DwProbe < -0.5) {
         dwLoad(0);
         vec3 e = DwEye.xyz + dir * min(tEnd, 30000.0);
-        fragColor = vec4(min(tEnd, 30000.0), min(axis, 1e8), floorT, DwEye.y - dwFloor(DwEye.xz));
+        fragColor = vec4(min(tEnd, 30000.0), min(axis, 6e4), min(floorT, 6e4), DwEye.y - dwFloor(DwEye.xz));
         wallDepth = vec4(e.y, dwFloor(e.xz), 1.0 - cover, float(gDwSamples));
-        wallSplit = vec4(e.xz, DwGround.xw);
+        wallSplit = vec4(e.xz - DwEye.xz, min(DwGround.xw, vec2(6e4)));
     }
     if (DwProbe > 0.5) {
         fragColor = gDwProbeA;

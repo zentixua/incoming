@@ -42,8 +42,9 @@ paths:
   chunks by render distance, coarse 32 m over 4 km; the atlas's last two tiles, `DwTerrain0/1`), from what the client knows
   (`FarTerrain.dust`: client chunks below permeable canopies, then LSS/Voxy/DH map tiles); the fine tile takes each cell's lowest
   column, the coarse their mean. `dwFloor` blends fine → coarse → the source's own map by share: the fine tile hands over inside
-  what it knows (8 cells), the coarse one continues the known ground 128 m past it (`DustGroundTest`: no step over 1 m per 2 m
-  at the drawn chunks' edge). The source's map learns the coarse tile's heights (`PallGround.learnAround`). Java readers of the
+  what it knows (8 cells), the coarse one continues the known ground 512 m past it (`DustGroundTest`: no step over 1 m per 2 m
+  at the drawn chunks' edge); a re-centred tile refills in the same tick (`DustGroundRecentreTest`), and every view uses the
+  tiles' one height reference (`DustGround.refY`). The source's map learns the coarse tile's heights (`PallGround.learnAround`). Java readers of the
   eye's height in the dust use the same floor (`DustGround.floor`). Each source also has its own 128² terrain map
   (`PallGround`, atlas `Sampler3`), the floor beyond the eye's tiles, and two ground-material tiles
   (`DustMaterialTiles`: fine at the server's dense cell, coarse at its outer cell; RGBA8 water/sand/hard/known, filled
@@ -142,11 +143,13 @@ paths:
   16 384 cells on the Zearth Silo map: laid on it alone, the dust's floor stands 10 m over the eye in a valley, the drawn ground
   13 m under it with no dust on it, and every ray past the drawn chunks ends at their edge (a clean strip under a
   flat-bottomed deck; step 7, `DustWallDiag.probe` −2 writes each ray's end, the scene's distance, the relief's end and the floor
-  there, `dw:ground=` dumps the maps). The relief search past the drawn chunks keeps the pall's lift law (the map dropped under
-  the ray at the start, as it was four map cells on).
+  there, `dw:ground=` dumps the maps and the tiles' known cells and tick cost). The relief search past the drawn chunks reads
+  the floor the dust lies on (`dwFloorCoarse`: searched on the map alone, rays down a valley ended 56–70 m past the drawn
+  chunks, `DustGroundTest`) and keeps the pall's lift law (that floor dropped under the ray at the start, as it was four map
+  cells on).
 - Program size: each inlined copy of `dwFloor` (three tile fetches) costs AMD's compiler ~1.5 KB; one copy in every light
   path adds 11 KB (127 against a 114 KB budget). The floor is read once per march sample (`dwSourceDensity`'s caller), its
-  density, light and light paths take it (`gDwFloorAt`); the relief search reads the map alone.
+  density, light and light paths take it (`gDwFloorAt`); the relief search's loop reads the coarse floor (116 KB).
 - Colour: one soil colour in white light draws the face as one tone whose rolls read only by light (chroma ±2.7 over the face
   against ±9.8 on the reference wall, corr(lightness, chroma) ≈ 0). `dwDustTint` (presentation): coarse soil low darker and
   earthier, fines on the tops paler, ±4 % per-point soil tint (seed), debris over hard ground greyer; the textured level only.

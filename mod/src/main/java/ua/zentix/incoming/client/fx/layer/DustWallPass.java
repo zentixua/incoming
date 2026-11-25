@@ -206,10 +206,9 @@ public final class DustWallPass {
         public float layerTop;
         /**
          * The dust's eye-centred ground tiles ({@code DustGround}): fine, coarse — origin from the eye (x, z), cell (0: off), the
-         * tiles' height reference minus the eye's height ({@code DwTerrain0/1}); the reference (world y, 64-block steps).
+         * tiles' height reference minus the eye's height ({@code DwTerrain0/1}).
          */
         public final float[] terrain0 = new float[4], terrain1 = new float[4];
-        public double terrainRef;
         /** The nearest source (history continuity). */
         public Object source;
         /** The dust's presentation exposure ({@code DwAdapt}). */
@@ -539,23 +538,22 @@ public final class DustWallPass {
         GlStateManager._pixelStore(GL11.GL_UNPACK_ALIGNMENT, 4);
     }
 
-    /** The eye-centred ground tiles' generation and height reference in the atlas ({@code DustGround}); whether both are there. */
+    /** The eye-centred ground tiles' generation in the atlas ({@code DustGround}); whether both are there. */
     private static long terrainVersion = -1;
-    private static double terrainRefIn = Double.NaN;
     private static boolean terrainUploaded;
     private static final float[] TERRAIN_RG = new float[2 * GROUND_SIDE * GROUND_SIDE];
 
-    /** The eye's fine and coarse ground tiles into the atlas's last two tiles when they or their height reference changed. */
+    /** The eye's fine and coarse ground tiles into the atlas's last two tiles when they changed. */
     private static void uploadTerrain(Frame f) {
         long v = ua.zentix.incoming.client.nuclear.DustGround.version();
-        if (v == terrainVersion && f.terrainRef == terrainRefIn) return;
+        if (v == terrainVersion) return;
         boolean all = true;
         int n = GROUND_SIDE * GROUND_SIDE * 4;
         if (groundBuffer == null) groundBuffer = MemoryUtil.memAllocFloat(n);
         GlStateManager._bindTexture(groundAtlas);
         unpack(4);
         for (int k = 0; k < 2; k++) {
-            if (!ua.zentix.incoming.client.nuclear.DustGround.pack(k, f.terrainRef, TERRAIN_RG)) {
+            if (!ua.zentix.incoming.client.nuclear.DustGround.pack(k, TERRAIN_RG)) {
                 all = false;
                 continue;
             }
@@ -568,7 +566,6 @@ public final class DustWallPass {
         PallPass.note("dust eye ground");
         // a source's map upload compares its own owner and generation: the atlas still holds it
         terrainVersion = v;
-        terrainRefIn = f.terrainRef;
         terrainUploaded = all;
     }
 

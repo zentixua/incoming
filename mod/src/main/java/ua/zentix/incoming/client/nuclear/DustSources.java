@@ -156,10 +156,12 @@ public final class DustSources {
         return w.active;
     }
 
-    /** The eye-centred ground tiles' places from this view's eye ({@code DwTerrain0/1}; the tiles follow the player's eye). */
+    /**
+     * The eye-centred ground tiles' places from this view's eye ({@code DwTerrain0/1}; the tiles follow the player's eye and
+     * hold one height reference for every view, so a second view never re-uploads them).
+     */
     private static void terrain(Vec3 eye, DustWallPass.Frame w) {
-        double ref = 64 * Math.round(eye.y / 64);
-        w.terrainRef = ref;
+        double ref = DustGround.refY();
         for (int k = 0; k < 2; k++) {
             float[] t = k == 0 ? w.terrain0 : w.terrain1;
             double[] p = DustGround.place(k);

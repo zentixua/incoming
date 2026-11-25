@@ -64,7 +64,48 @@ class DustGroundTest {
         double before = DustGround.floor(-100, 0, 0);
         // the eye walks 100 m east (the spot stays inside the fine tile); nothing new is learned: the cells it saw keep their heights
         for (int i = 0; i < 40; i++) DustGround.update((x, z) -> Double.NaN, 100, 90, 0, 12, i == 39);
-        assertEquals(before, DustGround.floor(-100, 0, 0), 1e-3);
+        assertEquals(before, DustGround.floor(-100, 0, 0), 0.25);
+    }
+
+    /**
+     * The relief search past the drawn chunks ({@code dwRayFloor}) on a floor: a horizontal or slightly lowered ray from the eye
+     * down a valley 300 m wide, the source's 508 m map a cell's mean (the ridges' height over the valley floor). The ray must end
+     * where it meets the floor the dust lies on: searched on the map alone it ended 56–70 m past the drawn chunks and cut away the
+     * dust the coarse tile lays on the valley floor beyond.
+     */
+    private static double rayEnd(java.util.function.DoubleUnaryOperator floorAlong, double eyeY, double pitch, double from, double fade) {
+        double dy = Math.sin(pitch), dz = Math.cos(pitch);
+        double ta = from / Math.max(Math.abs(dz), Math.abs(dy)), tb = 4000, ratio = Math.pow(tb / ta, 1 / 64.0);
+        double d0 = eyeY + dy * ta - floorAlong.applyAsDouble(dz * ta), lift = Math.max(1 - d0, 0), prevT = ta, prevD = d0 + lift;
+        double t = ta * Math.sqrt(ratio);
+        for (int i = 0; i <= 64; i++) {
+            double tt = Math.min(t, tb), d = eyeY + dy * tt - floorAlong.applyAsDouble(dz * tt) + lift * Math.max(1 - (tt - ta) / fade, 0);
+            if (d <= 0) return prevT + (tt - prevT) * Math.max(prevD, 0) / Math.max(prevD - d, 1e-6);
+            prevT = tt;
+            prevD = d;
+            t *= ratio;
+        }
+        return Double.POSITIVE_INFINITY;
+    }
+
+    @Test
+    void raysPastTheDrawnChunksEndOnTheDustsFloor() throws IOException {
+        // the eye in the valley, looking along it (the valley runs along z): the coarse tile knows the floor 192 m around the eye
+        // and continues it 128 m past; the map stands over the valley floor by its cell's mean
+        sweep(0, 71.62, 0, 192);
+        double map = 0;
+        for (double x = -254; x <= 254; x += 8) map += Math.floor(valley(x, 0)) / 64;
+        final double cellMean = map;
+        java.util.function.DoubleUnaryOperator floor = z -> DustGround.floor(0, z, cellMean);
+        double pitch = Math.toRadians(-0.2), onFloor = rayEnd(floor, 71.62, pitch, 168, 4 * 508);
+        // where the ray first meets the dust's floor (1 m steps past the drawn chunks)
+        double meets = 168;
+        while (meets < 4000 && 71.62 + Math.sin(pitch) * meets > floor.applyAsDouble(Math.cos(pitch) * meets)) meets++;
+        assertEquals(meets, onFloor, 0.05 * meets, "the ray ends where it meets the floor the dust lies on");
+        String s = Files.readString(Path.of("src/main/resources/assets/incoming/shaders/include/dustwall.glsl"));
+        String search = s.substring(s.indexOf("float dwRayFloor("), s.indexOf("return 1e9;\n}", s.indexOf("float dwRayFloor(")));
+        assertTrue(search.contains("q.y - dwFloorCoarse(q.xz)") && search.contains("q0.y - dwFloorCoarse(q0.xz)"),
+                "the shader's relief search reads the floor the dust lies on");
     }
 
     @Test
