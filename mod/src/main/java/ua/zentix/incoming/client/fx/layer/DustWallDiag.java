@@ -7,7 +7,7 @@ package ua.zentix.incoming.client.fx.layer;
 public final class DustWallDiag {
     /**
      * The pall's rung: −1 as shipped (a client scenario pins the setting's rung), −2 follows the GPU budget as in play, 0 and up
-     * pins that rung (never finer than the setting's).
+     * pins that rung (never finer than the setting's), in a client scenario and in the dev client alike.
      */
     public static volatile int rung = -1;
     /** False: every frame's march is resolved without the history. */
