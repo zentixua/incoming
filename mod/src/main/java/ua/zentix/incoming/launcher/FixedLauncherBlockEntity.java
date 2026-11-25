@@ -252,6 +252,13 @@ public class FixedLauncherBlockEntity extends BlockEntity implements Launcher {
         return craft() != null;
     }
 
+    /** The carrying craft's velocity at world point {@code at} (its body's motion and spin), blocks/tick. */
+    @Override
+    public Vec3 velocity(Vec3 at) {
+        SubLevels.Frame craft = craft();
+        return craft == null ? Vec3.ZERO : craft.velocity(at);
+    }
+
     @Override
     public Vec3 position() {
         Vec3 own = Vec3.atBottomCenterOf(worldPosition);

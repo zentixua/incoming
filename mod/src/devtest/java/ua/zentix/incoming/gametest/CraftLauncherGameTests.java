@@ -48,14 +48,14 @@ import java.util.Locale;
  * tests pass empty.
  * <p>
  * Deck: 7×7 planks on the "runway" ground, launcher in its middle on top; the strip leaves the launch path clear past
- * arming distance along +Z (the test area's barrier walls stand 16 blocks to the sides). The craft rests on the ground,
- * so its pose stands still between the teleports that turn and move it.
+ * arming distance along +Z (the test area's barrier walls stand 16 blocks to the sides). After assembly the test holds
+ * the craft 1 block above the ground at a set pose ({@link Hold}), and turns and moves it through that pose.
  */
 @GameTestHolder(Incoming.MOD_ID)
 @PrefixGameTestTemplate(false)
 public final class CraftLauncherGameTests {
-    /** Launcher on the deck: "runway" ground top y 3, deck at y 4; launches along the strip (+Z, 200 blocks ahead). */
-    private static final BlockPos LAUNCHER = new BlockPos(16, 5, 40);
+    /** Launcher on the deck: "runway" ground layers y 0–2, deck at y 3; launches along the strip (+Z, 200 blocks ahead). */
+    private static final BlockPos LAUNCHER = new BlockPos(16, 4, 40);
     private static final int DECK = 3;
 
     private CraftLauncherGameTests() {}
@@ -75,25 +75,31 @@ public final class CraftLauncherGameTests {
         }
         ServerLevel level = h.getLevel();
         FixedLauncherBlockEntity ground = deck(h, null);
-        Vec3 site = Vec3.atBottomCenterOf(h.absolutePos(LAUNCHER));
-        Vec3 far = site.add(0, -1, 1000);
+        Vec3 far = Vec3.atBottomCenterOf(h.absolutePos(LAUNCHER)).add(0, -1, 1000);
+        Vec3[] site = new Vec3[1];
         ground.setMission(new Mission(WeaponType.LOITER, 1, 0, new Target.Point(far), far, Waypoints.NONE));
         h.assertTrue(ground.load(new ItemStack(WeaponType.LOITER.spec().munition().item().get(), 2)).isEmpty(), "Lancets did not fit");
         FixedLauncherBlockEntity[] be = new FixedLauncherBlockEntity[1];
-        SubLevelAccess[] craft = new SubLevelAccess[1];
+        Hold hold = new Hold(h);
+        SubLevelAccess[] craft = hold.craft;
         StrikeProjectile[] lancet = new StrikeProjectile[1];
         float[] before = new float[1];
         Vec3[] release = new Vec3[1];
         h.startSequence()
                 .thenExecute(() -> assemble(h, 0))
                 .thenWaitUntil(() -> be[0] = carried(h, craft))
-                .thenIdle(10)
+                .thenExecute(hold::start)
+                .thenWaitUntil(hold.reached(h))
                 .thenExecute(() -> {
                     h.assertTrue(SubLevels.inPlotGrid(level, new ChunkPos(be[0].getBlockPos())), "launcher block is not in the plot grid");
                     h.assertTrue(be[0].carried(), "launcher on the craft is not carried");
-                    h.assertTrue(be[0].position().distanceTo(site) < 0.6, "launcher on an unmoved craft is not at its world place: " + be[0].position());
+                    // the deck is centred on the launcher: the craft's world bounds centre stands over or under it
+                    Vec3 centre = SubLevels.center(craft[0]);
+                    h.assertTrue(horizontal(be[0].position(), centre) < 0.05 && Math.abs(be[0].position().y - centre.y) < 1.5,
+                            "launcher at " + be[0].position() + ", its craft's centre " + centre);
+                    site[0] = be[0].position();
                     before[0] = be[0].yaw();
-                    teleport(h, craft[0], Vec3.ZERO, 90);
+                    hold.yaw = 90;
                 })
                 .thenWaitUntil(() -> h.assertTrue(Math.abs(Math.abs(Mth.wrapDegrees(be[0].yaw() - before[0])) - 90) < 2,
                         "craft not turned: heading " + be[0].yaw() + " from " + before[0]))
@@ -101,7 +107,8 @@ public final class CraftLauncherGameTests {
                 .thenExecute(() -> {
                     Vec3 at = be[0].position();
                     h.assertFalse(SubLevels.inPlotGrid(level, new ChunkPos(BlockPos.containing(at))), "launcher position is in the plot: " + at);
-                    h.assertTrue(horizontal(at, site) < 2, "turned craft carries the launcher to " + at + ", deck centre was " + site);
+                    h.assertTrue(horizontal(at, site[0]) < 2 && horizontal(at, SubLevels.center(craft[0])) < 0.05,
+                            "turned craft carries the launcher to " + at + ", its centre " + SubLevels.center(craft[0]));
                     h.assertTrue(Math.abs(be[0].rackYaw() - before[0]) < 1e-3 && Math.abs(Mth.wrapDegrees(be[0].yaw() - be[0].rackYaw())) > 80,
                             "world heading " + be[0].yaw() + " is not the turntable's " + be[0].rackYaw() + " turned with the craft");
                     h.assertTrue(LauncherOrders.problem(level, be[0]) == null, "a craft launcher refuses: " + FixedLauncherGameTests.key(LauncherOrders.problem(level, be[0])));
@@ -112,8 +119,11 @@ public final class CraftLauncherGameTests {
                     h.assertTrue(Math.abs(Mth.wrapDegrees(rails.yaw() - bearing)) < 1, "catapult heads " + rails.yaw() + ", target bears " + bearing);
                     onRail(h, lancet[0], rails, 0.01);
                 })
-                .thenExecute(() -> teleport(h, craft[0], new Vec3(3, 0, 0), 120))
-                .thenWaitUntil(() -> h.assertTrue(horizontal(be[0].position(), site.add(3, 0, 0)) < 2, "craft not moved: " + be[0].position()))
+                .thenExecute(() -> {
+                    hold.at = hold.at.add(3, 0, 0);
+                    hold.yaw = 120;
+                })
+                .thenWaitUntil(() -> h.assertTrue(horizontal(be[0].position(), site[0].add(3, 0, 0)) < 2, "craft not moved: " + be[0].position()))
                 .thenIdle(3)
                 .thenExecute(() -> {
                     h.assertTrue(lancet[0].flightPhase().onLauncher(), "Lancet left the rail early: " + lancet[0].flightPhase());
@@ -136,9 +146,12 @@ public final class CraftLauncherGameTests {
     }
 
     /**
-     * A round leaving a moving craft's rail keeps the rail's speed along its nose: the craft moves 0.5 blocks/tick along
-     * the strip (+Z, the catapult's heading) while the Lancet waits, so at the start of its boost it flies at
-     * 0.5·cos 20° = 0.47 blocks/tick plus the first boost steps, where a still craft gives at most 0.06.
+     * A round leaving a moving craft's rail keeps the rail's speed along its nose. The craft's body is given 10 blocks/s
+     * along the strip (+Z, the catapult's heading) through Sable's physics pipeline each tick while the Lancet waits: the
+     * launcher reads it as 0.5 blocks/tick (Sable's velocities are per second), and the Lancet starts its boost at that
+     * velocity along its rail (0.5·cos 20° = 0.47 blocks/tick), give or take its first flight step, where a still craft
+     * gives at most 0.06. The body's velocity is the cause read, not the pose's steps: Sable moves the pose on its own physics
+     * steps (under teleports here 0 or 1 block per tick for a steady 0.5).
      */
     @GameTest(template = "runway", timeoutTicks = 300, batch = "craft_launcher_speed", skyAccess = true)
     public static void carriesRailSpeed(GameTestHelper h) {
@@ -152,26 +165,43 @@ public final class CraftLauncherGameTests {
         ground.setMission(new Mission(WeaponType.LOITER, 1, 0, new Target.Point(far), far, Waypoints.NONE));
         h.assertTrue(ground.load(new ItemStack(WeaponType.LOITER.spec().munition().item().get(), 1)).isEmpty(), "Lancet did not fit");
         FixedLauncherBlockEntity[] be = new FixedLauncherBlockEntity[1];
-        SubLevelAccess[] craft = new SubLevelAccess[1];
+        Hold hold = new Hold(h);
+        SubLevelAccess[] craft = hold.craft;
         StrikeProjectile[] lancet = new StrikeProjectile[1];
         boolean[] moving = new boolean[1];
+        Vec3[] railSpeed = new Vec3[1];
+        Rails[] rails = new Rails[1];
         h.onEachTick(() -> {
-            if (moving[0]) teleport(h, craft[0], new Vec3(0, -0.05, 0.5), 0);
+            if (!moving[0]) return;
+            ServerSubLevel sub = (ServerSubLevel) craft[0];
+            PhysicsPipeline pipeline = SubLevelContainer.getContainer(level).physicsSystem().getPipeline();
+            Vector3d v = pipeline.getLinearVelocity(sub, new Vector3d()), w = pipeline.getAngularVelocity(sub, new Vector3d());
+            pipeline.addLinearAndAngularVelocity(sub, new Vector3d(-v.x, -v.y, 10 - v.z), w.negate(new Vector3d()));
+            if (lancet[0].flightPhase().onLauncher()) {
+                rails[0] = be[0].rails();
+                railSpeed[0] = be[0].velocity(rails[0].point(0));
+            }
         });
         h.startSequence()
                 .thenExecute(() -> assemble(h, 0))
                 .thenWaitUntil(() -> be[0] = carried(h, craft))
-                .thenIdle(10)
+                .thenExecute(() -> hold.start(4))
+                .thenWaitUntil(hold.reached(h))
                 .thenExecute(() -> {
                     fired(h, level, be[0], "signal on a craft");
                     lancet[0] = only(level, be[0]);
+                    hold.at = null;
                     moving[0] = true;
                 })
                 .thenWaitUntil(() -> h.assertTrue(lancet[0].flightPhase() == FlightPhase.BOOST, "Lancet not boosting yet: " + lancet[0].flightPhase()))
                 .thenExecute(() -> {
                     moving[0] = false;
-                    double v = lancet[0].speed();
-                    h.assertTrue(v > 0.45 && v < 0.6, "Lancet left a rail moving 0.5 blocks/tick along it at " + v + " blocks/tick");
+                    h.assertTrue(railSpeed[0] != null && railSpeed[0].distanceTo(new Vec3(0, 0, 0.5)) < 0.03,
+                            "craft at 10 blocks/s along +Z reads " + railSpeed[0] + " blocks/tick at the rail");
+                    double along = Math.max(0, railSpeed[0].dot(rails[0].direction())), v = lancet[0].speed();
+                    // the first flight step adds boost and pays the climb trade (game flight model): within a few hundredths
+                    h.assertTrue(along > 0.44 && v > along - 0.03 && v < along + 0.07,
+                            "Lancet left a rail moving " + along + " blocks/tick along it at " + v + " blocks/tick");
                 })
                 .thenSucceed();
     }
@@ -192,12 +222,14 @@ public final class CraftLauncherGameTests {
         FixedLauncherBlockEntity ground = deck(h, wall);
         shahedMission(h, ground);
         FixedLauncherBlockEntity[] be = new FixedLauncherBlockEntity[1];
-        SubLevelAccess[] craft = new SubLevelAccess[1];
+        Hold hold = new Hold(h);
+        SubLevelAccess[] craft = hold.craft;
         List<BlockPos> plotWall = new ArrayList<>();
         h.startSequence()
                 .thenExecute(() -> assemble(h, 3))
                 .thenWaitUntil(() -> be[0] = carried(h, craft))
-                .thenIdle(10)
+                .thenExecute(hold::start)
+                .thenWaitUntil(hold.reached(h))
                 .thenExecute(() -> {
                     // assembly keeps the blocks' layout in the plot
                     for (BlockPos w : wall) plotWall.add(be[0].getBlockPos().offset(w.subtract(LAUNCHER)));
@@ -230,11 +262,13 @@ public final class CraftLauncherGameTests {
         List<BlockPos> wall = ring(LAUNCHER, DECK + 1, LAUNCHER.getY(), LAUNCHER.getY() + 8);
         StrikeGameTests.afterTest(h, () -> wall.forEach(w -> h.setBlock(w, Blocks.AIR)));
         FixedLauncherBlockEntity[] be = new FixedLauncherBlockEntity[1];
-        SubLevelAccess[] craft = new SubLevelAccess[1];
+        Hold hold = new Hold(h);
+        SubLevelAccess[] craft = hold.craft;
         h.startSequence()
                 .thenExecute(() -> assemble(h, 0))
                 .thenWaitUntil(() -> be[0] = carried(h, craft))
-                .thenIdle(10)
+                .thenExecute(hold::start)
+                .thenWaitUntil(hold.reached(h))
                 .thenExecute(() -> {
                     wall.forEach(w -> h.setBlock(w, Blocks.STONE));
                     h.assertValueEqual(FixedLauncherGameTests.key(be[0].fire(level)), "incoming.fixed_launcher.sector", "craft walled by the world");
@@ -293,19 +327,57 @@ public final class CraftLauncherGameTests {
         h.assertFalse(near.isEmpty(), "craft not assembled");
         h.assertTrue(level.getBlockState(h.absolutePos(LAUNCHER)).isAir(), "launcher still in the world");
         craft[0] = near.getFirst();
-        BlockPos plot = BlockPos.containing(SubLevels.toPlot(craft[0], at));
-        h.assertTrue(level.getBlockEntity(plot) instanceof FixedLauncherBlockEntity, "no launcher at plot " + plot);
-        return (FixedLauncherBlockEntity) level.getBlockEntity(plot);
+        for (BlockPos p : SubLevels.plotCells(craft[0])) {
+            if (level.getBlockEntity(p) instanceof FixedLauncherBlockEntity be) return be;
+        }
+        throw new net.minecraft.gametest.framework.GameTestAssertException("no launcher in the craft's plot");
     }
 
-    /** Teleport {@code craft} by {@code shift} from where it is, turned to {@code yaw} about the vertical (Sable's physics pipeline). */
-    private static void teleport(GameTestHelper h, SubLevelAccess craft, Vec3 shift, float yaw) {
-        Vector3dc p = craft.logicalPose().position();
+    /**
+     * Holds the assembled craft in the air at a pose every tick, as an airship's lift and engines would: Sable's gravity
+     * would drop it, and on a fresh GameTest platform it can fall through ground whose collision Sable has not built yet.
+     * Starts 1 block above where the craft was assembled, unturned; tests turn and move it through {@link #at} and
+     * {@link #yaw}.
+     */
+    private static final class Hold {
+        final SubLevelAccess[] craft = new SubLevelAccess[1];
+        @Nullable
+        Vec3 at;
+        float yaw;
+
+        Hold(GameTestHelper h) {
+            h.onEachTick(() -> {
+                if (at != null) teleport(h, craft[0], at, yaw);
+            });
+        }
+
+        /** Hold the craft found by {@link #carried}, lifted 1 block. */
+        void start() {
+            start(1);
+        }
+
+        /** Hold the craft found by {@link #carried}, lifted {@code lift} blocks. */
+        void start(double lift) {
+            Vector3dc p = craft[0].logicalPose().position();
+            at = new Vec3(p.x(), p.y() + lift, p.z());
+        }
+
+        /** The craft stands at the held pose now. */
+        Runnable reached(GameTestHelper h) {
+            return () -> {
+                Vector3dc p = craft[0].logicalPose().position();
+                Vec3 now = new Vec3(p.x(), p.y(), p.z());
+                h.assertTrue(at != null && now.distanceTo(at) < 1e-3, "craft at " + now + ", held at " + at);
+            };
+        }
+    }
+
+    /** Put {@code craft} at {@code at}, turned to {@code yaw} about the vertical, at rest (Sable's physics pipeline). */
+    private static void teleport(GameTestHelper h, SubLevelAccess craft, Vec3 at, float yaw) {
         ServerSubLevel sub = (ServerSubLevel) craft;
         PhysicsPipeline pipeline = SubLevelContainer.getContainer(h.getLevel()).physicsSystem().getPipeline();
         pipeline.resetVelocity(sub);
-        pipeline.teleport(sub, new Vector3d(p.x() + shift.x, p.y() + 0.05 + shift.y, p.z() + shift.z),
-                new Quaterniond().rotateY(Math.toRadians(yaw)));
+        pipeline.teleport(sub, new Vector3d(at.x, at.y, at.z), new Quaterniond().rotateY(Math.toRadians(yaw)));
     }
 
     private static void command(ServerLevel level, String command, boolean quiet) {

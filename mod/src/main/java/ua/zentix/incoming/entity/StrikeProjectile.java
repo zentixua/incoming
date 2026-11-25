@@ -251,7 +251,7 @@ public abstract class StrikeProjectile extends Entity implements IEntityWithComp
     private byte clientPhase = -1;
     /** Launcher wait before ignition. */
     private int readyTicks;
-    /** World velocity of the ridden rail at the last ride step, blocks/tick: carried into the launch ({@link #launchTick}). */
+    /** World velocity of the ridden rail at the last ride step (its craft's motion there), blocks/tick: carried into the launch ({@link #launchTick}). */
     private Vec3 railVelocity = Vec3.ZERO;
     /** Sound target siren this many ticks before impact; -1 — no siren. */
     private int sirenLead = -1;
@@ -430,11 +430,13 @@ public abstract class StrikeProjectile extends Entity implements IEntityWithComp
             entityData.set(DATA_RAIL, Optional.empty());
             return;
         }
+        BlockPos at = entityData.get(DATA_RAIL).orElseThrow();
         Rails rails = ridden();
-        if (rails == null) return;
+        if (rails == null || !(level.getBlockEntity(at) instanceof Launcher launcher)) return;
         Vec3 to = rails.point(entityData.get(DATA_RAIL_CELL));
         if (!Terrain.ready(level, BlockPos.containing(to))) return;
-        railVelocity = to.subtract(position());
+        // the craft body's velocity, not this tick's step: Sable moves the pose on its own physics steps
+        railVelocity = launcher.velocity(to);
         flight.set(rails.yaw(), -rails.elevation());
         moveAlong(level, to, rails.direction());
     }

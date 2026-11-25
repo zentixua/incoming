@@ -28,6 +28,11 @@ public interface Launcher {
         return false;
     }
 
+    /** World velocity of the launcher's frame at world point {@code at}, blocks/tick: zero on the ground. */
+    default Vec3 velocity(Vec3 at) {
+        return Vec3.ZERO;
+    }
+
     /** Tick when the rack started raising to elevation: placed or turned. */
     long deployedAt();
 

@@ -90,7 +90,16 @@ public final class SubLevels {
 
         /** Plot direction (unit) of world direction {@code dir}. */
         Vec3 toPlotDirection(Vec3 dir);
+
+        /**
+         * World velocity of the craft's body at world point {@code at}, blocks/tick: its linear velocity plus its spin
+         * about its centre ({@link #VELOCITY_PER_TICK} from Sable's per-second rigid-body velocity).
+         */
+        Vec3 velocity(Vec3 at);
     }
+
+    /** Sable's rigid-body velocities are per second (Rapier); the mod's speeds are per tick. */
+    public static final double VELOCITY_PER_TICK = 1.0 / 20;
 
     /** The frame of the craft carrying block {@code pos} (its plot chunk); null on the ground or while that craft is not loaded. */
     @Nullable
@@ -117,6 +126,18 @@ public final class SubLevels {
                 } catch (RuntimeException | LinkageError e) {
                     fail(e);
                     return dir.normalize();
+                }
+            }
+
+            @Override
+            public Vec3 velocity(Vec3 at) {
+                try {
+                    Vec3 plot = sub.logicalPose().transformPositionInverse(at);
+                    Vector3d v = companion().getVelocity(level, sub, new Vector3d(plot.x, plot.y, plot.z), new Vector3d());
+                    return new Vec3(v.x, v.y, v.z).scale(VELOCITY_PER_TICK);
+                } catch (RuntimeException | LinkageError e) {
+                    fail(e);
+                    return Vec3.ZERO;
                 }
             }
 
