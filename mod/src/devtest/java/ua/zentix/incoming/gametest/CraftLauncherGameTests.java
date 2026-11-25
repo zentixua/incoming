@@ -18,6 +18,8 @@ import org.jetbrains.annotations.Nullable;
 import dev.ryanhcode.sable.api.physics.PhysicsPipeline;
 import dev.ryanhcode.sable.api.sublevel.SubLevelContainer;
 import dev.ryanhcode.sable.sublevel.ServerSubLevel;
+import dev.ryanhcode.sable.sublevel.SubLevel;
+import dev.ryanhcode.sable.sublevel.storage.SubLevelRemovalReason;
 import org.joml.Quaterniond;
 import org.joml.Vector3d;
 import org.joml.Vector3dc;
@@ -392,9 +394,9 @@ public final class CraftLauncherGameTests {
         be.setYaw(0);
         Vec3 site = Vec3.atBottomCenterOf(h.absolutePos(LAUNCHER));
         StrikeGameTests.afterTest(h, () -> {
-            for (StrikeProjectile p : StrikeWorld.projectiles(level)) if (p.ownerId() == null && p.position().distanceTo(site) < 64) p.discard();
+            for (StrikeProjectile p : StrikeWorld.projectiles(level)) if (p.ownerId() == null && p.position().distanceTo(site) < 512) p.discard();
             VirtualFlights.get(level).clear(level, p -> p.ownerId() == null && p.position().distanceTo(site) < 2048);
-            for (SubLevelAccess s : SubLevels.near(level, site, 16)) command(level, "sable sub_level remove " + s.getUniqueId(), true);
+            for (SubLevelAccess s : SubLevels.near(level, site, 16)) remove(level, s);
         });
         return be;
     }
@@ -442,6 +444,10 @@ public final class CraftLauncherGameTests {
         Quaterniond turn;
 
         Hold(GameTestHelper h) {
+            // the held craft, wherever it went: unheld after the test it would fall on through the void, simulated
+            StrikeGameTests.afterTest(h, () -> {
+                if (craft[0] != null) remove(h.getLevel(), craft[0]);
+            });
             h.onEachTick(() -> {
                 if (at != null) teleport(h, craft[0], at, turn != null ? turn : new Quaterniond().rotateY(Math.toRadians(yaw)));
             });
@@ -474,6 +480,12 @@ public final class CraftLauncherGameTests {
         PhysicsPipeline pipeline = SubLevelContainer.getContainer(h.getLevel()).physicsSystem().getPipeline();
         pipeline.resetVelocity(sub);
         pipeline.teleport(sub, new Vector3d(at.x, at.y, at.z), new Quaterniond(turn));
+    }
+
+    /** Remove {@code craft} through Sable's container: its command's sub-level selector does not parse a UUID here. */
+    private static void remove(ServerLevel level, SubLevelAccess craft) {
+        SubLevel sub = (SubLevel) craft;
+        if (!sub.isRemoved()) SubLevelContainer.getContainer(level).removeSubLevel(sub, SubLevelRemovalReason.REMOVED);
     }
 
     private static void command(ServerLevel level, String command, boolean quiet) {

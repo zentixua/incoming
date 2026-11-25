@@ -40,7 +40,9 @@ paths:
 - Sable craft in GameTests (`CraftLauncherGameTests`): a craft assembled on a fresh platform can fall through it
   before Sable has built that ground's collision (to y −1373 in one run), so a test that needs a pose holds the craft
   by teleporting it every tick through Sable's `PhysicsPipeline` (`Hold`: lifted, at rest, turned as the test sets).
-  The `sable sub_level teleport` command does not parse there; call the pipeline. A body velocity set through the
+  Sable's `sub_level` commands do not parse a UUID selector there (teleport, remove fail silently with suppressed
+  output); call the pipeline and `SubLevelContainer.removeSubLevel`. A craft left behind falls on through the void,
+  simulated, and broke a later shard's timing-paced `collapse` test; remove every craft a test made. A body velocity set through the
   pipeline is reported by Sable (`getVelocity`) but not integrated horizontally in the GameTest server, so tests read
   velocity laws from Sable's reported velocity, not from the craft's motion. The world bounds of a craft
   (`SubLevels.center`) are not centred vertically on its blocks; compare horizontally.
