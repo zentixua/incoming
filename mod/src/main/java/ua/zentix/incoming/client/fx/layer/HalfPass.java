@@ -388,10 +388,10 @@ final class HalfPass {
 
     /**
      * b (w×h texels of format, floats) into the bound texture through the unpack buffer: new storage on every call (the
-     * driver keeps the old one while the GPU still reads it), the copy itself on the GPU, so the render thread never
-     * waits. From client memory the NVIDIA driver held the render thread in the rectangles' upload until the frame's
-     * GPU work before it was done: 14–18 ms a frame (200–340 ms a second) while a 1 Mt front crossed the camera at 3 km.
-     * The unpack binding returns to 0: other uploads read client memory.
+     * driver keeps the old one while the GPU still reads it), the copy itself on the GPU. From client memory the NVIDIA
+     * driver held the render thread in the rectangles' upload 14–18 ms a frame (200–340 ms a second) while a 1 Mt front
+     * crossed a city camera at 3 km; through the buffer both uploads take 0.03–0.4 ms. The unpack binding returns to 0:
+     * other uploads read client memory.
      */
     private static void upload(FloatBuffer b, int w, int h, int format) {
         if (unpack == 0) unpack = GL15.glGenBuffers();
