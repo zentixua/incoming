@@ -18,10 +18,6 @@ import org.jetbrains.annotations.Nullable;
 import dev.ryanhcode.sable.api.physics.PhysicsPipeline;
 import dev.ryanhcode.sable.api.sublevel.SubLevelContainer;
 import dev.ryanhcode.sable.sublevel.ServerSubLevel;
-import net.minecraft.world.level.ClipContext;
-import net.minecraft.world.phys.BlockHitResult;
-import net.minecraft.world.phys.HitResult;
-import net.minecraft.world.phys.shapes.CollisionContext;
 import org.joml.Quaterniond;
 import org.joml.Vector3d;
 import org.joml.Vector3dc;
@@ -51,13 +47,15 @@ import java.util.Locale;
  * and the launch sector against the craft's own hull and against world blocks. Without Sable there is no craft: the
  * tests pass empty.
  * <p>
- * Deck: 7×7 planks on the "range" ground (first air y 11), launcher in its middle on top. The craft rests on the ground,
+ * Deck: 7×7 planks on the "runway" ground, launcher in its middle on top; the strip leaves the launch path clear past
+ * arming distance along +Z (the test area's barrier walls stand 16 blocks to the sides). The craft rests on the ground,
  * so its pose stands still between the teleports that turn and move it.
  */
 @GameTestHolder(Incoming.MOD_ID)
 @PrefixGameTestTemplate(false)
 public final class CraftLauncherGameTests {
-    private static final BlockPos LAUNCHER = new BlockPos(32, 12, 32);
+    /** Launcher on the deck: "runway" ground top y 3, deck at y 4; launches along the strip (+Z, 200 blocks ahead). */
+    private static final BlockPos LAUNCHER = new BlockPos(16, 5, 40);
     private static final int DECK = 3;
 
     private CraftLauncherGameTests() {}
@@ -66,10 +64,10 @@ public final class CraftLauncherGameTests {
      * Lancet on a craft turned 90° by teleport: the launcher is in the plot grid, yet its position is the craft's place in
      * the world, its world heading is the turntable's own heading turned with the craft, and a signal launches. The
      * catapult faces the target in the world (rack aimed at it), the Lancet stands on its rail's world point with the
-     * rail's world heading and elevation. The craft then moves 3 blocks and turns 90° more while the Lancet waits: it
+     * rail's world heading and elevation. The craft then moves 3 blocks and turns 30° more while the Lancet waits: it
      * follows the rail. After launch it flies from there into the world, along the rail heading.
      */
-    @GameTest(template = "range", timeoutTicks = 400, batch = "craft_launcher_fire", skyAccess = true)
+    @GameTest(template = "runway", timeoutTicks = 400, batch = "craft_launcher_fire", skyAccess = true)
     public static void firesFromCraftPose(GameTestHelper h) {
         if (!sable()) {
             h.succeed();
@@ -78,7 +76,7 @@ public final class CraftLauncherGameTests {
         ServerLevel level = h.getLevel();
         FixedLauncherBlockEntity ground = deck(h, null);
         Vec3 site = Vec3.atBottomCenterOf(h.absolutePos(LAUNCHER));
-        Vec3 far = site.add(1000, -1, 0);
+        Vec3 far = site.add(0, -1, 1000);
         ground.setMission(new Mission(WeaponType.LOITER, 1, 0, new Target.Point(far), far, Waypoints.NONE));
         h.assertTrue(ground.load(new ItemStack(WeaponType.LOITER.spec().munition().item().get(), 2)).isEmpty(), "Lancets did not fit");
         FixedLauncherBlockEntity[] be = new FixedLauncherBlockEntity[1];
@@ -89,12 +87,12 @@ public final class CraftLauncherGameTests {
         h.startSequence()
                 .thenExecute(() -> assemble(h, 0))
                 .thenWaitUntil(() -> be[0] = carried(h, craft))
+                .thenIdle(10)
                 .thenExecute(() -> {
                     h.assertTrue(SubLevels.inPlotGrid(level, new ChunkPos(be[0].getBlockPos())), "launcher block is not in the plot grid");
                     h.assertTrue(be[0].carried(), "launcher on the craft is not carried");
                     h.assertTrue(be[0].position().distanceTo(site) < 0.6, "launcher on an unmoved craft is not at its world place: " + be[0].position());
                     before[0] = be[0].yaw();
-                    probe(level, "fire assembled", craft[0], be[0]);
                     teleport(h, craft[0], Vec3.ZERO, 90);
                 })
                 .thenWaitUntil(() -> h.assertTrue(Math.abs(Math.abs(Mth.wrapDegrees(be[0].yaw() - before[0])) - 90) < 2,
@@ -106,16 +104,15 @@ public final class CraftLauncherGameTests {
                     h.assertTrue(horizontal(at, site) < 2, "turned craft carries the launcher to " + at + ", deck centre was " + site);
                     h.assertTrue(Math.abs(be[0].rackYaw() - before[0]) < 1e-3 && Math.abs(Mth.wrapDegrees(be[0].yaw() - be[0].rackYaw())) > 80,
                             "world heading " + be[0].yaw() + " is not the turntable's " + be[0].rackYaw() + " turned with the craft");
-                    probe(level, "fire turned", craft[0], be[0]);
                     h.assertTrue(LauncherOrders.problem(level, be[0]) == null, "a craft launcher refuses: " + FixedLauncherGameTests.key(LauncherOrders.problem(level, be[0])));
-                    h.assertValueEqual(FixedLauncherGameTests.key(be[0].fire(level)), "incoming.fixed_launcher.fired", "signal on a craft");
+                    fired(h, level, be[0], "signal on a craft");
                     lancet[0] = only(level, be[0]);
                     Rails rails = be[0].rails();
                     float bearing = FlightController.anglesTo(be[0].position(), far)[0];
                     h.assertTrue(Math.abs(Mth.wrapDegrees(rails.yaw() - bearing)) < 1, "catapult heads " + rails.yaw() + ", target bears " + bearing);
                     onRail(h, lancet[0], rails, 0.01);
                 })
-                .thenExecute(() -> teleport(h, craft[0], new Vec3(3, 0, 0), 180))
+                .thenExecute(() -> teleport(h, craft[0], new Vec3(3, 0, 0), 120))
                 .thenWaitUntil(() -> h.assertTrue(horizontal(be[0].position(), site.add(3, 0, 0)) < 2, "craft not moved: " + be[0].position()))
                 .thenIdle(3)
                 .thenExecute(() -> {
@@ -139,11 +136,52 @@ public final class CraftLauncherGameTests {
     }
 
     /**
+     * A round leaving a moving craft's rail keeps the rail's speed along its nose: the craft moves 0.5 blocks/tick along
+     * the strip (+Z, the catapult's heading) while the Lancet waits, so at the start of its boost it flies at
+     * 0.5·cos 20° = 0.47 blocks/tick plus the first boost steps, where a still craft gives at most 0.06.
+     */
+    @GameTest(template = "runway", timeoutTicks = 300, batch = "craft_launcher_speed", skyAccess = true)
+    public static void carriesRailSpeed(GameTestHelper h) {
+        if (!sable()) {
+            h.succeed();
+            return;
+        }
+        ServerLevel level = h.getLevel();
+        FixedLauncherBlockEntity ground = deck(h, null);
+        Vec3 far = Vec3.atBottomCenterOf(h.absolutePos(LAUNCHER)).add(0, -1, 1000);
+        ground.setMission(new Mission(WeaponType.LOITER, 1, 0, new Target.Point(far), far, Waypoints.NONE));
+        h.assertTrue(ground.load(new ItemStack(WeaponType.LOITER.spec().munition().item().get(), 1)).isEmpty(), "Lancet did not fit");
+        FixedLauncherBlockEntity[] be = new FixedLauncherBlockEntity[1];
+        SubLevelAccess[] craft = new SubLevelAccess[1];
+        StrikeProjectile[] lancet = new StrikeProjectile[1];
+        boolean[] moving = new boolean[1];
+        h.onEachTick(() -> {
+            if (moving[0]) teleport(h, craft[0], new Vec3(0, -0.05, 0.5), 0);
+        });
+        h.startSequence()
+                .thenExecute(() -> assemble(h, 0))
+                .thenWaitUntil(() -> be[0] = carried(h, craft))
+                .thenIdle(10)
+                .thenExecute(() -> {
+                    fired(h, level, be[0], "signal on a craft");
+                    lancet[0] = only(level, be[0]);
+                    moving[0] = true;
+                })
+                .thenWaitUntil(() -> h.assertTrue(lancet[0].flightPhase() == FlightPhase.BOOST, "Lancet not boosting yet: " + lancet[0].flightPhase()))
+                .thenExecute(() -> {
+                    moving[0] = false;
+                    double v = lancet[0].speed();
+                    h.assertTrue(v > 0.45 && v < 0.6, "Lancet left a rail moving 0.5 blocks/tick along it at " + v + " blocks/tick");
+                })
+                .thenSucceed();
+    }
+
+    /**
      * The craft's own hull in front of its rack blocks the launch sector: a 4-block plank wall around the launcher on the
      * deck refuses a Shahed with "sector blocked" (stock kept, nothing launched); with the wall removed from the craft the
      * same signal launches.
      */
-    @GameTest(template = "range", timeoutTicks = 300, batch = "craft_launcher_hull", skyAccess = true)
+    @GameTest(template = "runway", timeoutTicks = 300, batch = "craft_launcher_hull", skyAccess = true)
     public static void ownHullBlocksSector(GameTestHelper h) {
         if (!sable()) {
             h.succeed();
@@ -159,13 +197,10 @@ public final class CraftLauncherGameTests {
         h.startSequence()
                 .thenExecute(() -> assemble(h, 3))
                 .thenWaitUntil(() -> be[0] = carried(h, craft))
+                .thenIdle(10)
                 .thenExecute(() -> {
-                    for (BlockPos w : wall) plotWall.add(BlockPos.containing(SubLevels.toPlot(craft[0], Vec3.atCenterOf(h.absolutePos(w)))));
-                    probe(level, "hull", craft[0], be[0]);
-                    for (int i = 0; i < wall.size(); i++) {
-                        Incoming.LOG.info("CRAFTPROBE hull wall {} world {} → plot {}: {} (world now {})", wall.get(i), h.absolutePos(wall.get(i)), plotWall.get(i),
-                                level.getBlockState(plotWall.get(i)), level.getBlockState(h.absolutePos(wall.get(i))));
-                    }
+                    // assembly keeps the blocks' layout in the plot
+                    for (BlockPos w : wall) plotWall.add(be[0].getBlockPos().offset(w.subtract(LAUNCHER)));
                     for (BlockPos w : plotWall) h.assertTrue(level.getBlockState(w).is(Blocks.OAK_PLANKS), "hull wall not on the craft at " + w);
                     h.assertValueEqual(FixedLauncherGameTests.key(be[0].fire(level)), "incoming.fixed_launcher.sector", "launcher walled by its own craft");
                     h.assertTrue(be[0].stockCount() == 2 && ours(level, be[0]).isEmpty(), "blocked sector spent stock or launched");
@@ -173,7 +208,7 @@ public final class CraftLauncherGameTests {
                 })
                 .thenIdle(5)
                 .thenExecute(() -> {
-                    h.assertValueEqual(FixedLauncherGameTests.key(be[0].fire(level)), "incoming.fixed_launcher.fired", "open deck");
+                    fired(h, level, be[0], "open deck");
                     h.assertTrue(be[0].stockCount() == 1 && ours(level, be[0]).size() == 1, "open deck did not launch one Shahed");
                 })
                 .thenSucceed();
@@ -183,7 +218,7 @@ public final class CraftLauncherGameTests {
      * World blocks around the craft block its launch sector in the world frame: a stone wall around the deck (outside the
      * craft, built after assembly) refuses a Shahed with "sector blocked"; without the wall it launches.
      */
-    @GameTest(template = "range", timeoutTicks = 300, batch = "craft_launcher_world", skyAccess = true)
+    @GameTest(template = "runway", timeoutTicks = 300, batch = "craft_launcher_world", skyAccess = true)
     public static void worldBlocksSector(GameTestHelper h) {
         if (!sable()) {
             h.succeed();
@@ -199,13 +234,13 @@ public final class CraftLauncherGameTests {
         h.startSequence()
                 .thenExecute(() -> assemble(h, 0))
                 .thenWaitUntil(() -> be[0] = carried(h, craft))
+                .thenIdle(10)
                 .thenExecute(() -> {
                     wall.forEach(w -> h.setBlock(w, Blocks.STONE));
                     h.assertValueEqual(FixedLauncherGameTests.key(be[0].fire(level)), "incoming.fixed_launcher.sector", "craft walled by the world");
                     h.assertTrue(be[0].stockCount() == 2 && ours(level, be[0]).isEmpty(), "blocked sector spent stock or launched");
                     wall.forEach(w -> h.setBlock(w, Blocks.AIR));
-                    probe(level, "world open", craft[0], be[0]);
-                    h.assertValueEqual(FixedLauncherGameTests.key(be[0].fire(level)), "incoming.fixed_launcher.fired", "open world around the craft");
+                    fired(h, level, be[0], "open world around the craft");
                     h.assertTrue(be[0].stockCount() == 1 && ours(level, be[0]).size() == 1, "open world did not launch one Shahed");
                 })
                 .thenSucceed();
@@ -271,27 +306,6 @@ public final class CraftLauncherGameTests {
         pipeline.resetVelocity(sub);
         pipeline.teleport(sub, new Vector3d(p.x() + shift.x, p.y() + 0.05 + shift.y, p.z() + shift.z),
                 new Quaterniond().rotateY(Math.toRadians(yaw)));
-        Incoming.LOG.info("CRAFTPROBE teleport {} by {} to yaw {}: pose {} {}", craft.getUniqueId(), shift, yaw, craft.logicalPose().position(),
-                craft.logicalPose().orientation());
-    }
-
-    /** Log the craft pose, launcher frame and raw sector rays from every rail (axis and 1 block lower) for the shard log. */
-    static void probe(ServerLevel level, String what, SubLevelAccess craft, FixedLauncherBlockEntity be) {
-        Rails rails = be.rails();
-        Incoming.LOG.info("CRAFTPROBE {}: pose {} {} scale {}; launcher plot {} world {} yaw {} rack {} weapon {}; rails yaw {} elev {}", what,
-                craft.logicalPose().position(), craft.logicalPose().orientation(), craft.logicalPose().scale(), be.getBlockPos(), be.position(),
-                be.yaw(), be.rackYaw(), be.weapon(), rails.yaw(), rails.elevation());
-        Vec3 dir = rails.direction();
-        for (int slot = 0; slot < rails.slots(); slot++) {
-            for (int hull = 0; hull <= 1; hull++) {
-                Vec3 from = rails.point(slot).subtract(0, hull, 0), to = from.add(dir.scale(10));
-                BlockHitResult hit = level.clip(new ClipContext(from, to, ClipContext.Block.COLLIDER, ClipContext.Fluid.ANY, CollisionContext.empty()));
-                BlockPos at = hit.getBlockPos();
-                Incoming.LOG.info("CRAFTPROBE {} slot {} hull {} from {} → {}: {} at {} ({}, plot {}, inside {}) {}", what, slot, hull, from, to, hit.getType(),
-                        hit.getLocation(), at, SubLevels.inPlotGrid(level, new ChunkPos(at)), hit.isInside(),
-                        hit.getType() == HitResult.Type.MISS ? "" : level.getBlockState(at));
-            }
-        }
     }
 
     private static void command(ServerLevel level, String command, boolean quiet) {
@@ -313,6 +327,13 @@ public final class CraftLauncherGameTests {
     }
 
     // ---------------------------------------------------------------- rounds
+
+    /** A signal orders the mission: no refusal, status "fired". */
+    private static void fired(GameTestHelper h, ServerLevel level, FixedLauncherBlockEntity be, String what) {
+        var problem = be.fire(level);
+        h.assertTrue(problem == null, what + ": refused, " + FixedLauncherGameTests.key(problem));
+        h.assertValueEqual(FixedLauncherGameTests.key(be.lastReport()), "incoming.fixed_launcher.fired", what);
+    }
 
     /** Ownerless rounds of the launcher {@code be} near its world place. */
     private static List<StrikeProjectile> ours(ServerLevel level, FixedLauncherBlockEntity be) {

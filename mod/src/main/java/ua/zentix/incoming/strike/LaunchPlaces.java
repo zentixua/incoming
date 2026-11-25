@@ -49,10 +49,11 @@ public final class LaunchPlaces {
 
     /**
      * Site ready for launch: ordered site requires all chunks within {@link LaunchSite#PLACE_REACH} (launcher
-     * search area); fixed launcher requires its chunk.
+     * search area); fixed launcher requires its chunk, and on a craft that craft loaded ({@link LaunchOrigin.Fixed#located}).
      */
     public static boolean ready(ServerLevel level, LaunchOrigin from) {
-        return from instanceof LaunchOrigin.Fixed f ? Terrain.ready(level, f.pos()) : Terrain.readyAround(level, from.at(level), LaunchSite.PLACE_REACH);
+        return from instanceof LaunchOrigin.Fixed f ? Terrain.ready(level, f.pos()) && f.located(level)
+                : Terrain.readyAround(level, from.at(level), LaunchSite.PLACE_REACH);
     }
 
     /**

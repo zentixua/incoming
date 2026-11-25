@@ -136,7 +136,7 @@ public final class StrikeService {
         if (from instanceof LaunchOrigin.Fixed f) {
             // Fixed-launcher rack: launcher present, turntable carries this weapon's rack, pays projectile from inventory.
             fixed = f.launcher(level);
-            if (fixed == null || spec.rack() == null || !fixed.hasRack() || fixed.weapon() != weapon) return Result.FAILED;
+            if (fixed == null || !fixed.located() || spec.rack() == null || !fixed.hasRack() || fixed.weapon() != weapon) return Result.FAILED;
             shot = new Munitions.Bill(weapon, 1, 0);
             MutableComponent missing = Munitions.pay(fixed.store(), shot);
             if (missing != null) {

@@ -55,6 +55,11 @@ public sealed interface LaunchOrigin {
             if (!Terrain.ready(level, pos)) return null;
             return level.getBlockEntity(pos) instanceof FixedLauncherBlockEntity be ? be : null;
         }
+
+        /** The launcher's place in the world is known now: on the ground, or on a loaded craft ({@link FixedLauncherBlockEntity#located}). */
+        public boolean located(Level level) {
+            return !onCraft(level) || SubLevels.carrying(level, pos) != null;
+        }
     }
 
     /**

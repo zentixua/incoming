@@ -78,45 +78,59 @@ public final class SubLevels {
     }
 
     /**
-     * A block's own frame: the craft carrying block {@code pos} (its plot chunk), or null on the ground or while that
-     * craft is not loaded. Plot points of a carried block map to the world through {@link #toWorld(SubLevelAccess, Vec3)}
-     * and {@link #toWorldDirection}.
+     * A block's own frame on a craft: its plot coordinates and directions mapped to the world by the craft's current pose
+     * (position, rotation, scale). Plain types only, so classes holding one load without Sable.
      */
+    public interface Frame {
+        /** World point of plot point {@code plot}. */
+        Vec3 toWorld(Vec3 plot);
+
+        /** World direction (unit) of plot direction {@code dir}. */
+        Vec3 toWorldDirection(Vec3 dir);
+
+        /** Plot direction (unit) of world direction {@code dir}. */
+        Vec3 toPlotDirection(Vec3 dir);
+    }
+
+    /** The frame of the craft carrying block {@code pos} (its plot chunk); null on the ground or while that craft is not loaded. */
     @Nullable
-    public static SubLevelAccess carrying(Level level, net.minecraft.core.BlockPos pos) {
-        return inPlotGrid(level, new net.minecraft.world.level.ChunkPos(pos)) ? containing(level, new net.minecraft.world.level.ChunkPos(pos)) : null;
-    }
+    public static Frame carrying(Level level, net.minecraft.core.BlockPos pos) {
+        net.minecraft.world.level.ChunkPos chunk = new net.minecraft.world.level.ChunkPos(pos);
+        if (!inPlotGrid(level, chunk)) return null;
+        SubLevelAccess sub = containing(level, chunk);
+        return sub == null ? null : new Frame() {
+            @Override
+            public Vec3 toWorld(Vec3 plot) {
+                try {
+                    return sub.logicalPose().transformPosition(plot);
+                } catch (RuntimeException | LinkageError e) {
+                    fail(e);
+                    return plot;
+                }
+            }
 
-    /** World point of plot point {@code plot} of craft {@code sub} (its current pose: position, rotation, scale). */
-    public static Vec3 toWorld(SubLevelAccess sub, Vec3 plot) {
-        try {
-            return sub.logicalPose().transformPosition(plot);
-        } catch (RuntimeException | LinkageError e) {
-            fail(e);
-            return plot;
-        }
-    }
+            @Override
+            public Vec3 toWorldDirection(Vec3 dir) {
+                try {
+                    Vector3d d = sub.logicalPose().orientation().transform(new Vector3d(dir.x, dir.y, dir.z));
+                    return new Vec3(d.x, d.y, d.z).normalize();
+                } catch (RuntimeException | LinkageError e) {
+                    fail(e);
+                    return dir.normalize();
+                }
+            }
 
-    /** World direction (unit) of plot direction {@code dir} of craft {@code sub}: its current rotation. */
-    public static Vec3 toWorldDirection(SubLevelAccess sub, Vec3 dir) {
-        try {
-            Vector3d d = sub.logicalPose().orientation().transform(new Vector3d(dir.x, dir.y, dir.z));
-            return new Vec3(d.x, d.y, d.z).normalize();
-        } catch (RuntimeException | LinkageError e) {
-            fail(e);
-            return dir.normalize();
-        }
-    }
-
-    /** Plot direction (unit) of world direction {@code dir} on craft {@code sub}: inverse of {@link #toWorldDirection}. */
-    public static Vec3 toPlotDirection(SubLevelAccess sub, Vec3 dir) {
-        try {
-            Vector3d d = sub.logicalPose().orientation().transformInverse(new Vector3d(dir.x, dir.y, dir.z));
-            return new Vec3(d.x, d.y, d.z).normalize();
-        } catch (RuntimeException | LinkageError e) {
-            fail(e);
-            return dir.normalize();
-        }
+            @Override
+            public Vec3 toPlotDirection(Vec3 dir) {
+                try {
+                    Vector3d d = sub.logicalPose().orientation().transformInverse(new Vector3d(dir.x, dir.y, dir.z));
+                    return new Vec3(d.x, d.y, d.z).normalize();
+                } catch (RuntimeException | LinkageError e) {
+                    fail(e);
+                    return dir.normalize();
+                }
+            }
+        };
     }
 
     /** Craft center in the world. */

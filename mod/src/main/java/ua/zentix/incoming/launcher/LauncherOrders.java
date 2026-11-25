@@ -88,6 +88,8 @@ public final class LauncherOrders {
         Mission m = be.mission();
         if (m == null) return Component.translatable("incoming.fixed_launcher.no_mission.short");
         BlockPos pos = be.getBlockPos();
+        // on a craft that is not loaded now: no world place to fire from
+        if (!be.located()) return Component.translatable("incoming.fixed_launcher.not_loaded");
         UUID owner = be.owner();
         if (owner != null) {
             MutableComponent rule = rules(level.getServer(), owner, m.weapon(), be.position(), m.point());

@@ -21,7 +21,6 @@ import net.neoforged.neoforge.capabilities.Capabilities;
 import net.neoforged.neoforge.capabilities.RegisterCapabilitiesEvent;
 import net.neoforged.neoforge.items.IItemHandlerModifiable;
 import org.jetbrains.annotations.Nullable;
-import dev.ryanhcode.sable.companion.SubLevelAccess;
 import ua.zentix.incoming.compat.SubLevels;
 import ua.zentix.incoming.entity.LaunchQueue;
 import ua.zentix.incoming.entity.Launcher;
@@ -235,8 +234,16 @@ public class FixedLauncherBlockEntity extends BlockEntity implements Launcher {
      * craft's current pose.
      */
     @Nullable
-    private SubLevelAccess craft() {
+    private SubLevels.Frame craft() {
         return level == null ? null : SubLevels.carrying(level, worldPosition);
+    }
+
+    /**
+     * Where the launcher is in the world is known: on the ground, or on a craft that is loaded now. A block in Sable's plot
+     * grid whose craft is not loaded has no world place, and its plot coordinates are a distant corner of the world.
+     */
+    public boolean located() {
+        return level == null || craft() != null || !SubLevels.inPlotGrid(level, new net.minecraft.world.level.ChunkPos(worldPosition));
     }
 
     /** A craft carries this launcher now: its rails move with the craft ({@code StrikeProjectile.rideRail}). */
@@ -248,15 +255,15 @@ public class FixedLauncherBlockEntity extends BlockEntity implements Launcher {
     @Override
     public Vec3 position() {
         Vec3 own = Vec3.atBottomCenterOf(worldPosition);
-        SubLevelAccess craft = craft();
-        return craft == null ? own : SubLevels.toWorld(craft, own);
+        SubLevels.Frame craft = craft();
+        return craft == null ? own : craft.toWorld(own);
     }
 
     /** Rack heading in the world: its heading on the turntable ({@link #rackYaw}) turned by the craft carrying it. */
     @Override
     public float yaw() {
-        SubLevelAccess craft = craft();
-        return craft == null ? yaw : heading(SubLevels.toWorldDirection(craft, Local.horizontal(yaw)), yaw);
+        SubLevels.Frame craft = craft();
+        return craft == null ? yaw : heading(craft.toWorldDirection(Local.horizontal(yaw)), yaw);
     }
 
     /** Rack heading on the turntable in the block's own frame (the craft's on a craft), °: what the renderer turns. */
@@ -266,18 +273,18 @@ public class FixedLauncherBlockEntity extends BlockEntity implements Launcher {
 
     @Override
     public Rails rails(float yaw) {
-        SubLevelAccess craft = craft();
+        SubLevels.Frame craft = craft();
         if (craft == null) return mount().rails(position(), yaw, weapon());
         Rails own = mount().rails(Vec3.atBottomCenterOf(worldPosition), ownYaw(craft, yaw), weapon());
         java.util.List<Vec3> points = new java.util.ArrayList<>(own.slots());
-        for (Vec3 p : own.points()) points.add(SubLevels.toWorld(craft, p));
-        float[] axis = FlightController.anglesTo(Vec3.ZERO, SubLevels.toWorldDirection(craft, own.direction()));
+        for (Vec3 p : own.points()) points.add(craft.toWorld(p));
+        float[] axis = FlightController.anglesTo(Vec3.ZERO, craft.toWorldDirection(own.direction()));
         return new Rails(points, axis[0], -axis[1]);
     }
 
     /** Rack heading on the turntable that points along world heading {@code yaw} on {@code craft}. */
-    private static float ownYaw(SubLevelAccess craft, float yaw) {
-        return heading(SubLevels.toPlotDirection(craft, Local.horizontal(yaw)), yaw);
+    private static float ownYaw(SubLevels.Frame craft, float yaw) {
+        return heading(craft.toPlotDirection(Local.horizontal(yaw)), yaw);
     }
 
     /** Heading of {@code dir}'s horizontal part; {@code fallback} for a vertical direction (a craft on its side). */
@@ -287,7 +294,7 @@ public class FixedLauncherBlockEntity extends BlockEntity implements Launcher {
 
     /** Rack heading without raising again: on block placement, away from placer (world heading). */
     public void setYaw(float yaw) {
-        SubLevelAccess craft = craft();
+        SubLevels.Frame craft = craft();
         this.yaw = craft == null ? yaw : ownYaw(craft, yaw);
         setChanged();
     }
@@ -311,7 +318,7 @@ public class FixedLauncherBlockEntity extends BlockEntity implements Launcher {
     @Override
     public void turnTo(float yaw, long now) {
         if (turnedYaw(yaw, now) == yaw()) return;
-        SubLevelAccess craft = craft();
+        SubLevels.Frame craft = craft();
         this.yaw = craft == null ? yaw : ownYaw(craft, yaw);
         deployedAt = now;
         sync();
