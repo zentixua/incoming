@@ -328,6 +328,31 @@ public final class DustGround {
         return true;
     }
 
+    /**
+     * The lowest and highest ground the tiles hold (world y; NaN when off): the dust's vertical slab and ray search must reach
+     * them (a source's map spans only its own cells' fill: in a valley 9 m under its lowest cell no dust was marched at all).
+     */
+    public static double[] range() {
+        if (rangeVersion == version) return RANGE;
+        rangeVersion = version;
+        double lo = Double.NaN, hi = Double.NaN;
+        for (Tile t : new Tile[] {FINE, COARSE}) {
+            if (!t.on) continue;
+            for (int i = 0; i < SIDE * SIDE; i++) {
+                if (t.knownFlag[i] <= 0) continue;
+                float h = t.filled[i];
+                if (!(h >= lo)) lo = Double.isNaN(lo) ? h : Math.min(lo, h);
+                if (!(h <= hi)) hi = Double.isNaN(hi) ? h : Math.max(hi, h);
+            }
+        }
+        RANGE[0] = lo;
+        RANGE[1] = hi;
+        return RANGE;
+    }
+
+    private static final double[] RANGE = {Double.NaN, Double.NaN};
+    private static long rangeVersion = -1;
+
     /** Tile origin x, z (world), cell width; null when off. */
     @Nullable
     public static double[] place(int level) {

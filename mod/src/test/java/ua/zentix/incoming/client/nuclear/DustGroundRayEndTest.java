@@ -70,6 +70,17 @@ class DustGroundRayEndTest {
         assertTrue(end > 1500, "with an LOD map the level ray runs down the valley: " + end);
     }
 
+    /**
+     * The march's vertical slab (dwRaySpan: lowest − 1 to highest + the layer's top) reaches the valley floor: the eye tiles' span
+     * extends the map's (a 508 m cell's mean stands 9–30 m over the floor, and a slab clipped at it marched no dust in the hollow).
+     */
+    @Test
+    void theSlabReachesTheValleyFloor() {
+        run("vanilla", 192);
+        double[] r = DustGround.range();
+        assertTrue(r[0] <= 70 && r[1] >= 101, String.format(Locale.ROOT, "the tiles span %.1f..%.1f, the known valley 70..101", r[0], r[1]));
+    }
+
     @Test
     void vanillaRaysRunDownTheValley() {
         double end = run("vanilla", 192);

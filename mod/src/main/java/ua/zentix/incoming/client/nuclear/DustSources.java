@@ -301,9 +301,17 @@ public final class DustSources {
         put(p, 5, lit[0], lit[1], lit[2], 0);
         a.ground.frame(s.ground);
         boolean relief = s.ground.on() && ua.zentix.incoming.client.fx.layer.DustWallDiag.terrain;
-        put(p, 6, relief ? s.ground.params.y : 0, relief ? s.ground.params.z : 0, 0, 0);
+        // the vertical slab the march and the ray-end search cover: the map's span and the eye tiles' (DustGround.range; a valley
+        // under the map's lowest cell is dust ground too, and rays clipped at the map's bottom never reached it)
+        float lo = s.ground.params.y, hi = s.ground.params.z;
+        double[] range = DustGround.range();
+        if (!Double.isNaN(range[0])) {
+            lo = (float) Math.min(lo, range[0] - d.groundY());
+            hi = (float) Math.max(hi, range[1] - d.groundY());
+        }
+        put(p, 6, relief ? lo : 0, relief ? hi : 0, 0, 0);
         put(p, 7, (float) surge[0], (float) surge[1], (float) surge[2], 0);
-        if (relief) put(p, 8, s.ground.params.x, s.ground.params.y, s.ground.params.z, s.ground.params.w);
+        if (relief) put(p, 8, s.ground.params.x, lo, hi, s.ground.params.w);
         else put(p, 8, 0, 0, 0, 0);
         DustMaterialTiles m = a.materialTiles();
         m.fill();
