@@ -84,4 +84,20 @@ class CommandPlanTest {
         assertEquals(java.util.EnumSet.of(CommandPlan.Kind.BURNABLE, CommandPlan.Kind.SITE, CommandPlan.Kind.SKIP), own);
         assertEquals(1, p.blastGates().size());
     }
+
+    @Test
+    void pauseAndSleepSteps() {
+        CommandPlan p = CommandPlan.parse("pause:on;wait:40;shot:held;pause:off;sleep;pause:maybe");
+        // pause:on 100 (+1), wait:40, shot 141 (+20), pause:off 161 (+1), sleep 162 (+1); "pause:maybe" is a command
+        assertEquals(CommandPlan.Kind.PAUSE, p.steps().get(0).kind());
+        assertEquals("on", p.steps().get(0).arg());
+        assertEquals(141, p.steps().get(1).tick());
+        assertEquals("off", p.steps().get(2).arg());
+        assertEquals(161, p.steps().get(2).tick());
+        assertEquals(CommandPlan.Kind.SLEEP, p.steps().get(3).kind());
+        assertEquals(162, p.steps().get(3).tick());
+        assertEquals(CommandPlan.Kind.COMMAND, p.steps().get(4).kind());
+        // both need the world's own server: a joined server skips them
+        assertTrue(CommandPlan.Kind.PAUSE.ownServer() && CommandPlan.Kind.SLEEP.ownServer());
+    }
 }
