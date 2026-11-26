@@ -104,7 +104,9 @@ quality ladder step, compare only equal steps (frame time as in the game: `-Dinc
 `-Dincoming.nukeDiag=true` logs a client line per debris piece, 170–190 ms/s of the render thread as the wave reaches
 the viewer: frame-time windows at the front run without it; a recorder or a starved client drops debris as late
 (`nukeEvent … drop,server_late`), so its breach dust and their cost vanish from that run; in the `mushroom` scenario the firestorm sometimes dies out (check
-`burning` in SCENARIO lines before comparing); GPU clocks jump.
+`burning` in SCENARIO lines before comparing); GPU clocks jump; a single-player run adds the integrated server's
+threads and its JIT to the client's CPU, so a hitch seen there is checked on a dedicated server too (`incoming.server`,
+client-scenario.md) before it is called the player's.
 
 ## Checklist: look defect
 
