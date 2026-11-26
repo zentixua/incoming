@@ -3,7 +3,8 @@
 English · [Русский](ru/blackout.md)
 
 A Transformer Substation powers an area with a radius of 512 blocks. Knock it out with a blast and the electric lights
-of the area go out district by district. By default power starts coming back after 18 hours of the world's day and returns district by district over the next 1 h 48 min of it: 15 minutes and 90 seconds in a vanilla world. While a substation is knocked out,
+of the area go out district by district. By default power starts coming back after 18 hours of the world's day and returns district by district over the next 1 h 48 min of it: 15 minutes and 90 seconds in a vanilla world, counted from the end of the strike's first minutes. Until then the repair clock runs in real time: for a conventional strike, until its cloud has stopped rising and any crater fuel has burnt out (about 2 to 16 minutes; from the hit for other explosions); see
+[time after the strike](nuke.md#time-after-the-strike). While a substation is knocked out,
 its transformer oil burns: a column of thick black smoke, flames about 4.5 blocks high that light the area at night, and
 the crackle of the broken arc. A working substation hums.
 
@@ -18,9 +19,7 @@ Ingredients: 3 lightning rods, 2 copper ingots, 1 redstone block and 3 iron ingo
   cause outages in their own districts.
 - After a nuclear strike, power comes back by what the blast did to each district, in hours of the world's day
   (50 seconds each in a vanilla world; with the day cycle stopped, at the pace the day last ran). The repair clock runs
-  in real time through the strike's first 20 minutes, and for a substation a Shahed or missile knocked out, until the
-  strike's cloud has stopped rising and its crater fuel has burnt out; see
-  [time after the strike](nuke.md#time-after-the-strike):
+  in real time through the strike's first 20 minutes; see [time after the strike](nuke.md#time-after-the-strike):
   - where nothing broke (below 1 psi), the grid only tripped: power returns within 2 to 24 hours, the far edge first;
   - where lines are down (1 to 5 psi), crews rebuild them: 2 to 14 days, longest next to the destroyed zone;
   - where the grid is destroyed (5 psi and more), power never comes back by itself. Only fires, torches and the lamps

@@ -212,8 +212,8 @@ an hour of the world's day:
   fires and the rain keep their time, and only what nobody watches change moves on: the fallout on the ground,
   injuries, radiation sickness, hearing and power repairs;
 - burns, radiation sickness, hearing and the power in a district heal or are repaired in real time while any strike
-  that caused them is in its first minutes: a nuclear blast's 20, a Shahed's or missile's until its cloud has stopped
-  rising and the fuel in its crater has burnt out (about 2 to 16 minutes). A body hurt by two blasts close together
+  that caused them is in its first minutes: a nuclear blast's 20, a conventional strike's until its cloud has stopped
+  rising and any fuel in its crater has burnt out (about 2 to 16 minutes). A body hurt by two blasts close together
   heals in real time until both are over;
 - your injuries and hearing change only while you are in the world: logged out, radiation sickness does not progress,
   burns do not heal and hearing does not come back, and you return to them as you left them;
