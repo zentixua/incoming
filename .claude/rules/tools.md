@@ -211,7 +211,7 @@ Prism: `~/.var/app/org.prismlauncher.PrismLauncher/data/PrismLauncher/` (`tools/
     trailer/icon_from_frames.py <frames> <folder> ← the old Shahed-against-the-sky icon from frames (superseded by the pixel icon)
   docs/DESIGN-nuke.md                    ← nuclear strike design
   docs/design/universal-integration.md   ← integration roadmap (events, permissions, claims, data, compat), status table
-  docs/design/time.md                    ← time principle proposal (clocks of every consequence, pack conditions); awaiting Artem
+  docs/design/time.md                    ← time principle proposal (clocks of every consequence, pack conditions)
   docs/guide/                            ← player guide in English (pages by topic, pictures in img/),
                                            docs/guide/ru/ — the same in Russian
   docs/store/                            ← Modrinth and CurseForge page texts

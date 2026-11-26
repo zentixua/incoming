@@ -70,7 +70,7 @@ paths:
   per ground radius: front arrival, dust over hard ground (`paved`), the fire zone's share; per log age
   (`lifetimeAge`, `AGE0` 0.05 s, to `lifetimeEnd`): the drawn top and the optical depth the transfer reads, with slopes
   (cubic Hermite in the age coordinate); and the spray law per node (`lifetimeSpray`). Settling and dilution are the law's
-  alone (`DustModel.Column.depth`); the age clock is `NukeClock` through the detonation.
+  alone (`DustModel.Column.depth`); the age clock is real time (model seconds = client ticks / (20 · scale), `PallField.lifetime`), outside `NukeClock`.
 - Presentation deviations (marked in code and in the guide's deviation list): the drawn height ×68/58 of the law's
   (`PallField.PRESENT_HEIGHT`: the crest just under a 120 m camera's horizon at 4.5 km from 1 Mt), the hump, the transfer
   (`dwTransfer` ↔ `PallField.transfer`: optical depth above 1 drawn compressed) and the sight inside old dust
