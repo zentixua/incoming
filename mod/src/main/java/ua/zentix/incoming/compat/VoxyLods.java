@@ -20,6 +20,7 @@ import org.jetbrains.annotations.Nullable;
 import ua.zentix.incoming.Incoming;
 import ua.zentix.incoming.net.C2S;
 import ua.zentix.incoming.net.LodBatchFlow;
+import ua.zentix.incoming.net.LodDiag;
 import ua.zentix.incoming.net.S2C;
 import ua.zentix.incoming.nuclear.world.FarLods;
 import ua.zentix.incoming.registry.ModAttachments;
@@ -89,6 +90,10 @@ public final class VoxyLods {
         private volatile boolean writing;
         final LodBatchFlow flow = new LodBatchFlow();
         private int batchBytes;
+        /** {@link LodDiag}: batch times (ms) and ticks a non-empty queue spent blocked, by reason, in this second. */
+        private long diagBegin, diagFinish;
+        int diagAwaitAck, diagWriting, diagUnwritable, diagQuota, diagSentChunks;
+        long diagSentBytes;
 
         void offer(long chunk, S2C.VoxyChunk packet) {
             S2C.VoxyChunk was = queue.remove(chunk);
@@ -108,13 +113,30 @@ public final class VoxyLods {
 
         /** Server-thread queue drain. Never wait for the network or scan a blocked queue. */
         void drain(@Nullable Channel channel, BiConsumer<CustomPacketPayload, PacketSendListener> send) {
-            if (!writable(channel)) return;
+            if (!writable(channel)) {
+                if (LodDiag.ON && !queue.isEmpty()) {
+                    if (writing) diagWriting++;
+                    else diagUnwritable++;
+                }
+                return;
+            }
             if (!flow.active()) {
-                if (queue.isEmpty() || !flow.begin()) return;
+                if (queue.isEmpty()) return;
+                if (!flow.begin()) {
+                    if (LodDiag.ON) diagQuota++;
+                    return;
+                }
                 batchBytes = 0;
+                if (LodDiag.ON) {
+                    diagBegin = LodDiag.now();
+                    LodDiag.log("srv begin batch=%d limit=%d rate=%.3f queue=%d/%dKiB", flow.id(), flow.limit(), flow.rate(), queue.size(), bytes >> 10);
+                }
                 send.accept(new S2C.LodBatchStart(flow.id()), null);
             }
-            if (!flow.sending()) return; // Only the client's acknowledgement opens the next batch.
+            if (!flow.sending()) { // Only the client's acknowledgement opens the next batch.
+                if (LodDiag.ON && !queue.isEmpty()) diagAwaitAck++;
+                return;
+            }
             boolean byteWindowFull = batchBytes >= BATCH_BYTES;
             for (Iterator<S2C.VoxyChunk> q = queue.values().iterator(); q.hasNext() && flow.hasRoom() && !byteWindowFull && writable(channel); ) {
                 // Connection.send schedules on the event loop: writability alone cannot see those pending tasks.
@@ -138,11 +160,33 @@ public final class VoxyLods {
                 batchBytes += packet.sections().length;
                 byteWindowFull = batchBytes >= BATCH_BYTES;
                 sent++;
+                if (LodDiag.ON) {
+                    diagSentChunks++;
+                    diagSentBytes += packet.sections().length;
+                }
             }
             if ((byteWindowFull || !flow.hasRoom() || queue.isEmpty()) && transportWritable(channel)) {
                 flow.finish();
+                if (LodDiag.ON) {
+                    diagFinish = LodDiag.now();
+                    LodDiag.log("srv finish batch=%d chunks=%d bytes=%d sendMs=%d end=%s", flow.id(), flow.sent(), batchBytes,
+                            diagFinish - diagBegin, byteWindowFull ? "bytes" : queue.isEmpty() ? "empty" : "quota");
+                }
                 send.accept(new S2C.LodBatchFinished(flow.id(), flow.sent()), null);
             }
+        }
+
+        void diagAck(int id, boolean accepted, float rate) {
+            long now = LodDiag.now();
+            LodDiag.log("srv ack batch=%d ok=%s finishToAckMs=%d beginToAckMs=%d rate=%.3f", id, accepted, now - diagFinish, now - diagBegin, rate);
+        }
+
+        void diagSecond(String name, int latencyMs) {
+            if (diagSentChunks + diagAwaitAck + diagWriting + diagUnwritable + diagQuota == 0 && queue.isEmpty()) return;
+            LodDiag.log("srv sec player=%s latencyMs=%d queue=%d/%dKiB sentChunks=%d sentKiB=%d dropped=%d ticksAwaitAck=%d ticksWriting=%d ticksUnwritable=%d ticksQuota=%d",
+                    name, latencyMs, queue.size(), bytes >> 10, diagSentChunks, diagSentBytes >> 10, dropped, diagAwaitAck, diagWriting, diagUnwritable, diagQuota);
+            diagSentChunks = diagAwaitAck = diagWriting = diagUnwritable = diagQuota = 0;
+            diagSentBytes = 0;
         }
 
         private boolean writable(@Nullable Channel channel) {
@@ -304,7 +348,10 @@ public final class VoxyLods {
                 viewer.bytes = 0;
             }
             levels.add(dim);
-            if (server.getTickCount() % 20 == 0) viewer.staleBudget = STALE_PER_SECOND;
+            if (server.getTickCount() % 20 == 0) {
+                viewer.staleBudget = STALE_PER_SECOND;
+                if (LodDiag.ON) viewer.diagSecond(p.getGameProfile().getName(), p.connection.latency());
+            }
             viewer.drain(p);
         }
         long now = server.getTickCount();
@@ -326,7 +373,9 @@ public final class VoxyLods {
     public static void batchReceived(C2S.LodBatchReceived packet, IPayloadContext context) {
         if (!(context.player() instanceof ServerPlayer p)) return;
         Viewer viewer = get(p.getServer()).viewers.get(p.getUUID());
-        if (viewer != null) viewer.flow.acknowledge(packet.id(), packet.desiredChunksPerTick());
+        if (viewer == null) return;
+        boolean accepted = viewer.flow.acknowledge(packet.id(), packet.desiredChunksPerTick());
+        if (LodDiag.ON) viewer.diagAck(packet.id(), accepted, viewer.flow.rate());
     }
 
     /** The client reported whether it renders Voxy, into which the mod ingests chunks. Server thread. */

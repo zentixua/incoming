@@ -28,6 +28,8 @@ public final class LodBatchFlow {
 
     public int id() { return batch; }
     public int sent() { return sent; }
+    public int limit() { return limit; }
+    public float rate() { return rate; }
     public boolean active() { return active; }
     public boolean sending() { return active && !finished; }
     public boolean hasRoom() { return sending() && sent < limit; }

@@ -5,6 +5,7 @@ import net.minecraft.client.multiplayer.ChunkBatchSizeCalculator;
 import net.neoforged.neoforge.network.handling.IPayloadContext;
 import ua.zentix.incoming.client.replay.Replay;
 import ua.zentix.incoming.net.C2S;
+import ua.zentix.incoming.net.LodDiag;
 import ua.zentix.incoming.net.S2C;
 import org.jetbrains.annotations.Nullable;
 import java.util.concurrent.TimeUnit;
@@ -21,6 +22,9 @@ public final class ClientLodBatches {
     private int id;
     private boolean active, finished;
     private int chunks;
+    /** {@link LodDiag}: batch start and finish arrival (ms), acknowledgement polls, deepest Voxy queue seen. */
+    private long diagStart, diagFinish;
+    private int diagPolls, diagQueueMax;
 
     ClientLodBatches() {}
 
@@ -29,12 +33,23 @@ public final class ClientLodBatches {
         active = true;
         finished = false;
         calculator.onBatchStart();
+        if (LodDiag.ON) {
+            diagStart = LodDiag.now();
+            diagPolls = 0;
+            diagQueueMax = 0;
+            VoxyIngest.diagReset();
+        }
     }
 
     boolean end(S2C.LodBatchFinished packet) {
         if (!active || finished || id != packet.id()) return false;
         chunks = packet.chunks();
         finished = true;
+        if (LodDiag.ON) {
+            diagFinish = LodDiag.now();
+            LodDiag.log("cli finish batch=%d chunks=%d bytes=%d startToFinishMs=%d ingestCallMs=%.1f voxyQueue=%d", id, chunks,
+                    VoxyIngest.diagBytes(), diagFinish - diagStart, VoxyIngest.diagIngestNanos() / 1e6, VoxyIngest.taskCount());
+        }
         return true;
     }
 
@@ -43,7 +58,12 @@ public final class ClientLodBatches {
         if (!active || !finished || backlogged) return null;
         active = false;
         calculator.onBatchFinished(chunks);
-        return new C2S.LodBatchReceived(id, calculator.getDesiredChunksPerTick());
+        float rate = calculator.getDesiredChunksPerTick();
+        if (LodDiag.ON) {
+            LodDiag.log("cli ack batch=%d finishToAckMs=%d polls=%d voxyQueueMax=%d rate=%.3f", id, LodDiag.now() - diagFinish,
+                    diagPolls, diagQueueMax, rate);
+        }
+        return new C2S.LodBatchReceived(id, rate);
     }
 
     static void start(S2C.LodBatchStart packet, IPayloadContext context) {
@@ -68,6 +88,10 @@ public final class ClientLodBatches {
         var channel = context.connection().channel();
         if (!channel.isActive() || !active || id != batch) return;
         boolean busy = VoxyIngest.backlogged();
+        if (LodDiag.ON) {
+            diagPolls++;
+            diagQueueMax = Math.max(diagQueueMax, VoxyIngest.taskCount());
+        }
         C2S.LodBatchReceived ack = acknowledge(busy);
         if (ack != null) {
             if (!VoxyIngest.available()) context.reply(new C2S.LodMods(false));
