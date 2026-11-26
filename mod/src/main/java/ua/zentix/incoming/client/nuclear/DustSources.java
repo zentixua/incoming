@@ -104,7 +104,7 @@ public final class DustSources {
     private static final float[] GLOW = new float[8];
     /** Per-frame scratch (client thread): the frame's drawn sources, a source's surge, fire colours, the eye's column. */
     private static final List<ClientNuclear.Active> DRAWN = new ArrayList<>();
-    private static final double[] SURGE = new double[3], COLUMN = new double[6];
+    private static final double[] SURGE = new double[3], COLUMN = new double[2];
     private static final float[] FIRE_COLOUR = new float[3], LIT = new float[3];
 
     /**
@@ -336,7 +336,7 @@ public final class DustSources {
         double xe = Math.min(Math.hypot(ex, ez) / Math.max(reach, 1), 1) * (n - 1);
         int je = (int) Math.min(Math.floor(xe), n - 2);
         double haze = 1 - PallField.textured(t - (table[4 * je] + (xe - je) * (table[4 * (je + 1)] - table[4 * je])));
-        // presentation: the camera's share of the inside sight (PallField.sightWeight; 0 outside the dust, where every ray reads
+        // presentation: the camera's share of the inside sight (PallField.sight; 0 outside the dust, where every ray reads
         // the law), the march's DwSight
         double sight = a.pall.sight(ex, ez, at[1], ticks);
         p[4 * 5 + 3] = (float) sight;

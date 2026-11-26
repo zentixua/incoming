@@ -25,7 +25,6 @@ import ua.zentix.incoming.Incoming;
 
 import java.nio.ByteBuffer;
 import java.nio.FloatBuffer;
-import java.util.Random;
 
 /**
  * The nuclear dust wave, all of it, as its own ray-marched pass ({@code include/dustwall.glsl}): one presentation model
@@ -65,7 +64,7 @@ public final class DustWallPass {
     static final GpuTimer GPU_MARCH = new GpuTimer(), GPU_PACK = new GpuTimer(), GPU_RESOLVE = new GpuTimer();
 
     /** Value-noise lattice side ({@code DW_LATTICE}). */
-    private static final int LATTICE = 128;
+    private static final int LATTICE = ua.zentix.incoming.client.nuclear.DustNoise.SIDE;
     private static final int NOISE_UNIT = 12;
 
     public static ShaderInstance march, resolve, pack, limit;
@@ -85,7 +84,9 @@ public final class DustWallPass {
     private static final Vector3f FORWARD = new Vector3f();
     /** Table rows: arrival and paved, then the law's top and depth per log age ({@code PallField.lifetime}). */
     public static final int ROWS = 1 + ua.zentix.incoming.client.nuclear.PallField.AGES;
-    private static final FloatBuffer TABLE = MemoryUtil.memAllocFloat(NODES * (ROWS + 1) * 4);
+    /** A detonation's table: those rows, the spray row and the inside sight's rows ({@code PallField.TABLE_ROWS}). */
+    public static final int TABLE_ROWS = ua.zentix.incoming.client.nuclear.PallField.TABLE_ROWS;
+    private static final FloatBuffer TABLE = MemoryUtil.memAllocFloat(NODES * TABLE_ROWS * 4);
     /**
      * Interleaved rays: each frame marches half of the march pixels, a checkerboard alternating by frame, and the resolve fills
      * the rest from history (the pall's {@code Step.interleave}, at 2: 3–4 burnt a lattice into a still view). Judged the same
@@ -169,8 +170,11 @@ public final class DustWallPass {
      * draws its eight nearest crossings in full and further ones by their noise-free column ({@code DW_RAY_SOURCES}).
      */
     public static final int MAX_SOURCES = 16;
-    /** Rows per source in the source table ({@code DW_ROWS}): row 0, the law by age, the spray row, the frame inputs row. */
-    public static final int SOURCE_ROWS = ROWS + 2;
+    /**
+     * Rows per source in the source table ({@code DW_ROWS}): row 0, the law by age, the spray row, the inside sight by age, the
+     * frame inputs row.
+     */
+    public static final int SOURCE_ROWS = TABLE_ROWS + 1;
     /** Frame inputs per source, texels of its last row ({@code dwLoad}). */
     public static final int PARAMS = 11;
     /** Terrain tile side ({@code DW_GROUND_SIDE}: {@code PallGround.SIDE}). */
@@ -496,10 +500,10 @@ public final class DustWallPass {
             SLOT_USED[s] = frame;
             if (src.table != null && (TABLE_IN[s] != src.id || warming)) {
                 TABLE.clear();
-                TABLE.put(src.table, 0, NODES * (ROWS + 1) * 4).flip();
+                TABLE.put(src.table, 0, NODES * TABLE_ROWS * 4).flip();
                 GlStateManager._bindTexture(table);
                 unpack(4);
-                GL11.glTexSubImage2D(GL11.GL_TEXTURE_2D, 0, 0, s * sl, NODES, ROWS + 1, GL11.GL_RGBA, GL11.GL_FLOAT, TABLE);
+                GL11.glTexSubImage2D(GL11.GL_TEXTURE_2D, 0, 0, s * sl, NODES, TABLE_ROWS, GL11.GL_RGBA, GL11.GL_FLOAT, TABLE);
                 PallPass.note("dust table " + s);
                 TABLE_IN[s] = warming ? null : src.id;
             }
@@ -653,11 +657,10 @@ public final class DustWallPass {
         return GL30.glCheckFramebufferStatus(GL30.GL_DRAW_FRAMEBUFFER) == GlConst.GL_FRAMEBUFFER_COMPLETE;
     }
 
-    /** The 128³ lattice of random values the wall's value noise reads ({@code dwNoise3}); fixed seed: the same for everyone. */
+    /** The 128³ lattice of random values the wall's value noise reads ({@code dwNoise3}, {@code DustNoise}). */
     private static int lattice() {
         int n = LATTICE;
-        byte[] values = new byte[n * n * n];
-        new Random(0xD057L).nextBytes(values);
+        byte[] values = ua.zentix.incoming.client.nuclear.DustNoise.values();
         ByteBuffer buf = MemoryUtil.memAlloc(values.length);
         try {
             buf.put(values).flip();

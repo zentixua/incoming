@@ -27,7 +27,7 @@ class DustLawDumpProbe {
             StringBuilder s = new StringBuilder();
             s.append(String.format(Locale.ROOT, "{\"kt\": %.0f, \"reach\": %.3f, \"ageEnd\": %.3f, \"ages\": %d, \"nodes\": %d,%n", kt, f.reach(),
                     f.lifetimeEnd(), PallField.AGES, DustWallPass.NODES));
-            float[] table = new float[DustWallPass.NODES * (1 + PallField.AGES) * 4];
+            float[] table = new float[DustWallPass.NODES * PallField.TABLE_ROWS * 4];
             f.lifetime(DustWallPass.NODES, DustSources.PRESENT_HEIGHT, table);
             s.append("\"table\": [");
             for (int i = 0; i < table.length; i++) s.append(i == 0 ? "" : ",").append(String.format(Locale.ROOT, "%.7g", table[i]));

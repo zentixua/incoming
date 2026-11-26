@@ -40,16 +40,20 @@ Two things show the dust blanket, and neither is the clock:
 Vertical optical depth τ of the column at 1564 m from 15 kt, and the share of light that passes straight down
 (T = e^−τ):
 
-| Age after the front | Law τ (T) | Drawn now, with cap (T) | Drawn with the transfer only, no cap (T) |
+| Age after the front | Law τ (T) | Drawn with the cap in the table (T) | Drawn from outside, no cap (T) |
 |---|---|---|---|
-| 30 s | 25.5 (0) | 2.67 (7 %) | 3.2 (4 %) |
-| 63 s | 24.2 (0) | 0.60 (55 %) | 3.2 (4 %) |
-| 3 min | 20.0 (0) | 0.42 (66 %) | 3.0 (5 %) |
-| 10 min | 11.5 (0) | 0.29 (75 %) | 2.2 (11 %) |
-| 21 min | 4.7 (1 %) | 0.22 (81 %) | 1.7 (18 %) |
-| 31 min | 2.2 (11 %) | 0.19 (83 %) | 1.5 (22 %) |
-| 45 min | 0.75 (47 %) | 0.09 (91 %) | 0.75 (47 %) |
+| 30 s | 25.5 (0) | 2.67 (7 %) | 2.71 (7 %) |
+| 63 s | 24.2 (0) | 0.60 (55 %) | 2.40 (9 %) |
+| 3 min | 20.0 (0) | 0.42 (66 %) | 2.63 (7 %) |
+| 10 min | 11.5 (0) | 0.29 (75 %) | 2.23 (11 %) |
+| 21 min | 4.7 (1 %) | 0.22 (81 %) | 1.74 (18 %) |
+| 31 min | 2.2 (11 %) | 0.19 (83 %) | 1.51 (22 %) |
+| 45 min | 0.75 (47 %) | 0.09 (91 %) | 0.73 (48 %) |
 | 65 min | 0.16 (86 %) | 0.02 (98 %) | 0.16 (86 %) |
+
+The drawn column is the law's extinction over the drawn layer top through the transfer. For about five minutes that top is
+still joining the law's rising top (`PallField.LIFETIME_JOIN_S`, the young layer's accepted height), so at one minute the
+drawn column holds 57 % of the law's τ (13.8 of 24.2).
 
 Between 43 s and 63 s after the front the drawn column goes from 21 % to 55 % see-through (closer in, at 782 m, from 17 % to
 58 %), which is the thinning Artem saw. Seen slant from a hill (path about 3× the vertical) the uncapped column stays

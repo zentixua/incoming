@@ -66,7 +66,7 @@ def march_setup():
     return program
 
 
-ROWS = 35  # dustwall.glsl DW_ROWS: row 0, 32 age rows, the spray row, the frame inputs row
+ROWS = 66  # dustwall.glsl DW_ROWS: row 0, 32 age rows, the spray row, 31 inside-sight rows, the frame inputs row
 
 
 # the one source's frame inputs (dustwall.glsl dwLoad: its table's last row) and terrain tile (a ground atlas of one slot)
@@ -106,7 +106,10 @@ def source_table():
         t[0, :, 0] = arrive * (np.arange(128) / 127 * reach / at) ** 1.25
         t[1:33, :, 0] = 68
         t[1:33, :, 1] = 100
-    p = t[34]
+    # the inside sight's rows (DW_SIGHT_ROW 34..64): the law's depth at both nodes of each interval (no camera share is set)
+    t[34:65, :, 0] = t[1:32, :, 1]
+    t[34:65, :, 2] = t[2:33, :, 1]
+    p = t[ROWS - 1]
     p[0] = SOURCE["eye"]
     p[1] = SOURCE["ring"]
     p[2] = (1e4, 0.05, 0, 0)

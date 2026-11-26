@@ -33,21 +33,22 @@ uniform float DwAdapt;
 uniform float DwDetail;
 
 // Rows of one source in the source table (DustWallPass, PallField.lifetime): row 0 per node (front arrival, model s since the
-// burst; dust over hard ground relative to soil, PallField.paved; the fire zone's share; the drawn depth at five minutes the
-// inside sight follows, dwSighted), rows 1 + k per age node k (age = DwLife.y · ((1 + DwLife.x / DwLife.y)^(k / (DW_AGES − 1))
-// − 1)): (the presentation layer top, blocks; the column's vertical optical depth the transfer reads; both slopes per age
-// node); row 1 + DW_AGES per node: water spray (extinction where the blast wind strips the densest spray, 1/block; stripping
-// height, blocks: PallField.spray, sprayFrom; node 0's z: the inside sight's DwSightK); the last row: the source's frame
-// inputs (DustSources, read by dwLoad). Node i at radius i / (DW_NODES − 1) × reach.
-const int DW_SPRAY_ROW = 33, DW_PARAMS_ROW = 34, DW_ROWS = 35;
+// burst; dust over hard ground relative to soil, PallField.paved; the fire zone's share; 0), rows 1 + k per age node k (age =
+// DwLife.y · ((1 + DwLife.x / DwLife.y)^(k / (DW_AGES − 1)) − 1)): (the presentation layer top, blocks; the column's vertical
+// optical depth the transfer reads; both slopes per age node); row 1 + DW_AGES per node: water spray (extinction where the
+// blast wind strips the densest spray, 1/block; stripping height, blocks: PallField.spray, sprayFrom); rows DW_SIGHT_ROW + k
+// per age interval k, k + 1: the optical depth a camera inside the dust sees (PallField.sighted) and its slope at node k, then
+// at node k + 1; the last row: the source's frame inputs (DustSources, read by dwLoad). Node i at radius i / (DW_NODES − 1) ×
+// reach.
+const int DW_SPRAY_ROW = 33, DW_SIGHT_ROW = 34, DW_PARAMS_ROW = 65, DW_ROWS = 66;
 const float DW_NODES = 128.0;
 // the source table: the rows above per source (DW_NODES × DW_ROWS each, RGBA32F)
 uniform sampler2D Sampler2;
 // the height over which the dust thins to its floor at the current march sample (dwFloor: by the fine tile's share)
 float gDwFloorSoft = 3.0;
-// the camera's share of the inside sight in the source being read (0 outside its dust: PallField.sightWeight) and the sight's
-// optical depth per block over 200 m (the source's spray row, node 0's z): dwSighted. Loaded by dwLoad; set by the harness
-float DwSight = 0.0, DwSightK = 0.0;
+// presentation: the camera's share of the inside sight in the source being read (PallField.sight: 0 outside its dust, where
+// every ray reads the law through the transfer; dwLoad from the frame inputs, set by the harness)
+float DwSight = 0.0;
 #ifdef DW_SOURCES
 // Several detonations: one table (Sampler2) holds every source of the frame at DW_ROWS rows each; the march
 // sums their extinction and extinction-weighted light at every sample (each source's light finished before the next). The
@@ -108,8 +109,6 @@ void dwLoad(int k) {
     DwCut = b.a;
     DwFire = f.rgb;
     DwSight = f.a;
-    DwSightK = 0.0;
-    if (DwSight > 0.0) DwSightK = texelFetch(Sampler2, ivec2(0, gDwRow + DW_SPRAY_ROW), 0).z;
     DwRelief = r.xy;
     DwSurge = dwParam(7);
     DwGround = dwParam(8);
@@ -279,17 +278,16 @@ float gDwPrTaub = 0.0, gDwPrTaus = 0.0, gDwPrDepth = 0.0, gDwPrLift = 0.0;
 // set by dwDensity: the swell at the sample (dwBulge, share of the layer): sags sit in the shade of the swells around them
 float gDwSwell = 0.0;
 
-// table row 0 at ground radius r: (front arrival, model s; paved share; the fire zone's share; the drawn depth at five minutes
-// the inside sight follows, dwSighted)
+// table row 0 at ground radius r: (front arrival, model s; paved share)
 // diagnostics (harness, DW_DIAG): texture fetches of the current ray
 float gDwFetches = 0.0;
-vec4 dwRow0(float r) {
+vec3 dwRow0(float r) {
 #ifdef DW_DIAG
     gDwFetches += 2.0;
 #endif
     float x = clamp(r / max(DwRing.w, 1.0), 0.0, 1.0) * (DW_NODES - 1.0);
     int i = int(min(floor(x), DW_NODES - 2.0));
-    return mix(texelFetch(Sampler2, ivec2(i, gDwRow), 0), texelFetch(Sampler2, ivec2(i + 1, gDwRow), 0), x - float(i));
+    return mix(texelFetch(Sampler2, ivec2(i, gDwRow), 0).xyz, texelFetch(Sampler2, ivec2(i + 1, gDwRow), 0).xyz, x - float(i));
 }
 float dwArrival(float r) {
     return dwRow0(r).x;
@@ -324,6 +322,26 @@ vec2 dwLaw(float r, float a) {
     vec2 v = mix(dwLawAt(i, u), dwLawAt(i + 1, u), x - float(i));
     v.y *= 1.0 - smoothstep(DW_AGES - 2.0, DW_AGES - 1.0, dwAgeU(a));
     return v;
+}
+// the optical depth a camera inside the dust sees at node i, age coordinate u (presentation, PallField.sighted: about 200 m at
+// one minute, 700 m by five, then the law's own thinning; the haze level's fade by age, as the law's own nodes): the cubic
+// Hermite of its age interval's row (both nodes in one texel)
+float dwSightAt(int i, float u) {
+#ifdef DW_DIAG
+    gDwFetches += 1.0;
+#endif
+    float k = clamp(floor(u), 0.0, DW_AGES - 2.0), f = clamp(u - k, 0.0, 1.0);
+    vec4 p = texelFetch(Sampler2, ivec2(i, gDwRow + DW_SIGHT_ROW + int(k)), 0);
+    float f2 = f * f, f3 = f2 * f;
+    return max((2.0 * f3 - 3.0 * f2 + 1.0) * p.x + (f3 - 2.0 * f2 + f) * p.y + (-2.0 * f3 + 3.0 * f2) * p.z + (f3 - f2) * p.w, 0.0);
+}
+// dwLaw's depth as a camera inside the dust sees it (the same reading: radius nodes, the table's end)
+float dwSight(float r, float a) {
+    if (a <= 0.0) return 0.0;
+    float u = min(dwAgeU(a), DW_AGES - 1.0);
+    float x = clamp(r / max(DwRing.w, 1.0), 0.0, 1.0) * (DW_NODES - 1.0);
+    int i = int(min(floor(x), DW_NODES - 2.0));
+    return mix(dwSightAt(i, u), dwSightAt(i + 1, u), x - float(i)) * (1.0 - smoothstep(DW_AGES - 2.0, DW_AGES - 1.0, dwAgeU(a)));
 }
 
 // the density transfer (presentation): the drawn column's vertical optical depth from the law's. τ itself up to 1 (thin haze
@@ -410,50 +428,6 @@ const float DW_HAZE_FROM = 24.0, DW_HAZE_TO = 60.0;
 float dwTextured(float a) {
     float x = clamp((a - DW_HAZE_FROM) / (DW_HAZE_TO - DW_HAZE_FROM), 0.0, 1.0);
     return 1.0 - x * x * x * (x * (6.0 * x - 15.0) + 10.0);
-}
-
-// the transfer's inverse (PallField.inverseTransfer): Newton from below (the transfer is increasing and concave, so each step
-// stays below the root; both starts are lower bounds: its slope is at most 1, and it lies under its asymptote), 4 steps to
-// 3e-8 of the drawn depth
-float dwTransferStep(float drawn, float x) {
-    float e = exp(-x / DW_G_KNEE);
-    return max(x - (1.0 + DW_G_SLOPE * x + (1.0 - DW_G_SLOPE) * DW_G_KNEE * (1.0 - e) - drawn) / (DW_G_SLOPE + (1.0 - DW_G_SLOPE) * e), 0.0);
-}
-float dwInverseTransfer(float drawn) {
-    if (drawn <= 1.0) return drawn;
-    float x0 = max(drawn - 1.0, (drawn - 1.0 - (1.0 - DW_G_SLOPE) * DW_G_KNEE) / DW_G_SLOPE);
-    float x1 = dwTransferStep(drawn, x0);
-    float x2 = dwTransferStep(drawn, x1);
-    float x3 = dwTransferStep(drawn, x2);
-    return 1.0 + dwTransferStep(drawn, x3);
-}
-
-// Presentation, not physical (owner call; PallField.sighted): a camera inside old, thick dust sees about 200 m at the first
-// minute and 700 m by five, then farther as the law thins it (Silo's haze behind the wall, Nevada test dust: a see-through warm
-// haze, not a wall). The sight belongs to the camera: DwSight is its share of it (DustSources, PallField.sightWeight: the eye's
-// depth below the local layer top over the top's soft edge; 0 outside the dust, where every ray reads the law through the
-// transfer). The drawn column saturates at the extinction that gives that sight over the drawn profile (DwSightK: the sight's
-// optical depth per block over 200 m), through the haze level's fade (none while the textured level owns the column)
-const float DW_SEE_P = 0.7783854; // ln(700 / 200) / ln 5
-const float DW_SEE_FOLLOW = 300.0;
-// the drawn column's ceiling (optical depth) at age a: the sight grows as (a/60)^p to its five-minute value (C3), then the
-// ceiling follows the drawn depth's ratio to its five-minute value ref (table row 0's w), weighted in about DW_SEE_FOLLOW
-float dwSeeCeiling(float a, float top, float tau, float ref, float k) {
-    float b = max(a, 1.0);
-    float sight = pow(b / 60.0, DW_SEE_P) / pow(1.0 + pow(b / DW_SEE_FOLLOW, 4.0), DW_SEE_P / 4.0);
-    float ceiling = k / sight * dwProfileInt(0.95 * top);
-    if (ref <= 0.0) return ceiling;
-    return ceiling * pow(dwTransfer(tau) / ref, 1.0 / (1.0 + pow(DW_SEE_FOLLOW / b, 4.0)));
-}
-// the optical depth the transfer reads for a camera with sight share w: the law's tau where w is 0
-float dwSighted(float tau, float a, float top, float ref, float k, float w) {
-    float fade = (1.0 - dwTextured(a)) * w;
-    if (fade <= 0.0) return tau;
-    if (tau <= 0.0) return tau;
-    float drawn = dwTransfer(tau);
-    float c = dwSeeCeiling(a, top, tau, ref, k);
-    float capped = drawn / sqrt(1.0 + (drawn / c) * (drawn / c));
-    return dwInverseTransfer(drawn + (capped - drawn) * fade);
 }
 // a smooth max(a − c, 0) (softplus, width 1 s): no kink in any age function
 float dwAfter(float a, float c) {
@@ -778,7 +752,7 @@ float dwHaze(vec3 g, vec3 q, float r, float a, vec2 law, bool coarse) {
     vec2 xs = q.xz + wd * (dot(q.xz, wd) * (1.0 / (1.0 + a / DW_SHEAR_S) - 1.0));
     float L;
     float swell = dwSwellField(xs, a, L);
-    vec4 row = dwRow0(r);
+    vec3 row = dwRow0(r);
     float plume = dwPlume(L, a, 0.5 + 0.5 * row.z);
     float top = max(dwEnvelope(a, h, 1.65) * (1.0 + swell + plume), 1.0);
     if (q.y > top * 1.3 + 6.0) return 0.0;
@@ -861,8 +835,8 @@ float dwDustDensity(vec3 g, bool coarse) {
     vec2 law = dwLaw(r, a0);
     gDwWhy = 3.0;
     if (law.y <= 0.0) return 0.0;
-    // a camera inside the dust sees through old dust as far as its sight (dwSighted: presentation); outside it, the law
-    if (DwSight > 0.0) law.y = dwSighted(law.y, a0, law.x, dwRow0(r).w, DwSightK, DwSight);
+    // a camera inside the dust takes its share of the inside sight's depth (DwSight); outside it, the law
+    if (DwSight > 0.0) law.y = mix(law.y, dwSight(r, a0), DwSight);
     gDwWhy = 6.0;
     // the source ground's material (one fetch): over water the column is spray's, at a shore both by share
     vec3 mat = dwMaterial(q.xz);

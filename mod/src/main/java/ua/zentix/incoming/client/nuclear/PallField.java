@@ -248,11 +248,12 @@ public final class PallField {
     /**
      * Inputs of the whole-lifetime dust wave, the law's numbers by ground radius and log age.
      * Row 0, node j at radius j/(n − 1) of {@link #reach}: front arrival (model s), dust over hard ground relative to soil
-     * ({@link #paved}), the fire zone's share (fire light from below), the drawn depth at five minutes the inside sight follows
-     * ({@link #sighted}: the transfer of row 1's depth at 300 s). Rows 1..{@link #AGES}, age node k ({@link #lifetimeAge}): the
-     * presentation layer top (blocks) and the law's optical depth the transfer reads, then both slopes per age node (the
-     * shader's cubic Hermite in the age coordinate: C1, no kink at a node). The spray row ({@link #lifetimeSpray}) carries the
-     * inside sight's scale in node 0's third value ({@link #seeScale}).
+     * ({@link #paved}), the fire zone's share (fire light from below), 0. Rows 1..{@link #AGES}, age node k
+     * ({@link #lifetimeAge}): the presentation layer top (blocks) and the law's optical depth the transfer reads, then both
+     * slopes per age node (the shader's cubic Hermite in the age coordinate: C1, no kink at a node). Rows
+     * {@link #SIGHT_ROW}.. (one per age interval k, k + 1): the optical depth a camera inside the dust sees ({@link #sighted})
+     * and its slope at node k, then at node k + 1 (one fetch per interval). The spray row ({@link #lifetimeSpray}) lies
+     * between them, at row 1 + {@link #AGES}.
      * <p>
      * The top (presentation, not physical): {@code present} × the law's top ({@link DustModel.Column#height}) at the settle age
      * (1 s; the birth, hump and settling are the presentation's), joining the law's rising top over {@link #LIFETIME_JOIN_S}
@@ -262,43 +263,66 @@ public final class PallField {
      */
     public void lifetime(int n, double present, float[] out) {
         double end = lifetimeEnd();
-        double[][] v = new double[AGES][];
+        double[] law = new double[AGES], top = new double[AGES], seen = new double[AGES];
         for (int j = 0; j < n; j++) {
             double rb = j / (n - 1.0) * reach, slant = Math.hypot(d.metres(rb), Math.max(0, d.hobMetres()));
             int i = Math.min(BINS - 1, Math.max(0, (int) (rb / reach * BINS)));
             out[4 * j] = (float) (d.arrivalTicks(d.blocks(slant)) / (20.0 * d.scale()));
             out[4 * j + 1] = (float) paved[i];
             out[4 * j + 2] = (float) fire[i];
+            out[4 * j + 3] = 0;
             DustModel.Column c = columns[i];
-            out[4 * j + 3] = (float) transfer(lifetimeAt(c, SEE_FOLLOW_S, present)[1]);
-            for (int k = 0; k < AGES; k++) v[k] = lifetimeAt(c, lifetimeAge(k, end), present);
-            for (int m = 0; m < 2; m++) {
-                // monotone cubic slopes (Fritsch–Carlson): C1, and no overshoot between nodes (no negative depth)
-                double[] slope = new double[AGES];
-                for (int k = 0; k < AGES; k++) {
-                    double dl = k > 0 ? v[k][m] - v[k - 1][m] : v[1][m] - v[0][m], dr = k < AGES - 1 ? v[k + 1][m] - v[k][m] : dl;
-                    slope[k] = dl * dr <= 0 ? 0 : 0.5 * (dl + dr);
-                }
-                for (int k = 0; k < AGES - 1; k++) {
-                    double dk = v[k + 1][m] - v[k][m];
-                    if (dk == 0) {
-                        slope[k] = slope[k + 1] = 0;
-                        continue;
-                    }
-                    double al = slope[k] / dk, be = slope[k + 1] / dk, r = al * al + be * be;
-                    if (r > 9) {
-                        double t = 3 / Math.sqrt(r);
-                        slope[k] = t * al * dk;
-                        slope[k + 1] = t * be * dk;
-                    }
-                }
-                for (int k = 0; k < AGES; k++) {
-                    int o = 4 * ((1 + k) * n + j);
-                    out[o + m] = (float) v[k][m];
-                    out[o + 2 + m] = (float) slope[k];
-                }
+            for (int k = 0; k < AGES; k++) {
+                double age = lifetimeAge(k, end);
+                double[] v = lifetimeAt(c, age, present);
+                top[k] = v[0];
+                law[k] = v[1];
+                seen[k] = sighted(c, age, v[1], v[0]);
+            }
+            double[] topSlope = slopes(top), lawSlope = slopes(law), seenSlope = slopes(seen);
+            for (int k = 0; k < AGES; k++) {
+                int o = 4 * ((1 + k) * n + j);
+                out[o] = (float) top[k];
+                out[o + 1] = (float) law[k];
+                out[o + 2] = (float) topSlope[k];
+                out[o + 3] = (float) lawSlope[k];
+            }
+            for (int k = 0; k < AGES - 1; k++) {
+                int o = 4 * ((SIGHT_ROW + k) * n + j);
+                out[o] = (float) seen[k];
+                out[o + 1] = (float) seenSlope[k];
+                out[o + 2] = (float) seen[k + 1];
+                out[o + 3] = (float) seenSlope[k + 1];
             }
         }
+    }
+
+    /** Table row of the inside sight's first age interval ({@code DW_SIGHT_ROW}): after row 0, the age rows and the spray row. */
+    public static final int SIGHT_ROW = 2 + AGES;
+    /** Rows of the whole table: row 0, the age rows, the spray row and the inside sight's rows ({@link #lifetime}). */
+    public static final int TABLE_ROWS = SIGHT_ROW + AGES - 1;
+
+    /** Monotone cubic slopes (Fritsch–Carlson) of values at the age nodes: C1, and no overshoot between nodes (no negative depth). */
+    private static double[] slopes(double[] v) {
+        double[] slope = new double[AGES];
+        for (int k = 0; k < AGES; k++) {
+            double dl = k > 0 ? v[k] - v[k - 1] : v[1] - v[0], dr = k < AGES - 1 ? v[k + 1] - v[k] : dl;
+            slope[k] = dl * dr <= 0 ? 0 : 0.5 * (dl + dr);
+        }
+        for (int k = 0; k < AGES - 1; k++) {
+            double dk = v[k + 1] - v[k];
+            if (dk == 0) {
+                slope[k] = slope[k + 1] = 0;
+                continue;
+            }
+            double al = slope[k] / dk, be = slope[k + 1] / dk, r = al * al + be * be;
+            if (r > 9) {
+                double t = 3 / Math.sqrt(r);
+                slope[k] = t * al * dk;
+                slope[k + 1] = t * be * dk;
+            }
+        }
+        return slope;
     }
 
     /**
@@ -313,7 +337,7 @@ public final class PallField {
             int i = Math.min(BINS - 1, Math.max(0, (int) (rb / reach * BINS)));
             out[offset + 4 * j] = (float) (spray[i] <= 0 ? 0 : perBlock(SIGMA_SPRAY) * spray[i]);
             out[offset + 4 * j + 1] = (float) sprayFrom[i];
-            out[offset + 4 * j + 2] = j == 0 ? (float) (SEE_TAU / d.blocks(SEE_FIRST_M)) : 0;
+            out[offset + 4 * j + 2] = 0;
             out[offset + 4 * j + 3] = 0;
         }
     }
@@ -352,92 +376,94 @@ public final class PallField {
      * Presentation, not physical (owner call): a camera inside old, thick dust sees about {@link #SEE_FIRST_M} at the first
      * minute and {@link #SEE_FIVE_M} by five minutes (the reference: Silo's haze behind the wall, Nevada test dust: a
      * see-through warm haze, not a wall), then farther as the law thins it. The law's τ (60–96 at 4.5 km from 1 Mt over
-     * 5–10 min) would hold the camera in a 50-block fog for ten minutes. The sight belongs to the camera, not to the dust: a
-     * camera outside the dust (above the layer, or beyond its edge) reads the law through the transfer on every ray, so the
-     * blanket seen from a hill stays dark (straight down at 1.5 km from 15 kt it passes 9 % of the light at one minute and
-     * 18 % at twenty, where the sight drew 55 % and 81 %; {@code DustSightTest}). The camera's {@code weight} ({@link #sightWeight}) takes the cap in: the drawn depth saturates at the
-     * extinction that gives that sight (Koschmieder over the drawn column, {@link #seeCeiling}), through the haze level's fade
-     * (none while the textured young level owns the column: take 33 holds). Returns the τ the transfer turns into that drawn
-     * depth (its inverse), so every reader keeps one transfer ({@code dustwall.glsl}: {@code dwSighted}).
-     *
-     * @param tau the law's optical depth (the table's), age model s, top the table's top (blocks), ref the node's drawn depth
-     *            at five minutes (table row 0), k {@link #seeScale}
+     * 5–10 min) would hold the camera in a 50-block fog for ten minutes. The sight belongs to the camera, not to the dust: the
+     * table carries it per age node beside the law ({@link #lifetime}), and a camera takes it by its share ({@link #sight};
+     * {@code dustwall.glsl}: {@code DwSight}); a camera outside the dust reads the law through the transfer on every ray
+     * (from a hill, 15 kt at 1.5 km passes 9 % of the light straight down at one minute and 18 % at twenty;
+     * {@code DustSightTest}). The drawn depth saturates at the extinction that gives that sight (Koschmieder over the drawn
+     * column, {@link #seeCeiling}), by age through the haze level's fade (none while the textured young level owns the
+     * column: take 33 holds); from five minutes on the ceiling falls with the law's own thinning. Returned as the τ the
+     * transfer turns into that drawn depth (its inverse), so every reader keeps one transfer.
      */
-    static double sighted(double tau, double age, double top, double ref, double k, double weight) {
-        double fade = (1 - textured(age)) * weight;
-        if (fade <= 0 || tau <= 0) return tau;
-        double drawn = transfer(tau), ceiling = seeCeiling(age, top, tau, ref, k);
+    private double sighted(DustModel.Column c, double age, double tau, double topBlocks) {
+        double drawn = transfer(tau), fade = 1 - textured(age);
+        if (fade <= 0 || drawn <= 0) return tau;
+        double ceiling = seeCeiling(c, age, topBlocks);
         double capped = drawn / Math.sqrt(1 + (drawn / ceiling) * (drawn / ceiling));
         return inverseTransfer(drawn + (capped - drawn) * fade);
     }
 
     /** Sight inside old dust at one minute and at five minutes, m (presentation; owner call). */
     static final double SEE_FIRST_M = 200, SEE_FIVE_M = 700;
-    /** From this age the inside sight follows the law's own thinning (its drawn depth's ratio to this age's), model s. */
-    static final double SEE_FOLLOW_S = 300;
     /**
      * Optical depth over the sight distance: the meteorological optical range's 5 % contrast (WMO), so the ground 370 m
      * below and ahead of a 120 m camera shows at five minutes (optical depth 1.6 over it); Koschmieder's 2 % hid it.
      */
     static final double SEE_TAU = 3.0;
 
-    /** The inside sight's optical depth per block over {@link #SEE_FIRST_M} (the table's spray row, node 0: {@code DwSight.y}). */
-    public static double seeScale(float[] table, int n) {
-        return table[4 * (n * (1 + AGES)) + 2];
-    }
-
     /**
      * The drawn column's ceiling (optical depth) at age: the sight's extinction over the drawn profile's integral. The sight
      * grows as (a/60)^p to the five-minute value, smoothly (no kink: C3); the ceiling then follows the law's own thinning
-     * (the drawn depth's ratio to its five-minute value, ref), weighted in smoothly about {@link #SEE_FOLLOW_S}.
+     * (its g ratio to the five-minute column), weighted in smoothly about 300 s.
      */
-    static double seeCeiling(double age, double top, double tau, double ref, double k) {
+    private double seeCeiling(DustModel.Column c, double age, double topBlocks) {
         double a = Math.max(age, 1), p = Math.log(SEE_FIVE_M / SEE_FIRST_M) / Math.log(5);
-        double sight = Math.pow(a / 60.0, p) / Math.pow(1 + Math.pow(a / SEE_FOLLOW_S, 4), p / 4);
-        double ceiling = k / sight * profileIntegral(0.95 * top);
-        if (ref <= 0) return ceiling;
-        return ceiling * Math.pow(transfer(tau) / ref, 1 / (1 + Math.pow(SEE_FOLLOW_S / a, 4)));
+        double sight = d.blocks(SEE_FIRST_M) * Math.pow(a / 60.0, p) / Math.pow(1 + Math.pow(a / 300.0, 4), p / 4);
+        double ceiling = SEE_TAU / sight * profileIntegral(0.95 * topBlocks);
+        double refTau = c.depth(lifetimeSettled(300)), now = c.depth(lifetimeSettled(a));
+        double follow = refTau > 0 && now > 0 ? ceiling * transfer(now) / transfer(refTau) : ceiling;
+        double w = 1 / (1 + Math.pow(300 / a, 4));
+        return Math.exp(Math.log(ceiling) + (Math.log(Math.max(follow, 1e-9)) - Math.log(ceiling)) * w);
     }
 
     /**
-     * Presentation: the share of the inside sight ({@link #sighted}) a camera takes, from its place in the source's drawn dust
-     * (the source point (rx, rz) under the eye, the eye h blocks over the dust's floor): its depth below the layer's
-     * noise-free top, smoothed over the top's soft edge ({@code dwHaze}'s profile: 0 above it, 1 under it), times how much of
-     * a column it stands in against the sight's ceiling there (smoothly 0 where the column is gone: no step when walking out of
-     * the dust's edge), taken in over the eye's own dust's first {@link #SIGHT_BIRTH_S} (the front passing over the eye: its
-     * column is born whole in this reading, inside the opaque young head). 0 outside the dust: every ray then reads the law.
+     * Presentation: the share of the inside sight ({@link #sighted}) a camera {@code above} blocks over the dust's floor at
+     * (dx, dz) from ground zero takes ({@code ticks}): its dust is the air's from the drifted source point, as the march reads
+     * it. Its depth below the haze level's top there ({@code dwHaze}: the envelope × (1 + swell + plume), {@link #hazeTop}),
+     * smoothed over the top's soft edge (0 above it, 1 under it), times how much of a column it stands in against the sight's
+     * ceiling there (smoothly 0 where the column is gone: no step when walking out of the dust's edge), taken in over the eye's
+     * own dust's first {@link #SIGHT_BIRTH_S} (the front passing over the eye: its column is born whole in this reading, inside
+     * the opaque young head). 0 outside the dust, and before the table exists: every ray then reads the law.
      */
-    public static double sightWeight(float[] table, int n, double end, double reach, double t, double rx, double rz, double h,
-            double hard) {
-        double[] c = new double[6];
-        column(table, n, end, reach, t, rx, rz, hard, 0, c);
+    public double sight(double dx, double dz, double above, double ticks) {
+        float[] table = waveTable();
+        if (table == null) return 0;
+        double[] w = sightW, c = sightC;
+        source(dx, dz, ticks, w);
+        DustMaterialTiles m = materials;
+        column(table, ua.zentix.incoming.client.fx.layer.DustWallPass.NODES, lifetimeEnd(), reach, ticks / (20.0 * d.scale()), w[0],
+                w[1], m == null ? 0 : m.hard(w[0], w[1]), 0, c);
         if (c[0] <= 0) return 0;
-        double top = c[1], edge = 0.22 * top + 4;
-        double below = 1 - smoothstep(top - edge, top + 0.4 * edge, h);
+        double age = c[2], r = Math.hypot(w[0], w[1]);
+        double top = hazeTop(w[0], w[1], age, c[1], c[5], d.windDir(), d.windSpeed() > 0);
+        double edge = 0.22 * top + 4;
+        double below = 1 - smoothstep(top - edge, top + 0.4 * edge, above);
         if (below <= 0) return 0;
-        double ceiling = seeCeiling(c[2], c[4], c[3], c[5], seeScale(table, n));
-        return below * smoothstep(0, 1, c[0] / ceiling) * smoothstep(0, SIGHT_BIRTH_S, c[2]);
+        int i = Math.min(BINS - 1, Math.max(0, (int) (r / reach * BINS)));
+        double ceiling = seeCeiling(columns[i], age, c[4]);
+        return below * smoothstep(0, 1, c[0] / ceiling) * smoothstep(0, SIGHT_BIRTH_S, age);
     }
 
     /** The inside sight's onset over the eye's dust's age, model s (presentation, est.: within the head's opaque seconds). */
     static final double SIGHT_BIRTH_S = 2;
 
-    /**
-     * {@link #sightWeight} of a camera {@code above} blocks over the dust's floor at (dx, dz) from ground zero ({@code ticks}): its
-     * dust is the air's from the drifted source point, as the march reads it. 0 before the table exists.
-     */
-    public double sight(double dx, double dz, double above, double ticks) {
-        float[] table = waveTable();
-        if (table == null) return 0;
-        double[] w = sightW;
-        source(dx, dz, ticks, w);
-        DustMaterialTiles m = materials;
-        return sightWeight(table, ua.zentix.incoming.client.fx.layer.DustWallPass.NODES, lifetimeEnd(), reach, ticks / (20.0 * d.scale()),
-                w[0], w[1], above, m == null ? 0 : m.hard(w[0], w[1]));
-    }
-
     /** {@link #sight}'s scratch (client thread). */
-    private final double[] sightW = new double[2];
+    private final double[] sightW = new double[2], sightC = new double[6], sightL = new double[1];
+
+    /**
+     * {@code dwHaze}'s top at source point (x, z) from ground zero, age a (model s), drawn top h (blocks, 0.95 of the
+     * table's), fire zone share {@code fire}: the envelope × (1 + swell + plume), the swells read at the air-mass point
+     * stretched along the wind (bearing {@code windDir}; along x in calm air). Copies {@code dwEnvelope}, {@code dwSwellField},
+     * {@code dwPlume} on the march's noise lattice ({@link DustNoise}).
+     */
+    double hazeTop(double x, double z, double a, double h, double fire, double windDir, boolean wind) {
+        double wx = wind ? Math.cos(windDir) : 1, wz = wind ? Math.sin(windDir) : 0;
+        double along = (x * wx + z * wz) * (1 / (1 + a / DustNoise.SHEAR_S) - 1);
+        double[] l = sightL;
+        double swell = DustNoise.swell(x + wx * along, z + wz * along, a, l);
+        double plume = DustNoise.plume(l[0], a, 0.5 + 0.5 * fire);
+        return Math.max(DustNoise.envelope(a, h, 1.65) * (1 + swell + plume), 1);
+    }
 
     /** {@code dwProfileInt}: the drawn profile's integral over a settled top h, blocks. */
     static double profileIntegral(double h) {
@@ -452,9 +478,8 @@ public final class PallField {
     }
 
     /**
-     * Inverse of {@link #transfer} ({@code dwInverseTransfer}): Newton from below (the transfer is increasing and concave, so each
-     * step stays below the root; both starts are lower bounds: its slope is at most 1, and it lies under its asymptote), 4 steps
-     * to 3e-8 of the drawn depth.
+     * Inverse of {@link #transfer}: Newton from below (the transfer is increasing and concave, so each step stays below the root;
+     * both starts are lower bounds: its slope is at most 1, and it lies under its asymptote), 4 steps to 3e-8 of the drawn depth.
      */
     static double inverseTransfer(double drawn) {
         if (drawn <= 1) return drawn;
@@ -1060,7 +1085,7 @@ public final class PallField {
 
     private float[] buildWave() {
         int n = ua.zentix.incoming.client.fx.layer.DustWallPass.NODES;
-        float[] v = new float[n * (ua.zentix.incoming.client.fx.layer.DustWallPass.ROWS + 1) * 4];
+        float[] v = new float[n * TABLE_ROWS * 4];
         lifetime(n, PRESENT_HEIGHT, v);
         lifetimeSpray(n, v, n * ua.zentix.incoming.client.fx.layer.DustWallPass.ROWS * 4);
         return v;
@@ -1104,7 +1129,7 @@ public final class PallField {
     }
 
     /** {@link #waveDust}'s scratch (its readers run on the client thread). */
-    private final double[] waveW = new double[2], waveC = new double[6];
+    private final double[] waveW = new double[2], waveC = new double[2];
 
     /** The material tiles the dust wave draws for this detonation ({@link #drawnColumn}'s hard ground); null until they exist. */
     private volatile DustMaterialTiles materials;
@@ -1119,27 +1144,26 @@ public final class PallField {
      * over hard ground only its debris dust — the paved share of table row 0 — and the last table spacing's fade), out[1] its
      * top, blocks (0.95 of the table's, as drawn); 0 where no dust. One copy for every Java reader of the drawn dust. The law,
      * as a camera outside the dust sees it; {@link #drawnColumn(float[], int, double, double, double, double, double, double,
-     * double, double[])} with a camera's sight weight.
+     * double, double[])} with a camera's inside sight.
      */
     public static void drawnColumn(float[] table, int n, double end, double reach, double t, double rx, double rz, double hard,
             double[] out) {
         drawnColumn(table, n, end, reach, t, rx, rz, hard, 0, out);
     }
 
-    /** {@link #drawnColumn} as a camera with sight weight {@code sight} ({@link #sightWeight}) draws it ({@link #sighted}). */
+    /**
+     * {@link #drawnColumn} as a camera with inside-sight share {@code sight} ({@link #sight}) draws it: the optical depth the
+     * transfer reads moves from the law's to the inside sight's ({@link #sighted}, the table's {@link #SIGHT_ROW} rows) by the
+     * share ({@code dustwall.glsl}: {@code dwDustDensity}'s {@code DwSight}).
+     */
     public static void drawnColumn(float[] table, int n, double end, double reach, double t, double rx, double rz, double hard,
             double sight, double[] out) {
-        double[] c = out.length >= 6 ? out : new double[6];
-        column(table, n, end, reach, t, rx, rz, hard, sight, c);
-        if (c != out) {
-            out[0] = c[0];
-            out[1] = c[1];
-        }
+        column(table, n, end, reach, t, rx, rz, hard, sight, out);
     }
 
     /**
-     * {@link #drawnColumn} into out: drawn depth, drawn top, then the age (model s), the table's depth (the law's), the table's
-     * top and the node's five-minute drawn depth (row 0).
+     * {@link #drawnColumn} into out: drawn depth, drawn top, and where out holds them, the age (model s), the table's depth
+     * (the law's), the table's top and the fire zone's share (row 0).
      */
     private static void column(float[] table, int n, double end, double reach, double t, double rx, double rz, double hard,
             double sight, double[] out) {
@@ -1157,16 +1181,20 @@ public final class PallField {
         int o0 = 4 * ((1 + k) * n + j), o1 = 4 * ((2 + k) * n + j);
         double top = table[o0] + f * (table[o1] - table[o0]), tau = table[o0 + 1] + f * (table[o1 + 1] - table[o0 + 1]);
         double row = table[4 * j + 1] + fx * (table[4 * (j + 1) + 1] - table[4 * j + 1]);
-        double ref = table[4 * j + 3] + fx * (table[4 * (j + 1) + 3] - table[4 * j + 3]);
         double paved = 1 + hard * (row - 1);
         double edge = reach * (1 - 1.0 / (n - 1)), fade = 1 - smoothstep(edge, reach, r);
-        double seen = sight > 0 ? sighted(tau, age, top, ref, seeScale(table, n), sight) : tau;
+        double seen = tau;
+        if (sight > 0) {
+            int os = 4 * ((SIGHT_ROW + k) * n + j);
+            seen = tau + sight * (table[os] + f * (table[os + 2] - table[os]) - tau);
+        }
         out[0] = transfer(seen) * (1 + 0.5 * Math.exp(-age / 1.1)) * paved * fade;
         out[1] = 0.95 * top;
+        if (out.length < 6) return;
         out[2] = age;
         out[3] = tau;
         out[4] = top;
-        out[5] = ref;
+        out[5] = table[4 * j + 2] + fx * (table[4 * (j + 1) + 2] - table[4 * j + 2]);
     }
 
     private static double smoothstep(double a, double b, double x) {
