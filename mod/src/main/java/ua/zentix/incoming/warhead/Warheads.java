@@ -187,7 +187,8 @@ public final class Warheads {
                                    boolean fire, @Nullable Entity direct, @Nullable UUID owner, @Nullable ExplosionDamageCalculator calculator) {
         BlastArea held = area != null ? area.retain() : BlastArea.hold(level, at, reach(power));
         boolean blocks = held.rules().blockDamage();
-        boolean burns = fire && held.rules().fire();
+        // with doFireTick off the explosion's fire would stand forever (rule 11 of the time note)
+        boolean burns = fire && held.rules().fire() && ua.zentix.incoming.strike.StrikeRules.fireBurnsOut(level);
         StagedExplosion job = new StagedExplosion(held, after, at, power, burns, blocks, direct, owner, calculator);
         held.queued(job, level.getGameTime());
         StrikeWorld.get(level).impacts().add(level, job);

@@ -120,6 +120,8 @@ final class FlashScenario {
             cmd("gamerule doWeatherCycle false");
             cmd("gamerule doMobSpawning false");
             cmd("gamerule doFireTick false");
+            // the frames hold the flash fires still: lit as with fire tick on, frozen by the rule
+            ua.zentix.incoming.strike.StrikeRules.lightFrozenFireForTest(true);
             cmd("gamemode creative");
             Minecraft.getInstance().options.hideGui = true;
         });

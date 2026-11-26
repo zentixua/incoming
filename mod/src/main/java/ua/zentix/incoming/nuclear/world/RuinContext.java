@@ -481,6 +481,15 @@ final class RuinContext {
     }
 
     /**
+     * Whether ruins and the flash layer light block fire now: {@code nuclear.fires}, and only where it burns out by itself
+     * ({@link ua.zentix.incoming.strike.StrikeRules#fireBurnsOut}: with {@code doFireTick} off the city's fire would
+     * stand forever; the drawn firestorm still burns its law, {@link Detonation#blockFire}).
+     */
+    static boolean blockFires(net.minecraft.world.level.Level level) {
+        return IncomingConfig.SERVER.nukeFires.get() && ua.zentix.incoming.strike.StrikeRules.fireBurnsOut(level);
+    }
+
+    /**
      * Plan snapshots (server thread): radius-{@link RuinPlanner#REACH} square fully loaded. Property table
      * published after snapshots, only table read by background plan ({@code view} for server thread).
      */
@@ -493,7 +502,7 @@ final class RuinContext {
         RuinPlanner.ensureOwnStates();
         Blast.PropsView view = background ? Blast.publish() : Blast.SERVER;
         return new Grid(this, centre, level.getMinBuildHeight(), level.getMaxBuildHeight(), g, shadow, view,
-                IncomingConfig.SERVER.nukeBlockDamage.get(), IncomingConfig.SERVER.nukeTreeFall.get(), IncomingConfig.SERVER.nukeFires.get());
+                IncomingConfig.SERVER.nukeBlockDamage.get(), IncomingConfig.SERVER.nukeTreeFall.get(), blockFires(level));
     }
 
     /**
@@ -508,7 +517,7 @@ final class RuinContext {
         int[] shadow = shadow(level, centre, g);
         RuinPlanner.ensureOwnStates();
         return new Grid(this, centre, level.getMinBuildHeight(), level.getMaxBuildHeight(), g, shadow, Blast.publish(),
-                IncomingConfig.SERVER.nukeBlockDamage.get(), IncomingConfig.SERVER.nukeTreeFall.get(), IncomingConfig.SERVER.nukeFires.get());
+                IncomingConfig.SERVER.nukeBlockDamage.get(), IncomingConfig.SERVER.nukeTreeFall.get(), blockFires(level));
     }
 
     /**
@@ -519,7 +528,7 @@ final class RuinContext {
         ChunkShot[] g = new ChunkShot[Grid.SIDE * Grid.SIDE];
         g[Grid.R * Grid.SIDE + Grid.R] = shot;
         return new Grid(this, shot.pos(), level.getMinBuildHeight(), level.getMaxBuildHeight(), g, shadow(level, shot.pos(), g), view,
-                IncomingConfig.SERVER.nukeBlockDamage.get(), IncomingConfig.SERVER.nukeTreeFall.get(), IncomingConfig.SERVER.nukeFires.get());
+                IncomingConfig.SERVER.nukeBlockDamage.get(), IncomingConfig.SERVER.nukeTreeFall.get(), blockFires(level));
     }
 
     /**

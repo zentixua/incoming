@@ -542,6 +542,83 @@ public final class ScorchGameTests {
     }
 
     /**
+     * Rule 11 of the time note (docs/design/time.md §8.3): with {@code doFireTick} off a flash or ruin fire would stand forever,
+     * so the flash layer (the ruin plan without pressure, {@link RuinPlan} ignition) lights none, while it still scorches the
+     * ground. 15 kt at 592 m over the middle of 3 × 3 dry-meadow chunks, the strike's real flag
+     * ({@code StrikeRules.lightFrozenFireForTest(false)}).
+     */
+    @GameTest(template = "range", timeoutTicks = 40, batch = "nuke_flash_firetick_off", skyAccess = true)
+    public static void flashLightsNoFireWithoutFireTick(GameTestHelper h) {
+        int[] got = flashFires(h, false);
+        h.assertTrue(got[0] == 0, "with doFireTick off the flash lit " + got[0] + " fires (they would never go out)");
+        h.assertTrue(got[1] > 0, "with doFireTick off the flash scorched no ground: the layer did not run");
+        h.succeed();
+    }
+
+    /** The same flash with {@code doFireTick} on lights its fires as before ({@link #flashLightsNoFireWithoutFireTick}). */
+    @GameTest(template = "range", timeoutTicks = 40, batch = "nuke_flash_firetick_on", skyAccess = true)
+    public static void flashLightsFireWithFireTick(GameTestHelper h) {
+        int[] got = flashFires(h, true);
+        h.assertTrue(got[0] > 0, "with doFireTick on the flash lit no fire");
+        h.succeed();
+    }
+
+    /**
+     * Flash layer over 3 × 3 chunks with {@code doFireTick} = {@code tick}, the strikes' fire choice as in the game (not the
+     * GameTest server's frozen-fire override); free lane. Returns fires right after the layer and scorched ground cells.
+     */
+    private static int[] flashFires(GameTestHelper h, boolean tick) {
+        ServerLevel level = h.getLevel();
+        net.minecraft.world.level.GameRules.BooleanValue rule = level.getGameRules().getRule(net.minecraft.world.level.GameRules.RULE_DOFIRETICK);
+        boolean was = rule.get();
+        rule.set(tick, level.getServer());
+        ua.zentix.incoming.strike.StrikeRules.lightFrozenFireForTest(false);
+        fillBiome(h, 0, 63, DRY_MEADOW);
+        plants(h);
+        BlockPos lo = h.absolutePos(BlockPos.ZERO), hi = h.absolutePos(new BlockPos(63, 0, 63));
+        int[] sx = gridSide(Math.min(lo.getX(), hi.getX()), Math.max(lo.getX(), hi.getX()));
+        int[] sz = gridSide(Math.min(lo.getZ(), hi.getZ()), Math.max(lo.getZ(), hi.getZ()));
+        int ground = h.absolutePos(new BlockPos(0, 11, 0)).getY();
+        List<LevelChunk> inside = new ArrayList<>();
+        for (int cx = sx[0]; cx < sx[0] + 3; cx++) {
+            for (int cz = sz[0]; cz < sz[0] + 3; cz++) inside.add(level.getChunk(cx, cz));
+        }
+        for (LevelChunk c : inside) {
+            for (int dx = -RuinPlanner.REACH; dx <= RuinPlanner.REACH; dx++) {
+                for (int dz = -RuinPlanner.REACH; dz <= RuinPlanner.REACH; dz++) level.getChunk(c.getPos().x + dx, c.getPos().z + dz);
+            }
+        }
+        ChunkPos mid = new ChunkPos(sx[0] + 1, sz[0] + 1);
+        Detonation d = new Detonation(NuclearGameTests.nextId(level), new Vec3(mid.getMiddleBlockX() + 0.5, ground + 1 + 592, mid.getMiddleBlockZ() + 0.5),
+                ground + 1, 15, false, level.getGameTime(), 0, 0, 20_000, 7, 1f, false, 0.35f);
+        long[] keys = inside.stream().mapToLong(c -> c.getPos().toLong()).toArray();
+        java.util.Set<Long> view = java.util.Arrays.stream(keys).boxed().collect(java.util.stream.Collectors.toSet());
+        ScarQueue.seenForTest(view::contains);
+        FlashScorch flash = FlashScorch.forTest(d, keys, new ColumnScar.Budget(true));
+        WorkClock clock = WorkClock.decaying(() -> 0L, 1);
+        try {
+            for (long now = d.gameTime() + 1; now <= d.gameTime() + 200 && flash.appliedChunks() < keys.length; now++) {
+                clock.start(1_000_000_000L);
+                flash.work(level, now, clock);
+                RuinWorkers.awaitForTest(RuinWorkers.Priority.NEAR, 60_000);
+            }
+            h.assertTrue(flash.appliedChunks() == keys.length, "the layer reached " + flash.appliedChunks() + " of " + keys.length + " chunks");
+            int lit = 0, scorched = 0;
+            for (LevelChunk c : inside) {
+                lit += fires(h, c, 4)[0];
+                scorched += surface(h, c)[0];
+            }
+            Incoming.LOG.info("Flash with doFireTick {}: {} fires, {} scorched cells", tick, lit, scorched);
+            return new int[]{lit, scorched};
+        } finally {
+            ScarQueue.seenForTest(null);
+            unfire(level, inside, ground, 4);
+            rule.set(was, level.getServer());
+            ua.zentix.incoming.strike.StrikeRules.lightFrozenFireForTest(true);
+        }
+    }
+
+    /**
      * Review of #663, round 2: the urgent pass writes ready layers earliest deadline first, not in the regular pass's
      * submission order. 15 kt at 592 m, ground zero 200 blocks east of 3 × 3 chunks in view: the east column's wave comes
      * first. The chunks are submitted with the earliest deadline last (as nearest-player order can leave it); all build before

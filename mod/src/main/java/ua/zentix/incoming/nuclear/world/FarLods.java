@@ -498,7 +498,7 @@ public final class FarLods {
         if (taken.isEmpty()) return;
         RuinPlanner.ensureOwnStates();
         Blast.PropsView view = Blast.publish();
-        boolean fires = IncomingConfig.SERVER.nukeFires.get();
+        boolean fires = RuinContext.blockFires(level);
         DiskShots.Format f = format;
         for (int i = 0; i < taken.size(); i++) {
             Read r = taken.get(i);
@@ -573,7 +573,7 @@ public final class FarLods {
         reading.add(r.chunk);
         DiskShots.Format f = format;
         // Voxy-only request: send copy only if different from disk
-        boolean fires = IncomingConfig.SERVER.nukeFires.get(), lights = (kind & LIGHTS) != 0 && !refreshFor.containsKey(r.chunk);
+        boolean fires = RuinContext.blockFires(level), lights = (kind & LIGHTS) != 0 && !refreshFor.containsKey(r.chunk);
         // unplanned chunk may carry ground trace (district light included): snapshot, trace plan, copy
         Ring near = plan == null ? ringOf(r.chunk, now) : null;
         // a chunk claim protection denied to the ring's detonation keeps its copy without trace (NuclearClaims)

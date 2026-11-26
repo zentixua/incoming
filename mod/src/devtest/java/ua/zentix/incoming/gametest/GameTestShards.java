@@ -46,7 +46,10 @@ public final class GameTestShards {
         if (!only.isBlank()) NeoForge.EVENT_BUS.addListener((ServerAboutToStartEvent e) -> only(e, only));
         NeoForge.EVENT_BUS.addListener(net.neoforged.bus.api.EventPriority.LOWEST, BlastLog::onStart);
         NeoForge.EVENT_BUS.addListener((net.neoforged.neoforge.event.server.ServerStartingEvent e) -> {
-            if (e.getServer() instanceof GameTestServer) TestScale.realWave();
+            if (!(e.getServer() instanceof GameTestServer)) return;
+            TestScale.realWave();
+            // the GameTest server runs doFireTick off: checks count the fire strikes light before it grows or goes out
+            ua.zentix.incoming.strike.StrikeRules.lightFrozenFireForTest(true);
         });
         if (!spec.isBlank()) NeoForge.EVENT_BUS.addListener((ServerAboutToStartEvent e) -> select(e, spec));
     }

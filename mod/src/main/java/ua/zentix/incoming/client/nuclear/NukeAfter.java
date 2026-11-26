@@ -39,7 +39,8 @@ import java.util.Optional;
  * ({@link FireStorm#gate}: the server burns and local-chunk fire has not been extinguished); local chunks use real fire only.
  * Wind into fire and secondary explosions use the {@link FireField} model (server fire count), scaled by actual burning in
  * local chunks relative to the model there ({@link #trust}), and excluding fire already burning in local chunks (one fire counter per
- * detonation).
+ * detonation). Where the server lights no block fire ({@link Detonation#blockFire}: {@code doFireTick} off) local chunks have
+ * none to show or compare: the model burns there too, at full trust.
  */
 final class NukeAfter {
     static final int QUADRANTS = FireRoar.QUADRANTS;
@@ -183,7 +184,7 @@ final class NukeAfter {
                 // local chunks show actual fire: the model there is for comparison only
                 // the model counts every column as fueled: weigh it by the storm's terrain survey
                 double fueled = each * a.storm.fuelAt(x, z);
-                if (level.getChunkSource().getChunk((int) Math.floor(x) >> 4, (int) Math.floor(z) >> 4, false) != null) {
+                if (d.blockFire() && level.getChunkSource().getChunk((int) Math.floor(x) >> 4, (int) Math.floor(z) >> 4, false) != null) {
                     modelHere += fueled;
                     continue;
                 }
@@ -208,7 +209,7 @@ final class NukeAfter {
 
     /**
      * Distant storm into the roar ({@link #fire}): cells currently burning on the storm map ({@link FireStorm#map}: fraction of cell area
-     * burning — the same flame drawn by the pall), except local chunks (real fire there), with model trust
+     * burning — the same flame drawn by the pall), except local chunks (real fire there, if the server lights it), with model trust
      * ({@link FireStorm#gate}). Cell heat is burning area × {@link FirePlume#BLOCK_WATTS} (burning wood face, W/m²).
      *
      * @return distant storm heat, W
@@ -226,7 +227,7 @@ final class NukeAfter {
             double flame = map[c * FireStorm.CHANNELS];
             if (flame <= 0) continue;
             double x = b.x + (c % side + 0.5) * cell - half, z = b.z + (c / side + 0.5) * cell - half;
-            if (level.getChunkSource().getChunk((int) Math.floor(x) >> 4, (int) Math.floor(z) >> 4, false) != null) continue;
+            if (d.blockFire() && level.getChunkSource().getChunk((int) Math.floor(x) >> 4, (int) Math.floor(z) >> 4, false) != null) continue;
             double watts = gate * flame * area * FirePlume.BLOCK_WATTS;
             fire.add(x - ear.x, y - ear.y, z - ear.z, watts);
             sum += watts;

@@ -191,7 +191,7 @@ final class FrontLods {
 
     /** Read new copies in queue order while capacity, reads and background pool available. */
     private void start(ServerLevel level, Long2ObjectOpenHashMap<RuinPlan> plans, long room, long now) {
-        boolean fires = IncomingConfig.SERVER.nukeFires.get();
+        boolean fires = RuinContext.blockFires(level);
         for (int started = 0; next < candidates.size() && started < PER_TICK && built.pending() < READS && bytes() + READ_BYTES <= room; ) {
             // after detonation use at most half pool: player-chunk ruins more important
             if (!RuinWorkers.admit(RuinWorkers.Priority.FAR) || d != null && RuinWorkers.inFlight() >= RuinWorkers.capacity() / 2) return;

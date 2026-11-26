@@ -196,8 +196,9 @@ public class DebrisEntity extends Entity {
         boolean replaceable = here.canBeReplaced(new DirectionalPlaceContext(level, pos, Direction.DOWN, ItemStack.EMPTY, Direction.UP));
         boolean supported = state.canSurvive(level, pos) && !FallingBlock.isFree(level.getBlockState(pos.below()));
         if (!replaceable || !supported) return;
-        // Burning debris ignites only fuel it lands on or beside; on stone and ground it burns out by itself.
-        if (state.is(Blocks.FIRE) && (!rules.fire() || !touchesFuel(level, pos))) return;
+        // Burning debris ignites only fuel it lands on or beside; on stone and ground it burns out by itself. With doFireTick
+        // off it would never go out, so it lights nothing.
+        if (state.is(Blocks.FIRE) && (!rules.fire() || !ua.zentix.incoming.strike.StrikeRules.fireBurnsOut(level) || !touchesFuel(level, pos))) return;
         // claim protection where it lands, attributed to the debris itself (it outlives its strike)
         if (!Claims.allows(level, new ClaimQuery(level, this,
                 ModDamageTypes.source(level, ModDamageTypes.DEBRIS, this, null), position()), pos)) return;
