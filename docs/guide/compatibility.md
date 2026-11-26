@@ -16,6 +16,7 @@ On a server, install the same Incoming version for everyone.
 | LOD Server Support | Server terrain on the targeting map, even without Voxy | Server and clients; for a local world, open it to LAN |
 | Iris | Nuclear effects with shaders | Clients only |
 | Flashback | Recording and replaying strikes | Clients only |
+| Vista and other in-game camera and screen mods | Strikes, smoke and the mushroom cloud on in-game screens (up to four at a time, with low cloud detail) | Clients only |
 | Mekanism | Its hazmat suit and other radiation-shielding items protect from nuclear radiation ([pack makers](packs.md#radiation-shielding-incomingradiation_shielding)) | Server and clients |
 | Jade | Looking at a launcher, SAM, substation or strike projectile shows its state; owner and mission only to the owner's side and operators ([details](packs.md#jade)) | Server and clients |
 | FTB Teams | Players in one party are one side: they share spotting, the SAM spares their rounds, they link each other's launchers ([sides](packs.md#sides)) | Server and clients |
