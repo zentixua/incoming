@@ -51,7 +51,7 @@ public final class ClearAftermathGameTests {
         StrikeGameTests.afterTest(h, () -> NuclearStrikes.clear(level));
         BlockPos g = h.absolutePos(GROUND);
         // a 1 kt ground burst with fallout; added and cleared within this call, before any world tick works on it
-        Detonation d = new Detonation(NuclearGameTests.IDS.incrementAndGet(), Vec3.atBottomCenterOf(g), g.getY(), 1, true,
+        Detonation d = new Detonation(NuclearGameTests.nextId(level), Vec3.atBottomCenterOf(g), g.getY(), 1, true,
                 level.getGameTime(), 0, 3, 20_000, 7, 1, true, Detonation.OLD_WAVE);
         NuclearEvents events = NuclearEvents.get(level);
         events.add(d, level);
