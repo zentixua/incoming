@@ -368,6 +368,15 @@ public final class OwnSources {
     }
 
     /**
+     * Clock tick at which a sound that has played {@code playedNanos} of wall time started, the clock reading {@code clock}
+     * now and a client tick lasting {@code tickNanos} (100 ms at {@code /tick rate 10}, the replay's speed under
+     * Flashback); never before the anchor's own tick.
+     */
+    static double zero(double tick, double clock, long playedNanos, long tickNanos) {
+        return Math.max(tick, clock - ClientTicks.ticks(playedNanos, tickNanos));
+    }
+
+    /**
      * Anchors whose sound has started (clock now minus its elapsed playing time), was refused by engine
      * ({@code play} refuses immediately: no sound in engine), or did not start before timeout.
      */
@@ -378,8 +387,7 @@ public final class OwnSources {
             double clock = a.clock.ticks(partial);
             long started = a.started;
             if (started != 0) {
-                // the sound plays in wall time; the clock counts client ticks of the current length (/tick rate, replay speed)
-                a.zero = Math.max(a.tick, clock - ClientTicks.ticks(now - started, ClientTicks.nanos()));
+                a.zero = zero(a.tick, clock, now - started, ClientTicks.nanos());
                 a.heard = true;
             } else if (clock > a.tick + ANCHOR_WAIT || a.sound != null && !mc.getSoundManager().isActive(a.sound)) {
                 a.zero = a.tick;

@@ -258,10 +258,6 @@ public final class ClientNuclear {
             tick(System.nanoTime(), ua.zentix.incoming.client.ClientTicks.nanos());
         }
 
-        void tick(long nanos) {
-            tick(nanos, ua.zentix.incoming.client.ClientTicks.NOMINAL_NANOS);
-        }
-
         // Wall time detects a missed client tick. It never adds a tick to the picture. A client tick lasts
         // tickNanos (100 ms at /tick rate 10): one such tick is not a missed one.
         void tick(long nanos, long tickNanos) {

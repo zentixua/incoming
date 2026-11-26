@@ -56,7 +56,7 @@ class ClientNuclearTest {
         ClientNuclear.AgeClock clock = new ClientNuclear.AgeClock(0, true);
         for (int t = 1; t <= 100; t++) {
             clock.anchor(t);
-            clock.tick(t * 50_000_000L);
+            clock.tick(t * 50_000_000L, ua.zentix.incoming.client.ClientTicks.NOMINAL_NANOS);
         }
         double held = clock.shown();
         for (int t = 101; t <= 400; t++) clock.anchor(t);
@@ -122,7 +122,7 @@ class ClientNuclearTest {
             while (!wire.isEmpty() && wire.peek()[0] <= t) clock.anchor(wire.poll()[1]);
             for (int c = clientTicks.applyAsInt(t); c > 0; c--) {
                 double before = clock.shown();
-                clock.tick((1L + t) * 50_000_000L);
+                clock.tick((1L + t) * 50_000_000L, ua.zentix.incoming.client.ClientTicks.NOMINAL_NANOS);
                 double step = clock.shown() - before;
                 assertTrue(step >= 0, "server tick " + t + ": the clock ran backward, " + before + " → " + clock.shown());
                 assertTrue(step <= 3 + 1e-9, "server tick " + t + ": jump of " + step);

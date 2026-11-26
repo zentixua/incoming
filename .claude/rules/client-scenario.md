@@ -73,8 +73,9 @@ Create, Sable and Aeronautics, no pack) kept up in a saved world, `tools/dev_cli
   The freeze holds the nuclear show's age (`ClientNuclear`: eye-following state still updates), particles and the
   conventional strike's clouds, smoke, shake and heat shimmer (`ClientTicks`, `client.md`). On a CPU client (5 fps) a
   frozen frame can still change once: the frame-budgeted smoke preparation finishes the held age's snapshot late; judge a
-  hold by the per-second `SCENARIO far blasts` line (`hot [r h dT]` and puffs stay fixed), not by one frame pair. Config values (`mod/run/client/config/incoming-server.toml` and
-  `-client.toml`) are reread when the file changes; `max_yield` is a config value there, not an `/incoming rule`.
+  hold by the per-second `SCENARIO far blasts` line (`hot [r h dT]` and puffs stay fixed), not by one frame pair.
+  Config values (`mod/run/client/config/incoming-server.toml` and `-client.toml`) are reread when the file changes;
+  `max_yield` is a config value there, not an `/incoming rule`.
 - Measured 25.11 (laptop, shared GPU slot, Silo copy at 3514 73 −2298, a held 100 kt front): start 44.6 s to the
   player in the world; a shader edit to its frame 37.2 s cold, 16.6 s warm (the F3+T reload 27.8 / 13.8 s of it);
   a Java method edit hot-swapped and running in 3.0 s; two held frames 3 s apart differ by 0.19 of 255 on average.

@@ -134,9 +134,10 @@ on each frame and tick query, including direct renders during export. Clock limi
   `/tick step` moves them, `/tick rate` paces them through the client timer (`ClientTicksTest` checks each call stays
   under the gate). Frame readers use `getGameTimeDeltaPartialTick(false)` (1.0 while frozen), never the camera event's
   partial, which keeps cycling for the player's own motion and would rock a held clock every tick. What follows the
-  eye or the body (screen flash fade, concussion, hearing, foot support) keeps ticking. Wall time converts to client
-  ticks at `ClientTicks.nanos()` (the client timer's own length, `Minecraft.getTickTargetMillis`, which Flashback sets
-  from the replay speed), never at 50 ms.
+  eye or the body (screen flash fade, concussion, hearing, foot support) keeps ticking, and its frame reader takes the
+  camera event's partial: foot support under a held lean (`CameraShake.offsets` `bodyPartial`) otherwise steps at
+  20 Hz. Wall time converts to client ticks at `ClientTicks.nanos()` (the client timer's own length,
+  `Minecraft.getTickTargetMillis`, which Flashback sets from the replay speed), never at 50 ms.
 - `ClientLevel` calculates sky darkness (`Level.skyDarken`, `updateSkyBrightness`) only in constructor on world entry:
   client `getMaxLocalRawBrightness(pos)` stays daytime all evening. Time-of-day sky light at eye:
   `getMaxLocalRawBrightness(pos, FlashEyes.skyDarken(level))` (vanilla formula, same server-side).

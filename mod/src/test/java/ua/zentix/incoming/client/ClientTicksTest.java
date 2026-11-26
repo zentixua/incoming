@@ -69,8 +69,7 @@ class ClientTicksTest {
 
     /**
      * A Flashback replay pauses by freezing the level's tick rate: the clocks hold like {@code /tick freeze}; its
-     * play resumes them. A seek clears the conventional effects (they are not replayed), so a held clock never shows a
-     * cloud from another recording position.
+     * play resumes them. What a seek clears is checked by {@link #seekClearsTheConventionalEffects}.
      */
     @Test
     void replayPauseHoldsAndSeekClears() {
@@ -91,8 +90,10 @@ class ClientTicksTest {
     }
 
     /**
-     * {@code /tick rate 10}: a client tick lasts 100 ms, so in ten real seconds the clocks advance 100 ticks, five game
-     * seconds: half speed, with the world. Wall time converts to ticks at the timer's length, not at 50 ms.
+     * {@code /tick rate 10}: the client timer then lasts 100 ms a tick (vanilla's {@code getTickTargetMillis} is the
+     * level's {@code millisecondsPerTick} above 50 ms), so ten real seconds are 100 client ticks, five game seconds: half
+     * speed, with the world. The timer's milliseconds convert to the tick length, and wall time to ticks at it.
+     * That {@code pre} reads the timer itself is checked by {@link #lengthComesFromTheClientTimer}.
      */
     @Test
     void tickRateTenRunsAtHalfSpeed() {
@@ -110,6 +111,24 @@ class ClientTicksTest {
         assertEquals(40, ClientTicks.ticks(1_000_000_000L, ClientTicks.tickNanos(25f)), 1e-9);
         assertEquals(ClientTicks.NOMINAL_NANOS, ClientTicks.tickNanos(0f));
         assertEquals(ClientTicks.NOMINAL_NANOS, ClientTicks.tickNanos(Float.NaN));
+    }
+
+    /** The tick length is the client timer's own, the method Flashback answers with the replay speed. */
+    @Test
+    void lengthComesFromTheClientTimer() throws IOException {
+        String src = Files.readString(Path.of("src/main/java/ua/zentix/incoming/client/ClientTicks.java"));
+        assertTrue(src.contains("tickNanos = tickNanos(mc.getTickTargetMillis("), "pre reads the client timer's length");
+    }
+
+    /** A replay seek clears every conventional effect: a held clock never shows one from another recording position. */
+    @Test
+    void seekClearsTheConventionalEffects() throws IOException {
+        String src = Files.readString(Path.of("src/main/java/ua/zentix/incoming/client/IncomingClient.java"));
+        Matcher rewound = Pattern.compile("private static void rewound\\(\\) \\{([^}]*)}").matcher(src);
+        assertTrue(rewound.find(), "rewound()");
+        for (String call : new String[] {"SmokeGrid.reset();", "FireSmoke.reset();", "FxPool.INSTANCE.clear();",
+                "Effects.clear();", "CameraShake.reset();"})
+            assertTrue(rewound.group(1).contains(call), call + " in rewound()");
     }
 
     /**

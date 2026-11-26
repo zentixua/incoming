@@ -33,7 +33,10 @@ paths:
   `ReplayTest`.
   Conventional effects follow the replay through the client tick (`ClientTicks`, `client.md`): Flashback paces the
   client timer by the replay speed and pauses by freezing the level's tick rate, so clouds, smoke, shake and shimmer
-  hold on pause and keep the replay's pace; a seek clears them (`IncomingClient.rewound`).
+  hold on pause and keep the replay's pace; a seek clears them (`IncomingClient.rewound`). `ClientTicks.pre` calls that
+  hooked method once more per tick; on a freeze-with-delay tick-rate keyframe the hook's first call of a freeze sets
+  the client's frozen steps, so when the keyframe falls between the frame's timer call and our pre-tick, the slowdown
+  starts one tick earlier (rare, cosmetic; accepted limit).
 - Flashback NeoForge Fixed retains batched material checkpoints by source UUID. A viewer retiring the effects
   acknowledges that UUID. The server releases only that viewer's transfer and replaces its recorded batch with a
   one-byte tombstone. The replaceable `NukeMaterialSources` manifest contains the viewer's current sources.
