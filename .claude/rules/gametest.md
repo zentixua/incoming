@@ -55,6 +55,9 @@ paths:
   platform (and becomes flight terrain). Below the platform is an air layer above the world: for ruin collapse
   (`Collapse`, support counted from the window bottom), the entire platform is an unsupported overhang, so nuclear
   tests fill this layer (`detonation`). Tests run at random distant coordinates; each nuclear test gets its own batch.
+  A test that only needs a detonation's clocks or fallout (backdated hours to years) uses a detached `new NuclearEvents()`
+  passed explicitly (`RadiationTicker.step(level, events, …)`, `GroundFallout.at(events, …)`): a detonation in the level's
+  own `NuclearEvents` (active, `past` or a ground field) ruins every chunk loaded later, including other tests' platforms.
 - `CruiseMissileEntity.launch` chooses initial altitude from `getChunkNow`; passed `pos.y` does not set it. For a
   ridge-descent test, `level.getChunk` during construction is insufficient: wait for `Terrain.ready` before launch
   and check that actual launch altitude exceeds the tested floor; the previous position for step measurement is

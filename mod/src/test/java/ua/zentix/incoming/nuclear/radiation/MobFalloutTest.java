@@ -13,55 +13,32 @@ class MobFalloutTest {
     }
 
     /**
-     * A mob unloaded for days receives the decaying fallout of those days on load: the log-grid integral matches the exact
-     * t^-1.2 integral to 0.1 % from minutes to a week (the promise in {@code MobFallout}).
-     */
-    @Test
-    void longAccountIntegratesTheDecay() {
-        double k = FalloutModel.DECAY_EXP;
-        double[][] spans = {{400, 1000}, {1000, 24_000}, {200, 7 * 24_000}, {24_000, 7 * 24_000}};
-        for (double[] s : spans) {
-            double got = MobFallout.integral(t -> Math.pow(t, -k), s[0], s[1]);
-            double exact = powerLaw(k, s[0], s[1]);
-            assertEquals(exact, got, exact * 1e-3, "span " + s[0] + "–" + s[1]);
-        }
-    }
-
-    /** Fallout arriving inside the span (step from zero): the step costs at most one grid step of the span. */
-    @Test
-    void arrivalStepInsideTheSpan() {
-        double k = FalloutModel.DECAY_EXP, arrival = 5_000;
-        double got = MobFallout.integral(t -> t < arrival ? 0 : Math.pow(t, -k), 1_000, 100_000);
-        double exact = powerLaw(k, arrival, 100_000);
-        double step = Math.pow(100.0, 1.0 / MobFallout.INTEGRAL_STEPS) - 1;
-        assertEquals(exact, got, Math.pow(arrival, -k) * arrival * step);
-    }
-
-    /**
      * A player who sleeps through the plume's arrival (one long dose step, the promise in {@code RadiationTicker}) gets the
-     * dose from the moment the dust landed, not the decay law extrapolated back to when they lay down.
+     * dose from the moment the dust landed, not the decay law extrapolated back to when they lay down; a mob unloaded for
+     * days gets the decaying dose of those days, not the rate now times the gap ({@link GroundFallout.Point#dose}).
      */
     @Test
-    void sleepThroughArrivalCountsFromArrival() {
+    void longStepsCountFromTheLanding() {
         // 15 kt surface burst, no fires (no rain), wind 2.5 m/s along +x: 18 km downwind the plume lands 2 h after the burst
         var d = new ua.zentix.incoming.nuclear.Detonation(1, new net.minecraft.world.phys.Vec3(0, 64, 0), 64, 15, true, 0, 0f, 2.5f,
                 20_000, 0, 1f, true, 0.25f, 0L, false);
         double x = 18_000, arrival = d.falloutArrivalSeconds(x, 0) / 3600, h0 = 0.4, h1 = 10.4;
         assertEquals(2, arrival, 0.01);
-        double rate = d.falloutRateAt(x, 0, h1 * 3600, ua.zentix.incoming.nuclear.model.SmokeParcels.Clock.of(h1 * 3600, m -> m));
+        assertEquals(0, d.rainH1(x, 0), 0);
+        // a 24-hour day without jumps: the ground clock is the time since the burst
+        var p = new GroundFallout.Point(d.falloutH1(x, 0), new FalloutModel.Landing(arrival * 3600, 0), 0, null);
+        double rate = p.rate(h1 * 3600);
         double truth = rate * FalloutModel.decayHours(arrival, h1);
-        // within the log grid's one step at the arrival (arrivalStepInsideTheSpan)
-        assertEquals(truth, MobFallout.exposure(d, x, 0, h0 * 3600, h1 * 3600, ua.zentix.incoming.nuclear.model.SmokeParcels.Clock.of(h1 * 3600, m -> m)), truth * 0.03);
+        assertEquals(truth, p.dose(h0 * 3600, h1 * 3600), truth * 1e-9);
         assertTrue(rate * FalloutModel.decayHours(h0, h1) > 2 * truth, "the old extrapolation it replaces");
         // a short step is the rate × time
-        assertEquals(rate / 3600, MobFallout.exposure(d, x, 0, h1 * 3600 - 1, h1 * 3600, ua.zentix.incoming.nuclear.model.SmokeParcels.Clock.of(h1 * 3600, m -> m)), 1e-12);
-    }
-
-    /** Nothing before the span start or for an empty span. */
-    @Test
-    void emptySpan() {
-        assertEquals(0, MobFallout.integral(t -> 1, 500, 500));
-        assertEquals(0, MobFallout.integral(t -> 1, 500, 100));
+        assertEquals(rate / 3600, p.dose(h1 * 3600 - 1, h1 * 3600), rate / 3600 * 1e-4);
+        // a mob unloaded for a week after it landed: the t^-1.2 integral, far below the rate now × the week
+        double week = 7 * 24 + 2;
+        double weekDose = p.falloutH1() * (Math.pow(arrival, -0.2) - Math.pow(week, -0.2)) / 0.2;
+        assertEquals(weekDose, p.dose(0, week * 3600), weekDose * 1e-9);
+        assertTrue(p.dose(0, week * 3600) < p.rate(2.1 * 3600) * (week - 2));
+        assertEquals(0, GroundFallout.Point.NONE.dose(0, 1e9), 0);
     }
 
     /**
