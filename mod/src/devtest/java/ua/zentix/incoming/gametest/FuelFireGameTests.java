@@ -181,8 +181,9 @@ public final class FuelFireGameTests {
             List<BlockPos> now = cells(level, at);
             most[0] = Math.max(most[0], now.size());
             ever.addAll(now);
-            // once the crater has settled: a log in the wall beside every cell (a fuel beside a combustible)
-            if (level.getGameTime() == born + 60) {
+            // once every cell burns (explosion work spans ticks, longer on a busy runner): a log in the wall beside every
+            // cell (a fuel beside a combustible)
+            if (logs[0] == 0 && now.size() == law.cells() && level.getGameTime() < end - 200) {
                 for (BlockPos c : now) {
                     for (net.minecraft.core.Direction d : net.minecraft.core.Direction.Plane.HORIZONTAL) {
                         BlockPos n = c.relative(d);
