@@ -104,7 +104,7 @@ public final class DustSources {
     private static final float[] GLOW = new float[8];
     /** Per-frame scratch (client thread): the frame's drawn sources, a source's surge, fire colours, the eye's column. */
     private static final List<ClientNuclear.Active> DRAWN = new ArrayList<>();
-    private static final double[] SURGE = new double[3], COLUMN = new double[2];
+    private static final double[] SURGE = new double[3], COLUMN = new double[6];
     private static final float[] FIRE_COLOUR = new float[3], LIT = new float[3];
 
     /**
@@ -336,13 +336,17 @@ public final class DustSources {
         double xe = Math.min(Math.hypot(ex, ez) / Math.max(reach, 1), 1) * (n - 1);
         int je = (int) Math.min(Math.floor(xe), n - 2);
         double haze = 1 - PallField.textured(t - (table[4 * je] + (xe - je) * (table[4 * (je + 1)] - table[4 * je])));
-        double target = adapt * Math.exp(DUST_ADAPT_INSIDE * DUST_K * eyeDepth(table, n, end, reach, t, at, m.hard(at[0], at[2])) * haze);
+        // presentation: the camera's share of the inside sight (PallField.sightWeight; 0 outside the dust, where every ray reads
+        // the law), the march's DwSight
+        double sight = a.pall.sight(ex, ez, at[1], ticks);
+        p[4 * 5 + 3] = (float) sight;
+        double target = adapt * Math.exp(DUST_ADAPT_INSIDE * DUST_K * eyeDepth(table, n, end, reach, t, at, m.hard(at[0], at[2]), sight) * haze);
         if (DIAG && lead != null && !ua.zentix.incoming.client.fx.layer.FxViews.secondary()) {
             double[] c = COLUMN;
-            PallField.drawnColumn(table, n, end, reach, t, at[0], at[2], m.hard(at[0], at[2]), c);
+            PallField.drawnColumn(table, n, end, reach, t, at[0], at[2], m.hard(at[0], at[2]), sight, c);
             eyeLine = String.format(java.util.Locale.ROOT, "eye %.1f m over the dust's floor (map's %.1f), material water %.2f sand %.2f "
-                    + "hard %.2f, drawn column depth %.2f top %.0f m", at[1], ey - a.ground.at(eye.x, eye.z), m.share(at[0], at[2], 0),
-                    m.share(at[0], at[2], 1), m.share(at[0], at[2], 2), c[0], c[1]);
+                    + "hard %.2f, drawn column depth %.2f top %.0f m, inside sight %.2f", at[1], ey - a.ground.at(eye.x, eye.z),
+                    m.share(at[0], at[2], 0), m.share(at[0], at[2], 1), m.share(at[0], at[2], 2), c[0], c[1], sight);
         }
         // the eye takes it over time (presentation, as NukeExposure and Sight.adapted: opening ~2 s, closing ~8 s, est.), on the
         // detonation's clock (the time the player watches; a seek or jump restarts it at the target)
@@ -415,11 +419,12 @@ public final class DustSources {
 
     /**
      * Drawn optical depth of the dust above the eye (no drift: the eye's own ground point; the table's age nodes read linearly):
-     * {@code dwHaze}'s column, its top 0.95 of the table's, the share above by the profile's stratification.
+     * {@code dwHaze}'s column, its top 0.95 of the table's, the share above by the profile's stratification, as this camera
+     * sees it (its inside sight share {@code sight}).
      */
-    static double eyeDepth(float[] table, int n, double end, double reach, double t, float[] eye, double hard) {
+    static double eyeDepth(float[] table, int n, double end, double reach, double t, float[] eye, double hard, double sight) {
         double[] c = COLUMN;
-        PallField.drawnColumn(table, n, end, reach, t, eye[0], eye[2], hard, c);
+        PallField.drawnColumn(table, n, end, reach, t, eye[0], eye[2], hard, sight, c);
         if (c[0] <= 0) return 0;
         double h = Math.max(eye[1], 0) / Math.max(c[1], 1);
         if (h >= 1) return 0;

@@ -134,8 +134,13 @@ vec3 dwAirLight(vec3 rd) { return vec3(0.0); }
 #moj_import <incoming:dustwall.glsl>
 uniform vec3 Dir;
 uniform float End;
+// the camera's inside sight (the pass loads them per source: dwLoad)
+uniform float Sight;
+uniform float SightK;
 out vec4 fragColor;
 void main() {
+    DwSight = Sight;
+    DwSightK = SightK;
     vec4 wall = dwMarch(normalize(Dir), End, 0.8, 0.001, 128);
     fragColor = vec4(wall.rgb, wall.a);
 }
@@ -208,6 +213,30 @@ void main() {
     cut = march(2, (1, 0, 0), 20)
     g.glUniform1f(loc(p, "DwCut"), 0)
     check(abs(cut[3] - 1) < 1e-5, f"ray inside the fireball's ground footprint: T={cut[3]:.4f}, expected 1")
+
+    # the camera's inside sight (dwSighted, PallField.sighted): straight down through old dust (2 min, the haze level), the
+    # drawn depth with the camera's share w is the law's moved toward the sight's ceiling by w; share 0 is the law itself
+    def sighted(w):
+        g.glUniform1f(loc(p, "Sight"), w)
+        g.glUniform1f(loc(p, "SightK"), k)
+        g.glUniform1f(loc(p, "Floor"), 0)
+        g.glUniform2f(loc(p, "DwRelief"), 0, 0)
+        g.glUniform4f(loc(p, "DwEye"), 100, 40, 0, 120)
+        g.glUniform3f(loc(p, "Dir"), 0, -1, 0)
+        g.glUniform1f(loc(p, "End"), 40)
+        quad(p)
+        return -np.log(read(1, 1)[0, 0, 3])
+    k, slope, knee = 0.0788, 0.073, 0.5
+    drawn = 1 + slope * 9 + (1 - slope) * knee * (1 - np.exp(-9 / knee))
+    sight = 2 ** 0.7783854 / (1 + (120 / 300) ** 4) ** (0.7783854 / 4)
+    ceiling = k / sight * max(0.9483 * 0.95 * 20 - 2.854, 1)
+    capped = drawn / np.sqrt(1 + (drawn / ceiling) ** 2)
+    law = sighted(0)
+    for w in (0.5, 1.0):
+        want = (drawn + (capped - drawn) * w) / drawn
+        got = sighted(w) / law
+        check(abs(got - want) < 0.02, f"inside sight {w}: drawn depth {got:.4f} of the law's, expected {want:.4f}")
+    g.glUniform1f(loc(p, "Sight"), 0)
 
 
 def turning_case():

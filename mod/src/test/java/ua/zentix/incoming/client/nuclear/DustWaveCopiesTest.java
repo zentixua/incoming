@@ -38,6 +38,53 @@ class DustWaveCopiesTest {
         }
     }
 
+    /**
+     * The camera's inside sight ({@code dwSighted}, {@code dwSeeCeiling}, {@code dwInverseTransfer}) is
+     * {@link PallField#sighted}'s: over ages through the haze level's fade, law depths, tops, five-minute references and
+     * camera shares; the inverse returns the transfer's input to 1e-6.
+     */
+    @Test
+    void insideSightEqualsTheShader() throws Exception {
+        String s = Files.readString(GLSL).replace("const float DW_G_SLOPE = 0.073, DW_G_KNEE = 0.5;",
+                "const float DW_G_SLOPE = 0.073;\nconst float DW_G_KNEE = 0.5;")
+                .replace("const float DW_HAZE_FROM = 24.0, DW_HAZE_TO = 60.0;", "const float DW_HAZE_FROM = 24.0;\nconst float DW_HAZE_TO = 60.0;");
+        GlslFunction sighted = GlslFunction.parse(s, "dwSighted"), ceiling = GlslFunction.parse(s, "dwSeeCeiling"),
+                inverse = GlslFunction.parse(s, "dwInverseTransfer");
+        for (double tau = 0; tau < 120; tau += 0.731) {
+            assertEquals(tau, PallField.inverseTransfer(PallField.transfer(tau)), 1e-6 * Math.max(1, tau), "inverse " + tau);
+            assertEquals(PallField.inverseTransfer(PallField.transfer(tau)), inverse.call(Map.of("drawn", PallField.transfer(tau))),
+                    1e-9 * Math.max(1, tau), "dwInverseTransfer " + tau);
+        }
+        int checked = 0;
+        for (double age : new double[] {10, 24, 30, 45, 60, 90, 300, 900, 3000})
+            for (double tau : new double[] {0, 0.3, 1, 4, 13, 40})
+                for (double top : new double[] {20, 85, 300})
+                    for (double ref : new double[] {0, 0.6, 3})
+                        for (double w : new double[] {0, 0.4, 1}) {
+                            double k = 3.0 / 200, java = PallField.sighted(tau, age, top, ref, k, w);
+                            Map<String, Double> args = Map.of("tau", tau, "a", age, "top", top, "ref", ref, "k", k, "w", w);
+                            assertEquals(PallField.transfer(java), PallField.transfer(sighted.call(args)), 1e-6, "dwSighted (drawn depth) " + args);
+                            if (tau > 0) {
+                                double c = PallField.seeCeiling(age, top, tau, ref, k);
+                                assertEquals(c, ceiling.call(Map.of("a", age, "top", top, "tau", tau, "ref", ref, "k", k)), 1e-6 * c,
+                                        "dwSeeCeiling " + args);
+                            }
+                            checked++;
+                        }
+        assertEquals(9 * 6 * 3 * 3 * 3, checked);
+    }
+
+    /** The camera's share reaches the march with the source: the frame inputs' sixth texel's w ({@code dwLoad}: DwSight). */
+    @Test
+    void theSightShareIsAFrameInput() throws Exception {
+        String s = Files.readString(GLSL);
+        assertTrue(s.contains("vec4 b = dwParam(4), f = dwParam(5), r = dwParam(6);") && s.contains("DwSight = f.a;"), "DwSight from texel 5's w");
+        assertTrue(s.contains("if (DwSight > 0.0) law.y = dwSighted(law.y, a0, law.x, dwRow0(r).w, DwSightK, DwSight);"),
+                "the density reads the law through the camera's sight");
+        String sources = Files.readString(Path.of("src/main/java/ua/zentix/incoming/client/nuclear/DustSources.java"));
+        assertTrue(sources.contains("p[4 * 5 + 3] = (float) sight;"), "DustSources writes the share to texel 5's w");
+    }
+
     /** The source table's layout in the shader is the one the pass uploads (rows per source, the spray and frame-input rows, nodes). */
     @Test
     void tableLayoutIsTheShaders() throws Exception {

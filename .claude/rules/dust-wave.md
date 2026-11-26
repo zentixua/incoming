@@ -74,7 +74,14 @@ paths:
 - Presentation deviations (marked in code and in the guide's deviation list): the drawn height ×68/58 of the law's
   (`PallField.PRESENT_HEIGHT`: the crest just under a 120 m camera's horizon at 4.5 km from 1 Mt), the hump, the transfer
   (`dwTransfer` ↔ `PallField.transfer`: optical depth above 1 drawn compressed) and the sight inside old dust
-  (`PallField.visible`: about 200 m at one minute, 700 m by five, then the law's own thinning).
+  (`PallField.sighted` ↔ `dwSighted`: about 200 m at one minute, 700 m by five, then the law's own thinning).
+- The inside sight is the camera's, not the dust's: the table holds the law's optical depth; each source's frame inputs carry
+  the camera's share (`DwSight`, texel 5's w: `PallField.sightWeight`, the eye's depth below the local noise-free top over
+  its soft edge, × its column against the sight's ceiling, taken in over the eye's dust's first 2 s), and the density reads
+  the law through the sight with that share. Outside the dust every ray reads the law through the transfer (from a hill, 15 kt
+  at 1.5 km straight down: 9 % of the light at one minute, 18 % at twenty, opaque slant; the sight baked into the table drew
+  55 %). Java readers of the world's dust (stem foot, the mushroom's ground, breach dust) read the law; the eye's readers
+  (`DustSources.eyeDepth`, `PallField.addDrawnEye`) take the camera's share (`DustSightTest`, `DustWaveCopiesTest`).
 
 ## Readers
 - The pall's rays end at the wave's dust: in the pall interval the dust pass runs first, then `fx_dustwall_limit` writes, at

@@ -150,7 +150,8 @@ Ruins and everything in `nuclear/world/` are in `nuclear-world.md`.
   depth equals the layer depth (`PallFieldTest.headAndPallAreOneLayer`: within 20 %, at 2.5 km seam 6 %). Survey numbers
   in `DustModelTest` (15 kt at 592 m): top at 0.25 s 6–30 m, phase end 30–70 m, after 5 s 50–150 m (Rosenblatt: 60–150 m;
   at 1.4 km 58 m), at 1.42 km beneath layer night until minute 20, brighter by minute 30 (Fujii in Hersey), at 3.2 km
-  twilight, at 300 m clears in minutes. Fine dust hangs for hours: surface 15 kt pall visible ~1.6 h, airburst (592 m)
+  twilight, at 300 m clears in minutes. Every view from outside the dust draws this law through the transfer alone; only a camera
+  inside it takes the presentation's sight (`dust-wave.md`, `PallField.sightWeight`). Fine dust hangs for hours: surface 15 kt pall visible ~1.6 h, airburst (592 m)
   ~1.7 h (longest a kilometer from epicenter; at 3 km ~0.9 and ~1.1 h); detonation holds its pall slot that long.
   Numbers marked `(est.)` (fitted to Hiroshima or estimated) in `DustModel`: debris dust 0.1 kg/m² and `FINE_S`
   (together, with `HobBlast` pressure; old Kinney–Graham ×1.8 used 0.5 kg/m² and 1000 s), `STEM_*`, `RISE_S`, `TOP_MAX`,

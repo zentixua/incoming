@@ -183,10 +183,11 @@ public final class DustWallPass {
         /** Row 0, the law by age and the spray row ({@code PallField.lifetime}, {@code lifetimeSpray}): built once. */
         public float[] table;
         /**
-         * The frame inputs ({@code dwLoad}, texels 0..10): eye from ground zero and clock; ring (front, share still to fade in,
-         * envelope top, reach); life (last age, age scale, drift x, z); fireball (centre, radius); its light and the fireball's
-         * ground footprint; fire light from below; relief (low, high); base surge (radius, top, extinction); terrain map
-         * (half side, bottom, top, cell); material tiles (fine, coarse).
+         * The frame inputs ({@code dwLoad}, texels 0..10): eye from ground zero and clock; ring (front, share still to fade
+         * in, envelope top, reach); life (last age, age scale, drift x, z); fireball (centre, radius); its light and the
+         * fireball's ground footprint; fire light from below and the camera's inside sight share ({@code DwSight}); relief
+         * (low, high); base surge (radius, top, extinction); terrain map (half side, bottom, top, cell); material tiles (fine,
+         * coarse).
          */
         public final float[] params = new float[PARAMS * 4];
         /** Its terrain map ({@code PallGround}). */
