@@ -320,6 +320,14 @@ public final class FarFlightView {
         else POINTS.expire(now - 1);
     }
 
+    /**
+     * A jump nobody in this dimension saw ({@code CountedJump}): trails age by it, {@code ticks} real ticks of their motion age;
+     * the projectiles' flight is never jumped.
+     */
+    public static void jump(long ticks) {
+        POINTS.age(ticks);
+    }
+
     /** Path exists this tick: its look (new path starts this tick). */
     private static void see(FlightTrack track) {
         Far f = BY_TRACK.get(track);

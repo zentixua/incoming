@@ -39,8 +39,9 @@ import java.util.function.Predicate;
  *     ({@link StrikeClock});</li>
  *     <li>per dimension, {@link #counted} — jumps that fell while nobody in that dimension was awake (spectators and idle
  *     players are awake); they move the strikes there and end their shows. A jump with someone awake is {@link #unseen}:
- *     it moves only what nobody sees change. A counted jump that falls while a blast front crosses the dimension
- *     ({@link #holdJumpsWhile}) is counted when the front ends. Fixed-time dimensions (Nether, End) count no jumps.</li>
+ *     it moves only what nobody sees change. A jump that falls while a blast front crosses the dimension
+ *     ({@link #holdJumpsWhile}) waits for the front to end, then counts only if nobody there is awake by then (the sleepers
+ *     woke with the skip); otherwise it is unseen. Fixed-time dimensions (Nether, End) count no jumps.</li>
  * </ul>
  * Values in world-clock ticks (1000 per hour). Server-wide (all dimensions share the overworld's day), saved with the
  * overworld. A new clock starts at the overworld game time, so times saved before it (stored as game time) keep their
@@ -75,10 +76,14 @@ public final class WorldClock extends SavedData {
     /** Jumps of one dimension, world-clock ticks. */
     static final class Jumps {
         double counted, unseen, pending;
+        /** Game time at which {@link #counted} last rose (not saved): its players learn of it that tick ({@link #countedRose}). */
+        long roseAt = Long.MIN_VALUE;
     }
 
     /** While true for a dimension, its counted jumps wait (a blast front crossing it: flight and the wave are never jumped). */
     private static Predicate<ServerLevel> hold = level -> false;
+    /** Told when a held jump turns out seen: the dimension and its ticks ({@link #onHeldSeen}). */
+    private static java.util.function.ObjDoubleConsumer<ServerLevel> heldSeen = (level, jump) -> {};
 
     private WorldClock(double ticks, double rateTicks) {
         this.ticks = ticks;
@@ -89,6 +94,20 @@ public final class WorldClock extends SavedData {
         ServerLevel overworld = server.overworld();
         return overworld.getDataStorage().computeIfAbsent(
                 new Factory<>(() -> new WorldClock(overworld.getGameTime(), overworld.getGameTime()), WorldClock::load, null), NAME);
+    }
+
+    /** {@code seen} is told when a held jump turns out seen ({@link #settle}): strikes born during the hold drop it. */
+    public static void onHeldSeen(java.util.function.ObjDoubleConsumer<ServerLevel> seen) {
+        heldSeen = seen;
+    }
+
+    /**
+     * Jumps in {@code level}'s dimension held while a blast front crosses ({@link #holdJumpsWhile}), ticks: they join
+     * {@link #counted} when it has crossed if nobody is awake by then, else they turn out seen ({@link #onHeldSeen}).
+     */
+    public static double held(Level level) {
+        Jumps j = jumps(level);
+        return j == null ? 0 : j.pending;
     }
 
     /** Counted jumps in a dimension wait while {@code busy} holds for it (a blast front still crossing). */
@@ -116,6 +135,15 @@ public final class WorldClock extends SavedData {
         return level.getServer() == null ? Steps.VANILLA_PACE : get(level.getServer()).steps.pace;
     }
 
+    /**
+     * The jumps counted in {@code level}'s dimension rose this tick: its players are told at once, so the strikes' air they
+     * wake to is already as old as the night made it.
+     */
+    public static boolean countedRose(Level level) {
+        Jumps j = jumps(level);
+        return j != null && j.roseAt == level.getGameTime();
+    }
+
     /** Jumps counted in {@code level}'s dimension so far (nobody there awake), ticks: they move its strikes. */
     public static double counted(Level level) {
         Jumps j = jumps(level);
@@ -131,14 +159,6 @@ public final class WorldClock extends SavedData {
         return j == null ? 0 : j.unseen;
     }
 
-    /**
-     * Jumps in {@code level}'s dimension counted but held while a blast front crosses ({@link #holdJumpsWhile}), ticks: they
-     * join {@link #counted} when it has crossed. A strike born meanwhile takes them as already its past.
-     */
-    public static double held(Level level) {
-        Jumps j = jumps(level);
-        return j == null ? 0 : j.pending;
-    }
 
     private static Jumps jumps(Level level) {
         return level.getServer() == null ? null : get(level.getServer()).jumps.get(level.dimension().location().toString());
@@ -363,25 +383,43 @@ public final class WorldClock extends SavedData {
         c.setDirty();
     }
 
-    /** A jump of {@code hours} clock ticks: counted where nobody is awake, unseen elsewhere; fixed-time dimensions ignore it. */
+    /**
+     * A jump of {@code hours} clock ticks: counted where nobody is awake (as noted before the tick: vanilla wakes the sleepers
+     * inside the tick that skips the night), held where a front still crosses ({@link #settle}), unseen elsewhere;
+     * fixed-time dimensions ignore it.
+     */
     private void distribute(MinecraftServer server, double jump) {
         for (ServerLevel level : server.getAllLevels()) {
             if (level.dimensionType().hasFixedTime()) continue;
             Jumps j = jumps.computeIfAbsent(level.dimension().location().toString(), k -> new Jumps());
-            if (noneAwake.getOrDefault(level.dimension(), noneAwake(level))) j.pending += jump;
-            else j.unseen += jump;
+            if (!noneAwake.getOrDefault(level.dimension(), noneAwake(level))) j.unseen += jump;
+            else if (hold.test(level)) j.pending += jump;
+            else count(level, j, jump);
         }
     }
 
-    /** Counted jumps waiting for a front join their dimension's count once it has crossed. */
+    /**
+     * A jump held by a front, once it has crossed: counted if nobody in the dimension is awake now; otherwise it is a jump
+     * someone sees (unseen). Those who slept through the skip woke with it and are watching the strike, so moving its air,
+     * fires or show now would change them in front of a player (rule 7).
+     */
     private void settle(MinecraftServer server) {
         for (ServerLevel level : server.getAllLevels()) {
             Jumps j = jumps.get(level.dimension().location().toString());
-            if (j != null && j.pending > 0 && !hold.test(level)) {
-                j.counted += j.pending;
-                j.pending = 0;
+            if (j == null || j.pending <= 0 || hold.test(level)) continue;
+            double held = j.pending;
+            j.pending = 0;
+            if (noneAwake(level)) count(level, j, held);
+            else {
+                j.unseen += held;
+                heldSeen.accept(level, held);
             }
         }
+    }
+
+    private static void count(ServerLevel level, Jumps j, double jump) {
+        j.counted += jump;
+        j.roseAt = level.getGameTime();
     }
 
     /** Test seam: advance by world-clock ticks as if the time of day had moved by that much at the world's rate. */

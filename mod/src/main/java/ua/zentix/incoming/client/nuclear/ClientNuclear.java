@@ -51,7 +51,8 @@ public final class ClientNuclear {
         /** Water under burst ({@link NukeWater#resolve}): the column in the mushroom volume; the base surge is the dust wave's. */
         final BurstWater water;
         /**
-         * Post-wave pall ({@link NukePall}): dust on real time, fire haze on the strike clock ({@link #clockTicksAt}).
+         * Post-wave pall ({@link NukePall}): dust on the motion age ({@link #motionTicksAt}), fire haze on the strike clock
+         * ({@link #clockTicksAt}).
          */
         public final PallField pall;
         /** Firestorm over the burning city ({@link FireStorm}): on the strike clock ({@link #clockTicksAt}). */
@@ -148,6 +149,7 @@ public final class ClientNuclear {
             this.pall.prepareWave();
             this.pall.clock(this::clockTicksAt);
             this.pall.parcels(this::parcelClock);
+            this.pall.motion(this::motionTicksAt);
             this.storm = known == null ? new FireStorm(d, pall) : known.storm;
             if (known == null) NukeWater.resolve(this, Minecraft.getInstance().level);
             this.ground = known == null ? new PallGround(d, pall) : known.ground;
@@ -208,7 +210,12 @@ public final class ClientNuclear {
             return strikeClock(realTicks).strike(realTicks, rate, ClientClock.counted()) * 20;
         }
 
-        /** The motion age M ({@link StrikeClock#motion}) at {@code realTicks} client ticks since detonation, in ticks. */
+        /**
+         * The motion age M ({@link StrikeClock#motion}) at {@code realTicks} client ticks since detonation, in ticks: the real
+         * age plus the jumps counted in this dimension since the detonation (never those someone was awake for). What is in
+         * the air (dust, the mushroom, its light on the dust, scorch smoke) lives on it; a late joiner or a replay seek reads
+         * the same count from the clock packet.
+         */
         public double motionTicksAt(double realTicks) {
             return strikeClock(realTicks).motion(realTicks, ClientClock.counted()) * 20;
         }
@@ -234,6 +241,16 @@ public final class ClientNuclear {
                     return c.strikeAtMotion(at, realTicks, rate, jumps);
                 }
             };
+        }
+
+        /** The motion age M now ({@link #motionTicksAt} of the shown age), ticks. */
+        public double airTicks(float partialTick) {
+            return motionTicksAt(ticks(partialTick));
+        }
+
+        /** The motion age M now in model seconds (world scale applied, as {@link #seconds}). */
+        public double airSeconds(float partialTick) {
+            return airTicks(partialTick) / (20.0 * d.scale());
         }
 
         /** Detonation-clock seconds now. */
@@ -503,7 +520,7 @@ public final class ClientNuclear {
             FlashAftermath.detonation(d, partial -> {
                 // Sync can replace the active clock. Smoke must follow the clock still driving this detonation.
                 Active current = DETONATIONS.get(d.id());
-                return current != null && d.equals(current.d) ? current.clock.at(partial) : Double.POSITIVE_INFINITY;
+                return current != null && d.equals(current.d) ? current.motionTicksAt(current.clock.at(partial)) : Double.POSITIVE_INFINITY;
             }, p.blackout());
         }
     }
@@ -516,7 +533,16 @@ public final class ClientNuclear {
 
     /** The server's clocks: the client's world clocks continue from them, and each detonation's two ages follow its anchors. */
     public static void clock(S2C.NukeClock p) {
-        ClientClock.set(p);
+        clock(p, Minecraft.getInstance().level);
+    }
+
+    /** {@link #clock} received in {@code level} (tests: any token for a level). */
+    static void clock(S2C.NukeClock p, @Nullable Object level) {
+        double jump = ClientClock.set(p, level);
+        // a jump nobody here saw: conventional strikes move by it (the detonations read the count themselves). On a join
+        // the clocks come before the detonations (NuclearStrikes.sync), so the loop below finds none yet: a show that
+        // ended early stays estimated until the next packet, at most a second, which steps both states alike
+        if (jump > 0) ua.zentix.incoming.client.fx.CountedJump.apply(Math.round(jump));
         ANCHORS.clear();
         if (p.clocks().known()) {
             for (S2C.NukeClock.Anchor a : p.clocks().anchors())
@@ -790,7 +816,7 @@ public final class ClientNuclear {
                 NukeWater.tick(a, level, eye);
                 NukeDust.front(a, eye);
             }
-            if (a.ticks(0) > lifeTicks(a.d) && a.motionTicksAt(a.ticks(0)) / 20 > a.d.blackRainEndSeconds() && !a.pall.visible(a.ticks(0))) {
+            if (a.airTicks(0) > lifeTicks(a.d) && a.airTicks(0) / 20 > a.d.blackRainEndSeconds() && !a.pall.visible(a.ticks(0))) {
                 a.sounds.stop();
                 if (a.revision != null && !ua.zentix.incoming.client.replay.Replay.active())
                     net.neoforged.neoforge.network.PacketDistributor.sendToServer(new ua.zentix.incoming.net.C2S.MaterialRetired(a.revision));

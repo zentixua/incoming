@@ -205,6 +205,14 @@ public final class StrikeClouds {
     }
 
     /** Tests: moves the kept clouds within a block of {@code at} {@code ticks} into the past, as if they had happened that much earlier. */
+    /**
+     * Tests: forget every record in {@code level}. Earlier batches' strikes share the level and the packet's cap
+     * ({@link #CAP}): 256 younger clouds pushed a check's aged one out of its joiner's list.
+     */
+    public static void clearForTest(ServerLevel level) {
+        get(level).held.clear();
+    }
+
     public static void ageForTest(ServerLevel level, Vec3 at, long ticks) {
         StrikeClouds all = get(level);
         List<Held> moved = new ArrayList<>(all.held.size());
