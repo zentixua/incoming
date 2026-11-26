@@ -246,6 +246,38 @@ public final class FuelFireGameTests {
     }
 
     /**
+     * Rain wets the fuel it falls on, and a fuel fireball does not ignite wet fuel ({@code Warheads.soaked}, Kerr et al.
+     * 1971): grass and a hay bale under open sky are soaked while it rains; the same under a roof stay dry; in clear
+     * weather nothing is soaked. Weather is server-wide: own batch, clear weather restored.
+     */
+    @GameTest(template = "range", timeoutTicks = 400, batch = "fuel_fire_rain", skyAccess = true)
+    public static void rainSoaksExposedFuelOnly(GameTestHelper h) {
+        ServerLevel level = h.getLevel();
+        BlockPos open = h.absolutePos(CENTER.offset(-4, 0, 0)), hay = h.absolutePos(CENTER.offset(-4, 0, 3)),
+                covered = h.absolutePos(CENTER.offset(4, 0, 0));
+        level.setBlock(open, Blocks.SHORT_GRASS.defaultBlockState(), 2);
+        level.setBlock(hay, Blocks.HAY_BLOCK.defaultBlockState(), 2);
+        level.setBlock(covered, Blocks.SHORT_GRASS.defaultBlockState(), 2);
+        for (BlockPos p : BlockPos.betweenClosed(covered.offset(-1, 3, -1), covered.offset(1, 3, 1))) level.setBlock(p, Blocks.STONE.defaultBlockState(), 2);
+        StrikeGameTests.afterTest(h, () -> level.setWeatherParameters(24000, 0, false, false));
+        h.assertTrue(level.getBiome(open).value().getPrecipitationAt(open) == net.minecraft.world.level.biome.Biome.Precipitation.RAIN,
+                "the platform's biome has no rain: " + level.getBiome(open));
+        level.setWeatherParameters(24000, 0, false, false);
+        h.startSequence()
+                .thenWaitUntil(() -> h.assertFalse(level.isRaining(), "still raining"))
+                .thenExecute(() -> h.assertFalse(Warheads.soaked(level, open), "fuel soaked in clear weather"))
+                .thenExecute(() -> level.setWeatherParameters(0, 6000, true, false))
+                .thenWaitUntil(() -> h.assertTrue(level.isRaining(), "no rain yet"))
+                .thenExecute(() -> {
+                    h.assertTrue(Warheads.soaked(level, open), "grass under the sky stays dry in rain");
+                    h.assertTrue(Warheads.soaked(level, hay), "a hay bale under the sky stays dry in rain");
+                    h.assertFalse(Warheads.soaked(level, covered), "grass under a roof is soaked");
+                })
+                .thenExecute(() -> level.setWeatherParameters(24000, 0, false, false))
+                .thenSucceed();
+    }
+
+    /**
      * Fuel on the boardwalk above the ground; the flooring is gone (burnt out, broken) - the fuel drips down in its column to the ground and burns there; there is no fire left at the height of the flooring (there is no fuel nearby). A nearby player receives this via the network (review
      * FV, circle 2: checking the server status did not catch the sending): the first packet is a crater on the flooring, then on the ground,
      *  the same as the server; the crater chunk goes to him (entered, returned) - the current state is with him. As the client applies the

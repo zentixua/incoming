@@ -10,7 +10,6 @@ import ua.zentix.incoming.client.fx.layer.HeatPass;
 import ua.zentix.incoming.client.fx.layer.FxLights;
 import ua.zentix.incoming.client.fx.layer.FxQuads;
 import ua.zentix.incoming.client.fx.layer.SourceProbes;
-import ua.zentix.incoming.client.fx.layer.WaterDecal;
 import ua.zentix.incoming.client.nuclear.NukeRenderer;
 import ua.zentix.incoming.client.render.FarDraw;
 
@@ -102,7 +101,7 @@ public final class FarRenderer {
         basis[2].set(camera.getUpVector());
         return new FarView(eye, basis[0], basis[1], basis[2], partial,
                 FarView.depthFar(), pixel, edge, ambient, exposure, FarView.sky(mc.gameRenderer.lightTexture(), level, partial, new org.joml.Vector3f()), range, ua.zentix.incoming.client.fx.layer.FxViews.world(mc.options.getEffectiveRenderDistance() * 16.0),
-                level.effects().getCloudHeight(), level.getRainLevel(partial), Sight.Air.at(eye.y - WaterDecal.SEA_LEVEL, range),
+                level.effects().getCloudHeight(), level.getRainLevel(partial), Sight.Air.at(eye.y - ua.zentix.incoming.util.Terrain.sea(level), range),
                 ua.zentix.incoming.client.fx.layer.FxLayer.daySun(level, partial));
     }
 

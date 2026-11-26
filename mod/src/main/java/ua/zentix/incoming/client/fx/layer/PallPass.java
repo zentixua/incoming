@@ -434,7 +434,7 @@ public final class PallPass {
         /**
          * Sun light above the air, linear ({@code NukePall.Sky.top}; xyz): matter gets it through the air of its beam
          * ({@code fx_pall}: {@code pallSunBeam}); zero once the sun is below the horizon of the highest matter (no sun branch, no
-         * shadow map). w — the eye's altitude above sea level ({@code WaterDecal.SEA_LEVEL}), blocks: a point's altitude is its
+         * shadow map). w — the eye's altitude above sea level ({@code util/Terrain.sea}), blocks: a point's altitude is its
          * eye-relative y plus it ({@code pallSunHeight}).
          */
         public final Vector4f sunTop = new Vector4f();

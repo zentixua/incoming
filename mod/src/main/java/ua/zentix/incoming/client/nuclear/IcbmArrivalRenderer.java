@@ -5,11 +5,11 @@ import org.joml.Vector3f;
 import ua.zentix.incoming.client.far.FarSprites;
 import ua.zentix.incoming.client.far.FarView;
 import ua.zentix.incoming.client.far.Sight;
+import ua.zentix.incoming.client.fx.ClientAir;
 import ua.zentix.incoming.nuclear.IcbmArrival;
 import ua.zentix.incoming.nuclear.model.BlackBody;
 import ua.zentix.incoming.nuclear.model.ReentryGlow;
 import ua.zentix.incoming.strike.WeaponSpec;
-import ua.zentix.incoming.util.Air;
 
 /**
  * Reentering warhead seen from the ground ({@link ReentryGlow}): a bright plasma head with glare and veil like any
@@ -47,7 +47,7 @@ public final class IcbmArrivalRenderer {
             if (e.head() && now < path.end()) {
                 Vec3 at = path.at(now), p = at.subtract(view.camera());
                 double d = p.length(), t = view.air(d, p.y);
-                double seen = ReentryGlow.luminance(ENTRY, at.y - Air.SEA, sin) * path.light(now) * view.exposure() * t;
+                double seen = ReentryGlow.luminance(ENTRY, at.y - ClientAir.now().sea(), sin) * path.light(now) * view.exposure() * t;
                 out.light(p.x, p.y, p.z, ReentryGlow.RADIUS, seen, t, view.pixel(), HEAD_RGB[0], HEAD_RGB[1], HEAD_RGB[2], 1, 1, HEAD);
             }
             wake(path, view, out, now, Math.min(now, path.end()), game, sin);
@@ -68,7 +68,7 @@ public final class IcbmArrivalRenderer {
             if (!e.head() || now < path.start() || now >= path.end()) continue;
             double game = path.velocity().length(), sin = Math.abs(path.velocity().y) / Math.max(game, 1e-9);
             Vec3 at = path.at(now);
-            double lum = ReentryGlow.luminance(ENTRY, at.y - Air.SEA, sin) * path.light(now);
+            double lum = ReentryGlow.luminance(ENTRY, at.y - ClientAir.now().sea(), sin) * path.light(now);
             if (lum <= 0) continue;
             double k = lum / HEAD_LINEAR[3];
             f.light(at.x - eye.x, at.y - eye.y, at.z - eye.z, ReentryGlow.RADIUS, HEAD_LINEAR[0] * k, HEAD_LINEAR[1] * k,
@@ -81,7 +81,7 @@ public final class IcbmArrivalRenderer {
      * speed (real wake length / game speed, {@link ReentryGlow#wakeLength}): the real wake length laid along the game path.
      */
     private static void wake(IcbmArrival path, FarView view, FarSprites out, double now, double newest, double game, double sin) {
-        double tau = ReentryGlow.wakeLength(ENTRY, path.at(newest).y - Air.SEA, sin) / Math.max(game, 1e-9);
+        double tau = ReentryGlow.wakeLength(ENTRY, path.at(newest).y - ClientAir.now().sea(), sin) / Math.max(game, 1e-9);
         double half = ReentryGlow.RADIUS * WAKE_WIDTH;
         Vec3 head = wakeAt(path, newest, now).subtract(view.camera());
         double first = glow(path, view, now, newest, head, half, sin, game) * half / drawn(half, head.length(), view);
@@ -118,7 +118,7 @@ public final class IcbmArrivalRenderer {
 
     /** Wake brightness against screen white at the point emitted at {@code emission} (eye adaptation and air included). */
     private static double glow(IcbmArrival path, FarView view, double now, double emission, Vec3 at, double half, double sin, double game) {
-        double h = path.at(emission).y - Air.SEA;
+        double h = path.at(emission).y - ClientAir.now().sea();
         double tau = ReentryGlow.wakeLength(ENTRY, h, sin) / Math.max(game, 1e-9);
         double age = Math.max(0, now - emission);
         return ReentryGlow.WAKE_SHARE * ReentryGlow.luminance(ENTRY, h, sin) * Math.exp(-age / Math.max(tau, 1e-6))

@@ -51,6 +51,16 @@ paths:
   error does not mean absent chunk. Flight scenarios settle orders at tick end (`TerrainSurvey.settle` from
   `InstantChunks`). `Terrain.height` gives `CHUNK` without selection to callers already knowing readiness:
   `LaunchSite`, `Warheads` explosions, `nuclear/world`, ICBM site behind player in `NuclearStrikes`.
+- The world's sea level is `Terrain.sea(level)`: the server reads its generator (flat worlds −63, a pack's noise
+  settings), a client what `S2C.SeaLevel` sent for its current level (login, dimension change, respawn; 63 until then,
+  never another level's value). Every height above sea level in a world starts there: `Air` carries it (`Air.sea`,
+  wind profile, contrails), client water plane, haze, pall sun height, flame and re-entry glow, interceptor ceiling.
+  `Air.SEA` (63) is only for level-free laws (spec tables, `Ballistics.Drag`, tests): the standard atmosphere's scale is
+  kilometres, so other generators' sea levels shift it by a few percent there; `SeaLevelTest` counts its uses.
+- World wind (`util/Wind`) changes every `Wind.DAY` = 24 000 game ticks, not on the world's day: a 24-hour day sees
+  72 winds a day (not physical, guide `not-physical.md`). It stays on game ticks because a sleep or `/time` jump moves
+  the world's day in one tick, and a wind on that clock would swing smoke, plumes, flight drift and fallout at once
+  (`WindTest.windStaysOnGameTicks`).
 - World exit may hang on “Saving worlds” (vanilla unload loop `ChunkMap.processUnloads`): shutdown calls
   `ServerChunkCache.tick(() -> true, …)`, drains unload queue without limit; unload task for a revived holder retained
   by generation (`getGenerationRefCount() > 0`, generation retains whole window, canceled tasks until layers finish)

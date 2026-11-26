@@ -101,7 +101,8 @@ A blast is the warhead's charge in TNT, not a game explosion power. Everything f
   thin, dry fuel it reaches: leaves, dry grass, hay, books, and with the missile now and then cloth and wool. The flash
   comes from the fireball you see, which rises and drifts with the wind: tree crowns above the impact catch fire, grass on
   the ground catches more often downwind, and with the missile leaves catch a little past the ball's edge too. Planks, logs
-  and other thick wood only char in a flash that short. The flash leaves its fire only on what burns: sand, stone,
+  and other thick wood only char in a flash that short. In rain, fuel the rain falls on is wet and does not catch; under a
+  roof or inside a tree crown it stays dry and can. The flash leaves its fire only on what burns: sand, stone,
   earth, metal and rails never burn, and no flames from it are left standing on them. So a Shahed in a town leaves a
   few fires on dry plants near the impact, not a burning circle.
 - **Fuel in the crater**: the last quarter of the fuel stays in the crater and burns there as ordinary Minecraft fire on
@@ -542,8 +543,9 @@ same up close and far away.
   flat strip.
 - **Your eyes adjust to fire**: next to a launch at night or a fireball, your eyes adjust to the fire's light. The flame
   is bright but does not wash the whole screen out; a flame far away does not change how your eyes see the night.
-- **Wind**: smoke drifts with the world's wind, the same wind that carries nuclear fallout. Each game day has its own
-  wind, and it turns slowly from one day to the next. Near the ground it is weaker, most of all at night.
+- **Wind**: smoke drifts with the world's wind, the same wind that carries nuclear fallout. Every 20 minutes of play
+  (24 000 game ticks, one vanilla day) has its own wind, and it turns slowly from one to the next
+  ([not physical](not-physical.md) under longer days). Near the ground it is weaker, most of all at night.
 - **Contrails**: the B-2 leaves a contrail only where the air is cold enough for one to form. At the height it flies
   now the air is too warm, so it leaves none. The falling bomb leaves no trail. A white vapour collar forms around a body
   only near the speed of sound in humid air; the bomb falls slower in the game, so it has none.

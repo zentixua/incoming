@@ -52,11 +52,6 @@ public final class WaterDecal {
     /** Still-water top above block bottom ({@code LiquidBlockRenderer} — 8/9). */
     public static final double SURFACE = 8.0 / 9.0;
     /**
-     * Client sea level: no client generator; {@code Level.getSeaLevel} in 1.21.1 is deprecated and always 63 —
-     * Overworld sea (water through 62, first air above — 63).
-     */
-    public static final int SEA_LEVEL = 63;
-    /**
      * Under a shader pack, waves lower the surface below 8/9, blocks: Complementary Reimagined (host's pack) by default lowers
      * water-top vertices ({@code WAVING_WATER_VERTEX}: −0.05 ± 0.025 under open sky, −0.05 under a roof), with margin.
      */
@@ -151,7 +146,8 @@ public final class WaterDecal {
         s.safeGetUniform("InvProj").set(INV_PROJ.set(e.getProjectionMatrix()).invert());
         s.safeGetUniform("InvView").set(INV_VIEW.set(e.getModelViewMatrix()).invert());
         s.safeGetUniform("CamY").set((float) cam.y);
-        double sea = SEA_LEVEL - 1 + SURFACE;
+        // the world's sea level (util/Terrain.sea): first air above still sea water
+        double sea = ua.zentix.incoming.client.fx.ClientAir.now().sea() - 1 + SURFACE;
         s.safeGetUniform("WaterParams").set((float) (0.8 * view.world()), (float) (sea - cam.y), (float) count, view.ambient());
         Vector4f haze = fog.haze(view.range(), HAZE);
         s.safeGetUniform("Haze").set(haze.x, haze.y, haze.z, haze.w);

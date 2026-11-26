@@ -1,7 +1,6 @@
 package ua.zentix.incoming.client;
 
 import org.jetbrains.annotations.Nullable;
-import ua.zentix.incoming.util.Air;
 import ua.zentix.incoming.client.fx.BlastSource.Explosive;
 import ua.zentix.incoming.client.sound.Loudness;
 import ua.zentix.incoming.client.fx.plume.Flame;
@@ -204,10 +203,10 @@ public record ClientWeaponSpec(ClientAirframe airframe, @Nullable ClientAirframe
                     : new Stage(motor, booster, trail.alongBurn(article.burnPath(), article.booster().burn()), share);
         }
 
-        /** Plume at world height y; null if not burning or not visible. */
+        /** Plume at world height y over the world's sea level {@code sea}; null if not burning or not visible. */
         @Nullable
-        public Flame flame(double y) {
-            return motor == null ? null : FlameModel.at(motor, y - Air.SEA, share);
+        public Flame flame(double y, int sea) {
+            return motor == null ? null : FlameModel.at(motor, y - sea, share);
         }
     }
 

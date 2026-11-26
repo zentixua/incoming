@@ -275,9 +275,16 @@ public final class Blackouts {
         return hours <= 0 ? Outage.NEVER : now + Math.round(hours * Outage.TICKS_PER_HOUR);
     }
 
-    /** Spread of uniform restoration on the grid clock: the setting's seconds at vanilla day speed (20 clock ticks each). */
+    /**
+     * Grid-clock ticks per unit of {@code grid.restore_spread_seconds}: one second at vanilla day speed (20 server ticks),
+     * so a unit is {@code 20 · WorldClock.SECONDS_PER_TICK} = 72 s of the world's day, and its real length follows the day
+     * (its config tooltip says so; {@code RestoreSpreadTest}).
+     */
+    public static final int SPREAD_TICKS_PER_UNIT = 20;
+
+    /** Spread of uniform restoration on the grid clock (world's day), from the setting. */
     private static int restoreSpread() {
-        return IncomingConfig.SERVER.gridRestoreSpread.get() * 20;
+        return IncomingConfig.SERVER.gridRestoreSpread.get() * SPREAD_TICKS_PER_UNIT;
     }
 
     // ---------------------------------------------------------------- clock

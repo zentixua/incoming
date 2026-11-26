@@ -29,7 +29,8 @@ paths:
   off dark-district lamps in the palette before the chunk enters the world; `BlackoutWorld` removes their disk light
   via `checkBlock` when neighbors load). A twin replaces `lit=false`: shaders (Complementary) light lamps by block ID,
   DH by block luminance; twins have no item, so any twin in the world is an extinguished lamp (moved by a piston or craft
-  to a lit district, it relights itself, `Unlit.placed`; Sable plots are scanned every 5 s by `BlackoutWorld.relightPlots`:
+  to a lit district, it relights itself, `Unlit.placed`; Sable plots are scanned every 5 s by `BlackoutWorld.relightPlots`; twins never tick (no random ticks: blocks do not tick in a plot, and
+  `randomTickSpeed 0` is common), every relight comes from an event or a scan, GameTest `plotTwinRelightsWithoutRandomTicks`;
   assembly writes blocks straight into sections, blocks do not tick in a plot, Sable saves the plot itself; a twin in
   a plot relights on a neighbor update during assembly, `Unlit.neighborChanged`: autosave precedes the end of the server
   tick, and Sable has no plot-save event). Lamps change directly in the section palette (`ChunkLights.applyInPlace`,

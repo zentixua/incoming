@@ -111,7 +111,8 @@ final class Craters {
      * traversal from impact while exposure ≥ {@link PulseIgnition#FLOOR} (no ball behind surviving wall); each
      * fuel face reached gets one decision per block: exposure ignites thin fuels by threshold share ({@link
      * PulseIgnition#share}: leaves, paper, grass, fabric via {@code pulse_*}; untagged mod blocks readily ignited
-     * by vanilla, spread ≥ {@link #THIN_SPREAD}, as grass, ⚠ approximation). Thick wood does not ignite: seconds
+     * by vanilla, spread ≥ {@link #THIN_SPREAD}, as grass, ⚠ approximation); fuel rain falls on is wet and does not ignite
+     * ({@link Warheads#soaked}). Thick wood does not ignite: seconds
      * heat less than a millimeter. Crater fuel ({@link FuelFireball#POOL_SHARE}) burns on blocks where it settles
      * ({@link FuelFires}); wood it flows to ignites by game rules.
      * <p>
@@ -222,7 +223,7 @@ final class Craters {
                     if (s.isFlammable(level, n, dir.getOpposite())) {
                         long key = n.asLong();
                         if (!burns.containsKey(key)) {
-                            double share = PulseIgnition.share(q, fuel(level, n, s, dir.getOpposite()));
+                            double share = Warheads.soaked(level, n) ? 0 : PulseIgnition.share(q, fuel(level, n, s, dir.getOpposite()));
                             burns.put(key, share > 0 && level.random.nextDouble() < share);
                         }
                         if (burns.get(key) && !lit.contains(key) && light(level, area.claims(), p, here, n.immutable(), s, dir)) lit.add(key);

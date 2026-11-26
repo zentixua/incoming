@@ -17,7 +17,6 @@ import ua.zentix.incoming.IncomingConfig;
 import ua.zentix.incoming.client.far.FarView;
 import ua.zentix.incoming.client.far.Sight;
 import ua.zentix.incoming.client.fx.layer.PallPass;
-import ua.zentix.incoming.client.fx.layer.WaterDecal;
 import ua.zentix.incoming.client.sound.SoundFilters;
 import ua.zentix.incoming.nuclear.Detonation;
 
@@ -311,7 +310,7 @@ public final class NukePall {
         // no detonation: no dust wave (the shared frame keeps the last nuclear frame's inputs otherwise)
         f.dustWall.active = false;
         double range = Sight.range(level.getRainLevel(partial), level.getThunderLevel(partial));
-        Sight.Air a = Sight.Air.at(eye.y - ua.zentix.incoming.client.fx.layer.WaterDecal.SEA_LEVEL, range);
+        Sight.Air a = Sight.Air.at(eye.y - ua.zentix.incoming.util.Terrain.sea(level), range);
         f.air.set((float) a.haze(), (float) a.clean(), (float) a.weather(), (float) (1 / Sight.HAZE_HEIGHT));
         light(level, eye, partial, f);
         openSky(level, f.openSky, f.faceShade);
@@ -481,11 +480,11 @@ public final class NukePall {
          * light; zero once the sun is below the horizon of {@link Sight#SUN_TOP}.
          */
         final float[] top = new float[3];
-        /** Eye altitude above sea level ({@link WaterDecal#SEA_LEVEL}), blocks: fx_pall's sun height is p.y plus it. */
+        /** Eye altitude above sea level (the world's, {@code util/Terrain.sea}), blocks: fx_pall's sun height is p.y plus it. */
         float eyeUp;
 
         /**
-         * Sun light on matter at altitude {@code height} blocks (= m) above sea level ({@link WaterDecal#SEA_LEVEL}: one reference for
+         * Sun light on matter at altitude {@code height} blocks (= m) above sea level (the world's, {@code util/Terrain.sea}: one reference for
          * every detonation, cap, pall and wall), per channel, into {@code into}: {@link #top} through the air of its beam
          * ({@link Sight#sunThroughAir}); the copy in {@code fx_pall} is {@code pallSunBeam(pallSunHeight(p))}.
          */
@@ -507,7 +506,7 @@ public final class NukePall {
     }
 
     /**
-     * Altitude above sea level ({@link WaterDecal#SEA_LEVEL}) of the highest matter of all detonations, blocks: the mushroom's top with its billows ({@link MushroomField#top}),
+     * Altitude above sea level (the world's, {@code util/Terrain.sea}) of the highest matter of all detonations, blocks: the mushroom's top with its billows ({@link MushroomField#top}),
      * or {@link Sight#SUN_TOP} while one has no mushroom (pall and wall only; their sun branches cost per sample, no shadow map).
      * The frame computes sunlight while the sun stands above this height's horizon.
      */
@@ -516,7 +515,7 @@ public final class NukePall {
         for (ClientNuclear.Active a : ClientNuclear.detonations()) {
             ua.zentix.incoming.nuclear.model.MushroomModel.Shape s = MushroomField.shape(a, partial);
             if (s == null) return Sight.SUN_TOP;
-            top = Math.max(top, a.d.groundY() - WaterDecal.SEA_LEVEL + a.d.blocks(MushroomField.top(s)));
+            top = Math.max(top, a.d.groundY() - ua.zentix.incoming.client.fx.ClientAir.now().sea() + a.d.blocks(MushroomField.top(s)));
         }
         return Math.min(top, Sight.SUN_TOP);
     }
@@ -531,7 +530,7 @@ public final class NukePall {
      * {@code top} (blocks above sea level), zero below it.
      */
     static void sky(ClientLevel level, Vec3 eye, float partial, double top, Sky into) {
-        into.eyeUp = (float) (eye.y - WaterDecal.SEA_LEVEL);
+        into.eyeUp = (float) (eye.y - ua.zentix.incoming.util.Terrain.sea(level));
         float angle = level.getTimeOfDay(partial) * Mth.TWO_PI;
         into.sx = -Mth.sin(angle);
         into.sy = Mth.cos(angle);
@@ -639,8 +638,8 @@ public final class NukePall {
             ClientNuclear.Active last = all.getLast();
             ua.zentix.incoming.nuclear.model.MushroomModel.Shape shape = MushroomField.shape(last, 0);
             if (shape != null) {
-                double up = last.d.groundY() - WaterDecal.SEA_LEVEL + last.d.blocks(shape.capY());
-                double top = last.d.groundY() - WaterDecal.SEA_LEVEL + last.d.blocks(MushroomField.top(shape));
+                double up = last.d.groundY() - ua.zentix.incoming.client.fx.ClientAir.now().sea() + last.d.blocks(shape.capY());
+                double top = last.d.groundY() - ua.zentix.incoming.client.fx.ClientAir.now().sea() + last.d.blocks(MushroomField.top(shape));
                 double[] atCap = new double[3], atTop = new double[3];
                 SKY.sunAt(up, atCap);
                 SKY.sunAt(top, atTop);
@@ -648,7 +647,7 @@ public final class NukePall {
                 Vec3 eye = mc.gameRenderer.getMainCamera().getPosition();
                 double dx = last.d.burst().x - eye.x, dy = last.d.groundY() + last.d.blocks(shape.capY()) - eye.y, dz = last.d.burst().z - eye.z;
                 double dist = Math.sqrt(dx * dx + dy * dy + dz * dz);
-                Sight.Air air = Sight.Air.at(eye.y - WaterDecal.SEA_LEVEL, Sight.range(mc.level == null ? 0 : mc.level.getRainLevel(1),
+                Sight.Air air = Sight.Air.at(eye.y - ua.zentix.incoming.client.fx.ClientAir.now().sea(), Sight.range(mc.level == null ? 0 : mc.level.getRainLevel(1),
                         mc.level == null ? 0 : mc.level.getThunderLevel(1)));
                 double haze = 1 - air.transmittance(dist, dy);
                 double[] airLight = NukeExposure.airLight(dx / dist, dy / dist, dz / dist, new double[] {f.airSky.x, f.airSky.y, f.airSky.z},

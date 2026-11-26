@@ -21,6 +21,10 @@ import java.util.function.Supplier;
  * not surrounding light), and Distant Horizons LODs of loaded chunks (light is computed from block emission).
  * Counterparts have no item: they occur in the world only through blackout, so restoration is unambiguous
  * ({@link ua.zentix.incoming.grid.GridLights}).
+ * <p>
+ * Counterparts never tick: every relight comes from an event or a scan (placement, neighbor update in a plot, chunk load,
+ * the restoration cascade, {@code BlackoutWorld.relightPlots}), so {@code randomTickSpeed} (0 on many servers) changes
+ * nothing ({@code GridGameTests.plotTwinRelightsWithoutRandomTicks}).
  */
 public interface Unlit {
     /** Lamp of which this block is a counterpart. */
@@ -50,15 +54,6 @@ public interface Unlit {
      */
     static void neighborChanged(BlockState state, Level level, BlockPos pos) {
         if (level instanceof ServerLevel server && SubLevels.isInPlot(server, Vec3.atCenterOf(pos))) ChunkLights.relight(server, pos, state);
-    }
-
-    /**
-     * Fallback: a counterpart's random tick where power exists makes it a lamp again. This relights counterparts seen by
-     * neither the blackout queue nor {@link #placed}: in Sable craft plots (assembly places blocks directly in sections),
-     * or in a chunk left dark for any other reason.
-     */
-    static void randomTick(BlockState state, ServerLevel level, BlockPos pos) {
-        if (BlackoutWorld.powered(level, pos)) BlackoutWorld.get(level).relightLater(pos);
     }
 
     /** Pick block (middle button) gives the lamp. */

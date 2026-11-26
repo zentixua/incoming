@@ -1016,4 +1016,16 @@ public final class Warheads {
             return Craters.dig(level, area.claims(), new Vec3(pos.x, cover, pos.z), law.craterRadius(soil), law.craterDepth(soil), ventMat);
         }
     }
+
+    /**
+     * Rain falls on the fuel at {@code at} (on it or on its top face, as vanilla rain reaches a block: open sky, a rainy
+     * biome): its surface is wet, and "wet or green leaves are virtually impossible to ignite and even when ignited will
+     * not participate in the development of a persistent fire" (Kerr et al. 1971, DNA N2:TR 2-70, p. 4-2; the same for
+     * the thin dry fuels of {@code PulseIgnition}: their thresholds are for dry kindling), so the fireball's seconds of
+     * light ignite none of it. Fuel under a roof or a canopy stays dry. A fuel pool burns in rain all the same
+     * ({@link FuelFires}). Ready chunks only (the caller checks).
+     */
+    public static boolean soaked(ServerLevel level, BlockPos at) {
+        return level.isRaining() && (level.isRainingAt(at) || level.isRainingAt(at.above()));
+    }
 }
