@@ -148,7 +148,12 @@ public final class VoxyLods {
         /** Server thread, every tick: top up the event loop's stock and let it send. Never waits for the network. */
         void drain() {
             stockUp();
-            if (channel == null || !channel.isActive() || stock.isEmpty() || !pumpQueued.compareAndSet(false, true)) return;
+            if (!stock.isEmpty()) schedulePump();
+        }
+
+        /** Any thread: one pump task at a time on the connection's event loop. */
+        private void schedulePump() {
+            if (channel == null || !channel.isActive() || !pumpQueued.compareAndSet(false, true)) return;
             channel.eventLoop().execute(() -> {
                 pumpQueued.set(false);
                 pump();
@@ -213,9 +218,14 @@ public final class VoxyLods {
             if (LodDiag.ON) diagInFlight = flow.inFlight();
         }
 
+        /**
+         * Write completion. Inside {@link #pump} its loop continues; otherwise pump as a new task: Netty completes the
+         * write before it subtracts the bytes from the channel's pending count, so a pump from here would see a full
+         * channel and stop until the next tick.
+         */
         private void written() {
             writing = false;
-            pump();
+            if (!pumping) schedulePump();
         }
 
         private void mark() {

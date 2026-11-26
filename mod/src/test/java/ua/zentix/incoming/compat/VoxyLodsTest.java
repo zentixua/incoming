@@ -171,9 +171,38 @@ class VoxyLodsTest {
             assertTrue(channel.isWritable(), "event-loop dispatch has not encoded anything yet");
             assertEquals(1, client.chunks.size());
             client.pending.onSuccess();
-            assertEquals(2, client.chunks.size(), "the completed write sends the next chunk itself");
+            channel.runPendingTasks(); // the connection's event loop
+            assertEquals(2, client.chunks.size(), "the completed write sends the next chunk without a server tick");
             client.pending.onFailure();
+            channel.runPendingTasks();
             assertEquals(3, client.chunks.size(), "a failed write also releases its reservation");
+        } finally {
+            channel.finishAndReleaseAll();
+        }
+    }
+
+    /** Netty completes a write before it subtracts its bytes from the pending count: pumping inside the callback stalls. */
+    @Test
+    void asyncWriteCompletionContinuesWithoutAServerTick() {
+        SlowChannel channel = new SlowChannel();
+        try {
+            Receiver client = new Receiver();
+            BiConsumer<CustomPacketPayload, PacketSendListener> transport = (p, done) -> {
+                if (p instanceof S2C.VoxyChunk chunk) {
+                    client.chunks.add(chunk);
+                    channel.writeAndFlush(Unpooled.wrappedBuffer(chunk.sections())).addListener(future -> {
+                        if (future.isSuccess()) done.onSuccess();
+                        else done.onFailure();
+                    });
+                } else client.accept(p, done);
+            };
+            VoxyLods.Viewer viewer = new VoxyLods.Viewer(channel, transport);
+            for (int i = 0; i < 10; i++) viewer.offer(i, packet(i, new byte[40 * 1024]));
+            tick(viewer);
+            assertEquals(1, client.chunks.size(), "one outstanding write");
+            channel.resume();
+            channel.runPendingTasks();
+            assertEquals(10, client.chunks.size(), "completions chain the rest on the event loop");
         } finally {
             channel.finishAndReleaseAll();
         }
@@ -201,7 +230,8 @@ class VoxyLodsTest {
             assertFalse(channel.isWritable());
             assertEquals(1, client.chunks.size());
             channel.resume();
-            assertEquals(1, client.marks.size(), "completed write marks the full window");
+            channel.runPendingTasks();
+            assertEquals(1, client.marks.size(), "the full window is marked once");
             tick(viewer);
             assertEquals(1, client.chunks.size(), "no acknowledgement, no second window");
             client.ackAll(viewer);

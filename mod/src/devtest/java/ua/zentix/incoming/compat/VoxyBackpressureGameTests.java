@@ -98,7 +98,7 @@ public final class VoxyBackpressureGameTests {
             channel.draining = true;
             channel.flush();
             channel.runPendingTasks();
-            h.assertTrue(viewer.sent.get() == 8, "Connection write completion did not resume delivery within the window");
+            h.assertTrue(viewer.sent.get() == 8, "Connection write completion did not resume delivery within the window: sent " + viewer.sent.get() + ", waiting " + (viewer.bytes + viewer.stockBytes()) + ", in flight " + viewer.flow.inFlight() + ", writable " + channel.isWritable() + ", marks " + batches.size());
             h.assertTrue(batches.stream().mapToInt(S2C.LodBatchFinished::chunks).sum() == 8, "sent chunks not all marked for acknowledgement");
             for (int i = 8; i < 68; i++) viewer.offer(i, new S2C.VoxyChunk(dimension, i, 0, new byte[small]));
             for (int tick = 0; tick < 1200; tick++) {
