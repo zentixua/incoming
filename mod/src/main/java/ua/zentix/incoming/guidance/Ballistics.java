@@ -38,7 +38,12 @@ public final class Ballistics {
             return new Drag(coefficient, 0);
         }
 
-        /** Coefficient at world altitude {@code y} and air-relative {@code speed} blocks/tick, 1/block. */
+        /**
+         * Coefficient at world altitude {@code y} and air-relative {@code speed} blocks/tick, 1/block. Density is taken
+         * above the reference sea level {@link Air#SEA}, not the world's: the drag law also serves level-free spec tables
+         * ({@code WeaponSpec.reach}), and a flat world's offset (126 m) changes standard-atmosphere density by 1.2 %
+         * ({@code SeaLevelTest}), while the wind in the same trajectory reads the world's sea level.
+         */
         public double at(double y, double speed) {
             double h = y - Air.SEA;
             return coefficient * StandardAtmosphere.density(h) / RHO0 * machTerm(h, speed);
@@ -92,7 +97,7 @@ public final class Ballistics {
 
         /** World ground wind (10 m above sea) at every altitude: what an unsounded fire solution knows. */
         static Wind ground(Air air) {
-            double y = Air.SEA + 10;
+            double y = air.sea() + 10;
             return uniform(air.windX(y) / 20, air.windZ(y) / 20);
         }
     }

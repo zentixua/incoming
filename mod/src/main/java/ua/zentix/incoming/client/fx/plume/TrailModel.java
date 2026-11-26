@@ -171,14 +171,14 @@ public final class TrailModel {
 
     /** Vapour excess above ice saturation at world height y, kg/m³ (0 — not supersaturated). */
     public static double excess(double y, Air air) {
-        return Math.max(0, -Contrail.iceDeficit(StandardAtmosphere.temperature(y - Air.SEA), air.humidity()));
+        return Math.max(0, -Contrail.iceDeficit(StandardAtmosphere.temperature(y - air.sea()), air.humidity()));
     }
 
     /**
      * Whether a contrail forms at world height y: temperature and pressure from the standard atmosphere above world sea level.
      */
     public static boolean contrail(Trail t, double y, Air air) {
-        double h = y - Air.SEA;
+        double h = y - air.sea();
         return Contrail.forms(t.motor(), StandardAtmosphere.temperature(h), StandardAtmosphere.pressure(h), air.humidity());
     }
 
@@ -195,7 +195,7 @@ public final class TrailModel {
         double life = smoke > 0 ? until(t, sigmaFor(smoke), inverseSpeed, c, wind, n) : 0;
         double ice = 0;
         if (contrail(t, y, air)) {
-            double h = y - Air.SEA, deficit = Contrail.iceDeficit(StandardAtmosphere.temperature(h), air.humidity());
+            double h = y - air.sea(), deficit = Contrail.iceDeficit(StandardAtmosphere.temperature(h), air.humidity());
             // supersaturated air: trail thickens while spreading — lasts as long as supersaturation
             ice = deficit <= 0 ? LONGEST : until(t, Math.min(sigmaFor(ice(t, inverseSpeed, 0, 0)),
                     Contrail.dryAt(t.motor().waterFlow() * inverseSpeed, deficit)), inverseSpeed, c, wind, n);

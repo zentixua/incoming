@@ -3,7 +3,7 @@
 English · [Русский](ru/blackout.md)
 
 A Transformer Substation powers an area with a radius of 512 blocks. Knock it out with a blast and the electric lights
-of the area go out district by district. Power starts coming back after 15 minutes and returns district by district over the next 90 seconds by default. While a substation is knocked out,
+of the area go out district by district. By default power starts coming back after 18 hours of the world's day and returns district by district over the next 1 h 48 min of it: 15 minutes and 90 seconds in a vanilla world. While a substation is knocked out,
 its transformer oil burns: a column of thick black smoke, flames about 4.5 blocks high that light the area at night, and
 the crackle of the broken arc. A working substation hums.
 

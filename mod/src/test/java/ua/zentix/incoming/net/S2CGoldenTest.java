@@ -139,6 +139,7 @@ class S2CGoldenTest {
                                 new S2C.NukeClock.Anchor(3, 0, 24_000, 80_000.5, 13_000, 81_200.5),
                                 new S2C.NukeClock.Anchor(7, 13_000, -1, Double.NaN, Double.NaN, Double.NaN))))),
                 golden(S2C.NukeTick.TYPE, S2C.NukeTick.CODEC, new S2C.NukeTick(2_000_000_123L)),
+                golden(S2C.SeaLevel.TYPE, S2C.SeaLevel.CODEC, new S2C.SeaLevel(-63)),
                 golden(S2C.NukeCancelled.TYPE, S2C.NukeCancelled.CODEC, new S2C.NukeCancelled(List.of(7, 300_000))),
                 golden(S2C.NukeDebris.TYPE, S2C.NukeDebris.CODEC, new S2C.NukeDebris(4, List.of(
                         new S2C.NukeDebris.Piece(new BlockPos(-100, 70, 2000), Blocks.STONE.defaultBlockState()),

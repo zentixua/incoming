@@ -640,7 +640,7 @@ public final class FarBlasts {
      */
     static double heightAbove(ClientLevel level, Vec3 pos) {
         double ground = FarTerrain.dust(level).at((int) Math.floor(pos.x), (int) Math.floor(pos.z));
-        if (Double.isNaN(ground)) ground = ua.zentix.incoming.util.Air.SEA;
+        if (Double.isNaN(ground)) ground = ua.zentix.incoming.util.Terrain.sea(level);
         return Math.max(0, pos.y - ground);
     }
 

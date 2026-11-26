@@ -26,6 +26,62 @@ import java.util.function.IntBinaryOperator;
 public final class Terrain {
     private Terrain() {}
 
+    /** Vanilla Overworld sea level (water through 62, first air above 63): level-free laws and a client before the server's word. */
+    public static final int VANILLA_SEA = 63;
+    /** Client level the server's sea level belongs to ({@link #seaFromServer}); weak, so a closed world is not retained. */
+    private static java.lang.ref.WeakReference<Level> seaOf = new java.lang.ref.WeakReference<>(null);
+    private static volatile int seaFromServer = VANILLA_SEA;
+
+    /**
+     * The world's sea level, first air above still sea water: the server reads its generator (flat worlds −63, a
+     * pack's noise settings their {@code sea_level}), a client what the server sent for its current level
+     * ({@code S2C.SeaLevel}, {@link #VANILLA_SEA} until it arrives). Not {@code Level.getSeaLevel}: always 63 in 1.21.1.
+     * Every height the mod measures above sea level in a world starts here ({@code SeaLevelTest}).
+     */
+    public static int sea(Level level) {
+        if (level instanceof ServerLevel server) return server.getChunkSource().getGenerator().getSeaLevel();
+        return seaOf.get() == level ? seaFromServer : VANILLA_SEA;
+    }
+
+    /** Client: the server's sea level for {@code level} (packet handler, client thread). */
+    public static void seaFromServer(Level level, int y) {
+        seaFromServer = y;
+        seaOf = new java.lang.ref.WeakReference<>(level);
+    }
+
+    /**
+     * Ticks between repeats of {@code S2C.SeaLevel} to every player: a Flashback recording started mid-session holds the
+     * value within this time, whatever its snapshot keeps (5 bytes per player each 30 s).
+     */
+    public static final int SEA_RESEND = 600;
+
+    /**
+     * Tells a player the sea level of the level they are in: login, dimension change, respawn and every
+     * {@link #SEA_RESEND} ticks. Not from a Flashback replay server: its viewers get the recorded value, and the replay
+     * server's own level is not the recorded world.
+     */
+    public static void sendSea(net.minecraft.server.level.ServerPlayer player) {
+        if (ua.zentix.incoming.compat.FlashbackReplay.isReplay(player.server)) return;
+        net.neoforged.neoforge.network.PacketDistributor.sendToPlayer(player, new ua.zentix.incoming.net.S2C.SeaLevel(sea(player.serverLevel())));
+    }
+
+    public static void onServerTick(net.neoforged.neoforge.event.tick.ServerTickEvent.Post e) {
+        if (e.getServer().getTickCount() % SEA_RESEND != 0) return;
+        for (net.minecraft.server.level.ServerPlayer p : e.getServer().getPlayerList().getPlayers()) sendSea(p);
+    }
+
+    public static void onLogin(net.neoforged.neoforge.event.entity.player.PlayerEvent.PlayerLoggedInEvent e) {
+        if (e.getEntity() instanceof net.minecraft.server.level.ServerPlayer p) sendSea(p);
+    }
+
+    public static void onChangeDimension(net.neoforged.neoforge.event.entity.player.PlayerEvent.PlayerChangedDimensionEvent e) {
+        if (e.getEntity() instanceof net.minecraft.server.level.ServerPlayer p) sendSea(p);
+    }
+
+    public static void onRespawn(net.neoforged.neoforge.event.entity.player.PlayerEvent.PlayerRespawnEvent e) {
+        if (e.getEntity() instanceof net.minecraft.server.level.ServerPlayer p) sendSea(p);
+    }
+
     /**
      * Chunk loaded and ready: server uses {@code getChunkNow}, not {@code hasChunk}/{@code isLoaded}
      * (also true for still-loading chunks, whose reads wait for loading).

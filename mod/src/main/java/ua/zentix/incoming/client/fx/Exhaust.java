@@ -98,7 +98,7 @@ public final class Exhaust {
         ClientWeaponSpec.ClientAirframe a = nozzles(e);
         // booster thrust share follows the curve (rise, decay toward separation), with fractional ticks: plume fades without steps
         ClientWeaponSpec.Stage stage = a.far().stage(e.flightPhase(), e.phaseAge() + partial, e.airframe().thrust());
-        Flame f = stage.flame(e.getY());
+        Flame f = stage.flame(e.getY(), ua.zentix.incoming.util.Terrain.sea(level));
         if (f == null) return null;
         ClientWeaponSpec.At n = a.nozzle(stage);
         return new Plume((float) n.y(), (float) n.z(), f, 1);
@@ -243,8 +243,9 @@ public final class Exhaust {
         if (e.isDrilling()) return;
         Vec3 at = e.position();
         // humidity from the world atmosphere (weather), as for trails and clouds
-        double mach = VapourCollar.mach(e.speed() * 20, at.y - ua.zentix.incoming.util.Air.SEA);
-        if (VapourCollar.forms(mach, ua.zentix.incoming.util.Air.of(level).humidity())) {
+        ua.zentix.incoming.util.Air air = ua.zentix.incoming.util.Air.of(level);
+        double mach = VapourCollar.mach(e.speed() * 20, at.y - air.sea());
+        if (VapourCollar.forms(mach, air.humidity())) {
             for (int i = 0; i < 4; i++) {
                 double a = r.nextDouble() * Mth.TWO_PI;
                 Vec3 p = Local.at(e.position(), e.getYRot(), e.getXRot(), Math.cos(a) * 1.1, Math.sin(a) * 1.1, 2 - r.nextDouble());

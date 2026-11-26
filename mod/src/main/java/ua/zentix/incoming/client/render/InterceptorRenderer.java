@@ -5,7 +5,6 @@ import org.jetbrains.annotations.Nullable;
 import ua.zentix.incoming.client.ClientWeaponSpec;
 import ua.zentix.incoming.client.far.FarView;
 import ua.zentix.incoming.client.far.Sight;
-import ua.zentix.incoming.util.Air;
 import ua.zentix.incoming.client.fx.plume.Flame;
 import ua.zentix.incoming.client.fx.plume.FlameModel;
 import com.mojang.blaze3d.vertex.PoseStack;
@@ -51,7 +50,7 @@ public class InterceptorRenderer extends EntityRenderer<InterceptorEntity> {
     @Nullable
     static Exhaust.Plume plume(InterceptorEntity e, float partial) {
         boolean boost = e.age() + partial <= InterceptorSpec.SAM.boostTicks();
-        Flame f = FlameModel.at(boost ? ClientWeaponSpec.SAM_BOOST : ClientWeaponSpec.SAM_SUSTAIN, e.getY() - Air.SEA);
+        Flame f = FlameModel.at(boost ? ClientWeaponSpec.SAM_BOOST : ClientWeaponSpec.SAM_SUSTAIN, e.getY() - ua.zentix.incoming.util.Terrain.sea(e.level()));
         if (f == null || !(e.level() instanceof ClientLevel level)) return null;
         return new Exhaust.Plume(0, (float) -InterceptorSpec.SAM.noseLength(), f, 1);
     }

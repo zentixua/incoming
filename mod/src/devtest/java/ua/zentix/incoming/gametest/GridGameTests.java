@@ -366,6 +366,58 @@ public final class GridGameTests {
                 .thenSucceed();
     }
 
+    /**
+     * Relight never depends on random ticks: no twin ticks randomly, and a twin written straight into a Sable plot section
+     * (no placement, no neighbor update) relights by the plot scan ({@code BlackoutWorld.relightPlots}) with
+     * {@code randomTickSpeed 0}, a common server setting.
+     */
+    @GameTest(template = "range", timeoutTicks = 600, batch = "grid_sable_ticks", skyAccess = true)
+    public static void plotTwinRelightsWithoutRandomTicks(GameTestHelper h) {
+        for (ua.zentix.incoming.registry.ModBlocks.UnlitPair p : ua.zentix.incoming.registry.ModBlocks.UNLIT) {
+            for (BlockState st : p.unlit().get().getStateDefinition().getPossibleStates())
+                h.assertFalse(st.isRandomlyTicking(), "twin ticks randomly: " + st);
+        }
+        if (!ModList.get().isLoaded("sable")) {
+            h.succeed();
+            return;
+        }
+        ServerLevel level = h.getLevel();
+        var server = level.getServer();
+        quiet(level);
+        var rule = level.getGameRules().getRule(net.minecraft.world.level.GameRules.RULE_RANDOMTICKING);
+        int speed = rule.get();
+        rule.set(0, server);
+        BlockPos from = CENTER.offset(-2, 3, -2), to = from.offset(4, 0, 4);
+        BlockPos a = h.absolutePos(from), b = h.absolutePos(to);
+        Vec3 craft = Vec3.atCenterOf(h.absolutePos(from.offset(2, 0, 2)));
+        SubLevelAccess[] sub = new SubLevelAccess[1];
+        BlockPos[] twin = new BlockPos[1];
+        h.startSequence()
+                .thenExecute(() -> {
+                    BlockPos.betweenClosed(from, to).forEach(p -> h.setBlock(p, Blocks.OAK_PLANKS));
+                    server.getCommands().performPrefixedCommand(server.createCommandSourceStack().withLevel(level).withSuppressedOutput(),
+                            String.format(Locale.ROOT, "sable assemble area %d %d %d %d %d %d", a.getX(), a.getY(), a.getZ(), b.getX(), b.getY(), b.getZ()));
+                })
+                .thenWaitUntil(() -> {
+                    List<SubLevelAccess> near = SubLevels.near(level, craft, 8);
+                    h.assertFalse(near.isEmpty(), "craft is not assembled");
+                    sub[0] = near.getFirst();
+                })
+                .thenExecute(() -> {
+                    // a twin written into the plot section: no onPlace, no neighbor update, only the plot scan can find it
+                    BlockPos c = BlockPos.containing(SubLevels.toPlot(sub[0], SubLevels.center(sub[0]))).above(2);
+                    LevelChunk chunk = level.getChunkAt(c);
+                    chunk.getSection(chunk.getSectionIndex(c.getY())).setBlockState(c.getX() & 15, c.getY() & 15, c.getZ() & 15,
+                            GridLights.unlit(Blocks.SEA_LANTERN.defaultBlockState()), false);
+                    twin[0] = c;
+                    h.assertTrue(GridLights.isUnlit(level.getBlockState(c)), "the twin was not written: " + level.getBlockState(c));
+                })
+                .thenWaitUntil(() -> h.assertTrue(level.getBlockState(twin[0]).is(Blocks.SEA_LANTERN),
+                        "the plot twin did not relight without random ticks: " + level.getBlockState(twin[0])))
+                .thenExecute(() -> rule.set(speed, server))
+                .thenSucceed();
+    }
+
     /** Lamps around the craft plot center: {lit, extinguished}. */
     private static int[] plotLamps(ServerLevel level, SubLevelAccess sub) {
         BlockPos c = BlockPos.containing(SubLevels.toPlot(sub, SubLevels.center(sub)));

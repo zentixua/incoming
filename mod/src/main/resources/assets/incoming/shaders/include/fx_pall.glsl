@@ -89,7 +89,7 @@ uniform vec4 PallSun;
 // the sun on the ground; matter aloft takes pallSunBeam of its height
 uniform vec3 PallSunLight;
 // sun light above the air, linear (rgb, NukePall.Sky.top: weather, remainder to white after sky light); zero once the sun is
-// below the horizon of the frame's highest matter. w — the eye's altitude above sea level (WaterDecal.SEA_LEVEL), blocks
+// below the horizon of the frame's highest matter. w — the eye's altitude above sea level (util/Terrain.sea), blocks
 uniform vec4 PallSunTop;
 uniform vec3 PallSkyLight;
 uniform vec3 PallFireLight;
