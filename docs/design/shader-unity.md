@@ -107,8 +107,9 @@ Frame evidence, release 3.14 scene bench, same scenes under no pack, Photon and 
 - **Who reaches the clouds.** Cloud decks: Complementary 192 and 288 (vanilla height and layer 2), MakeUp 319–590,
   Photon cumulus 1200 m above sea level at `CLOUDS_SCALE=1` (Artem's setting; y ≈ 1263) or 120 m at the default 10
   (y ≈ 183), altocumulus 3200 m and cirrus 6000 m (scaled the same way). Game cruise heights (`WeaponSpec`): Shahed and
-  loitering munition 45 blocks, cruise missile 12, B-2 170 above the target. So at the default game scale only the nuke,
-  the ICBM, high MLRS arcs and the B-2 meet clouds; at real scale the Shahed cruises at 2 km, above Photon's deck.
+  loitering munition 45 blocks, cruise missile 12, B-2 170 above the target. An MLRS rocket at its game speed of 4 blocks/tick
+  peaks at most v²/2g ≈ 160 blocks above the launcher at 45° (g = 0.0245, drag ignored). So at the default game scale
+  only the nuke, the ICBM, the B-2 and long Grad arcs (Complementary's 192 deck only) meet clouds; at real scale the Shahed cruises at 2 km, above Photon's deck.
 - **Verdict.** Proposed: the nuclear stem and cap open the deck (radius from the mushroom model at the deck height,
   drifting with the wind afterwards), the ICBM launch column opens a narrow hole (est.), and both light the deck from
   below. Not proposed: holes behind drones, missiles and rockets (concept 4: never add what reality lacks).
