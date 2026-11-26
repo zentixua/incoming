@@ -65,6 +65,10 @@ paths:
   out per take. LOD Server Support serves a single-player world only with `--prop lss.test.integratedServer=true`;
   `/publish` opens a LAN socket on every interface, and `rig/LoopbackGuard` stops the server (the client then sits in the
   menu while the recorder runs: a take wrapper must stop on a guard line or a silent log).
+- `tools/prod_client.py --server` without a scenario (a plain join, `--incoming-jar`) stops at a server's resource-pack
+  prompt: the headless client cannot answer it, the server shows the player only in its configuration phase, and the run
+  ends at `--seconds` without joining. Before `--no-copy`, set the entry's `acceptTextures` byte to 1 for that address in
+  the copy's `servers.dat` (quick play reads it); the `commands` scenario accepts the pack itself.
 - A player's slow line without sudo: one user and network namespace (`unshare -U -n --map-user=$(id -u)
   --map-group=$(id -g) --keep-caps`, inside a `laptop_job.sh` unit) holds the `rigLaunch` server and client; there
   `tc` shapes loopback (a `prio` qdisc, a `u32 match ip sport <server port>` filter to a `netem delay rate` band for
