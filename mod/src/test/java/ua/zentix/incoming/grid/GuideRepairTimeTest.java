@@ -18,8 +18,10 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 class GuideRepairTimeTest {
     /** Real seconds until uniform repairs start for a default substation outage whose strike's show lasts {@code showTicks}. */
     static double firstRepairSeconds(long showTicks) {
-        long restoreAt = 18_000; // default restore_hours 18, grid clock from 0
-        Outage o = new Outage(1, 0, 0, 512, 0, 3, restoreAt, 90 * Blackouts.SPREAD_TICKS_PER_UNIT, 7).heldBy(-1, showTicks);
+        // the defaults of restore_hours (world hours, 1000 world-clock ticks each) and restore_spread_seconds; grid clock from 0
+        long restoreAt = Math.round(ua.zentix.incoming.IncomingConfig.SERVER.gridRestoreHours.getDefault() * 1000);
+        int spread = ua.zentix.incoming.IncomingConfig.SERVER.gridRestoreSpread.getDefault() * Blackouts.SPREAD_TICKS_PER_UNIT;
+        Outage o = new Outage(1, 0, 0, 512, 0, 3, restoreAt, spread, 7).heldBy(-1, showTicks);
         RecoveryClock c = RecoveryClock.district();
         long base = o.lag();
         for (long g = 0; g < 10 * 72_000; g += 20) {
@@ -40,12 +42,14 @@ class GuideRepairTimeTest {
     @Test
     void repairsStartFifteenMinutesAfterTheShowInAVanillaWorld() {
         long shahed = StrikeShow.fuelTicks(WeaponSpec.DRONE, 1_000_000), missile = StrikeShow.fuelTicks(WeaponSpec.MISSILE, 1_000_000);
-        // the guide: the show lasts about 2.5 (Shahed-136) to 16 (cruise missile) minutes
-        assertEquals(150, shahed / 20.0, 15, "Shahed-136 show, s");
-        assertEquals(960, missile / 20.0, 30, "missile show, s");
+        // the guide: a conventional strike's show lasts about 2 to 16 minutes (the cloud's apex 1.7-5 min, a Shahed-136's
+        // fuel 2.5 min, a cruise missile's 16 min)
+        assertEquals(150, shahed / 20.0, 15, "Shahed-136 fuel, s");
+        assertEquals(960, missile / 20.0, 30, "missile fuel, s");
         // the guide: power starts coming back about 15 minutes after the show (18 world hours at 50 s each, plus the rate
-        // blend's half minute)
-        for (long show : new long[] {shahed, missile}) {
+        // blend's half minute), from the shortest show (the apex alone) to the missile's
+        long apexMin = Math.round(StrikeShow.seconds(Math.PI / (1.7 * 60), 0) * 20);
+        for (long show : new long[] {apexMin, shahed, missile}) {
             double after = firstRepairSeconds(show) - show / 20.0;
             assertTrue(after >= 900 && after <= 960, "first repair " + after + " s after a " + show / 20.0 + " s show");
         }

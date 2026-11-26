@@ -3,7 +3,7 @@
 English · [Русский](ru/blackout.md)
 
 A Transformer Substation powers an area with a radius of 512 blocks. Knock it out with a blast and the electric lights
-of the area go out district by district. By default power starts coming back after 18 hours of the world's day and returns district by district over the next 1 h 48 min of it: 15 minutes and 90 seconds in a vanilla world, counted from the end of the strike's first minutes. Until then the repair clock runs in real time: for a Shahed or missile, until its cloud has stopped rising and its crater fuel has burnt out (about 2.5 to 16 minutes); see
+of the area go out district by district. By default power starts coming back after 18 hours of the world's day and returns district by district over the next 1 h 48 min of it: 15 minutes and 90 seconds in a vanilla world, counted from the end of the strike's first minutes. Until then the repair clock runs in real time: for a conventional strike, until its cloud has stopped rising and any crater fuel has burnt out (about 2 to 16 minutes; from the hit for other explosions); see
 [time after the strike](nuke.md#time-after-the-strike). While a substation is knocked out,
 its transformer oil burns: a column of thick black smoke, flames about 4.5 blocks high that light the area at night, and
 the crackle of the broken arc. A working substation hums.
