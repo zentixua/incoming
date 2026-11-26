@@ -286,7 +286,7 @@ queues, little rework; each mission's budget is checked against its measured loa
   `guidance/`: flight/autopilots/virtual projectile/client entity tracking); `work.md` (tick budget, bulk damage in
   units); `warhead.md` (staged blast/glass/crater falls/vanilla-blast particles); `defense.md` (air defense, allowed/
   forbidden targets); `launcher.md` (fixed launcher, redstone launch); `claims.md` (claim protection).
-- `nuclear.md` (nuke except ruins: model/detonation/radiation/client); `nuclear-world.md` (ruins, zone behind wave,
+- `nuclear.md` (nuke except ruins, fallout); `fallout.md`; `nuclear-world.md` (ruins, zone behind wave,
   player chunk delivery); `grid.md` (blackout/lamps/chunk light).
 - `server-chunks.md` (chunks/tickets/world exit/entities/ground); `sable.md`; `dh.md` (Distant Horizons/LSS API
   terrain for map/rays/sound, distant LODs, world leaks); `voxy.md` (Voxy via Roxy, depth/distant changes/LSS).
