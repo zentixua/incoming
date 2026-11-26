@@ -18,8 +18,9 @@
 #                                               one-frame dropout of an effect), with the dust pass's state
 #   tools/dev_client.sh age                     the newest detonation's shown age (s), front radius and eye distance (blocks)
 #   tools/dev_client.sh skip <seconds>          the newest detonation that old (single player): the server's game time moves
-#                                               there and the client rebuilds it, as a replay seek; the strike's clocks take the
-#                                               span as real time (a 24-hour day); answers with the burst and its wind
+#                                               there and the client rebuilds it, as a replay seek; across the show's end the
+#                                               span reads at vanilla pace, after it at the real rate (a 24-hour day: skip to
+#                                               1150, wait for the end, then skip on); answers with the burst and its wind
 #   tools/dev_client.sh dw <key>=<value> …      the dust wave's diagnostics, as the client scenario's dw: steps (devtest
 #                                               DustWallSteps: probe, dump, sweep, ground, freezeage, history, …)
 #   tools/dev_client.sh swap                    Gradle compiles; changed loaded classes are redefined (jdb); changed
