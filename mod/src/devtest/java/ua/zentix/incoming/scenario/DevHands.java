@@ -169,6 +169,15 @@ public final class DevHands {
                 done(id, String.format(Locale.ROOT, "ok age %.2f front %.0f eye %.0f", t, a.wall.reach(t),
                         Math.hypot(e.x - a.d.burst().x, e.z - a.d.burst().z)));
             }
+            case "describe" -> {
+                // what a client scenario's shot logs before its grab (ClientScenario.shot): the same calls at the same point
+                Incoming.LOG.info("DEV describe pall {}", ua.zentix.incoming.client.fx.layer.PallPass.describe());
+                if (!ua.zentix.incoming.client.nuclear.ClientNuclear.detonations().isEmpty()) {
+                    Incoming.LOG.info("DEV describe nuke {}", ua.zentix.incoming.client.nuclear.NukePall.describe());
+                    Incoming.LOG.info("DEV describe wall {}", ua.zentix.incoming.client.nuclear.WallProbe.describe());
+                }
+                done(id, "ok");
+            }
             case "watch" -> {
                 watch = arg.equals("on");
                 frames = 0;
@@ -178,7 +187,7 @@ public final class DevHands {
                 DustWallSteps.apply(arg);
                 done(id, "ok");
             }
-            default -> throw new IllegalArgumentException("unknown: " + line + " (cmd, reload, shot, hud, press, dw, age, watch)");
+            default -> throw new IllegalArgumentException("unknown: " + line + " (cmd, reload, shot, hud, press, dw, age, watch, describe)");
         }
     }
 

@@ -211,6 +211,7 @@ case "$c" in
   reload) need_running; reload ;;
   age) need_running; hand age ;;
   watch) need_running; hand "watch ${1:-on}" ;;
+  describe) need_running; hand describe ;;
   dw) need_running; for a in "$@"; do hand "dw $a" || exit 1; done ;;
   shot) need_running; [ $# -ge 1 ] || { echo "shot <name> [--settle s]" >&2; exit 2; }; shot "$@" ;;
   stop) stop ;;
