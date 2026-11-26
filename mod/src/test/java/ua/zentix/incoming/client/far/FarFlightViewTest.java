@@ -78,7 +78,7 @@ class FarFlightViewTest {
 
     @Test
     void rocketMotorIsSparkByDayAndGlareAtNight() {
-        Flame flame = far(WeaponType.ROCKET).stage(FlightPhase.BOOST).flame(Air.SEA);
+        Flame flame = far(WeaponType.ROCKET).stage(FlightPhase.BOOST).flame(Air.SEA, Air.SEA);
         assertNotNull(flame);
         double d = 2000, t = Sight.transmittance(d, Sight.CLEAR);
         double[] day = new double[5], night = new double[5];
@@ -100,7 +100,7 @@ class FarFlightViewTest {
      */
     @Test
     void nearFlameAtNightAdaptsTheEye() {
-        Flame flame = far(WeaponType.MISSILE).stage(FlightPhase.BOOST).flame(Air.SEA);
+        Flame flame = far(WeaponType.MISSILE).stage(FlightPhase.BOOST).flame(Air.SEA, Air.SEA);
         assertNotNull(flame);
         double night = 0.17, d = 8.4, r = flame.lightRadius();
         double[] out = new double[5];
@@ -179,7 +179,7 @@ class FarFlightViewTest {
      */
     @Test
     void trailSmokeStartsWhereTheFlameEnds() {
-        Flame f = far(WeaponType.MISSILE).stage(FlightPhase.BOOST).flame(Air.SEA);
+        Flame f = far(WeaponType.MISSILE).stage(FlightPhase.BOOST).flame(Air.SEA, Air.SEA);
         assertNotNull(f);
         double flame = f.flame();
         assertTrue(f.tailLuminance() < 0.01 * f.flameLuminance(), "the tail behind the flame does not shine: " + f.tailLuminance());
@@ -203,7 +203,7 @@ class FarFlightViewTest {
     @Test
     void cruiseMissileEngineDoesNotGlow() {
         // turbofan exhaust — ~700 K without particles: neither day nor night
-        assertNull(far(WeaponType.MISSILE).stage(FlightPhase.CRUISE).flame(Air.SEA));
+        assertNull(far(WeaponType.MISSILE).stage(FlightPhase.CRUISE).flame(Air.SEA, Air.SEA));
     }
 
     // ---------------------------------------------------------------- trail points along the way

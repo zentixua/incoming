@@ -38,7 +38,7 @@ class HazeTest {
     }
 
     static Flame booster() {
-        Flame f = ClientWeaponSpec.of(WeaponType.MISSILE).airframe(false).far().stage(FlightPhase.BOOST).flame(Air.SEA);
+        Flame f = ClientWeaponSpec.of(WeaponType.MISSILE).airframe(false).far().stage(FlightPhase.BOOST).flame(Air.SEA, Air.SEA);
         assertNotNull(f);
         return f;
     }

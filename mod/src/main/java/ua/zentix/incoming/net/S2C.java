@@ -623,6 +623,16 @@ public final class S2C {
     }
 
     /**
+     * The sea level of the player's level ({@code util/Terrain.sea}: clients have no generator), on login, dimension change
+     * and respawn; a replay snapshot keeps the last one.
+     */
+    public record SeaLevel(int y) implements CustomPacketPayload {
+        public static final Type<SeaLevel> TYPE = new Type<>(Incoming.id("sea_level"));
+        public static final StreamCodec<ByteBuf, SeaLevel> CODEC = StreamCodec.composite(ByteBufCodecs.VAR_INT, SeaLevel::y, SeaLevel::new);
+        @Override public Type<? extends CustomPacketPayload> type() { return TYPE; }
+    }
+
+    /**
      * Scheduled nuclear strikes cancelled one by one ({@code clear tag}): their warnings, countdowns and sirens end; other
      * strikes and live detonations stay (a full {@link NukeSync} would restart them).
      */

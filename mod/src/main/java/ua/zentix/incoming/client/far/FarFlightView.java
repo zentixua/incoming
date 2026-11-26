@@ -377,7 +377,7 @@ public final class FarFlightView {
                     track.at(t - 1, NOZZLE);
                     f.path += Math.sqrt(sq(POS[0] - NOZZLE[0]) + sq(POS[1] - NOZZLE[1]) + sq(POS[2] - NOZZLE[2]));
                 }
-                Flame flame = stage.flame(POS[1]);
+                Flame flame = stage.flame(POS[1], air.sea());
                 f.flame = flame == null ? 0 : flame.flame();
             }
             f.impinging = false;
@@ -602,7 +602,7 @@ public final class FarFlightView {
     /** Whether projectile has visible burning plume at tick t (at its altitude). */
     private static boolean hasFlame(Far f, long t) {
         f.track.at(t, POS);
-        return f.look.stage(FlightPhase.byId(f.track.phase(t)), f.track.phaseAge(t), f.thrust).flame(POS[1]) != null;
+        return f.look.stage(FlightPhase.byId(f.track.phase(t)), f.track.phaseAge(t), f.thrust).flame(POS[1], air.sea()) != null;
     }
 
     /** Client-world blocks occlude point from eye (ray to first block with a visual shape). */
@@ -679,7 +679,7 @@ public final class FarFlightView {
             double tr = view.air(d, dy);
             float vis = Mth.lerp(view.partial(), f.visPrev, f.vis);
             // own engine invisible onboard: camera entity not drawn, no jet — no light either
-            Flame flame = entity && onboard(track) ? null : stage.flame(POS[1]);
+            Flame flame = entity && onboard(track) ? null : stage.flame(POS[1], air.sea());
             double flamePx = 0, flameAlpha = 0;
             if (flame != null && vis > 0) {
                 flameAt(track, t, -f.airframe.nozzle(stage).z() + flame.middle(), dx, dy, dz, OUT);

@@ -42,7 +42,7 @@ class FarLookTest {
 
     /** Phase torch at sea level of the world. */
     private static Flame flame(FarLook look, FlightPhase ph) {
-        return look.stage(ph).flame(Air.SEA);
+        return look.stage(ph).flame(Air.SEA, Air.SEA);
     }
 
     @Test

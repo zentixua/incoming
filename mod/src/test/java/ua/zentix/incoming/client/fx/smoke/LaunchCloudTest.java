@@ -73,7 +73,7 @@ class LaunchCloudTest {
         var stage = ClientWeaponSpec.of(WeaponType.MISSILE).airframe(false).far().stage(FlightPhase.BOOST);
         Motor m = stage.motor();
         var trail = stage.trail();
-        double flame = stage.flame(ua.zentix.incoming.util.Air.SEA).flame(), morton = LaunchCloud.mortonLength(m);
+        double flame = stage.flame(ua.zentix.incoming.util.Air.SEA, ua.zentix.incoming.util.Air.SEA).flame(), morton = LaunchCloud.mortonLength(m);
         double[] look = new double[ua.zentix.incoming.client.fx.plume.TrailModel.LOOK];
         for (double v : new double[]{3, 10, 30}) {
             double inv = ua.zentix.incoming.client.fx.plume.TrailModel.inverseSpeed(v, 0);

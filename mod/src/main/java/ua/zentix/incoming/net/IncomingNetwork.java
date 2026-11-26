@@ -11,7 +11,7 @@ import ua.zentix.incoming.strike.ServerActions;
  * incompatible change, letting NeoForge report different mod versions instead of crashing.
  */
 public final class IncomingNetwork {
-    public static final String PROTOCOL = "64";
+    public static final String PROTOCOL = "65";
 
     private IncomingNetwork() {}
 
@@ -38,6 +38,7 @@ public final class IncomingNetwork {
         r.playToClient(S2C.NukeMaterial.TYPE, S2C.NukeMaterial.CODEC, (p, ctx) -> ClientHooks.get().nukeMaterial(p));
         r.playToClient(S2C.NukeSync.TYPE, S2C.NukeSync.CODEC, (p, ctx) -> ClientHooks.get().nukeSync(p));
         r.playToClient(S2C.NukeClock.TYPE, S2C.NukeClock.CODEC, (p, ctx) -> ClientHooks.get().nukeClock(p));
+        r.playToClient(S2C.SeaLevel.TYPE, S2C.SeaLevel.CODEC, (p, ctx) -> ua.zentix.incoming.util.Terrain.seaFromServer(ctx.player().level(), p.y()));
         r.playToClient(S2C.NukeTick.TYPE, S2C.NukeTick.CODEC, (p, ctx) -> ClientHooks.get().nukeTick(p));
         r.playToClient(S2C.NukeCancelled.TYPE, S2C.NukeCancelled.CODEC, (p, ctx) -> ClientHooks.get().nukeCancelled(p));
         r.playToClient(S2C.Radiation.TYPE, S2C.Radiation.CODEC, (p, ctx) -> ClientHooks.get().radiation(p));

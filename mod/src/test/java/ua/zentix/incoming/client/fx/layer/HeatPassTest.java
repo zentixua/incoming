@@ -69,7 +69,7 @@ class HeatPassTest {
      */
     @Test
     void jetFarAwayIsTheBallOfTheSameArea() {
-        Flame f = ClientWeaponSpec.of(WeaponType.MISSILE).airframe(false).far().stage(FlightPhase.BOOST).flame(Air.SEA);
+        Flame f = ClientWeaponSpec.of(WeaponType.MISSILE).airframe(false).far().stage(FlightPhase.BOOST).flame(Air.SEA, Air.SEA);
         assertNotNull(f);
         double[] parts = f.partAreas();
         double core = f.core(), fl = Math.max(f.flame(), core), end = f.tailEnd();
@@ -187,7 +187,7 @@ class HeatPassTest {
      */
     @Test
     void jetEndsWhereItsAxisMeetsTheGround() {
-        Flame f = ClientWeaponSpec.of(WeaponType.MISSILE).airframe(false).far().stage(FlightPhase.BOOST).flame(Air.SEA);
+        Flame f = ClientWeaponSpec.of(WeaponType.MISSILE).airframe(false).far().stage(FlightPhase.BOOST).flame(Air.SEA, Air.SEA);
         assertNotNull(f);
         HeatPass.Frame frame = new HeatPass.Frame();
         double sin = Math.sin(Math.toRadians(30)), cos = Math.cos(Math.toRadians(30)), cut = 2 / sin;

@@ -8,7 +8,6 @@ import org.joml.Vector3f;
 import org.joml.Vector4f;
 import ua.zentix.incoming.client.far.Sight;
 import ua.zentix.incoming.client.fx.layer.PallPass;
-import ua.zentix.incoming.client.fx.layer.WaterDecal;
 import ua.zentix.incoming.nuclear.Detonation;
 import ua.zentix.incoming.nuclear.model.BlackBody;
 import ua.zentix.incoming.nuclear.model.FlashLight;
@@ -802,7 +801,7 @@ public final class MushroomField {
      * is effects_scale times smaller, but haze to it is as for the real mushroom at its real altitude above sea level.
      */
     static Sight.Air air(Detonation d, Vec3 eye, double range) {
-        return Sight.Air.at(d.metres(eye.y - WaterDecal.SEA_LEVEL), range);
+        return Sight.Air.at(d.metres(eye.y - ua.zentix.incoming.client.fx.ClientAir.now().sea()), range);
     }
 
     /**
