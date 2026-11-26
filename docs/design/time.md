@@ -523,6 +523,8 @@ is awake; otherwise it moves only doses, injuries and repairs.
 
 ## 10. Every mechanic against pack conditions: mismatches, ranked
 
+The "What happens now" column describes the mod before the fixes; §12 names what holds now.
+
 From the inventories and a separate audit of pack conditions (tick rate, time control, gamerules, pause, servers,
 replays, dimensions). Most player-visible first; the "Fix" column names the §9 change.
 
@@ -579,8 +581,8 @@ Every change of §9, by the PR that made it:
 | 1 | Inside-sight cap as a camera property | #780 |
 | 2 | Clocks: M and S, the rate blend, counted jumps, the stopped-day rate, `/time set`, saved anchors | #778 |
 | 3 | The air reads M; a night everyone slept through clears the strike's dust and smoke | #782 |
-| 4 | Handoffs: smoke parcels and black rain under them | #784 |
-| 4 | Handoffs: fallout and rain deposit arrive on M and age on the ground | #785 |
+| 4 | Handoffs: smoke parcels, black rain under them and its deposit landing with the rain | #784 |
+| 4 | Handoffs: fallout arrives on M and ages on the ground | #785 |
 | 5 | Shared states and outages; the conventional show sets the hearing clock | #783 |
 | 6 | Bodies age while present; hearing kept across relog | #783 |
 | 7 | Client clocks follow the level's tick and the replay position; shimmer off the wall clock | #776 |
