@@ -461,8 +461,10 @@ Ruins and everything in `nuclear/world/` are in `nuclear-world.md`.
   Players are stepped once a second (`BodyClock.tick`), mobs by their sickness and burn effects; a step after more than
   `PRESENT_GAP` ticks is an absence (offline, unloaded): nothing elapses, so no fatal-stage login. A body without a clock
   starts at `WorldClock.now`: saved `exposedAt` keep their meaning. Causes: `RadiationTicker.addDose(…, d, ago)` (prompt;
-  a late mob dates its exposure `ago` by the cause's S, `MobFallout` by `secondsAt` at the crossing), fallout or rain
-  reaching a player, `FlashBurns`. The ear is the client's (`client-sound.md`), kept on the server across relogs
+  a late mob dates its exposure `ago` by the cause's S, `MobFallout` by `secondsAt` at the crossing: limit, a mob first
+  dosed while unloaded comes back sick by that time, while one already sick when unloaded is frozen), fallout or rain
+  reaching a player (`BodyClockGameTests.falloutHoldsThePlayersClock`), `FlashBurns`. Detonation ids are per
+  dimension: a step in another dimension drops the cause (`CrossDimensionCauseTest`). The ear is the client's (`client-sound.md`), kept on the server across relogs
   (`radiation/Ears`, attachment `EAR`, opaque tag ≤ `C2S.Ear.EAR_BYTES`, `S2C.Ear` on login).
 - `Detonation.dayTime` is unread, kept for the save/packet formats. Anchors per detonation (`NuclearEvents.Anchor`: the
   world clock at burst and show end, which date bodies' exposure, and the `StrikeClock` anchors) and the history are

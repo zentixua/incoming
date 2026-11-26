@@ -21,7 +21,8 @@ import java.util.Objects;
  *     either.</li>
  * </ul>
  * Causes: the youngest detonation that acted on the state ({@link #strike}; all detonations' shows last alike and a counted
- * jump ends all of a dimension's shows at once, so the youngest ends last), and the latest end of a conventional strike's
+ * jump ends all of a dimension's shows at once, so the youngest ends last; detonation ids are per dimension, so a step in
+ * another dimension drops it and blends from there), and the latest end of a conventional strike's
  * show ({@link #until}, game time; a counted jump ends it). It also counts the event time ({@link #event}: real time plus
  * counted jumps, the motion age M of rule 1) for exposure windows such as the ear's 2-minute dose.
  * <p>
@@ -65,6 +66,8 @@ public final class RecoveryClock {
     private boolean settled;
     /** The last step counted nothing ({@link #fresh}). */
     private boolean fresh = true;
+    /** A cause was in its show at the last step. */
+    private boolean lastInShow;
     /** A gap between steps longer than this is an absence, game ticks. */
     private long gap = PRESENT_GAP;
 
@@ -167,6 +170,12 @@ public final class RecoveryClock {
         boolean sameDim = Objects.equals(dim, lastDim);
         long dg = lastGame == NONE ? -1 : game - lastGame;
         if (dg == 0 && sameDim) return;
+        // detonation ids are per dimension: a cause from the dimension left behind means nothing here (its show, if still
+        // running, held the state until now; the blend from this moment)
+        if (!sameDim && lastDim != null && strike != NO_STRIKE) {
+            strike = NO_STRIKE;
+            if (lastInShow) endedAt = Math.max(endedAt, game);
+        }
         double dc = sameDim ? Math.max(0, counted - lastCounted) : 0, du = sameDim ? Math.max(0, unseen - lastUnseen) : 0;
         // a jump nobody in the dimension was awake for ends the shows there (rule 7); a detonation's own clock says so itself
         if (dc > 0 && until != NONE && until > game) until = game;
@@ -193,6 +202,7 @@ public final class RecoveryClock {
         lastCounted = counted;
         lastUnseen = unseen;
         lastDim = dim;
+        lastInShow = inShow;
     }
 
     /** Whether a cause is in its show at {@code game}; records the latest show end seen ({@link #endedAt}). */

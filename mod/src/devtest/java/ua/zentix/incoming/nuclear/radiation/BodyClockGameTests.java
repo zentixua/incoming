@@ -110,4 +110,23 @@ public final class BodyClockGameTests {
         h.assertFalse(again.hasData(ModAttachments.EAR), "a healed ear is still kept");
         h.succeed();
     }
+
+    /**
+     * Fallout reaching a player holds its body clock (time.md §8.3 rule 8): the detonation becomes the body's cause.
+     * Ground detonation with fallout landed at the player's feet, one radiation second.
+     */
+    @GameTest(template = "range", timeoutTicks = 20, batch = "body_clock", skyAccess = true)
+    public static void falloutHoldsThePlayersClock(GameTestHelper h) {
+        ServerLevel level = h.getLevel();
+        FakePlayer p = new FakePlayer(level, new GameProfile(UUID.randomUUID(), "fallout"));
+        p.moveTo(h.absoluteVec(new Vec3(32, 2, 32)));
+        long landed = (long) Math.ceil(20 * 60 * 4 * Math.pow(15, 0.2));
+        Detonation d = new Detonation(NuclearEvents.get(level).nextId(), p.position(), p.getY(), 15, true,
+                level.getGameTime() - 2000 - landed, 0, 5, 20_000, 7, 0.1f, true, Detonation.OLD_WAVE);
+        h.assertTrue(BodyClock.of(p).strike() == RecoveryClock.NO_STRIKE, "the body already had a cause");
+        RadiationTicker.step(level, java.util.List.of(p), java.util.List.of(d));
+        h.assertTrue(RadiationTicker.dose(p).doseGy() > 0, "no fallout reached the player");
+        h.assertTrue(BodyClock.of(p).strike() == d.id(), "fallout reaching the player is not its body's cause: " + BodyClock.of(p).strike());
+        h.succeed();
+    }
 }

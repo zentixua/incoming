@@ -421,6 +421,10 @@ public final class IncomingClient {
         @Override
         public void fuelFire(S2C.FuelFire p) {
             Replay.event("fuel", live -> {
+                // the lit crater extends its strike's show for the hearing it harmed
+                if (live && !p.cells().isEmpty()) ua.zentix.incoming.client.nuclear.Deafness.fuel(p.blastTick(), p.cells().getFirst().getX() + 0.5,
+                        p.cells().getFirst().getZ() + 0.5, ua.zentix.incoming.warhead.StrikeShow.fuelTicks(
+                                ua.zentix.incoming.strike.WeaponType.byId(p.weapon()).spec(), p.cells().size()));
                 if (live && ownBlasts()) BlastEffects.fuelFire(p);
             });
         }

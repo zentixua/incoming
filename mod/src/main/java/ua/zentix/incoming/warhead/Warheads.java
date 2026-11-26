@@ -34,6 +34,7 @@ import ua.zentix.incoming.Incoming;
 import ua.zentix.incoming.claim.Writes;
 import ua.zentix.incoming.IncomingConfig;
 import ua.zentix.incoming.compat.SubLevels;
+import ua.zentix.incoming.grid.Blackouts;
 import ua.zentix.incoming.net.S2C;
 import ua.zentix.incoming.nuclear.model.BlastModel;
 import ua.zentix.incoming.nuclear.model.CraterModel;
@@ -657,8 +658,8 @@ public final class Warheads {
                 onCraft = inPlots || !SubLevels.near(level, pos, 1).isEmpty();
                 // Struck material and whether slab over void: same breach that will remove slab (client target visual).
                 Optional<S2C.Blast.Support> support = onCraft || !(spec.charge() > 0) ? Optional.empty() : support(level, pos, spec.charge(), axis, direct);
-                // the strike's show (cloud apex, crater fuel burn-out): what it harms that recovers holds at real rate until then
-                int show = StrikeShow.ticks(level, spec, !onCraft && area.rules().fire());
+                // the strike's show: the cloud's apex now, extended by the crater fuel's burn-out once it lights (fuelFire)
+                int show = StrikeShow.apexTicks(level);
                 area.show(born + show);
                 // the ground under the point before the crater: a late joiner's client builds the cloud over it, not over the crater
                 StrikeClouds.send(level, pos, reach,
@@ -706,7 +707,13 @@ public final class Warheads {
             if (weapon.spec().fuelAtImpact() > 0 && !onCraft && area.rules().fire()) {
                 Craters.ignite(level, area, main, this::happened, pos, weapon.spec().fuelAtImpact());
                 // Crater fuel after crater: settles on bottom, burns as block fire while available.
-                unit(level, area, main, ImpactCost.Kind.GROUND, "Fuel fire", l -> happened() ? FuelFires.pour(l, area.claims(), pos, weapon, born, reach) : 0);
+                unit(level, area, main, ImpactCost.Kind.GROUND, "Fuel fire", l -> {
+                    if (!happened()) return 0;
+                    int lit = FuelFires.pour(l, area.claims(), pos, weapon, born, reach);
+                    // the strike's show lasts until its fuel burns out: outages it caused wait for it too
+                    if (lit > 0) Blackouts.extendShow(l, area.show(), born + StrikeShow.fuelTicks(weapon.spec(), lit));
+                    return lit;
+                });
             }
             unit(level, area, main, ImpactCost.Kind.DEBRIS, "Debris",
                     l -> !happened() ? 0 : missile ? DebrisSpawner.missile(l, pos, mat, area.rules(), owner) : DebrisSpawner.drone(l, pos, mat, area.rules(), owner));
@@ -785,7 +792,7 @@ public final class Warheads {
                 // Visible to far_range, audible to air-escaped charge share's sound range (HearingModel).
                 double reach = Math.max(IncomingConfig.SERVER.farRange.get(), Math.min(IncomingConfig.FAR_RANGE_MAX, HearingModel.audibleRangeM(air)));
                 // the strike's show: its cloud's apex (no crater fuel)
-                int show = StrikeShow.ticks(level, WeaponType.BUNKER.spec(), false);
+                int show = StrikeShow.apexTicks(level);
                 area.show(level.getGameTime() + show);
                 StrikeClouds.send(level, pos, reach,
                         new S2C.Blast(S2C.Blast.BUNKER, pos, mat.ordinal(), cover, level.random.nextLong(), Optional.ofNullable(direct).map(Entity::getUUID),

@@ -59,9 +59,26 @@ public final class Deafness {
     /** Hearing clock and event time now, world-clock ticks ({@link #recovery}). */
     private static double clock, event;
     /** Conventional blasts' show ends by blast seed, game time ({@code S2C.Blast#show}): a blast that hurts the ear holds it. */
-    private static final Map<Long, Long> SHOWS = new HashMap<>();
+    private static final Map<Long, Show> SHOWS = new HashMap<>();
+
+    /** A conventional blast's show: its end and blast time (game time), where it was, whether it hurt the ear. */
+    private static final class Show {
+        long end;
+        final long at;
+        final double x, z;
+        boolean heard;
+
+        Show(long end, long at, double x, double z) {
+            this.end = end;
+            this.at = at;
+            this.x = x;
+            this.z = z;
+        }
+    }
     /** The server holds a hurt ear for this player ({@link #tell}). */
     private static boolean told;
+    /** A blast just hurt the ear: tell the server on the next tick. */
+    private static boolean tellNow;
     /** Current filter: volume and highs (also read by the sound thread). */
     private static volatile float gain = 1, highs = 1;
     /** Current high-frequency shift, dB (for ringing and the scenario line). */
@@ -83,8 +100,11 @@ public final class Deafness {
      * on replaying the same blast).
      */
     public static void blast(double exposure, double kpa, long seed) {
-        Long show = SHOWS.get(seed);
-        if (show != null) recovery.until(show);
+        Show show = SHOWS.get(seed);
+        if (show != null) {
+            show.heard = true;
+            recovery.until(show.end);
+        }
         hurt(exposure, kpa, seed);
     }
 
@@ -95,16 +115,35 @@ public final class Deafness {
     }
 
     /**
-     * A conventional blast with seed {@code seed} happened at game time {@code game}; its show lasts {@code show} game ticks
-     * ({@code StrikeShow.NONE} — none).
+     * A conventional blast with seed {@code seed} happened at game time {@code game} at {@code (x, z)}; its show lasts
+     * {@code show} game ticks until its cloud's apex ({@code StrikeShow.NONE} — none), longer if its crater fuel lights
+     * ({@link #fuel}).
      */
-    public static void announce(long seed, long game, int show) {
+    public static void announce(long seed, long game, double x, double z, int show) {
         if (show < 0) return;
-        SHOWS.values().removeIf(end -> end < game);
-        SHOWS.put(seed, game + show);
+        SHOWS.values().removeIf(s -> s.end < game);
+        SHOWS.put(seed, new Show(game + show, game, x, z));
+    }
+
+    /** Blasts this far from a lit crater (blocks) and this close in time (game ticks) are its strike. */
+    private static final double FUEL_NEAR = 32;
+    private static final long FUEL_SOON = 100;
+
+    /**
+     * Crater fuel of a strike at game time {@code blastTick} lit cells starting at {@code (x, z)} and burns out after
+     * {@code ticks} ({@code S2C.FuelFire}): the strike's show lasts until then.
+     */
+    public static void fuel(long blastTick, double x, double z, int ticks) {
+        for (Show s : SHOWS.values()) {
+            if (Math.abs(s.at - blastTick) > FUEL_SOON || (s.x - x) * (s.x - x) + (s.z - z) * (s.z - z) > FUEL_NEAR * FUEL_NEAR) continue;
+            s.end = Math.max(s.end, blastTick + ticks);
+            if (s.heard) recovery.until(s.end);
+        }
     }
 
     private static void hurt(double exposure, double kpa, long seed) {
+        // the server holds the ear from the hurting blast on: a relog seconds later cures nothing
+        tellNow = true;
         EAR.blast(exposure, clock / HOUR_TICKS, event / HOUR_TICKS);
         // ruptured eardrums that have not healed rupture again — restart healing
         Minecraft mc = Minecraft.getInstance();
@@ -140,10 +179,11 @@ public final class Deafness {
     /** Tell the server the ear while it is hurt, and once when it has healed ({@code C2S.Ear}); never from a replay. */
     private static void tell(long game) {
         boolean hurt = EAR.any() || rupturedAt >= 0;
-        if (hurt ? game % TELL_TICKS != 0 : !told) return;
+        if (hurt ? game % TELL_TICKS != 0 && !tellNow : !told) return;
         if (ua.zentix.incoming.client.replay.Replay.active() || Minecraft.getInstance().getConnection() == null) return;
         net.neoforged.neoforge.network.PacketDistributor.sendToServer(new C2S.Ear(hurt ? save() : new CompoundTag()));
         told = hurt;
+        tellNow = false;
     }
 
     /** The ear's state: doses, eardrums and the recovery clock. */

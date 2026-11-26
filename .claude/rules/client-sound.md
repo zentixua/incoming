@@ -321,14 +321,9 @@ file changes.
   motor loop at volume 0.5: −23.4 LUFS instead of −19.5), equally for all sounds and 3.4.1. Subtract this when comparing
   probe-recording loudness with the model. The look-gate flyby had an alert siren over the motor in its separate scene
   (harmonics 436/877/1314 Hz), unlike after the launch scene: measure the motor in its tone band (shaft 125 Hz × pitch).
-  Compare the sound window in a raid with the same isolated hit only at the same hearing state: raid (99 Shaheds,
-  first at 30–50 blocks) by second 10 is one deafness dose (`HearingModel.Ear`: waves within 2 real minutes add; the
-  numbers below were measured while the window was 1.7 s of a vanilla day's world clock, which split hits 2 s apart:
-  one dose now sums them: 8 Shaheds 1–2 s apart at 30–50 m shift 50 dB, not 32, `RaidHearingTest`),
-  threshold shift ~80 dB in highs and ~27 in lows — full-band volume −10.9 dB, highs down to −40 dB (filter limit),
-  ringing at ~4.9 kHz — the suppression and spectral-difference mechanism in the near-hit window (raid versus single;
-  bands depend on window/method: reviewer with Hann window got −8.8/−9.9/−19.5/−1.4/−43.8 dB at
-  20–125/125–500/500–2000/2000–6000/6000–20000 Hz, main similar). Whole-window M loudness (background, ringing, impact,
+  Compare the sound window in a raid with the same isolated hit only at the same hearing state: a raid's hits within
+  2 real minutes are one deafness dose (`HearingModel.Ear`, event time), so its shift exceeds any single hit's: 8 Shaheds
+  1–2 s apart at 30–50 m shift 50 dB (`RaidHearingTest`). Whole-window M loudness (background, ringing, impact,
   recordings, not a single near-hit track) is not a mix measure and is not explained entirely by deafness: compare
   mixes at equal hearing, `nuke_tinnitus = false` for both or an isolated hit after the same dose; decompose using a
   run at equal hearing.

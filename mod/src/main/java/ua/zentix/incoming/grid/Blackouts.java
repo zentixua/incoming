@@ -317,9 +317,19 @@ public final class Blackouts {
     }
 
     /**
+     * A conventional strike's show that was to end at game time {@code from} ends at {@code to} (its crater fuel lit,
+     * {@code StrikeShow}): the outages it caused wait for it.
+     */
+    public static void extendShow(ServerLevel level, long from, long to) {
+        if (from == Long.MIN_VALUE || to <= from) return;
+        PowerGrid grid = PowerGrid.get(level);
+        for (Outage o : List.copyOf(grid.outages())) if (o.until() == from) grid.hold(o.heldBy(-1, to));
+    }
+
+    /**
      * Once a second: each outage whose cause's show may still hold it falls behind the grid clock by the world's rate it
      * does not take ({@link Outage#lag}, {@link RecoveryClock}): real rate through the show, then the rate blend. Once the
-     * blend is over the outage is released and its lag stays.
+     * blend is over, or a repair is due, the outage is released and its lag stays.
      */
     static void hold(ServerLevel level, PowerGrid grid) {
         if (grid.outages().stream().noneMatch(Outage::held)) return;
@@ -334,7 +344,9 @@ public final class Blackouts {
             c.step(level.getGameTime(), WorldClock.rateClock(level), WorldClock.counted(level), WorldClock.unseen(level), level.dimension(), shows);
             if (!world.holdBase.containsKey(o.id())) world.holdBase.put(o.id(), o.lag());
             Outage next = o.lagging(world.holdBase.get(o.id()) + Math.round(c.behind()));
-            if (c.settled()) {
+            // released once the blend is over, or once a repair falls due (a sleep moved the clock past the first repair):
+            // a lag growing under a running restoration would rebuild it every second and darken districts it relit
+            if (c.settled() || now(level) >= next.restoreFrom()) {
                 next = next.released();
                 world.holds.remove(o.id());
                 world.holdBase.remove(o.id());
