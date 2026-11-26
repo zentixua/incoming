@@ -125,6 +125,11 @@ paths:
   (there is no fuel fire in the air — complaint 24.10: puffs hung where the roof was). Burnt out — the fire is removed if no
   fuel is nearby (a tree burns further by vanilla rules); the cell's chunk is not ready — it waits and is removed when the
   chunk is ready again (otherwise with `doFireTick` = false the fire would stand forever; GameTest `fuel_fire_unload`).
+  With `doFireTick` = false (`StrikeRules.fireBurnsOut`, read when fire would be placed) a burnt-out or dripping cell's
+  fire is removed beside fuel and on netherrack too, and strikes light no other block fire: `Warheads.explode` (vanilla
+  fire), `Craters.ignite` (fuel ball), `DebrisEntity` (burning debris); GameTest `fuel_fire_firetick_off`. The GameTest
+  server runs with the rule off and `StrikeRules.lightFrozenFireForTest(true)` (`GameTestShards`), so other checks count
+  fires as with the rule on; tests of the rule clear it in their own batch and restore it.
   Someone else's fire in the cell — it burns, age is reset, only if the block has it: Burnt (probe FV, 24.10) places its own
   `burnt:firestarter` (a successor of `FireBlock`, `FireBlockOnPlaceMixin`) instead of vanilla fire everywhere except the
   floor from its tag `burnt:vanilla_fire_burns_on` (stone, brick), and on ground it puts it out itself. For clients —
