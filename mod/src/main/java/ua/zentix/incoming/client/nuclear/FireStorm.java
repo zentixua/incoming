@@ -7,6 +7,7 @@ import ua.zentix.incoming.Incoming;
 import ua.zentix.incoming.client.far.Sightline;
 import ua.zentix.incoming.nuclear.Detonation;
 import ua.zentix.incoming.nuclear.model.Blowout;
+import ua.zentix.incoming.nuclear.model.FireStormLaw;
 import ua.zentix.incoming.nuclear.model.ThermalModel;
 import ua.zentix.incoming.util.noise.FastNoiseLite;
 
@@ -70,26 +71,10 @@ public final class FireStorm {
     static final double IGNITE_SPREAD_S = 30;
     /** The wave blows out cell fire over this many ticks from arrival. */
     static final double BLOW_TICKS = 20;
-    /**
-     * Fire growth to full strength, s: t-squared growth (heat release α·t², SFPE Handbook; NFPA 72 Annex B) at the "medium"
-     * rate α = 0.01172 kW/s² reaches 17 MW, a fully involved house (est.), in 1200 s. The same time as the record: at Hiroshima
-     * fires started in shattered houses about 5 minutes after the burst and the mass fire formed in about 20 minutes
-     * (Glasstone and Dolan 1977, §7.70; Uda's survey via Sutou 2020).
-     */
-    static final double GROW_S = 1200;
-    /**
-     * Full strength holds this many seconds after {@link #GROW_S} (±30 % per cell), then decays e-fold over {@link #DECAY_S} to
-     * smoldering {@link #EMBERS}: Hiroshima burned hardest 2–6 h after the burst and abated by evening (Uda via Sutou 2020; (est.)
-     * as a cell law).
-     */
-    static final double PEAK_S = 3 * 3600, DECAY_S = 2 * 3600, EMBERS = 0.2;
-    /**
-     * Smoldering burns out between these detonation-clock times, s: Hiroshima's fires burned out by the evening after a
-     * morning burst (est.).
-     */
-    static final double OUT_FROM_S = 9 * 3600, OUT_S = 12 * 3600;
-    /** Smoke decays less than flame: smoldering material emits smoke. */
-    static final double SMOKE_EMBERS = 0.45;
+    /** Growth, peak, decay and burn-out of a cell on the strike clock: the shared law ({@link FireStormLaw}). */
+    static final double GROW_S = FireStormLaw.GROW_S, PEAK_S = FireStormLaw.PEAK_S, DECAY_S = FireStormLaw.DECAY_S,
+            EMBERS = FireStormLaw.EMBERS, OUT_FROM_S = FireStormLaw.OUT_FROM_S, OUT_S = FireStormLaw.OUT_S,
+            SMOKE_EMBERS = FireStormLaw.SMOKE_EMBERS;
     /** Smoke emission into columns — cell strength raised to this power: strong sources produce columns, weak ones low haze. */
     static final double COLUMN_POWER = 1.4;
     /** Channels per map cell (RGBA). */
@@ -141,21 +126,19 @@ public final class FireStorm {
 
     // ---------------------------------------------------------------- time
 
-    /** Fire growth {@code ageS} seconds after ignition, fraction of full strength: t-squared to {@link #GROW_S}. */
+    /** {@link FireStormLaw#growth}. */
     static double growth(double ageS) {
-        if (ageS <= 0) return 0;
-        double u = Math.min(1, ageS / GROW_S);
-        return u * u;
+        return FireStormLaw.growth(ageS);
     }
 
-    /** Cell flame {@code ageS} seconds after ignition, fraction of full strength ({@code peakS} is its decay start). */
+    /** {@link FireStormLaw#flame}. */
     static double flame(double ageS, double peakS) {
-        return growth(ageS) * decay(ageS, peakS, EMBERS);
+        return FireStormLaw.flame(ageS, peakS);
     }
 
-    /** Cell smoke (emission into a column), fraction of full strength: smoke yield follows the burning rate. */
+    /** {@link FireStormLaw#smoke}. */
     static double smoke(double ageS, double peakS) {
-        return growth(ageS) * decay(ageS, peakS, SMOKE_EMBERS);
+        return FireStormLaw.smoke(ageS, peakS);
     }
 
     /**
@@ -173,11 +156,6 @@ public final class FireStorm {
     static double feedAt(double h, double top, double g, double b) {
         double head = top * Math.max(0, Math.min(1, b / Math.max(g, 1e-6)));
         return g * (1 - smooth(0.8 * head, head + 1, h));
-    }
-
-    private static double decay(double ageS, double peakS, double floor) {
-        if (ageS <= peakS) return 1;
-        return (floor + (1 - floor) * Math.exp(-(ageS - peakS) / DECAY_S)) * (1 - smooth(OUT_FROM_S, OUT_S, ageS));
     }
 
     // ---------------------------------------------------------------- grid

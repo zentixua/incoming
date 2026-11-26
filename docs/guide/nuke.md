@@ -187,10 +187,10 @@ The detailed timings, visual behavior and model limits are in the [nuclear effec
 
 ### Time after the strike
 
-Everything you watch move runs in real time: the flight, the flash, the wave, the mushroom cloud and the first
-20 minutes of the fires. The slow consequences then follow your world's day: the town burns and smoulders for about
-12 hours, black rain falls from its smoke, fallout decays, and burns, radiation sickness, hearing and the power grid
-heal or are repaired. A game hour is an hour of the world's day:
+Everything you watch move runs in real time: the flight, the flash, the wave, the mushroom cloud, the smoke and the
+first 20 minutes of the fires. The slow consequences then follow your world's day: the town burns and smoulders for about
+12 hours, fallout decays, and burns, radiation sickness, hearing and the power grid heal or are repaired. A game hour is
+an hour of the world's day:
 
 - in a vanilla world a day lasts 20 minutes, so a game hour passes in 50 seconds and the fires burn out about
   10 minutes after those first 20;
@@ -213,8 +213,14 @@ heal or are repaired. A game hour is an hour of the world's day:
 - `/tick freeze` holds the strike's moment like the rest of the world: the flash, wave and clouds stand still while you
   look around, and `/tick step` moves them on.
 
+The town's smoke leaves with the wind in real time: at every moment it carries away as much smoke as the fires make at
+that moment, and the smoke drifts downwind and widens for hours, also after the fires are out. Black rain falls from this
+smoke where it has drifted to: a place downwind gets about an hour and a half of it with a 24-hour day, and at most about
+10 minutes in a vanilla world, where the fires burn down sooner.
+
 An effect never comes before its cause: fallout lands as the cloud passes over, and black rain starts only once the
-firestorm has formed, at least 20 real minutes after the burst.
+firestorm has formed, at least 20 real minutes after the burst, and falls only under the drifting smoke, never ahead of
+it.
 
 ### Ending the aftermath
 

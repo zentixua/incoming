@@ -114,7 +114,7 @@ paths:
 
 ## What does not draw ground dust
 - The pall draws only haze, the mushroom, the Wilson shell and the firestorm; its table has the haze row alone
-  (`PallField.ROWS` 1). There is no fallback camera dust, HUD veil, pall head, pall surge or crossfade between pictures;
+  (`PallField.ROWS` 1: rgb by radius, a by shift along the wind, the smoke parcels, `nuclear.md`). There is no fallback camera dust, HUD veil, pall head, pall surge or crossfade between pictures;
   dust OFF draws none. `NukeDust` draws litter, removed pieces and surface litter only.
 
 ## Budget

@@ -101,7 +101,7 @@ public final class MobFallout {
             froms[i] = from;
             if (from >= now) continue;
             double s0 = events.secondsAt(d, level, from), s1 = events.seconds(d, level);
-            roentgens += exposure(d, mob.getX(), mob.getZ(), s0, s1);
+            roentgens += exposure(d, mob.getX(), mob.getZ(), s0, s1, events.parcels(d, level));
             span = Math.max(span, now - from);
             spanHours = Math.max(spanHours, (s1 - s0) / 3600);
         }
@@ -124,7 +124,7 @@ public final class MobFallout {
                 for (int i : live) {
                     Detonation d = detonations.get(i);
                     if (froms[i] < t) r += exposure(d, mob.getX(), mob.getZ(), events.secondsAt(d, level, froms[i]),
-                            events.secondsAt(d, level, t));
+                            events.secondsAt(d, level, t), events.parcels(d, level));
                 }
                 return before + r * gyPerR;
             }, now - span, now, SicknessModel.MIN_DOSE);
@@ -159,11 +159,11 @@ public final class MobFallout {
 
     /**
      * Unshielded fallout exposure at (x, z) from {@code s0} to {@code s1} seconds after detonation {@code d} on its own clock
-     * ({@code NukeClock}), R.
+     * ({@code NukeClock}), R; {@code parcels} — its smoke-parcel clock now (when black rain reached the point).
      */
-    static double exposure(Detonation d, double x, double z, double s0, double s1) {
-        if (s1 - s0 <= SHORT_S) return d.falloutRateAt(x, z, s1) * (s1 - s0) / 3600;
-        return integral(s -> d.falloutRateAt(x, z, s), s0, s1) / 3600;
+    static double exposure(Detonation d, double x, double z, double s0, double s1, ua.zentix.incoming.nuclear.model.SmokeParcels.Clock parcels) {
+        if (s1 - s0 <= SHORT_S) return d.falloutRateAt(x, z, s1, parcels) * (s1 - s0) / 3600;
+        return integral(s -> d.falloutRateAt(x, z, s, parcels), s0, s1) / 3600;
     }
 
     /**

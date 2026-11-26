@@ -6,13 +6,15 @@
 //
 // Detonation slot — mat4 by columns:
 //   [0] = (epicenter x, z from the eye; ground under the epicenter from the eye by y; how far the table goes, blocks)
-//   [1] = (drift by wind x, z of what was lifted at the moment of detonation, blocks (billow noise drifts with it); length of
-//          the haze trail, blocks; 1 — slot exists, 2 — and there is hard ground or sand under its pall: channels b, a of the
-//          relief map are read)
+//   [1] = (drift by wind x, z of what was lifted at the moment of detonation, blocks (billow noise drifts with it); travel of
+//          the oldest smoke parcel downwind, blocks (the band's axis length); 1 — slot exists, 2 — and there is hard ground or sand under its pall: channels
+//          b, a of the relief map are read)
 //   [2] = (wind x, z — unit; the slot's half of the shared terrain texture, pallGroundUv; v of the haze row in the table)
-//   [3] = (0; noise tile, blocks; seconds after detonation; 1 — there is water under the pall and its map, channel g of the
-//          slot's relief map, PallGround; 0 — everywhere land)
-// Table: across the width — radius 0..reach; one row per slot — the haze (attenuation, height, fire light from below; 0).
+//   [3] = (radius of the fire zone, blocks; noise tile, blocks; seconds after detonation; 1 — there is water under the pall and
+//          its map, channel g of the slot's relief map, PallGround; 0 — everywhere land)
+// Table: one row per slot, the haze; across the width rgb by radius 0..reach (attenuation at full strength, height, fire light
+// from below), a by travel past the fire zone's downwind edge 0..S[1].z (the smoke parcels' strength,
+// nuclear/model/SmokeParcels).
 
 // Substance of the pall (client/nuclear/PallLight; PallGlslTest checks): single-scattering albedo ω' by channel and asymmetry
 // g' after delta-Eddington (the forward peak f = g² goes into unscattered light, the remainder g' = g / (1 + g)). The
@@ -150,27 +152,39 @@ vec3 pallDustW(float sand, float hard, float paved, float smoke) {
     return mix(mix(PALL_DUST_W, PALL_SAND_W, clamp(share, 0.0, 1.0)), PALL_SMOKE_W, smoke);
 }
 
+// Smoke parcels (nuclear/model/SmokeParcels): a parcel widens by this share of its shift downwind over the fire zone's radius
+const float PALL_PARCEL_SPREAD = 0.2;
+// nodes per table row (PallField.BINS)
+const float PALL_BINS = 128.0;
+
 // Haze of slot S at point p (from the eye), without noise (the average over noise is that); ground, G — relief and water maps
 // of the slot; floorUp — floor of the layer under the point (top of the relief by the map, blocks above the ground under the
 // epicenter; 0 — ground under the epicenter): slab is computed from it, and above a hill the layer rises from it
-// (PallField.sigma is the same). The haze is read at its source on the axis of the trail: there are no fires over water. Without
-// water under the pall (S[3].w = 0) the map is not read
+// (PallField.sigma is the same). The haze is the newest smoke parcel over the point: across the wind the fire zone's smoke
+// abreast of the band's axis (the point's place along the wind, from the epicenter to the oldest parcel), widened by the
+// parcel's travel past the zone's downwind edge, at that parcel's strength (the row's channel a, by travel; over the zone the
+// smoke leaving now); its source water is read on the fire zone: there are no fires over water. The fires light only the smoke
+// above them. Without water under the pall (S[3].w = 0) the map is not read
 PallAt pallField(sampler2D table, sampler2D ground, mat4 S, vec4 G, vec3 p, float floorUp) {
     vec2 q = p.xz - S[0].xy;
     float hill = max(floorUp, 0.0);
     float above = p.y - S[0].z - hill, reach = S[0].w;
     floorUp -= hill;
-    float len = S[1].z, along = clamp(dot(q, S[2].xy), 0.0, len);
-    vec2 source = q - S[2].xy * along;
+    float len = S[1].z, down = dot(q, S[2].xy), along = clamp(down, 0.0, len), travel = clamp(down - S[3].x, 0.0, len);
+    float widen = 1.0 + PALL_PARCEL_SPREAD * travel / max(S[3].x, 1.0);
+    vec2 source = (q - S[2].xy * along) / widen;
     float uh = length(source) / reach;
     vec4 haze = texture(table, vec2(min(uh, 1.0), S[2].w));
-    float top = max(haze.g, 1.0), sh = haze.r * (1.0 - 0.5 * along / max(len, 1.0)) * pallEdge(uh), fire = haze.b;
+    float carried = texture(table, vec2((travel / max(len, 1.0) * (PALL_BINS - 1.0) + 0.5) / PALL_BINS, S[2].w)).a;
+    // the fires light only the smoke above them: the zone's fire share at the point itself (PallField.fire, 0.85–1.05 of its
+    // radius), on the row's fire light read at the parcel's source
+    float top = max(haze.g, 1.0), sh = haze.r * carried * pallEdge(uh);
+    float fire = haze.b * (1.0 - smoothstep(0.85 * S[3].x, 1.05 * S[3].x, length(q)));
     float wet = 0.0;
     if (S[3].w > 0.5 && sh + fire > 0.0) {
-        float dry = 1.0 - pallWater(ground, S, G, source);
-        sh *= dry;
-        fire *= dry;
+        sh *= 1.0 - pallWater(ground, S, G, source);
         wet = pallWater(ground, S, G, q);
+        fire *= 1.0 - wet;
     }
     PallAt a;
     a.height = above / top;

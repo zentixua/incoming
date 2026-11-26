@@ -17,6 +17,10 @@
 #   tools/dev_client.sh watch on|off            log every frame whose upper screen jumps in luminance ("DEV pop": a
 #                                               one-frame dropout of an effect), with the dust pass's state
 #   tools/dev_client.sh age                     the newest detonation's shown age (s), front radius and eye distance (blocks)
+#   tools/dev_client.sh skip <seconds>          the newest detonation that old (single player): the server's game time moves
+#                                               there and the client rebuilds it, as a replay seek; across the show's end the
+#                                               span reads at vanilla pace, after it at the real rate (a 24-hour day: skip to
+#                                               1150, wait for the end, then skip on); answers with the burst and its wind
 #   tools/dev_client.sh dw <key>=<value> …      the dust wave's diagnostics, as the client scenario's dw: steps (devtest
 #                                               DustWallSteps: probe, dump, sweep, ground, freezeage, history, …)
 #   tools/dev_client.sh swap                    Gradle compiles; changed loaded classes are redefined (jdb); changed
@@ -43,7 +47,7 @@ need_running() { running || { echo "dev client is not running (tools/dev_client.
 # The java a rigLaunch script runs (its jdb redefines classes): the last quoted .../bin/java on its exec line
 rig_java() { sed -n "s/^exec env .* '\([^']*\/bin\/java\)' .*/\1/p" "$1"; }
 
-# One line to the dev client (DevHands: cmd, reload, shot, hud, press, dw, age, watch), waits for its answer; prints it, code 1 on "error"
+# One line to the dev client (DevHands: cmd, reload, shot, hud, press, dw, age, skip, watch), waits for its answer; prints it, code 1 on "error"
 hand() {
   local id done t=0 res limit=${2:-300}
   id=$(date +%s%N); mkdir -p "$DEV/inbox"
@@ -210,6 +214,7 @@ case "$c" in
   swap) need_running; swap ;;
   reload) need_running; reload ;;
   age) need_running; hand age ;;
+  skip) need_running; [ $# -ge 1 ] || { echo "skip <seconds>" >&2; exit 2; }; hand "skip $1" ;;
   watch) need_running; hand "watch ${1:-on}" ;;
   describe) need_running; hand describe ;;
   dw) need_running; for a in "$@"; do hand "dw $a" || exit 1; done ;;

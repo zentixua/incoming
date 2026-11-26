@@ -7,6 +7,7 @@ import ua.zentix.incoming.nuclear.Detonation;
 import ua.zentix.incoming.nuclear.model.BlastModel;
 import ua.zentix.incoming.nuclear.model.DustModel;
 import ua.zentix.incoming.nuclear.model.FireballModel;
+import ua.zentix.incoming.nuclear.model.SmokeParcels;
 import ua.zentix.incoming.nuclear.model.ThermalModel;
 import ua.zentix.incoming.nuclear.model.WaterModel;
 
@@ -28,8 +29,9 @@ import ua.zentix.incoming.nuclear.model.WaterModel;
  * (hill: wind lofts dust from its slope); dust flows into valleys, where the layer starts at ground-zero elevation.
  * <p>
  * <b>Haze.</b> The city burns over the ignition zone (light pulse from {@link ThermalModel#ignite}): smoky haze
- * (visibility {@link #HAZE_VISIBILITY_M} m) is the fires' smoke: it grows, holds and burns out with them ({@link FireStorm#smoke} on
- * the detonation's clock, {@link #clock}: hours of the world's day after the show), trails downwind, lit by fires from below.
+ * (visibility {@link SmokeParcels#HAZE_VISIBILITY_M} m) is the fires' smoke parcels ({@link SmokeParcels}): each real second the
+ * fires emit at their strength on the strike clock ({@link #clock}: hours of the world's day after the show), and the parcels drift
+ * and widen downwind on the motion age ({@link #parcels}); the fires light only the smoke above them.
  * <p>
  * <b>Water</b> (plan, step 6). No dust over water: wind behind the front tears spray from crests ({@link WaterModel#spray}) —
  * a separate layer with its own height (crest stripping height, {@link WaterModel#sprayHeight}; large drops fall out, lowering
@@ -40,7 +42,7 @@ import ua.zentix.incoming.nuclear.model.WaterModel;
  * it was lofted: dust drifted onto water stays dust (point minus drift); haze at its source (no fires over water).
  * <p>
  * Time: dust and spray use the model clock (ticks / (20·scale)), like front and head; paper falls in real seconds (client ticks
- * / 20); haze and fires use the detonation's clock ({@link #clock}). Lengths in model meters and blocks through detonation scale. The radius table
+ * / 20); fires use the strike clock ({@link #clock}), their smoke parcels the motion age ({@link #parcels}). Lengths in model meters and blocks through detonation scale. The radius table
  * ({@link #row}) is what the pall shader receives: all expensive work is done here.
  */
 public final class PallField {
@@ -67,8 +69,6 @@ public final class PallField {
      * and ash ({@link #SIGMA_DENSE}); the front layer is tens of times denser.
      */
     static final double DENSE_VISIBILITY_M = 40;
-    /** Visibility in smoky haze over the burning city, m. */
-    static final double HAZE_VISIBILITY_M = 900;
     /**
      * No dust thinner than this vertical optical depth in the table (95 % sun transmission): sets table radius and when pall
      * has settled ({@link #dustEnd}).
@@ -78,10 +78,12 @@ public final class PallField {
     static final double GONE = 0.0015;
     /** Dust drifts at a fraction of detonation wind: wind is weaker near ground, heavy material settles. */
     static final double DRIFT = 0.5;
-    /** Maximum downwind haze-plume length, in fire-zone radii. */
-    static final double PLUME_MAX = 2;
-    /** Haze height over fires, m (at 15 kt): smoke rises above dust. */
-    static final double HAZE_TOP_M = 260;
+    /**
+     * The terrain map beneath the pall ({@link PallGround}) covers the smoke parcels this many fire-zone radii downwind of the
+     * epicentre; farther parcels lie on the map's edge terrain, as dust carried past it does: a map stretched over the whole band
+     * (tens of kilometres) would coarsen the cells under the camera.
+     */
+    static final double MAP_DOWNWIND = 2;
     /**
      * Full ash rate when dust settles at this rate, kg/(m²·s) (half a gram per m² per second: coarse material in the first
      * minutes, {@link DustModel.Column#fallout}).
@@ -111,7 +113,7 @@ public final class PallField {
     static final double SURGE_VISIBILITY_M = 50;
 
     /** Light extinction in the former dense pall dust (density measure) and in haze, 1/m. */
-    static final double SIGMA_DENSE = Sight.KOSCHMIEDER / DENSE_VISIBILITY_M, SIGMA_HAZE = Sight.KOSCHMIEDER / HAZE_VISIBILITY_M;
+    static final double SIGMA_DENSE = Sight.KOSCHMIEDER / DENSE_VISIBILITY_M, SIGMA_HAZE = Sight.KOSCHMIEDER / SmokeParcels.HAZE_VISIBILITY_M;
     /** Extinction in the densest spray and base surge, 1/m. */
     static final double SIGMA_SPRAY = Sight.KOSCHMIEDER / SPRAY_VISIBILITY_M, SIGMA_SURGE = Sight.KOSCHMIEDER / SURGE_VISIBILITY_M;
 
@@ -156,6 +158,14 @@ public final class PallField {
     private final double dustEnd;
     /** Detonation clock from real ticks ({@link #clock}); real time until set. */
     private DoubleUnaryOperator clock = t -> t;
+    /**
+     * The smoke parcels' clock at real ticks ({@link #parcels}); until set, M is real time and S at M is {@link #clock} (no
+     * jumps).
+     */
+    private java.util.function.DoubleFunction<SmokeParcels.Clock> parcelClock =
+            t -> SmokeParcels.Clock.of(t / 20.0, m -> clock.applyAsDouble(m * 20) / 20.0);
+    /** The fires' smoke parcels (metres, seconds). */
+    private final SmokeParcels smoke;
 
     public PallField(Detonation d) {
         this.d = d;
@@ -165,6 +175,7 @@ public final class PallField {
         // server does not ignite (Detonation.fires) — no fire zone: no haze above it, fire glow or storm
         double ignite = !d.fires() ? 0 : groundRange(ThermalModel.rangeForFluence(ThermalModel.ignite(y), y, d.surface(), d.visibility()), hob);
         this.fireReach = d.blocks(ignite);
+        this.smoke = new SmokeParcels(y, ignite, d.windDir(), d.windSpeed());
         this.reach = Math.max(1, d.blocks(Math.max(dustM, ignite)) * 1.02);
         double last = 0;
         for (int i = 0; i < BINS; i++) {
@@ -519,9 +530,9 @@ public final class PallField {
         return d.blocks(hazeTopM(d.yieldKt()));
     }
 
-    /** Haze top over fires, m ({@link #HAZE_TOP_M} at 15 kt, ∛yield). */
+    /** Haze top over fires, m ({@link SmokeParcels#HAZE_TOP_M} at 15 kt, ∛yield). */
     static double hazeTopM(double yieldKt) {
-        return HAZE_TOP_M * Math.cbrt(yieldKt / 15);
+        return SmokeParcels.HAZE_TOP_M * Math.cbrt(yieldKt / 15);
     }
 
     /**
@@ -560,6 +571,16 @@ public final class PallField {
      */
     void clock(DoubleUnaryOperator clock) {
         this.clock = clock;
+        band = null;
+    }
+
+    /**
+     * The smoke parcels' clock ({@link SmokeParcels.Clock}) at real client ticks since detonation: the motion age and the strike
+     * clock at an earlier motion age, from the server's anchors ({@code ClientNuclear.Active.parcelClock}).
+     */
+    void parcels(java.util.function.DoubleFunction<SmokeParcels.Clock> clock) {
+        this.parcelClock = clock;
+        band = null;
     }
 
     /** Detonation-clock seconds at {@code ticks} real client ticks since detonation. */
@@ -626,16 +647,6 @@ public final class PallField {
         return 0.55 + 0.45 * smooth(0.3, 0.95, u);
     }
 
-    /**
-     * Haze over time: smoke of the fires, so it grows, holds and burns out with them ({@link FireStorm#smoke} at the nominal peak,
-     * on the detonation's clock; earlier it rose 15–150 s after the front, before the fires that make it). Only behind the front
-     * ({@code ageS} &gt; 0): the wave sweeps what smoke there is into its dust; before it, a few per mille of full fire.
-     */
-    double hazeEnvelope(double ageS, double ticks) {
-        if (ageS <= 0) return 0;
-        return FireStorm.smoke(clockSeconds(ticks), FireStorm.PEAK_S);
-    }
-
     // ---------------------------------------------------------------- shader table
 
     /** Extinction 1/m → 1/block (one block = 1/scale meter). */
@@ -662,8 +673,8 @@ public final class PallField {
     }
 
     /**
-     * Table row at {@code ticks} since detonation (client ticks): 4 numbers per {@link #BINS} nodes — the haze ({@link #haze}),
-     * all the pall volume draws of the field. Writes into {@code out} (length ≥ 4·BINS). {@code land} indicates land beneath the
+     * Table row at {@code ticks} since detonation (client ticks): 4 numbers per {@link #BINS} nodes — the haze ({@link #haze}: the
+     * fire zone's smoke by radius and the parcels' strength along the wind), all the pall volume draws of the field. Writes into {@code out} (length ≥ 4·BINS). {@code land} indicates land beneath the
      * pall ({@link PallGround}): no haze or fires over open sea (the shader would remove them by map anyway, but the slot is
      * empty without them).
      */
@@ -671,7 +682,7 @@ public final class PallField {
         double[] v = new double[4];
         for (int i = 0; i < BINS; i++) {
             haze(i, ticks, v);
-            if (!land) v[0] = v[2] = 0;
+            if (!land) v[0] = v[2] = v[3] = 0;
             for (int k = 0; k < 4; k++) out[4 * i + k] = (float) v[k];
         }
     }
@@ -780,15 +791,72 @@ public final class PallField {
     }
 
     /**
-     * Node i haze (by distance from plume axis): extinction (1/block), height (blocks; no lower than eventual dust
-     * top), fire light from below 0..1, 0.
+     * Node i of the haze row: the fire zone's smoke by radius i (its extinction at full strength, 1/block: the fire share once the
+     * front has passed, the parcel read widened at its shift), height (blocks; no lower than eventual dust top), fire light from
+     * below 0..1 at radius i (the fires light only the smoke above them), and the parcels' strength at node i ({@link Band}:
+     * emission at its strike clock over its widening, faded where not seen; node i at travel i/(BINS − 1) of
+     * {@link #parcelLength} past the zone's downwind edge). The pall's haze at a point is extinction × strength ({@code pallField}, {@link #layers}).
      */
     void haze(int i, double ticks, double[] out) {
-        out[0] = perBlock(SIGMA_HAZE) * fire[i] * hazeEnvelope(age(i, ticks), ticks);
+        out[0] = age(i, ticks) > 0 ? perBlock(SIGMA_HAZE) * fire[i] : 0;
         // the haze top climbs with the smoke columns that feed it (FireStorm.risen from the flash)
         out[1] = Math.max(ceiling[i], hazeTop() * FireStorm.risen(clockSeconds(ticks), hazeTopM(d.yieldKt())));
         out[2] = fire[i] * fireLight(ticks);
-        out[3] = 0;
+        out[3] = band(ticks).carried[i];
+    }
+
+    /**
+     * The smoke parcels along the wind at one moment ({@link SmokeParcels}): strength per node (travel j/(BINS − 1) of
+     * {@code length}, blocks), the axis length, and the first and last drawn node (−1: none).
+     */
+    record Band(double ticks, float[] carried, double length, int first, int last) {
+        boolean drawn() {
+            return last >= 0;
+        }
+
+        /** Travel of node j's parcel past the fire zone's downwind edge, blocks. */
+        double at(int j) {
+            return length * j / (BINS - 1);
+        }
+
+        /** Strength of the parcel that has travelled {@code along} blocks, linear between nodes: as the shader reads the row's last channel. */
+        double strength(double along) {
+            if (length <= 0) return carried[0];
+            double x = Math.max(0, Math.min(1, along / length)) * (BINS - 1);
+            int j = Math.min((int) x, BINS - 2);
+            return carried[j] + (x - j) * (carried[j + 1] - carried[j]);
+        }
+    }
+
+    /** The last {@link Band} built (frames and tick readers ask at a few moments; each build is 128 law readings). */
+    private volatile Band band;
+
+    /** The smoke parcels at {@code ticks} real client ticks since detonation. */
+    Band band(double ticks) {
+        Band b = band;
+        if (b != null && b.ticks == ticks) return b;
+        float[] v = new float[BINS];
+        int first = -1, last = -1;
+        double length = 0;
+        if (fireReach > 0) {
+            SmokeParcels.Clock c = parcelClock.apply(ticks);
+            length = d.blocks(smoke.length(c));
+            for (int j = 0; j < BINS; j++) {
+                v[j] = (float) smoke.carried(SmokeParcels.node(j, smoke.length(c)), c);
+                if (v[j] > 0) {
+                    if (first < 0) first = j;
+                    last = j;
+                }
+            }
+        }
+        b = new Band(ticks, v, length, first, last);
+        band = b;
+        return b;
+    }
+
+    /** Widening of the parcel at shift {@code along} blocks ({@link SmokeParcels#widen}). */
+    double widen(double along) {
+        return smoke.widen(d.metres(along));
     }
 
     /**
@@ -821,22 +889,58 @@ public final class PallField {
     }
 
     /**
-     * Whether anything remains of pall at {@code ticks}: haze (only above fires), dust while the front crosses the
+     * Whether anything remains of pall at {@code ticks}: haze (drawn smoke parcels), dust while the front crosses the
      * table and until settled everywhere (spray settles before dust), base surge.
      */
     public boolean visible(double ticks) {
-        return ticks > 0 && (fireReach > 0 && clockSeconds(ticks) < FireStorm.OUT_S || ticks <= arrival[BINS - 1] || ticks < dustEnd
-                || surge(ticks, new double[3]));
+        return ticks > 0 && (hazeVisible(ticks) || ticks <= arrival[BINS - 1] || ticks < dustEnd || surge(ticks, new double[3]));
     }
 
-    /** Whether the fire-zone haze, the matter the pall volume draws ({@link #row}), can exist at {@code ticks}. */
+    /** Whether the haze, the matter the pall volume draws ({@link #row}), exists at {@code ticks}: some smoke parcel is drawn. */
     public boolean hazeVisible(double ticks) {
-        return ticks > 0 && fireReach > 0 && clockSeconds(ticks) < FireStorm.OUT_S;
+        return ticks > 0 && fireReach > 0 && band(ticks).drawn();
     }
 
-    /** Ground reach from ground zero of the haze at {@code ticks}, blocks: fire zone (its soft edge) and downwind plume; 0 — no fire zone. */
+    /** Radius of a parcel's disk at the fire zone (the haze's soft edge), blocks. */
+    double hazeRadius() {
+        return Math.min(reach, 1.05 * fireReach);
+    }
+
+    /** Ground reach from ground zero of the haze at {@code ticks}, blocks: to the far edge of the farthest drawn parcel; 0 — none. */
     public double hazeExtent(double ticks) {
-        return fireReach <= 0 ? 0 : Math.min(reach, 1.05 * fireReach) + plume(ticks);
+        Band b = band(ticks);
+        if (fireReach <= 0 || !b.drawn()) return 0;
+        double s = b.at(b.last);
+        return Math.min(s + fireReach, b.length) + hazeRadius() * widen(s);
+    }
+
+    /**
+     * Ground box of the drawn haze at {@code ticks} around ground zero, blocks: {min x, min z, max x, max z} into {@code out}, the
+     * hull of the drawn parcels' disks no farther than {@code within} blocks from the eye at ({@code ex}, {@code ez}) from ground
+     * zero; false — none.
+     */
+    public boolean hazeBounds(double ticks, double ex, double ez, double within, double[] out) {
+        Band b = band(ticks);
+        if (fireReach <= 0 || !b.drawn()) return false;
+        double ux = Math.cos(d.windDir()), uz = Math.sin(d.windDir());
+        out[0] = out[1] = Double.POSITIVE_INFINITY;
+        out[2] = out[3] = Double.NEGATIVE_INFINITY;
+        boolean any = false;
+        for (int j = Math.max(b.first - 1, 0); j <= Math.min(b.last + 1, BINS - 1); j++) {
+            // the parcel that has travelled s stands abreast of the axis at s past the zone's downwind edge; the newest also
+            // over the whole zone
+            double s = b.at(j), r = hazeRadius() * widen(s);
+            for (double g : s > 0 ? new double[]{Math.min(s + fireReach, b.length)} : new double[]{0, Math.min(fireReach, b.length)}) {
+                double x = ux * g, z = uz * g;
+                if (Math.hypot(x - ex, z - ez) - r > within) continue;
+                any = true;
+                out[0] = Math.min(out[0], x - r);
+                out[1] = Math.min(out[1], z - r);
+                out[2] = Math.max(out[2], x + r);
+                out[3] = Math.max(out[3], z + r);
+            }
+        }
+        return any;
     }
 
     /**
@@ -851,7 +955,8 @@ public final class PallField {
 
     /**
      * Maximum ground reach from ground zero of pall at {@code ticks}, blocks: table (or base surge if
-     * wider), dust drift (until dust settles or while surge rolls — nothing to drift afterward), and haze plume in any direction.
+     * wider), dust drift (until dust settles or while surge rolls — nothing to drift afterward), and the haze near the fires
+     * ({@link #MAP_DOWNWIND}) in any direction.
      * Slot bounds ({@link NukePall}) and terrain map beneath pall ({@link PallGround}).
      */
     public double extent(double ticks) {
@@ -861,7 +966,7 @@ public final class PallField {
     }
 
     /**
-     * {@link #extent} without drift: table (or base surge if wider) and haze plume — pall at its own source, where
+     * {@link #extent} without drift: table (or base surge if wider) and the haze near the fires — pall at its own source, where
      * it was lofted. Terrain map beneath pall ({@link PallGround}) covers this and the camera, not the full drift.
      */
     public double sourceExtent(double ticks) {
@@ -870,17 +975,12 @@ public final class PallField {
     }
 
     private double atSource(double ticks, boolean surge, double[] s) {
-        return (surge ? Math.max(reach, 1.05 * s[0]) : reach) + plume(ticks);
+        return (surge ? Math.max(reach, 1.05 * s[0]) : reach) + Math.min(MAP_DOWNWIND * fireReach, parcelLength(ticks));
     }
 
-    /** Downwind haze-plume length at {@code ticks}, blocks: grows with wind, capped at {@link #PLUME_MAX} fire zones. */
-    public double plume(double ticks) {
-        return Math.min(PLUME_MAX * fireReach, d.blocks(d.windSpeed()) * ticks / 20.0);
-    }
-
-    /** Haze thins along the plume: halved at the end of length {@code len} ({@code along} — downwind from ground zero). */
-    static double plumeThin(double along, double len) {
-        return 1 - 0.5 * along / Math.max(len, 1);
+    /** Axis length of the smoke parcels at {@code ticks}, blocks ({@link SmokeParcels#length}): the haze row's along-wind span. */
+    public double parcelLength(double ticks) {
+        return band(ticks).length;
     }
 
     /** Table edge (u — fraction of {@link #reach}): field fades toward it, zero beyond. */
@@ -890,7 +990,7 @@ public final class PallField {
 
     /**
      * Extinction at a point without noise (noise mean = 1), 1/block: dust and spray (wind-drifted since
-     * lofting, {@link #source}; material from water where lofted), haze (downwind plume; no fires over water at its source) and base surge — same as
+     * lofting, {@link #source}; material from water where lofted), haze (smoke parcels; no fires over water at their source) and base surge — same as
      * the field the pall and dust passes draw. Point is ground distance from ground zero (dx, dz, blocks), height above ground
      * zero (blocks); {@code floorUp} — underlying terrain above ground zero (blocks, {@link PallGround} map):
      * above hills, layer starts at their slope; in valleys, at ground zero ({@link #profile}); {@code water} — water fraction beneath
@@ -944,6 +1044,13 @@ public final class PallField {
         out.add((float) (l[0] * profile(h / l[2]) + l[1] * profile(h / l[7])),
                 (float) (l[0] * between(h, Double.POSITIVE_INFINITY, l[2]) + l[1] * between(h, Double.POSITIVE_INFINITY, l[7])),
                 (float) (l[0] * between(floor - base, h, l[2]) + l[1] * between(floor - base, h, l[7])));
+    }
+
+    /** The haze's extinction at the ground at (dx, dz) from ground zero, blocks, over land, 1/block ({@link #layers}). */
+    double hazeSigma(double dx, double dz, double ticks) {
+        double[] l = new double[LAYERS];
+        layers(dx, dz, ticks, Water.DRY, l);
+        return l[3];
     }
 
     /** Mist component of {@link #sigma}: spray and base surge, 1/block. */
@@ -1227,14 +1334,21 @@ public final class PallField {
             out[2] = Math.max(topD, 1);
             out[7] = Math.max(v[1], 1);
         }
-        double len = plume(ticks), ux = Math.cos(d.windDir()), uz = Math.sin(d.windDir());
-        double along = Math.max(0, Math.min(len, dx * ux + dz * uz));
-        double sx = dx - ux * along, sz = dz - uz * along, uh = Math.hypot(sx, sz) / reach;
-        if (uh < 1) {
-            haze(bin(uh * reach), ticks, v);
-            if (v[0] > 0) {
-                out[3] = v[0] * (1 - water.at(sx, sz)) * plumeThin(along, len) * edge(uh);
-                out[4] = Math.max(v[1], 1);
+        if (fireReach > 0) {
+            // the smoke parcel over the point (pallField): the fire zone's haze shifted downwind and widened, at its strength
+            Band b = band(ticks);
+            double ux = Math.cos(d.windDir()), uz = Math.sin(d.windDir());
+            // the band's axis abreast of the point; the newest parcel over it, by its travel past the zone's downwind edge
+            double down = dx * ux + dz * uz, along = Math.max(0, Math.min(b.length, down));
+            double travel = Math.max(0, Math.min(b.length, down - fireReach)), widen = widen(travel);
+            double sx = (dx - ux * along) / widen, sz = (dz - uz * along) / widen, uh = Math.hypot(sx, sz) / reach;
+            if (uh < 1) {
+                haze(bin(uh * reach), ticks, v);
+                double carried = b.strength(travel);
+                if (v[0] > 0 && carried > 0) {
+                    out[3] = v[0] * carried * (1 - water.at(sx, sz)) * edge(uh);
+                    out[4] = Math.max(v[1], 1);
+                }
             }
         }
         double[] s = new double[3];
@@ -1249,7 +1363,7 @@ public final class PallField {
     /**
      * Ash falling to ground at a point, 0..1 ({@code NukeAsh}): from settling dust, proportional to what settles out
      * ({@link DustModel.Column#fallout}, full strength at {@link #ASH_FULL}), from 15–60 s after the wave; from fire haze
-     * while the city burns (sparser along plume). No ash from spray or fog over water: material follows water where it was
+     * from the smoke parcels (sparser as they thin). No ash from spray or fog over water: material follows water where it was
      * lofted ({@code water}, as in {@link #sigma}).
      */
     public double ashRate(double dx, double dz, double ticks, Water water) {
@@ -1265,13 +1379,18 @@ public final class PallField {
                 if (ash > 0) ash *= 1 - water.at(lx, lz);
             }
         }
-        double len = plume(ticks), ux = Math.cos(d.windDir()), uz = Math.sin(d.windDir());
-        double along = Math.max(0, Math.min(len, dx * ux + dz * uz));
-        double sx = dx - ux * along, sz = dz - uz * along, uh = Math.hypot(sx, sz) / reach;
-        if (uh < 1) {
-            int i = bin(uh * reach);
-            double haze = 0.8 * fire[i] * hazeEnvelope(age(i, ticks), ticks) * plumeThin(along, len) * edge(uh);
-            if (haze > ash) ash = Math.max(ash, haze * (1 - water.at(sx, sz)));
+        if (fireReach > 0) {
+            Band b = band(ticks);
+            double ux = Math.cos(d.windDir()), uz = Math.sin(d.windDir());
+            // the band's axis abreast of the point; the newest parcel over it, by its travel past the zone's downwind edge
+            double down = dx * ux + dz * uz, along = Math.max(0, Math.min(b.length, down));
+            double travel = Math.max(0, Math.min(b.length, down - fireReach)), widen = widen(travel);
+            double sx = (dx - ux * along) / widen, sz = (dz - uz * along) / widen, uh = Math.hypot(sx, sz) / reach;
+            if (uh < 1) {
+                int i = bin(uh * reach);
+                double haze = age(i, ticks) > 0 ? 0.8 * fire[i] * b.strength(travel) * edge(uh) : 0;
+                if (haze > ash) ash = Math.max(ash, haze * (1 - water.at(sx, sz)));
+            }
         }
         return Math.min(1, ash);
     }

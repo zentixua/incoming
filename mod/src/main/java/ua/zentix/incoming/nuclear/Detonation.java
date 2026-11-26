@@ -403,12 +403,15 @@ public record Detonation(int id, Vec3 burst, double groundY, double yieldKt, boo
      * real time through the show, so the plume lands as the visible cloud passes; then the world clock, so its decay takes
      * the hours the world lives through).
      *
-     * @param seconds detonation-clock seconds after the burst
+     * The black-rain deposit lands as its rain arrives, on the motion age ({@link BlackRainModel#landedStrike}).
+     *
+     * @param seconds detonation-clock seconds after the burst (now or earlier)
+     * @param parcels the detonation's smoke-parcel clock now (when the rain reached the point)
      */
-    public double falloutRateAt(double x, double z, double seconds) {
+    public double falloutRateAt(double x, double z, double seconds, ua.zentix.incoming.nuclear.model.SmokeParcels.Clock parcels) {
         if (!hasFallout()) return 0;
         double hours = seconds / 3600, mx = metres(x - burst.x), mz = metres(z - burst.z);
-        double rain = blackRainModel().depositH1(mx, mz, seconds);
+        double rain = blackRainModel().depositH1(mx, mz, seconds, parcels);
         double decay = Math.pow(Math.max(hours, FalloutModel.MIN_DECAY_HOURS), -FalloutModel.DECAY_EXP);
         return falloutModel().doseRate(mx, mz, hours) + rain * decay;
     }
@@ -418,12 +421,15 @@ public record Detonation(int id, Vec3 burst, double groundY, double yieldKt, boo
         return falloutModel().arrivalHours(metres(x - burst.x), metres(z - burst.z)) * 3600;
     }
 
-    /** Whether black rain falls at the point (same on server and client), {@code seconds} on the detonation's clock. */
-    public boolean blackRainAt(double x, double z, double seconds) {
-        return blackRainModel().raining(metres(x - burst.x), metres(z - burst.z), seconds);
+    /**
+     * Whether black rain falls at the point (same on server and client): under the fires' drawn smoke parcels
+     * ({@link ua.zentix.incoming.nuclear.model.SmokeParcels}) on the detonation's two ages {@code c}.
+     */
+    public boolean blackRainAt(double x, double z, ua.zentix.incoming.nuclear.model.SmokeParcels.Clock c) {
+        return blackRainModel().raining(metres(x - burst.x), metres(z - burst.z), c);
     }
 
-    /** Detonation-clock seconds after the burst until black rain ends everywhere. */
+    /** Motion-age seconds after the burst until black rain ends everywhere. */
     public double blackRainEndSeconds() {
         return blackRainModel().endSeconds();
     }
@@ -435,6 +441,13 @@ public record Detonation(int id, Vec3 burst, double groundY, double yieldKt, boo
     public static boolean underOpenSky(net.minecraft.world.level.Level level, Vec3 pos) {
         return Terrain.height(level, net.minecraft.world.level.levelgen.Heightmap.Types.MOTION_BLOCKING,
                 net.minecraft.util.Mth.floor(pos.x), net.minecraft.util.Mth.floor(pos.z)) <= pos.y;
+    }
+
+    /** Ground radius of the zone the light pulse ignites, m (whether or not the server lit fires). */
+    double fireRadiusM() {
+        double hob = Math.max(0, hobMetres());
+        double slant = ThermalModel.rangeForFluence(ThermalModel.ignite(yieldKt), yieldKt, surface, visibility);
+        return Math.sqrt(Math.max(0, slant * slant - hob * hob));
     }
 
     /** Caches expensive to compute per call (arrival table, maximum radius). */
@@ -482,9 +495,7 @@ public record Detonation(int id, Vec3 burst, double groundY, double yieldKt, boo
             return RAIN.computeIfAbsent(d, x -> {
                 // fire zone where light ignites (as for ruins and client firestorm); absent if server does not ignite fires;
                 // without black rain (world rule) the fires make no rain cloud
-                double hob = Math.max(0, x.hobMetres());
-                double slant = ThermalModel.rangeForFluence(ThermalModel.ignite(x.yieldKt), x.yieldKt, x.surface, x.visibility);
-                double fire = x.fires && x.rain ? Math.sqrt(Math.max(0, slant * slant - hob * hob)) : 0;
+                double fire = x.fires && x.rain ? x.fireRadiusM() : 0;
                 return new BlackRainModel(x.yieldKt, fire, x.windDir, x.windSpeed, 1 - x.falloutModel().surfaceFraction());
             });
         }

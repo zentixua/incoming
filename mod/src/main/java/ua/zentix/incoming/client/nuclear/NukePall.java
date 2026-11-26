@@ -39,6 +39,16 @@ public final class NukePall {
     private static final PallPass.Frame FRAME = new PallPass.Frame();
     private static final float[] ROW = new float[PallField.ROWS * PallPass.WIDTH * 4];
     private static final double[] DRIFT = new double[2];
+    /** Ground box of the drawn smoke parcels around ground zero ({@link PallField#hazeBounds}). */
+    private static final double[] BAND = new double[4];
+    /**
+     * Smoke parcels are marched no farther from the eye than this many optical depths of the frame's air: behind it a tenth of a
+     * percent of their light reaches the eye ({@code pallAir}), and a box over the whole band (up to ~100 km) would spread the
+     * ray's steps thin over the near haze.
+     */
+    static final double AIR_DEPTH = 6.9;
+    /** {@link #AIR_DEPTH} in blocks this frame (clear air: 35 km). */
+    private static double airReach = 1e9;
     private static final Vector3f LO = new Vector3f(), HI = new Vector3f(), CULL = new Vector3f();
     private static final float[] GLOW = new float[8];
     /** Slot dust-wall parameters ({@link BlastWall#slot}): the Wilson cloud for the frame, the head at the camera. */
@@ -233,6 +243,7 @@ public final class NukePall {
         PallPass.Quality q = quality();
         PallPass.Frame f = FRAME;
         double range = Sight.range(level.getRainLevel(partial), level.getThunderLevel(partial)), air = Sight.KOSCHMIEDER / range;
+        airReach = AIR_DEPTH / air;
         // air to mushrooms, pall and wall in model meters (all detonations share one scale)
         MushroomField.air(all.get(0).d, eye, range, f.air);
         // frame light before mushrooms: by day include mushrooms whose shadow enters the frame (MushroomField.frame)
@@ -396,24 +407,34 @@ public final class NukePall {
         boolean water = a.ground.hasWater();
         p.row(ticks, a.ground.hasLand(), ROW);
         double top = 1;
-        boolean any = false;
+        boolean shape = false, carried = false;
         for (int i = 0; i < PallField.ROWS * PallPass.WIDTH; i++) {
-            any |= ROW[4 * i] > 0;
+            shape |= ROW[4 * i] > 0;
+            carried |= ROW[4 * i + 3] > 0;
             top = Math.max(top, ROW[4 * i + 1]);
         }
+        // haze: the fire zone's smoke shape and a drawn smoke parcel carrying it within the air's reach of the eye
+        boolean band = shape && carried && p.hazeBounds(ticks, eye.x - d.burst().x, eye.z - d.burst().z, airReach, BAND);
+        boolean any = band;
         // Wilson cloud in the same volume; the mushroom's foot inflow and ball light, the firestorm's fire map read the slot
         double seconds = a.seconds(partial);
         boolean wall = a.wall.slot(seconds, WALL);
         any |= wall && WALL[18] > 0 || MushroomField.shape(a, partial) != null || stormy(a);
         if (!any) return false;
         p.drift(ticks, DRIFT);
-        double plume = p.plume(ticks);
+        double length = p.parcelLength(ticks);
         float cx = (float) (d.burst().x - eye.x), cz = (float) (d.burst().z - eye.z), ground = (float) (d.groundY() - eye.y);
-        // bounds: haze over the fire zone and its plume; valleys below ground zero over full height; above hills the layer starts
-        // at their slopes (pallField); the Wilson cloud surrounds the detonation point
-        float r = (float) Math.max(Math.max(p.hazeExtent(ticks), 1), a.wall.wilsonReach(seconds));
+        // bounds: the fire zone and the drawn smoke parcels downwind; valleys below ground zero over full height; above hills the
+        // layer starts at their slopes (pallField); the Wilson cloud surrounds the detonation point
+        float r = (float) Math.max(1, a.wall.wilsonReach(seconds));
         LO.set(cx - r, (float) (ground - top), cz - r);
         HI.set(cx + r, (float) (ground + Math.max(a.ground.high(), 0) + top * 1.05), cz + r);
+        if (band) {
+            LO.x = Math.min(LO.x, (float) (cx + BAND[0]));
+            LO.z = Math.min(LO.z, (float) (cz + BAND[1]));
+            HI.x = Math.max(HI.x, (float) (cx + BAND[2]));
+            HI.z = Math.max(HI.z, (float) (cz + BAND[3]));
+        }
         if (WALL[18] > 0) HI.y = Math.max(HI.y, (float) (ground + WALL[19] + a.wall.wilsonReach(seconds)));
         CULL.set(LO.x, Math.min(LO.y, bottom), LO.z);
         if (frustum.intersectAab(CULL, HI, SIDES_AND_NEAR) >= 0) return false;
@@ -422,9 +443,10 @@ public final class NukePall {
         org.joml.Matrix4f m = k == 0 ? f.slot0 : f.slot1;
         m.m00(cx).m01(cz).m02(ground).m03((float) p.reach());
         // S[1].w: 1 — slot in use, 2 — and hard ground or sand beneath its pall (the shader samples the soil only then)
-        m.m10((float) DRIFT[0]).m11((float) DRIFT[1]).m12((float) plume).m13(a.ground.hasHard() || a.ground.hasSand() ? 2 : 1);
+        m.m10((float) DRIFT[0]).m11((float) DRIFT[1]).m12((float) length).m13(a.ground.hasHard() || a.ground.hasSand() ? 2 : 1);
         m.m20((float) Math.cos(d.windDir())).m21((float) Math.sin(d.windDir()));
-        m.m30(0).m31((float) Math.max(48, d.blocks(TILE_M * ys))).m32((float) (ticks / 20.0));
+        // S[3].x: the fire zone's radius, blocks (the parcels widen by SmokeParcels.SPREAD of their shift over it)
+        m.m30((float) p.fireReach()).m31((float) Math.max(48, d.blocks(TILE_M * ys))).m32((float) (ticks / 20.0));
         tableRows(m, k, water);
         // ball and fire light on dust (CloudPuffs.pallLight)
         a.puffs.pallLight(MushroomField.shape(a, partial), a.pall.fireLight(ticks), GLOW);

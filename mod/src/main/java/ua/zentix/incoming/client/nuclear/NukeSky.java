@@ -33,7 +33,7 @@ public final class NukeSky {
         boolean in = false;
         if (Detonation.underOpenSky(level, cam)) {
             for (ClientNuclear.Active a : ClientNuclear.detonations()) {
-                if (a.d.blackRainAt(cam.x, cam.z, a.clockSeconds(0))) {
+                if (a.d.blackRainAt(cam.x, cam.z, a.parcelClock(a.ticks(0)))) {
                     in = true;
                     break;
                 }
@@ -84,7 +84,7 @@ public final class NukeSky {
         ClientLevel level = Minecraft.getInstance().level;
         if (level != null && Detonation.underOpenSky(level, eye))
             for (ClientNuclear.Active active : ClientNuclear.detonations())
-                if (active.d.blackRainAt(eye.x, eye.z, active.clockSeconds(partial))) return 1;
+                if (active.d.blackRainAt(eye.x, eye.z, active.parcelClock(active.ticks(partial)))) return 1;
         return 0;
     }
 

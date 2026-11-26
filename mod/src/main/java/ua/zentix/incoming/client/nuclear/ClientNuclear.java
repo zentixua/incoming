@@ -147,6 +147,7 @@ public final class ClientNuclear {
             if (known != null) this.tiles = known.tiles;
             this.pall.prepareWave();
             this.pall.clock(this::clockTicksAt);
+            this.pall.parcels(this::parcelClock);
             this.storm = known == null ? new FireStorm(d, pall) : known.storm;
             if (known == null) NukeWater.resolve(this, Minecraft.getInstance().level);
             this.ground = known == null ? new PallGround(d, pall) : known.ground;
@@ -210,6 +211,29 @@ public final class ClientNuclear {
         /** The motion age M ({@link StrikeClock#motion}) at {@code realTicks} client ticks since detonation, in ticks. */
         public double motionTicksAt(double realTicks) {
             return strikeClock(realTicks).motion(realTicks, ClientClock.counted()) * 20;
+        }
+
+        /**
+         * The smoke parcels' clock at {@code realTicks} client ticks since detonation ({@code nuclear/model/SmokeParcels}): M then,
+         * and S at an earlier M from the server's anchors alone ({@link StrikeClock#strikeAtMotion}), as the server reads it for
+         * the rain it doses.
+         */
+        public ua.zentix.incoming.nuclear.model.SmokeParcels.Clock parcelClock(double realTicks) {
+            StrikeClock c = strikeClock(realTicks);
+            double within = Math.min(1, realTicks - ticks(0));
+            double rate = ClientClock.rateClock() + within * ClientClock.pace() * ua.zentix.incoming.util.WorldClock.REAL_RATE;
+            double jumps = ClientClock.counted(), m = c.motion(realTicks, jumps);
+            return new ua.zentix.incoming.nuclear.model.SmokeParcels.Clock() {
+                @Override
+                public double motion() {
+                    return m;
+                }
+
+                @Override
+                public double strikeAt(double at) {
+                    return c.strikeAtMotion(at, realTicks, rate, jumps);
+                }
+            };
         }
 
         /** Detonation-clock seconds now. */
@@ -766,7 +790,7 @@ public final class ClientNuclear {
                 NukeWater.tick(a, level, eye);
                 NukeDust.front(a, eye);
             }
-            if (a.ticks(0) > lifeTicks(a.d) && a.clockSeconds(0) > a.d.blackRainEndSeconds() && !a.pall.visible(a.ticks(0))) {
+            if (a.ticks(0) > lifeTicks(a.d) && a.motionTicksAt(a.ticks(0)) / 20 > a.d.blackRainEndSeconds() && !a.pall.visible(a.ticks(0))) {
                 a.sounds.stop();
                 if (a.revision != null && !ua.zentix.incoming.client.replay.Replay.active())
                     net.neoforged.neoforge.network.PacketDistributor.sendToServer(new ua.zentix.incoming.net.C2S.MaterialRetired(a.revision));

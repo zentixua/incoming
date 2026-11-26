@@ -125,9 +125,12 @@ Ruins and everything in `nuclear/world/` are in `nuclear-world.md`.
   quiet animals.
 
 - Post-wave pall (`client/nuclear/PallField` field, `NukePall` at camera/into frame, `NukeAsh` ash;
-  `client/fx/layer/PallPass` renders): dust follows ground pressure and front arrival, haze over the ignition zone
-  lives the storm's smoke on the strike clock S (`PallField.clock`, set by `ClientNuclear.Active.clockTicksAt`:
-  `util/StrikeClock` over the client clocks `ClientClock`; clocks below); no time-of-day logic here. Pace game-tick timers to the clock on a fixed game-time grid (`BurnsEffect`: every
+  `client/fx/layer/PallPass` renders): dust follows ground pressure and front arrival; the haze is the fires' smoke
+  parcels (`nuclear/model/SmokeParcels`: server rain and client haze from clock anchors; laws in its javadoc): a point reads the newest parcel over it, travel counted from the zone's downwind edge
+  (`DownwindFireZoneSmokeTest`), alike in Java, `pall.glsl` and `startSeconds`; drawn faded only below `GONE`
+  (`theBandHasNoCut`). Row channel a = parcels by travel (128 nodes, `SmokeParcels.drawn` both sides); fire light = row b ×
+  the zone's fire share at the point (a third read broke the AMD budget). Terrain map: band to
+  `MAP_DOWNWIND` fire radii; slot box: parcels within `NukePall.AIR_DEPTH` air depths of the eye. No time-of-day logic here. Pace game-tick timers to the clock on a fixed game-time grid (`BurnsEffect`: every
   20th game tick, never on the timer's own remainder, which a correction keeps landing on); dust stays on real time; detonation lives on the client while pall remains visible. Field laws in Java and copied in `shaders/include/pall.glsl` (`PallGlslTest` reads
   shader functions and compares with Java; edit laws in both); fireball/fire lighting on pall (`pallBallShare`,
   `pallBurn`) copies `CloudPuffs.ball` and `burn`: change lighting there too.
@@ -251,7 +254,9 @@ Ruins and everything in `nuclear/world/` are in `nuclear-world.md`.
   `RuinContext.blockFires(d)` (front copies built before the burst under another rule are dropped at `FrontLods.handOff`
   and follow `FarLods`); `NukeAfter.realFire` draws and sounds the model storm in local chunks too, trust untouched.
   Plans always carry fire, writes decide. GameTests `nuke_flash_firetick_off`/`_on` (rule flipped after the burst),
-  `NukeAfterBlockFireTest`. Black rain
+  `NukeAfterBlockFireTest`. Black rain is the
+  parcels' rain-out (`BlackRainModel`: onset on M, deposit landing then and ageing on S, `BlackRainDepositSeamTest`;
+  rain only under drawn haze, `PallFieldTest.blackRainFallsOnlyUnderTheDrawnHaze`). Black rain
   needs fires and `Detonation.rain` (`nuclear.black_rain` at detonation, same packet rule): off, `BlackRainModel` gets no
   fire zone, so no rain picture/sound, washout or skin contamination on server and client alike (the live rule still
   gates contamination for detonations saved before the field, which read as rain on). Storm

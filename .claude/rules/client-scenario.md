@@ -64,7 +64,10 @@ Create, Sable and Aeronautics, no pack) kept up in a saved world, `tools/dev_cli
   `DevHands` reads one-line files from `mod/run/client/dev/inbox` (`incoming.dev.inbox`, set by `-PhotSwap`): `cmd`,
   `reload` (answered when the reload has finished), `shot`, `hud`, `press <button>`, `dw <key>=<value>` (the dust wave's
   diagnostics, as the scenario's `dw:` steps; `rung=N` pins the pall's rung here too), `age` (the newest detonation's shown
-  age, front radius and eye distance: a hold at a front distance, since `/tick step` paces with the frame rate) and
+  age, front radius and eye distance: a hold at a front distance, since `/tick step` paces with the frame rate), `skip <s>`
+  (the newest detonation that old: the server's game time moves, the client rebuilds as on a seek; a skip across the
+  show's end reads the span at vanilla pace, since the server dates a late end that way, while a skip after an ended show
+  leaves the world's clock where it was, a 24-hour day's aftermath: skip to 1150 s, wait for the end, then skip on) and
   `watch on|off` (a one-frame dropout logged as `DEV pop`; it stalls the GPU every frame); it logs every opened screen
   (`DEV screen`). The bare `reload` reads `build/resources`: a shader edit in `src` needs `swap`.
 - The scene: `cmd 'tp @s …'`, `time set`, the burst once, `tick freeze` at the moment, `tick step <ticks>` to move it.
