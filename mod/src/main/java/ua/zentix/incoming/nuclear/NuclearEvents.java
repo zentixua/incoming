@@ -288,6 +288,20 @@ public final class NuclearEvents extends SavedData {
         return age < SHOW_TICKS ? StrikeClock.start(0) : StrikeClock.start(0).end(SHOW_TICKS, WorldClock.rateClock(level) - (age - SHOW_TICKS), 0);
     }
 
+    /**
+     * Where detonation {@code id}'s show stands ({@link ua.zentix.incoming.util.RecoveryClock.Shows}): the game time it ended,
+     * {@link ua.zentix.incoming.util.RecoveryClock#RUNNING}, or {@link ua.zentix.incoming.util.RecoveryClock#NONE} when the
+     * detonation is not here (forgotten).
+     */
+    public long showEnd(int id, ServerLevel level) {
+        for (Detonation d : detonations) {
+            if (d.id() != id) continue;
+            StrikeClock c = clock(d, level);
+            return c.ended() ? d.gameTime() + c.endAge() : ua.zentix.incoming.util.RecoveryClock.RUNNING;
+        }
+        return ua.zentix.incoming.util.RecoveryClock.NONE;
+    }
+
     /** Detonation {@code d}'s show is over (its length, or a jump counted while nobody in the dimension was awake). */
     public boolean showEnded(Detonation d, ServerLevel level) {
         return clock(d, level).ended();

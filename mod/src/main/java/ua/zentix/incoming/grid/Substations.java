@@ -26,7 +26,7 @@ public final class Substations {
     public enum State { WORKING, KNOCKED_OUT, DESTROYED }
 
     /**
-     * @param repairIn world-clock ticks until power restoration starts in its area ({@link Outage#restoreAt}); {@link
+     * @param repairIn world-clock ticks until power restoration starts in its area ({@link Outage#repairsAt}); {@link
      *                 Outage#NEVER} — no restoration is scheduled (a command outage), or the state is not
      *                 {@link State#KNOCKED_OUT}
      */
@@ -44,7 +44,7 @@ public final class Substations {
         long now = Blackouts.now(level);
         Optional<Outage> down = grid.downOutage(node.id(), now);
         if (down.isPresent()) {
-            long at = down.get().restoreAt();
+            long at = down.get().repairsAt();
             return new Supply(State.KNOCKED_OUT, at == Outage.NEVER ? Outage.NEVER : at - now);
         }
         if (grid.destroyed(pos.getX() >> 4, pos.getZ() >> 4, now)) return new Supply(State.DESTROYED, Outage.NEVER);

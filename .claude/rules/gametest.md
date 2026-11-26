@@ -9,6 +9,9 @@ paths:
 # GameTest and flight scenarios
 
 ## Pitfalls
+- `runGameTestServer` ends with BUILD SUCCESSFUL even when mod loading failed: read the log for
+  "All N required tests passed". A client-bound and a server-bound payload may not share an id (NeoForge refuses the
+  second registration and loading fails); `PayloadIdsTest` checks every `S2C`/`C2S` id is unique.
 - Whole strikes against data: `SurfaceGameTests` (batches `surface_<weapon>`, `surface_<weapon>_nearby`, `surface_bomb`):
   the mod's strike path (`Warheads.detonate` with a weapon entity, axis from the spec's impact angle; bomb is a real
   entity dropped by B-2) over seven surfaces; expectations are sourced laws and data spread; report:

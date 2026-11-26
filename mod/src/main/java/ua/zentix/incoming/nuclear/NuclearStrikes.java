@@ -19,6 +19,7 @@ import ua.zentix.incoming.util.WorldClock;
 import ua.zentix.incoming.IncomingConfig;
 import ua.zentix.incoming.entity.IcbmEntity;
 import ua.zentix.incoming.net.S2C;
+import ua.zentix.incoming.nuclear.radiation.BodyClock;
 import ua.zentix.incoming.nuclear.radiation.FlashEyes;
 import ua.zentix.incoming.nuclear.radiation.RadiationTicker;
 import ua.zentix.incoming.util.Terrain;
@@ -365,6 +366,7 @@ public final class NuclearStrikes {
         // impact work of the same round (BlastFront).
         events.settleImpacts(d -> world.frontBusy(d, now) || world.craterDigging(d));
         long t2 = System.nanoTime();
+        BodyClock.tick(level);
         RadiationTicker.tick(level);
         long t3 = System.nanoTime();
         if (t3 - t0 > SLOW_TICK_NS && world.slowLogDue(now)) {
@@ -410,6 +412,7 @@ public final class NuclearStrikes {
             sync(p);
             RadiationTicker.sync(p);
             FlashEyes.sync(p);
+            ua.zentix.incoming.nuclear.radiation.Ears.sync(p);
         }
     }
 

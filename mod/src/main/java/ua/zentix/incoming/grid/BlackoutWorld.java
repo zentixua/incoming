@@ -249,6 +249,12 @@ public final class BlackoutWorld {
 
     private final List<Sweep> sweeps = new ArrayList<>();
     /**
+     * Recovery clocks of outages a show may still hold, by outage ({@link Blackouts#hold}), and the lag each had when its
+     * clock started (a restart starts a new clock from the saved lag).
+     */
+    final it.unimi.dsi.fastutil.ints.Int2ObjectOpenHashMap<ua.zentix.incoming.util.RecoveryClock> holds = new it.unimi.dsi.fastutil.ints.Int2ObjectOpenHashMap<>();
+    final it.unimi.dsi.fastutil.ints.Int2LongOpenHashMap holdBase = new it.unimi.dsi.fastutil.ints.Int2LongOpenHashMap();
+    /**
      * Chunks due for conversion: from a cascade, loading or lamp placement. Player-near chunks first
      * ({@link #NEAR_CHUNKS}), then the rest: in a city with millions of lamps the queue takes minutes, and lights near a
      * player do not wait for distant districts.

@@ -86,6 +86,9 @@ final class BlastArea {
     /** World rules every job of this strike changes the world under: its round's, or the config's when the area opened. */
     private final StrikeRules rules;
 
+    /** Game time the strike's show ends ({@link StrikeShow}); {@link Long#MIN_VALUE} — none (tests, explosions that are no strike). */
+    private long show = Long.MIN_VALUE;
+
     /** The strike's first explosion: its projectile and damage source attribute the strike's claim queries. */
     @Nullable
     private StagedExplosion first;
@@ -142,6 +145,16 @@ final class BlastArea {
     /** World rules this strike's jobs change the world under ({@link StrikeRules}). */
     StrikeRules rules() {
         return rules;
+    }
+
+    /** The strike's show ends at game time {@code end} ({@link StrikeShow}). */
+    void show(long end) {
+        show = end;
+    }
+
+    /** Game time the strike's show ends; {@link Long#MIN_VALUE} — none. */
+    long show() {
+        return show;
     }
 
     /** Area explosion queued at {@code tick}. */

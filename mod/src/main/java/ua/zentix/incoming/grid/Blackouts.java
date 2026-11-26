@@ -30,6 +30,8 @@ import ua.zentix.incoming.nuclear.Detonation;
 import ua.zentix.incoming.nuclear.model.BlastModel;
 import ua.zentix.incoming.nuclear.world.WorkClock;
 import ua.zentix.incoming.registry.ModAttachments;
+import ua.zentix.incoming.nuclear.NuclearEvents;
+import ua.zentix.incoming.util.RecoveryClock;
 import ua.zentix.incoming.work.WorkScheduler;
 
 import java.util.ArrayList;
@@ -105,7 +107,9 @@ public final class Blackouts {
         for (Node n : PowerGrid.get(level).nodes()) {
             if (Vec3.atCenterOf(n.pos()).distanceToSqr(at) <= reach * reach) hit.add(n);
         }
-        hit.forEach(n -> knockOut(level, n));
+        // a strike's show holds the repairs it causes at real rate (Outage, RecoveryClock)
+        long until = Warheads.showOf(e.getExplosion());
+        hit.forEach(n -> knockOut(level, n, restoreAt(now(level)), -1, until == Long.MIN_VALUE ? Outage.NO_SHOW : until));
     }
 
     /**
@@ -113,22 +117,28 @@ public final class Blackouts {
      * later (repairs restart).
      */
     public static void knockOut(ServerLevel level, Node node) {
-        knockOut(level, node, restoreAt(now(level)));
+        knockOut(level, node, restoreAt(now(level)), -1, Outage.NO_SHOW);
     }
 
-    /** Same, repairs done at {@code restoreAt} ({@link Outage#NEVER} — only by command). */
-    private static void knockOut(ServerLevel level, Node node, long restoreAt) {
+    /**
+     * Same, repairs done at {@code restoreAt} ({@link Outage#NEVER} — only by command), held while the show of detonation
+     * {@code strike} (-1 — none) or of a conventional strike ending at game time {@code until} runs.
+     */
+    private static void knockOut(ServerLevel level, Node node, long restoreAt, int strike, long until) {
         PowerGrid grid = PowerGrid.get(level);
         long now = now(level);
         grid.downOutage(node.id(), now).ifPresentOrElse(o -> {
-            if (o.restoreAt() != Outage.NEVER && restoreAt > o.restoreAt()) {
-                Outage later = o.restoring(restoreAt, restoreSpread());
+            Outage held = o.heldBy(strike, until);
+            if (o.repairsAt() != Outage.NEVER && restoreAt > o.repairsAt()) {
+                Outage later = held.restoring(restoreAt, restoreSpread());
                 grid.replace(later);
                 BlackoutWorld.get(level).onRestore(later);
+            } else if (!held.equals(o)) {
+                grid.hold(held);
             }
         }, () -> {
             Vec3 c = Vec3.atCenterOf(node.pos());
-            blackout(level, c, node.radius(), speed(), node.id(), restoreAt, -1, -1);
+            blackout(level, c, node.radius(), speed(), node.id(), restoreAt, -1, -1, strike, until);
             PacketDistributor.sendToPlayersNear(level, null, c.x, c.y, c.z, FAILURE_RANGE, new S2C.GridFailure(c, level.random.nextLong()));
         });
         Substations.sync(level, grid, now);
@@ -145,14 +155,14 @@ public final class Blackouts {
         double radius = nukeRadius(d, grid);
         if (radius <= 0) return;
         double dead = d.groundRange(BlastModel.kpa(DEAD_PSI)), damaged = Math.max(dead, d.groundRange(BlastModel.kpa(DAMAGED_PSI)));
-        Outage o = blackout(level, d.burst(), radius, NUKE_SPEED, -1, Outage.NEVER, dead, damaged);
+        Outage o = blackout(level, d.burst(), radius, NUKE_SPEED, -1, Outage.NEVER, dead, damaged, d.id(), Outage.NO_SHOW);
         List<Node> hit = new ArrayList<>();
         for (Node n : PowerGrid.get(level).nodes()) {
             if (Math.hypot(n.pos().getX() + 0.5 - o.x(), n.pos().getZ() + 0.5 - o.z()) <= o.radius()) hit.add(n);
         }
         for (Node n : hit) {
             long repaired = o.lightAt(Districts.of(n.pos().getX() >> 4, n.pos().getZ() >> 4));
-            knockOut(level, n, repaired == Outage.NEVER ? o.rerouteAt() : repaired);
+            knockOut(level, n, repaired == Outage.NEVER ? o.rerouteAt() : repaired, d.id(), Outage.NO_SHOW);
         }
     }
 
@@ -173,19 +183,22 @@ public final class Blackouts {
      * @param node failed node causing this outage; -1 — not a node
      */
     public static Outage blackout(ServerLevel level, Vec3 at, double radius, double speed, int node) {
-        return blackout(level, at, radius, speed, node, restoreAt(now(level)), -1, -1);
+        return blackout(level, at, radius, speed, node, restoreAt(now(level)), -1, -1, -1, Outage.NO_SHOW);
     }
 
     /**
      * Same, light restored uniformly from {@code restoreAt}, or by damage ({@code dead}, {@code damaged}: {@link Outage}).
      * {@code speed} is blocks per game tick: the cascade keeps its real speed whatever the day speed (on the grid clock it
-     * is divided by the clock's current rate).
+     * is divided by the clock's current rate). Repairs are held by the show of detonation {@code strike} (-1 — none) or
+     * of a conventional strike ending at game time {@code until} ({@link Outage}).
      */
-    private static Outage blackout(ServerLevel level, Vec3 at, double radius, double speed, int node, long restoreAt, double dead, double damaged) {
+    private static Outage blackout(ServerLevel level, Vec3 at, double radius, double speed, int node, long restoreAt, double dead, double damaged,
+                                   int strike, long until) {
         // a nuclear outage is bounded by its own measured limit (nukeRadius), the rest by the setting
         if (damaged < 0) radius = Math.min(radius, IncomingConfig.SERVER.gridMaxRadius.get());
         long now = now(level);
-        Outage o = PowerGrid.get(level).addOutage(new Outage(0, at.x, at.z, radius, now, speed / rate(level), restoreAt, restoreSpread(), node, dead, damaged));
+        Outage o = PowerGrid.get(level).addOutage(new Outage(0, at.x, at.z, radius, now, speed / rate(level), restoreAt, restoreSpread(), node, dead, damaged,
+                0, strike, until));
         BlackoutWorld.get(level).onOutage(level, o);
         Orders.queue(level, new GridOutageEvent(level.dimension(), outageId(level, o), o.x(), o.z(), o.radius(), nodePos(level, o), o.byDamage()));
         String restore = o.byDamage() ? String.format(Locale.ROOT, "power returns by damage: in hours beyond %d blocks, in days beyond %d, never within %d",
@@ -219,16 +232,17 @@ public final class Blackouts {
             Outage restoring;
             // districts already relit (a repair weeks long: most of them) are not issued again
             long relit = Math.min(grid.swept(o.id(), true), now - 1);
-            if (o.restoreAt() > now) {
+            // an order no show holds back
+            if (o.repairsAt() > now) {
                 // the rest are due from now: no new time falls at or before relit
-                restoring = o.restoring(now, spread);
+                restoring = o.restoring(now, spread).released();
             } else {
                 // Spread only shrinks: districts already lit remain lit.
-                long left = Math.min(o.restoreSpread(), now - o.restoreAt() + spread);
+                long left = Math.min(o.restoreSpread(), now - o.repairsAt() + spread);
                 if (left >= o.restoreSpread()) continue;
-                restoring = o.restoring(o.restoreAt(), (int) left);
+                restoring = o.restoring(o.repairsAt(), (int) left).released();
                 // a still dark district may now be due before relit: reissue the whole uniform restoration
-                relit = Math.min(relit, o.restoreAt() - 1);
+                relit = Math.min(relit, o.repairsAt() - 1);
             }
             grid.replace(restoring);
             // Restart restoration cascade with the new times.
@@ -302,6 +316,48 @@ public final class Blackouts {
         return now(level) + Math.round((gameTime - level.getGameTime()) * rate(level));
     }
 
+    /**
+     * A conventional strike's show that was to end at game time {@code from} ends at {@code to} (its crater fuel lit,
+     * {@code StrikeShow}): the outages it caused wait for it.
+     */
+    public static void extendShow(ServerLevel level, long from, long to) {
+        if (from == Long.MIN_VALUE || to <= from) return;
+        PowerGrid grid = PowerGrid.get(level);
+        for (Outage o : List.copyOf(grid.outages())) if (o.until() == from) grid.hold(o.heldBy(-1, to));
+    }
+
+    /**
+     * Once a second: each outage whose cause's show may still hold it falls behind the grid clock by the world's rate it
+     * does not take ({@link Outage#lag}, {@link RecoveryClock}): real rate through the show, then the rate blend. Once the
+     * blend is over, or a repair is due, the outage is released and its lag stays.
+     */
+    static void hold(ServerLevel level, PowerGrid grid) {
+        if (grid.outages().stream().noneMatch(Outage::held)) return;
+        BlackoutWorld world = BlackoutWorld.get(level);
+        NuclearEvents events = NuclearEvents.get(level);
+        RecoveryClock.Shows shows = id -> events.showEnd(id, level);
+        for (Outage o : List.copyOf(grid.outages())) {
+            if (!o.held()) continue;
+            RecoveryClock c = world.holds.computeIfAbsent(o.id(), k -> RecoveryClock.district());
+            c.strike(o.strike());
+            if (o.until() != Outage.NO_SHOW) c.until(o.until());
+            c.step(level.getGameTime(), WorldClock.rateClock(level), WorldClock.counted(level), WorldClock.unseen(level), level.dimension(), shows);
+            if (!world.holdBase.containsKey(o.id())) world.holdBase.put(o.id(), o.lag());
+            Outage next = o.lagging(world.holdBase.get(o.id()) + Math.round(c.behind()));
+            // released once the blend is over, or once a repair falls due (a sleep moved the clock past the first repair):
+            // a lag growing under a running restoration would rebuild it every second and darken districts it relit
+            if (c.settled() || now(level) >= next.restoreFrom()) {
+                next = next.released();
+                world.holds.remove(o.id());
+                world.holdBase.remove(o.id());
+            }
+            if (!next.equals(o)) grid.hold(next);
+        }
+        // outages forgotten, released by command or replaced meanwhile
+        world.holds.keySet().removeIf(id -> grid.outages().stream().noneMatch(o -> o.id() == id && o.held()));
+        world.holdBase.keySet().removeIf(id -> !world.holds.containsKey(id));
+    }
+
     /** Grid-clock ticks per game tick now, for things that keep their real speed (cascades): never above vanilla speed. */
     static double rate(Level level) {
         return Math.max(WorldClock.REAL_RATE, Math.min(1, WorldClock.rate(level)));
@@ -322,7 +378,10 @@ public final class Blackouts {
         for (ServerLevel level : levels) {
             PowerGrid grid = PowerGrid.get(level);
             // Substations follow grid state even without outages: a block whose chunk was unready aligns once ready.
-            if (second) Substations.sync(level, grid, now(level));
+            if (second) {
+                hold(level, grid);
+                Substations.sync(level, grid, now(level));
+            }
             // Twins in Sable craft plots — also after restart, when no outages remain.
             List<SubLevelAccess> ships = plots ? SubLevels.all(level) : List.of();
             if (!ships.isEmpty()) BlackoutWorld.get(level).relightPlots(level, ships);

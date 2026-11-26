@@ -173,4 +173,49 @@ class OutageTest {
         assertTrue(o.over(o.rerouteAt() + 1));
         assertTrue(NUKE.anyDestroyed());
     }
+
+    /**
+     * Repairs run on the outage's recovery clock, which trails the grid clock by its lag (grown during its cause's show and
+     * the blend): every repair time moves by the lag, darkening keeps the grid clock, and an order restores at the asked time.
+     */
+    @Test
+    void lagMovesRepairsNotDarkening() {
+        Outage held = NUKE.heldBy(9, Outage.NO_SHOW).lagging(700);
+        // the damaged belt, 4 km out
+        long d = Districts.of(250, 0);
+        assertTrue(NUKE.lightAt(d) != Outage.NEVER);
+        assertEquals(NUKE.darkAt(d), held.darkAt(d));
+        assertEquals(NUKE.lightAt(d) + 700, held.lightAt(d));
+        assertEquals(NUKE.restoreFrom() + 700, held.restoreFrom());
+        assertEquals(NUKE.rerouteAt() + 700, held.rerouteAt());
+        assertTrue(held.held());
+        assertFalse(held.released().held());
+        assertEquals(700, held.released().lag());
+        // uniform repairs: on the outage's clock, so the substation's 18 hours start after its strike's show
+        Outage sub = O.heldBy(-1, 5000).lagging(300);
+        assertEquals(O.repairsAt() + 300, sub.repairsAt());
+        assertFalse(sub.over(1299 + 300));
+        assertTrue(sub.over(1300 + 300));
+        // an order at grid time 2000 restores at 2000 whatever the lag
+        assertEquals(2000, sub.restoring(2000, 0).repairsAt());
+        assertEquals(Outage.NEVER, sub.restoring(Outage.NEVER, 0).repairsAt());
+        // the youngest cause and the latest show end hold
+        assertEquals(9, held.heldBy(4, 10).strike());
+        assertEquals(5000, sub.heldBy(-1, 10).until());
+    }
+
+    /** Outages saved before the recovery clock load with no lag and no cause: their times read as world clock. */
+    @Test
+    void savedBeforeTheRecoveryClock() {
+        Outage held = NUKE.heldBy(3, 77).lagging(1234);
+        var json = Outage.CODEC.encodeStart(JsonOps.INSTANCE, held).getOrThrow();
+        assertEquals(held, Outage.CODEC.parse(JsonOps.INSTANCE, json).getOrThrow());
+        json.getAsJsonObject().remove("lag");
+        json.getAsJsonObject().remove("strike");
+        json.getAsJsonObject().remove("until");
+        Outage old = Outage.CODEC.parse(JsonOps.INSTANCE, json).getOrThrow();
+        assertEquals(0, old.lag());
+        assertFalse(old.held());
+        assertEquals(NUKE.lightAt(Districts.of(250, 0)), old.lightAt(Districts.of(250, 0)));
+    }
 }

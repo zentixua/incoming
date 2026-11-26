@@ -11,7 +11,7 @@ import ua.zentix.incoming.strike.ServerActions;
  * incompatible change, letting NeoForge report different mod versions instead of crashing.
  */
 public final class IncomingNetwork {
-    public static final String PROTOCOL = "67";
+    public static final String PROTOCOL = "68";
 
     private IncomingNetwork() {}
 
@@ -44,6 +44,7 @@ public final class IncomingNetwork {
         r.playToClient(S2C.NukeCancelled.TYPE, S2C.NukeCancelled.CODEC, (p, ctx) -> ClientHooks.get().nukeCancelled(p));
         r.playToClient(S2C.Radiation.TYPE, S2C.Radiation.CODEC, (p, ctx) -> ClientHooks.get().radiation(p));
         r.playToClient(S2C.RetinaScars.TYPE, S2C.RetinaScars.CODEC, (p, ctx) -> ClientHooks.get().retinaScars(p));
+        r.playToClient(S2C.Ear.TYPE, S2C.Ear.CODEC, (p, ctx) -> ClientHooks.get().ear(p));
         r.playToClient(S2C.Flights.TYPE, S2C.Flights.CODEC, (p, ctx) -> ClientHooks.get().flights(p));
         r.playToClient(S2C.FarFlights.TYPE, S2C.FarFlights.CODEC, (p, ctx) -> ClientHooks.get().farFlights(p));
         r.playToClient(S2C.MapPlayers.TYPE, S2C.MapPlayers.CODEC, (p, ctx) -> ClientHooks.get().mapPlayers(p));
@@ -56,6 +57,9 @@ public final class IncomingNetwork {
         r.playToServer(C2S.MaterialRetired.TYPE, C2S.MaterialRetired.CODEC, (p, ctx) -> {
             if (ctx.player() instanceof net.minecraft.server.level.ServerPlayer viewer)
                 ua.zentix.incoming.nuclear.material.MaterialDelivery.retire(viewer, p.id());
+        });
+        r.playToServer(C2S.Ear.TYPE, C2S.Ear.CODEC, (p, ctx) -> {
+            if (ctx.player() instanceof net.minecraft.server.level.ServerPlayer player) ua.zentix.incoming.nuclear.radiation.Ears.told(player, p.state());
         });
         r.playToServer(C2S.ReviewNuclear.TYPE, C2S.ReviewNuclear.CODEC, ua.zentix.incoming.strike.NuclearReview::request);
         r.playToServer(C2S.NuclearAction.TYPE, C2S.NuclearAction.CODEC, ua.zentix.incoming.strike.NuclearReview::action);

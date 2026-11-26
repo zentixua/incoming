@@ -55,6 +55,23 @@ public final class ModAttachments {
     public static final Supplier<AttachmentType<UUID>> BURN_SHOCK_OWNER = REGISTER.register("burn_shock_owner",
             () -> AttachmentType.builder(() -> Util.NIL_UUID).serialize(UUIDUtil.CODEC).build());
 
+    /**
+     * Living entity: its body's recovery clock ({@link ua.zentix.incoming.util.RecoveryClock}, {@code nuclear/radiation/BodyClock}):
+     * sickness and burns run on it, only while the body is in the world. A body without one starts at the world clock, so the
+     * exposure times saved before it keep their meaning. Reset on death (not copied).
+     */
+    public static final Supplier<AttachmentType<ua.zentix.incoming.util.RecoveryClock>> BODY_CLOCK = REGISTER.register("body_clock",
+            () -> AttachmentType.builder((net.neoforged.neoforge.attachment.IAttachmentHolder holder) -> new ua.zentix.incoming.util.RecoveryClock(
+                    holder instanceof net.minecraft.world.entity.Entity e ? ua.zentix.incoming.util.WorldClock.now(e.level()) : 0))
+                    .serialize(ua.zentix.incoming.util.RecoveryClock.CODEC).build());
+
+    /**
+     * Player: the ear's state as the client last told it ({@code C2S.Ear}, opaque to the server, {@code client/nuclear/Deafness}),
+     * given back on login: hearing is kept across relogging. Reset on death (not copied): a new body hears.
+     */
+    public static final Supplier<AttachmentType<net.minecraft.nbt.CompoundTag>> EAR = REGISTER.register("ear",
+            () -> AttachmentType.builder(() -> new net.minecraft.nbt.CompoundTag()).serialize(net.minecraft.nbt.CompoundTag.CODEC, t -> !t.isEmpty()).build());
+
     /** Player retinal burns — flash blind spots; reset on death (not copied). */
     public static final Supplier<AttachmentType<RetinaScars>> RETINA = REGISTER.register("retina",
             () -> AttachmentType.builder(() -> RetinaScars.NONE).serialize(RetinaScars.CODEC, s -> !s.isEmpty()).build());

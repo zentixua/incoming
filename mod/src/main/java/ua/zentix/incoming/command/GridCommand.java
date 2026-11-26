@@ -125,7 +125,7 @@ final class GridCommand {
             long now = ua.zentix.incoming.grid.Blackouts.now(level);
             String dimension = level.dimension().location().toString();
             for (Outage outage : PowerGrid.get(level).outages()) {
-                long restore = outage.restoreAt();
+                long restore = outage.repairsAt();
                 Component when = restore == Outage.NEVER && outage.byDamage()
                         ? Component.translatable("incoming.grid.restore.damage", Math.round(outage.damaged()), Math.round(outage.dead()))
                         : restore == Outage.NEVER ? Component.translatable("incoming.grid.restore.never")

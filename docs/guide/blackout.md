@@ -17,8 +17,10 @@ Ingredients: 3 lightning rods, 2 copper ingots, 1 redstone block and 3 iron ingo
   skin (at most 16384 blocks). Both `grid.enabled` and `grid.nuke_blackout` must be on. Hit substations can also
   cause outages in their own districts.
 - After a nuclear strike, power comes back by what the blast did to each district, in hours of the world's day
-  (50 seconds each in a vanilla world, real hours with the day cycle stopped; see
-  [time after the strike](nuke.md#time-after-the-strike)):
+  (50 seconds each in a vanilla world; with the day cycle stopped, at the pace the day last ran). The repair clock runs
+  in real time through the strike's first 20 minutes, and for a substation a Shahed or missile knocked out, until the
+  strike's cloud has stopped rising and its crater fuel has burnt out; see
+  [time after the strike](nuke.md#time-after-the-strike):
   - where nothing broke (below 1 psi), the grid only tripped: power returns within 2 to 24 hours, the far edge first;
   - where lines are down (1 to 5 psi), crews rebuild them: 2 to 14 days, longest next to the destroyed zone;
   - where the grid is destroyed (5 psi and more), power never comes back by itself. Only fires, torches and the lamps

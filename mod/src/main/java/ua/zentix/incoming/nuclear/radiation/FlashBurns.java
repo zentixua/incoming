@@ -116,7 +116,10 @@ public final class FlashBurns {
         }
         // each burn has its own duration: vanilla keeps a weaker, longer effect underneath, exposing it when the stronger ends.
         // No surrounding particles (obscure the eyes in first person), icon only
-        if (e.isAlive()) e.addEffect(new MobEffectInstance(ModEffects.BURNS, ticks, amplifier, false, false, true));
+        if (!e.isAlive()) return;
+        // the flash holds the body's clock at real rate during its show (BodyClock)
+        BodyClock.cause(e, d);
+        e.addEffect(new MobEffectInstance(ModEffects.BURNS, ticks, amplifier, false, false, true));
     }
 
     /**

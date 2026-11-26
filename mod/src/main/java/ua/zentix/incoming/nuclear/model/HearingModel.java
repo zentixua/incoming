@@ -252,27 +252,31 @@ public final class HearingModel {
     }
 
     /**
-     * Blasts at one ear. Blasts within 2 minutes ({@link #FIRST_HOURS} hours) form one dose: energies add (equal energy,
-     * ISO 1999), shift from the sum and latest blast. Afterward each dose has its own recovery line, and shift is their
-     * maximum: a second dose over an unresolved shift neither shortens nor adds to it (approximation: no data on summing
-     * shifts from separate doses).
+     * Blasts at one ear. Blasts within 2 minutes of event time ({@link #FIRST_HOURS} hours: real time plus jumps nobody was
+     * awake for, the motion age M of {@code docs/design/time.md} §8.3 rule 1) form one dose: energies add (equal energy,
+     * ISO 1999), shift from the sum and latest blast. Afterward each dose has its own recovery line on the ear's recovery
+     * clock, and shift is their maximum: a second dose over an unresolved shift neither shortens nor adds to it
+     * (approximation: no data on summing shifts from separate doses).
      */
     public static final class Ear {
         /** Maximum retained doses: discard the one with the smallest current shift. */
-        private static final int MOST = 16;
-        /** Dose: energy, dB·s, and hour of its last blast. */
+        public static final int MOST = 16;
+        /** Dose: energy, dB·s, recovery-clock hour and event-time hour of its last blast. */
         private final List<double[]> doses = new ArrayList<>();
 
-        /** Blast with audible front energy {@code exposure}, dB·s, at hearing-clock {@code hour}. */
-        public void blast(double exposure, double hour) {
+        /**
+         * Blast with audible front energy {@code exposure}, dB·s, at recovery-clock {@code hour} and event-time {@code event}
+         * hours.
+         */
+        public void blast(double exposure, double hour, double event) {
             double e = exposure;
             for (Iterator<double[]> it = doses.iterator(); it.hasNext(); ) {
                 double[] d = it.next();
-                if (hour - d[1] > FIRST_HOURS) continue;
+                if (event - d[2] > FIRST_HOURS) continue;
                 e = 10 * Math.log10(Math.pow(10, e / 10) + Math.pow(10, d[0] / 10));
                 it.remove();
             }
-            doses.add(new double[]{e, hour});
+            doses.add(new double[]{e, hour, event});
             if (doses.size() > MOST) {
                 double[] least = doses.get(0);
                 for (double[] d : doses) if (shiftAfter(HearingModel.shift(d[0]), hour - d[1]) < shiftAfter(HearingModel.shift(least[0]), hour - least[1])) least = d;
@@ -280,13 +284,16 @@ public final class HearingModel {
             }
         }
 
-        /** High-frequency shift at {@code hour}, dB; resolved doses are removed (except those still able to combine with a new blast). */
-        public double shift(double hour) {
+        /**
+         * High-frequency shift at recovery-clock {@code hour}, dB; resolved doses are removed (except those still able to
+         * combine with a new blast: event time {@code event} within {@link #FIRST_HOURS} of theirs).
+         */
+        public double shift(double hour, double event) {
             double most = 0;
             for (Iterator<double[]> it = doses.iterator(); it.hasNext(); ) {
                 double[] d = it.next();
                 double s = shiftAfter(HearingModel.shift(d[0]), hour - d[1]);
-                if (s <= 0 && hour - d[1] > FIRST_HOURS) it.remove();
+                if (s <= 0 && event - d[2] > FIRST_HOURS) it.remove();
                 else most = Math.max(most, s);
             }
             return most;
@@ -299,6 +306,22 @@ public final class HearingModel {
 
         public void clear() {
             doses.clear();
+        }
+
+        /** The doses as a flat list (energy, hour, event; for saving across a relog). */
+        public List<Double> save() {
+            List<Double> flat = new ArrayList<>(doses.size() * 3);
+            for (double[] d : doses) for (double v : d) flat.add(v);
+            return flat;
+        }
+
+        /** Doses from {@link #save}: at most {@link #MOST}, finite values only. */
+        public void restore(List<Double> flat) {
+            doses.clear();
+            for (int i = 0; i + 2 < flat.size() && doses.size() < MOST; i += 3) {
+                double[] d = {flat.get(i), flat.get(i + 1), flat.get(i + 2)};
+                if (Double.isFinite(d[0]) && Double.isFinite(d[1]) && Double.isFinite(d[2])) doses.add(d);
+            }
         }
     }
 }

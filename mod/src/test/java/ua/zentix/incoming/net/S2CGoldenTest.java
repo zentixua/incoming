@@ -95,6 +95,20 @@ class S2CGoldenTest {
     private static final Detonation D2 = new Detonation(5, Q, -12.5, 1000, false, 200_000, -2.25f, 12.5f, 5000, -77, 0.5f, false, 1f, 18000);
     private static final S2C.NukeWarning W = new S2C.NukeWarning(9, P, Q, 100, 2500, 300, true, true, false, 2f);
 
+    /** An ear as the client tells it ({@code client/nuclear/Deafness#save}). */
+    private static net.minecraft.nbt.CompoundTag ear() {
+        net.minecraft.nbt.CompoundTag t = new net.minecraft.nbt.CompoundTag();
+        net.minecraft.nbt.ListTag doses = new net.minecraft.nbt.ListTag();
+        for (double v : new double[]{142.5, 12.25, 3.5}) doses.add(net.minecraft.nbt.DoubleTag.valueOf(v));
+        t.put("doses", doses);
+        t.putDouble("ruptured", -1);
+        net.minecraft.nbt.CompoundTag clock = new net.minecraft.nbt.CompoundTag();
+        clock.putDouble("clock", 12250);
+        clock.putInt("strike", 4);
+        t.put("clock", clock);
+        return t;
+    }
+
     private static List<Golden<?>> cases() {
         return List.of(
                 golden(S2C.Blast.TYPE, S2C.Blast.CODEC,
@@ -103,7 +117,10 @@ class S2CGoldenTest {
                         new S2C.Blast(S2C.Blast.ROCKET, P, 3, 70.5f, -42L, Optional.of(A), 4, new Vec3(0.6, -0.8, 0)),
                         new S2C.Blast(S2C.Blast.ROCKET, P, 3, 70.5f, -42L, Optional.of(A), 4, new Vec3(0.6, -0.8, 0), true),
                         new S2C.Blast(S2C.Blast.ROCKET, P, 3, 70.5f, -42L, Optional.of(A), 4, new Vec3(0.6, -0.8, 0), true,
-                                Optional.of(new S2C.Blast.Support(false, 1.2f, 1.75f, new Vec3(1, 0, 0), 0.5f)))),
+                                Optional.of(new S2C.Blast.Support(false, 1.2f, 1.75f, new Vec3(1, 0, 0), 0.5f))),
+                        new S2C.Blast(S2C.Blast.ROCKET, P, 3, 70.5f, -42L, Optional.of(A), 4, new Vec3(0.6, -0.8, 0), true,
+                                Optional.of(new S2C.Blast.Support(false, 1.2f, 1.75f, new Vec3(1, 0, 0), 0.5f)), 19_200)),
+                golden(S2C.Ear.TYPE, S2C.Ear.CODEC, new S2C.Ear(ear())),
                 golden(S2C.FuelFire.TYPE, S2C.FuelFire.CODEC, new S2C.FuelFire(7, List.of(new BlockPos(-1234, 70, 98765), new BlockPos(1, -63, -4096)), 0b10L, 2, 123_456_789L)),
                 golden(S2C.StrikeClouds.TYPE, S2C.StrikeClouds.CODEC, new S2C.StrikeClouds(List.of(
                         new S2C.StrikeClouds.Cloud(S2C.StrikeClouds.BLAST, 123_456L, 2500.5, new ua.zentix.incoming.util.Air(

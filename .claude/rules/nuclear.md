@@ -442,7 +442,7 @@ Ruins and everything in `nuclear/world/` are in `nuclear-world.md`.
   minute until M passes 12 h, plus the show's end, the blend's end and both sides of each counted jump); client:
   `ClientNuclear.Active.motionTicksAt`/`clockTicksAt`. The show ends at `NukeClock.SHOW_S` or at the first counted jump
   (`NuclearEvents.endShows`, each tick); the blend's end is an anchor (`rampRate`), so a later change of k never moves
-  the past. World clocks (`util/WorldClock`): `now` with every jump (doses, injuries, outages, repairs), `rateClock`
+  the past. World clocks (`util/WorldClock`): `now` with every jump (doses, the grid clock), `rateClock`
   without jumps, `pace` (k, ≥ 1, measured only from a step that follows a running step at its cadence, so a nudge of a
   stopped day or the first step after a stop keeps it; the counting state is saved, so a load does too), and per
   dimension `counted` (nobody awake: sleep in single player; `held` while a front crosses, `NuclearStrikes.frontCrossing`;
@@ -453,6 +453,19 @@ Ruins and everything in `nuclear/world/` are in `nuclear-world.md`.
   detonation's anchors once a second to every player (detonations or not), on a show's end and on entry, so its latest
   copy in a Flashback snapshot restores them after a seek (`ClientNuclear.ANCHORS` outlives `rewound`); a recording
   made before the anchors reads as a 20-minute show and no jumps (`S2C.NukeClock.Clocks.NONE`).
+- Shared states (time.md rule 8, `util/RecoveryClock`): real while a cause is in its show (the youngest detonation that
+  acted on the state, ids grow; a conventional strike's show end, `warhead/StrikeShow`: max(π/N apex, crater fuel
+  burn-out)), then the blend from the last show's end; every jump (`counted` and `unseen`) counts; event time (real +
+  counted) for exposure windows. Bodies (`radiation/BodyClock`, attachment `BODY_CLOCK`, not copied on death): sickness
+  (`RadiationDose.exposedAt` is body-clock ticks) and burn pacing (`BurnsEffect.pace` by `BodyClock.lastSecond`) read it.
+  Players are stepped once a second (`BodyClock.tick`), mobs by their sickness and burn effects; a step after more than
+  `PRESENT_GAP` ticks is an absence (offline, unloaded): nothing elapses, so no fatal-stage login. A body without a clock
+  starts at `WorldClock.now`: saved `exposedAt` keep their meaning. Causes: `RadiationTicker.addDose(…, d, ago)` (prompt;
+  a late mob dates its exposure `ago` by the cause's S, `MobFallout` by `secondsAt` at the crossing: limit, a mob first
+  dosed while unloaded comes back sick by that time, while one already sick when unloaded is frozen), fallout or rain
+  reaching a player (`BodyClockGameTests.falloutHoldsThePlayersClock`), `FlashBurns`. Detonation ids are per
+  dimension: a step in another dimension drops the cause (`CrossDimensionCauseTest`). The ear is the client's (`client-sound.md`), kept on the server across relogs
+  (`radiation/Ears`, attachment `EAR`, opaque tag ≤ `C2S.Ear.EAR_BYTES`, `S2C.Ear` on login).
 - `Detonation.dayTime` is unread, kept for the save/packet formats. Anchors per detonation (`NuclearEvents.Anchor`: the
   world clock at burst and show end, which date bodies' exposure, and the `StrikeClock` anchors) and the history are
   persisted; a save without them reads as a 20-minute show, no jumps. Doses step per detonation by ΔS

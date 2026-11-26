@@ -2,6 +2,7 @@ package ua.zentix.incoming.client.fx;
 
 import net.minecraft.client.Camera;
 import net.minecraft.client.Minecraft;
+import ua.zentix.incoming.client.nuclear.Deafness;
 import net.minecraft.client.multiplayer.ClientLevel;
 import net.minecraft.client.player.LocalPlayer;
 import net.minecraft.core.BlockPos;
@@ -49,6 +50,9 @@ public final class BlastEffects {
      * beyond {@link FarBlasts#NEAR} are managed by {@link FarBlasts} (packets arrive up to {@code far_range}).
      */
     public static void blast(S2C.Blast p) {
+        // the strike's show holds the hearing it harms (Deafness)
+        var level = Minecraft.getInstance().level;
+        if (level != null) Deafness.announce(p.seed(), level.getGameTime(), p.pos().x, p.pos().z, p.show());
         // one cloud per blast: shared by the volume, distant visuals and the flash with particles here
         CloudModel cloud = FarBlasts.add(p);
         // crater fuel: the server sends its block fire in a separate packet (fuelFire); in replays recorded before that packet and for

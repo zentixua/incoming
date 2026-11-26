@@ -100,39 +100,81 @@ class HearingModelTest {
     void severalWavesAddWithinTwoMinutesAndKeepTheLongestRecovery() {
         HearingModel.Ear ear = new HearingModel.Ear();
         double e = exposureFor(30);
-        ear.blast(e, 0);
-        ear.blast(e, 1 / 60.0);
-        assertEquals(HearingModel.shift(e + 10 * Math.log10(2)), ear.shift(1 / 60.0 + HearingModel.FIRST_HOURS), 1e-9);
+        ear.blast(e, 0, 0);
+        ear.blast(e, 1 / 60.0, 1 / 60.0);
+        assertEquals(HearingModel.shift(e + 10 * Math.log10(2)), ear.shift(1 / 60.0 + HearingModel.FIRST_HOURS, 1 / 60.0 + HearingModel.FIRST_HOURS), 1e-9);
         assertTrue(HearingModel.shift(e + 10 * Math.log10(2)) > 38);
 
         // 40 dB and after half a minute 45 - one dose stronger 45: recovery longer than 45 (22,6 h)
         ear = new HearingModel.Ear();
-        ear.blast(exposureFor(40), 0);
-        ear.blast(exposureFor(45), 0.5 / 60);
-        assertTrue(ear.shift(0.5 / 60 + HearingModel.recoveryHours(45)) > 0);
+        ear.blast(exposureFor(40), 0, 0);
+        ear.blast(exposureFor(45), 0.5 / 60, 0.5 / 60);
+        assertTrue(ear.shift(0.5 / 60 + HearingModel.recoveryHours(45), 0.5 / 60 + HearingModel.recoveryHours(45)) > 0);
 
         // 60 dB, after 10 hours 15 - the shift goes along the straight line 60 dB to its end (64 hours)
         ear = new HearingModel.Ear();
-        ear.blast(exposureFor(60), 0);
-        ear.blast(exposureFor(15), 10);
-        assertEquals(HearingModel.shiftAfter(60, 26), ear.shift(26), 1e-9);
-        assertEquals(HearingModel.shiftAfter(60, 63), ear.shift(63), 1e-9);
-        assertTrue(ear.shift(63) > 0);
+        ear.blast(exposureFor(60), 0, 0);
+        ear.blast(exposureFor(15), 10, 10);
+        assertEquals(HearingModel.shiftAfter(60, 26), ear.shift(26, 26), 1e-9);
+        assertEquals(HearingModel.shiftAfter(60, 63), ear.shift(63, 63), 1e-9);
+        assertTrue(ear.shift(63, 63) > 0);
 
         // 20 dB, after an hour 50 - from 50, from the beginning
         ear = new HearingModel.Ear();
-        ear.blast(exposureFor(20), 0);
-        ear.blast(exposureFor(50), 1);
-        assertEquals(50, ear.shift(1 + HearingModel.FIRST_HOURS), 1e-9);
-        assertEquals(0, ear.shift(1 + HearingModel.recoveryHours(50) + 0.01), 0);
+        ear.blast(exposureFor(20), 0, 0);
+        ear.blast(exposureFor(50), 1, 1);
+        assertEquals(50, ear.shift(1 + HearingModel.FIRST_HOURS, 1 + HearingModel.FIRST_HOURS), 1e-9);
+        assertEquals(0, ear.shift(1 + HearingModel.recoveryHours(50) + 0.01, 1 + HearingModel.recoveryHours(50) + 0.01), 0);
         assertTrue(!ear.any());
 
         // two waves slightly quieter than the threshold next to each other - together higher
         ear = new HearingModel.Ear();
-        ear.blast(HearingModel.ONSET_EXPOSURE - 1, 0);
-        assertEquals(0, ear.shift(0), 0);
-        ear.blast(HearingModel.ONSET_EXPOSURE - 1, 0.5 / 60);
-        assertTrue(ear.shift(0.5 / 60 + HearingModel.FIRST_HOURS) > 0);
+        ear.blast(HearingModel.ONSET_EXPOSURE - 1, 0, 0);
+        assertEquals(0, ear.shift(0, 0), 0);
+        ear.blast(HearingModel.ONSET_EXPOSURE - 1, 0.5 / 60, 0.5 / 60);
+        assertTrue(ear.shift(0.5 / 60 + HearingModel.FIRST_HOURS, 0.5 / 60 + HearingModel.FIRST_HOURS) > 0);
+    }
+
+    /**
+     * The 2-minute dose window is event time (real time plus jumps nobody was awake for), not the recovery clock: after a
+     * show, under a vanilla day, the recovery clock runs 72× while two blasts 30 real seconds apart are still one dose; and
+     * two blasts 3 real minutes apart are two doses even if the ear's clock barely moved.
+     */
+    @Test
+    void doseWindowIsEventTime() {
+        double e = exposureFor(30);
+        HearingModel.Ear ear = new HearingModel.Ear();
+        // 30 real seconds = 0.6 world hours at 72×
+        ear.blast(e, 0, 0);
+        ear.blast(e, 0.6, 0.5 / 60);
+        assertEquals(HearingModel.shiftAfter(HearingModel.shift(e + 10 * Math.log10(2)), HearingModel.FIRST_HOURS),
+                ear.shift(0.6 + HearingModel.FIRST_HOURS, 0.5 / 60 + HearingModel.FIRST_HOURS), 1e-9);
+
+        ear = new HearingModel.Ear();
+        ear.blast(e, 0, 0);
+        ear.blast(e, 3 / 60.0, 3 / 60.0);
+        assertEquals(HearingModel.shiftAfter(HearingModel.shift(e), HearingModel.FIRST_HOURS),
+                ear.shift(3 / 60.0 + HearingModel.FIRST_HOURS, 3 / 60.0 + HearingModel.FIRST_HOURS), 1e-9);
+    }
+
+    /** The ear saved for a relog comes back the same; a damaged list keeps only whole finite doses, at most {@code MOST}. */
+    @Test
+    void earSurvivesSaving() {
+        HearingModel.Ear ear = new HearingModel.Ear();
+        ear.blast(exposureFor(45), 1, 1);
+        ear.blast(exposureFor(30), 5, 2);
+        HearingModel.Ear back = new HearingModel.Ear();
+        back.restore(ear.save());
+        assertEquals(ear.shift(9, 9), back.shift(9, 9), 0);
+        java.util.List<Double> bad = new java.util.ArrayList<>(ear.save());
+        bad.set(1, Double.NaN);
+        bad.add(7.0);
+        back.restore(bad);
+        assertEquals(1, back.save().size() / 3);
+        java.util.List<Double> many = new java.util.ArrayList<>();
+        for (int i = 0; i < 40; i++) many.addAll(java.util.List.of(80.0, (double) i, (double) i));
+        back.restore(many);
+        assertEquals(HearingModel.Ear.MOST, back.save().size() / 3);
     }
 
     @Test

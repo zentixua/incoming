@@ -289,7 +289,7 @@ public final class IncomingConfig {
                     .translation("incoming.config.grid_max_radius").defineInRange("max_radius", 4096, 64, 16_384);
             gridCascadeSpeed = b.comment("How fast the outage spreads from the substation across districts, blocks per second.")
                     .translation("incoming.config.grid_cascade_speed").defineInRange("cascade_speed", 60.0, 1.0, 10_000.0);
-            gridRestoreHours = b.comment("Game hours until power starts coming back after a substation is knocked out (0: only with /incoming grid restore); after a nuclear strike power returns by the damage.",
+            gridRestoreHours = b.comment("Game hours until power starts coming back after a substation is knocked out, counted in real time until the strike's cloud stops rising and its crater fuel burns out (0: only with /incoming grid restore); after a nuclear strike power returns by the damage.",
                             "Hours of the world's day: 50 seconds each under a vanilla day, real hours with a mod that makes days 24 hours long; sleep brings power back sooner.")
                     .translation("incoming.config.grid_restore_hours").defineInRange("restore_hours", 18.0, 0.0, 12_096.0);
             gridRestoreSpread = b.comment("How long power takes to return to every district, in random order, counted on the world's day like restore_hours.",
@@ -381,7 +381,7 @@ public final class IncomingConfig {
                             "It does not change the light of the fire on the world and smoke.")
                     .translation("incoming.config.bloom").defineEnum("bloom", Bloom.FAST);
             nukeTinnitus = b.comment("Hearing damage from a blast wave strong enough to hurt the ears (from about 0.75 psi): muffled hearing and",
-                            "ringing ears that recover over game hours; from 5 psi torn eardrums, muffled for game weeks or until you die.")
+                            "ringing ears that recover in real time during the strike's first minutes, then over game hours; from 5 psi torn eardrums, muffled for game weeks or until you die.")
                     .translation("incoming.config.nuke_tinnitus").define("nuke_tinnitus", true);
             soundMuffling = b.comment("Strike sounds lose high tones with distance and are muffled behind hills and walls, with or without Sound Physics Remastered;",
                             "inside the nuclear dust pall, distant sounds are muffled too.")

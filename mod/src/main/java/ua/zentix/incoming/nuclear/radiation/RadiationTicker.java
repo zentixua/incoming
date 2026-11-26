@@ -65,20 +65,29 @@ public final class RadiationTicker {
         return e instanceof Mob && !e.getType().is(EntityTypeTags.UNDEAD);
     }
 
-    /** Dose, Gy: prompt burst radiation or fallout. A mob with dose from 1 Gy gets sick (effect drives the course). */
+    /** Dose from detonation {@code d} now, Gy: prompt burst radiation. A mob with dose from 1 Gy gets sick (effect drives the course). */
+    public static void addDose(LivingEntity e, float gy, Detonation d) {
+        addDose(e, gy, d, 0);
+    }
+
+    /** Dose now with no detonation holding the body's clock, Gy (tests, a body dosed outside any show). */
     public static void addDose(LivingEntity e, float gy) {
-        addDose(e, gy, WorldClock.ticks(e.level()));
+        addDose(e, gy, null, 0);
     }
 
     /**
-     * Dose received at world clock {@code at} ({@link WorldClock}), Gy: a body loaded after the detonation received its dose
-     * then, so its sickness stages run from then ({@code LateExposure}). Sickness runs on the world clock: a vanilla day's hour
-     * is 50 real seconds, a day-length mod's hour an hour; a night's sleep is a night of illness.
+     * Dose from detonation {@code d}, Gy, received {@code ago} body-clock ticks before now ({@link BodyClock}): a body loaded
+     * after the detonation received its dose then, so its sickness stages run from then ({@code LateExposure}). Sickness runs
+     * on the body's clock: real time while a detonation that acted on it is in its show, then the world's day (a vanilla day's
+     * hour is 50 real seconds, a day-length mod's hour an hour; a night's sleep is a night of illness), only while the body
+     * is in the world.
      */
-    public static void addDose(LivingEntity e, float gy, long at) {
+    public static void addDose(LivingEntity e, float gy, @org.jetbrains.annotations.Nullable Detonation d, double ago) {
+        if (d != null) BodyClock.cause(e, d);
         RadiationDose r = dose(e);
         float total = r.doseGy() + gy;
-        set(e, new RadiationDose(total, r.contamination(), r.isExposed() || total < 1 ? r.exposedAt() : Math.min(at, WorldClock.ticks(e.level())), r.rate()));
+        long now = (long) Math.floor(BodyClock.now(e));
+        set(e, new RadiationDose(total, r.contamination(), r.isExposed() || total < 1 ? r.exposedAt() : now - (long) Math.max(0, Math.ceil(ago)), r.rate()));
         if (!(e instanceof Player) && total >= 1 && !e.hasEffect(ModEffects.RADIATION_SICKNESS)) {
             e.addEffect(new MobEffectInstance(ModEffects.RADIATION_SICKNESS, MobEffectInstance.INFINITE_DURATION, 0, true, false, false));
         }
@@ -153,8 +162,12 @@ public final class RadiationTicker {
             Detonation d = list.get(i);
             field += d.falloutRateAt(p.getX(), p.getZ(), c.now[i]);
             // over the step's own course: a long step (a sleep) counts nothing before the dust or rain reached the player
-            roentgens += MobFallout.exposure(d, p.getX(), p.getZ(), c.before[i], c.now[i]);
-            if (d.blackRainAt(p.getX(), p.getZ(), c.now[i])) blackRain = true;
+            double r = MobFallout.exposure(d, p.getX(), p.getZ(), c.before[i], c.now[i]);
+            roentgens += r;
+            boolean rain = d.blackRainAt(p.getX(), p.getZ(), c.now[i]);
+            if (rain) blackRain = true;
+            // a detonation whose fallout or rain reaches the body holds its clock during its show
+            if (!p.isCreative() && (r >= MobFallout.BACKGROUND * c.doseHours(i) || rain)) BodyClock.cause(p, d);
         }
         RadiationDose r = dose(p);
         // what the body wears stops a share of new exposure: fallout and new rain dust, not the dust already on it
@@ -173,7 +186,7 @@ public final class RadiationTicker {
         double contaminationHours = c.newest < 0 ? REAL_SECOND_HOURS : c.doseHours(c.newest);
         // in creative mode the counter shows the field, but no dose accumulates and no sickness develops
         double gy = r.doseGy() + (p.isCreative() ? 0 : (roentgens * shield * worn + contamination * contaminationHours) * GY_PER_R);
-        long exposed = r.isExposed() || gy < 1 ? r.exposedAt() : WorldClock.ticks(level);
+        long exposed = r.isExposed() || gy < 1 ? r.exposedAt() : (long) Math.floor(BodyClock.now(p));
         RadiationDose next = new RadiationDose((float) gy, (float) contamination, exposed, (float) rate);
         set(p, next);
         sickness(level, p, next);
@@ -217,9 +230,9 @@ public final class RadiationTicker {
         return (h >>> 11) * 0x1.0p-53;
     }
 
-    /** World-clock hours since dose crossed 1 Gy ({@link WorldClock}). */
-    private static double hoursSinceExposure(LivingEntity e, RadiationDose r) {
-        return (WorldClock.now(e.level()) - r.exposedAt()) / WorldClock.HOUR;
+    /** Body-clock hours since dose crossed 1 Gy ({@link BodyClock}, as last stepped: a login reads the state it left with). */
+    public static double hoursSinceExposure(LivingEntity e, RadiationDose r) {
+        return (BodyClock.of(e).clock() - r.exposedAt()) / WorldClock.HOUR;
     }
 
     /**
@@ -229,6 +242,7 @@ public final class RadiationTicker {
     static boolean tickMob(ServerLevel level, LivingEntity e) {
         RadiationDose r = dose(e);
         if (!r.isExposed()) return false;
+        BodyClock.step(e);
         if (hoursSinceExposure(e, r) < SicknessModel.onsetHours(r.doseGy())) return true;
         sickness(level, e, r);
         return stage(e, r) != SicknessModel.Stage.NONE;
