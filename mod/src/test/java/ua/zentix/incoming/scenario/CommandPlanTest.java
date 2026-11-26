@@ -84,4 +84,35 @@ class CommandPlanTest {
         assertEquals(java.util.EnumSet.of(CommandPlan.Kind.BURNABLE, CommandPlan.Kind.SITE, CommandPlan.Kind.SKIP), own);
         assertEquals(1, p.blastGates().size());
     }
+
+    @Test
+    void pauseAndSleepSteps() {
+        CommandPlan p = CommandPlan.parse("pause:on;wait:40;shot:held;pause:off;sleep;pause:maybe");
+        // pause:on 100 (+1), wait:40, shot 141 (+20), pause:off 161 (+1), sleep 162 (+1); "pause:maybe" is a command
+        assertEquals(CommandPlan.Kind.PAUSE, p.steps().get(0).kind());
+        assertEquals("on", p.steps().get(0).arg());
+        assertEquals(141, p.steps().get(1).tick());
+        assertEquals("off", p.steps().get(2).arg());
+        assertEquals(161, p.steps().get(2).tick());
+        assertEquals(CommandPlan.Kind.SLEEP, p.steps().get(3).kind());
+        assertEquals(162, p.steps().get(3).tick());
+        assertEquals(CommandPlan.Kind.COMMAND, p.steps().get(4).kind());
+        // both need the world's own server: a joined server skips them
+        assertTrue(CommandPlan.Kind.PAUSE.ownServer() && CommandPlan.Kind.SLEEP.ownServer());
+    }
+
+    @Test
+    void laterGatesMoveWithWaitingSteps() {
+        // wait:blast at 140 holds the steps; wait:front planned at 400 must move with them, or it fires before its nuke
+        CommandPlan p = CommandPlan.parse("incoming salvo drone 1 0 at 0 64 0;wait:blast;wait:200;incoming nuke now at 0 64 -2000 15 ground;wait:front;shot:front");
+        int blast = p.blastGates().getFirst();
+        assertEquals(CommandPlan.START + 40, blast);
+        int front = p.frontGate();
+        assertTrue(front > blast, "front gate after the blast gate: " + front);
+        int gate = front;
+        for (int t = blast; t < blast + 1000; t++) gate = CommandPlan.later(gate, t);
+        assertEquals(front + 1000, gate, "a later gate moves a tick per held tick");
+        assertEquals(blast, CommandPlan.later(blast, blast), "the gate being waited at stays");
+        assertEquals(-1, CommandPlan.later(-1, blast), "no gate stays none");
+    }
 }

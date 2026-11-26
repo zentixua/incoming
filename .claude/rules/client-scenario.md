@@ -43,7 +43,11 @@ within 4 km, 200 blocks up), `skip:<s>` (time skip to that many seconds after th
 with its `SCENARIO frame` pall line: trails and shimmer), `site:<biomes>` (fresh ground zero whose 2 km ring and 16 km southern
 camera line are mostly these biome ids/`#tags`, from the generator without loading, ≥ 40 km from earlier sites; teleports 150
 above it facing north), `wave:<x>` (CUSTOM preset, `nuclear.wave_speed`), `pall:<OFF|LOW|MEDIUM|HIGH>` (client dust quality),
-`pair:<name>` (frame, then `pall_<name>_off` 3 ticks later with the pall off: what the pall pass draws). Every shot with a
+`pair:<name>` (frame, then `pall_<name>_off` 3 ticks later with the pall off: what the pall pass draws). `pause:on|off` (the
+single-player pause without its menu, vanilla's "Game Paused" title in the frame; client ticks still count; `SCENARIO
+pause` logs whether vanilla paused), `sleep` (the player lies down through vanilla's check in a bed placed at its feet,
+which stays: night and a non-spectator player; the day must run for vanilla to skip the night, logged as `SCENARIO sleep
+finished`). Every shot with a
 detonation also logs `SCENARIO shot … nuke:` (`NukePall.describe`) and `… wall:` (devtest `WallProbe`: model time, dust edge −
 shock radius, wedge/top, fire zone and flame, frame sky/exposure, camera biome, and the head colour `NukePall.dustLight` gives on
 the camera line with its soot share, sand share and fire term). With the shaderpack and no DH, ground beyond render distance is

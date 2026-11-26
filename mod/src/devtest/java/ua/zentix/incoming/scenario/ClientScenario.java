@@ -3715,6 +3715,8 @@ public final class ClientScenario {
                     offShot(step.tick() + 1, step.arg() + "_off", 3);
                 }
                 case DW -> at(step.tick(), () -> dustWallDiag(step.arg()));
+                case PAUSE -> at(step.tick(), () -> pauseGame(step.arg().equals("on")));
+                case SLEEP -> at(step.tick(), ClientScenario::sleepInBed);
                 case SKIP -> at(step.tick(), () -> fsSkip(Double.parseDouble(step.arg())));
                 case FRAMES -> at(step.tick(), () -> frameRun(step.arg()));
             }
@@ -4009,7 +4011,7 @@ public final class ClientScenario {
             return;
         }
         nukeGateWaited++;
-        steps.replaceAll(s -> s.at >= tick ? new Step(s.at + 1, s.action) : s);
+        holdLater();
     }
 
     /**
@@ -4030,12 +4032,7 @@ public final class ClientScenario {
             return;
         }
         blastGateWaited++;
-        steps.replaceAll(s -> s.at >= tick ? new Step(s.at + 1, s.action) : s);
-        int first = blastGates.removeFirst();
-        java.util.List<Integer> rest = new ArrayList<>(blastGates);
-        blastGates.clear();
-        blastGates.add(first);
-        for (int g : rest) blastGates.add(g + 1);
+        holdLater();
     }
 
     /**
@@ -4068,7 +4065,20 @@ public final class ClientScenario {
             return;
         }
         frontGateWaited++;
+        holdLater();
+    }
+
+    /**
+     * One tick of waiting at a gate: every later step and every later gate ({@code wait:nuke}, {@code wait:front}, the next
+     * {@code wait:blast}) move a tick, so a gate planned after this one still comes after the steps before it.
+     */
+    private void holdLater() {
         steps.replaceAll(s -> s.at >= tick ? new Step(s.at + 1, s.action) : s);
+        nukeGate = CommandPlan.later(nukeGate, tick);
+        frontGate = CommandPlan.later(frontGate, tick);
+        java.util.List<Integer> gates = new ArrayList<>(blastGates);
+        blastGates.clear();
+        for (int g : gates) blastGates.add(CommandPlan.later(g, tick));
     }
 
     /**
@@ -4103,6 +4113,62 @@ public final class ClientScenario {
 
     /** Longest wait for an explosion ({@code wait:blast}): Shahed's flight at 5 km, tick. */
     private static final int BLAST_WAIT = 3600;
+
+    /**
+     * Step {@code pause:on|off}: the single-player pause without its menu (as F3+Esc), so a frame shows the held world; the
+     * scenario keeps counting client ticks (they run under the pause), the integrated server and the client level stop.
+     * Vanilla's "Game Paused" title stays at the top of the frame. {@code pause:off} closes only that screen.
+     */
+    private void pauseGame(boolean on) {
+        Minecraft mc = Minecraft.getInstance();
+        if (on) mc.pauseGame(true);
+        else if (mc.screen instanceof net.minecraft.client.gui.screens.PauseScreen) mc.setScreen(null);
+        // vanilla decides the pause in the next frame's tick: read what it decided (a published world or another open screen
+        // does not pause)
+        at(tick + 2, () -> Incoming.LOG.info("SCENARIO pause {}: paused {}, screen {}", on ? "on" : "off", mc.isPaused(),
+                mc.screen == null ? "none" : mc.screen.getClass().getSimpleName()));
+    }
+
+    /**
+     * Step {@code sleep}: the camera player lies down, through vanilla's own check ({@code ServerPlayer.startSleepInBed}), in a
+     * bed placed at its feet facing south; vanilla skips the night once the sleep is deep if the day runs. The outcome
+     * ({@code asleep} or vanilla's refusal) goes to the log as {@code SCENARIO sleep}, the skip itself as {@code SCENARIO sleep
+     * finished} (old and new day time). The two blocks at and south of the feet become the bed, which stays, with the
+     * respawn point.
+     */
+    /** The night-skip listener is registered once, at the first {@code sleep} step. */
+    private static boolean sleepWatched;
+
+    private static void sleepInBed() {
+        Minecraft mc = Minecraft.getInstance();
+        var server = mc.getSingleplayerServer();
+        if (server == null || mc.player == null) return;
+        java.util.UUID id = mc.player.getUUID();
+        server.execute(() -> {
+            net.minecraft.server.level.ServerPlayer p = server.getPlayerList().getPlayer(id);
+            if (p == null) return;
+            // vanilla's sleep share counts no spectator: lying down would skip nothing
+            if (p.isSpectator()) {
+                Incoming.LOG.warn("SCENARIO sleep refused: the player is a spectator, vanilla skips no night for one");
+                return;
+            }
+            if (!sleepWatched) {
+                sleepWatched = true;
+                NeoForge.EVENT_BUS.addListener((net.neoforged.neoforge.event.level.SleepFinishedTimeEvent e) ->
+                        Incoming.LOG.info("SCENARIO sleep finished: night skipped, day time {} -> {}", e.getLevel().getLevelData().getDayTime(), e.getNewTime()));
+            }
+            var level = p.serverLevel();
+            BlockPos foot = p.blockPosition();
+            BlockPos head = foot.relative(net.minecraft.core.Direction.SOUTH);
+            var bed = net.minecraft.world.level.block.Blocks.RED_BED.defaultBlockState()
+                    .setValue(net.minecraft.world.level.block.BedBlock.FACING, net.minecraft.core.Direction.SOUTH);
+            level.setBlock(foot, bed.setValue(net.minecraft.world.level.block.BedBlock.PART, net.minecraft.world.level.block.state.properties.BedPart.FOOT), 3);
+            level.setBlock(head, bed.setValue(net.minecraft.world.level.block.BedBlock.PART, net.minecraft.world.level.block.state.properties.BedPart.HEAD), 3);
+            var r = p.startSleepInBed(head);
+            Incoming.LOG.info("SCENARIO sleep at {} (day time {}): {}", head.toShortString(), level.getDayTime(),
+                    r.left().map(Object::toString).orElse("asleep"));
+        });
+    }
 
     private void at(int t, Runnable r) {
         steps.add(new Step(t, r));

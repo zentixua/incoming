@@ -22,15 +22,23 @@ record CommandPlan(List<Step> steps, int nukeGate, List<Integer> blastGates, int
     static final int START = 100, TAIL = 100;
 
     enum Kind {
-        COMMAND, SHOT, HUD_OFF, HUD_ON, SKIP, FRAMES, STORM, BURNABLE, MAX_YIELD, WAVE, PALL, PAIR, SITE, DW;
+        COMMAND, SHOT, HUD_OFF, HUD_ON, SKIP, FRAMES, STORM, BURNABLE, MAX_YIELD, WAVE, PALL, PAIR, SITE, DW, PAUSE, SLEEP;
 
         /** Reads or moves the world's own server (the client's integrated one): a joined server skips it. */
         boolean ownServer() {
-            return this == SKIP || this == BURNABLE || this == SITE;
+            return this == SKIP || this == BURNABLE || this == SITE || this == PAUSE || this == SLEEP;
         }
     }
 
     record Step(int tick, Kind kind, String arg) {}
+
+    /**
+     * A gate planned for {@code gate} while steps wait at {@code tick}: a later gate moves with the waiting steps (one tick),
+     * the gate being waited at and earlier ones stay; −1 (none) stays.
+     */
+    static int later(int gate, int tick) {
+        return gate > tick ? gate + 1 : gate;
+    }
 
     static CommandPlan parse(String spec) {
         return parse(spec, 40);
@@ -106,6 +114,15 @@ record CommandPlan(List<Step> steps, int nukeGate, List<Integer> blastGates, int
                 int count = f.length > 1 ? Integer.parseInt(f[1].strip()) : 8;
                 steps.add(new Step(t, Kind.FRAMES, arg));
                 t += 12 * count + 20;
+            } else if (c.equals("pause:on") || c.equals("pause:off")) {
+                // the single-player pause (as F3+Esc: no menu over the frame); the integrated server stops ticking
+                steps.add(new Step(t, Kind.PAUSE, c.substring("pause:".length())));
+                t += 1;
+            } else if (c.equals("sleep")) {
+                // the camera player lies down in a bed placed at its feet (a real sleep: vanilla skips the night once the
+                // sleep is deep, 100 ticks, if the day runs; needs night and a non-spectator player)
+                steps.add(new Step(t, Kind.SLEEP, ""));
+                t += 1;
             } else if (c.equals("hud:off") || c.equals("hud:on")) {
                 steps.add(new Step(t, c.equals("hud:off") ? Kind.HUD_OFF : Kind.HUD_ON, ""));
                 t += 1;
