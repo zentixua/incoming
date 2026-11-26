@@ -7,13 +7,17 @@ import net.minecraft.world.effect.MobEffectInstance;
 import net.minecraft.world.entity.LivingEntity;
 import net.minecraft.world.entity.ai.attributes.AttributeModifier;
 import net.minecraft.world.entity.ai.attributes.Attributes;
+import net.minecraft.world.entity.player.Player;
 import net.neoforged.neoforge.common.EffectCure;
 import ua.zentix.incoming.Incoming;
 import ua.zentix.incoming.nuclear.model.BurnInjury;
+import ua.zentix.incoming.registry.ModAttachments;
 import ua.zentix.incoming.registry.ModDamageTypes;
+import ua.zentix.incoming.strike.StrikeOwner;
 import ua.zentix.incoming.util.WorldClock;
 
 import java.util.Set;
+import java.util.UUID;
 
 /**
  * Fireball light burns ({@link FlashBurns}): effect lasts while burns heal, capping health at what they left throughout.
@@ -48,7 +52,13 @@ public class BurnsEffect extends MobEffect {
     public boolean applyEffectTick(LivingEntity e, int amplifier) {
         MobEffectInstance burns = e.getEffect(ua.zentix.incoming.registry.ModEffects.BURNS);
         if (amplifier >= SHOCK && (burns == null || burns.getDuration() == 1)) {
-            e.hurt(ModDamageTypes.source(e.level(), ModDamageTypes.BURN_SHOCK, null, null), Float.MAX_VALUE);
+            // the flash that caused the shock names its owner when online now ({@link FlashBurns}). Whether the burn may
+            // harm this body was decided at the flash: an owner the damage rules (PvP, team) now refuse is not named,
+            // so the shock still kills
+            UUID cause = e.getExistingData(ModAttachments.BURN_SHOCK_OWNER).orElse(null);
+            Player owner = StrikeOwner.online(e.level().getServer(), cause);
+            if (owner != null && e instanceof Player victim && !victim.canHarmPlayer(owner)) owner = null;
+            StrikeOwner.hurt(e, ModDamageTypes.source(e.level(), ModDamageTypes.BURN_SHOCK, null, owner), Float.MAX_VALUE);
             return true;
         }
         if (burns != null && !e.level().isClientSide() && e.level().getGameTime() % WorldClock.PACE_TICKS == 0)

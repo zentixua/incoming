@@ -8,7 +8,9 @@ import net.minecraft.network.chat.Component;
 import net.minecraft.network.protocol.Packet;
 import net.minecraft.network.protocol.game.ClientGamePacketListener;
 import net.minecraft.network.protocol.game.ClientboundBlockEntityDataPacket;
+import net.minecraft.network.chat.contents.TranslatableContents;
 import net.minecraft.server.level.ServerLevel;
+import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.level.block.Block;
@@ -19,13 +21,17 @@ import net.neoforged.neoforge.capabilities.Capabilities;
 import net.neoforged.neoforge.capabilities.RegisterCapabilitiesEvent;
 import net.neoforged.neoforge.items.IItemHandlerModifiable;
 import org.jetbrains.annotations.Nullable;
+import ua.zentix.incoming.compat.SubLevels;
 import ua.zentix.incoming.entity.LaunchQueue;
 import ua.zentix.incoming.entity.Launcher;
 import ua.zentix.incoming.entity.LauncherMount;
+import ua.zentix.incoming.entity.Rails;
 import ua.zentix.incoming.guidance.FlightController;
+import ua.zentix.incoming.info.Readout;
 import ua.zentix.incoming.registry.ModBlockEntities;
 import ua.zentix.incoming.strike.Munitions;
 import ua.zentix.incoming.strike.WeaponType;
+import ua.zentix.incoming.util.Local;
 import ua.zentix.incoming.util.Magazine;
 
 import java.util.UUID;
@@ -163,7 +169,13 @@ public class FixedLauncherBlockEntity extends BlockEntity implements Launcher {
      */
     @Nullable
     public Component fire(ServerLevel level) {
-        Component problem = LauncherOrders.fire(level, this);
+        return fire(level, null);
+    }
+
+    /** Same; {@code made} receives the answered order ({@link LauncherOrders#fire}). */
+    @Nullable
+    public Component fire(ServerLevel level, @Nullable java.util.function.Consumer<ua.zentix.incoming.strike.Order> made) {
+        Component problem = LauncherOrders.fire(level, this, made);
         report(problem != null ? problem : Component.translatable("incoming.fixed_launcher.fired"));
         if (problem != null) level.levelEvent(1001, worldPosition, 0);
         return problem;
@@ -180,7 +192,22 @@ public class FixedLauncherBlockEntity extends BlockEntity implements Launcher {
         return last;
     }
 
-    /** Status line for the player looking at the launcher. */
+    /**
+     * Status line for {@code viewer} at the launcher: the full line ({@link #status()}) for the owner's side and operators
+     * ({@link Readout#privileged}); for anyone else the rack's weapon and the stock, and the last
+     * result only when it tells nothing about the owner or the mission.
+     */
+    public Component status(ServerPlayer viewer) {
+        if (Readout.privileged(viewer.server, owner, viewer)) return status();
+        Component state = mission == null ? Component.translatable("incoming.fixed_launcher.no_mission", stockCount())
+                : Component.translatable("incoming.fixed_launcher.status.public", mission.weapon().displayName(),
+                Munitions.held(stock, mission.weapon().spec().munition().item().get(), mission.weapon().spec().munition().rounds()));
+        boolean shown = last != null && (Readout.publicRefusal(last)
+                || last.getContents() instanceof TranslatableContents t && t.getKey().equals("incoming.fixed_launcher.fired"));
+        return shown ? Component.translatable("incoming.fixed_launcher.status.last", state, last) : state;
+    }
+
+    /** Full status line (owner's side, operators, the operator's {@code /incoming launcher} command). */
     public Component status() {
         Component state = mission == null ? Component.translatable("incoming.fixed_launcher.no_mission", stockCount())
                 : Component.translatable("incoming.fixed_launcher.status", mission.weapon().displayName(), mission.count(),
@@ -201,19 +228,96 @@ public class FixedLauncherBlockEntity extends BlockEntity implements Launcher {
         return rack != null;
     }
 
+    /**
+     * The craft carrying this launcher (Create Aeronautics, through {@link SubLevels}), or null on the ground. The block
+     * sits in the craft's plot; rack heading, pivot and rails are kept in that frame and reach the world through the
+     * craft's current pose.
+     */
+    @Nullable
+    private SubLevels.Frame craft() {
+        return level == null ? null : SubLevels.carrying(level, worldPosition);
+    }
+
+    /**
+     * Where the launcher is in the world is known: on the ground, or on a craft that is loaded now. A block in Sable's plot
+     * grid whose craft is not loaded has no world place, and its plot coordinates are a distant corner of the world.
+     */
+    public boolean located() {
+        return level == null || SubLevels.located(level, worldPosition);
+    }
+
+    /** A craft carries this launcher now: its rails move with the craft ({@code StrikeProjectile.rideRail}). */
     @Override
-    public Vec3 position() {
-        return Vec3.atBottomCenterOf(worldPosition);
+    public boolean carried() {
+        return craft() != null;
+    }
+
+    /** The carrying craft's velocity at world point {@code at} (its body's motion and spin), blocks/tick. */
+    @Override
+    public Vec3 velocity(Vec3 at) {
+        SubLevels.Frame craft = craft();
+        return craft == null ? Vec3.ZERO : craft.velocity(at);
     }
 
     @Override
+    public Vec3 position() {
+        Vec3 own = Vec3.atBottomCenterOf(worldPosition);
+        SubLevels.Frame craft = craft();
+        return craft == null ? own : craft.toWorld(own);
+    }
+
+    /** Rack heading in the world: its heading on the turntable ({@link #rackYaw}) turned by the craft carrying it. */
+    @Override
     public float yaw() {
+        SubLevels.Frame craft = craft();
+        return craft == null ? yaw : heading(craft.toWorldDirection(Local.horizontal(yaw)), yaw);
+    }
+
+    /** Rack heading on the turntable in the block's own frame (the craft's on a craft), °: what the renderer turns. */
+    public float rackYaw() {
         return yaw;
     }
 
-    /** Rack heading without raising again: on block placement, away from placer. */
+    /**
+     * The rails as the rack stands: built from the turntable's own heading in its frame, the rack the renderer draws (a
+     * world heading's round trip through a pitched or rolled craft's pose is not exact).
+     */
+    @Override
+    public Rails rails() {
+        SubLevels.Frame craft = craft();
+        return craft == null ? mount().rails(position(), yaw, weapon()) : inWorld(craft, yaw);
+    }
+
+    @Override
+    public Rails rails(float yaw) {
+        SubLevels.Frame craft = craft();
+        if (craft == null) return mount().rails(position(), yaw, weapon());
+        return inWorld(craft, ownYaw(craft, yaw));
+    }
+
+    /** The rack's rails at turntable heading {@code own} in its frame, placed in the world by {@code craft}'s pose. */
+    private Rails inWorld(SubLevels.Frame craft, float own) {
+        Rails rack = mount().rails(Vec3.atBottomCenterOf(worldPosition), own, weapon());
+        java.util.List<Vec3> points = new java.util.ArrayList<>(rack.slots());
+        for (Vec3 p : rack.points()) points.add(craft.toWorld(p));
+        float[] axis = FlightController.anglesTo(Vec3.ZERO, craft.toWorldDirection(rack.direction()));
+        return new Rails(points, axis[0], -axis[1]);
+    }
+
+    /** Rack heading on the turntable that points along world heading {@code yaw} on {@code craft}. */
+    private static float ownYaw(SubLevels.Frame craft, float yaw) {
+        return heading(craft.toPlotDirection(Local.horizontal(yaw)), yaw);
+    }
+
+    /** Heading of {@code dir}'s horizontal part; {@code fallback} for a vertical direction (a craft on its side). */
+    private static float heading(Vec3 dir, float fallback) {
+        return dir.x * dir.x + dir.z * dir.z < 1e-8 ? fallback : FlightController.anglesTo(Vec3.ZERO, dir)[0];
+    }
+
+    /** Rack heading without raising again: on block placement, away from placer (world heading). */
     public void setYaw(float yaw) {
-        this.yaw = yaw;
+        SubLevels.Frame craft = craft();
+        this.yaw = craft == null ? yaw : ownYaw(craft, yaw);
         setChanged();
     }
 
@@ -232,10 +336,12 @@ public class FixedLauncherBlockEntity extends BlockEntity implements Launcher {
         return queue;
     }
 
+    /** Turn the rack to world heading {@code yaw} ({@link Launcher#turnTo}); kept as the turntable's own heading. */
     @Override
     public void turnTo(float yaw, long now) {
-        if (turnedYaw(yaw, now) == this.yaw) return;
-        this.yaw = yaw;
+        if (turnedYaw(yaw, now) == yaw()) return;
+        SubLevels.Frame craft = craft();
+        this.yaw = craft == null ? yaw : ownYaw(craft, yaw);
         deployedAt = now;
         sync();
     }

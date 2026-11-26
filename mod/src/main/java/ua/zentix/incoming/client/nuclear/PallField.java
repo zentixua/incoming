@@ -11,9 +11,10 @@ import ua.zentix.incoming.nuclear.model.ThermalModel;
 import ua.zentix.incoming.nuclear.model.WaterModel;
 
 /**
- * Pall after the shock wave ("cinema-level nuke" plan, step 2): dust and smoke density field of one detonation by radius
- * from ground zero and time. Drawn by the effects-layer volume ({@code fx/layer/PallPass}: rays through the field multiplied by
- * 3D noise); also drives camera visibility, sound, ash and shadow ({@link NukePall}). Pure math from the detonation
+ * Pall after the shock wave ("cinema-level nuke" plan, step 2): dust, spray and smoke density field of one detonation by radius
+ * from ground zero and time. The ground dust and spray are drawn by the dust pass ({@code fx/layer/DustWallPass}); the pall volume
+ * ({@code fx/layer/PallPass}) draws only the fire-zone haze row of {@link #row}. The whole field also drives camera visibility, sound,
+ * ash and shadow ({@link NukePall}). Pure math from the detonation
  * model, without world access or a new packet: the client knows what the wave lofts from ground pressure
  * ({@link Detonation#groundOverpressureKpa}) and front arrival ({@link Detonation#arrivalTicks}), like the server.
  * <p>
@@ -36,16 +37,15 @@ import ua.zentix.incoming.nuclear.model.WaterModel;
  * minutes, {@link #SPRAY_S}). A burst on water also produces a base surge — fog from the fallen water column
  * ({@link #surge}, {@link WaterModel} laws and clock, the same as the column in the mushroom volume). The {@link PallGround} map knows whether land or
  * water is beneath the pall (cell water fraction from client knowledge); material follows the place where
- * it was lofted: dust drifted onto water stays dust. Thus the shader samples water fraction at the same location as dust
- * and spray tables — point minus drift; haze at its source (no fires over water).
+ * it was lofted: dust drifted onto water stays dust (point minus drift); haze at its source (no fires over water).
  * <p>
  * Time: dust and spray use the model clock (ticks / (20·scale)), like front and head; paper falls in real seconds (client ticks
  * / 20); haze and fires use the detonation's clock ({@link #clock}). Lengths in model meters and blocks through detonation scale. The radius table
- * ({@link #row}) is what the shader receives: all expensive work (dust model, front arrival) is done here.
+ * ({@link #row}) is what the pall shader receives: all expensive work is done here.
  */
 public final class PallField {
     /**
-     * Dust-layer top unevenness: top above a point is (1 ± this) of table top (shader: {@code PALL_BUMPS}, tile noise).
+     * Dust-layer top unevenness: top above a point is (1 ± this) of table top.
      * Thermals make the mixed-layer top over heated ground bumpy — a convective entrainment zone 0.2–0.4
      * of layer height (Stull 1988, ch. 11; Deardorff, Willis and Stockton 1980), half of it — 0.3 (est.). Same layer profile
      * up to its own top, so optical depth above a point for light matches density: a hollow between bumps lies at layer top,
@@ -218,6 +218,217 @@ public final class PallField {
         return reach;
     }
 
+    /** Log-spaced age nodes of the whole-lifetime dust table ({@link #lifetime}). */
+    public static final int AGES = 32;
+    /** Age scale of the table's log coordinate log(1 + age / AGE0), model seconds. */
+    public static final double AGE0 = 0.05;
+
+    /** Latest age at which any node's lofted layer is still thicker than {@link #GONE_DEPTH}, model seconds (the table's last age). */
+    public double lifetimeEnd() {
+        double end = lifetimeEnd;
+        if (end < 0) {
+            end = 60;
+            for (int i = 0; i < BINS; i++) end = Math.max(end, settledBy(columns[i]));
+            lifetimeEnd = end;
+            lifetimeEndRuns++;
+        }
+        return end;
+    }
+
+    /** {@link #lifetimeEnd}, once computed (a bisection per node: read every frame by every reader of the drawn dust). */
+    private volatile double lifetimeEnd = -1;
+    /** Times {@link #lifetimeEnd} ran its bisection (tests: once per field). */
+    int lifetimeEndRuns;
+
+    /** Age of table node u (fractional), model seconds. */
+    public static double lifetimeAge(double u, double end) {
+        return AGE0 * (Math.pow(1 + end / AGE0, u / (AGES - 1)) - 1);
+    }
+
+    /**
+     * Inputs of the whole-lifetime dust wave, the law's numbers by ground radius and log age.
+     * Row 0, node j at radius j/(n − 1) of {@link #reach}: front arrival (model s), dust over hard ground relative to soil
+     * ({@link #paved}), the fire zone's share (fire light from below), 0. Rows 1..{@link #AGES}, age node k ({@link #lifetimeAge}): the presentation layer top (blocks)
+     * and the optical depth the transfer reads, then both slopes per age node (the shader's cubic Hermite in the age
+     * coordinate: C1, no kink at a node).
+     * <p>
+     * The top (presentation, not physical): {@code present} × the law's top ({@link DustModel.Column#height}) at the settle age
+     * (1 s; the birth, hump and settling are the presentation's), joining the law's rising top over {@link #LIFETIME_JOIN_S}
+     * (a cubic-exponential onset: take 33's layer height held through its 24 s, the law's top from ~5 min on). The depth: the law's
+     * extinction (its optical depth over its own top, {@link DustModel.Column#depth}: the only owner of settling and
+     * dilution) over the presentation's top: once the top has joined the law's, the law's optical depth itself.
+     */
+    public void lifetime(int n, double present, float[] out) {
+        double end = lifetimeEnd();
+        double[][] v = new double[AGES][];
+        for (int j = 0; j < n; j++) {
+            double rb = j / (n - 1.0) * reach, slant = Math.hypot(d.metres(rb), Math.max(0, d.hobMetres()));
+            int i = Math.min(BINS - 1, Math.max(0, (int) (rb / reach * BINS)));
+            out[4 * j] = (float) (d.arrivalTicks(d.blocks(slant)) / (20.0 * d.scale()));
+            out[4 * j + 1] = (float) paved[i];
+            out[4 * j + 2] = (float) fire[i];
+            out[4 * j + 3] = 0;
+            DustModel.Column c = columns[i];
+            for (int k = 0; k < AGES; k++) v[k] = lifetimeAt(c, lifetimeAge(k, end), present);
+            for (int m = 0; m < 2; m++) {
+                // monotone cubic slopes (Fritsch–Carlson): C1, and no overshoot between nodes (no negative depth)
+                double[] slope = new double[AGES];
+                for (int k = 0; k < AGES; k++) {
+                    double dl = k > 0 ? v[k][m] - v[k - 1][m] : v[1][m] - v[0][m], dr = k < AGES - 1 ? v[k + 1][m] - v[k][m] : dl;
+                    slope[k] = dl * dr <= 0 ? 0 : 0.5 * (dl + dr);
+                }
+                for (int k = 0; k < AGES - 1; k++) {
+                    double dk = v[k + 1][m] - v[k][m];
+                    if (dk == 0) {
+                        slope[k] = slope[k + 1] = 0;
+                        continue;
+                    }
+                    double al = slope[k] / dk, be = slope[k + 1] / dk, r = al * al + be * be;
+                    if (r > 9) {
+                        double t = 3 / Math.sqrt(r);
+                        slope[k] = t * al * dk;
+                        slope[k + 1] = t * be * dk;
+                    }
+                }
+                for (int k = 0; k < AGES; k++) {
+                    int o = 4 * ((1 + k) * n + j);
+                    out[o + m] = (float) v[k][m];
+                    out[o + 2 + m] = (float) slope[k];
+                }
+            }
+        }
+    }
+
+    /**
+     * The dust wave's water spray per node ({@code dustwall.glsl}: {@code dwSprayLaw}), into {@code out} from float {@code offset}:
+     * node j at radius j/(n − 1) of {@link #reach}: the extinction where the blast wind strips the densest spray (1/block,
+     * {@link WaterModel#spray} × {@link #SIGMA_SPRAY}) and the stripping height (blocks, {@link WaterModel#sprayHeight}); the
+     * shader takes the age law ({@link #sprayEnvelope}, {@link #sprayTop}).
+     */
+    public void lifetimeSpray(int n, float[] out, int offset) {
+        for (int j = 0; j < n; j++) {
+            double rb = j / (n - 1.0) * reach;
+            int i = Math.min(BINS - 1, Math.max(0, (int) (rb / reach * BINS)));
+            out[offset + 4 * j] = (float) (spray[i] <= 0 ? 0 : perBlock(SIGMA_SPRAY) * spray[i]);
+            out[offset + 4 * j + 1] = (float) sprayFrom[i];
+            out[offset + 4 * j + 2] = 0;
+            out[offset + 4 * j + 3] = 0;
+        }
+    }
+
+    /** Settle age of the presentation's birth envelope, model s: the law's layer is read from here on (smoothly). */
+    static final double LIFETIME_SETTLE_S = 1.0;
+    /** The presentation top joins the law's rising top over this age (Gaussian onset), model s (presentation; est.). */
+    public static final double LIFETIME_JOIN_S = 180;
+
+    /**
+     * The lofted dust fills the layer the law's top deepens (its growth over the positive phase and over hot ground) by
+     * mixing, one eddy turnover behind it: h/w* with h ~100 m and w* ~25 m/s of the post-shock gusts, est. (model s).
+     */
+    public static final double LIFETIME_MIX_S = 4;
+
+    /** (presentation top, blocks; optical depth for the transfer) of column c at age (model s). */
+    private double[] lifetimeAt(DustModel.Column c, double age, double present) {
+        double first = Math.max(d.blocks(c.height(LIFETIME_SETTLE_S)), MIN_TOP_BLOCKS);
+        age = Math.max(age, 0);
+        // the dust's own height: a first-order lag of the law's top (exponential integrator over growing steps)
+        double mixed = first, s = 0, law = first;
+        while (s < age) {
+            double dt = Math.min(Math.max(0.02, 0.01 * s), age - s);
+            s += dt;
+            law = lifetimeLaw(c, s);
+            mixed = law + (mixed - law) * Math.exp(-dt / LIFETIME_MIX_S);
+        }
+        double x = age / LIFETIME_JOIN_S, join = 1 - Math.exp(-x * x * x);
+        double top = first + (law - first) * join;
+        double a = lifetimeSettled(age);
+        double tau = c.depth(a) * top / Math.max(mixed, top);
+        return new double[] {top * present, visible(c, age, tau, top * present, present)};
+    }
+
+    /**
+     * Presentation, not physical (owner call): inside an old, thick layer a camera sees about
+     * {@link #SEE_FIRST_M} at the first minute and {@link #SEE_FIVE_M} by five minutes (the reference: Silo's haze behind
+     * the wall, Nevada test dust: a see-through warm haze, not a wall). The law's τ (60–96 at 4.5 km from 1 Mt over 5–10 min)
+     * would hold the camera in a 50-block fog for ten minutes. The transfer saturates the old column's drawn optical depth
+     * at the extinction that gives that sight (Koschmieder, 3.912/V, over the drawn column), by age through the haze
+     * level's fade (none while the textured young level owns the column: take 33 holds); from five minutes on the ceiling
+     * falls with the law's own thinning (the drawn depth follows the law's τ through g). Returned as the τ the shader's
+     * {@code dwTransfer} turns into that drawn depth (its inverse), so the shader keeps one transfer.
+     */
+    private double visible(DustModel.Column c, double age, double tau, double topBlocks, double present) {
+        double drawn = transfer(tau), fade = 1 - textured(age);
+        if (fade <= 0 || drawn <= 0) return tau;
+        double ceiling = seeCeiling(c, age, topBlocks, present);
+        double capped = drawn / Math.sqrt(1 + (drawn / ceiling) * (drawn / ceiling));
+        return inverseTransfer(drawn + (capped - drawn) * fade);
+    }
+
+    /** Sight inside old dust at one minute and at five minutes, m (presentation; owner call). */
+    static final double SEE_FIRST_M = 200, SEE_FIVE_M = 700;
+    /**
+     * Optical depth over the sight distance: the meteorological optical range's 5 % contrast (WMO), so the ground 370 m
+     * below and ahead of a 120 m camera shows at five minutes (optical depth 1.6 over it); Koschmieder's 2 % hid it.
+     */
+    static final double SEE_TAU = 3.0;
+
+    /**
+     * The drawn column's ceiling (optical depth) at age: the sight's extinction over the drawn profile's integral. The sight
+     * grows as (a/60)^p to the five-minute value, smoothly (no kink: C3); the ceiling then follows the law's own thinning
+     * (its g ratio to the five-minute column), weighted in smoothly about 300 s.
+     */
+    private double seeCeiling(DustModel.Column c, double age, double topBlocks, double present) {
+        double a = Math.max(age, 1), p = Math.log(SEE_FIVE_M / SEE_FIRST_M) / Math.log(5);
+        double sight = d.blocks(SEE_FIRST_M) * Math.pow(a / 60.0, p) / Math.pow(1 + Math.pow(a / 300.0, 4), p / 4);
+        double ceiling = SEE_TAU / sight * profileIntegral(0.95 * topBlocks);
+        double refTau = c.depth(lifetimeSettled(300)), now = c.depth(lifetimeSettled(a));
+        double follow = refTau > 0 && now > 0 ? ceiling * transfer(now) / transfer(refTau) : ceiling;
+        double w = 1 / (1 + Math.pow(300 / a, 4));
+        return Math.exp(Math.log(ceiling) + (Math.log(Math.max(follow, 1e-9)) - Math.log(ceiling)) * w);
+    }
+
+    /** {@code dwProfileInt}: the drawn profile's integral over a settled top h, blocks. */
+    static double profileIntegral(double h) {
+        return Math.max(0.9483 * h - 2.854, 1);
+    }
+
+    /** {@code dwTransfer}. */
+    public static double transfer(double tau) {
+        if (tau <= 1) return tau;
+        double x = tau - 1;
+        return 1 + 0.073 * x + (1 - 0.073) * 0.5 * (1 - Math.exp(-x / 0.5));
+    }
+
+    /** Inverse of {@link #transfer} (monotone; Newton from the affine branch). */
+    static double inverseTransfer(double drawn) {
+        if (drawn <= 1) return drawn;
+        double x = Math.max((drawn - 1 - 0.4635) / 0.073, 0);
+        for (int i = 0; i < 30; i++) {
+            double f = 1 + 0.073 * x + (1 - 0.073) * 0.5 * (1 - Math.exp(-x / 0.5)) - drawn, df = 0.073 + (1 - 0.073) * Math.exp(-x / 0.5);
+            x = Math.max(x - f / df, 0);
+            if (Math.abs(f) < 1e-9) break;
+        }
+        return 1 + x;
+    }
+
+    /** {@code dwTextured}: the textured level's share at age (quintic step from 1 at 24 s to 0 at 60 s). */
+    static double textured(double age) {
+        double x = Math.min(1, Math.max(0, (age - 24) / 36.0));
+        return 1 - x * x * x * (x * (6 * x - 15) + 10);
+    }
+
+    /** A smooth max of the age and {@link #LIFETIME_SETTLE_S} (softplus, width 0.3 s), model s. */
+    private static double lifetimeSettled(double age) {
+        double w = 0.3, x = (age - LIFETIME_SETTLE_S) / w;
+        return LIFETIME_SETTLE_S + w * (x > 30 ? x : Math.log1p(Math.exp(x)));
+    }
+
+    /** The law's layer top read from the settle age on (a smooth max of the age and {@link #LIFETIME_SETTLE_S}), blocks. */
+    private double lifetimeLaw(DustModel.Column c, double age) {
+        double a = lifetimeSettled(age);
+        return Math.max(d.blocks(c.height(a)), MIN_TOP_BLOCKS);
+    }
+
     /** Ground ignition-zone radius, blocks (0 — no fires): haze above it, firestorm inside ({@link FireStorm}). */
     double fireReach() {
         return fireReach;
@@ -258,6 +469,11 @@ public final class PallField {
         return columns[i];
     }
 
+    /** Node i's dust over hard ground relative to soil (table row 0's paved share). */
+    double paved(int i) {
+        return paved[i];
+    }
+
     /**
      * The detonation's clock ({@code NukeClock}) for real client ticks since detonation, in ticks: real through the show,
      * the world clock after ({@code ClientNuclear.Active}). Fire, its smoke and its light follow it; dust and spray do not.
@@ -271,7 +487,7 @@ public final class PallField {
         return clock.applyAsDouble(ticks) / 20.0;
     }
 
-    // ---------------------------------------------------------------- laws (shared with fx_pall shader)
+    // ---------------------------------------------------------------- laws (profile and column shared with the pall shaders)
 
     /**
      * Vertical profile: fraction of ground density at pall height {@code x} above ground zero (0 — ground; 1 — top):
@@ -319,13 +535,13 @@ public final class PallField {
 
     /**
      * Base surge by radius ({@code u} — fraction of its radius): denser roller at the edge, thinner toward the center, fading beyond the edge
-     * (like its billows: a ring from half-radius to edge, denser at the edge). Same as {@code pallSurge} in {@code pall.glsl}.
+     * (like its billows: a ring from half-radius to edge, denser at the edge).
      */
     static double surgeProfile(double u) {
         return (0.35 + 0.65 * smooth(0.2, 0.85, u)) * (1 - smooth(0.9, 1.05, u));
     }
 
-    /** Base-surge top by radius, fraction of its height: roller higher at edge, lower toward center ({@code pallSurgeTop}). */
+    /** Base-surge top by radius, fraction of its height: roller higher at edge, lower toward center. */
     static double surgeTop(double u) {
         return 0.55 + 0.45 * smooth(0.3, 0.95, u);
     }
@@ -357,31 +573,26 @@ public final class PallField {
         return (ticks - arrival[i]) / (20.0 * d.scale());
     }
 
-    /** Table rows per detonation: dust, spray, haze, in order. */
-    public static final int ROWS = 3;
-    static final int DUST_ROW = 0, SPRAY_ROW = 1, HAZE_ROW = 2;
+    /** Table rows per detonation: the haze. */
+    public static final int ROWS = 1;
+
+    /** First float of detonation slot {@code slot}'s haze row in the frame table ({@link #ROWS} rows of {@code width} RGBA nodes per slot). */
+    public static int hazeOffset(int slot, int width) {
+        return slot * ROWS * width * 4;
+    }
 
     /**
-     * Table row at {@code ticks} since detonation (client ticks): 12 numbers per {@link #BINS} nodes — dust
-     * ({@link #dust}), spray ({@link #spray}) and haze ({@link #haze}). Writes into {@code out} (length ≥ 12·BINS): all dust
-     * nodes first, then spray, then haze. {@code land}, {@code water} indicate land and water beneath pall
-     * ({@link PallGround}): absent material is also absent from the table — dust and haze over open sea, spray over land (the shader would
-     * remove them by map anyway, but the slot is empty without them, so a sea burst spends no passes on invisible dust, and
-     * over land the shader skips the water map).
+     * Table row at {@code ticks} since detonation (client ticks): 4 numbers per {@link #BINS} nodes — the haze ({@link #haze}),
+     * all the pall volume draws of the field. Writes into {@code out} (length ≥ 4·BINS). {@code land} indicates land beneath the
+     * pall ({@link PallGround}): no haze or fires over open sea (the shader would remove them by map anyway, but the slot is
+     * empty without them).
      */
-    public void row(double ticks, boolean land, boolean water, float[] out) {
+    public void row(double ticks, boolean land, float[] out) {
         double[] v = new double[4];
         for (int i = 0; i < BINS; i++) {
-            dust(i, ticks, v);
-            if (!land) v[0] = 0;
-            for (int k = 0; k < 4; k++) out[4 * (DUST_ROW * BINS + i) + k] = (float) v[k];
-            spray(i, ticks, v);
-            if (!water) v[0] = 0;
-            for (int k = 0; k < 4; k++) out[4 * (SPRAY_ROW * BINS + i) + k] = (float) v[k];
             haze(i, ticks, v);
-            // no haze or underlying fires over open sea (dust drift share is for spray)
             if (!land) v[0] = v[2] = 0;
-            for (int k = 0; k < 4; k++) out[4 * (HAZE_ROW * BINS + i) + k] = (float) v[k];
+            for (int k = 0; k < 4; k++) out[4 * i + k] = (float) v[k];
         }
     }
 
@@ -432,8 +643,8 @@ public final class PallField {
 
     /**
      * Node i spray over water: water-level extinction (1/block; where water lies beneath pall, excluding spray still in wall head),
-     * spray top (blocks, {@link #sprayTop}); node i dust over hard ground relative to soil ({@link #paved}, read with the dust where it
-     * was lofted — the row has room), 0. Separate layer: spray does not mix with dust and is lower.
+     * spray top (blocks, {@link #sprayTop}); node i dust over hard ground relative to soil ({@link #paved}), 0. Separate layer: spray
+     * does not mix with dust and is lower.
      */
     void spray(int i, double ticks, double[] out) {
         double age = seconds(i, ticks);
@@ -443,7 +654,7 @@ public final class PallField {
         out[3] = 0;
     }
 
-    /** Dust over ground with hard share {@code hard} relative to soil at node i: copy of {@code pallField} (spray row, b). */
+    /** Dust over ground with hard share {@code hard} relative to soil at node i. */
     double soil(int i, double hard) {
         return 1 + hard * (paved[i] - 1);
     }
@@ -479,7 +690,7 @@ public final class PallField {
     /**
      * Source of dust and spray at point (dx, dz) from ground zero (blocks) at {@code ticks}: point minus their
      * drift ({@link #share} uses the point's own node: fraction varies over the front travel distance; drift is orders of magnitude shorter).
-     * {@code out} receives x, z. Same as {@code pallField} in {@code pall.glsl}.
+     * {@code out} receives x, z.
      */
     public void source(double dx, double dz, double ticks, double[] out) {
         drift(ticks, out);
@@ -490,20 +701,19 @@ public final class PallField {
 
     /**
      * Node i haze (by distance from plume axis): extinction (1/block), height (blocks; no lower than eventual dust
-     * top), fire light from below 0..1; fourth value — node i dust drift fraction ({@link #share}: shader reads the haze
-     * row at the point before drift).
+     * top), fire light from below 0..1, 0.
      */
     void haze(int i, double ticks, double[] out) {
         out[0] = perBlock(SIGMA_HAZE) * fire[i] * hazeEnvelope(age(i, ticks), ticks);
         // the haze top climbs with the smoke columns that feed it (FireStorm.risen from the flash)
         out[1] = Math.max(ceiling[i], hazeTop() * FireStorm.risen(clockSeconds(ticks), hazeTopM(d.yieldKt())));
         out[2] = fire[i] * fireLight(ticks);
-        out[3] = share(i, ticks);
+        out[3] = 0;
     }
 
     /**
      * Soot share in dust lofted at ground range {@code r} (blocks from ground zero) at {@code ticks}: fire zone × fire growth
-     * ({@link FireStorm#growth} on the detonation clock), the dust row b of the table ({@link #dust}, {@code pallField}: smoke). Dust lofted
+     * ({@link FireStorm#growth} on the detonation clock), as {@link #dust}. Dust lofted
      * by the wave seconds to minutes after the flash carries next to no soot; it darkens only as the fires grow.
      */
     double smoke(double r, double ticks) {
@@ -537,6 +747,16 @@ public final class PallField {
     public boolean visible(double ticks) {
         return ticks > 0 && (fireReach > 0 && clockSeconds(ticks) < FireStorm.OUT_S || ticks <= arrival[BINS - 1] || ticks < dustEnd
                 || surge(ticks, new double[3]));
+    }
+
+    /** Whether the fire-zone haze, the matter the pall volume draws ({@link #row}), can exist at {@code ticks}. */
+    public boolean hazeVisible(double ticks) {
+        return ticks > 0 && fireReach > 0 && clockSeconds(ticks) < FireStorm.OUT_S;
+    }
+
+    /** Ground reach from ground zero of the haze at {@code ticks}, blocks: fire zone (its soft edge) and downwind plume; 0 — no fire zone. */
+    public double hazeExtent(double ticks) {
+        return fireReach <= 0 ? 0 : Math.min(reach, 1.05 * fireReach) + plume(ticks);
     }
 
     /**
@@ -591,7 +811,7 @@ public final class PallField {
     /**
      * Extinction at a point without noise (noise mean = 1), 1/block: dust and spray (wind-drifted since
      * lofting, {@link #source}; material from water where lofted), haze (downwind plume; no fires over water at its source) and base surge — same as
-     * {@code pallField} in {@code pall.glsl} from the table. Point is ground distance from ground zero (dx, dz, blocks), height above ground
+     * the field the pall and dust passes draw. Point is ground distance from ground zero (dx, dz, blocks), height above ground
      * zero (blocks); {@code floorUp} — underlying terrain above ground zero (blocks, {@link PallGround} map):
      * above hills, layer starts at their slope; in valleys, at ground zero ({@link #profile}); {@code water} — water fraction beneath
      * pall ({@link PallGround}). Excludes wall head ({@link BlastWall#sigma}). For camera effects: sound, ash,
@@ -602,6 +822,47 @@ public final class PallField {
         layers(dx, dz, ticks, water, l);
         double h = above - Math.max(floorUp, 0);
         return l[0] * profile(h / l[2]) + l[1] * profile(h / l[7]) + l[3] * profile(h / l[4]) + l[5] * profile(h / l[6]);
+    }
+
+    /**
+     * {@link #sigma} with the drawn dust wave's ground dust ({@link #waveDust}) in place of the law's: the carpet the screen shows
+     * at a point (spray, haze and surge as {@link #sigma}), 1/block.
+     */
+    public double drawnSigma(double dx, double dz, double above, double floorUp, double ticks, Water water) {
+        double[] l = new double[LAYERS];
+        layers(dx, dz, ticks, water, l);
+        waveDust(dx, dz, ticks, water, l);
+        double h = above - Math.max(floorUp, 0);
+        return l[0] * profile(h / l[2]) + l[1] * profile(h / l[7]) + l[3] * profile(h / l[4]) + l[5] * profile(h / l[6]);
+    }
+
+    /**
+     * Add the haze alone (what the pall volume draws) to the eye extinction and its two vertical depths, as {@link #sigma} and
+     * {@link #tau}: extinction at {@code eye}, depth above it and below it down to {@code floor} (blocks above ground zero).
+     */
+    void addHazeEye(double dx, double dz, double eye, double floor, double ticks, Water water, org.joml.Vector3f out) {
+        double[] l = new double[LAYERS];
+        layers(dx, dz, ticks, water, l);
+        double base = Math.max(floor, 0), h = eye - base;
+        out.add((float) (l[3] * profile(h / l[4])),
+                (float) (l[3] * between(h, Double.POSITIVE_INFINITY, l[4])),
+                (float) (l[3] * between(floor - base, h, l[4])));
+    }
+
+    /**
+     * The dust wave's drawn dust at the eye ({@link #waveDust}: its noise-free column, as the pass draws it) added to {@code out}:
+     * extinction at the eye (1/block) and the optical depths above and below it. The pall's rays end where the dust in front of
+     * them is opaque ({@code pallClip}): behind it nothing shows, and without it every ray from inside the dust marched its whole
+     * length through dust the pall does not draw (the pall pass took 71 ms at HIGH inside the dust at +60 s against v3.13.0's 25).
+     */
+    void addDrawnEye(double dx, double dz, double eye, double floor, double ticks, Water water, org.joml.Vector3f out) {
+        double[] l = new double[LAYERS];
+        layers(dx, dz, ticks, water, l);
+        waveDust(dx, dz, ticks, water, l);
+        double base = Math.max(floor, 0), h = eye - base;
+        out.add((float) (l[0] * profile(h / l[2]) + l[1] * profile(h / l[7])),
+                (float) (l[0] * between(h, Double.POSITIVE_INFINITY, l[2]) + l[1] * between(h, Double.POSITIVE_INFINITY, l[7])),
+                (float) (l[0] * between(floor - base, h, l[2]) + l[1] * between(floor - base, h, l[7])));
     }
 
     /** Mist component of {@link #sigma}: spray and base surge, 1/block. */
@@ -636,20 +897,45 @@ public final class PallField {
         return l[0] * between(0, inf, l[2]) + l[1] * between(0, inf, l[7]);
     }
 
+    /**
+     * Optical depth of the ground dust and spray above (dx, dz) as the dust wave draws it (the picture's reader: the ground the
+     * mushroom sees, {@code MushroomField.groundUnder}): the wave's noise-free column ({@link #waveDust}) and the law's spray.
+     */
+    public double drawnTau(double dx, double dz, double ticks, Water water) {
+        double[] l = new double[LAYERS];
+        layers(dx, dz, ticks, water, l);
+        waveDust(dx, dz, ticks, water, l);
+        double inf = Double.POSITIVE_INFINITY;
+        // (the wave's own column: its ground extinction over the drawn profile's integral)
+        return l[0] / 1.25 * Math.max(0.9483 * l[2] - 2.854, 1) + l[1] * between(0, inf, l[7]);
+    }
+
+    /**
+     * The dust wave's drawn noise-free top over (dx, dz) at {@code ticks}, blocks (1 where it has no dust): the layer breach dust
+     * merges into ({@code BlastDust}).
+     */
+    public double drawnTop(double dx, double dz, double ticks) {
+        double[] l = new double[LAYERS];
+        waveDust(dx, dz, ticks, Water.DRY, l);
+        return l[0] > 0 ? l[2] : 1;
+    }
+
     /** {@link #layers} parameters for {@link #footLayer} (frame runs on render thread): no new array per mushroom per frame. */
     private final double[] footScratch = new double[LAYERS];
 
     /**
-     * Wave dust layer at the stem base, {@code r} blocks from ground zero, averaged over four sides (wind drift
-     * shifts the layer): ground dust and spray extinction, 1/block ({@code out[0]}; at height × {@link #profile}), and their top,
-     * blocks ({@code out[1]}; weighted by extinction fractions). No layer — 0 and 1. Inflow turns it into the stem
-     * ({@code MushroomField.foot}).
+     * The dust layer the stem foot rises from, {@code r} blocks from ground zero, averaged over four sides (wind drift
+     * shifts the layer): the drawn dust wave's ground dust ({@link #waveDust}: the carpet the screen shows) and the spray,
+     * extinction 1/block ({@code out[0]}; at height × {@link #profile}), and their top, blocks ({@code out[1]}; weighted by
+     * extinction fractions). No layer — 0 and 1. Inflow turns it into the stem ({@code MushroomField.foot}).
      */
     public void footLayer(double r, double ticks, Water water, double[] out) {
         double[] l = footScratch;
         double sigma = 0, top = 0;
         for (int k = 0; k < 4; k++) {
-            layers(k == 0 ? r : k == 1 ? -r : 0, k == 2 ? r : k == 3 ? -r : 0, ticks, water, l);
+            double dx = k == 0 ? r : k == 1 ? -r : 0, dz = k == 2 ? r : k == 3 ? -r : 0;
+            layers(dx, dz, ticks, water, l);
+            waveDust(dx, dz, ticks, water, l);
             sigma += l[0] + l[1];
             top += l[0] * l[2] + l[1] * l[7];
         }
@@ -672,6 +958,129 @@ public final class PallField {
         double h = (hi - lo) / n, sum = profile(lo) + profile(hi);
         for (int k = 1; k < n; k++) sum += (k % 2 == 1 ? 4 : 2) * profile(lo + k * h);
         return sum * h / 3;
+    }
+
+    /**
+     * The drawn dust wave's presentation layer, built once ({@link #lifetime} at {@link #PRESENT_HEIGHT} and {@link #lifetimeSpray}:
+     * the dust pass's source table, {@code DustSources}).
+     */
+    private volatile float[] wave;
+    private java.util.concurrent.CompletableFuture<Void> building;
+
+    /**
+     * The dust wave's table ({@code DustWallPass.NODES} nodes; rows: arrival, the law by age, spray); null until it is built.
+     * The build (120–340 ms) runs off the render thread from the detonation's arrival ({@link #prepareWave}); until it is
+     * ready no dust is drawn or read, and the drawn wave's one-second fade-in covers the start.
+     */
+    public float[] waveTable() {
+        float[] w = wave;
+        if (w == null) prepareWave();
+        return w;
+    }
+
+    /** Start building {@link #waveTable} in the background, once. */
+    public synchronized void prepareWave() {
+        if (wave != null || building != null || buildFailures > 1) return;
+        building = java.util.concurrent.CompletableFuture.runAsync(() -> wave = buildWave(), net.minecraft.Util.backgroundExecutor())
+                .exceptionally(e -> {
+                    // logged, and built once more (a second failure leaves this detonation without its dust wave)
+                    ua.zentix.incoming.Incoming.LOG.warn("Nuclear dust wave: the table of detonation {} was not built", d.id(), e);
+                    synchronized (this) {
+                        buildFailures++;
+                        building = null;
+                    }
+                    return null;
+                });
+    }
+
+    private int buildFailures;
+
+    /** {@link #waveTable}, built on this thread if it is not ready (tests, tools). */
+    public float[] waveTableNow() {
+        float[] w = wave;
+        if (w == null) wave = w = buildWave();
+        return w;
+    }
+
+    private float[] buildWave() {
+        int n = ua.zentix.incoming.client.fx.layer.DustWallPass.NODES;
+        float[] v = new float[n * (ua.zentix.incoming.client.fx.layer.DustWallPass.ROWS + 1) * 4];
+        lifetime(n, PRESENT_HEIGHT, v);
+        lifetimeSpray(n, v, n * ua.zentix.incoming.client.fx.layer.DustWallPass.ROWS * 4);
+        return v;
+    }
+
+    /**
+     * The wave's layer drawn taller than the dust law's at its settle age (presentation, not physical; owner's call 22.11 under
+     * Artem's "crest up to about camera height"): ×68/58, so that at 4.5 km from a 1 Mt surface burst the settled layer stands
+     * ~68 blocks high and its crest (1.4–1.6 of it) reads just under the horizon line of a 120-block camera.
+     */
+    public static final double PRESENT_HEIGHT = 68.0 / 58.0;
+
+    /**
+     * The picture's readers (the stem foot, the ground the mushroom sees) take the dust as the dust wave draws it, not the law's
+     * layer: its noise-free column ({@code dustwall.glsl}: {@code dwHaze}'s column, the transfer, the young head's density, the
+     * profile normalised over the drawn top) at the source point of (dx, dz) replaces {@code l[0]} (ground extinction, the
+     * profile's 1.25 at the ground) and {@code l[2]} (top); the spray, haze and surge stay the law's.
+     */
+    private void waveDust(double dx, double dz, double ticks, Water water, double[] l) {
+        double[] w = waveW, c = waveC;
+        source(dx, dz, ticks, w);
+        float[] table = waveTable();
+        l[0] = 0;
+        l[2] = 1;
+        if (table == null) return;
+        DustMaterialTiles m = materials;
+        drawnColumn(table, ua.zentix.incoming.client.fx.layer.DustWallPass.NODES, lifetimeEnd(), reach, ticks / (20.0 * d.scale()),
+                w[0], w[1], m == null ? 0 : m.hard(w[0], w[1]), c);
+        if (c[0] <= 0) return;
+        double top = c[1];
+        double wet = water.at(w[0], w[1]);
+        l[0] = 1.25 * c[0] / Math.max(0.9483 * top - 2.854, 1) * (1 - wet);
+        l[2] = Math.max(top, 1);
+    }
+
+    /** {@link #waveDust}'s scratch (its readers run on the client thread). */
+    private final double[] waveW = new double[2], waveC = new double[2];
+
+    /** The material tiles the dust wave draws for this detonation ({@link #drawnColumn}'s hard ground); null until they exist. */
+    private volatile DustMaterialTiles materials;
+
+    void materials(DustMaterialTiles m) {
+        materials = m;
+    }
+
+    /**
+     * The drawn dust wave's noise-free column at source point (rx, rz) from ground zero, model time t ({@code dustwall.glsl}:
+     * {@code dwHaze}'s column): out[0] its vertical optical depth (the law's through {@link #transfer}, the young head's density,
+     * over hard ground only its debris dust — the paved share of table row 0 — and the last table spacing's fade), out[1] its
+     * top, blocks (0.95 of the table's, as drawn); 0 where no dust. One copy for every Java reader of the drawn dust.
+     */
+    public static void drawnColumn(float[] table, int n, double end, double reach, double t, double rx, double rz, double hard,
+            double[] out) {
+        out[0] = 0;
+        out[1] = 1;
+        double r = Math.hypot(rx, rz), x = Math.min(r / Math.max(reach, 1), 1) * (n - 1);
+        int j = (int) Math.min(Math.floor(x), n - 2);
+        double fx = x - j;
+        double age = t - (table[4 * j] + fx * (table[4 * (j + 1)] - table[4 * j]));
+        if (age <= 0) return;
+        double u = Math.log1p(age / AGE0) / Math.log1p(end / AGE0) * (AGES - 1);
+        if (u >= AGES - 1) return;
+        int k = (int) Math.floor(u);
+        double f = u - k;
+        int o0 = 4 * ((1 + k) * n + j), o1 = 4 * ((2 + k) * n + j);
+        double top = 0.95 * (table[o0] + f * (table[o1] - table[o0])), tau = table[o0 + 1] + f * (table[o1 + 1] - table[o0 + 1]);
+        double row = table[4 * j + 1] + fx * (table[4 * (j + 1) + 1] - table[4 * j + 1]);
+        double paved = 1 + hard * (row - 1);
+        double edge = reach * (1 - 1.0 / (n - 1)), fade = 1 - smoothstep(edge, reach, r);
+        out[0] = transfer(tau) * (1 + 0.5 * Math.exp(-age / 1.1)) * paved * fade;
+        out[1] = top;
+    }
+
+    private static double smoothstep(double a, double b, double x) {
+        double v = Math.clamp((x - a) / (b - a), 0, 1);
+        return v * v * (3 - 2 * v);
     }
 
     /** Number of values in {@link #layers}. */

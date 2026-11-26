@@ -127,6 +127,12 @@ class AutopilotPropertiesTest {
         public double clearAlong(Vec3 to, double margin) {
             return blockedAt(ground, pos, to, margin);
         }
+
+        /** As {@code StrikeProjectile.covered}: a heightfield covers only an aim beneath its own column's ground. */
+        @Override
+        public boolean covered(Vec3 aim, double margin) {
+            return pos.y > aim.y + margin && ground.at(Math.floor(aim.x), Math.floor(aim.z)) > aim.y + margin;
+        }
     }
 
     record Scenario(long seed, Weapon weapon, Relief relief, Aim aim, boolean routed) {

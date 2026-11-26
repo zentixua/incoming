@@ -2,7 +2,7 @@
 
 English · [Русский](ru/rules.md)
 
-By default the designator works for every player, and nuclear weapons only for operators and the host of a single-player or LAN world ([nuclear strike](nuke.md)).
+By default the designator works for every player, and nuclear weapons only for operators and the host of a single-player or LAN world ([nuclear strike](nuke.md)). A server with a permission mod can set these rights per player, group and weapon ([permissions](packs.md#permissions)).
 
 ## Spotting
 
@@ -15,8 +15,9 @@ struck only if you or your team have spotted them: with your own eyes or through
 - A team shares its sight: once one member spots someone, anyone on the team can strike.
 - If you hide behind a wall or go over the horizon, the other side loses you after 30 seconds.
 
-An operator sets up teams: `/team add <name>`, then `/team join <name> <players>`. Without a team, your own side is you
-alone.
+Your team is a vanilla team that an operator sets up (`/team add <name>`, then `/team join <name> <players>`), or your
+party in FTB Teams or Open Parties and Claims if the server has one of them ([sides](packs.md#sides)). Without a team,
+your own side is you alone.
 
 ## Moving targets
 
@@ -26,4 +27,4 @@ Only the Shahed and the Lancet follow a moving target, and only while you keep i
 ## Limits
 
 Up to 30 rounds in a salvo, spread up to 150 blocks, binoculars lock onto targets up to 400 blocks, the map up to 10,000 blocks. These
-are defaults that the world owner can change. How many strikes you can make is limited by your munitions.
+are defaults that the world owner can change, also in the game with [`/incoming rule`](commands.md#world-rules). How many strikes you can make is limited by your munitions.

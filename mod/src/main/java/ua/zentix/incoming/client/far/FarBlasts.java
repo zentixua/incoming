@@ -605,18 +605,12 @@ public final class FarBlasts {
 
     /** Ground under sod on top: dust is there below, but the sod holds it (tear-off from 3 m/s). */
     public static boolean sod(net.minecraft.world.level.block.state.BlockState s) {
-        return s.is(net.minecraft.tags.BlockTags.DIRT) || s.is(net.minecraft.world.level.block.Blocks.MOSS_CARPET)
-                || s.is(net.minecraft.world.level.block.Blocks.MUD) || s.is(net.minecraft.world.level.block.Blocks.CLAY);
+        return ua.zentix.incoming.nuclear.material.DustMaterial.sod(s);
     }
 
     /** Whether the ground on top is loose: a weak wind tears dust off it. */
     public static boolean loose(net.minecraft.world.level.block.state.BlockState s) {
-        return s.is(net.minecraft.world.level.block.Blocks.DIRT) || s.is(net.minecraft.world.level.block.Blocks.COARSE_DIRT)
-                || s.is(net.minecraft.world.level.block.Blocks.ROOTED_DIRT) || s.is(net.minecraft.world.level.block.Blocks.FARMLAND)
-                || s.is(net.minecraft.world.level.block.Blocks.DIRT_PATH) || s.is(net.minecraft.tags.BlockTags.SAND)
-                || s.is(net.minecraft.world.level.block.Blocks.GRAVEL) || s.is(net.minecraft.world.level.block.Blocks.SNOW)
-                || s.is(net.minecraft.world.level.block.Blocks.SNOW_BLOCK) || s.is(net.minecraft.world.level.block.Blocks.POWDER_SNOW)
-                || s.is(net.minecraft.world.level.block.Blocks.SUSPICIOUS_SAND) || s.is(net.minecraft.world.level.block.Blocks.SUSPICIOUS_GRAVEL);
+        return ua.zentix.incoming.nuclear.material.DustMaterial.loose(s);
     }
 
     /**

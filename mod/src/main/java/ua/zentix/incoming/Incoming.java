@@ -6,6 +6,7 @@ import net.minecraft.resources.ResourceLocation;
 import net.neoforged.bus.api.EventPriority;
 import net.neoforged.bus.api.IEventBus;
 import net.neoforged.fml.ModContainer;
+import net.neoforged.fml.ModList;
 import net.neoforged.fml.common.Mod;
 import net.neoforged.fml.config.ModConfig;
 import net.neoforged.neoforge.common.NeoForge;
@@ -28,6 +29,7 @@ import ua.zentix.incoming.nuclear.model.HobBlast;
 import ua.zentix.incoming.nuclear.radiation.RadiationTicker;
 import ua.zentix.incoming.nuclear.world.BlockResponse;
 import ua.zentix.incoming.nuclear.world.FarLods;
+import ua.zentix.incoming.progress.Progress;
 import ua.zentix.incoming.registry.ModAttachments;
 import ua.zentix.incoming.registry.ModBlockEntities;
 import ua.zentix.incoming.registry.ModBlocks;
@@ -44,6 +46,7 @@ import ua.zentix.incoming.strike.FlightStatus;
 import ua.zentix.incoming.strike.NuclearKeys;
 import ua.zentix.incoming.strike.PickHints;
 import ua.zentix.incoming.strike.StrikeWorld;
+import ua.zentix.incoming.target.Sides;
 import ua.zentix.incoming.target.Sightings;
 import ua.zentix.incoming.warhead.CraterFalls;
 import ua.zentix.incoming.work.StallWatch;
@@ -80,11 +83,37 @@ public final class Incoming {
         Util.backgroundExecutor().execute(HobBlast::warm);
 
         modBus.addListener(IncomingNetwork::register);
+        modBus.addListener(ua.zentix.incoming.command.RuleCommand::onConfigReload);
         modBus.addListener(ua.zentix.incoming.registry.ModDataMaps::register);
+        // Mekanism's worn radiation shielding: the compat class names Mekanism's API, so it loads only with Mekanism
+        if (ModList.get().isLoaded("mekanism")) ua.zentix.incoming.compat.mekanism.MekanismShielding.install();
+        // CC:Tweaked peripherals of the launcher and the SAM: the compat package names CC:Tweaked's API, so it loads only
+        // with CC:Tweaked (Jade finds its overlay plugin by its own annotation scan; nothing here names it)
+        if (ModList.get().isLoaded("computercraft")) modBus.addListener(ua.zentix.incoming.compat.computercraft.Peripherals::register);
+        // Create Display Link sources of the SAM and the launcher: the compat package names Create's API, so it loads only
+        // with Create
+        if (ModList.get().isLoaded("create")) ua.zentix.incoming.compat.create.DisplaySources.install(modBus);
+        // Sides (target.Sides, api.SideResolveEvent): the vanilla team answers first, then FTB Teams, then Open Parties and
+        // Claims; each bridge names its mod's API, so it loads only with that mod
+        NeoForge.EVENT_BUS.addListener(Sides.PRIORITY, Sides::answerTeam);
+        if (ModList.get().isLoaded("ftbteams")) ua.zentix.incoming.compat.ftbteams.FtbTeamsSides.install();
+        if (ModList.get().isLoaded("openpartiesandclaims")) ua.zentix.incoming.compat.opac.OpacSides.install();
+        NeoForge.EVENT_BUS.addListener(Sides::onLogin);
+        NeoForge.EVENT_BUS.addListener(Sides::onLogout);
         modBus.addListener(SamBlockEntity::registerCapabilities);
         modBus.addListener(FixedLauncherBlockEntity::registerCapabilities);
+        // advancements and statistics (progress.Progress): no legacy ids to alias
+        Progress.register(modBus);
 
         NeoForge.EVENT_BUS.addListener(IncomingCommand::register);
+        NeoForge.EVENT_BUS.addListener(ua.zentix.incoming.util.SignalEdge::onLevelTick);
+        NeoForge.EVENT_BUS.addListener(Progress::onReleased);
+        NeoForge.EVENT_BUS.addListener(Progress::onEnded);
+        NeoForge.EVENT_BUS.addListener(Progress::onRelit);
+        NeoForge.EVENT_BUS.addListener(Progress::onChangeDimension);
+        NeoForge.EVENT_BUS.addListener(Progress::onPlayerTick);
+        NeoForge.EVENT_BUS.addListener(EventPriority.LOWEST, Progress::onDeath);
+        NeoForge.EVENT_BUS.addListener(ua.zentix.incoming.strike.Authority::onGatherNodes);
         NeoForge.EVENT_BUS.addListener(StrikeWorld::onLevelTick);
         NeoForge.EVENT_BUS.addListener(ua.zentix.incoming.warhead.SurfaceDamage::onLevelTick);
         NeoForge.EVENT_BUS.addListener(ua.zentix.incoming.warhead.FuelFires::onLevelTick);
@@ -107,6 +136,8 @@ public final class Incoming {
         NeoForge.EVENT_BUS.addListener(EventPriority.LOWEST, ua.zentix.incoming.util.StopDrain::onServerStopping);
         NeoForge.EVENT_BUS.addListener(EventPriority.HIGHEST, ua.zentix.incoming.util.WorldClock::onServerTick);
         NeoForge.EVENT_BUS.addListener(FlightStatus::onServerTick);
+        // Last: order and round events queued by this tick's impacts and nuclear work go out in it.
+        NeoForge.EVENT_BUS.addListener(EventPriority.LOWEST, ua.zentix.incoming.strike.Orders::onServerTick);
         NeoForge.EVENT_BUS.addListener(FarFlights::onServerTick);
         NeoForge.EVENT_BUS.addListener(FlashbackReplay::onServerTick);
         NeoForge.EVENT_BUS.addListener(DhChunks::onServerStarting);
@@ -130,7 +161,6 @@ public final class Incoming {
         NeoForge.EVENT_BUS.addListener(LegacyMigration::onServerStarted);
         NeoForge.EVENT_BUS.addListener(LegacyMigration::onEntityJoin);
         NeoForge.EVENT_BUS.addListener(CraterFalls::onEntityJoin);
-        NeoForge.EVENT_BUS.addListener(CraterFalls::onEntityTick);
         NeoForge.EVENT_BUS.addListener(ua.zentix.incoming.nuclear.MobPanic::onJoin);
 
         NeoForge.EVENT_BUS.addListener(NuclearStrikes::onChunkLoad);
@@ -150,7 +180,7 @@ public final class Incoming {
 
         NeoForge.EVENT_BUS.addListener(EventPriority.HIGHEST, WorkScheduler::onServerTickPre);
         NeoForge.EVENT_BUS.addListener(EventPriority.HIGHEST, WorkScheduler::onLevelTickPre);
-        NeoForge.EVENT_BUS.addListener(ua.zentix.incoming.nuclear.world.RuinDelivery::onLevelTickPre);
+        NeoForge.EVENT_BUS.addListener(ua.zentix.incoming.work.ChunkDelivery::onLevelTickPre);
         NeoForge.EVENT_BUS.addListener(WorkScheduler::onServerTick);
         NeoForge.EVENT_BUS.addListener(EventPriority.LOWEST, WorkScheduler::onServerTickEnd);
         NeoForge.EVENT_BUS.addListener(EventPriority.HIGHEST, ua.zentix.incoming.work.ChunkLoadPace::onTickStart);
@@ -167,6 +197,7 @@ public final class Incoming {
         NeoForge.EVENT_BUS.addListener(Blackouts::onChunkUnload);
         NeoForge.EVENT_BUS.addListener(Blackouts::onExplosion);
         // Last: other mods' handlers see and modify the explosion entity list before the mod takes it.
+        NeoForge.EVENT_BUS.addListener(EventPriority.HIGHEST, ua.zentix.incoming.warhead.Warheads::onDetonateFirst);
         NeoForge.EVENT_BUS.addListener(EventPriority.LOWEST, ua.zentix.incoming.warhead.Warheads::onDetonate);
         NeoForge.EVENT_BUS.addListener(EventPriority.LOWEST, Blackouts::onBlockPlaced);
         // First: other save listeners see the tag with twins already removed.

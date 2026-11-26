@@ -72,11 +72,26 @@ paths:
   chunk uses background generator, pending answer world bottom); projectile orders 1024-block route survey once/sec
   (`surveyAhead`); target-approach straight line `Autopilot.Sightline`, if blocked (`Craft.clearAlong`: block cells in
   ready chunks, beyond/outside world survey terrain top, `Terrain.underRelief`), do not attack; missile stays in
-  pop-up, Shahed cruises without climbing (climb raises nose, preventing timely dive along same line over obstacle),
-  at most `DIVE_MARGIN` nose-turn paths; no moving-target lead, Artem's decision 21.10); unit test
+  pop-up, Shahed cruises without climbing (climb raises nose, preventing timely dive along same line over obstacle).
+  The attack is forced when the slant range falls to `DIVE_MARGIN` nose-turn paths (`Autopilot.withinTurn`), or, for a
+  covered aim only (`Craft.covered`: a block in the column above it, a roof or ground over a buried aim), when the
+  craft would pass over it within one turn time (`Autopilot.overflight`, horizontal range against horizontal travel at
+  the current speed): high above the aim, as in a pop-up, the slant range never falls to the first, and a covered aim's
+  line never opens. An uncovered aim's line opens by overflight, so forcing the attack there drives the Shahed into the
+  building beside it (`ShahedCityGameTests`). `DroneDiveTest` pins every Shahed city layout's outcome.
+  `MissileBuildingGameTests` checks first-pass roof contact for covered points and hits at exposed points.
+  No moving-target lead (Artem, 21.10). Unit test
   `AutopilotPropertiesTest` checks 10 000 random model-terrain flight scenarios.
 
 ## Pitfalls
+- A round on a craft launcher's rail (`rideRail`: synced `DATA_RAIL`, cell) is re-placed each server tick on the rail's
+  world point and axis (`followRail`, through `moveAlong`, no range spent) and, on the client, on the rail of the
+  client's own craft pose (`clientRail`; Sable ticks client sub-levels in `Minecraft.tick` before `level.tickEntities()`,
+  so the pose is this tick's): server positions arrive a tick or two behind the craft's pose and the round would slide
+  along a moving rack. Leaving, the fuze's arming origin and the launch gate move to the release point (`leaveRail`). Leaving the rail it keeps its craft's body velocity at the rail along its nose
+  (`Launcher.velocity`, Sable's per-second rigid-body velocity in blocks/tick; `releaseSpeed`, boosted weapons; across
+  the nose dropped, not physical, guide deviation list); Grad solves its arc from the release point. Never derive that
+  speed from pose steps: Sable moves the pose on its own physics steps (a steady 0.5 blocks/tick read 0 or 1.0 per tick).
 - Bomb ground path (`BunkerBusterEntity.plan`): remaining axial distance inside block but outside shape shorter than
   `GRAZE` (1 µm) is face float error, not void. Otherwise angled crossings between same-medium blocks “exited into
   void”, restarting Young layer: B-2 bomb at 89° penetrated 18–29 % beyond law (80° 40 %, vertical exact; GameTest

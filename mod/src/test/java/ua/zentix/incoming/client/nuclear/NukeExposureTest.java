@@ -203,11 +203,14 @@ class NukeExposureTest {
     private record Block(String name, String from, String to, String text) {}
 
     private static final List<Block> BLOCKS = List.of(
-            new Block("pallAirLight", "vec3 pallAirLight(vec3 dir) {", "// Add matter of opacity", """
-                    vec3 pallAirLight(vec3 dir) { float across = length(dir.xz);
-                    if (dir.y <= 0.0 || across * 16.0 >= 512.0 * dir.y) return PallAirFog.rgb;
+            new Block("pallAirLightOf", "vec3 pallAirLightOf(vec3 dir, vec3 sky, vec4 fog) {", "// Two world distances", """
+                    vec3 pallAirLightOf(vec3 dir, vec3 sky, vec4 fog) { float across = length(dir.xz);
+                    if (dir.y <= 0.0 || across * 16.0 >= 512.0 * dir.y) return fog.rgb;
                     float d = 16.0 + (512.0 - 16.0) * (16.0 * across / dir.y) / 512.0;
-                    return mix(PallAirSky, PallAirFog.rgb, d < PallAirFog.w ? smoothstep(0.0, PallAirFog.w, d) : 1.0); }
+                    return mix(sky, fog.rgb, d < fog.w ? smoothstep(0.0, fog.w, d) : 1.0); }
+                    """),
+            new Block("pallAirLight", "vec3 pallAirLight(vec3 dir) {", "// Add matter of opacity", """
+                    vec3 pallAirLight(vec3 dir) { return pallAirLightOf(dir, PallAirSky, PallAirFog); }
                     """),
             new Block("pallShown", "vec3 pallShown(vec3 light, float cover)", "// Inverse of shoulder", """
                     vec3 pallShown(vec3 light, float cover) { float shownCover = cover; vec3 medium = light / max(cover, 1e-4);
@@ -297,7 +300,8 @@ class NukeExposureTest {
                 {"filmed += part * film;", "filmed += part * 0.0;", "main (ray accumulation)"},
                 {"vec3 shown = pallShown(light + heat, cover) + airlight;", "vec3 shown = pallShown(light, cover) + airlight;", "main (pixel assembly)"},
                 {"vec3 airlight = haze * pallAirLight(dir);", "vec3 airlight = vec3(0.0);", "main (pixel assembly)"},
-                {"smoothstep(0.0, PallAirFog.w, d)", "smoothstep(0.0, PallAirFog.w, 2.0 * d)", "pallAirLight"},
+                {"smoothstep(0.0, fog.w, d)", "smoothstep(0.0, fog.w, 2.0 * d)", "pallAirLightOf"},
+                {"return pallAirLightOf(dir, PallAirSky, PallAirFog);", "return pallAirLightOf(dir, PallAirFog.rgb, PallAirFog);", "pallAirLight"},
                 {"film = dot(hot, LUMA) * mushFilmShareLit(roll, key / max(PallBodyExposure, 1e-9));", "film = dot(hot, LUMA) * mushFilmShare(roll);", "mushAt (glow)"},
                 {"vec3(1.0)), film);", "vec3(1.0)), 1.0 - film);", "main (pixel assembly)"},
                 {"heat += partHeat;", "heat += partGlow;", "mushStep"},

@@ -2,6 +2,8 @@ package ua.zentix.incoming.grid;
 
 import it.unimi.dsi.fastutil.ints.IntArrayList;
 import it.unimi.dsi.fastutil.ints.IntArrays;
+import it.unimi.dsi.fastutil.ints.IntOpenHashSet;
+import it.unimi.dsi.fastutil.ints.IntSet;
 import it.unimi.dsi.fastutil.longs.Long2IntOpenHashMap;
 import it.unimi.dsi.fastutil.longs.Long2LongOpenHashMap;
 import it.unimi.dsi.fastutil.longs.Long2ObjectOpenHashMap;
@@ -55,7 +57,8 @@ import java.util.function.LongPredicate;
  *   <li>Lamps change directly in the section palette ({@link ChunkLights#applyInPlace}): for the world a lamp and its
  *   counterpart are identical except for light ({@link GridLights#inPlace}: no block entity or different shape), so
  *   neighbors, heightmaps and collisions need no updates; lighting uses {@code checkBlock} at the position, clients get
- *   a block change. With Create and Sable, a lamp via {@code setBlock} costs ≈10 µs; a city may have 2.5 million invisible
+ *   few lamps as block changes and many as the whole chunk after its light ({@link ua.zentix.incoming.work.ChunkDelivery#lamps}).
+ *   With Create and Sable, a lamp via {@code setBlock} costs ≈10 µs; a city may have 2.5 million invisible
  *   light blocks (up to 7400 per chunk): the queue would take minutes. Signal-controlled lamps are checked against their
  *   signal immediately if chunk neighbors are loaded; at the loaded world's edge (no neighbors, which on a dedicated
  *   server may never arrive), when those neighbors load. Only Sable craft plots go through the world
@@ -360,6 +363,13 @@ public final class BlackoutWorld {
         return lastRepeatMax;
     }
 
+    /** Grid nodes whose substation's neighbours were asked to recheck it since the server started ({@link Substations#sync}). */
+    private final IntOpenHashSet signalled = new IntOpenHashSet();
+
+    IntSet signalled() {
+        return signalled;
+    }
+
     /** For {@link ModAttachments#BLACKOUT_WORLD}: separate for each world, lives while the world is loaded, non-persistent. */
     public BlackoutWorld() {
         resume.defaultReturnValue(-1);
@@ -645,7 +655,7 @@ public final class BlackoutWorld {
         relightPlaced(level, clock);
         scheduleRestoreSweeps(grid, at);
         if (now % 20 == 0) {
-            grid.prune(at);
+            for (Outage o : grid.prune(at)) Blackouts.restored(level, o);
             sounded.long2LongEntrySet().removeIf(e -> now - e.getLongValue() > 200);
             // chunk left memory without becoming full (ring around edge chunks): it has no unload event
             var chunkMap = level.getChunkSource().chunkMap;

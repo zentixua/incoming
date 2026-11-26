@@ -9,6 +9,14 @@ paths:
 # Chunks, tickets and server tick
 
 ## Pitfalls
+- A neighbour update from a block we change (`updateNeighborsAt`, `setBlock` with neighbour flags) runs vanilla
+  redstone synchronously: dust carries 15 blocks, and a piston beside the last wire resolves its push 13 blocks
+  further, loading any chunk there that is not ready. Our signal sources change state without neighbour flags and hand
+  every notice (change, placement, removal by a quiet write, recheck after load) to `util/SignalEdge`: sent at once when
+  every chunk within `SignalEdge.REACH` (32) is ready, else queued per position in a world attachment
+  (saved with the world; a removal turns a waiting change into a plain recheck, so a later observer never sees it) and
+  sent by its level tick once they are (`RedstoneReviewGameTests`, `RedstoneRoundTwoReviewGameTests`,
+  `RedstoneQueueReviewGameTests`). Fixtures that need a notice at once load two chunks around (`GridGameTests.holdWide`).
 - Ground location only via `util/Terrain.estimate`: height/source `CHUNK`/`CEILING`/`DISK`/`CLIENT_MAP`/`GENERATOR`/`SEA`/
   `UNKNOWN`, caller chooses allowed sources: `Allowed.CHUNK` in world, `FLIGHT` outside, `ORDER` for orders, `RELIEF`
   for entire flight path, `VIRTUAL_RELIEF` outside world/straight target line beyond ready chunks (no Nether ceiling);
@@ -107,7 +115,9 @@ paths:
   entity ticking rule (Artem: mod does not change game/other mods globally): mixin on
   `LevelChunk$BoundTickingBlockEntity.tick` (tick only with ready `ChunkHolder.getTickingChunk`) would delay all pack
   block entities; Lithium replaces same call. Rig stall ≤ 13 s (trial spawner by target area, server view 8/simulation
-  6) also vanilla: player steps beyond pre-ready square, neighbor still generating. Lithium “sleeping” block entities
+  6) also vanilla: player steps beyond pre-ready square, neighbor still generating. The one-pass ticker removal
+  (`mixin/level/BlockEntityTickerRemovalMixin`, work.md) is no ticking rule: the same tickers tick at the same time,
+  only vanilla's per-element list removal (MC-117075) becomes one compaction. Lithium “sleeping” block entities
   use dummy ticker, `getPos()` null; code iterating `Level.blockEntityTickers` checks null. Mixin `@Shadow` only on
   members declared by target class itself (no refMap, game Mojang names); nested outer reference `this$0`, like Lithium.
 - Vanilla unload (`ChunkMap.processUnloads`) uses spare tick time; without it, 200 `toDrop` holders/tick; above 2000 in `toDrop`

@@ -50,7 +50,8 @@ softens both. Hearing damage can be turned off in the [settings](settings.md).
 ## Surface-to-Air Missile System (SAM)
 
 The SAM is a block that shoots down other players' Shaheds, Lancets, cruise missiles and B-2s by itself. It leaves the
-projectiles of the player who placed it, and of that player's team, alone.
+projectiles of the player who placed it, and of that player's team, alone ([who is on a team](rules.md#spotting)). If a
+target's owner joins the team while a missile chases it, the missile blows itself up in the air.
 
 The block itself is the radar cabin. Four missile canisters stand upright on top of it, so the whole SAM is about five
 and a half blocks tall. An interceptor leaves its canister straight up, then turns in a short arc toward the point where it will meet the
@@ -104,3 +105,31 @@ Without Create, use a clock in the SAM and a comparator in the interceptor inste
    clear the space above it to see the counts. Stock alone cannot fire until a missile reaches a rail.
 
 Missiles cannot be taken back out, but a broken SAM drops its stock and ready missiles.
+
+### Redstone
+
+The SAM gives a redstone signal while its radar sees a hostile target: strength 15 from every side, like a daylight
+detector. It powers dust, lamps, pistons, doors and the redstone inputs of Create and ComputerCraft blocks next to it,
+not through the block it touches. Through a redstone torch the signal inverts: iron doors fed by the torch stand open
+while the sky is clear and shut on alarm (more examples in [For server owners and pack makers](packs.md#redstone)).
+
+- It comes on within half a second of a hostile target appearing on the radar and goes off within half a second of the
+  last one leaving it, being shot down or exploding.
+- Every hostile target the radar sees counts, also the ones it does not fire at: an ICBM, Grad rockets, targets beyond
+  its 1.5 km firing range. Projectiles of its owner and the owner's team never turn it on. A SAM placed by command,
+  without an owner, counts every projectile it sees.
+- It works without missiles. Under a solid roof the radar sees nothing, so there is no signal; leaves do not hide the
+  sky from the radar.
+- A comparator next to the SAM still shows how full its stock is.
+- Keep what you build beside it no taller than the SAM block: its radar looks out half a block above it, so a door or
+  an extended piston next to it hides targets lower than about 45° above the horizon straight out from that side, and
+  the alarm can drop as the door closes.
+- In an unloaded chunk the SAM keeps the signal it had and looks again within half a second once its chunk works.
+  Within 32 blocks of ground that is not loaded (the edge of the loaded world), what it powers learns of a change
+  only once that ground loads: a circuit reaching there would otherwise load it.
+- A CC:Tweaked computer attached to the SAM reads its missiles and radar, and receives the event `incoming_alert` on
+  every sweep while the radar tracks a hostile target ([For server owners and pack makers](packs.md#computers-cctweaked)).
+  With Jade, looking at the SAM shows its missiles and what its radar tracks.
+- With Create, a Display Link attached to the SAM offers the source **Air-raid alert**: a sign or nixie tube reads
+  `ALERT` while the signal is on and `Clear` while it is off (a display board writes both in capitals), at most half a
+  second behind the signal. An attached label goes before the text, as with Create's own sources.

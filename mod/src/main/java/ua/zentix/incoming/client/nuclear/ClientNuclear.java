@@ -5,14 +5,18 @@ import net.minecraft.client.multiplayer.ClientLevel;
 import net.minecraft.world.phys.Vec3;
 import net.neoforged.neoforge.client.event.ClientPlayerNetworkEvent;
 import org.jetbrains.annotations.Nullable;
+import ua.zentix.incoming.Incoming;
 import ua.zentix.incoming.client.far.FarTerrain;
 import ua.zentix.incoming.client.far.Sightline;
 import ua.zentix.incoming.client.fx.CameraShake;
+import ua.zentix.incoming.client.replay.Replay;
 import ua.zentix.incoming.client.sound.SoundFilters;
 import ua.zentix.incoming.net.S2C;
 import ua.zentix.incoming.nuclear.NuclearStrikes;
 import ua.zentix.incoming.nuclear.Detonation;
 import ua.zentix.incoming.nuclear.NukeClock;
+import ua.zentix.incoming.nuclear.material.DustMaterial;
+import ua.zentix.incoming.nuclear.material.MaterialInbox;
 import ua.zentix.incoming.nuclear.radiation.RetinaScars;
 
 import java.util.ArrayList;
@@ -23,6 +27,8 @@ import java.util.Iterator;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.UUID;
+import java.util.function.DoubleSupplier;
 
 /**
  * Everything nuclear known to the client: this dimension's detonations (model derives flash, sphere, mushroom,
@@ -32,16 +38,16 @@ public final class ClientNuclear {
     /**
      * Client detonation. Live (neither world entry nor Flashback replay seeking) includes flash, sound
      * and shake. Visual time is the {@link AgeClock}: continuous in frame time, steered to the server's own age for the
-     * detonation, at most three ticks ahead of it, never backward, catching up without jumps.
+     * detonation, with a bounded lead during a server stall.
      */
     public static final class Active {
         public final Detonation d;
         public final boolean live;
         /** Fireball/fire light on dust and water under epicenter ({@link CloudPuffs}). */
         public final CloudPuffs puffs;
-        /** Shock-wave dust wall: rolling head and Wilson cloud ({@link BlastWall}; pall renders it, {@link NukePall}). */
+        /** The blast wave: its shock front and the Wilson cloud ({@link BlastWall}; the dust it lofts is the dust wave's, {@link DustSources}). */
         public final BlastWall wall;
-        /** Water under burst ({@link NukeWater#resolve}): column in mushroom volume, base surge in pall. */
+        /** Water under burst ({@link NukeWater#resolve}): the column in the mushroom volume; the base surge is the dust wave's. */
         final BurstWater water;
         /**
          * Post-wave pall ({@link NukePall}): dust on real time, fire haze on the detonation's clock ({@link #clockTicksAt}).
@@ -51,10 +57,55 @@ public final class ClientNuclear {
         public final FireStorm storm;
         /** Terrain under pall ({@link PallGround}): end of its ray where no world lies behind. */
         final PallGround ground;
+
+        /** Diagnostics: this detonation's terrain map ({@link PallGround#writeDiag}). */
+        public void writeGroundDiag(String prefix) throws java.io.IOException {
+            ground.writeDiag(prefix);
+        }
+        private SourceMaterial source;
+        /** The dust wave's material tiles ({@link #materialTiles}): kept across a replay seek's copy, filled once. */
+        private DustMaterialTiles tiles;
+        private UUID revision;
+        private int seed = -1;
+
+        /** The ground material the dust wave draws for this detonation ({@link DustMaterialTiles}). */
+        public DustMaterialTiles materialTiles() {
+            if (tiles == null) {
+                tiles = new DustMaterialTiles(d, sourceMaterial());
+                pall.materials(tiles);
+            }
+            return tiles;
+        }
+
+        /** Stable server revision, or the first local answer at each legacy world cell. */
+        public SourceMaterial sourceMaterial() {
+            if (source == null) source = new SourceMaterial(d, revision == null ? null : inbox(revision), seed, (x, z) -> {
+                ClientLevel level = Minecraft.getInstance().level;
+                if (level != null) {
+                    double wet = FarTerrain.water(level).at(x, z);
+                    if (Double.isFinite(wet)) {
+                        if (wet >= 0.5) return DustMaterial.WATER;
+                        if (FarTerrain.hard(level).at(x, z) >= 0.5) return DustMaterial.HARD;
+                        if (FarTerrain.sand(level).at(x, z) >= 0.5) return DustMaterial.SAND;
+                        return DustMaterial.SOIL;
+                    }
+                }
+                if (ground.water(x, z) >= 0.5) return DustMaterial.WATER;
+                if (ground.hard(x, z) >= 0.5) return DustMaterial.HARD;
+                return ground.sand(x, z) >= 0.5 ? DustMaterial.SAND : DustMaterial.SOIL;
+            });
+            return source;
+        }
+
         /** Own client ticks since packet arrival (since replay seek afterward). */
         private long age;
         /** Detonation age shown on this client ({@link AgeClock}). */
         final AgeClock clock;
+        final WaveEvents events = new WaveEvents();
+        final long epoch = playbackEpoch;
+        private double lastFrameAge = Double.NaN;
+        private long lastFrameNanos;
+        private boolean discarded;
         /**
          * Estimated world clock at the end of the show ({@link NukeClock}) when the server has not said ({@link #SHOW_ENDS}:
          * a recording made before the server sent it); NaN — not estimated yet.
@@ -63,31 +114,39 @@ public final class ClientNuclear {
         final NukeSounds.Schedule sounds;
 
         Active(Detonation d, boolean live, long clientNow) {
-            this(d, live, clientNow, new CloudPuffs(d), new BlastWall(d), new BurstWater(), null, null, null);
+            this(d, live, clientNow, null);
         }
 
         /** Same detonation after replay seek: past, without flash/sound, age from this recording position's clock. */
         Active(Active a, long clientNow) {
-            this(a.d, false, clientNow, a.puffs, a.wall, a.water, a.pall, a.storm, a.ground);
+            this(a.d, false, clientNow, a);
+            revision = a.revision;
+            seed = a.seed;
+            source = a.source;
         }
 
-        private Active(Detonation d, boolean live, long clientNow, CloudPuffs puffs, BlastWall wall, BurstWater water, @Nullable PallField pall,
-                @Nullable FireStorm storm, @Nullable PallGround ground) {
+        private Active(Detonation d, boolean live, long clientNow, @Nullable Active known) {
             this.d = d;
             this.live = live;
             // Live: the packet is the server's first anchor. Entry or seek: age starts from the level's game time.
             long start = live ? 0 : Math.max(0, clientNow - d.gameTime());
-            this.clock = new AgeClock(start, live, live && ua.zentix.incoming.client.replay.Replay.active());
-            this.puffs = puffs;
-            this.wall = wall;
-            this.water = water;
-            ClientLevel level = Minecraft.getInstance().level;
-            this.pall = pall != null ? pall : new PallField(d);
+            if (Replay.active()) {
+                DoubleSupplier birth = known != null && known.clock.replayPosition != null ? known.clock.birth
+                        : Replay.birth(d.id(), d.gameTime(), start, live);
+                this.clock = new AgeClock(start, live, Replay::position, birth);
+            } else {
+                this.clock = new AgeClock(start, live);
+            }
+            this.puffs = known == null ? new CloudPuffs(d) : known.puffs;
+            this.wall = known == null ? new BlastWall(d) : known.wall;
+            this.water = known == null ? new BurstWater() : known.water;
+            this.pall = known == null ? new PallField(d) : known.pall;
+            if (known != null) this.tiles = known.tiles;
+            this.pall.prepareWave();
             this.pall.clock(this::clockTicksAt);
-            this.storm = storm != null ? storm : new FireStorm(d, this.pall);
-            // same terrain: known data stays; new map fills using water under epicenter
-            if (ground == null) NukeWater.resolve(this, level);
-            this.ground = ground != null ? ground : new PallGround(d, this.pall);
+            this.storm = known == null ? new FireStorm(d, pall) : known.storm;
+            if (known == null) NukeWater.resolve(this, Minecraft.getInstance().level);
+            this.ground = known == null ? new PallGround(d, pall) : known.ground;
             this.sounds = new NukeSounds.Schedule(this);
         }
 
@@ -100,6 +159,14 @@ public final class ClientNuclear {
         void tick() {
             age++;
             clock.tick();
+            deliverPieces();
+        }
+
+        private void deliverPieces() {
+            if (events.pending()) events.drain(ticks(0), (batch, pieces) -> {
+                NukeDust.debris(this, batch, pieces);
+                sounds.scatter(batch, pieces);
+            }, DIAG ? (batch, due) -> eventTrace(this, batch, due, "drop", "drawn_late") : null);
         }
 
         /** Ticks since detonation (with frame fraction): the shown age, monotone across frames ({@link AgeClock#at}). */
@@ -132,154 +199,133 @@ public final class ClientNuclear {
         }
     }
 
-    /**
-     * The detonation age a client shows, in ticks: a continuous function of the client's own time (its ticks plus the frame's
-     * partial tick), steered toward the server's age. The server's own age for the detonation (game time at send minus
-     * detonation time) arrives with each anchor: the live detonation packet (age 0) and {@code S2C.NukeTick}, sent every server
-     * tick while the dimension holds a show. The server's age now is estimated as the latest anchor plus the server's rate
-     * (anchor ages per own tick over the last second) times the own time since it arrived, less {@link #DELAY} (a tick of
-     * buffer for anchor jitter). The shown age advances every frame at the server's rate times a steering factor
-     * 1 + error / {@link #RESPONSE} in [{@link #SLOWEST}, {@link #FASTEST}]: within 1.25 for the error of an anchor stream's
-     * jitter, up to three times for a lag after a frozen client. It never runs backward, never more than {@link #LEAD} past the
-     * latest anchor, and eases to a stop over {@link #EASE} ticks only when no anchor has come for {@link #STALE} ticks of
-     * frames (a stalled server; ticks a frozen client could not process packets in do not count). Without a stream (a
-     * recording made before it, a detonation past its show) it follows its own time from the last anchor, uncapped.
-     * <p>
-     * The previous law (#668) let the age run at most one tick past the latest anchor in whole-tick steps: frames inside a tick
-     * held at an integer age until the next anchor landed, then jumped. On a 1 Mt wave rig 40-43 % of frames held, up to
-     * 149 ms, and the wall moved in 20 Hz steps (wave-proposal runs3). The client level clock is not used: vanilla increments
-     * it on its own and time packets set it, so a lead or lag present at arrival became false age (reviews of #668: a lead of
-     * 30 at arrival made a fresh 15 kt front 621 m instead of 174 m). Pure: checked by {@code ClientNuclearTest}, also on the
-     * rig's recorded anchor stream.
-     */
+    /** Live presentation runs on processed client ticks, with bounded steering toward confirmed server time. */
     static final class AgeClock {
-        /** Ticks the shown age stays behind the estimated server age: one tick of buffer absorbs anchor arrival jitter. */
-        static final double DELAY = 1;
-        /** Ticks of error that change the speed by 100 %: a tick of jitter changes it by a tenth. */
-        static final double RESPONSE = 10;
-        /** Slowest and fastest steering relative to the server's pace; the fastest is also the most own ticks a tick. */
-        static final double SLOWEST = 0.8, FASTEST = 3;
-        /** Most ticks the shown age runs past the latest anchor (ruins and debris arrive two or more ticks after the wave). */
-        static final double LEAD = 3;
-        /** Frame time without a new anchor before the age eases to a stop, and the ease's length, ticks (100 ms). */
-        static final double STALE = 3, EASE = 2;
-        /**
-         * Own time a live detonation in a Flashback replay waits for its first per-tick anchor, ticks: none by then means a recording made
-         * before them (3.13 and older, the live packet alone), which runs on own time instead of easing to a stop {@link #LEAD} past that
-         * packet. Only in a replay: a live server can send its first anchor late (post-burst work), and running on own time there put the
-         * drawn wave ahead of the server's (review of #678: 24 ticks shown at server age 1 after a 30-tick gap).
-         */
-        static final double PROBE = 20;
-        /** Own time over which the server's rate is measured, ticks. */
-        static final double RATE_WINDOW = 20;
-        /** The server's age at the latest anchor's send. */
-        private long anchor;
-        /** Own time when it arrived, and at the first frame after it (a frozen client processes packets only between frames). */
-        private double anchorAt, seenAt;
-        private boolean unseen;
-        /** Recent anchors (own time, server age): the server's rate. */
-        private final java.util.ArrayDeque<double[]> recent = new java.util.ArrayDeque<>();
-        /** Anchors arrive every server tick (current server, show running). */
-        private boolean streamed;
-        /** A per-tick anchor has arrived ({@link #PROBE}). */
-        private boolean anchored;
-        /** Viewing a Flashback replay: the recording may predate per-tick anchors ({@link #PROBE}). */
-        private final boolean replay;
-        /** The show is over: this clock ignores further stream anchors. */
-        private boolean over;
-        /** A past detonation (entry, seek) shown from an estimate: the server's first anchor sets the age whole. */
-        private boolean estimated;
-        /** Own client ticks. */
-        private long own;
-        /** Own time of the last advance, and the shown age there. */
-        private double at, shown;
+        /** Plan 4.11 presentation contract (ticks and nominal speed, not physical). SLEW is 0.2× per second. */
+        static final double LEAD = 200, DELAY = 2;
+        private static final double RESPONSE = 40, BRAKE = 60, SLEW = 0.2 / 20;
+        private static final double MIN_SPEED = 0.85, MAX_SPEED = 1.2;
+        private final @Nullable DoubleSupplier replayPosition;
+        private final DoubleSupplier birth;
+        private long own, anchor, confirmed;
+        private double at, anchorAt, shown, speed = 1, resyncUntil;
+        private boolean estimated, sampled, over, waitingForTarget, farBehind;
+        private static final long TICK_NANOS = 1_000_000_000L / 20;
+        private long lastTickNanos, expectedOwn;
+        private double lastRate = 1;
 
-        /** {@code start} — the age now; {@code live} — a fresh detonation whose packet is the server's anchor at age 0. */
         AgeClock(long start, boolean live) {
-            this(start, live, false);
+            this(start, live, null, () -> 0);
         }
 
-        /** {@code replay}: the detonation plays from a Flashback recording ({@link #PROBE}). */
-        AgeClock(long start, boolean live, boolean replay) {
-            this.replay = replay;
+        AgeClock(long start, boolean live, @Nullable DoubleSupplier position, DoubleSupplier birth) {
+            replayPosition = position;
+            this.birth = birth;
+            confirmed = live ? start : -1;
             anchor = start;
             shown = start;
-            streamed = live;
-            // A seek can see the last stream anchor before its show-end packet. The recording's last time
-            // packet can be up to one sync interval behind the seek position.
             over = !live && start >= NukeClock.SHOW_TICKS - TIME_SYNC_TICKS;
             estimated = !live && !over;
-            recent.add(new double[]{0, start});
         }
 
-        /** An anchor: the server's age for this detonation when the packet was sent ({@code S2C.NukeTick}). */
-        void anchor(long serverAge) {
-            if (over) return;
-            anchor = Math.max(0, serverAge);
+        void anchor(long age) {
+            if (age < 0 || age < confirmed) return;
+            confirmed = age;
+            if (replayPosition != null || over || !estimated && age <= anchor) return;
+            anchor = Math.max(0, age);
             anchorAt = at;
-            anchored = true;
-            unseen = true;
-            streamed = true;
             if (estimated) {
+                if (!sampled) shown = anchor;
+                else if (shown > anchor) waitingForTarget = true;
+                else if (shown < anchor) resyncUntil = at + RESPONSE;
                 estimated = false;
-                shown = anchor;
-                recent.clear();
             }
-            recent.add(new double[]{at, anchor});
-            while (recent.size() > 2 && at - recent.peekFirst()[0] > RATE_WINDOW) recent.pollFirst();
+            boolean behind = anchor - shown > BRAKE;
+            if (behind && !farBehind) resyncUntil = at + RESPONSE;
+            farBehind = behind;
         }
 
-        /** The show is over: no more per-tick anchors (ended shows' list in {@code S2C.NukeClock}); own time carries on. */
+        long confirmed() {
+            return confirmed;
+        }
+
         void ended() {
             over = true;
-            streamed = false;
+            waitingForTarget = false;
+            resyncUntil = 0;
         }
 
-        /** The server's age per own tick over the last second; 1 until a quarter second of anchors is known. */
-        private double rate() {
-            double[] first = recent.peekFirst(), last = recent.peekLast();
-            double span = last[0] - first[0];
-            return span < 5 ? 1 : Math.clamp((last[1] - first[1]) / span, 0.25, FASTEST);
+        void tick() {
+            tick(System.nanoTime());
+        }
+
+        // Wall time detects a missed client tick. It never adds a tick to the picture.
+        void tick(long nanos) {
+            if (replayPosition != null) return;
+            long elapsed = nanos - lastTickNanos;
+            if (lastTickNanos != 0 && elapsed >= TICK_NANOS) {
+                // At low FPS several client ticks run in one frame. Count the previous batch before declaring a loss.
+                if (own < expectedOwn && anchor > shown + 1 && !estimated && !over && resyncUntil <= at)
+                    resyncUntil = at + RESPONSE;
+                expectedOwn = own + elapsed / TICK_NANOS;
+            }
+            lastTickNanos = nanos;
+            advance(++own);
+        }
+
+        double shown() {
+            return replayPosition == null ? shown : Math.max(0, replayPosition.getAsDouble() - birth.getAsDouble());
+        }
+
+        double at(double partial) {
+            if (replayPosition != null) return shown();
+            sampled = true;
+            advance(own + partial);
+            return shown;
         }
 
         private void advance(double now) {
-            if (now <= at) return;
             double dt = now - at;
+            if (dt <= 0) return;
+            double target = anchor + Math.min(RESPONSE, at - anchorAt) - DELAY;
+            double step;
+            if (over || estimated) {
+                step = slew(1, dt);
+            } else if (waitingForTarget && target < shown) {
+                speed = 0.5;
+                step = dt * speed;
+            } else if (at < resyncUntil && target > shown) {
+                // Only processed time advances. Finish the catch at nominal speed when we intercept the target.
+                double extra = Math.min(2 * dt, target - shown);
+                step = dt + extra;
+                speed = 1;
+                if (extra < 2 * dt) resyncUntil = 0;
+            } else {
+                waitingForTarget = false;
+                resyncUntil = 0;
+                double error = target - shown;
+                // Suppress corrections inside the two-tick packet jitter buffer.
+                double correction = error / RESPONSE * Math.min(1, Math.abs(error) / DELAY);
+                double steering = Math.clamp(1 + correction, MIN_SPEED, MAX_SPEED);
+                double brake = Math.clamp((LEAD - (shown - anchor)) / BRAKE, 0, 1);
+                step = slew(steering * brake, dt);
+            }
+            if (!over && !estimated) {
+                double remaining = Math.max(0, anchor + LEAD - shown);
+                // The linear brake divides the remaining distance by BRAKE. Snap its tail once that speed is below one ULP.
+                step = remaining <= Math.ulp(shown) * BRAKE ? remaining : Math.min(step, remaining);
+                if (step == remaining) speed = 0;
+            }
+            if (DIAG) lastRate = step / dt;
+            shown += step;
             at = now;
-            if (unseen) {
-                seenAt = now;
-                unseen = false;
-            }
-            if (replay && streamed && !anchored && now > PROBE) streamed = false;
-            // error against the target at the step's start (the step itself is not an error)
-            if (!streamed) {
-                double target = anchor + (now - dt - anchorAt);
-                shown += dt * Math.clamp(1 + (target - shown) / RESPONSE, SLOWEST, FASTEST);
-                return;
-            }
-            double rate = rate();
-            double target = anchor + rate * (now - dt - anchorAt) - DELAY;
-            double speed = Math.min(rate * Math.clamp(1 + (target - shown) / RESPONSE, SLOWEST, FASTEST), FASTEST);
-            double stale = now - seenAt;
-            double ease = stale <= STALE ? 1 : Math.max(0, 1 - (stale - STALE) / EASE);
-            shown = Math.max(shown, Math.min(shown + dt * speed * ease, anchor + LEAD));
         }
 
-        /** One client tick. */
-        void tick() {
-            own++;
-            advance(own);
-        }
-
-        /** The shown age now, ticks (after the last tick or frame). */
-        double shown() {
-            return shown;
-        }
-
-        /** The shown age in a frame {@code partial} of a tick after the last client tick: never less than before. */
-        double at(double partial) {
-            advance(own + partial);
-            return shown;
+        // Integral of a linear ramp followed by constant speed. Tick queries may split a render interval.
+        private double slew(double demand, double dt) {
+            double change = Math.clamp(demand - speed, -SLEW * dt, SLEW * dt);
+            speed += change;
+            return speed * dt - 0.5 * change * Math.abs(change) / SLEW;
         }
     }
 
@@ -328,11 +374,27 @@ public final class ClientNuclear {
     public static IcbmApproaches approaches() { return APPROACHES; }
     public static void approach(S2C.NukeApproach p) { APPROACHES.snapshot(p.time(), p.arrivals()); }
 
+    static final boolean DIAG = Boolean.getBoolean("incoming.nukeDiag");
+    private static long playbackEpoch;
     private static final ClockLead CLOCK = new ClockLead();
     private static final Map<Integer, Active> DETONATIONS = new LinkedHashMap<>();
     private static final Map<Integer, S2C.NukeWarning> WARNINGS = new LinkedHashMap<>();
     @Nullable
     private static S2C.Radiation radiation;
+
+    // Packets may precede the burst or NukeSync in a Flashback snapshot.
+    private static final Map<UUID, MaterialInbox> MATERIALS = new LinkedHashMap<>();
+    private static MaterialInbox inbox(UUID id) {
+        return MATERIALS.computeIfAbsent(id, unused -> new MaterialInbox());
+    }
+    public static void materialSources(S2C.NukeMaterialSources p) {
+        var active = new java.util.HashSet<>(p.sources());
+        MATERIALS.keySet().retainAll(active);
+    }
+    public static void material(S2C.NukeMaterial p) {
+        if (p.tombstone()) MATERIALS.remove(p.id());
+        else inbox(p.id()).receive(p);
+    }
 
     private ClientNuclear() {}
 
@@ -343,6 +405,11 @@ public final class ClientNuclear {
         boolean fresh = !WARNINGS.containsKey(w.strikeId());
         WARNINGS.put(w.strikeId(), w);
         if (fresh && live) NukeSounds.warning(w);
+    }
+
+    /** Scheduled strikes cancelled ({@link S2C.NukeCancelled}): their warnings end; detonations and other strikes stay. */
+    public static void cancelled(S2C.NukeCancelled p) {
+        for (int id : p.strikes()) WARNINGS.remove(id);
     }
 
     /**
@@ -370,6 +437,8 @@ public final class ClientNuclear {
         // previous display of same detonation (from seek): remove its burning-city loops
         if (known != null) known.sounds.stop();
         Active a = new Active(d, live, level.getGameTime());
+        a.revision = p.material().orElse(null);
+        a.seed = p.ground();
         DETONATIONS.put(d.id(), a);
         if (live) {
             NukeLight.detonation(level);
@@ -398,11 +467,17 @@ public final class ClientNuclear {
 
     /** The server's game time this tick ({@link S2C.NukeTick}): each detonation's anchor ({@link AgeClock}). */
     public static void anchor(S2C.NukeTick p) {
-        for (Active a : DETONATIONS.values()) a.clock.anchor(p.gameTime() - a.d.gameTime());
+        for (Active a : DETONATIONS.values()) {
+            long age = p.gameTime() - a.d.gameTime();
+            a.clock.anchor(age);
+            if (DIAG) Incoming.LOG.info("nukeAnchor,{},{},{},{},{}", a.epoch, a.d.id(),
+                    System.nanoTime(), a.clock.at, age);
+        }
     }
 
     /** World entry/dimension change: all current state, without flash/hit (already passed). */
     public static void sync(S2C.NukeSync p) {
+        playbackEpoch++;
         stopAll();
         APPROACHES.reset();
         Map<Integer, Active> old = new HashMap<>(DETONATIONS);
@@ -414,27 +489,47 @@ public final class ClientNuclear {
             // same detonation (respawn, replay position after it): as after seek, dust/pall/storm
             // retain history (cannot repeat the young storm's comparison with fire later)
             Active known = old.get(d.id());
-            DETONATIONS.put(d.id(), known != null && known.d.equals(d) ? new Active(known, now) : new Active(d, false, now));
+            Active a = known != null && known.d.equals(d) ? new Active(known, now) : new Active(d, false, now);
+            UUID revision = p.materials().get(d.id());
+            if (!java.util.Objects.equals(a.revision, revision)) {
+                a.revision = revision;
+                a.seed = -1;
+                a.source = null;
+                a.tiles = null;
+            }
+            DETONATIONS.put(d.id(), a);
         }
+        // A live sync supersedes the dimension, including recalled sources. Recording snapshots can deliver
+        // their batches before the matching detonation and retain them until the seek finishes.
+        if (!ua.zentix.incoming.client.replay.Replay.active()) MATERIALS.keySet().retainAll(p.materials().values());
         for (S2C.NukeWarning w : p.warnings()) WARNINGS.put(w.strikeId(), w);
         NukeDust.reset();
         NukePall.reset();
         NukeLight.reset();
     }
 
+    /** A discontinuous marker invalidates the old playback epoch before any queued event can cross its front. */
+    public static void seekStarted() {
+        for (Active a : DETONATIONS.values()) {
+            a.discarded = true;
+            a.events.clear();
+            a.sounds.clearClatter();
+        }
+    }
+
     /**
-     * Flashback replay sought: everything before this recording position is past, without flash/sound/deafness,
-     * at its age by world clock; later detonations/launches are removed (arrive again when replay reaches them). Client clock
-     * in replay follows the last recorded time packet, sent once a second: a detonation within the next second
-     * is retained (age 0).
+     * A seek reconstructs each past show at its recording age and removes future shows.
+     * Historical world time still identifies launches whose recording positions are unknown.
      */
     public static void rewound() {
+        playbackEpoch++;
         ClientLevel level = Minecraft.getInstance().level;
         if (level == null) return;
         long now = level.getGameTime();
         // old detonations disappear (later than recording position) or become past; stop driving their echoes/loops
         stopAll();
-        DETONATIONS.values().removeIf(a -> a.d.gameTime() > now + TIME_SYNC_TICKS);
+        DETONATIONS.values().removeIf(a -> a.clock.replayPosition != null
+                ? a.clock.birth.getAsDouble() > Replay.packetPosition() : a.d.gameTime() > now + TIME_SYNC_TICKS);
         DETONATIONS.replaceAll((id, a) -> new Active(a, now));
         WARNINGS.values().removeIf(w -> w.launchTime() > now + TIME_SYNC_TICKS);
         CLOCK.reset();
@@ -463,11 +558,55 @@ public final class ClientNuclear {
     }
 
     /** Blocks removed by wave in a nearby chunk: pieces fly ({@link NukeDust#debris}), ruins crumble afterward. */
-    public static void debris(S2C.NukeDebris p) {
+    public static void debris(S2C.NukeDebris p, boolean live) {
         Active a = DETONATIONS.get(p.detonation());
-        if (a == null) return;
-        NukeDust.debris(a, p);
-        a.sounds.debris(p);
+        if (a == null || !live || a.discarded) {
+            if (DIAG) {
+                if (a != null) eventTrace(a, null, Double.NaN, "drop", "seek");
+                else Incoming.LOG.info("nukeEvent,{},{},-1,-1,NaN,NaN,NaN,drop,no_source", playbackEpoch, p.detonation());
+            }
+            return;
+        }
+        var receipt = a.events.receive(p, a.clock.confirmed(), a.age(), piece -> a.d.arrivalTicks(
+                Vec3.atCenterOf(piece.pos()).distanceTo(a.d.burst())));
+        if (receipt == null) {
+            if (DIAG) {
+                var repeated = new WaveEvents.Receipt(a.clock.confirmed(), a.events.ordinal(p), p, a.age());
+                eventTrace(a, repeated, Double.NaN, "drop", a.clock.confirmed() < 0 ? "no_anchor" : "duplicate");
+            }
+            return;
+        }
+        if (DIAG) {
+            for (var piece : p.pieces()) {
+                double due = a.d.arrivalTicks(Vec3.atCenterOf(piece.pos()).distanceTo(a.d.burst()));
+                boolean fresh = receipt.tick() - due <= NukeDust.DEBRIS_LATE;
+                eventTrace(a, receipt, due, fresh ? "due" : "drop", fresh ? "fresh" : "server_late");
+            }
+        }
+        NukeDust.received();
+        a.sounds.after.ruins(p.pieces());
+        a.deliverPieces();
+    }
+
+    static void eventTrace(Active a, @Nullable WaveEvents.Receipt batch, double due, String action, String reason) {
+        double shown = a.ticks(0);
+        Incoming.LOG.info("nukeEvent,{},{},{},{},{},{},{},{},{}", a.epoch, a.d.id(),
+                batch == null ? a.clock.confirmed() : batch.tick(), batch == null ? -1 : batch.ordinal(),
+                due, shown, shown - due, action, reason);
+    }
+
+    static void traceFrame(float partial) {
+        for (Active a : DETONATIONS.values()) {
+            double shown = a.ticks(partial);
+            long now = System.nanoTime();
+            double elapsed = (now - a.lastFrameNanos) / 50_000_000.0;
+            double frameRate = (shown - a.lastFrameAge) / elapsed;
+            Incoming.LOG.info("nukeFrame,{},{},{},{},{},{},{},{}", a.epoch, a.d.id(),
+                    now, shown, a.clock.confirmed(), shown - a.clock.confirmed(),
+                    a.clock.replayPosition == null ? a.clock.lastRate : frameRate, frameRate < 0.1);
+            a.lastFrameAge = shown;
+            a.lastFrameNanos = now;
+        }
     }
 
     /**
@@ -485,8 +624,12 @@ public final class ClientNuclear {
     }
 
     public static void reset() {
+        playbackEpoch++;
+        held = false;
+        MATERIALS.clear();
         stopAll();
         DETONATIONS.clear();
+        DustGround.reset();
         SHOW_ENDS.clear();
         WARNINGS.clear();
         radiation = null;
@@ -525,6 +668,23 @@ public final class ClientNuclear {
         };
     }
 
+    /** The show stands still this tick ({@link #holds}). */
+    private static boolean held;
+
+    /**
+     * The show's age runs on world ticks like particles: it stands still under {@code /tick freeze} and moves with
+     * {@code /tick step}, while everything that follows the eye (pall ground, sky, hearing) keeps updating. A replay's age
+     * is its editor position, and its editor pauses by freezing the tick rate itself (replay.md): a replay never holds.
+     */
+    static boolean holds(boolean runsNormally, boolean replay) {
+        return !runsNormally && !replay;
+    }
+
+    /** True while the show stands still: per-tick spawners add nothing. */
+    static boolean held() {
+        return held;
+    }
+
     public static void tick() {
         Minecraft mc = Minecraft.getInstance();
         ClientLevel level = mc.level;
@@ -538,24 +698,37 @@ public final class ClientNuclear {
         // column-top water for pall map (its matter); absent under ceiling (Nether), like terrain
         FarTerrain.Water water = heights == null ? null : FarTerrain.water(level), hard = heights == null ? null : FarTerrain.hard(level),
                 sand = heights == null ? null : FarTerrain.sand(level);
+        // the dust's eye-centred ground (its floor over the drawn chunks and the near kilometres)
+        if (!DETONATIONS.isEmpty()) DustGround.tick(level, eye, mc.options.getEffectiveRenderDistance());
+        held = holds(level.tickRateManager().runsNormally(), ua.zentix.incoming.client.replay.Replay.active());
         for (Iterator<Active> it = DETONATIONS.values().iterator(); it.hasNext(); ) {
             Active a = it.next();
-            a.tick();
-            a.sounds.tick();
+            if (!held) a.tick();
+            // the schedule plays sounds and the gust's puffs by age: nothing is due while it stands still
+            if (!a.discarded && !held) a.sounds.tick();
             // terrain/water under pall: for rays without world behind and for matter (ceiling dimensions use ground
             // under epicenter)
             // water under epicenter before pall map: map fills unknowns from it
             NukeWater.resolve(a, level);
             double wall = a.wall.reach(a.seconds(0));
             double seen = Math.hypot(eye.x - a.d.burst().x, eye.z - a.d.burst().z);
-            if (a.pall.visible(a.ticks(0)) || wall > 0) a.ground.survey(a.ticks(0), wall, seen, heights, water, hard, sand);
+            if (a.pall.visible(a.ticks(0)) || wall > 0) {
+                if (now % 20 == 0) a.ground.learnAround();
+                a.ground.survey(a.ticks(0), wall, seen, heights, water, hard, sand);
+            }
             // firestorm tornadoes follow terrain beneath them
             // the tick's own age: a frame-fraction query of the next tick would advance the clock past every frame of this one
             if (heights != null) a.storm.track(a.ticks(0) / 20.0, heights);
-            NukeWater.tick(a, level, eye);
-            NukeDust.front(a, eye);
+            // spawners add particles per tick of elapsed age: none while held (the frozen particle pool would only pile up)
+            if (!held) {
+                NukeWater.tick(a, level, eye);
+                NukeDust.front(a, eye);
+            }
             if (a.ticks(0) > lifeTicks(a.d) && a.clockSeconds(0) > a.d.blackRainEndSeconds() && !a.pall.visible(a.ticks(0))) {
                 a.sounds.stop();
+                if (a.revision != null && !ua.zentix.incoming.client.replay.Replay.active())
+                    net.neoforged.neoforge.network.PacketDistributor.sendToServer(new ua.zentix.incoming.net.C2S.MaterialRetired(a.revision));
+                MATERIALS.remove(a.revision);
                 it.remove();
             }
         }

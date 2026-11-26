@@ -31,6 +31,7 @@ import net.minecraft.world.phys.Vec3;
 import net.neoforged.neoforge.network.PacketDistributor;
 import org.jetbrains.annotations.Nullable;
 import ua.zentix.incoming.Incoming;
+import ua.zentix.incoming.claim.Writes;
 import ua.zentix.incoming.IncomingConfig;
 import ua.zentix.incoming.compat.SubLevels;
 import ua.zentix.incoming.net.S2C;
@@ -45,8 +46,11 @@ import ua.zentix.incoming.registry.ModDataMaps;
 import ua.zentix.incoming.registry.ModParticles;
 import ua.zentix.incoming.registry.ModTags;
 import ua.zentix.incoming.strike.ImpactCost;
+import ua.zentix.incoming.strike.StrikeOwner;
 import ua.zentix.incoming.strike.StrikeWorld;
 import ua.zentix.incoming.strike.Timeline;
+import ua.zentix.incoming.strike.ImpactWork;
+import ua.zentix.incoming.strike.RoundRef;
 import ua.zentix.incoming.strike.WeaponSpec;
 import ua.zentix.incoming.strike.WeaponType;
 import ua.zentix.incoming.nuclear.world.CraterJob;
@@ -79,15 +83,20 @@ public final class Warheads {
     // ---------------------------------------------------------------- entry
 
     public static void detonate(ServerLevel level, WeaponType weapon, Vec3 pos, @Nullable Entity projectile, @Nullable UUID owner) {
+        detonate(level, weapon, pos, projectile, owner, null);
+    }
+
+    /** Same, as order round {@code round}'s impact: its impact work lasts while this blast's jobs run ({@link ImpactWork}). */
+    public static void detonate(ServerLevel level, WeaponType weapon, Vec3 pos, @Nullable Entity projectile, @Nullable UUID owner, @Nullable RoundRef round) {
         long t0 = System.nanoTime();
         StrikeWorld world = StrikeWorld.get(level);
-        world.add(new SurfaceBlast(level, weapon, pos, projectile, owner));
+        world.add(new SurfaceBlast(level, weapon, pos, projectile, owner, level.random.nextLong(), impact(round, owner, weapon)));
         world.impactCost().step(System.nanoTime() - t0);
     }
 
     /** Same complete surface impact with a fixed source seed, for reproducible fixtures; no world RNG reseeding. */
     public static void testDetonate(ServerLevel level, WeaponType weapon, Vec3 pos, @Nullable Entity projectile, long seed) {
-        StrikeWorld.get(level).add(new SurfaceBlast(level, weapon, pos, projectile, null, seed));
+        StrikeWorld.get(level).add(new SurfaceBlast(level, weapon, pos, projectile, null, seed, null));
     }
 
     /**
@@ -122,13 +131,22 @@ public final class Warheads {
 
     /** Underground bunker-buster detonation. */
     public static void bunker(ServerLevel level, Vec3 pos, Vec3 entry, @Nullable Entity bomb, @Nullable UUID owner) {
+        bunker(level, pos, entry, bomb, owner, null);
+    }
+
+    /** Same, as order round {@code round}'s impact ({@link ImpactWork}). */
+    public static void bunker(ServerLevel level, Vec3 pos, Vec3 entry, @Nullable Entity bomb, @Nullable UUID owner, @Nullable RoundRef round) {
         long t0 = System.nanoTime();
         StrikeWorld world = StrikeWorld.get(level);
-        world.add(new BunkerBlast(level, pos, entry, bomb, owner));
+        world.add(new BunkerBlast(level, pos, entry, bomb, owner, impact(round, owner, WeaponType.BUNKER)));
         world.impactCost().step(System.nanoTime() - t0);
     }
 
     // ---------------------------------------------------------------- shared helpers
+
+    private static ImpactWork.@Nullable Impact impact(@Nullable RoundRef round, @Nullable UUID owner, WeaponType weapon) {
+        return round == null ? null : new ImpactWork.Impact(round, owner, weapon);
+    }
 
     /**
      * World read reach of vanilla {@code power} blast: rays attenuate within 1.3·power / 0.225 steps of 0.3
@@ -144,10 +162,15 @@ public final class Warheads {
      * secondary salvo burst at loaded-world edge stalled 1.2 s.
      */
     public static void whenReady(ServerLevel level, Vec3 centre, double reach, Consumer<ServerLevel> action) {
+        whenReady(level, centre, reach, action, null);
+    }
+
+    /** Same, as part of round {@code impact}'s impact work while it waits ({@link ImpactWork}). */
+    public static void whenReady(ServerLevel level, Vec3 centre, double reach, Consumer<ServerLevel> action, ImpactWork.@Nullable Impact impact) {
         if (Terrain.readyAround(level, centre, reach)) {
             action.accept(level);
         } else {
-            StrikeWorld.get(level).add(new Deferred(BlastArea.hold(level, centre, reach), action));
+            StrikeWorld.get(level).add(new Deferred(BlastArea.hold(level, centre, reach, impact), action));
         }
     }
 
@@ -161,10 +184,10 @@ public final class Warheads {
      * explosions selected rays/damaged entities ({@link BlastArea#peersPicking})
      */
     static StagedExplosion explode(ServerLevel level, @Nullable BlastArea area, List<StagedExplosion> after, Vec3 at, float power,
-                                   boolean fire, @Nullable Entity direct, @Nullable Entity owner, @Nullable ExplosionDamageCalculator calculator) {
-        boolean blocks = IncomingConfig.SERVER.blockDamage.get();
-        boolean burns = fire && IncomingConfig.SERVER.fire.get();
+                                   boolean fire, @Nullable Entity direct, @Nullable UUID owner, @Nullable ExplosionDamageCalculator calculator) {
         BlastArea held = area != null ? area.retain() : BlastArea.hold(level, at, reach(power));
+        boolean blocks = held.rules().blockDamage();
+        boolean burns = fire && held.rules().fire();
         StagedExplosion job = new StagedExplosion(held, after, at, power, burns, blocks, direct, owner, calculator);
         held.queued(job, level.getGameTime());
         StrikeWorld.get(level).impacts().add(level, job);
@@ -307,6 +330,11 @@ public final class Warheads {
         }
     }
 
+    /** {@code ExplosionEvent.Detonate}, {@code HIGHEST}: a craft blast's block list before claim handlers edit it. */
+    public static void onDetonateFirst(net.neoforged.neoforge.event.level.ExplosionEvent.Detonate event) {
+        StagedExplosion.onDetonateFirst(event);
+    }
+
     /** {@code ExplosionEvent.Detonate}, {@code LOWEST}: vanilla craft-blast damage handed to mod units. */
     public static void onDetonate(net.neoforged.neoforge.event.level.ExplosionEvent.Detonate event) {
         StagedExplosion.onDetonate(event);
@@ -436,10 +464,10 @@ public final class Warheads {
     /**
      * Ignite ground: fire on column top (like fallen fireballs). Ready chunks only: missile fire ring 7 blocks
      * from impact reached still-generating chunks at loaded edge; {@code igniteAt} block read would load inside
-     * tick, already-loading height/block reads wait in {@code managedBlock}.
+     * tick, already-loading height/block reads wait in {@code managedBlock}. The caller holds {@code world.fire}.
      */
     public static void igniteGround(ServerLevel level, double x, double z) {
-        if (!IncomingConfig.SERVER.fire.get() || !Terrain.readyAround(level, new Vec3(x, 0, z), EDGE)) return;
+        if (!Terrain.readyAround(level, new Vec3(x, 0, z), EDGE)) return;
         BlockPos top = level.getHeightmapPos(Heightmap.Types.MOTION_BLOCKING, BlockPos.containing(x, 0, z));
         igniteAt(level, top);
     }
@@ -450,7 +478,7 @@ public final class Warheads {
      * SableCommonEvents.handleBlockChange}), synchronously loading at edge.
      */
     static boolean igniteAt(ServerLevel level, BlockPos pos) {
-        if (!IncomingConfig.SERVER.fire.get() || !Terrain.neighbourhoodReady(level, pos.getX() >> 4, pos.getZ() >> 4)) return false;
+        if (!Terrain.neighbourhoodReady(level, pos.getX() >> 4, pos.getZ() >> 4)) return false;
         return level.getBlockState(pos).isAir() && igniteIn(level, pos);
     }
 
@@ -459,7 +487,7 @@ public final class Warheads {
      * same readiness as {@link #igniteAt}. Returns placed.
      */
     static boolean igniteIn(ServerLevel level, BlockPos pos) {
-        if (!IncomingConfig.SERVER.fire.get() || !Terrain.neighbourhoodReady(level, pos.getX() >> 4, pos.getZ() >> 4)) return false;
+        if (!Terrain.neighbourhoodReady(level, pos.getX() >> 4, pos.getZ() >> 4)) return false;
         BlockState fire = BaseFireBlock.getState(level, pos);
         if (!fire.canSurvive(level, pos)) return false;
         ua.zentix.incoming.work.BlockLighting.changed(level, pos);
@@ -474,8 +502,8 @@ public final class Warheads {
      * pressure–impulse curve, room gases, {@code BlastBody}) in impact-queue work units.
      */
     static StagedExplosion charge(ServerLevel level, BlastArea area, Vec3 at, double tntKg, SlabBreach.Placement placement,
-                                  @Nullable Vec3 axis, @Nullable Entity direct, @Nullable Entity owner) {
-        boolean blocks = IncomingConfig.SERVER.blockDamage.get();
+                                  @Nullable Vec3 axis, @Nullable Entity direct, @Nullable UUID owner) {
+        boolean blocks = area.rules().blockDamage();
         StagedExplosion job = new StagedExplosion(area.retain(), List.of(), at, tntKg, placement, axis, blocks, direct, owner);
         area.queued(job, level.getGameTime());
         StrikeWorld.get(level).impacts().add(level, job);
@@ -540,6 +568,11 @@ public final class Warheads {
         return StagedExplosion.chargeOf(e);
     }
 
+    /** World rules a mod strike explosion runs under ({@link ua.zentix.incoming.strike.StrikeRules}); null for vanilla/other explosions. */
+    public static ua.zentix.incoming.strike.@Nullable StrikeRules rulesOf(Explosion e) {
+        return StagedExplosion.rulesOf(e);
+    }
+
     /**
      * Charge strike area: wave rays ({@link StagedExplosion#breakReach}), crater rim, fuel ball; farther bodies
      * damaged where world loaded.
@@ -577,18 +610,16 @@ public final class Warheads {
         private final Vec3 pos;
         @Nullable
         private final Entity direct;
+        /** Owner UUID: each damage names them as attacker while online ({@link StrikeOwner}). */
         @Nullable
-        private final Entity owner;
+        private final UUID owner;
         private final GroundMaterial mat;
         private final BlastArea area;
         /** Main explosion: other strike work waits for its removals. */
         private final List<StagedExplosion> main;
 
-        SurfaceBlast(ServerLevel level, WeaponType weapon, Vec3 pos, @Nullable Entity direct, @Nullable UUID ownerId) {
-            this(level, weapon, pos, direct, ownerId, level.random.nextLong());
-        }
-
-        SurfaceBlast(ServerLevel level, WeaponType weapon, Vec3 pos, @Nullable Entity direct, @Nullable UUID ownerId, long seed) {
+        SurfaceBlast(ServerLevel level, WeaponType weapon, Vec3 pos, @Nullable Entity direct, @Nullable UUID ownerId, long seed,
+                     ImpactWork.@Nullable Impact impact) {
             this.weapon = weapon;
             this.pos = pos;
             WeaponSpec spec = weapon.spec();
@@ -596,37 +627,43 @@ public final class Warheads {
             // Craft nearby: vanilla-ray craft explosion reads farther ({@code StagedExplosion.crafts}).
             float craft = StagedExplosion.craftPower(level, pos, spec.charge());
             if (craft > 0) held = Math.max(held, StagedExplosion.craftReach(craft));
-            this.area = BlastArea.hold(level, pos, held);
-            this.direct = direct;
-            this.owner = ownerId == null ? null : level.getPlayerByUUID(ownerId);
-            this.mat = GroundMaterial.sample(level, BlockPos.containing(pos));
-            int kind = switch (spec.blast()) {
-                case MISSILE -> S2C.Blast.MISSILE;
-                case ROCKET -> S2C.Blast.ROCKET;
-                case DRONE, NONE -> S2C.Blast.DRONE;
-            };
-            // Visible to far_range, audible while charge blast exceeds quiet-night background (HearingModel), capped
-            // at server's far-data range.
-            double reach = Math.max(IncomingConfig.SERVER.farRange.get(),
-                    Math.min(IncomingConfig.FAR_RANGE_MAX, HearingModel.audibleRangeM(spec.charge())));
-            this.reach = reach;
-            this.born = level.getGameTime();
-            this.seed = seed;
-            this.axis = axis(direct);
-            // Charge on craft: no crater/fuel ball, hull rather than ground. Projectile supplies craft impact point
-            // already in world (StrikeProjectile: SubLevels.toWorld); also check craft whose bounds contain point.
-            inPlots = SubLevels.inPlotGrid(level, new net.minecraft.world.level.ChunkPos(BlockPos.containing(pos)));
-            onCraft = inPlots || !SubLevels.near(level, pos, 1).isEmpty();
-            // Struck material and whether slab over void: same breach that will remove slab (client target visual).
-            Optional<S2C.Blast.Support> support = onCraft || !(spec.charge() > 0) ? Optional.empty() : support(level, pos, spec.charge(), axis, direct);
-            PacketDistributor.sendToPlayersNear(level, null, pos.x, pos.y, pos.z, reach,
-                    new S2C.Blast(kind, pos, mat.ordinal(), (float) pos.y, seed, Optional.ofNullable(direct).map(Entity::getUUID), weapon.id(), axis,
-                            true, support));
-            // Warhead bursts at impact face: breaches slab over void (SlabBreach); craft
-            // hull is not world obstacle.
-            main = spec.charge() > 0 ? List.of(charge(level, area, pos, spec.charge(),
-                    onCraft ? SlabBreach.Placement.NONE : SlabBreach.Placement.SURFACE, axis, direct, owner)) : List.of();
-            if (!onCraft && IncomingConfig.SERVER.collapse.get()) area.trackCollapse(level, main, pos);
+            this.area = BlastArea.hold(level, pos, held, impact);
+            try {
+                this.direct = direct;
+                this.owner = ownerId;
+                this.mat = GroundMaterial.sample(level, BlockPos.containing(pos));
+                int kind = switch (spec.blast()) {
+                    case MISSILE -> S2C.Blast.MISSILE;
+                    case ROCKET -> S2C.Blast.ROCKET;
+                    case DRONE, NONE -> S2C.Blast.DRONE;
+                };
+                // Visible to far_range, audible while charge blast exceeds quiet-night background (HearingModel), capped
+                // at server's far-data range.
+                double reach = Math.max(IncomingConfig.SERVER.farRange.get(),
+                        Math.min(IncomingConfig.FAR_RANGE_MAX, HearingModel.audibleRangeM(spec.charge())));
+                this.reach = reach;
+                this.born = level.getGameTime();
+                this.seed = seed;
+                this.axis = axis(direct);
+                // Charge on craft: no crater/fuel ball, hull rather than ground. Projectile supplies craft impact point
+                // already in world (StrikeProjectile: SubLevels.toWorld); also check craft whose bounds contain point.
+                inPlots = SubLevels.inPlotGrid(level, new net.minecraft.world.level.ChunkPos(BlockPos.containing(pos)));
+                onCraft = inPlots || !SubLevels.near(level, pos, 1).isEmpty();
+                // Struck material and whether slab over void: same breach that will remove slab (client target visual).
+                Optional<S2C.Blast.Support> support = onCraft || !(spec.charge() > 0) ? Optional.empty() : support(level, pos, spec.charge(), axis, direct);
+                PacketDistributor.sendToPlayersNear(level, null, pos.x, pos.y, pos.z, reach,
+                        new S2C.Blast(kind, pos, mat.ordinal(), (float) pos.y, seed, Optional.ofNullable(direct).map(Entity::getUUID), weapon.id(), axis,
+                                true, support));
+                // Warhead bursts at impact face: breaches slab over void (SlabBreach); craft
+                // hull is not world obstacle.
+                main = spec.charge() > 0 ? List.of(charge(level, area, pos, spec.charge(),
+                        onCraft ? SlabBreach.Placement.NONE : SlabBreach.Placement.SURFACE, axis, direct, owner)) : List.of();
+                if (!onCraft && area.rules().collapse()) area.trackCollapse(level, main, pos);
+            } catch (RuntimeException e) {
+                // a failed setup releases its own holder; jobs it already queued keep theirs (the round's impact work ends with the last)
+                area.release(level);
+                throw e;
+            }
         }
 
         /** Explosion on Sable craft. */
@@ -651,23 +688,23 @@ public final class Warheads {
             boolean missile = weapon.spec().blast() == WeaponSpec.Blast.MISSILE;
             // Post-main work only if explosion happened: claim-canceled blast neither digs nor ignites.
             if (main.isEmpty()) return false;
-            if (IncomingConfig.SERVER.blockDamage.get() && !onCraft) {
-                unit(level, area, main, ImpactCost.Kind.GROUND, "Crater", l -> happened() ? Craters.dig(l, pos, weapon.spec().charge(), mat, seed) : 0);
+            if (area.rules().blockDamage() && !onCraft) {
+                unit(level, area, main, ImpactCost.Kind.GROUND, "Crater", l -> happened() ? Craters.dig(l, area.claims(), pos, weapon.spec().charge(), mat, seed) : 0);
                 // what the blast left without support falls (the explosion's removals are known once it ends)
-                if (IncomingConfig.SERVER.collapse.get()) StrikeCollapse.queue(level, area, main, pos);
+                if (area.rules().collapse()) StrikeCollapse.queue(level, area, main, pos);
             }
-            if (weapon.spec().fuelAtImpact() > 0 && !onCraft) {
+            if (weapon.spec().fuelAtImpact() > 0 && !onCraft && area.rules().fire()) {
                 Craters.ignite(level, area, main, this::happened, pos, weapon.spec().fuelAtImpact());
                 // Crater fuel after crater: settles on bottom, burns as block fire while available.
-                unit(level, area, main, ImpactCost.Kind.GROUND, "Fuel fire", l -> happened() ? FuelFires.pour(l, pos, weapon, born, reach) : 0);
+                unit(level, area, main, ImpactCost.Kind.GROUND, "Fuel fire", l -> happened() ? FuelFires.pour(l, area.claims(), pos, weapon, born, reach) : 0);
             }
             unit(level, area, main, ImpactCost.Kind.DEBRIS, "Debris",
-                    l -> !happened() ? 0 : missile ? DebrisSpawner.missile(l, pos, mat) : DebrisSpawner.drone(l, pos, mat));
+                    l -> !happened() ? 0 : missile ? DebrisSpawner.missile(l, pos, mat, area.rules(), owner) : DebrisSpawner.drone(l, pos, mat, area.rules(), owner));
             FragmentModel fragments = FragmentModel.of(weapon.spec());
             // In Sable plot grid, rays would hit craft blocks: fragments do not break craft.
             if (fragments != null && !inPlots) FragmentStrike.queue(level, area, main, this::happened, fragments, pos, axis, seed, direct, owner,
-                    IncomingConfig.SERVER.shatterGlass.get(), IncomingConfig.SERVER.blockDamage.get());
-            if (IncomingConfig.SERVER.shatterGlass.get()) Shatter.queue(level, area, main, pos, Shatter.Wave.of(pos, weapon.spec().charge()));
+                    area.rules().shatterGlass(), area.rules().blockDamage());
+            if (area.rules().shatterGlass()) Shatter.queue(level, area, main, pos, Shatter.Wave.of(pos, weapon.spec().charge()));
             return false;
         }
 
@@ -697,7 +734,7 @@ public final class Warheads {
         @Nullable
         private final Entity direct;
         @Nullable
-        private final Entity owner;
+        private final UUID owner;
         private final GroundMaterial ventMat;
         /** Material/depth/time sampled before excavation changes the source column. */
         private final S2C.Quake groundShock;
@@ -712,11 +749,11 @@ public final class Warheads {
         private final List<StagedExplosion> main;
         private int t;
 
-        BunkerBlast(ServerLevel level, Vec3 pos, Vec3 entry, @Nullable Entity direct, @Nullable UUID ownerId) {
+        BunkerBlast(ServerLevel level, Vec3 pos, Vec3 entry, @Nullable Entity direct, @Nullable UUID ownerId, ImpactWork.@Nullable Impact impact) {
             this.pos = pos;
             this.entry = entry;
             this.direct = direct;
-            this.owner = ownerId == null ? null : level.getPlayerByUUID(ownerId);
+            this.owner = ownerId;
             BlockPos c = BlockPos.containing(pos);
             GroundMaterial mat = GroundMaterial.sample(level, c);
             this.ventMat = GroundMaterial.sample(level, BlockPos.containing(entry));
@@ -732,30 +769,36 @@ public final class Warheads {
             // where loaded (ray ends in unready chunk): 2.4 t wave reaches ~650 blocks, thousands of chunks;
             // whole strike would wait for their loading.
             double held = Math.max(law.fracture(), Math.max(law.chimney(), 2 * law.craterRadius(CraterModel.Soil.WET) + 1)) + EDGE;
-            this.area = BlastArea.hold(level, pos, held);
+            this.area = BlastArea.hold(level, pos, held, impact);
+            try {
 
-            // Visible to far_range, audible to air-escaped charge share's sound range (HearingModel).
-            double reach = Math.max(IncomingConfig.SERVER.farRange.get(), Math.min(IncomingConfig.FAR_RANGE_MAX, HearingModel.audibleRangeM(air)));
-            PacketDistributor.sendToPlayersNear(level, null, pos.x, pos.y, pos.z, reach,
-                    new S2C.Blast(S2C.Blast.BUNKER, pos, mat.ordinal(), cover, level.random.nextLong(), Optional.ofNullable(direct).map(Entity::getUUID),
-                            WeaponType.BUNKER.id()));
+                // Visible to far_range, audible to air-escaped charge share's sound range (HearingModel).
+                double reach = Math.max(IncomingConfig.SERVER.farRange.get(), Math.min(IncomingConfig.FAR_RANGE_MAX, HearingModel.audibleRangeM(air)));
+                PacketDistributor.sendToPlayersNear(level, null, pos.x, pos.y, pos.z, reach,
+                        new S2C.Blast(S2C.Blast.BUNKER, pos, mat.ordinal(), cover, level.random.nextLong(), Optional.ofNullable(direct).map(Entity::getUUID),
+                                WeaponType.BUNKER.id()));
 
-            // One charge: in voids around charge, fraction not escaped to air; above ground, escaped share (at surface,
-            // entire charge as surface wave).
-            List<StagedExplosion> blasts = new ArrayList<>(2);
-            double below = law.breaches() ? law.tnt() - air : law.tnt();
-            // Buried charge tamped: breaches nearby bunker/cave voids (SlabBreach); escaped fraction is wave.
-            if (below > 0) blasts.add(charge(level, area, pos, below, SlabBreach.Placement.BURIED, null, direct, owner));
-            if (law.breaches() && air > 0) blasts.add(charge(level, area, top.add(0, 0.5, 0), air, SlabBreach.Placement.NONE, null, direct, owner));
-            main = List.copyOf(blasts);
-            if (law.breaches() && IncomingConfig.SERVER.collapse.get()) area.trackCollapse(level, main, pos);
+                // One charge: in voids around charge, fraction not escaped to air; above ground, escaped share (at surface,
+                // entire charge as surface wave).
+                List<StagedExplosion> blasts = new ArrayList<>(2);
+                double below = law.breaches() ? law.tnt() - air : law.tnt();
+                // Buried charge tamped: breaches nearby bunker/cave voids (SlabBreach); escaped fraction is wave.
+                if (below > 0) blasts.add(charge(level, area, pos, below, SlabBreach.Placement.BURIED, null, direct, owner));
+                if (law.breaches() && air > 0) blasts.add(charge(level, area, top.add(0, 0.5, 0), air, SlabBreach.Placement.NONE, null, direct, owner));
+                main = List.copyOf(blasts);
+                if (law.breaches() && area.rules().collapse()) area.trackCollapse(level, main, pos);
+            } catch (RuntimeException e) {
+                // a failed setup releases its own holder; jobs it already queued keep theirs (the round's impact work ends with the last)
+                area.release(level);
+                throw e;
+            }
         }
 
         @Override
         public boolean tick(ServerLevel level) {
             t++;
             if (t == 1) {
-                boolean blocks = IncomingConfig.SERVER.blockDamage.get();
+                boolean blocks = area.rules().blockDamage();
                 // Crushing-zone rock pressure hundreds of MPa: anyone there (bore, void behind wall) cannot survive.
                 unit(level, area, main, ImpactCost.Kind.HITS, "Crush zone", l -> {
                     if (!happened()) return 0;
@@ -766,7 +809,7 @@ public final class Warheads {
                     if (law.breaches()) unit(level, area, main, ImpactCost.Kind.GROUND, "Ejection crater", l -> happened() ? crater(l) : 0);
                     // what the breakout wave above ground left without support falls; underground the bomb has its own
                     // collapse laws (cavity, vaults in the crack zone, roof chimney) and the cavity is dug alongside
-                    if (law.breaches() && IncomingConfig.SERVER.collapse.get()) StrikeCollapse.queue(level, area, main, pos);
+                    if (law.breaches() && area.rules().collapse()) StrikeCollapse.queue(level, area, main, pos);
                     int r = Mth.ceil(law.crush());
                     for (int dy = -r; dy <= r; dy++) {
                         int y = dy;
@@ -774,7 +817,7 @@ public final class Warheads {
                     }
                 }
                 if (law.breaches()) {
-                    if (IncomingConfig.SERVER.shatterGlass.get()) {
+                    if (area.rules().shatterGlass()) {
                         Vec3 top = new Vec3(pos.x, cover, pos.z);
                         Shatter.queue(level, area, main, top, Shatter.Wave.of(top, law.airCharge(hole)));
                     }
@@ -790,7 +833,7 @@ public final class Warheads {
                     });
                 }
             }
-            if (t == 2 && IncomingConfig.SERVER.blockDamage.get()) {
+            if (t == 2 && area.rules().blockDamage()) {
                 // Fracture-zone roofs next tick: cavities of all same-tick detonations queue first (salvo crater falls
                 // happen together, not sequentially); FRACTURE_SLICES layers per unit (~3 thousand cells/layer; falling rubble/water entering cavity cause neighbor updates).
                 int f = Mth.ceil(law.fracture());
@@ -803,7 +846,7 @@ public final class Warheads {
                     });
                 }
             }
-            if (t == CHIMNEY_TICK && IncomingConfig.SERVER.collapse.get() && IncomingConfig.SERVER.blockDamage.get() && !law.breaches()) {
+            if (t == CHIMNEY_TICK && area.rules().collapse() && area.rules().blockDamage() && !law.breaches()) {
                 unit(level, area, main, ImpactCost.Kind.GROUND, "Roof collapse", l -> happened() ? chimney(l) : 0);
             }
             // Send as soon as Start accepted the explosion, not after every damage/front work unit finished.
@@ -843,7 +886,7 @@ public final class Warheads {
             int n = 0;
             for (LivingEntity e : level.getEntitiesOfClass(LivingEntity.class, new AABB(pos, pos).inflate(r), LivingEntity::isAlive)) {
                 if (e.position().distanceTo(pos) > r) continue;
-                e.hurt(ModDamageTypes.source(level, ModDamageTypes.SHOCKWAVE, direct, owner), Float.MAX_VALUE);
+                StrikeOwner.hurt(e, ModDamageTypes.source(level, ModDamageTypes.SHOCKWAVE, direct, StrikeOwner.online(level, owner)), Float.MAX_VALUE);
                 n++;
             }
             return n;
@@ -859,6 +902,7 @@ public final class Warheads {
             double rc = law.cavity(), rk = law.crush();
             int r = Mth.ceil(rk), n = 0;
             BlockPos.MutableBlockPos p = new BlockPos.MutableBlockPos();
+            Writes writes = new Writes(Block.UPDATE_ALL);
             for (int dx = -r; dx <= r; dx++) {
                 for (int dz = -r; dz <= r; dz++) {
                     double d = Math.sqrt(dx * dx + dy * dy + dz * dz);
@@ -871,14 +915,15 @@ public final class Warheads {
                     ModDataMaps.Penetrability m = ModDataMaps.Penetrability.of(s);
                     if (m.kind() == Penetration.Kind.STOP || m.kind() == Penetration.Kind.FLUID) continue;
                     if (d <= rc) {
-                        ColumnScar.replace(level, p.immutable(), s, Blocks.AIR.defaultBlockState(), Block.UPDATE_ALL);
+                        writes.add(p, s, Blocks.AIR.defaultBlockState());
                         continue;
                     }
                     // Crush mapped rock/masonry, not others (chest, mod mechanism).
                     BlockState rubble = rubble(s, ModDataMaps.Penetrability.find(s));
-                    if (rubble != null && !s.is(rubble.getBlock())) ColumnScar.replace(level, p.immutable(), s, rubble, Block.UPDATE_ALL);
+                    if (rubble != null && !s.is(rubble.getBlock())) writes.add(p, s, rubble);
                 }
             }
+            writes.flush(level, area.claims());
             return n;
         }
 
@@ -905,6 +950,7 @@ public final class Warheads {
             int r = Mth.ceil(rf), n = 0;
             RandomSource random = level.random;
             BlockPos.MutableBlockPos p = new BlockPos.MutableBlockPos(), up = new BlockPos.MutableBlockPos();
+            Writes writes = new Writes(Block.UPDATE_ALL);
             for (int dx = -r; dx <= r; dx++) {
                 for (int dz = -r; dz <= r; dz++) {
                     double d = Math.sqrt(dx * dx + dy * dy + dz * dz);
@@ -918,9 +964,10 @@ public final class Warheads {
                     if (!roof.is(ModTags.NUKE_GROUND) || random.nextDouble() > 1 - d / rf) continue;
                     ModDataMaps.Penetrability m = ModDataMaps.Penetrability.of(roof);
                     if (m.kind() != Penetration.Kind.ROCK && m.kind() != Penetration.Kind.SOIL) continue;
-                    ColumnScar.replace(level, up.immutable(), roof, Blocks.GRAVEL.defaultBlockState(), Block.UPDATE_ALL);
+                    writes.add(up, roof, Blocks.GRAVEL.defaultBlockState());
                 }
             }
+            writes.flush(level, area.claims());
             return n;
         }
 
@@ -933,6 +980,7 @@ public final class Warheads {
             double rc = law.cavity();
             int r = Mth.ceil(rc), top = Math.min(cover, c.getY() + Mth.ceil(law.chimney())), n = 0;
             BlockPos.MutableBlockPos p = new BlockPos.MutableBlockPos();
+            Writes writes = new Writes(Block.UPDATE_ALL);
             for (int y = c.getY() + 1; y <= top; y++) {
                 for (int dx = -r; dx <= r; dx++) {
                     for (int dz = -r; dz <= r; dz++) {
@@ -944,10 +992,11 @@ public final class Warheads {
                         if (s.isAir()) continue;
                         ModDataMaps.Penetrability m = ModDataMaps.Penetrability.of(s);
                         if (m.kind() == Penetration.Kind.STOP || m.kind() == Penetration.Kind.FLUID || s.is(Blocks.GRAVEL)) continue;
-                        ColumnScar.replace(level, p.immutable(), s, Blocks.GRAVEL.defaultBlockState(), Block.UPDATE_ALL);
+                        writes.add(p, s, Blocks.GRAVEL.defaultBlockState());
                     }
                 }
             }
+            writes.flush(level, area.claims());
             if (law.subsides()) {
                 Vec3 sv = new Vec3(pos.x, cover, pos.z);
                 // Subsidence dust: fraction of ground lost into hole (cavity volume), raised by falling (like crater).
@@ -964,7 +1013,7 @@ public final class Warheads {
          */
         private int crater(ServerLevel level) {
             CraterModel.Soil soil = ventMat.soil();
-            return Craters.dig(level, new Vec3(pos.x, cover, pos.z), law.craterRadius(soil), law.craterDepth(soil), ventMat);
+            return Craters.dig(level, area.claims(), new Vec3(pos.x, cover, pos.z), law.craterRadius(soil), law.craterDepth(soil), ventMat);
         }
     }
 }

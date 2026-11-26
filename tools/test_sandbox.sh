@@ -2,7 +2,8 @@
 # Effects sandbox check without a client (CI, "Остановка проверок"): `shot` sets time before the effect, not after
 # (23.10: 0,1 and 0,5 s "night" frames were daytime), separately for each shot (without --time, day); `shaders` and `dh`
 # without their mods in the sandbox directory refuse with a message, rather than capturing without Iris or DH (23.10: FX captured "under Iris" without Iris);
-# on a CPU renderer `shot` records sound in its own unslowed take, `--at none` only that take; CPU client memory ceiling, admission, GL environment
+# a frame take with sound records the sound in its own unslowed take (frames are paced on any renderer), `--at none` only
+# that take; CPU client memory ceiling, admission, GL environment
 # and socket naming (tools/soft_gl.sh).
 set -uo pipefail
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
@@ -19,18 +20,19 @@ fx() { echo "$1" >> "$tmp/fx.log"; }
 swap() { echo swap >> "$tmp/fx.log"; }
 eval "$(declare -f cut_wav | sed '1s/^cut_wav/real_cut_wav/')"
 cut_wav() { :; }
-( shot n1 'blast drone' --time night --no-swap ) >/dev/null 2>&1
-( shot n2 'flight missile' --at 0.5 --wav 2 ) >/dev/null 2>&1
+# (no sound: a frame take with sound runs a second take, checked below)
+( shot n1 'blast drone' --time night --wav 0 --no-swap ) >/dev/null 2>&1
+( shot n2 'flight missile' --at 0.5 --wav 0 ) >/dev/null 2>&1
 want='clear
 time night
 overlay off
-shots n1 0.1,0.5,1,2,4 4
+shots n1 0.1,0.5,1,2,4 0
 blast drone
 swap
 clear
 time day
 overlay off
-shots n2 0.5 2
+shots n2 0.5 0
 flight missile'
 [ "$(cat "$tmp/fx.log")" = "$want" ] && ok "shot: time before effect, default day without --time" || bad "shot command order:
 $(cat "$tmp/fx.log")"
@@ -75,7 +77,7 @@ fx() {
 }
 : > "$tmp/fx.log"; mkdir -p "$FX/out/n3-wav"; echo soft > "$FX/renderer"; touch "$FX/out/n3-wav/keep.png"
 ( shot n3 'nuke 15 near' --at -0.5,1 --wav 2 --no-swap ) >/dev/null 2>&1; rc=$?
-take=$(sed -n 's/^shots \(\.wav-n3-[A-Za-z0-9]*\) none@-0.5 2$/\1/p' "$tmp/fx.log")
+take=$(sed -n 's/^shots \(_wav-n3-[A-Za-z0-9]*\) none@-0.5 2$/\1/p' "$tmp/fx.log")
 [ $rc = 0 ] && grep -qx 'shots n3 -0.5,1 0' "$tmp/fx.log" && [ -n "$take" ] && [ "$(grep -cx 'nuke 15 near' "$tmp/fx.log")" = 2 ] \
   && [ "$(grep -n -x 'clear' "$tmp/fx.log" | tail -1 | cut -d: -f1)" -lt "$(grep -n "shots $take" "$tmp/fx.log" | cut -d: -f1)" ] \
   && ok "CPU shot: frames take without sound, cleared, then a sound take from -0.5 s ($take)" || bad "CPU shot: rc $rc $(tr '\n' ';' < "$tmp/fx.log")"
@@ -99,13 +101,26 @@ grep -qx '15600 blast drone' "$tmp/limit.log" && ok "CPU shot deadline from the 
 # client), WAV and capture.json in the shot's directory on a fresh tree (no fx/out yet)
 rm -rf "$FX/out"; : > "$tmp/fx.log"
 ( shot n7 'real missile' --at none --wav 2 --no-swap ) >/dev/null 2>&1; rc=$?
-[ $rc = 0 ] && [ "$(grep -c '^shots' "$tmp/fx.log")" = 1 ] && grep -qE '^shots \.wav-n7-[A-Za-z0-9]+ none@0 2$' "$tmp/fx.log" \
+[ $rc = 0 ] && [ "$(grep -c '^shots' "$tmp/fx.log")" = 1 ] && grep -qE '^shots _wav-n7-[A-Za-z0-9]+ none@0 2$' "$tmp/fx.log" \
   && [ "$(grep -cx 'real missile' "$tmp/fx.log")" = 1 ] && ok "CPU sound-only shot: one sound take, no frame take" || bad "CPU sound-only shot: rc $rc $(tr '\n' ';' < "$tmp/fx.log")"
 python3 -c 'import json,sys,wave; w=wave.open(sys.argv[1]); a=json.load(open(sys.argv[2])); sys.exit(0 if abs(w.getnframes()/w.getframerate()-2)<0.01 and a["frames"]==[] and a["audio"]["seconds"]==2 else 1)' \
   "$FX/out/n7/n7.wav" "$FX/out/n7/capture.json" 2>/dev/null && ok "CPU sound-only shot: WAV and capture.json" || bad "CPU sound-only shot output: $(ls "$FX/out" "$FX/out/n7" 2>&1 | tr '\n' ' ')"
 : > "$tmp/fx.log"; echo gpu > "$FX/renderer"
+# GPU frames are paced too (Sandbox.paceFrame): frames and sound in separate takes, as on a CPU renderer
 ( shot n4 'blast drone' --at 0.5 --wav 2 --no-swap ) >/dev/null 2>&1
-[ "$(grep -c '^shots' "$tmp/fx.log")" = 1 ] && grep -qx 'shots n4 0.5 2' "$tmp/fx.log" && ok "GPU shot: one take with sound" || bad "GPU shot: $(tr '\n' ';' < "$tmp/fx.log")"
+grep -qx 'shots n4 0.5 0' "$tmp/fx.log" && [ "$(grep -cE '^shots _wav-n4-[A-Za-z0-9]+ none@0 2$' "$tmp/fx.log")" = 1 ] \
+  && ok "GPU shot: frames take without sound, then a sound take" || bad "GPU shot: $(tr '\n' ';' < "$tmp/fx.log")"
+# every take name sent to the client is one its `shots` accepts (SandboxCommand: not starting with a dot), and a first
+# frame with a time of day gives the sound take a plain second
+: > "$tmp/fx.log"
+( shot n9 'blast drone' --at -0.5@12500,1 --wav 2 --no-swap ) >/dev/null 2>&1
+bad_names=$(sed -n 's/^shots \([^ ]*\) .*/\1/p' "$tmp/fx.log" | grep -vE '^[A-Za-z0-9_][A-Za-z0-9_.-]*$')
+[ -z "$bad_names" ] && grep -qE '^shots _wav-n9-[A-Za-z0-9]+ none@-0.5 2$' "$tmp/fx.log" && ok "sound take: a name and second the client accepts" \
+  || bad "sound take names: $(tr '\n' ';' < "$tmp/fx.log")"
+# sound only on a GPU: nothing is paced, one take with sound
+: > "$tmp/fx.log"
+( shot n8 'blast drone' --at none --wav 2 --no-swap ) >/dev/null 2>&1
+[ "$(grep -c '^shots' "$tmp/fx.log")" = 1 ] && grep -qx 'shots n8 none 2' "$tmp/fx.log" && ok "GPU sound-only shot: one take" || bad "GPU sound-only shot: $(tr '\n' ';' < "$tmp/fx.log")"
 
 # review probe: an empty shot name never replaces fx/out, and any valid effect text keeps capture.json valid
 out=$(bash "$ROOT/tools/probes/sound-only-output.sh" "$ROOT" 2>&1) && ok "probe sound-only-output" || bad "probe sound-only-output: $out"
@@ -123,4 +138,82 @@ out=$(INCOMING_SOFT_RESERVE_MB=100000000 soft_mem_ok 2>&1); rc=$?
 # gpu_lease.sh tells a CPU session by its socket: nested_kwin refuses any other name on the CPU path, before KWin
 out=$(INCOMING_SOFT=1 "$ROOT/tools/nested_kwin.sh" wayland-incoming-sandbox 64 64 true 2>&1); rc=$?
 [ $rc = 2 ] && [[ $out == *"wayland-incoming-soft-"* ]] && ok "CPU session needs a soft socket name" || bad "nested_kwin soft socket: $rc $out"
+# Dev client (tools/dev_client.sh) without a client: a line goes to the inbox and its answer comes back; an "error"
+# answer fails; the java a rigLaunch script runs is found even after quoted environment values
+(
+  source "$ROOT/tools/dev_client.sh"
+  DEV=$tmp/dev; mkdir -p "$DEV"
+  running() { true; }
+  answer() { for _ in $(seq 100); do f=$(ls "$DEV"/inbox/*.cmd 2>/dev/null | head -n 1); [ -n "$f" ] && break; sleep 0.05; done
+    printf '%s\n' "$1" > "${f%.cmd}.done"; mv "$f" "$f.seen"; }
+  answer "ok" & a=$!
+  out=$(hand "cmd time set 6000" 5); rc=$?; wait $a
+  [ $rc = 0 ] && [[ $out == "cmd time set 6000 → ok" ]] && [ "$(cat "$DEV"/inbox/*.seen)" = "cmd time set 6000" ] \
+    && echo "ok: dev client hand: line in, answer out" || { echo "FAIL: dev client hand: $rc $out"; exit 1; }
+  rm -f "$DEV"/inbox/*
+  answer "error not in a world" & a=$!
+  out=$(hand "cmd tp @s 0 80 0" 5); rc=$?; wait $a
+  [ $rc = 1 ] && [[ $out == *"error not in a world"* ]] && echo "ok: dev client hand: an error answer fails" \
+    || { echo "FAIL: dev client hand error: $rc $out"; exit 1; }
+  printf "#!/usr/bin/env bash\nexec env 'A=x y' '/opt/jbr/bin/java' '@/x/args.txt' '-cp' 'a:b' Main\n" > "$tmp/rig.sh"
+  [ "$(rig_java "$tmp/rig.sh")" = /opt/jbr/bin/java ] && echo "ok: dev client java from the rig script" \
+    || { echo "FAIL: rig_java: $(rig_java "$tmp/rig.sh")"; exit 1; }
+) || fail=1
+# Idle limit: a client whose job ended without `stop` (no command for INCOMING_SANDBOX_IDLE s) stops itself, its JVM
+# first (the client JVM is a grandchild of the display wrapper), and says why; a command keeps it alive; 0 never stops
+(
+  source "$ROOT/tools/sandbox.sh"
+  RUN=$tmp/idle-run FX=$tmp/idle-run/fx
+  # fake JVM: a script named java (with a direct #!/bin/bash its process name is java); a copy of sleep fails where coreutils is one multicall
+  # binary (GitHub runners: "coreutils: unknown program 'java'")
+  mkdir -p "$RUN/logs" "$FX" "$tmp/bin"
+  printf '#!/bin/bash\ntrap '"'"'kill $s 2>/dev/null; exit 0'"'"' TERM\nsleep "$1" & s=$!\nwait $s\n' > "$tmp/bin/java"; chmod +x "$tmp/bin/java"
+  export INCOMING_SANDBOX_VANILLA=1 INCOMING_SANDBOX_POLL=0.2 INCOMING_SANDBOX_IDLE=60
+  vanilla_display() { "$tmp/bin/java" 300 & wait; }
+  jpid() { pgrep -f "$tmp/bin/java 300" | head -1; }
+  ago() { touch -d "@$(( $(date +%s) - $1 ))" "${@:2}"; }
+  # the fake JVM itself must run, or every case below passes or fails for nothing
+  "$tmp/bin/java" 0 || echo "FAIL: fake JVM does not run: $(ls -l "$tmp/bin/java") $(findmnt -no OPTIONS -T "$tmp" 2>&1) $(command -v sleep)"
+  # idle since the world became ready two hours ago: stops within a poll
+  ago 7200 "$FX/ready"; rm -f "$FX/active" "$FX/stopped"
+  run_client 1280 720 & r=$!
+  for _ in $(seq 100); do kill -0 $r 2>/dev/null || break; sleep 0.1; done
+  kill -0 $r 2>/dev/null && { kill $(jpid) $r; echo "FAIL: idle sandbox still running after 10 s"; }
+  wait $r; rc=$?
+  [ $rc = 0 ] && [ -z "$(jpid)" ] && grep -q 'no command for 120 min (INCOMING_SANDBOX_IDLE=60 s): sandbox stopped' "$FX/stopped" \
+    && echo "ok: idle sandbox stops itself, JVM included, and says why" || echo "FAIL: idle stop: rc $rc java $(jpid) $(cat "$FX/stopped" 2>&1)"
+  # a recent command keeps it; the command aging past the limit stops it
+  rm -f "$FX/stopped"; touch "$FX/active"
+  run_client 1280 720 & r=$!
+  sleep 1.5
+  if [ -n "$(jpid)" ] && kill -0 $r 2>/dev/null; then echo "ok: a recent command keeps the sandbox"
+  else echo "FAIL: stopped despite a recent command: java '$(jpid)', run_client $(kill -0 $r 2>/dev/null && echo alive || echo gone), idle $(idle_seconds), stopped '$(cat "$FX/stopped" 2>/dev/null)', client.out '$(cat "$RUN/logs/client.out" 2>/dev/null)', $(ps -eo pid,ppid,stat,args | grep -F "$tmp" | grep -v grep)"; fi
+  ago 120 "$FX/active"
+  for _ in $(seq 50); do kill -0 $r 2>/dev/null || break; sleep 0.1; done
+  kill -0 $r 2>/dev/null && { echo "FAIL: not stopped after its last command aged"; kill $(jpid) $r; } || echo "ok: stops once the last command ages past the limit"
+  # 0: never stops
+  rm -f "$FX/stopped"; INCOMING_SANDBOX_IDLE=0 run_client 1280 720 & r=$!
+  sleep 1
+  kill -0 $r 2>/dev/null && [ ! -f "$FX/stopped" ] && echo "ok: INCOMING_SANDBOX_IDLE=0 never stops" || echo "FAIL: IDLE=0 stopped"
+  kill $(jpid) 2>/dev/null; wait $r 2>/dev/null
+  # every command marks activity; a command finding the client gone tells why it stopped
+  running() { true; }
+  ago 7200 "$FX/active"
+  ( for _ in $(seq 50); do for c in "$FX"/inbox/*.cmd; do [ -f "$c" ] && { echo ok > "${c%.cmd}.done"; rm -f "$c"; exit; }; done; sleep 0.1; done ) &
+  fx 'blast drone' >/dev/null
+  [ "$(idle_seconds)" -le 2 ] && echo "ok: a command marks the sandbox active" || echo "FAIL: fx did not mark activity: $(idle_seconds)"
+  # a long command (a nuke shot runs for minutes) keeps marking while it waits: answered after 13 s, fx/active is
+  # younger than the wait
+  ( sleep 13; for c in "$FX"/inbox/*.cmd; do echo ok > "${c%.cmd}.done"; rm -f "$c"; done ) &
+  fx 'nuke 15' >/dev/null &
+  sleep 0.5; ago 7200 "$FX/active"; wait
+  [ "$(idle_seconds)" -le 6 ] && echo "ok: a running command keeps marking the sandbox active" || echo "FAIL: long command not marked: $(idle_seconds)"
+  running() { false; }
+  echo "12:00:00 no command for 30 min (INCOMING_SANDBOX_IDLE=1800 s): sandbox stopped" > "$FX/stopped"
+  out=$(fx 'blast drone' 2>&1)
+  [[ $out == *"sandbox is not running"*"no command for 30 min"* ]] && echo "ok: a command after the idle stop says why" || echo "FAIL: not-running message: $out"
+) > "$tmp/idle.log" 2>&1
+cat "$tmp/idle.log"
+grep -q '^FAIL' "$tmp/idle.log" && fail=1
+[ "$(grep -c '^ok:' "$tmp/idle.log")" = 7 ] || { echo "FAIL: idle checks incomplete"; fail=1; }
 exit $fail

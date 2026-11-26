@@ -10,6 +10,7 @@ import net.minecraft.core.Direction;
 import net.minecraft.tags.BlockTags;
 import net.minecraft.world.level.BlockGetter;
 import net.minecraft.world.level.block.LiquidBlock;
+import ua.zentix.incoming.api.ClaimQuery;
 import ua.zentix.incoming.nuclear.model.BlastDamage;
 import ua.zentix.incoming.nuclear.model.BlastModel;
 import ua.zentix.incoming.nuclear.world.BlastBody;
@@ -50,6 +51,8 @@ import ua.zentix.incoming.registry.ModDamageTypes;
 import ua.zentix.incoming.registry.ModParticles;
 import ua.zentix.incoming.registry.ModSounds;
 import ua.zentix.incoming.strike.ImpactCost;
+import ua.zentix.incoming.strike.StrikeOwner;
+import ua.zentix.incoming.strike.StrikeRules;
 import ua.zentix.incoming.util.PoiRecords;
 import ua.zentix.incoming.util.Terrain;
 import ua.zentix.incoming.work.UnitQueue;
@@ -210,8 +213,9 @@ final class StagedExplosion implements UnitQueue.Job {
     private final boolean blocks;
     @Nullable
     private final Entity direct;
+    /** Owner UUID; the attacker is looked up when the explosion starts ({@link StrikeOwner}). */
     @Nullable
-    private final Entity owner;
+    private final UUID owner;
     @Nullable
     private final ExplosionDamageCalculator calculator;
 
@@ -231,6 +235,8 @@ final class StagedExplosion implements UnitQueue.Job {
     /** Entity distance at the start of the outward sweep, and glass/backing before any blocks are removed. */
     private List<Double> bodyRanges = List.of();
     private long beganAt, frontDueTick;
+    /** {@link #drain}: the queue finishes at shutdown. */
+    private boolean draining;
     /** UnitQueue polls blocked between units; ready is only checked at the start of its slice. */
     private LongSupplier frontTime = () -> Long.MAX_VALUE;
     private final java.util.Map<Entity, BlastBody.Before> bodyBefore = new java.util.IdentityHashMap<>();
@@ -261,6 +267,11 @@ final class StagedExplosion implements UnitQueue.Job {
     private static Explosion driving;
     @Nullable
     private static List<Entity> handed;
+    /** Job of {@link #driving} and that explosion's block list before claim handlers ({@link #onDetonateFirst}). */
+    @Nullable
+    private static StagedExplosion drivingJob;
+    @Nullable
+    private static long[] drivingOffered;
     /** Drops for entire explosion (like {@code Explosion.addOrAppendStack}). */
     private final List<Pair<ItemStack, BlockPos>> drops = new ArrayList<>();
     private boolean done;
@@ -292,20 +303,20 @@ final class StagedExplosion implements UnitQueue.Job {
     }
 
     StagedExplosion(BlastArea area, List<StagedExplosion> after, Vec3 at, float power, boolean fire, boolean blocks, @Nullable Entity direct,
-                    @Nullable Entity owner, @Nullable ExplosionDamageCalculator calculator) {
+                    @Nullable UUID owner, @Nullable ExplosionDamageCalculator calculator) {
         this(area, after, at, power, 0, fire, blocks, direct, owner, calculator);
     }
 
     /** Physical charge explosion {@code tntKg} kg TNT with {@code placement} contact. */
     StagedExplosion(BlastArea area, List<StagedExplosion> after, Vec3 at, double tntKg, SlabBreach.Placement placement, @Nullable Vec3 axis,
-                    boolean blocks, @Nullable Entity direct, @Nullable Entity owner) {
+                    boolean blocks, @Nullable Entity direct, @Nullable UUID owner) {
         this(area, after, at, (float) breakReach(tntKg), tntKg, false, blocks, direct, owner, null);
         this.placement = placement;
         this.axis = axis;
     }
 
     private StagedExplosion(BlastArea area, List<StagedExplosion> after, Vec3 at, float power, double charge, boolean fire, boolean blocks,
-                            @Nullable Entity direct, @Nullable Entity owner, @Nullable ExplosionDamageCalculator calculator) {
+                            @Nullable Entity direct, @Nullable UUID owner, @Nullable ExplosionDamageCalculator calculator) {
         this.area = area;
         this.after = after;
         this.at = at;
@@ -329,7 +340,7 @@ final class StagedExplosion implements UnitQueue.Job {
     @Override
     public boolean ready(ServerLevel level) {
         // Whole strike area covers this explosion too: shared condition preserves work order.
-        return (phase != Phase.FRONT || level.getGameTime() >= frontDueTick) && area.ready(level)
+        return (phase != Phase.FRONT || frontNow(level) >= frontDueTick) && area.ready(level)
                 && (frontArea == null || frontArea.ready(level));
     }
 
@@ -355,7 +366,7 @@ final class StagedExplosion implements UnitQueue.Job {
 
     @Override
     public boolean blocked() {
-        return waiting() || phase == Phase.FRONT && frontTime.getAsLong() < frontDueTick
+        return waiting() || phase == Phase.FRONT && !draining && frontTime.getAsLong() < frontDueTick
                 || (phase == Phase.BLOCKS || phase == Phase.FRONT) && area.peersPicking(this);
     }
 
@@ -419,15 +430,16 @@ final class StagedExplosion implements UnitQueue.Job {
         Level.ExplosionInteraction interaction = blocks ? Level.ExplosionInteraction.BLOCK : Level.ExplosionInteraction.NONE;
         if (SubLevels.inPlotGrid(level, new ChunkPos(BlockPos.containing(at)))) {
             counts.vanilla++;
-            explosion = level.explode(direct, ModDamageTypes.source(level, ModDamageTypes.STRIKE, direct, owner), calculator,
+            explosion = level.explode(direct, ModDamageTypes.source(level, ModDamageTypes.STRIKE, direct, StrikeOwner.online(level, owner)), calculator,
                     at.x, at.y, at.z, power, fire, interaction, ModParticles.NONE.get(), ModParticles.NONE.get(), ModSounds.SILENT);
             return false;
         }
         Explosion.BlockInteraction destroy = blocks ? Explosion.BlockInteraction.DESTROY_WITH_DECAY : Explosion.BlockInteraction.KEEP;
-        source = ModDamageTypes.source(level, ModDamageTypes.STRIKE, direct, owner);
+        source = ModDamageTypes.source(level, ModDamageTypes.STRIKE, direct, StrikeOwner.online(level, owner));
         Explosion e = new Explosion(level, direct, source, calculator,
                 at.x, at.y, at.z, power, fire, destroy, ModParticles.NONE.get(), ModParticles.NONE.get(), ModSounds.SILENT);
         explosion = e;
+        RULES.put(e, area.rules());
         if (calculator != null) damage = calculator;
         boolean cancelled = EventHooks.onExplosionStart(level, e);
         time(ExplosionStage.START, t);
@@ -461,7 +473,11 @@ final class StagedExplosion implements UnitQueue.Job {
         // Nested explosion (event handler) runs its own state: restore outer afterward.
         Explosion outer = driving;
         List<Entity> outerHanded = handed;
+        StagedExplosion outerJob = drivingJob;
+        long[] outerOffered = drivingOffered;
         driving = e;
+        drivingJob = this;
+        drivingOffered = null;
         handed = null;
         List<Entity> got;
         try {
@@ -470,6 +486,8 @@ final class StagedExplosion implements UnitQueue.Job {
             got = handed;
             handed = outerHanded;
             driving = outer;
+            drivingJob = outerJob;
+            drivingOffered = outerOffered;
         }
         time(ExplosionStage.VANILLA, t);
         if (got != null) {
@@ -574,12 +592,13 @@ final class StagedExplosion implements UnitQueue.Job {
         long t = System.nanoTime();
         if (SubLevels.inPlotGrid(level, new ChunkPos(BlockPos.containing(at)))) centre = SubLevels.toWorld(level, at);
         Explosion.BlockInteraction destroy = blocks ? Explosion.BlockInteraction.DESTROY_WITH_DECAY : Explosion.BlockInteraction.KEEP;
-        source = ModDamageTypes.source(level, ModDamageTypes.STRIKE, direct, owner);
+        source = ModDamageTypes.source(level, ModDamageTypes.STRIKE, direct, StrikeOwner.online(level, owner));
         Explosion e = new Explosion(level, direct, source, null, centre.x, centre.y, centre.z, power, false, destroy,
                 ModParticles.NONE.get(), ModParticles.NONE.get(), ModSounds.SILENT);
         explosion = e;
-        // Start handlers already see charge ({@link #chargeOf}).
+        // Start handlers already see charge ({@link #chargeOf}) and rules ({@link #rulesOf}).
         CHARGES.put(e, charge);
+        RULES.put(e, area.rules());
         cancelled = EventHooks.onExplosionStart(level, e);
         started = true;
         time(ExplosionStage.START, t);
@@ -887,6 +906,16 @@ final class StagedExplosion implements UnitQueue.Job {
         frontArea = BlastArea.hold(level, centre, craftReach(power));
     }
 
+    /** Shutdown drain: world time stops, so the front reaches every chosen block now instead of waiting for ticks. */
+    @Override
+    public void drain() {
+        draining = true;
+    }
+
+    private long frontNow(ServerLevel level) {
+        return draining ? Long.MAX_VALUE : level.getGameTime();
+    }
+
     private boolean front(ServerLevel level) {
         long t = System.nanoTime();
         LongSupplier watch = clock != null ? clock : WorkScheduler.impactClock(level.getServer()).sampler();
@@ -898,7 +927,7 @@ final class StagedExplosion implements UnitQueue.Job {
             double block = next < toBlow.size() ? new AABB(toBlow.get(next)).distanceToSqr(centre) : Double.POSITIVE_INFINITY;
             double craft = nextCraft < craftFront.size() ? craftFront.get(nextCraft).rangeSqr() : Double.POSITIVE_INFINITY;
             frontDueTick = beganAt + (long) Math.ceil(20 * BlastModel.chemicalArrivalSeconds(Math.sqrt(Math.min(craft, Math.min(body, block))), charge, true));
-            if (level.getGameTime() < frontDueTick) break;
+            if (frontNow(level) < frontDueTick) break;
             if (craft <= Math.min(block, body)) {
                 CraftFront hit = craftFront.get(nextCraft);
                 crafts(level, hit);
@@ -944,11 +973,11 @@ final class StagedExplosion implements UnitQueue.Job {
         if (entity instanceof LivingEntity living) {
             BlastBody.Before before = bodyBefore.remove(entity);
             if (before != null) before = before.drifted(entity.position());
-            if (!living.isSpectator() && !living.isPassenger()) BlastBody.hit(level, wave(), living, direct, owner, before);
+            if (!living.isSpectator() && !living.isPassenger()) BlastBody.hit(level, wave(), living, direct, source.getEntity(), before);
         } else {
             if (lightReach < 0) lightReach = reachFor(LIGHT_PSI, charge);
             if (entity.distanceToSqr(centre) <= lightReach * lightReach && Explosion.getSeenPercent(airOrigin(), entity) > 0)
-                entity.hurt(source, BREAKS_ANYTHING);
+                StrikeOwner.hurt(entity, source, BREAKS_ANYTHING);
         }
     }
 
@@ -993,18 +1022,22 @@ final class StagedExplosion implements UnitQueue.Job {
         Vec3 c = centre;
         double tnt = charge;
         boolean destroy = blocks;
-        Entity by = direct, from = owner;
+        StrikeRules rules = area.rules();
+        Entity by = direct, from = source != null ? source.getEntity() : StrikeOwner.online(level, owner);
         Warheads.whenReady(level, c, craftReach(craftPower), l -> {
             // During this explosion, handlers see charge ({@link #chargeOf}), and its entity list
             // in {@code Detonate} is empty ({@link #onDetonate}): no damage/knockback or body visibility rays.
             double outer = craftCharge;
+            StrikeRules outerRules = craftRules;
             craftCharge = tnt;
+            craftRules = rules;
             try {
                 l.explode(by, ModDamageTypes.source(l, ModDamageTypes.STRIKE, by, from), new CraftCharge(l, c, tnt, hit.id()),
                         c.x, c.y, c.z, craftPower, false, destroy ? Level.ExplosionInteraction.BLOCK : Level.ExplosionInteraction.NONE,
                         ModParticles.NONE.get(), ModParticles.NONE.get(), ModSounds.SILENT);
             } finally {
                 craftCharge = outer;
+                craftRules = outerRules;
             }
         });
     }
@@ -1080,6 +1113,19 @@ final class StagedExplosion implements UnitQueue.Job {
     /** Charges of ongoing charge explosions (event handlers, {@link #chargeOf}). */
     private static final java.util.Map<Explosion, Double> CHARGES = java.util.Collections.synchronizedMap(new java.util.WeakHashMap<>());
 
+    /** World rules of ongoing mod explosions ({@link #rulesOf}). */
+    private static final java.util.Map<Explosion, StrikeRules> RULES = java.util.Collections.synchronizedMap(new java.util.WeakHashMap<>());
+    /** Rules of the craft explosion running now ({@link #craftCharge}). */
+    @Nullable
+    private static StrikeRules craftRules;
+
+    /** World rules of a mod strike explosion ({@link BlastArea#rules}); null for vanilla/other explosions. */
+    @Nullable
+    static StrikeRules rulesOf(Explosion e) {
+        StrikeRules r = RULES.get(e);
+        return r != null ? r : craftCharge > 0 ? craftRules : null;
+    }
+
     /** Physical mod explosion charge, kg TNT; 0 vanilla/other explosion. */
     static double chargeOf(Explosion e) {
         Double c = CHARGES.get(e);
@@ -1088,16 +1134,38 @@ final class StagedExplosion implements UnitQueue.Job {
 
     /** Charge not canceled ({@code ExplosionEvent.Start}): post-main strike work only if explosion happened. */
     /**
-     * A claim event on this strike's behalf ({@link StrikeCollapse}): a zero-radius explosion attributed as this one is
-     * (the same projectile and damage source, so a handler keyed to the attacker treats the collapse as the blast).
+     * A claim query on this strike's behalf ({@link BlastArea#claims}, {@link StrikeCollapse}): attributed as this
+     * explosion is (the same projectile and damage source, so a handler keyed to the attacker treats it as the blast).
      */
-    Explosion attributed(ServerLevel level, Vec3 centre) {
-        return new Explosion(level, direct, source, null, centre.x, centre.y, centre.z, 0f, false, Explosion.BlockInteraction.DESTROY_WITH_DECAY,
-                ModParticles.NONE.get(), ModParticles.NONE.get(), ModSounds.SILENT);
+    ClaimQuery attributed(ServerLevel level, Vec3 centre) {
+        return new ClaimQuery(level, direct, source != null ? source : ModDamageTypes.source(level, ModDamageTypes.STRIKE, direct, null), centre);
     }
 
     boolean happened() {
         return started && !cancelled;
+    }
+
+    private static long[] positions(List<BlockPos> list) {
+        long[] at = new long[list.size()];
+        for (int i = 0; i < at.length; i++) at[i] = list.get(i).asLong();
+        return at;
+    }
+
+    /**
+     * Claim handlers removed some of the {@code offered} positions from this explosion's {@code Detonate} list: their
+     * chunks are denied to every later writer of the strike ({@link BlastArea#claims}).
+     */
+    private void denied(long[] offered, List<BlockPos> kept) {
+        if (kept.size() == offered.length) {
+            boolean same = true;
+            for (int i = 0; i < offered.length && same; i++) same = kept.get(i).asLong() == offered[i];
+            if (same) return;
+        }
+        LongOpenHashSet left = new LongOpenHashSet(kept.size());
+        for (BlockPos p : kept) left.add(p.asLong());
+        for (long p : offered) {
+            if (!left.contains(p)) area.claims().deny(ChunkPos.asLong(BlockPos.getX(p) >> 4, BlockPos.getZ(p) >> 4));
+        }
     }
 
     /** First unit ran (area ready), claim handler did not cancel. */
@@ -1119,7 +1187,9 @@ final class StagedExplosion implements UnitQueue.Job {
         entities = new ArrayList<>(level.getEntities((Entity) null, new AABB(x0, y0, z0, x1, y1, z1)));
         time(ExplosionStage.ENTITIES, t);
         t = System.nanoTime();
+        long[] offered = positions(e.getToBlow());
         EventHooks.onExplosionDetonate(level, e, entities, f2);
+        denied(offered, e.getToBlow());
         time(ExplosionStage.DETONATE, t);
         phase = Phase.SPLIT;
         return true;
@@ -1241,7 +1311,7 @@ final class StagedExplosion implements UnitQueue.Job {
             d5 /= d12;
             d7 /= d12;
             d9 /= d12;
-            if (damage.shouldDamageEntity(e, entity)) entity.hurt(source, damage.getEntityDamageAmount(e, entity));
+            if (damage.shouldDamageEntity(e, entity)) StrikeOwner.hurt(entity, source, damage.getEntityDamageAmount(e, entity));
             double d13 = (1.0 - d11) * (double) Explosion.getSeenPercent(at, entity) * (double) damage.getKnockbackMultiplier(entity);
             double d10 = entity instanceof LivingEntity living ? d13 * (1.0 - living.getAttributeValue(Attributes.EXPLOSION_KNOCKBACK_RESISTANCE)) : d13;
             Vec3 push = EventHooks.getExplosionKnockback(level, e, entity, new Vec3(d5 * d10, d7 * d10, d9 * d10));
@@ -1275,6 +1345,10 @@ final class StagedExplosion implements UnitQueue.Job {
      * handler-created nested ones) are distinct objects, untouched.
      */
     static void onDetonate(net.neoforged.neoforge.event.level.ExplosionEvent.Detonate event) {
+        if (driving != null && event.getExplosion() == driving && drivingJob != null && drivingOffered != null) {
+            drivingJob.denied(drivingOffered, event.getAffectedBlocks());
+            drivingOffered = null;
+        }
         if (craftCharge > 0 && CHARGES.get(event.getExplosion()) == null) {
             event.getAffectedEntities().clear();
             return;
@@ -1283,6 +1357,14 @@ final class StagedExplosion implements UnitQueue.Job {
         List<Entity> list = event.getAffectedEntities();
         handed = new ArrayList<>(list);
         list.clear();
+    }
+
+    /**
+     * {@code ExplosionEvent.Detonate}, {@code HIGHEST}: the block list of the explosion whose vanilla {@code explode()}
+     * mod runs, before claim handlers edit it ({@link #onDetonate} records what they removed).
+     */
+    static void onDetonateFirst(net.neoforged.neoforge.event.level.ExplosionEvent.Detonate event) {
+        if (driving != null && event.getExplosion() == driving && drivingJob != null) drivingOffered = positions(event.getAffectedBlocks());
     }
 
     /** Vanilla player explosion packet: own knockback, no blocks (clients see removals as they happen). */

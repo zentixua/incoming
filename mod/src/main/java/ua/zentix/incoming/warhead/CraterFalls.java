@@ -15,9 +15,7 @@ import net.minecraft.world.level.block.FallingBlock;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.phys.Vec3;
 import net.neoforged.neoforge.event.entity.EntityJoinLevelEvent;
-import net.neoforged.neoforge.event.tick.EntityTickEvent;
 import org.jetbrains.annotations.Nullable;
-import ua.zentix.incoming.IncomingConfig;
 import ua.zentix.incoming.registry.ModAttachments;
 
 import java.util.ArrayList;
@@ -41,7 +39,6 @@ import java.util.UUID;
  * ModAttachments#CRATER_FALLS}.
  */
 public final class CraterFalls {
-    private static final String COLLAPSE_RUBBLE = "incoming:collapse_rubble";
     /** Live falling blocks starting within blast area. */
     public static final int LIVE_CAP = 48;
     /** Live falling blocks across all world areas: widely dispersed salvo areas do not overlap. */
@@ -97,21 +94,14 @@ public final class CraterFalls {
         if (get(level).settle(level, falling, from)) event.setCanceled(true);
     }
 
-    /** Vanilla keeps the falling-block picture while suppressing placement and item drops on impact. */
-    static void markRubble(FallingBlockEntity falling) {
-        falling.addTag(COLLAPSE_RUBBLE);
+    /**
+     * Collapse rubble: vanilla keeps the falling-block picture while suppressing the item drop on impact, and with
+     * {@code stays} off the placement too. {@code stays}: the strike's {@code world.debris_stay} ({@link BlastArea#rules}), decided once: vanilla saves the
+     * cancelled placement with the entity, so a rule changed while it falls does not reach it.
+     */
+    static void markRubble(FallingBlockEntity falling, boolean stays) {
         falling.dropItem = false;
-        if (!rubbleStays()) falling.disableDrop();
-    }
-
-    public static void onEntityTick(EntityTickEvent.Pre event) {
-        // Config can reload while a block is airborne (including after an unload and reload).
-        if (event.getEntity() instanceof FallingBlockEntity falling && falling.level() instanceof ServerLevel
-                && falling.getTags().contains(COLLAPSE_RUBBLE) && !rubbleStays()) falling.disableDrop();
-    }
-
-    static boolean rubbleStays() {
-        return IncomingConfig.SERVER.debrisStay.get();
+        if (!stays) falling.disableDrop();
     }
 
     /**

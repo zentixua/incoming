@@ -14,7 +14,7 @@ import net.minecraft.util.RandomSource;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.levelgen.Heightmap;
 import net.minecraft.world.phys.Vec3;
-import ua.zentix.incoming.IncomingConfig;
+import ua.zentix.incoming.claim.BlockGate;
 import ua.zentix.incoming.nuclear.model.CraterModel;
 import ua.zentix.incoming.nuclear.model.FuelFireball;
 import ua.zentix.incoming.nuclear.model.PulseIgnition;
@@ -57,20 +57,20 @@ final class Craters {
      * follows law: Lancet/Grad yield a one-block hole or none). No crater if burst is higher above ground than
      * crater depth (roof, floor). Returns columns checked.
      */
-    static int dig(ServerLevel level, Vec3 pos, double tntKg, GroundMaterial mat, long seed) {
+    static int dig(ServerLevel level, BlockGate gate, Vec3 pos, double tntKg, GroundMaterial mat, long seed) {
         CraterModel.Soil soil = mat.soil();
-        return dig(level, pos, CraterModel.chargeRadius(tntKg, soil), CraterModel.chargeDepth(tntKg, soil), mat, RandomSource.create(seed));
+        return dig(level, gate, pos, CraterModel.chargeRadius(tntKg, soil), CraterModel.chargeDepth(tntKg, soil), mat, RandomSource.create(seed));
     }
 
     /**
      * Crater at {@code pos}, {@code rc} radius/{@code depth} depth in blocks (same bowl/rim). Returns columns
      * checked.
      */
-    static int dig(ServerLevel level, Vec3 pos, double rc, double depth, GroundMaterial mat) {
-        return dig(level, pos, rc, depth, mat, level.random);
+    static int dig(ServerLevel level, BlockGate gate, Vec3 pos, double rc, double depth, GroundMaterial mat) {
+        return dig(level, gate, pos, rc, depth, mat, level.random);
     }
 
-    private static int dig(ServerLevel level, Vec3 pos, double rc, double depth, GroundMaterial mat, RandomSource random) {
+    private static int dig(ServerLevel level, BlockGate gate, Vec3 pos, double rc, double depth, GroundMaterial mat, RandomSource random) {
         if (depth <= 0) return 0;
         int cx = Mth.floor(pos.x), cz = Mth.floor(pos.z);
         if (!Terrain.neighbourhoodReady(level, cx >> 4, cz >> 4)) return 0;
@@ -95,7 +95,7 @@ final class Craters {
         for (int x = cx - n; x <= cx + n; x++) {
             for (int z = cz - n; z <= cz + n; z++) {
                 if (!Terrain.neighbourhoodReady(level, x >> 4, z >> 4)) continue;
-                CraterJob.digColumn(level, x, z, pos, outer, phase, profile, mat.debris(), null, CraterJob.Mode.DIG, random);
+                CraterJob.digColumn(level, x, z, pos, outer, phase, profile, mat.debris(), null, CraterJob.Mode.DIG, random, gate);
                 columns++;
             }
         }
@@ -120,10 +120,10 @@ final class Craters {
      * on nearby stone/sand. At Shahed impact, one fifth dry grass and three quarters foliage ignite, less toward
      * edge; missile almost all grass/leaves inside, leaves also at 1.5 radii (quarter) and canopy above ball;
      * fabric rarely ({@code FuelFireballTest}). Queue traversal ({@link Ignition}) after {@code after} explosions
-     * if explosion {@code happened}.
+     * if explosion {@code happened}. The caller holds the strike's {@code world.fire} ({@link BlastArea#rules}).
      */
     static void ignite(ServerLevel level, BlastArea area, List<StagedExplosion> after, BooleanSupplier happened, Vec3 pos, double fuelKg) {
-        if (!IncomingConfig.SERVER.fire.get() || FuelFireball.ballKg(fuelKg) <= 0) return;
+        if (FuelFireball.ballKg(fuelKg) <= 0) return;
         StrikeWorld.get(level).impacts().add(level, new Ignition(area.retain(), after, happened, pos, FuelFireball.ballKg(fuelKg)));
     }
 
@@ -223,7 +223,7 @@ final class Craters {
                             double share = PulseIgnition.share(q, fuel(level, n, s, dir.getOpposite()));
                             burns.put(key, share > 0 && level.random.nextDouble() < share);
                         }
-                        if (burns.get(key) && !lit.contains(key) && light(level, p, here, n.immutable(), s, dir)) lit.add(key);
+                        if (burns.get(key) && !lit.contains(key) && light(level, area.claims(), p, here, n.immutable(), s, dir)) lit.add(key);
                     }
                     if (seen.add(n.asLong())) {
                         if (n.getY() > startY && n.getY() > ceiling(level, n.getX(), n.getZ())) continue;
@@ -292,13 +292,14 @@ final class Craters {
      * attached to fuel beneath or with no floor (wall fire). No fire over stone, sand, rails beside fuel: vanilla
      * fire with solid floor renders on floor and would burn sand. Returns whether placed.
      */
-    private static boolean light(ServerLevel level, BlockPos air, BlockState here, BlockPos fuel, BlockState s, Direction dir) {
+    private static boolean light(ServerLevel level, BlockGate gate, BlockPos air, BlockState here, BlockPos fuel, BlockState s, Direction dir) {
         // Shapeless plant (grass, flowers, crops, sugar cane): vanilla-style fire in place.
-        if (s.getCollisionShape(level, fuel).isEmpty() && s.getFluidState().isEmpty()) return Warheads.igniteIn(level, fuel);
+        if (s.getCollisionShape(level, fuel).isEmpty() && s.getFluidState().isEmpty()) return gate.allows(level, fuel) && Warheads.igniteIn(level, fuel);
         if (!here.isAir()) return false;
         BlockPos below = air.below();
         if (dir != Direction.DOWN && level.getBlockState(below).isFaceSturdy(level, below, Direction.UP)) return false;
-        return Warheads.igniteAt(level, air.immutable());
+        BlockPos at = air.immutable();
+        return gate.allows(level, at) && Warheads.igniteAt(level, at);
     }
 
     private static boolean passes(ServerLevel level, BlockPos p, BlockState s) {

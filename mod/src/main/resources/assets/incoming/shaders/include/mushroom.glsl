@@ -141,17 +141,27 @@ struct Mush {
     float footMerge;
 };
 
+// The single-burst ray reads its one body from draw uniforms. The radial tables and
+// shadow tiles following these parameters keep their ordinary texture coordinates.
+vec4 mushBodyTexel(sampler2D data, int k, int column) {
+#ifdef PALL_SINGLE
+    return PallMushBody[column];
+#else
+    return texelFetch(data, ivec2(column, k), 0);
+#endif
+}
+
 Mush mushLoad(sampler2D data, int k) {
-    vec4 t0 = texelFetch(data, ivec2(0, k), 0), t1 = texelFetch(data, ivec2(1, k), 0), t2 = texelFetch(data, ivec2(2, k), 0);
-    vec4 t3 = texelFetch(data, ivec2(3, k), 0), t4 = texelFetch(data, ivec2(4, k), 0), t6 = texelFetch(data, ivec2(6, k), 0);
-    vec4 t8 = texelFetch(data, ivec2(8, k), 0), t10 = texelFetch(data, ivec2(10, k), 0), t11 = texelFetch(data, ivec2(11, k), 0);
-    vec4 t12 = texelFetch(data, ivec2(12, k), 0), t13 = texelFetch(data, ivec2(13, k), 0), t15 = texelFetch(data, ivec2(15, k), 0);
-    vec4 t16 = texelFetch(data, ivec2(16, k), 0), t19 = texelFetch(data, ivec2(19, k), 0);
+    vec4 t0 = mushBodyTexel(data, k, 0), t1 = mushBodyTexel(data, k, 1), t2 = mushBodyTexel(data, k, 2);
+    vec4 t3 = mushBodyTexel(data, k, 3), t4 = mushBodyTexel(data, k, 4), t6 = mushBodyTexel(data, k, 6);
+    vec4 t8 = mushBodyTexel(data, k, 8), t10 = mushBodyTexel(data, k, 10), t11 = mushBodyTexel(data, k, 11);
+    vec4 t12 = mushBodyTexel(data, k, 12), t13 = mushBodyTexel(data, k, 13), t15 = mushBodyTexel(data, k, 15);
+    vec4 t16 = mushBodyTexel(data, k, 16), t19 = mushBodyTexel(data, k, 19);
     // table epicenter is x/z/ground y (like pall slot); position becomes x/y/z
     return Mush(t0.xzy, t1.xy, t1.z, t1.w, t2.x, t2.y, t2.z, t2.w, t3.x, t3.y, t3.z, t3.w, t4.x, t4.y, t4.z, t4.w,
-            texelFetch(data, ivec2(5, k), 0), t6.x, t6.y, t6.z, t6.w, texelFetch(data, ivec2(7, k), 0), t8.x, t8.y, t8.z, t8.w,
-            texelFetch(data, ivec2(9, k), 0), t10.x, t10.y, t10.z, t10.w, t11.x, t11.y, t11.z, t12.rgb, t12.w,
-            t13.x, t13.y, t13.z, t13.w, texelFetch(data, ivec2(14, k), 0), t15.x, t15.y, t15.z, t15.w, t16.x, t16.y, t16.z, t16.w,
+            mushBodyTexel(data, k, 5), t6.x, t6.y, t6.z, t6.w, mushBodyTexel(data, k, 7), t8.x, t8.y, t8.z, t8.w,
+            mushBodyTexel(data, k, 9), t10.x, t10.y, t10.z, t10.w, t11.x, t11.y, t11.z, t12.rgb, t12.w,
+            t13.x, t13.y, t13.z, t13.w, mushBodyTexel(data, k, 14), t15.x, t15.y, t15.z, t15.w, t16.x, t16.y, t16.z, t16.w,
             t19.x, t19.y, t19.z, t19.w, t11.w);
 }
 
@@ -209,6 +219,7 @@ float mushFootDensity(float h, float top, float sigma, float share, float rise) 
 // inflow-band share at height h: tapers from layer top (or half merge height if lower) to
 // merge height merge (density does not: already stem density at merge) (+1e-6: ground-level merge has no edge, equal-edge smoothstep undefined)
 float mushFootNarrow(float h, float top, float merge) {
+    if (merge <= 0.0) return 0.0;
     return 1.0 - smoothstep(min(top, 0.5 * merge), merge + 1e-6, h);
 }
 
@@ -281,7 +292,9 @@ float mushSmin(float a, float b, float k) {
 
 // Edge density: 1 inside, 0 outside, softened over ±e blocks (d signed distance to billow-displaced edge)
 float mushEdge(float d, float e) {
-    return smoothstep(-e, e, -d);
+    if (e > 0.0) return smoothstep(-e, e, -d);
+    if (d > 0.0) return 0.0;
+    return 1.0;
 }
 
 // Eye-relative p in mushroom body: x/z from mushroom axis at this height (with drift), y above epicenter ground
@@ -465,6 +478,7 @@ vec4 mushDist(Mush m, vec3 q) {
 // mushStemDist and mushEdge just like the wall; an independent height cutoff would slice off its billows.
 float mushStemSigma(float h, float capBot, float tau, float radius) {
     if (h < -0.02 * capBot) return 0.0;
+    if (radius <= 0.0) return 0.0;
     return tau / (2.0 * radius);
 }
 
@@ -713,23 +727,41 @@ vec3 mushBallCap(vec3 e, float adapt) {
     return mushFilm3(e * mushBallGain(dot(e, vec3(0.2126, 0.7152, 0.0722)), adapt));
 }
 
-// Mushroom k transmittance along ray dir over [0, len], noiseless (steps steps), for layer quads before particle
-float mushTransmit(sampler2D data, vec3 dir, float len, int steps) {
-    float through = 1.0;
+// Noiseless extinction of all the mushroom's parts at local q, 1/block
+float mushDepthAt(Mush m, vec3 q) {
+    return dot(mushMean(m, q), vec4(1.0));
+}
+
+// Accumulate one body's clipped interval at its own midpoint spacing.
+void mushAddDepth(inout float depth, Mush m, vec3 dir, vec2 span, int steps) {
+    if (span.y <= span.x) return;
+    float ds = (span.y - span.x) / float(steps);
+    for (int i = 0; i < steps; i++) {
+        vec3 q = mushLocal(m, dir * (span.x + (float(i) + 0.5) * ds));
+        depth += mushDepthAt(m, q) * ds;
+    }
+}
+
+// Integrated noiseless mushroom depth on the eye ray dir over [start, len]
+float mushDepthRange(sampler2D data, vec3 dir, float start, float len, int steps) {
+    float depth = 0.0;
     for (int k = 0; k < MUSHROOMS; k++) {
         if (!mushOn(data, k)) continue;
         Mush m = mushLoad(data, k);
         vec2 span = mushSpan(m, dir);
+        span.x = max(span.x, start);
         span.y = min(span.y, len);
-        if (span.y <= span.x) continue;
-        float ds = (span.y - span.x) / float(steps), tau = 0.0;
-        for (int i = 0; i < steps; i++) {
-            tau += dot(mushMean(m, mushLocal(m, dir * (span.x + (float(i) + 0.5) * ds))), vec4(1.0)) * ds;
-        }
-        // real transmittance: haze in front of the cap shows the air's light (fx_pall: passMatter), never what lies behind
-        through *= exp(-tau);
+        mushAddDepth(depth, m, dir, span, steps);
     }
-    return through;
+    return depth;
+}
+
+float mushTransmitRange(sampler2D data, vec3 dir, float start, float len, int steps) {
+    return exp(-mushDepthRange(data, dir, start, len, steps));
+}
+
+float mushTransmit(sampler2D data, vec3 dir, float len, int steps) {
+    return mushTransmitRange(data, dir, 0.0, len, steps);
 }
 
 // ---------------------------------------------------------------- mushroom sunlight shadow (PallPass: fx_mush_shadow)

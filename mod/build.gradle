@@ -45,6 +45,32 @@ repositories {
         forRepository { maven { url = 'https://api.modrinth.com/maven' } }
         filter { includeGroup 'maven.modrinth' }
     }
+    // Mekanism API (MIT): IRadiationShielding for compat/mekanism
+    exclusiveContent {
+        forRepository { maven { url = 'https://modmaven.dev/' } }
+        filter { includeGroup 'mekanism' }
+    }
+    // CC:Tweaked API (MPL-2.0): PeripheralCapability, IPeripheral for compat/computercraft
+    exclusiveContent {
+        forRepository { maven { url = 'https://maven.squiddev.cc' } }
+        filter { includeGroup 'cc.tweaked' }
+    }
+    // FTB Teams (optional): its public API for compat/ftbteams, from FTB's own maven
+    exclusiveContent {
+        forRepository { maven { url = 'https://maven.ftb.dev/releases' } }
+        filter { includeGroup 'dev.ftb.mods' }
+    }
+    // Architectury (LGPL-3.0, FTB Teams' required dependency): the event type of FTB Teams' membership events
+    exclusiveContent {
+        forRepository { maven { url = 'https://maven.architectury.dev/' } }
+        filter { includeGroup 'dev.architectury' }
+    }
+    // Ponder (MIT, Create's own library): its VirtualBlockEntity is a supertype of Create's block entities, so the
+    // GameTests that drive a Display Link compile (compat/create)
+    exclusiveContent {
+        forRepository { maven { url = 'https://maven.createmod.net' } }
+        filter { includeGroup 'net.createmod.ponder' }
+    }
     // glsl-processor — parsing of Veil's GLSL (carried by Sable): ShaderSourceTest runs its shaders through it
     exclusiveContent {
         forRepository { maven { url = 'https://maven.blamejared.com' } }
@@ -100,9 +126,28 @@ neoForge {
         minecraftVersion = project.parchment_minecraft_version
     }
     runs {
+        // The standard dev client (docs/dev-pipeline.md, section 2; tools/dev_client.sh runs it without a window).
+        // -PquickPlay=<save>: straight into that world of run/client/saves (vanilla --quickPlaySingleplayer).
+        // -PhotSwap[=<port>]: JetBrains Runtime from the Gradle toolchain (foojay downloads it; vendor JETBRAINS), enhanced
+        // class redefinition and a JDWP port on loopback (default 5005), where an IDE's "reload changed classes" or jdb's
+        // `redefine` replaces classes in the running client.
+        // -PclientSize=WxH: window size (vanilla --width/--height). INCOMING_CLIENT_HEAP: fixed heap (tools/soft_gl.sh).
         client {
             client()
             gameDirectory = project.file('run/client')
+            if (project.findProperty('quickPlay')) programArguments.addAll '--quickPlaySingleplayer', project.findProperty('quickPlay') as String
+            if (project.findProperty('clientSize')) {
+                def size = (project.findProperty('clientSize') as String).split('x')
+                programArguments.addAll '--width', size[0], '--height', size[1]
+            }
+            if (System.getenv('INCOMING_CLIENT_HEAP')) jvmArgument "-Xmx${System.getenv('INCOMING_CLIENT_HEAP')}"
+            if (project.hasProperty('hotSwap')) {
+                def port = project.findProperty('hotSwap') ?: '5005'
+                jvmArgument '-XX:+AllowEnhancedClassRedefinition'
+                jvmArgument "-agentlib:jdwp=transport=dt_socket,server=y,suspend=n,address=127.0.0.1:${port}"
+                // the agent's keyboard (tools/dev_client.sh, devtest DevHands): chat commands, F3+T, F2, F1 as files
+                systemProperty 'incoming.dev.inbox', project.file('run/client/dev/inbox').absolutePath
+            }
         }
         // client without a window for the check scenario (see src/devtest/.../ClientScenario and
         // tools/client_scenario.sh)
@@ -158,6 +203,10 @@ neoForge {
             // effects-layer GPU time per pass and part (drain frames, LayerTimes): INCOMING_FX_DRAIN=1 tools/sandbox.sh
             // start
             if (System.getenv('INCOMING_FX_DRAIN')) systemProperty 'incoming.fx.drain', 'true'
+            // the dust wave counts as not ready for this many frames after it first has visible dust (A3: the WARN, and no other dust)
+            if (System.getenv('INCOMING_DUSTWAVE_NOT_READY')) systemProperty 'incoming.dustwave.notReadyFrames', System.getenv('INCOMING_DUSTWAVE_NOT_READY')
+            // the nuclear diagnostics (clock CSV, dust wave A1/A4 lines) in scenario and sandbox runs
+            if (System.getenv('INCOMING_NUKE_DIAG')) systemProperty 'incoming.nukeDiag', 'true'
         }
         server {
             server()
@@ -276,6 +325,37 @@ dependencies {
     // LOD Server Support (MIT): only for compilation — far terrain from the server through its client API
     // (client/map/LssTerrain)
     compileOnly "maven.modrinth:lod-server-support:${lss_version}"
+    // Mekanism: only the API for compilation — worn radiation shielding from its item capability (compat/mekanism);
+    // unit tests use it too (the adapter against a stand-in shielding)
+    compileOnly "mekanism:Mekanism:${minecraft_version}-${mekanism_version}:api"
+    testImplementation "mekanism:Mekanism:${minecraft_version}-${mekanism_version}:api"
+    // sable-companion is always in the mod jar (jarJar): unit tests load classes reaching SubLevels with it, as in game;
+    // without Sable its built-in stub answers "no craft"
+    testImplementation "dev.ryanhcode.sable-companion:sable-companion-common-${minecraft_version}:${sable_companion_version}"
+    // Jade: only for compilation — the overlay plugin (compat/jade, found by Jade's @WailaPlugin scan); unit tests
+    // check its data field against Jade's interfaces
+    compileOnly "maven.modrinth:jade:${jade_version}"
+    testImplementation "maven.modrinth:jade:${jade_version}"
+    // CC:Tweaked: only the API for compilation — launcher and SAM peripherals (compat/computercraft); unit tests run the
+    // adapters against stand-in computers
+    compileOnly "cc.tweaked:cc-tweaked-${minecraft_version}-core-api:${cctweaked_version}"
+    compileOnly "cc.tweaked:cc-tweaked-${minecraft_version}-forge-api:${cctweaked_version}"
+    testImplementation "cc.tweaked:cc-tweaked-${minecraft_version}-core-api:${cctweaked_version}"
+    testImplementation "cc.tweaked:cc-tweaked-${minecraft_version}-forge-api:${cctweaked_version}"
+    // Create: only for compilation — Display Link sources of the SAM and the launcher (compat/create); the GameTest
+    // runtime has the same Create jar from the pack (runtimeModPatterns), so GameTests read the sources through Create
+    compileOnly("maven.modrinth:create:${create_version}") { transitive = false }
+    devtestCompileOnly("net.createmod.ponder:ponder-neoforge:${ponder_version}") { transitive = false }
+    // FTB Teams, Architectury and Open Parties and Claims: only their APIs for compilation — sides from parties
+    // (compat/ftbteams, compat/opac); unit tests run the adapters against stand-in teams and parties
+    compileOnly("dev.ftb.mods:ftb-teams-neoforge:${ftbteams_version}") { transitive = false }
+    compileOnly("dev.architectury:architectury-neoforge:${architectury_version}") { transitive = false }
+    compileOnly "maven.modrinth:open-parties-and-claims:${opac_version}"
+    testImplementation("dev.ftb.mods:ftb-teams-neoforge:${ftbteams_version}") { transitive = false }
+    testImplementation("dev.architectury:architectury-neoforge:${architectury_version}") { transitive = false }
+    // FTB Library only for the unit tests' stand-in teams: FTB Teams' Team interface names its colour type
+    testRuntimeOnly("dev.ftb.mods:ftb-library-neoforge:${ftblibrary_version}") { transitive = false }
+    testImplementation "maven.modrinth:open-parties-and-claims:${opac_version}"
     // a range, not an exact version: Sable carries the same companion with its own range, and FML picks one version
     // suitable for all — exactly [1.6.0] would not let in a game with Sable that brings 1.6.1
     jarJar("dev.ryanhcode.sable-companion:sable-companion-common-${minecraft_version}") {
@@ -299,6 +379,8 @@ dependencies {
     testImplementation 'com.google.code.gson:gson:2.10.1'
     // same version as Veil in the Sable pack (Veil 4.3.2): ShaderSourceTest prints the shaders as Veil does
     testImplementation 'io.github.ocelot:glsl-processor:0.2.3'
+    // the Groovy of Almighty's rule scripts (its build.gradle): AlmightyNoteTest runs the note's rule recipes
+    testImplementation 'org.apache.groovy:groovy:4.0.33'
 }
 
 // CI (build.yml, "Юнит-тесты"): -PtestGroup=slow runs the three slowest classes (@Tag("slow"), 1–3 min each), the rest
@@ -417,7 +499,14 @@ tasks.register('copyRuntimeMods_stress', Sync) {
     onlyIf { mcModsDir.isDirectory() }
 }
 tasks.matching { it.name in ['runStressServer', 'runStressClient'] }.configureEach { dependsOn 'copyRuntimeMods_stress' }
-tasks.matching { it.name == 'runClient' }.configureEach { dependsOn 'copyRuntimeMods_client' }
+tasks.matching { it.name == 'runClient' }.configureEach {
+    dependsOn 'copyRuntimeMods_client'
+    // -PhotSwap: the client runs on JetBrains Runtime (enhanced class redefinition); the build itself stays on the toolchain
+    if (project.hasProperty('hotSwap')) javaLauncher = javaToolchains.launcherFor {
+        languageVersion = JavaLanguageVersion.of(21)
+        vendor = JvmVendorSpec.JETBRAINS
+    }
+}
 tasks.matching { it.name == 'runServer' }.configureEach { dependsOn 'copyRuntimeMods_server' }
 tasks.matching { it.name == 'runClientScenario' }.configureEach {
     dependsOn 'copyRuntimeMods_scenario'

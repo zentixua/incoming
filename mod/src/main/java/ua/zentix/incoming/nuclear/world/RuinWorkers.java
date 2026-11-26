@@ -148,7 +148,7 @@ public final class RuinWorkers {
      * Whether another {@code priority} task admitted: pool tasks at its priority and higher below {@link #capacity}.
      * Lower priorities excluded from count: queue puts this task before them.
      */
-    static boolean admit(Priority priority) {
+    public static boolean admit(Priority priority) {
         return inFlight(priority) < capacity();
     }
 

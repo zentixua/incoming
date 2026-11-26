@@ -14,6 +14,7 @@ import net.minecraft.world.level.ChunkPos;
 import net.minecraft.world.level.chunk.LevelChunk;
 import net.minecraft.world.phys.Vec3;
 import org.jetbrains.annotations.Nullable;
+import ua.zentix.incoming.claim.NuclearClaims;
 import ua.zentix.incoming.Incoming;
 import ua.zentix.incoming.IncomingConfig;
 import ua.zentix.incoming.registry.ModAttachments;
@@ -96,8 +97,8 @@ public final class NuclearPrep {
      */
     static final long PLANS_CAP = 512L << 20;
     /** Concurrent disk reads and estimated memory per read (parsed city chunk tens of KB). */
-    private static final int READS = 64;
-    private static final long READ_BYTES = 96L << 10;
+    static final int READS = 64;
+    static final long READ_BYTES = 96L << 10;
     /** Allowed detonation-location difference from plan, blocks. */
     private static final double SAME_PLACE = 8;
 
@@ -283,7 +284,7 @@ public final class NuclearPrep {
     private final List<Prep> preps = new ArrayList<>();
     /** Strikes whose preparation failed: do not restart (otherwise error logged every tick). */
     private final java.util.Set<Integer> failed = new java.util.HashSet<>();
-    private final WorkClock clock = WorkClock.decaying(0.5);
+    private WorkClock clock = WorkClock.decaying(0.5);
 
     /** Total prebuilt ruins across strikes (tests, status). */
     public int plannedChunks() {
@@ -325,6 +326,28 @@ public final class NuclearPrep {
             bytes += (long) (p.order.length + p.edge.length + p.toScan.size()) * Long.BYTES;
         }
         return bytes;
+    }
+
+    static final int MATERIAL_WINDOW = 32;
+
+    /** Each preparation retains its own window. Concurrent surveys reserve half of one window across dimensions. */
+    static int preparationSlots(int outstanding, boolean surveying) {
+        return Math.max(0, (surveying ? READS - MATERIAL_WINDOW : READS) - outstanding);
+    }
+    private static boolean surveying(ServerLevel level) {
+        for (var other : level.getServer().getAllLevels()) {
+            if (other.hasData(ModAttachments.NUCLEAR_WORLD) && NuclearWorld.get(other).materials.wantsReads()) return true;
+        }
+        return false;
+    }
+    static int readSlots(ServerLevel level) {
+        long bytes = 0;
+        for (var other : level.getServer().getAllLevels())
+            if (other.hasData(ModAttachments.NUCLEAR_WORLD)) bytes += NuclearWorld.get(other).materials.reservedBytes();
+        return materialSlots(bytes);
+    }
+    static int materialSlots(long reservedBytes) {
+        return Math.max(0, MATERIAL_WINDOW - (int) (reservedBytes / READ_BYTES));
     }
 
     /** One server-wide preparation admission estimate; multiple strikes/dimensions share the cap. */
@@ -603,17 +626,19 @@ public final class NuclearPrep {
             }
         }
         // window read-ahead in wave order
-        while (p.nextRead < p.order.length && p.reading.size() < READS && memory(level) + READ_BYTES <= PLANS_CAP) {
+        int slots = preparationSlots(p.reading.size(), surveying(level));
+        while (p.nextRead < p.order.length && slots > 0 && memory(level) + READ_BYTES <= PLANS_CAP) {
             long c = p.order[p.nextRead];
             boolean all = true;
             for (int dx = -RuinPlanner.REACH; all && dx <= RuinPlanner.REACH; dx++) {
                 for (int dz = -RuinPlanner.REACH; all && dz <= RuinPlanner.REACH; dz++) {
                     long k = ChunkPos.asLong(ChunkPos.getX(c) + dx, ChunkPos.getZ(c) + dz);
                     if (p.reading.contains(k) || p.unreadable.contains(k) || p.ruins.shotAvailable(level, k)) continue;
-                    if (p.reading.size() >= READS || memory(level) + READ_BYTES > PLANS_CAP) {
+                    if (slots == 0 || memory(level) + READ_BYTES > PLANS_CAP) {
                         all = false;
                         continue;
                     }
+                    slots--;
                     p.reading.add(k);
                     DiskShots.read(p.format, new ChunkPos(k), RuinWorkers.Priority.FAR).thenAccept(p.reads.expect());
                 }
@@ -727,7 +752,10 @@ public final class NuclearPrep {
             RuinPlan plan = p.plans.get(chunk);
             if (plan == null) continue;
             for (Detonation d : events.detonations()) {
-                if (d.id() == p.detonation && ScarQueue.due(d, new ChunkPos(chunk)) <= now) return plan;
+                // a chunk claim protection denied to the detonation gets no ruins in its copy either (NuclearClaims)
+                if (d.id() == p.detonation && ScarQueue.due(d, new ChunkPos(chunk)) <= now) {
+                    return NuclearClaims.get(level).denied(d.id(), chunk) ? RuinPlan.EMPTY : plan;
+                }
             }
         }
         return null;
@@ -1134,6 +1162,34 @@ public final class NuclearPrep {
                     watch.available() ? "old generation" : "heap", live >> 20, Runtime.getRuntime().maxMemory() >> 20, heapStrikes);
         }
         return heapStrikes >= 2;
+    }
+
+    /**
+     * For tests: wait until every zone layout building in the background ({@link #layout}) is done, at most
+     * {@code millis}; whether all are. A GameTest that finishes the mod's background work at each tick waits here too.
+     */
+    boolean awaitLayoutsForTest(long millis) {
+        long until = System.nanoTime() + millis * 1_000_000L;
+        for (Prep p : preps) {
+            CompletableFuture<Layout> layout = p.layout;
+            if (layout == null) continue;
+            try {
+                layout.get(Math.max(0, until - System.nanoTime()), java.util.concurrent.TimeUnit.NANOSECONDS);
+            } catch (java.util.concurrent.TimeoutException e) {
+                return false;
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+                return false;
+            } catch (java.util.concurrent.ExecutionException e) {
+                // the preparation reports and drops a failed layout on its next tick
+            }
+        }
+        return true;
+    }
+
+    /** For tests: the preparation's work clock (a counting clock keeps its units per tick off the wall); null: real. */
+    void useClockForTest(@Nullable WorkClock test) {
+        clock = test != null ? test : WorkClock.decaying(0.5);
     }
 
     /** For tests: stop all preparations as under memory pressure. */

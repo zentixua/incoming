@@ -34,7 +34,9 @@ Client scenarios log `SCENARIO …` lines (sounds, fps, flash; `SCENARIO far`: d
 `SCENARIO nuke-sound`: nuclear echo, rays, reflection delay/level, tracks, start anchor `by sound|tick`; burning city,
 own OpenAL sources with obstruction, per-tick `FireWatch` cost). Use these and frames to check look/sound.
 `commands` scenario (`incoming.commands`, semicolon-separated steps, `ScenarioCommands`/`CommandPlan`): commands,
-`wait:N`, `shot:<name>`, `hud:off|on`, `wait:nuke` (wait for detonation packet), `wait:blast` (wait for next server
+`wait:N`, `shot:<name>`, `hud:off|on`, `wait:nuke` (wait for detonation packet), `wait:front` (once: later steps wait until the newest detonation's
+in-game front has passed the ground under the camera; after `incoming nuke now` use it alone, since `wait:nuke` after
+the command's own gap waits for a second detonation), `wait:blast` (wait for next server
 explosion, at most 3600 ticks), `maxyield:<kt>` (server yield ceiling), `burnable` (to the most flammable land
 within 4 km, 200 blocks up), `skip:<s>` (time skip to that many seconds after the last detonation, as scenario
 `firestorm`), `storm:on|off`, `frames:<name>:<count>:<yaw>:<blocks>` (consecutive frames while turning/moving, each
@@ -48,9 +50,37 @@ the camera line with its soot share, sand share and fire term). With the shaderp
 fog/clouds: frames of a wall kilometres away show it against sky, not against ground. Detailed city for client-fire measurements: `INCOMING_CITY=N@tick` (`FireCity`:
 surface section plus N − 1 below per client chunk, with global palette, client-only).
 
+## Standard dev client: the look loop
+The loop of the look skill (section 4; docs/dev-pipeline.md, section 2): ModDevGradle's `runClient` (the mod with
+Create, Sable and Aeronautics, no pack) kept up in a saved world, `tools/dev_client.sh` as the agent's hands.
+- `start <save> --from <world dir>`: the world is copied once into `mod/run/client/saves/<save>` (`cp --reflink`: a
+  4.7 GB Silo copy in 4 s, no extra disk) and kept; later starts reuse it. `-PquickPlay` opens it, `-PhotSwap` runs
+  JetBrains Runtime (Gradle toolchain, foojay) with `-XX:+AllowEnhancedClassRedefinition` and JDWP on a free loopback
+  port. The display is `soft_gl.sh` `vanilla_display` (shared GPU slot or CPU, `laptop_job.sh --soft`); its unit
+  ceiling is the heap plus 6 GB: with a 4 GB heap a real map with a 100 kt burst peaked at 8.85 GB, and heap + 2 GB
+  (the sandbox's) was killed while loading the world. A map made in the pack carries experimental datapack settings:
+  vanilla asks once, `start` confirms it (`press`).
+- Keys: XTEST events (xdotool) never reach the game's Xwayland window inside a nested KWin `--virtual`, so the devtest
+  `DevHands` reads one-line files from `mod/run/client/dev/inbox` (`incoming.dev.inbox`, set by `-PhotSwap`): `cmd`,
+  `reload` (answered when the reload has finished), `shot`, `hud`, `press <button>`, `dw <key>=<value>` (the dust wave's
+  diagnostics, as the scenario's `dw:` steps; `rung=N` pins the pall's rung here too), `age` (the newest detonation's shown
+  age, front radius and eye distance: a hold at a front distance, since `/tick step` paces with the frame rate) and
+  `watch on|off` (a one-frame dropout logged as `DEV pop`; it stalls the GPU every frame); it logs every opened screen
+  (`DEV screen`). The bare `reload` reads `build/resources`: a shader edit in `src` needs `swap`.
+- The scene: `cmd 'tp @s …'`, `time set`, the burst once, `tick freeze` at the moment, `tick step <ticks>` to move it.
+  A server burst leaves its ruins in the copy (the client saves it on `stop`): an untouched map is a new `<save>` name
+  with `--from` again.
+  The freeze holds the nuclear show's age (`ClientNuclear`: eye-following state still updates) and particles; ordinary
+  strike smoke and the effects layer run on. Config values (`mod/run/client/config/incoming-server.toml` and
+  `-client.toml`) are reread when the file changes; `max_yield` is a config value there, not an `/incoming rule`.
+- Measured 25.11 (laptop, shared GPU slot, Silo copy at 3514 73 −2298, a held 100 kt front): start 44.6 s to the
+  player in the world; a shader edit to its frame 37.2 s cold, 16.6 s warm (the F3+T reload 27.8 / 13.8 s of it);
+  a Java method edit hot-swapped and running in 3.0 s; two held frames 3 s apart differ by 0.19 of 255 on average.
+  A whole Silo take per change took 14 min 31 s per spot.
+
 ## Effects sandbox: frames during work; full pack under Iris only for one comparison with 3.4.1
-Rule ([visual/audio checks](../../docs/dev-pipeline.md#4-visual-and-audio-checks)): inspect look/sound during work,
-like a modder in a dev game: edit → sandbox frame/WAV in seconds; before/after frames/WAV in PR for reviewer.
+Rule ([visual/audio checks](../../docs/dev-pipeline.md#4-visual-and-audio-checks)): the look loop is the dev client
+above; the sandbox gives frames/WAV at exact effect seconds in a flat world, before/after against `main` for the reviewer.
 Sandbox is an MDG dev client with `devtest` (like JEI's `clientGameTest`); custom parts are only frame-to-file at a
 specified tick and chatless commands (Claude cannot see screen; NeoForge has no screenshot client tests,
 NeoForge #3624). Full-pack Iris client (`look_gate`, `prod_client.py`: ~3 min to first frame, 10–25 min per scene set,
@@ -69,8 +99,9 @@ with Iris.
 - `tools/sandbox.sh start [shaders] [dh] [gpu]`: vanilla (shared GPU slot or CPU, “Vanilla rendering”) unless `shaders`, `dh` or `gpu`; mod-only client (sable-companion alongside: not embedded in dev; `shaders`
   adds Sodium/Iris/host shaderpack from instance, `dh` Distant Horizons), flat world (`Sandbox`: bedrock, stone,
   dirt, grass, grass top y 64; noon, no weather/mobs; same world every launch), headless in nested KWin, as laptop
-  job (unit `incoming-job-sandbox-<tree_id>`); lives until `stop`; in GPU mode also until Artem's game starts
-  (`fx/stopped`; game running means immediate exit 75); other jobs cannot stop it. GPU mode, one GPU (`tools/gpu_lease.sh`): client (`nested_kwin.sh`, used by every client) acquires its
+  job (unit `incoming-job-sandbox-<tree_id>`); lives until `stop` or `INCOMING_SANDBOX_IDLE` seconds (1800; 0 never)
+  without a command (`fx`/`swap` mark `fx/active`); in GPU mode also until Artem's game starts
+  (`fx/stopped` says which; game running means immediate exit 75); other jobs cannot stop it. GPU mode, one GPU (`tools/gpu_lease.sh`): client (`nested_kwin.sh`, used by every client) acquires its
   session lease (owner from `wt-<S>…` tree) and GPU-client lock, holds/renews while alive; `start` requests them
   before building. Another session holds GPU: exit 75, line “GPU held by <owner> (<tree>), since <time>”; client
   already running (even own session's sandbox in another tree/look gate): exit 75, “client running on GPU …”;
@@ -105,7 +136,8 @@ with Iris.
   white/black concrete marker pairs along the street, faces 4.5–59.5 m from the camera `cam 15 1.6 0 1.6`, n ≤ 12 rounds at
   once at the side-street crossings, none in the marker street: the eye inside a B-2 ×12 salvo's dust; the shot log's
   `veil set` lists the veil Gaussians, from which the law's transmittance to each marker follows). `nuke <kt> [air|ground]`: `/incoming nuke now`
-  6 km away; `airburst`: SAM burst 30 m above point; `sam`: loaded SAM at point and Shahed from 1400 blocks north
+  6 km away (`… also <dx> <dz> <delay s>`, up to 15 groups: more detonations of that yield (dx, dz) m from the
+  first, delay s after it on the client's world-tick clock: crossing waves, a nuke into old haze); `airburst`: SAM burst 30 m above point; `sam`: loaded SAM at point and Shahed from 1400 blocks north
   through it (like probe `sam-side`), time from interceptor launch rail exit (trail, rail-exit cloud, motor;
   `track on` follows it), `clear` removes SAM; `sam` starts at gameTime 6000 (same branch-comparison air, leaves
   time of day unchanged). `launch`/`flight <weapon> [from]`: real launch (`/incoming salvo … from`; final `own`
@@ -216,7 +248,11 @@ times and the pall's budget are not frame costs: frame cost belongs to the GPU a
   ages 0.102, 0.521, 1.005, 3.009 s; unpaced 0.163, 0.524, 1.292, 3.061 s). Pacing follows the armed take, not the
   current rate: effects that `clear` first (`nuke … near`) and fast stretches that raised the rate keep it. Only the
   last `Sandbox.PACE_LEAD` (2 s) before a due frame is slowed; farther the world runs at 20 ticks/s (paced whole, a
-  nuke frame at 130 s took tens of minutes at 1–3 frames/s). `shots` takes a time of day per frame
+  nuke frame at 130 s took tens of minutes at 1–3 frames/s). A frame is taken at the first render whose age (tick +
+  partial tick) reaches its second, never at a tick boundary: at whole ticks a GPU 30 fps clip advanced 25–28 ms per
+  frame with a 45–145 ms jump every half second (each PNG write stalls the render thread ~0.1 s while game time runs),
+  and everything moving lurched at ~2 Hz, read as flicker. GPU takes slow the world to `GPU_FRAMES_PER_TICK` (48)
+  renders per tick; check `capture.json` ages (steps of 1/30 s) before judging motion in a clip. `shots` takes a time of day per frame
   (`<seconds>@<day time>`, e.g. `130@12500,130.5@12550`): a dusk strip in one take; the `SANDBOX shot` line logs it. A slowed
   take's sound is not real-time: `shot` records sound in a second take of the same effect at 20 ticks/s from the first
   frame's second (`shots .wav-<name>-XXXXXX none@<s> <wav>`, a fresh `mktemp` staging directory), cuts the WAV from it and writes
@@ -229,8 +265,10 @@ times and the pall's budget are not frame costs: frame cost belongs to the GPU a
   and wherever vanilla clouds drift (their offset follows client ticks): set `renderClouds:"false"` in the sandbox
   `options.txt` (every start makes sure the line exists, `client_options`) and cut the mask at the frame's own horizon.
   Every take states its second 0: `capture.json` `clock` and each `SANDBOX shot` line ("t = 0 at effect start", or for
-  `nuke … near` "front at the houses (burst N s earlier)"); read frame times against it. A CPU sandbox at `-Xmx3g` is OOM-killed at its ceiling after
-  about ten nuclear takes (server ruins and pall state accumulate): restart it every few nuclear takes.
+  `nuke … near` "front at the houses (burst N s earlier)"); read frame times against it. Server ruins and pall state accumulate with each nuclear take, and
+  the default heap (“Vanilla rendering”) can run out on the second one: for nuclear takes `export INCOMING_SOFT_HEAP=4g`
+  (or `5g`) before `start` and keep it set for every `restart` (a restart starts the client again from the current
+  environment), restarting between nuclear takes.
 - Mesa caches compiled shaders in `~/.cache/incoming-mesa-shaders`, shared by every tree: a cold llvmpipe compiles the
   nuclear volume shaders for 140 s (laptop) or 74 s (netcup) before `ready`; a cold blast's first frame takes seconds.
 - Measured 20.11 (flat sandbox, 1280×720, `blast drone`): laptop (16 threads, `LP_NUM_THREADS` 8) start 240 s cold,
@@ -239,12 +277,30 @@ times and the pall's budget are not frame costs: frame cost belongs to the GPU a
 - A host with little free memory (a server beside game servers): Gradle with `-PnoRecompile` (binary Minecraft:
   Vineflower's decompile needs ~4 GB and was OOM-killed under a 3.5 GB ceiling), mods from `tools/fetch_runtime_mods.py`
   (`-PmcModsDir=run/ci-mods`), no Gradle daemon, `INCOMING_SOFT_HEAP=1536m` (ceiling 3.5 GB); one client at a time.
+- A CPU client started on netcup is stopped by its job's end: `tools/sandbox.sh stop` or `tools/dev_client.sh stop`
+  when the work is done, and the sandbox stops itself after its idle limit; `laptop_job.sh` stops its unit when its caller ends (TERM, Ctrl+C, HUP of
+  an `ssh -t` link, systemd-run killed). A plain `ssh vps cmd` that drops sends nothing: the job ends by its own
+  deadline. `tools/stray_clients.sh --host vps` lists clients that outlived their job (report only); a stray that is
+  not yours is reported to the lead, never killed.
 
 ## Pitfalls
 - Server may lag client ticks during world generation: client-scenario frames anchor to events, not a counter.
 - Scenario frames compare across runs: with `incoming.scenario`, nuclear seed derives from ID (`NuclearWarhead`),
   wind from detonation game time (`Wind.at`), pall detail from setting without GPU budget (`PallPass.Detail.pin`:
-  llvmpipe budget would lower to LOW).
+  llvmpipe budget would lower to LOW). A frame-time run measures the game's cost only with the ladder on
+  (`-Dincoming.pall.adaptive=true`): pinned, a 1 Mt passage at 3 km held the pall at 30–59 ms a frame, a cost the game
+  steps down from within a second. While a detonation is live the scenario logs `SCENARIO nuke-layer` every half second
+  (layer GPU by pass, smoke fill, near dust); the `far` line exists only once distant blasts do.
+- A single-player frame-time run puts the integrated server on the client's CPU. At the Silo city spot (1 Mt at 3 km,
+  front −1..+1 s) the single-player JVM keeps 13.2 cores busy with 8.6–9.2 more queued (C2 4.7–5.3 cores, three
+  quarters of its compiles there recompiles), and its worst second has 8–12 frames. The same client on a dedicated server
+  keeps 5.3–9.8 cores busy with 0.4–2.3 queued, and its worst second has 33–46 frames. Capping the compiler threads
+  (`-XX:CICompilerCount=4`) only hands those cores to chunk meshing (12 frames).
+- The player's server case: `commands` with `--prop incoming.server=host:port` and no `--world` joins that server (its
+  resource pack accepted, as a player who answered yes; a failed or dropped join ends the run). The server must be in
+  offline mode with the scenario's user (`Dev`) as operator, and its own config holds what `maxyield:` and `wave:` set in
+  a world (they only log there; a world's scenario sets the CUSTOM preset); `burnable`, `site:`, `skip:` and
+  `wait:blast` need the world's own server and are skipped. `spark …` profiles the server, `sparkc …` the client.
 - `pall-front`: night post-front pall, camera 400 m from surface 15 kt, 120 m above ground (like host replay frame),
   frames relative to camera-front arrival. `INCOMING_EXPORT=2560x1440`: game frame larger than window, like Flashback
   video export; window reports output size (`Window.framebufferWidth/Height` fields via reflection; Flashback mixes
@@ -287,7 +343,7 @@ times and the pall's budget are not frame costs: frame cost belongs to the GPU a
   draws vertical pall stripes: compare runs on same world.
 - Iris installed without shaderpack plus DH (like host laptop): `INCOMING_SHADERS=1 INCOMING_DH=1`, `-PmcModsDir`
   pointing to directory with `fetch_runtime_mods.py` mods plus Sodium/Iris/DH jar matching pack version (Modrinth,
-  sha512 from open-skies `pack/mods/*.pw.toml`); do not write `iris.properties`, shaders off. Cloud DH builds little:
+  sha512 from open-skies-friends `pack/mods/*.pw.toml`); do not write `iris.properties`, shaders off. Cloud DH builds little:
   frame share covered by LOD beyond render distance in `SCENARIO … depth:`.
 - Accessibility welcome screen/unfocused pause break headless client; `client_scenario.sh` writes own `options.txt`.
 - Headless client works in cloud without KWin/shaders:

@@ -9,6 +9,7 @@ import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.function.DoubleSupplier;
 
 /**
  * Flashback replay and seeking. In one tick during seek, replay server loads a recording segment snapshot and reads
@@ -33,7 +34,33 @@ public final class Replay {
     /** Live and past event counts per type (for replay scenario). */
     private static final Map<String, int[]> COUNTS = new LinkedHashMap<>();
     private static int waited;
-    private static boolean warned;
+    private static boolean warned, opened;
+    private static RecordedBursts births;
+
+    /** Both tick consumers and renderers read the editor or export frame currently being displayed. */
+    public static double position() {
+        return FlashbackReplay.position(Minecraft.getInstance().getSingleplayerServer(), MARKERS.place);
+    }
+
+    /** Packet timeline reached by the server during a seek, including the tick currently being interpolated. */
+    public static int packetPosition() {
+        return MARKERS.place;
+    }
+
+    public static DoubleSupplier birth(int id, long gameTime, long age, boolean live) {
+        // The end-of-tick marker identifies the original live packet even before that tick is drawn.
+        double fallback = MARKERS.place - age;
+        if (live) return () -> fallback;
+        openClock();
+        return births == null ? () -> fallback : births.birth(id, gameTime, fallback);
+    }
+
+    private static void openClock() {
+        if (opened) return;
+        opened = true;
+        var recording = FlashbackReplay.recording(Minecraft.getInstance().getSingleplayerServer());
+        if (recording != null) births = RecordedBursts.open(recording.path(), recording.id());
+    }
 
     private record Pending(String kind, BooleanConsumer action) {}
 
@@ -55,8 +82,10 @@ public final class Replay {
      * Replay server end-of-tick marker: prior events become live or past; first playback marker after seek calls
      * {@code rewound} first (everything before seeking belongs to another recording position).
      */
-    public static void marker(int place, boolean seeking, Runnable rewound) {
+    public static void marker(int place, boolean seeking, Runnable seekStarted, Runnable rewound) {
+        openClock();
         Markers.Verdict v = MARKERS.next(place, seeking);
+        if (MARKERS.interrupted) seekStarted.run();
         if (v == Markers.Verdict.SETTLED) rewound.run();
         flush(v == Markers.Verdict.LIVE);
     }
@@ -79,6 +108,9 @@ public final class Replay {
     public static void reset() {
         PENDING.clear();
         MARKERS.reset();
+        if (births != null) births.close();
+        births = null;
+        opened = false;
         waited = 0;
     }
 
@@ -142,11 +174,13 @@ public final class Replay {
         /** Consecutive playback markers, up to {@code SETTLE + 1}. */
         private int streak;
         private int place;
+        private boolean interrupted;
         long count;
 
         Verdict next(int place, boolean seeking) {
             int moved = place - this.place;
             boolean clean = count > 0 && !seeking && moved >= 0 && moved <= STEP;
+            interrupted = !clean && streak > 0;
             streak = clean ? Math.min(streak + 1, SETTLE + 1) : 0;
             this.place = place;
             count++;
@@ -160,6 +194,7 @@ public final class Replay {
 
         void reset() {
             streak = 0;
+            place = 0;
             count = 0;
         }
     }

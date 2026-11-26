@@ -39,6 +39,7 @@ public final class NuclearWorld {
      * tens of MB). Chunk whose neighbors arrive later builds ruins with new context.
      */
     private static final int RUINS_SWEEP = 100, RUINS_IDLE = 600;
+    public final MaterialSurveys materials = new MaterialSurveys();
     private final NuclearPrep prep = new NuclearPrep();
     private final RuinSettle settle = new RuinSettle();
     private final List<PulseJob> pulses = new ArrayList<>();
@@ -56,11 +57,6 @@ public final class NuclearWorld {
      * ({@link FlashScorch#burnOut}; no ticks scheduled during chunk load).
      */
     private final it.unimi.dsi.fastutil.longs.LongOpenHashSet unburnt = new it.unimi.dsi.fastutil.longs.LongOpenHashSet();
-    /** Chunks waiting to go to their viewers whole ({@link RuinDelivery}). */
-    final it.unimi.dsi.fastutil.longs.Long2ObjectOpenHashMap<RuinDelivery.PendingWhole> wholeWaiting =
-            new it.unimi.dsi.fastutil.longs.Long2ObjectOpenHashMap<>();
-    /** Unique write revisions for whole deliveries, including across chunk reloads. */
-    long wholeRevision;
     /** Unfinished saved craters resumed (after world load). */
     private boolean restored;
     /** World game time of last slow-tick log. */
@@ -97,6 +93,19 @@ public final class NuclearWorld {
     @Nullable
     public long[] frontLodStats(int strike) {
         return prep.frontStats(strike);
+    }
+
+    /**
+     * For tests: layouts building in the background done, the zones of all preparations ({@link NuclearPrep}) and the
+     * ruin settlement's pass ({@link RuinSettle}), each waited for at most {@code millis}; whether all are.
+     */
+    public boolean awaitLayoutsForTest(long millis) {
+        return prep.awaitLayoutsForTest(millis) && settle.awaitLayoutForTest(millis);
+    }
+
+    /** For tests: the preparation's own work clock ({@link NuclearPrep}); {@code null} puts back the real one. */
+    public void usePreparationClockForTest(@Nullable WorkClock clock) {
+        prep.useClockForTest(clock);
     }
 
     /** Deterministic front send-budget clock for an existing preparation; other clocks stay real (tests). */
@@ -151,6 +160,24 @@ public final class NuclearWorld {
     }
 
     /**
+     * {@code d}'s blast front at {@code now}: travelling, or its hits on bodies and craft still queued. A nuclear round's
+     * impact work ({@link ua.zentix.incoming.nuclear.NuclearEvents.Impact}).
+     */
+    public boolean frontBusy(Detonation d, long now) {
+        return now <= BlastFront.frontEnd(d) || blast.pending(d.id());
+    }
+
+    /**
+     * {@code d}'s crater is being dug: a live job (a failed one is dropped for this session; its saved progress resumes
+     * after a restart, a later run, like ruins on a later chunk load). Saved unfinished craters become live jobs on the
+     * first tick after a world load, before the impact settle reads this.
+     */
+    public boolean craterDigging(Detonation d) {
+        for (CraterJob job : craters) if (job.detonation().id() == d.id()) return true;
+        return false;
+    }
+
+    /**
      * Whether nuclear queues have server-thread work (NUCLEAR lane {@code WorkScheduler}: while present, impacts
      * do not take entire shared budget).
      */
@@ -160,7 +187,7 @@ public final class NuclearWorld {
 
     /** Retained preparation and active-context estimates, without the shared worker buffers. */
     long retainedRuinBytes() {
-        long bytes = prep.retainedBytes();
+        long bytes = prep.retainedBytes() + materials.reservedBytes();
         for (RuinContext ctx : ruins.values()) bytes += ctx.retainedBytes();
         return bytes;
     }
@@ -172,7 +199,7 @@ public final class NuclearWorld {
      * strike's preparation.
      */
     long workingRuinBytes() {
-        long bytes = prep.retainedBytes();
+        long bytes = prep.retainedBytes() + materials.reservedBytes();
         for (RuinContext ctx : ruins.values()) bytes += ctx.retainedBytes() - ctx.durableBytes();
         return bytes;
     }
@@ -332,6 +359,7 @@ public final class NuclearWorld {
     }
 
     public void onChunkLoad(ServerLevel level, LevelChunk chunk) {
+        materials.live(chunk);
         // front LOD copy unnecessary: world supplies chunk ruins/LODs
         prep.loaded(chunk.getPos().toLong());
         NuclearEvents events = NuclearEvents.get(level);
@@ -342,6 +370,7 @@ public final class NuclearWorld {
     }
 
     public void onChunkUnload(ServerLevel level, LevelChunk chunk) {
+        materials.unload(chunk);
         scars.drop(level, chunk.getPos());
         // layer mark saved with chunk: reevaluate next load
         unburnt.remove(chunk.getPos().toLong());
@@ -389,6 +418,7 @@ public final class NuclearWorld {
 
     /** Cancel: queues stopped (destruction not restored). */
     public void clear(ServerLevel level) {
+        materials.clear();
         // preparation before FarLods: copies return claimed requests there, to be removed with its queues
         settle.clear(level);
         prep.clear(level, scars);
@@ -420,25 +450,29 @@ public final class NuclearWorld {
      * <li>{@code urgentFlash} — flash layers players see whose deadline is near ({@link FlashScorch#workUrgent}): ahead of
      * seen ruins due now, glass in view stayed whole 3 ticks after the wave (GameTest seenRuinsKeepUpWithCrater); after
      * craters and unseen ruins the layer got nothing until the wave (15 kt, full host pack: 904 of 915 chunks late);</li>
+     * <li>{@code planAhead} — background plans for chunks in view whose wave is up to 15 s away ({@link ScarQueue#planAhead}):
+     * after the layers due now, before the craters, which would push them back into the last second before the wave;</li>
      * <li>{@code craters}, then {@code ruins} — unseen ruins;</li>
      * <li>{@code flash} — the rest of each flash layer on what wave-reached ruins leave: when the front crosses many chunks
      * per tick, distant layers ahead delayed front ruins for ticks (25 tick units to layers, none to ruins). A wave-reached
      * layer is unnecessary: ruins apply everything (built from the pre-flash world). Detonations progress independently.</li>
      * </ol>
      */
-    public static long[] afterFront(Runnable seenRuins, Runnable urgentFlash, Runnable craters, Runnable ruins, Runnable flash) {
-        long[] at = new long[6];
+    public static long[] afterFront(Runnable seenRuins, Runnable urgentFlash, Runnable planAhead, Runnable craters, Runnable ruins, Runnable flash) {
+        long[] at = new long[7];
         at[0] = System.nanoTime();
         seenRuins.run();
         at[1] = System.nanoTime();
         urgentFlash.run();
         at[2] = System.nanoTime();
-        craters.run();
+        planAhead.run();
         at[3] = System.nanoTime();
-        ruins.run();
+        craters.run();
         at[4] = System.nanoTime();
-        flash.run();
+        ruins.run();
         at[5] = System.nanoTime();
+        flash.run();
+        at[6] = System.nanoTime();
         return at;
     }
 
@@ -514,7 +548,7 @@ public final class NuclearWorld {
                     Incoming.LOG.error("Flash scorch of detonation #{} failed with an exception (urgent pass)", job.detonation().id(), e);
                 }
             }
-        }, () -> digCraters(level, events, clock), () -> scars.work(level, now, clock), () -> {
+        }, () -> scars.planAhead(level, now, clock), () -> digCraters(level, events, clock), () -> scars.work(level, now, clock), () -> {
             for (java.util.Iterator<FlashScorch> it = scorches.iterator(); it.hasNext(); ) {
                 FlashScorch job = it.next();
                 try {
@@ -527,12 +561,12 @@ public final class NuclearWorld {
                 }
             }
         });
-        lastCraterNanos = at[3] - at[2];
-        lastScarNanos = at[1] - at[0] + at[4] - at[3];
+        lastCraterNanos = at[4] - at[3];
+        lastScarNanos = at[1] - at[0] + at[3] - at[2] + at[5] - at[4];
         long urgentNanos = at[2] - at[1];
         if (!unburnt.isEmpty()) burnOut(level);
         long prepStart = System.nanoTime();
-        lastScorchNanos = prepStart - at[4] + urgentNanos;
+        lastScorchNanos = prepStart - at[5] + urgentNanos;
         // prebuilt ruins use remaining budget: already traveling wave matters more
         try {
             prep.tick(level, events, scars, clock);

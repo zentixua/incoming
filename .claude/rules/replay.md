@@ -2,6 +2,7 @@
 paths:
   - "mod/src/main/java/ua/zentix/incoming/client/replay/**"
   - "mod/src/main/java/ua/zentix/incoming/compat/FlashbackReplay.java"
+  - "mod/src/main/java/ua/zentix/incoming/compat/ReplayMaterialDelivery.java"
   - "mod/src/test/java/ua/zentix/incoming/client/replay/**"
   - "mod/src/main/java/ua/zentix/incoming/net/**"
   - "mod/src/test/java/ua/zentix/incoming/net/**"
@@ -22,9 +23,21 @@ paths:
   server tick end (`catchUpNewViewers`), after markers for all seek reads; with one marker, seek explosions would reach
   the next tick as live. Client ticks cannot identify a seek: the client ticks during it (Flashback only suppresses
   rendering, and on pause also ticks the client from a packet); during video export the server stops between steps
-  without clearing the snapshot marker. The replay client clock follows the recording's time packet once per second
-  (`ClientNuclear.TIME_SYNC_TICKS`). Check: `replay` scenario (`SCENARIO replay seek` lines); replay-server model:
+  without clearing the snapshot marker. The nuclear show uses the editor's fractional replay position
+  (`getPartialReplayTick`) or the export frame's exact start tick plus fractional progress. A paused editor
+  supplies its held tick. Both render and tick consumers read that position on demand. Export draws directly
+  between client frame events. The integer marker identifies live packet births and seek membership.
+  `RecordedBursts` scans the UUID-matched archive in the background from replay open. Cold seeks display an
+  estimate until the original packet outside snapshots supplies its exact birth. Shows predating the archive
+  use its initial world time. World exit interrupts the reader. Check: `replay` scenario (`SCENARIO replay seek` lines); replay-server model:
   `ReplayTest`.
+- Flashback NeoForge Fixed retains batched material checkpoints by source UUID. A viewer retiring the effects
+  acknowledges that UUID. The server releases only that viewer's transfer and replaces its recorded batch with a
+  one-byte tombstone. The replaceable `NukeMaterialSources` manifest contains the viewer's current sources.
+  `ReplayMaterialDelivery` checks the snapshot's geometry, sync and material against this manifest before forwarding
+  them. It sends the nearest source first, one part per 50 ms, including while paused. The local play-connection
+  probe passes 40 recorded sources through Minecraft's encoder, NeoForge filters and compression and checks all 17
+  active checkpoints at the receiver. The material format and legacy lookup live in `nuclear.md`.
 - Chunk-state packets (`S2C.NukeFlashMarks`, flash traces): a Flashback snapshot contains only the last packet of a
   type, not one per chunk, so unloading chunks during seek would erase marks absent from the snapshot. Thus replay
   clients retain marks on chunk unload and show the detonation layer by their own clock (`FlashMarksClient.index`:

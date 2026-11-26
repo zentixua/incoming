@@ -94,7 +94,8 @@ A blast is the warhead's charge in TNT, not a game explosion power. Everything f
   material, spread a little around. You see those blocks fall, and dust rises over the parts that collapse.
   With `world.debris_stay` off, falling rubble disappears on landing. Fallen chests, barrels, shulker boxes and modded storage such as Create
   vaults or depots drop as when broken, even when empty.
-  Shulker boxes keep their name and contents. The world setting `world.collapse` turns collapse off.
+  Shulker boxes keep their name and contents. A chest, barrel or dispenser with unopened structure loot drops as
+  its item with the loot still inside: placed and opened, it fills with the loot it held. The world setting `world.collapse` turns collapse off.
 - **Fire** starts only from fuel and burning debris. The Shahed and the missile still carry fuel; three quarters of it
   burns as a fireball (≈16 m across for the Shahed, ≈34 m for the missile) for one to three seconds. That flash ignites
   thin, dry fuel it reaches: leaves, dry grass, hay, books, and with the missile now and then cloth and wool. The flash
@@ -214,8 +215,8 @@ further away. At 1 the B-2 bomb falls for about 50 seconds after the drop, so it
 A kamikaze drone: it takes off from a trailer next to you, flies with a loud engine buzz and dives at the end. Use it
 on buildings and on moving targets. Its two-stroke engine has no muffler: on a quiet night it can be heard about 12 km away, by day about 6 km, long
 before it arrives. A SAM can shoot it down, so
-against air defense send a salvo or route it around. It dives only once it can see the target: if a hill or a
-building hides it, the drone flies on at its height and dives more steeply later. It does not aim ahead of a moving
+against air defense send a salvo or route it around. If a hill or building hides the target, the drone stays in cruise
+for longer, climbing only to clear an obstacle on its way. It can still start its dive while the target is hidden. It does not aim ahead of a moving
 target. A tall building right next to the target or a roof over it can still be in the way: it then hits the
 building or the roof.
 
@@ -239,9 +240,9 @@ loaded: it reads the saved height of each place, and for land nobody has explore
 knows the ground but not trees or buildings. Chunks still saved in the pre-1.18 format stay unknown to it until they load. A heightmap already
 converted to the current format remains usable even if the chunk still needs terrain below zero. It flies over a hill on its way and dives behind it. It does not look for a
 way around through valleys: the route is yours to set. If a hill, the rim of a pit or a building hides the target, the
-missile climbs until it can see it and then dives. It cannot get past a building that hides the target at a steep angle right next to it (for
-example, 40 blocks taller than the target and 20 blocks from it), and it cannot reach a target under a roof: use
-the bomb there.
+missile climbs until the path opens or it needs to commit to the dive. A steep obstacle right next to the target
+(for example, a building 40 blocks taller than the target and 20 blocks away) can take the hit. A roof or wall can
+take the hit when the aim point is inside a closed building. Use the bomb to reach a target beneath a roof.
 
 ## Grad
 

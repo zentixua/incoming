@@ -32,7 +32,8 @@ Ruins and everything in `nuclear/world/` are in `nuclear-world.md`.
     `NuclearStrikes` (ICBM launch, timer, world events, client synchronization);
   - `radiation/` — player dose (attachment), `RadiationTicker` (once per second: fallout field × shielding +
     contamination), `Shielding` (block shielding by path mass: rays toward burst and sky for detonation, rays toward
-    surrounding sky-exposed surfaces for fallout), `FlashBurns` (light burns by armor slot: skin, clothes, metal; shock),
+    surrounding sky-exposed surfaces for fallout), `WornShielding` (worn items: data map, else Mekanism; sum ≤ 1;
+    new exposure only), `FlashBurns` (light burns by armor slot: skin, clothes, metal; shock),
     `FlashEyes` (retinal burns: visual-field spots, attachment `RETINA`, packet `S2C.RetinaScars`, full list/state;
     client calculates field glare, `NukeFlash`), radiation-sickness and burn effects (burns cap health while healing).
 - Mushroom is a volume in the pall pass (`fx_pall`), not billows: shape, cap matter and cooling laws in
@@ -100,8 +101,8 @@ Ruins and everything in `nuclear/world/` are in `nuclear-world.md`.
   peak (g 0.85: 82 versus ~11 for a 30° disk) made the shell several times brighter than the sphere. Flash frame
   (`NukeFlash.overexposed`): overexposure X = K^(e^(−u/0.2 s)) after the second maximum (K is camera flash light versus
   exposure, `FlashLight.Eye.peak`); frame gain X^(1/2.2) via “frame × (1 + c)” blending and lens-scattered light
-  X/100; at 15 kt, 1.4 km, white until ~0.25 s, ×3 at 0.5 s, back by one second (previously white for full 1.24 s pulse
-  plus 2–4 s). Eye-glare veil starts at pulse maximum. Volume noise prepares from world entry (`IncomingClient.login`):
+  X/100; at 15 kt, 1.4 km, white until ~0.25 s, ×3 at 0.5 s, back by one second.
+  Eye-glare veil starts at pulse maximum. Volume noise prepares from world entry (`IncomingClient.login`):
   `/incoming nuke now` has no warning, otherwise the sphere has no body for its first second. Mushroom daytime world
   shadow is a shadow map (`fx_mush_shadow`, output `fx_pall_composite`; `client-fx.md`; tile and world top: texels 17, 18).
   - `flash/` — flash traces on faces (DESIGN-nuke §3.7): `FlashChar` (material by `nuke_chars`/`nuke_soots` tags,
@@ -133,7 +134,7 @@ Ruins and everything in `nuclear/world/` are in `nuclear-world.md`.
   rewinds (AGENTS.md “Time”). Pace game-tick timers to the clock on a fixed game-time grid (`BurnsEffect`: every
   20th game tick, never on the timer's own remainder, which a correction keeps landing on); dust stays on real time; detonation lives on the client while pall remains visible. Field laws in Java and copied in `shaders/include/pall.glsl` (`PallGlslTest` reads
   shader functions and compares with Java; edit laws in both); fireball/fire lighting on pall (`pallBallShare`,
-  `pallBurn`) copies `CloudPuffs.ball` and `burn` (also camera dust light, `NukePall.dustColor`): change lighting there too.
+  `pallBurn`) copies `CloudPuffs.ball` and `burn`: change lighting there too.
   Dust and dust-wall head are one layer (`nuclear/model/DustModel`; laws: “Blast-lofted dust” survey, “cinema-level
   nuke” design §8; DESIGN-nuke §6), not two fitted curves: wave-lofted ground carried by wind behind the front along
   ground during local positive phase (ground pressure, phase and along-ground dynamic-pressure share by burst height,
@@ -160,40 +161,40 @@ Ruins and everything in `nuclear/world/` are in `nuclear-world.md`.
   `TOP_C`, heating light share 0.2, γ 5 K/km, entrainment wind over pressure phase (not dynamic-pressure phase, survey
   §8.1), and `lifted` shaped as dynamic-pressure impulse rather than an entrainment law. Lofted mass uses
   `REFERENCE` everywhere (hard ground: `PAVED` share); the colour is the soil's: `PallGround` channel a is the sand share
-  (`FarTerrain.sand`), `pallDustW`/`PallField.sandShare` mix reference `DUST` with desert `SAND` (AERONET ω, Dubovik 2002,
+  (`FarTerrain.sand`), `PallField.sandShare` mixes reference `DUST` with desert `SAND` (AERONET ω, Dubovik 2002,
   `NukePall.SAND_OMEGA`) by mass, debris over hard ground stays `DUST`; soot share is the table's fire zone × `FireStorm.growth`
   (`PallField.smoke`), for head and pall alike (18.11: a 0.77 constant in the head made a black disk out to the ignition range). From above, pall is one blanket (18.10 complaint: golden/dark patches
   from altitude): young-layer patches (noise with gaps, `pallShape`) mix over one layer-eddy turnover (`PallField.mixed`,
-  e-fold over `DustModel.RISE_S`, dust-row fourth channel) to fluctuations `MIXED` = 0.2 of mean (`clumps`, `pallMixed`;
-  Willis and Deardorff 1976, (est.)), while thermals make the top bumpy, top not holes: `topD` × (1 ± `BUMPS` = 0.3,
-  entrainment zone, Stull 1988, (est.); `topBumps` in `fx_pall`, last `pallField` parameter, 1 without noise). Light in
-  troughs equals layer-top light (depth overhead from the same layer); previously rays through billow gaps reached
-  bottom, lit by mean optical depth (and fires), producing dark/orange patches seen only from above.
+  e-fold over `DustModel.RISE_S`) to fluctuations `MIXED` = 0.2 of mean (`clumps`; the pall's haze takes `pallMixed` at
+  full mixing; Willis and Deardorff 1976, (est.)), while thermals make the top bumpy, top not holes: top × (1 ± `BUMPS` =
+  0.3, entrainment zone, Stull 1988, (est.)). Light in troughs equals layer-top light (depth overhead from the same
+  layer): rays through billow gaps lit by mean optical depth (and fires) produce dark/orange patches seen only from above.
   `PallFieldTest.oldPallIsOneBlanket`: after 6–7 minutes, where mean depth ≥ 5, thinnest column ≥ 3. Wind carries dust
-  and spray from the moment lofted (`PallField.share`, age-based drift share `drift`, haze-row fourth channel;
-  `source`), not the entire pall by wind travel since detonation: otherwise downwind dust edge/head led the server
+  and spray from the moment lofted (`PallField.share`, age-based drift share `drift`; `source`), not the entire pall by wind travel since detonation: otherwise downwind dust edge/head led the server
   front (sound, shake, knockback, debris) by 100–200 blocks, upwind lagged. Pall bounds grow with drift until dust
   settles (`PallField.extent`: tens of kilometers in an hour); terrain map does not: it covers pall at source, wall
   head and camera (`PallField.sourceExtent`, `client-fx.md`), otherwise camera cells would coarsen to half a kilometer;
   dust carried past the map rests on edge terrain. No dust above water (DESIGN-nuke §6, step 6): wind-stripped spray
-  behind the front has its own table row (slot rows: dust, spray, haze; `PallField.ROWS`, 6 for two detonations in
-  `PallPass`), height and law: rises to wave-crest stripping height (`WaterModel.sprayHeight`), large drops fall,
+  behind the front has its own layer (`PallField.spray`), height and law: rises to wave-crest stripping height (`WaterModel.sprayHeight`), large drops fall,
   lowering top to 0.6 of that (`PallField.sprayTop`, (est.)), rather than rising like dust over hot ground
   (`WaterModel.spray`: visible over 60 m, thins in 30 s, falls out in three minutes; head portion is the same lower,
   rearward wedge, same `handoff`); water bursts also have a base surge by model laws/clock (`PallField.surge`,
-  `WaterModel.surge*`; from the water-column wall falling into it on the same clock in the mushroom volume). Pall OFF
-  hides the surge, leaves the column (mushroom LOW). Water beneath pall is channel 2 of `PallGround`; matter follows
-  its source (position minus drift, also table lookup): dust carried over water stays dust, spray carried ashore stays
-  spray; haze/glow use source water on the plume axis (no fires over water), as do ash/paper (`PallField.Water`,
-  `NukePall.water`). What is absent under pall (`PallGround.hasLand`/`hasWater`) is absent in the table: a sea burst
-  without dust/haze releases its slot once spray settles and surge fades, while over land shaders skip the water map.
+  `WaterModel.surge*`; from the water-column wall falling into it on the same clock in the mushroom volume). These laws
+  feed the camera (`PallField.sigma`, `mist`, sound, ash) and the dust pass's inputs; the pall volume draws only the
+  fire-zone haze (one table row per slot, `PallField.ROWS`; `PallPass.ROWS` 2), never ground dust, spray or the base
+  surge. Water beneath pall is channel 2 of `PallGround`; matter follows its source (position minus drift): dust carried
+  over water stays dust, spray carried ashore stays spray; haze/glow use source water on the plume axis (no fires over
+  water), as do ash/paper (`PallField.Water`, `NukePall.water`). What is absent under pall (`PallGround.hasLand`) is
+  absent in the table: no haze over open sea; over land (slot `S[3].w` 0) shaders skip the water map. A detonation takes a
+  pall slot only for haze, a Wilson shell, a mushroom or a firestorm (`NukePall.visible`).
   Unknown water takes nearest known, not average (`PallGround.nearest`; epicenter is known, `NukeWater.under`): averaging
   would spread a camera-local pond's pale spray across unknown land, and leave half-dust over sea near a shore burst.
-- Shock-wave dust wall (`client/nuclear/BlastWall` laws; rendered by pall: `pallWall*`, `pallWilson` in `pall.glsl`, head
-  in `fx_pall`, slot numbers `PallWall0/1`, `PallWilson0/1`): front itself is invisible; along-ground wind behind it
+- Shock-wave dust wall (`client/nuclear/BlastWall` laws for the camera: dust at the eye, sound, `NukePall.dustLight`; on
+  screen the dust pass draws the ground dust, the pall only the Wilson shell, `pallWilson`, `PallWilson0/1`): front itself
+  is invisible; along-ground wind behind it
   (`Detonation.groundWind`: Rankine–Hugoniot × √along-ground dynamic-pressure share) lofts surface matter: soil dust (its
-  colour from `PallGround`, soot only as fires grow: `PallField.smoke` via `PallAt.smoke`), spray over water; fire light from below
-  is the fires' own flame (`PallField.fireLight` in slot `G.y`, as the haze's), not an incandescence clock. Head is pall dust's youngest, lowest, densest part (`DustModel` above), not
+  colour from `PallGround`, soot only as fires grow: `PallField.smoke`), spray over water; fire light from below
+  is the fires' own flame (`PallField.fireLight`, as the haze's), not an incandescence clock. Head is pall dust's youngest, lowest, densest part (`DustModel` above), not
   its own curve: a wedge from front to where local positive phase has ended (`length` = front(t) − `tail`(t); `tail`
   solves in-game front arrival + local phase = t, by table nodes; phase varies by range, `HobBlast.positivePhaseSeconds`:
   15 kt at 592 m: 0.45 s beneath burst, 0.74 s at 1 km, 1.29 s at 5 km). Dust leading edge is in-game front (`head`),
@@ -210,44 +211,18 @@ Ruins and everything in `nuclear/world/` are in `nuclear-world.md`.
   1 kt at 240 m, 15 kt at 592 m; top is Kuhl law over front-normal path behind wedge end during local dust age,
   no spikes, and while sphere is off ground, top never sags by more than 2 % and 5 cm). Known out-of-game limit: low
   airbursts above 15 kt (1 Mt at 700 m) touch ground behind the front, shrinking the wedge by 1.5 on that tick, top
-  10–25 % lower, and pall handoff band (`PALL_WALL_HANDOFF_FROM/TO` shader constants) jumps away from sphere: slot has
-  no sphere radius (all 20 numbers used); game bursts (up to 15 kt, airbursts above 2.9 sphere radii) never do this.
+  10–25 % lower; game bursts (up to 15 kt, airbursts above 2.9 sphere radii) never do this.
   Over wedge fraction u behind edge, lofted amount follows dynamic-pressure impulse (`DustModel.lifted`), top Kuhl
   dusty-layer law u^(5/6) (`top`), ground density their ratio (`shape`: 0 at edge, at u ≈ 0.1 2.6 times denser than wedge
   back); column depth grows rearward. Back top and edge/back density use the same `DustModel.Column` (`first`,
   `lifted`: 256-node table down to 0.2 psi); intermediate density is linear (est.). Beyond wedge, transition to
   pall from 1 to 1.5 wedge lengths (`handoff`; pall takes 1 − handoff by local age / t₊). Where wind no longer lofts
-  visible dust (thinner than `GONE`, visible over 4 km), no head, dust remains pall. Law copies: `pallLifted`,
-  `pallWallTop/Shape/Fade/Mean` (`PallGlslTest`). Head noise uses dust coordinates (`BlastWall.origin`, copy
-  `pallWallOrigin`): position minus post-front wind path (`carried`: air path over local positive phase, U·t₊/e by
-  Friedlander, tens of meters for 15 kt at 592 m; phase share `carriedShare` = u·e^(1−u)); air stationary at ground,
-  1/7 boundary-layer law above, upward 0.02–0.08 of path (Kuhl §3.4). Billows form where front lofted dust and stay there;
-  against the departing front, edge dust goes up/back, rolling the wall. The pattern also turns in eddies on concentric rings resting on
-  the ground (`pallWallRoll`/`BlastWall.roll`, angle `rollAngle` = `EDDY` 0.2 × wind path × `carriedShare` / eddy size: top
-  outward with the wave's wind, back as it reverses; × `ROLL_GAIN` 8, presentation, turn zero at eddy rims). Eddies are the local
-  layer's size, not the tile's (the tile is the thickest layer's, near ground zero: 79 m for 15 kt where the layer 1 km out is
-  16–29 m): the octave tile/2^k nearest the local top (`wallBillows`, fixed scales, two near a boundary); thinner than tile/11
-  (toe) billows give way to their mean: tile-sized holes in a metres-thick sheet read as a translucent shell at the front (18.11).
-  Close-up check 19.11 (sandbox, side view along the front): the head is a thin ramp (15 kt 1.5 km: top 37 m over a 291 m
-  wedge), its turn lasts the head's life (0.9–3.6 s) — texture churn, not a wall rolling over itself; the tall translucent
-  sheet above it in the first seconds is the Wilson shell (`pallWilson`), not dust. Noise tile (`TILE` of maximum phase-end layer
-  top) is fixed per detonation: a tile growing with the head, like old noise in a tile rotated by wall angle at front,
-  moved billows over ground at front speed — dust “spread from epicenter” (18.10 complaint,
-  `BlastWallTest.headCloudsStayWhereTheDustWasLifted`). Cartesian coordinates, no tiled circumference or noise phases.
-  Rays sample the head more densely (`pallWallSpans`: ring from dust edge to 1.5 wedges and terrain-map height layer,
-  step one eighth its height, at most `steps` extra steps). Same light as pall, light-path depth follows wedge shape
-  (`wall` in `fx_pall`, copy `NukePall.dustLight`): diffuse uses the lesser mean-head depth above point (to local wedge
-  top) or sideways to wedge exit (at height z, wedge ends nearer edge by (z/top)^1.2 of length, inverse of u^(5/6));
-  below point, to terrain (ground/fires, no below-map dust); sun/fireball beams to head top (within 1.5 wedges and its
-  top), steps denser near point (quadratic, `wallChordNear`: dense dust extinguishes light in first meters). Old four
-  even steps over 1.5 wedges/top skipped thin wedge, leaving uniform light deep inside. Thus head interior is dark
-  (meters of visibility), top lit by sun/fireball, bottom by fires at night (`BlastWallTest.nearDustTakesWallLight`).
-  Billow shadow uses two samples toward main light. Wilson cloud is a Gaussian shell behind front (0.93 front radius,
+  visible dust (thinner than `GONE`, visible over 4 km), no head, dust remains pall. The head's laws feed the camera's
+  readers (sound, hearing, the eye's medium: `BlastWall.sigma`/`tau`); its picture is the dust wave's (`dust-wave.md`). Wilson cloud is a Gaussian shell behind front (0.93 front radius,
   0.15–3.5·∛(Y/15) s) when the negative phase condenses water in the world air (`BlastWall.condenses`: `Condensation.water`, the
   conventional law, with the negative phase p/e² capped at 4 psi, G&D §3.05, and `Air.surfaceHumidity`: forms from 51 % RH, so
   in clear weather (70 %) and rain; not biome downfall): ray traversal is an event, like tornado (`pallWilson`, `wilsonLight`). Camera pall
-  (`NukePall.tick`: sound, ray range) also uses mean head (`BlastWall.sigma`). Fallback camera dust (`NukeDust.front`,
-  when pall is not drawn) uses head `BlastWall.wall`, in its light (`NukePall.dustColor`, below).
+  (`NukePall.tick`: sound, ray range) also uses mean head (`BlastWall.sigma`).
 - Visible shock front and shimmer over sphere/storm use distortion pass `HeatPass` (`client/nuclear/NukeHeat`,
   `client-fx.md`): sphere `frontRadius` while beyond the fireball; compression thickness `ShockOptics.DECAY_SHARE` of
   in-game positive-phase length (`frontRadius − phaseEndRadius`); absent beyond dust-wall edge, shock fades from
@@ -356,9 +331,8 @@ Ruins and everything in `nuclear/world/` are in `nuclear-world.md`.
   of a billow tile, phase starts shifted by smooth spatial noise so the whole band does not pulse together. Influence
   (`mushFootInfluence`) starts outside 0.6 stem radius, extends at most two carpet heights beyond wall and no higher
   than merge; this map leaves distant haze and inner stem jets unchanged. Inflow is at wall and outward
-  (`mushFootWall`, from 0.6 stem radius): stem interior has its own dust. First version filled the whole stem with
-  carpet-density inflow and bent flow across the whole stem, producing a ring across the stem (inflow dust front
-  inside) and “herringbone” jets above; `StemFootTest.stemAwayFromTheFootIsAsBefore` checks unchanged field/pattern above
+  (`mushFootWall`, from 0.6 stem radius): stem interior has its own dust.
+  `StemFootTest.stemAwayFromTheFootIsAsBefore` checks unchanged field/pattern above
   merge and inside stem. Bounds include full band width (`MushroomField.reach`); empty-space steps use actual tapered
   band (`mushFootBandAt`), old stem clearance above merge. Slope bound below merge includes both derivatives:
   width ≤0.385 and taper ≤1.5/(merge−start). Inflow cylinder checked once per pixel; inside, one flow map per slot is
@@ -378,12 +352,9 @@ Ruins and everything in `nuclear/world/` are in `nuclear-world.md`.
   removed cap/stem entirely for dusty viewers (host video 18.10: mushroom vanished at 17 s despite thin dust above).
   Mushrooms on the ray ignore cutoff; transmittance ends them. Pall OFF does not cut rays (σ/depths zero), otherwise
   invisible dust would hide the mushroom.
-- Dust-wall head rests on pall terrain map (`PallGround`, like layer floor), not epicenter altitude (otherwise one
-  plane through hills and above valleys): map is coarser than world, so head extends a quarter to half its height
-  below it, avoiding hovering in lowlands beneath the map.
 - Removed debris is client cosmetic: server sends removed chunk positions (`S2C.NukeDebris`) only to chunk viewers on
-  ruin-replacement tick; client tears off pieces when its clock's front reaches the position (`NukeDust.debris`:
-  delay up to `Fragments.DELAY_MAX`; ruins more than a second after front mean no debris, wind is already gone).
+  ruin-replacement tick. `WaveEvents` admits each sampled position against the server tick at receipt and dispatches
+  it to `NukeDust.debris` during the displayed front's wind window (clock limits below).
   Pieces ride local wave wind at removal origin (`BlastGust`: Friedlander with `blastWind` and local positive phase,
   same air path as head dust, `BlastWall.carriedShare`); masonry-breach dust (mass for all positions represented by
   sample, `S2C.NukeDebris.weight`) forms downwind effects-layer billow streaks (`BlastDust`: grouped in 4-block cells
@@ -401,10 +372,8 @@ Ruins and everything in `nuclear/world/` are in `nuclear-world.md`.
   shadow, so expanded streaks formed a flat veil across the frame. Replay seeks spawn no debris (`Replay.event`).
 - Water (`NukeWater`, `BurstWater`, `fx/layer/WaterDecal`, model `WaterModel`): no dust above water — mushroom skirt over
   water (water under epicenter, `BurstWater.under`) whitens; wall head over water (`PallGround` water share at point)
-  is spray, lower (crest-stripping height), own density (`WaterModel.spray`); camera dust (`NukeDust.front`) only over
-  land; over water the same head volume draws local spray, `NukeWater.front` particles are crest drops (fallback spray
-  billows are smooth when pall does not draw head, `NukePall.drawsHead`: a billow wider than screen near eye duplicated
-  volume spray and made square stair-steps). Spray head/local spray start behind dust edge (front itself) by head
+  is spray, lower (crest-stripping height), own density (`WaterModel.spray`); the pall volume draws no head or spray
+  (ground dust and spray are the dust pass's), `NukeWater.front` particles are crest drops. Spray head/local spray start behind dust edge (front itself) by head
   travel during last `WaterModel.SPRAY_LAG` (0.5 s; no farther than grounded fireball edge; `BlastWall.slot`): spray on
   the front hid the dark ring from waterside viewers, the main water-wave cue. Water under epicenter (client chunk,
   map tile, otherwise surface exactly at sea level 63) is reevaluated until client detonation age 30 own ticks
@@ -435,29 +404,35 @@ Ruins and everything in `nuclear/world/` are in `nuclear-world.md`.
   restore the mark, same hash. Changes without neighbor notification (`setBlock` without flag 1, used by some mods)
   are invisible to event: next chunk save/send prunes (`FlashMarks.pruned`), unless same-type block replaced it first.
   Client mesh checks same hash while awaiting packet. Block hash is 6 bits; all 32 mark bits are used.
-- Client detonation age (`ClientNuclear.AgeClock`) is anchored to the server, never to the client level clock (vanilla
-  increments it itself and time packets set it: a lead or lag at arrival or alternating delayed syncs became false age —
-  reviews of #668: a lead of 30 made a fresh 15 kt front 621 m instead of 174 m, alternating 10-tick delays showed 200 for
-  160, a lag of 30 showed 50 for 20). Anchors carry the server's age for the detonation at send: the live detonation
-  packet (0) and `S2C.NukeTick` (server game time, every server tick while the dimension holds a show,
-  `NuclearStrikes.showing`). The shown age is continuous in the client's own time (ticks plus frame partial): it advances
-  every frame at the server's measured rate (anchor ages per own tick over `RATE_WINDOW`) × steering 1 + error/`RESPONSE`
-  in [`SLOWEST` 0.8, `FASTEST` 3] toward the estimated server age less `DELAY` (one tick of jitter buffer); never back, at
-  most `LEAD` 3 ticks past the latest anchor (ruins and debris arrive ≥ 2 ticks after the wave); eases to a stop over
-  `EASE` only after `STALE` ticks of frames without an anchor (server stall; packets a frozen client could not read do not
-  count). Without a stream (after the show, `ended`; in a Flashback replay, a live burst with no per-tick anchor within
-  `PROBE` 1 s is a recording made before them; a live server's late first anchor only holds the burst at `LEAD`) it follows own time, uncapped; tick-time callers ask the tick's own age (`ticks(0)`: a partial ahead
-  advances the clock past every frame of the tick, review of #678); a past detonation
-  (entry, seek) with a running show takes the first anchor whole. The reconstructed age classifies the show at
-  `NukeClock.SHOW_TICKS`, allowing one time-packet interval for lag. Ended shows ignore stream anchors in either
-  Flashback snapshot packet order. #668's law (at most one tick past the anchor, whole-tick steps) held
-  40–43 % of frames up to 149 ms on a 1 Mt rig: the wall moved in 20 Hz steps (19.11). Own ticks alone lagged the server
-  31–55 ticks in the full host pack. `ClientNuclearTest`: recorded rig anchor streams (`age-clock/J3.txt`, `J6.txt`) with
-  jitter, lagging server, heavy client, alternating delays, server stall and backward anchor, client freeze, no stream,
-  past snap, frames.
-- `Detonation.dayTime` (time of day at detonation) is no longer read: kept only for the save/packet formats. Slow
-  consequences use the world clock (`WorldClock` on the server, `ClientClock` mirroring it from the client's day) and the
-  detonation clock; server anchors per detonation (`NuclearEvents.Anchor`: world clock at burst and show end) are
+- Live detonation age (`ClientNuclear.AgeClock`) advances on processed client ticks plus the frame fraction.
+  The birth packet confirms age zero. Each ordered `NukeTick` confirms server game time minus detonation time.
+  Steering targets that age plus elapsed own time (up to 40 ticks), buffered by two ticks. Small errors within the
+  buffer receive proportionally less correction. Normal speed is 0.85–1.2× before the 140–200 tick linear lead brake.
+  The final speed slews at 0.2×/s, the lead stops at 200 ticks, and show end releases it to uncapped own time.
+  A late client's first estimate may be replaced before the first draw. Once shown it stays monotone. A frozen or
+  half-rate client and a client behind at admission can catch up at up to 3× for two seconds. A displayed estimate
+  above its first anchor advances at half speed until the target reaches it. Tick callers use `ticks(0)`.
+- Two viewers must agree within ten ticks after ten seconds of normal service following a steady server or a short
+  stall. After 20 s steady, 60 s at 10 TPS and recovery to 20 TPS, a cold join has 60 s to reach that band and stay
+  there. At +10 s the reachable gap is ≥31.733 ticks (server age 1200, resident ≥1271.733, joiner ≤1240).
+  The independent trajectory and all recovery checkpoints are in the [join calculation](https://github.com/zentixua/incoming/pull/742#clock-contract-and-cold-joins).
+- Ruin packets take their server age from the preceding anchor. The detonation, epoch, server tick and batch
+  ordinal identify a delivery. Each sampled site must be fresh at receipt (up to 20 server ticks after crossing).
+  At dispatch the drawn front must have reached the site within the last 20 displayed ticks (`DEBRIS_LATE`).
+  A site beyond that window produces neither wind-driven debris nor its clatter. Accepted clatter from a live
+  burst travels from the original site arrival, including later arrivals at the ear. A reconstructed show stays
+  silent for clatter. Seek or world entry rebuilds pending and consumed state. Replay clocks are in `replay.md`.
+- **Server timing limit.** Ruin replacement and damage follow the server. They can lag the drawn wave by its lead:
+  up to 4.7 s with the 5.15 s stall on Artem's recorded stream, and 8.3 s after 60 s at 10 TPS
+  (`AgeClockLeadProbeTest`). The client applies authoritative changes at receipt.
+- `PresentationClockTest` checks all 1,445 deliveries in the recording through the final drain, overload, restart,
+  joins and frame pacing. `ReplayExportFramesProbeTest` compares editor and export ages and wall extinction.
+  `ClientNuclearTest` checks freeze, the half-rate client and the J3/J6 recorded frame streams
+  with ±25 ms arrival jitter. With `-Dincoming.nukeDiag=true`, `nukeFrame` logs epoch, detonation, receive-clock
+  nanoseconds, shown age, confirmed age, lead, steering and held status. `nukeAnchor` logs receipt time and server
+  age, and `nukeEvent` logs server tick, ordinal, due age, shown age, signed skew (shown minus due), decision and reason.
+- `Detonation.dayTime` is unread, kept for the save/packet formats. Slow consequences use the world clock
+  (`WorldClock`; the client's `ClientClock` mirrors its day) and the detonation clock; server anchors per detonation (`NuclearEvents.Anchor`: world clock at burst and show end) are
   persisted, and doses step per detonation by Δτ (`NuclearEvents.stepFrom`, `FalloutModel.decayHours` for a sleep's
   long step). A burst-clock anchor for a detonation dated in the past (tests) uses `NuclearEvents.add(d, level)`, which
   backdates it as a vanilla day. Detonation stream codec (`Detonation.STREAM_CODEC`, 3.1.0 fields)
@@ -465,23 +440,10 @@ Ruins and everything in `nuclear/world/` are in `nuclear-world.md`.
   `NukeSync`; replay.md).
 - Client scenarios (`incoming.scenario`, same-JVM server) derive wind/detonation seed from detonation ID
   (`NuclearWarhead.SCENARIO`), not `level.random`: pall, mushroom and plume frames compare across runs.
-- Pall volume draws camera dust like distant wall head (`NukePall.drawsHead`: quality not OFF, shaders/noise working,
-  detonation in two pall slots, nearest by pall or head edge, `NukePall.outside`: pall alone made a third detonation's
-  local head yield to detonations whose haze contains camera); land-local `NukeDust` then only draws litter, removed
-  pieces and surface litter (same over water, crest drops `NukeWater.front`). Square billows a step or two from eye,
-  wider than frame, duplicated volume dust: full-screen pixel stair-steps (near particles use nearest pixels), dark
-  spheres above wall top, over sea billows 340 m above water, above head top. Fallback camera dust when pall is not
-  drawn (`NukeDust`: head billows, breach dust, billows while head surrounds player only within it, by local mean
-  density `BlastWall.sigma`; all smooth, `Fx.Spec.smooth`) uses local wall color (`NukePall.dustColor` → `dustLight`:
-  copy of `wall` light in `fx_pall` over mean head, same frame light `NukePall.sky`, depths to top/edge/sun/sphere,
-  `PallLight.diffuse`; mean beam phase; dark billows/smoke take a share), without lightmap (`Fx.Spec.prelit`, darker
-  under roofs by sky/block light): nighttime lightmap is dark while wall glows from fires, so camera billows
-  (2–6 % frame height) formed near-black spots on orange wall (trailer, night city shot at 2 km). Own billow light
-  (old `CloudPuffs.wallColor`, fireball glow without head shadow) made them orange by day over a gray-brown wall in
-  fireball shadow: dust/wall share light. Full-screen veil (`NukeDust.veil`) uses mean head at eye (`NukePall.tick`),
-  local wall color, only with pall OFF (or not drawn due to broken noise): otherwise pall draws head itself, doubling
-  screen darkening. Head holds veil while at eye (`veilWanted` each tick), fading only after head leaves. Old veil,
-  based on front-arrival pressure, minimum 0.2, darkened even sound-only locations (15 kt beyond 10 km, host video).
+- Camera dust is the pall volume and the dust pass, like the distant wall head; land-local `NukeDust` only draws litter,
+  removed pieces and surface litter (same over water, crest drops `NukeWater.front`). Particle billows a step or two from
+  the eye, wider than the frame, would duplicate volume dust: full-screen pixel stair-steps (near particles use nearest
+  pixels), dark spheres above wall top. No screen veil: the volume itself darkens the screen at the eye.
   Litter and pieces use world light: small/opaque, correctly dark against wall.
 - Client does not know server fire settings (`fires`, `fires_per_detonation`): distant fire is `FireField` model (server
   probability: flash ignition, `Detonation.flashTicks`, wave arrival at ground by slant range from burst blows out
@@ -526,7 +488,7 @@ Ruins and everything in `nuclear/world/` are in `nuclear-world.md`.
   behind front (next impact orbit, return to body). Spectator body is camera: viewing through another entity leaves
   client `LocalPlayer` at initial viewing location (server moves only `ServerPlayer`). Body effects belong in `hit`,
   not at camera position.
-- Head-dust wind path behind front (`BlastWall.carriedShare`, copy `pallWallCarried`) is Friedlander integral
+- Head-dust wind path behind front (`BlastWall.carriedShare`) is Friedlander integral
   u·e^(1−u), including after positive phase: negative-phase wind reverses (G&D §3.05), dust returns toward epicenter
   (total wave impulse zero). Same Friedlander for post-front wind sound (`BlastPulse.friedlander`).
 - Mushroom stem dust is `nuclear/model/StemDust`: dust drawn from wave layer (`DustModel.Column.stem`, starting at
@@ -567,3 +529,20 @@ Vanilla sky flash (`ClientLevel.setSkyFlashTime`) mixes sky and fog toward white
 timer renewed to one tick each frame is a 20 Hz sawtooth (replay capture 10.11: ±0.055 frame luminance, corr 0.97 with
 the partial tick); `NukeFlash.SKY_FLASH_TICKS` is 3, since the fog color reads the sky before the `ComputeFogColor`
 renewal and so sees one tick less right after a tick (`NukeFlashSkyTest`).
+
+## Dust source material
+
+- Server cells: 64 blocks out to optical depth 1 at one second, 256 blocks out to 0.05 (presentation keeps its own
+  thresholds). A cell closes 200 ticks before the front reaches its nearest ground point; surveys continue after
+  detonation; instant sources start from the observations at birth.
+- Class by column plurality, ties water, sand, soil, hard; unread cells take the nearest measured closed centre (ties
+  by world X, then Z); cells due together share samples. Ground-zero wetness: origin block, surveyed ground, soil.
+- `NuclearEvents` keeps the UUID across detonation: open sources save birth samples, timestamped observations and
+  frontier tick; finished ones packed cells. A malformed entry is isolated; a worker failure publishes uniform seed.
+- Checkpoints stand alone (partial maps carry fractional origin and sealed extent); four cells per byte, byte runs
+  when smaller. 64 KB is per framed packet: a typical 1 Mt source fits whole, an incompressible 330,870-cell airburst
+  needs 82,718 B of values, 17 sources fit in 1.5 MB. Cold delivery nearest first, 12,500 material bytes per part,
+  20 parts per rolling second per viewer.
+- `ClientNuclear.Active.sourceMaterial()`: class, commit status, origin wetness; the detonation packet carries the
+  frozen seed for an unwarned viewer (`frozenFallback()` until the cell arrives); empty outside the footprint;
+  sources without a revision freeze the first local terrain answer per cell.

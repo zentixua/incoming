@@ -14,10 +14,15 @@ import net.neoforged.neoforge.event.level.ChunkEvent;
 import net.neoforged.neoforge.event.level.ExplosionEvent;
 import net.neoforged.neoforge.network.PacketDistributor;
 import org.jetbrains.annotations.Nullable;
+import ua.zentix.incoming.api.ClaimQuery;
 import ua.zentix.incoming.warhead.Warheads;
 import ua.zentix.incoming.Incoming;
 import ua.zentix.incoming.util.WorldClock;
 import ua.zentix.incoming.IncomingConfig;
+import ua.zentix.incoming.api.GridOutageEvent;
+import ua.zentix.incoming.api.GridRestoreEvent;
+import ua.zentix.incoming.strike.Orders;
+import ua.zentix.incoming.strike.StrikeRules;
 import dev.ryanhcode.sable.companion.SubLevelAccess;
 import ua.zentix.incoming.compat.SubLevels;
 import ua.zentix.incoming.net.S2C;
@@ -29,7 +34,9 @@ import ua.zentix.incoming.work.WorkScheduler;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.nio.charset.StandardCharsets;
 import java.util.Locale;
+import java.util.UUID;
 
 /**
  * Blackout: a grid-node (substation) hit, nuclear strike or command cuts power to an area — districts go dark in a cascade
@@ -82,7 +89,12 @@ public final class Blackouts {
      * (wind charge, breeze) and very weak pops do not count as explosions for it.
      */
     public static void onExplosion(ExplosionEvent.Detonate e) {
-        if (!(e.getLevel() instanceof ServerLevel level) || !IncomingConfig.SERVER.gridEnabled.get()) return;
+        if (!(e.getLevel() instanceof ServerLevel level)) return;
+        // Incoming's claim question is no explosion (api.ClaimQuery)
+        if (e.getExplosion() instanceof ClaimQuery) return;
+        // a strike's explosion follows the rules its order was made under; any other explosion, the config now
+        StrikeRules rules = Warheads.rulesOf(e.getExplosion());
+        if (!(rules != null ? rules : StrikeRules.live()).grid()) return;
         if (e.getExplosion().getBlockInteraction() == Explosion.BlockInteraction.TRIGGER_BLOCK || e.getExplosion().radius() < MIN_BLAST) return;
         Vec3 at = e.getExplosion().center();
         // Warhead explosion by charge: substation equipment is outdoors; disabled where the wave breaks
@@ -129,8 +141,8 @@ public final class Blackouts {
      * disabled — each also darkens its own area until repaired as its own district is (a destroyed one: until supply is
      * rerouted around it, {@link Outage#rerouteAt}).
      */
-    public static void nuke(ServerLevel level, Detonation d) {
-        double radius = nukeRadius(d);
+    public static void nuke(ServerLevel level, Detonation d, boolean grid) {
+        double radius = nukeRadius(d, grid);
         if (radius <= 0) return;
         double dead = d.groundRange(BlastModel.kpa(DEAD_PSI)), damaged = Math.max(dead, d.groundRange(BlastModel.kpa(DAMAGED_PSI)));
         Outage o = blackout(level, d.burst(), radius, NUKE_SPEED, -1, Outage.NEVER, dead, damaged);
@@ -146,10 +158,11 @@ public final class Blackouts {
 
     /**
      * Nuclear grid-outage radius ({@link #nuke}; sent to clients with detonation: lamps short with EMP arcs),
-     * blocks; 0 — no grid outage (blackout or grid damage disabled by setting).
+     * blocks; 0 — no grid outage (blackout or grid damage disabled by setting). {@code grid}: {@code grid.enabled} of the
+     * strike's order ({@code StrikeRules}).
      */
-    public static double nukeRadius(Detonation d) {
-        if (!IncomingConfig.SERVER.gridEnabled.get() || !IncomingConfig.SERVER.gridNuke.get()) return 0;
+    public static double nukeRadius(Detonation d, boolean grid) {
+        if (!grid || !IncomingConfig.SERVER.gridNuke.get()) return 0;
         return Math.min(d.radiusMax(), NUKE_MAX_RADIUS);
     }
 
@@ -174,6 +187,7 @@ public final class Blackouts {
         long now = now(level);
         Outage o = PowerGrid.get(level).addOutage(new Outage(0, at.x, at.z, radius, now, speed / rate(level), restoreAt, restoreSpread(), node, dead, damaged));
         BlackoutWorld.get(level).onOutage(level, o);
+        Orders.queue(level, new GridOutageEvent(level.dimension(), outageId(level, o), o.x(), o.z(), o.radius(), nodePos(level, o), o.byDamage()));
         String restore = o.byDamage() ? String.format(Locale.ROOT, "power returns by damage: in hours beyond %d blocks, in days beyond %d, never within %d",
                 Math.round(damaged), Math.round(dead), Math.round(dead))
                 : o.restoreAt() == Outage.NEVER ? "power will not come back by itself"
@@ -225,6 +239,29 @@ public final class Blackouts {
         }
         Substations.sync(level, grid, now);
         return n;
+    }
+
+    /** Power is back in all of outage {@code o}, now forgotten ({@link PowerGrid#prune}). */
+    static void restored(ServerLevel level, Outage o) {
+        Orders.queue(level, new GridRestoreEvent(level.dimension(), outageId(level, o), o.x(), o.z(), o.radius(), nodePos(level, o), o.byDamage()));
+        Orders.queue(level, new ua.zentix.incoming.progress.Progress.Relit(level.dimension(), o));
+        Incoming.LOG.info("Blackout #{} ({}): power restored everywhere", o.id(), level.dimension().location());
+    }
+
+    /**
+     * Outage identifier for events: a name-based UUID of the dimension and the grid's saved outage number, so it needs no
+     * stored field and is the same after a restart.
+     */
+    public static UUID outageId(ServerLevel level, Outage o) {
+        return UUID.nameUUIDFromBytes(("incoming:outage/" + level.dimension().location() + "/" + o.id()).getBytes(StandardCharsets.UTF_8));
+    }
+
+    /** Substation whose failure caused {@code o}; null for a nuclear or command outage, or a node since removed. */
+    @Nullable
+    private static BlockPos nodePos(ServerLevel level, Outage o) {
+        if (o.node() < 0) return null;
+        Node n = PowerGrid.get(level).node(o.node());
+        return n == null ? null : n.pos();
     }
 
     // ---------------------------------------------------------------- settings

@@ -53,7 +53,7 @@ public final class ClientScenario {
      * Scenario commands, {@code wait:nuke}: tick, from which the steps are waiting for the detonation packet ({@code -1} - they are not waiting), and how many
      *  ticks they are already waiting for; the detonations that the client knew when the steps stood up are not the same detonations.
      */
-    private int nukeGate = -1, nukeGateWaited;
+    private int nukeGate = -1, nukeGateWaited, frontGate = -1, frontGateWaited, freezeWaited;
     /** {@code wait:blast}: tick, from which steps wait for the next explosion on the embedded server; explosions from launch. */
     private final java.util.ArrayDeque<Integer> blastGates = new java.util.ArrayDeque<>();
     private final java.util.concurrent.atomic.AtomicInteger serverBlasts = new java.util.concurrent.atomic.AtomicInteger();
@@ -169,12 +169,15 @@ public final class ClientScenario {
     /** The client has a detailed city for measuring fire ({@code incoming.scenario.city}), null - no. */
     @org.jetbrains.annotations.Nullable
     private final FireCity city = FireCity.of(System.getProperty("incoming.scenario.city"));
+    /** {@code incoming.server}: join this dedicated server (host:port) instead of opening a world; null in a world. */
+    private static final String JOIN = System.getProperty("incoming.server");
 
     public ClientScenario(IEventBus modBus) {
         String scenario = System.getProperty("incoming.scenario");
         if (scenario == null) return;
         ua.zentix.incoming.gametest.TestScale.realWaveOnStart();
         FrameTimes.startIfRequested();
+        HitchProbe.startIfRequested();
         // script lines, sandbox and samples write the layer time on the GPU in parts: the sample is always running
         ua.zentix.incoming.client.fx.layer.LayerTimes.always();
         if ("release-check".equals(scenario)) {
@@ -274,9 +277,41 @@ public final class ClientScenario {
     }
 
     private void onScreen(ScreenEvent.Init.Post e) {
+        // a world copy made with experimental settings (a server's world, Zearth Silo) asks once before loading: the scenario
+        // answers "I know what I'm doing" itself (a client without a window has nobody to click)
+        if (started && System.getProperty("incoming.world") != null) {
+            for (var child : e.getScreen().children()) {
+                if (child instanceof net.minecraft.client.gui.components.Button b
+                        && b.getMessage().getContents() instanceof net.minecraft.network.chat.contents.TranslatableContents t
+                        && t.getKey().equals("selectWorld.backupJoinSkipButton")) {
+                    Incoming.LOG.info("SCENARIO world copy with experimental settings: loading it as it is");
+                    b.onPress();
+                    return;
+                }
+            }
+        }
+        // a join that fails or drops leaves the client on the disconnect screen with no world ticks: end the run
+        if (started && JOIN != null && e.getScreen() instanceof net.minecraft.client.gui.screens.DisconnectedScreen) {
+            Incoming.LOG.error("SCENARIO disconnected from {}: {}", JOIN, e.getScreen().getTitle().getString());
+            Incoming.LOG.info("SCENARIO done");
+            Minecraft.getInstance().stop();
+            return;
+        }
         if (started || !(e.getScreen() instanceof TitleScreen)) return;
         started = true;
         Minecraft mc = Minecraft.getInstance();
+        // a dedicated server instead of a world (incoming.server=host:port, the commands scenario): the player's
+        //  multiplayer case, with the server's own JVM elsewhere; the commands go to it as chat commands of an operator
+        if (JOIN != null) {
+            Incoming.LOG.info("SCENARIO connect {}", JOIN);
+            var data = new net.minecraft.client.multiplayer.ServerData("incoming-scenario", JOIN,
+                    net.minecraft.client.multiplayer.ServerData.Type.OTHER);
+            // the server's recommended resource pack is taken, as a player who answered yes once (no prompt to click)
+            data.setResourcePackStatus(net.minecraft.client.multiplayer.ServerData.ServerPackStatus.ENABLED);
+            net.minecraft.client.gui.screens.ConnectScreen.startConnecting(e.getScreen(), mc,
+                    net.minecraft.client.multiplayer.resolver.ServerAddress.parseString(JOIN), data, false, null);
+            return;
+        }
         // player's world copy (tools/prod_client.py --world): open it instead of creating a scenario world
         String world = System.getProperty("incoming.world");
         if (world != null) {
@@ -314,7 +349,9 @@ public final class ClientScenario {
         if (p == null || mc.level == null) return;
         tick++;
         if (nukeGate >= 0 && tick >= nukeGate) holdForNuke();
+        if (frontGate >= 0 && tick >= frontGate && nukeGate < 0) holdForFront();
         if (!blastGates.isEmpty() && tick >= blastGates.getFirst()) holdForBlast();
+        if (ua.zentix.incoming.client.fx.layer.DustWallDiag.freezeAt > 0) holdForFreeze();
         for (Step s : List.copyOf(steps)) {
             if (s.at == tick) s.action.run();
         }
@@ -352,6 +389,11 @@ public final class ClientScenario {
             String blast = ua.zentix.incoming.client.sound.BlastSounds.describe();
             if (!blast.isEmpty()) Incoming.LOG.info("SCENARIO blast-sound {}", blast);
         }
+        // a live detonation in view is not "far": its layer GPU by pass, smoke fill and near dust every half second, from
+        // the flash on (the "far" line above starts only once distant blasts exist)
+        if (tick % 10 == 0 && !ua.zentix.incoming.client.nuclear.ClientNuclear.detonations().isEmpty())
+            Incoming.LOG.info("SCENARIO nuke-layer smoke {}; near {}; layer {}", FarRenderer.describeSmoke(),
+                    ua.zentix.incoming.client.nuclear.NukeDust.describe(), ua.zentix.incoming.client.fx.layer.FxLayer.describeTiming());
     }
 
     private void plan() {
@@ -1371,6 +1413,42 @@ public final class ClientScenario {
                 int y = around((int) Math.floor(fsInside.x), (int) Math.floor(fsInside.z)) + 20;
                 cmd(String.format(java.util.Locale.ROOT, "tp @s %.1f %d %.1f facing %.1f %.1f %.1f", fsInside.x, y, fsInside.z, fsLook.x, fsLook.y, fsLook.z));
             }
+        }
+    }
+
+    /** A {@code dw:} step: one dust-wave diagnostic ({@link DustWallSteps}); {@code rdc} also takes a RenderDoc capture. */
+    private void dustWallDiag(String arg) {
+        if (arg.strip().equals("rdc")) {
+            renderDocCapture();
+            Incoming.LOG.info("SCENARIO dw {}", arg);
+        } else {
+            DustWallSteps.apply(arg);
+        }
+    }
+
+    /**
+     * {@code dw:rdc}: RenderDoc takes the next frame. The client runs under {@code renderdoccmd capture} (prod_client.py
+     * {@code INCOMING_JAVA_WRAP}); its in-app API ({@code RENDERDOC_GetAPI}, version 1.1.2) is asked from the injected library,
+     * so no UI is needed to trigger the capture. Linux only; without RenderDoc in the process the step logs that and does nothing.
+     */
+    private static void renderDocCapture() {
+        if (org.lwjgl.system.Platform.get() != org.lwjgl.system.Platform.LINUX) {
+            Incoming.LOG.warn("SCENARIO dw rdc: the RenderDoc trigger is Linux only");
+            return;
+        }
+        long lib = org.lwjgl.system.linux.DynamicLinkLoader.dlopen("librenderdoc.so", 2 | 4); // RTLD_NOW | RTLD_NOLOAD
+        if (lib == 0) { Incoming.LOG.warn("SCENARIO dw rdc: RenderDoc is not in the process"); return; }
+        long getApi = org.lwjgl.system.linux.DynamicLinkLoader.dlsym(lib, "RENDERDOC_GetAPI");
+        try (org.lwjgl.system.MemoryStack stack = org.lwjgl.system.MemoryStack.stackPush()) {
+            org.lwjgl.PointerBuffer api = stack.mallocPointer(1);
+            int ok = org.lwjgl.system.JNI.invokePI(10102, org.lwjgl.system.MemoryUtil.memAddress(api), getApi);
+            if (ok != 1 || api.get(0) == 0) { Incoming.LOG.warn("SCENARIO dw rdc: RENDERDOC_GetAPI returned {}", ok); return; }
+            // RENDERDOC_API_1_1_2: TriggerCapture is the 16th entry of the function table
+            long trigger = org.lwjgl.system.MemoryUtil.memGetAddress(api.get(0) + 15L * org.lwjgl.system.Pointer.POINTER_SIZE);
+            org.lwjgl.system.JNI.invokeV(trigger);
+            Incoming.LOG.info("SCENARIO dw rdc: capture triggered");
+        } finally {
+            org.lwjgl.system.linux.DynamicLinkLoader.dlclose(lib); // the RTLD_NOLOAD open's reference
         }
     }
 
@@ -3573,7 +3651,7 @@ public final class ClientScenario {
 
     /**
      * Commands from {@code incoming.commands} (semicolon-separated, except semicolons in brackets or quotes —
-     * {@link ScenarioCommands}) in the open world, to check modpack mods respond (e.g. a recording copy:
+     * {@link ScenarioCommands}) in the open world or on the joined server ({@code incoming.server}), to check modpack mods respond (e.g. a recording copy:
      * {@code /dh pregen status}, {@code /chunky}); replies go to chat, chat to the client log.
      * Besides commands: {@code wait:N} adds N ticks (0…{@value CommandPlan#MAX_WAIT}); {@code wait:nuke} makes later steps
      * relative to client receipt of a new detonation packet (once per scenario; server may lag the client clock, so a
@@ -3590,13 +3668,20 @@ public final class ClientScenario {
                 Math.max(1, Integer.getInteger("incoming.commands.gap", 40)));
         for (String w : plan.warnings()) Incoming.LOG.warn("SCENARIO commands: {}", w);
         if (plan.nukeGate() >= 0) nukeGate = plan.nukeGate();
-        blastGates.addAll(plan.blastGates());
+        if (plan.frontGate() >= 0) frontGate = plan.frontGate();
+        // wait:blast counts the integrated server's explosions: on a joined server it would only wait out its limit
+        if (JOIN != null && !plan.blastGates().isEmpty()) Incoming.LOG.warn("SCENARIO commands: wait:blast needs the world's own server, skipped on {}", JOIN);
+        else blastGates.addAll(plan.blastGates());
         if (!blastGates.isEmpty()) {
             NeoForge.EVENT_BUS.addListener((net.neoforged.neoforge.event.level.ExplosionEvent.Start e) -> {
                 if (!e.getLevel().isClientSide()) serverBlasts.incrementAndGet();
             });
         }
         for (CommandPlan.Step step : plan.steps()) {
+            if (JOIN != null && step.kind().ownServer()) {
+                Incoming.LOG.warn("SCENARIO commands: {} needs the world's own server, skipped on {}", step.kind(), JOIN);
+                continue;
+            }
             switch (step.kind()) {
                 case SHOT -> shot(step.tick(), step.arg());
                 case HUD_OFF, HUD_ON -> {
@@ -3609,9 +3694,17 @@ public final class ClientScenario {
                     pickEpicentre();
                     cmd(String.format(java.util.Locale.ROOT, "tp @s %d 200 %d", fsX, fsZ));
                 });
-                case MAX_YIELD -> at(step.tick(), () -> ua.zentix.incoming.IncomingConfig.SERVER.nukeMaxYield.set(Integer.parseInt(step.arg())));
+                // on a dedicated server these are its own config (incoming-server.toml there): this client cannot set them
+                case MAX_YIELD -> at(step.tick(), () -> {
+                    if (JOIN != null) Incoming.LOG.info("SCENARIO maxyield:{} is the server's config on {}", step.arg(), JOIN);
+                    else ua.zentix.incoming.IncomingConfig.SERVER.nukeMaxYield.set(Integer.parseInt(step.arg()));
+                });
                 case SITE -> at(step.tick(), () -> pickSite(step.arg()));
                 case WAVE -> at(step.tick(), () -> {
+                    if (JOIN != null) {
+                        Incoming.LOG.info("SCENARIO wave:{} is the server's config on {}", step.arg(), JOIN);
+                        return;
+                    }
                     ua.zentix.incoming.IncomingConfig.SERVER.scalePreset.set(ua.zentix.incoming.IncomingConfig.ScalePreset.CUSTOM);
                     ua.zentix.incoming.IncomingConfig.SERVER.nukeWaveSpeed.set(Double.parseDouble(step.arg()));
                 });
@@ -3621,6 +3714,7 @@ public final class ClientScenario {
                     shot(step.tick(), step.arg());
                     offShot(step.tick() + 1, step.arg() + "_off", 3);
                 }
+                case DW -> at(step.tick(), () -> dustWallDiag(step.arg()));
                 case SKIP -> at(step.tick(), () -> fsSkip(Double.parseDouble(step.arg())));
                 case FRAMES -> at(step.tick(), () -> frameRun(step.arg()));
             }
@@ -3942,6 +4036,69 @@ public final class ClientScenario {
         blastGates.clear();
         blastGates.add(first);
         for (int g : rest) blastGates.add(g + 1);
+    }
+
+    /**
+     * {@code wait:front}: until the newest detonation's in-game front has passed the camera's ground point (the burst's distance to
+     * the ground under the player), all later steps shift by a tick: frames at fixed times after the front passes the camera.
+     * No detonation or no passage within {@value CommandPlan#MAX_WAIT} ticks: a line in the log, and the steps go on.
+     */
+    private void holdForFront() {
+        var p = Minecraft.getInstance().player;
+        var newest = ua.zentix.incoming.client.nuclear.ClientNuclear.detonations().stream()
+                .min(java.util.Comparator.comparingDouble(a -> a.ticks(0)));
+        if (newest.isPresent() && p != null) {
+            var a = newest.get();
+            var level = Minecraft.getInstance().level;
+            int x = net.minecraft.util.Mth.floor(p.getX()), z = net.minecraft.util.Mth.floor(p.getZ());
+            double ground = level != null && level.getChunkSource().hasChunk(x >> 4, z >> 4)
+                    ? level.getHeight(net.minecraft.world.level.levelgen.Heightmap.Types.MOTION_BLOCKING, x, z) : p.getY();
+            double r = a.d.burst().distanceTo(new net.minecraft.world.phys.Vec3(p.getX(), ground, p.getZ()));
+            if (a.ticks(0) >= a.d.arrivalTicks(r)) {
+                Incoming.LOG.info("SCENARIO commands: the front passed the camera's ground point ({} m from the burst, {} s after it, "
+                        + "world game time {}); the steps were waiting {} tick", Math.round(r), String.format(java.util.Locale.ROOT, "%.2f", a.ticks(0) / 20),
+                        level == null ? -1 : level.getGameTime(), frontGateWaited);
+                frontGate = -1;
+                return;
+            }
+        }
+        if (frontGateWaited >= CommandPlan.MAX_WAIT) {
+            Incoming.LOG.warn("SCENARIO commands: no front passage for {} tick - steps go further", frontGateWaited);
+            frontGate = -1;
+            return;
+        }
+        frontGateWaited++;
+        steps.replaceAll(s -> s.at >= tick ? new Step(s.at + 1, s.action) : s);
+    }
+
+    /**
+     * {@code dw:freezeat=<m>}: the later steps wait (shift by a tick) until the newest detonation's front is within m blocks of the
+     * camera's ground point; then the dust wave's age freezes there ({@code DustWallDiag.freezeAge}). No such front within
+     * {@value CommandPlan#MAX_WAIT} ticks: a line in the log, and the steps go on.
+     */
+    private void holdForFreeze() {
+        var p = Minecraft.getInstance().player;
+        var newest = ua.zentix.incoming.client.nuclear.ClientNuclear.detonations().stream()
+                .min(java.util.Comparator.comparingDouble(a -> a.ticks(0)));
+        if (newest.isPresent() && p != null) {
+            var a = newest.get();
+            double r = a.d.burst().distanceTo(new net.minecraft.world.phys.Vec3(p.getX(), a.d.burst().y, p.getZ()));
+            float m = ua.zentix.incoming.client.fx.layer.DustWallDiag.freezeAt;
+            if (a.ticks(0) >= a.d.arrivalTicks(Math.max(r - m, 0))) {
+                ua.zentix.incoming.client.fx.layer.DustWallDiag.freezeAge = true;
+                ua.zentix.incoming.client.fx.layer.DustWallDiag.freezeAt = -1;
+                Incoming.LOG.info("SCENARIO dw frozen with the front {} m from the camera ({} s after the burst)", Math.round(m),
+                        String.format(java.util.Locale.ROOT, "%.2f", a.ticks(0) / 20));
+                return;
+            }
+        }
+        if (++freezeWaited >= CommandPlan.MAX_WAIT) {
+            Incoming.LOG.warn("SCENARIO dw: the front did not come within {} m for {} tick - steps go further",
+                    Math.round(ua.zentix.incoming.client.fx.layer.DustWallDiag.freezeAt), freezeWaited);
+            ua.zentix.incoming.client.fx.layer.DustWallDiag.freezeAt = -1;
+            return;
+        }
+        steps.replaceAll(s -> s.at > tick ? new Step(s.at + 1, s.action) : s);
     }
 
     /** Longest wait for an explosion ({@code wait:blast}): Shahed's flight at 5 km, tick. */

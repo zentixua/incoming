@@ -12,7 +12,7 @@ paths:
 The short layout is in AGENTS.md; here, what each script does.
 
 Prism: `~/.var/app/org.prismlauncher.PrismLauncher/data/PrismLauncher/` (`tools/paths.py`: PRISM);
-`instances/Open Skies/minecraft/` is Artem's playing instance (MC; folder name only in `tools/paths.py`, read by
+`instances/Open-Skies/minecraft/` is Artem's playing instance (MC; folder name only in `tools/paths.py`, read by
 `build.gradle`, overridden by `MC_DIR`): `mods/` also supplies Create/Sable/Aeronautics for dev runs,
 `logs/latest.log`, `incoming-backup/` for `deploy.sh` removals; `java/java-runtime-delta` is JDK 21.
 
@@ -34,8 +34,11 @@ Prism: `~/.var/app/org.prismlauncher.PrismLauncher/data/PrismLauncher/` (`tools/
                                            does not touch an instance with pack auto-update: packwiz-installer would bring back the pack's jar
     logscan.py                           ← digest of logs/latest.log
     check_knowledge.py                   ← CI job “Знания” (every run): agent knowledge layout (CLAUDE.md = @AGENTS.md, AGENTS.md
-                                           ≤ 28 KiB, every rule has live `paths:` and is listed, plugin hooks exist, no private
+                                           ≤ 28 KiB, every rule ≤ 64 KiB (an oversized one's ceiling only falls), has live `paths:` and is listed, plugin hooks exist, no private
                                            facts); test_check_knowledge.py also tests the plugin's hooks/knowledge.py
+    clip_metrics.py change|flicker|period ← motion and repetition of a look take or of reference footage, both measured the
+                                           same way (look skill): detail change per 0.1 s after the best shift and apparent speed (search 8 px per lag), frame-to-frame
+                                           pulsing, a dominant period and staircase steps along an edge; test_clip_metrics.py
     nuke_survey.py <untouched> <blasted> <gz x> <gz z> ← nuclear ruins against the untouched world, block by block (region
                                            files only, safe on a live server's world): share of built blocks still in place by
                                            kind and distance ring, one-block spikes left standing, block columns at --spot=x,z
@@ -45,12 +48,29 @@ Prism: `~/.var/app/org.prismlauncher.PrismLauncher/data/PrismLauncher/` (`tools/
                                            its Gradle step and another Gradle run in the same tree (GameTest) collide on
                                            downloadAssets: start the second after the client's launch script exists;
                                            scenarios and what each captures: in the script header
+    dev_client.sh start|cmd|hud|dw|age|watch|swap|reload|shot|stop|status ← the look loop: ModDevGradle runClient (the mod and its dependencies) straight
+                                           into a saved world (a reflinked copy of a real map), JetBrains Runtime from the Gradle
+                                           toolchain with JDWP on loopback; `swap` compiles, redefines changed classes (jdb) and presses
+                                           the F3+T reload for changed resources; chat commands, reload, F2, F1 and dust-wave diagnostics (dw) as files the
+                                           client reads (devtest DevHands: the nested display passes it no keyboard input); shared
+                                           GPU slot or CPU (laptop_job.sh --soft); how to work: client-scenario.md, “Standard dev client”
     sandbox.sh start|fx|swap|shot|restart|stop|jbr ← effects sandbox (vanilla: shared GPU slot or CPU, unless shaders/sodium/dh/gpu): a client with only the mod (+ Iris with a shaderpack, Sodium without one, DH) in a
                                            flat world, an effect by the /fx command in seconds, hot code swap and
                                            resource reload without a new client, frames and WAV in one command (`shot`; `--at none`
                                            sound only, its take in a 160×90 window at 20 fps);
                                            a nuke at the camera: `nuke 15 near`; how to work: client-scenario.md,
-                                           “Effects sandbox”; check without a client: test_sandbox.sh (CI)
+                                           “Effects sandbox”; check without a client: test_sandbox.sh (CI);
+                                           no command for INCOMING_SANDBOX_IDLE s (1800; 0 never): the client stops itself
+    stray_clients.sh [--host vps] [--idle S] [--max-age S] ← report only: job units whose caller is gone, sandboxes and dev
+                                           clients idle past the limit, other jobs over 12 h, client JVMs whose wrapper is gone; exit 1 when any; never
+                                           stops anything; test: test_stray_clients.sh (CI)
+    amd_shader_check.py [--only R] [--record] [--tree D] ← every core and post program through AMD's OpenGL compiler offline
+                                           (glc of RGA 2.13, gfx1032 = RX 6600 XT; vanilla stages and includes from the 1.21.1
+                                           client jar; both hash-checked into mod/run/rga): VGPRs, scratch, code of both stages,
+                                           compiler memory, seconds; fails past tools/fixtures/amd_shader_budget.json (+10 % code or
+                                           memory per stage, new scratch, a program that does not compile, a new one over 128 KB or 1 GB). CI job
+                                           “Компилятор AMD” on shader changes; --record --jobs 1 on an idle machine after a
+                                           deliberate change, the reason in the PR
     see_through_check.sh [graphics] [start options] ← regression check of effects behind see-through blocks: a blast seen
                                            through a sandbox `pane` of each translucent block and stone, visible share 2 s
                                            after it by see_through.py, fails outside its bounds; run it on changes to the
@@ -59,6 +79,21 @@ Prism: `~/.var/app/org.prismlauncher.PrismLauncher/data/PrismLauncher/` (`tools/
     see_through_gl.py                    ← the see-through shaders on Mesa llvmpipe without a game: sampler counts (the pall
                                            composite within 16), fx_depth on synthetic captures, the half-resolution
                                            pair, the pall split with smoke in front of a far pane; exit 1 on a failed check
+    nuclear_volume_warmup_gl.py           ← Mesa cold-cache nuclear volume timings for the pall and wall programs: batch (one frame), staged
+                                           (one draw per loading frame, including both wall composite targets), cold (unprepared burst). dust_wall_gl.py runs staged
+    dust_wall_gl.py                      ← the young nuclear dust wall's shaders on Mesa llvmpipe (see_through_gl.py's
+                                           harness): thin foreground, hand and pane in its composite, history at a new
+                                           occluder and on an uneven lattice, the march at the world's edge, straight down
+                                           and on a valley floor; exit 1 on a failed check; run it on dust wall shader changes
+    dust_wall_contract_gl.py [checkout] [case ...] ← Mesa GL contracts for depth ordering and reprojection.
+                                           Use motion for camera translation/rotation, edge for slopes and convex corners, skin for the march reaching the
+                                           wall's dense face cell by cell after a thin span.
+                                           dust_wall_gl.py runs every case.
+    wall_layer_identity.py               ← fixed-seed llvmpipe comparison with fixtures/wall_layer_7de91b6d1.glsl, run by
+                                           dust_wall_gl.py. Checks light, depth and clipped transmission across 672 cases.
+    pall_single_gl.py                    ← compares the general and single-burst ray in six llvmpipe scenes, including
+                                           haze, soot and a populated cap with a missing-body negative control. Run by dust_wall_gl.py.
+    dust_wall_ray_cost.py <checkout> [readbacks.npz] ← llvmpipe timings and optional RGBA32F readbacks for the pall ray pass
     nested_kwin.sh                       ← nested KWin for the client: no window and no host sound, its own D-Bus bus without starting services
                                            (nested_kwin_bus.conf) and XDG directories; takes the GPU lease and the client lock
                                            (gpu_lease.sh); exit 75 means whoever holds the GPU or Artem's game running (an exclusive client never starts beside it); with INCOMING_SOFT=1 a CPU session
@@ -67,7 +102,7 @@ Prism: `~/.var/app/org.prismlauncher.PrismLauncher/data/PrismLauncher/` (`tools/
     soft_gl.sh                           ← vanilla clients, sourced: vanilla_display (shared GPU slot, else CPU at once), CPU rendering (Mesa llvmpipe): GL vendor/thread/heap
                                            environment, memory ceiling and admission, CPU display (nested KWin on a
                                            wayland-incoming-soft-<name> socket, else xvfb-run); details: client-scenario.md, “Vanilla rendering”
-    laptop_job.sh [--gpu|--light|--soft] [--full] <name> -- <command> ← heavy job on the host's laptop: its own temporary systemd service
+    laptop_job.sh [--gpu|--light|--soft] [--full --acceptance] <name> -- <command> ← heavy job on the host's laptop: its own temporary systemd service
                                            (not in the Claude group), the laptop does not sleep, everything of it is stopped on exit; no queue;
                                            --gpu [--wait] takes the GPU lease of its session (another session's: refusal 75; with
                                            --wait, in the lease queue) and waits until Artem's game is closed; his game started during the
@@ -75,9 +110,13 @@ Prism: `~/.var/app/org.prismlauncher.PrismLauncher/data/PrismLauncher/` (`tools/
                                            at the end, “laptop_job <name>: exit N”; --status: what runs and who holds the GPU;
                                            --soft: a vanilla client (shared GPU slot or CPU), no lease, CPUWeight=idle, MemoryMax from soft_gl.sh, no swap;
                                            every job has a memory ceiling (--ceiling <mode>): 10 GB + 4 GB swap, --full (whole pack) 20 GB,
+                                           --full only with --acceptance (a final take: refused with 2 without it, each counted as a
+                                           `take` row of its task in the load log),
                                            from measured unit peaks; past it the unit stops itself and the output says “memory ceiling …
                                            reached”; INCOMING_JOB_MEM/INCOMING_JOB_SWAP for one job; without a sleep inhibitor where none is allowed (a server);
-                                           TERM/Ctrl+C on laptop_job.sh stops its service (the client never outlives the command)
+                                           every job runs in agents.slice (laptop-agents: one ceiling for all agent work, rigs.md); a job
+                                           killed because the slice is full says “agent work memory … is full”; TMPDIR: its own on disk, removed at stop;
+                                           TERM/Ctrl+C/HUP on laptop_job.sh, or its systemd-run killed, stops its service (the client never outlives the command)
                                            task load: at stop (ExecStopPost `laptop_job.sh --account`) the unit's CPU from its cgroup
                                            goes to the load log (`cpu` row, task = DELEGATE_TASK set by `delegate`; job and task
                                            names only, never the command's arguments); laptop-agents mission-load sums it;
@@ -95,7 +134,7 @@ Prism: `~/.var/app/org.prismlauncher.PrismLauncher/data/PrismLauncher/` (`tools/
                                            session: refusal “GPU held by …, since …”; a live nested KWin without the lock (the script before
                                            the lease) also counts as busy; running work extends it, without it expires in 10 min; Artem's game
                                            is artem_playing (java in his instance's folder or in the Prism group); --wait:
-                                           an honest queue (FIFO): a free GPU goes to the first waiter; status: who holds it and
+                                           an honest queue (FIFO): a free GPU goes to the first waiter; a holder past its turn (INCOMING_GPU_TURN, 30 min) with a waiter queues its new takes and yields after INCOMING_GPU_YIELD (90 s) without work; status: who holds it and
                                            who waits; at most INCOMING_GPU_QUEUE_MAX (2) other sessions wait, a newcomer beyond is refused (75);
                                            a nested KWin on a wayland-incoming-soft-… socket is a CPU session, not a GPU client;
                                            shared slots (gpu_slot_take, INCOMING_GPU_SLOTS 3, `$LEASE.slot<N>` locks plus a shared hold of the
@@ -109,7 +148,7 @@ Prism: `~/.var/app/org.prismlauncher.PrismLauncher/data/PrismLauncher/` (`tools/
     logtime.py                           ← time of Minecraft log lines for digests of laptop tasks
     free_port.py                         ← a free port on 127.0.0.1 for check servers (stress.sh, mp_scenario.sh)
     rig_procs.sh                         ← processes of checks in their own sessions (source from stress.sh, mp_scenario.sh): the script's exit kills them with the JVM
-    probes/                              ← review probes kept as regression tests (run by test_gpu_lease.sh, test_sandbox.sh)
+    probes/                              ← review probes kept as regression tests (run by test_gpu_lease.sh, test_sandbox.sh, test_stray_clients.sh)
     test_rig_procs.sh                    ← check of rig_procs.sh (CI): Ctrl+C, TERM, end of script, a foreign session, fd, RIG_GRACE timeout: no orphans
     look_gate/run.sh <name> <tree> [scenes] ← picture-and-sound gate: ProbeScenario scenes under Iris with the whole build (README.md
                                            there): only a one-off comparison with 3.4.1, then to be removed; hearing always without deafening, sampling in the order of the reference and in the air of its game time;
@@ -136,7 +175,7 @@ Prism: `~/.var/app/org.prismlauncher.PrismLauncher/data/PrismLauncher/` (`tools/
                                            leak — who holds the world after leaving to the menu: entries into the world with commands (incoming.leak.*),
                                            in the menu — a class histogram and a JFR sample with paths to roots (needs -XX:VMThreadStackSize=8192:
                                            with the default stack the path search crashes the JVM), into the log — lines `SCENARIO leak … holder`;
-                                           replay — replay of a Flashback in the directory of tools/pack_dir.py of the build (zentixua/open-skies) with the recording mods and quicksave: saved, opened and played back — the projectile's frames and the places where it vanished; rewinds backward and forward through strikes and the nuke — without live explosions and flashes
+                                           replay — replay of a Flashback in the directory of tools/pack_dir.py of the build (zentixua/open-skies-friends) with the recording mods and quicksave: saved, opened and played back — the projectile's frames and the places where it vanished; rewinds backward and forward through strikes and the nuke — without live explosions and flashes
     replayscan/                          ← analysis of a Flashback replay by the game itself into tables: a client mod without a window (events, paths,
                                            visibility through the player's eyes or set cameras, ground measurements at explosions) and replaydb.py —
                                            a DuckDB database with queries for video plans (launches, flybys, ground strikes); filming plans of
@@ -171,6 +210,7 @@ Prism: `~/.var/app/org.prismlauncher.PrismLauncher/data/PrismLauncher/` (`tools/
                                            dist/incoming-trailer.mp4, -lite.mp4 and -credits.txt (lines for the video description)
     trailer/icon_from_frames.py <frames> <folder> ← the old Shahed-against-the-sky icon from frames (superseded by the pixel icon)
   docs/DESIGN-nuke.md                    ← nuclear strike design
+  docs/design/universal-integration.md   ← integration roadmap (events, permissions, claims, data, compat), status table
   docs/guide/                            ← player guide in English (pages by topic, pictures in img/),
                                            docs/guide/ru/ — the same in Russian
   docs/store/                            ← Modrinth and CurseForge page texts
@@ -193,7 +233,8 @@ Prism: `~/.var/app/org.prismlauncher.PrismLauncher/data/PrismLauncher/` (`tools/
   does not build the mod or run GameTest (`tools/replayscan` has its own build and unit tests, `tools/look_gate` the run
   validity test, `tools/stand` the wrapper build, its unit tests and test_gate.py); store pages (`docs/store`,
   `docs/media`, `docs/guide`, README, `.github/scripts`, `publish.yml`) only their check `test_store*.py`; `mod/`, CI and
-  unknown paths get the full check, and a manual run (release) always runs everything. The jar is the artifact
+  unknown paths get the full check, and a manual run (release) always runs everything. Shader changes (and
+  `amd_shader_check.py`, its test and budget) also run “Компилятор AMD”. The jar is the artifact
   `incoming-jar`.
 - A push to `main` and a release do not recheck a tree that already fully passed a successful run of this repository
   (a PR merged without `main` moving gives the same tree): `Что изменилось` finds the tag `tested-tree-<tree>`
@@ -204,7 +245,7 @@ Prism: `~/.var/app/org.prismlauncher.PrismLauncher/data/PrismLauncher/` (`tools/
   manually on `main` with `release=true`: after all checks, the workflow releases `v<version>` with the jar (friends take it
   from there), and `publish` then uploads the same jar to Modrinth and CurseForge by itself (step `release`; a manual
   `publish release` re-sends a version and skips stores that already have the jar). If `main` has moved on from the commit checked in the game, a branch `claude/release-…` from that commit with only
-  the notes, and the run on it. After the release, the open-skies build takes the jar by itself (its `update` workflow
+  the notes, and the run on it. After the release, the open-skies-friends build takes the jar by itself (its `update` workflow
   runs there every 3 hours; to run it at once, start it manually on `main`), checks it and releases it; players with
   auto-update get it on their next launch. Create, Sable and Aeronautics are pinned in the pack: a new version of them is a PR in
-  open-skies together with the pins here (`gradle.properties`, `tools/fetch_runtime_mods.py`).
+  open-skies-friends together with the pins here (`gradle.properties`, `tools/fetch_runtime_mods.py`).

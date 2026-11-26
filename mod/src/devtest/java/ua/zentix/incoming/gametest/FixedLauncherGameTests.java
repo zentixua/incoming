@@ -397,7 +397,7 @@ public final class FixedLauncherGameTests {
      * Install the launcher with the host {@code owner}, the package rate is +Z. After checking, remove it without falling out, and that’s it,
      *  that left it: shells, volleys.
      */
-    private static FixedLauncherBlockEntity launcher(GameTestHelper h, BlockPos at, @Nullable UUID owner) {
+    static FixedLauncherBlockEntity launcher(GameTestHelper h, BlockPos at, @Nullable UUID owner) {
         ServerLevel level = h.getLevel();
         h.setBlock(at, ModBlocks.FIXED_LAUNCHER.get());
         FixedLauncherBlockEntity be = h.getBlockEntity(at);
@@ -414,7 +414,7 @@ public final class FixedLauncherGameTests {
         return be;
     }
 
-    private static void load(GameTestHelper h, FixedLauncherBlockEntity be, ItemStack stack) {
+    static void load(GameTestHelper h, FixedLauncherBlockEntity be, ItemStack stack) {
         h.assertTrue(be.load(stack).isEmpty(), "ammunition was not included in the reserve");
     }
 
@@ -430,7 +430,7 @@ public final class FixedLauncherGameTests {
 
     /** Translation string key (null - no string). */
     @Nullable
-    private static String key(@Nullable Component c) {
+    static String key(@Nullable Component c) {
         return c != null && c.getContents() instanceof TranslatableContents t ? t.getKey() : null;
     }
 

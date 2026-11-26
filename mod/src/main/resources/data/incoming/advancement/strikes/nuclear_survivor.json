@@ -1,0 +1,33 @@
+{
+  "parent": "incoming:strikes/root",
+  "display": {
+    "icon": {
+      "id": "incoming:nuclear_warhead"
+    },
+    "title": {
+      "translate": "advancements.incoming.strikes.nuclear_survivor.title"
+    },
+    "description": {
+      "translate": "advancements.incoming.strikes.nuclear_survivor.description"
+    },
+    "frame": "challenge",
+    "show_toast": true,
+    "announce_to_chat": true,
+    "hidden": false
+  },
+  "criteria": {
+    "survived": {
+      "trigger": "incoming:nuclear_survived",
+      "conditions": {
+        "overpressure_psi": {
+          "min": 5.0
+        }
+      }
+    }
+  },
+  "requirements": [
+    [
+      "survived"
+    ]
+  ]
+}

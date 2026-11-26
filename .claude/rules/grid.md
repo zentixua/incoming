@@ -20,7 +20,11 @@ paths:
   tick, otherwise one spike keeps the queue at one unit per tick; rate: `/incoming grid status`; a unit over 10 ms logs
   “Blackout (…): work unit (queue|relight|cascade)” with a breakdown by work kind and “outside kinds” time (GC, thread
   preemption are not blackout work; over half the unit = INFO, otherwise WARN)), `Blackouts` (entry points: explosion
-  near a node, the nuke, `GridCommand`; events), `SubstationBlock`/`Substations` (node block, “live”), `ChunkSaves` (no
+  near a node, the nuke, `GridCommand`; events), `SubstationBlock`/`Substations` (node block, “live”; its `powered`
+  is its redstone output, weak 15 from every face: `Substations.sync` writes it without neighbour updates and tells
+  the neighbours through `util/SignalEdge` (`server-chunks.md`), and has them recheck every node once after a start
+  (`BlackoutWorld.signalled`); its default state is dead and `onPlace` sets the grid's state
+  (`Substations.works`), so nothing reads a false 15 during a placement or replacement; `RedstoneGameTests`, `RedstoneReviewGameTests`), `ChunkSaves` (no
   twins on disk: `ChunkDataEvent.Save` writes sections with lamps and `isLightOn=false`, `ChunkDataEvent.Load` turns
   off dark-district lamps in the palette before the chunk enters the world; `BlackoutWorld` removes their disk light
   via `checkBlock` when neighbors load). A twin replaces `lit=false`: shaders (Complementary) light lamps by block ID,
@@ -29,7 +33,9 @@ paths:
   assembly writes blocks straight into sections, blocks do not tick in a plot, Sable saves the plot itself; a twin in
   a plot relights on a neighbor update during assembly, `Unlit.neighborChanged`: autosave precedes the end of the server
   tick, and Sable has no plot-save event). Lamps change directly in the section palette (`ChunkLights.applyInPlace`,
-  light via `checkBlock`, clients via `blockChanged`): the lamp/twin pair is one block to the world except for light
+  light via `checkBlock`, clients through `ChunkDelivery.lamps`: a chunk with many switched
+  lamps, or more to switch in a later pass, goes whole after its light, since each lamp delta
+  makes the client spread its light removal itself, `work.md`): the lamp/twin pair is one block to the world except for light
   (`GridLights.inPlace`, GameTest), whereas `setBlock` with the host's pack costs ≈10 µs per lamp — Greenfield has
   2.5 million invisible `minecraft:light` blocks (up to 7400 per chunk), so the queue would take minutes. Only Sable plots
   use `setBlock`. A chunk at the edge of the loaded world (neighbors unloaded) is converted immediately too: waiting
@@ -68,6 +74,16 @@ paths:
   substation textures: `tools/gen_textures.py`. Vanilla assigns the cutout layer to lanterns and end rods in code
   (`ItemBlockRenderTypes`), not the model — twins need it in the model (`render_type`). `ofFullCopy` does not transfer
   the loot table by block name — twins need `lootFrom(lamp)`.
+- `ChunkSaves.onSave` restores lamps by renaming twin entries of each saved section's palette list; the packed block
+  data stays as vanilla wrote it. Decoding and re-encoding sections on save costs more than vanilla's whole chunk
+  serialization when a wave saves a dark city (276 ms per second of server thread, 1 Mt over the Silo map). The rename
+  is the lossless fast path only: it reads the saved tag (a snapshot: the live chunk may have relit since), changes
+  only an entry's `Name` (other keys belong to other writers), and declines without touching the tag when the lamp
+  state is already listed, a twin entry does not decode or omits a property, or the packed data does not read as
+  vanilla's (length, an index beyond the list). A declined section goes the full way: rebuilt only if its tag equals
+  vanilla's encoding of the live section, otherwise left with its twins. Each section is handled on its own; the
+  light flag drops for every converted one. GameTests `savedTwinsRestoreByPaletteRename`, `grid_save_foreign`,
+  `grid_save_collision`; `grid_save_cost` logs the cost beside vanilla's serialization.
 - Chunk light from disk: `ChunkSerializer.read` queues saved light arrays before `ChunkDataEvent.Load`, and
   `lightChunk(…, isLighted=false)` only adds source light — old light from a lamp removed in the palette remains.
   Remove it with `LightEngine.checkBlock` at the lamp position (the level decrease also propagates to adjacent chunks).

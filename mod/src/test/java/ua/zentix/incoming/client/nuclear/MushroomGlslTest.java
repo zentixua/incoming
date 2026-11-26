@@ -378,13 +378,16 @@ class MushroomGlslTest {
     @Test
     void tableLayoutMatchesJava() {
         Map<String, Double> c = constants();
-        Matcher m = Pattern.compile("ivec2\\((\\w+), k\\)").matcher(GLSL);
+        Matcher reads = Pattern.compile("mushBodyTexel\\(data, k, (\\d+)\\)").matcher(GLSL);
         int max = -1;
-        while (m.find()) {
-            String at = m.group(1);
-            max = Math.max(max, at.matches("\\d+") ? Integer.parseInt(at) : c.get(at).intValue());
-        }
+        while (reads.find()) max = Math.max(max, Integer.parseInt(reads.group(1)));
         assertEquals(MushroomField.FOOT, max);
+        assertTrue(GLSL.contains("texelFetch(data, ivec2(column, k), 0)"));
+        assertTrue(GLSL.contains("return PallMushBody[column];"));
+        String ray = read("core/fx_pall_single.fsh");
+        assertTrue(ray.contains("uniform vec4 PallMushBody[" + MushroomField.FOOT_COLUMNS + "];"));
+        assertEquals(MushroomField.SHADOW_RECT, c.get("MUSH_SHADOW_RECT").intValue());
+        assertEquals(MushroomField.SHADOW_TOP, c.get("MUSH_SHADOW_TOP").intValue());
         assertEquals(MushroomField.FOOT_COLUMNS, c.get("MUSH_FOOT_COLUMNS").intValue());
         assertEquals(FootColumn.NODES, c.get("MUSH_FOOT_NODES").intValue());
         assertEquals(MushroomField.FOOT_COLUMNS + FootColumn.NODES / 4, c.get("MUSH_FOOT_EDGES").intValue());

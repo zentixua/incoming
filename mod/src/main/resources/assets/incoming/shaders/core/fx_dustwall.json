@@ -1,0 +1,43 @@
+{
+    "vertex": "incoming:fx_dustwall",
+    "fragment": "incoming:fx_dustwall",
+    "samplers": [
+        { "name": "Sampler1" },
+        { "name": "Sampler2" },
+        { "name": "Sampler3" },
+        { "name": "Sampler4" }
+    ],
+    "uniforms": [
+        { "name": "InvViewProj", "type": "matrix4x4", "count": 16, "values": [1.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 0.0, 1.0] },
+        { "name": "PallForward", "type": "float", "count": 3, "values": [0.0, 0.0, -1.0] },
+        { "name": "DwDiv", "type": "float", "count": 1, "values": [4.0] },
+        { "name": "DwAdapt", "type": "float", "count": 1, "values": [1.0] },
+        { "name": "DwInterleave", "type": "float", "count": 4, "values": [0.0, 0.0, 0.0, 0.0] },
+        { "name": "DwDetail", "type": "float", "count": 1, "values": [0.0] },
+        { "name": "DwSunLight", "type": "float", "count": 3, "values": [0.0, 0.0, 0.0] },
+        { "name": "DwSunDir", "type": "float", "count": 3, "values": [0.0, 1.0, 0.0] },
+        { "name": "DwSkyLight", "type": "float", "count": 3, "values": [0.0, 0.0, 0.0] },
+        { "name": "DwGroundLight", "type": "float", "count": 3, "values": [0.0, 0.0, 0.0] },
+        { "name": "DwAlbedo", "type": "float", "count": 3, "values": [0.8, 0.8, 0.8] },
+        { "name": "DwBulk", "type": "float", "count": 3, "values": [0.6, 0.53, 0.45] },
+        { "name": "DwSandAlbedo", "type": "float", "count": 3, "values": [0.9, 0.85, 0.7] },
+        { "name": "DwSandBulk", "type": "float", "count": 3, "values": [0.7, 0.6, 0.45] },
+        { "name": "PallAir", "type": "float", "count": 4, "values": [0.0, 0.0, 0.0, 0.0] },
+        { "name": "PallFloorFrom", "type": "float", "count": 1, "values": [0.0] },
+        { "name": "PallAirSky", "type": "float", "count": 3, "values": [0.0, 0.0, 0.0] },
+        { "name": "PallAirFog", "type": "float", "count": 4, "values": [0.0, 0.0, 0.0, 0.0] },
+        { "name": "DwFrame", "type": "float", "count": 2, "values": [0.0, 128.0] },
+        { "name": "DwProbe", "type": "float", "count": 1, "values": [ 0.0 ] },
+        { "name": "PallOpenAt", "type": "float", "count": 4, "values": [0.0, 0.0, 0.0, 0.0] },
+        { "name": "PallOpenWrap", "type": "float", "count": 3, "values": [0.0, 0.0, 0.0] },
+        { "name": "DwSourceCount", "type": "float", "count": 1, "values": [0.0] },
+        { "name": "DwSlotsA", "type": "float", "count": 4, "values": [0.0, 1.0, 2.0, 3.0] },
+        { "name": "DwSlotsB", "type": "float", "count": 4, "values": [4.0, 5.0, 6.0, 7.0] },
+        { "name": "DwSlotsC", "type": "float", "count": 4, "values": [8.0, 9.0, 10.0, 11.0] },
+        { "name": "DwSlotsD", "type": "float", "count": 4, "values": [12.0, 13.0, 14.0, 15.0] },
+        { "name": "DwMistAlbedo", "type": "float", "count": 3, "values": [0.99, 0.99, 0.99] },
+        { "name": "DwMistBulk", "type": "float", "count": 3, "values": [0.8, 0.82, 0.84] },
+        { "name": "DwTerrain0", "type": "float", "count": 4, "values": [0.0, 0.0, 0.0, 0.0] },
+        { "name": "DwTerrain1", "type": "float", "count": 4, "values": [0.0, 0.0, 0.0, 0.0] }
+    ]
+}

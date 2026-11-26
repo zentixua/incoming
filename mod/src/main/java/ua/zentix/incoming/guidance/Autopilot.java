@@ -82,10 +82,8 @@ public final class Autopilot {
     // ---------------------------------------------------------------- straight target approach
 
     /**
-     * Path margin to turn nose toward target (game number, not physical): with an obstructed straight line (roofed target,
-     * high-rise or ridge right beside it), projectile still attacks once this many nose-turn paths remain
-     * ({@link #turnDistance}); later its nose could not reach the target and it would overshoot. While farther away,
-     * it does not attack ({@link Sightline}).
+     * Path margin to turn the nose toward the target (game number, not physical): with an obstructed straight line,
+     * commit to the attack once this many nose-turn paths of slant range remain ({@link #withinTurn}).
      */
     static final double DIVE_MARGIN = 1.5;
     /**
@@ -95,21 +93,38 @@ public final class Autopilot {
     static final int SIGHT_RECHECK = 4;
 
     /**
-     * Path needed for nose to turn from current pitch to target line {@code aim}, with pitch angular-speed limit
-     * {@code rate} °/tick and acceleration {@code accel} °/tick²: angular acceleration and braking,
-     * with a plateau at the limit for large angles. A target behind (beyond the plane across heading) has a line past vertical:
-     * 180° − angle below horizon. Otherwise a climbing missile would pass overhead while computed turn stayed no greater
-     * than to a vertical dive, and attack would never start.
+     * Ticks for the nose to turn from its current pitch to the line to {@code aim}, with pitch angular-speed limit
+     * {@code rate} °/tick and acceleration {@code accel} °/tick²: angular acceleration and braking, with a plateau at
+     * the limit for large angles. A target behind (beyond the plane across heading) has a line past vertical:
+     * 180° − angle below horizon.
      */
-    public static double turnDistance(Craft c, Vec3 aim, Bearing toAim, double rate, double accel) {
+    private static double turnTicks(Craft c, Vec3 aim, Bearing toAim, double rate, double accel) {
         Vec3 pos = c.position(), f = c.flight().forward();
         boolean behind = (aim.x - pos.x) * f.x + (aim.z - pos.z) * f.z < 0;
         double los = behind ? 180 - toAim.pitch() : toAim.pitch();
         double turn = Math.max(0, los - c.flight().pitch());
-        double ticks = turn <= rate * rate / accel
+        return turn <= rate * rate / accel
                 ? 2 * Math.sqrt(turn / accel)
                 : turn / rate + rate / accel;
-        return c.speed() * ticks;
+    }
+
+    /**
+     * The aim is within {@link #DIVE_MARGIN} nose-turn paths (slant range against slant travel): past this the nose could
+     * not turn to it in time, so a blocked line no longer delays the attack.
+     */
+    static boolean withinTurn(Craft c, Vec3 aim, Bearing toAim, double rate, double accel) {
+        return toAim.distance() <= c.speed() * turnTicks(c, aim, toAim, rate, accel) * DIVE_MARGIN;
+    }
+
+    /**
+     * The craft would pass over the aim before its nose could turn to it (horizontal range against horizontal travel in
+     * one turn time, an estimate at the current speed). High above the aim the slant range never falls to
+     * {@link #withinTurn}: a pop-up climbing over the aim (its slant range grows even as it passes over). This deadline
+     * applies only to a covered aim ({@link Craft#covered}): an uncovered aim's line opens at overflight at the latest,
+     * so waiting for it reaches the aim, while a covered aim's line never opens.
+     */
+    static boolean overflight(Craft c, Vec3 aim, Bearing toAim, double rate, double accel) {
+        return toAim.horizontal() <= c.speed() * c.flight().forward().horizontalDistance() * turnTicks(c, aim, toAim, rate, accel);
     }
 
     /**
@@ -117,15 +132,15 @@ public final class Autopilot {
      * to target ({@link Craft#clearAlong} — ready chunks only), do not attack until it
      * opens. Missile climbs in a pop-up; if line closes during dive (target behind a slope), return
      * to pop-up ({@link MissileAutopilot}); Shahed continues at cruise altitude ({@link DroneAutopilot}: climbing
-     * hurts its approach). Only while nose can still turn toward target ({@link #DIVE_MARGIN}): closer in, attack as is —
-     * this rule does not bypass a high-rise right beside target or a roofed target.
+     * hurts its approach). Commit to the attack even with the obstruction in the way once the aim is within the nose's
+     * turn ({@link #withinTurn}), or, for a covered aim, at overflight ({@link #overflight}).
      */
     public static final class Sightline {
         private boolean blocked;
         /**
-         * Attack already forced ({@link #DIVE_MARGIN}): do not measure the line until approach ends, otherwise after turning
+         * Attack already forced: do not measure the line until approach ends, otherwise after turning
          * its nose the projectile would resume climbing. Not saved: loading mid-dive makes missile pull into pop-up for a few
-         * ticks until the nose-turn path forces attack again.
+         * ticks until the deadline forces attack again.
          */
         private boolean committed;
         /** Ticks before remeasuring the line (unsaved: measure immediately after load). */
@@ -133,21 +148,25 @@ public final class Autopilot {
 
         /**
          * Straight line to {@code aim} is blocked except for last {@code margin} blocks at target (fuze reaches them), and
-         * target is farther than {@link #DIVE_MARGIN} nose-turn paths with attack limits {@code rate},
-         * {@code accel}: do not attack. Measure once per {@link #SIGHT_RECHECK} ticks.
+         * the attack can still wait (attack limits {@code rate}, {@code accel}): do not attack.
+         * Measure the line once per {@link #SIGHT_RECHECK} ticks.
          */
         public boolean masked(Craft c, Vec3 aim, Bearing toAim, double margin, double rate, double accel) {
             if (committed) return false;
-            if (toAim.distance() <= turnDistance(c, aim, toAim, rate, accel) * DIVE_MARGIN) {
+            if (withinTurn(c, aim, toAim, rate, accel)) {
                 committed = true;
                 return false;
             }
             if (wait > 0) {
                 wait--;
-                return blocked;
+            } else {
+                blocked = c.clearAlong(aim, margin) != Double.POSITIVE_INFINITY;
+                wait = SIGHT_RECHECK - 1;
             }
-            blocked = c.clearAlong(aim, margin) != Double.POSITIVE_INFINITY;
-            wait = SIGHT_RECHECK - 1;
+            if (blocked && overflight(c, aim, toAim, rate, accel) && c.covered(aim, margin)) {
+                committed = true;
+                return false;
+            }
             return blocked;
         }
 

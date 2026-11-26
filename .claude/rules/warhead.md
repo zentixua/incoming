@@ -73,8 +73,8 @@ paths:
   explosion would read the world at ~1.9 reach and cost the peak of a tick), the strike area at a craft — up to
   `craftReach`; while it runs, `chargeOf` returns the charge, and the entity list of its `Detonate` is empty. The explosion
   charge for event handlers — `Warheads.chargeOf` (blackout: a substation is knocked out where the wave breaks 4 psi). An
-  explosion cancelled by protection claims does not dig, burn or throw debris; on a craft — neither a crater nor a fuel
-  ball. Behind the main explosion of a strike come the units of `Craters.dig` (the crater `CraterModel.chargeRadius`:
+  explosion cancelled by protection claims does not dig, burn, break glass or throw debris; on a craft — neither a crater
+  nor a fuel ball; every follow-up writer asks claim protection (`claim/`, `claims.md`). Behind the main explosion of a strike come the units of `Craters.dig` (the crater `CraterModel.chargeRadius`:
   0.65·∛W across, a quarter in depth, the profile and rim — the same `CraterJob.digColumn` as for the nuke, mode `DIG`:
   only ground, whole blocks with a random addition by the fractional part; not if the charge above ground is deeper than
   the depth), `Craters.ignite` (the fuel fireball `FuelFireball` — without the crater share `POOL_SHARE`, one number and one
@@ -198,12 +198,17 @@ paths:
     drops even when empty (`Block.dropResources` with its block entity: a shulker box keeps its name and
     contents in the item) and is removed without clearing (`ColumnScar.replaceKeeping`), so its own `onRemove` spills
     what it keeps (chest; Create vault, depot, saw: many Create block entities are `Clearable`, and the saw's handler
-    gives nothing out); it lands as no rubble; an unrolled loot table stays unrolled. GameTest `storageContentsSurvive`.
+    gives nothing out); it lands as no rubble. An unrolled loot table stays unrolled (rolling reads structures for explorer
+    maps, hundreds of ms): a `RandomizableContainerBlockEntity`'s own dropped item carries the table and seed
+    (`container_loot`, restored when placed), its drops through `BlockDropsEvent` as `dropResources` sends them. Other
+    loot containers (a decorated pot restores no `container_loot`), no own item among the drops or cancelled drops:
+    `onRemove` rolls the loot, as a hand break does. With `doTileDrops` off the table is lost unrolled (no roll inside a
+    fall portion). GameTests `storageContentsSurvive`, `lootChestKeepsLoot`, `CollapseLootGameTests`.
     As in vanilla, `doTileDrops=false` loses a shulker box's contents, and a vault with an enlarged
     `vaultCapacity` spawns its whole contents in one removal.
   - Rubble: falls as vanilla falling blocks while `CraterFalls.room` allows, otherwise lands at once where it would
-    rest, spread by `Debris.spread`; fluid ticks and landings in their own portions; rubble lands in claimed land as
-    vanilla falling sand does. With `world.debris_stay` off, live rubble disappears on landing and direct landing
+    rest, spread by `Debris.spread`; fluid ticks and landings in their own portions; rubble asks claim protection
+    where it lands (`claims.md`). With the strike's `world.debris_stay` off (`BlastArea.rules`, as the order was made), live rubble disappears on landing and direct landing
     skips placement. A single strike sends `S2C.Collapse` for its fall. A shared plan sends one packet per chunk over
     the load-bearing blocks it actually removed there (`StrikeSupport.MATERIAL` m³ a block). Packet sends share the
     fall deadline. GameTest `everyCollapsedHouseReceivesDustOverItsFootprint` watches the 100-house salvo away from the

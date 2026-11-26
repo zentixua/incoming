@@ -1,6 +1,5 @@
 package ua.zentix.incoming.launcher;
 
-import com.mojang.authlib.GameProfile;
 import net.minecraft.ChatFormatting;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.GlobalPos;
@@ -9,21 +8,21 @@ import net.minecraft.network.chat.MutableComponent;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
-import net.minecraft.server.players.GameProfileCache;
 import net.minecraft.world.item.ItemStack;
-import net.minecraft.world.level.ChunkPos;
 import net.minecraft.world.phys.Vec3;
 import org.jetbrains.annotations.Nullable;
 import ua.zentix.incoming.Incoming;
 import ua.zentix.incoming.IncomingConfig;
-import ua.zentix.incoming.compat.SubLevels;
+import ua.zentix.incoming.strike.Authority;
 import ua.zentix.incoming.strike.LaunchOrigin;
 import ua.zentix.incoming.strike.Loadout;
 import ua.zentix.incoming.strike.Munitions;
 import ua.zentix.incoming.strike.SalvoData;
+import ua.zentix.incoming.strike.Orders;
 import ua.zentix.incoming.strike.ServerActions;
 import ua.zentix.incoming.strike.StrikeWorld;
 import ua.zentix.incoming.strike.Waypoints;
+import ua.zentix.incoming.strike.WeaponType;
 import ua.zentix.incoming.util.Terrain;
 
 import java.util.ArrayList;
@@ -34,13 +33,13 @@ import java.util.UUID;
  * Fixed launcher orders ({@link FixedLauncherBlockEntity}): mission from linked designator ({@link #assign}) and
  * launch on redstone signal ({@link #fire}). Launch follows player order path ({@link
  * ServerActions#fromLauncher}): single projectile or salvo ({@link SalvoData}) from this launcher's firing
- * position ({@link LaunchOrigin.Fixed}); projectiles belong to launcher owner, so {@code /team} friend/foe, their
+ * position ({@link LaunchOrigin.Fixed}); projectiles belong to launcher owner, so side friend/foe ({@link ua.zentix.incoming.target.Sides}), their
  * “Abort”, and active-projectile limit match their designator orders. Launcher inventory pays: must cover the
  * whole order immediately (never truncate it), but deduct one projectile as it takes the rail; canceled salvos
  * and failed launches remain in storage.
  * <p>
- * Owned launcher follows owner's rules ({@code rules} in {@link ServerActions#strike}): designator permission,
- * target within {@code map_range} of the launcher itself, {@code max_active_per_player} limit. Unowned (placed by
+ * Owned launcher follows owner's rules ({@code rules} in {@link ServerActions#strike}): the owner's rights to the
+ * designator and the mission's weapon ({@link Authority}), target within {@code map_range} of the launcher itself, {@code max_active_per_player} limit. Unowned (placed by
  * a game-master command) bypasses them like console.
  */
 public final class LauncherOrders {
@@ -49,29 +48,63 @@ public final class LauncherOrders {
     /** Signal reached launcher {@code be}: issue mission order. Null means ordered; otherwise failure reason. */
     @Nullable
     public static Component fire(ServerLevel level, FixedLauncherBlockEntity be) {
-        Mission m = be.mission();
-        if (m == null) return Component.translatable("incoming.fixed_launcher.no_mission.short");
+        return fire(level, be, null);
+    }
+
+    /** Same; {@code made} receives the answered order ({@code ServerActions.fromLauncher}), also after a deferral. */
+    @Nullable
+    public static Component fire(ServerLevel level, FixedLauncherBlockEntity be, @Nullable java.util.function.Consumer<ua.zentix.incoming.strike.Order> made) {
+        // started inside a strike-order listener or off the server thread: the whole firing, with its checks, later
+        if (Orders.elsewhere(level, () -> {
+            if (level.getBlockEntity(be.getBlockPos()) == be) be.fire(level, made);
+        })) return null;
+        return fireReason(level, be, made);
+    }
+
+    @Nullable
+    private static Component fireReason(ServerLevel level, FixedLauncherBlockEntity be, @Nullable java.util.function.Consumer<ua.zentix.incoming.strike.Order> made) {
+        Component problem = problem(level, be);
+        if (problem != null) return problem;
+        Mission m = java.util.Objects.requireNonNull(be.mission());
         BlockPos pos = be.getBlockPos();
-        // In Sable plot grid, block is not at its visible position: launch would leave from the distant plot.
-        if (SubLevels.inPlotGrid(level, new ChunkPos(pos))) return Component.translatable("incoming.fixed_launcher.on_craft");
-        UUID owner = be.owner();
-        if (owner != null) {
-            MutableComponent rule = rules(level.getServer(), owner, be.position(), m.point());
-            if (rule != null) return rule;
-        }
-        if (busy(level, be)) return Component.translatable("incoming.fixed_launcher.busy");
-        LaunchOrigin.Fixed origin = new LaunchOrigin.Fixed(pos);
-        Loadout l = ServerActions.clamp(new Loadout(m.weapon(), m.count(), m.spread(), Loadout.DEFAULT.mode(), "", Loadout.Nuke.DEFAULT));
-        MutableComponent route = ServerActions.routeProblem(level, null, false, m.weapon(), origin, m.via(), m.point());
-        if (route != null) return route;
-        MutableComponent missing = Munitions.shortage(be.store().items(), Munitions.Bill.of(l));
-        if (missing != null) return missing;
-        String who = "launcher " + pos.toShortString();
+        Loadout l = loadout(m);
+        // on a craft the block's own position is in a distant plot: the log also names where the craft carries it
+        String who = "launcher " + pos.toShortString() + (be.carried() ? " on a craft at " + BlockPos.containing(be.position()).toShortString() : "");
         Component before = be.lastReport();
-        boolean ok = ServerActions.fromLauncher(level, who, owner, l, new ServerActions.Aim(m.target(), m.point(), null), m.via(), origin);
+        boolean ok = ServerActions.fromLauncher(level, who, be.owner(), l, new ServerActions.Aim(m.target(), m.point(), null), m.via(),
+                new LaunchOrigin.Fixed(pos), be::report, made);
         if (ok) return null;
         // Launch reported its own issue (blocked sector, inventory): this reason is more specific than the general one.
         return be.lastReport() != before ? be.lastReport() : Component.translatable("incoming.fixed_launcher.failed");
+    }
+
+    /**
+     * Why a signal now would not issue the mission order, without issuing it: the checks {@link #fire} runs before the
+     * launch, in the same order (no mission, on a craft that is not loaded, the owner's rules, busy, route, stock). Null means a signal would
+     * order it; the launch itself can still fail (blocked sector), as it reports then. Reads only the launcher, its ready
+     * chunk and the owner's cached rights: an overlay or a computer may ask it often.
+     */
+    @Nullable
+    public static Component problem(ServerLevel level, FixedLauncherBlockEntity be) {
+        Mission m = be.mission();
+        if (m == null) return Component.translatable("incoming.fixed_launcher.no_mission.short");
+        BlockPos pos = be.getBlockPos();
+        // on a craft that is not loaded now: no world place to fire from
+        if (!be.located()) return Component.translatable("incoming.fixed_launcher.not_loaded");
+        UUID owner = be.owner();
+        if (owner != null) {
+            MutableComponent rule = rules(level.getServer(), owner, m.weapon(), be.position(), m.point());
+            if (rule != null) return rule;
+        }
+        if (busy(level, be)) return Component.translatable("incoming.fixed_launcher.busy");
+        MutableComponent route = ServerActions.routeProblem(level, null, false, m.weapon(), new LaunchOrigin.Fixed(pos), m.via(), m.point());
+        if (route != null) return route;
+        return Munitions.shortage(be.store().items(), Munitions.Bill.of(loadout(m)));
+    }
+
+    /** The order a mission gives: its weapon, count and spread within the world's limits. */
+    private static Loadout loadout(Mission m) {
+        return ServerActions.clamp(new Loadout(m.weapon(), m.count(), m.spread(), Loadout.DEFAULT.mode(), "", Loadout.Nuke.DEFAULT));
     }
 
     /**
@@ -83,13 +116,18 @@ public final class LauncherOrders {
     }
 
     /**
-     * Rules for owner {@code owner}'s launcher order at {@code at} aimed at {@code aim}; null means allowed.
-     * Owner may be offline: permissions use their profile.
+     * Rules for owner {@code owner}'s launcher order of {@code weapon} at {@code at} aimed at {@code aim}; null means
+     * allowed. The owner's rights come from {@link Authority} (the designator, the weapon); an offline owner's from the
+     * node's own resolver, never the permission handler or a storage lookup.
      */
     @Nullable
-    private static MutableComponent rules(MinecraftServer server, UUID owner, Vec3 at, Vec3 aim) {
-        int permission = permission(server, owner);
-        if (!IncomingConfig.SERVER.designatorForEveryone.get() && permission < 2) return Component.translatable("incoming.fixed_launcher.no_rights");
+    private static MutableComponent rules(MinecraftServer server, UUID owner, WeaponType weapon, Vec3 at, Vec3 aim) {
+        Authority.Denial denied = Authority.check(Authority.Action.launch(weapon, false), Authority.Actor.owner(server, owner));
+        if (denied != null) {
+            return denied.gate() == Authority.Gate.WEAPON ? Component.translatable("incoming.fixed_launcher.no_rights.weapon", weapon.displayName())
+                    : Component.translatable("incoming.fixed_launcher.no_rights");
+        }
+        int permission = Authority.level(server, owner);
         int limit = IncomingConfig.SERVER.maxActivePerPlayer.get();
         if (limit > 0 && permission < 2) {
             int active = StrikeWorld.active(server, owner);
@@ -102,17 +140,6 @@ public final class LauncherOrders {
     private static boolean inRange(Vec3 at, Vec3 aim) {
         double range = IncomingConfig.SERVER.mapRange.get(), dx = aim.x - at.x, dz = aim.z - at.z;
         return dx * dx + dz * dz <= range * range;
-    }
-
-    /**
-     * Permission level of player {@code id}: online value, otherwise server-cached profile (operators,
-     * singleplayer host).
-     */
-    private static int permission(MinecraftServer server, UUID id) {
-        ServerPlayer online = server.getPlayerList().getPlayer(id);
-        GameProfileCache cache = server.getProfileCache();
-        GameProfile profile = online != null ? online.getGameProfile() : cache == null ? null : cache.get(id).orElse(null);
-        return profile == null ? 0 : server.getProfilePermissions(profile);
     }
 
     /**
@@ -169,7 +196,8 @@ public final class LauncherOrders {
         // Do not load the launcher chunk to assign a mission: far from players it is not in memory.
         if (!Terrain.ready(level, at.pos())) return Component.translatable("incoming.fixed_launcher.not_loaded");
         if (!(level.getBlockEntity(at.pos()) instanceof FixedLauncherBlockEntity be)) return Component.translatable("incoming.fixed_launcher.gone");
-        if (!LauncherLinks.mayCommand(player, be)) return Component.translatable("incoming.fixed_launcher.not_yours");
+        MutableComponent refused = LauncherLinks.refusal(player, be);
+        if (refused != null) return refused;
         if (busy(level, be)) return Component.translatable("incoming.fixed_launcher.busy");
         if (!inRange(be.position(), mission.point())) {
             return Component.translatable("incoming.fixed_launcher.out_of_range", IncomingConfig.SERVER.mapRange.get());

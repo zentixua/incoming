@@ -20,6 +20,8 @@ import net.neoforged.neoforge.network.handling.IPayloadContext;
 import org.jetbrains.annotations.Nullable;
 import ua.zentix.incoming.Incoming;
 import ua.zentix.incoming.IncomingConfig;
+import ua.zentix.incoming.api.StrikeOrderEvent;
+import ua.zentix.incoming.api.StrikeRoundEvent;
 import ua.zentix.incoming.compat.SubLevels;
 import ua.zentix.incoming.entity.DebrisEntity;
 import ua.zentix.incoming.entity.LauncherEntity;
@@ -48,6 +50,7 @@ import java.util.Locale;
 import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
+import java.util.function.Consumer;
 import java.util.function.Predicate;
 
 /**
@@ -70,8 +73,9 @@ public final class ServerActions {
         player.displayClientMessage(reason.copy().withStyle(ChatFormatting.RED), true);
     }
 
+    /** May use the designator, its map and abort ({@link Authority}: {@code incoming.launch}). */
     public static boolean mayUse(Player player) {
-        return IncomingConfig.SERVER.designatorForEveryone.get() || player.hasPermissions(2);
+        return player instanceof ServerPlayer p && Authority.allows(Authority.Action.USE, p);
     }
 
     // ---------------------------------------------------------------- packets
@@ -87,13 +91,15 @@ public final class ServerActions {
 
     /** Shared reviewed/unreviewed dispatch. A reviewed aim is immutable until this call. */
     static void fire(ServerPlayer player, C2S.Fire p, @Nullable Aim reviewed) {
-        if (!mayUse(player)) {
-            refuse(player, Component.translatable("incoming.no_permission"));
+        Loadout l = p.loadout();
+        // the designator and this weapon; a nuclear warhead is asked by the review and again by the order (nuclearRefusal)
+        Authority.Denial denied = Authority.check(Authority.Action.launch(l.weapon(), false), Authority.Actor.of(player));
+        if (denied != null) {
+            refuse(player, denied.line());
             return;
         }
         if (tooSoon(player, ModAttachments.LAST_FIRE.get())) return;
 
-        Loadout l = p.loadout();
         Aim aim = reviewed != null ? reviewed : fireAim(player, p);
         if (aim == null) return;
         // Designator linked to fixed launchers assigns missions instead of launching itself: they launch from their sites.
@@ -217,7 +223,7 @@ public final class ServerActions {
     @Nullable
     public static MutableComponent routeProblem(ServerLevel level, @Nullable ServerPlayer shooter, boolean rules, WeaponType weapon,
                                                 @Nullable LaunchOrigin from, Waypoints via, Vec3 aim) {
-        if (from != null && !inWorld(level, from.at())) return outsideWorld(from.at());
+        if (from != null && !inWorld(level, from.at(level))) return outsideWorld(from.at(level));
         if (via.isEmpty()) return null;
         WeaponSpec.Route route = weapon.spec().route();
         if (!route.waypoints()) return Component.translatable("incoming.route.unsupported", weapon.displayName());
@@ -227,7 +233,7 @@ public final class ServerActions {
                 return Component.translatable("incoming.route.out_of_range", IncomingConfig.SERVER.mapRange.get());
             }
         }
-        Vec3 start = from != null ? from.at() : shooter != null ? shooter.position() : via.points().getFirst();
+        Vec3 start = from != null ? from.at(level) : shooter != null ? shooter.position() : via.points().getFirst();
         if (!via.within(weapon, start, aim)) {
             return Component.translatable("incoming.route.too_long", weapon.displayName(), kilometres(via.length(start, aim)), kilometres(route.reach()));
         }
@@ -381,32 +387,24 @@ public final class ServerActions {
                 Math.min(l.spread(), IncomingConfig.SERVER.maxSpread.get()), l.mode(), l.player(), n);
     }
 
-    /** Nuclear weapons: enabled and allowed for this player (default operators and the world host, {@link NuclearKeys#trusted}). */
-    public static boolean mayUseNuke(ServerPlayer player) {
-        return IncomingConfig.SERVER.nukeEnabled.get() && (!IncomingConfig.SERVER.nukeOpsOnly.get() || NuclearKeys.trusted(player));
-    }
-
     /**
-     * Why {@code player}'s nuclear order {@code l} is refused, or null: {@link #nuclearRefusal(Loadout, boolean,
-     * boolean, boolean, boolean, int)} with this world's settings. Review and launch both ask here, so they never disagree.
+     * Why {@code player}'s nuclear order {@code l} is refused, or null: the rights ({@link Authority}: the designator, the
+     * weapon, nuclear weapons in this world, {@code incoming.nuclear}), then {@link #nuclearRefusal(Loadout, boolean, int)}
+     * with this world's settings. Review and launch both ask here, so they never disagree.
      */
     @Nullable
     static Component nuclearRefusal(ServerPlayer player, Loadout l) {
-        var c = IncomingConfig.SERVER;
-        return nuclearRefusal(l, mayUse(player), c.nukeEnabled.get(), c.nukeOpsOnly.get() && !NuclearKeys.trusted(player),
-                c.carrierNukes.get(), c.nukeMaxYield.get());
+        Authority.Denial denied = Authority.check(Authority.Action.launch(l.weapon(), true), Authority.Actor.of(player));
+        if (denied != null) return denied.line();
+        return nuclearRefusal(l, IncomingConfig.SERVER.carrierNukes.get(), IncomingConfig.SERVER.nukeMaxYield.get());
     }
 
     /**
-     * Why a nuclear order {@code l} is refused, the first reason in the order the player can act on: the designator
-     * itself, nuclear weapons in this world, operator rights (the world host counts as one), a warhead on a carrier,
-     * the yield limit; null if allowed.
+     * Why an allowed player's nuclear order {@code l} is refused, the first reason in the order the player can act on: a
+     * warhead on a carrier, the yield limit; null if valid.
      */
     @Nullable
-    static Component nuclearRefusal(Loadout l, boolean mayUse, boolean enabled, boolean needsOperator, boolean carrierNukes, int cap) {
-        if (!mayUse) return Component.translatable("incoming.no_permission");
-        if (!enabled) return Component.translatable("incoming.nuke.disabled");
-        if (needsOperator) return Component.translatable("incoming.nuke.ops_only");
+    static Component nuclearRefusal(Loadout l, boolean carrierNukes, int cap) {
         if (l.nuke().onCarrier() && !l.weapon().spec().warhead().always() && !carrierNukes) return Component.translatable("incoming.nuke.carrier_off");
         if (l.nuke().yieldKt() > cap) return Component.translatable("incoming.nuke.over_cap", l.nuke().yieldKt(), cap);
         return null;
@@ -424,13 +422,56 @@ public final class ServerActions {
      */
     public static boolean strike(ServerPlayer player, WeaponType weapon, int count, int spread, Aim aim, Loadout.Nuke nuke, Waypoints via,
                                  @Nullable LaunchOrigin from, boolean rules) {
+        return strike(player, weapon, count, spread, aim, nuke, via, from, rules, null);
+    }
+
+    /**
+     * Same order carrying group name {@code tag} on its rounds ({@link Order#tagged}). Admission ({@link Orders#admit})
+     * follows Incoming's own checks: listeners see the order before payment.
+     */
+    public static boolean strike(ServerPlayer player, WeaponType weapon, int count, int spread, Aim aim, Loadout.Nuke nuke, Waypoints via,
+                                 @Nullable LaunchOrigin from, boolean rules, @Nullable String tag) {
+        return strike(player, weapon, count, spread, aim, nuke, via, from, rules, tag, null);
+    }
+
+    /**
+     * Same; {@code made} receives the order once admission has answered it (a command reads {@link Order#admitted} and
+     * its id); a deferred entry ({@link Orders#deferred}) passes it on to its later run; it is not called for an order
+     * refused by Incoming's own checks before admission.
+     */
+    public static boolean strike(ServerPlayer player, WeaponType weapon, int count, int spread, Aim aim, Loadout.Nuke nuke, Waypoints via,
+                                 @Nullable LaunchOrigin from, boolean rules, @Nullable String tag, @Nullable Consumer<Order> made) {
+        return strike(player, player, weapon, count, spread, aim, nuke, via, from, rules, tag, made);
+    }
+
+    /**
+     * Same, given by {@code asker} ({@link Authority}: the player who gave the order, also through {@code /execute as};
+     * null for automation, the console, command blocks and what they run, which asks nothing). {@code player} is whom
+     * the order is made for: targets, payment, projectiles.
+     */
+    public static boolean strike(@Nullable ServerPlayer asker, ServerPlayer player, WeaponType weapon, int count, int spread, Aim aim,
+                                 Loadout.Nuke nuke, Waypoints via, @Nullable LaunchOrigin from, boolean rules, @Nullable String tag,
+                                 @Nullable Consumer<Order> made) {
+        Aim asAsked = aim;
+        if (Orders.elsewhere(player.serverLevel(), () -> {
+            // later the player may have left (inventory already saved) or respawned (a new object): order as they are now;
+            // the asker's rights are read again then (Authority.Actor.live)
+            ServerPlayer now = live(player);
+            if (now != null) strike(asker, now, weapon, count, spread, asAsked, nuke, via, from, rules, tag, made);
+            else Incoming.LOG.info("Queued strike order dropped: {} left", player.getGameProfile().getName());
+        })) return true;
+        // The order as requested, before clamping: a carrier warhead where carriers carry none is refused, as in review.
+        Loadout asked = new Loadout(weapon, count, spread, TargetMode.LOOK, "", nuke);
+        // The rights of whoever gave the order, as they are now; automation asks nothing. A nuclear order asks after its
+        // target, in the order its refusals always came.
+        if (!asked.nuclear() && !askerAllows(asker, player, asked)) return false;
         if (rules) {
             aim = ruled(player, aim);
             if (aim == null) return false;
         }
-        // The order as requested, before clamping: a carrier warhead where carriers carry none is refused, as in review.
-        Loadout asked = new Loadout(weapon, count, spread, TargetMode.LOOK, "", nuke);
+        // A nuclear order also needs the rights of the player it is made for, from any source, as the switches always did
         if (asked.nuclear()) {
+            if (!askerAllows(asker, player, asked)) return false;
             Component no = nuclearRefusal(player, asked);
             if (no != null) {
                 refuse(player, no);
@@ -448,13 +489,38 @@ public final class ServerActions {
         }
         // Whole order at once: do not shrink salvo to inventory contents.
         Munitions.Bill bill = rules && !player.hasInfiniteMaterials() ? Munitions.Bill.of(l) : null;
-        if (bill != null && !Munitions.pay(player, bill)) return false;
-        if (aim.label() != null) player.sendSystemMessage(locked(weapon, aim).withStyle(ChatFormatting.GOLD));
-        // Non-operator nuclear strike: second key and at least 90 s flight/delay, retaining an authorized origin.
-        if (l.nuclear() && rules && !NuclearKeys.trusted(player)) {
-            return NuclearKeys.order(player, player.server.getPlayerList().getPlayers(), l, aim, via, from, bill);
-        }
-        return launch(player.serverLevel(), player.getGameProfile().getName(), player, player.getYRot(), l, aim, via, from, bill);
+        Aim target = aim;
+        Order order = Order.player(player, l, target, bill != null ? StrikeOrderEvent.Payment.UPFRONT : StrikeOrderEvent.Payment.WAIVED).tagged(tag);
+        boolean ok = Orders.admit(order, o -> {
+            if (bill != null && !Munitions.pay(player, bill)) {
+                o.reject(StrikeOrderEvent.Reason.MUNITIONS);
+                return false;
+            }
+            if (target.label() != null) player.sendSystemMessage(locked(weapon, target).withStyle(ChatFormatting.GOLD));
+            // Non-operator nuclear strike: second key and at least 90 s flight/delay, retaining an authorized origin.
+            if (l.nuclear() && rules && !NuclearKeys.trusted(player)) {
+                Orders.carrierPending(o);
+                o.accept(1);
+                return NuclearKeys.order(player, player.server.getPlayerList().getPlayers(), l, target, via, from, bill, o.round(0));
+            }
+            return launch(player.serverLevel(), player.getGameProfile().getName(), player, player.getYRot(), l, target, via, from, bill, o);
+        });
+        if (made != null) made.accept(order);
+        return ok;
+    }
+
+    /**
+     * {@code asker}'s rights ({@link Authority}) to launch {@code asked}, read as they are now (an asker who left: by
+     * {@link Authority.Actor#owner}); null asker is automation. A refusal goes to the asker, otherwise to {@code player}.
+     */
+    private static boolean askerAllows(@Nullable ServerPlayer asker, ServerPlayer player, Loadout asked) {
+        if (asker == null) return true;
+        ServerPlayer by = live(asker);
+        Authority.Denial denied = Authority.check(Authority.Action.launch(asked.weapon(), asked.nuclear()),
+                by != null ? Authority.Actor.of(by) : Authority.Actor.owner(player.server, asker.getUUID()));
+        if (denied == null) return true;
+        refuse(by != null ? by : player, denied.line());
+        return false;
     }
 
     /**
@@ -549,7 +615,47 @@ public final class ServerActions {
      */
     public static boolean dispatch(ServerLevel level, String who, float yaw, WeaponType weapon, int count, int spread, Aim aim, Loadout.Nuke nuke,
                                    Waypoints via, @Nullable LaunchOrigin from) {
-        return launch(level, who, null, null, yaw, order(weapon, count, spread, nuke), aim, via, from, null);
+        return dispatch(level, who, yaw, weapon, count, spread, aim, nuke, via, from, null, null);
+    }
+
+    /**
+     * Same with group name {@code tag} on its rounds; {@code feedback} receives a listener's refusal (command source).
+     */
+    public static boolean dispatch(ServerLevel level, String who, float yaw, WeaponType weapon, int count, int spread, Aim aim, Loadout.Nuke nuke,
+                                   Waypoints via, @Nullable LaunchOrigin from, @Nullable String tag, @Nullable Consumer<Component> feedback) {
+        return dispatch(level, who, yaw, weapon, count, spread, aim, nuke, via, from, tag, feedback, null);
+    }
+
+    /** Same; {@code made} receives the answered order, as in {@link #strike}. */
+    public static boolean dispatch(ServerLevel level, String who, float yaw, WeaponType weapon, int count, int spread, Aim aim, Loadout.Nuke nuke,
+                                   Waypoints via, @Nullable LaunchOrigin from, @Nullable String tag, @Nullable Consumer<Component> feedback,
+                                   @Nullable Consumer<Order> made) {
+        return dispatch(null, level, who, yaw, weapon, count, spread, aim, nuke, via, from, tag, feedback, made);
+    }
+
+    /**
+     * Same, given by {@code asker} ({@link Authority}): a player's command run by a non-player entity ({@code /execute as}
+     * an armor stand) asks that player's rights, read again on a deferred run; null is automation.
+     */
+    public static boolean dispatch(@Nullable ServerPlayer asker, ServerLevel level, String who, float yaw, WeaponType weapon, int count, int spread,
+                                   Aim aim, Loadout.Nuke nuke, Waypoints via, @Nullable LaunchOrigin from, @Nullable String tag,
+                                   @Nullable Consumer<Component> feedback, @Nullable Consumer<Order> made) {
+        if (Orders.elsewhere(level, () -> dispatch(asker, level, who, yaw, weapon, count, spread, aim, nuke, via, from, tag, feedback, made))) return true;
+        if (asker != null) {
+            ServerPlayer by = live(asker);
+            Authority.Denial denied = Authority.check(Authority.Action.launch(weapon, new Loadout(weapon, count, spread, TargetMode.LOOK, "", nuke).nuclear()),
+                    by != null ? Authority.Actor.of(by) : Authority.Actor.owner(level.getServer(), asker.getUUID()));
+            if (denied != null) {
+                if (by != null) refuse(by, denied.line());
+                if (feedback != null) feedback.accept(denied.line());
+                return false;
+            }
+        }
+        Loadout l = order(weapon, count, spread, nuke);
+        Order order = Order.server(level, who, l, aim, feedback).tagged(tag);
+        boolean ok = Orders.admit(order, o -> launch(level, who, null, null, yaw, l, aim, via, from, null, o));
+        if (made != null) made.accept(order);
+        return ok;
     }
 
     /**
@@ -560,7 +666,31 @@ public final class ServerActions {
      * @return true if launched (salvo started)
      */
     public static boolean fromLauncher(ServerLevel level, String who, @Nullable UUID owner, Loadout l, Aim aim, Waypoints via, LaunchOrigin.Fixed at) {
-        return launch(level, who, null, owner, 0, clamp(l), aim, via, at, null);
+        return fromLauncher(level, who, owner, l, aim, via, at, null);
+    }
+
+    /** Same; {@code feedback} receives a listener's refusal (the launcher's status). */
+    public static boolean fromLauncher(ServerLevel level, String who, @Nullable UUID owner, Loadout l, Aim aim, Waypoints via, LaunchOrigin.Fixed at,
+                                       @Nullable Consumer<Component> feedback) {
+        return fromLauncher(level, who, owner, l, aim, via, at, feedback, null);
+    }
+
+    /** Same; {@code made} receives the answered order, as in {@link #strike}. */
+    public static boolean fromLauncher(ServerLevel level, String who, @Nullable UUID owner, Loadout l, Aim aim, Waypoints via, LaunchOrigin.Fixed at,
+                                       @Nullable Consumer<Component> feedback, @Nullable Consumer<Order> made) {
+        Loadout loadout = clamp(l);
+        Order order = Order.launcher(level, at.pos(), owner, loadout, aim, feedback);
+        boolean ok = Orders.admit(order, o -> launch(level, who, null, owner, 0, loadout, aim, via, at, null, o));
+        if (made != null) made.accept(order);
+        return ok;
+    }
+
+    /** {@code player} as they are in the game now: the same object, or their respawned one; null if they left. */
+    @Nullable
+    public static ServerPlayer live(ServerPlayer player) {
+        if (!player.isRemoved() && !player.hasDisconnected()) return player;
+        ServerPlayer now = player.server.getPlayerList().getPlayer(player.getUUID());
+        return now == null || now.hasDisconnected() ? null : now;
     }
 
     /** Order within server limits ({@link #clamp}). */
@@ -576,37 +706,48 @@ public final class ServerActions {
      * unlaunched rounds
      */
     private static boolean launch(ServerLevel level, String who, @Nullable ServerPlayer owner, float yaw, Loadout l, Aim aim, Waypoints via,
-                                  @Nullable LaunchOrigin from, @Nullable Munitions.Bill paid) {
-        return launch(level, who, owner, owner == null ? null : owner.getUUID(), yaw, l, aim, via, from, paid);
+                                  @Nullable LaunchOrigin from, @Nullable Munitions.Bill paid, Order order) {
+        return launch(level, who, owner, owner == null ? null : owner.getUUID(), yaw, l, aim, via, from, paid, order);
     }
 
-    /** {@link #launch} for {@code ownerId}: {@code owner} is shooter when player ordered, not launcher/console. */
+    /**
+     * {@link #launch} for {@code ownerId}: {@code owner} is shooter when player ordered, not launcher/console. Accepts
+     * {@code order} once recorded (salvo stored, or just before the single launch, whose failure ends its round).
+     */
     private static boolean launch(ServerLevel level, String who, @Nullable ServerPlayer owner, @Nullable UUID ownerId, float yaw, Loadout l, Aim aim,
-                                  Waypoints via, @Nullable LaunchOrigin from, @Nullable Munitions.Bill paid) {
+                                  Waypoints via, @Nullable LaunchOrigin from, @Nullable Munitions.Bill paid, Order order) {
         StrikeService.log(level, who, l.weapon(), l.count(), l.spread(), aim.target(), aim.point(), via, from);
-        float course = from != null ? FlightController.anglesTo(from.at(), aim.point())[0] : yaw;
+        float course = from != null ? FlightController.anglesTo(from.at(level), aim.point())[0] : yaw;
         // Unready launch site: even one projectile uses a salvo, which loads/waits for site (LaunchPlaces), rather than starting
         // outside the loaded world, already cruising, where launch is invisible.
         if (l.count() > 1 || l.spread() > 0 || LaunchPlaces.waits(level, l.weapon(), from)) {
-            SalvoData.start(level, l.weapon(), l.count(), l.spread(), aim.target(), aim.point(), course, ownerId, l.nuke(), via, from, paid != null);
+            SalvoData.start(level, l.weapon(), l.count(), l.spread(), aim.target(), aim.point(), course, ownerId, l.nuke(), via, from, paid != null,
+                    order);
+            order.accept(l.count());
             return true;
         }
+        Orders.carrierPending(order);
+        order.accept(1);
+        RoundRef round = order.round(0);
         StrikeService.Result r;
         String why = "launch failed";
         try {
-            r = owner == null ? StrikeService.launch(level, l.weapon(), aim.target(), aim.point(), course, ownerId, true, l.nuke(), via, from)
-                    : StrikeService.launchBy(level, l.weapon(), aim.target(), aim.point(), course, owner, true, l.nuke(), via, from);
+            r = owner == null ? StrikeService.launch(level, l.weapon(), aim.target(), aim.point(), course, ownerId, true, l.nuke(), via, from, round)
+                    : StrikeService.launchBy(level, l.weapon(), aim.target(), aim.point(), course, owner, true, l.nuke(), via, from, round);
         } catch (RuntimeException e) {
             // Like salvo (SalvoData.tick): exception during launch counts as failed, refund payment.
             Incoming.LOG.error("Launch {} failed with an exception — {}", l.weapon().getSerializedName(), who, e);
             r = StrikeService.Result.FAILED;
             why = "launch failed with an exception";
         }
+        boolean refunded = order.payment() == StrikeOrderEvent.Payment.PER_RELEASE;
         if (owner != null) {
             if (r.ok()) StrikeService.confirm(owner, l.weapon(), r.eta());
             else refuse(owner, Component.translatable("incoming.launch_failed"));
-            if (!r.ok() && paid != null) Munitions.refund(List.of(owner), owner.getUUID(), paid, why);
+            if (!r.ok() && paid != null) refunded = Munitions.refund(List.of(owner), owner.getUUID(), paid, why);
         }
+        // A fixed launcher's failed release put its munition back (StrikeService); nothing left a waived order.
+        if (!r.ok()) Orders.ended(level, round, l.weapon(), ownerId, RoundEnd.unreleased(StrikeRoundEvent.Outcome.FAILED, refunded));
         return r.ok();
     }
 
@@ -819,8 +960,10 @@ public final class ServerActions {
                 if (onRail.stream().noneMatch(l::serves)) kill.add(l);
             }
             for (Entity e : kill) {
-                if (e instanceof StrikeProjectile) projectiles.add(e.getUUID());
-                else if (e instanceof LauncherEntity) launchersRemoved++;
+                if (e instanceof StrikeProjectile p) {
+                    projectiles.add(e.getUUID());
+                    p.endRound(RoundEnd.recalled(p.position()));
+                } else if (e instanceof LauncherEntity) launchersRemoved++;
                 e.discard();
             }
             // Nuclear salvo is only one projectile awaiting launch site (ServerActions.clamp, LaunchPlaces); like nuclear projectile,
@@ -860,10 +1003,20 @@ public final class ServerActions {
      * @return projectiles that stopped attacking and canceled salvos
      */
     public static Recalled recall(MinecraftServer server, UUID owner, String who) {
-        Predicate<StrikeProjectile> mine = p -> owner.equals(p.ownerId()) && !p.isNuclear();
+        return recall(server, owner, null, who);
+    }
+
+    /**
+     * Same, only for rounds carrying group name {@code tag} (null means all): untagged and other-tagged strikes go on;
+     * launchers stay (a launcher is matched to its shots only by owner and weapon, so a tag cannot tell which one served
+     * it), and clients are told only which projectiles are gone, not that the owner's salvo stopped.
+     */
+    public static Recalled recall(MinecraftServer server, UUID owner, @Nullable String tag, String who) {
+        Predicate<StrikeProjectile> mine = p -> owner.equals(p.ownerId()) && !p.isNuclear() && (tag == null || tagged(p, tag));
         // Projectiles now gone: clients stop sound/camera (turned-away B-2 sounds while departing).
         List<UUID> gone = new ArrayList<>();
-        int destroyed = 0, turned = 0, unlaunched = 0, virtual = 0, launchersRemoved = 0, salvos = 0;
+        int destroyed = 0, turned = 0, unlaunched = 0, virtual = 0, launchersRemoved = 0, salvos = 0, salvoRounds = 0;
+        java.util.Set<UUID> stoppedSalvo = new java.util.HashSet<>();
         for (ServerLevel level : server.getAllLevels()) {
             List<UUID> outside = VirtualFlights.get(level).clear(level, p -> mine.test(p) && (p.flightPhase().onLauncher() || p.recallable()));
             virtual += outside.size();
@@ -890,12 +1043,13 @@ public final class ServerActions {
                 }
             }
             for (StrikeProjectile p : mineOnRail) {
+                p.endRound(RoundEnd.recalled(p.position()));
                 p.discard();
                 gone.add(p.getUUID());
                 unlaunched++;
             }
             for (LauncherEntity l : launchers) {
-                if (onRail.stream().noneMatch(l::serves)) {
+                if (tag == null && onRail.stream().noneMatch(l::serves)) {
                     l.discard();
                     launchersRemoved++;
                 }
@@ -911,12 +1065,16 @@ public final class ServerActions {
                 }
             }
             // Player abort leaves nuclear salvo (projectile awaiting launch site), like nuclear projectile.
-            salvos += SalvoData.get(level).cancel(level, owner, server.getPlayerList().getPlayers(), false);
+            if (tag == null) salvos += SalvoData.get(level).cancel(level, owner, server.getPlayerList().getPlayers(), false);
+            else salvoRounds += SalvoData.get(level).cancelTagged(level, owner, tag, server.getPlayerList().getPlayers(), false, stoppedSalvo::add);
         }
-        PacketDistributor.sendToAllPlayers(new S2C.Cleared(Optional.of(owner), false, gone));
-        Incoming.LOG.info("Stand down — {}: self-destructed {}, turned away {}, taken off launchers {} (launchers {}), off-world {}, salvos {}",
-                who, destroyed, turned, unlaunched, launchersRemoved, virtual, salvos);
-        return new Recalled(destroyed + turned + unlaunched + virtual, salvos);
+        if (tag == null) PacketDistributor.sendToAllPlayers(new S2C.Cleared(Optional.of(owner), false, gone));
+        else if (!gone.isEmpty()) PacketDistributor.sendToAllPlayers(new S2C.Cleared(Optional.of(net.minecraft.Util.NIL_UUID), false, gone));
+        if (tag != null) endSalvoLines(server, stoppedSalvo);
+        Incoming.LOG.info("Stand down{} — {}: self-destructed {}, turned away {}, taken off launchers {} (launchers {}), off-world {}, salvos {}{}",
+                tag == null ? "" : " (tag " + tag + ")", who, destroyed, turned, unlaunched, launchersRemoved, virtual, salvos,
+                tag == null ? "" : ", unlaunched salvo rounds " + salvoRounds);
+        return new Recalled(destroyed + turned + unlaunched + virtual, salvos, salvoRounds);
     }
 
     /** {@link #recall(MinecraftServer, UUID, String)} for {@code player}: report to them. */
@@ -925,8 +1083,72 @@ public final class ServerActions {
         return Component.translatable("incoming.recalled", r.projectiles(), r.salvos());
     }
 
-    /** Own-abort result: projectiles that stopped attacking and canceled salvos. */
-    public record Recalled(int projectiles, int salvos) {}
+    /**
+     * Own-abort result: projectiles that stopped attacking, cancelled salvos and, for a tagged recall, their unlaunched
+     * rounds that ended (cancelled salvos are not counted there).
+     */
+    public record Recalled(int projectiles, int salvos, int salvoRounds) {
+        /** Rounds of a tagged recall that stopped: projectiles and unlaunched salvo rounds. */
+        public int rounds() {
+            return projectiles + salvoRounds;
+        }
+    }
+
+    /** Projectile {@code p} carries a round of an order tagged {@code tag}. */
+    private static boolean tagged(StrikeProjectile p, String tag) {
+        return p.round() != null && tag.equals(p.round().tag());
+    }
+
+    /**
+     * {@code clear tag} by an operator, the host, the console or a command block: every round carrying group name
+     * {@code tag} in every dimension, nuclear included, as {@link #clearAll} does: projectiles removed without exploding,
+     * salvos cancelled with refunds to online owners, scheduled ICBMs and orders waiting for a second key cancelled.
+     * Rounds already detonated keep their impact work; debris, launchers and other strikes stay (see {@link #recall(MinecraftServer,
+     * UUID, String, String)} for launchers).
+     *
+     * @return rounds that ended
+     */
+    public static int clearTag(MinecraftServer server, String tag, String who) {
+        Predicate<StrikeProjectile> cancelled = p -> tagged(p, tag);
+        List<UUID> gone = new ArrayList<>();
+        java.util.Set<UUID> stoppedSalvo = new java.util.HashSet<>();
+        int rounds = 0;
+        Collection<ServerPlayer> online = server.getPlayerList().getPlayers();
+        for (ServerLevel level : server.getAllLevels()) {
+            gone.addAll(VirtualFlights.get(level).clear(level, cancelled));
+            // Collect only: discard immediately removes from the map traversed by getAllEntities.
+            List<StrikeProjectile> kill = new ArrayList<>();
+            for (Entity e : level.getAllEntities()) {
+                if (e instanceof StrikeProjectile p && cancelled.test(p)) kill.add(p);
+            }
+            for (StrikeProjectile p : kill) {
+                gone.add(p.getUUID());
+                p.endRound(RoundEnd.recalled(p.position()));
+                p.discard();
+            }
+            rounds += SalvoData.get(level).cancelTagged(level, null, tag, online, true, stoppedSalvo::add);
+            rounds += NuclearStrikes.cancelTagged(level, tag);
+        }
+        rounds += NuclearKeys.cancel(server, online, tag, Component.translatable("incoming.nuke.key.cancelled").withStyle(ChatFormatting.GRAY),
+                "tag clear — " + who);
+        // nobody's notice (Util.NIL_UUID): an empty owner would reset every player's alerts, an owner their salvo progress
+        if (!gone.isEmpty()) PacketDistributor.sendToAllPlayers(new S2C.Cleared(Optional.of(net.minecraft.Util.NIL_UUID), false, gone));
+        endSalvoLines(server, stoppedSalvo);
+        Incoming.LOG.info("Clear tag {} — {}: projectiles {}, unlaunched rounds {}", tag, who, gone.size(), rounds);
+        return rounds + gone.size();
+    }
+
+    /**
+     * A tagged clear stopped these owners' salvos: end their salvo progress line, unless another salvo of theirs still
+     * launches (it shows its own progress at its next launch).
+     */
+    private static void endSalvoLines(MinecraftServer server, java.util.Set<UUID> owners) {
+        for (UUID owner : owners) {
+            boolean more = false;
+            for (ServerLevel level : server.getAllLevels()) more |= SalvoData.get(level).remaining(owner) > 0;
+            if (!more) PacketDistributor.sendToAllPlayers(new S2C.Cleared(Optional.of(owner), false, List.of()));
+        }
+    }
 
     /** Abort result to issuer: whether nuclear strikes were canceled too. */
     public static MutableComponent clearedMessage(int n, boolean nuclear) {

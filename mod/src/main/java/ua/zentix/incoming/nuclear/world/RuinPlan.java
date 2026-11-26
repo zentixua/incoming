@@ -35,7 +35,9 @@ import ua.zentix.incoming.compat.SableTerrain;
 import ua.zentix.incoming.grid.GridLights;
 import ua.zentix.incoming.net.S2C;
 import ua.zentix.incoming.nuclear.Detonation;
+import ua.zentix.incoming.nuclear.flash.FlashChar;
 import ua.zentix.incoming.util.Terrain;
+import ua.zentix.incoming.work.ChunkDelivery;
 
 import java.util.List;
 
@@ -60,7 +62,7 @@ import java.util.List;
  * section emptiness to light engine; light checks (highest changed column point, new/removed blocks beneath
  * surviving top, new/removed light sources) in one light-engine task. Chunk viewers receive same-tick section
  * packets for small writes ({@code ChunkHolder.blockChanged}, like {@code setBlock}), or a whole chunk after the
- * latest write's light checks when a whole delivery is pending ({@link RuinDelivery}). Distant Horizons LODs are
+ * latest write's light checks when a whole delivery is pending ({@link ChunkDelivery}). Distant Horizons LODs are
  * queued in the same tick ({@link DhUpdates}). Block entities/POIs change through the world afterward
  * ({@link ColumnScar#replace}: {@code onRemove} and consequences, no inventory drops, deferred data removed).
  * Queue places trunks in neighboring chunks after their ruins. Fires applied with
@@ -557,6 +559,27 @@ public final class RuinPlan {
         return new Debris(out, removed);
     }
 
+    /**
+     * World positions ({@link BlockPos#asLong}) this plan changes in {@code chunk}, for claim protection: block
+     * positions, fires, each scorched biome column cell at its lowest changed block, flash-charred faces.
+     */
+    public long[] writes(LevelChunk chunk) {
+        ChunkPos pos = chunk.getPos();
+        int x0 = pos.getMinBlockX(), z0 = pos.getMinBlockZ(), minY = chunk.getMinBuildHeight();
+        BlockPos.MutableBlockPos m = new BlockPos.MutableBlockPos();
+        int[] marks = flash == null ? NONE : flash;
+        LongArrayList at = new LongArrayList(cells.length + fires.length + marks.length + 16);
+        for (int c : cells) at.add(at(m, c, x0, z0, minY).asLong());
+        for (int c : fires) at.add(at(m, c, x0, z0, minY).asLong());
+        if (biomes != null) {
+            for (int column = 0; column < 16; column++) {
+                if (biomes.levels()[column] > 0) at.add(BlockPos.asLong(x0 + ((column & 3) << 2), Math.max(minY, biomes.from()[column]), z0 + ((column >> 2) << 2)));
+            }
+        }
+        for (int mark : marks) at.add(FlashChar.pos(mark, pos.x, pos.z).asLong());
+        return at.toLongArray();
+    }
+
     /** Changed positions in the plan ({@link RuinCost}). */
     int cells() {
         return cells.length;
@@ -879,60 +902,158 @@ public final class RuinPlan {
                       boolean marked, boolean layer) {
         PHASES[0] += System.nanoTime() - t;
         t = System.nanoTime();
-        ChunkPos pos = chunk.getPos();
-        int x0 = pos.getMinBlockX(), z0 = pos.getMinBlockZ(), minY = chunk.getMinBuildHeight();
-        BlockPos.MutableBlockPos m = new BlockPos.MutableBlockPos();
-        BlockState air = Blocks.AIR.defaultBlockState();
+        // One write in phases, each loop its own small method (Write), so a deoptimisation on a branch first taken at the
+        // front (a city chunk after field chunks) costs C2 a small recompile: a single write method compiles to 100-135 kB
+        // and recompiles on each such branch (1 Mt over a city at 3 km: six recompiles, 3.85 CPU-s in the 4 s of the
+        // front, on cores the client's render thread waits for). RuinWriteShapeTest holds the phase sizes.
+        Write w = new Write(level, chunk, budget, flash, marked, layer);
+        w.cells();
+        w.fires();
+        if (w.over) w.quench();
+        if (w.was != null) w.sable();
+        w.sectionStatus();
+        PHASES[1] += System.nanoTime() - t;
+        t = System.nanoTime();
+        // heightmaps/sky sources from plan; chunk edited since plan outside plan positions (block inside house), or
+        // column “before” value differs, so rescan all plan columns from chunk
+        if (!untouched || !setHeights(chunk)) rescanColumns(chunk);
+        if (w.lit > 0) w.fireSurface();
+        PHASES[2] += System.nanoTime() - t;
+        t = System.nanoTime();
+        w.deltas();
+        w.light();
+        if (fluidTicks.length > 0) w.fluids();
+        PHASES[3] += System.nanoTime() - t;
+        t = System.nanoTime();
+        chunk.setUnsaved(true);
+        w.slowCells();
+        // viewed but non-ticking chunk (view edge): send full chunk via vanilla
+        if (w.watched && !w.ticking && !w.whole) {
+            for (ServerPlayer p : w.players) p.connection.chunkSender.markChunkPendingToSend(chunk);
+        }
+        // after the block entities: the whole chunk carries them too
+        if (w.whole) ChunkDelivery.wholeAfterLight(level, chunk, w.changed);
+        // Distant Horizons LOD: ruins with wave, not next chunk save
+        long dh = System.nanoTime();
+        DhUpdates.mark(level, w.pos, level.getGameTime());
+        long took = System.nanoTime() - t;
+        dh = System.nanoTime() - dh;
+        PHASES[4] += took;
+        if (took > slowestWorldNanos) w.slowest(took, dh);
+        return w.lit;
+    }
+
+    /** One {@link #write} in its phases; fields carry what a later phase reads. Server thread. */
+    private final class Write {
+        final ServerLevel level;
+        final LevelChunk chunk;
+        final ColumnScar.Budget budget;
+        @Nullable
+        final RuinPlan flash;
+        final boolean marked, layer;
+        final ChunkPos pos;
+        final int x0, z0, minY;
+        final BlockPos.MutableBlockPos m = new BlockPos.MutableBlockPos();
         // plan positions directly in sections like setBlock (also changes section in place while light thread reads
         // chunk), without per-block overhead; block entities/POIs through world afterward (onRemove:
         // contents, chest halves, Create belts)
-        LevelChunkSection[] now = chunk.getSections();
+        final LevelChunkSection[] now;
         // changed sections and previous emptiness (bit per section, can exceed 64 sections)
-        long[] touched = new long[(now.length + 63) >> 6], wasEmpty = new long[touched.length];
+        final long[] touched, wasEmpty;
         // ruins over flash layer: layer fire present in plan positions/ruin fires or extinguished
-        boolean over = flash != null || marked;
-        boolean ignites = budget.ignites && IncomingConfig.SERVER.nukeFires.get();
-        int maxFires = IncomingConfig.SERVER.nukeMaxFires.get();
+        final boolean over, ignites;
         // Sable sees state immediately before write (over layer, not plan's pre-flash world)
-        boolean sable = SableTerrain.present() && SableTerrain.watched(level, chunk);
-        BlockState[] was = sable ? new BlockState[cells.length] : null;
+        @Nullable
+        final BlockState[] was;
         // extinguished layer fire (rubble, breach, wave-blown) needs light check, since fire emits light
-        LongArrayList quenched = null;
-        // ruins over layer without plan cannot identify counted chunk fires: return all layer counter took,
-        // then count continuing fire (fresh post-restart counter took none). With layer plan, per position
-        int layerCounted = budget.layer.remove(pos.toLong());
-        if (marked) budget.fires = Math.max(0, budget.fires - layerCounted);
-        for (int k = 0; k < cells.length; k++) {
-            int c = cells[k];
-            if ((c & SLOW) != 0) continue;
-            int i = section(c);
-            LevelChunkSection s = now[i];
-            BlockState state = states[(c >>> STATE_SHIFT) & STATE_MASK];
-            BlockState live = s.getBlockState(c & 15, (c >> 8) & 15, (c >> 4) & 15);
-            if (over && fire(live)) {
-                // layer fire where plan says air with ruin fire (burned grass) continues, handled by fires below
-                if (state.isAir() && ignites && hasFire(c & KEY_MASK)) continue;
-                if (quenched == null) quenched = new LongArrayList();
-                quenched.add(at(m, c, x0, z0, minY).asLong());
-                if (flash != null && flash.counted(c & KEY_MASK)) budget.fires = Math.max(0, budget.fires - 1);
-            }
-            touch(touched, wasEmpty, now, i);
-            s.setBlockState(c & 15, (c >> 8) & 15, (c >> 4) & 15, state, false);
-            if (was != null) was[k] = live;
+        LongArrayList quenched;
+        int layerCounted;
+        int lit, n;
+        int[] burning = NONE;
+        BlockState[] fireWas = NO_STATES;
+        LongArrayList out;
+        List<BlockState> outWas;
+        ChunkHolder holder;
+        List<ServerPlayer> players = List.of();
+        boolean watched, ticking, whole, sections;
+        int changed;
+        BlockState slowBlock;
+        long slowBlockNanos;
+
+        Write(ServerLevel level, LevelChunk chunk, ColumnScar.Budget budget, @Nullable RuinPlan flash, boolean marked, boolean layer) {
+            this.level = level;
+            this.chunk = chunk;
+            this.budget = budget;
+            this.flash = flash;
+            this.marked = marked;
+            this.layer = layer;
+            pos = chunk.getPos();
+            x0 = pos.getMinBlockX();
+            z0 = pos.getMinBlockZ();
+            minY = chunk.getMinBuildHeight();
+            now = chunk.getSections();
+            touched = new long[(now.length + 63) >> 6];
+            wasEmpty = new long[touched.length];
+            over = flash != null || marked;
+            ignites = budget.ignites && IncomingConfig.SERVER.nukeFires.get();
+            was = SableTerrain.present() && SableTerrain.watched(level, chunk) ? new BlockState[cells.length] : null;
+            // ruins over layer without plan cannot identify counted chunk fires: return all layer counter took,
+            // then count continuing fire (fresh post-restart counter took none). With layer plan, per position
+            layerCounted = budget.layer.remove(pos.toLong());
+            if (marked) budget.fires = Math.max(0, budget.fires - layerCounted);
         }
-        // fires where plan says air, until detonation fire counter exhausted; layer fire on ruin-fire position
-        // continues (ruin type: faces toward post-wave flammable neighbors)
-        int lit = 0, n = 0;
-        int[] burning = fires.length == 0 || !ignites ? NONE : new int[fires.length];
-        BlockState[] fireWas = burning.length == 0 ? NO_STATES : new BlockState[burning.length];
-        for (int k = 0; k < burning.length; k++) {
-            int c = fires[k];
+
+        /** Plan positions into sections. */
+        void cells() {
+            for (int k = 0; k < cells.length; k++) {
+                int c = cells[k];
+                if ((c & SLOW) != 0) continue;
+                int i = section(c);
+                LevelChunkSection s = now[i];
+                BlockState state = states[(c >>> STATE_SHIFT) & STATE_MASK];
+                BlockState live = s.getBlockState(c & 15, (c >> 8) & 15, (c >> 4) & 15);
+                if (over && fire(live) && keepsLayerFire(c, state)) continue;
+                touch(touched, wasEmpty, now, i);
+                s.setBlockState(c & 15, (c >> 8) & 15, (c >> 4) & 15, state, false);
+                if (was != null) was[k] = live;
+            }
+        }
+
+        /**
+         * Layer fire under plan position {@code c}: true where the plan's air keeps ruin fire (the position is left to
+         * {@link #fires}); otherwise records the position for a light check ({@link #quenched}), returns a counted fire
+         * to the detonation counter and returns false, and the write then replaces the fire.
+         */
+        private boolean keepsLayerFire(int c, BlockState state) {
+            // layer fire where plan says air with ruin fire (burned grass) continues, handled by fires below
+            if (state.isAir() && ignites && hasFire(c & KEY_MASK)) return true;
+            if (quenched == null) quenched = new LongArrayList();
+            quenched.add(at(m, c, x0, z0, minY).asLong());
+            if (flash != null && flash.counted(c & KEY_MASK)) budget.fires = Math.max(0, budget.fires - 1);
+            return false;
+        }
+
+        /**
+         * Fires where plan says air, until detonation fire counter exhausted; layer fire on ruin-fire position
+         * continues (ruin type: faces toward post-wave flammable neighbors).
+         */
+        void fires() {
+            if (fires.length > 0 && ignites) {
+                int maxFires = IncomingConfig.SERVER.nukeMaxFires.get();
+                burning = new int[fires.length];
+                fireWas = new BlockState[burning.length];
+                for (int k = 0; k < burning.length; k++) ignite(fires[k], maxFires);
+            }
+            if (layer && layerCounted > 0) budget.layer.put(pos.toLong(), layerCounted);
+        }
+
+        private void ignite(int c, int maxFires) {
             int i = section(c);
             LevelChunkSection s = now[i];
             BlockState fire = states[(c >>> STATE_SHIFT) & STATE_MASK];
             BlockState live = s.getBlockState(c & 15, (c >> 8) & 15, (c >> 4) & 15);
             if (!live.isAir()) {
-                if (!over || !fire(live)) continue;
+                if (!over || !fire(live)) return;
                 // layer fire excluded from detonation count (layer predicts wave-blown, or no plan) but retained by ruins
                 // now enters count
                 if (flash == null || !flash.counted(c & KEY_MASK)) budget.fires++;
@@ -941,7 +1062,7 @@ public final class RuinPlan {
                     s.setBlockState(c & 15, (c >> 8) & 15, (c >> 4) & 15, fire, false);
                 }
             } else {
-                if (budget.fires >= maxFires) continue;
+                if (budget.fires >= maxFires) return;
                 touch(touched, wasEmpty, now, i);
                 s.setBlockState(c & 15, (c >> 8) & 15, (c >> 4) & 15, fire, false);
                 lit++;
@@ -953,12 +1074,11 @@ public final class RuinPlan {
             fireWas[n] = live;
             burning[n++] = c;
         }
-        if (layer && layerCounted > 0) budget.layer.put(pos.toLong(), layerCounted);
-        // layer fire absent from both plan positions and ruin fires (wave-blown, support removed) extinguished
-        LongArrayList out = null;
-        List<BlockState> outWas = null;
-        if (over) {
+
+        /** Layer fire absent from both plan positions and ruin fires (wave-blown, support removed) extinguished. */
+        void quench() {
             Heightmap surface = chunk.getOrCreateHeightmapUnprimed(Heightmap.Types.WORLD_SURFACE);
+            BlockState air = Blocks.AIR.defaultBlockState();
             for (int f : flash != null ? flash.fires : fireCells(now)) {
                 int key = f & KEY_MASK, i = section(f);
                 if (i >= now.length) continue;
@@ -981,8 +1101,9 @@ public final class RuinPlan {
                 if (flash != null && flash.counted(key)) budget.fires = Math.max(0, budget.fires - 1);
             }
         }
-        // Sable keeps world-block copies near craft, observes only LevelChunk.setBlockState: notify near craft
-        if (sable) {
+
+        /** Sable keeps world-block copies near craft, observes only LevelChunk.setBlockState: notify near craft. */
+        void sable() {
             for (int k = 0; k < cells.length; k++) {
                 if (was[k] == null) continue;
                 int c = cells[k];
@@ -993,24 +1114,25 @@ public final class RuinPlan {
                 at(m, burning[k], x0, z0, minY);
                 SableTerrain.changed(level, chunk, m.getX(), m.getY(), m.getZ(), fireWas[k], states[(burning[k] >>> STATE_SHIFT) & STATE_MASK]);
             }
+            BlockState air = Blocks.AIR.defaultBlockState();
             for (int k = 0; out != null && k < out.size(); k++) {
                 m.set(out.getLong(k));
                 SableTerrain.changed(level, chunk, m.getX(), m.getY(), m.getZ(), outWas.get(k), air);
             }
         }
-        LevelLightEngine light = level.getChunkSource().getLightEngine();
-        for (int i = 0; i < now.length; i++) {
-            if (!bit(touched, i)) continue;
-            boolean empty = now[i].hasOnlyAir();
-            if (bit(wasEmpty, i) != empty) light.updateSectionStatus(SectionPos.of(pos, chunk.getSectionYFromSectionIndex(i)), empty);
+
+        /** Sections that became empty or stopped being empty tell the light engine. */
+        void sectionStatus() {
+            LevelLightEngine light = level.getChunkSource().getLightEngine();
+            for (int i = 0; i < now.length; i++) {
+                if (!bit(touched, i)) continue;
+                boolean empty = now[i].hasOnlyAir();
+                if (bit(wasEmpty, i) != empty) light.updateSectionStatus(SectionPos.of(pos, chunk.getSectionYFromSectionIndex(i)), empty);
+            }
         }
-        PHASES[1] += System.nanoTime() - t;
-        t = System.nanoTime();
-        // heightmaps/sky sources from plan; chunk edited since plan outside plan positions (block inside house), or
-        // column “before” value differs, so rescan all plan columns from chunk
-        if (!untouched || !setHeights(chunk)) rescanColumns(chunk);
-        if (lit > 0) {
-            // fire is not air but blocks neither motion nor sky: only world-surface heightmap changes
+
+        /** Fire is not air but blocks neither motion nor sky: only world-surface heightmap changes. */
+        void fireSurface() {
             Heightmap surface = chunk.getOrCreateHeightmapUnprimed(Heightmap.Types.WORLD_SURFACE);
             for (int k = 0; k < n; k++) {
                 if (!fireWas[k].isAir()) continue;
@@ -1018,108 +1140,108 @@ public final class RuinPlan {
                 surface.update(c & 15, minY + (section(c) << 4) + ((c >> 8) & 15), (c >> 4) & 15, states[(c >>> STATE_SHIFT) & STATE_MASK]);
             }
         }
-        PHASES[2] += System.nanoTime() - t;
-        t = System.nanoTime();
-        // Small changes go as section packets unless a pending whole delivery will carry this write too.
-        ChunkHolder holder = level.getChunkSource().chunkMap.getVisibleChunkIfPresent(pos.toLong());
-        List<ServerPlayer> players = holder == null ? List.of() : RuinDelivery.viewers(holder);
-        boolean watched = !players.isEmpty(), ticking = watched && holder.getTickingChunk() != null;
-        int changed = 0;
-        if (ticking) {
-            for (int c : cells) if ((c & SLOW) == 0) changed++;
-            if (out != null) changed += out.size();
-            for (int k = 0; k < n; k++) if (fireWas[k] != states[(burning[k] >>> STATE_SHIFT) & STATE_MASK]) changed++;
-        }
-        boolean whole = (ticking && RuinDelivery.whole(changed)) || RuinDelivery.waiting(level, chunk);
-        boolean sections = ticking && !whole;
-        if (sections) {
-            RuinDelivery.deltas(changed);
+
+        /** Small changes go as section packets unless a pending whole delivery will carry this write too. */
+        void deltas() {
+            holder = level.getChunkSource().chunkMap.getVisibleChunkIfPresent(pos.toLong());
+            players = holder == null ? List.of() : ChunkDelivery.viewers(holder);
+            watched = !players.isEmpty();
+            ticking = watched && holder.getTickingChunk() != null;
+            if (ticking) {
+                for (int c : cells) if ((c & SLOW) == 0) changed++;
+                if (out != null) changed += out.size();
+                for (int k = 0; k < n; k++) if (fireWas[k] != states[(burning[k] >>> STATE_SHIFT) & STATE_MASK]) changed++;
+            }
+            whole = (ticking && ChunkDelivery.whole(changed)) || ChunkDelivery.waiting(level, chunk);
+            sections = ticking && !whole;
+            if (!sections) return;
+            ChunkDelivery.deltas(changed);
             for (int c : cells) if ((c & SLOW) == 0) holder.blockChanged(at(m, c, x0, z0, minY));
             for (int k = 0; out != null && k < out.size(); k++) holder.blockChanged(m.set(out.getLong(k)));
         }
-        int extra = quenched == null ? 0 : quenched.size();
-        long[] checks = java.util.Arrays.copyOf(lightAt, lightAt.length + lit + extra);
-        int checked = lightAt.length;
-        for (int k = 0; k < extra; k++) checks[checked++] = quenched.getLong(k);
-        for (int k = 0; k < n; k++) {
-            int c = burning[k];
-            BlockState fire = states[(c >>> STATE_SHIFT) & STATE_MASK];
-            at(m, c, x0, z0, minY);
-            if (fireWas[k].isAir()) checks[checked++] = m.asLong();
-            if (sections && fireWas[k] != fire) holder.blockChanged(m);
-            // fire tick like newly placed fire (FireBlock.onPlace): 30–39 ticks, flash-layer fire starts with ruins
-            if (!layer) level.scheduleTick(m.immutable(), fire.getBlock(), 30 + (int) (RuinPlanner.hash(m.getX(), m.getY(), m.getZ(), 31) * 10));
+
+        /** Light checks in one engine task; new fires tick like newly placed fire and go to delta viewers. */
+        void light() {
+            int extra = quenched == null ? 0 : quenched.size();
+            long[] checks = java.util.Arrays.copyOf(lightAt, lightAt.length + lit + extra);
+            int checked = lightAt.length;
+            for (int k = 0; k < extra; k++) checks[checked++] = quenched.getLong(k);
+            for (int k = 0; k < n; k++) {
+                int c = burning[k];
+                BlockState fire = states[(c >>> STATE_SHIFT) & STATE_MASK];
+                at(m, c, x0, z0, minY);
+                if (fireWas[k].isAir()) checks[checked++] = m.asLong();
+                if (sections && fireWas[k] != fire) holder.blockChanged(m);
+                // fire tick like newly placed fire (FireBlock.onPlace): 30–39 ticks, flash-layer fire starts with ruins
+                if (!layer) level.scheduleTick(m.immutable(), fire.getBlock(), 30 + (int) (RuinPlanner.hash(m.getX(), m.getY(), m.getZ(), 31) * 10));
+            }
+            ua.zentix.incoming.work.BlockLighting.changed(level, chunk);
+            checkLight(level.getChunkSource().getLightEngine(), pos, checked == checks.length ? checks : java.util.Arrays.copyOf(checks, checked));
         }
-        ua.zentix.incoming.work.BlockLighting.changed(level, chunk);
-        checkLight(light, pos, checked == checks.length ? checks : java.util.Arrays.copyOf(checks, checked));
-        // fluid beside breach (neighbors too) gets tick like neighbor setBlock, staggered by position hash, at most
-        // FLUID_TICKS per second: replacement wakes no neighbors, unticked water would stand as wall
-        for (int k = 0; k < fluidTicks.length; k++) {
-            m.set(fluidTicks[k]);
-            // neighbor unloaded (ready plan needs no neighbors): no tick; chunk load does not schedule one, so water
-            // stands until nearby block update
-            if (!Terrain.ready(level, m)) continue;
-            BlockState st = level.getBlockState(m);
-            if (st.getFluidState().isEmpty()) continue;
-            level.scheduleTick(m.immutable(), st.getFluidState().getType(), fluidDelay(k, m.getX(), m.getY(), m.getZ()));
-        }
-        PHASES[3] += System.nanoTime() - t;
-        t = System.nanoTime();
-        chunk.setUnsaved(true);
-        // log chunk's longest block: onRemove may be costly (entire Create shaft network traversed,
-        // belt removes whole chain)
-        BlockState slowBlock = null;
-        long slowBlockNanos = 0;
-        BlockPos slowAt = null;
-        boolean anySlow = false;
-        for (int c : cells) if ((c & SLOW) != 0) {
-            anySlow = true;
-            break;
-        }
-        int readyBefore = anySlow ? readyMask(level, pos) : 0;
-        int radiusBefore = anySlow && slowBlockLines < SLOW_BLOCK_LINES ? neighbourRadius(level, chunk) : 0;
-        // landed containers: contents (or unopened loot table) read before the source is cleared, written into the
-        // landed block entity after it is placed
-        net.minecraft.nbt.CompoundTag[] carried = moves.length == 0 ? null : new net.minecraft.nbt.CompoundTag[moves.length / 2];
-        for (int k = 0; carried != null && k < carried.length; k++) {
-            net.minecraft.world.level.block.entity.BlockEntity be = level.getBlockEntity(m.set(moves[2 * k]));
-            if (be instanceof net.minecraft.world.Container) carried[k] = be.saveWithoutMetadata(level.registryAccess());
-        }
-        for (int c : cells) {
-            if ((c & SLOW) == 0) continue;
-            at(m, c, x0, z0, minY);
-            BlockState old = chunk.getBlockState(m);
-            long b = System.nanoTime();
-            ColumnScar.replace(level, m, old, states[(c >>> STATE_SHIFT) & STATE_MASK]);
-            b = System.nanoTime() - b;
-            if (b > slowBlockNanos) {
-                slowBlockNanos = b;
-                slowBlock = old;
-                slowAt = m.immutable();
+
+        /**
+         * Fluid beside breach (neighbors too) gets tick like neighbor setBlock, staggered by position hash, at most
+         * FLUID_TICKS per second: replacement wakes no neighbors, unticked water would stand as wall.
+         */
+        void fluids() {
+            for (int k = 0; k < fluidTicks.length; k++) {
+                m.set(fluidTicks[k]);
+                // neighbor unloaded (ready plan needs no neighbors): no tick; chunk load does not schedule one, so water
+                // stands until nearby block update
+                if (!Terrain.ready(level, m)) continue;
+                BlockState st = level.getBlockState(m);
+                if (st.getFluidState().isEmpty()) continue;
+                level.scheduleTick(m.immutable(), st.getFluidState().getType(), fluidDelay(k, m.getX(), m.getY(), m.getZ()));
             }
         }
-        if (slowBlockNanos > SLOW_BLOCK_NANOS) logSlowBlock(level, chunk, slowAt, slowBlock, slowBlockNanos, readyBefore, radiusBefore);
-        for (int k = 0; carried != null && k < carried.length; k++) {
-            if (carried[k] == null) continue;
-            net.minecraft.world.level.block.entity.BlockEntity be = level.getBlockEntity(m.set(moves[2 * k + 1]));
-            if (be instanceof net.minecraft.world.Container) {
-                be.loadWithComponents(carried[k], level.registryAccess());
-                changed(level, be);
+
+        /**
+         * World-path positions (block entities, POIs) and landed containers' contents. Logs the chunk's longest block:
+         * onRemove may be costly (entire Create shaft network traversed, belt removes whole chain).
+         */
+        void slowCells() {
+            boolean anySlow = false;
+            for (int c : cells) if ((c & SLOW) != 0) {
+                anySlow = true;
+                break;
+            }
+            if (!anySlow && moves.length == 0) return;
+            int readyBefore = anySlow ? readyMask(level, pos) : 0;
+            int radiusBefore = anySlow && slowBlockLines < SLOW_BLOCK_LINES ? neighbourRadius(level, chunk) : 0;
+            // landed containers: contents (or unopened loot table) read before the source is cleared, written into the
+            // landed block entity after it is placed
+            net.minecraft.nbt.CompoundTag[] carried = moves.length == 0 ? null : new net.minecraft.nbt.CompoundTag[moves.length / 2];
+            for (int k = 0; carried != null && k < carried.length; k++) {
+                net.minecraft.world.level.block.entity.BlockEntity be = level.getBlockEntity(m.set(moves[2 * k]));
+                if (be instanceof net.minecraft.world.Container) carried[k] = be.saveWithoutMetadata(level.registryAccess());
+            }
+            BlockPos slowAt = null;
+            for (int c : cells) {
+                if ((c & SLOW) == 0) continue;
+                at(m, c, x0, z0, minY);
+                BlockState old = chunk.getBlockState(m);
+                long b = System.nanoTime();
+                ColumnScar.replace(level, m, old, states[(c >>> STATE_SHIFT) & STATE_MASK]);
+                b = System.nanoTime() - b;
+                if (b > slowBlockNanos) {
+                    slowBlockNanos = b;
+                    slowBlock = old;
+                    slowAt = m.immutable();
+                }
+            }
+            if (slowBlockNanos > SLOW_BLOCK_NANOS) logSlowBlock(level, chunk, slowAt, slowBlock, slowBlockNanos, readyBefore, radiusBefore);
+            for (int k = 0; carried != null && k < carried.length; k++) {
+                if (carried[k] == null) continue;
+                net.minecraft.world.level.block.entity.BlockEntity be = level.getBlockEntity(m.set(moves[2 * k + 1]));
+                if (be instanceof net.minecraft.world.Container) {
+                    be.loadWithComponents(carried[k], level.registryAccess());
+                    changed(level, be);
+                }
             }
         }
-        // viewed but non-ticking chunk (view edge): send full chunk via vanilla
-        if (watched && !ticking && !whole) {
-            for (ServerPlayer p : players) p.connection.chunkSender.markChunkPendingToSend(chunk);
-        }
-        // after the block entities: the whole chunk carries them too
-        if (whole) RuinDelivery.wholeAfterLight(level, chunk, changed);
-        // Distant Horizons LOD: ruins with wave, not next chunk save
-        long dh = System.nanoTime();
-        DhUpdates.mark(level, pos, level.getGameTime());
-        long took = System.nanoTime() - t;
-        dh = System.nanoTime() - dh;
-        PHASES[4] += took;
-        if (took > slowestWorldNanos) {
+
+        /** The slowest world write so far: this one. */
+        void slowest(long took, long dh) {
             slowestWorldNanos = took;
             slowestWorldChunk = pos.toLong();
             int slow = 0;
@@ -1129,7 +1251,6 @@ public final class RuinPlan {
             slowestWorldBlockNanos = slowBlockNanos;
             slowestWorldDhNanos = dh;
         }
-        return lit;
     }
 
     /** A world-path block replacement this long (a tick share) logs where and which neighbour chunks it loaded. */

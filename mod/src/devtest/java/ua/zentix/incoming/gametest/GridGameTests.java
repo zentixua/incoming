@@ -97,8 +97,8 @@ import java.util.stream.Collectors;
 @GameTestHolder(Incoming.MOD_ID)
 @PrefixGameTestTemplate(false)
 public final class GridGameTests {
-    private static final BlockPos CENTER = new BlockPos(32, 12, 32);
-    private static final TicketType<ChunkPos> HOLD = TicketType.create("incoming_test_grid_hold", Comparator.comparingLong(ChunkPos::toLong));
+    static final BlockPos CENTER = new BlockPos(32, 12, 32);
+    static final TicketType<ChunkPos> HOLD = TicketType.create("incoming_test_grid_hold", Comparator.comparingLong(ChunkPos::toLong));
 
     private GridGameTests() {}
 
@@ -106,7 +106,7 @@ public final class GridGameTests {
      * Disabling other checks - the lights are on in all blocks now, so that they don’t turn off the site in the middle of this
      *  (with the spread of the team, the site block would remain dark until 10 s - longer than the period of other checks).
      */
-    private static void quiet(ServerLevel level) {
+    static void quiet(ServerLevel level) {
         Blackouts.restore(level, null, 0, 0);
         // substations of other checks remain in the world: a nuclear strike from this one would knock them out (batch order - by name hash)
         PowerGrid grid = PowerGrid.get(level);
@@ -441,10 +441,10 @@ public final class GridGameTests {
         for (BlockPos p : lamps) h.setBlock(p, Blocks.LANTERN);
         // air blast away from the substation (as in nuclear inspections: 15 kt, scale 0.1); the explosion itself is not needed here
         BlockPos g = h.absolutePos(CENTER.east(8));
-        Detonation d = new Detonation(NuclearGameTests.IDS.incrementAndGet(), new Vec3(g.getX() + 0.5, g.getY() + 300, g.getZ() + 0.5), g.getY(),
+        Detonation d = new Detonation(NuclearGameTests.nextId(level), new Vec3(g.getX() + 0.5, g.getY() + 300, g.getZ() + 0.5), g.getY(),
                 15, false, level.getGameTime(), 0, 0, 20_000, 7, 0.1f, false, Detonation.OLD_WAVE);
         h.assertTrue(d.radiusMax() > 64, "detonation radius " + d.radiusMax() + " does not cover the area");
-        Blackouts.nuke(level, d);
+        Blackouts.nuke(level, d, ua.zentix.incoming.IncomingConfig.SERVER.gridEnabled.get());
         h.assertTrue(PowerGrid.get(level).downOutage(node.id(), level.getGameTime()).isPresent(), "nuclear strike did not knock out the substation");
         h.startSequence()
                 .thenWaitUntil(() -> {
@@ -939,11 +939,11 @@ public final class GridGameTests {
         BlockPos lamp = new BlockPos(18, 12, 18);
         h.setBlock(lamp, Blocks.LANTERN);
         BlockPos g = h.absolutePos(CENTER.east(8));
-        Detonation d = new Detonation(NuclearGameTests.IDS.incrementAndGet(), new Vec3(g.getX() + 0.5, g.getY() + 1, g.getZ() + 0.5), g.getY(),
+        Detonation d = new Detonation(NuclearGameTests.nextId(level), new Vec3(g.getX() + 0.5, g.getY() + 1, g.getZ() + 0.5), g.getY(),
                 15, true, level.getGameTime(), 0, 0, 20_000, 7, 0.1f, false, Detonation.OLD_WAVE);
         double dead = d.groundRange(BlastModel.kpa(Blackouts.DEAD_PSI));
         h.assertTrue(dead > 64, "destroyed zone " + dead + " does not cover the platform");
-        Blackouts.nuke(level, d);
+        Blackouts.nuke(level, d, ua.zentix.incoming.IncomingConfig.SERVER.gridEnabled.get());
         PowerGrid grid = PowerGrid.get(level);
         // this strike's outage: the newest (other nuclear checks leave restored outages until they are pruned)
         Outage o = grid.outages().stream().filter(Outage::byDamage).max(java.util.Comparator.comparingInt(Outage::id)).orElseThrow();
@@ -1442,7 +1442,18 @@ public final class GridGameTests {
      * Keep a chunk and its neighbors and load them immediately (from disk or generation): the GameTest server on CI ticks
      *  tens of times faster than the game, and the test period passes before the background loading.
      */
-    private static void hold(ServerLevel level, ChunkPos p) {
+    /**
+     * {@link #hold}, with the whole ticket area (two chunks around) loaded now: a redstone notice of our sources reaches
+     * that far ({@code SignalEdge.REACH}) and waits until it is ready.
+     */
+    static void holdWide(ServerLevel level, ChunkPos p) {
+        hold(level, p);
+        for (int dx = -2; dx <= 2; dx++) {
+            for (int dz = -2; dz <= 2; dz++) level.getChunk(p.x + dx, p.z + dz);
+        }
+    }
+
+    static void hold(ServerLevel level, ChunkPos p) {
         level.getChunkSource().addRegionTicket(HOLD, p, 2, p);
         for (int dx = -1; dx <= 1; dx++) {
             for (int dz = -1; dz <= 1; dz++) level.getChunk(p.x + dx, p.z + dz);
@@ -1507,9 +1518,68 @@ public final class GridGameTests {
      *  (queue {@code unloadQueue}) only during the remaining tick time - as any live server does.
      *  Here this time is given to it: one unloading pass per waiting step.
      */
-    private static void unloaded(GameTestHelper h, ServerLevel level, ChunkPos p) {
+    static void unloaded(GameTestHelper h, ServerLevel level, ChunkPos p) {
         level.getChunkSource().tick(() -> true, false);
         var holder = level.getChunkSource().chunkMap.getVisibleChunkIfPresent(p.toLong());
         h.assertTrue(holder == null, "chunk not unloaded: level " + (holder == null ? 0 : holder.getTicketLevel()));
     }
+
+    /**
+     * Saving a blacked-out chunk restores lamps by renaming the twins in each section's palette list: the packed block
+     * data in the tag stays the very array vanilla wrote (no section decode or re-encode on the server thread; three of
+     * them per section cost 276 ms of every second while a 1 Mt wave saved a dark city, srvlag run 23.11). Single-value,
+     * small, hash and global (over 256 states) palettes all decode to the lamps, block for block; a lamp beside its own twin
+     * state cannot be renamed without listing one state twice: the fast path declines and leaves the tag as it was.
+     */
+    @GameTest(template = "range", timeoutTicks = 20, batch = "grid_save_palette", skyAccess = true)
+    public static void savedTwinsRestoreByPaletteRename(GameTestHelper h) {
+        var codec = PalettedContainer.codecRW(net.minecraft.world.level.block.Block.BLOCK_STATE_REGISTRY, BlockState.CODEC,
+                PalettedContainer.Strategy.SECTION_STATES, Blocks.AIR.defaultBlockState());
+        List<BlockState> lamps = new ArrayList<>();
+        for (ModBlocks.UnlitPair pair : ModBlocks.UNLIT) lamps.addAll(pair.lit().get().getStateDefinition().getPossibleStates());
+        List<BlockState> filler = new ArrayList<>();
+        for (BlockState st : net.minecraft.world.level.block.Block.BLOCK_STATE_REGISTRY) {
+            if (filler.size() >= 400) break;
+            if (!GridLights.isLit(st) && !GridLights.isUnlit(st)) filler.add(st);
+        }
+        net.minecraft.util.RandomSource random = net.minecraft.util.RandomSource.create(23);
+        // sizes: one twin (single value), 3 states (linear), 40 (hash), 400 + twins (global)
+        int[][] cases = {{0, 1}, {2, 1}, {20, 20}, {400, 40}};
+        for (int[] c : cases) {
+            PalettedContainer<BlockState> live = new PalettedContainer<>(net.minecraft.world.level.block.Block.BLOCK_STATE_REGISTRY,
+                    Blocks.AIR.defaultBlockState(), PalettedContainer.Strategy.SECTION_STATES);
+            BlockState[] expect = new BlockState[4096];
+            for (int i = 0; i < 4096; i++) {
+                boolean twin = c[0] == 0 || random.nextInt(c[0] + c[1]) < c[1];
+                BlockState lamp = c[0] == 0 ? lamps.get(0) : lamps.get(random.nextInt(Math.min(c[1], lamps.size())) * (lamps.size() / Math.min(c[1], lamps.size())));
+                BlockState st = twin ? GridLights.unlit(lamp) : filler.get(c[0] == 0 ? 0 : random.nextInt(c[0]));
+                live.set(i & 15, i >> 8, (i >> 4) & 15, st);
+                expect[i] = twin ? lamp : st;
+            }
+            CompoundTag tag = (CompoundTag) codec.encodeStart(NbtOps.INSTANCE, live).getOrThrow();
+            Tag data = tag.get("data");
+            int renamed = ChunkSaves.relightPalette(tag);
+            h.assertTrue(renamed > 0, "case " + c[0] + "/" + c[1] + ": nothing renamed (" + renamed + ")");
+            h.assertTrue(tag.get("data") == data, "case " + c[0] + "/" + c[1] + ": block data re-encoded");
+            PalettedContainer<BlockState> back = codec.parse(NbtOps.INSTANCE, tag).getOrThrow();
+            for (int i = 0; i < 4096; i++) {
+                BlockState got = back.get(i & 15, i >> 8, (i >> 4) & 15);
+                if (got != expect[i]) {
+                    h.fail("case " + c[0] + "/" + c[1] + ": block " + i + " " + got + " instead of " + expect[i]);
+                    return;
+                }
+            }
+        }
+        // a lamp beside its own twin state: a rename would list one state twice, so the fast path declines untouched
+        PalettedContainer<BlockState> both = new PalettedContainer<>(net.minecraft.world.level.block.Block.BLOCK_STATE_REGISTRY,
+                Blocks.AIR.defaultBlockState(), PalettedContainer.Strategy.SECTION_STATES);
+        both.set(0, 0, 0, lamps.get(0));
+        both.set(1, 0, 0, GridLights.unlit(lamps.get(0)));
+        CompoundTag tag = (CompoundTag) codec.encodeStart(NbtOps.INSTANCE, both).getOrThrow();
+        CompoundTag before = tag.copy();
+        h.assertTrue(ChunkSaves.relightPalette(tag) == ChunkSaves.DECLINED, "a lamp beside its own twin state was renamed");
+        h.assertTrue(tag.equals(before), "the declined rename changed the tag");
+        h.succeed();
+    }
+
 }

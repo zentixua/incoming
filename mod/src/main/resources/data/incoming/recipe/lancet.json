@@ -14,16 +14,16 @@
   ],
   "key": {
     "I": {
-      "item": "minecraft:iron_ingot"
+      "tag": "c:ingots/iron"
     },
     "M": {
       "item": "create:precision_mechanism"
     },
     "C": {
-      "item": "minecraft:copper_ingot"
+      "tag": "c:ingots/copper"
     },
     "G": {
-      "item": "minecraft:gunpowder"
+      "tag": "c:gunpowders"
     },
     "R": {
       "item": "minecraft:redstone"

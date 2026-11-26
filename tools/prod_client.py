@@ -195,7 +195,7 @@ def main():
     if a.server and (a.world or a.quickplay):
         ap.error("--server cannot be combined with --world or --quickplay")
     if a.server and a.scenario:
-        ap.error("--server cannot run scenarios that open local worlds")
+        ap.error("--server joins without a scenario; a scenario joins a server itself: --prop incoming.server=host:port")
     if a.quickplay and not a.world:
         ap.error("--quickplay needed --world")
     if a.copy_only and a.no_copy:
@@ -251,6 +251,9 @@ def main():
                 f"[wave]\nfile = {audio}\n")
     tools = os.path.dirname(os.path.abspath(__file__))
     game = f"\"{java}\" @\"{argfile}\""
+    # INCOMING_JAVA_WRAP: a command run in front of the client's java (a frame debugger's capture, e.g. RenderDoc's)
+    if os.environ.get("INCOMING_JAVA_WRAP"):
+        game = f"{os.environ['INCOMING_JAVA_WRAP']} {game}"
     if a.video:
         if os.path.exists(audio):
             os.remove(audio)

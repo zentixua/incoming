@@ -19,6 +19,7 @@ import ua.zentix.incoming.entity.flight.ProximityFuse;
 import ua.zentix.incoming.entity.Launcher;
 import ua.zentix.incoming.entity.LauncherEntity;
 import ua.zentix.incoming.entity.LauncherMount;
+import ua.zentix.incoming.entity.Rails;
 import ua.zentix.incoming.entity.RocketEntity;
 import ua.zentix.incoming.entity.StrikeProjectile;
 import ua.zentix.incoming.guidance.Autopilot;
@@ -271,15 +272,30 @@ public final class LaunchSite {
     @Nullable
     public static Pick pickOn(ServerLevel level, LauncherMount mount, Vec3 site, WeaponType weapon, float[] want, Vec3 target, float maxOff,
                               Budget budget) {
+        return pickOn(level, yaw -> mount.rails(site, yaw, weapon), site, weapon, want, target, maxOff, budget);
+    }
+
+    /**
+     * Heading of a standing launcher's rack (fixed launcher, also on a craft): as {@link #pickOn(ServerLevel, LauncherMount,
+     * Vec3, WeaponType, float[], Vec3, float, Budget)}, with its rails where they stand in the world at each heading.
+     */
+    @Nullable
+    public static Pick pickOn(ServerLevel level, Launcher launcher, float[] want, Vec3 target, float maxOff, Budget budget) {
+        return pickOn(level, launcher::rails, launcher.position(), launcher.weapon(), want, target, maxOff, budget);
+    }
+
+    @Nullable
+    private static Pick pickOn(ServerLevel level, Rails.Turned rails, Vec3 site, WeaponType weapon, float[] want, Vec3 target, float maxOff,
+                               Budget budget) {
         float toTarget = FlightController.anglesTo(site, target)[0];
         for (int i = 0; i < want.length; i++) {
-            if (clearAhead(level, mount, site, want[i], weapon, target, budget)) return new Pick(site, want[i], i);
+            if (clearAhead(level, rails.at(want[i]), weapon, target, budget)) return new Pick(site, want[i], i);
             if (budget.out()) return null;
         }
         for (float t : TURNS) {
             float yaw = Mth.wrapDegrees(want[0] + t);
             if (Math.abs(Mth.wrapDegrees(yaw - toTarget)) > maxOff) continue;
-            if (clearAhead(level, mount, site, yaw, weapon, target, budget)) return new Pick(site, yaw, -1);
+            if (clearAhead(level, rails.at(yaw), weapon, target, budget)) return new Pick(site, yaw, -1);
             if (budget.out()) return null;
         }
         return null;
@@ -287,7 +303,12 @@ public final class LaunchSite {
 
     /** Standing launcher's sector (current heading) toward {@code target} is clear. */
     public static boolean clearAhead(ServerLevel level, Launcher launcher, Vec3 target, Budget budget) {
-        return clearAhead(level, launcher.mount(), launcher.position(), launcher.yaw(), launcher.weapon(), target, budget);
+        return clearAhead(level, launcher.rails(), launcher.weapon(), target, budget);
+    }
+
+    /** Standing launcher's sector at world heading {@code yaw} (its rack turned there) toward {@code target} is clear. */
+    public static boolean clearAhead(ServerLevel level, Launcher launcher, float yaw, Vec3 target, Budget budget) {
+        return clearAhead(level, launcher.rails(yaw), launcher.weapon(), target, budget);
     }
 
     /** {@link #clearAhead(ServerLevel, Vec3, float, WeaponType, Vec3, Budget)} with its own default budget. */
@@ -321,13 +342,23 @@ public final class LaunchSite {
      * the middle too.
      */
     public static boolean clearAhead(ServerLevel level, LauncherMount mount, Vec3 site, float yaw, WeaponType weapon, Vec3 target, Budget budget) {
-        float elevation = LauncherEntity.elevation(weapon);
+        return clearAhead(level, mount.rails(site, yaw, weapon), weapon, target, budget);
+    }
+
+    /**
+     * Launch sector from {@code rails} as they stand in the world (rail points and axis; on a craft its pose already
+     * applied): the law of {@link #clearAhead(ServerLevel, LauncherMount, Vec3, float, WeaponType, Vec3, Budget)}.
+     * Rays go through {@code Level.clip}, which with Sable also hits craft blocks, so a craft's own hull or mast in front
+     * of its rack blocks the sector as a building does.
+     */
+    private static boolean clearAhead(ServerLevel level, Rails rails, WeaponType weapon, Vec3 target, Budget budget) {
+        float elevation = rails.elevation(), yaw = rails.yaw();
         WeaponSpec.Airframe air = weapon.spec().airframe();
         WeaponSpec.LaunchProfile lp = air.launchProfile();
-        int slots = LauncherEntity.slots(weapon);
+        int slots = rails.slots();
         List<List<Vec3[]>> boost = new ArrayList<>(slots), paths = new ArrayList<>(slots);
         for (int slot = 0; slot < slots; slot++) {
-            Vec3 rail = mount.railPoint(site, yaw, weapon, slot);
+            Vec3 rail = rails.point(slot);
             List<Vec3> path = new ArrayList<>();
             path.add(rail);
             if (lp != null) {

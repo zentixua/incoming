@@ -6,25 +6,34 @@ import it.unimi.dsi.fastutil.longs.LongIterator;
 import it.unimi.dsi.fastutil.longs.LongOpenHashSet;
 import it.unimi.dsi.fastutil.objects.Reference2IntOpenHashMap;
 import net.minecraft.core.BlockPos;
+import net.minecraft.core.component.DataComponents;
 import net.minecraft.core.Direction;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.util.Mth;
 import net.minecraft.world.Container;
-import net.minecraft.world.RandomizableContainer;
 import net.minecraft.world.entity.item.FallingBlockEntity;
+import net.minecraft.world.entity.item.ItemEntity;
+import net.minecraft.world.entity.EntityType;
+import net.minecraft.world.item.ItemStack;
+import net.minecraft.world.item.component.SeededContainerLoot;
 import net.minecraft.world.level.ChunkPos;
 import net.minecraft.world.level.Explosion;
+import net.minecraft.world.level.GameRules;
 import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.FallingBlock;
 import net.minecraft.world.level.block.entity.BlockEntity;
+import net.minecraft.world.level.block.entity.RandomizableContainerBlockEntity;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.material.FluidState;
 import net.minecraft.world.phys.Vec3;
 import net.neoforged.neoforge.capabilities.Capabilities;
-import net.neoforged.neoforge.event.EventHooks;
+import net.neoforged.neoforge.common.NeoForge;
+import net.neoforged.neoforge.event.level.BlockDropsEvent;
 import net.neoforged.neoforge.network.PacketDistributor;
 import org.jetbrains.annotations.Nullable;
 import ua.zentix.incoming.Incoming;
+import ua.zentix.incoming.claim.Claims;
+import ua.zentix.incoming.api.ClaimQuery;
 import ua.zentix.incoming.IncomingConfig;
 import ua.zentix.incoming.compat.SubLevels;
 import ua.zentix.incoming.net.S2C;
@@ -176,7 +185,7 @@ final class StrikeCollapse implements UnitQueue.Job {
         if (support == null && !removedAt.isEmpty() && !StrikeSupport.slotFree()) return false;
         if (!area.ready(level)) return false;
         if (support == null) {
-            if (removedAt.isEmpty() || !IncomingConfig.SERVER.blockDamage.get()) return true;
+            if (removedAt.isEmpty() || !area.rules().blockDamage()) return true;
             // the slot first: a waiting collapse holds nothing but its strike area
             if (!StrikeSupport.tryReserve()) return false;
             support = new StrikeSupport(level, removedAt, removedWas, area.collapseSource());
@@ -352,7 +361,7 @@ final class StrikeCollapse implements UnitQueue.Job {
             StrikeRemovals.Source source = area.collapseSource();
             Explosion e = source != null ? source.explosion(level)
                     : after.getFirst().attributed(level, centre);
-            BlockPos protectedBlock = protectedBearing(level, e, null, offered, end);
+            BlockPos protectedBlock = protectedBearing(level, e, null, offered, end, true);
             if (protectedBlock != null) {
                 Incoming.LOG.info("Collapse at {} kept standing: claim protection keeps load-bearing {}",
                         BlockPos.containing(centre).toShortString(), protectedBlock.toShortString());
@@ -370,7 +379,7 @@ final class StrikeCollapse implements UnitQueue.Job {
             StrikeRemovals.Source source = peer.sources().get(peerSource);
             if (!support.excludedPeer(source)) {
                 Explosion e = source.explosion(level);
-                BlockPos protectedBlock = protectedBearing(level, e, peer.indices(), peerOffered, end);
+                BlockPos protectedBlock = protectedBearing(level, e, peer.indices(), peerOffered, end, false);
                 if (protectedBlock == null && end < peer.indices().length) {
                     peerOffered = end;
                     return;
@@ -418,18 +427,27 @@ final class StrikeCollapse implements UnitQueue.Job {
         }
     }
 
-    /** Keep decorative blocks directly and return the first protected bearing block for a support-based retry. */
-    private @Nullable BlockPos protectedBearing(ServerLevel level, Explosion e, @Nullable int[] indices, int from, int end) {
+    /**
+     * Keep decorative blocks directly and return the first protected bearing block for a support-based retry. In the
+     * strike's {@code own} context a chunk its real explosion's claim handlers denied stays denied ({@link BlastArea#claims}).
+     */
+    private @Nullable BlockPos protectedBearing(ServerLevel level, Explosion e, @Nullable int[] indices, int from, int end, boolean own) {
         long[] all = result.at();
-        List<BlockPos> list = e.getToBlow();
-        for (int i = from; i < end; i++) list.add(BlockPos.of(all[indices == null ? i : indices[i]]));
-        EventHooks.onExplosionDetonate(level, e, new ArrayList<>(), 0);
-        LongOpenHashSet allowed = new LongOpenHashSet(list.size());
-        for (BlockPos p : list) allowed.add(p.asLong());
+        // asked through Claims (centre and readiness guards); a position in a chunk not in memory is not asked and not
+        // protected: the fall skips it unwritten (writable), so it must not stop the collapse as a protected bearing block
+        long[] ask = new long[end - from];
+        int n = 0;
+        for (int i = from; i < end; i++) {
+            long at = all[indices == null ? i : indices[i]];
+            if (Terrain.ready(level, BlockPos.getX(at) >> 4, BlockPos.getZ(at) >> 4)) ask[n++] = at;
+        }
+        ClaimQuery q = e instanceof ClaimQuery c ? c : new ClaimQuery(level, e.getDirectSourceEntity(), null, e.center());
+        LongOpenHashSet refused = new LongOpenHashSet();
+        if (n > 0) Claims.offer(level, q, ask, 0, n, refused::add, false);
         for (int i = from; i < end; i++) {
             int index = indices == null ? i : indices[i];
             long at = all[index];
-            if (allowed.contains(at)) continue;
+            if (!refused.contains(at) && !(own && area.claims().denied(ChunkPos.asLong(BlockPos.getX(at) >> 4, BlockPos.getZ(at) >> 4)))) continue;
             if (StrikeSupport.bearing(result.was()[index])) return BlockPos.of(at);
             kept.add(at);
         }
@@ -577,7 +595,7 @@ final class StrikeCollapse implements UnitQueue.Job {
      * drops it ({@link Block#dropResources} with its block entity: a shulker box keeps its contents in the item), then the
      * block's own removal ({@code onRemove}) spills what it keeps inside: a chest's contents, a Create vault's or depot's,
      * a jukebox's disc. Nothing is cleared first (the nuclear ruins clear, {@link ColumnScar#replace}). An unopened loot
-     * chest keeps its table unrolled (rolling it reads structures for maps, hundreds of ms).
+     * container drops with its loot unrolled ({@link #dropWithLoot}).
      *
      * @return the block dropped as an item (it lands as no rubble then)
      */
@@ -586,14 +604,53 @@ final class StrikeCollapse implements UnitQueue.Job {
         if (st.hasBlockEntity()) {
             BlockEntity be = level.getBlockEntity(p);
             if (be != null && isStorage(level, p, st, be)) {
-                Block.dropResources(st, level, p, be);
+                if (be instanceof RandomizableContainerBlockEntity r && r.getLootTable() != null) dropWithLoot(level, p, st, r);
+                else Block.dropResources(st, level, p, be);
                 item = true;
             }
-            // Loot can be copied to the item as a component. Prevent onRemove from rolling it into loose items.
-            if (be instanceof RandomizableContainer r && r.getLootTable() != null) r.setLootTable(null);
         }
         ColumnScar.replaceKeeping(level, p, st, to);
         return item;
+    }
+
+    /**
+     * An unopened loot container (a village or ruin chest, barrel, dispenser) drops as {@link Block#dropResources} drops
+     * it, drop event included, its own item carrying the unrolled table and seed ({@code container_loot}, which
+     * {@link RandomizableContainerBlockEntity} restores when placed): placed and opened, it rolls them then. Rolling here
+     * reads structures for explorer maps, hundreds of ms in one fall portion. Other loot containers (a decorated pot
+     * restores no {@code container_loot}) drop as usual and their {@code onRemove} rolls the loot, as a hand break does;
+     * so does a chest whose drops a mod's {@link BlockDropsEvent} listener cancelled. With {@code doTileDrops} off the
+     * table is dropped unrolled (no roll inside the fall).
+     */
+    private static void dropWithLoot(ServerLevel level, BlockPos p, BlockState st, RandomizableContainerBlockEntity be) {
+        if (!level.getGameRules().getBoolean(GameRules.RULE_DOBLOCKDROPS)) {
+            Block.dropResources(st, level, p, be);
+            be.setLootTable(null);
+            return;
+        }
+        SeededContainerLoot loot = new SeededContainerLoot(be.getLootTable(), be.getLootTableSeed());
+        boolean carried = false;
+        List<ItemEntity> drops = new ArrayList<>();
+        for (ItemStack stack : Block.getDrops(st, level, p, be)) {
+            if (stack.isEmpty()) continue;
+            if (!carried && stack.is(st.getBlock().asItem())) {
+                if (!stack.has(DataComponents.CONTAINER_LOOT)) stack.set(DataComponents.CONTAINER_LOOT, loot);
+                carried = true;
+            }
+            // Block.popResource's placement; NeoForge's capture that feeds the drop event is private to Block
+            double h = EntityType.ITEM.getHeight() / 2.0;
+            ItemEntity e = new ItemEntity(level, p.getX() + 0.5 + Mth.nextDouble(level.random, -0.25, 0.25),
+                    p.getY() + 0.5 + Mth.nextDouble(level.random, -0.25, 0.25) - h, p.getZ() + 0.5 + Mth.nextDouble(level.random, -0.25, 0.25), stack);
+            e.setDefaultPickUpDelay();
+            drops.add(e);
+        }
+        // CommonHooks.handleBlockDrops, which does not tell whether a listener cancelled the drops
+        BlockDropsEvent event = NeoForge.EVENT_BUS.post(new BlockDropsEvent(level, p, st, be, drops, null, ItemStack.EMPTY));
+        if (event.isCanceled()) return;
+        for (ItemEntity e : event.getDrops()) level.addFreshEntity(e);
+        st.spawnAfterBreak(level, p, ItemStack.EMPTY, false);
+        if (event.getDroppedExperience() > 0) st.getBlock().popExperience(level, p, event.getDroppedExperience());
+        if (carried) be.setLootTable(null);
     }
 
     /** Storage can be empty and still carry item components, such as a custom name. */
@@ -618,7 +675,11 @@ final class StrikeCollapse implements UnitQueue.Job {
         int fall = from.getY() - rest(level, from.getX(), from.getY(), from.getZ(), m);
         double[] off = StrikeSupport.spread(from.getX(), from.getY(), from.getZ(), fall);
         FallingBlockEntity e = FallingBlockEntity.fall(level, from, rubble);
-        CraterFalls.markRubble(e);
+        CraterFalls.markRubble(e, area.rules().debrisStay());
+        // where it comes to rest (as the direct landing puts it): claim-protected there, it falls but places nothing
+        int x = Mth.floor(from.getX() + 0.5 + off[0]), z = Mth.floor(from.getZ() + 0.5 + off[1]);
+        if (area.rules().debrisStay() && Terrain.ready(level, x >> 4, z >> 4)
+                && !area.claims().allows(level, new BlockPos(x, rest(level, x, from.getY(), z, m) + 1, z))) e.disableDrop();
         double ticks = fallTicks(Math.max(1, fall));
         e.setDeltaMovement(off[0] / ticks, 0, off[1] / ticks);
         stats.live++;
@@ -641,7 +702,7 @@ final class StrikeCollapse implements UnitQueue.Job {
 
     /** Rubble without a live falling block, in timed portions, after every fall is out of the way. */
     private int land(ServerLevel level) {
-        if (!CraterFalls.rubbleStays()) {
+        if (!area.rules().debrisStay()) {
             landed = landings.size();
             return 0;
         }
@@ -666,7 +727,7 @@ final class StrikeCollapse implements UnitQueue.Job {
                 BlockPos at = new BlockPos(x, y, z);
                 BlockState there = level.getBlockState(at);
                 // under water rubble sinks away, as in the nuclear pile (RuinPlanner#buries)
-                if (y < level.getMaxBuildHeight() && FallingBlock.isFree(there) && there.getFluidState().isEmpty()) {
+                if (y < level.getMaxBuildHeight() && FallingBlock.isFree(there) && there.getFluidState().isEmpty() && area.claims().allows(level, at)) {
                     ColumnScar.replace(level, at, there, l.state());
                     stats.placed++;
                     n++;

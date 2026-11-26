@@ -115,12 +115,16 @@ Particles and the effects layer: `client-fx.md`; models: `client-models.md`; sou
   (`TerrainTiles.Partial`; otherwise chunk layer builds one tile per frame after opening, view terrain ready in
   ~1.1 s); chunk tile with holes rereads when its client chunk arrives (`ChunkEvent.Load` client-side,
   `TerrainTiles.arrived`): prebuild also runs before chunks arrive), `nuclear/` (flash/afterimage, field glare/retinal
-  burns `NukeFlash`, sky/fog, sphere/mushroom `MushroomField` (sphere/fire light on dust `CloudPuffs`), dust wall with
-  rolling head/Wilson cloud `BlastWall` in pall volume, camera litter/debris/fallback dust `NukeDust`, water dark
-  front ring/spray `NukeWater` (decal `fx/layer/WaterDecal`), water column in mushroom volume/base surge in pall,
-  post-wave pall/ash `PallField`, `NukePall`, `NukeAsh` (volume `fx/layer/PallPass`), black rain, sound, front hit/body
+  burns `NukeFlash`, sky/fog, sphere/mushroom `MushroomField` (sphere/fire light on dust `CloudPuffs`), dust wall laws
+  `BlastWall` (camera readers; its Wilson cloud in the pall volume), ground dust drawn by the dust pass
+  `fx/layer/DustWallPass`, camera litter/debris `NukeDust`, water dark front ring/spray `NukeWater` (decal
+  `fx/layer/WaterDecal`), water column in mushroom volume, post-wave field/ash `PallField`, `NukePall`, `NukeAsh` (pall
+  volume `fx/layer/PallPass`: fire-zone haze, mushrooms, Wilson shell, firestorm), black rain, sound, front hit/body
   wind lean on front arrival (`BodySway`: hit from G&D blast loading, immediate lean rate `jolt`; `CameraShake.sway`
   from body-front arrival including tick fraction), EFX deafness, Geiger counter, countdowns/alarm, two-step launch).
+
+The nuclear renderer reads the live presentation clock at the frame fraction. Replay reads Flashback's fractional position
+on each frame and tick query, including direct renders during export. Clock limits and diagnostics are in `nuclear.md`, replay positions in `replay.md`.
 
 ## Pitfalls
 - `ClientLevel` calculates sky darkness (`Level.skyDarken`, `updateSkyBrightness`) only in constructor on world entry:

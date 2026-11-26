@@ -1127,7 +1127,7 @@ public final class StrikeGameTests {
                 "route longer than the range accepted");
 
         // salvo remembers the launch site
-        h.assertTrue(command(h, "incoming salvo missile 3 6" + at + fromArg(far)) == 1, "salvo from the launch site not accepted");
+        h.assertTrue(command(h, "incoming salvo missile 3 6" + at + fromArg(far)) == 3, "salvo from the launch site not admitted with its 3 rounds");
         CompoundTag saved = SalvoData.get(level).save(new CompoundTag(), level.registryAccess());
         SalvoData.get(level).cancel(level, null, List.of());
         ListTag salvos = saved.getList("salvos", Tag.TAG_COMPOUND);
@@ -2038,7 +2038,9 @@ public final class StrikeGameTests {
             lastPos[0] = l.position();
             last[0] = l.flightPhase() + " " + h.relativeVec(l.position()) + " v=" + l.speed();
             if (l.flightPhase() == FlightPhase.LOITER) {
-                loiter[0]++;
+                // circling time by the munition's own phase clock (saved across off-world flight): a tick on which
+                // the test does not find it (a handover between world and off-world flight) must not shorten it
+                loiter[0] = Math.max(loiter[0], l.phaseAge() + 1);
                 double off = Math.hypot(l.getX() - point.x, l.getZ() - point.z) - l.orbitRadius();
                 if (Math.abs(off) > Math.abs(drift[0])) {
                     drift[0] = off;

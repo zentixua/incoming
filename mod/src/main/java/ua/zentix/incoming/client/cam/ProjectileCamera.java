@@ -238,7 +238,9 @@ public final class ProjectileCamera {
                 if (v.lengthSqr() > 1.0e-4) lastDir = v.normalize();
                 lastTerminal = p.flightPhase() == FlightPhase.TERMINAL || p.flightPhase() == FlightPhase.DRILL;
             }
-            if (pad == null && p.flightPhase().onLauncher()) {
+            // the rail moves while the round waits on a craft's launcher: the launch shot follows it until it leaves
+            if (p.flightPhase().onLauncher()) {
+                if (pad != null && pad.distanceToSqr(p.position()) > 1e-4 && shot == Shot.LAUNCH) shot = Shot.WAIT;
                 pad = p.position();
                 padYaw = p.getYRot();
             }

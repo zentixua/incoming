@@ -17,16 +17,16 @@
   ],
   "key": {
     "I": {
-      "item": "minecraft:iron_ingot"
+      "tag": "c:ingots/iron"
     },
     "R": {
       "item": "minecraft:redstone"
     },
     "C": {
-      "item": "minecraft:copper_ingot"
+      "tag": "c:ingots/copper"
     },
     "G": {
-      "item": "minecraft:gunpowder"
+      "tag": "c:gunpowders"
     },
     "P": {
       "item": "minecraft:iron_trapdoor"

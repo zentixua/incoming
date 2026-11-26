@@ -65,3 +65,62 @@ reason = "Map strike, sight lines and sound: far terrain from LOD Server Support
 versionRange = "[0,)"
 ordering = "NONE"
 side = "CLIENT"
+
+# Mekanism is optional: its radiation-shielding item capability (hazmat suit, MekaSuit) counts as worn shielding
+# against nuclear radiation (compat/mekanism); the incoming:radiation_shielding data map wins for an item it lists.
+[[dependencies.${mod_id}]]
+modId = "mekanism"
+type = "optional"
+reason = "Nuclear radiation: Mekanism's radiation shielding of worn items"
+versionRange = "[10.7,)"
+ordering = "NONE"
+side = "BOTH"
+
+# Jade is optional: overlay lines for the launcher, the SAM, the substation and strike projectiles (compat/jade, found by
+# Jade's own plugin scan); owner and mission only for the owner's side and operators. 15.1.7 (checked: the same API as 15.1.6,
+# the first 1.21 build) has every API call the plugin makes.
+[[dependencies.${mod_id}]]
+modId = "jade"
+type = "optional"
+reason = "Overlay lines: launcher mission and readiness, SAM radar, substation outage, projectile owner"
+versionRange = "[15.1.7,)"
+ordering = "NONE"
+side = "BOTH"
+
+# Create is optional: Display Link sources of the SAM and the fixed launcher (compat/create); its 6.0 public display API.
+[[dependencies.${mod_id}]]
+modId = "create"
+type = "optional"
+reason = "Display Link sources: the SAM's air-raid alert, a fixed launcher's munitions and readiness"
+versionRange = "[6.0.0,)"
+ordering = "NONE"
+side = "BOTH"
+
+# CC:Tweaked is optional: computer peripherals of the fixed launcher and the SAM (compat/computercraft).
+[[dependencies.${mod_id}]]
+modId = "computercraft"
+type = "optional"
+reason = "Computer peripherals: launcher status and fire, SAM stock, tracking and alert events"
+versionRange = "[1.113,)"
+ordering = "NONE"
+side = "BOTH"
+
+# FTB Teams is optional: a party is one side for spotting, the SAM, targeting and launcher links
+# (compat/ftbteams); 2101.1.0, its first 1.21.1 build, has every API call the bridge makes.
+[[dependencies.${mod_id}]]
+modId = "ftbteams"
+type = "optional"
+reason = "Sides: an FTB Teams party spots, shares the SAM and links launchers as one side"
+versionRange = "[2101.1.0,)"
+ordering = "NONE"
+side = "BOTH"
+
+# Open Parties and Claims is optional: a party is one side (compat/opac); 0.23.4, its first 1.21.1 NeoForge build, has
+# every API call the bridge makes.
+[[dependencies.${mod_id}]]
+modId = "openpartiesandclaims"
+type = "optional"
+reason = "Sides: an Open Parties and Claims party spots, shares the SAM and links launchers as one side"
+versionRange = "[0.23.4,)"
+ordering = "NONE"
+side = "BOTH"

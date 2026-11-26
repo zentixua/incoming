@@ -192,7 +192,7 @@ public final class ScorchGameTests {
         ServerLevel level = h.getLevel();
         double scale = 0.0182;
         Detonation d = NuclearGameTests.detonation(h, GROUND_ZERO, Yield.optimalBurstHeight(15) * scale, 15, (float) scale);
-        Detonation other = new Detonation(NuclearGameTests.IDS.incrementAndGet(), d.burst(), d.groundY(), d.yieldKt(), d.surface(),
+        Detonation other = new Detonation(NuclearGameTests.nextId(level), d.burst(), d.groundY(), d.yieldKt(), d.surface(),
                 d.gameTime(), d.windDir(), d.windSpeed(), d.visibility(), d.seed() * 31 + 12345, d.scale(), d.fallout(), d.wave());
         int changed = 0;
         for (LevelChunk chunk : NuclearGameTests.chunks(h)) {
@@ -489,7 +489,7 @@ public final class ScorchGameTests {
             }
         }
         ChunkPos mid = new ChunkPos(sx[0] + 1, sz[0] + 1);
-        Detonation d = new Detonation(NuclearGameTests.IDS.incrementAndGet(), new Vec3(mid.getMiddleBlockX() + 0.5, ground + 1 + 592, mid.getMiddleBlockZ() + 0.5),
+        Detonation d = new Detonation(NuclearGameTests.nextId(level), new Vec3(mid.getMiddleBlockX() + 0.5, ground + 1 + 592, mid.getMiddleBlockZ() + 0.5),
                 ground + 1, 15, false, level.getGameTime(), 0, 0, 20_000, 7, 1f, false, 0.35f);
         long[] keys = inside.stream().mapToLong(c -> c.getPos().toLong()).toArray();
         long first = Long.MAX_VALUE;
@@ -521,7 +521,8 @@ public final class ScorchGameTests {
                 lane(clock, time);
                 final long tick = now;
                 NuclearWorld.afterFront(() -> {
-                }, () -> flash.workUrgent(level, tick, clock), () -> busy(clock, time), () -> busy(clock, time), () -> flash.work(level, tick, clock));
+                }, () -> flash.workUrgent(level, tick, clock), () -> {
+                }, () -> busy(clock, time), () -> busy(clock, time), () -> flash.work(level, tick, clock));
                 RuinWorkers.awaitForTest(RuinWorkers.Priority.NEAR, 60_000);
                 if (flash.appliedChunks() == keys.length) {
                     doneAt = now;
@@ -566,7 +567,7 @@ public final class ScorchGameTests {
             }
         }
         ChunkPos mid = new ChunkPos(sx[0] + 1, sz[0] + 1);
-        Detonation d = new Detonation(NuclearGameTests.IDS.incrementAndGet(), new Vec3(mid.getMiddleBlockX() + 200.5, ground + 1 + 592, mid.getMiddleBlockZ() + 0.5),
+        Detonation d = new Detonation(NuclearGameTests.nextId(level), new Vec3(mid.getMiddleBlockX() + 200.5, ground + 1 + 592, mid.getMiddleBlockZ() + 0.5),
                 ground + 1, 15, false, level.getGameTime(), 0, 0, 20_000, 7, 1f, false, 0.35f);
         // earliest deadline last in the input order
         inside.sort(Comparator.comparingLong((LevelChunk c) -> FlashScorch.deadline(d, c.getPos())).reversed());

@@ -13,6 +13,8 @@ import net.minecraft.world.level.levelgen.Heightmap;
 import net.minecraft.world.phys.Vec3;
 import net.neoforged.neoforge.common.Tags;
 import org.jetbrains.annotations.Nullable;
+import ua.zentix.incoming.claim.BlockGate;
+import ua.zentix.incoming.claim.NuclearClaims;
 import ua.zentix.incoming.nuclear.Detonation;
 import ua.zentix.incoming.nuclear.model.CraterGround;
 import ua.zentix.incoming.nuclear.model.CraterModel;
@@ -242,7 +244,8 @@ public final class CraterJob {
                 return plane == null ? Double.POSITIVE_INFINITY : CraterGround.at(plane, x + 0.5 - d.burst().x, z + 0.5 - d.burst().z);
             }
         };
-        digColumn(level, x, z, d.burst(), outer, d.seed() % 13, p, rim, ModBlocks.TRINITITE.get().defaultBlockState(), Mode.VAPORIZE, random);
+        digColumn(level, x, z, d.burst(), outer, d.seed() % 13, p, rim, ModBlocks.TRINITITE.get().defaultBlockState(), Mode.VAPORIZE, random,
+                NuclearClaims.gate(level, d));
     }
 
     /** How a crater column is applied to blocks. */
@@ -283,9 +286,10 @@ public final class CraterJob {
      * @param phase  irregular-edge phase offset
      * @param glaze  floor glazing material (nuclear — trinitite), null — none
      * @param mode   nuclear or conventional crater ({@link Mode})
+     * @param gate   claim protection of the cause ({@link BlockGate}): a protected block stays with the column under it
      */
     public static void digColumn(ServerLevel level, int x, int z, net.minecraft.world.phys.Vec3 centre, double outer, double phase, Profile profile,
-                                 List<BlockState> rimStates, @Nullable BlockState glaze, Mode mode, RandomSource random) {
+                                 List<BlockState> rimStates, @Nullable BlockState glaze, Mode mode, RandomSource random, BlockGate gate) {
         double dx = x + 0.5 - centre.x, dz = z + 0.5 - centre.z;
         if (dx * dx + dz * dz > outer * outer) return;
         double r = Math.hypot(dx, dz) / CraterGround.edge(Math.atan2(dz, dx), phase);
@@ -356,6 +360,12 @@ public final class CraterJob {
                 relief = whole + (random.nextDouble() < relief - whole ? 1 : 0);
             }
         }
+        // the column's writes, asked of claim protection together (one question per column): removals from the top down,
+        // floor glazing, rim, partial damage
+        List<BlockPos> at = new ArrayList<>();
+        List<BlockState> was = new ArrayList<>(), with = new ArrayList<>();
+        int removals = 0;
+        boolean glazed = false;
         if (relief < 0) {
             // everything above bowl profile removed: buildings above soil and soil to profile; underwater pit fills with water
             int floor = Mth.floor(ground + relief);
@@ -365,23 +375,53 @@ public final class CraterJob {
                 BlockState s = level.getBlockState(m.setY(y));
                 if (y >= ground && !s.getFluidState().isEmpty()) continue; // water above the floor itself remains
                 if (mode == Mode.DIG && (s.getBlock().defaultDestroyTime() < 0 || s.getExplosionResistance(level, m, excavation) >= BLAST_PROOF)) break;
-                if (!s.isAir() && s.getBlock().defaultDestroyTime() >= 0) ColumnScar.replace(level, m, s, y < ground ? fill : Blocks.AIR.defaultBlockState());
+                if (!s.isAir() && s.getBlock().defaultDestroyTime() >= 0) {
+                    at.add(m.immutable());
+                    was.add(s);
+                    with.add(y < ground ? fill : Blocks.AIR.defaultBlockState());
+                }
             }
+            removals = at.size();
             BlockState bottom = level.getBlockState(m.setY(floor - 1));
             if (glaze != null && depth > lift && random.nextFloat() < 0.3f && !bottom.isAir() && bottom.getFluidState().isEmpty()
                     && bottom.getBlock().defaultDestroyTime() >= 0) {
-                ColumnScar.replace(level, m, bottom, glaze);
+                at.add(m.immutable());
+                was.add(bottom);
+                with.add(glaze);
+                glazed = true;
             }
         } else if (relief >= 1 && !rimStates.isEmpty()) {
             // rim: ejected soil lies over natural ground
             int crest = Mth.floor(ground + relief);
             for (int y = ground; y < crest; y++) {
-                BlockState was = level.getBlockState(m.setY(y));
-                if (was.canBeReplaced()) ColumnScar.replace(level, m, was, rimStates.get(random.nextInt(rimStates.size())));
+                BlockState s = level.getBlockState(m.setY(y));
+                if (!s.canBeReplaced()) continue;
+                at.add(m.immutable());
+                was.add(s);
+                with.add(rimStates.get(random.nextInt(rimStates.size())));
             }
         }
+        if (damagedPos != null) at.add(damagedPos);
+        if (at.isEmpty()) return;
+        List<BlockPos> allowed = new ArrayList<>(at);
+        gate.filter(level, allowed);
+        java.util.Set<BlockPos> may = allowed.size() == at.size() ? null : new java.util.HashSet<>(allowed);
+        boolean whole = true;
+        for (int k = 0; k < was.size(); k++) {
+            boolean ok = may == null || may.contains(at.get(k));
+            if (k < removals || glazed && k == removals) {
+                // a protected block keeps itself and the column under it, as a blast-proof one does; no floor under it
+                if (!ok || !whole) {
+                    whole = false;
+                    continue;
+                }
+            } else if (!ok) {
+                continue;
+            }
+            ColumnScar.replace(level, at.get(k), was.get(k), with.get(k));
+        }
         // Full blocks above the residual surface have now gone; its chips must not be hidden by those old blocks.
-        if (damagedPos != null) SurfaceDamage.mark(level, damagedPos, level.getBlockState(damagedPos), damagedDepth);
+        if (damagedPos != null && whole && (may == null || may.contains(damagedPos))) SurfaceDamage.mark(level, damagedPos, level.getBlockState(damagedPos), damagedDepth);
     }
 
     /**

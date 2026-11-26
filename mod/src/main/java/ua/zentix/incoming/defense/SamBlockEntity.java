@@ -13,6 +13,7 @@ import net.minecraft.sounds.SoundSource;
 import net.minecraft.world.Containers;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.level.Level;
+import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.entity.BlockEntity;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.levelgen.Heightmap;
@@ -28,11 +29,13 @@ import ua.zentix.incoming.registry.ModItems;
 import ua.zentix.incoming.target.Sides;
 import ua.zentix.incoming.target.Sightings;
 import ua.zentix.incoming.util.Magazine;
+import ua.zentix.incoming.util.SignalEdge;
 import ua.zentix.incoming.util.Terrain;
 
 import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
+import java.util.concurrent.CopyOnWriteArrayList;
 
 /**
  * Stationary SAM: placer (their side is friendly, {@link Sides}), stored interceptor missiles (hopper and Create
@@ -41,7 +44,7 @@ import java.util.UUID;
  * ({@link AirAlert}) and side reconnaissance ({@link Sightings}) learn of hostile targets, fire control ({@link
  * FireControl}) launches one missile at the nearest free target, and nearby friendlies receive the radar screen
  * ({@link S2C.RadarScope}). Loads no chunks: radar uses the world projectile list; missile flight is {@link
- * Interceptor}.
+ * Interceptor}. The sweep also sets the redstone alarm ({@link #alarm}).
  */
 public class SamBlockEntity extends BlockEntity {
     /** Radar sweeps the sky once per this many ticks; launches no more often. */
@@ -69,8 +72,20 @@ public class SamBlockEntity extends BlockEntity {
     private int reload;
     /** What radar saw on its last sweep (for the status line): total and hostile targets. */
     private int lastTracks, lastHostile;
+    /** Distance from the antenna to the nearest hostile track of the last sweep, blocks; infinite without one. */
+    private double lastNearest = Double.POSITIVE_INFINITY;
+    /**
+     * Told on every sweep that sees a hostile track (not saved): computers attached to this SAM. Attach and detach may
+     * come from another thread (a computer's), so the list is copy-on-write; the sweep reads it on the server thread.
+     */
+    private final CopyOnWriteArrayList<Watcher> watchers = new CopyOnWriteArrayList<>();
     /** Sky above the SAM is blocked: it does not fire under a roof. */
     private boolean covered;
+    /**
+     * The neighbours were asked to recheck the alarm ({@link SamBlock#ALARM}) since this block entity loaded (not
+     * saved): the first sweep does it once, in case a change was saved untold.
+     */
+    private boolean signalled;
 
     public SamBlockEntity(BlockPos pos, BlockState state) {
         super(ModBlockEntities.SAM.get(), pos, state);
@@ -103,6 +118,54 @@ public class SamBlockEntity extends BlockEntity {
     /** Insert missiles into storage; returns what did not fit. */
     public ItemStack load(ItemStack stack) {
         return stock.load(stack);
+    }
+
+    /** Radar tracks (any side) of the latest sweep. */
+    public int tracks() {
+        return lastTracks;
+    }
+
+    /** Hostile radar tracks of the latest sweep: the SAM tracks while this is above zero (the redstone alarm). */
+    public int hostile() {
+        return lastHostile;
+    }
+
+    /** Distance from the antenna to the nearest hostile track of the latest sweep, blocks; infinite without one. */
+    public double nearestHostile() {
+        return lastNearest;
+    }
+
+    /** The sky above is blocked: the SAM does not fire (latest sweep). */
+    public boolean covered() {
+        return covered;
+    }
+
+    /** Rails the SAM holds missiles on (the world's {@code sam_rails}). */
+    public static int rails() {
+        return IncomingConfig.SERVER.samRails.get();
+    }
+
+    /**
+     * Something that follows this SAM's tracking (a computer attached to it): told on each sweep that sees a hostile
+     * track, on the server thread, until removed. Not saved.
+     */
+    @FunctionalInterface
+    public interface Watcher {
+        /** This sweep sees {@code hostile} hostile tracks, the nearest {@code nearest} blocks from the antenna. */
+        void tracking(int hostile, double nearest);
+    }
+
+    public void watch(Watcher w) {
+        watchers.addIfAbsent(w);
+    }
+
+    public void unwatch(Watcher w) {
+        watchers.remove(w);
+    }
+
+    /** The latest radar sweep saw a hostile projectile: redstone alarm on ({@link SamBlock#ALARM}). */
+    public boolean alarm() {
+        return getBlockState().getValue(SamBlock.ALARM);
     }
 
     /** Comparator signal follows storage fullness. */
@@ -162,24 +225,46 @@ public class SamBlockEntity extends BlockEntity {
         String side = owner == null ? null : Sides.side(level.getServer(), owner);
         lastTracks = tracks.size();
         lastHostile = 0;
+        lastNearest = Double.POSITIVE_INFINITY;
         for (Radar.Track t : tracks) {
             if (!t.hostile()) continue;
             lastHostile++;
+            lastNearest = Math.min(lastNearest, t.distance());
             // The side's controller map shows hostile radar targets; the side already sees its own projectiles.
             if (side != null) Sightings.spot(level, side, t.projectile(), Sightings.Source.RADAR);
         }
         AirAlert.sweep(level, owner, side, tracks);
+        setAlarm(level, pos, lastHostile > 0);
+        // the same condition as the alarm: the SAM tracks while its sweep sees a hostile target
+        if (lastHostile > 0) for (Watcher w : watchers) w.tracking(lastHostile, lastNearest);
         // Open sky above the SAM (its chunk is ready because it ticks): a missile launches upward and would burst against a roof.
         covered = Terrain.height(level, Heightmap.Types.MOTION_BLOCKING, pos.getX(), pos.getZ()) > pos.getY() + 1;
         if (ready > 0 && !covered) {
             Radar.Track shot = FireControl.pick(tracks, DefenseWorld.get(level));
             if (shot != null) {
-                FireControl.launch(level, rail(pos, ready - 1), shot, owner, pos.toShortString(), spec);
+                FireControl.launch(level, rail(pos, ready - 1), shot, owner, pos.immutable(), spec);
                 ready--;
                 setChanged();
             }
         }
         scope(level, antenna, tracks);
+    }
+
+    /**
+     * Redstone alarm follows the sweep. The state changes without neighbour updates; {@link SignalEdge} tells the
+     * neighbours on the same tick when every chunk their circuit can reach is ready, otherwise once they are.
+     */
+    private void setAlarm(ServerLevel level, BlockPos pos, boolean on) {
+        BlockState state = getBlockState();
+        if (state.getValue(SamBlock.ALARM) != on) {
+            state = state.setValue(SamBlock.ALARM, on);
+            level.setBlock(pos, state, Block.UPDATE_CLIENTS | Block.UPDATE_KNOWN_SHAPE);
+            SignalEdge.changed(level, pos, state);
+        }
+        if (!signalled) {
+            SignalEdge.recheck(level, pos, state);
+            signalled = true;
+        }
     }
 
     /** Center of rail {@code k}'s canister: the missile stands at full length inside and launches upward. */

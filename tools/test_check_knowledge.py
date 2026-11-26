@@ -88,6 +88,28 @@ class GateTest(unittest.TestCase):
     def test_this_repository_passes(self):
         self.assertEqual(check_knowledge.check(ROOT), [])
 
+    def test_anchored_rules_must_stay(self):
+        # the look loop (Artem 25.11): a rewrite that drops an anchored rule fails the gate instead of silently
+        skill = check_knowledge.PLUGIN / "skills/look/SKILL.md"
+        text = (ROOT / skill).read_text(encoding="utf-8")
+        self.repo.write(str(skill), text)
+        self.repo.write("docs/dev-pipeline.md", (ROOT / "docs/dev-pipeline.md").read_text(encoding="utf-8"))
+        self.repo.write("AGENTS.md", AGENTS + "- Look changes iterate in the dev client; whole-pack takes and the matrix only for the\n  final set.\n")
+        self.assertEqual(self.problems(), [])
+        start, end = text.index("## 4. Iterate in the dev client"), text.index("## 5. Judge in motion")
+        self.repo.write(str(skill), text[:start] + text[end:])
+        self.repo.write("AGENTS.md", AGENTS)
+        lost = [p for p in self.problems() if "lost the rule" in p]
+        self.assertEqual(len(lost), 4, self.problems())
+        self.assertEqual(sum(p.startswith("AGENTS.md:") for p in lost), 2, lost)
+
+    def test_size_inside_the_agreed_look_is_ours(self):
+        # Artem 22.11: he sets the goal, not a height; a mission must never stop to ask him a size, height or shape
+        agents = " ".join((ROOT / "AGENTS.md").read_text(encoding="utf-8").split())
+        self.assertIn("A size, height or shape serving the agreed look is the owner's call, never Artem's question", agents)
+        self.assertNotIn("changes only by Artem's word", agents)
+        self.assertNotIn("real size/shape", agents)
+
     def test_claude_md_must_import_agents(self):
         self.repo.write("CLAUDE.md", "# rules here\n")
         self.assertTrue(any("CLAUDE.md" in p for p in self.problems()))
@@ -95,6 +117,25 @@ class GateTest(unittest.TestCase):
     def test_agents_size_cap(self):
         self.repo.write("AGENTS.md", AGENTS + "x" * check_knowledge.AGENTS_MAX)
         self.assertTrue(any("AGENTS.md is" in p for p in self.problems()))
+
+    def test_rule_size_cap(self):
+        rule = self.repo.root / ".claude/rules"
+        name = next(f.name for f in sorted(rule.glob("*.md")))
+        text = (rule / name).read_text(encoding="utf-8")
+        self.repo.write(f".claude/rules/{name}", text + "x" * check_knowledge.RULE_MAX)
+        self.assertTrue(any(f"{name} is" in p for p in self.problems()))
+
+    def test_oversize_ceiling_only_falls(self):
+        for name, ceiling in check_knowledge.RULE_OVERSIZE.items():
+            self.assertGreater(ceiling, check_knowledge.RULE_MAX)
+            size = len((ROOT / ".claude/rules" / name).read_bytes())
+            self.assertLessEqual(size, ceiling)
+            self.assertGreaterEqual(size, ceiling - check_knowledge.RULE_SLACK)
+
+    def test_crlf_counts_as_read(self):
+        body = ("x" * 60 + "\r\n") * (check_knowledge.RULE_MAX // 61)
+        self.repo.write(".claude/rules/area.md", RULE + body)
+        self.assertTrue(any("area.md is" in p for p in self.problems()))
 
     def test_rule_without_paths(self):
         self.repo.write(".claude/rules/area.md", "# no frontmatter\n")

@@ -3,7 +3,7 @@
 # start time, or waits with --wait; the owner reacquires without waiting; abandoned leases expire; another session cannot
 # renew or release it; owner comes from the tree; laptop_job.sh --gpu and sandbox.sh start from another session refuse before
 # starting anything; jobs without GPU take no lease; a client without a lock (pre-lease script) also means a busy
-# GPU, not a free one; a CPU session (soft socket) is not; waiters form a fair FIFO queue capped at two other sessions; Artem's game is detected by its instance directory, not its
+# GPU, not a free one; a CPU session (soft socket) is not; waiters form a fair FIFO queue capped at two other sessions, and a holder past its turn yields to them; Artem's game is detected by its instance directory, not its
 # command-line path, and stops a --gpu job it starts during; a delegated task owns the lease across its trees; a running
 # client's GPU samples and a job's CPU go to the load log; vanilla clients share GPU slots without waiting, fall back
 # to the CPU, and never share the GPU with a measurement; every laptop job has a memory ceiling and says when it hits it.
@@ -193,6 +193,31 @@ for _ in $(seq 50); do [ -f "$tmp/tr" ] && break; sleep 0.1; done
 kill $q4 2>/dev/null; wait $q4 2>/dev/null
 lease_release TR
 
+# A turn has an end: past INCOMING_GPU_TURN with another session waiting, the holder's running work still renews, its
+# new take queues behind the waiter, and its lease passes to the waiter after INCOMING_GPU_YIELD without work. 21.11: a
+# chain of release-candidate GPU jobs held the lease for 2 h 20 min while the dust wall waited
+rm -f "$INCOMING_GPU_LEASE" "$INCOMING_GPU_LEASE.queue" "$tmp/dw"
+now=$(date +%s)
+printf 'RC\t/x/wt-RC\t%s\t%s\n' $(( now - 4000 )) $(( now - 5 )) > "$INCOMING_GPU_LEASE"
+lease_take RC /x/wt-RC && ok "alone, the holder re-takes past its turn" || bad "turn over without waiters"
+( lease_take DW /x/wt-DW --wait 2>/dev/null; echo DW > "$tmp/dw" ) & q1=$!
+sleep 0.5
+lease_renew RC && [ "$(cut -f1 "$INCOMING_GPU_LEASE")" = RC ] && ok "running work renews past its turn" || bad "running work displaced"
+out=$(lease_take RC /x/wt-RC 2>&1); rc=$?
+[ $rc = 75 ] && [[ $out == *"GPU turn of RC since "*"is over and queued: DW"* ]] && ok "a new take past the turn waits behind the waiter: $out" \
+  || bad "turn: $rc $out"
+printf 'RC\t/x/wt-RC\t%s\t%s\n' $(( now - 4000 )) $(( now - 100 )) > "$INCOMING_GPU_LEASE"
+for _ in $(seq 50); do [ -f "$tmp/dw" ] && break; sleep 0.1; done
+[ "$(cut -f1 "$INCOMING_GPU_LEASE")" = DW ] && ok "an idle holder past its turn yields to the waiter" || bad "no yield: $(cat "$INCOMING_GPU_LEASE")"
+kill $q1 2>/dev/null; wait $q1 2>/dev/null
+rm -f "$INCOMING_GPU_LEASE" "$INCOMING_GPU_LEASE.queue"
+printf 'RC\t/x/wt-RC\t%s\t%s\n' $(( $(date +%s) - 600 )) $(( $(date +%s) - 100 )) > "$INCOMING_GPU_LEASE"
+( lease_take DW /x/wt-DW --wait 2>/dev/null ) & q1=$!
+sleep 0.5
+lease_take RC /x/wt-RC && [ "$(cut -f1 "$INCOMING_GPU_LEASE")" = RC ] && ok "within its turn the holder keeps the GPU between jobs" || bad "yield inside the turn"
+kill $q1 2>/dev/null; wait $q1 2>/dev/null
+lease_release RC; rm -f "$INCOMING_GPU_LEASE.queue"
+
 # The queue is capped: with two other sessions waiting, a third is refused at once and pointed to the CPU path
 rm -f "$INCOMING_GPU_LEASE" "$INCOMING_GPU_LEASE.queue"
 lease_take V3 /x/wt-V3
@@ -216,15 +241,15 @@ kill $k; wait $k 2>/dev/null
 unset INCOMING_GPU_POLL
 
 # Artem's game is java in its instance directory; sandbox java with instance paths in its command line is not that game
-mkdir -p "$tmp/prism/instances/Open Skies/minecraft" "$tmp/bin" "$tmp/sandbox"
+mkdir -p "$tmp/prism/instances/Open-Skies/minecraft" "$tmp/bin" "$tmp/sandbox"
 printf '#!/bin/bash\nsleep 5\n' > "$tmp/bin/java"; chmod +x "$tmp/bin/java"
 real=0; artem_playing && real=1
-( cd "$tmp/sandbox" && exec "$tmp/bin/java" -Dfml.modFolders="$tmp/prism/instances/Open Skies/minecraft/mods" ) & j=$!
+( cd "$tmp/sandbox" && exec "$tmp/bin/java" -Dfml.modFolders="$tmp/prism/instances/Open-Skies/minecraft/mods" ) & j=$!
 sleep 0.3
 if [ $real = 1 ]; then echo "skip: Artem's game is running"
 else (PRISM=$tmp/prism; artem_playing) && bad "sandbox with instance paths mistaken for Artem's game" || ok "sandbox with instance paths is not Artem's game"; fi
 kill $j 2>/dev/null; wait $j 2>/dev/null
-( cd "$tmp/prism/instances/Open Skies/minecraft" && exec "$tmp/bin/java" -cp x ) & j=$!
+( cd "$tmp/prism/instances/Open-Skies/minecraft" && exec "$tmp/bin/java" -cp x ) & j=$!
 sleep 0.3
 (PRISM=$tmp/prism; artem_playing) && ok "java in instance directory is Artem's game" || bad "java in instance directory not detected"
 kill $j 2>/dev/null; wait $j 2>/dev/null
@@ -238,7 +263,7 @@ else
   PRISM_DIR=$tmp/prism INCOMING_GPU_OWNER=SH INCOMING_GAME_POLL=0.2 "$ROOT/tools/laptop_job.sh" --in-unit gpu run $$ -- \
     bash -c 'sleep 60 & echo $! > "$1/grandchild"; wait' _ "$tmp" > "$tmp/run" 2>&1 & r=$!
   sleep 1
-  ( cd "$tmp/prism/instances/Open Skies/minecraft" && exec "$tmp/bin/java" -cp x ) & j=$!
+  ( cd "$tmp/prism/instances/Open-Skies/minecraft" && exec "$tmp/bin/java" -cp x ) & j=$!
   wait $r; rc=$?
   took=$(( $(date +%s) - start ))
   [ $rc = 75 ] && grep -q "run: Artem's game started at [0-9:]*: job stopped" "$tmp/run" && [ $took -lt 5 ] \
@@ -250,7 +275,7 @@ else
   PRISM_DIR=$tmp/prism INCOMING_GPU_OWNER=SH INCOMING_GAME_POLL=0.2 "$ROOT/tools/laptop_job.sh" --in-unit gpu deaf $$ -- \
     bash -c 'trap "" TERM; sleep 60 & echo $! > "$1/deaf"; wait' _ "$tmp" > "$tmp/deaf.out" 2>&1 & r=$!
   sleep 1
-  ( cd "$tmp/prism/instances/Open Skies/minecraft" && exec "$tmp/bin/java" -cp x ) & j=$!
+  ( cd "$tmp/prism/instances/Open-Skies/minecraft" && exec "$tmp/bin/java" -cp x ) & j=$!
   wait $r; rc=$?
   took=$(( $(date +%s) - start ))
   [ $rc = 75 ] && [ $took -ge 9 ] && [ $took -lt 16 ] && ! kill -0 "$(cat "$tmp/deaf")" 2>/dev/null \
@@ -323,7 +348,7 @@ else
   start=$(date +%s)
   ( STUB_RUN=30 vd > "$tmp/vd.out" 2>&1; echo $? > "$tmp/vd.rc" ) & v=$!
   sleep 0.8
-  ( cd "$tmp/prism/instances/Open Skies/minecraft" && exec "$tmp/bin/java" -cp x ) & j=$!
+  ( cd "$tmp/prism/instances/Open-Skies/minecraft" && exec "$tmp/bin/java" -cp x ) & j=$!
   wait $v; took=$(( $(date +%s) - start ))
   [ "$(cat "$tmp/vd.rc")" = 75 ] && grep -q "Artem's game started at .*: shared GPU client stopped" "$tmp/vd.out" && [ $took -lt 5 ] \
     && ok "Artem's game stops a shared GPU client in ${took} s" || bad "shared client and game: rc $(cat "$tmp/vd.rc") after $took s: $(cat "$tmp/vd.out")"
@@ -335,7 +360,7 @@ fi
 # review probes (tools/probes): shared and exclusive launches exclude each other also across slot counts and older
 # scripts; a vanilla launch never waits on exclusive admission; a CPU client's admission uses its real ceiling; Artem's
 # game stops the whole shared session and frees its slot, with and without errexit
-for p in gpu-exclusion vanilla-no-wait soft-memory-override soft-memory-fractional; do
+for p in gpu-exclusion vanilla-no-wait soft-memory-override soft-memory-fractional gpu-turn; do
   out=$(bash "$ROOT/tools/probes/$p.sh" "$ROOT" 2>&1) && ok "probe $p" || bad "probe $p: $out"
 done
 if command -v dbus-run-session >/dev/null; then
@@ -376,4 +401,12 @@ fi
 [ "$("$ROOT/tools/laptop_job.sh" --ceiling heavy)" = "10G 4G" ] && [ "$("$ROOT/tools/laptop_job.sh" --ceiling gpu)" = "10G 4G" ] \
   && [ "$("$ROOT/tools/laptop_job.sh" --ceiling full)" = "20G 4G" ] && [ "$(INCOMING_SOFT_HEAP=3g "$ROOT/tools/laptop_job.sh" --ceiling soft)" = "5120M 0" ] \
   && [ "$(INCOMING_JOB_MEM=2G "$ROOT/tools/laptop_job.sh" --ceiling heavy)" = "2G 4G" ] && ok "memory ceiling for every mode" || bad "ceilings: $("$ROOT/tools/laptop_job.sh" --ceiling heavy)"
+# A whole-pack job is a final take: refused (2) without --acceptance before any lease or service; with it, a `take` row of
+# its task goes to the load log (systemd may be absent here: only the guard and the row are checked)
+out=$(DELEGATE_LOAD_LOG=$tmp/takes.tsv DELEGATE_TASK=t1 "$ROOT/tools/laptop_job.sh" --full take1 -- true 2>&1); rc=$?
+[ $rc = 2 ] && [[ $out == *"add --acceptance"* ]] && [ ! -s "$tmp/takes.tsv" ] && ok "--full without --acceptance refused (2), no take counted" \
+  || bad "--full without --acceptance: $rc $out"
+out=$(DELEGATE_LOAD_LOG=$tmp/takes.tsv DELEGATE_TASK=t1 INCOMING_GPU_OWNER=FZC timeout 20 "$ROOT/tools/laptop_job.sh" --full --acceptance take2 -- true 2>&1); rc=$?
+[[ $out == *"whole-pack take 1 of task t1"* ]] && [ "$(awk -F'\t' '$1 == "take" && $3 == "t1" && $4 == "take2"' "$tmp/takes.tsv" | wc -l)" = 1 ] \
+  && ok "--full --acceptance counted for its task (code $rc)" || bad "--full --acceptance: $rc $out"
 exit $fail

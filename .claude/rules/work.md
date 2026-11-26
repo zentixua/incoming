@@ -5,6 +5,7 @@ paths:
   - "mod/src/main/java/ua/zentix/incoming/nuclear/world/**"
   - "mod/src/test/java/ua/zentix/incoming/work/**"
   - "mod/src/main/java/ua/zentix/incoming/client/fx/FireWatch.java"
+  - "mod/src/main/java/ua/zentix/incoming/mixin/level/**"
 ---
 
 # Server work budget (`work/`)
@@ -47,11 +48,68 @@ paths:
   cost, mid-lane requests, neighbor decodes, uneven ticks and the factor; a new background loader
   of disk chunks goes through it too.
 - `UnitQueue` runs new heads in enqueue order, then one unit per continuation in a persistent round-robin order.
-  Unready areas and blocked dependencies are skipped. Continuation `ready`/`blocked` results are cached once per
+  Unready areas and blocked dependencies are skipped; a job is cancelled after `GIVE_UP_TICKS` without a unit (since
+  its last unit or its enqueue), not by age: a light repair that ran a unit every tick for five minutes may wait a
+  tick for its fence (`UnitQueueTest.giveUpCountsTicksWithoutProgressNotAge`). Continuation `ready`/`blocked` results are cached once per
   work window, after heads (whose first step can introduce a dependency). Post refreshes them even within the same
-  world tick. Unit kinds keep separate clock estimates. Shutdown drains available work without a deadline via
-  `finish`, then releases jobs that cannot proceed. Strike timelines enqueue into `StrikeWorld.impacts()` rather
+  world tick. Unit kinds keep separate clock estimates. Shutdown drains available work to completion via `finish` while
+  its windows run units (a last continuation that enqueues a ready successor keeps the queue length and is still
+  progress), then releases only jobs that cannot run (unready areas, waiting for them). Started work is never cut
+  short: jobs are not saved, so a release midway would save half-applied edits (GameTest `work_stop_front`); a drain
+  past `UnitQueue.SLOW_DRAIN_NANOS` (30 s) only logs. World time stops during the drain: `Job.drain` tells each job
+  (also one enqueued meanwhile) to do now what waits for a later tick (the explosion front's arrival); a step
+  returning true without progress would otherwise repeat forever in finish's window (`UnitQueueTest`,
+  `blast_front_stop`). Strike timelines enqueue into `StrikeWorld.impacts()` rather
   than executing directly; an empty queue can start the job that tick.
+- `ChunkDelivery` sends our in-place block changes (ruin writes `RuinPlan.write`, blackout lamps
+  `ChunkLights.applyInPlace`) to the players already holding the chunk, the viewers vanilla's broadcast finds (the
+  holder's player provider, AT). Fewer than `ChunkDelivery.WHOLE_FROM` (35) changed positions go as section deltas in
+  the same tick unless a whole delivery is pending; more go as one whole-chunk packet after the chunk's light. Lamps
+  decide per chunk, not per budgeted pass: a pass that stops with lamps left in the chunk goes whole too. Section
+  deltas cost the client per position on its render thread: `ClientLevel.setBlock` (in the host pack 55–63 % of it is
+  Voxy re-snapshotting the whole section per block, `VoxelIngestService.rawIngest`) and the client's own light
+  propagation for every changed block, though the server sends the computed light. A 15 kt wave sends ~247 thousand
+  positions in 10 s around a viewer at 1.5 km (one 2.2 s frame of packets, then a 1.8 s light frame); a lamp switched
+  off by a delta spreads its block-light removal over its whole light radius on the client, and a 1 Mt blackout over
+  the Silo map darkens ~92 thousand lamps around a viewer at 3.9 km within the wave's 10 s passage. A whole chunk costs
+  ~0.55 ms (`CHUNK_NANOS`, `POSITION_NANOS`). Further writes join a pending delivery, and only the light fence for the
+  latest write revision builds the packet (on the chunk cache's main-thread queue, like `BlockLighting`): built on the
+  write tick it would show new blocks in old light. While it waits, vanilla's light broadcast for that chunk is held
+  (`onLevelTickPre` clears its holder's light bits, AT; each hold lasts up to `HOLD_LIMIT` ticks, a write after expiry
+  starts a new hold): light from new blocks or a changed neighbour would otherwise reach the client's old blocks.
+  Fenced chunks wait in a ready queue sent at the world tick's start, in fence order, at most `PER_TICK` (12: vanilla's
+  7 ms client chunk budget per tick, `ChunkBatchSizeCalculator`, at `CHUNK_NANOS`, a world-load figure; a ruined city
+  chunk also re-creates its block entities and Sodium sections, not measured apart) to each viewer per tick, a chunk
+  for all its viewers at once. From `READY_LIMIT` (20 ticks, the ruins' 1 s acceptance) after its first write a chunk
+  may use `LATE_PER_TICK` (twice the budget): a late clump of fences (light thread behind, write-to-send lag up to 35
+  ticks) or readiness above 12 a tick for over a second spreads at 24 a tick instead of reaching the client at once;
+  pacing past 1 s adds only that spread (GameTest `lateFencesStillSpread`). A waiting chunk keeps its light hold and later writes join it (a
+  superseded revision leaves the queue, its new fence queues it again); vanilla's own block deltas for it (fire, player
+  edits) still reach the client's old blocks meanwhile. Unpaced, a 1 Mt wave crossing the Silo city in view sent a
+  viewer at 3.9 km up to 95–105 whole chunks in one tick, ~600 in 3 s; GameTests `readyChunksGoPacedToEachViewer` (two
+  viewers), `readyChunkGoesAtItsWaitLimit`. The client re-creates every block entity of a
+  whole chunk, and vanilla drops each replaced ticker from the level's list by a single `ArrayList` removal (MC-117075,
+  removed × tickers a tick): with 20,074 chests ticking in view on the Silo map, the tick after a frame that loaded
+  30–134 ruined chunks took 200–300 ms, worst during G1 concurrent marking. `mixin/level/BlockEntityTickerRemovalMixin`
+  drops exactly the tickers the loop found removed, in one pass after it; what ticks and when is unchanged (GameTests
+  `removedTickersLeaveInOnePass`, fails without it; `reboundWrapperKeepsTicking`: a wrapper removed after its turn and
+  rebound stays, as in vanilla).
+  GameTests: `heavyRuinsGoWholeAfterTheirLight` (the client's light is rebuilt from its light before the write and every
+  payload's data/empty masks in order, unmentioned sections kept, and must equal the server's right after the whole
+  chunk: comparing payload and server while skipping absent sections passed a packet with no light at all),
+  `heavyRuinsAsDeltasGiveTheSameChunk` (the same ruins through deltas, both client chunks equal the server's),
+  `lightWaitsForTheWholeChunk` (light thread held, a light mark on the waiting chunk reaches the client without the
+  hold), `blackoutLampsGoWholeAfterTheirLight` (64 lamps in two budgeted passes whole, 3 lamps as deltas),
+  `firstFenceCannotSendSecondWritesWithUnprocessedLight` (one packet with both writes' light),
+  `lightHoldExpiresBeforeALaterWriteRestartsIt` (the 200-tick deadline and restart). Measuring client stalls:
+  `jstack -l` and `ThreadMXBean.dumpAllThreads(true, true)` walk the heap at a safepoint, 115–250 ms each on the
+  full-pack client (probes every 0.5 s turned a 4 s stall into 13 s); sample the render thread with
+  `Thread.getStackTrace` (the scenario client's `incoming.hitch` probe) and subtract `-Xlog:safepoint` dump time. Its
+  stall stacks carry Mojang's own line numbers, not the decompiled sources': map a line with `javap -l -c` on the
+  class in Prism's `libraries/net/neoforged/neoforge/<version>/neoforge-<version>-client.jar`. A
+  whole chunk costs the wire more than its deltas (Silo city chunks ~11 KB compressed against ~0.2 KB for 35 deltas);
+  vanilla sends chunks at that size as a player moves, unpaced by our code: not measured for a conventional blackout
+  over a home uplink.
 - `StallWatch` samples the server stack every 0.5 s while stalled. After a stall longer than 2 s, within or between
   ticks, it logs `Server thread stalled for N s` with common stack locations. A single-player pause is not a stall.
   Vanilla's `Can't keep up` is accumulated lateness; the lane report only sees ticks.
@@ -96,6 +154,14 @@ paths:
   Legacy admission is itself a budgeted unit: pending positions own no tickets, a bounded scan drops unloaded or
   already marked entries and chooses the nearest player chunk. Only one repair can hold its source-context ring;
   normal live-edit leases remain independent. Shutdown drops pending legacy positions and drains committed edits.
+  Recovery checks go to vanilla's one light-engine queue in slices of at most `BlockLighting.LIGHT_SLICE` (256)
+  checks in one chunk (the engine orders tasks by chunk, so a fence on one chunk does not cover another's checks):
+  the next slice waits until the engine processed the last. The scan resumes at a cell; every move to another section
+  (including past one whose storage vanished between slices) or chunk starts at its first cell (GameTest
+  `light_repair_cursor`). A pending slice or fence is `blocked`, admitted work rather than an unready area. Server-thread budgets do not bound that queue, and a moving
+  player's synchronous chunk load needs a light task from it: whole sections per unit queued 195,000 checks in the
+  minute after a 1 Mt blackout (every pre-existing chunk under the outage counts as legacy) and held such loads
+  0.3–0.8 s (GameTest `light_repair_slices`).
 - A walk over chunks that skips most of them still charges its time budget for the skips and stays bounded to the
   area it searches (`FireWatch.box`).
 

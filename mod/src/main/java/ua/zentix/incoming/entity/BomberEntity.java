@@ -21,6 +21,7 @@ import java.util.ArrayList;
 import ua.zentix.incoming.registry.ModEntities;
 import ua.zentix.incoming.strike.FlightScale;
 import ua.zentix.incoming.strike.VirtualFlights;
+import ua.zentix.incoming.strike.RoundEnd;
 import ua.zentix.incoming.strike.WeaponSpec;
 import ua.zentix.incoming.strike.WeaponType;
 import ua.zentix.incoming.target.Target;
@@ -241,6 +242,7 @@ public class BomberEntity extends StrikeProjectile {
         if (released) return false;
         released = true;
         setPhase(FlightPhase.EGRESS);
+        endRound(RoundEnd.recalled(position()));
         Incoming.LOG.info("B-2 {} recalled at {}: leaving without a drop (off-world {})", getUUID(), blockPosition(), isVirtual());
         return true;
     }
@@ -253,12 +255,24 @@ public class BomberEntity extends StrikeProjectile {
         if (bomb == null) return;
         bomb.drop(position().add(0, -BombDrop.DROP_BELOW, 0), flight.forward().scale(speed), drop, goal, ownerId());
         bomb.setNuclear(nuclear);
+        // The round goes on in the bomb; the departing B-2 is no longer it.
+        bomb.attachRound(detachRound());
+        handCameraMark(bomb);
         shareAir(bomb);
         // The bomb UUID from projectile warnings identifies its B-2.
         Incoming.LOG.info("B-2 {} dropped bomb {} at {}, {} blocks from the aim point, {} above it (off-world {})", getUUID(), bomb.getUUID(),
                 blockPosition(), Math.round(position().subtract(drop).horizontalDistance()), Math.round(getY() - drop.y), isVirtual());
-        if (isVirtual()) VirtualFlights.launch(level, bomb);
-        else level.addFreshEntity(bomb);
+        if (isVirtual()) {
+            VirtualFlights.launch(level, bomb);
+            return;
+        }
+        boolean added = false;
+        try {
+            added = level.addFreshEntity(bomb);
+        } finally {
+            // refused entry, or a join listener threw: the bomb never flies, its round fails here instead of never
+            if (!added) bomb.discard();
+        }
     }
 
     /**

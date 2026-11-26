@@ -20,14 +20,17 @@ import ua.zentix.incoming.compat.DhUpdates;
 import ua.zentix.incoming.nuclear.model.BlastInjury;
 import ua.zentix.incoming.registry.ModDamageTypes;
 import ua.zentix.incoming.strike.ImpactCost;
+import ua.zentix.incoming.strike.StrikeOwner;
 import ua.zentix.incoming.strike.StrikeWorld;
 import ua.zentix.incoming.util.Terrain;
 import ua.zentix.incoming.work.UnitQueue;
 
 import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.SplittableRandom;
 import java.util.UUID;
 import java.util.function.BooleanSupplier;
@@ -74,7 +77,10 @@ public final class FragmentStrike implements UnitQueue.Job {
     private final Vec3 centre, axis;
     private final long seed;
     @Nullable
-    private final Entity direct, owner;
+    private final Entity direct;
+    /** Owner UUID: a hit names them as attacker while online ({@link StrikeOwner}). */
+    @Nullable
+    private final UUID owner;
     private final boolean glassRule, blockRule;
 
     private List<Body> bodies;
@@ -90,7 +96,7 @@ public final class FragmentStrike implements UnitQueue.Job {
     private boolean done;
 
     private FragmentStrike(@Nullable BlastArea area, List<StagedExplosion> after, BooleanSupplier happened, FragmentModel model, Vec3 centre,
-                           Vec3 axis, long seed, @Nullable Entity direct, @Nullable Entity owner, boolean glassRule, boolean blockRule) {
+                           Vec3 axis, long seed, @Nullable Entity direct, @Nullable UUID owner, boolean glassRule, boolean blockRule) {
         this.area = area;
         this.after = after;
         this.happened = happened;
@@ -109,7 +115,7 @@ public final class FragmentStrike implements UnitQueue.Job {
      * happened}).
      */
     static FragmentStrike queue(ServerLevel level, @Nullable BlastArea area, List<StagedExplosion> after, BooleanSupplier happened,
-                                FragmentModel model, Vec3 centre, Vec3 axis, long seed, @Nullable Entity direct, @Nullable Entity owner,
+                                FragmentModel model, Vec3 centre, Vec3 axis, long seed, @Nullable Entity direct, @Nullable UUID owner,
                                 boolean glassRule, boolean blockRule) {
         FragmentStrike job = new FragmentStrike(area == null ? null : area.retain(), after, happened, model, centre, axis, seed, direct, owner,
                 glassRule, blockRule);
@@ -246,6 +252,18 @@ public final class FragmentStrike implements UnitQueue.Job {
     private int applyBlocks(ServerLevel level) {
         int n = 0;
         BlockPos.MutableBlockPos m = new BlockPos.MutableBlockPos();
+        // the portion's positions asked of claim protection in one question
+        LongOpenHashSet refused = new LongOpenHashSet();
+        if (area != null) {
+            List<BlockPos> portion = new ArrayList<>();
+            for (int k = blockNext; k < Math.min(blockList.length, blockNext + BLOCK_PORTION); k++) portion.add(BlockPos.of(blockList[k]));
+            List<BlockPos> allowed = new ArrayList<>(portion);
+            area.claims().filter(level, allowed);
+            if (allowed.size() < portion.size()) {
+                Set<BlockPos> may = new HashSet<>(allowed);
+                for (BlockPos p : portion) if (!may.contains(p)) refused.add(p.asLong());
+            }
+        }
         for (; blockNext < blockList.length && n < BLOCK_PORTION; blockNext++, n++) {
             long p = blockList[blockNext];
             m.set(p);
@@ -262,6 +280,7 @@ public final class FragmentStrike implements UnitQueue.Job {
             }
             boolean edgesReady = Terrain.neighbourhoodReady(level, cx, cz);
             if (!edgesReady && !Terrain.readyAround(level, Vec3.atCenterOf(m), Warheads.EDGE)) continue;
+            if (refused.contains(p)) continue;
             ua.zentix.incoming.work.BlockLighting.changed(level, m);
             level.setBlock(m, to, edgesReady ? Block.UPDATE_ALL : Warheads.EDGE_FLAGS);
             touched.add(ChunkPos.asLong(cx, cz));
@@ -290,7 +309,7 @@ public final class FragmentStrike implements UnitQueue.Job {
             // fragments make their own wounds, not a repeat of the wave's hit: the wave's invulnerability window does
             // not absorb them
             e.invulnerableTime = 0;
-            e.hurt(ModDamageTypes.source(level, ModDamageTypes.FRAGMENT, direct, owner), dmg);
+            StrikeOwner.hurt(e, ModDamageTypes.source(level, ModDamageTypes.FRAGMENT, direct, StrikeOwner.online(level, owner)), dmg);
         }
         return n;
     }

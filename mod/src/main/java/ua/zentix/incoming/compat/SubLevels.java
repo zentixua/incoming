@@ -77,6 +77,101 @@ public final class SubLevels {
         }
     }
 
+    /**
+     * A block's own frame on a craft: its plot coordinates and directions mapped to the world by the craft's current pose
+     * (position, rotation, scale). Plain types only, so classes holding one load without Sable.
+     */
+    public interface Frame {
+        /** World point of plot point {@code plot}. */
+        Vec3 toWorld(Vec3 plot);
+
+        /** World direction (unit) of plot direction {@code dir}. */
+        Vec3 toWorldDirection(Vec3 dir);
+
+        /** Plot direction (unit) of world direction {@code dir}. */
+        Vec3 toPlotDirection(Vec3 dir);
+
+        /**
+         * World velocity of the craft's body at world point {@code at}, blocks/tick: its linear velocity plus its spin
+         * about its centre ({@link #VELOCITY_PER_TICK} from Sable's per-second rigid-body velocity).
+         */
+        Vec3 velocity(Vec3 at);
+    }
+
+    /** Sable's rigid-body velocities are per second (Rapier); the mod's speeds are per tick. */
+    public static final double VELOCITY_PER_TICK = 1.0 / 20;
+
+    /**
+     * Block {@code pos} has a place in the world now: off the plot grid, or in the plot of a loaded craft. A plot block
+     * whose craft is not loaded has none: its coordinates are a distant corner of the world.
+     */
+    public static boolean located(Level level, net.minecraft.core.BlockPos pos) {
+        return !inPlotGrid(level, new net.minecraft.world.level.ChunkPos(pos)) || carrying(level, pos) != null;
+    }
+
+    /** The frame of the craft carrying block {@code pos} (its plot chunk); null on the ground or while that craft is not loaded. */
+    @Nullable
+    public static Frame carrying(Level level, net.minecraft.core.BlockPos pos) {
+        net.minecraft.world.level.ChunkPos chunk = new net.minecraft.world.level.ChunkPos(pos);
+        if (!inPlotGrid(level, chunk)) return null;
+        SubLevelAccess sub = containing(level, chunk);
+        return sub == null ? null : new Frame() {
+            @Override
+            public Vec3 toWorld(Vec3 plot) {
+                try {
+                    return sub.logicalPose().transformPosition(plot);
+                } catch (RuntimeException | LinkageError e) {
+                    fail(e);
+                    return plot;
+                }
+            }
+
+            @Override
+            public Vec3 toWorldDirection(Vec3 dir) {
+                try {
+                    Vector3d d = sub.logicalPose().orientation().transform(new Vector3d(dir.x, dir.y, dir.z));
+                    return new Vec3(d.x, d.y, d.z).normalize();
+                } catch (RuntimeException | LinkageError e) {
+                    fail(e);
+                    return dir.normalize();
+                }
+            }
+
+            @Override
+            public Vec3 velocity(Vec3 at) {
+                try {
+                    Vec3 plot = sub.logicalPose().transformPositionInverse(at);
+                    Vector3d v = companion().getVelocity(level, sub, new Vector3d(plot.x, plot.y, plot.z), new Vector3d());
+                    return new Vec3(v.x, v.y, v.z).scale(VELOCITY_PER_TICK);
+                } catch (RuntimeException | LinkageError e) {
+                    fail(e);
+                    return Vec3.ZERO;
+                }
+            }
+
+            @Override
+            public Vec3 toPlotDirection(Vec3 dir) {
+                try {
+                    Vector3d d = sub.logicalPose().orientation().transformInverse(new Vector3d(dir.x, dir.y, dir.z));
+                    return new Vec3(d.x, d.y, d.z).normalize();
+                } catch (RuntimeException | LinkageError e) {
+                    fail(e);
+                    return dir.normalize();
+                }
+            }
+        };
+    }
+
+    /** Plot blocks that craft carry at world point {@code at} now (one per craft whose bounds hold it), nearest craft first. */
+    public static List<net.minecraft.core.BlockPos> plotBlocksAt(Level level, Vec3 at) {
+        List<net.minecraft.core.BlockPos> out = new ArrayList<>();
+        for (SubLevelAccess s : near(level, at, 0.5)) {
+            net.minecraft.core.BlockPos b = net.minecraft.core.BlockPos.containing(toPlot(s, at));
+            if (inPlotGrid(level, new net.minecraft.world.level.ChunkPos(b))) out.add(b);
+        }
+        return out;
+    }
+
     /** Craft center in the world. */
     public static Vec3 center(SubLevelAccess sub) {
         try {

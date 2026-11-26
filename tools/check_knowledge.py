@@ -6,12 +6,17 @@ changes what agents know. Checks:
   - CLAUDE.md is exactly `@AGENTS.md` (Claude Code reads AGENTS.md through it; Codex reads AGENTS.md directly).
   - AGENTS.md <= AGENTS_MAX bytes: Codex stops reading project AGENTS.md files at 32 KiB (project_doc_max_bytes;
     its global ~/.codex/AGENTS.md is not counted, measured 20.11), and every line costs every session attention.
+  - Every .claude/rules/*.md is <= RULE_MAX bytes (an agent reads the whole rule before touching its paths; a 190 KB
+    rule costs ~50k tokens of every such session), except RULE_OVERSIZE entries, whose ceiling only falls: rewrite
+    instead of appending, split by paths, then drop the entry.
   - Every .claude/rules/*.md has strict frontmatter with a `paths:` list (Claude Code treats a rule with broken
     frontmatter as unscoped: it would load into every session) whose globs each match a tracked file (a rename leaves
     no dead rule), and appears in AGENTS.md's rule list; every rule AGENTS.md lists exists; no nested rule folders
     (Claude Code reads .claude/rules recursively, the list and the hooks do not).
   - The marketplace lists the `incoming` plugin at its folder; the plugin's hooks.json registers knowledge.py for
     SessionStart, InstructionsLoaded, PostToolUse and Stop; every hook script named exists.
+  - Rules that must always hold keep their anchor text in their home (ANCHORS), checked where the plugin's skills
+    exist: a rewrite that drops the rule fails here instead of silently.
   - Public repository: no IPv4 addresses (except loopback/any/multicast), private mounts, personal e-mail addresses
     or claude.ai links in AGENTS.md, rules or any plugin file.
 Run: python3 tools/check_knowledge.py [repo root]; exit 1 with the list of problems.
@@ -26,10 +31,30 @@ import sys
 from pathlib import Path
 
 AGENTS_MAX = 28 * 1024
+RULE_MAX = 64 * 1024
+RULE_OVERSIZE = {"client-fx.md": 181_752}  # bytes; lower it when the rule shrinks, drop it once under RULE_MAX
+RULE_SLACK = 1024  # an oversized rule may sit this far under its ceiling; further shrinking must lower the ceiling
 HOOK_EVENTS = {"SessionStart", "InstructionsLoaded", "PostToolUse", "Stop"}
 HOOK_COMMAND = 'python3 "${CLAUDE_PLUGIN_ROOT}/hooks/knowledge.py"'
 POST_TOOLS = {"Read", "Edit", "Write", "MultiEdit", "NotebookEdit", "Grep", "Glob", "Bash"}
 PLUGIN = Path(".claude/plugins/incoming")
+# home file -> (anchor regex, the rule it guards)
+ANCHORS = {
+    PLUGIN / "skills/look/SKILL.md": [
+        (r"## \d+\. Iterate in the dev client; whole-pack takes only for acceptance",
+         "look changes iterate in the standard dev client in seconds; whole-pack takes only for the acceptance set"),
+        (r"`/tick freeze`", "the defect's moment is held with vanilla /tick freeze, the burst plays once per session"),
+    ],
+    Path("AGENTS.md"): [
+        (r"Look\s+changes\s+iterate\s+in\s+the\s+dev\s+client", "look changes iterate in the dev client"),
+        (r"whole-pack\s+takes\s+and\s+the\s+matrix\s+only\s+for\s+the\s+final\s+set",
+         "whole-pack takes and the matrix only for the final set"),
+    ],
+    Path("docs/dev-pipeline.md"): [
+        (r"--quickPlaySingleplayer", "the dev client opens the saved test world directly (vanilla quick play)"),
+        (r"AllowEnhancedClassRedefinition", "code goes into the running client by hot swap on JetBrains Runtime"),
+    ],
+}
 PRIVATE = [
     (re.compile(r"\b(?!127\.0\.0\.1\b|0\.0\.0\.0\b|224\.)(?:\d{1,3}\.){3}\d{1,3}\b"), "IPv4 address"),
     (re.compile(r"/mnt/project-files"), "private claude.ai project files path"),
@@ -79,6 +104,16 @@ def check(root: Path) -> list[str]:
             problems.append(f"{f.relative_to(root)}: nested rule files are not supported; keep rules flat")
     for f in rules:
         text = f.read_text(encoding="utf-8")
+        size = len(f.read_bytes())  # raw bytes, as read into a session
+        ceiling = RULE_OVERSIZE.get(f.name, RULE_MAX)
+        if size > ceiling:
+            problems.append(f"{f.name} is {size} B > {ceiling} B: rewrite old text instead of appending, or split the "
+                            "rule by paths")
+        elif f.name in RULE_OVERSIZE and size <= RULE_MAX:
+            problems.append(f"{f.name} is under {RULE_MAX} B now: drop it from RULE_OVERSIZE")
+        elif f.name in RULE_OVERSIZE and size < ceiling - RULE_SLACK:
+            problems.append(f"{f.name} shrank to {size} B: lower its RULE_OVERSIZE ceiling to that size, so it cannot "
+                            "grow back")
         globs = rule_paths(text)
         if not globs:
             problems.append(f"{f.name}: no strict `paths:` frontmatter (only `paths:` with `  - \"glob\"` items and an "
@@ -120,6 +155,14 @@ def check(root: Path) -> list[str]:
                                 registered.add(event)
             for event in sorted(HOOK_EVENTS - registered):
                 problems.append(f"hooks.json: {event} does not run hooks/knowledge.py")
+
+    if (root / PLUGIN / "skills").is_dir():
+        for home, anchors in ANCHORS.items():
+            text = (root / home).read_text(encoding="utf-8") if (root / home).is_file() else ""
+            for rx, rule in anchors:
+                if not re.search(rx, text):
+                    problems.append(f"{home}: lost the rule \"{rule}\" (anchor `{rx}`): restore it or move the anchor "
+                                    "with the rule")
 
     public = [agents_path, *rules, *[p for p in plugin.rglob("*") if p.is_file() and "__pycache__" not in p.parts]]
     for f in public:

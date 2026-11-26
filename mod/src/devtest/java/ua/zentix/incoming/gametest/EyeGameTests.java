@@ -111,7 +111,9 @@ public final class EyeGameTests {
         creative.setGameMode(GameType.CREATIVE);
         NuclearWarhead.expose(level, d, creative, null);
         h.assertTrue(FlashEyes.scars(creative).isEmpty(), "in creative mode burned my retina");
-        FakePlayer owner = player(h, 0, 0), friend = player(h, 0, -45, false), enemy = player(h, 0, -45, true);
+        // the launcher is credited by UUID while online (StrikeOwner): a real player in the player list
+        java.util.UUID owner = ProgressGameTests.Credited.online(h, "incoming_eyes_owner", 0, Vec3.atBottomCenterOf(h.absolutePos(CENTER.above()))).getUUID();
+        FakePlayer friend = player(h, 0, -45, false), enemy = player(h, 0, -45, true);
         NuclearWarhead.expose(level, d, friend, owner);
         h.assertTrue(FlashEyes.scars(friend).isEmpty(), "blowing up a player burned the retina of someone whom the rules do not allow to be injured");
         NuclearWarhead.expose(level, d, enemy, owner);
@@ -172,7 +174,7 @@ public final class EyeGameTests {
 
     /** 15 kt in air in {@code burst}; {@code scale} - blocks per meter. */
     private static Detonation detonation(GameTestHelper h, Vec3 burst, float scale) {
-        return new Detonation(NuclearGameTests.IDS.incrementAndGet(), burst, h.absolutePos(CENTER).getY(), 15, false, h.getLevel().getGameTime(),
+        return new Detonation(NuclearGameTests.nextId(h.getLevel()), burst, h.absolutePos(CENTER).getY(), 15, false, h.getLevel().getGameTime(),
                 0, 0, 20_000, 7, scale, false, Detonation.OLD_WAVE);
     }
 }

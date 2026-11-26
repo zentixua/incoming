@@ -24,9 +24,10 @@ paths:
   the reproduced position and 31 more offsets.
 - CI shards GameTest over six machines (`-PgametestShard=i/n`, `GameTestShards`): each batch stays in one shard; shards
   balance by `gametest-durations.json`; `tools/gametest_durations.py` refreshes the table from shard logs when durations
-  diverge noticeably. CI has no Lithium run: the mod does not touch what Lithium replaces (block-entity ticking,
+  diverge noticeably. CI has no Lithium run: the mod does not touch what Lithium replaces (when block entities tick,
   `Explosion.explode` loop); `-PwithLithium` runs GameTest with Lithium as on the host (absent from the jar and
-  `mods.toml`), for manual compatibility checks.
+  `mods.toml`), for manual compatibility checks. In `Level.tickBlockEntities` Lithium wraps `shouldTickBlocksAt` and our
+  ticker-removal mixin wraps the removal calls: a change to that mixin reruns `be_ticker_.*` with `-PwithLithium`.
 - Optional LSS integration: `./gradlew runGameTestServer -PwithLss '-PgametestOnly=lss_.*'`. The runtime jar defaults
   to `lss_version`; `-PlssTestVersion=<Modrinth version ID>` checks another supported LSS runtime without changing the
   compile API. The GameTest server needs `lss.test.integratedServer=true` (the Gradle flag supplies it). Tests register
@@ -36,6 +37,15 @@ paths:
   use background threads/wall time, so these tests run at game pace and wait for actual receipts/rows, never a fixed
   sleep. A no-op store-policy receipt fences queued deletes before a test deposits replacement bytes; the asynchronous
   store can otherwise apply an older unconditional delete after the test's new deposit.
+- Sable craft in GameTests (`CraftLauncherGameTests`): a craft assembled on a fresh platform can fall through it
+  before Sable has built that ground's collision (to y −1373 in one run), so a test that needs a pose holds the craft
+  by teleporting it every tick through Sable's `PhysicsPipeline` (`Hold`: lifted, at rest, turned as the test sets).
+  Sable's `sub_level` commands do not parse a UUID selector there (teleport, remove fail silently with suppressed
+  output); call the pipeline and `SubLevelContainer.removeSubLevel`. A craft left behind falls on through the void,
+  simulated, and broke a later shard's timing-paced `collapse` test; remove every craft a test made. A body velocity set through the
+  pipeline is reported by Sable (`getVelocity`) but not integrated horizontally in the GameTest server, so tests read
+  velocity laws from Sable's reported velocity, not from the craft's motion. The world bounds of a craft
+  (`SubLevels.center`) are not centred vertically on its blocks; compare horizontally.
 - Local batch subset: `./gradlew runGameTestServer -PgametestOnly='<batch name regex>'` (`GameTestShards.only`, works
   with `-PgametestShard`). Nuclear ground-trace checks use batch `nuke_scorch`.
 - GameTest places the template 1 block above its origin; without `skyAccess = true`, a barrier ceiling covers the
@@ -132,6 +142,17 @@ paths:
   The camouflet's three-column displacement limit remains; fallen-block count is a separate quantity, not a crater
   radius adjustment.
 
+- Redstone fixtures: a piston base is a `moving_piston` while it moves, so reading `EXTENDED` from it throws inside
+  `onEachTick` and crashes the whole GameTest server (every later batch is lost); check the block first. A comparator
+  placed by `setBlock` never reads its input until a neighbour update reaches it (none comes from its own placement):
+  place it before the block it reads changes (loading a magazine updates it), then allow its 2-tick delay
+  (`RedstoneGameTests`).
+
+- Unit tests share one JVM: a test calling `Bootstrap.bootStrap()` must first stub the mod list as `PackDocsTest` does
+  (`if (LoadingModList.get() == null) LoadingModList.of(…)`), or NeoForge's feature flags throw inside `Blocks`'
+  static init, the class stays failed for the whole JVM, and dozens of unrelated tests (Voxy, LSS, Mockito mocks of
+  `MinecraftServer`) fail after it with `NoClassDefFoundError`.
+
 - Fixed surface-baseline seeds and `blast_crater_seed` regression: see `warhead.md`.
 
 - Late-exposure fixtures measure pulse/wave damage, independently of ground fire. Saved-zone settlement can lay
@@ -156,6 +177,18 @@ paths:
   (`RuinPlanner.leavesRubble`): a lone test block must sit where it leaves none (`blastBreaksLightKeepsMasonryFellsTrees`).
 - Background ruin workers run in wall time (0.5–1.3 s for a 1 kt chunk locally, 50–510 unthrottled ticks): a test that
   waits for them runs at game speed (`chunkWithheldUntilRuins`), or CI's unthrottled ticks spend its timeout first.
+  Game speed still races them: a check whose outcome depends on when background work lands finishes it at each tick
+  instead (`BackgroundSettle.settle`: zone and settlement layouts, chunk I/O answers, `RuinWorkers`, then
+  `InstantChunks.settle` for tickets), with counting work clocks (the shared one and the preparation's own,
+  `usePreparationClockForTest`) and a load pace that admits every load (`work.OpenLoadPace`), so the result depends on
+  ticks only; its 60 s wall limit only catches a hang. At 50 ms a tick, whether `nuke_prep_border`'s disk plans are
+  ready by its detonation follows the runner, and with it what the zone behind the wave has to do.
+- Detonation numbers of a check come from the level's counter (`NuclearGameTests.nextId`), the one sequence real
+  strikes use: a chunk a check ruined keeps that number (`CHUNK_SCAR`), and the ruin queue skips a chunk whose mark is
+  not below a detonation's number, while the preparation still plans it, so its zone square is held to the end
+  (DIAG “finished plan, no queued work”; “prepared plan … not queued”). A number from a separate counter above the
+  level's outranks every later strike check on the grid beside it; `nuke_prep_border` marks its wall chunk from the
+  counter first and must still leave no plan and no held square.
 - Light leases retain chunks after a fixture removes its own ticket, until committed light changes can be saved.
   Assert partial conversion when removing that ticket, not at eventual unload (`grid_tower`). Fixtures isolating
   ScarQueue neighbor handoff seed current-light chunks with `LIGHT_REPAIRED`: prior batches' scar/outage contexts
@@ -169,7 +202,10 @@ paths:
   reshuffles the shards, so order-dependent tests fail on unrelated PRs. Reproduce locally with the same
   `-PgametestShard=i/6` after rebasing on `origin/main` (the split is deterministic), run the batch alone a few times,
   name the shared state by number; never skip the test.
-- `FakePlayer.die()` is a no-op: test death with a real `ServerPlayer`. After a blast, fire as well as rubble may fill
+- `FakePlayer.die()` is a no-op: test death with a real `ServerPlayer`. A "restart" probe of a `noSave` entity type
+  (debris, SAM missile) cannot use `Entity.save` (returns false): read its data back with `saveWithoutId` + `load` on a
+  new entity, as `RuleGameTests`/`OwnerGameTests` do. An owner in another level is a real `ServerPlayer` built on that
+  level and put in the player list (`OwnerGameTests.elsewhere`). After a blast, fire as well as rubble may fill
   a broken block's spot: assert the block is gone, not that the spot is air.
 - A check that every position a blast chose ends empty holds only for the explosion alone: the collapse's rubble (the
   building's own material) and settled debris rightly fall into the holes, at positions that vary with where the runner
@@ -179,3 +215,27 @@ paths:
   for a slot or state) must report its failed bound with another exception (`IllegalStateException`), or the retry skips
   the done fixture and passes (`CollapseGameTests.snapshotStepsStayInTheirSlice`).
 
+- A check that needs a pack maker's datapack (the guide's examples, a foreign item in a `c:` tag) loads a real one with
+  `DataPackFixture`: files in the world's `datapacks/`, then the reload `/datapack enable` makes. On the server thread
+  `reloadResources` finishes inside the call (`managedBlock`, 2–4 s with Create) and swaps tags, data maps, recipes and
+  advancements server-wide, so each such test has its own batch and unloads the pack before it succeeds (on failure too).
+  A test sequence step may throw only `GameTestAssertException`: any other exception there (a failed reload, a file
+  error) crashes the whole GameTest server. The GameTest server always has Create:
+  recipes without it are checked by `RecipeTagsTest` against the tag files on the classpath (`RecipeContract`: the four
+  bulk materials go in as `c:` tags, counts pinned).
+
+- A test that saves the server config (`/incoming rule`, `SERVER_SPEC.save()`) writes every value in memory, other
+  tests' temporary ones too, into `run/gametest/config/incoming-server.toml`, which outlives the run, and FML's watcher
+  reloads that file about 500 ms later on its own thread, replacing every value in memory. GameTest runs with values
+  set only in memory (`TestScale.realWaveOnStart`: CUSTOM preset, wave 1.0, over the file's GAME), so a reload in the
+  middle of a run hands every later nuclear test the wrong scale (`nuke_prep_border`, `dh_front` and
+  `nuke_settle_budget` failed; restoring the file can raise more than one reload). Set rules in memory (`set()`), as
+  `RuleGameTests.setArena` does; the one test that must prove the file (`rule_command`) puts back the original bytes,
+  waits until the watcher has been quiet for 2 s, then sets every server value back as it was (`RuleGameTests.Fence`).
+- The GameTest server has no profile cache (`MinecraftServer.getProfileCache()` is null): an offline UUID never resolves
+  to an operator there, so offline-operator rights (`Authority.level`) cannot be probed in GameTest; online rights come
+  from `MunitionGameTests.Listener`'s permission level. A fake player put into the server's player list needs a
+  connection with a channel (`PermissionGameTests.online`, `FuelFireGameTests.Watcher`): the server sends listed players
+  packets every 20 ticks (`MinecraftServer.synchronizeTime`), and a bare `FakePlayer` crashes the whole GameTest server
+  there. A permission-handler probe swaps `PermissionAPI`'s active
+  handler for its own batch only (`PermissionGameTests.Handler`), since the handler is server-wide.

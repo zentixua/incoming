@@ -35,8 +35,8 @@ import java.util.UUID;
 import java.util.stream.Stream;
 
 /**
- * Flashback replay ({@code replay} scenario: launch as in {@code launch}, with recording mods from zentixua/open-skies
- * and {@code recordingControls.quicksave} in Flashback settings): client leaves the world as with "Save and Quit";
+ * Flashback replay ({@code replay} scenario: launch as in {@code launch}, with recording mods from
+ * zentixua/open-skies-friends and {@code recordingControls.quicksave} in Flashback settings): client leaves the world as with "Save and Quit";
  * Flashback finishes the recording zip in its replay folder on exit; scenario opens that replay, seeks before the
  * first launch, and plays to the end. Camera (own replay player, the viewer) moves beside the projectile;
  * {@code replay_<name>.png} frames show projectile in flight ({@link #FLIGHT} ticks after appearance) and disappearance

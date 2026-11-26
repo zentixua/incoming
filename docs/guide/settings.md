@@ -16,12 +16,14 @@ Each player has their own, stored in `config/incoming-client.toml`.
 | Show strikes in flight | on | list of your projectiles and marks in the world |
 | Projectile camera on launch | off | the camera shows every launch by itself |
 | Binocular zoom | 4 | from 1.5 to 10 |
-| Mushroom cloud, dust wall and pall | MEDIUM | the fireball and the mushroom cloud with the water column of a burst on water, the dust wall of a nuclear blast wave, the dust and smoke over the area after it, the base surge over water, and the firestorm over a burning town, drawn as a volume; lower is lighter on a weak graphics card, and every setting lowers its own detail when the card falls behind (not while Flashback exports a video); OFF: no dust wall, no pall, no base surge and no firestorm, only the dust close around you and falling ash, and the fireball, the mushroom cloud and the water column at LOW |
+| Mushroom cloud and dust wave | MEDIUM | the fireball and the mushroom cloud with the water column of a burst on water, the dust wave of a nuclear blast (the dust it tears from the ground, spray over water and the base surge, from the front to the thin haze that drifts for hours) and the firestorm over a burning town, drawn as volumes; lower is lighter on a weak graphics card, and every setting lowers its own detail when the card falls behind (not while Flashback exports a video); OFF hides the dust wave and the firestorm, falling ash stays, and the fireball, the mushroom cloud and the water column are drawn at LOW |
 | Glow around fire | FAST | glow around fire, fireballs, flashes and rocket flames; FAST works it out from a coarser image and is cheaper, FULL is finer close to small and fine-detailed flames, OFF: no glow |
 | Hearing damage | on | muffled hearing and faint ringing after a blast wave that hurts the ears; torn eardrums from 5 psi |
 | Incoming's blast effects | on | the flash, fireball, smoke, dust, debris, blast wave, sound, echo, jolt and hearing loss of strike blasts, and the bunker bomb's impact, ground tremor, gas vent and collapse; off hides these effects but does not make another mod replace them; only your picture and sound change, destruction and damage are the server's; air defense hits and nuclear blasts stay |
 | Muffle distant and hidden strikes | on | distant strikes lose high tones, hidden ones sound muffled, and inside the dust pall all distant sounds are muffled |
 | Hints already shown | empty | first-use hints this game has already shown or whose action you have already used, such as the console hint the first time you hold a designator; clear the list to see them again |
+
+The game prepares the mushroom cloud and dust wall while loading resources. If the graphics card spends at least 250 ms but less than one second drawing the nuclear dust in one frame, the nuclear volume, including the dust wave, drops to its lowest detail for the rest of the session. At one second or more, the nuclear volume turns off for the rest of the session.
 
 The mod's sounds follow the Ambient/Environment volume slider.
 
@@ -41,17 +43,20 @@ Start the world/server once to create it. NeoForge uses a world override instead
 
 Edits to the active file reload automatically unless NeoForge's config watcher is disabled; then restart the
 world/server. The most useful settings are below; the rest are in the same file, each with a comment.
+Operators can also read and change some of these world rules in the game with
+[`/incoming rule`](commands.md#world-rules), which writes the same file.
 
 | Key | Default | What it does |
 |---|---|---|
-| `launch.designator_for_everyone` | on | the designator works for all players, not only operators |
+| `launch.designator_for_everyone` | on | the designator works for all players, not only operators; a permission mod can override it per player ([permissions](packs.md#permissions)) |
 | `launch.max_salvo`, `max_spread` | 30, 150 | largest salvo and spread |
 | `launch.max_active_per_player` | 0 | rejects a new order when the player already has this many active rounds; counts flight, rounds on launchers, unfired salvo rounds and nuclear orders waiting for a second key. One accepted salvo can exceed the limit; operators are exempt; 0: no limit |
 | `launch.sight_rules` | on | [spotting](rules.md#spotting): strike only spotted targets |
 | `world.early_warning` | on | an early-warning network exists: sirens, target banners and nuclear launch notices. Off: only the owner gets flight data/countdowns; other players rely on sight, sound or their SAM radar. Legacy `world.siren` migrates automatically; an explicit new key takes precedence |
 | `world.block_damage`, `world.fire` | on | conventional strike destruction and fires; nuclear strikes have separate switches below |
+| `world.shatter_glass`, `world.debris_stay` | on, on | the blast wave breaks glass; clods, rubble and wreck parts stay as blocks |
 | `world.collapse` | on | [what a blast leaves without support falls](weapons.md#what-a-blast-does): storeys above blown-out walls and floors, the roof of a cavity above an underground bomb |
-| `nuclear.enabled`, `ops_only` | on, on | nuclear weapons exist; only operators and the host of a single-player or LAN world launch them |
+| `nuclear.enabled`, `ops_only` | on, on | nuclear weapons exist; only operators and the host of a single-player or LAN world launch them (a permission mod can grant others the right, [permissions](packs.md#permissions)) |
 | `nuclear.default_yield`, `max_yield` | 15, 100 | yield of a command without a number; largest allowed yield, kt (up to 1000 = 1 Mt) |
 | `nuclear.block_damage`, `nuclear.fires` | on | nuclear ruins/craters and thermal fires; independent of `world.block_damage` and `world.fire` |
 | `nuclear.black_rain` | on | smoke from the fires of a nuclear strike rains out downwind as black rain, washing a little radioactivity to the ground and contaminating skin and clothes; off: no black rain, the fires stay. Applies to new detonations |

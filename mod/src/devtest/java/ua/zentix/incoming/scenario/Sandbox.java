@@ -127,7 +127,28 @@ final class Sandbox {
     /** CPU renderer (Mesa llvmpipe, tools/soft_gl.sh): frames pace the world ({@link #paceFrame}). */
     private Boolean soft;
     /** Frames per tick while frames are due on a CPU renderer: a frame lands within half a tick of its second. */
-    private static final double FRAMES_PER_TICK = 2;
+    private static final double FRAMES_PER_TICK = framesPerTick(2);
+    /**
+     * Frames per tick while frames are due on a GPU: a frame is taken at the first render whose age reaches its second, so
+     * it lands within a few milliseconds of it, also after a frame that wrote its PNG (~0.1 s on the render thread); at whole
+     * ticks a 30 fps take's frames advanced 25–28 ms with a 45–145 ms jump
+     * every half second, and every moving thing in the clip lurched at ~2 Hz.
+     */
+    private static final double GPU_FRAMES_PER_TICK = framesPerTick(48);
+
+    /**
+     * Probe override of the frames per tick while frames are due ({@code fx/frames_per_tick} in the sandbox directory): a time
+     * lapse at 1 frame/s needs no 48 renders a tick, which stretched 10 game minutes over hours.
+     */
+    private static double framesPerTick(double otherwise) {
+        try {
+            double v = Double.parseDouble(java.nio.file.Files.readString(java.nio.file.Path.of("fx/frames_per_tick")).trim());
+            Incoming.LOG.info("SANDBOX frames per tick while frames are due: {}", v);
+            return v;
+        } catch (Exception e) {
+            return otherwise;
+        }
+    }
     /** Seconds before a due frame from which the CPU renderer's world is slowed ({@link #paceFrame}). */
     private static final double PACE_LEAD = 2;
     /** Rate from arming to the first measured frames (≈ 2 frames per tick at 4 frames/s, the smoke-filled llvmpipe rate). */
@@ -160,6 +181,8 @@ final class Sandbox {
     private int freshX;
     /** Camera: distance, height above ground, bearing from the point, height of the look point. */
     private double camDist = 60, camHeight = 10, camBearing = 90, camLook = 8;
+    /** Camera turn after facing the point, degrees of yaw ({@code cam}'s fifth number; 180 — looking away from it). */
+    private double camTurn;
     private boolean overlay;
     /** Zoom ×k ({@code zoom}): 1 — none. */
     private double zoom = 1;
@@ -220,6 +243,8 @@ final class Sandbox {
      * NuclearStrikes.detonateNow}).
      */
     private final java.util.Set<Integer> knownNukes = new java.util.HashSet<>();
+    /** {@code nuke … also}: (client tick due, server command) of detonations still to fire. */
+    private final List<Object[]> also = new java.util.ArrayList<>();
     private Vec3 firstSeen = Vec3.ZERO;
     private double closest = Double.MAX_VALUE;
     /** Nuke near the camera: how many runs there were (site — {@link #nearSite}). */
@@ -325,6 +350,12 @@ final class Sandbox {
         // effect clocks are world ticks: paused (resource reload, menu), effects stand still and frames wait
         if (mc.isPaused()) return;
         tick++;
+        for (var it = also.iterator(); it.hasNext(); ) {
+            Object[] a = it.next();
+            if ((int) a[0] > tick) continue;
+            it.remove();
+            onServer(false, server -> run(server, (String) a[1]));
+        }
         if (!ready) {
             if (tick == 1) setup();
             // ground under the point and the camera at the client
@@ -436,6 +467,7 @@ final class Sandbox {
                 camHeight = c.number(1, camHeight);
                 camBearing = c.number(2, camBearing);
                 camLook = c.number(3, camLook);
+                camTurn = c.number(4, 0);
                 placeCamera();
                 finish("ok");
             }
@@ -1198,6 +1230,7 @@ final class Sandbox {
         paved = -1;
         pending = Pending.SERVER;
         knownNukes.clear();
+        also.clear();
         ua.zentix.incoming.client.nuclear.ClientNuclear.detonations().forEach(a -> knownNukes.add(a.d.id()));
         Vec3 at = c.near() ? new Vec3(site.x, GROUND + 1, site.z - c.nearRange()) : new Vec3(site.x, GROUND + 1, site.z);
         onServer(true, server -> {
@@ -1255,6 +1288,12 @@ final class Sandbox {
             run(server, String.format(Locale.ROOT, "incoming nuke now at %.1f %.1f %.1f %d %s", at.x, at.y, at.z, (int) c.number(0),
                     c.air() ? "air" : "ground"));
         });
+        // nuke … also: the further detonations on the client's tick clock (world ticks: a paused client waits with them)
+        for (double[] a : c.also()) {
+            String order = String.format(Locale.ROOT, "incoming nuke now at %.1f %.1f %.1f %d %s", at.x + a[0], at.y, at.z + a[1],
+                    (int) c.number(0), c.air() ? "air" : "ground");
+            also.add(new Object[] {tick + (int) Math.round(a[2] * 20), order});
+        }
     }
 
     /**
@@ -1560,7 +1599,8 @@ final class Sandbox {
             mc.level.setDayTime(day);
             onServer(false, s -> s.overworld().setDayTime(day));
         }
-        if (tick < effectTick + Math.round(t * 20) || !fullSize(mc)) {
+        // the first render whose age reaches the frame's second (at whole ticks frames jittered by a render interval)
+        if ((tick - effectTick + partial) / 20.0 < t - 1e-4 || !fullSize(mc)) {
             // far from the next frame the world runs at full rate: pacing a whole 130 s take on llvmpipe (1–3 frames/s
             // with a mushroom in view) stretches it to tens of minutes; the last PACE_LEAD seconds settle the rate
             if (effectTick + Math.round(t * 20) - tick > PACE_LEAD * 20) pace(20);
@@ -1602,7 +1642,7 @@ final class Sandbox {
         if (paceLast != 0) {
             double frame = (now - paceLast) / 1e9;
             paceFrameS = paceFrameS == 0 ? frame : paceFrameS * 0.7 + frame * 0.3;
-            pace(1 / (FRAMES_PER_TICK * paceFrameS));
+            pace(1 / ((Boolean.TRUE.equals(soft) ? FRAMES_PER_TICK : GPU_FRAMES_PER_TICK) * paceFrameS));
         }
         paceLast = now;
     }
@@ -1612,15 +1652,23 @@ final class Sandbox {
         return (armed != null && armed.times.length > 0) || (capture != null && capture.next < capture.times.length);
     }
 
-    /** World rate, ticks/s (CPU renderer only; 20 restores); command only on a change of more than a tenth. */
+    /**
+     * World rate, ticks/s (20 restores); command only on a change of more than a tenth. Any renderer: a GPU take with a frame
+     * every 1/30 s writes each PNG on the render thread, and unpaced its effect runs several times ahead of the frames'
+     * seconds; the preset arming rate holds the first frames too, before a measured rate exists (at 20 ticks/s the second
+     * frame of a take whose first is due at once lands ~67 ms late).
+     */
     private void pace(double rate) {
         // render thread: the GL context answers only there, and only after the window exists
         if (soft == null) soft = ua.zentix.incoming.client.fx.layer.GpuWatch.software(com.mojang.blaze3d.platform.GlUtil.getRenderer());
-        if (!soft) return;
         double r = Math.max(1, Math.min(20, rate));
+        if (r == 20) {
+            // leaving the pacing window: the next due frame measures afresh, not across the idle gap
+            paceLast = 0;
+            paceFrameS = 0;
+        }
         if (r < 20 && Math.abs(r - paceRate) <= paceRate * 0.1) return;
         if (r == 20 && paceRate == 20) return;
-        if (r == 20) paceLast = 0;
         paceRate = r;
         // the manager itself, not /tick rate: the command's feedback would print into the frames' chat
         Incoming.LOG.info("SANDBOX tick rate {}", String.format(Locale.ROOT, "%.1f", r));
@@ -1682,6 +1730,7 @@ final class Sandbox {
         double y = GROUND + 1 + camHeight;
         String me = Minecraft.getInstance().player.getGameProfile().getName();
         server(String.format(Locale.ROOT, "tp %s %.2f %.2f %.2f facing %.2f %.2f %.2f", me, eye.x, y - 1.62, eye.z, site.x, GROUND + 1 + camLook, site.z));
+        if (camTurn != 0) server(String.format(Locale.ROOT, "execute as %s at @s run tp @s ~ ~ ~ ~%.2f ~", me, camTurn));
         placePane(eye, y);
         placeMob(eye);
     }

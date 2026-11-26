@@ -13,6 +13,7 @@ import org.jetbrains.annotations.Nullable;
 import ua.zentix.incoming.entity.InterceptorEntity;
 import ua.zentix.incoming.entity.StrikeProjectile;
 import ua.zentix.incoming.guidance.Homing;
+import ua.zentix.incoming.target.Sides;
 import ua.zentix.incoming.util.Terrain;
 
 import java.util.UUID;
@@ -23,7 +24,8 @@ import java.util.UUID;
  * tick ({@link Homing#lead}), with a lateral-acceleration turn limit ({@link Homing}, {@link InterceptorSpec#turnLimit}). The proximity
  * fuze bursts it at closest approach if within fuze radius ({@link #fuze}): a burst shoots the target down. There
  * is no die roll: a miss passes outside that radius; the target keeps flying and the missile turns after it while
- * fuel lasts. If the target disappears, gains a rider, or fuel runs out, the missile self-destructs in the air.
+ * fuel lasts. If the target disappears, gains a rider, becomes friendly to the SAM's owner, or fuel runs out, the missile
+ * self-destructs in the air.
  * Targets are only mod projectiles ({@link StrikeProjectile}), identified by UUID.
  * <p>
  * {@link DefenseWorld} runs flight with the same code inside and outside the loaded world: in ticking chunks
@@ -38,6 +40,8 @@ public final class Interceptor {
         KILL,
         /** Target disappeared (detonation, abort, left the world) or gained a rider: self-destruct. */
         LOST,
+        /** Target became friendly to the SAM's owner (a side change mid-flight): self-destruct. */
+        FRIENDLY,
         /** Fuel ran out: self-destruct. */
         FUEL,
         /** Hit ground or a structure. */
@@ -55,6 +59,9 @@ public final class Interceptor {
     private final UUID owner;
     /** Launch location (for the log). */
     private final String launcher;
+    /** SAM block it left; null in flight tests without one. */
+    @Nullable
+    private final BlockPos site;
     private Vec3 pos, dir;
     private double speed;
     private int age;
@@ -64,10 +71,20 @@ public final class Interceptor {
     private InterceptorEntity view;
 
     Interceptor(InterceptorSpec spec, UUID target, @Nullable UUID owner, String launcher, Vec3 rail, Vec3 dir) {
+        this(spec, target, owner, launcher, null, rail, dir);
+    }
+
+    /** Missile from the SAM at {@code site}. */
+    Interceptor(InterceptorSpec spec, UUID target, @Nullable UUID owner, BlockPos site, Vec3 rail, Vec3 dir) {
+        this(spec, target, owner, site.toShortString(), site, rail, dir);
+    }
+
+    private Interceptor(InterceptorSpec spec, UUID target, @Nullable UUID owner, String launcher, @Nullable BlockPos site, Vec3 rail, Vec3 dir) {
         this.spec = spec;
         this.target = target;
         this.owner = owner;
         this.launcher = launcher;
+        this.site = site;
         this.pos = rail;
         this.dir = dir.normalize();
         this.speed = spec.launchSpeed();
@@ -144,6 +161,11 @@ public final class Interceptor {
             world.burst(level, this, pos, null, End.LOST);
             return;
         }
+        // Friendly rounds are not targets: sides can change while the missile flies (a party joined, a team changed).
+        if (owner != null && Sides.friendly(level.getServer(), owner, t.ownerId())) {
+            world.burst(level, this, pos, null, End.FRIENDLY);
+            return;
+        }
         if (age >= spec.fuelTicks()) {
             world.burst(level, this, pos, null, End.FUEL);
             return;
@@ -208,6 +230,11 @@ public final class Interceptor {
 
     String launcher() {
         return launcher;
+    }
+
+    @Nullable
+    BlockPos site() {
+        return site;
     }
 
     /**

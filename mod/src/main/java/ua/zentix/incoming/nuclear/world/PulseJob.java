@@ -2,7 +2,6 @@ package ua.zentix.incoming.nuclear.world;
 
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
-import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.LivingEntity;
 import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.phys.AABB;
@@ -70,11 +69,10 @@ final class PulseJob {
 
     /** Work fitting within budget; true — pulse processed everyone. */
     boolean work(ServerLevel level, WorkClock clock) {
-        Entity ownerEntity = owner == null ? null : level.getPlayerByUUID(owner);
         while ((targets == null || next < targets.size()) && clock.canStart()) {
             long t0 = clock.begin();
             if (targets == null) targets = inRange(level, d);
-            else if (NuclearWarhead.expose(level, d, targets.get(next++), ownerEntity)) touched++;
+            else if (NuclearWarhead.expose(level, d, targets.get(next++), owner)) touched++;
             nanos += clock.end(t0);
         }
         if (targets == null || next < targets.size()) return false;

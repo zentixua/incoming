@@ -11,7 +11,7 @@ Doppler 3D sound. Public repository, public product with a large audience: no sl
 (Minecraft blocks, entities, characters). Played single-player, as an opened host world and on a whitelisted server; only the host is operator.
 Player-visible changes update the player guide in the same PR, both languages: docs/guide English, docs/guide/ru
 Russian (frames: `tools/client_scenario.sh guide`, `tools/guide_images.sh`). Nuclear design/deviations:
-docs/DESIGN-nuke.md. Neighbors: Open Skies pack (zentixua/open-skies), Almighty AI game-master bridge (zentixua/almighty).
+docs/DESIGN-nuke.md. Neighbors: Open Skies pack (zentixua/open-skies-friends), Almighty AI game-master bridge (zentixua/almighty).
 
 Read this file in full before work. **Before reading or editing files, open every area rule whose `paths:` header
 covers them; a path often belongs to several areas.** When planning before opening files, read the area rules by
@@ -21,7 +21,7 @@ path rules by themselves.
 **Where knowledge lives (one home per fact; no copies, no history, dates only as origin).** This file: session-wide
 rules, concepts and Artem's permanent decisions about the mod and the process. `.claude/rules/<area>.md`: one code
 area's structure and pitfalls. Plugin skills: procedures. Team and operations (roles, machines, servers, what needs
-Artem's word): the private `open-skies` repository's `.claude/rules/team.md`, loaded by project threads and, through
+Artem's word): open-skies-friends' `.claude/rules/team.md`, loaded by project threads and, through
 the laptop plugin, by laptop sessions. Live status: the lead's project memory. Claude Code auto memory is no home:
 other agents never see it. A changed fact is rewritten in its home in the same PR, and a rule that must always hold
 gets a test or check (`tools/check_knowledge.py` guards this layout). A checkout behind `origin/main` has outdated
@@ -46,13 +46,13 @@ instructions: work in a worktree from `origin/main`.
 - Never delete what your task did not create (worlds, saves, files, worktrees) without Artem's word; move surplus
   aside (`deploy.sh` uses `incoming-backup/`).
 - **Act as the engineer, finish without questions** (Artem, 04.11): Artem sets goals as a player; we decide how and
-  take obvious engineering steps without waiting. Once the applicable checks pass, merge your PR after green Итог and
-  review (workflow below). Ask only about goal changes or irreversible choices.
+  take obvious engineering steps without waiting. Ask Artem only what team.md reserves for his word.
 - **Plans are targets, not decisions** (Artem, 03.11, 20.11): a clearly better way found mid-work, even a fundamental
-  rewrite of an existing feature, is taken without asking and recorded in the PR. Limits stay: the concept below, real
-  size/shape and public steps by Artem's word.
+  rewrite of an existing feature, is taken without asking and recorded in the PR. Limits: the concept below, public
+  steps by Artem's word.
 - **Public steps** (GitHub release, version bump for a release, Modrinth, CurseForge, YouTube, replies to players)
-  require Artem's explicit instruction. A release candidate reaches him only after we tested it in game ourselves and
+  require Artem's explicit instruction. A release candidate reaches him only after we tested every changed look and
+  behavior in game ourselves under his conditions (look skill matrix, his shader pack and quality preset) and
   found nothing to fault; he approves, he does not test for us.
 - Store pages and the README first screen follow the usual popular-mod layout (`docs/store/listing.md`): banner and
   one line, 2–3 sentence intro, Features with GIFs/screenshots, video, requirements, FAQ, links, license small; no
@@ -74,15 +74,15 @@ cd mod && ./gradlew runScenarioSweep      # flight scenarios, all seeds; -Pscena
                                          # -PscenarioOnly=<regex> selects; -PscenarioRealChunks uses real loading
 cd mod && ./gradlew runScenarioRecord     # rerecord trajectory baseline; explain shifts in the scenario PR
 tools/client_scenario.sh nuke            # headless: mod/run/scenario/screenshots/*.png, audio.wav, logs
-tools/sandbox.sh shot <name> '<effect>'   # effect frames/WAV, shared GPU or CPU, never queued (client-scenario.md)
+tools/dev_client.sh start <save>         # the look loop (client-scenario.md)
 tools/stand/run.sh <name> ci:<branch> --packs none --scenes 100  # scene bench, ~3 GPU min; tools/stand/README.md
 tools/deploy.sh                          # jar → dist/ for friends and mods/ without pack auto-update
 python3 tools/logscan.py [--since 18:30]   # after play: mod errors, strikes, detonations, Sable
 ```
-Scripts using numpy/scipy/soundfile/Pillow declare dependencies in `# /// script` (PEP 723); run
+Scripts needing numpy/scipy/soundfile/Pillow declare them in `# /// script` (PEP 723); run
 `uv run tools/<script>.py`, install nothing into system Python. Without an instance (cloud/CI):
 `python3 tools/fetch_runtime_mods.py` → `./gradlew runGameTestServer -PmcModsDir=run/ci-mods`.
-CI checks each commit once, on `main` push and PR; branches without PRs get no CI, so open a draft immediately.
+CI checks each commit once, on `main` push and PR; branches without PRs get none: open a draft at once.
 Checks follow changed paths (`tools.md`); Итог decides merge, failing if any needed check fails or is canceled.
 Release steps: `tools.md`.
 A PR changing packet/entity-data formats bumps `IncomingNetwork.PROTOCOL`. A release with behavior/lang keys different
@@ -119,9 +119,10 @@ defense, `launcher/`, `grid/` blackout, `sound/`, `client/`, `work/` tick budget
    own model; more only when the simpler one fails, shown by a frame or number. Two errors: "childish" (finished
    objects at the wrong place/time, eyeballed numbers) and "excess" (complexity or cost invisible in game).
 4. **Presentation is free within plausibility.** Light, colour, contrast, billows, detail, movement, sound and camera
-   are strengthened toward the reference footage, marked `presentation:` in code, without changing facts. A real size
-   or shape changes only by Artem's word, as a marked deviation. Never add what reality lacks (fire on every block,
-   smoke from nowhere, impossible colour, impossible flight, 200 m craters, "space" effects).
+   are strengthened toward the reference footage, marked `presentation:` in code, without changing facts. A size, height
+   or shape serving the agreed look is the owner's call, never Artem's question (22.11), as a marked deviation.
+   Never add what reality lacks (fire on every block, smoke from nowhere, impossible colour/flight, 200 m craters,
+   "space" effects).
 - **Vanilla first** (Artem, 20.11): the look is built and accepted without shaders first; under a shader pack (Iris)
   every effect works and looks at least as good, never broken. Accept in both: vanilla frames, then one GPU
   shader-pack check on the last head.
@@ -131,8 +132,6 @@ defense, `launcher/`, `grid/` blackout, `sound/`, `client/`, `work/` tick budget
 - **Game launch, physical effects at the target.** Craft, press launch; target charge, blast, fragments, destruction
   and damage follow real specs/laws. Each number from `WeaponSpec` or law with nearby source; missing-data values
   marked `(est.)`, approximate laws identified.
-- **Judging the look:** sandbox frame beside the same `main` frame and the reference footage; the player's eye
-  decides, numbers inform. Before/after frames go to Artem.
 - **Picture first, then performance** (Artem, 25.10, 04.11, 08.11): optimization never visibly hurts the picture;
   quality presets let players fit their PC. Each effect has a frame-cost limit held at any strike count; redesign
   effects that cannot perform well without hacks, discard costly, barely visible detail. Optimize what is noticeably
@@ -142,9 +141,11 @@ defense, `launcher/`, `grid/` blackout, `sound/`, `client/`, `work/` tick budget
   radar or damage models. Shared class laws (inertia/bank, altitude-speed trade, gravity/drag/wind for unpowered,
   `guidance/`); game numbers in `WeaponSpec.Handling`, `Ballistic`, marked “not physical”.
 - **Fix causes, not outcomes; never glue** (Artem, 21.11). Correct the producing model, not its output; one law per
-  class; weapon-specific numbers in spec, not constants or weapon `switch`. One phenomenon on screen = one model: where
-  a real law and the wanted look disagree, build one presentation model for the look with physics only as its visible
-  inputs (where, when, how much, wind), never a law plus look corrections on its result. Review: glue is serious.
+  class; weapon numbers in spec. One phenomenon on screen = one model: where a law and the wanted look disagree, the
+  look wins: one presentation model, physics only as visible inputs (where, when, how much, wind), never a law plus
+  look fixes on it. Model handoff = crossfade; if the seam shows, the new model owns it all. No condition (water,
+  several detonations, a view) and no handoff returns to an older model unless Artem agreed to it.
+  Review: either is serious.
 - **Configure causes, not consequences.** Player sets conditions, world computes consequences. Four setting kinds:
   world rules (phenomena, permissions, salvos, flight time, real-product choices: nuclear yield 1–15 kt, burst height);
   map time/distance scale (`GAME` default, `REAL`, `CUSTOM`); performance (one work budget/tick, quality); convenience.
@@ -165,10 +166,10 @@ defense, `launcher/`, `grid/` blackout, `sound/`, `client/`, `work/` tick budget
   vanilla 72×, day-length mods 1×, stopped day real, sleep/`/time add` jump forward). Each detonation runs
   `nuclear/NukeClock`: real for the 20-minute show, then joins the world clock over a minute (`nuclear.md`). An
   effect never precedes its cause (`NukeClockTest`). No new time settings; durations stay in world hours.
-- **Physics deviations** only preset scale or Artem's explicit decision; mark every one “not physical” in code and
-  guide deviation list (game flight speeds/heights, wave 0.35 let players see approach/wave; real values in weapon
-  table). No silent deviations. Presentation boosts change no facts, so are not deviations.
-- **Complaints never repeat:** each fix gets a test/check that would catch recurrence.
+- **Physics deviations** only preset scale, Artem's decision or concept 4's owner call; mark every one “not
+  physical” in code and guide deviation list (game flight speeds/heights, wave 0.35; real values in weapon table). No
+  silent deviations. Presentation boosts change no facts, so are not deviations.
+- **Complaints never repeat:** each fix gets a test/check that would catch recurrence; a new model inherits them.
 
 ## Mod boundaries and compatibility
 Artem, 26.10: standard Minecraft mod practice, no extra custom principles.
@@ -180,7 +181,7 @@ Artem, 26.10: standard Minecraft mod practice, no extra custom principles.
   with source entity, own damage type); expose ours through tags/data/events too. No specific-mod code in main code.
   Truly needed integrations are optional `compat/` modules using public APIs, loaded only with that mod. Never adopt
   or disable other mods' mechanics/look (smoke/fire/sound).
-- **A mod conflicts with ours:** first its settings or pack choice (open-skies); its bug gets an issue to author;
+- **A mod conflicts with ours:** first its settings or pack choice (open-skies-friends); its bug gets an issue to author;
   needed integration goes in optional API `compat/` as above (Sable/DH/Voxy); crash without API gets narrow guard with
   code reason, removed when fixed upstream; fundamental incompatibility declared in `mods.toml`.
 
@@ -205,29 +206,29 @@ actually works, fix the real cause. **Sustainable pace** (Artem, 20.11): routine
 queues, little rework; each mission's budget is checked against its measured load (laptop-agents `mission`).
 - **One owner per task:** the owner implements, validates, handles review and merges; overlapping edits are
   coordinated; unfinished work is handed over with branch/PR, checked commit, measurements, risks and next action.
-  The owner chooses the implementation and records a substantial decision (context, alternatives, choice,
-  consequences) in the PR or a design document; disagreements are settled with code, tests or measurements.
+  The owner chooses the implementation and records a substantial decision in the PR or a design document;
+  disagreements are settled by code, tests or measurements.
 - **Ready-made first** (Artem, 22.10): search mods/addons/libraries/tools before custom code (Modrinth, CurseForge,
   GitHub; Fabric via Roxy/Sinytra Connector) and the mod's own systems (a new renderer only with a frame or measurement
   showing the existing one fails). Custom code: the reason in one PR line. Our ban
   on vanilla/other-mod mixins concerns our code, not an argument against other mods. A new mod or library that
   clearly helps is welcome: try briefly, tell Artem what it gives and costs; a new required pack mod needs his word.
 - **License** (Artem, 22.10): Incoming is GPL-3.0-only; copy code only under compatible licenses (GPL-3.0, MIT, CC0),
-  from All-Rights-Reserved or closed mods take ideas only (the license is in the jar's `mods.toml`).
+  from All-Rights-Reserved or closed mods take ideas only.
 - **Plan only large changes:** before coding, a few PR-description lines of what players see/hear and the law
   (existing mod law, new laws sourced). Small edits directly. A brief gives goal, decisions, references, done numbers,
   not the implementation. The player outcome stays fixed: fixing evidence stays in, new outcomes go to a follow-up PR.
 - **Validation:** code changes need build and touched-area GameTest (`./gradlew build`; GameTest through `tools/laptop_job.sh … --
   ./gradlew runGameTestServer -PgametestOnly=…`). Numeric claims get unit tests/GameTest; comment/guide promises held
-  by tests. Documentation-only changes use the applicable CI checks, without a game run. Open draft immediately
-  (CI only on PRs); split large work.
-- **Visual/audio:** edit → sandbox frame/WAV (`tools/sandbox.sh shot`) beside same `main` frame; before/after frames/
-  WAV in PR; where frames render: `client-scenario.md`. Scene bench (100-strike frame
-  cost versus `main`) only for changes that can change frame cost: render/FX code, shaders, particle or draw counts
-  (Artem, 30.10); once, on the final PR head after review; colors, textures, sounds, text, server, tools skip it. Never
-  merge above frame-cost limit or with a bench look flag unanswered in the PR (intended or fixed). No
-  full-pack Iris recording per PR. A new version for Artem's review (frames, clip, animation) first goes beside the one
-  he last saw, same times: what he accepted must still hold by number.
+  by tests. Documentation-only changes use the applicable CI checks, without a game run. Split large work.
+- **Visual/audio:** the `look` skill (scope, traits and mechanism before code; clips judged in motion); the player's
+  eye decides, numbers inform. Look changes iterate in the dev client (look skill); whole-pack takes and the matrix
+  only for the final set. Before/after frames/WAV in PR; where frames render: `client-scenario.md`. Scene bench
+  (100-strike frame cost versus `main`) only for changes that can change frame cost: render/FX code, shaders, particle
+  or draw counts (Artem, 30.10); once, on the final PR head after review; colors, textures, sounds, text, server, tools
+  skip it. Never merge above frame-cost limit or with a bench look flag unanswered in the PR (intended or fixed). No
+  full-pack Iris recording per PR. A new version for Artem's review (frames, clip, animation) first goes beside the
+  one he last saw, same times: what he accepted must still hold by number.
 - **Performance starts with measurement:** GPU time by layer parts (mod markers, bench line, F3), RenderDoc frame
   (`mod/run/renderdoc/`, Python analysis); edit the numerically identified cause, not a presumed model.
 - **One run answers everything** (Artem, 18.11): before any run that observes the system (test, measurement,
@@ -254,13 +255,15 @@ queues, little rework; each mission's budget is checked against its measured loa
   checks the first round's fixes and new serious defects in them); a defect class surviving both stops the work for the
   root-cause analysis above, not a third round. Merge only without an open serious finding: fixed, or recorded in the PR as an explicit
   limit. Before each release, one Codex audit of the whole `main` diff since the last release.
-- **Effort** (Artem, 19.11), for every agent, task and review: the working range is low/medium/high.
-  **medium** is the default. **high** for work that needs deep reasoning: diagnosis of an unknown cause, physics
-  laws, rendering, performance, concurrency, and reviews of such changes. **low** for mechanical work: renames,
-  moving or copying text, routine checks, collecting files or logs. Above high only when high demonstrably failed on
+- **Effort** (Artem, 19.11), for every agent, task and review: the range is low/medium/high.
+  **medium** by default. **high** for work that needs deep reasoning: diagnosis of an unknown cause, physics
+  laws, rendering, performance, concurrency, and reviews of such changes. **low**: mechanical work (renames,
+  moving text, routine checks, collecting files or logs). Above high only when high demonstrably failed on
   that task (a missed serious error or a wrong result), stated in the PR or report.
-- **Author or explicitly accepted work owner merges** (who owns a task in the team: open-skies `team.md`): green Итог (sole required check), review without serious errors. No repeated verification by
-  someone else; CI-missed bugs get tests, not extra manual steps.
+- **The task owner merges** once every condition but Итог holds (review fixes and probe pushed, any needed
+  bench in and answered): `gh pr ready` and `gh pr merge --auto --squash`; it lands on green Итог (sole required
+  check; if behind `main`, `gh pr update-branch`). No repeat checks by others; CI-missed bugs get tests, not manual
+  steps.
 - End commits with your own agent's name/address in `Co-Authored-By:`, never another agent's.
 - Community standards versus our tools/replacements: `docs/dev-pipeline.md`.
 
@@ -271,22 +274,23 @@ queues, little rework; each mission's budget is checked against its measured loa
   through `util/Terrain`. Nuclear loads use background vanilla `TicketType` (`NuclearTickets`).
 - `Locale.ROOT` for command numbers: Artem's Russian locale makes `String.format("%.1f")` use comma.
 - Heavy laptop jobs through `tools/laptop_job.sh` (own systemd service; `--gpu` waits for Artem's game to close and
-  leases the GPU; `--soft` vanilla clients run at idle CPU priority; each job has a memory ceiling); full-pack jobs (≈12 GB, `--full`) run singly, GPU-free jobs may overlap within 32 GB; fix excess use in code.
+  leases the GPU; `--soft` vanilla clients run at idle CPU priority; each job has a memory ceiling); full-pack jobs
+  (≈12 GB, `--full --acceptance`) run singly, GPU-free jobs may overlap within 32 GB; fix excess use in code.
   `/tmp` is RAM tmpfs: large clones/instance copies/frames go to disk, e.g. ignored `mod/run/`.
-- Checks must never reach Artem's screen/speakers. Clients only via `tools/nested_kwin.sh` (`--virtual`, no desktop
-  window/host OpenAL audio, scenario audio to file); without KWin (cloud), `xvfb-run` with same muted host audio (`rigs.md`).
+- Checks must never reach Artem's screen/speakers: clients only via `tools/nested_kwin.sh --virtual`, without KWin
+  (cloud) `xvfb-run`; no host audio, scenario audio to file (`rigs.md`).
 
 ## `.claude/rules/` files
-- `tools.md`: layout, every `tools/` script, CI.
-- `strike.md` (`strike/`, `target/`: orders/spec/launch/virtual flight/areas/hit outcomes); `entity.md` (`entity/`,
+- `tools.md`: layout, `tools/` scripts, CI.
+- `strike.md` (`strike/`, `target/`, `progress/`: orders/spec/launch/virtual flight/areas/hits/credit); `entity.md` (`entity/`,
   `guidance/`: flight/autopilots/virtual projectile/client entity tracking); `work.md` (tick budget, bulk damage in
   units); `warhead.md` (staged blast/glass/crater falls/vanilla-blast particles); `defense.md` (air defense, allowed/
-  forbidden targets); `launcher.md` (fixed launcher, redstone launch).
+  forbidden targets); `launcher.md` (fixed launcher, redstone launch); `claims.md` (claim protection).
 - `nuclear.md` (nuke except ruins: model/detonation/radiation/client); `nuclear-world.md` (ruins, zone behind wave,
   player chunk delivery); `grid.md` (blackout/lamps/chunk light).
-- `server-chunks.md` (chunks/tickets/world exit/entities/ground); `sable.md`; `dh.md` (Distant Horizons/LOD Server
-  Support API terrain for map/rays/sound, distant LODs, world leaks); `voxy.md` (Voxy via Roxy, depth/distant changes/LSS).
-- `client-smoke.md` (blast cloud bounds, bounded preparation, shared dust terrain cache).
+- `server-chunks.md` (chunks/tickets/world exit/entities/ground); `sable.md`; `dh.md` (Distant Horizons/LSS API
+  terrain for map/rays/sound, distant LODs, world leaks); `voxy.md` (Voxy via Roxy, depth/distant changes/LSS).
+- `client-smoke.md` (blast clouds, terrain cache); `dust-wave.md` (nuclear dust).
 - `client.md` (client structure/heightmaps/Iris/`AFTER_LEVEL`); `client-fx.md` (particles/effects layer/trail/alpha
   discard); `client-models.md` (OBJ); `client-sound.md` (OpenAL/volume/loops); `replay.md` (Flashback).
 - `gametest.md` (GameTest/flight scenarios, no wall clocks); `client-scenario.md` (headless client); `rigs.md`

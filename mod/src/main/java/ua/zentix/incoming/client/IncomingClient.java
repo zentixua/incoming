@@ -41,6 +41,7 @@ import ua.zentix.incoming.client.fx.GridEffects;
 import ua.zentix.incoming.client.fx.layer.FxAtlas;
 import ua.zentix.incoming.client.fx.layer.FxLayer;
 import ua.zentix.incoming.client.fx.layer.PallPass;
+import ua.zentix.incoming.client.fx.layer.VolumeReload;
 import ua.zentix.incoming.client.fx.particle.Fx;
 import ua.zentix.incoming.client.fx.particle.FxPool;
 import ua.zentix.incoming.client.hud.Alerts;
@@ -191,6 +192,7 @@ public final class IncomingClient {
         e.registerReloadListener(ua.zentix.incoming.client.nuclear.NukeBallSurface.INSTANCE);
         e.registerReloadListener(ua.zentix.incoming.client.sound.Envelopes.INSTANCE);
         e.registerReloadListener(Concussion.RELOAD);
+        e.registerReloadListener(VolumeReload.LISTENER);
     }
 
     private static void keys(RegisterKeyMappingsEvent e) {
@@ -309,7 +311,7 @@ public final class IncomingClient {
     }
 
     /**
-     * Nuclear mushroom volume noise builds in the background from world entry (~one second on one core, once per game launch):
+     * Request the background volume noise at world entry as well as resource load (~one second on one core, once per game launch):
      * the fireball is the mushroom volume from the first instant; without launch warning ({@code /incoming nuke now}),
      * it would otherwise have no body for its first second. Also once per launch, warm what detonation builds on the frame
      * thread ({@link ClientNuclear#warm}: dust wall and pall).
@@ -481,6 +483,12 @@ public final class IncomingClient {
         }
 
         @Override
+        public void nukeCancelled(S2C.NukeCancelled p) {
+            // a state change, not a one-shot: replayed on a seek it only removes warnings already gone
+            Replay.event("nuke_cancelled", live -> ClientNuclear.cancelled(p));
+        }
+
+        @Override
         public void nukeApproach(S2C.NukeApproach p) {
             // Keep snapshot order with burst events and apply it after the replay seek reset.
             Replay.event("nuke_approach", live -> ClientNuclear.approach(p));
@@ -498,16 +506,23 @@ public final class IncomingClient {
 
         @Override
         public void nukeDebris(S2C.NukeDebris p) {
-            // debris from seeking is in the past: it landed long ago
-            Replay.event("nuke_debris", live -> {
-                if (live) ClientNuclear.debris(p);
-            });
+            Replay.event("nuke_debris", live -> ClientNuclear.debris(p, live));
         }
 
         @Override
         public void nukeFlashMarks(S2C.NukeFlashMarks p) {
             // chunk state: always accepted, including during seeking (the layer appears when the clock reaches the flash)
             ua.zentix.incoming.client.nuclear.FlashMarksClient.receive(p);
+        }
+
+        @Override
+        public void nukeMaterialSources(S2C.NukeMaterialSources p) {
+            ua.zentix.incoming.client.nuclear.ClientNuclear.materialSources(p);
+        }
+
+        @Override
+        public void nukeMaterial(S2C.NukeMaterial p) {
+            ClientNuclear.material(p);
         }
 
         @Override
@@ -608,7 +623,7 @@ public final class IncomingClient {
 
         @Override
         public void replayTick(S2C.ReplayTick p) {
-            Replay.marker(p.place(), p.seeking(), IncomingClient::rewound);
+            Replay.marker(p.place(), p.seeking(), ClientNuclear::seekStarted, IncomingClient::rewound);
         }
     }
 }

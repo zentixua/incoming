@@ -165,6 +165,7 @@ final class RuinContext {
      * computed here from blocks ({@link DiskShots.Read#primed}).
      */
     void putDisk(ServerLevel level, DiskShots.Read read) {
+        NuclearWorld.get(level).materials.disk(read.pos().toLong(), read.surfaceVotes());
         long key = read.pos().toLong();
         ChunkShot now = shots.getAndMoveToLast(key);
         // shadow heights only with snapshot: retained live snapshot already captured in-memory heights

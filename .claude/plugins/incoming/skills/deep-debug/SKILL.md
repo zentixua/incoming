@@ -40,7 +40,9 @@ in the cloud VM. Never touch the play servers (25565–25567) or their worlds wi
 
 - **Always on in every Gradle run and `prod_client.py`** (build.gradle): a JFR ring of the last 30 minutes dumped on
   exit to `<run dir>/run.jfr` and the GC/safepoint log `<run dir>/gc.log` (`prod_client.py`: in its `logs/`); while running, `jcmd <pid> JFR.dump
-  name=incoming filename=…` saves the window around an event without stopping. `INCOMING_JFR=profile` for the profile
+  name=incoming filename=…` saves the window around an event without stopping. In `prod_client.py` launches the render
+  thread is named `main` in JFR (not `Render thread` as in its log); `jfr print` truncates stacks to 5 frames without
+  `--stack-depth`. `INCOMING_JFR=profile` for the profile
   settings: `ExecutionSample` on Server thread, GC and safepoint pauses, `ThreadPark`/`JavaMonitorEnter`/`ThreadSleep`
   > 10 ms, `CPULoad`, `ThreadCPULoad` (thread running or waiting), `ObjectAllocationSample`, file IO. A Crafty server
   needs the same flags added to its JVM arguments. A Gradle run crashes at its first JVM-raised OutOfMemoryError
@@ -81,46 +83,37 @@ Where: Artem's laptop, only when he is not playing (`tools/gpu_lease.sh --wait`)
 - **GPU time per pass**: `LayerTimes` (`-Dincoming.fx.drain=true` or F3), the bench line.
 - **RenderDoc**: frame capture in `mod/run/renderdoc/`, cost per draw call, overdraw, analysis with its Python
   (`renderdoccmd` needs `-d "$PWD"`; run the qrenderdoc Python analysis outside nested KWin).
-- **Client CPU**: spark on the client, render thread time, frame p50/p95.
+- **Pixel defects** (dark spots, specks, holes, bands, flicker on an effect; Artem, 24.11: "no guessing, find the
+  exact cause"): a RenderDoc capture of the defect frame, then pixel history and shader debug of 2–3 bad pixels beside
+  a good neighbour. Log every term per pixel (march samples, density, transmittance, light and shadow terms, history
+  blend) and name the term that differs, with its numbers, before any fix attempt. Changing a knob and re-judging
+  frames is guessing.
+- **Client CPU**: spark on the client, render thread time, frame p50/p95. More work or slower work: per-thread
+  hardware counters, `LC_ALL=C perf stat -e instructions:u,cycles:u,task-clock --per-thread -p <pid> -I 100 -x,`
+  (user processes may count their own threads), joined with the frame log: instructions per frame and IPC on the
+  render thread split a heavier frame from one starved by other threads. `-p` counts only threads alive when perf
+  attaches: start it after the world loads; take compiler-thread load from schedstat.
 - **GPU clocks**: `nvidia-smi` log once a second; 45 s warm-up; the clock is written beside each view.
 - **Frames**: the same spot, the same moment after the strike, against `main` (`tools/sandbox.sh shot`); the scene
   bench for frame cost.
-- **Shaders**: the hold rig (age the cloud once, keep the client, hot reload), a probe channel per term.
+- **Other vendors' drivers** (AMD, no such GPU here): `tools/amd_shader_check.py` gives AMD's own compiler output
+  per program (VGPRs, scratch, code size, compiler memory and seconds); Mesa llvmpipe is the second compiler.
+- **Shaders**: the dev client held at the defect (look skill section 4: the burst once, `/tick freeze`, F3+T per
+  change), a probe channel per term.
 
 Traps: Dynamic FPS caps to 15 FPS exactly after 300 s (`dynamic_fps.json` `{"idle":{"timeout":0}}`); scenarios pin a
-quality ladder step, compare only equal steps; in the `mushroom` scenario the firestorm sometimes dies out (check
-`burning` in SCENARIO lines before comparing); GPU clocks jump.
+quality ladder step, compare only equal steps (frame time as in the game: `-Dincoming.pall.adaptive=true`);
+`-Dincoming.nukeDiag=true` logs a client line per debris piece, 170–190 ms/s of the render thread as the wave reaches
+the viewer: frame-time windows at the front run without it; a recorder or a starved client drops debris as late
+(`nukeEvent … drop,server_late`), so its breach dust and their cost vanish from that run; in the `mushroom` scenario the firestorm sometimes dies out (check
+`burning` in SCENARIO lines before comparing); GPU clocks jump; a single-player run adds the integrated server's
+threads and its JIT to the client's CPU, so a hitch seen there is checked on a dedicated server too (`incoming.server`,
+client-scenario.md) before it is called the player's.
 
-## Checklist: look defect (our picture against the reference)
+## Checklist: look defect
 
-A look task converges only when the target is fixed, measured the same way on both sides, and drawn by a representation
-that can produce it. Tuning constants inside a representation that cannot is the slow failure: no number moves.
-
-- **Target, fixed.** In the plan, before code: the reference frames (real footage, then film VFX; never another
-  renderer's look, such as a shader pack's clouds, as the reference), Artem's decisions, the judge's views and the done
-  numbers. The player outcome stays fixed for the task; correcting a wrong camera, tick, crop or gate so that it shows
-  the reported symptom stays in the task, a new outcome goes to a follow-up PR. Judge in vanilla (AGENTS.md "Vanilla
-  first"); a shader pack gets one "not broken" check of the look, which does not waive a pack-specific functional test.
-- **Gate script calibrated on the reference.** The script that gates our frames (crop, mask, luma, hue/saturation,
-  contrast p90/p10, feature size, per-lobe light distribution, churn per second) first runs on the reference: it must
-  pass the reference and fail the current `main` frame on the reported defect. Necessary, not sufficient (exposure,
-  scale or a crop can separate two inputs without measuring the defect): the fresh judge still decides.
-- **Existing system first.** Name what in the mod (or the community) already draws the nearest phenomenon and show it
-  at the target's scale, by a frame or by a measured motion/load case. For example: billows, dust rings and smoke are lit
-  puffs (`far/SmokePuffs`, six-way light maps; sources `FrontDust`, `BlastDust`); seeing inside dust is distance fog;
-  thin haze is the pall march. A new renderer only when that evidence shows why the existing one fails.
-- **Picture apart from physics.** The drawing takes where, when and how much from the law; physics, sound and gameplay
-  read the law, never the drawing, so a look change cannot move a physical quantity. What the player actually sees
-  (occlusion, visibility probes) is tested on the drawing separately.
-- **Prototype before integration** (about 2 h): CPU vanilla frames of the chosen representation at the judge's views,
-  beside the reference and `main`. That first run already records what decides the design: the diagnostic probes,
-  fill, draw counts and CPU preparation time; GPU frame cost needs one GPU measurement (llvmpipe timings are not GPU
-  cost, client-scenario.md) where the design depends on it. Final law, probe and budget integration comes after.
-- **Rounds.** One short CPU job per round that answers all of the round's related questions (minutes), read as soon as it
-  ends; each round changes the cause the last one named by number. Three rounds or the timebox without a measured shift:
-  stop, name the root cause, and act on it (AGENTS.md).
-- **Judge.** A fresh Claude session gets `main`|PR pairs, the reference frames, the law's numbers for the scene and the
-  done numbers; never the author's notes. Codex reviews the code only.
+The look skill holds the whole procedure (target, mechanism, technique probes, judging in motion); this skill's
+rule of one full run per round applies to every look round.
 
 ## Checklist: bug from Artem's game
 
@@ -159,6 +152,21 @@ go in run files and the PR, not in chat. New knowledge (a gauge trap, a new prob
 into that area's `.claude/rules` or this skill by PR in the same thread; status and numbers go into the report.
 
 ## Gauges that lie
+- JFR names the client's render thread `main` (its OS name, in `/proc` schedstat and `top`, is `Render thread`);
+  filtering JFR samples by `Render thread` finds none. Render-thread stall stacks carry Mojang's line numbers: map them
+  with `javap -l -c` on the runtime class (work.md), never on the decompiled sources.
+- Client JFR: the render thread is `main` in `ExecutionSample` (not "Render thread"), and JFR samples only a few
+  threads per period, so with the client's dozens of busy threads its render-thread sample count is a small, uneven
+  fraction of wall time: use it for shares inside the thread, never for milliseconds. Per-frame cost comes from a
+  render-thread sampler and frame log in the scenario client (the `incoming.hitch` probe).
+- The probe's per-frame GPU ms (GL timestamps) counts the GPU's idle gaps while the render thread waits for a core:
+  at a 1 Mt city front frames showed 57–61 ms "GPU" at 8–46 % `nvidia-smi` utilisation, CPU-bound. Read GPU utilisation
+  and `hitch-sched` run-queue wait before calling frames GPU-bound.
+- A JIT burst at an event is mostly recompiles, not warm-up: split C2 compile time in the window by each method's
+  history in the compile recording (first compile; recompile after a recorded `jdk.Deoptimization`; recompile without
+  one: cold code flushed after `CodeCache GC Threshold` collections, or a dependency invalidation, `-Xlog:codecache*,
+  dependencies`). At a 1 Mt city front 70–78 % of 20–27 CPU-s of C2 in 4 s were recompiles. Our own long methods compile
+  to units 50× their bytecode (`javap -c` sizes): a 2,550-byte one recompiled at 100–135 kB each time.
 - `MinecraftServer.getTickTimesNanos` misses work done in `ServerTickEvent.Post`: take tick cost from spark
   tickmonitor or tick-start intervals. GC-log "Reaching safepoint" lines inside ZGC concurrent phases are not game
   stops: game threads keep running.
@@ -166,7 +174,6 @@ into that area's `.claude/rules` or this skill by PR in the same thread; status 
   value of the string or pixel he sees).
 - A bug from Artem's game: his Flashback replay (instance `flashback/replays`, copy first) is a data source: the login
   packet gives the game mode, snapshots `set_time`, `move_entities` positions; read where he stood and when.
-- Shader probes: the hold rig ages the cloud once (dust off, render distance 2), then the client polls command files
-  (`tp <up> <pitch>`, `prop <key> <value>`, `reload`, `shot <name>`, `quit`); copy edited shaders into
-  `mod/build/resources/main` and `reload` (~50 s); after toggling a mode wait ~80 ticks (temporal history); a probe
-  channel writes one term's value as the pall output with alpha 0 (channel 39 = linear calibration ramp).
+- Shader probes: in the dev client (look skill section 4) the cloud ages once, then `/tick freeze` holds it; each edited
+  shader goes in by `tools/dev_client.sh swap` (F3+T); after toggling a mode wait ~80 ticks (temporal history); a
+  probe channel writes one term's value as the pall output with alpha 0 (channel 39 = linear calibration ramp).

@@ -55,8 +55,12 @@ public final class SceneDepth {
      * channel; the surface's own light and transmittance are {@link SeeThrough#glass}.
      */
     private static int hard = -1;
-    /** Framebuffer the layer draws through: the frame's colour with {@link #hard}; the colour texture it was made for. */
-    private static int layerFbo = -1, layerColour = -1, layerDraw = -1, layerRead = -1;
+    /**
+     * Framebuffer the layer draws through: the frame's colour with {@link #hard}, attached anew on every bind. A texture name
+     * says nothing about the texture behind it: a GUI-scale change recreates the main target at the same size and the
+     * driver hands the freed colour name back, so an attachment kept by name would draw into the deleted texture.
+     */
+    private static int layerFbo = -1, layerDraw = -1, layerRead = -1;
     /** This frame looks through see-through surfaces. */
     private static boolean see;
     /** 1×1 stand-in for {@code FxGlass} with nothing to read (a sampler on the frame being drawn is a feedback loop, on 0 incomplete). */
@@ -385,16 +389,12 @@ public final class SceneDepth {
         int read = GlStateManager._getInteger(GL30.GL_READ_FRAMEBUFFER_BINDING);
         if (layerFbo < 0) layerFbo = GlStateManager.glGenFramebuffers();
         GlStateManager._glBindFramebuffer(GlConst.GL_FRAMEBUFFER, layerFbo);
-        if (colour != layerColour) {
-            GlStateManager._glFramebufferTexture2D(GlConst.GL_FRAMEBUFFER, GlConst.GL_COLOR_ATTACHMENT0, GlConst.GL_TEXTURE_2D, colour, 0);
-            GlStateManager._glFramebufferTexture2D(GlConst.GL_FRAMEBUFFER, GlConst.GL_DEPTH_ATTACHMENT, GlConst.GL_TEXTURE_2D, hard, 0);
-            layerColour = colour;
-            if (GlStateManager.glCheckFramebufferStatus(GlConst.GL_FRAMEBUFFER) != GlConst.GL_FRAMEBUFFER_COMPLETE) {
-                layerColour = -1;
-                GlStateManager._glBindFramebuffer(GL30.GL_DRAW_FRAMEBUFFER, draw);
-                GlStateManager._glBindFramebuffer(GL30.GL_READ_FRAMEBUFFER, read);
-                return false;
-            }
+        GlStateManager._glFramebufferTexture2D(GlConst.GL_FRAMEBUFFER, GlConst.GL_COLOR_ATTACHMENT0, GlConst.GL_TEXTURE_2D, colour, 0);
+        GlStateManager._glFramebufferTexture2D(GlConst.GL_FRAMEBUFFER, GlConst.GL_DEPTH_ATTACHMENT, GlConst.GL_TEXTURE_2D, hard, 0);
+        if (GlStateManager.glCheckFramebufferStatus(GlConst.GL_FRAMEBUFFER) != GlConst.GL_FRAMEBUFFER_COMPLETE) {
+            GlStateManager._glBindFramebuffer(GL30.GL_DRAW_FRAMEBUFFER, draw);
+            GlStateManager._glBindFramebuffer(GL30.GL_READ_FRAMEBUFFER, read);
+            return false;
         }
         layerDraw = draw;
         layerRead = read;
@@ -418,12 +418,23 @@ public final class SceneDepth {
     }
 
     /** Both textures and framebuffers sized to the game frame (recreated on window resize). */
+    /** The real world-distance target during a resource reload, before a world supplies depth. */
+    static int loadingScene(int w, int h) {
+        if (w <= 0 || h <= 0 || !ensure(w, h)) return -1;
+        int draw = GlStateManager._getInteger(GL30.GL_DRAW_FRAMEBUFFER_BINDING);
+        GlStateManager._glBindFramebuffer(GL30.GL_DRAW_FRAMEBUFFER, FBOS[current]);
+        GL30.glClearBufferfv(GL11.GL_COLOR, 0, SKY_DISTANCE);
+        GlStateManager._glBindFramebuffer(GL30.GL_DRAW_FRAMEBUFFER, draw);
+        lastOk = previousValid = see = false;
+        return TEXTURES[current];
+    }
+
+    private static final float[] SKY_DISTANCE = {1e9f, 1e9f, 0f, 0f};
+
     private static boolean ensure(int w, int h) {
         if (FBOS[0] >= 0 && w == width && h == height) return true;
         width = w;
         height = h;
-        // the colour the layer framebuffer was made for no longer matches the new depth size
-        layerColour = -1;
         hard = image(hard, GL30.GL_DEPTH_COMPONENT32F, GL11.GL_DEPTH_COMPONENT, GL11.GL_FLOAT, w, h);
         for (int i = 0; i < 2; i++) {
             if (!ensureOne(i, w, h)) {
@@ -466,7 +477,7 @@ public final class SceneDepth {
     public static final class ViewState {
         private int[] FBOS = {-1, -1};
         private int[] TEXTURES = {-1, -1};
-        private int hard = -1, layerFbo = -1, layerColour = -1;
+        private int hard = -1, layerFbo = -1;
         private boolean see;
         private int fbo = -1;
         private int texture = -1;
@@ -490,7 +501,6 @@ public final class SceneDepth {
             int t;
             t = SceneDepth.hard; SceneDepth.hard = hard; hard = t;
             t = SceneDepth.layerFbo; SceneDepth.layerFbo = layerFbo; layerFbo = t;
-            t = SceneDepth.layerColour; SceneDepth.layerColour = layerColour; layerColour = t;
             boolean b = SceneDepth.see; SceneDepth.see = see; see = b;
             int[] oldFBOS = SceneDepth.FBOS;
             SceneDepth.FBOS = FBOS;

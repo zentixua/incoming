@@ -5,6 +5,8 @@ import net.minecraft.core.registries.Registries;
 import net.minecraft.world.level.block.Block;
 import net.neoforged.neoforge.registries.datamaps.DataMapType;
 import ua.zentix.incoming.registry.ModDataMaps;
+import ua.zentix.incoming.strike.StrikeRules;
+import org.jetbrains.annotations.Nullable;
 import net.minecraft.core.BlockPos;
 import ua.zentix.incoming.util.Terrain;
 import net.minecraft.util.RandomSource;
@@ -15,6 +17,7 @@ import net.minecraft.world.phys.Vec3;
 import ua.zentix.incoming.entity.DebrisEntity;
 
 import java.util.List;
+import java.util.UUID;
 import java.util.Comparator;
 import java.util.ArrayList;
 
@@ -51,23 +54,23 @@ public final class DebrisSpawner {
     }
 
     /** Shahed debris; returns count. */
-    public static int drone(ServerLevel level, Vec3 at, GroundMaterial mat) {
-        return spawnGround(level, at, mat.debris(), false, 1.5, 0.5, 1.6)
-                + spawnGround(level, at, mat.debris(), false, 1.5, 0.5, 1.6)
-                + spawnCharred(level, at, 1.5, 0.5, 1.6)
-                + spawn(level, at, palette(level, ModDataMaps.DEBRIS_DRONE), false, 1.5, 0.5, 1.6)
-                + spawnBurning(level, at, 1.5, 0.5, 1.6);
+    public static int drone(ServerLevel level, Vec3 at, GroundMaterial mat, StrikeRules rules, @Nullable UUID owner) {
+        return spawnGround(level, at, mat.debris(), false, 1.5, 0.5, 1.6, rules, owner)
+                + spawnGround(level, at, mat.debris(), false, 1.5, 0.5, 1.6, rules, owner)
+                + spawnCharred(level, at, 1.5, 0.5, 1.6, rules, owner)
+                + spawn(level, at, palette(level, ModDataMaps.DEBRIS_DRONE), false, 1.5, 0.5, 1.6, rules, owner)
+                + spawnBurning(level, at, 1.5, 0.5, 1.6, rules, owner);
     }
 
     /** Missile debris; returns count. */
-    public static int missile(ServerLevel level, Vec3 at, GroundMaterial mat) {
+    public static int missile(ServerLevel level, Vec3 at, GroundMaterial mat, StrikeRules rules, @Nullable UUID owner) {
         int n = 0;
-        for (int i = 0; i < 4; i++) n += spawnGround(level, at, mat.debris(), false, 2.1, 0.6, 2.2);
-        return n + spawnCharred(level, at, 2.1, 0.6, 2.2)
-                + spawnCharred(level, at, 2.1, 0.6, 2.2)
-                + spawn(level, at, palette(level, ModDataMaps.DEBRIS_MISSILE), false, 2.1, 0.6, 2.2)
-                + spawnBurning(level, at, 2.1, 0.6, 2.2)
-                + spawnBurning(level, at, 2.1, 0.6, 2.2);
+        for (int i = 0; i < 4; i++) n += spawnGround(level, at, mat.debris(), false, 2.1, 0.6, 2.2, rules, owner);
+        return n + spawnCharred(level, at, 2.1, 0.6, 2.2, rules, owner)
+                + spawnCharred(level, at, 2.1, 0.6, 2.2, rules, owner)
+                + spawn(level, at, palette(level, ModDataMaps.DEBRIS_MISSILE), false, 2.1, 0.6, 2.2, rules, owner)
+                + spawnBurning(level, at, 2.1, 0.6, 2.2, rules, owner)
+                + spawnBurning(level, at, 2.1, 0.6, 2.2, rules, owner);
     }
 
     /**
@@ -75,9 +78,10 @@ public final class DebrisSpawner {
      * target heading at its speed (pieces retain body momentum; burst gives small random-direction addition),
      * lose speed to air, and fall in a heading-aligned strip, longer for faster targets. Count follows body size
      * ({@code noseLength}): Lancet/Shahed handful, missile more, B-2 rain of parts. No ground: burst airborne.
+     * The pieces carry the projectile's owner ({@code owner}): its body is what falls; the interceptor only chose where.
      * Returns debris count.
      */
-    public static int wreck(ServerLevel level, Vec3 at, Vec3 velocity, double noseLength) {
+    public static int wreck(ServerLevel level, Vec3 at, Vec3 velocity, double noseLength, StrikeRules rules, @Nullable UUID owner) {
         RandomSource r = level.random;
         List<BlockState> parts = noseLength > 2.5 ? palette(level, ModDataMaps.DEBRIS_MISSILE) : palette(level, ModDataMaps.DEBRIS_DRONE);
         int rounds = noseLength > 5 ? 3 : 1;
@@ -85,45 +89,45 @@ public final class DebrisSpawner {
         double spread = Math.min(2.5, 0.4 + noseLength * 0.3);
         int n = 0;
         for (int k = 0; k < rounds; k++) {
-            for (BlockState s : parts) n += wreckPiece(level, at, s, false, true, drift, spread, r);
-            for (BlockState s : palette(level, ModDataMaps.DEBRIS_EMBERS)) n += wreckPiece(level, at, s, true, true, drift, spread, r);
-            for (BlockState s : burning()) n += wreckPiece(level, at, s, true, false, drift, spread, r);
+            for (BlockState s : parts) n += wreckPiece(level, at, s, false, true, drift, spread, r, rules, owner);
+            for (BlockState s : palette(level, ModDataMaps.DEBRIS_EMBERS)) n += wreckPiece(level, at, s, true, true, drift, spread, r, rules, owner);
+            for (BlockState s : burning()) n += wreckPiece(level, at, s, true, false, drift, spread, r, rules, owner);
         }
         return n;
     }
 
-    private static int wreckPiece(ServerLevel level, Vec3 at, BlockState s, boolean hot, boolean hurts, Vec3 drift, double spread, RandomSource r) {
+    private static int wreckPiece(ServerLevel level, Vec3 at, BlockState s, boolean hot, boolean hurts, Vec3 drift, double spread, RandomSource r, StrikeRules rules, @Nullable UUID owner) {
         Vec3 p = at.add((r.nextDouble() - 0.5) * spread * 2, (r.nextDouble() - 0.5) * spread, (r.nextDouble() - 0.5) * spread * 2);
-        level.addFreshEntity(DebrisEntity.create(level, p, s, hot, hurts, drift.add(velocity(r, 0.45, -0.15, 0.35))));
+        level.addFreshEntity(DebrisEntity.create(level, p, s, hot, hurts, drift.add(velocity(r, 0.45, -0.15, 0.35))).under(rules, owner));
         return 1;
     }
 
-    private static int spawn(ServerLevel level, Vec3 at, List<BlockState> states, boolean hot, double horizontal, double upMin, double upMax) {
+    private static int spawn(ServerLevel level, Vec3 at, List<BlockState> states, boolean hot, double horizontal, double upMin, double upMax, StrikeRules rules, @Nullable UUID owner) {
         for (BlockState s : states) {
-            level.addFreshEntity(DebrisEntity.create(level, start(level.random, at), s, hot, true, velocity(level.random, horizontal, upMin, upMax)));
+            level.addFreshEntity(DebrisEntity.create(level, start(level.random, at), s, hot, true, velocity(level.random, horizontal, upMin, upMax)).under(rules, owner));
         }
         return states.size();
     }
 
     /** Material from a cohesive face that remains intact is chips; ejected loose ground retains its blocks. */
-    private static int spawnGround(ServerLevel level, Vec3 at, List<BlockState> states, boolean hot, double horizontal, double upMin, double upMax) {
+    private static int spawnGround(ServerLevel level, Vec3 at, List<BlockState> states, boolean hot, double horizontal, double upMin, double upMax, StrikeRules rules, @Nullable UUID owner) {
         BlockPos face = BlockPos.containing(at.add(0, -1e-5, 0));
         boolean small = Terrain.ready(level, face) && SurfaceBlocks.solid(level, face, level.getBlockState(face))
                 && SurfaceBlocks.cohesive(level.getBlockState(face));
         for (BlockState state : states) {
             level.addFreshEntity(DebrisEntity.ground(level, start(level.random, at), state, hot, true,
-                    velocity(level.random, horizontal, upMin, upMax), small));
+                    velocity(level.random, horizontal, upMin, upMax), small).under(rules, owner));
         }
         return states.size();
     }
 
-    private static int spawnCharred(ServerLevel level, Vec3 at, double horizontal, double upMin, double upMax) {
-        return spawnGround(level, at, palette(level, ModDataMaps.DEBRIS_EMBERS), true, horizontal, upMin, upMax) + spawnGround(level, at, palette(level, ModDataMaps.DEBRIS_ASH), false, horizontal, upMin, upMax);
+    private static int spawnCharred(ServerLevel level, Vec3 at, double horizontal, double upMin, double upMax, StrikeRules rules, @Nullable UUID owner) {
+        return spawnGround(level, at, palette(level, ModDataMaps.DEBRIS_EMBERS), true, horizontal, upMin, upMax, rules, owner) + spawnGround(level, at, palette(level, ModDataMaps.DEBRIS_ASH), false, horizontal, upMin, upMax, rules, owner);
     }
 
-    private static int spawnBurning(ServerLevel level, Vec3 at, double horizontal, double upMin, double upMax) {
+    private static int spawnBurning(ServerLevel level, Vec3 at, double horizontal, double upMin, double upMax, StrikeRules rules, @Nullable UUID owner) {
         for (BlockState s : burning()) {
-            level.addFreshEntity(DebrisEntity.create(level, start(level.random, at), s, true, false, velocity(level.random, horizontal, upMin, upMax)));
+            level.addFreshEntity(DebrisEntity.create(level, start(level.random, at), s, true, false, velocity(level.random, horizontal, upMin, upMax)).under(rules, owner));
         }
         return burning().size();
     }

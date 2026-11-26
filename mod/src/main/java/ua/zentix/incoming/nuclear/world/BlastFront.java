@@ -8,6 +8,7 @@ import it.unimi.dsi.fastutil.ints.IntSet;
 import it.unimi.dsi.fastutil.longs.LongOpenHashSet;
 import net.minecraft.core.BlockPos;
 import net.minecraft.server.level.ServerLevel;
+import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.util.Mth;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.LivingEntity;
@@ -23,10 +24,12 @@ import org.jetbrains.annotations.Nullable;
 import ua.zentix.incoming.IncomingConfig;
 import ua.zentix.incoming.compat.SubLevels;
 import ua.zentix.incoming.nuclear.Detonation;
+import ua.zentix.incoming.progress.Progress;
 import ua.zentix.incoming.registry.ModAttachments;
 import ua.zentix.incoming.registry.ModDamageTypes;
 import ua.zentix.incoming.registry.ModParticles;
 import ua.zentix.incoming.registry.ModSounds;
+import ua.zentix.incoming.strike.StrikeOwner;
 import ua.zentix.incoming.warhead.Warheads;
 
 import java.util.ArrayDeque;
@@ -108,6 +111,23 @@ final class BlastFront {
         return hits.size() + aircraft.size();
     }
 
+    /**
+     * Last game tick of {@code d}'s front: its arrival at the last hit reach ({@link Detonation#blastReach}) plus the
+     * positive phase there, and two ticks for the last ring.
+     */
+    static long frontEnd(Detonation d) {
+        double reach = d.blastReach();
+        return d.gameTime() + (long) Math.floor(d.arrivalTicks(reach) + d.positivePhaseTicks(reach)) + 2;
+    }
+
+    /** {@code detonation}'s front still travels or its hits wait. */
+    boolean pending(int detonation) {
+        if (reached.containsKey(detonation)) return true;
+        for (Hit h : hits) if (h.d().id() == detonation) return true;
+        for (AircraftHit a : aircraft) if (a.d().id() == detonation) return true;
+        return false;
+    }
+
     /** Front traveling or hits queued (common-budget NUCLEAR lane). */
     boolean busy() {
         return !reached.isEmpty() || !hits.isEmpty() || !aircraft.isEmpty();
@@ -123,8 +143,7 @@ final class BlastFront {
         Set<Integer> active = new HashSet<>();
         for (Detonation d : detonations) {
             long since = now - d.gameTime();
-            double reach = d.blastReach();
-            if (since >= 0 && since <= d.arrivalTicks(reach) + d.positivePhaseTicks(reach) + 2) {
+            if (since >= 0 && now <= frontEnd(d)) {
                 advance(level, d, since);
                 active.add(d.id());
             }
@@ -193,7 +212,7 @@ final class BlastFront {
             LivingEntity e = h.entity();
             if (!e.isAlive() || e.isSpectator() || e.isPassenger()) continue;
             long t0 = clock.begin();
-            Entity owner = h.owner() == null ? null : level.getPlayerByUUID(h.owner());
+            Entity owner = StrikeOwner.online(level, h.owner());
             if (h.buried()) BlastBody.bury(level, h.d(), e, owner);
             else if (!e.getData(ModAttachments.NUKE_SEEN).blasted(h.d().id())) {
                 // once per body and detonation: loading it later brings no second wave, and a body loaded on the tick the front
@@ -204,6 +223,7 @@ final class BlastFront {
                 BlastBody.Before late = h.before() != null || seen == null ? null : seen.remove(e.getId());
                 BlastBody.Before b = h.before() != null ? h.before() : late == null ? null : late.drifted(e.position());
                 if (BlastBody.hit(level, h.d(), e, owner, b)) windy.computeIfAbsent(h.d().id(), k -> new IntOpenHashSet()).add(e.getId());
+                if (e instanceof ServerPlayer p) Progress.blasted(level, h.d(), p);
             }
             clock.end(t0);
         }
@@ -302,11 +322,15 @@ final class BlastFront {
      */
     private static void blast(ServerLevel level, AircraftHit a) {
         boolean blocks = IncomingConfig.SERVER.nukeBlockDamage.get();
+        // a blast waiting for its area is still the detonation round's impact work (strike.OrderStatus)
+        var round = ua.zentix.incoming.nuclear.NuclearEvents.get(level).impact(a.d().id());
+        var impact = round == null ? null : new ua.zentix.incoming.strike.ImpactWork.Impact(round.round(), round.owner().orElse(null),
+                ua.zentix.incoming.strike.WeaponType.NUKE);
         Warheads.whenReady(level, a.at(), Warheads.reach(a.power()), l -> l.explode(null,
                 ModDamageTypes.source(l, ModDamageTypes.NUCLEAR_BLAST, null, null), new AircraftOnly(l),
                 a.at().x, a.at().y, a.at().z, a.power(), false,
                 blocks ? Level.ExplosionInteraction.BLOCK : Level.ExplosionInteraction.NONE,
-                ModParticles.NONE.get(), ModParticles.NONE.get(), ModSounds.SILENT));
+                ModParticles.NONE.get(), ModParticles.NONE.get(), ModSounds.SILENT), impact);
     }
 
     /**

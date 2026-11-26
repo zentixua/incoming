@@ -15,7 +15,7 @@ import net.minecraft.world.phys.Vec3;
 import net.neoforged.neoforge.event.level.ChunkWatchEvent;
 import net.neoforged.neoforge.event.tick.LevelTickEvent;
 import net.neoforged.neoforge.network.PacketDistributor;
-import ua.zentix.incoming.IncomingConfig;
+import ua.zentix.incoming.claim.BlockGate;
 import ua.zentix.incoming.net.S2C;
 import ua.zentix.incoming.nuclear.model.FuelPool;
 import ua.zentix.incoming.registry.ModAttachments;
@@ -179,15 +179,19 @@ public final class FuelFires {
     }
 
     /**
-     * {@code weapon} fuel left in crater at {@code pos} (impact {@code blastTick}) settles on blocks/burns:
-     * cells, fire, accounting, client packet within {@code reach}. Returns ignited count.
+     * {@code weapon} fuel left in crater at {@code pos} (impact {@code blastTick}) settles on blocks the strike may change
+     * ({@code gate}) and burns:
+     * cells, fire, accounting, client packet within {@code reach}. Returns ignited count. The caller holds the strike's
+     * {@code world.fire}; a poured pool relights under it until its fuel is spent.
      */
-    static int pour(ServerLevel level, Vec3 pos, WeaponType weapon, long blastTick, double reach) {
-        if (!IncomingConfig.SERVER.fire.get()) return 0;
+    static int pour(ServerLevel level, BlockGate gate, Vec3 pos, WeaponType weapon, long blastTick, double reach) {
         int n = weapon.spec().pool().cells();
         if (n <= 0 || n > S2C.FuelFire.MAX_CELLS) return 0;
         List<Long> lit = new ArrayList<>(n);
-        for (BlockPos p : cells(level, pos, n)) {
+        List<BlockPos> cells = new ArrayList<>(cells(level, pos, n));
+        // a claim-protected cell holds no fuel of ours: it neither burns now nor relights later
+        gate.filter(level, cells);
+        for (BlockPos p : cells) {
             if (level.getBlockState(p).getBlock() instanceof BaseFireBlock || Warheads.igniteIn(level, p)) lit.add(p.asLong());
         }
         if (lit.isEmpty()) return 0;
@@ -210,7 +214,7 @@ public final class FuelFires {
 
     /** Delivery tests: same with packet to players within {@code reach}, like impact. */
     public static int testPour(ServerLevel level, Vec3 pos, WeaponType weapon, long burned, double reach) {
-        return pour(level, pos, weapon, level.getGameTime() - burned, reach);
+        return pour(level, BlockGate.ALL, pos, weapon, level.getGameTime() - burned, reach);
     }
 
     /** Crater state to players within blast-packet reach (position first cell). */

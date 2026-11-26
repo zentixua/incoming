@@ -120,7 +120,7 @@ public final class PanicGameTests {
             if (make(level, burst, g.getY(), mid, 0).psi(probe) > PSI) hi = mid;
             else lo = mid;
         }
-        Detonation d = make(level, burst, g.getY(), (float) Math.sqrt(lo * hi), NuclearGameTests.IDS.incrementAndGet());
+        Detonation d = make(level, burst, g.getY(), (float) Math.sqrt(lo * hi), NuclearGameTests.nextId(level));
         for (Mob m : mobs) {
             double psi = d.psi(m.position());
             h.assertTrue(psi > 0.3 && psi < 0.7, String.format(Locale.ROOT, "mob's blood pressure %.2f psi", psi));

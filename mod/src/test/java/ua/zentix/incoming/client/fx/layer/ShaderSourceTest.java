@@ -9,6 +9,7 @@ import java.io.IOException;
 import java.net.URISyntaxException;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.ArrayDeque;
 import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
@@ -64,6 +65,70 @@ class ShaderSourceTest {
     }
 
     @Test
+    void noEqualityWithBracketedEqualityOperand() throws IOException, URISyntaxException {
+        List<String> bad = everyShader(ShaderSourceTest::bracketedEquality);
+        assertTrue(bad.isEmpty(), "Veil drops parentheses around nested equality comparisons: " + bad);
+    }
+
+    @Test
+    void findsBracketedEqualityOnEitherSide() {
+        assertEquals(List.of(1, 2, 3), bracketedEquality("""
+                if (pallSamePlace(there, here) != (pass == 0)) continue;
+                bool left = (a != sample(i)) == c;
+                bool nested = a == ((b != c));
+                bool relational = a != (b < c);
+                bool call = sample(b == c) != a;
+                bool logic = a != (b == c && d);
+                bool index = a == (values[b == c]);
+                // a == (b == c)
+                """));
+    }
+
+    private static boolean equality(String token) {
+        return token.equals("==") || token.equals("!=");
+    }
+
+    private static List<Integer> bracketedEquality(String source) {
+        String text = blankComments(source);
+        var tokens = TOKEN.matcher(text).results().toList();
+        var opens = new ArrayDeque<Integer>();
+        int[] close = new int[tokens.size()];
+        Set<String> lowerPrecedence = Set.of("&", "^", "|", "&&", "||", "?", ",", "=",
+                "+=", "-=", "*=", "/=", "%=", "&=", "^=", "|=");
+        List<Integer> found = new ArrayList<>();
+        for (int i = 0; i < tokens.size(); i++) {
+            String token = tokens.get(i).group();
+            if (token.equals("(") || token.equals("[")) opens.push(i);
+            if (!token.equals(")") && !token.equals("]")) continue;
+            int open = opens.pop();
+            close[open] = i;
+            if (token.equals("]")) continue;
+            String before = open == 0 ? "" : tokens.get(open - 1).group();
+            String after = i + 1 == tokens.size() ? "" : tokens.get(i + 1).group();
+            boolean call = before.matches("[A-Za-z_]\\w*") && !before.equals("return");
+            boolean leftOperand = equality(after) && !call;
+            if (!leftOperand && !equality(before)) continue;
+            int first = open + 1, end = i;
+            while (first < end && tokens.get(first).group().equals("(") && close[first] == end - 1) {
+                first++;
+                end--;
+            }
+            boolean comparison = false;
+            for (int j = first; j < end; j++) {
+                String operand = tokens.get(j).group();
+                if (operand.equals("(") || operand.equals("[")) j = close[j];
+                else if (lowerPrecedence.contains(operand)) {
+                    comparison = false;
+                    break;
+                } else if (equality(operand)) comparison = true;
+            }
+            if (comparison) found.add(1 + (int) text.substring(0, tokens.get(open).start()).chars()
+                    .filter(c -> c == '\n').count());
+        }
+        return found;
+    }
+
+    @Test
     void noIncrementStatement() throws IOException, URISyntaxException {
         List<String> bad = everyShader(ShaderSourceTest::increments);
         assertTrue(bad.isEmpty(), "“n++;” (Veil loses the “;”, write “n += 1;”): " + bad);
@@ -90,7 +155,7 @@ class ShaderSourceTest {
       * front of a point for the layer's quads and probes).
      */
     @Test
-    void everyUniformIsBoundInItsProgram() throws IOException, URISyntaxException {
+    void everyUniformIsBoundInItsProgram() throws Exception {
         Path core = Path.of(ShaderSourceTest.class.getResource("/assets/incoming/shaders/core").toURI());
         Pattern uniform = Pattern.compile("(?m)^\\s*uniform\\s+(\\w+)\\s+(\\w+)\\s*;");
         List<String> bad = new ArrayList<>();
@@ -103,7 +168,12 @@ class ShaderSourceTest {
                 String name = json.getFileName().toString();
                 for (String[] stage : new String[][]{{"vertex", ".vsh"}, {"fragment", ".fsh"}}) {
                     String file = program.get(stage[0]).getAsString().replaceFirst("^incoming:", "") + stage[1];
-                    Matcher m = uniform.matcher(blankComments(withImports(core.resolveSibling("include"), Files.readString(core.resolve(file)), new HashSet<>())));
+                    String source = withImports(core.resolveSibling("include"), Files.readString(core.resolve(file)), new HashSet<>());
+                    if (source.contains("#define PALL_SINGLE")) {
+                        // The single-burst interface excludes the second slot, whirls and conventional smoke.
+                        source = io.github.ocelot.glslprocessor.api.GlslParser.preprocessParse(source, new java.util.HashMap<>()).toSourceString();
+                    }
+                    Matcher m = uniform.matcher(blankComments(source));
                     Set<String> declared = new HashSet<>();
                     while (m.find()) {
                         String type = m.group(1), u = m.group(2);
@@ -189,25 +259,21 @@ class ShaderSourceTest {
     }
 
     /**
-     * The dust-wall head nearer than the near volume's far boundary is marched by the rays per pixel, not sampled by the
-     * volume's cells (one point per cell drew the moving roller as clumps with holes): every reader of the volume ends it
-     * where the rays begin, at froxelEnd, or near pall is counted twice or not at all.
+     * The rays take the pall beyond the near volume's far boundary only, and every reader of the volume ends it there: otherwise
+     * near pall is counted twice or not at all.
      */
     @Test
-    void nearVolumeEndsBeforeTheHead() throws IOException, URISyntaxException {
+    void nearVolumeEndsWhereTheRaysBegin() throws IOException, URISyntaxException {
         Path include = Path.of(ShaderSourceTest.class.getResource("/assets/incoming/shaders/include").toURI());
         Path core = include.resolveSibling("core");
-        assertTrue(blankComments(body(Files.readString(include.resolve("pall.glsl")), "float froxelEnd(")).contains("pallWallSpans("),
-                "froxelEnd: the volume does not end at the head");
         String march = blankComments(body(Files.readString(include.resolve("fx_pall.glsl")), "void main("));
-        assertTrue(march.contains("nearT = froxelEnd(") && march.contains("t0 = max(t0, nearT)"), "fx_pall: rays do not begin at froxelEnd");
-        assertFalse(march.contains("PallFroxel.z / axis"), "fx_pall: a ray part begins at the volume's far boundary, not at froxelEnd");
+        assertTrue(march.contains("nearT = PallFroxel.z / axis") && march.contains("t0 = max(t0, nearT)"),
+                "fx_pall: rays do not begin at the volume's far boundary");
         String composite = blankComments(body(Files.readString(core.resolve("fx_pall_composite.fsh")), "void main("));
-        assertTrue(composite.contains("froxelEnd(") && composite.contains("min(depth, nearEnd)"), "composite: volume read past froxelEnd");
-        String upsample = blankComments(body(Files.readString(core.resolve("fx_pall_composite.fsh")), "vec4 upsample("));
-        assertFalse(upsample.contains("PallFroxel.z / axis"), "composite: upsample correction past froxelEnd");
+        assertTrue(composite.contains("nearEnd = PallFroxel.z") && composite.contains("min(depth, nearEnd)"),
+                "composite: volume read past its far boundary");
         String mix = blankComments(body(Files.readString(core.resolve("fx_pall_mix.fsh")), "void main("));
-        assertTrue(mix.contains("froxelEnd(") && mix.contains("min(depth, end)"), "fx_pall_mix: volume read past froxelEnd");
+        assertTrue(mix.contains("min(depth, PallFroxel.z)"), "fx_pall_mix: volume read past its far boundary");
     }
 
     /**
@@ -259,7 +325,7 @@ class ShaderSourceTest {
         assertFalse(dense.contains("mushStemLobes("), "the original stem pattern is not re-rendered");
         String slot = blankComments(body(pall, "void slot("));
         assertEquals(1, slot.split("carpetFlowAt\\(", -1).length - 1, "the flow map is shared by all offset samples of the slot");
-        assertTrue(slot.contains("f.column.x += up") && slot.contains("f.slab.x += total"), "lifted dust shades itself");
+        assertTrue(slot.contains("s.tau += f.column + liftedUp;") && slot.contains("s.slab += f.slab + liftedSlab;"), "lifted dust shades itself");
         assertTrue(slot.contains("mushFootRemoved(Sampler7, k, m, rho - r)"), "the column is limited by the radius of the narrowing band");
         assertTrue(slot.contains("mushFootColumn(Sampler7, k, m, q.y) - removed"));
         assertTrue(slot.contains("mushFootColumn(Sampler7, k, m, 0.0) - removed"), "the shared layer does not include dust outside the given radius");

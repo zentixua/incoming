@@ -21,14 +21,17 @@ import net.minecraft.world.phys.Vec3;
 import net.minecraft.world.phys.shapes.VoxelShape;
 import org.jetbrains.annotations.Nullable;
 import org.joml.Vector3f;
-import ua.zentix.incoming.IncomingConfig;
+import ua.zentix.incoming.api.ClaimQuery;
+import ua.zentix.incoming.claim.Claims;
 import ua.zentix.incoming.guidance.BombDrop;
 import ua.zentix.incoming.guidance.FlightController;
 import ua.zentix.incoming.guidance.Mission;
-import ua.zentix.incoming.nuclear.NuclearWarhead;
 import ua.zentix.incoming.nuclear.world.ColumnScar;
 import ua.zentix.incoming.registry.ModDamageTypes;
 import ua.zentix.incoming.registry.ModDataMaps.Penetrability;
+import ua.zentix.incoming.strike.RoundEnd;
+import ua.zentix.incoming.strike.RoundRef;
+import ua.zentix.incoming.strike.StrikeOwner;
 import ua.zentix.incoming.strike.WeaponSpec;
 import ua.zentix.incoming.strike.WeaponType;
 import ua.zentix.incoming.target.Target;
@@ -183,8 +186,7 @@ public class BunkerBusterEntity extends StrikeProjectile {
         if (flightPhase() == FlightPhase.DRILL) return;
         if (nuclear != null) {
             // Nuclear penetrating warhead (like B61-11): enters ground a few meters, a surface detonation with a crater.
-            discard();
-            NuclearWarhead.detonate(level, point, nuclear.yieldKt(), false, ownerId());
+            detonateNuclear(level, point, false);
             return;
         }
         // Impact uses entity velocity at fall end: along the nose plus wind drift.
@@ -348,7 +350,7 @@ public class BunkerBusterEntity extends StrikeProjectile {
         while (carved < path.steps().size() && path.steps().get(carved).s() <= s + 1e-6) {
             Step step = path.steps().get(carved++);
             armed = step.armed();
-            if (step.solid()) carve(level, step.pos());
+            if (step.solid()) carve(level, step.pos(), rules().blockDamage(), this);
         }
         Vec3 to = origin.add(flight.forward().scale(s));
         strike(level, from, to);
@@ -383,10 +385,14 @@ public class BunkerBusterEntity extends StrikeProjectile {
      * Bore: clear the block on the path axis (0.8 m caliber means one block); loose material above falls into it.
      * Only with ready neighboring chunks too: updates and Sable read neighbors.
      */
-    private static void carve(ServerLevel level, BlockPos p) {
-        if (!IncomingConfig.SERVER.blockDamage.get() || !Terrain.neighbourhoodReady(level, p.getX() >> 4, p.getZ() >> 4)) return;
+    private static void carve(ServerLevel level, BlockPos p, boolean blockDamage, BunkerBusterEntity bomb) {
+        if (!blockDamage || !Terrain.neighbourhoodReady(level, p.getX() >> 4, p.getZ() >> 4)) return;
         BlockState s = level.getBlockState(p);
         if (s.isAir()) return;
+        // claim protection before the charge exists: the bomb itself is the cause; a protected block stays (the bomb's
+        // path follows its penetration law either way)
+        if (!Claims.allows(level, new ClaimQuery(level, bomb,
+                ModDamageTypes.source(level, ModDamageTypes.KINETIC, bomb, null), bomb.position()), p)) return;
         ColumnScar.replace(level, p, s, Blocks.AIR.defaultBlockState(), Block.UPDATE_ALL);
     }
 
@@ -396,7 +402,7 @@ public class BunkerBusterEntity extends StrikeProjectile {
         AABB box = new AABB(from, to).inflate(r + 0.5);
         for (LivingEntity e : level.getEntitiesOfClass(LivingEntity.class, box, LivingEntity::isAlive)) {
             if (e.getBoundingBox().inflate(r).clip(from, to).isPresent() || e.getBoundingBox().inflate(r).contains(from)) {
-                e.hurt(ModDamageTypes.source(level, ModDamageTypes.KINETIC, this, ownerPlayer()), Float.MAX_VALUE);
+                StrikeOwner.hurt(e, ModDamageTypes.source(level, ModDamageTypes.KINETIC, this, ownerPlayer()), Float.MAX_VALUE);
             }
         }
     }
@@ -404,8 +410,10 @@ public class BunkerBusterEntity extends StrikeProjectile {
     private void detonate(ServerLevel level) {
         Vec3 at = position();
         Vec3 entry = entry();
+        RoundRef r = round();
+        endRound(RoundEnd.impact(at, weapon().spec().warheadTnt()));
         discard();
-        Warheads.bunker(level, at, entry, this, ownerId());
+        Warheads.bunker(level, at, entry, this, ownerId(), r);
     }
 
     /**

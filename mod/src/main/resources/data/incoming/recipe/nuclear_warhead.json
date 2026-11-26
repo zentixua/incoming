@@ -11,7 +11,7 @@
       "item": "minecraft:tnt"
     },
     "I": {
-      "item": "minecraft:iron_block"
+      "tag": "c:storage_blocks/iron"
     },
     "N": {
       "item": "minecraft:netherite_ingot"

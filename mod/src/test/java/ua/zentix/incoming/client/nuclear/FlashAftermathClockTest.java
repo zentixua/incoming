@@ -57,13 +57,13 @@ class FlashAftermathClockTest {
     void stalledFrontStillAllowsEmissionAndControlsExpiry() throws Exception {
         var clock = new ClientNuclear.AgeClock(0, true);
         clock.anchor(0);
-        for (int tick = 0; tick < 11; tick++) {
+        for (int tick = 0; tick < 2400; tick++) {
             clock.tick();
             SmokeGrid.tick();
         }
-        assertEquals(3, clock.shown(), 1e-9);
-        Puffs smoke = probeHay(clock, new Vec3(0, 64, 0), distance -> 10, 11);
-        assertEquals(1, smoke.size(), "hay still emits at age 3 with the front arriving at age 10");
+        assertEquals(200, clock.shown(), 1e-9);
+        Puffs smoke = probeHay(clock, new Vec3(0, 64, 0), distance -> 205, 11);
+        assertEquals(1, smoke.size(), "hay still emits at the lead brake with the front arriving at 205");
 
         double width = smoke.puffGrowth(SmokeGrid.seconds(0));
         for (int tick = 0; tick < 40; tick++) {
@@ -75,14 +75,14 @@ class FlashAftermathClockTest {
         assertEquals(1, smoke.size(), "the local smoke clock ran two more seconds during the stall");
         assertEquals(width, smoke.puffGrowth(SmokeGrid.seconds(0)), 1e-9);
 
-        for (int anchor = 1; anchor <= 20 && clock.shown() < 10; anchor++) {
+        for (int anchor = 1; anchor <= 200 && clock.shown() < 205; anchor++) {
             clock.anchor(anchor);
             clock.tick();
             SmokeGrid.tick();
             smoke.emit(SmokeGrid.seconds(0), sink);
-            assertEquals(clock.shown() < 10 ? 1 : 0, smoke.size(), "shown age " + clock.shown());
+            assertEquals(clock.shown() < 205 ? 1 : 0, smoke.size(), "shown age " + clock.shown());
         }
-        assertTrue(clock.shown() >= 10, "the resumed front reaches the hay");
+        assertTrue(clock.shown() >= 205, "the resumed front reaches the hay");
     }
 
     @Test
@@ -124,6 +124,36 @@ class FlashAftermathClockTest {
                 assertEquals(Double.POSITIVE_INFINITY, age.applyAsDouble(0));
                 ClientNuclear.sync(empty);
                 assertEquals(Double.POSITIVE_INFINITY, age.applyAsDouble(0));
+            } finally {
+                ClientNuclear.sync(empty);
+            }
+        }
+    }
+
+    @Test
+    void cancellingOneScheduledTagDoesNotRestartAnotherActiveBurst() {
+        Minecraft client = mock(Minecraft.class);
+        ClientLevel level = mock(ClientLevel.class);
+        client.level = level;
+        when(level.dimensionType()).thenReturn(mock(DimensionType.class));
+        Detonation other = new Detonation(1, new Vec3(0, 64, 0), 64, 1, true, 100, 0, 5, 20_000, 0, 1, false, 1);
+        S2C.NukeSync empty = new S2C.NukeSync(List.of(), List.of());
+        try (var minecraft = mockStatic(Minecraft.class); var flash = mockStatic(FlashAftermath.class);
+             var water = mockStatic(NukeWater.class); var light = mockStatic(NukeLight.class);
+             var echoes = mockConstruction(NukeEchoes.class)) {
+            minecraft.when(Minecraft::getInstance).thenReturn(client);
+            when(level.getGameTime()).thenReturn(100L);
+            try {
+                ClientNuclear.detonation(new S2C.NukeDetonation(other, 0, 1), true);
+                flash.verify(() -> FlashAftermath.detonation(eq(other), any(DoubleUnaryOperator.class), eq(0.0)));
+                water.verify(() -> NukeWater.resolve(any(), eq(level)));
+                light.verify(() -> NukeLight.detonation(level));
+                assertEquals(1, echoes.constructed().size());
+                var active = ClientNuclear.detonations().getFirst();
+                active.tick();
+                // a tagged clear cancels another strike by its id (NuclearStrikes.cancelTagged), not by a full resync
+                ClientNuclear.cancelled(new S2C.NukeCancelled(List.of(99)));
+                assertEquals(1, ClientNuclear.detonations().getFirst().age(), "the surviving burst's tick and sound schedule restarted");
             } finally {
                 ClientNuclear.sync(empty);
             }

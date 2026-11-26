@@ -229,7 +229,7 @@ public final class Fx {
         }
 
         /**
-         * Colour already includes open-sky light (camera dust — its dust wall light, {@code NukePall.dustColor}):
+         * Colour already includes open-sky light:
          * lightmap does not darken it; frame fireball light is not added — already in the colour. Under a roof,
          * darkens by local skylight and block light, like the lightmap relative to open sky.
          */

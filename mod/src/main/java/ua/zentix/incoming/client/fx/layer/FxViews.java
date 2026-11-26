@@ -50,6 +50,13 @@ public final class FxViews {
 
     public static boolean secondary() { return scope != null; }
 
+    private static final Object PRIMARY = new Object();
+
+    /** This view's identity while it lives (the primary's, or a secondary target's saved state): per-view state keys on it. */
+    public static Object viewKey() {
+        return scope == null ? PRIMARY : scope.entry != null ? scope.entry.value : scope;
+    }
+
     public static boolean skipped() { return scope != null && scope.entry == null; }
 
     /** Before nuclear fog/light sampling or world entity submissions. */

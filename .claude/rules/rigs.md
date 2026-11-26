@@ -41,15 +41,27 @@ paths:
   `/run/user/1000/doc` (`fusermount3 -u -z`), and its own on exit; Flatpak apps (Prism) fail to start (“bwrap: Can't find
   source path …/doc/by-app/…”; restore with `systemctl --user restart xdg-document-portal.service`). Check:
   `findmnt /run/user/1000/doc` before and after must show the same mount.
-- The host's pack (zentixua/open-skies, includes Sinytra Connector) does not start in a Gradle run: Connector requires
+- The host's pack (zentixua/open-skies-friends, includes Sinytra Connector) does not start in a Gradle run: Connector requires
   Minecraft's launcher file layout (“Could not determine clean minecraft artifact path”). Use `tools/prod_client.py`
   for full-pack checks (libraries and ForgeWrapper from the Prism directory, instance copy in `mod/run/prod`; Artem's
   instance is untouched).
 - Measurement server without a panel: `./gradlew runServer -PserverDir=run/<name> -PmcModsDir=run/ci-mods` (after
   `tools/fetch_runtime_mods.py`), `advertiseDedicatedServerToLan=false` in its `config/neoforge-server.toml`
   (LoopbackGuard), RCON for commands. `forceload add` only queues tickets: wait with `execute if loaded` before acting.
+- Laptop memory: all agent work (missions, delegate runs, `laptop_job.sh` jobs, units agents start) shares one ceiling,
+  the user unit `agents.slice` that laptop-agents installs (MemoryMax/MemorySwapMax, no MemoryHigh). Without it, their
+  sum fills RAM and zram swap and systemd-oomd kills the cgroup with the most swap, which is always the Claude desktop
+  app (idle pages swap out first). Heavy runs from a Claude app session therefore go through `laptop_job.sh`, never
+  directly (a `java` started there counts as the app), and temporary files go to `$TMPDIR` (on disk in agent units),
+  never `/tmp` (a 16 GB RAM tmpfs).
+- A fake process in a tooling test (a pretend `java`) is a `#!/bin/bash` script with that name (process name = script
+  name); a copy of `sleep` fails on GitHub runners, whose coreutils is one multicall binary ("unknown program 'java'").
 - Stop background scripts by PID: `pkill -f <pattern>` also matches your own shell's command line and kills it.
 - `tools/prod_client.py --video` copies Artem's `options.txt`; with `fullscreen:true` the window grows to the nested
   screen and `x11_record.py` (which starts a segment only at exactly `--size`) records nothing after the menu: run
   `--copy-only --dir D`, set `fullscreen:false` in `D/options.txt`, then `--no-copy --dir D --video …`. x11grab also
-  yields some all-black and duplicate frames; exclude them from per-frame metrics.
+  yields all-black, partly black (torn: whole rows uniform black, ~13 % of a nuke take's frames) and duplicate frames;
+  exclude them from per-frame metrics and clips. Each take overwrites the instance's `logs/run.jfr` and `gc.log`: copy them
+  out per take. LOD Server Support serves a single-player world only with `--prop lss.test.integratedServer=true`;
+  `/publish` opens a LAN socket on every interface, and `rig/LoopbackGuard` stops the server (the client then sits in the
+  menu while the recorder runs: a take wrapper must stop on a guard line or a silent log).

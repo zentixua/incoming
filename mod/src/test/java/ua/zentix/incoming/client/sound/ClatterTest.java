@@ -30,6 +30,17 @@ class ClatterTest {
         assertEquals(1, out.size(), "sound - after 343 m / 343 m/s after the front");
     }
 
+    @Test
+    void anAlreadyAdmittedSourceReachesTheEarOnItsFirstDeferredTick() {
+        var c = new Clatter(SPECTRA);
+        c.add(new Clatter.Event(Noise.SOUND, 0, 0, 100, 120, 1, Clatter.DEBRIS));
+        var heard = new ArrayList<Clatter.Play>();
+        c.tick(1500, 0, 0, 0, NIGHT, heard);
+        c.tick(1501, 0, 0, 0, NIGHT, heard);
+        assertEquals(1, heard.size());
+        assertEquals(1, heard.getFirst().events());
+    }
+
     /** Sounds from different places are incoherent: two identical destructions at once - +3 dB, not +6. */
     @Test
     void sameMomentAddsByPower() {
@@ -85,7 +96,7 @@ class ClatterTest {
         c.add(new Clatter.Event(20, 0, 0, 2, 120, 1, Clatter.DEBRIS));
         for (int t = 3; t < 30; t++) {
             int was = out.size();
-            c.tick(t, 0, 0, 0, NIGHT, out);
+            if (!c.idle()) c.tick(t, 0, 0, 0, NIGHT, out);
             if (out.size() > was) {
                 assertTrue(Double.isNaN(played), "with one sound");
                 played = t;

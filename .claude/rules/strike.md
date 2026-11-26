@@ -3,6 +3,7 @@ paths:
   - "mod/src/main/java/ua/zentix/incoming/strike/**"
   - "mod/src/main/java/ua/zentix/incoming/target/**"
   - "mod/src/main/java/ua/zentix/incoming/net/**"
+  - "mod/src/main/java/ua/zentix/incoming/progress/**"
   - "mod/src/test/java/ua/zentix/incoming/strike/**"
 ---
 
@@ -114,9 +115,8 @@ paths:
   otherwise location stays and target is not lost. `Sight`: server line of sight without chunk loading,
   `sees(player, entity)` (not invisible, sent to client, horizontal range no farther than vanilla sends entity,
   `range`/`viewRange`, clear eyes-to-eyes/body-center), `within(player, point)`, `clear(world, from, to)`
-  (`ClipContext.Block.VISUAL`: glass transparent; unready path chunk means unseen); `Sides`: friendlies by `/team`
-  (same player/team; UUID also supports offline owner via profile cache). `Sightings`: side reconnaissance
-  (`Sides.side`: team/player, non-persistent world attachment): every 5 ticks each player marks hostile players and
+  (`ClipContext.Block.VISUAL`: glass transparent; unready path chunk means unseen); `Sides`: one side key per player
+  (roadmap B5, below). `Sightings`: side reconnaissance (keyed by `Sides.side`, non-persistent world attachment): every 5 ticks each player marks hostile players and
   Sable craft unobstructed in view (60° cone), through own eyes and own projectile-camera frame (same `CameraLink`
   view as guidance); radar/other sensors use `Sightings.spot`; retains `sight_memory` (30 s). Map (`mapPlayers`):
   friendlies always, hostiles/other spotted subjects at last seen place with age; without `sight_rules`, all players.
@@ -134,6 +134,111 @@ paths:
   clear `Sight.clear` ray, craft uses `SubLevels.visibleFrom` (ray can hit craft itself); player has one view,
   one guided projectile. Without rules target is `OfEntity`/`OfSubLevel`, followed without camera.
 
+## Order lifecycle events (`ua.zentix.incoming.api`)
+- Every order entry (designator, player command, `dispatch`, fixed launcher, `nuke now`) is admitted through
+  `strike/Orders.admit` after Incoming's own checks and before payment: `Request` → one `Rejected`/`Accepted`
+  (`Order.accept`/`reject`, once), all three posted at once (the next order must see the last `Accepted`). Each entry's
+  outermost call starts with `Orders.elsewhere` (off the server thread, or inside a `Request` listener: the whole entry
+  reruns later with all its checks and a live player object); a new entry does the same.
+- Round, detonation and grid events never post inside Incoming's loops: `Orders.queue` puts them in one server-wide
+  queue (overworld `StrikeWorld`), delivered at world- and server-tick end and last in `onServerStopping`. A
+  synchronous post there would let listeners recall or clear inside salvo, key-wait and flight loops (double endings,
+  `ConcurrentModificationException`) and reorder Released/Ended; per-world queues would reorder rounds that change
+  dimension.
+- Each admitted round ends exactly once. Rounds are `RoundRef` (order id + index, name-based UUID), saved on whatever
+  carries them: `StrikeProjectile` NBT `round`, `ScheduledStrike.round`, `SalvoData` `order`/`failed_rounds`. A form
+  change hands the round on (`VirtualFlights.park` detaches it from the old entity, B-2 release moves it to the bomb);
+  a terminal path calls `endRound` before `discard` (first ending wins); any other destroying removal ends it as
+  failed in `StrikeProjectile.remove`. Unreleased rounds end where their carrier settles (`SalvoData.settle`,
+  `NuclearKeys.end`, the single-launch failure in `ServerActions.launch`). Regressions: `OrderEventGameTests`.
+- Command results and `status` (`strike/OrderStatus`, `command/StatusCommand`): a strike command (and `launcher …
+  fire`) returns `Order.admitted`; the answered order reaches it through the `made` callback of `strike`/`dispatch`/
+  `fromLauncher`, also after a deferral (`Orders.deferred`: the command returns 0 and names the order when admitted).
+  `status` reads rounds where they live, never a parallel registry that could drift: orders inside `Orders.admit`
+  whose rounds get a carrier only after `accept` (`Orders.carrierPending`: single launch, key wait, `nuke now`; a salvo
+  is recorded before `accept`, so a clear from an `Accepted` listener shows at once), `SalvoData.rounds`
+  (unlaunched and failed, queued), `NuclearKeys.rounds` (queued), projectiles carrying a round in world and off-world
+  (`VirtualFlights.inFlight`: disk records instantiated, flights entering the world this moment included),
+  `ScheduledStrike`s (a `nuke now` waiting for ground, launch time = burst time, is queued), and impact work:
+  conventional `ImpactWork` (the round's `BlastArea` holders; a new impact job must retain the area or the round
+  leaves the count early; a blast's setup releases its holder if it throws), nuclear `NuclearEvents.Impact` (saved;
+  kept while `NuclearWorld.frontBusy` or `craterDigging` (a live job; a dropped one resumes only after a restart),
+  dropped the first tick neither holds, so ruins on later chunk loads never reopen it; deferred craft blasts are
+  `ImpactWork` of the same round). Unfinished = Accepted
+  until Ended, plus impact work. A tag is world-wide, saved with `RoundRef`; `clear tag` follows `clear`'s owner rules
+  (`ServerActions.recall(…, tag, …)`, `clearTag`), leaves launchers (`LauncherEntity.serves` matches by owner and
+  weapon only), removes the ICBM showing a cancelled strike (`IcbmEntity.strike`), and tells clients only what is gone
+  (`S2C.Cleared` with `Util.NIL_UUID`, `S2C.NukeCancelled`: a full `NukeSync` would restart live detonations), plus an
+  owner notice ending the salvo progress line when no salvo of that owner still launches.
+  Regressions: `OrderStatusTest`, `OrderStatusGameTests`, `OrderStatusRegressionGameTests`, `ImpactRegistrationTest`,
+  `TaggedClearAlertsTest`, `TaggedSalvoHudTest`, `CraterImpactTest`, `FlashAftermathClockTest`.
+
+## Advancements and statistics (`progress/`)
+- `Progress` credits rounds from the api events as delivered (`Released`, `Ended`) and outages from `Progress.Relit`
+  (queued by `Blackouts.restored` after `GridRestoreEvent`, carrying the `Outage` record),
+  never from Incoming's own loops: one place decides, and credit follows the round's owner UUID across off-world
+  flight and restarts (a fake player under a real player's profile is that player, as in `Authority`). Nuclear credit
+  comes from the burst itself (`Progress.witness` in `NuclearWarhead.detonate`: a same-tick clear cannot lose it) and
+  from the wave's real hit (`Progress.blasted` in `BlastFront.work`; a burial alone is no hit, and a ring catch below
+  `HIT_KPA` is none). Credited = in the player list at delivery and not `isFakePlayer()`; nothing
+  is queued for an offline owner. Online players of a level come from the player list filtered by level, not
+  `level.players()`. Interceptions skip rounds friendly to the interceptor (`Sides.friendly`, the SAM radar's rule).
+- Camera credit is `StrikeProjectile.cameraGuided` (saved as `camera_guided`, set by `retarget` and a pursuit HELD
+  tick), carried to `RoundEnd.cameraGuided`/`Ended.isCameraGuided` by `endRound` and `detonateNuclear`; a round
+  handed to another entity takes the mark along (`handCameraMark`: B-2 to bomb).
+- Nuclear survival: watched from the hit (the wave hits from 0.3 psi) unless creative/spectator, due at hit + positive
+  phase at the body + `LANDING_TICKS` (`survivalDue`), granted only alive, vulnerable and in the burst's dimension; the
+  watch is the unsaved player attachment `SURVIVAL`, cleared on death and dimension change; due watches leave the list before the trigger
+  runs (a reward may kill the player). The advancement's 5 psi is in its JSON (`Blackouts.DEAD_PSI`, `ProgressTest`).
+  Witnessed = horizontal range within `Detonation.radiusMax`. Restore credit tests the player's district as the grid
+  does, never a circle: `Outage.covers`, its cascade arrived before its light (`darkAt < lightAt`), and `PowerGrid.dark`.
+- Stats (`ModStats`) are created at common setup, as vanilla's: the statistics screen lists only created stat
+  objects. A new weapon adds `rounds_launched.<id>` and its lang key automatically fails
+  `ProgressTest` until translated. GameTest players that must earn advancements or stats are real `ServerPlayer`s
+  (`ProgressGameTests.Credited`): `FakePlayer` drops stats and advancements; connection before `moveTo`.
+  Regressions: `ProgressGameTests`, `ProgressReviewGameTests`, `ProgressRoundTwoGameTests`, `ProgressTest`.
+
+## Owner identity (`strike/StrikeOwner`, roadmap B3)
+- Attribution is the owner UUID, saved on whatever carries a strike (orders, `RoundRef` carriers, projectile NBT,
+  `ScheduledStrike`, `NuclearEvents.Impact`, `DebrisEntity` `owner`, the living attachment `BURN_SHOCK_OWNER`) and on
+  the api events, whatever the owner's online state. Credit is the attacker entity in the damage source, looked up from
+  that UUID at the moment of damage with `StrikeOwner.online` (player list: any level; offline or fake profile: null;
+  dead before respawn: still credited, as vanilla credits an arrow). Never `level.getPlayerByUUID` (same level only).
+  Jobs keep the UUID and resolve at each hit; only one explosion's source (`StagedExplosion.source`, its craft blast)
+  holds the attacker resolved at its start for the few ticks of its damage units.
+- Every strike `hurt` goes through `StrikeOwner.hurt`: an attacker in another level is dropped as the victim's revenge
+  target (`setLastHurtByMob`; vanilla target goals measure across levels by raw coordinates), kill credit stays. The
+  vanilla-explosion paths (plot grid, craft) hurt through vanilla and skip it.
+- One cause, one attacker: blast, shockwave, kinetic hit, fragments, debris (a wreck's pieces carry the shot-down
+  round's owner), nuclear wave, light, prompt radiation, burn shock (`FlashBurns` records the owner of the flash that
+  brought shock; `player_burn_shock` names them). No attacker: radiation sickness (merged dose, fallout, rain),
+  `LateExposure` catch-up (an estimate at load, no owner kept after the front), the wave's craft blasts, spreading fire,
+  a crash before arming (vanilla `explode`). Burn shock drops an attacker the damage rules now refuse: the flash decided
+  harm (`owner_shock_team`).
+- Claim queries keep B2's attribution: `ClaimQuery` direct source is the projectile, never the owner (indirect source
+  null); nuclear queries have none. Regressions: `OwnerGameTests` (batches `owner_*`).
+
+## Sides (`target/Sides`, `api/SideResolveEvent`, roadmap B5)
+- One key per player, friendly = same UUID or equal keys: symmetric by construction; null owner is friendly to nobody.
+  Every friend-or-foe rule asks `Sides` (spotting, map marks, `sighted`, nuclear review, radar, SAM crew, `AirAlert`,
+  interceptor pursuit, `LauncherLinks.refusal`, `Readout.privileged`, interception credit); never `Entity.isAlliedTo` or
+  a pairwise team test. Exception: damage keeps vanilla PvP and `/team` friendly fire (`Player.canHarmPlayer` in the burn
+  and flash paths, like an arrow); a party mod's own PvP option is that mod's. A key is posted once per cache miss as `SideResolveEvent` (server thread; the first answer
+  wins, so priority is precedence): `Sides.answerTeam` at `HIGH` (`minecraft:team/<name>`), `compat/ftbteams` at
+  `NORMAL` (party; the personal team abstains), `compat/opac` at `LOW`; unanswered `incoming:player/<uuid>`.
+- Cache: overworld attachment `SIDES` (unsaved: dies with the server). Whole-cache invalidation is the static
+  `Sides.EPOCH` (any thread): `ServerScoreboard.addDirtyListener` (team changes and every score change), FTB Teams
+  `TeamEvent`s, `SideResolveEvent.invalidate()`; login/logout forget that player; an answer older than `RECHECK` (20
+  ticks) is asked again, the bound for OPAC, whose API has no party event. The event's name is the player list's, else
+  the in-memory profile cache's (`GameProfileCache.get(UUID)`, no storage), else the live player's own (fake players
+  outside the list); an entry resolved without a name is re-asked once a live player supplies one.
+- A radar sweep costs one cached lookup per track and at most one question per distinct owner per cache lifetime
+  (`SideGameTests.radarAsksOncePerOwner`, counted by `Sides.Cache.resolutions`): `RECHECK`, or one tick on a server whose
+  scores change every tick (every score change marks the scoreboard dirty; player ticks run after the level ticks, so a
+  sweep still hits the cache). Contacts and alerts stay under the key
+  that recorded them. Regressions: `SideGameTests`, `SightGameTests.sidesFollowTeams`, `SideResolveEventTest`,
+  `FtbTeamsSidesTest`, `OpacSidesTest` (neither mod is in the GameTest runtime; `TestParties` answers as they do),
+  `OptionalModsTest`.
 ## Unpaid nuclear review
 - `NuclearReview` is separate player state, not a `NuclearKeys` order. Global nuclear abort invalidates it on the
   server before sending cancellation; actual death invalidates it through `LivingDeathEvent`, with dead/removed
@@ -145,12 +250,48 @@ paths:
   movement. Keep ordinary launch resolution separate from review disclosure. Packet-level regressions:
   `nuclear_review_disclosure`, `nuclear_review_last_seen`.
 
+- Authorization (`strike/Authority`, roadmap B1): one policy for every entry (designator packets, player commands,
+  deferred reruns, a key wait as its key turns, fixed launcher owner, linking, second key): `check(Action, Actor)` →
+  null or `Denial` (gate, line). Rights are NeoForge `PermissionNode`s (`incoming.launch`, `incoming.launch.<weapon
+  serialized name>`, `incoming.nuclear`, `incoming.launcher.link`) whose default resolvers are the switches
+  (`designator_for_everyone`, `nuclear.ops_only`, operator by `hasPermissions(2)` online or the cached profile offline,
+  `NuclearKeys.trusted`), so the default handler answers exactly as before; its refusal lines stay the switches' own,
+  a foreign handler's say only what is refused (`Denial.byDefault`). Gates: designator, weapon, nuclear flag (hard),
+  `incoming.nuclear`. Trust is never a node: second key, warning, nuclear abort/retarget, map launch site stay
+  `NuclearKeys.trusted`. The actor is who gave the order: a command's `CommandSourceStack.source` player (also through
+  `/execute as`; `ServerActions.strike(asker, player, …)`, re-read live after a deferral); console, command blocks and
+  ownerless launchers are automation and ask nothing, except that a flying nuclear order always asks the player it is
+  made for (`nuclearRefusal`, as the switches did); `nuke now` asks only a typing player. A key wait re-asks its owner's
+  rights (not carrier/yield validity) when the key turns, after finding the order (no-order line unchanged); an armed
+  order rechecks the nuclear flag before release (a paid order whose owner is offline waits for them: refunds reach only
+  online inventories). A non-player executor of a player's command (`/execute as` an armor stand) asks that player
+  (`dispatch(asker, …)`); a deferred `nuke now` re-reads its player by UUID (`ServerActions.live`) and needs them still
+  operator. An offline owner never calls `PermissionAPI.getOfflinePermission` (NeoForge promises nothing about storage
+  there) and nothing is kept from their last visit (its context, e.g. dimension, would be wrong): the node resolver
+  answers, as the default handler does. A handler that lacks a node falls back to its resolver.
+  Regressions: `AuthorityTest`, `PermissionGameTests`, `PermissionRegressionGameTests`, `PermissionRoundTwoGameTests`
+  (devtest handlers swapped into `PermissionAPI`, one batch per probe: the handler and switches are server-wide).
 - Nuclear permission (Artem): `nuclear.ops_only` means operators and the world host (`NuclearKeys.trusted`: the
   single-player or LAN host, cheats on or off). Review and launch take the refusal from one function,
-  `ServerActions.nuclearRefusal` (designator, enabled, operator/host, carrier, yield cap, in that order;
-  `NuclearRefusalTest`). Every refused order speaks through `ServerActions.refuse` (red action bar,
+  `ServerActions.nuclearRefusal` (`Authority`: designator, weapon, enabled, `incoming.nuclear`; then carrier, yield cap,
+  in that order; `NuclearRefusalTest`). Every refused order speaks through `ServerActions.refuse` (red action bar,
   `RefusalChannelTest`); every key named in code exists in both lang files (`LangTest`).
 
+- World rules by command (`command/RuleCommand`, roadmap B4): `/incoming rule` sets `ModConfigSpec` values and saves the
+  spec (one home: the world's server config). Exposed only where a change reaches just later orders: the six
+  world-changing rules are `StrikeRules`, captured when an `Order` is made and carried on `RoundRef.rules` (saved in its
+  NBT and codec; `SalvoData` saves them because it recomputes round refs), then `BlastArea.rules()` for every blast job,
+  `DebrisEntity.under` (saved), collapse rubble's cancelled drop (vanilla saves it), `StagedExplosion.rulesOf` for the
+  substation listener, `NuclearWarhead` for the nuclear blackout. Block-changing code never reads those six from
+  `IncomingConfig` (work without an order reads `StrikeRules.live()` when its area opens; test helpers and explosions
+  that are not ours, such as the nuclear wave's craft explosions, read it live). A projectile keeps its order's rules
+  apart from its round (`StrikeProjectile.orderRules`, saved): a B-2 hands its round to the bomb and can still be shot
+  down. The other exposed keys are read only at admission, except B1's re-asks before a nuclear release:
+  `nuclear.enabled` (hard gate) and the rights from `nuclear.ops_only` and `launch.designator_for_everyone` at the key
+  turn. A new key needs the same proof. Limit: FML's watcher reloads the file 500 ms after the last write and swaps the
+  values without a lock the mod can take, so a set landing inside that swap is reverted until its own write reloads.
+  Regressions: `RuleGameTests` (arena: every conventional weapon, rules off at order, on at impact; controls),
+  `RuleReviewGameTests`, `StrikeRulesTest`.
 - `world.early_warning` controls automatic sirens and nuclear launch/target notices (default true). `ServerConfigMigration`
   decorates the registered server `IConfigSpec`: copy legacy `world.siren` before spec correction removes it; an explicit
   new key wins. `IncomingConfigScreen` passes the underlying `ModConfigSpec` to NeoForge section widgets. Warning

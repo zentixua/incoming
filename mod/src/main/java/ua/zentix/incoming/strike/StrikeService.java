@@ -20,6 +20,7 @@ import ua.zentix.incoming.Incoming;
 import ua.zentix.incoming.IncomingConfig;
 import ua.zentix.incoming.entity.BomberEntity;
 import ua.zentix.incoming.entity.Launcher;
+import ua.zentix.incoming.entity.Rails;
 import ua.zentix.incoming.entity.LauncherEntity;
 import ua.zentix.incoming.entity.LoiterEntity;
 import ua.zentix.incoming.entity.RocketEntity;
@@ -85,14 +86,28 @@ public final class StrikeService {
         return launch(level, weapon, target, point, approachYaw, owner, siren, nuke, via, from, 0);
     }
 
+    /** {@link #launch} as order round {@code round}: the projectile (or scheduled ICBM strike) carries it, Released posted. */
+    public static Result launch(ServerLevel level, WeaponType weapon, Target target, Vec3 point, float approachYaw,
+                                @Nullable UUID owner, boolean siren, Loadout.Nuke nuke, Waypoints via, @Nullable LaunchOrigin from,
+                                @Nullable RoundRef round) {
+        return launch(level, weapon, target, point, approachYaw, owner, siren, nuke, via, from, 0, round);
+    }
+
     /**
      * Salvo projectile ({@link SalvoData}) as {@link #launch}, in its own lane: route shifted sideways {@code
      * lane} blocks ({@link WeaponSpec.Lanes}, {@link Route#inLane}); 0 follows path itself.
      */
     public static Result launch(ServerLevel level, WeaponType weapon, Target target, Vec3 point, float approachYaw,
                                 @Nullable UUID owner, boolean siren, Loadout.Nuke nuke, Waypoints via, @Nullable LaunchOrigin from, double lane) {
+        return launch(level, weapon, target, point, approachYaw, owner, siren, nuke, via, from, lane, null);
+    }
+
+    /** Salvo projectile in its lane as order round {@code round} (null: outside the order lifecycle). */
+    public static Result launch(ServerLevel level, WeaponType weapon, Target target, Vec3 point, float approachYaw,
+                                @Nullable UUID owner, boolean siren, Loadout.Nuke nuke, Waypoints via, @Nullable LaunchOrigin from, double lane,
+                                @Nullable RoundRef round) {
         ServerPlayer shooter = owner == null ? null : level.getServer().getPlayerList().getPlayer(owner);
-        return launch(level, weapon, target, point, approachYaw, owner, shooter, siren, nuke, via, from, lane);
+        return launch(level, weapon, target, point, approachYaw, owner, shooter, siren, nuke, via, from, lane, round);
     }
 
     /**
@@ -101,12 +116,19 @@ public final class StrikeService {
      */
     public static Result launchBy(ServerLevel level, WeaponType weapon, Target target, Vec3 point, float approachYaw,
                                   ServerPlayer shooter, boolean siren, Loadout.Nuke nuke, Waypoints via, @Nullable LaunchOrigin from) {
-        return launch(level, weapon, target, point, approachYaw, shooter.getUUID(), shooter, siren, nuke, via, from, 0);
+        return launchBy(level, weapon, target, point, approachYaw, shooter, siren, nuke, via, from, null);
+    }
+
+    /** {@link #launchBy} as order round {@code round}. */
+    public static Result launchBy(ServerLevel level, WeaponType weapon, Target target, Vec3 point, float approachYaw,
+                                  ServerPlayer shooter, boolean siren, Loadout.Nuke nuke, Waypoints via, @Nullable LaunchOrigin from,
+                                  @Nullable RoundRef round) {
+        return launch(level, weapon, target, point, approachYaw, shooter.getUUID(), shooter, siren, nuke, via, from, 0, round);
     }
 
     private static Result launch(ServerLevel level, WeaponType weapon, Target target, Vec3 point, float approachYaw, @Nullable UUID owner,
                                  @Nullable ServerPlayer shooter, boolean siren, Loadout.Nuke nuke, Waypoints via, @Nullable LaunchOrigin from,
-                                 double lane) {
+                                 double lane, @Nullable RoundRef round) {
         if (shooter != null && shooter.level() != level) shooter = null;
         WeaponSpec spec = weapon.spec();
         FixedLauncherBlockEntity fixed = null;
@@ -114,7 +136,7 @@ public final class StrikeService {
         if (from instanceof LaunchOrigin.Fixed f) {
             // Fixed-launcher rack: launcher present, turntable carries this weapon's rack, pays projectile from inventory.
             fixed = f.launcher(level);
-            if (fixed == null || spec.rack() == null || !fixed.hasRack() || fixed.weapon() != weapon) return Result.FAILED;
+            if (fixed == null || !fixed.located() || spec.rack() == null || !fixed.hasRack() || fixed.weapon() != weapon) return Result.FAILED;
             shot = new Munitions.Bill(weapon, 1, 0);
             MutableComponent missing = Munitions.pay(fixed.store(), shot);
             if (missing != null) {
@@ -124,7 +146,7 @@ public final class StrikeService {
         }
         boolean ok = false;
         try {
-            Result r = launch(level, weapon, target, point, approachYaw, owner, shooter, siren, nuke, via, from, fixed, lane);
+            Result r = launch(level, weapon, target, point, approachYaw, owner, shooter, siren, nuke, via, from, fixed, lane, round);
             ok = r.ok();
             return r;
         } finally {
@@ -135,7 +157,7 @@ public final class StrikeService {
 
     private static Result launch(ServerLevel level, WeaponType weapon, Target target, Vec3 point, float approachYaw, @Nullable UUID owner,
                                  @Nullable ServerPlayer shooter, boolean siren, Loadout.Nuke nuke, Waypoints via, @Nullable LaunchOrigin from,
-                                 @Nullable FixedLauncherBlockEntity fixed, double lane) {
+                                 @Nullable FixedLauncherBlockEntity fixed, double lane, @Nullable RoundRef round) {
         if (siren) StrikeWorld.get(level).newOrder(owner, weapon);
         WeaponSpec spec = weapon.spec();
         // This launch's miss (spec): aim at shifted target, relative offset for entity.
@@ -144,9 +166,11 @@ public final class StrikeService {
             target = target.offset(miss);
             point = point.add(miss);
         }
-        if (spec.launch() == WeaponSpec.Launch.ICBM) return launchIcbm(level, target, point, nuke, shooter, owner, from, IncomingConfig.SERVER.nukeFlightTime.get());
+        if (spec.launch() == WeaponSpec.Launch.ICBM) {
+            return launchIcbm(level, target, point, nuke, shooter, owner, from, IncomingConfig.SERVER.nukeFlightTime.get(), round);
+        }
         Loadout.Nuke warhead = nuke.onCarrier() && Loadout.carriesNuke(weapon) ? nuke : null;
-        Stand stand = fixed != null ? Stand.fixed(fixed) : new Stand(post(level, shooter, owner, from, point), null, from == null ? null : from.at());
+        Stand stand = fixed != null ? Stand.fixed(fixed) : new Stand(post(level, shooter, owner, from, point), null, from == null ? null : from.at(level));
         StrikeProjectile p = switch (spec.launch()) {
             case GUIDED -> launchGuided(level, weapon, target, point, approachYaw, owner, shooter, stand, via, lane);
             case ROCKET -> launchRocket(level, target, point, approachYaw, owner, shooter, stand);
@@ -172,6 +196,11 @@ public final class StrikeService {
             }
             if (!added) return Result.FAILED;
         }
+        if (round != null) {
+            // Only a projectile that made it into the world or off-world flight carries the round: a refused one failed.
+            p.attachRound(round);
+            Orders.released(level, round, weapon, owner, p.position(), point);
+        }
         return new Result(true, eta);
     }
 
@@ -188,15 +217,21 @@ public final class StrikeService {
     /** ICBM at an ordered pad, retaining the owner even when they are offline. */
     public static Result launchIcbm(ServerLevel level, Target target, Vec3 point, Loadout.Nuke nuke, @Nullable ServerPlayer shooter,
                                     @Nullable UUID owner, @Nullable LaunchOrigin from, int flightTicks) {
+        return launchIcbm(level, target, point, nuke, shooter, owner, from, flightTicks, null);
+    }
+
+    /** ICBM as order round {@code round}: the scheduled strike carries it ({@link NuclearStrikes}). */
+    public static Result launchIcbm(ServerLevel level, Target target, Vec3 point, Loadout.Nuke nuke, @Nullable ServerPlayer shooter,
+                                    @Nullable UUID owner, @Nullable LaunchOrigin from, int flightTicks, @Nullable RoundRef round) {
         if (shooter != null && shooter.level() != level) shooter = null;
         if (from != null) {
             Vec3 aim = target instanceof Target.Ground ? point : NuclearStrikes.ground(level, point);
             return new Result(NuclearStrikes.launchAt(level, aim, target instanceof Target.Ground, nuke.yieldKt(), nuke.airBurst(),
-                    from, owner, flightTicks), flightTicks);
+                    from, owner, flightTicks, round), flightTicks);
         }
         boolean ok = target instanceof Target.Ground
-                ? NuclearStrikes.launch(level, point, true, nuke.yieldKt(), nuke.airBurst(), shooter, flightTicks)
-                : NuclearStrikes.launch(level, NuclearStrikes.ground(level, point), false, nuke.yieldKt(), nuke.airBurst(), shooter, flightTicks);
+                ? NuclearStrikes.launch(level, point, true, nuke.yieldKt(), nuke.airBurst(), shooter, flightTicks, round)
+                : NuclearStrikes.launch(level, NuclearStrikes.ground(level, point), false, nuke.yieldKt(), nuke.airBurst(), shooter, flightTicks, round);
         return new Result(ok, flightTicks);
     }
 
@@ -206,7 +241,7 @@ public final class StrikeService {
      */
     @Nullable
     private static LaunchSite.Post post(ServerLevel level, @Nullable ServerPlayer shooter, @Nullable UUID owner, @Nullable LaunchOrigin from, Vec3 point) {
-        if (from != null) return LaunchSite.Post.ordered(level, from.at(), point, owner);
+        if (from != null) return LaunchSite.Post.ordered(level, from.at(level), point, owner);
         return shooter != null && IncomingConfig.SERVER.launchNearPlayer.get() ? LaunchSite.Post.of(shooter) : null;
     }
 
@@ -402,10 +437,11 @@ public final class StrikeService {
         StrikeProjectile p = create(level, weapon);
         if (p == null) return null;
         Slot slot = Slot.reserve(level, launcher);
-        p.placeOnLauncher(slot.rail(), launcher.yaw(), launcher.elevation(), slot.ready(), slot.hidden(), target, point, owner);
+        p.placeOnLauncher(slot.rail(), slot.yaw(), slot.elevation(), slot.ready(), slot.hidden(), target, point, owner);
+        slot.ride(p, true);
         // First waypoint on launcher heading at arming distance: follow the checked sector straight
         // until there, then turn onto route armed; salvo projectile enters its lane after gate.
-        Vec3 gate = gate(slot.rail(), launcher.yaw());
+        Vec3 gate = gate(slot.rail(), slot.yaw());
         p.setRoute(inLane(course.from(gate, ProximityFuse.ARM_DISTANCE, option), weapon, lane, point).after(gate, slot.rail()));
         return p;
     }
@@ -435,11 +471,11 @@ public final class StrikeService {
             if (LaunchSite.clearAhead(level, be, point, budget)) return option;
             if (!silent) return sectorClosed(be);
         }
-        LaunchSite.Pick pick = LaunchSite.pickOn(level, be.mount(), site, weapon, want, course.heading(), MAX_OFF_TARGET, budget);
+        LaunchSite.Pick pick = LaunchSite.pickOn(level, be, want, course.heading(), MAX_OFF_TARGET, budget);
         if (pick == null) return sectorClosed(be);
         be.turnTo(pick.yaw(), now);
         // Clear heading within small correction threshold: rack stayed at old heading, sector checked above.
-        if (be.yaw() != pick.yaw() && !LaunchSite.clearAhead(level, be, point, budget)) return sectorClosed(be);
+        if (Math.abs(Mth.wrapDegrees(be.yaw() - pick.yaw())) > 1e-3f && !LaunchSite.clearAhead(level, be, point, budget)) return sectorClosed(be);
         return Math.max(0, pick.preferred());
     }
 
@@ -481,11 +517,21 @@ public final class StrikeService {
      * @param ready ticks until ignition
      * @param hidden ticks projectile stays hidden in rack while raising
      */
-    private record Slot(Vec3 rail, int ready, int hidden) {
+    private record Slot(Launcher launcher, int cell, Vec3 rail, float yaw, float elevation, int ready, int hidden) {
+        /** @param yaw rail axis heading in the world, ° ({@link Rails}) @param elevation rail axis elevation in the world, ° */
         static Slot reserve(ServerLevel level, Launcher launcher) {
             long now = level.getGameTime();
             int[] slot = launcher.reserve(now, launcher.rack().minReady(), launcher.rack().busyTicks());
-            return new Slot(launcher.railPoint(slot[0]), slot[1], launcher.raisingTicks(now));
+            Rails rails = launcher.rails();
+            return new Slot(launcher, slot[0], rails.point(slot[0]), rails.yaw(), rails.elevation(), slot[1], launcher.raisingTicks(now));
+        }
+
+        /**
+         * Projectile {@code p} just placed on this cell: on a launcher a craft carries, it rides the rail until it leaves
+         * ({@link StrikeProjectile#rideRail}); a ground rack stands still, so the placement holds.
+         */
+        void ride(StrikeProjectile p, boolean gated) {
+            if (launcher instanceof FixedLauncherBlockEntity be && be.carried()) p.rideRail(be.getBlockPos(), cell, gated);
         }
     }
 
@@ -523,7 +569,7 @@ public final class StrikeService {
     private static Launcher aimedFixed(ServerLevel level, FixedLauncherBlockEntity be, WeaponType weapon, Vec3 point) {
         long now = level.getGameTime();
         float yaw = be.turnedYaw(FlightController.anglesTo(be.position(), point)[0], now);
-        if (!LaunchSite.clearAhead(level, be.mount(), be.position(), yaw, weapon, point, new LaunchSite.Budget())) {
+        if (!LaunchSite.clearAhead(level, be, yaw, point, new LaunchSite.Budget())) {
             sectorClosed(be);
             return null;
         }
@@ -568,8 +614,9 @@ public final class StrikeService {
         Launcher launcher = aimed(level, stand, shooter, WeaponType.ROCKET, point);
         if (launcher != null) {
             Slot slot = Slot.reserve(level, launcher);
-            r.placeInTube(slot.rail(), launcher.yaw(), launcher.elevation(), slot.ready(), slot.hidden(), target,
+            r.placeInTube(slot.rail(), slot.yaw(), slot.elevation(), slot.ready(), slot.hidden(), target,
                     point, owner);
+            slot.ride(r, false);
             r.fireData(level.random);
             return r;
         }
@@ -596,8 +643,12 @@ public final class StrikeService {
         Launcher launcher = aimed(level, stand, shooter, WeaponType.LOITER, via.isEmpty() ? point : via.points().getFirst());
         if (launcher != null) {
             Slot slot = Slot.reserve(level, launcher);
-            e.placeOnLauncher(slot.rail(), launcher.yaw(), launcher.elevation(), slot.ready(), slot.hidden(), target, point, owner);
-            e.setRoute(loiterRoute(via, slot.rail(), point, lane, gate(slot.rail(), launcher.yaw())));
+            e.placeOnLauncher(slot.rail(), slot.yaw(), slot.elevation(), slot.ready(), slot.hidden(), target, point, owner);
+            Vec3 gate = gate(slot.rail(), slot.yaw());
+            Route route = loiterRoute(via, slot.rail(), point, lane, gate);
+            e.setRoute(route);
+            Vec3 first = route == null ? null : route.current();
+            slot.ride(e, first != null && first.x == gate.x && first.z == gate.z);
             return e;
         }
         if (stand.fixed() != null) return null;

@@ -9,7 +9,7 @@ On a server, install the same Incoming version for everyone.
 
 | Mod | What it adds to Incoming | Install it on |
 |---|---|---|
-| Create | Munition recipes using Create parts; vanilla recipes are available without it | Server and clients |
+| Create | Munition recipes using Create parts; vanilla recipes are available without it. A Display Link shows the SAM's air-raid alert ([SAM](defense.md#redstone)) and a fixed launcher's munitions and readiness ([launcher](launcher.md#firing)) on display boards, signs and nixie tubes | Server and clients |
 | Create Aeronautics with Sable 2.0.6+ | Flying craft as targets; explosions break and push them | Server and clients |
 | Distant Horizons 3.3.3 | Distant terrain on the map and visible changes after strikes | Clients; also the host or dedicated server for damage updates |
 | Voxy through Roxy | Distant terrain on the map and in the world | Clients only |
@@ -17,6 +17,11 @@ On a server, install the same Incoming version for everyone.
 | Iris | Nuclear effects with shaders | Clients only |
 | Flashback | Recording and replaying strikes | Clients only |
 | Vista and other in-game camera and screen mods | Strikes, smoke and the mushroom cloud on in-game screens (up to four at a time, with low cloud detail) | Clients only |
+| Mekanism | Its hazmat suit and other radiation-shielding items protect from nuclear radiation ([pack makers](packs.md#radiation-shielding-incomingradiation_shielding)) | Server and clients |
+| Jade | Looking at a launcher, SAM, substation or strike projectile shows its state; owner and mission only to the owner's side and operators ([details](packs.md#jade)) | Server and clients |
+| FTB Teams | Players in one party are one side: they share spotting, the SAM spares their rounds, they link each other's launchers ([sides](packs.md#sides)) | Server and clients |
+| Open Parties and Claims | Players in one party are one side, as with FTB Teams ([sides](packs.md#sides)) | Server and clients |
+| CC:Tweaked | Computers read the fixed launcher and the SAM, fire a launcher's mission and receive air-raid events ([details](packs.md#computers-cctweaked)) | Server and clients |
 
 Explosions, smoke, trails and the nuclear cloud stay visible behind stained and tinted glass, ice, slime, honey and water,
 tinted by them as the world behind them is. With a shader pack, and in camera views from other mods, these blocks hide

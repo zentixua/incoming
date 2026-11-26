@@ -28,8 +28,12 @@ import ua.zentix.incoming.nuclear.Detonation;
 import ua.zentix.incoming.nuclear.model.BurnInjury;
 import ua.zentix.incoming.nuclear.model.BurnInjury.Cover;
 import ua.zentix.incoming.nuclear.model.Fragility;
+import ua.zentix.incoming.registry.ModAttachments;
 import ua.zentix.incoming.registry.ModDamageTypes;
 import ua.zentix.incoming.registry.ModEffects;
+import ua.zentix.incoming.strike.StrikeOwner;
+
+import java.util.UUID;
 
 /**
  * Fireball light burns across the body ({@link BurnInjury}, DESIGN-nuke §4): the side facing the ball burns — half the
@@ -50,6 +54,9 @@ import ua.zentix.incoming.registry.ModEffects;
  * only the increase. Each burn heals on its own schedule (cap set by the worst unhealed burn); ongoing shock keeps its
  * original schedule. A player protected by damage rules (no PvP, same team) is wholly unaffected by a player's flash,
  * including their own — skin and clothing, as with an arrow.
+ *
+ * <p>Shock has one cause: the flash whose burn alone reached the threshold (a later flash never moves it). That flash's
+ * owner is kept with the body ({@code ModAttachments.BURN_SHOCK_OWNER}) and named by the shock's death when online then.
  */
 public final class FlashBurns {
     /** Skin share per slot on the ball-facing side, % (half the rule of nines): head, torso with arms, legs, feet. */
@@ -61,8 +68,13 @@ public final class FlashBurns {
 
     private FlashBurns() {}
 
-    /** Burns from fluence {@code q} cal/cm² at the eyes of an entity seeing the ball. */
-    public static void burn(ServerLevel level, Detonation d, LivingEntity e, double q, @Nullable Entity owner) {
+    /**
+     * Burns from fluence {@code q} cal/cm² at the eyes of an entity seeing the ball.
+     *
+     * @param ownerId the detonation's owner, credited when online in any level ({@link StrikeOwner})
+     */
+    public static void burn(ServerLevel level, Detonation d, LivingEntity e, double q, @Nullable UUID ownerId) {
+        Entity owner = StrikeOwner.online(level, ownerId);
         if (e.fireImmune() || e instanceof ArmorStand || e instanceof AbstractGolem || e.isInvulnerable() || underWater(level, e)
                 || e.hasEffect(MobEffects.FIRE_RESISTANCE) || q < BurnInjury.lowest(d.yieldKt())) return;
         if (e instanceof Player victim && owner instanceof Player attacker && !victim.canHarmPlayer(attacker)) return;
@@ -96,7 +108,11 @@ public final class FlashBurns {
         // Wound is down to the cap from new and previous burns together: previous burns already removed their share
         float dmg = (float) (BurnInjury.wound(before, amplifier) * unburned(e));
         if (dmg >= 0.5f && !(e instanceof Player p && p.getAbilities().invulnerable)) {
-            e.hurt(ModDamageTypes.source(level, ModDamageTypes.NUCLEAR_THERMAL, null, owner), dmg);
+            StrikeOwner.hurt(e, ModDamageTypes.source(level, ModDamageTypes.NUCLEAR_THERMAL, null, owner), dmg);
+        }
+        if (amplifier == BurnsEffect.SHOCK) {
+            if (ownerId != null) e.setData(ModAttachments.BURN_SHOCK_OWNER, ownerId);
+            else e.removeData(ModAttachments.BURN_SHOCK_OWNER);
         }
         // each burn has its own duration: vanilla keeps a weaker, longer effect underneath, exposing it when the stronger ends.
         // No surrounding particles (obscure the eyes in first person), icon only
