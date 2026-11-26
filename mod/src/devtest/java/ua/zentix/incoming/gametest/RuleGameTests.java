@@ -206,6 +206,9 @@ public final class RuleGameTests {
     public static void arenaKeepsItsBlocks(GameTestHelper h) {
         ServerLevel level = h.getLevel();
         keepRules(h);
+        // outages of earlier batches cascade over neighbouring platforms (a nuke's 512-block one reached this arena 2 s
+        // in): the arena's own rounds are the subject, so the grid starts quiet, as the grid tests do
+        GridGameTests.quiet(level);
         GridQuiet grid = new GridQuiet();
         BlockPos substation = arena(h);
         Node node = PowerGrid.get(level).nodeAt(h.absolutePos(substation));
@@ -267,6 +270,9 @@ public final class RuleGameTests {
     public static void roundsMadeUnderRulesOnStillDamage(GameTestHelper h) {
         ServerLevel level = h.getLevel();
         keepRules(h);
+        // outages of earlier batches cascade over neighbouring platforms (a nuke's 512-block one reached this arena 2 s
+        // in): the arena's own rounds are the subject, so the grid starts quiet, as the grid tests do
+        GridGameTests.quiet(level);
         GridQuiet grid = new GridQuiet();
         BlockPos substation = arena(h);
         Node node = PowerGrid.get(level).nodeAt(h.absolutePos(substation));
