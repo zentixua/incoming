@@ -231,11 +231,21 @@ public final class CameraShake {
         return p.isPassenger() || p.isSwimming() || p.isFallFlying() || p.isSleeping() || p.getAbilities().flying;
     }
 
-    /** Client tick; {@code onFeet} — player has foot support ({@link #standing}). */
-    public static void tick(boolean onFeet) {
-        ticks++;
+    /** Client tick of a running level; {@code onFeet} — player has foot support ({@link #standing}). */
+    static void tick(boolean onFeet) {
+        tick(onFeet, true);
+    }
+
+    /**
+     * Client tick; {@code onFeet} — player has foot support ({@link #standing}). The ground and the blast move the body
+     * only while the level runs ({@code runs}, {@link ua.zentix.incoming.client.ClientTicks}): under {@code /tick freeze}
+     * and a paused replay the jolt, tremor and lean hold where they stood.
+     */
+    public static void tick(boolean onFeet, boolean runs) {
         standingBefore = standing;
         standing = Mth.clamp(standing + (onFeet ? STANDING_STEP : -STANDING_STEP), 0, 1);
+        if (!runs) return;
+        ticks++;
         SWAYS.removeIf(s -> (ticks - s.from) / 20.0 * BodySway.RATE >= s.tilt.length - 1);
         TREMORS.removeIf(r -> (ticks - r.from) / 20.0 >= r.seconds);
         GROUNDS.removeIf(g -> (ticks - g.from) / 20.0 >= g.seconds);
@@ -265,7 +275,9 @@ public final class CameraShake {
         // lean belongs to the player's body: invisible to the projectile camera or another entity's eyes
         Player p = mc.player;
         double body = p != null && mc.getCameraEntity() == p ? p.getViewYRot((float) e.getPartialTick()) : Double.NaN;
-        double[] o = offsets(e.getPartialTick(), e.getYaw(), e.getPitch(), e.getRoll(), body, k);
+        // the shake's own time: the game-time partial tick, which holds at the tick's end while the level is frozen (the
+        // camera event's partial keeps cycling for the player's own motion)
+        double[] o = offsets(mc.getTimer().getGameTimeDeltaPartialTick(false), e.getYaw(), e.getPitch(), e.getRoll(), body, k);
         e.setYaw(e.getYaw() + (float) o[0]);
         e.setPitch(e.getPitch() + (float) o[1]);
         e.setRoll(e.getRoll() + (float) o[2]);

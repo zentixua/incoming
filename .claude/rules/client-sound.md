@@ -252,7 +252,8 @@ file changes.
   anchor before `play`: an engine-held buffer (same recording's second use in a game) starts on the sound thread
   before `play` returns; an anchor created afterward would wait 40 ticks, shift one tick, and lose near reflections'
   first 0–2 s (`SCENARIO nuke-sound … start +… by sound|tick`). Engine-refused sound (`isActive` false) uses tick time
-  immediately.
+  immediately. The anchor converts the sound's wall-clock playing time into clock ticks at the client tick's current
+  length (`ClientTicks.nanos`: 100 ms at `/tick rate 10`, the replay's speed under Flashback), never at a fixed 50 ms.
 - Nuclear strike volume follows peak pressure at the ear (`Outdoor.pressureVolume`: full from 1 psi, below that half
   pressure decibels, like conventional explosions), same `Outdoor` path as conventional ones (edge by `Sightline` from
   detonation, ground at epicenter, daytime shadow from ray/ground contact, `Outdoor.shadowFrom`: beyond 9 km for a

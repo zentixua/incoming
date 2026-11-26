@@ -127,6 +127,16 @@ The nuclear renderer reads the live presentation clock at the frame fraction. Re
 on each frame and tick query, including direct renders during export. Clock limits and diagnostics are in `nuclear.md`, replay positions in `replay.md`.
 
 ## Pitfalls
+- Conventional effects that move (blast timelines `Effects` and their `BlastTime` stamps, `SmokeGrid` clouds,
+  `FireSmoke` crater and oil smoke, `FxPool` particles, `Fragments`, `CameraShake` jolt and lean, the heat shimmer) run
+  on the client level's tick: `ClientTicks.runs()`, decided in the client pre-tick as vanilla's `TickRateManager.tick`
+  will (not paused, not frozen or a frozen step). Pause, `/tick freeze` and a Flashback pause (a level freeze) stop them,
+  `/tick step` moves them, `/tick rate` paces them through the client timer (`ClientTicksTest` checks each call stays
+  under the gate). Frame readers use `getGameTimeDeltaPartialTick(false)` (1.0 while frozen), never the camera event's
+  partial, which keeps cycling for the player's own motion and would rock a held clock every tick. What follows the
+  eye or the body (screen flash fade, concussion, hearing, foot support) keeps ticking. Wall time converts to client
+  ticks at `ClientTicks.nanos()` (the client timer's own length, `Minecraft.getTickTargetMillis`, which Flashback sets
+  from the replay speed), never at 50 ms.
 - `ClientLevel` calculates sky darkness (`Level.skyDarken`, `updateSkyBrightness`) only in constructor on world entry:
   client `getMaxLocalRawBrightness(pos)` stays daytime all evening. Time-of-day sky light at eye:
   `getMaxLocalRawBrightness(pos, FlashEyes.skyDarken(level))` (vanilla formula, same server-side).

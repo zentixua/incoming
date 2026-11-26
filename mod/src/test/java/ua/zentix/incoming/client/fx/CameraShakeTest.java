@@ -218,6 +218,33 @@ class CameraShakeTest {
     }
 
     /**
+     * {@code /tick freeze} and a paused replay hold the blast's lean and the ground jolt where they stood (no tick of
+     * the level, no tick of the shake), and the shake resumes from there: after the hold it equals a shake that never
+     * stopped, at the same count of running ticks.
+     */
+    @Test
+    void frozenLevelHoldsTheShake() {
+        CameraShake.reset();
+        sway(1, 2, new Vec3(0, 0, 1));
+        CameraShake.ground(1, 1.5, 0, 7);
+        for (int i = 0; i < 10; i++) CameraShake.tick(true, true);
+        double[] held = CameraShake.offsets(0.5, 0, 0, 0, 0, 1);
+        assertTrue(Math.abs(held[1]) > 0.01, "a shake to hold: " + held[1]);
+        for (int i = 0; i < 200; i++) CameraShake.tick(true, false);
+        double[] after = CameraShake.offsets(0.5, 0, 0, 0, 0, 1);
+        for (int k = 0; k < 3; k++) assertEquals(held[k], after[k], 0, "axis " + k + " stood still");
+        for (int i = 0; i < 10; i++) CameraShake.tick(true, true);
+        double[] resumed = CameraShake.offsets(0.25, 0, 0, 0, 0, 1);
+        CameraShake.reset();
+        sway(1, 2, new Vec3(0, 0, 1));
+        CameraShake.ground(1, 1.5, 0, 7);
+        for (int i = 0; i < 20; i++) CameraShake.tick(true, true);
+        double[] straight = CameraShake.offsets(0.25, 0, 0, 0, 0, 1);
+        for (int k = 0; k < 3; k++) assertEquals(straight[k], resumed[k], 1e-12, "axis " + k + " resumed where it stood");
+        CameraShake.reset();
+    }
+
+    /**
      * A {@code psi} wave from {@code kt} with shake strength {@code k}: minimum and maximum pitch and minimum roll
      * while the body rocks, heading 0 (toward +z): {min pitch, max pitch, min roll}.
      */

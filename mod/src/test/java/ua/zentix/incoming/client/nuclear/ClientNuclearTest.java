@@ -63,6 +63,34 @@ class ClientNuclearTest {
         assertEquals(held, clock.shown(), 1e-9);
     }
 
+    /**
+     * {@code /tick rate 10}: server and client both tick every 100 ms, the server's ages arriving with 0–3 ticks of
+     * network jitter. Each 100 ms tick is one client tick, not a missed one, so the clock keeps its jitter buffer and
+     * steers within the normal 0.85–1.2 per tick. Counted at a fixed 50 ms, every tick reads as a missed one and the
+     * clock snaps to each early age (steps of 1.39 per tick, above the top speed: a stutter).
+     */
+    @Test
+    void slowTickRateIsNoMissedTick() {
+        long tick = 100_000_000L;
+        assertTrue(maxStep(tick, tick) <= 1.2 + 1e-9, "step at the rate's length " + maxStep(tick, tick));
+        assertTrue(maxStep(tick, 50_000_000L) > 1.3, "a fixed 50 ms stutters: " + maxStep(tick, 50_000_000L));
+    }
+
+    /** Largest shown-age step per tick: ticks {@code wall} ns apart, counted at {@code length}; jittered anchors. */
+    private static double maxStep(long wall, long length) {
+        ClientNuclear.AgeClock clock = new ClientNuclear.AgeClock(0, true);
+        java.util.Random jitter = new java.util.Random(17);
+        double last = 0, max = 0;
+        for (int t = 1; t <= 1200; t++) {
+            clock.anchor(Math.max(0, t - jitter.nextInt(4)));
+            clock.tick(1 + t * wall, length);
+            double shown = clock.at(0);
+            if (t > 100) max = Math.max(max, shown - last);
+            last = shown;
+        }
+        return max;
+    }
+
     /** The jump back is forgotten in half a minute. */
     @Test
     void leadDecays() {

@@ -221,13 +221,13 @@ public final class FireSmoke implements SmokeGrid.Source {
         return i;
     }
 
-    /** Once per client tick: sources every {@link #PERIOD}. */
-    public static void tick(ClientLevel level) {
+    /** Once per client tick: sources every {@link #PERIOD} ticks of a running level ({@code runs}); a new world clears them. */
+    public static void tick(ClientLevel level, boolean runs) {
         if (level != world) {
             reset();
             world = level;
         }
-        if (++clock % PERIOD != 0) return;
+        if (!runs || ++clock % PERIOD != 0) return;
         double now = SmokeGrid.seconds(0);
         for (var it = OIL_FIRES.long2ObjectEntrySet().iterator(); it.hasNext(); ) {
             var e = it.next();

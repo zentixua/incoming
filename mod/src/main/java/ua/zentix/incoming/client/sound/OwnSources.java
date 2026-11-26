@@ -13,6 +13,7 @@ import org.lwjgl.openal.ALC10;
 import org.lwjgl.openal.ALC11;
 import org.lwjgl.openal.EXTEfx;
 import ua.zentix.incoming.Incoming;
+import ua.zentix.incoming.client.ClientTicks;
 import ua.zentix.incoming.client.nuclear.Deafness;
 
 import java.nio.ShortBuffer;
@@ -377,7 +378,8 @@ public final class OwnSources {
             double clock = a.clock.ticks(partial);
             long started = a.started;
             if (started != 0) {
-                a.zero = Math.max(a.tick, clock - (now - started) * 20e-9);
+                // the sound plays in wall time; the clock counts client ticks of the current length (/tick rate, replay speed)
+                a.zero = Math.max(a.tick, clock - ClientTicks.ticks(now - started, ClientTicks.nanos()));
                 a.heard = true;
             } else if (clock > a.tick + ANCHOR_WAIT || a.sound != null && !mc.getSoundManager().isActive(a.sound)) {
                 a.zero = a.tick;

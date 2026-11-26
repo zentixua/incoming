@@ -70,8 +70,8 @@ Create, Sable and Aeronautics, no pack) kept up in a saved world, `tools/dev_cli
 - The scene: `cmd 'tp @s …'`, `time set`, the burst once, `tick freeze` at the moment, `tick step <ticks>` to move it.
   A server burst leaves its ruins in the copy (the client saves it on `stop`): an untouched map is a new `<save>` name
   with `--from` again.
-  The freeze holds the nuclear show's age (`ClientNuclear`: eye-following state still updates) and particles; ordinary
-  strike smoke and the effects layer run on. Config values (`mod/run/client/config/incoming-server.toml` and
+  The freeze holds the nuclear show's age (`ClientNuclear`: eye-following state still updates), particles and the
+  conventional strike's clouds, smoke, shake and heat shimmer (`ClientTicks`, `client.md`). Config values (`mod/run/client/config/incoming-server.toml` and
   `-client.toml`) are reread when the file changes; `max_yield` is a config value there, not an `/incoming rule`.
 - Measured 25.11 (laptop, shared GPU slot, Silo copy at 3514 73 −2298, a held 100 kt front): start 44.6 s to the
   player in the world; a shader edit to its frame 37.2 s cold, 16.6 s warm (the F3+T reload 27.8 / 13.8 s of it);
