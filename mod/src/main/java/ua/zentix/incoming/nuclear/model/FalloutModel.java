@@ -16,11 +16,41 @@ package ua.zentix.incoming.nuclear.model;
  * at 4 / 13 / 40 km for a 15 kt surface burst in 24 km/h wind — the order of NUKEMAP (Miller model) contours for this case.
  * Everything is multiplied by the surface-burst share {@link #surfaceFraction()}.
  *
- * <p>Time is game hours (1000 ticks; day — 20 minutes): fallout arrives at a point after downwind distance / wind speed,
- * but no earlier than the largest particles fall from the cloud ({@link #firstArrivalHours}); decays by Way–Wigner
- * t^−1.2 (7–10 rule) — see {@link #doseRate}.
+ * <p>Time ({@code docs/design/time.md} §8.3 rule 4): fallout arrives at a point on the strike's motion age (real time, the
+ * air's clock) after downwind distance / wind speed, but no earlier than the largest particles fall from the cloud
+ * ({@link #firstArrivalHours}), also after the cloud is too thin to see. On the ground it decays by Way–Wigner t^−1.2
+ * (7–10 rule), t its ground age: the age it landed at plus the ground clock since ({@link #groundRate}). It lands until
+ * {@link #lastLandingHours} above the radiation model's floor {@link #FLOOR}.
  */
 public record FalloutModel(double yieldKt, double hobM, double windDirRad, double windSpeedMps) {
+    /**
+     * Where a deposit (plume fallout, black-rain dust) lies on the ground at a point, by time (time.md §8.3 rule 4): it
+     * landed at motion age {@code arrival}, seconds, when the ground clock (the strike clock plus jumps someone was awake
+     * for) led the motion age by {@code shift} seconds. Its ground age at ground clock G is G − shift, which is
+     * {@code arrival} at the landing: the dose rate it lands with is the law's for its age in the air, on any day.
+     */
+    public record Landing(double arrival, double shift) {
+        /** Ground age at ground clock {@code ground}, hours; below {@link #arrival} — not landed yet then. */
+        public double groundHours(double ground) {
+            return (ground - shift) / 3600;
+        }
+
+        /** Dose rate, R/h, at ground clock {@code ground} of a deposit with H+1 rate {@code h1}; 0 before it landed. */
+        public double rate(double h1, double ground) {
+            return landed(ground) ? groundRate(h1, groundHours(ground)) : 0;
+        }
+
+        /** Whether it has landed by ground clock {@code ground} (to a microsecond: the landing moment itself counts). */
+        public boolean landed(double ground) {
+            return ground - shift >= arrival - 1e-6;
+        }
+
+        /** Dose, R, over ground clock {@code g0} to {@code g1} of a deposit with H+1 rate {@code h1}: none before it landed. */
+        public double dose(double h1, double g0, double g1) {
+            return groundDose(h1, Math.max(g0 - shift, arrival) / 3600, (g1 - shift) / 3600);
+        }
+    }
+
     /** Axial fallout dose rate near the epicenter at H+1, R/h. */
     public static final double PEAK_H1 = 1e5;
     /** Axial decay length, m (at 15 kt and reference wind). */
@@ -37,6 +67,11 @@ public record FalloutModel(double yieldKt, double hobM, double windDirRad, doubl
     /** Way–Wigner decay law. */
     public static final double DECAY_EXP = 1.2;
     private static final double MIN_WIND = 0.5;
+    /**
+     * The radiation model's floor, R/h: a dose rate below it is background (about 100 µSv/h, ten times the highest natural
+     * background on inhabited land, est.); it adds no dose, and fallout ends where and when it falls below.
+     */
+    public static final double FLOOR = 0.01;
     /** Earliest fallout: {@code FIRST_ARRIVAL_MIN · Y^FIRST_ARRIVAL_EXP} minutes (Miller model). */
     private static final double FIRST_ARRIVAL_MIN = 4;
     private static final double FIRST_ARRIVAL_EXP = 0.2;
@@ -91,7 +126,8 @@ public record FalloutModel(double yieldKt, double hobM, double windDirRad, doubl
 
     /**
      * Dose rate after {@code hoursSinceDetonation} hours, R/h: Ḋ = Ḋ₁·t^−1.2, t at least {@link #MIN_DECAY_HOURS}
-     * (law valid from half an hour); 0 before fallout arrival.
+     * (law valid from half an hour); 0 before fallout arrival. The ground age is the time since the burst only where the
+     * ground's clock has run with the air's (a 24-hour day, no jumps); otherwise {@link Landing}.
      */
     public double doseRate(double x, double z, double hoursSinceDetonation) {
         if (hoursSinceDetonation < arrivalHours(x, z)) return 0;
@@ -111,6 +147,85 @@ public record FalloutModel(double yieldKt, double hobM, double windDirRad, doubl
         double lo = Math.max(h0, MIN_DECAY_HOURS);
         double tail = h1 <= lo ? 0 : Math.pow(a, DECAY_EXP) * (Math.pow(lo, 1 - DECAY_EXP) - Math.pow(h1, 1 - DECAY_EXP)) / (DECAY_EXP - 1);
         return flat + tail;
+    }
+
+    /** Strongest H+1 dose rate of the field, R/h: at ground zero, the trace's start and the epicenter patch. */
+    public double peakH1() {
+        return PEAK_H1 * surfaceFraction() * REFERENCE_WIND / wind() * (1 + GZ_PEAK);
+    }
+
+    /**
+     * Motion age, hours, of the trace's last landing above {@link #FLOOR}: along the axis the landing dose rate (H+1 rate
+     * decayed to its arrival age) falls with distance; the farthest point still above the floor. 15 kt surface burst in the
+     * reference wind: 270 km, 11.24 h. No fallout: 0.
+     */
+    public double lastLandingHours() {
+        if (surfaceFraction() <= 0) return 0;
+        double lo = 0, hi = 1000;
+        while (landingRate(hi) >= FLOOR) hi *= 2;
+        if (landingRate(lo) < FLOOR) return 0;
+        for (int i = 0; i < 60; i++) {
+            double mid = (lo + hi) / 2;
+            if (landingRate(mid) >= FLOOR) lo = mid;
+            else hi = mid;
+        }
+        return arrivalHours(lo * Math.cos(windDirRad), lo * Math.sin(windDirRad));
+    }
+
+    /** Dose rate on the axis {@code down} metres downwind as it lands, R/h. */
+    private double landingRate(double down) {
+        double x = down * Math.cos(windDirRad), z = down * Math.sin(windDirRad);
+        return groundRate(doseRateAtH1(x, z), arrivalHours(x, z));
+    }
+
+    /**
+     * Upper bound of the H+1 dose rate anywhere at least {@code r} metres from the epicenter, R/h; non-increasing in r.
+     * A point at distance r is either at least r/2 downwind (the axial law at r/2 bounds it), less than r/2 downwind and so
+     * at least r·√3/2 across with σ under 0.05·r + R_ball, or upwind (a Gaussian of r with σ = R_ball); plus the epicenter
+     * patch at r.
+     */
+    public double boundH1(double r) {
+        double frac = surfaceFraction();
+        if (frac <= 0) return 0;
+        double rf = FireballModel.maxRadius(yieldKt, true), wind = wind();
+        double stretch = Math.pow(yieldKt / 15, 0.45) * wind / REFERENCE_WIND;
+        double along = Math.pow(1 + r / 2 / (TRAIL_SCALE_M * stretch), -TRAIL_EXP);
+        double s = 0.05 * r + rf;
+        double across = Math.exp(-0.375 * r * r / (s * s));
+        double upwind = Math.exp(-r * r / (8 * rf * rf));
+        double gz = GZ_PEAK * Math.exp(-r * r / (2 * (GZ_RADIUS * rf) * (GZ_RADIUS * rf)));
+        return PEAK_H1 * frac * REFERENCE_WIND / wind * (Math.max(along, Math.max(across, upwind)) + gz);
+    }
+
+    /**
+     * Distance, metres, beyond which the dose rate stays under {@code rate} R/h for ground ages of at least
+     * {@code groundHours} ({@link #boundH1}); 0 — nowhere above it.
+     */
+    public double reachMetres(double groundHours, double rate) {
+        double decay = Math.pow(Math.max(groundHours, MIN_DECAY_HOURS), -DECAY_EXP);
+        if (boundH1(0) * decay < rate) return 0;
+        double lo = 0, hi = 1000;
+        while (boundH1(hi) * decay >= rate) hi *= 2;
+        for (int i = 0; i < 50; i++) {
+            double mid = (lo + hi) / 2;
+            if (boundH1(mid) * decay >= rate) lo = mid;
+            else hi = mid;
+        }
+        return hi;
+    }
+
+    /** Dose rate of fallout on the ground, R/h: H+1 rate {@code h1} at ground age {@code groundHours} (Way–Wigner, half-hour floor). */
+    public static double groundRate(double h1, double groundHours) {
+        return h1 * Math.pow(Math.max(groundHours, MIN_DECAY_HOURS), -DECAY_EXP);
+    }
+
+    /** Dose, R, of fallout with H+1 rate {@code h1} over ground ages {@code g0} to {@code g1} hours: ∫ {@link #groundRate}. */
+    public static double groundDose(double h1, double g0, double g1) {
+        if (g1 <= g0 || h1 <= 0) return 0;
+        double flat = Math.max(0, Math.min(g1, MIN_DECAY_HOURS) - g0) * Math.pow(MIN_DECAY_HOURS, -DECAY_EXP);
+        double lo = Math.max(g0, MIN_DECAY_HOURS);
+        double tail = g1 <= lo ? 0 : (Math.pow(lo, 1 - DECAY_EXP) - Math.pow(g1, 1 - DECAY_EXP)) / (DECAY_EXP - 1);
+        return h1 * (flat + tail);
     }
 
     private double wind() {
