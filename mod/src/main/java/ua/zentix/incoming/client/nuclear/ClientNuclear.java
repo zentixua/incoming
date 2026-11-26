@@ -108,8 +108,8 @@ public final class ClientNuclear {
         private long lastFrameNanos;
         private boolean discarded;
         /**
-         * Estimated clocks ({@link StrikeClock}) when the server has not said ({@link #ANCHORS}: a detonation newer than the
-         * last clock packet, or a recording made before the server sent them); null — not estimated yet.
+         * The last anchors the server told ({@link #ANCHORS}), or the estimate when it has not (a recording made before the
+         * server sent them); null — neither yet.
          */
         private StrikeClock guessed;
         /** Counted jumps in this dimension when this client learned of the detonation: its estimate before the server says. */
@@ -185,13 +185,14 @@ public final class ClientNuclear {
         /** This detonation's two ages: the server's anchors, or an estimate until it says. */
         StrikeClock strikeClock(double realTicks) {
             StrikeClock told = ANCHORS.get(d.id());
-            if (told != null) return told;
-            if (realTicks / 20.0 <= NukeClock.SHOW_S) return StrikeClock.start(jumpsAtEntry);
+            if (told != null) return guessed = told;
+            // once told, the last anchors hold (a detonation the server has forgotten while its pall still shows)
+            if (guessed != null && guessed.ended()) return guessed;
+            if (realTicks / 20.0 <= NukeClock.SHOW_S) return guessed != null ? guessed : StrikeClock.start(jumpsAtEntry);
             // not told (a recording made before the server sent it): a 20-minute show, as if the day had run at vanilla
             // speed since its end, no jumps
-            if (guessed == null || !guessed.ended()) guessed = StrikeClock.start(jumpsAtEntry).end(NukeClock.SHOW_TICKS,
+            return guessed = StrikeClock.start(jumpsAtEntry).end(NukeClock.SHOW_TICKS,
                     ClientClock.rateClock() - (realTicks - NukeClock.SHOW_TICKS), jumpsAtEntry);
-            return guessed;
         }
 
         /**
