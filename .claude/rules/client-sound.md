@@ -324,7 +324,7 @@ file changes.
   Compare the sound window in a raid with the same isolated hit only at the same hearing state: raid (99 Shaheds,
   first at 30–50 blocks) by second 10 is one deafness dose (`HearingModel.Ear`: waves within 2 real minutes add; the
   numbers below were measured while the window was 1.7 s of a vanilla day's world clock, which split hits 2 s apart:
-  one dose now sums them, `RaidHearingTest`),
+  one dose now sums them: 8 Shaheds 1–2 s apart at 30–50 m shift 50 dB, not 32, `RaidHearingTest`),
   threshold shift ~80 dB in highs and ~27 in lows — full-band volume −10.9 dB, highs down to −40 dB (filter limit),
   ringing at ~4.9 kHz — the suppression and spectral-difference mechanism in the near-hit window (raid versus single;
   bands depend on window/method: reviewer with Hann window got −8.8/−9.9/−19.5/−1.4/−43.8 dB at
