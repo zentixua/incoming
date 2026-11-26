@@ -76,8 +76,9 @@ paths:
   queue and another sender's look the same from here: the target is how much of a foreign queue the window holds its
   share against and how much own queue a slow line carries (88–222 ms from 4.5 to 0.6 MB/s on a default kernel,
   `slowerLinesKeepTheLineFullWithAShortQueue`). With `tcp_notsent_lowat` on the socket (netcup's Crafty container) the
-  Netty gate keeps the window's bytes in the stock, out of game packets' way: game-packet wait p95 12 ms with LSS and a
-  strike's ruins on the LTE rig, 143 ms without. Sizes count section bytes before the connection's compression, which
+  socket holds at most 47 KB unsent on the rig (2.5 MB without), so the window's bytes beyond TCP's own window wait in
+  the stock; what then queues in the line is TCP's window, shared with LSS, whose traffic sets the game-packet wait
+  while it streams (rig: LSS at 0.54 or 1.66 MB/s in the same phase, p95 wait 12 or 260 ms). Sizes count section bytes before the connection's compression, which
   shrinks ruin chunks 5.7× (rig, 26.11.2026); `WINDOW_MAX` is ~280 KB on the wire, just over the 240 KB a 4.5 MB/s, 54 ms LTE link
   holds in flight. One acknowledged batch per round trip, as vanilla's chunk sender does at its client-measured rate,
   is round-trip bound: on that link it carried 0.07 MB/s and the 48 MiB queue overflowed. The window bounds what can

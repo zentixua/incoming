@@ -88,8 +88,9 @@ public final class VoxyLods {
      * share against: after a strike with LSS re-sending columns, mark-to-ack times on the LTE rig were 65 ms above base
      * at p90 (26.11.2026). A 25 ms target there gave ruins 6 % of the line beside a 100 ms foreign queue (simulation,
      * `VoxyLodsSharedLineTest`), this one 38 %. On slow lines it is the queue game packets wait behind while a backlog
-     * streams, 88–222 ms from 4.5 down to 0.6 MB/s (`slowerLinesKeepTheLineFullWithAShortQueue`), unless the socket caps
-     * unsent data (`tcp_notsent_lowat`), when the Netty gate keeps the window's bytes in the stock instead.
+     * streams, 88–222 ms from 4.5 down to 0.6 MB/s (`slowerLinesKeepTheLineFullWithAShortQueue`). A socket that caps
+     * unsent data (`tcp_notsent_lowat`; rig: at most 47 KB unsent, against 2.5 MB without) leaves the window's bytes
+     * beyond TCP's own window in the stock, behind game packets (by mechanism, not measured on a slow line).
      */
     static final long TARGET_NANOS = 100_000_000;
     /** A batch mark, so an acknowledgement, at least every this many section bytes: the window refills as chunks land. */
