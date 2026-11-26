@@ -344,11 +344,21 @@ float dwSight(float r, float a) {
     return mix(dwSightAt(i, u), dwSightAt(i + 1, u), x - float(i)) * (1.0 - smoothstep(DW_AGES - 2.0, DW_AGES - 1.0, dwAgeU(a)));
 }
 
-// the density transfer (presentation): the drawn column's vertical optical depth from the law's. τ itself up to 1 (thin haze
+// the density transfer (presentation): the textured young level's drawn column's vertical optical depth from the law's (the
+// haze level draws the law's whole column held under what the screen shows, dwHazeDepth; between them by dwTextured:
+// PallField.column). τ itself up to 1 (thin haze
 // hides what the law's optical depth hides, Koschmieder); compressive above it, the slope falling from 1 smoothly to
 // DW_G_SLOPE over DW_G_KNEE (C1 at τ = 1; the matte, semi-transparent wall: the law's columns of tens to hundreds would draw
 // an opaque skin). Fitted to take 33's drawn column at 4.5 km from 1 Mt, ages 1–24 s (tools/uw_probe/probe_gl.py)
 const float DW_G_SLOPE = 0.073, DW_G_KNEE = 0.5;
+// the haze level's drawn column (PallField.hazeDepth): the law's optical depth, softly held under the depth a ray leaves the
+// dust at (dwMarch stops at a transmittance of 1 %: ln 100): deeper dust shows nothing more from any view; the eighth-power
+// soft minimum keeps the law within 1 % up to τ 3.3
+const float DW_SEEN = 4.6051702;
+float dwHazeDepth(float tau) {
+    float u = tau / DW_SEEN, u2 = u * u, u4 = u2 * u2;
+    return tau / sqrt(sqrt(sqrt(1.0 + u4 * u4)));
+}
 float dwTransfer(float tau) {
     if (tau <= 1.0) return tau;
     float x = tau - 1.0;
@@ -376,15 +386,6 @@ vec2 dwSprayLaw(float r, float a) {
     // (the envelope fades to zero over its last tenth above the pall's GONE share: no cut)
     return vec2(top, sp.x * env * smoothstep(DW_SPRAY_GONE, 2.0 * DW_SPRAY_GONE, env) * top * 0.548);
 }
-// the column of a source point whose ground is water by share w: the dust law's and the spray's, mixed by share (a shore
-// point carries both; dust carried over water stays dust: the share is the source ground's)
-vec2 dwMaterialLaw(vec2 law, float r, float a, float w) {
-    if (w <= 0.0) return law;
-    vec2 sp = dwSprayLaw(r, a);
-    return vec2(mix(law.x, sp.x, w), (1.0 - w) * law.y + w * sp.y);
-}
-
-
 // the ground point the air at ground point p came from: p minus the drift of its dust since its own birth (the law's drift:
 // the detonation's wind × DRIFT, from the front's arrival there). Fixed point q = p − D·age(q), two steps from
 // q₀ = p − D·age(p); the drift is a small share of the front's speed, so it converges at once
@@ -732,6 +733,8 @@ vec3 gDwMatNow = vec3(0.0);
 
 // diagnostics: why the last density was zero (1 ring/cut, 2 before arrival, 3 no law, 4 above the ceiling, 5 lean-back age, 6 thin profile)
 float gDwWhy = 0.0;
+// the sample's law column as a camera outside the dust sees it (dwDustDensity: the source ground's material, no inside sight)
+float gDwLawOut = 0.0;
 // set by dwDensity at its sample: the textured share (dwTextured; gDwForceF ≥ 0 forces it: harness), and the haze level's
 // column there: its drawn optical depth, the depth above the sample, the fire zone's share under it, its top
 float gDwF = 1.0, gDwForceF = -1.0, gDwHazeTc = 0.0, gDwHazeAbove = 0.0, gDwHazeFire = 0.0, gDwHazeTop = 0.0;
@@ -742,7 +745,7 @@ float dwColumnAbove(float x) {
     return 1.25 * (1.0 - u) - 0.25 * (1.0 - u * u);
 }
 
-// The haze level (noise-free): the same column (the law's top and depth through dwTransfer, the same profile, ground fade,
+// The haze level (noise-free): the same column (the law's top and depth, the same profile, ground fade,
 // soil, open air and table end), no seeds, billows, swells or puffs. q: the source ground point and height above the ground
 float dwHaze(vec3 g, vec3 q, float r, float a, vec2 law, bool coarse) {
     float h = law.x * 0.95;
@@ -760,8 +763,12 @@ float dwHaze(vec3 g, vec3 q, float r, float a, vec2 law, bool coarse) {
     float prof = 1.0 - smoothstep(top - edge, top + 0.4 * edge, q.y);
     float strat = 1.25 - 0.5 * clamp(q.y / top, 0.0, 1.0);
     float paved = 1.0 + gDwMatNow.z * (row.y - 1.0);
-    float tc = dwTransfer(law.y) * (1.0 + 0.5 * exp(-a / 1.1)) * paved
-            * (1.0 - smoothstep(DwRing.w * (1.0 - 1.0 / (DW_NODES - 1.0)), DwRing.w, r));
+    float k = (1.0 + 0.5 * exp(-a / 1.1)) * paved * (1.0 - smoothstep(DwRing.w * (1.0 - 1.0 / (DW_NODES - 1.0)), DwRing.w, r));
+    // the haze level's column (PallField.column): seen from outside, the law's whole column here (its material, paved share
+    // and fade) held under what the screen shows (dwHazeDepth); a camera inside the dust takes it to the textured level's
+    // reading of its inside sight by its share (the inside view as the transfer of the sight draws it)
+    float out_ = dwHazeDepth(gDwLawOut * k);
+    float tc = DwSight > 0.0 ? out_ + DwSight * (dwTransfer(law.y) * k - out_) : out_;
     // (normalised over its own swollen top: the swells and plumes reshape the column, its optical depth stays the law's
     // through g, so the consumers' noise-free reference holds)
     float sigma = tc / dwProfileInt(top) * prof * strat * smoothstep(0.0, gDwFloorSoft, q.y) * smoothstep(0.0, 0.08, a);
@@ -835,13 +842,18 @@ float dwDustDensity(vec3 g, bool coarse) {
     vec2 law = dwLaw(r, a0);
     gDwWhy = 3.0;
     if (law.y <= 0.0) return 0.0;
-    // a camera inside the dust takes its share of the inside sight's depth (DwSight); outside it, the law
-    if (DwSight > 0.0) law.y = mix(law.y, dwSight(r, a0), DwSight);
     gDwWhy = 6.0;
     // the source ground's material (one fetch): over water the column is spray's, at a shore both by share
     vec3 mat = dwMaterial(q.xz);
     gDwMatNow = mat;
-    law = dwMaterialLaw(law, r, a0, mat.x);
+    // the law's column as a camera outside the dust sees it (the haze level's, dwHaze), then a camera inside the dust takes
+    // its share of the inside sight's depth (DwSight)
+    // (the column of a source point whose ground is water by share: the dust law's and the spray's by share, a shore point
+    // carrying both; dust carried over water stays dust: the share is the source ground's)
+    vec2 sp = mat.x > 0.0 ? dwSprayLaw(r, a0) : vec2(1.0, 0.0);
+    gDwLawOut = mix(law.y, sp.y, mat.x);
+    if (DwSight > 0.0) law.y = mix(law.y, dwSight(r, a0), DwSight);
+    law = vec2(mix(law.x, sp.x, mat.x), mix(law.y, sp.y, mat.x));
     if (law.y <= 0.0) return 0.0;
     // the haze level where the texture has faded, blended by the same fade function (no seam in time or space)
     float F = gDwForceF >= 0.0 ? gDwForceF : dwTextured(a0);
