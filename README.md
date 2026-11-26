@@ -40,14 +40,14 @@ Launch an ICBM or fit a nuclear warhead to a cruise missile or B-2 bomb. By defa
 ### Launching
 
 - **Strike Designator:** aim through binoculars, or press Shift+RMB with it in hand to open the console: weapon, salvo, spread, target and map. Set routes, or watch through a projectile's camera.
-- **Fixed launchers:** load ammunition, assign a target with the designator and fire with redstone.
+- **Fixed launchers:** load ammunition, assign a target with the designator and fire with redstone, also from a Create Aeronautics aircraft in flight.
 
 ## Requirements and dependencies
 
 **Minecraft 1.21.1 · NeoForge 21.1.264+ · Java 21.** Incoming is required on the server and every client.
 No other mods are required.
 
-Create, Create Aeronautics with Sable, Distant Horizons, Voxy through Roxy and Iris are optional.
+Create, Create Aeronautics with Sable, Distant Horizons, Voxy through Roxy, Iris, Jade, CC:Tweaked, Mekanism, FTB Teams and Open Parties and Claims are optional.
 See [compatibility and supported versions](docs/guide/compatibility.md).
 
 ## Installation
