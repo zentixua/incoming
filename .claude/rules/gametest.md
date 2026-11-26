@@ -239,3 +239,8 @@ paths:
   packets every 20 ticks (`MinecraftServer.synchronizeTime`), and a bare `FakePlayer` crashes the whole GameTest server
   there. A permission-handler probe swaps `PermissionAPI`'s active
   handler for its own batch only (`PermissionGameTests.Handler`), since the handler is server-wide.
+
+- `ServerTickRateManager.setFrozen` changes `runsNormally()` only at the manager's next `tick()` (start of a server
+  tick): a test that freezes and calls a tick handler in the same callback calls `tickRateManager().tick()` first, and
+  again after unfreezing (`WorldClockGameTests.aFrozenServerStopsTheClock`). Jumps of the shared day are server-wide:
+  clock tests run in their own batches and put the per-dimension counters back (`WorldClock.restoreJumpsForTest`).
