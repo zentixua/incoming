@@ -209,7 +209,8 @@ paths:
 - A GameTest red in one CI shard only usually depends on order, neighbours or a cold JVM; adding or removing a batch
   reshuffles the shards, so order-dependent tests fail on unrelated PRs. Reproduce locally with the same
   `-PgametestShard=i/6` after rebasing on `origin/main` (the split is deterministic), run the batch alone a few times,
-  name the shared state by number; never skip the test.
+  name the shared state by number; never skip the test. Level-wide ledgers shared by batches are such state: 256 earlier
+  clouds filled a joiner's capped list (`strike_clouds_join`, `StrikeClouds.clearForTest`).
 - `FakePlayer.die()` is a no-op: test death with a real `ServerPlayer`. A "restart" probe of a `noSave` entity type
   (debris, SAM missile) cannot use `Entity.save` (returns false): read its data back with `saveWithoutId` + `load` on a
   new entity, as `RuleGameTests`/`OwnerGameTests` do. An owner in another level is a real `ServerPlayer` built on that
