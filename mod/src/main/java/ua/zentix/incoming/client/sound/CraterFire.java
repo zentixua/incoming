@@ -35,6 +35,11 @@ final class CraterFire {
         this.age = age;
     }
 
+    /** A jump nobody in this dimension saw ({@code CountedJump}): the fuel is {@code ticks} older, as its strike's clock. */
+    void age(long ticks) {
+        age = (int) Math.min(Integer.MAX_VALUE, age + Math.max(0, ticks));
+    }
+
     /** Source heat release at the emission time heard now; delay never changes the recording's playback rate. */
     static double heat(FuelBurn burn, double ageSeconds, double distance) {
         return burn.law().watts() * burn.share(ageSeconds - distance / Noise.SOUND);

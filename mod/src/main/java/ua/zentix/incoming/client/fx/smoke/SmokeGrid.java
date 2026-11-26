@@ -310,7 +310,7 @@ public final class SmokeGrid {
     }
 
     /**
-     * A jump nobody in this dimension saw ({@code AirJump}): the grid clock moves by {@code by} real ticks, so every source's
+     * A jump nobody in this dimension saw ({@code CountedJump}): the grid clock moves by {@code by} real ticks, so every source's
      * smoke is that much older; sources whose life it passes leave on the next {@link #tick}.
      */
     public static void jump(long by) {

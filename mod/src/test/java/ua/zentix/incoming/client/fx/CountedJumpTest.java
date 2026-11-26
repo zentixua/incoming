@@ -13,11 +13,11 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
- * Rule 2 for conventional strikes ({@code docs/design/time.md} §8.3): a night nobody saw ({@link AirJump}) ages what is in
- * the air by its hours at once. An 8-hour night clears a Shahed's cloud; the crater fuel fire stays in place on its own clock,
- * and its smoke near the source is its present plume, never a gap or an old plume popping back.
+ * Rule 2 for conventional strikes ({@code docs/design/time.md} §8.3): a night nobody saw ({@link CountedJump}) ages what is in
+ * the air by its hours at once, and the crater fuel, burning in place within its show, alike. An 8-hour night clears a
+ * Shahed's cloud and burns its crater out, with no old plume popping back.
  */
-class AirJumpTest {
+class CountedJumpTest {
     private static final long NIGHT = 8 * 3600 * 20;
     private static final FuelPool DRONE = WeaponType.DRONE.spec().pool(5);
     private static final List<BlockPos> CRATER = List.of(new BlockPos(0, 63, 0), new BlockPos(1, 63, 0), new BlockPos(-1, 63, 0),
@@ -39,28 +39,26 @@ class AirJumpTest {
     }
 
     /**
-     * The crater fuel burns on the server's cells, which the night does not move: the source keeps its strength by its real age;
-     * the grid clock moved, so the smoke around the source is the one it gave off meanwhile, at that strength.
+     * The crater fuel burns in place on its strike's clock, within its show, so a counted night moves it as it moves the
+     * smoke: the source ends where its law ran out, at once, and the smoke near it is none, never the plume it had before
+     * the night; the source leaves the grid on the next tick. A source left alone burns on by its law.
      */
     @Test
-    void craterSmokeKeepsItsFireAcrossTheNight() {
+    void aCountedNightBurnsTheCraterSmokeOut() {
         FireSmoke.reset();
         try {
             FireSmoke f = FireSmoke.pool(null, new FuelBurn(7, DRONE, 5, CRATER, 0), 60);
-            // the sources are reassessed once a second, at a phase of the shared counter: the age read is within that second
             for (int i = 0; i < 40; i++) tick();
             assertEquals(DRONE.share(61.5), f.blocks, spread(61, 62));
+            assertTrue(f.blocks > 0 && Double.isNaN(f.end), "the fire burns two minutes before its law's end");
             double start = f.start;
             SmokeGrid.jump(NIGHT);
             FireSmoke.jump(NIGHT);
-            for (int i = 0; i < 20; i++) tick();
-            assertTrue(DRONE.seconds() < 8 * 3600 && f.blocks > 0, "the fire burns on by its real age, not out with the night");
-            assertEquals(DRONE.share(62.5), f.blocks, spread(62, 63), "the fire burns on by its real age");
-            assertTrue(Double.isNaN(f.end), "the fire went out with the night");
-            assertEquals(start, f.start, "the smoke's start stays: the plume is whole, not newly lit");
             double now = SmokeGrid.seconds(0);
-            for (double back : new double[]{1, 100, 600})
-                assertEquals(f.blocks, f.blocksAt(now - back), 0.02 * f.blocks, "smoke " + back + " s downwind of the source");
+            assertEquals(start + DRONE.seconds(), f.end, 1e-9, "the fuel ends where its law ran out, during the night");
+            for (double back : new double[]{0, 1, 100, 600}) assertEquals(0, f.blocksAt(now - back), "smoke " + back + " s downwind after the night");
+            tick();
+            assertTrue(f.ended(), "the spent source is still drawn");
         } finally {
             FireSmoke.reset();
         }

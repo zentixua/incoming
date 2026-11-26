@@ -1565,5 +1565,5 @@ paths:
 - Ordinary blasts use `BlastTime`: a monotonic counter on `ClientTickEvent.Pre`, birth in the same counter, tick
   fraction from the frame (a post-tick counter aged an event by a tick at creation: the Shahed's front was at 26 m on
   its first frame). `BlastEffects.Timeline` does not perform age 0 twice in one tick. It ignores world time packets; a
-  jump nobody in the dimension saw advances it once (`AirJump`, `client-smoke.md`): an effect reading it takes a leap of
-  hours in one tick by ending, not looping over the elapsed ticks.
+  jump nobody in the dimension saw advances it once (`CountedJump`, `client-smoke.md`): an effect reading it takes a leap of
+  hours in one tick by ending, not looping over elapsed ticks.

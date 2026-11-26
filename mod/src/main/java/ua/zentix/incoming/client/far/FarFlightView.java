@@ -321,7 +321,7 @@ public final class FarFlightView {
     }
 
     /**
-     * A jump nobody in this dimension saw ({@code AirJump}): trails age by it, {@code ticks} real ticks of their motion age;
+     * A jump nobody in this dimension saw ({@code CountedJump}): trails age by it, {@code ticks} real ticks of their motion age;
      * the projectiles' flight is never jumped.
      */
     public static void jump(long ticks) {

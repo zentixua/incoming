@@ -150,7 +150,7 @@ final class TrailPoints {
     }
 
     /**
-     * A jump nobody in this dimension saw ({@code AirJump}): every live point is {@code ticks} older (its motion age M), as
+     * A jump nobody in this dimension saw ({@code CountedJump}): every live point is {@code ticks} older (its motion age M), as
      * the air it marks; what the jump leaves past its life fades at the next {@link #expire}.
      */
     void age(long ticks) {

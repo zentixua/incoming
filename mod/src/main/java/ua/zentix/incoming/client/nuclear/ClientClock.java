@@ -67,8 +67,7 @@ public final class ClientClock {
      */
     static double set(S2C.NukeClock p, Object level) {
         ticks = p.clock();
-        ClientLevel level = net.minecraft.client.Minecraft.getInstance().level;
-        dimension = level == null ? null : level.dimension();
+        dimension = level instanceof ClientLevel l ? l.dimension() : null;
         S2C.NukeClock.Clocks c = p.clocks();
         double was = counted;
         boolean same = level != null && countedIn.get() == level;

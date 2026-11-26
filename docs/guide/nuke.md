@@ -204,7 +204,10 @@ an hour of the world's day:
 - a night everyone in the Overworld sleeps through (in single player, your own sleep) ends the 20 minutes at once and moves
   the strike on by the hours slept: you wake to the town at its age, the fires burning down and the fallout weaker. What
   the strike put into the air is as old as the night makes it: after an ordinary night the dust and the mushroom cloud
-  have gone with the wind, and so have the clouds, dust and trails of every other strike;
+  have gone with the wind, and so have the clouds, dust and trails of every other strike, whose crater fires have burnt
+  out;
+- a night slept through in the first minute after a nuke, while its blast wave is still crossing the land, counts as a
+  night you were awake for: you wake to the strike as you left it;
 - a night skipped while someone stays awake (an idle or spectating player too) changes nothing in front of them: the
   fires and the rain keep their time, and only what nobody watches change moves on: the fallout on the ground,
   injuries, radiation sickness, hearing and power repairs;

@@ -275,7 +275,7 @@ class FarFlightViewTest {
     }
 
     /**
-     * Rule 2: a trail is air; a night nobody saw (8 h, {@code AirJump}) makes every point that much older, so a Shahed's trail
+     * Rule 2: a trail is air; a night nobody saw (8 h, {@code CountedJump}) makes every point that much older, so a Shahed's trail
      * laid before it is gone after it, while a point laid after it lives its own life.
      */
     @Test

@@ -68,15 +68,18 @@ final class BlastDust implements SmokeGrid.Source {
             this.groundM = groundM;
         }
 
-        /** Layer top and airborne fraction at {@code t} (ticks since detonation), evaluated at the integer tick. */
-        void layer(ClientNuclear.Active a, double t) {
+        /**
+         * Layer top and airborne fraction at {@code t} (motion-age ticks since detonation), evaluated at the integer tick;
+         * {@code jumped} — the counted jumps in it, ticks: the pall takes the shown real age and maps it itself.
+         */
+        void layer(ClientNuclear.Active a, double t, double jumped) {
             Detonation d = a.d;
             long k = (long) Math.floor(t);
             if (k == tick) return;
             tick = k;
             double age = k - gust.arrival;
             top = layerTop(d, groundM, age);
-            drawnTop = a.pall.drawnTop(x - d.burst().x, z - d.burst().z, k);
+            drawnTop = a.pall.drawnTop(x - d.burst().x, z - d.burst().z, k - jumped);
             // coarse material settles from a layer as high as the head top (at least a meter); extinction follows what remains airborne
             aloft = DustModel.extinctionAloft(Math.max(0, age) / (20.0 * d.scale()) / Math.max(1, d.metres(top)));
         }
@@ -164,7 +167,7 @@ final class BlastDust implements SmokeGrid.Source {
     public boolean emit(double seconds, SmokeGrid.Sink out) {
         if (gone) return false;
         Detonation d = a.d;
-        double t = a.airTicks(0) + (seconds - SmokeGrid.seconds(0)) * 20;
+        double shown = a.ticks(0), jumped = a.motionTicksAt(shown) - shown, t = shown + jumped + (seconds - SmokeGrid.seconds(0)) * 20;
         drawn = 0;
         tauMax = massDrawn = 0;
         streaks.removeIf(s -> {
@@ -177,7 +180,7 @@ final class BlastDust implements SmokeGrid.Source {
             double hx = parcel[0], hy = parcel[1], hz = parcel[2], spreadHead = parcel[3];
             parcel(g, last, t, parcel);
             double tx = parcel[0], ty = parcel[1], tz = parcel[2], spreadTail = parcel[3];
-            s.layer(a, t);
+            s.layer(a, t, jumped);
             double sigma = s.r0 + 0.5 * (spreadHead + spreadTail);
             double mass = s.mass * released * s.aloft * apart(sigma, s.drawnTop);
             double half = 0.5 * Math.sqrt((hx - tx) * (hx - tx) + (hz - tz) * (hz - tz) + (hy - ty) * (hy - ty));

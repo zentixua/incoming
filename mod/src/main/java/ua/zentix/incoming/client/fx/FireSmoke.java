@@ -108,11 +108,6 @@ public final class FireSmoke implements SmokeGrid.Source {
     double x, y, z, blocks, fire;
     final double start;
     double end = Double.NaN;
-    /**
-     * Grid seconds the jumps nobody saw added after {@link #start} ({@link #jump}): the smoke is that much older, the fire
-     * itself is not (it stays in place and burns on its own clock, the server's cells for crater fuel).
-     */
-    double jumped;
     /** World changed: source leaves the grid. */
     boolean gone;
     /**
@@ -245,17 +240,7 @@ public final class FireSmoke implements SmokeGrid.Source {
                 continue;
             }
         }
-        for (var it = POOLS.iterator(); it.hasNext(); ) {
-            FireSmoke f = it.next();
-            double share = f.burning.applyAsDouble(now - f.start - f.jumped);
-            f.blocks = share;
-            if (share <= 0 && now > f.start) {
-                f.end = now;
-                it.remove();
-                if (f.burn != null) POOL_IDS.remove(f.burn.id, f);
-                columns();
-            }
-        }
+        burnOut(now);
         // nearby sources form one fire; then record history and build its plume
         java.util.List<FireSmoke> burning = new java.util.ArrayList<>(OIL_FIRES.values());
         burning.addAll(POOLS);
@@ -267,12 +252,32 @@ public final class FireSmoke implements SmokeGrid.Source {
     }
 
     /**
-     * A jump nobody in this dimension saw ({@code AirJump}, {@code by} real ticks): the grid clock has moved, so the smoke
-     * already emitted is that much older and far downwind; a source keeps burning where it was, its smoke drawn from it again
-     * as a whole plume of its present strength (the smoke it gave off meanwhile).
+     * A jump nobody in this dimension saw ({@code CountedJump}, {@code by} real ticks), with the grid clock already moved:
+     * the smoke emitted before it is that much older and far downwind. The crater fuel burns in place on its strike's clock,
+     * which the jump moves too (inside its show S is M), so a fuel spent during the jump ends at once; an oil fire burns on
+     * while its substation is out, its smoke near it the plume of its present strength.
      */
-    public static void jump(long by) {
-        for (FireSmoke f : POOLS) f.jumped += by / 20.0;
+        public static void jump(long by) {
+        burnOut(SmokeGrid.seconds(0));
+    }
+
+    /**
+     * Crater fuel by its law's age on the grid clock at {@code now}: a spent source ends where its fuel ran out (by the law,
+     * or now if put out earlier), so after a jump the smoke near it is what that end left (none), never the plume it had
+     * before the jump.
+     */
+    private static void burnOut(double now) {
+        for (var it = POOLS.iterator(); it.hasNext(); ) {
+            FireSmoke f = it.next();
+            double share = f.burning.applyAsDouble(now - f.start);
+            f.blocks = share;
+            if (share <= 0 && now > f.start) {
+                f.end = f.burn == null ? now : Math.min(now, f.start + f.burn.law().seconds());
+                it.remove();
+                if (f.burn != null) POOL_IDS.remove(f.burn.id, f);
+                columns();
+            }
+        }
     }
 
     /**

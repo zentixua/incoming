@@ -246,6 +246,18 @@ public final class StrikeHistory {
         return Math.max(lo, Math.min(hi, v));
     }
 
+    /**
+     * Samples whose counted jumps exceed {@code above} take {@code by} less, and as much more unseen: a held night that
+     * turned out seen, already in the past of a strike born during the hold.
+     */
+    public void withdraw(double above, double by) {
+        for (int i = 0; i < n; i++) {
+            if (!(jumps[i] > above)) continue;
+            jumps[i] -= by;
+            if (!Double.isNaN(unseens[i])) unseens[i] += by;
+        }
+    }
+
     /** Index of the last sample at or before {@code age}; −1 — none. */
     private int last(double age) {
         int lo = 0, hi = n - 1, found = -1;

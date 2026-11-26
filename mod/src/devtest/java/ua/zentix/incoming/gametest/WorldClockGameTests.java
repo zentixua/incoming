@@ -33,6 +33,8 @@ import java.util.UUID;
 @PrefixGameTestTemplate(false)
 public final class WorldClockGameTests {
     private static final double NIGHT = 13_000;
+    /** A whole day, world-clock ticks: a step that leaves the sun where it stood. */
+    private static final long DAY = 24_000;
 
     /** A detonation far from every platform, {@code age} ticks old, in a detached event list (no world work). */
     private static Detonation detonation(ServerLevel level, NuclearEvents events, long age) {
@@ -268,38 +270,38 @@ public final class WorldClockGameTests {
 
     /**
      * Rule 2: the tick a night nobody watched is counted, its players get the count (not at the next second's packet), so the
-     * air of every strike they wake to is already as old as the night made it.
+     * air of every strike they wake to is already as old as the night made it. The jump is a real step of the day, so the
+     * server's own order counts it: {@code WorldClock.onServerTick} (Post, highest) before {@code NuclearStrikes} sends. It is
+     * one whole day, so the sun stands where it stood and nothing is set back (a set back is a forward set modulo a day,
+     * itself a counted jump that would outlive the test's restored counters).
      */
     @GameTest(template = "range", timeoutTicks = 60, batch = "clock_air", skyAccess = true)
     public static void aCountedNightReachesThePlayersAtOnce(GameTestHelper h) {
         ServerLevel level = h.getLevel();
         MinecraftServer server = level.getServer();
-        WorldClock clock = WorldClock.get(server);
         Map<String, double[]> saved = jumps(server);
         var watcher = FuelFireGameTests.Watcher.in(h, level, new Vec3(0, 100, 0), S2C.NukeClock.class);
-        double expected = saved.get(dim(level))[0] + NIGHT;
+        double before = saved.get(dim(level))[0];
         long[] jumpedAt = {Long.MIN_VALUE}, seenAt = {Long.MIN_VALUE};
+        WorldClock.holdJumpsWhile(l -> false);
         StrikeGameTests.afterTest(h, () -> {
             WorldClock.holdJumpsWhile(NuclearStrikes::frontCrossing);
             restore(server, saved);
         });
         h.onEachTick(() -> {
             if (jumpedAt[0] != Long.MIN_VALUE && seenAt[0] == Long.MIN_VALUE
-                    && watcher.got.stream().anyMatch(p -> p.clocks().counted() == expected)) seenAt[0] = level.getGameTime();
+                    && watcher.got.stream().anyMatch(p -> p.clocks().counted() >= before + DAY - 1000)) seenAt[0] = level.getGameTime();
             // away from the once-a-second packet (15 ticks later): only the jump itself can send one sooner
             if (jumpedAt[0] == Long.MIN_VALUE && level.getGameTime() % 20 == 5) {
-                WorldClock.holdJumpsWhile(l -> false);
-                clock.recordAwakeForTest(server);
                 watcher.got.clear();
-                clock.jumpForTest(server, NIGHT);
-                h.assertTrue(WorldClock.countedRose(level), "the count did not rise this tick");
+                server.overworld().setDayTime(server.overworld().getDayTime() + DAY);
                 jumpedAt[0] = level.getGameTime();
             }
         });
         h.succeedWhen(() -> {
             h.assertTrue(seenAt[0] != Long.MIN_VALUE, "no clock packet with the counted night yet: " + watcher.got);
             h.assertTrue(seenAt[0] - jumpedAt[0] <= 2, "the count reached the players " + (seenAt[0] - jumpedAt[0])
-                    + " ticks after the jump: with the once-a-second packet, not at once");
+                    + " ticks after the night: with the once-a-second packet, not at once");
         });
     }
 

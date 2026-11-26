@@ -533,9 +533,16 @@ public final class ClientNuclear {
 
     /** The server's clocks: the client's world clocks continue from them, and each detonation's two ages follow its anchors. */
     public static void clock(S2C.NukeClock p) {
-        double jump = ClientClock.set(p, Minecraft.getInstance().level);
-        // a jump nobody here saw: the conventional air's clocks move by it (the detonations' air reads the count itself)
-        if (jump > 0) ua.zentix.incoming.client.fx.AirJump.apply(Math.round(jump));
+        clock(p, Minecraft.getInstance().level);
+    }
+
+    /** {@link #clock} received in {@code level} (tests: any token for a level). */
+    static void clock(S2C.NukeClock p, @Nullable Object level) {
+        double jump = ClientClock.set(p, level);
+        // a jump nobody here saw: conventional strikes move by it (the detonations read the count themselves). On a join
+        // the clocks come before the detonations (NuclearStrikes.sync), so the loop below finds none yet: a show that
+        // ended early stays estimated until the next packet, at most a second, which steps both states alike
+        if (jump > 0) ua.zentix.incoming.client.fx.CountedJump.apply(Math.round(jump));
         ANCHORS.clear();
         if (p.clocks().known()) {
             for (S2C.NukeClock.Anchor a : p.clocks().anchors())

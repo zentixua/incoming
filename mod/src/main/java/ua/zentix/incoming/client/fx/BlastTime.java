@@ -13,7 +13,7 @@ public final class BlastTime {
     public static void advance() { ticks++; }
     public static long ticks() { return ticks; }
     public static void reset() { ticks = 0; }
-    /** A jump nobody in this dimension saw, real ticks of the air ({@code AirJump}). */
+    /** A jump nobody in this dimension saw, real ticks of the air ({@code CountedJump}). */
     public static void jump(long by) { ticks += Math.max(0, by); }
 
     public static double seconds(long clientTick, long bornTick, double partial) {
