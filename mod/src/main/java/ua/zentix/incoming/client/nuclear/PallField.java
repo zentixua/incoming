@@ -41,8 +41,9 @@ import ua.zentix.incoming.nuclear.model.WaterModel;
  * water is beneath the pall (cell water fraction from client knowledge); material follows the place where
  * it was lofted: dust drifted onto water stays dust (point minus drift); haze at its source (no fires over water).
  * <p>
- * Time: dust and spray use the model clock (ticks / (20·scale)), like front and head; paper falls in real seconds (client ticks
- * / 20); fires use the strike clock ({@link #clock}), their smoke parcels the motion age ({@link #parcels}). Lengths in model meters and blocks through detonation scale. The radius table
+ * Time: what is in the air lives on the motion age M ({@link #motion}: real time plus the jumps counted since the detonation):
+ * dust, spray and the base surge on its model clock (M / (20·scale)), like front and head, their drift on it, paper and ash
+ * falling in its seconds; fires use the strike clock ({@link #clock}), their smoke parcels the motion age ({@link #parcels}). Lengths in model meters and blocks through detonation scale. The radius table
  * ({@link #row}) is what the pall shader receives: all expensive work is done here.
  */
 public final class PallField {
@@ -166,6 +167,8 @@ public final class PallField {
             t -> SmokeParcels.Clock.of(t / 20.0, m -> clock.applyAsDouble(m * 20) / 20.0);
     /** The fires' smoke parcels (metres, seconds). */
     private final SmokeParcels smoke;
+    /** Motion age M from real ticks ({@link #motion}); real time until set. */
+    private DoubleUnaryOperator motion = t -> t;
 
     public PallField(Detonation d) {
         this.d = d;
@@ -583,6 +586,20 @@ public final class PallField {
         band = null;
     }
 
+    /**
+     * The motion age M ({@code util/StrikeClock}) for real client ticks since detonation, in ticks ({@code ClientNuclear.Active}):
+     * real time plus the jumps counted in its dimension since. Dust, spray, the base surge, their drift and what falls from
+     * them follow it; fire, its smoke and its light do not.
+     */
+    void motion(DoubleUnaryOperator motion) {
+        this.motion = motion;
+    }
+
+    /** The motion age M at {@code ticks} real client ticks since detonation, ticks ({@link #motion}). */
+    double air(double ticks) {
+        return ticks <= 0 ? ticks : motion.applyAsDouble(ticks);
+    }
+
     /** Detonation-clock seconds at {@code ticks} real client ticks since detonation. */
     double clockSeconds(double ticks) {
         return clock.applyAsDouble(ticks) / 20.0;
@@ -659,9 +676,14 @@ public final class PallField {
         return (ticks - arrival[i]) / 20.0;
     }
 
-    /** Node i model seconds at {@code ticks}: from game-front arrival, dust and spray age like wall head. */
+    /** Node i model seconds at {@code ticks}: from game-front arrival, dust and spray age like wall head, on the motion age. */
     private double seconds(int i, double ticks) {
-        return (ticks - arrival[i]) / (20.0 * d.scale());
+        return (air(ticks) - arrival[i]) / (20.0 * d.scale());
+    }
+
+    /** Node i seconds of the motion age at {@code ticks} since front arrival: what falls from the air (ash, paper). */
+    private double fallAge(int i, double ticks) {
+        return (air(ticks) - arrival[i]) / 20.0;
     }
 
     /** Table rows per detonation: the haze. */
@@ -694,7 +716,7 @@ public final class PallField {
      * from beneath as it rises.
      */
     private double pallShare(int i, double ticks) {
-        double t = ticks / (20.0 * d.scale());
+        double t = air(ticks) / (20.0 * d.scale());
         if (d.metres(radius(i)) < FireballModel.groundRadius(t, Math.max(0, d.hobMetres()), d.yieldKt(), d.surface())) return 0;
         return 1 - BlastWall.handoff(seconds(i, ticks) / columns[i].positive());
     }
@@ -760,7 +782,7 @@ public final class PallField {
     public boolean surge(double ticks, double[] out) {
         out[0] = out[1] = out[2] = 0;
         if (wet <= 0 || ticks <= 0) return false;
-        double t = ticks / (20 * d.scale()), y = d.yieldKt();
+        double t = air(ticks) / (20 * d.scale()), y = d.yieldKt();
         double a = WaterModel.surgeDensity(t, y) * wet, r = WaterModel.surgeRadius(t, y);
         if (a < GONE || r <= 0) return false;
         out[0] = d.blocks(r);
@@ -775,7 +797,8 @@ public final class PallField {
      * follow the server front (sound, shake, knockback, debris) in every direction from ground zero, including downwind.
      */
     double share(int i, double ticks) {
-        return ticks <= 0 ? 0 : Math.max(0, Math.min(1, (ticks - arrival[i]) / ticks));
+        double m = air(ticks);
+        return m <= 0 ? 0 : Math.max(0, Math.min(1, (m - arrival[i]) / m));
     }
 
     /**
@@ -893,7 +916,8 @@ public final class PallField {
      * table and until settled everywhere (spray settles before dust), base surge.
      */
     public boolean visible(double ticks) {
-        return ticks > 0 && (hazeVisible(ticks) || ticks <= arrival[BINS - 1] || ticks < dustEnd || surge(ticks, new double[3]));
+        double m = air(ticks);
+        return ticks > 0 && (hazeVisible(ticks) || m <= arrival[BINS - 1] || m < dustEnd || surge(ticks, new double[3]));
     }
 
     /** Whether the haze, the matter the pall volume draws ({@link #row}), exists at {@code ticks}: some smoke parcel is drawn. */
@@ -948,7 +972,7 @@ public final class PallField {
      * surge, age fraction for dust and spray ({@link #share}).
      */
     public void drift(double ticks, double[] out) {
-        double s = d.blocks(d.windSpeed()) * DRIFT * ticks / 20.0;
+        double s = d.blocks(d.windSpeed()) * DRIFT * air(ticks) / 20.0;
         out[0] = Math.cos(d.windDir()) * s;
         out[1] = Math.sin(d.windDir()) * s;
     }
@@ -962,7 +986,8 @@ public final class PallField {
     public double extent(double ticks) {
         double[] s = new double[3];
         boolean surge = surge(ticks, s);
-        return atSource(ticks, surge, s) + d.blocks(d.windSpeed()) * DRIFT * (surge ? ticks : Math.min(ticks, dustEnd)) / 20.0;
+        double m = air(ticks);
+        return atSource(ticks, surge, s) + d.blocks(d.windSpeed()) * DRIFT * (surge ? m : Math.min(m, dustEnd)) / 20.0;
     }
 
     /**
@@ -1226,7 +1251,7 @@ public final class PallField {
         l[2] = 1;
         if (table == null) return;
         DustMaterialTiles m = materials;
-        drawnColumn(table, ua.zentix.incoming.client.fx.layer.DustWallPass.NODES, lifetimeEnd(), reach, ticks / (20.0 * d.scale()),
+        drawnColumn(table, ua.zentix.incoming.client.fx.layer.DustWallPass.NODES, lifetimeEnd(), reach, air(ticks) / (20.0 * d.scale()),
                 w[0], w[1], m == null ? 0 : m.hard(w[0], w[1]), sight, c);
         if (c[0] <= 0) return;
         double top = c[1];
@@ -1375,7 +1400,7 @@ public final class PallField {
             int i = bin(ud * reach);
             double age = seconds(i, ticks);
             if (columns[i].depth(age) >= GONE_DEPTH) {
-                ash = Math.min(1, columns[i].fallout(age) / ASH_FULL) * smooth(15, 60, age(i, ticks)) * edge(ud);
+                ash = Math.min(1, columns[i].fallout(age) / ASH_FULL) * smooth(15, 60, fallAge(i, ticks)) * edge(ud);
                 if (ash > 0) ash *= 1 - water.at(lx, lz);
             }
         }
@@ -1403,7 +1428,7 @@ public final class PallField {
         double r = Math.hypot(dx, dz);
         if (r >= reach) return 0;
         int i = bin(r);
-        double age = age(i, ticks);
+        double age = fallAge(i, ticks);
         double paper = smooth(0.3, 0.7, destroyed[i]) * smooth(5, 20, age) * (1 - smooth(120, 300, age));
         return paper <= 0 ? 0 : paper * (1 - water.at(dx, dz));
     }

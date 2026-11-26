@@ -144,6 +144,62 @@ public final class FuelFireGameTests {
         });
     }
 
+    /**
+     * Rules 3 and 7 of the time note: the crater fuel burns in place on its strike's clock, within its show, so a night
+     * nobody saw (8 h, counted) burns it out: a Shahed's fuel burning 10 s after impact has no cell and no fire left two
+     * ticks after the count, and no packet tells a client it still burns. A night someone saw moves it not at all.
+     */
+    @GameTest(template = "range", timeoutTicks = 200, batch = "fuel_fire_counted_night", skyAccess = true)
+    public static void aCountedNightBurnsTheCraterFuelOut(GameTestHelper h) {
+        ServerLevel level = h.getLevel();
+        net.minecraft.server.MinecraftServer server = level.getServer();
+        ua.zentix.incoming.util.WorldClock clock = ua.zentix.incoming.util.WorldClock.get(server);
+        String dim = level.dimension().location().toString();
+        java.util.Map<String, double[]> saved = new java.util.HashMap<>();
+        for (ServerLevel l : server.getAllLevels()) saved.put(l.dimension().location().toString(), clock.jumpsForTest(l.dimension().location().toString()));
+        Vec3 at = Vec3.atBottomCenterOf(h.absolutePos(CENTER));
+        calm(h);
+        StrikeGameTests.afterTest(h, () -> {
+            ua.zentix.incoming.util.WorldClock.holdJumpsWhile(ua.zentix.incoming.nuclear.NuclearStrikes::frontCrossing);
+            saved.forEach(clock::restoreJumpsForTest);
+        });
+        FuelPool law = WeaponType.DRONE.spec().pool();
+        h.assertTrue(FuelFires.testPour(level, at, WeaponType.DRONE, 200) > 0, "no fuel lit");
+        List<BlockPos> lit = new ArrayList<>(cells(level, at));
+        long[] unseen = {Long.MIN_VALUE}, counted = {Long.MIN_VALUE};
+        h.onEachTick(() -> {
+            long t = level.getGameTime();
+            if (counted[0] != Long.MIN_VALUE) {
+                h.assertTrue(cells(level, at).isEmpty() || t - counted[0] <= 2,
+                        "the fuel burns on " + (t - counted[0]) + " ticks after an 8-hour night: " + cells(level, at).size() + " cells");
+                return;
+            }
+            h.assertTrue(cells(level, at).size() == law.cells(), "the fuel is out before the night nobody saw: " + cells(level, at).size());
+            if (unseen[0] == Long.MIN_VALUE && t % 20 == 7) {
+                // a night someone in the dimension saw: it moves only what nobody sees change, the fire burns on
+                double[] j = clock.jumpsForTest(dim);
+                clock.restoreJumpsForTest(dim, new double[]{j[0], j[1] + 8000, j[2]});
+                unseen[0] = t;
+            } else if (unseen[0] != Long.MIN_VALUE && t - unseen[0] >= 20) {
+                // a night nobody saw: counted
+                ua.zentix.incoming.util.WorldClock.holdJumpsWhile(l -> false);
+                clock.recordAwakeForTest(server);
+                clock.jumpForTest(server, 8000);
+                h.assertTrue(clock.jumpsForTest(dim)[0] == saved.get(dim)[0] + 8000, "the night was not counted: "
+                        + java.util.Arrays.toString(clock.jumpsForTest(dim)));
+                counted[0] = t;
+            }
+        });
+        h.succeedWhen(() -> {
+            h.assertTrue(counted[0] != Long.MIN_VALUE, "no night yet");
+            h.assertTrue(cells(level, at).isEmpty(), "the fuel still burns after the night");
+            for (BlockPos c : lit) {
+                h.assertTrue(!(level.getBlockState(c).getBlock() instanceof BaseFireBlock), "fire left at " + c.toShortString());
+            }
+            h.assertTrue(FuelFires.burning(level).stream().noneMatch(b -> b.at().distanceTo(at) < MINE), "clients are still told it burns");
+        });
+    }
+
     @GameTest(template = "range", timeoutTicks = 3600, batch = "fuel_fire_drone", skyAccess = true)
     public static void droneFuelBurnsOnTheCraterFloorAsLongAsItLasts(GameTestHelper h) {
         groundTest(h, WeaponType.DRONE);

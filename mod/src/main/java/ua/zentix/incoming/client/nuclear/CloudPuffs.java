@@ -100,7 +100,7 @@ public final class CloudPuffs {
      * spectrum cost tens of microseconds.
      */
     boolean pallLightNow(ClientNuclear.Active a, float[] into) {
-        double t = a.seconds(0);
+        double t = a.airSeconds(0);
         if (t != nowT) {
             nowLit = pallLight(MushroomField.shape(a, 0), a.pall.fireLight(a.ticks(0)), now);
             nowT = t;

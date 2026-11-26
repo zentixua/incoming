@@ -392,7 +392,9 @@ take it: it is the one decision left to Artem (§11).
    - A step under an hour is a rate, not a jump: the in-place clocks follow it through the world clock, the air ignores
      it. With the day stopped, `/time set` only chooses the light. A backward set never invents days.
    - Flight and the blast wave are never jumped: they finish in seconds at their speed, and their damage stays in the
-     work budget. A jump that falls while a front is still crossing is counted when the front ends (within ~1 min).
+     work budget. A jump that falls while a front is still crossing waits for the front to end (within ~1 min), then
+     counts only if nobody in the dimension is awake by then. The sleepers woke with the skip and watch the strike, so
+     it is usually a jump someone sees.
    - Gradual time-lapse sleep mods are a rate: the ground follows it and the air keeps real time (limit: after a lapsed
      night the plumes are where real time puts them).
 8. **Shared states and bodies.** A state with several causes (a body's hearing, burns and sickness; a district's

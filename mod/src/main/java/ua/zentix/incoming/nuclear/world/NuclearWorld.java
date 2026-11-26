@@ -577,7 +577,7 @@ public final class NuclearWorld {
         long falloutStart = System.nanoTime();
         lastPrepNanos = falloutStart - prepStart;
         try {
-            mobFallout.work(level, events.detonations(), clock);
+            mobFallout.work(level, events.falloutSources(), clock);
         } catch (RuntimeException e) {
             Incoming.LOG.error("Mob fallout failed with an exception; pass reset", e);
             mobFallout.clear();
@@ -623,7 +623,8 @@ public final class NuclearWorld {
     /** After world load: resume unfinished craters from stopped chunk. */
     private void restore(NuclearEvents events) {
         restored = true;
-        events.craters().forEach((id, done) -> events.detonations().stream().filter(d -> d.id() == id).findFirst()
-                .ifPresent(d -> craters.add(new CraterJob(d, done, events.craterGround(id)))));
+        // a crater keeps digging after its detonation is forgotten (NuclearEvents.prune)
+        events.craters().forEach((id, done) -> java.util.stream.Stream.concat(events.detonations().stream(), events.past().stream())
+                .filter(d -> d.id() == id).findFirst().ifPresent(d -> craters.add(new CraterJob(d, done, events.craterGround(id)))));
     }
 }

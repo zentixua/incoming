@@ -653,6 +653,11 @@ public final class BlastSounds {
     /** Ejecta fall window, s: mean fall power is mgh over this time (est.) (ejecta falls over 1–3 s). */
     static final double EJECTA_FALL_S = 2;
 
+    /** A jump nobody in this dimension saw ({@code CountedJump}): every crater fire's fuel is {@code ticks} older. */
+    public static void jump(long ticks) {
+        for (CraterFire f : FIRES) f.age(ticks);
+    }
+
     /**
      * Fuel fire in a crater (fire on server blocks, {@code age} ticks since impact): recording loops at native speed;
      * heat release, duration and position come from fuel {@code burn} (flowed or buried — the roar follows it).

@@ -106,7 +106,11 @@ with a nuclear warhead still waits 90 seconds before launch, even with early war
 - **Leave the fallout trail, or wait it out indoors.** Fallout lies on everything open to the sky and shines through
   roofs and walls: a block of stone or earth stops nearly all of it, a block of wood about 95%, glass almost nothing,
   and an open doorway lets it in. Water washes the dust off you (rain does not); otherwise it fades only as slowly
-  as the fallout itself.
+  as the fallout itself. Fallout lands where the wind carries the cloud, when the cloud gets there: tens of kilometres
+  downwind an hour or more after the burst, even after the cloud is too thin to see. On the ground it weakens as the
+  world's day runs, by the same law everywhere: seven times older, ten times weaker. It does not vanish on a set day:
+  near ground zero of a ground burst it stays measurable for years of game time (15 kt: about a year and a half of play
+  in a vanilla world), ever weaker, until `/incoming clear`.
 - **Radiation sickness** starts hours later and keeps game time: nausea and vomiting, then days or weeks of feeling
   well, then weeks of weakness, from 2 Gy without natural healing. Whether it kills depends on the dose: below 2 Gy
   almost nobody dies, at 4.5 Gy half, from 10 Gy everyone, and the higher the dose, the sooner (from 50 Gy within a
@@ -198,13 +202,18 @@ an hour of the world's day:
 - with the day cycle stopped (`doDaylightCycle false`, or a mod holding the time) the sun stops, the aftermath does not:
   it keeps the pace the day last ran at, a vanilla day's if it never ran;
 - a night everyone in the Overworld sleeps through (in single player, your own sleep) ends the 20 minutes at once and moves
-  the strike on by the hours slept: you wake to the town at its age, the fires burning down and the fallout weaker;
+  the strike on by the hours slept: you wake to the town at its age, the fires burning down and the fallout weaker. What
+  the strike put into the air is as old as the night makes it: after an ordinary night the dust and the mushroom cloud
+  have gone with the wind, and so have the clouds, dust and trails of every other strike, whose crater fires have burnt
+  out;
+- a night slept through in the first minute after a nuke, while its blast wave is still crossing the land, counts as a
+  night you were awake for: you wake to the strike as you left it;
 - a night skipped while someone stays awake (an idle or spectating player too) changes nothing in front of them: the
-  fires and the rain keep their time, and only what nobody watches change moves on: injuries, radiation sickness,
-  hearing and power repairs;
+  fires and the rain keep their time, and only what nobody watches change moves on: the fallout on the ground,
+  injuries, radiation sickness, hearing and power repairs;
 - burns, radiation sickness, hearing and the power in a district heal or are repaired in real time while any strike
-  that caused them is in its first minutes: a nuclear blast's 20, a Shahed's or missile's until its cloud has stopped
-  rising and the fuel in its crater has burnt out (about 2 to 16 minutes). A body hurt by two blasts close together
+  that caused them is in its first minutes: a nuclear blast's 20, a conventional strike's until its cloud has stopped
+  rising and any fuel in its crater has burnt out (about 2 to 16 minutes). A body hurt by two blasts close together
   heals in real time until both are over;
 - your injuries and hearing change only while you are in the world: logged out, radiation sickness does not progress,
   burns do not heal and hearing does not come back, and you return to them as you left them;

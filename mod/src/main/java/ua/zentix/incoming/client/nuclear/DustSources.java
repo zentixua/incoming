@@ -199,25 +199,41 @@ public final class DustSources {
 
     /** Whether detonation a has dust on its table now: the front has left ground zero and some node's dust is younger than the table's end. */
     static boolean visible(ClientNuclear.Active a, float partial) {
-        double t = seconds(a, partial);
-        if (a.d.blocks(a.wall.shock(t)) <= 1) return false;
-        float[] table = table(a);
+        return onTable(a.d, a.wall, a.pall, seconds(a, partial));
+    }
+
+    /** Whether detonation d has dust on its table at dust age {@code t} (model seconds of its motion age, {@link #seconds}). */
+    static boolean onTable(Detonation d, BlastWall wall, PallField pall, double t) {
+        if (d.blocks(wall.shock(t)) <= 1) return false;
+        float[] table = pall.waveTable();
         if (table == null) return false;
-        double end = a.pall.lifetimeEnd(), last = 0;
+        double end = pall.lifetimeEnd(), last = 0;
         for (int j = 0; j < DustWallPass.NODES; j++) last = Math.max(last, table[4 * j]);
         return t <= last + end;
     }
 
-    /** Diagnostics ({@code DustWallDiag.freezeAge}): each source's age when the freeze began. */
+    /** Diagnostics ({@code DustWallDiag.freezeAge}): each source's dust age and shown age when the freeze began. */
     private static final Map<ClientNuclear.Active, double[]> FROZEN = new WeakHashMap<>();
 
-    /** Source a's model seconds now, or its frozen age under the diagnostic freeze. */
+    /**
+     * Source a's dust age now, model seconds of its motion age M ({@code ClientNuclear.Active#airSeconds}: real time plus the
+     * jumps counted since the detonation), or its frozen age under the diagnostic freeze.
+     */
     private static double seconds(ClientNuclear.Active a, float partial) {
         if (!ua.zentix.incoming.client.fx.layer.DustWallDiag.freezeAge) {
             if (!FROZEN.isEmpty()) FROZEN.clear();
-            return a.seconds(partial);
+            return a.airSeconds(partial);
         }
-        return FROZEN.computeIfAbsent(a, k -> new double[] {k.seconds(partial)})[0];
+        return frozen(a, partial)[0];
+    }
+
+    /** Source a's shown (real) age, ticks, the pall's argument, or the one frozen with {@link #seconds}. */
+    private static double ticks(ClientNuclear.Active a, float partial) {
+        return FROZEN.isEmpty() ? a.ticks(partial) : frozen(a, partial)[1];
+    }
+
+    private static double[] frozen(ClientNuclear.Active a, float partial) {
+        return FROZEN.computeIfAbsent(a, k -> new double[] {k.airSeconds(partial), k.ticks(partial)});
     }
 
     /** Whether every node of a's table is past the textured level's window ({@code dwTextured}: 0 from 60 s after its birth). */
@@ -258,7 +274,7 @@ public final class DustSources {
     private static double source(ClientNuclear.Active a, Vec3 eye, float partial, PallPass.Frame f, DustWallPass.Source s,
             DustWallPass.Frame lead) {
         Detonation d = a.d;
-        double t = seconds(a, partial), ticks = FROZEN.isEmpty() ? a.ticks(partial) : t * 20.0 * a.d.scale();
+        double t = seconds(a, partial), ticks = ticks(a, partial);
         int n = DustWallPass.NODES;
         float[] table = table(a);
         s.id = a;

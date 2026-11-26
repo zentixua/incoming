@@ -303,10 +303,11 @@ public final class MushroomField {
         return lin * PallLight.linear(kept) + Math.min(lin / Math.max(PallLight.linear(open), 1e-4), 1) * added;
     }
 
-    /** Detonation mushroom at frame time; null — not yet present or dispersed. */
+    /** Detonation mushroom at frame time, on its motion age; null — not yet present or dispersed. */
     static MushroomModel.Shape shape(ClientNuclear.Active a, float partial) {
         Detonation d = a.d;
-        double t = a.seconds(partial);
+        // the mushroom is in the air: its motion age (real time plus the jumps counted since the detonation)
+        double t = a.airSeconds(partial);
         // ground front reach (skirt is dust at the stem base, no farther than the front)
         double front = d.metres(d.frontRadius(a.ticks(partial)));
         double hob = Math.max(0, d.hobMetres());

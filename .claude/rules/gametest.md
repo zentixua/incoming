@@ -55,6 +55,9 @@ paths:
   platform (and becomes flight terrain). Below the platform is an air layer above the world: for ruin collapse
   (`Collapse`, support counted from the window bottom), the entire platform is an unsupported overhang, so nuclear
   tests fill this layer (`detonation`). Tests run at random distant coordinates; each nuclear test gets its own batch.
+  A test that only needs a detonation's clocks or fallout (backdated hours to years) uses a detached `new NuclearEvents()`
+  passed explicitly (`RadiationTicker.step(level, events, …)`, `GroundFallout.at(events, …)`): a detonation in the level's
+  own `NuclearEvents` (active, `past` or a ground field) ruins every chunk loaded later, including other tests' platforms.
 - `CruiseMissileEntity.launch` chooses initial altitude from `getChunkNow`; passed `pos.y` does not set it. For a
   ridge-descent test, `level.getChunk` during construction is insufficient: wait for `Terrain.ready` before launch
   and check that actual launch altitude exceeds the tested floor; the previous position for step measurement is
@@ -206,7 +209,8 @@ paths:
 - A GameTest red in one CI shard only usually depends on order, neighbours or a cold JVM; adding or removing a batch
   reshuffles the shards, so order-dependent tests fail on unrelated PRs. Reproduce locally with the same
   `-PgametestShard=i/6` after rebasing on `origin/main` (the split is deterministic), run the batch alone a few times,
-  name the shared state by number; never skip the test.
+  name the shared state by number; never skip the test. Level-wide ledgers shared by batches are such state: 256 earlier
+  clouds filled a joiner's capped list (`strike_clouds_join`, `StrikeClouds.clearForTest`).
 - `FakePlayer.die()` is a no-op: test death with a real `ServerPlayer`. A "restart" probe of a `noSave` entity type
   (debris, SAM missile) cannot use `Entity.save` (returns false): read its data back with `saveWithoutId` + `load` on a
   new entity, as `RuleGameTests`/`OwnerGameTests` do. An owner in another level is a real `ServerPlayer` built on that

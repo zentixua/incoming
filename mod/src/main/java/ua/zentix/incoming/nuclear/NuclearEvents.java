@@ -11,6 +11,7 @@ import net.minecraft.world.level.saveddata.SavedData;
 import net.minecraft.world.phys.Vec3;
 import ua.zentix.incoming.Incoming;
 import ua.zentix.incoming.nuclear.material.MaterialBirth;
+import ua.zentix.incoming.nuclear.model.FalloutModel;
 import ua.zentix.incoming.strike.RoundRef;
 import ua.zentix.incoming.util.StrikeClock;
 import ua.zentix.incoming.util.StrikeHistory;
@@ -33,8 +34,9 @@ import static ua.zentix.incoming.nuclear.NukeClock.SHOW_TICKS;
 public final class NuclearEvents extends SavedData {
     private static final String NAME = Incoming.MOD_ID + "_nuclear";
     /**
-     * Detonations are forgotten 7 days after the burst on their strike clock ({@link StrikeClock}): fallout has weakened hundreds of
-     * times by then. Destruction is remembered longer ({@link #past}): a chunk first loaded a month later is still destroyed.
+     * Detonations are forgotten 7 days after the burst on their strike clock ({@link StrikeClock}): their air, fires and rain
+     * have long ended. Destruction is remembered longer ({@link #past}): a chunk first loaded a month later is still destroyed;
+     * so is fallout, as a ground field ({@link #groundFields}) until it decays below the radiation floor.
      */
     public static final double FORGET_AFTER_S = 7 * 24 * 3600;
     /**
@@ -130,8 +132,15 @@ public final class NuclearEvents extends SavedData {
     private final List<Detonation> detonations = new ArrayList<>();
     /** Nuclear rounds whose impact work runs, by detonation number (saved: a restart mid-front keeps them). */
     private final Map<Integer, Impact> impacts = new LinkedHashMap<>();
-    /** Forgotten detonations: no fallout or visuals — only destruction in chunks loaded later. */
+    /** Forgotten detonations: no visuals — only destruction in chunks loaded later and their ground fields. */
     private final List<Detonation> past = new ArrayList<>();
+    /**
+     * Forgotten detonations whose fallout still lies above the radiation floor ({@link FalloutModel#FLOOR}) somewhere: their
+     * ground fields, read like a live detonation's fallout (the law with each point's landing, {@link #landingByMotion}) only
+     * near players ({@link Detonation#groundReach}); each keeps its anchors and its compacted history (under 4 KB). Dropped
+     * when the field's peak at its youngest ground age falls below the floor: years of world time at ground zero.
+     */
+    private final List<Detonation> grounds = new ArrayList<>();
     private final List<ScheduledStrike> scheduled = new ArrayList<>();
     /** Unfinished craters: detonation number → number of chunks already dug. */
     private final Map<Integer, Integer> craters = new LinkedHashMap<>();
@@ -232,6 +241,19 @@ public final class NuclearEvents extends SavedData {
         return past;
     }
 
+    /** Forgotten detonations whose fallout still lies on the ground ({@link #grounds}). */
+    public List<Detonation> groundFields() {
+        return grounds;
+    }
+
+    /** What the radiation reads fallout from: live detonations with fallout, then ground fields. */
+    public List<Detonation> falloutSources() {
+        List<Detonation> out = new ArrayList<>(detonations.size() + grounds.size());
+        for (Detonation d : detonations) if (d.hasFallout()) out.add(d);
+        out.addAll(grounds);
+        return out;
+    }
+
     public boolean isPast(int id) {
         return past.stream().anyMatch(d -> d.id() == id);
     }
@@ -245,17 +267,37 @@ public final class NuclearEvents extends SavedData {
      * ({@link WorldClock#rateClock}), in a dimension with no jumps counted (tests without a live clock).
      */
     public void add(Detonation d, double clock, double rate) {
-        add(d, clock, rate, 0, 0);
+        add(d, clock, rate, 0, 0, 0);
     }
 
-    private void add(Detonation d, double clock, double rate, double jumps, long age) {
+    private void add(Detonation d, double clock, double rate, double jumps, double unseen, long age) {
         detonations.add(d);
         clocks.put(d.id(), new Anchor(d.id(), clock, Double.NaN, StrikeClock.start(jumps)));
         StrikeHistory h = new StrikeHistory();
-        h.sample(0, rate, jumps, 0, true);
-        if (age > 0) h.sample(age, rate + age, jumps, age / 20.0, true);
+        h.sample(0, rate, jumps, unseen, 0, true);
+        if (age > 0) h.sample(age, rate + age, jumps, unseen, age / 20.0, true);
         histories.put(d.id(), h);
         setDirty();
+    }
+
+    /**
+     * A night held for a front in {@code level} ({@code held} world-clock ticks) turned out seen (someone awake when the front
+     * ended, {@link WorldClock#counted}): a strike born during the hold took it as its past ({@link #add}), and the count will
+     * never include it, so its anchors and history drop it; strikes born before the night are untouched.
+     */
+    public void heldSeen(ServerLevel level, double held) {
+        double counted = WorldClock.counted(level);
+        for (var e : clocks.entrySet()) {
+            StrikeClock c = e.getValue().clock();
+            if (!(c.jumpsAtStrike() > counted)) continue;
+            double end = c.ended() && c.jumpsAtEnd() > counted ? c.jumpsAtEnd() - held : c.jumpsAtEnd();
+            Anchor a = e.getValue();
+            e.setValue(new Anchor(a.id(), a.burst(), a.showEnd(),
+                    new StrikeClock(c.jumpsAtStrike() - held, c.endAge(), c.rateAtEnd(), end, c.rateAtRamp())));
+            StrikeHistory h = histories.get(e.getKey());
+            if (h != null) h.withdraw(counted, held);
+            setDirty();
+        }
     }
 
     /**
@@ -264,8 +306,9 @@ public final class NuclearEvents extends SavedData {
      */
     public void add(Detonation d, ServerLevel level) {
         long age = Math.max(0, level.getGameTime() - d.gameTime());
-        // jumps held for a front before the burst are this strike's past too
-        add(d, WorldClock.now(level) - age, WorldClock.rateClock(level) - age, WorldClock.counted(level) + WorldClock.held(level), age);
+        // jumps held for a front before the burst are this strike's past too (if the night turns out seen, heldSeen)
+        add(d, WorldClock.now(level) - age, WorldClock.rateClock(level) - age, WorldClock.counted(level) + WorldClock.held(level),
+                WorldClock.unseen(level), age);
     }
 
     /**
@@ -362,6 +405,72 @@ public final class NuclearEvents extends SavedData {
         return h.at(game - d.gameTime(), now - d.gameTime(), rate, counted);
     }
 
+    /**
+     * Detonation {@code d}'s ground clock G now, seconds since the burst: its strike clock plus the jumps someone was awake
+     * for since ({@link WorldClock#unseen}). Fallout and rain dust on the ground age on it (time.md §8.3 rules 4 and 7: a
+     * night skipped with someone awake moves the doses, not what anyone watches).
+     */
+    public double ground(Detonation d, ServerLevel level) {
+        return seconds(d, level) + (WorldClock.unseen(level) - unseenAtBurst(d, level)) * WorldClock.SECONDS_PER_TICK;
+    }
+
+    /** Detonation {@code d}'s ground clock G at a past game time {@code game}, seconds since the burst. */
+    public double groundAt(Detonation d, ServerLevel level, long game) {
+        StrikeHistory h = histories.get(d.id());
+        double unseen = h == null ? WorldClock.unseen(level) : h.unseenAt(game - d.gameTime(), level.getGameTime() - d.gameTime(), WorldClock.unseen(level));
+        return secondsAt(d, level, game) + (unseen - unseenAtBurst(d, level)) * WorldClock.SECONDS_PER_TICK;
+    }
+
+    /** Unseen jumps in {@code d}'s dimension at its burst; a detonation without history credits none before now. */
+    private double unseenAtBurst(Detonation d, ServerLevel level) {
+        StrikeHistory h = histories.get(d.id());
+        return h == null ? WorldClock.unseen(level) : h.unseenAt(0, level.getGameTime() - d.gameTime(), WorldClock.unseen(level));
+    }
+
+    /**
+     * A deposit that reaches a point at motion age {@code motionS} (the plume, {@link Detonation#falloutArrivalSeconds}; black
+     * rain's dust, {@link Detonation#rainStartSeconds}): its landing there, from the history; null — not landed yet.
+     */
+    public @org.jetbrains.annotations.Nullable FalloutModel.Landing landingByMotion(Detonation d, ServerLevel level, double motionS) {
+        if (!Double.isFinite(motionS)) return null;
+        StrikeClock c = clock(d, level);
+        long ageNow = level.getGameTime() - d.gameTime();
+        StrikeHistory h = historyOf(d, level);
+        double age = h.ageAtMotion(c, motionS, ageNow, WorldClock.counted(level));
+        return Double.isNaN(age) ? null : new FalloutModel.Landing(motionS, shiftAt(d, level, c, h, age));
+    }
+
+    /** Ground clock minus motion age at real age {@code age}, seconds: constant across a counted jump, never negative. */
+    private double shiftAt(Detonation d, ServerLevel level, StrikeClock c, StrikeHistory h, double age) {
+        return h.groundLead(c, age, level.getGameTime() - d.gameTime(), WorldClock.rateClock(level), WorldClock.counted(level), WorldClock.unseen(level));
+    }
+
+    /** {@code d}'s history, or for a detonation saved without one a vanilla day since its burst with today's jumps. */
+    private StrikeHistory historyOf(Detonation d, ServerLevel level) {
+        StrikeHistory h = histories.get(d.id());
+        if (h != null && h.size() > 0) return h;
+        StrikeHistory vanilla = new StrikeHistory();
+        long ageNow = level.getGameTime() - d.gameTime();
+        vanilla.sample(0, WorldClock.rateClock(level) - ageNow, WorldClock.counted(level), WorldClock.unseen(level), 0, true);
+        return vanilla;
+    }
+
+    /**
+     * Youngest ground age any of {@code d}'s deposits can have now, seconds: its motion age (a deposit landing now); once
+     * everything has landed ({@link StrikeHistory#compacted}), the ground clock since the last landing above the floor. Bounds
+     * where and how long its fallout matters ({@link Detonation#groundReach}, {@link #groundAbove}).
+     */
+    public double youngestGround(Detonation d, ServerLevel level) {
+        StrikeHistory h = histories.get(d.id());
+        if (h == null || !h.compacted()) return motion(d, level);
+        return ground(d, level) - shiftAt(d, level, clock(d, level), h, h.compactedAge());
+    }
+
+    /** Whether {@code d}'s fallout lies above the radiation floor anywhere: its peak at its youngest ground age. */
+    public boolean groundAbove(Detonation d, ServerLevel level) {
+        return d.hasFallout() && FalloutModel.groundRate(d.groundPeakH1(), youngestGround(d, level) / 3600) >= FalloutModel.FLOOR;
+    }
+
     /** Detonation {@code d}'s world-clock history; null — none (saved before it). */
     public @org.jetbrains.annotations.Nullable StrikeHistory history(Detonation d) {
         return histories.get(d.id());
@@ -383,7 +492,7 @@ public final class NuclearEvents extends SavedData {
     public List<Detonation> endShows(ServerLevel level) {
         List<Detonation> ended = new ArrayList<>();
         long gameNow = level.getGameTime();
-        double clockNow = WorldClock.now(level), rate = WorldClock.rateClock(level), counted = WorldClock.counted(level);
+        double clockNow = WorldClock.now(level), rate = WorldClock.rateClock(level), counted = WorldClock.counted(level), unseen = WorldClock.unseen(level);
         for (Detonation d : detonations) {
             long age = gameNow - d.gameTime();
             Anchor a = clocks.get(d.id());
@@ -413,13 +522,32 @@ public final class NuclearEvents extends SavedData {
                 force = true;
                 setDirty();
             }
-            // a detonation saved before its history: from now on (earlier moments as a vanilla day)
-            StrikeHistory h = histories.computeIfAbsent(d.id(), k -> new StrikeHistory());
-            int samples = h.size();
-            h.sample(age, rate, counted, c.motion(age, counted), force);
-            if (h.size() != samples) setDirty();
+            track(d, level, age, rate, counted, unseen, force);
         }
+        // ground fields keep their history for the moments their deposits landed at, and sample later jumps
+        for (Detonation d : grounds) track(d, level, gameNow - d.gameTime(), rate, counted, unseen, false);
         return ended;
+    }
+
+    /**
+     * Sample {@code d}'s history; once its fallout and rain have all landed above the floor and its blend is recorded, compact
+     * it ({@link StrikeHistory#compact}): from then on it keeps only jumps.
+     */
+    private void track(Detonation d, ServerLevel level, long age, double rate, double counted, double unseen, boolean force) {
+        StrikeClock c = clock(d, level);
+        // a detonation saved before its history: from now on (earlier moments as a vanilla day)
+        StrikeHistory h = histories.computeIfAbsent(d.id(), k -> new StrikeHistory());
+        h.settleUnseen(unseen);
+        int samples = h.size();
+        double motion = c.motion(age, counted);
+        h.sample(age, rate, counted, unseen, motion, force);
+        if (!h.compacted() && c.ended() && !Double.isNaN(c.rateAtRamp()) && motion >= d.lastLandingSeconds()
+                && motion >= d.rainLandedSeconds()) {
+            h.sample(age, rate, counted, unseen, motion, true);
+            h.compact();
+            samples = -1;
+        }
+        if (h.size() != samples) setDirty();
     }
 
     /** The anchors of this dimension's detonations, for clients ({@code S2C.NukeClock}). */
@@ -511,6 +639,7 @@ public final class NuclearEvents extends SavedData {
         encoding.clear();
         craters.clear();
         craterGrounds.clear();
+        grounds.clear();
         clocks.clear();
         histories.clear();
         steps.clear();
@@ -518,27 +647,41 @@ public final class NuclearEvents extends SavedData {
         return n;
     }
 
-    /** Forget old detonations: fallout and effects ended; destruction remains in {@link #past}. */
+    /**
+     * Forget old detonations: their air, fires and rain ended; destruction remains in {@link #past}, fallout above the floor
+     * as a ground field ({@link #grounds}), dropped once it has decayed below it.
+     */
     public void prune(ServerLevel level) {
-        prune(d -> seconds(d, level));
+        prune(d -> seconds(d, level), d -> groundAbove(d, level));
     }
 
-    /** Same, with each detonation's strike clock now, seconds ({@link #seconds}). */
+    /** Same, with each detonation's strike clock now, seconds ({@link #seconds}), and no ground fields. */
     public void prune(java.util.function.ToDoubleFunction<Detonation> seconds) {
+        prune(seconds, d -> false);
+    }
+
+    /** Same, with whether a detonation's fallout still lies above the floor ({@link #groundAbove}). */
+    public void prune(java.util.function.ToDoubleFunction<Detonation> seconds, java.util.function.Predicate<Detonation> lies) {
         List<Detonation> faded = detonations.stream().filter(d -> seconds.applyAsDouble(d) > FORGET_AFTER_S).toList();
         if (!faded.isEmpty()) {
             detonations.removeAll(faded);
             past.addAll(faded);
             faded.forEach(d -> forgetMaterial(d.id()));
+            for (Detonation d : faded) if (lies.test(d)) grounds.add(d);
             setDirty();
         }
+        if (grounds.removeIf(d -> !faded.contains(d) && !lies.test(d))) setDirty();
+        java.util.Set<Integer> kept = new java.util.HashSet<>();
+        for (Detonation d : detonations) kept.add(d.id());
+        for (Detonation d : grounds) kept.add(d.id());
         // a material whose strike was called off by any path, not only cancel(): nothing will ever read it
         if (materials.keySet().removeIf(id -> scheduled.stream().noneMatch(s -> s.id() == id)
                 && detonations.stream().noneMatch(d -> d.id() == id))) { materialEpoch++; setDirty(); }
-        if (clocks.keySet().removeIf(id -> detonations.stream().noneMatch(d -> d.id() == id))) setDirty();
-        if (histories.keySet().removeIf(id -> detonations.stream().noneMatch(d -> d.id() == id))) setDirty();
-        steps.keySet().removeIf(id -> detonations.stream().noneMatch(d -> d.id() == id));
-        if (craters.keySet().removeIf(id -> detonations.stream().noneMatch(d -> d.id() == id))) setDirty();
+        if (clocks.keySet().removeIf(id -> !kept.contains(id))) setDirty();
+        if (histories.keySet().removeIf(id -> !kept.contains(id))) setDirty();
+        steps.keySet().removeIf(id -> !kept.contains(id));
+        // a crater keeps digging after its detonation is forgotten: its progress stays until it is done
+        if (craters.keySet().removeIf(id -> detonations.stream().noneMatch(d -> d.id() == id) && past.stream().noneMatch(d -> d.id() == id))) setDirty();
         if (craterGrounds.keySet().removeIf(id -> !craters.containsKey(id))) setDirty();
     }
 
@@ -548,6 +691,8 @@ public final class NuclearEvents extends SavedData {
         e.lateFrom = tag.contains("late_from") ? tag.getInt("late_from") : e.nextId;
         Detonation.CODEC.listOf().parse(NbtOps.INSTANCE, tag.get("detonations")).resultOrPartial(Incoming.LOG::error).ifPresent(e.detonations::addAll);
         if (tag.contains("past")) Detonation.CODEC.listOf().parse(NbtOps.INSTANCE, tag.get("past")).resultOrPartial(Incoming.LOG::error).ifPresent(e.past::addAll);
+        // saved before ground fields: none (fallout of detonations forgotten then had already ended)
+        for (int id : tag.getIntArray("ground_fields")) e.past.stream().filter(d -> d.id() == id).findFirst().ifPresent(e.grounds::add);
         ScheduledStrike.CODEC.listOf().parse(NbtOps.INSTANCE, tag.get("scheduled")).resultOrPartial(Incoming.LOG::error).ifPresent(e.scheduled::addAll);
         if (tag.contains("craters")) CRATERS_CODEC.parse(NbtOps.INSTANCE, tag.get("craters")).resultOrPartial(Incoming.LOG::error).ifPresent(e.craters::putAll);
         if (tag.contains("crater_grounds")) GROUNDS_CODEC.parse(NbtOps.INSTANCE, tag.get("crater_grounds")).resultOrPartial(Incoming.LOG::error).ifPresent(e.craterGrounds::putAll);
@@ -584,6 +729,7 @@ public final class NuclearEvents extends SavedData {
         tag.putInt("late_from", lateFrom);
         Detonation.CODEC.listOf().encodeStart(NbtOps.INSTANCE, detonations).resultOrPartial(Incoming.LOG::error).ifPresent(t -> tag.put("detonations", t));
         Detonation.CODEC.listOf().encodeStart(NbtOps.INSTANCE, past).resultOrPartial(Incoming.LOG::error).ifPresent(t -> tag.put("past", t));
+        tag.putIntArray("ground_fields", grounds.stream().mapToInt(Detonation::id).toArray());
         ScheduledStrike.CODEC.listOf().encodeStart(NbtOps.INSTANCE, scheduled).resultOrPartial(Incoming.LOG::error).ifPresent(t -> tag.put("scheduled", t));
         CRATERS_CODEC.encodeStart(NbtOps.INSTANCE, craters).resultOrPartial(Incoming.LOG::error).ifPresent(t -> tag.put("craters", t));
         GROUNDS_CODEC.encodeStart(NbtOps.INSTANCE, craterGrounds).resultOrPartial(Incoming.LOG::error).ifPresent(t -> tag.put("crater_grounds", t));
