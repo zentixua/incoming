@@ -4,6 +4,9 @@ Status: proposal for Artem's decision ("обсуждаем"). Analysis only; not
 references are `path:line` against `main` at the time of writing; `J/` is `mod/src/main/java/ua/zentix/incoming/`.
 The numbers come from code reading and from a throwaway unit probe over the shipped models (`PallField`, `CloudModel`;
 15 kt surface burst, defaults, game scale), quoted where used.
+Review: two independent rounds. The defect class both found (a body's motion and what it carries on different clocks)
+led to the root-cause analysis in §6.0 and the split by body in §6. The project's review rule allows no third round, so
+§6's final form has not been through an independent review of its own; the follow-up design PRs review it.
 
 ## 1. The question
 
@@ -102,13 +105,15 @@ burn shock kills in 25 s–10 min.
    fires, rain and fallout stay at the minute they were (`NukeClock` ignores the world during the show). Sleeping after
    a conventional strike heals hearing but leaves the clouds, trails and crater fire as they were. The guide says
    "after a night's sleep the fires are out" without the exception.
-3. **Dust and mushroom outlive what they belong to.** Vanilla: the storm and black rain end at about 23–30 min, the
-   15 kt mushroom stays to 27 min and the dust law to 1.6 h. 24-hour day: black rain falls for hours after the 27-min
-   mushroom has gone (consistent there, since the storm is real too).
+3. **Dust and mushroom outlast the fires under a vanilla day.** The storm and black rain end at about 23–30 min, the
+   15 kt mushroom stays to 27 min and the dust law to 1.6 h. This is not a defect: the dust and the mushroom are air
+   raised by the blast, not the fires' smoke, and they drift away by their own motion (§6.0). The defect is the
+   carried rain (item 7).
 4. **One conventional strike, three clocks.** Its crater fire on ticks (2.5–16 min), its cloud on client ticks (up to
    60 min), the hearing damage it causes on the world clock (13 min vanilla, 16 h on a 24-hour day).
 5. **The longest conventional effects ignore the day.** A Shahed cloud stays up to an hour under a vanilla day (three
-   in-game days); a trail is capped at a fixed 1200 s labelled "an in-game day".
+   in-game days), drifting 10–20 km downwind by its end; a trail is capped at a fixed 1200 s labelled "an in-game day";
+   sleep leaves both.
 6. **Client-only state.** Conventional clouds and crater smoke are not shown to a late joiner and vanish on a replay
    seek; hearing loss is cured by relogging (it is client state), while burns and sickness persist.
 7. **Wind transport on the detonation clock.** The black-rain band starts at a downwind point at `START_S` + distance /
@@ -131,8 +136,9 @@ what players see, without our candidates; its answer is summarized in §5.5):
    hold) looks the same in every pack.
 3. **Lived-with consequences follow the world.** A 24-hour day plays out as in real life; a vanilla day compresses the
    aftermath with its sky; sleep moves it on; nothing holds a base hostage for real hours the world cannot skip.
-4. **One cause, one clock.** Everything one strike causes (smoke, dust, fires, rain, fallout, injuries, outages) ages
-   together, so related things never disagree.
+4. **Related effects agree.** What one strike causes never disagrees on screen. A body (a cloud, the dust) never has
+   its size and its density on different clocks, and a carried thing (rain, fallout) is never separated from its
+   carrier or ahead of it.
 5. **No hand-picked durations.** Durations come from the laws; the only other time constant is a marked presentation
    one (the 60-s join that keeps a rate change from showing as a step).
 6. **Same for everyone.** Server-defined: every player, a late joiner and a replay seek see the same state.
@@ -151,7 +157,8 @@ firestorm (out at 12 h), a Shahed cloud (up to 1 h), hearing after a near miss (
   declines from 2.5 min, is out by 10 min; a Shahed cloud fades in 50 s; hearing 13 min; outage 15 min. D2: dust opaque 100 s, storm formed in
   100 s. D24 and S: everything real.
 - Sleep at any time jumps everything; consistent everywhere; late join and seek are functions of the world clock.
-- Seams: under V and D2 the show itself time-lapses. Dust behind the wave clears while the front is still crossing
+- Seams: under V and D2 the show itself time-lapses, and what travels either races (its spread and drift on the day)
+  or splits from its own size (density on the day, size real: the defect of §6.0). Dust behind the wave clears while the front is still crossing
   (the front at 0.35 of sound speed takes about 40 s to 5 km); the mushroom thins before it has risen. The same nuke is
   a 20-second pop in one pack and a 20-minute event in another.
 - Fails 2 (the show) on the most common setup. Passes 3–7. Cheapest frames.
@@ -164,39 +171,48 @@ firestorm (out at 12 h), a Shahed cloud (up to 1 h), hearing after a near miss (
   weeks of evening sessions; the sky says days passed, the world says minutes.
 - Fails 3. Passes 1, 2, 4–6. The most frame cost (12 h of storm haze over every session).
 
-### 5.3 C: one strike, one clock (recommended; §6)
+### 5.3 C: the air in real time, the ground on the world's day (recommended; §6)
 
-Each strike has one clock for how far its consequences have gone. It runs in real time while the strike's own energy
-drives what happens (the show), then at the world's rate; motion on screen keeps real time (§6 gives the two ages
-exactly).
+Everything a strike puts into the air lives its whole law in real time (plus time jumps) and leaves by its own motion.
+Everything that stays in place ages on the strike's clock: real during the strike's show, then at the world's rate.
+§6 gives the rules and why the split is by body, not by quantity.
 
-- V: the nuke's show is 20 real min with an opaque dust blanket throughout; the dust then lifts within 1–1.5 min, the
-  storm is at full strength at the show's end, declines from 2–3 min later and is out by 28–30 min; fallout is
-  forgotten after 2.6 h. A Shahed cloud rises to its apex in real time (2–5 min) and fades within 1–2 min after; a
-  missile's show lasts while its crater fuel burns (16 min), so its cloud goes at about 18 min. Hearing and outages
-  recover at real rate during a show and at the world's rate after it. D2: after the show the dust lifts in 4–6 min,
-  the storm burns out over about an hour. D24 and S: everything real (the dust 1.6 h, the storm 12 h), which is real
+- V:
+  - The nuke's show is 20 real min. The dust blanket is opaque for about 20–25 min at 1.5 km, half clear by about
+    45 min and gone by about 65 min, drifting downwind at half the wind (the law, drawn through the transfer). The
+    mushroom lasts its 22–27 min.
+  - The storm is at full strength at the show's end, declines from 2–3 min later and is out by 28–30 min after the
+    burst.
+  - The smoke the fires gave off before they went out drifts on as a detaching band; black rain falls under it as it
+    passes. Fallout travels with its cloud at the real wind, decaying in flight by its physical age; on the ground it
+    decays at the world's rate.
+  - A Shahed cloud lives its law (up to an hour at light wind) while it drifts away, 10–20 km downwind by its end.
+  - Hearing, burns, sickness and outages recover at real rate during a show and at the world's rate after it.
+- D2: the same air; the storm burns out over about an hour after the show. D24 and S: everything real, which is real
   life.
-- Sleep or `/time add` during the show ends the show at the jump, and the jump's hours count at once (§6, rule 4): the
-  sleeper wakes to the aftermath at its world age, which is what the sky says. Later sleep jumps every strike's
-  consequences with the sky. Fast-day and stepping day mods and gradual time-lapse sleep are rates, not jumps: they
-  never end a show.
-- Server with some sleepers: the jump happens only when the server's sleep share is met; awake players see the sky and
-  the aftermath jump together (vanilla's own behavior for the sky). With the default share (all players) nobody in the
-  overworld is watching; a show in the Nether or the End is not ended by a jump (no sky jumps there).
+- Sleep or `/time add` (a jump) adds its hours at once to both clocks of every strike, so a night's sleep clears the
+  air and moves the ground on. During a show a jump also ends the show (rule 6).
+- Server with some sleepers: the jump happens only when the server's sleep share is met; awake players see the sky, the
+  air and the aftermath jump together (vanilla's own behavior for the sky and the weather). With the default share
+  nobody in the overworld is watching. Strikes in fixed-time dimensions (Nether, End) ignore jumps.
 - Late join and seek, nuclear: the clocks are functions of server anchors (the world clock at the burst, the real time
-  and world clock where the show ended, the jumps since the burst). The anchors of today assume a 20-min show; rule 4
-  adds fields (§6.1, change 4). Conventional: today's clouds are client-only and not re-sent; C computes their clock from
-  the blast packet and the world clock, and re-sending them to late joiners is a separate change (§6.1, change 11).
+  and world clock where the show ended, a saved jump counter). Conventional: today's clouds are client-only and not
+  re-sent; their clock comes from the blast packet and the clock packet; re-sending them is a separate change (§6.1,
+  change 10).
 - Several detonations: each has its own clocks; their dust and smoke add up by their own ages. A body or a district hit
   by several strikes recovers at real rate while any of them is in its show (rule 7).
-- Conventional-only play: every cloud fades within minutes under V and by its law under D24.
-- Seams: the end of the show is a rate change, not a catch-up, blended over 60 s; anything still changing then speeds
-  up with the sky (under V, the dust lifting in the minute after the show). That is the one visible compression, and
-  it is the day's own. Today's join blends positions and overshoots to 1.68× the world's rate (121× real under V,
-  `NukeClock.java:39-41`); C blends rates instead (rule 2).
-- Passes 1–5 and 7; passes 6 for nuclear strikes, while conventional clouds stay unseen by late joiners until change 11
-  (as today). Frame cost under V falls (dust 1.6 h → 22 min; clouds up to 1 h → 4–18 min); under D24 and S unchanged.
+- Conventional-only play: clouds and trails as in real life, drifting off; sleep clears them.
+- Seams:
+  - At a show's end, the ground's processes (fires burning down, recoveries) speed up with the sky over a 60-s rate
+    blend. The air never speeds up, so nothing visibly balloons, races or arrives ahead of what carries it.
+  - Today's join blends positions and overshoots to 1.68× the world's rate (121× real under V, `NukeClock.java:39-41`);
+    C blends rates.
+- Passes requirements 1–5 and 7, and 6 for nuclear strikes; conventional clouds stay unseen by late joiners until change 10 (as
+  today).
+- Frame cost: as today for dust, mushroom, clouds and trails. The haze band that carries black rain is drawn further
+  than today's 2-fire-zone plume; bench under V and S.
+- It differs from the player view on one point. The player view wanted the dust to thin at the world's pace after
+  20 min; C keeps the dust's physical hour, because compressing it would race it across the map (§6.0).
 
 ### 5.4 D: each phenomenon real while it visibly changes, then the world's day
 
@@ -219,78 +235,113 @@ and sleep during the window to move the aftermath on. It ranked "everything on t
 for the reasons in 5.1 and 5.2. Its worst cases: something changing in front of the eye for a bookkeeping reason, two
 clocks disagreeing on screen, and a long phase holding the game hostage with no way forward.
 
-E is C reached independently. C adds three things E leaves open: one clock for everything a strike causes, including
-injuries and outages (E leaves the body and the grid on the world day from the burst, which is inconsistency 1); a
-definition of the window (the strike's own energy), so it is not a per-phenomenon choice; and motion staying real.
+E and C agree on most points: the watched phase in real time, a rate change without catch-up, sleep moving the
+aftermath on, nothing backward. They differ on the air. E compresses everything after the window, the dust and smoke
+included. That runs into the problem of §6.0: what travels cannot be compressed without racing it, shrinking its
+footprint or losing its carrier. C keeps the air on real time and compresses only what stays in place. E also leaves the
+body and the grid on the world's day from the burst, which is inconsistency 1.
 
 ### 5.6 Summary
 
-| | A world day | B real | C one strike, one clock | D per phenomenon | E player view |
+| | A world day | B real | C air real, ground on the day | D per phenomenon | E player view |
 |---|---|---|---|---|---|
 | Show the same in every pack | no | yes | yes | yes | yes |
 | 24-hour day = real life | yes | yes | yes | yes | yes |
 | Sleep moves the aftermath | yes | no | yes | partly | yes |
-| Related effects agree | yes | yes | yes | no | partly |
-| No hand-picked durations | yes | yes | yes | no | yes |
-| Frame cost under V | lowest | highest | low | high | low |
+| Nothing in the air races or loses its carrier | no | yes | yes | no | no |
+| Related effects agree | no | yes | yes | no | partly |
+| No hand-picked durations | yes | yes | one fixed show length | no | one fixed window |
+| Frame cost under V | lowest | highest | as today (+ the haze band) | high | low |
 
-## 6. Recommendation: C, one strike, one clock
+## 6. Recommendation: C, the air in real time, the ground on the world's day
 
-**The principle, as a player can state it:** *A strike plays out in real time while its own energy drives it; what it
-leaves behind then ages with the world's day, never slower than real time and never backward. Everything one strike
-causes shares its clock, and what moves on screen moves in real time.*
+**The principle, as a player can state it:** *What a strike puts into the air (clouds, dust, smoke, rain, fallout)
+lives in real time and drifts away with the wind, like Minecraft's own clouds and weather. What it leaves in place
+(fires, contamination, ruins, power, your body) plays out in real time while the strike's own energy drives it, then
+ages with the world's day, never slower than real time and never backward. Sleep moves both on.*
+
+### 6.0 Why the split is by body (root cause after two review rounds)
+
+The first two drafts split each strike's consequences by quantity: positions and speeds on a real-time age M, amounts
+and densities on a compressed clock S. Both review rounds found the same class of defect: a body's motion and the body
+it causes disagreeing.
+- Round 1: rain and fallout carried ahead of their smoke.
+- Round 2: a cloud's size on one clock and its density on another, and rain under a carrier that has already gone.
+
+The cause, with its numbers:
+- **Every visible end in the air is made by motion.** A conventional cloud lives while τ = m / (2π σh σv) ≥ `SEEN`,
+  and its σ's grow with turbulent spread (`CloudModel.java:830-841`, `GroundDust.java:1425-1437`). A trail lives until
+  σ reaches a target (`TrailModel.java:383-387`), the mushroom until Richardson dispersal (`MushroomModel.java:136-148`),
+  the dust until its size bins settle (`PallField.settledBy`).
+  - "Amount" in the air is therefore a function of how far the body has spread or fallen.
+  - Reading size on M and density on S draws a cloud that loses mass it never lost. Two minutes after a Shahed's apex
+    under V, σ ∝ t gives a drawn mass of (4 min / 74 min)², about 1/340 of the cloud's.
+  - Reading both on S races the spread 72× on screen.
+- **A carried thing exists only with its carrier.** Moving the black-rain band at the real wind while its carrier
+  lives on the compressed clock puts rain under a clear sky. The review's probe, for 15 kt at 3 m/s under V: rain at
+  20 km at 119 min after the burst, while the haze is out at 28–30 min. Moving both on S races them.
+- **With space real and speeds real, time cannot be compressed for anything that travels.** Its footprint would shrink,
+  or its motion would time-lapse, or its carrier would outlive its cause. In place, compression costs nothing visible
+  but the rate at which things burn down and heal.
+
+So the split follows the body. A body in the air lives its whole law on one age, real time plus jumps. A thing in
+place ages on the strike clock. Where one feeds the other (fires emitting smoke, smoke raining, rain and fallout
+landing), the handoff carries the state across at that moment.
 
 Rules:
 
-1. **Two ages per strike.** The *motion age* M is real time plus every time jump since the strike. The *strike clock*
-   S equals M during the show and runs at the world's rate after it. S ≥ M always. Every consequence reads one of them:
-   - M for motion: where things are and how fast they move (flight, the front, rise, the mushroom's rise, spread and
-     dispersal, drift with the wind, the dust's drift, birth and texture, the haze plume's reach, the black-rain band
-     and the fallout carried downwind, sound);
-   - S for how far a process has gone: amounts and densities (the dust's depth and lifetime, smoke thinning), burning
-     and burning out, rain duration at a point, decay, contamination, healing, repairs.
+1. **Two ages per strike.** The *motion age* M is real time plus every jump since the strike. The *strike clock* S
+   equals M during the show and runs at the world's rate after it. S ≥ M always.
+2. **The air on M, whole.** A body in the air lives its whole law on M: rise, spread, settling, thinning, drift, light,
+   and what falls from it. This covers the blast and conventional clouds, ground dust, the nuclear dust blanket, the
+   mushroom and its stem, trails, smoke parcels, black rain and fallout in flight. Such a body leaves the scene by its
+   own motion.
+3. **In place on S.** What stays in place reads S:
+   - the fires (their growth, strength, burning out and emission), their light;
+   - contamination and fallout on the ground and its decay;
+   - ruins and late collapse;
+   - outages and repairs;
+   - injuries (rule 7).
+4. **Handoffs carry the state.** Smoke leaving a fire carries the fire's strength at its S at that moment, then lives
+   on M; the drawn haze over and downwind of the fires is these parcels, so black rain falls only under drawn smoke.
+   Fallout and rain carry their in-flight age M to the ground, then decay there on S. Nothing carried exists without
+   its carrier, and nothing arrives before it.
+5. **The show is the strike's own phase, from its laws.** It lasts while the strike's own energy drives what is in
+   place.
+   - Conventional blast: until its crater fuel has burnt down (`FuelFires`: Shahed 2.5 min, missile 16 min), taken from
+     the server's fire, not the client's pool model. Without fuel, until the blast is over.
+   - Detonation: one fixed show length, 20 min, fires or not. The firestorm forms in it (Hiroshima); the mushroom
+     (17–27 min by yield) and the dust are air and do not depend on it.
 
-   Nothing a strike causes reads raw ticks or the raw world clock. Something carried by the wind therefore never
-   arrives before its carrier, and what crosses the screen never speeds up with the day.
-2. **The show is the strike's own phase, from its laws.** It lasts while the strike's own energy drives the picture.
-   - Conventional blast: until its thermal reaches its apex (`Thermal`, Morton–Taylor–Turner with the air's
-     Brunt–Väisälä frequency: 2–5 min) and its crater fuel has burnt down (`FuelFires`: Shahed 2.5 min, missile 16 min).
-   - Every detonation, fires or not: the existing 20 min. The firestorm forms in it (Hiroshima), the 1–15 kt
-     mushroom's rise and dispersal take 22–27 min, and the dust's dark phase at 1.4 km ends at about 20 min. One value
-     covers the detonation's own processes.
-
-   After the show, the atmosphere, gravity, decay and healing carry what is left: the world's processes, on the world's
-   day. A show that ends by its length joins the world's rate by a rate blend, dS/dt = 1 + (k − 1)·u(r / 60 s) (u a
-   smoothstep, r real seconds since the show's end, k the world's rate). It never overshoots k and never catches up the
-   show.
-3. **Motion is real.** No position or speed on screen follows the world's rate. A process whose look is mostly motion
-   (the mushroom, a trail's spread) lives on M entirely.
-4. **A time jump is an event, and it ends the show.** A jump is a sleep's wake-up (NeoForge `SleepFinishedTimeEvent`)
-   or a `/time add` / `/time set` command that moves the day forward (`CommandEvent`). A day-mod's fast or stepped day
-   and a gradual time-lapse sleep are rates, never jumps. A jump adds its hours to M and S at once, with no blend.
-   During a show in a dimension with a day cycle, a jump also ends the show there. A backward `/time set` never moves a
-   clock back.
-5. **Real time is game time.** Lag, `/tick rate`, `/tick freeze` and pause slow or stop every strike clock with the
-   world, on the server and on the client (the client level's tick, the replay position).
-6. **Server-defined.** The clocks are functions of server anchors: the world clock at the burst, the real time and
-   world clock where the show ended, and the jumps since the burst. Every player, a late joiner and a replay seek see
-   the same state.
-7. **Shared states age by the slowest live cause, and bodies only while present.** A state with several causes (a
-   body's hearing, burns and sickness, a district's outage) recovers at real rate while any of its causes is in its
-   show, and at the world's rate otherwise; jumps count. A body's injuries advance only over the ticks the body is in
-   the world, as vanilla effects do: a player who logs off, or a mob in an unloaded chunk, resumes where it left. The
-   world's consequences (fires, fallout, outages) age whether anyone is there or not. Exposure is not recovery: how a
-   dose is gathered (the ear's 2-minute dose window, `HearingModel.Ear`) is the event's own time and uses M.
+   A show that ends by its length joins the world's rate by a rate blend, dS/dt = 1 + (k − 1)·u(r / 60 s), with u a
+   smoothstep, r real seconds since the show's end and k the world's rate without jumps. It never overshoots k and
+   never catches up the show.
+6. **A jump is a forward step of the day in one tick of at least one hour (1000 ticks)**, from any source: sleep,
+   commands, functions, mods. It adds its hours once to M and S (not again through k), with no blend, and ends a show
+   it falls in.
+   - Fast-day and stepping day mods and gradual time-lapse sleep are rates, never jumps.
+   - A backward `/time set` counts as its forward distance only when that is under 12 hours (a night skip); otherwise
+     it counts as real time. "Set day" in the morning and a periodic "set noon" invent no days.
+   - Strikes in fixed-time dimensions ignore jumps.
+7. **Shared states and bodies.** A state with several causes (a body's hearing, burns and sickness; a district's
+   outage) recovers at real rate while any cause is in its show, then at the world's rate through the same rate blend;
+   jumps count (test: two strikes in different phases). A body's injuries advance only while it is in the world, as
+   vanilla effects do. Exposure (the ear's 2-minute dose window, `HearingModel.Ear`) is the event's own time: M.
+8. **Real time is game time.** Lag, `/tick rate`, `/tick freeze` and pause slow or stop every clock with the world, on
+   the server and on the client (the client level's tick, the replay position).
+9. **Server-defined.** The clocks are functions of server anchors: the world clock at the burst, the real time and world
+   clock where the show ended, and the world's jump counter (saved) at the burst. The clock packet carries the
+   counter, so every player, a late joiner and a replay seek see the same state. Hearing is the one client-held state
+   (change 6): a client effect behind a client setting.
 
 Why C:
-- It is the only candidate that passes the requirements in §4, except the conventional late-join gap that exists today.
-- It is Artem's idea (consequences follow the day, a 24-hour day is real life) with the exception he named (what moves
-  stays real) made into a rule.
-- The player-view analysis reached the same principle on its own.
-- It generalizes the current nuclear rule (`NukeClock`), adding the motion age and jumps as events, with no new
-  setting.
-
-The one visible compression (the end of a show under a short day) is the same compression the sky shows.
+- It passes every requirement in §4 (except the conventional late-join gap that exists today) without splitting any
+  body or carrier across clocks.
+- It is Artem's idea for what stays and burns in the world (the day sets how long it lasts; a 24-hour day is real
+  life) with his exception (what moves stays real) taken to its root: what travels cannot be compressed.
+- It matches vanilla: clouds and weather run on ticks and sleep clears the weather.
+- It is closest to today's code. The dust, clouds and mushroom already run on real time and the storm on `NukeClock`;
+  C adds jumps, handoffs, the body and grid rules, and fixes the cap.
 
 ### 6.1 What C changes, and what a player will notice
 
@@ -298,42 +349,45 @@ Ordered by what a player notices first. Each item is one follow-up PR with its t
 (`IncomingNetwork.PROTOCOL` bump), save and replay effects. Frame-cost changes are measured on the scene bench where
 marked.
 
-| # | Change | Code areas | Formats | Player-visible effect (V / D24) |
+| # | Change | Code areas | Formats | Player-visible effect |
 |---|---|---|---|---|
-| 1 | The inside-sight cap becomes a camera property: it weighs each ray's segment inside the layer by the eye's depth below the local layer top (smoothed over the top's own softness); with the eye outside the dust, every ray reads the law through the transfer. Not a time change. | `PallField.visible/lifetime` (cap out of the shared table), `dustwall.glsl` (+ `wall_layer`, harness preludes), `DustSources`, `DustWallGlslTest`, `PallFieldTest`, `tools/dust_wall_gl.py`; guide `not-physical.md` row | none | From outside and above, the blanket near ground zero stays dense (straight down 4 % of light at 1 min, 18 % at 20 min at 1.5 km; opaque seen slant) instead of 55 % see-through after a minute. Inside it the view is unchanged (200 m → 700 m). Two players see different densities only when one stands inside the dust; walking out, the far blanket thickens over the eye's last metres in the layer (test: drawn density along a fixed far ray changes continuously with eye height). Bench: no new work per ray. |
-| 2 | The dust reads two ages: M for drift, birth, hump, texture and the history's clock-jump restart; S for depth and lifetime (rule 1). | `DustSources.source` (two ages per source), `PallField` (`lifetime`, `visible`, `dustEnd`, `waveDust`), `dustwall.glsl` drift `q₀ = p − D·age` on M, resolve restart rule, `DustWallGlslTest`, `tools/dust_wall_gl.py`; texts `nuclear.md` ("dust stays on real time"), `dust-wave.md`, `PallField.java:42,479`, `ClientNuclear.java:53` | uses change 4's anchors | V: dense through the show, lifts within 1–1.5 min after it, drifting at the real wind. D24 and S: unchanged (1.6 h). Sleep clears it. Bench: shorter life under V, less cost. |
-| 3 | Injuries and outages recover by rule 7: real rate while any cause is in its show, the world's rate otherwise. The ear's dose window moves to M (exposure). | `RadiationTicker`, `SicknessModel`, `BurnsEffect`/`BurnInjury`, `Deafness`/`HearingModel` (`Ear`), `grid/Outage`, `Blackouts`, `PowerGrid`; text `client-sound.md` (hearing clock) | Saves: a recovery clock per body and per district; existing `exposedAt` and outage times are read as world clock (migration: the new clock starts at the world clock) | V: during the nuke's show hearing, burns, sickness and power no longer recover 72× fast; the zone stays dark through the show. Sleep during the show heals the body and moves the fires alike. The raid hearing numbers in `client-sound.md` are measured again (the 2-min window is 1.7 s of real time under V today). D24: unchanged. |
-| 4 | Time jumps are events and end the show (rule 4); the rate blend replaces the position blend (rule 2). | `NukeClock`, `NukeClockTest` (no overshoot), `WorldClock` (jump events), `ClientClock`, `NuclearEvents.Anchor`/`endShows`, `ClientNuclear.clockTicksAt`, `S2C.NukeClock` | Packet: `ShowEnd` gains the show's real end and the jump total, PROTOCOL bump. Save: two `Anchor` fields. Replays without them: a 20-min show and no jumps, as today | Sleep during the show: wake to the aftermath at its world age (fires burning down or out, fallout decayed) instead of a minute-5 mushroom in a morning sky. |
-| 5 | The mushroom on M (rule 3). | `MushroomModel.lifeSeconds` readers, `CloudPuffs`, `ClientNuclear` | uses change 4 | Unchanged except across a jump: after sleeping through a show the mushroom is gone. |
-| 6 | Conventional strikes get two ages: show to the apex and the fuel's burn-down, then the world's rate with the same blend. The fixed caps (`CloudModel.LIFE_MAX` 3600 s, also read by `GroundDust`; `TrailModel` 1200 s) give way to the law's visibility threshold, with the frame-cost limit checked on the bench under a stopped day. | `client/fx/smoke` (`CloudModel`, `GroundDust`, `SmokeGrid`, `BlastTime`), `FireSmoke`, `warhead/FuelFires`, `TrailModel` | Packet: the world clock and jump events sent once a second to every client (today only while a dimension holds detonations), PROTOCOL bump; old replays: real time | V: a Shahed cloud fades 1–2 min after its apex (about 4–7 min in total instead of up to 60), a missile's after its fuel fire (about 18 min); trails go with them. D24: by the law. Sleep clears them. Bench: less cost under V, measured under S. |
-| 7 | Bodies age while present (rule 7). Sickness stops progressing offline (today it reads the absolute world clock, `RadiationTicker.java:223`, so a player can log back in at the fatal stage). Hearing is kept across relog: the client sends its ear state to a player attachment and gets it back on join. | `RadiationTicker`, `SicknessModel`, `Deafness`, `HearingModel`, `BurnsEffect` | Save: a body clock per player and mob (attachment). Packet: ear state both ways, PROTOCOL bump | No death on login after a night offline; relogging no longer cures deafness. |
-| 8 | Client strike clocks follow the client level's tick (frozen by `/tick freeze`, the replay position in Flashback); heat shimmer leaves the wall clock. | `IncomingClient` smoke, trail and blast clocks, `HeatPass` | none | Under `/tick freeze` and a Flashback pause, conventional smoke stands still with the rest of the world, as the guide says; exported video shimmers at the right speed. |
-| 9 | A detonation is forgotten when its fallout rate at H+1 contours falls below the natural background (a physical threshold), not at a fixed 7 days; crater progress is kept until the crater is done. | `NuclearEvents` pruning, `FORGET_AFTER_S` | Save: crater progress outlives the detonation | Dosimeters no longer drop in one step at day 7. |
-| 10 | Rain and fallout carried by the wind move on M; the rain's duration at a point and every decay stay on S. | `BlackRainModel.startSeconds`, `FalloutModel` arrival, `RadiationTicker`, `NukeSky`, `PallField.plume` (jumps) | none (derived) | V: the black-rain band and fallout travel at the visible wind behind the haze that carries them, instead of sweeping kilometres in seconds after the show; far downwind, fallout arrives older and weaker, as the world's days have passed. D24: unchanged. |
-| 11 | Live conventional strikes are recorded on the server and re-sent to a late joiner and on a seek (optional, closes C's one gap). | `strike/`, `S2C.Blast`, `IncomingClient` | Packet and record, PROTOCOL bump | A friend joining sees the clouds still up. |
+| 1 | The inside-sight cap becomes a camera property. It weighs each ray's segment inside the layer by the eye's depth below the local layer top, smoothed over the top's softness (`BUMPS`, about 0.3 of the layer height); with the eye outside the dust every ray reads the law through the transfer. Not a time change; an accepted presentation, marked. | `PallField.visible/lifetime` (cap out of the shared table), `dustwall.glsl` (+ `wall_layer`, harness preludes), `DustSources`, `DustWallGlslTest`, `PallFieldTest`, `tools/dust_wall_gl.py`; guide `not-physical.md` row | none | Every pack: from outside and above, the blanket near ground zero stays dense (straight down 4 % of light at 1 min, 18 % at 20 min at 1.5 km; opaque seen slant) instead of 55 % see-through after a minute. Inside, the view is unchanged (200 m → 700 m). Two players see different densities only when one stands inside the dust. Walking out, the far blanket thickens over the top's softness, tens of metres of eye height (test: the drawn depth along a fixed far ray stays continuous in eye height). Bench: no new work per ray. |
+| 2 | Jumps (rule 6), the rate blend (rule 5), and the jump counter and show-end anchors (rule 9). | `WorldClock` (k without jumps, the jump counter, the backward-set rule), `ClientClock`, `NukeClock`, `NukeClockTest` (no overshoot), `NuclearEvents.Anchor`/`endShows`, `ClientNuclear.clockTicksAt`, `S2C.NukeClock` | Packet: clock packet with the jump counter, sent once a second to every client (today only while a dimension holds detonations); `ShowEnd` gains the show's real end. PROTOCOL bump. Save: the counter in `WorldClock`, two `Anchor` fields. Replays without them: a 20-min show and no jumps, as today | Sleep during the show: wake to the aftermath at its world age instead of a minute-5 mushroom in a morning sky. `/time set day` at night moves the aftermath on (§7 #3); in the morning it does not. |
+| 3 | The air reads M: dust, mushroom, clouds, ground dust, trails and smoke add the jumps to their real age. | `DustSources.source`, `ClientNuclear` (mushroom, `CloudPuffs`), `client/fx/smoke` (`SmokeGrid`, `BlastTime`), `FireSmoke`, `TrailModel`; texts `nuclear.md`, `dust-wave.md`, `PallField.java:42,479` ("real time plus jumps") | uses change 2 | After a night's sleep the sky is clear of the strike's dust and smoke. Otherwise unchanged: the air runs as today. |
+| 4 | Handoffs (rule 4). The haze over and downwind of the fires becomes smoke parcels: each carries the fire's strength at its S at emission and moves on M, replacing today's plume, which shows the fires' current smoke out to 2 fire zones. Black rain falls under drawn parcels; rain and fallout carry their in-flight age to the ground. | `PallField` (`hazeEnvelope`, `plume`, `PLUME_MAX`), `pall.glsl`, `BlackRainModel` (band = parcels), `FalloutModel` (arrival on M, decay on S after landing), `RadiationTicker`, `NukeSky` | none (derived from anchors) | V: after the fires burn out, their last smoke drifts away as a band and black rain falls only under it, no longer from a clear sky or kilometres ahead of it; fallout lands with its cloud at the visible wind and at its physical age. D24: as physics. Bench: the longer haze band, under V and S. |
+| 5 | Shared states and outages (rule 7). | `RadiationTicker`, `SicknessModel`, `BurnsEffect`/`BurnInjury`, `Deafness`/`HearingModel` (`Ear` window on M), `grid/Outage`, `Blackouts`, `PowerGrid`; text `client-sound.md` | Save: a recovery clock per body and per district; existing `exposedAt` and outage times are read as world clock (the new clock starts at the world clock) | V: during a show hearing, burns, sickness and power no longer recover 72× fast; the zone stays dark through the show. The raid hearing numbers in `client-sound.md` are measured again (today's 2-min window is 1.7 s of real time under V). |
+| 6 | Bodies age while present (rule 7). Sickness stops progressing offline (today it reads the absolute world clock, `RadiationTicker.java:223`, so a player can log back in at the fatal stage). Hearing is kept across relog: the client sends its ear state to a player attachment and gets it back on join. | `RadiationTicker`, `SicknessModel`, `Deafness`, `HearingModel`, `BurnsEffect` | Save: a body clock per player and mob (attachment). Packet: ear state both ways, PROTOCOL bump | No death on login after a night offline; relogging no longer cures deafness. |
+| 7 | Client clocks follow the client level's tick (frozen by `/tick freeze`, the replay position in Flashback); heat shimmer leaves the wall clock. | `IncomingClient` smoke, trail and blast clocks, `HeatPass` | none | Under `/tick freeze` and a Flashback pause, conventional smoke stands still with the rest of the world, as the guide says; exported video shimmers at the right speed. |
+| 8 | A detonation is forgotten only after its last arrival on M and once its ground fallout is below the natural background (a physical threshold), not at a fixed 7 days; crater progress is kept until the crater is done. | `NuclearEvents` pruning, `FORGET_AFTER_S` | Save: crater progress outlives the detonation | Dosimeters no longer drop in one step at day 7. |
+| 9 | `doFireTick false`: no fire placement and the detonation's `fires` off (§7 #2). | `strike/StrikeRules`, `NuclearWarhead` | none | No permanent static flames on servers with fire tick off. |
+| 10 | Live conventional strikes are recorded on the server and re-sent to a late joiner and on a seek (optional, closes C's one gap). | `strike/`, `S2C.Blast`, `IncomingClient` | Packet and record, PROTOCOL bump | A friend joining sees the clouds still up. |
 
 Guide (both languages, with the PRs that change behavior):
-- the "Time" passage in `nuke.md` states the principle in its player form, adds conventional strikes, and says that
-  sleep during the show ends it. It also makes two sentences exact: under a vanilla day the fires burn out about 10
-  minutes after the show (half an hour after the burst); and black rain starts 20 real minutes after the burst unless a
-  sleep ends the show first;
+- the "Time" passage in `nuke.md` states the principle in its player form (the air in real time, what stays in place
+  on the day, sleep moves both), adds conventional strikes, and says that sleep during the show ends it. It also makes
+  two sentences exact: under a vanilla day the fires burn out about 10 minutes after the show (half an hour after the
+  burst); and black rain starts 20 real minutes after the burst unless a sleep ends the show first;
 - `not-physical.md` describes the inside-sight row as "only for a camera inside the dust".
 
 AGENTS.md "Time" would read (replacing the current paragraph):
 
-> **Time** (Artem, 10.11; principle 26.11): one strike, one clock. A strike plays out in real time while its own energy
-> drives it (the show: 20 minutes for a detonation; a conventional blast until its cloud's apex and its fuel's
-> burn-down); then what it leaves ages at the world's rate (`util/WorldClock`: time of day, never slower than real,
-> never backward: vanilla 72×, day-length mods 1×, stopped day real), joined by a rate blend. Amounts, burning, decay and
-> healing read the strike's clock. Motion reads real time plus jumps: flight, front, rise, drift, and rain and fallout
-> carried by the wind. A sleep or time command is a jump: it counts at once and ends a show. A state with several
-> causes recovers at real rate while any cause is in its show. A body ages only while it is in the world. Real time is
-> game time (lag, `/tick`, pause). No new time settings; durations come from the laws.
+> **Time** (Artem, 10.11; principle 26.11): the air in real time, the ground on the world's day. Everything a strike
+> puts into the air (clouds, dust, mushroom, trails, smoke, rain and fallout in flight) lives its whole law in real
+> time plus jumps and leaves by its own motion: what travels is never compressed. What stays in place (fires and their
+> emission, contamination, ruins, outages, injuries) runs real during the strike's show (20 minutes for a detonation;
+> a conventional blast until its fuel burns down), then at the world's rate (`util/WorldClock`: time of day, never
+> slower than real, never backward: vanilla 72×, day-length mods 1×, stopped day real), joined by a rate blend.
+> Handoffs carry the state: smoke carries its fire's strength at emission, rain and fallout their age in flight. A jump
+> (the day stepping at least an hour in a tick: sleep, commands) counts once on both and ends a show. A state with
+> several causes recovers at real rate while any cause is in its show; a body ages only while it is in the world. Real
+> time is game time (lag, `/tick`, pause). No new time settings; durations come from the laws.
 
 ### 6.2 What C keeps
 
 The 20-minute nuclear show and its 60-s join (now a rate blend), the world clock and its floor, the movement axis
-(`scale_preset`, flight speed, wave speed), and every law's own durations. No new setting.
+(`scale_preset`, flight speed, wave speed), and every law's own durations. Kept with them, as today: real-time dust,
+clouds, mushroom and trails, and the existing caps `CloudModel.LIFE_MAX` (1 h) and the trail's 1200 s, which are a
+separate question for the laws' own visibility thresholds. No new setting.
 
 ## 7. Every mechanic against pack conditions: mismatches, ranked
 
@@ -344,23 +398,23 @@ independent fixes.
 | # | Condition | What happens now | Fix | Setup |
 |---|---|---|---|---|
 | 1 | Any nuke, every pack | The dust blanket is drawn see-through from outside a minute after the front (§1.1) | C change 1 | every game |
-| 2 | `doFireTick false` | No gamerule is read before placing fire (`strike/StrikeRules.java:30`); our ruin, flash, blast and debris fires (up to 20 000 per detonation, `nuclear/world/RuinPlan.java:1175`, `warhead/Warheads.java:489`, `StagedExplosion.java:1447`, `DebrisSpawner.java:51`) never go out, while the drawn storm burns out by its law: permanent static flames over a dead city. Crater fuel fires remove themselves at burn-out (`warhead/FuelFires.java:341`) | Treat `doFireTick false` as `world.fire false` for placement (the admin asked for no fire to burn), and set the detonation's `fires` off with it (`NuclearWarhead.java:98` reads only `nuclear.fires`), so the client draws no storm over a city with no fire | common on servers |
-| 3 | `/time set day` at night (the usual op skip) | `dayTime` is absolute, so the set moves it backward; the world clock counts that tick as real (`util/WorldClock.java:106-125`, `ClientClock.java:30`): fires, fallout, injuries and repairs see no night pass | Count a backward set as the forward distance to that time of day (`floorMod(delta, 24000)`); under C rule 4 that set is a jump and ends a show it falls in | common in single-player, with ops |
-| 4 | Vanilla day, during the nuke's show | Hearing, burns, sickness and power recover 72× fast while the show runs in real time (§3.1, 1) | C change 3 | every vanilla game |
-| 5 | Dedicated server, player offline | Sickness advances offline (login at the fatal stage); burns are frozen offline; hearing is cured by relogging | C change 7 | common |
-| 6 | Flashback pause, `/tick freeze` | Conventional blast clouds, ground shake and crater smoke keep running (`client/IncomingClient.java:232,259,264,270`) while particles, trails and the nuke hold; the guide says clouds stand still | C change 8 (rule 5) | common for filming |
-| 7 | Flashback export, pause, freeze | Heat shimmer runs on the wall clock (`client/fx/layer/HeatPass.java:644,733`): boils while paused, churns too fast in exported video | Drive it by game ticks plus partial tick or the replay position (rule 5) | creators |
-| 8 | Vanilla day, conventional play | A Shahed or missile cloud stays up to an hour (three in-game days); a trail 20 min; sleep leaves them | C change 6 | every vanilla game |
-| 9 | Sleep during a show | Fires, rain and fallout stay at the minute of the sleep while the sky jumped hours (the guide says the fires are out after a night's sleep) | C change 4 | common in single-player |
-| 10 | Day-length mods that set `dayTime` themselves (not NeoForge `dayTimePerTick`) | Without detonations the server does not send its clock, so the client's hearing clock counts vanilla steps (`ClientClock.java:30`, `NuclearStrikes.java:355`): hearing after conventional blasts heals about 72× too fast | Send the world clock while any strike clock or injury is live (rule 6) | depends on the mod |
+| 2 | `doFireTick false` | No gamerule is read before placing fire (`strike/StrikeRules.java:30`); our ruin, flash, blast and debris fires (up to 20 000 per detonation, `nuclear/world/RuinPlan.java:1175`, `warhead/Warheads.java:489`, `StagedExplosion.java:1447`, `DebrisSpawner.java:51`) never go out, while the drawn storm burns out by its law: permanent static flames over a dead city. Crater fuel fires remove themselves at burn-out (`warhead/FuelFires.java:341`) | Treat `doFireTick false` as `world.fire false` for placement (the admin asked for no fire to burn), and set the detonation's `fires` off with it (`NuclearWarhead.java:98` reads only `nuclear.fires`), so the client draws no storm over a city with no fire (C change 9) | common on servers |
+| 3 | `/time set day` at night (the usual op skip) | `dayTime` is absolute, so the set moves it backward; the world clock counts that tick as real (`util/WorldClock.java:106-125`, `ClientClock.java:30`): fires, fallout, injuries and repairs see no night pass | Count a backward set as the forward distance to that time of day (`floorMod(delta, 24000)`); only under 12 h (a night skip), otherwise real; such a set is a jump under C rule 6 and ends a show it falls in (C change 2) | common in single-player, with ops |
+| 4 | Vanilla day, during the nuke's show | Hearing, burns, sickness and power recover 72× fast while the show runs in real time (§3.1, 1) | C change 5 | every vanilla game |
+| 5 | Dedicated server, player offline | Sickness advances offline (login at the fatal stage); burns are frozen offline; hearing is cured by relogging | C change 6 | common |
+| 6 | Flashback pause, `/tick freeze` | Conventional blast clouds, ground shake and crater smoke keep running (`client/IncomingClient.java:232,259,264,270`) while particles, trails and the nuke hold; the guide says clouds stand still | C change 7 (rule 8) | common for filming |
+| 7 | Flashback export, pause, freeze | Heat shimmer runs on the wall clock (`client/fx/layer/HeatPass.java:644,733`): boils while paused, churns too fast in exported video | Drive it by game ticks plus partial tick or the replay position (C change 7, rule 8) | creators |
+| 8 | Vanilla day, conventional play | A Shahed or missile cloud stays up to an hour (three in-game days) while drifting off; a trail 20 min; sleep leaves them | C change 3 (sleep clears them; their real-time life stays) | every vanilla game |
+| 9 | Sleep during a show | Fires, rain and fallout stay at the minute of the sleep while the sky jumped hours (the guide says the fires are out after a night's sleep) | C change 2 | common in single-player |
+| 10 | Day-length mods that set `dayTime` themselves (not NeoForge `dayTimePerTick`) | Without detonations the server does not send its clock, so the client's hearing clock counts vanilla steps (`ClientClock.java:30`, `NuclearStrikes.java:355`): hearing after conventional blasts heals about 72× too fast | The clock packet to every client once a second (C change 2, rule 9) | depends on the mod |
 | 11 | 24-hour or stopped day | Outages 18 real hours, the storm 12 real hours, fallout real days: real life by design; `restore_spread_seconds` is world-clock time but its tooltip says seconds (90 s → 1.8 real h) | Fix the tooltip; the guide says plainly that a stopped day means real-time consequences and that `/time add` moves them on | common |
-| 12 | Day 7 of a detonation | Fallout drops to zero in one step when the detonation is forgotten; unfinished crater progress is dropped with it | C change 9 | every long game |
-| 13 | `/tick freeze` | The world clock keeps counting real time on frozen ticks (`WorldClock.java:112-125`): after the show, storm, rain, fallout, sickness and repairs advance in a frozen world and jump on unfreeze | Skip counting while the tick manager is frozen (rule 5) | rare |
+| 12 | Day 7 of a detonation | Fallout drops to zero in one step when the detonation is forgotten; unfinished crater progress is dropped with it | C change 8 | every long game |
+| 13 | `/tick freeze` | The world clock keeps counting real time on frozen ticks (`WorldClock.java:112-125`): after the show, storm, rain, fallout, sickness and repairs advance in a frozen world and jump on unfreeze | Skip counting while the tick manager is frozen (rule 8) | rare |
 | 14 | Day mods stepping more than one tick at a time | A step of +N every M ticks counts N plus the real floor already credited: a 24-hour day as +10 every 720 ticks runs 2× (`WorldClock.java:107-111`) | Subtract the real time credited since the last step | rare |
 | 15 | `/tick rate`, `/tick sprint`, Flashback speed | The client assumes 20 ticks per second (`ClientNuclear.java:213,266-270`, `client/sound/OwnSources.java:380`): catch-up spurts, sound anchors drifting | Use the tick manager's tick length | rare |
 | 16 | Long days | Wind changes every 24 000 game ticks (`util/Wind.java:23-31`): 72 winds per world day under a 24-hour day; sleep does not move it | Change the wind with the world clock | low |
 | 17 | Other packs | Sea level fixed at 63 (`util/Air.java`, after `SURFACE_CLEAR`; `WaterDecal.SEA_LEVEL`); `randomTickSpeed 0` disables lamp relight in Sable plots (`grid/block/Unlit.java:55`); rain does not wet fuel for ignition | Read the level's sea level | rare |
-| 18 | Fast-day and stepping day mods, gradual time-lapse sleep | Today they are counted as rates (`WorldClock.Steps`, apart from #14); under C they stay rates: rule 4's jumps are events (sleep wake-up, time commands), so they never end a show | — | depends on the mod |
+| 18 | Fast-day and stepping day mods, gradual time-lapse sleep | Today they are counted as rates (`WorldClock.Steps`, apart from #14); under C they stay rates: rule 6's jumps are single-tick steps of at least an hour, so they never end a show | — | depends on the mod |
 
 Handled correctly (checked): single-player pause (server and client clocks stop), sleep with any sleep share and
 gradual time-lapse sleep mods (every tick's day advance counts), a 2-hour day in single steps (exactly 12×), a 24-hour
@@ -372,8 +426,11 @@ Server lag slows the show and the server's work alike (game ticks on both sides)
 ## 8. Needs Artem's word
 
 - Adopt C (or another principle) as the time rule; the AGENTS.md "Time" wording above.
-- Rule 4 changes a stated behavior ("sleep during the show changes nothing" in `NukeClock`).
-- Under rule 4, `/time set day` during a show (with mismatch 3 fixed) or `/time add` ends the show at once, like
+- The split itself: the air (dust, clouds, mushroom, smoke) keeps its physical real-time life in every pack, and only
+  what stays in place follows the day. Under a vanilla day the dust blanket therefore hangs about an hour, drifting off,
+  rather than lifting at minute 20.
+- A jump (sleep, time commands) during the show ends it (today the show ignores sleep).
+- Under rule 6, `/time set day` during a show (with mismatch 3 fixed) or `/time add` ends the show at once, like
   sleep.
 - Mismatch 2 (`doFireTick false` stops our fire placement and the drawn storm) changes what servers with fire tick off
   see: no burning ruins and no firestorm instead of permanent flames.
