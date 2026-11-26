@@ -7,22 +7,19 @@ import static org.junit.jupiter.api.Assertions.*;
 
 class ClientLodBatchesTest {
     @Test
-    void acknowledgementWaitsForTheBackgroundIngestQueueWithoutBlocking() {
+    void oneAcknowledgementCoversEveryMarkSinceTheLastAndWaitsWhileVoxyIsBehind() {
         ClientLodBatches receiver = new ClientLodBatches();
-        receiver.begin(7);
-        assertNull(receiver.acknowledge(false), "finish marker required");
-        assertFalse(receiver.end(new S2C.LodBatchFinished(6, 4)));
-        assertTrue(receiver.end(new S2C.LodBatchFinished(7, 4)));
+        assertNull(receiver.acknowledge(false), "nothing marked");
+        assertTrue(receiver.mark(new S2C.LodBatchFinished(1, 2)));
+        assertEquals(1, receiver.acknowledge(false).id());
+        assertNull(receiver.acknowledge(false), "exactly one acknowledgement per mark");
+        assertTrue(receiver.mark(new S2C.LodBatchFinished(2, 2)));
+        assertTrue(receiver.mark(new S2C.LodBatchFinished(3, 1)), "the next batch arrives before the previous is acknowledged");
         for (int poll = 0; poll < 1200; poll++) assertNull(receiver.acknowledge(true), "queued work is not completed ingestion");
-        var ack = receiver.acknowledge(false);
-        assertNotNull(ack);
-        assertEquals(7, ack.id());
-        assertTrue(Float.isFinite(ack.desiredChunksPerTick()) && ack.desiredChunksPerTick() > 0);
-        assertNull(receiver.acknowledge(false), "exactly one acknowledgement");
-        receiver.begin(8);
-        assertFalse(receiver.end(new S2C.LodBatchFinished(7, 4)), "previous batch cannot finish a new batch");
-        assertTrue(receiver.end(new S2C.LodBatchFinished(8, 2)));
-        assertEquals(8, receiver.acknowledge(false).id());
+        assertFalse(receiver.mark(new S2C.LodBatchFinished(3, 1)), "repeated mark");
+        assertFalse(receiver.mark(new S2C.LodBatchFinished(2, 1)), "stale mark");
+        assertEquals(3, receiver.acknowledge(false).id(), "cumulative");
+        assertNull(receiver.acknowledge(false));
     }
 
     @Test

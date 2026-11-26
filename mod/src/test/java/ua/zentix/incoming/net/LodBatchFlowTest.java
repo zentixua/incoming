@@ -6,30 +6,42 @@ import static org.junit.jupiter.api.Assertions.*;
 
 class LodBatchFlowTest {
     @Test
-    void onlyMatchingFinishedBatchCanBeAcknowledgedAndRateIsBounded() {
-        LodBatchFlow flow = new LodBatchFlow();
-        assertFalse(flow.acknowledge(0, 64));
-        assertTrue(flow.begin());
-        assertFalse(flow.acknowledge(flow.id(), 64));
-        flow.chunkSent();
-        flow.finish();
-        assertFalse(flow.acknowledge(flow.id() + 1, 64));
-        assertFalse(flow.begin());
-        assertTrue(flow.acknowledge(flow.id(), Float.MAX_VALUE));
-        assertTrue(flow.begin());
-        int chunks = 0;
-        while (flow.hasRoom()) {
-            flow.chunkSent();
-            chunks++;
-        }
-        assertEquals(64, chunks);
-        flow.finish();
-        assertTrue(flow.acknowledge(flow.id(), Float.NaN));
-        int ticks = 0;
-        while (!flow.begin() && ticks < 101) ticks++;
-        assertTrue(ticks >= 99 && ticks <= 100, "invalid rate chooses 0.01 chunks/tick");
-        assertTrue(flow.hasRoom());
-        flow.chunkSent();
+    void severalBatchesStayInFlightUpToTheWindowAndAcknowledgementsAreCumulative() {
+        LodBatchFlow flow = new LodBatchFlow(100, 30);
+        assertFalse(flow.acknowledge(0), "nothing marked");
+        assertFalse(flow.markDue(true), "no open batch");
+        flow.chunkSent(20);
+        assertFalse(flow.markDue(true), "batch not full, more coming");
+        assertTrue(flow.markDue(false), "nothing more waiting: mark now");
+        flow.chunkSent(20);
+        assertTrue(flow.markDue(true), "batch full");
+        int first = flow.mark();
+        assertEquals(2, flow.markedChunks());
+        flow.chunkSent(40);
+        int second = flow.mark();
+        assertTrue(flow.hasRoom(), "80 of 100 in flight: a second batch went before any acknowledgement");
+        flow.chunkSent(40);
         assertFalse(flow.hasRoom());
+        assertTrue(flow.markDue(true), "closed window marks the open batch");
+        int third = flow.mark();
+        assertFalse(flow.acknowledge(third + 1), "an unmarked batch cannot be acknowledged");
+        assertTrue(flow.acknowledge(second), "covers the first batch too");
+        assertEquals(40, flow.inFlight());
+        assertFalse(flow.acknowledge(first), "older than the last acknowledgement");
+        assertFalse(flow.acknowledge(second), "duplicate");
+        assertTrue(flow.hasRoom());
+        assertTrue(flow.acknowledge(third));
+        assertEquals(0, flow.inFlight());
+    }
+
+    @Test
+    void aChunkLargerThanTheWindowGoesAlone() {
+        LodBatchFlow flow = new LodBatchFlow(100, 30);
+        assertTrue(flow.hasRoom());
+        flow.chunkSent(250);
+        assertFalse(flow.hasRoom());
+        int id = flow.mark();
+        assertTrue(flow.acknowledge(id));
+        assertTrue(flow.hasRoom());
     }
 }

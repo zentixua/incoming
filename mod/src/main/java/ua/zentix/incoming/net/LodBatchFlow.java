@@ -1,53 +1,70 @@
 package ua.zentix.incoming.net;
 
+import java.util.ArrayDeque;
+
 /**
- * Per-connection LOD flow control, following vanilla 1.21.1 PlayerChunkSender's client-reported chunks/tick and
- * fractional quota. A single bootstrap chunk measures the connection; thereafter only acknowledged receive rates
- * size batches. One unacknowledged batch bounds work even when a proxy accepts writes faster than its downstream.
- * Server thread only. Batch IDs survive dimension changes; stale/duplicate/early acknowledgements cannot open a window.
+ * Per-connection acknowledged byte window for Voxy LOD delivery, owned by the connection's network event loop. Chunks
+ * go out while fewer than {@code window} bytes await the client's acknowledgement; a batch mark follows every
+ * {@code batch} bytes, and the client acknowledges marks cumulatively once Voxy has room. Several batches are in
+ * flight at once, so delivery follows the line rather than one round trip per batch; the window still bounds what can
+ * wait ahead of game packets, whatever buffers sit between server and client (a proxy completes writes at once).
+ * Batch IDs survive dimension changes; stale, duplicate and early acknowledgements open nothing.
  */
 public final class LodBatchFlow {
-    // Same receive-rate bounds as vanilla PlayerChunkSender, not an assumed network byte rate.
-    static final float MIN_RATE = 0.01f, MAX_RATE = 64;
-    private float rate = 1, quota;
-    private int sequence, batch, limit, sent;
-    private boolean active, finished;
+    private final long window;
+    private final int batch;
+    /** Marked batches awaiting acknowledgement: id, bytes. */
+    private final ArrayDeque<long[]> marked = new ArrayDeque<>();
+    private int sequence, acknowledged, openChunks, markedChunks;
+    private long inFlight, open;
 
-    /** Start at most one batch, if the fractional quota permits. Call at most once per server tick. */
-    public boolean begin() {
-        if (active) return false;
-        quota = Math.min(quota + rate, Math.max(1, rate));
-        if (quota < 1) return false;
-        batch = ++sequence;
-        limit = (int) quota;
-        sent = 0;
-        active = true;
-        finished = false;
+    public LodBatchFlow(long window, int batch) {
+        this.window = window;
+        this.batch = batch;
+    }
+
+    /** Another chunk may go now: the window has room (with nothing in flight, one chunk larger than it stands alone). */
+    public boolean hasRoom() {
+        return inFlight < window;
+    }
+
+    public void chunkSent(int bytes) {
+        inFlight += bytes;
+        open += bytes;
+        openChunks++;
+    }
+
+    /** The open batch should be marked: it is full, nothing more is waiting, or the window is closed. */
+    public boolean markDue(boolean moreWaiting) {
+        return openChunks > 0 && (open >= batch || !moreWaiting || !hasRoom());
+    }
+
+    /** Close the open batch; its mark carries the returned ID and chunk count ({@link #markedChunks}). */
+    public int mark() {
+        marked.add(new long[]{++sequence, open});
+        open = 0;
+        markedChunks = openChunks;
+        openChunks = 0;
+        return sequence;
+    }
+
+    public int markedChunks() {
+        return markedChunks;
+    }
+
+    /** Cumulative: every marked batch up to {@code id}. Only a marked, not yet acknowledged ID is accepted. */
+    public boolean acknowledge(int id) {
+        if (id <= acknowledged || id > sequence) return false;
+        while (!marked.isEmpty() && marked.peek()[0] <= id) inFlight -= marked.poll()[1];
+        acknowledged = id;
         return true;
     }
 
-    public int id() { return batch; }
-    public int sent() { return sent; }
-    public int limit() { return limit; }
-    public float rate() { return rate; }
-    public boolean active() { return active; }
-    public boolean sending() { return active && !finished; }
-    public boolean hasRoom() { return sending() && sent < limit; }
-
-    public void chunkSent() {
-        sent++;
+    public long inFlight() {
+        return inFlight;
     }
 
-    public void finish() {
-        finished = true;
-        quota -= sent;
-    }
-
-    /** Only the matching, fully sent batch can be acknowledged. Invalid rates select vanilla's minimum. */
-    public boolean acknowledge(int id, float desiredChunksPerTick) {
-        if (!active || !finished || id != batch) return false;
-        rate = Float.isFinite(desiredChunksPerTick) ? Math.clamp(desiredChunksPerTick, MIN_RATE, MAX_RATE) : MIN_RATE;
-        active = false;
-        return true;
+    public int lastMark() {
+        return sequence;
     }
 }
