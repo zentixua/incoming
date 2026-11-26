@@ -81,7 +81,8 @@ paths:
   ball with the client: `FuelFireball.Sweep` — growth, rising to 0.75·D and drift by the world's wind, as in the picture
   (`CloudModelTest.serverFireballIsTheBallThePlayerSees`); fuel rain falls on (`Warheads.soaked`: raining, a
   rainy biome, nothing but leaves above it by `MOTION_BLOCKING_NO_LEAVES`; not vanilla `isRainingAt`, whose heightmap
-  stops at each column's top leaf and leaves 58 % of an oak crown dry) is wet and never ignites (Kerr et al. 1971: wet
+  stops at each column's top leaf and leaves most of a crown's sides and underside dry: 33 of 57 leaves of the
+  oak in `RainCrownGameTests`) is wet and never ignites (Kerr et al. 1971: wet
   leaves virtually impossible to ignite), fuel under a roof stays dry, GameTests `fuel_fire_rain`, `fuel_fire_rain_crown`; the crater's fuel pool burns in rain
   regardless (`FuelFires`); the impulse of a place — for the whole burning; inside the ball
   full, outside — (r/d)²; a walk through air from the near cells to the far ones (not from the larger impulse: for a risen
