@@ -10,7 +10,8 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
  * The sight inside old dust belongs to the camera ({@link PallField#sight}, {@code dustwall.glsl}: {@code DwSight}): from outside
- * the dust every ray reads the law through the transfer, so the blanket seen from a hill stays dark; a camera inside sees what
+ * the dust every ray reads the law as drawn ({@link PallField#drawn}: the haze level the law's depth, the young textured level its
+ * transfer), so the blanket seen from a hill or from above stays opaque while the law's column is thick; a camera inside sees what
  * main drew, at every age (about 200 m at one minute, 700 m by five); walking out of the dust moves no far ray by a step.
  */
 class DustSightTest {
@@ -61,21 +62,53 @@ class DustSightTest {
 
     /**
      * Complaint (time.md §1.1): a minute after the front the blanket was drawn see-through from outside, 55 % of the light
-     * straight down at 1.5 km from 15 kt. From outside the column passes 9 % at one minute and 18 % at twenty (the law's
-     * optical depth through the transfer over the drawn top), and seen slant (three times the vertical path) it stays opaque
-     * through those twenty minutes.
+     * straight down at 1.5 km from 15 kt. From outside the column is the law's to what the screen shows (the haze level,
+     * {@link PallField#drawn}): it passes 1 % of the light straight down at one minute (law τ 14.0) and 1.7 % at twenty (τ 5.2),
+     * and seen slant (three times the vertical path) it stays opaque through those twenty minutes.
      */
     @Test
     void fromOutsideTheBlanketFollowsTheLaw() {
         Wave w = Wave.of(15);
         int j = w.node(1564);
         double minute = Math.exp(-w.drawn(j, 60, 0)), twenty = Math.exp(-w.drawn(j, 1200, 0));
-        assertTrue(minute > 0.07 && minute < 0.11, "straight down at one minute: " + minute);
-        assertTrue(twenty > 0.16 && twenty < 0.20, "straight down at twenty minutes: " + twenty);
+        assertTrue(minute < 0.011, "straight down at one minute: " + minute);
+        assertTrue(twenty > 0.012 && twenty < 0.022, "straight down at twenty minutes: " + twenty);
         for (double age = 60; age <= 1200; age += 30)
             assertTrue(Math.exp(-3 * w.drawn(j, age, 0)) < 0.01, "slant at " + age + " s: " + Math.exp(-3 * w.drawn(j, age, 0)));
         // the inside sight is what drew it see-through
         assertTrue(Math.exp(-w.drawn(j, 63, 1)) > 0.45, "the inside sight at one minute: " + Math.exp(-w.drawn(j, 63, 1)));
+    }
+
+    /**
+     * Complaint (RC take, 26.11): from 400 m above the layer, 2 km from a 15 kt surface burst, 70° down, the ground showed
+     * through the blanket at 70 s and two minutes (the transfer drew the law's τ 6.7–8.2 as about 1.9: 15 % of the light).
+     * Seen from outside, the haze level draws the law's own depth up to the depth the screen shows (the march's exit, ln 100):
+     * the column is that once the textured level has gone (60 s), the law within 1 % up to τ 2, and the 70° ray passes under
+     * 1 % of the light while the law's column is over 6; the textured young level keeps the transfer.
+     */
+    @Test
+    void fromAboveTheHazeIsTheLaw() {
+        Wave w = Wave.of(15);
+        int j = w.node(2000);
+        double down = Math.sin(Math.toRadians(70));
+        for (double age : new double[] {60, 70, 90, 120, 300, 600, 1200}) {
+            double[] c = w.column(j, age);
+            assertEquals(PallField.hazeDepth(c[3]), c[0], 1e-9 * c[3], "the haze level's column at " + age + " s");
+            if (c[3] > 6) assertTrue(Math.exp(-c[0] / down) < 0.01, "70° down at " + age + " s: " + Math.exp(-c[0] / down));
+        }
+        assertTrue(w.column(j, 70)[3] > 6 && w.column(j, 120)[3] > 6, "the law's column at 70 s and 2 min: " + w.column(j, 70)[3]);
+        for (double tau = 0.01; tau <= 2; tau += 0.01)
+            assertEquals(tau, PallField.hazeDepth(tau), 0.01 * tau, "the haze level's column is the law's at τ " + tau);
+        for (double tau = 2; tau < 400; tau *= 1.1)
+            assertTrue(PallField.hazeDepth(tau) <= PallField.HAZE_SEEN && PallField.hazeDepth(tau * 1.1) > PallField.hazeDepth(tau),
+                    "held under the march's exit depth, rising, at τ " + tau);
+        // the young textured level: the law through the transfer (the matte face), and between them by the textured share
+        double[] young = w.column(j, 10);
+        assertEquals(PallField.transfer(young[3]) * (1 + 0.5 * Math.exp(-10 / 1.1)), young[0], 1e-9 * young[0], "at 10 s");
+        double[] mid = w.column(j, 42);
+        double f = PallField.textured(42);
+        double haze = PallField.hazeDepth(mid[3]);
+        assertEquals(haze + f * (PallField.transfer(mid[3]) - haze), mid[0], 1e-9 * mid[0], "at 42 s");
     }
 
     /**
