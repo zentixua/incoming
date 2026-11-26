@@ -31,7 +31,7 @@ Ruins and everything in `nuclear/world/` are in `nuclear-world.md`.
     detonations and scheduled strikes), `NuclearWarhead` (detonation, light and radiation for one entity),
     `NuclearStrikes` (ICBM launch, timer, world events, client synchronization);
   - `radiation/` — player dose (attachment), `RadiationTicker` (once per second: fallout field × shielding +
-    contamination), `Shielding` (block shielding by path mass: rays toward burst and sky for detonation, rays toward
+    contamination), `GroundFallout` (`fallout.md`), `Shielding` (block shielding by path mass: rays toward burst and sky for detonation, rays toward
     surrounding sky-exposed surfaces for fallout), `WornShielding` (worn items: data map, else Mekanism; sum ≤ 1;
     new exposure only), `FlashBurns` (light burns by armor slot: skin, clothes, metal; shock),
     `FlashEyes` (retinal burns: visual-field spots, attachment `RETINA`, packet `S2C.RetinaScars`, full list/state;
@@ -255,7 +255,7 @@ Ruins and everything in `nuclear/world/` are in `nuclear-world.md`.
   and follow `FarLods`); `NukeAfter.realFire` draws and sounds the model storm in local chunks too, trust untouched.
   Plans always carry fire, writes decide. GameTests `nuke_flash_firetick_off`/`_on` (rule flipped after the burst),
   `NukeAfterBlockFireTest`. Black rain is the
-  parcels' rain-out (`BlackRainModel`: onset on M, deposit landing then and ageing on S, `BlackRainDepositSeamTest`;
+  parcels' rain-out (`BlackRainModel`: onset on M, deposit `fallout.md`, `BlackRainDepositSeamTest`;
   rain only under drawn haze, `PallFieldTest.blackRainFallsOnlyUnderTheDrawnHaze`). Black rain
   needs fires and `Detonation.rain` (`nuclear.black_rain` at detonation, same packet rule): off, `BlackRainModel` gets no
   fire zone, so no rain picture/sound, washout or skin contamination on server and client alike (the live rule still
@@ -475,8 +475,8 @@ Ruins and everything in `nuclear/world/` are in `nuclear-world.md`.
   (`radiation/Ears`, attachment `EAR`, opaque tag ≤ `C2S.Ear.EAR_BYTES`, `S2C.Ear` on login).
 - `Detonation.dayTime` is unread, kept for the save/packet formats. Anchors per detonation (`NuclearEvents.Anchor`: the
   world clock at burst and show end, which date bodies' exposure, and the `StrikeClock` anchors) and the history are
-  persisted; a save without them reads as a 20-minute show, no jumps. Doses step per detonation by ΔS
-  (`NuclearEvents.stepFrom`, `FalloutModel.decayHours` for a sleep's long step). A burst-clock anchor for a detonation dated in the past (tests) uses `NuclearEvents.add(d, level)`, which
+  persisted; a save without them reads as a 20-minute show, no jumps.
+- Fallout on the ground, ground fields: `fallout.md`. A burst-clock anchor for a detonation dated in the past (tests) uses `NuclearEvents.add(d, level)`, which
   backdates it as a vanilla day. Detonation stream codec (`Detonation.STREAM_CODEC`, 3.1.0 fields)
   is frozen: new fields go in `CODEC` (save, `optionalFieldOf`) and at end of each detonation packet (`NukeDetonation`,
   `NukeSync`; replay.md).

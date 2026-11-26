@@ -106,7 +106,11 @@ with a nuclear warhead still waits 90 seconds before launch, even with early war
 - **Leave the fallout trail, or wait it out indoors.** Fallout lies on everything open to the sky and shines through
   roofs and walls: a block of stone or earth stops nearly all of it, a block of wood about 95%, glass almost nothing,
   and an open doorway lets it in. Water washes the dust off you (rain does not); otherwise it fades only as slowly
-  as the fallout itself.
+  as the fallout itself. Fallout lands where the wind carries the cloud, when the cloud gets there: tens of kilometres
+  downwind an hour or more after the burst, even after the cloud is too thin to see. On the ground it weakens as the
+  world's day runs, by the same law everywhere: seven times older, ten times weaker. It does not vanish on a set day:
+  near ground zero of a ground burst it stays measurable for years of game time (15 kt: about a year and a half of play
+  in a vanilla world), ever weaker, until `/incoming clear`.
 - **Radiation sickness** starts hours later and keeps game time: nausea and vomiting, then days or weeks of feeling
   well, then weeks of weakness, from 2 Gy without natural healing. Whether it kills depends on the dose: below 2 Gy
   almost nobody dies, at 4.5 Gy half, from 10 Gy everyone, and the higher the dose, the sooner (from 50 Gy within a
@@ -200,8 +204,8 @@ an hour of the world's day:
 - a night everyone in the Overworld sleeps through (in single player, your own sleep) ends the 20 minutes at once and moves
   the strike on by the hours slept: you wake to the town at its age, the fires burning down and the fallout weaker;
 - a night skipped while someone stays awake (an idle or spectating player too) changes nothing in front of them: the
-  fires and the rain keep their time, and only what nobody watches change moves on: injuries, radiation sickness,
-  hearing and power repairs;
+  fires and the rain keep their time, and only what nobody watches change moves on: the fallout on the ground,
+  injuries, radiation sickness, hearing and power repairs;
 - burns, radiation sickness, hearing and the power in a district heal or are repaired in real time while any strike
   that caused them is in its first minutes: a nuclear blast's 20, a conventional strike's until its cloud has stopped
   rising and any fuel in its crater has burnt out (about 2 to 16 minutes). A body hurt by two blasts close together
