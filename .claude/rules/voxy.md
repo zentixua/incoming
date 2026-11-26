@@ -62,18 +62,22 @@ paths:
   calculate it: null means dark (black LODs); loaded chunks use the world's light engine (missing sky layer above
   terrain = 15), copies use `compat/CopyLight` from their blocks within the chunk (disk light would keep a dark district
   lit). All sections, including empty ones: air from a demolished tower erases it. Delivery is an acknowledged byte
-  window per connection (`net/LodBatchFlow`; `VoxyLods.WINDOW_BYTES`, 1.5 MiB of section bytes unacknowledged): the
-  server thread hands at most `STOCK_BYTES` of its queue to the connection's network event loop each tick; the event
-  loop writes chunks while the window and Netty allow, marks a batch (`S2C.LodBatchFinished`) every 64 KiB, and the
-  client acknowledges marks cumulatively (`C2S.LodBatchReceived`, handled on the server's network thread, so a freed
-  window sends at once, not on the next tick). Several batches are in flight: a sender with one acknowledged batch at a
-  time, paced by server ticks and sized by vanilla's `ChunkBatchSizeCalculator`, sends one chunk per round trip, which
-  on a 4.5 MB/s, 54 ms LTE link is 10 chunks/s, 0.08 MB/s of the line, with the 48 MiB queue full and dropping (rig,
-  26.11.2026). The window counts bytes before the connection's compression, which shrinks ruin chunks 5.7× (same rig):
-  1.5 MiB is ~280 KB on the wire, just over that link's 240 KB in flight. It bounds what can wait ahead of game
-  packets anywhere between server and client, a buffering proxy included
+  window per connection (`net/LodBatchFlow`): the server thread keeps up to `STOCK_BYTES` (2 MiB) of its queue ready on
+  the connection's network event loop, topped up each tick, the only rate ceiling (40 MiB/s of sections at 20 TPS);
+  the event loop writes chunks while the window and Netty allow, at most `PUMP_BYTES` per task, marks a batch
+  (`S2C.LodBatchFinished`) every 64 KiB, and the client acknowledges marks cumulatively (`C2S.LodBatchReceived`,
+  handled on the server's network thread, so a freed window sends at once, not on the next tick). The window must
+  cover the line's bandwidth-delay product without a standing queue, on every line: it follows LEDBAT (RFC 6817), mark-
+  to-ack time minus the lowest of the last one to two minutes against a 25 ms target, between `WINDOW_MIN` (128 KiB)
+  and `WINDOW_MAX` (1.5 MiB). Sizes count section bytes before the connection's compression, which shrinks ruin
+  chunks 5.7× (rig, 26.11.2026); `WINDOW_MAX` is ~280 KB on the wire, just over the 240 KB a 4.5 MB/s, 54 ms LTE link
+  holds in flight. One acknowledged batch per round trip, as vanilla's chunk sender does at its client-measured rate,
+  is round-trip bound: on that link it carried 0.07 MB/s and the 48 MiB queue overflowed. The window bounds what can
+  wait ahead of game packets anywhere between server and client, a buffering proxy included
   (`fastProxyHoldsAtMostOneWindowBeforeItsSlowClientAcknowledges`); `acknowledgementsKeepAnLteLineFullWithoutAStandingQueue`
-  simulates that link. The client handlers run on the same network thread. Before acknowledging, poll Voxy's public
+  and `slowerLinesKeepTheLineFullWithAShortQueue` simulate lines from 0.6 to 4.5 MB/s. A mark not above the client's
+  last one starts a new server session on the same client channel (a proxy's backend switch): the client acknowledges
+  it. The client handlers run on the same network thread. Before acknowledging, poll Voxy's public
   `VoxyCommon.getInstance().getIngestService().getTaskCount()` (sections queued, not started) on the event loop until
   it is at most LSS's own halt mark, 6144 (`VoxyIngest.INGEST_HALT_SECTIONS`); never block the network thread. Not
   "until empty": LSS keeps that queue in the thousands while it fills its radius, and an empty-queue wait cut ruin
@@ -82,7 +86,7 @@ paths:
   and the stock, not the window) and reject old/duplicate/early acknowledgements. Netty still gates every chunk:
   active/writable, at least 16 KiB headroom, no more than 32 KiB pending even with a raised watermark, and at most one
   outstanding chunk write, whose completion sends the next. A large indivisible chunk can cross the watermark once, and
-  one larger than the window goes alone. There is no fixed byte-rate throttle. The waiting queue holds at most 48 MiB;
+  one larger than the window goes alone. The waiting queue holds at most 48 MiB;
   a fresh copy replaces a waiting copy (not one already handed to the event loop). `VoxyLods.room` gates `DhUpdates`,
   `FarLods` and `FrontLods`, even with DH: excess updates for Voxy players would otherwise be lost. Copy engine light
   layers (`getData` fills the live layer for a uniform one); a heavy-zone copy goes to DH `DhUpdates.LEAD` before the

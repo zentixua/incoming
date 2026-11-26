@@ -18,7 +18,11 @@ import java.util.concurrent.TimeUnit;
  */
 public final class ClientLodBatches {
     private static final AttributeKey<ClientLodBatches> STATE = AttributeKey.valueOf("incoming:lod_batches");
-    /** Newest mark received and newest acknowledged; marks arrive in order on one connection. */
+    /**
+     * Newest mark received and newest acknowledged. One server sender numbers its marks upward, in order on the
+     * connection; a mark not above the last one comes from a new server session on the same client channel (a proxy
+     * moved the player to another backend), whose sender starts again at 1.
+     */
     private int marked, acknowledged;
     private boolean polling;
     /** {@link LodDiag}: when the oldest unacknowledged mark arrived, polls while Voxy was behind, its deepest queue. */
@@ -27,9 +31,9 @@ public final class ClientLodBatches {
 
     ClientLodBatches() {}
 
-    /** A later mark than any before; stale or repeated marks are ignored. */
-    boolean mark(S2C.LodBatchFinished packet) {
-        if (packet.id() <= marked) return false;
+    /** Record a mark; a lower ID than the last starts a new server session. */
+    void mark(S2C.LodBatchFinished packet) {
+        if (packet.id() <= marked) acknowledged = 0;
         if (LodDiag.ON) {
             if (marked == acknowledged) diagSince = LodDiag.now();
             LodDiag.log("cli mark batch=%d chunks=%d bytes=%d ingestCallMs=%.1f voxyQueue=%d", packet.id(), packet.chunks(),
@@ -37,7 +41,6 @@ public final class ClientLodBatches {
             VoxyIngest.diagReset();
         }
         marked = packet.id();
-        return true;
     }
 
     /** Acknowledgement of every mark so far, unless nothing new arrived or Voxy is behind. */
@@ -61,7 +64,8 @@ public final class ClientLodBatches {
             state = new ClientLodBatches();
             attribute.set(state);
         }
-        if (state.mark(packet)) state.replyWhenReady(context);
+        state.mark(packet);
+        state.replyWhenReady(context);
     }
 
     private void replyWhenReady(IPayloadContext context) {

@@ -98,18 +98,26 @@ public final class VoxyBackpressureGameTests {
             channel.draining = true;
             channel.flush();
             channel.runPendingTasks();
-            h.assertTrue(viewer.sent.get() == 8, "Connection write completion did not resume delivery within the window: sent " + viewer.sent.get() + ", waiting " + (viewer.bytes + viewer.stockBytes()) + ", in flight " + viewer.flow.inFlight() + ", writable " + channel.isWritable() + ", marks " + batches.size());
+            h.assertTrue(viewer.sent.get() == 1 && !batches.isEmpty(), "the oversized chunk did not hold the window until acknowledged");
+            viewer.acknowledged(batches.getLast().id());
+            channel.runPendingTasks();
+            h.assertTrue(viewer.sent.get() == 8, "Connection write completion did not resume delivery within the window: sent " + viewer.sent.get()
+                    + ", waiting " + (viewer.bytes + viewer.stockBytes()) + ", in flight " + viewer.flow.inFlight() + ", window " + viewer.flow.window());
             h.assertTrue(batches.stream().mapToInt(S2C.LodBatchFinished::chunks).sum() == 8, "sent chunks not all marked for acknowledgement");
             for (int i = 8; i < 68; i++) viewer.offer(i, new S2C.VoxyChunk(dimension, i, 0, new byte[small]));
             for (int tick = 0; tick < 1200; tick++) {
                 viewer.drain();
                 channel.runPendingTasks();
             }
-            h.assertTrue(viewer.flow.inFlight() >= VoxyLods.WINDOW_BYTES && viewer.flow.inFlight() < VoxyLods.WINDOW_BYTES + small,
-                    "write completion was mistaken for client acknowledgement: " + viewer.flow.inFlight() + " bytes in flight");
-            viewer.acknowledged(batches.getLast().id());
-            channel.runPendingTasks();
-            h.assertTrue(viewer.sent.get() == 68 && viewer.bytes + viewer.stockBytes() == 0, "acknowledgement did not send the rest");
+            long window = viewer.flow.window();
+            h.assertTrue(viewer.flow.inFlight() >= window && viewer.flow.inFlight() < window + small && viewer.sent.get() < 68,
+                    "write completion was mistaken for client acknowledgement: " + viewer.flow.inFlight() + " bytes in flight, window " + window);
+            for (int round = 0; round < 100 && viewer.sent.get() < 68; round++) {
+                viewer.acknowledged(batches.getLast().id());
+                viewer.drain();
+                channel.runPendingTasks();
+            }
+            h.assertTrue(viewer.sent.get() == 68 && viewer.bytes + viewer.stockBytes() == 0, "acknowledgements did not send the rest");
             int received = 0;
             for (ByteBuf bytes; (bytes = channel.readOutbound()) != null; ) {
                 if (bytes.readableBytes() > 1) received++;
@@ -121,6 +129,19 @@ public final class VoxyBackpressureGameTests {
             channel.finishAndReleaseAll();
         }
     }
+    /** On the main thread an acknowledgement waits for the server tick: one window per tick, not per round trip. */
+    @GameTest(template = "range", timeoutTicks = 20, batch = "voxy_backpressure", skyAccess = true)
+    public static void acknowledgementsAreHandledOnTheNetworkThread(GameTestHelper h) {
+        java.util.Map<net.minecraft.network.ConnectionProtocol, java.util.Map<net.minecraft.resources.ResourceLocation,
+                net.neoforged.neoforge.network.registration.PayloadRegistration<?>>> all = ObfuscationReflectionHelper.getPrivateValue(
+                net.neoforged.neoforge.network.registration.NetworkRegistry.class, null, "PAYLOAD_REGISTRATIONS");
+        var registration = all.get(net.minecraft.network.ConnectionProtocol.PLAY).get(ua.zentix.incoming.net.C2S.LodBatchReceived.TYPE.id());
+        h.assertTrue(registration != null, "acknowledgement payload not registered");
+        h.assertFalse(registration.handler() instanceof net.neoforged.neoforge.network.handling.MainThreadPayloadHandler,
+                "acknowledgements are handled on the main thread");
+        h.succeed();
+    }
+
     /** The real mark-to-disk-to-queue path, with an old copy already waiting at the queue cap. */
     @GameTest(template = "range", timeoutTicks = 400, batch = "voxy_saved_update", skyAccess = true)
     public static void pausedMarkSurvivesUnloadAndReplacesItsWaitingCopy(GameTestHelper h) {

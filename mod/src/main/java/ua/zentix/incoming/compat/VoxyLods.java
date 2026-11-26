@@ -27,6 +27,7 @@ import ua.zentix.incoming.net.S2C;
 import ua.zentix.incoming.nuclear.world.FarLods;
 import ua.zentix.incoming.registry.ModAttachments;
 
+import java.util.ArrayDeque;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -41,6 +42,7 @@ import java.util.concurrent.ConcurrentLinkedQueue;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.function.BiConsumer;
+import java.util.function.LongSupplier;
 
 /**
  * World changes made by the mod, for players' Voxy LODs ({@code client/VoxyIngest}): alongside Distant Horizons through
@@ -53,7 +55,8 @@ import java.util.function.BiConsumer;
  * <ul>
  * <li>Recipients: players in the same world with Voxy within {@link FarLods#FAR_CHUNKS} chunks who do not have this chunk
  * (Voxy rebuilds chunks the player sees itself from vanilla packets).</li>
- * <li>Rate: as fast as the client acknowledges, within {@link #WINDOW_BYTES} unacknowledged on the connection, sent by
+ * <li>Rate: as fast as the client acknowledges, within a window of unacknowledged bytes that follows the queue it builds
+ * ({@link LodBatchFlow}, {@link #WINDOW_MIN}–{@link #WINDOW_MAX}), sent by
  * its network event loop with one chunk write outstanding and headroom left for game packets. The player queue is
  * limited to {@link #QUEUE_BYTES}, a fresh copy of a chunk replaces its waiting copy. Queue space is {@link #room}:
  * {@link DhUpdates} uses it to deliver chunks even without DH.</li>
@@ -71,21 +74,34 @@ public final class VoxyLods {
     /** Even with a raised Netty watermark, do not add LODs behind more than this many pending bytes. */
     static final int MAX_PENDING_BYTES = 32 * 1024;
     /**
-     * Section bytes sent and not yet acknowledged by the client, whatever buffers lie between (Netty, kernel, proxy,
-     * line): what can wait ahead of game packets. Not a rate: acknowledgements reopen it as fast as the client receives.
-     * Counted before the connection's compression, which shrinks ruin chunks 5.7× (rig, 26.11.2026): 1.5 MiB is about
-     * 280 KB on the wire, just above the 240 KB that Artem's LTE link (4.5 MB/s, 54 ms round trip) holds in flight, so
-     * such a line stays full with a few milliseconds of standing queue; a slower line queues at most this much. One
-     * chunk larger than the window goes alone.
+     * Most section bytes sent and not yet acknowledged by the client, whatever buffers lie between (Netty, kernel,
+     * proxy, line): what can wait ahead of game packets. Counted before the connection's compression, which shrinks ruin
+     * chunks 5.7× (rig, 26.11.2026): 1.5 MiB is about 280 KB on the wire, just above the 240 KB that Artem's LTE link
+     * (4.5 MB/s, 54 ms round trip) holds in flight, so such a line stays full. One chunk larger than the window goes alone.
      */
-    static final int WINDOW_BYTES = 3 << 19;
+    static final int WINDOW_MAX = 3 << 19;
+    /**
+     * The window never closes below this. Against a mod that fills the connection's queue for seconds (LSS filling its
+     * radius: round trips of 300 ms on that LTE link) it still carries about 10 chunks a second; 64 KiB left a 0.6 MB/s
+     * line 57 % used. On a line that slow with poorly compressible chunks (2.5×) the floor alone is 84 ms of line and,
+     * measured into the base delay, holds a 144 ms queue (simulation, `slowerLinesKeepTheLineFullWithAShortQueue`).
+     */
+    static final int WINDOW_MIN = 128 * 1024;
+    /**
+     * Queueing delay the window aims at (LEDBAT TARGET, RFC 6817 allows up to 100 ms): half a server tick ahead of game
+     * packets, not visible as lag, enough to keep a line full between acknowledgements.
+     */
+    static final long TARGET_NANOS = 25_000_000;
     /** A batch mark, so an acknowledgement, at least every this many section bytes: the window refills as chunks land. */
     static final int BATCH_BYTES = 64 * 1024;
     /**
-     * Chunks the server thread hands to the network event loop per tick: the window plus what a fast line sends within a
-     * tick, so acknowledgements between ticks always find chunks to send.
+     * Chunks the server thread keeps ready on the network event loop, topped up every tick: the window plus what a fast
+     * line sends within a tick, so acknowledgements between ticks find chunks to send. It is also the one rate ceiling:
+     * 2 MiB a tick, 40 MiB/s of sections at 20 TPS (about 7 MB/s on the wire).
      */
     static final int STOCK_BYTES = 2 << 20;
+    /** Section bytes one pump task writes before it yields the event loop to other connections and game packets. */
+    static final int PUMP_BYTES = 256 * 1024;
     /** Maximum waiting player queue size; this does not bound bytes already handed to the connection. */
     static final long QUEUE_BYTES = 48L << 20;
     /** Estimated chunk size (for {@link #room}): 24 sections with palettes and surface light — ~40 KB before compression. */
@@ -115,22 +131,30 @@ public final class VoxyLods {
         private final AtomicLong stockBytes = new AtomicLong();
         private final AtomicBoolean pumpQueued = new AtomicBoolean();
         /** Event loop only. */
-        final LodBatchFlow flow = new LodBatchFlow(WINDOW_BYTES, BATCH_BYTES);
+        final LodBatchFlow flow = new LodBatchFlow(WINDOW_MIN, WINDOW_MAX, BATCH_BYTES, TARGET_NANOS);
+        private final LongSupplier clock;
         /** One chunk write outstanding, from hand-over to the write completion callback. Event loop only. */
         private boolean writing, pumping;
         /** {@link LodDiag}: mark times by batch ID (event loop); chunks and bytes written this second, bytes in flight. */
-        private final java.util.ArrayDeque<long[]> diagMarks = new java.util.ArrayDeque<>();
-        private volatile long diagInFlight;
+        private final ArrayDeque<long[]> diagMarks = new ArrayDeque<>();
+        private volatile long diagInFlight, diagWindow;
         private volatile int diagChunks;
         private volatile long diagBytes;
 
         Viewer(@Nullable Channel channel, BiConsumer<CustomPacketPayload, PacketSendListener> transport) {
+            this(channel, transport, System::nanoTime);
+        }
+
+        Viewer(@Nullable Channel channel, BiConsumer<CustomPacketPayload, PacketSendListener> transport, LongSupplier clock) {
             this.channel = channel;
             this.transport = transport;
+            this.clock = clock;
         }
 
         static Viewer of(ServerPlayer player) {
             Connection connection = player.connection.getConnection();
+            // Straight to the Connection, which writes at once on its own event loop; the player's send wrapper only
+            // adds NeoForge's channel check, already passed: the client announced Voxy with this mod's own packet.
             return new Viewer(connection.channel(), (packet, listener) -> connection.send(new ClientboundCustomPayloadPacket(packet), listener));
         }
 
@@ -171,11 +195,11 @@ public final class VoxyLods {
             }
         }
 
-        /** Server thread: a dimension change drops what the client no longer needs, including the stock. */
         long stockBytes() {
             return stockBytes.get();
         }
 
+        /** Server thread: a dimension change drops what the client no longer needs, including the stock. */
         void clear() {
             queue.clear();
             bytes = 0;
@@ -189,8 +213,13 @@ public final class VoxyLods {
         void pump() {
             if (pumping) return; // a write completed synchronously inside this loop
             pumping = true;
+            long written = 0;
             try {
                 while (!writing && transportWritable(channel) && flow.hasRoom()) {
+                    if (written >= PUMP_BYTES) {
+                        schedulePump(); // yield: the event loop serves other connections and this player's game packets
+                        break;
+                    }
                     S2C.VoxyChunk packet = stock.poll();
                     if (packet == null) break;
                     int size = packet.sections().length;
@@ -203,6 +232,7 @@ public final class VoxyLods {
                         throw error;
                     }
                     flow.chunkSent(size);
+                    written += size;
                     sent.incrementAndGet();
                     if (LodDiag.ON) {
                         diagChunks++;
@@ -215,7 +245,10 @@ public final class VoxyLods {
             } finally {
                 pumping = false;
             }
-            if (LodDiag.ON) diagInFlight = flow.inFlight();
+            if (LodDiag.ON) {
+                diagInFlight = flow.inFlight();
+                diagWindow = flow.window();
+            }
         }
 
         /**
@@ -229,7 +262,7 @@ public final class VoxyLods {
         }
 
         private void mark() {
-            int id = flow.mark();
+            int id = flow.mark(clock.getAsLong());
             if (LodDiag.ON) {
                 diagMarks.add(new long[]{id, LodDiag.now()});
                 LodDiag.log("srv mark batch=%d chunks=%d inFlight=%d stock=%d", id, flow.markedChunks(), flow.inFlight(), stockBytes.get());
@@ -239,11 +272,12 @@ public final class VoxyLods {
 
         /** Event loop: the client acknowledged marks up to {@code id}; send what the freed window allows. */
         void acknowledged(int id) {
-            boolean accepted = flow.acknowledge(id);
+            boolean accepted = flow.acknowledge(id, clock.getAsLong());
             if (LodDiag.ON) {
                 long markedAt = 0;
                 while (!diagMarks.isEmpty() && diagMarks.peek()[0] <= id) markedAt = diagMarks.poll()[1];
-                LodDiag.log("srv ack batch=%d ok=%s markToAckMs=%d inFlight=%d", id, accepted, markedAt == 0 ? -1 : LodDiag.now() - markedAt, flow.inFlight());
+                LodDiag.log("srv ack batch=%d ok=%s markToAckMs=%d inFlight=%d window=%d", id, accepted, markedAt == 0 ? -1 : LodDiag.now() - markedAt,
+                        flow.inFlight(), flow.window());
             }
             if (accepted) pump();
         }
@@ -261,8 +295,8 @@ public final class VoxyLods {
             diagChunks = 0;
             diagBytes = 0;
             if (chunks == 0 && queue.isEmpty() && stock.isEmpty()) return;
-            LodDiag.log("srv sec player=%s latencyMs=%d queue=%d/%dKiB stock=%dKiB inFlight=%dKiB sentChunks=%d sentKiB=%d dropped=%d",
-                    name, latencyMs, queue.size(), bytes >> 10, stockBytes.get() >> 10, diagInFlight >> 10, chunks, sentBytes >> 10, dropped);
+            LodDiag.log("srv sec player=%s latencyMs=%d queue=%d/%dKiB stock=%dKiB inFlight=%dKiB window=%dKiB sentChunks=%d sentKiB=%d dropped=%d",
+                    name, latencyMs, queue.size(), bytes >> 10, stockBytes.get() >> 10, diagInFlight >> 10, diagWindow >> 10, chunks, sentBytes >> 10, dropped);
         }
 
         /** How many more LSS-overwritten chunks the player can report ({@link #stale}): {@link #STALE_PER_SECOND} per second. */
@@ -450,7 +484,8 @@ public final class VoxyLods {
         VoxyLods v = get(p.getServer());
         Channel channel = p.connection.getConnection().channel();
         if (!packet.voxy()) {
-            v.viewers.remove(p.getUUID());
+            Viewer gone = v.viewers.remove(p.getUUID());
+            if (gone != null) gone.clear();
             channel.attr(VIEWER).set(null);
             return;
         }
