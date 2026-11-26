@@ -88,7 +88,11 @@ Where: Artem's laptop, only when he is not playing (`tools/gpu_lease.sh --wait`)
   a good neighbour. Log every term per pixel (march samples, density, transmittance, light and shadow terms, history
   blend) and name the term that differs, with its numbers, before any fix attempt. Changing a knob and re-judging
   frames is guessing.
-- **Client CPU**: spark on the client, render thread time, frame p50/p95.
+- **Client CPU**: spark on the client, render thread time, frame p50/p95. More work or slower work: per-thread
+  hardware counters, `LC_ALL=C perf stat -e instructions:u,cycles:u,task-clock --per-thread -p <pid> -I 100 -x,`
+  (user processes may count their own threads), joined with the frame log: instructions per frame and IPC on the
+  render thread split a heavier frame from one starved by other threads. `-p` counts only threads alive when perf
+  attaches: start it after the world loads; take compiler-thread load from schedstat.
 - **GPU clocks**: `nvidia-smi` log once a second; 45 s warm-up; the clock is written beside each view.
 - **Frames**: the same spot, the same moment after the strike, against `main` (`tools/sandbox.sh shot`); the scene
   bench for frame cost.
@@ -102,7 +106,9 @@ quality ladder step, compare only equal steps (frame time as in the game: `-Dinc
 `-Dincoming.nukeDiag=true` logs a client line per debris piece, 170–190 ms/s of the render thread as the wave reaches
 the viewer: frame-time windows at the front run without it; a recorder or a starved client drops debris as late
 (`nukeEvent … drop,server_late`), so its breach dust and their cost vanish from that run; in the `mushroom` scenario the firestorm sometimes dies out (check
-`burning` in SCENARIO lines before comparing); GPU clocks jump.
+`burning` in SCENARIO lines before comparing); GPU clocks jump; a single-player run adds the integrated server's
+threads and its JIT to the client's CPU, so a hitch seen there is checked on a dedicated server too (`incoming.server`,
+client-scenario.md) before it is called the player's.
 
 ## Checklist: look defect
 

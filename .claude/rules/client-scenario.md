@@ -99,8 +99,9 @@ with Iris.
 - `tools/sandbox.sh start [shaders] [dh] [gpu]`: vanilla (shared GPU slot or CPU, “Vanilla rendering”) unless `shaders`, `dh` or `gpu`; mod-only client (sable-companion alongside: not embedded in dev; `shaders`
   adds Sodium/Iris/host shaderpack from instance, `dh` Distant Horizons), flat world (`Sandbox`: bedrock, stone,
   dirt, grass, grass top y 64; noon, no weather/mobs; same world every launch), headless in nested KWin, as laptop
-  job (unit `incoming-job-sandbox-<tree_id>`); lives until `stop`; in GPU mode also until Artem's game starts
-  (`fx/stopped`; game running means immediate exit 75); other jobs cannot stop it. GPU mode, one GPU (`tools/gpu_lease.sh`): client (`nested_kwin.sh`, used by every client) acquires its
+  job (unit `incoming-job-sandbox-<tree_id>`); lives until `stop` or `INCOMING_SANDBOX_IDLE` seconds (1800; 0 never)
+  without a command (`fx`/`swap` mark `fx/active`); in GPU mode also until Artem's game starts
+  (`fx/stopped` says which; game running means immediate exit 75); other jobs cannot stop it. GPU mode, one GPU (`tools/gpu_lease.sh`): client (`nested_kwin.sh`, used by every client) acquires its
   session lease (owner from `wt-<S>…` tree) and GPU-client lock, holds/renews while alive; `start` requests them
   before building. Another session holds GPU: exit 75, line “GPU held by <owner> (<tree>), since <time>”; client
   already running (even own session's sandbox in another tree/look gate): exit 75, “client running on GPU …”;
@@ -276,6 +277,11 @@ times and the pall's budget are not frame costs: frame cost belongs to the GPU a
 - A host with little free memory (a server beside game servers): Gradle with `-PnoRecompile` (binary Minecraft:
   Vineflower's decompile needs ~4 GB and was OOM-killed under a 3.5 GB ceiling), mods from `tools/fetch_runtime_mods.py`
   (`-PmcModsDir=run/ci-mods`), no Gradle daemon, `INCOMING_SOFT_HEAP=1536m` (ceiling 3.5 GB); one client at a time.
+- A CPU client started on netcup is stopped by its job's end: `tools/sandbox.sh stop` or `tools/dev_client.sh stop`
+  when the work is done, and the sandbox stops itself after its idle limit; `laptop_job.sh` stops its unit when its caller ends (TERM, Ctrl+C, HUP of
+  an `ssh -t` link, systemd-run killed). A plain `ssh vps cmd` that drops sends nothing: the job ends by its own
+  deadline. `tools/stray_clients.sh --host vps` lists clients that outlived their job (report only); a stray that is
+  not yours is reported to the lead, never killed.
 
 ## Pitfalls
 - Server may lag client ticks during world generation: client-scenario frames anchor to events, not a counter.
@@ -285,6 +291,16 @@ times and the pall's budget are not frame costs: frame cost belongs to the GPU a
   (`-Dincoming.pall.adaptive=true`): pinned, a 1 Mt passage at 3 km held the pall at 30–59 ms a frame, a cost the game
   steps down from within a second. While a detonation is live the scenario logs `SCENARIO nuke-layer` every half second
   (layer GPU by pass, smoke fill, near dust); the `far` line exists only once distant blasts do.
+- A single-player frame-time run puts the integrated server on the client's CPU. At the Silo city spot (1 Mt at 3 km,
+  front −1..+1 s) the single-player JVM keeps 13.2 cores busy with 8.6–9.2 more queued (C2 4.7–5.3 cores, three
+  quarters of its compiles there recompiles), and its worst second has 8–12 frames. The same client on a dedicated server
+  keeps 5.3–9.8 cores busy with 0.4–2.3 queued, and its worst second has 33–46 frames. Capping the compiler threads
+  (`-XX:CICompilerCount=4`) only hands those cores to chunk meshing (12 frames).
+- The player's server case: `commands` with `--prop incoming.server=host:port` and no `--world` joins that server (its
+  resource pack accepted, as a player who answered yes; a failed or dropped join ends the run). The server must be in
+  offline mode with the scenario's user (`Dev`) as operator, and its own config holds what `maxyield:` and `wave:` set in
+  a world (they only log there; a world's scenario sets the CUSTOM preset); `burnable`, `site:`, `skip:` and
+  `wait:blast` need the world's own server and are skipped. `spark …` profiles the server, `sparkc …` the client.
 - `pall-front`: night post-front pall, camera 400 m from surface 15 kt, 120 m above ground (like host replay frame),
   frames relative to camera-front arrival. `INCOMING_EXPORT=2560x1440`: game frame larger than window, like Flashback
   video export; window reports output size (`Window.framebufferWidth/Height` fields via reflection; Flashback mixes

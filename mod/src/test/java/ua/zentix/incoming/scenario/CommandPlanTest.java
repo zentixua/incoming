@@ -74,4 +74,14 @@ class CommandPlanTest {
         assertEquals(1, p.warnings().size(), p.warnings().toString());
         assertEquals(-1, CommandPlan.parse("shot:x").frontGate());
     }
+
+    /** On a joined server (incoming.server) these steps would read the absent integrated server and crash the client. */
+    @Test
+    void ownServerStepsAreKnown() {
+        CommandPlan p = CommandPlan.parse("burnable;site:#is_forest;skip:60;wait:blast;maxyield:1000;wave:0.35;say hi");
+        java.util.Set<CommandPlan.Kind> own = java.util.EnumSet.noneOf(CommandPlan.Kind.class);
+        for (CommandPlan.Step s : p.steps()) if (s.kind().ownServer()) own.add(s.kind());
+        assertEquals(java.util.EnumSet.of(CommandPlan.Kind.BURNABLE, CommandPlan.Kind.SITE, CommandPlan.Kind.SKIP), own);
+        assertEquals(1, p.blastGates().size());
+    }
 }

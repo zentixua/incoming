@@ -54,6 +54,8 @@ paths:
   app (idle pages swap out first). Heavy runs from a Claude app session therefore go through `laptop_job.sh`, never
   directly (a `java` started there counts as the app), and temporary files go to `$TMPDIR` (on disk in agent units),
   never `/tmp` (a 16 GB RAM tmpfs).
+- A fake process in a tooling test (a pretend `java`) is a `#!/bin/bash` script with that name (process name = script
+  name); a copy of `sleep` fails on GitHub runners, whose coreutils is one multicall binary ("unknown program 'java'").
 - Stop background scripts by PID: `pkill -f <pattern>` also matches your own shell's command line and kills it.
 - `tools/prod_client.py --video` copies Artem's `options.txt`; with `fullscreen:true` the window grows to the nested
   screen and `x11_record.py` (which starts a segment only at exactly `--size`) records nothing after the menu: run
