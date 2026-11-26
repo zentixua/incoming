@@ -126,22 +126,12 @@ Ruins and everything in `nuclear/world/` are in `nuclear-world.md`.
 
 - Post-wave pall (`client/nuclear/PallField` field, `NukePall` at camera/into frame, `NukeAsh` ash;
   `client/fx/layer/PallPass` renders): dust follows ground pressure and front arrival; the haze is the fires' smoke
-  parcels (`nuclear/model/SmokeParcels`, time.md §8.3 rule 4): each real second the zone emits at `FireStormLaw.smoke` of
-  its strike clock S, the parcel moves downwind on the motion age M at the detonation's wind and widens by `SPREAD` (0.2,
-  the Hiroshima band) per metre of travel, its column thinned by the same factor. A point reads the newest parcel over it
-  (`SmokeParcels.shift`: travel past the zone's downwind edge, 0 over the burning zone; from the epicentre the zone's
-  downwind half stood smokeless while fires grew, `DownwindFireZoneSmokeTest`), across the wind the zone abreast of the
-  band's axis (`axis`); alike in Java, `pall.glsl` and `startSeconds`.
-  Seen (rain, deposit) while its law column is ≥ `GONE` (0.05: 15 kt ~114 km, 6–10 h at a 24-hour day), drawn fading out
-  below it to `GONE`/`FADE` (presentation on the unseen side only, so the rain band stays the law's: a cut at `GONE`
-  drew a straight edge across the band, `SmokeParcelsTest.theBandHasNoCut`). S at an earlier M comes from the anchors alone (`StrikeClock.strikeAtMotion`:
-  even rate between show end, blend end and now; counted jumps since the show's end as the newest stretch of M), so server
-  and clients read the same parcels with no packet. Client: `PallField.Band` (128 axis nodes, `SmokeParcels.drawn`
-  interpolation, the haze row's channel a), clock `PallField.parcels` ← `ClientNuclear.Active.parcelClock`; server:
-  `NuclearEvents.parcels`. Fire light only over the fires (row b × the zone's fire share at the point; a third table read broke `fx_pall_composite`'s
-  AMD compiler budget, recorded at 1344 MB for the second). The terrain map covers
-  the band `MAP_DOWNWIND` (2) fire radii, farther on its edge. The slot box holds only parcels within `NukePall.AIR_DEPTH`
-  (6.9) optical depths of frame air from the eye (35 km clear): the whole band would spread the ray's steps thin. No time-of-day logic here. Pace game-tick timers to the clock on a fixed game-time grid (`BurnsEffect`: every
+  parcels (`nuclear/model/SmokeParcels`, one law for server rain and client haze from clock anchors, no packet;
+  laws in its javadoc): a point reads the newest parcel over it, travel counted from the zone's downwind edge
+  (`DownwindFireZoneSmokeTest`), alike in Java, `pall.glsl` and `startSeconds`; drawn faded only below `GONE`
+  (`theBandHasNoCut`). Row channel a = parcels by travel (128 nodes, `SmokeParcels.drawn` both sides); fire light = row b ×
+  the zone's fire share at the point (a third table read broke `fx_pall_composite`'s AMD budget). Terrain map: band to
+  `MAP_DOWNWIND` fire radii; slot box: parcels within `NukePall.AIR_DEPTH` air depths of the eye. No time-of-day logic here. Pace game-tick timers to the clock on a fixed game-time grid (`BurnsEffect`: every
   20th game tick, never on the timer's own remainder, which a correction keeps landing on); dust stays on real time; detonation lives on the client while pall remains visible. Field laws in Java and copied in `shaders/include/pall.glsl` (`PallGlslTest` reads
   shader functions and compares with Java; edit laws in both); fireball/fire lighting on pall (`pallBallShare`,
   `pallBurn`) copies `CloudPuffs.ball` and `burn`: change lighting there too.
@@ -266,12 +256,8 @@ Ruins and everything in `nuclear/world/` are in `nuclear-world.md`.
   and follow `FarLods`); `NukeAfter.realFire` draws and sounds the model storm in local chunks too, trust untouched.
   Plans always carry fire, writes decide. GameTests `nuke_flash_firetick_off`/`_on` (rule flipped after the burst),
   `NukeAfterBlockFireTest`. Black rain is the
-  rain-out of the drawn smoke parcels (`BlackRainModel.raining`): under a parcel that left the fires in the window
-  `START_S`–`END_S` of M and has travelled under `DRIFT_S`, where the law column is ≥ `GONE` and `SmokeParcels.drawn` > 0 (90 min a point at a 24-hour
-  day, ≤ 10 min on a vanilla day; `BlackRainModelTest`, `PallFieldTest.blackRainFallsOnlyUnderTheDrawnHaze`);
-  `startSeconds` is its onset on M (`BlackRainDepositSeamTest`); the deposit lands then, read on S
-  (`landedStrike`: `falloutRateAt`/`MobFallout.exposure` take the parcel clock), and ages on S since; its size does not
-  depend on how much smoke passed. Black rain
+  parcels' rain-out (`BlackRainModel`: onset on M, deposit landing then and ageing on S, `BlackRainDepositSeamTest`;
+  rain only under drawn haze, `PallFieldTest.blackRainFallsOnlyUnderTheDrawnHaze`). Black rain
   needs fires and `Detonation.rain` (`nuclear.black_rain` at detonation, same packet rule): off, `BlackRainModel` gets no
   fire zone, so no rain picture/sound, washout or skin contamination on server and client alike (the live rule still
   gates contamination for detonations saved before the field, which read as rain on). Storm
