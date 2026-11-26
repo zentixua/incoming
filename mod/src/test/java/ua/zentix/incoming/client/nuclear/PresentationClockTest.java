@@ -31,7 +31,7 @@ class PresentationClockTest {
                     confirmed = anchor;
                     lastReceipt = own;
                 }
-                if (frame > 0) clock.tick(1 + own * 50_000_000L);
+                if (frame > 0) clock.tick(1 + own * 50_000_000L, ua.zentix.incoming.client.ClientTicks.NOMINAL_NANOS);
             }
             double shown = clock.at((frame % 3) / 3.0);
             lead = Math.max(lead, shown - confirmed);
@@ -95,7 +95,7 @@ class PresentationClockTest {
                         clock.anchor(a);
                         lastAnchor = (int) a;
                     }
-                    if (own > 0) clock.tick(1 + own * 50_000_000L);
+                    if (own > 0) clock.tick(1 + own * 50_000_000L, ua.zentix.incoming.client.ClientTicks.NOMINAL_NANOS);
                 }
                 double shown = clock.at((units % 6) / 6.0);
                 int dt = frame == 0 ? 0 : steps[(frame - 1) % steps.length];
@@ -141,8 +141,8 @@ class PresentationClockTest {
                     if (joined != null) joined.anchor(nextAnchor);
                     nextAnchor++;
                 }
-                if (own > 0) resident.tick(1 + own * 50_000_000L);
-                if (own > recovery) joined.tick(1 + own * 50_000_000L);
+                if (own > 0) resident.tick(1 + own * 50_000_000L, ua.zentix.incoming.client.ClientTicks.NOMINAL_NANOS);
+                if (own > recovery) joined.tick(1 + own * 50_000_000L, ua.zentix.incoming.client.ClientTicks.NOMINAL_NANOS);
             }
             double a = resident.at((frame % 3) / 3.0);
             if (joined != null) {
@@ -229,7 +229,7 @@ class PresentationClockTest {
         for (int frame = 1; frame <= 600; frame++) {
             for (int i = 0; i < 3; i++) clock.anchor((frame - 1) * 3 + i + 1);
             for (int i = 0; i < 3; i++) {
-                clock.tick(1 + frame * 150_000_000L);
+                clock.tick(1 + frame * 150_000_000L, ua.zentix.incoming.client.ClientTicks.NOMINAL_NANOS);
                 double next = clock.at(0);
                 assertEquals(speed, next - age, 0.01 + 1e-9, "catch-up batch at frame " + frame);
                 speed = next - age;

@@ -15,6 +15,11 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 class CameraShakeTest {
     private static final int STEP = BodySway.RATE / 20;
 
+    /** Offsets of a running level: the shake's and the body's partial tick are one. */
+    private static double[] offsets(double partial, double yaw, double pitch, double roll, double body, double k) {
+        return CameraShake.offsets(partial, partial, yaw, pitch, roll, body, k);
+    }
+
     /**
      * Wave on the ground, where the pressure is {@code psi}, from the air blast {@code kt} at the best height: {velocity pressure along the
      *  ground, Pa; positive phase, s; front pressure, Pa}.
@@ -62,8 +67,8 @@ class CameraShakeTest {
                         double[] w = wave(1, 2), t = CameraShake.sway(w[2], w[0], 1, w[1], 0, away, yaw);
                         int top = 0;
                         for (int i = 0; i < t.length; i++) if (t[i] > t[top]) top = i;
-                        for (int tick = 0; tick < top / STEP; tick++) CameraShake.tick(true);
-                        double[] o = CameraShake.offsets((top % STEP) / (double) STEP, yaw, pitch, roll, yaw, 1);
+                        for (int tick = 0; tick < top / STEP; tick++) CameraShake.tick(true, true);
+                        double[] o = offsets((top % STEP) / (double) STEP, yaw, pitch, roll, yaw, 1);
                         Vector3d[] got = camera(yaw + o[0], pitch + o[1], roll + o[2]), was = camera(yaw, pitch, roll);
                         double flat = Math.hypot(away.x, away.z);
                         Quaterniond lean = new Quaterniond().rotationAxis(t[top], away.z / flat, 0, -away.x / flat);
@@ -79,8 +84,8 @@ class CameraShakeTest {
         double[] t = sway(1, 2, new Vec3(1, 0, 0));
         int top = 0;
         for (int i = 0; i < t.length; i++) if (t[i] > t[top]) top = i;
-        for (int tick = 0; tick < top / STEP; tick++) CameraShake.tick(true);
-        double[] o = CameraShake.offsets((top % STEP) / (double) STEP, 0, 90, 0, 0, 1);
+        for (int tick = 0; tick < top / STEP; tick++) CameraShake.tick(true, true);
+        double[] o = offsets((top % STEP) / (double) STEP, 0, 90, 0, 0, 1);
         Vector3d look = camera(o[0], 90 + o[1], o[2])[0];
         assertEquals(Math.toDegrees(t[top]), angle(look, new Vector3d(0, -1, 0)), 1e-6);
         assertTrue(look.x < 0, "looking down to the right: " + look);
@@ -108,9 +113,9 @@ class CameraShakeTest {
             for (int i = 0; i < waves; i++) sway(5, 15, away);
             double edge = Math.toDegrees(CameraShake.edge(0, away.x / Math.sqrt(2), away.z / Math.sqrt(2))), most = 0;
             for (int tick = 0; tick < 20 * 20; tick++) {
-                double[] o = CameraShake.offsets(0, 0, 0, 0, 0, 1);
+                double[] o = offsets(0, 0, 0, 0, 0, 1);
                 most = Math.max(most, angle(camera(o[0], o[1], o[2])[1], new Vector3d(0, 1, 0)) / edge);
-                CameraShake.tick(true);
+                CameraShake.tick(true, true);
             }
             assertEquals(1, most, 1e-9, waves + " waves: obliquely - up to the ellipse and no further");
         }
@@ -136,17 +141,17 @@ class CameraShakeTest {
                         Quaterniond prev = null;
                         for (int tick = 0; tick * STEP < t.length + 20; tick++) {
                             for (int f = 0; f < 10; f++) {
-                                double[] o = CameraShake.offsets(f / 10.0, yaw, pitch, 0, yaw, 1);
+                                double[] o = offsets(f / 10.0, yaw, pitch, 0, yaw, 1);
                                 Quaterniond q = rotation(yaw + o[0], pitch + o[1], o[2]);
                                 if (prev != null) most = Math.max(most, Math.toDegrees(2 * Math.acos(Math.min(1, Math.abs(q.dot(prev))))));
                                 prev = q;
                             }
-                            CameraShake.tick(true);
+                            CameraShake.tick(true, true);
                         }
                         String what = kt + " kt, " + psi + " psi, course " + yaw + ", pitch " + pitch;
                         assertTrue(most < 0.5, what + ": " + most + "° per frame");
                         if (psi == 1) assertTrue(most * 200 < 30, what + ": " + most * 200 + " °/s");
-                        double[] o = CameraShake.offsets(0.5, yaw, pitch, 0, yaw, 1);
+                        double[] o = offsets(0.5, yaw, pitch, 0, yaw, 1);
                         assertEquals(0, Math.abs(o[0]) + Math.abs(o[1]) + Math.abs(o[2]), 1e-12, what + ": the body is straightened, but the camera is not");
                     }
                 }
@@ -165,11 +170,11 @@ class CameraShakeTest {
         sway(5, 15, new Vec3(0, 0, 1));
         double front = 0;
         for (int tick = 0; tick < 20 * 20; tick++) {
-            double[] o = CameraShake.offsets(0.5, 0, 0, 0, Double.NaN, 1);
+            double[] o = offsets(0.5, 0, 0, 0, Double.NaN, 1);
             assertEquals(0, Math.abs(o[0]) + Math.abs(o[1]) + Math.abs(o[2]), 1e-12, "camera is not on the player");
-            o = CameraShake.offsets(0.5, 180, 0, 0, 0, 1);
+            o = offsets(0.5, 180, 0, 0, 0, 1);
             front = Math.max(front, angle(camera(180 + o[0], o[1], o[2])[1], new Vector3d(0, 1, 0)));
-            CameraShake.tick(true);
+            CameraShake.tick(true, true);
         }
         assertEquals(Math.toDegrees(BodySway.FORWARD), front, 1e-6, "front view: border - bodies");
         CameraShake.reset();
@@ -180,12 +185,12 @@ class CameraShakeTest {
     void wavesAdd() {
         CameraShake.reset();
         double[] first = sway(1, 2, new Vec3(0, 0, 1));
-        for (int i = 0; i < 10; i++) CameraShake.tick(true);
-        double before = CameraShake.offsets(0, 0, 0, 0, 0, 1)[1];
+        for (int i = 0; i < 10; i++) CameraShake.tick(true, true);
+        double before = offsets(0, 0, 0, 0, 0, 1)[1];
         double[] second = sway(0.5, 2, new Vec3(0, 0, 1));
-        assertEquals(before, CameraShake.offsets(0, 0, 0, 0, 0, 1)[1], 1e-9, "at the moment of arrival");
-        for (int i = 0; i < 10; i++) CameraShake.tick(true);
-        assertEquals(Math.toDegrees(first[20 * STEP] + second[10 * STEP]), CameraShake.offsets(0, 0, 0, 0, 0, 1)[1], 1e-9);
+        assertEquals(before, offsets(0, 0, 0, 0, 0, 1)[1], 1e-9, "at the moment of arrival");
+        for (int i = 0; i < 10; i++) CameraShake.tick(true, true);
+        assertEquals(Math.toDegrees(first[20 * STEP] + second[10 * STEP]), offsets(0, 0, 0, 0, 0, 1)[1], 1e-9);
         CameraShake.reset();
     }
 
@@ -198,7 +203,7 @@ class CameraShakeTest {
         CameraShake.reset();
         double[] w = wave(1, 2), t = CameraShake.sway(w[2], w[0], 1, w[1], 0.5, new Vec3(0, 0, 1), 0);
         double half = Math.toDegrees(t[STEP / 2] + (t[STEP / 2 + 1] - t[STEP / 2]) * (STEP / 2.0 - STEP / 2));
-        assertEquals(half, CameraShake.offsets(0, 0, 0, 0, 0, 1)[1], 1e-9);
+        assertEquals(half, offsets(0, 0, 0, 0, 0, 1)[1], 1e-9);
         assertTrue(half > 0, "half a blow is already a tilt");
         CameraShake.reset();
     }
@@ -208,13 +213,71 @@ class CameraShakeTest {
     void noLeanInTheAir() {
         CameraShake.reset();
         double[] t = sway(1, 2, new Vec3(0, 0, 1));
-        for (int i = 0; i < 10; i++) CameraShake.tick(true);
-        assertTrue(CameraShake.offsets(0, 0, 0, 0, 0, 1)[1] > 0.1);
-        for (int i = 0; i < 6; i++) CameraShake.tick(false);
-        assertEquals(0, CameraShake.offsets(0.5, 0, 0, 0, 0, 1)[1], 1e-12);
-        for (int i = 0; i < 6; i++) CameraShake.tick(true);
-        assertEquals(Math.toDegrees(t[22 * STEP]), CameraShake.offsets(0, 0, 0, 0, 0, 1)[1], 1e-9);
+        for (int i = 0; i < 10; i++) CameraShake.tick(true, true);
+        assertTrue(offsets(0, 0, 0, 0, 0, 1)[1] > 0.1);
+        for (int i = 0; i < 6; i++) CameraShake.tick(false, true);
+        assertEquals(0, offsets(0.5, 0, 0, 0, 0, 1)[1], 1e-12);
+        for (int i = 0; i < 6; i++) CameraShake.tick(true, true);
+        assertEquals(Math.toDegrees(t[22 * STEP]), offsets(0, 0, 0, 0, 0, 1)[1], 1e-9);
         CameraShake.reset();
+    }
+
+    /**
+     * {@code /tick freeze} and a paused replay hold the blast's lean and the ground jolt where they stood (no tick of
+     * the level, no tick of the shake), and the shake resumes from there: after the hold it equals a shake that never
+     * stopped, at the same count of running ticks.
+     */
+    @Test
+    void frozenLevelHoldsTheShake() {
+        CameraShake.reset();
+        sway(1, 2, new Vec3(0, 0, 1));
+        CameraShake.ground(1, 1.5, 0, 7);
+        for (int i = 0; i < 10; i++) CameraShake.tick(true, true);
+        double[] held = offsets(0.5, 0, 0, 0, 0, 1);
+        assertTrue(Math.abs(held[1]) > 0.01, "a shake to hold: " + held[1]);
+        for (int i = 0; i < 200; i++) CameraShake.tick(true, false);
+        double[] after = offsets(0.5, 0, 0, 0, 0, 1);
+        for (int k = 0; k < 3; k++) assertEquals(held[k], after[k], 0, "axis " + k + " stood still");
+        for (int i = 0; i < 10; i++) CameraShake.tick(true, true);
+        double[] resumed = offsets(0.25, 0, 0, 0, 0, 1);
+        CameraShake.reset();
+        sway(1, 2, new Vec3(0, 0, 1));
+        CameraShake.ground(1, 1.5, 0, 7);
+        for (int i = 0; i < 20; i++) CameraShake.tick(true, true);
+        double[] straight = offsets(0.25, 0, 0, 0, 0, 1);
+        for (int k = 0; k < 3; k++) assertEquals(straight[k], resumed[k], 1e-12, "axis " + k + " resumed where it stood");
+        CameraShake.reset();
+    }
+
+    /**
+     * Review probe (PR #776, round 1): foot support is the body's and ticks under {@code /tick freeze}, so a jump
+     * during a held lean must fade it per frame, not in steps at each client tick. The shake's partial is 1.0 while
+     * frozen; foot support takes the camera's. Before the fix one partial served both: the held lean (4.31° at 1 psi
+     * from 2 kt) stepped by 1.08° once per tick and stood still between.
+     */
+    @Test
+    void heldLeanFollowsAJumpSmoothlyUnderFreeze() {
+        CameraShake.reset();
+        double kt = 2, psi = 1, h = Yield.optimalBurstHeight(kt), g = HobBlast.rangeFor(psi, h, kt);
+        CameraShake.sway(1000 * BlastModel.kpa(psi),
+                1000 * BlastModel.dynamicPressureKpa(BlastModel.kpa(psi)) * HobBlast.alongGround(g, h, kt), 1,
+                HobBlast.positivePhaseSeconds(g, h, kt), 0, new Vec3(0, 0, 1), 0);
+        for (int i = 0; i < 10; i++) CameraShake.tick(true, true);
+        double lean = Math.abs(CameraShake.offsets(1, 1, 0, 0, 0, 0, 1)[1]);
+        assertTrue(lean > 0.1, "a lean to hold: " + lean);
+        // frozen: the player jumps; frames at camera partials 0, 0.1 … 1 in each of two frozen ticks
+        double last = Double.NaN, maxStep = 0;
+        for (int tick = 0; tick < 2; tick++) {
+            CameraShake.tick(false, false);
+            for (int f = 0; f <= 10; f++) {
+                double o = CameraShake.offsets(1, f / 10.0, 0, 0, 0, 0, 1)[1];
+                if (!Double.isNaN(last)) maxStep = Math.max(maxStep, Math.abs(o - last));
+                last = o;
+            }
+        }
+        CameraShake.reset();
+        assertTrue(maxStep < 0.1 * lean, "foot-support step per frame " + maxStep + "° of a " + lean + "° lean");
+        assertTrue(Math.abs(last) < 0.9 * lean, "the jump still fades the lean: " + last);
     }
 
     /**
@@ -226,12 +289,12 @@ class CameraShakeTest {
         double[] t = sway(psi, kt, away), e = {0, 0, 0};
         for (int tick = 0; tick * STEP < t.length; tick++) {
             for (int f = 0; f < 10; f++) {
-                double[] o = CameraShake.offsets(f / 10.0, 0, 0, 0, 0, k);
+                double[] o = offsets(f / 10.0, 0, 0, 0, 0, k);
                 e[0] = Math.min(e[0], o[1]);
                 e[1] = Math.max(e[1], o[1]);
                 e[2] = Math.min(e[2], o[2]);
             }
-            CameraShake.tick(true);
+            CameraShake.tick(true, true);
         }
         CameraShake.reset();
         return e;
@@ -275,7 +338,7 @@ class CameraShakeTest {
         int turns = 0, sign = 0;
         for (int tick = 0; tick < 20 * 6; tick++) {
             for (int k = 0; k < 6; k++) {
-                double pitch = CameraShake.offsets(k / 6.0, 0, 0, 0, 0, 1)[1];
+                double pitch = offsets(k / 6.0, 0, 0, 0, 0, 1)[1];
                 assertTrue(Math.abs(pitch - last) <= 1.05 * kick + 1e-9, "jump in tick " + tick + ": " + last + " → " + pitch);
                 int s2 = (int) Math.signum(pitch);
                 if (s2 != 0 && s2 != sign) {
@@ -285,11 +348,11 @@ class CameraShakeTest {
                 most = Math.max(most, Math.abs(pitch));
                 last = pitch;
             }
-            CameraShake.tick(true);
+            CameraShake.tick(true, true);
         }
         assertTrue(turns >= 2, "swings: sign changes " + turns);
         assertTrue(most > 1, "scope " + most);
-        assertEquals(0, CameraShake.offsets(0, 0, 0, 0, 0, 1)[1], 1e-9, "came back");
+        assertEquals(0, offsets(0, 0, 0, 0, 0, 1)[1], 1e-9, "came back");
         CameraShake.reset();
         double[] w = wave(1, 2);
         assertEquals(null, CameraShake.sway(w[2], w[0], 1, w[1], w[1], 0, new Vec3(0, 0, 1), 0, false).neck(), "the nuke - no neck");
@@ -370,7 +433,7 @@ class CameraShakeTest {
         double weak = 0;
         for (double t = 0; t <= 40; t += 0.05) weak = Math.max(weak, Math.abs(CameraShake.groundAt(t)[1]));
         assertTrue(weak < pitch, weak + " against " + pitch);
-        assertEquals(0, CameraShake.offsets(5, 0, 0, 0, Double.NaN, 1)[1], 1e-12, "the projectile camera does not nod");
+        assertEquals(0, offsets(5, 0, 0, 0, Double.NaN, 1)[1], 1e-12, "the projectile camera does not nod");
         CameraShake.reset();
     }
 }

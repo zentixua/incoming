@@ -231,11 +231,16 @@ public final class CameraShake {
         return p.isPassenger() || p.isSwimming() || p.isFallFlying() || p.isSleeping() || p.getAbilities().flying;
     }
 
-    /** Client tick; {@code onFeet} — player has foot support ({@link #standing}). */
-    public static void tick(boolean onFeet) {
-        ticks++;
+    /**
+     * Client tick; {@code onFeet} — player has foot support ({@link #standing}). The ground and the blast move the body
+     * only while the level runs ({@code runs}, {@link ua.zentix.incoming.client.ClientTicks}): under {@code /tick freeze}
+     * and a paused replay the jolt, tremor and lean hold where they stood.
+     */
+    public static void tick(boolean onFeet, boolean runs) {
         standingBefore = standing;
         standing = Mth.clamp(standing + (onFeet ? STANDING_STEP : -STANDING_STEP), 0, 1);
+        if (!runs) return;
+        ticks++;
         SWAYS.removeIf(s -> (ticks - s.from) / 20.0 * BodySway.RATE >= s.tilt.length - 1);
         TREMORS.removeIf(r -> (ticks - r.from) / 20.0 >= r.seconds);
         GROUNDS.removeIf(g -> (ticks - g.from) / 20.0 >= g.seconds);
@@ -265,7 +270,10 @@ public final class CameraShake {
         // lean belongs to the player's body: invisible to the projectile camera or another entity's eyes
         Player p = mc.player;
         double body = p != null && mc.getCameraEntity() == p ? p.getViewYRot((float) e.getPartialTick()) : Double.NaN;
-        double[] o = offsets(e.getPartialTick(), e.getYaw(), e.getPitch(), e.getRoll(), body, k);
+        // the shake's own time: the game-time partial tick, which holds at the tick's end while the level is frozen; foot
+        // support is the body's and keeps ticking, so it takes the camera event's partial, which keeps cycling
+        double[] o = offsets(mc.getTimer().getGameTimeDeltaPartialTick(false), e.getPartialTick(), e.getYaw(), e.getPitch(),
+                e.getRoll(), body, k);
         e.setYaw(e.getYaw() + (float) o[0]);
         e.setPitch(e.getPitch() + (float) o[1]);
         e.setRoll(e.getRoll() + (float) o[2]);
@@ -275,9 +283,10 @@ public final class CameraShake {
      * Camera shake rotation in the frame, ° (yaw, pitch — positive downward, roll — positive with top to the right), with camera yaw
      * {@code cameraYaw}, pitch {@code cameraPitch} and roll {@code cameraRoll}; {@code bodyYaw} — player view direction,
      * ° (sets the stability boundary: front third-person view looks backward); NaN — camera is not on the player,
-     * no body lean; {@code k} — shake strength from settings.
+     * no body lean; {@code k} — shake strength from settings. {@code partial} is the shake's own time within the tick (the
+     * level's, held while frozen); {@code bodyPartial} the body's, for foot support, which ticks under a freeze too.
      */
-    static double[] offsets(double partial, double cameraYaw, double cameraPitch, double cameraRoll, double bodyYaw, double k) {
+    static double[] offsets(double partial, double bodyPartial, double cameraYaw, double cameraPitch, double cameraRoll, double bodyYaw, double k) {
         double t = TickTime.at(ticks, partial);
         // amplitudes: yaw/pitch, °
         double yaw = 0, pitch = 0, roll = 0;
@@ -312,7 +321,7 @@ public final class CameraShake {
             neckX += neck * s.pushX;
             neckZ += neck * s.pushZ;
         }
-        double w = k * (standingBefore + (standing - standingBefore) * partial), body = w * Math.hypot(leanX, leanZ);
+        double w = k * (standingBefore + (standing - standingBefore) * bodyPartial), body = w * Math.hypot(leanX, leanZ);
         if (Double.isNaN(bodyYaw) || !(body > 0) && !(neckX != 0 || neckZ != 0)) return new double[]{yaw, pitch, roll};
         // the body leans downwind away from the blast — a frontal hit tips the head back, a rear hit tips it down, a side hit tilts it away from
         // the blast; beyond the stability boundary a person steps — body lean stays there; the head sways on the neck on top

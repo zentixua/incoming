@@ -311,7 +311,7 @@ public final class FxLayer {
         // collected: the exposure of the whole frame adapts to it (fireballs, puddles, fires, debris — this frame's;
         // projectile torches — the previous one's: their places are counted by collection, and they cannot flare up at
         // once, as a fireball does).
-        HeatPass.Frame heat = HeatPass.begin(level, sky.exposure(), sky.pixel());
+        HeatPass.Frame heat = HeatPass.begin(level, sky.exposure(), sky.pixel(), SmokeGrid.seconds(sky.partial()));
         double air = Sight.KOSCHMIEDER / Sight.range(level.getRainLevel(sky.partial()), level.getThunderLevel(sky.partial()));
         FarBlasts.heat(sky.camera(), sky.partial(), heat, air);
         ua.zentix.incoming.client.nuclear.NukeHeat.heat(sky.camera(), sky.partial(), heat);

@@ -210,7 +210,6 @@ public final class ClientNuclear {
         private long own, anchor, confirmed;
         private double at, anchorAt, shown, speed = 1, resyncUntil;
         private boolean estimated, sampled, over, waitingForTarget, farBehind;
-        private static final long TICK_NANOS = 1_000_000_000L / 20;
         private long lastTickNanos, expectedOwn;
         private double lastRate = 1;
 
@@ -256,18 +255,19 @@ public final class ClientNuclear {
         }
 
         void tick() {
-            tick(System.nanoTime());
+            tick(System.nanoTime(), ua.zentix.incoming.client.ClientTicks.nanos());
         }
 
-        // Wall time detects a missed client tick. It never adds a tick to the picture.
-        void tick(long nanos) {
+        // Wall time detects a missed client tick. It never adds a tick to the picture. A client tick lasts
+        // tickNanos (100 ms at /tick rate 10): one such tick is not a missed one.
+        void tick(long nanos, long tickNanos) {
             if (replayPosition != null) return;
             long elapsed = nanos - lastTickNanos;
-            if (lastTickNanos != 0 && elapsed >= TICK_NANOS) {
+            if (lastTickNanos != 0 && elapsed >= tickNanos) {
                 // At low FPS several client ticks run in one frame. Count the previous batch before declaring a loss.
                 if (own < expectedOwn && anchor > shown + 1 && !estimated && !over && resyncUntil <= at)
                     resyncUntil = at + RESPONSE;
-                expectedOwn = own + elapsed / TICK_NANOS;
+                expectedOwn = own + elapsed / tickNanos;
             }
             lastTickNanos = nanos;
             advance(++own);
@@ -599,7 +599,7 @@ public final class ClientNuclear {
         for (Active a : DETONATIONS.values()) {
             double shown = a.ticks(partial);
             long now = System.nanoTime();
-            double elapsed = (now - a.lastFrameNanos) / 50_000_000.0;
+            double elapsed = (now - a.lastFrameNanos) / (double) ua.zentix.incoming.client.ClientTicks.nanos();
             double frameRate = (shown - a.lastFrameAge) / elapsed;
             Incoming.LOG.info("nukeFrame,{},{},{},{},{},{},{},{}", a.epoch, a.d.id(),
                     now, shown, a.clock.confirmed(), shown - a.clock.confirmed(),
