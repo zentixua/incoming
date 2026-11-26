@@ -178,10 +178,11 @@ public final class FarBlasts {
             this.ground = ground;
             this.water = ground.isWater() && source.chargeKg() > 0 ? water(level, new Vec3(x, y, z), source.chargeKg(), model.air) : null;
             this.seed = seed;
-            // a resent strike happened before the client knew it: it is that old now, and its sound has passed
+            // a resent strike happened before the client knew it: it is that old now; its far rumble is still to come only
+            // while its front has not yet reached the ear (FarBlasts.cloud decides)
             this.born = BlastTime.ticks() - (resent == null ? 0 : resent.ticks());
             this.near = near;
-            this.soundPending = resent == null && !near;
+            this.soundPending = !near;
             // Fuel in the crater burns as fire on the server's blocks: its smoke and sound come with it in a packet (BlastEffects.fuelFire)
             float[] dust = dustColour(ground);
             dustR = SmokeGrid.dustAlbedo(dust[0]);
@@ -542,6 +543,9 @@ public final class FarBlasts {
     public static CloudModel cloud(ClientLevel level, BlastSource source, CloudModel model, Vec3 at, GroundMaterial ground, long seed,
                                    BlastSource voice, @Nullable Resent resent) {
         Event e = new Event(level, source, model, at.x, at.y, at.z, ground, seed, near(at), voice, resent);
+        // a resent strike's rumble plays only if its front is still on the way to the ear (a player out of a portal 2 s
+        // after a hit 3 km away hears it at 8.7 s), never one that has passed
+        if (resent != null && e.soundPending) e.soundPending = stillHeard(e.soundFront(), e.blastDistanceTo(camera()), resent.ticks());
         trace(e, FarTerrain.of(level), camera());
         clear(e, camera(), resent == null ? 0 : resent.ticks());
         admit(EVENTS, e, CAP, old -> {
@@ -550,6 +554,11 @@ public final class FarBlasts {
         });
         SmokeGrid.add(e);
         return model;
+    }
+
+    /** A strike {@code ageTicks} old, {@code d} blocks from the ear: its front ({@link #arrivalTicks}) has not reached it yet. */
+    static boolean stillHeard(@Nullable ChemicalFront front, double d, long ageTicks) {
+        return arrivalTicks(front, d) > ageTicks;
     }
 
     /** {@code e} goes to the end of {@code events}; beyond {@code cap} the first one goes to {@code gone} (picture — yes, sound — on its own schedule). */

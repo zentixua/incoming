@@ -28,7 +28,7 @@ import java.util.function.ToDoubleFunction;
  * A late joiner gets the list right after login, before its chunks: a cloud waits for the chunk under it (its dust reads
  * the ground around) up to {@link Ledger#CHUNK_WAIT}, or is built at once beyond the client's view. A Flashback seek clears
  * every cloud ({@code IncomingClient.rewound}); the last list read (the snapshot keeps the last packet of a type) is then
- * built again at the replay position's ages. Strikes after that position wait until it reaches them.
+ * built again at the replay position's ages. Strikes after that position are left to their live packets.
  */
 public final class ClientStrikeClouds {
     static final Ledger LEDGER = new Ledger();
@@ -156,9 +156,15 @@ public final class ClientStrikeClouds {
             waiting.clear();
         }
 
+        /**
+         * Listed clouds to build: not seen live, and already begun. One born after {@code now} (a replay seek back past
+         * it, the list read at the old position) comes live when playback reaches it; built here as well, it would be
+         * drawn twice. The next list follows its live packet within a second.
+         */
         private void queue(long now) {
             waiting.clear();
             for (S2C.StrikeClouds.Cloud c : known) {
+                if (c.born() > now) continue;
                 if (c.kind() == S2C.StrikeClouds.FUEL || !shown.containsKey(c.packet())) waiting.add(new Waiting(c, now));
             }
         }
@@ -170,16 +176,17 @@ public final class ClientStrikeClouds {
         void tick(long now, double counted, Predicate<S2C.StrikeClouds.Cloud> ready, ToDoubleFunction<S2C.StrikeClouds.Cloud> distance,
                   ObjLongConsumer<S2C.StrikeClouds.Cloud> build, LongSupplier nanos) {
             shown.values().removeIf(born -> (now - born) / 20.0 >= StrikeClouds.LIFE_S);
-            waiting.removeIf(w -> w.cloud.kind() != S2C.StrikeClouds.FUEL && w.cloud.born() <= now
-                    && (StrikeClouds.motion(w.cloud, now, counted) >= StrikeClouds.LIFE_S || shown.containsKey(w.cloud.packet())));
+            // past its life by real age, or seen live: gone for good. Aged past it only by counted jumps: held, since this
+            // world's clock may not have arrived yet (the server prunes by the same motion age, so a real one leaves the list)
+            waiting.removeIf(w -> w.cloud.born() > now || w.cloud.kind() != S2C.StrikeClouds.FUEL
+                    && ((now - w.cloud.born()) / 20.0 >= StrikeClouds.LIFE_S || shown.containsKey(w.cloud.packet())));
             long start = nanos.getAsLong();
             for (boolean first = true; first || nanos.getAsLong() - start < BUILD_NANOS; first = false) {
                 Waiting best = null;
                 double nearest = Double.POSITIVE_INFINITY;
                 for (Waiting w : waiting) {
                     S2C.StrikeClouds.Cloud c = w.cloud;
-                    // a replay before the strike: it comes live when the position reaches it
-                    if (c.born() > now) continue;
+                    if (c.kind() != S2C.StrikeClouds.FUEL && StrikeClouds.motion(c, now, counted) >= StrikeClouds.LIFE_S) continue;
                     if (c.kind() != S2C.StrikeClouds.FUEL && now - w.since < CHUNK_WAIT && !ready.test(c)) continue;
                     double d = distance.applyAsDouble(c);
                     if (best == null || d < nearest) {

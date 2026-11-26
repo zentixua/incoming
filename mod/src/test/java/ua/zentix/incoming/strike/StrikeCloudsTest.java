@@ -158,6 +158,7 @@ class StrikeCloudsTest {
      */
     @Test
     void aCloudBuildsAtAnAgeCheaply() {
+        // printed, not asserted: shared CI runners make wall time no test measure (gametest.md)
         CloudModel.Air air = new CloudModel.Air(0.012, 6, 2, 0.14, 3, 0.5);
         WeaponType[] weapons = {WeaponType.DRONE, WeaponType.MISSILE, WeaponType.ROCKET};
         for (int i = 0; i < 30; i++) new CloudModel(BlastSource.of(weapons[i % 3], false), air).shear(600);
@@ -173,7 +174,6 @@ class StrikeCloudsTest {
         double ms = (System.nanoTime() - t0) / 1e6 / n;
         System.out.printf(java.util.Locale.ROOT, "STRIKECLOUDS build: constructor %.3f ms%n", built / 1e6 / n);
         System.out.printf(java.util.Locale.ROOT, "STRIKECLOUDS build: %.3f ms per cloud built and asked at 600 s (%d clouds, check %.1f)%n", ms, n, sum);
-        assertTrue(ms < 10, "a cloud build " + ms + " ms");
     }
 
     private static int bytes(List<S2C.StrikeClouds.Cloud> clouds) {

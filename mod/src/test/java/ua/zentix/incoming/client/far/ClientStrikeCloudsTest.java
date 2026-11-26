@@ -85,7 +85,10 @@ class ClientStrikeCloudsTest {
         ledger.sync(List.of(cloud(1000, blast(2))), 1200);
         tick(1200, 3600 / WorldClock.SECONDS_PER_TICK, c -> true);
         assertTrue(built.isEmpty(), "after a counted hour");
-        assertEquals(0, ledger.waiting());
+        // held, not dropped: the counted value may be another world's until this world's clock arrives
+        assertEquals(1, ledger.waiting());
+        tick(1000 + life, 3600 / WorldClock.SECONDS_PER_TICK, c -> true);
+        assertEquals(0, ledger.waiting(), "gone once past its life by real age");
     }
 
     /**
@@ -111,16 +114,18 @@ class ClientStrikeCloudsTest {
         ledger.sync(List.of(cloud(1000, early)), 2000);
         tick(2000);
         assertEquals(List.of(new Built(cloud(1000, early), 1000)), built);
-        // seek back again with a list that already holds a later strike: it waits for its moment
+        // seek back again with a list that already holds a later strike: it is left to its live packet, which the replay
+        // hands over at its tick's marker, before or after the client's tick reaches it
         built.clear();
         ledger.sync(List.of(cloud(1000, early), cloud(3000, late)), 2000);
         ledger.rewound(2000);
         tick(2000);
         assertEquals(1, built.size());
-        tick(2999);
-        assertEquals(1, built.size(), "the later strike is not up before it happens");
+        for (long t = 2001; t <= 3000; t++) tick(t);
+        assertEquals(1, built.size(), "the later strike is not built by the ledger");
         ledger.live(late, 3000);
-        tick(3000);
+        ledger.sync(List.of(cloud(1000, early), cloud(3000, late)), 3020);
+        tick(3020);
         assertEquals(1, built.size(), "the later strike came live, not built twice");
     }
 
@@ -167,19 +172,28 @@ class ClientStrikeCloudsTest {
         assertEquals(1, built.size());
     }
 
-    /** A crater fire is a state: applied from every list and again after a seek, never before its strike. */
+    /** A crater fire is a state: applied from every list and again after a seek; one lit after the position comes live. */
     @Test
     void aCraterFireFollowsEveryList() {
         ledger.sync(List.of(fuel(500)), 400);
         tick(400);
-        assertTrue(built.isEmpty(), "before the strike");
         tick(500);
-        assertEquals(1, built.size());
+        assertTrue(built.isEmpty(), "lit after the list's moment: left to its live packet");
         ledger.sync(List.of(fuel(500)), 520);
         tick(520);
-        assertEquals(2, built.size(), "a later list updates it");
+        assertEquals(1, built.size(), "a later list applies it");
+        ledger.sync(List.of(fuel(500)), 540);
+        tick(540);
+        assertEquals(2, built.size(), "and updates it");
         ledger.rewound(600);
         tick(600);
         assertEquals(3, built.size(), "a seek restores it");
+    }
+
+    /** A resent strike's far rumble still plays while its front is on the way, never after it passed. */
+    @Test
+    void aResentRumbleIsHeardOnlyWhileOnTheWay() {
+        assertTrue(FarBlasts.stillHeard(null, 3000, 40), "3 km at 2 s: the sound arrives at 8.7 s");
+        assertTrue(!FarBlasts.stillHeard(null, 3000, 200), "3 km at 10 s: it has passed");
     }
 }
