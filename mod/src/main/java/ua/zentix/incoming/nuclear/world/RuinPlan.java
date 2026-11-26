@@ -995,7 +995,7 @@ public final class RuinPlan {
             touched = new long[(now.length + 63) >> 6];
             wasEmpty = new long[touched.length];
             over = flash != null || marked;
-            ignites = budget.ignites && RuinContext.blockFires(level);
+            ignites = budget.ignites && IncomingConfig.SERVER.nukeFires.get();
             was = SableTerrain.present() && SableTerrain.watched(level, chunk) ? new BlockState[cells.length] : null;
             // ruins over layer without plan cannot identify counted chunk fires: return all layer counter took,
             // then count continuing fire (fresh post-restart counter took none). With layer plan, per position

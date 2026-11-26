@@ -247,10 +247,13 @@ Ruins and everything in `nuclear/world/` are in `nuclear-world.md`.
   at front arrival, measured from the burst to the sampled face in 3D (`FlashAftermathClockTest`).
   Server fires disabled (`nuclear.fires`, `fires_per_detonation` = 0) means no fire zone (`PallField`: no haze or glow),
   storm or roar: `Detonation.fires` (settings at detonation, in detonation packet; absent field defaults yes).
-  `Detonation.blockFire` (`doFireTick` at detonation, saved `block_fire`, packet tail; absent defaults yes): with it
-  off ruins and the flash layer light no block fire (`RuinContext.blockFires`, also far/front LOD copies), and
-  `NukeAfter` draws and sounds the model storm in local chunks too, at full trust (no real fire to compare);
-  GameTests `nuke_flash_firetick_off`/`_on`. Black rain
+  `Detonation.blockFire` (`doFireTick` at detonation, saved `block_fire`, packet tail; absent defaults yes) is the one
+  source for server and client, however the rule changes later: with it off the detonation's fire counter does not
+  ignite (`ScarQueue.budget`), so ruins and the flash layer write their planned fire as none; LOD copies take
+  `RuinContext.blockFires(d)` (front copies built before the burst under another rule are dropped at `FrontLods.handOff`
+  and follow `FarLods`); `NukeAfter.realFire` draws and sounds the model storm in local chunks too, trust untouched.
+  Plans always carry fire, writes decide. GameTests `nuke_flash_firetick_off`/`_on` (rule flipped after the burst),
+  `NukeAfterBlockFireTest`. Black rain
   needs fires and `Detonation.rain` (`nuclear.black_rain` at detonation, same packet rule): off, `BlackRainModel` gets no
   fire zone, so no rain picture/sound, washout or skin contamination on server and client alike (the live rule still
   gates contamination for detonations saved before the field, which read as rain on). Storm

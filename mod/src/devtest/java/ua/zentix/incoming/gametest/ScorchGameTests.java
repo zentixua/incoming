@@ -565,7 +565,9 @@ public final class ScorchGameTests {
 
     /**
      * Flash layer over 3 × 3 chunks with {@code doFireTick} = {@code tick}, the strikes' fire choice as in the game (not the
-     * GameTest server's frozen-fire override); free lane. Returns fires right after the layer and scorched ground cells.
+     * GameTest server's frozen-fire override): the detonation takes the rule as {@code NuclearWarhead} does, the layer the
+     * detonation's own fire counter ({@code ScarQueue.budget}); free lane. Returns fires right after the layer and scorched
+     * ground cells.
      */
     private static int[] flashFires(GameTestHelper h, boolean tick) {
         ServerLevel level = h.getLevel();
@@ -590,11 +592,14 @@ public final class ScorchGameTests {
         }
         ChunkPos mid = new ChunkPos(sx[0] + 1, sz[0] + 1);
         Detonation d = new Detonation(NuclearGameTests.nextId(level), new Vec3(mid.getMiddleBlockX() + 0.5, ground + 1 + 592, mid.getMiddleBlockZ() + 0.5),
-                ground + 1, 15, false, level.getGameTime(), 0, 0, 20_000, 7, 1f, false, 0.35f);
+                ground + 1, 15, false, level.getGameTime(), 0, 0, 20_000, 7, 1f, false, 0.35f)
+                .withBlockFire(ua.zentix.incoming.strike.StrikeRules.fireBurnsOut(level));
+        // the rule changes after the burst: the world follows the detonation's choice, as the client does
+        rule.set(!tick, level.getServer());
         long[] keys = inside.stream().mapToLong(c -> c.getPos().toLong()).toArray();
         java.util.Set<Long> view = java.util.Arrays.stream(keys).boxed().collect(java.util.stream.Collectors.toSet());
         ScarQueue.seenForTest(view::contains);
-        FlashScorch flash = FlashScorch.forTest(d, keys, new ColumnScar.Budget(true));
+        FlashScorch flash = FlashScorch.forTest(d, keys, null);
         WorkClock clock = WorkClock.decaying(() -> 0L, 1);
         try {
             for (long now = d.gameTime() + 1; now <= d.gameTime() + 200 && flash.appliedChunks() < keys.length; now++) {

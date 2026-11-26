@@ -91,7 +91,7 @@ numbers by up to a quarter):
 | Conventional ground dust (`GroundDust.life`) | wind 3 m/s: 3–22 min; wind 8 m/s: 1–9 min |
 | Trails and contrails (`TrailModel`, capped at 1200 s "no longer than an in-game day") | ≤ 20 min |
 | Crater fuel fire (server) and its smoke | Shahed 2.5 min, missile 16 min |
-| Fires lit by blasts, flash fires | vanilla fire rules (never out with `doFireTick false`) |
+| Fires lit by blasts, flash fires | vanilla fire rules; with `doFireTick false` none is lit (rule 11) |
 | Client fire model (roar, inward wind), secondary explosions | ~20 min after the last ignition; ≤ 10 min |
 
 **Detonation clock** (real for 20 min, then the world's day): firestorm (full strength at 20 min, held about 3 h, then decaying, out by 9–12 h),
@@ -485,7 +485,7 @@ replays. Frame-cost changes are benched where marked.
 | 6 | Bodies age while present; hearing kept across relog. | `RadiationTicker`, `SicknessModel`, `Deafness`, `HearingModel`, `BurnsEffect` | Save: body clock per player and mob. Packet: ear state, PROTOCOL bump | No fatal-stage login after a night offline; relogging no longer cures deafness. |
 | 7 | Client clocks follow the client level's tick and the replay position; heat shimmer leaves the wall clock. | `IncomingClient` smoke, trail and blast clocks, `HeatPass` | none | `/tick freeze` and Flashback pause stop conventional smoke; exported video shimmers at the right speed. |
 | 8 | Fallout follows its law to the end: after the trace's last arrival above the radiation model's own floor (out to ~270 km, ~11 h), a detonation keeps only a compact ground field (bounded cells, evaluated only near players) that decays by its law and is dropped when its strongest cell falls below that floor. That is years of world time at ground zero, as for a real surface burst; `/incoming clear` removes it. Crater progress kept until done. | `NuclearEvents`, `FORGET_AFTER_S`, `FalloutModel`, `RadiationTicker` | Save: the compact field, crater progress, the world-clock history (rule 4) | No one-step drop of the dosimeter at day 7; the ground near ground zero stays measurably hot, decaying. |
-| 9 | `doFireTick false` (rule 11). | `strike/StrikeRules`, `Warheads`, `StagedExplosion`, `RuinPlan`, `DebrisSpawner`, `FuelFires` | none | No permanent static flames on such servers. |
+| 9 | `doFireTick false` (rule 11). | `strike/StrikeRules`, `Craters`, `DebrisEntity`, `FuelFires`, `ScarQueue`, `FarLods`, `FrontLods`, `client/nuclear/NukeAfter` | Save and packet: `Detonation.blockFire` (`doFireTick` at detonation, defaults to lit), PROTOCOL bump | No permanent static flames on such servers; the firestorm is still drawn and heard. |
 | 10 | Conventional strikes recorded on the server and sent to late joiners and on a seek. | `strike/`, `S2C.Blast`, `IncomingClient` | Packet and record, PROTOCOL bump | A friend joining sees the clouds still up. |
 
 Guide (both languages, with the PRs that change behavior): `nuke.md` "Time" states the principle in its player form
@@ -522,7 +522,7 @@ replays, dimensions). Most player-visible first; the "Fix" column names the §9 
 |---|---|---|---|---|
 | 1 | Any nuke, every pack | The dust blanket is drawn see-through from outside a minute after the front (§1.1) | 1 | every game |
 | 2 | Vanilla day, after a nuke | The dust hangs about an hour over the area; a night's sleep does not clear it | its law stays (§8.2); a night everyone sleeps through clears it (3) | every vanilla game |
-| 3 | `doFireTick false` | No gamerule is read before placing fire (`strike/StrikeRules.java:30`); ruin, flash, blast and debris fires (up to 20 000 per detonation, `nuclear/world/RuinPlan.java:1175`, `warhead/Warheads.java:489`, `StagedExplosion.java:1447`, `DebrisSpawner.java:51`) never go out | 9 | common on servers |
+| 3 | `doFireTick false` | Ruin, flash, fuel-ball and debris fires (up to 20 000 per detonation) would never go out. Strikes read the gamerule where fire would be placed (`StrikeRules.fireBurnsOut`), nuclear writes follow the detonation's `Detonation.blockFire`: none is lit, and the crater fuel fire removes its own blocks | 9 | common on servers |
 | 4 | `/time set day` at night (the usual op skip) | `dayTime` moves backward and the world clock counts that tick as real (`util/WorldClock.java:106-125`, `ClientClock.java:30`): no night passes for the aftermath | 2 (rule 7: counted as a jump; with the op awake it moves doses, injuries and repairs) | common with ops |
 | 5 | Vanilla day, during the nuke's show | Hearing, burns, sickness and power recover 72× fast while the show runs in real time (§3.1, 1) | 5 | every vanilla game |
 | 6 | Stopped sun (always-noon servers, creative) | Real time: a nuke's firestorm burns 12 real hours, fallout lasts 7 real days | 2 (rule 6) | common |

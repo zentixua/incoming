@@ -481,12 +481,14 @@ final class RuinContext {
     }
 
     /**
-     * Whether ruins and the flash layer light block fire now: {@code nuclear.fires}, and only where it burns out by itself
-     * ({@link ua.zentix.incoming.strike.StrikeRules#fireBurnsOut}: with {@code doFireTick} off the city's fire would
-     * stand forever; the drawn firestorm still burns its law, {@link Detonation#blockFire}).
+     * Whether a write of detonation {@code d}'s ruins or flash layer (world or LOD copy) lights block fire:
+     * {@code nuclear.fires}, and {@link Detonation#blockFire} ({@code doFireTick} at detonation: with it off the city's
+     * fire would stand forever). The client follows the same flag (the firestorm then drawn from its model), so the world
+     * and the picture agree however the rule changes later. Plans always carry their fire; the write decides
+     * ({@code ScarQueue.budget} for the world).
      */
-    static boolean blockFires(net.minecraft.world.level.Level level) {
-        return IncomingConfig.SERVER.nukeFires.get() && ua.zentix.incoming.strike.StrikeRules.fireBurnsOut(level);
+    static boolean blockFires(Detonation d) {
+        return IncomingConfig.SERVER.nukeFires.get() && d.blockFire();
     }
 
     /**
@@ -502,7 +504,7 @@ final class RuinContext {
         RuinPlanner.ensureOwnStates();
         Blast.PropsView view = background ? Blast.publish() : Blast.SERVER;
         return new Grid(this, centre, level.getMinBuildHeight(), level.getMaxBuildHeight(), g, shadow, view,
-                IncomingConfig.SERVER.nukeBlockDamage.get(), IncomingConfig.SERVER.nukeTreeFall.get(), blockFires(level));
+                IncomingConfig.SERVER.nukeBlockDamage.get(), IncomingConfig.SERVER.nukeTreeFall.get(), IncomingConfig.SERVER.nukeFires.get());
     }
 
     /**
@@ -517,7 +519,7 @@ final class RuinContext {
         int[] shadow = shadow(level, centre, g);
         RuinPlanner.ensureOwnStates();
         return new Grid(this, centre, level.getMinBuildHeight(), level.getMaxBuildHeight(), g, shadow, Blast.publish(),
-                IncomingConfig.SERVER.nukeBlockDamage.get(), IncomingConfig.SERVER.nukeTreeFall.get(), blockFires(level));
+                IncomingConfig.SERVER.nukeBlockDamage.get(), IncomingConfig.SERVER.nukeTreeFall.get(), IncomingConfig.SERVER.nukeFires.get());
     }
 
     /**
@@ -528,7 +530,7 @@ final class RuinContext {
         ChunkShot[] g = new ChunkShot[Grid.SIDE * Grid.SIDE];
         g[Grid.R * Grid.SIDE + Grid.R] = shot;
         return new Grid(this, shot.pos(), level.getMinBuildHeight(), level.getMaxBuildHeight(), g, shadow(level, shot.pos(), g), view,
-                IncomingConfig.SERVER.nukeBlockDamage.get(), IncomingConfig.SERVER.nukeTreeFall.get(), blockFires(level));
+                IncomingConfig.SERVER.nukeBlockDamage.get(), IncomingConfig.SERVER.nukeTreeFall.get(), IncomingConfig.SERVER.nukeFires.get());
     }
 
     /**

@@ -799,10 +799,11 @@ public final class ScarQueue {
 
     /**
      * Detonation fire counter ({@code fires_per_detonation}), shared by ruins/flash layer ({@link FlashScorch}). Forgotten
-     * detonation (chunk first loaded days later) scorches without ignition: fires would long be extinguished.
+     * detonation (chunk first loaded days later) scorches without ignition: fires would long be extinguished. So does one
+     * whose fire would never go out ({@link Detonation#blockFire}: {@code doFireTick} off at detonation).
      */
     ColumnScar.Budget budget(ServerLevel level, Detonation d) {
-        return budgets.computeIfAbsent(d.id(), k -> new ColumnScar.Budget(!NuclearEvents.get(level).isPast(k)));
+        return budgets.computeIfAbsent(d.id(), k -> new ColumnScar.Budget(d.blockFire() && !NuclearEvents.get(level).isPast(k)));
     }
 
     /** Fire counters only for remembered detonations. */

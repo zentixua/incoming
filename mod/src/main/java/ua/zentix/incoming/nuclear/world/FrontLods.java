@@ -70,6 +70,8 @@ final class FrontLods {
         long bytes;
         /** Front arrival at chunk midpoint ({@link ScarQueue#due}); 0 before detonation. */
         long due;
+        /** The copy lights block fire ({@link #fires}); one built before the detonation that chose otherwise is dropped. */
+        boolean fires;
 
         Copy(int index) {
             this.index = index;
@@ -189,9 +191,17 @@ final class FrontLods {
         }
     }
 
+    /**
+     * Whether copies light block fire: the detonation's choice ({@link RuinContext#blockFires}); before it, the rule now
+     * (a copy that turns out different is dropped at {@link #handOff}).
+     */
+    private boolean fires(ServerLevel level) {
+        return d != null ? RuinContext.blockFires(d) : IncomingConfig.SERVER.nukeFires.get() && ua.zentix.incoming.strike.StrikeRules.fireBurnsOut(level);
+    }
+
     /** Read new copies in queue order while capacity, reads and background pool available. */
     private void start(ServerLevel level, Long2ObjectOpenHashMap<RuinPlan> plans, long room, long now) {
-        boolean fires = RuinContext.blockFires(level);
+        boolean fires = fires(level);
         for (int started = 0; next < candidates.size() && started < PER_TICK && built.pending() < READS && bytes() + READ_BYTES <= room; ) {
             // after detonation use at most half pool: player-chunk ruins more important
             if (!RuinWorkers.admit(RuinWorkers.Priority.FAR) || d != null && RuinWorkers.inFlight() >= RuinWorkers.capacity() / 2) return;
@@ -204,6 +214,7 @@ final class FrontLods {
             if (plan == null || copies.containsKey(chunk) || FarLods.inWorld(level, chunk) || !FarLods.nearPlayer(level, chunk)
                     || d != null && ScarQueue.due(d, new ChunkPos(chunk)) - now <= DhUpdates.LEAD) continue;
             Copy c = new Copy(index);
+            c.fires = fires;
             if (d != null) c.due = ScarQueue.due(d, new ChunkPos(chunk));
             copies.put(chunk, c);
             started++;
@@ -236,8 +247,21 @@ final class FrontLods {
      * Prepared detonation: give copies front-arrival deadlines, enqueue held copies nearest first (equal
      * section deadlines, as for 2 kt on detonation tick, allocate DH window/tick time to nearest).
      */
-    void handOff(Detonation d) {
+    void handOff(ServerLevel level, Detonation d) {
         this.d = d;
+        // copies built while the rule said otherwise (doFireTick changed during flight): FarLods sends them after the wave
+        boolean fires = fires(level);
+        LongArrayList stale = new LongArrayList();
+        for (var e : copies.long2ObjectEntrySet()) {
+            Copy c = e.getValue();
+            if (c.fires != fires && (c.state == READY || c.state == BUILDING)) stale.add(e.getLongKey());
+        }
+        for (long chunk : stale) {
+            Copy c = copies.get(chunk);
+            drop(chunk, c);
+            giveBack(level, chunk, c);
+            abandoned++;
+        }
         int ready = 0, building = 0;
         for (int i = 0; i < next; i++) {
             long chunk = candidates.getLong(i);
