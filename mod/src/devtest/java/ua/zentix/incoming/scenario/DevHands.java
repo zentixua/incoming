@@ -42,6 +42,8 @@ public final class DevHands {
     private final Path inbox;
     /** Waiting {@code press} lines with their first tick. */
     private final List<Object[]> presses = new ArrayList<>();
+    /** {@code skip}: answer once the client has rebuilt the detonations at their new age (id, due tick, answer). */
+    private final List<Object[]> skips = new ArrayList<>();
     private long tick;
 
     public DevHands() {
@@ -110,6 +112,13 @@ public final class DevHands {
                 done((String) p[0], result);
             }
         }
+        for (var it = skips.iterator(); it.hasNext(); ) {
+            Object[] k = it.next();
+            if (tick < (long) k[1]) continue;
+            it.remove();
+            ua.zentix.incoming.client.nuclear.ClientNuclear.rewound();
+            done((String) k[0], (String) k[2]);
+        }
         if (tick % 4 != 0) return;
         List<Path> files;
         try (Stream<Path> list = Files.list(inbox)) {
@@ -169,6 +178,24 @@ public final class DevHands {
                 done(id, String.format(Locale.ROOT, "ok age %.2f front %.0f eye %.0f", t, a.wall.reach(t),
                         Math.hypot(e.x - a.d.burst().x, e.z - a.d.burst().z)));
             }
+            case "skip" -> {
+                // the newest detonation becomes that many seconds old: the server's game time moves there (no day-time step, so
+                // the strike's clocks take the skipped span as real time, as at a 24-hour day) and the client rebuilds every
+                // detonation at its new age, as a replay seek does (ClientScenario.fsSkip); answers with the burst and its wind
+                var all = ua.zentix.incoming.client.nuclear.ClientNuclear.detonations();
+                var server = mc.getSingleplayerServer();
+                if (all.isEmpty() || server == null) throw new IllegalStateException("no detonation or not single player");
+                var d = all.getLast().d;
+                long target = d.gameTime() + Math.round(Double.parseDouble(arg) * 20);
+                server.execute(() -> {
+                    var level = server.overworld();
+                    ((net.minecraft.world.level.storage.ServerLevelData) level.getLevelData()).setGameTime(target);
+                    server.getPlayerList().broadcastAll(new net.minecraft.network.protocol.game.ClientboundSetTimePacket(level.getGameTime(),
+                            level.getDayTime(), level.getGameRules().getBoolean(net.minecraft.world.level.GameRules.RULE_DAYLIGHT)));
+                });
+                skips.add(new Object[] {id, tick + 15, String.format(Locale.ROOT, "ok burst %.0f %.0f %.0f wind %.3f rad %.1f m/s",
+                        d.burst().x, d.burst().y, d.burst().z, d.windDir(), d.windSpeed())});
+            }
             case "describe" -> {
                 // what a client scenario's shot logs before its grab (ClientScenario.shot): the same calls at the same point
                 Incoming.LOG.info("DEV describe pall {}", ua.zentix.incoming.client.fx.layer.PallPass.describe());
@@ -187,7 +214,7 @@ public final class DevHands {
                 DustWallSteps.apply(arg);
                 done(id, "ok");
             }
-            default -> throw new IllegalArgumentException("unknown: " + line + " (cmd, reload, shot, hud, press, dw, age, watch, describe)");
+            default -> throw new IllegalArgumentException("unknown: " + line + " (cmd, reload, shot, hud, press, dw, age, skip, watch, describe)");
         }
     }
 
