@@ -273,10 +273,11 @@ file changes.
   energy is its shock = peak − 38.7 dB, while conventional positive phases last milliseconds and the whole wave is
   audible), not peak: a 140 dB peak threshold (CHABA) would deafen players 70 km from a nuke and a kilometer from a
   Shahed. Filter `Deafness.gain`/`highs` (lows: cochlear loss with recruitment plus conductive loss; highs: difference),
-  also for own sources. Hearing clock is unpaused client ticks plus forward time-of-day jumps exceeding game-time
-  advance by more than 20 ticks (sleep, `/time add`), not `getGameTime`: sleep restores hearing. Jumps count only in
-  the same client world while game time advanced normally: a new client world (portal) starts with zero clocks and
-  its time packet would otherwise count as sleep; server clock corrections move both times. Respawn:
+  also for own sources. Hearing clock is `ClientClock.now` (the world clock with every jump): the server's value once a
+  second (`S2C.NukeClock`, with or without detonations), between them the client's own count by the server's rule
+  (`WorldClock.Steps`) over its level's game ticks, not `getGameTime`: sleep restores hearing. Jumps count only in the
+  same client world while game time advanced normally: a new client world (portal) starts with zero clocks and its
+  time packet would otherwise count as sleep; server clock corrections move both times. Respawn:
   `ClientPlayerNetworkEvent.Clone` with old player `isDeadOrDying` (dimension change also clones, hearing remains).
   Multiple waves use `HearingModel.Ear` (within 2 game minutes, ~1.7 s, one dose). Wave sounds themselves (hit, pops,
   glass; own-source shock uses `before` in `OwnSources.play`) use `Deafness.before`, hearing as it was before the wave;

@@ -54,7 +54,7 @@ class NuclearCancelledMaterialTest {
         NuclearEvents events = new NuclearEvents();
         var s = committedStrike(events);
         events.cancel(s);
-        events.prune(1_000_000, 1_000_000);
+        events.prune(d -> 0);
         assertTrue(events.scheduled().isEmpty());
         assertNull(events.material(s.id()), "cancelled strike's ground material is still held by the world's saved data");
         assertTrue(events.currentMaterials().isEmpty(), "cancelled strike's ground material is still in every warned viewer's manifest");
@@ -65,7 +65,7 @@ class NuclearCancelledMaterialTest {
         NuclearEvents events = new NuclearEvents();
         var s = committedStrike(events);
         events.cancel(s);
-        events.prune(1_000_000, 1_000_000);
+        events.prune(d -> 0);
         CompoundTag saved = events.save(new CompoundTag(), RegistryAccess.EMPTY);
         int entries = saved.getList("materials", Tag.TAG_COMPOUND).size();
         assertEquals(0, entries, "cancelled strike's material entry (observations journal) is written to disk on every save");
@@ -77,7 +77,7 @@ class NuclearCancelledMaterialTest {
         var s = committedStrike(events);
         var kept = committedStrike(events);
         events.unschedule(s);
-        events.prune(0, 0);
+        events.prune(d -> 0);
         assertNull(events.material(s.id()), "a strike's material outlived the strike");
         assertTrue(events.material(kept.id()) != null, "prune forgot a scheduled strike's material");
     }

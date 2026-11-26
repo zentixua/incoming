@@ -12,6 +12,9 @@ import net.minecraft.world.phys.Vec3;
 import ua.zentix.incoming.Incoming;
 import ua.zentix.incoming.nuclear.material.MaterialBirth;
 import ua.zentix.incoming.strike.RoundRef;
+import ua.zentix.incoming.util.StrikeClock;
+import ua.zentix.incoming.util.StrikeHistory;
+import ua.zentix.incoming.util.WorldClock;
 
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
@@ -30,20 +33,34 @@ import static ua.zentix.incoming.nuclear.NukeClock.SHOW_TICKS;
 public final class NuclearEvents extends SavedData {
     private static final String NAME = Incoming.MOD_ID + "_nuclear";
     /**
-     * Detonations are forgotten 7 days after the burst on their own clock ({@link NukeClock}): fallout has weakened hundreds of
+     * Detonations are forgotten 7 days after the burst on their strike clock ({@link StrikeClock}): fallout has weakened hundreds of
      * times by then. Destruction is remembered longer ({@link #past}): a chunk first loaded a month later is still destroyed.
      */
     public static final double FORGET_AFTER_S = 7 * 24 * 3600;
     /**
-     * World-clock readings ({@link ua.zentix.incoming.util.WorldClock}) of a detonation: at the burst and at its show's end
-     * (NaN — the show is not over). They set its clock ({@link NukeClock}) and when its bodies were exposed.
+     * A detonation's clock anchors: the world clock with every jump ({@link WorldClock#now}) at the burst and at its show's
+     * end (NaN — the show is not over), which date its bodies' exposure, and its two ages ({@link StrikeClock}: counted
+     * jumps at the burst; real age, clock without jumps and counted jumps at the show's end; clock without jumps at the
+     * blend's end). Saved before the two ages: no jumps, a show that ended at {@link NukeClock#SHOW_TICKS} with the clock
+     * without jumps where the clock was.
      */
-    public record Anchor(int id, double burst, double showEnd) {
+    public record Anchor(int id, double burst, double showEnd, StrikeClock clock) {
+        public Anchor {
+            if (!clock.ended() && !Double.isNaN(showEnd)) clock = new StrikeClock(clock.jumpsAtStrike(), SHOW_TICKS, showEnd, clock.jumpsAtStrike(), Double.NaN);
+            else if (clock.ended() && Double.isNaN(clock.rateAtEnd())) clock = new StrikeClock(clock.jumpsAtStrike(), clock.endAge(), showEnd, clock.jumpsAtEnd(), clock.rateAtRamp());
+        }
+
         static final Codec<Anchor> CODEC = RecordCodecBuilder.create(i -> i.group(
                 Codec.INT.fieldOf("id").forGetter(Anchor::id),
                 Codec.DOUBLE.fieldOf("burst").forGetter(Anchor::burst),
-                Codec.DOUBLE.optionalFieldOf("show_end", Double.NaN).forGetter(Anchor::showEnd)
-        ).apply(i, Anchor::new));
+                Codec.DOUBLE.optionalFieldOf("show_end", Double.NaN).forGetter(Anchor::showEnd),
+                Codec.DOUBLE.optionalFieldOf("jumps", 0.0).forGetter(a -> a.clock.jumpsAtStrike()),
+                Codec.LONG.optionalFieldOf("end_age", StrikeClock.RUNNING).forGetter(a -> a.clock.endAge()),
+                Codec.DOUBLE.optionalFieldOf("end_rate", Double.NaN).forGetter(a -> a.clock.rateAtEnd()),
+                Codec.DOUBLE.optionalFieldOf("end_jumps", 0.0).forGetter(a -> a.clock.jumpsAtEnd()),
+                Codec.DOUBLE.optionalFieldOf("ramp_rate", Double.NaN).forGetter(a -> a.clock.rateAtRamp())
+        ).apply(i, (id, burst, showEnd, jumps, endAge, endRate, endJumps, ramp) ->
+                new Anchor(id, burst, showEnd, new StrikeClock(jumps, endAge, endRate, endAge < 0 ? Double.NaN : endJumps, ramp))));
     }
 
     /**
@@ -126,6 +143,8 @@ public final class NuclearEvents extends SavedData {
     private final Map<Integer, Double> steps = new java.util.HashMap<>();
     /** Detonation number → world-clock anchors ({@link Anchor}); detonations saved before them have none (estimated). */
     private final Map<Integer, Anchor> clocks = new LinkedHashMap<>();
+    /** Detonation number → its world-clock history ({@link StrikeHistory}): its strike clock at any past moment. */
+    private final Map<Integer, StrikeHistory> histories = new LinkedHashMap<>();
     private long materialEpoch;
     public long materialEpoch() { return materialEpoch; }
     public java.util.Collection<MaterialBirth> currentMaterials() { return materials.values(); }
@@ -221,10 +240,21 @@ public final class NuclearEvents extends SavedData {
         return scheduled;
     }
 
-    /** Detonation at world clock {@code clock} ({@link ua.zentix.incoming.util.WorldClock#now}). */
-    public void add(Detonation d, double clock) {
+    /**
+     * Detonation at world clock {@code clock} ({@link WorldClock#now}) and clock without jumps {@code rate}
+     * ({@link WorldClock#rateClock}), in a dimension with no jumps counted (tests without a live clock).
+     */
+    public void add(Detonation d, double clock, double rate) {
+        add(d, clock, rate, 0, 0);
+    }
+
+    private void add(Detonation d, double clock, double rate, double jumps, long age) {
         detonations.add(d);
-        clocks.put(d.id(), new Anchor(d.id(), clock, Double.NaN));
+        clocks.put(d.id(), new Anchor(d.id(), clock, Double.NaN, StrikeClock.start(jumps)));
+        StrikeHistory h = new StrikeHistory();
+        h.sample(0, rate, jumps, 0, true);
+        if (age > 0) h.sample(age, rate + age, jumps, age / 20.0, true);
+        histories.put(d.id(), h);
         setDirty();
     }
 
@@ -233,8 +263,9 @@ public final class NuclearEvents extends SavedData {
      * (tests, imports), the world clock that many game ticks ago as under a vanilla day.
      */
     public void add(Detonation d, ServerLevel level) {
-        double now = ua.zentix.incoming.util.WorldClock.now(level);
-        add(d, now - Math.max(0, level.getGameTime() - d.gameTime()));
+        long age = Math.max(0, level.getGameTime() - d.gameTime());
+        // jumps held for a front before the burst are this strike's past too
+        add(d, WorldClock.now(level) - age, WorldClock.rateClock(level) - age, WorldClock.counted(level) + WorldClock.held(level), age);
     }
 
     /**
@@ -246,29 +277,58 @@ public final class NuclearEvents extends SavedData {
         return a != null ? a.burst() : Math.min(clockNow, clockNow - (gameNow - d.gameTime()));
     }
 
-    /** World clock at the end of detonation {@code d}'s show; NaN — not over at game time {@code gameNow}. */
-    public double showEndClock(Detonation d, long gameNow, double clockNow) {
-        if (gameNow - d.gameTime() < SHOW_TICKS) return Double.NaN;
+    /**
+     * Detonation {@code d}'s two ages ({@link StrikeClock}); for a detonation saved before anchors, as if the day had run at
+     * vanilla speed since, with no jumps.
+     */
+    public StrikeClock clock(Detonation d, ServerLevel level) {
         Anchor a = clocks.get(d.id());
-        if (a != null && !Double.isNaN(a.showEnd())) return a.showEnd();
-        // not recorded (saved before anchors): as if the day had run at vanilla speed since
-        double end = clockNow - (gameNow - d.gameTime() - SHOW_TICKS);
-        return a != null ? Math.max(a.burst(), end) : end;
+        if (a != null) return a.clock();
+        long age = level.getGameTime() - d.gameTime();
+        return age < SHOW_TICKS ? StrikeClock.start(0) : StrikeClock.start(0).end(SHOW_TICKS, WorldClock.rateClock(level) - (age - SHOW_TICKS), 0);
+    }
+
+    /** Detonation {@code d}'s show is over (its length, or a jump counted while nobody in the dimension was awake). */
+    public boolean showEnded(Detonation d, ServerLevel level) {
+        return clock(d, level).ended();
+    }
+
+    /** Detonation {@code d}'s strike clock S now, seconds since the burst ({@link StrikeClock#strike}): what stays in place. */
+    public double seconds(Detonation d, ServerLevel level) {
+        return clock(d, level).strike(level.getGameTime() - d.gameTime(), WorldClock.rateClock(level), WorldClock.counted(level));
+    }
+
+    /** Detonation {@code d}'s motion age M now, seconds since the burst ({@link StrikeClock#motion}): what is in the air. */
+    public double motion(Detonation d, ServerLevel level) {
+        return clock(d, level).motion(level.getGameTime() - d.gameTime(), WorldClock.counted(level));
     }
 
     /**
-     * Detonation {@code d}'s own clock ({@link NukeClock}), seconds since the burst, at game time {@code game} and world clock
-     * {@code clock}: now, or a past moment after the show's end was recorded.
+     * Detonation {@code d}'s strike clock S at a past game time {@code game} (now or earlier), seconds since the burst: from
+     * its world-clock history ({@link StrikeHistory}).
      */
-    public double seconds(Detonation d, long game, double clock) {
-        double real = (game - d.gameTime()) / 20.0;
-        if (real <= NukeClock.SHOW_S) return real;
-        return NukeClock.fromClock(real, clock - showEndClock(d, game, clock));
+    public double secondsAt(Detonation d, ServerLevel level, long game) {
+        double[] r = readingAt(d, level, game);
+        return clock(d, level).strike(game - d.gameTime(), r[0], r[1]);
     }
 
-    /** Same, now. */
-    public double seconds(Detonation d, ServerLevel level) {
-        return seconds(d, level.getGameTime(), ua.zentix.incoming.util.WorldClock.now(level));
+    /** Detonation {@code d}'s motion age M at a past game time {@code game}, seconds since the burst. */
+    public double motionAt(Detonation d, ServerLevel level, long game) {
+        return clock(d, level).motion(game - d.gameTime(), readingAt(d, level, game)[1]);
+    }
+
+    /** {clock without jumps, counted jumps} at game time {@code game}: history, or as a vanilla day without it. */
+    private double[] readingAt(Detonation d, ServerLevel level, long game) {
+        long now = level.getGameTime();
+        double rate = WorldClock.rateClock(level), counted = WorldClock.counted(level);
+        StrikeHistory h = histories.get(d.id());
+        if (h == null || h.size() == 0) return game >= now ? new double[]{rate, counted} : new double[]{rate - (now - game), counted};
+        return h.at(game - d.gameTime(), now - d.gameTime(), rate, counted);
+    }
+
+    /** Detonation {@code d}'s world-clock history; null — none (saved before it). */
+    public @org.jetbrains.annotations.Nullable StrikeHistory history(Detonation d) {
+        return histories.get(d.id());
     }
 
     /**
@@ -280,20 +340,60 @@ public final class NuclearEvents extends SavedData {
         return before == null || before > seconds ? Math.max(0, seconds - 1) : before;
     }
 
-    /** Record shows that ended by game time {@code gameNow} at world clock {@code clockNow}; returns them. */
-    public List<Detonation> endShows(long gameNow, double clockNow) {
+    /**
+     * The clocks' tick in {@code level}: record shows that ended (their length passed, or a jump was counted since the
+     * burst), the blend's end and the history samples; returns the detonations whose show ended now.
+     */
+    public List<Detonation> endShows(ServerLevel level) {
         List<Detonation> ended = new ArrayList<>();
+        long gameNow = level.getGameTime();
+        double clockNow = WorldClock.now(level), rate = WorldClock.rateClock(level), counted = WorldClock.counted(level);
         for (Detonation d : detonations) {
-            if (gameNow - d.gameTime() < SHOW_TICKS) continue;
+            long age = gameNow - d.gameTime();
             Anchor a = clocks.get(d.id());
-            if (a != null && !Double.isNaN(a.showEnd())) continue;
-            // recorded on the tick it ends; a detonation saved before anchors, at the estimate
-            double end = a == null ? showEndClock(d, gameNow, clockNow) : Math.max(a.burst(), clockNow - (gameNow - d.gameTime() - SHOW_TICKS));
-            clocks.put(d.id(), new Anchor(d.id(), a != null ? a.burst() : burstClock(d, gameNow, clockNow), end));
-            ended.add(d);
-            setDirty();
+            if (a == null) {
+                // saved before anchors: estimated as a vanilla day, recorded so it stays put
+                a = new Anchor(d.id(), burstClock(d, gameNow, clockNow), Double.NaN, clock(d, level));
+                if (a.clock().ended()) a = new Anchor(d.id(), a.burst(), clockNow - (age - SHOW_TICKS), a.clock());
+                clocks.put(d.id(), a);
+                setDirty();
+            }
+            StrikeClock c = a.clock();
+            boolean force = false;
+            if (!c.ended() && (age >= SHOW_TICKS || counted > c.jumpsAtStrike())) {
+                // on the tick it ends; a jump ends it at once, its hours already in the motion age
+                long end = Math.min(age, SHOW_TICKS);
+                double late = age - end;
+                c = c.end(end, rate - late, counted);
+                a = new Anchor(d.id(), a.burst(), Math.max(a.burst(), clockNow - late), c);
+                clocks.put(d.id(), a);
+                ended.add(d);
+                force = true;
+                setDirty();
+            }
+            if (c.rampDue(age)) {
+                c = c.ramp(age, rate);
+                clocks.put(d.id(), new Anchor(d.id(), a.burst(), a.showEnd(), c));
+                force = true;
+                setDirty();
+            }
+            // a detonation saved before its history: from now on (earlier moments as a vanilla day)
+            StrikeHistory h = histories.computeIfAbsent(d.id(), k -> new StrikeHistory());
+            int samples = h.size();
+            h.sample(age, rate, counted, c.motion(age, counted), force);
+            if (h.size() != samples) setDirty();
         }
         return ended;
+    }
+
+    /** The anchors of this dimension's detonations, for clients ({@code S2C.NukeClock}). */
+    public List<Anchor> anchors() {
+        List<Anchor> out = new ArrayList<>();
+        for (Detonation d : detonations) {
+            Anchor a = clocks.get(d.id());
+            if (a != null) out.add(a);
+        }
+        return out;
     }
 
     public void schedule(ScheduledStrike s) {
@@ -376,14 +476,20 @@ public final class NuclearEvents extends SavedData {
         craters.clear();
         craterGrounds.clear();
         clocks.clear();
+        histories.clear();
         steps.clear();
         setDirty();
         return n;
     }
 
     /** Forget old detonations: fallout and effects ended; destruction remains in {@link #past}. */
-    public void prune(long gameNow, double clockNow) {
-        List<Detonation> faded = detonations.stream().filter(d -> seconds(d, gameNow, clockNow) > FORGET_AFTER_S).toList();
+    public void prune(ServerLevel level) {
+        prune(d -> seconds(d, level));
+    }
+
+    /** Same, with each detonation's strike clock now, seconds ({@link #seconds}). */
+    public void prune(java.util.function.ToDoubleFunction<Detonation> seconds) {
+        List<Detonation> faded = detonations.stream().filter(d -> seconds.applyAsDouble(d) > FORGET_AFTER_S).toList();
         if (!faded.isEmpty()) {
             detonations.removeAll(faded);
             past.addAll(faded);
@@ -394,6 +500,7 @@ public final class NuclearEvents extends SavedData {
         if (materials.keySet().removeIf(id -> scheduled.stream().noneMatch(s -> s.id() == id)
                 && detonations.stream().noneMatch(d -> d.id() == id))) { materialEpoch++; setDirty(); }
         if (clocks.keySet().removeIf(id -> detonations.stream().noneMatch(d -> d.id() == id))) setDirty();
+        if (histories.keySet().removeIf(id -> detonations.stream().noneMatch(d -> d.id() == id))) setDirty();
         steps.keySet().removeIf(id -> detonations.stream().noneMatch(d -> d.id() == id));
         if (craters.keySet().removeIf(id -> detonations.stream().noneMatch(d -> d.id() == id))) setDirty();
         if (craterGrounds.keySet().removeIf(id -> !craters.containsKey(id))) setDirty();
@@ -410,6 +517,14 @@ public final class NuclearEvents extends SavedData {
         if (tag.contains("crater_grounds")) GROUNDS_CODEC.parse(NbtOps.INSTANCE, tag.get("crater_grounds")).resultOrPartial(Incoming.LOG::error).ifPresent(e.craterGrounds::putAll);
         if (tag.contains("clocks")) Anchor.CODEC.listOf().parse(NbtOps.INSTANCE, tag.get("clocks")).resultOrPartial(Incoming.LOG::error)
                 .ifPresent(l -> l.forEach(a -> e.clocks.put(a.id(), a)));
+        CompoundTag hist = tag.getCompound("clock_history");
+        for (String key : hist.getAllKeys()) {
+            try {
+                e.histories.put(Integer.parseInt(key), StrikeHistory.load(hist.getCompound(key)));
+            } catch (NumberFormatException ex) {
+                Incoming.LOG.warn("Ignoring clock history with invalid detonation number {}", key);
+            }
+        }
         // saved before order status: detonations from then have no impact work
         if (tag.contains("impacts")) Impact.CODEC.listOf().parse(NbtOps.INSTANCE, tag.get("impacts")).resultOrPartial(Incoming.LOG::error)
                 .ifPresent(l -> l.forEach(i -> e.impacts.put(i.detonation(), i)));
@@ -437,6 +552,9 @@ public final class NuclearEvents extends SavedData {
         CRATERS_CODEC.encodeStart(NbtOps.INSTANCE, craters).resultOrPartial(Incoming.LOG::error).ifPresent(t -> tag.put("craters", t));
         GROUNDS_CODEC.encodeStart(NbtOps.INSTANCE, craterGrounds).resultOrPartial(Incoming.LOG::error).ifPresent(t -> tag.put("crater_grounds", t));
         Anchor.CODEC.listOf().encodeStart(NbtOps.INSTANCE, List.copyOf(clocks.values())).resultOrPartial(Incoming.LOG::error).ifPresent(t -> tag.put("clocks", t));
+        CompoundTag hist = new CompoundTag();
+        histories.forEach((id, h) -> hist.put(String.valueOf(id), h.save()));
+        tag.put("clock_history", hist);
         Impact.CODEC.listOf().encodeStart(NbtOps.INSTANCE, List.copyOf(impacts.values())).resultOrPartial(Incoming.LOG::error).ifPresent(t -> tag.put("impacts", t));
         if (!materials.isEmpty()) {
             var list = new net.minecraft.nbt.ListTag();

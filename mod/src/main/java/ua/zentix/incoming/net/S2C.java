@@ -590,23 +590,59 @@ public final class S2C {
     }
 
     /**
-     * The server's world clock ({@code util.WorldClock}) and the clock at which each ended show of this dimension ended
-     * ({@code nuclear.NukeClock}: from there a detonation's clock follows the world clock). Sent once a second while the
-     * dimension holds detonations, when a show ends and on entry: the whole state in one packet, so the last one (all a
-     * Flashback snapshot keeps) restores it after a replay seek; a lagging server pulls a client that ran ahead back.
+     * The server's world clocks ({@code util.WorldClock}) and this dimension's detonation clock anchors
+     * ({@code util.StrikeClock}, {@code nuclear.NuclearEvents.Anchor}). Sent to every player once a second, also with no
+     * detonations (the hearing clock follows it), when a show ends and on entry: the whole state in one packet, so the last
+     * one (all a Flashback snapshot keeps) restores it after a replay seek; a lagging server pulls a client that ran ahead
+     * back. {@link #ends} is the format of recordings made before {@link #clocks} (filled only there): each ended show's
+     * world clock at its end; such a recording means a 20-minute show and no jumps.
      */
-    public record NukeClock(double clock, List<ShowEnd> ends) implements CustomPacketPayload {
+    public record NukeClock(double clock, List<ShowEnd> ends, Clocks clocks) implements CustomPacketPayload {
         public static final Type<NukeClock> TYPE = new Type<>(Incoming.id("nuke_clock"));
         public static final StreamCodec<ByteBuf, NukeClock> CODEC = StreamCodec.composite(
                 ByteBufCodecs.DOUBLE, NukeClock::clock,
                 ShowEnd.CODEC.apply(ByteBufCodecs.list()), NukeClock::ends,
+                StreamCodecs.trailing(Clocks.CODEC, Clocks.NONE), NukeClock::clocks,
                 NukeClock::new);
         @Override public Type<? extends CustomPacketPayload> type() { return TYPE; }
 
-        /** Detonation {@code id}'s show ended at world clock {@code at}. */
+        /** The format of recordings made before {@link Clocks}. */
+        public NukeClock(double clock, List<ShowEnd> ends) {
+            this(clock, ends, Clocks.NONE);
+        }
+
+        /** Detonation {@code id}'s show ended at world clock {@code at} (recordings made before {@link Clocks}). */
         public record ShowEnd(int id, double at) {
             public static final StreamCodec<ByteBuf, ShowEnd> CODEC = StreamCodec.composite(
                     ByteBufCodecs.VAR_INT, ShowEnd::id, ByteBufCodecs.DOUBLE, ShowEnd::at, ShowEnd::new);
+        }
+
+        /**
+         * The clock without jumps, the world's rate k, the jumps counted and not counted in the receiver's dimension
+         * (world-clock ticks), and each detonation's anchors there. {@link #NONE}: an old recording.
+         */
+        public record Clocks(double rate, double pace, double counted, double unseen, List<Anchor> anchors) {
+            public static final Clocks NONE = new Clocks(Double.NaN, Double.NaN, 0, 0, List.of());
+            public static final StreamCodec<ByteBuf, Clocks> CODEC = StreamCodec.composite(
+                    ByteBufCodecs.DOUBLE, Clocks::rate, ByteBufCodecs.DOUBLE, Clocks::pace,
+                    ByteBufCodecs.DOUBLE, Clocks::counted, ByteBufCodecs.DOUBLE, Clocks::unseen,
+                    Anchor.CODEC.apply(ByteBufCodecs.list()), Clocks::anchors, Clocks::new);
+
+            public boolean known() {
+                return !Double.isNaN(rate);
+            }
+        }
+
+        /**
+         * Detonation {@code id}'s two ages ({@code util.StrikeClock}): counted jumps at the burst; real ticks from the burst
+         * to the show's end (−1: running), the clock without jumps and the counted jumps there; the clock without jumps at
+         * the blend's end (NaN: not yet).
+         */
+        public record Anchor(int id, double jumps, long endAge, double endRate, double endJumps, double rampRate) {
+            public static final StreamCodec<ByteBuf, Anchor> CODEC = StreamCodec.composite(
+                    ByteBufCodecs.VAR_INT, Anchor::id, ByteBufCodecs.DOUBLE, Anchor::jumps, ByteBufCodecs.VAR_LONG, Anchor::endAge,
+                    ByteBufCodecs.DOUBLE, Anchor::endRate, ByteBufCodecs.DOUBLE, Anchor::endJumps,
+                    ByteBufCodecs.DOUBLE, Anchor::rampRate, Anchor::new);
         }
     }
 

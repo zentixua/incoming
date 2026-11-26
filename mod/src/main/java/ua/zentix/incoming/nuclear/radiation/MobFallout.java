@@ -111,7 +111,7 @@ public final class MobFallout {
             froms[i] = from;
             fromClocks[i] = Math.min(fromClock, clock);
             if (from >= now) continue;
-            double s0 = events.seconds(d, from, fromClocks[i]), s1 = events.seconds(d, now, clock);
+            double s0 = events.secondsAt(d, level, from), s1 = events.seconds(d, level);
             roentgens += exposure(d, mob.getX(), mob.getZ(), s0, s1);
             span = Math.max(span, now - from);
             spanHours = Math.max(spanHours, (s1 - s0) / 3600);
@@ -127,15 +127,15 @@ public final class MobFallout {
             // a long account (the mob was unloaded for hours): the sickness clock starts when the dose really passed 1 Gy,
             // not on load, so a mob that would have died in those hours dies now
             // only detonations that gave this mob fallout in the account: each bisection step integrates them again.
-            // The world clock between an account's start and now is taken as running evenly (estimate)
+            // each detonation's strike clock at a past tick from its world-clock history
             int[] live = java.util.stream.IntStream.range(0, froms.length)
                     .filter(i -> froms[i] < now && detonations.get(i).hasFallout()).toArray();
             at = crossing(t -> {
                 double r = 0;
                 for (int i : live) {
                     Detonation d = detonations.get(i);
-                    if (froms[i] < t) r += exposure(d, mob.getX(), mob.getZ(), events.seconds(d, froms[i], fromClocks[i]),
-                            events.seconds(d, t, between(froms[i], fromClocks[i], now, clock, t)));
+                    if (froms[i] < t) r += exposure(d, mob.getX(), mob.getZ(), events.secondsAt(d, level, froms[i]),
+                            events.secondsAt(d, level, t));
                 }
                 return before + r * gyPerR;
             }, now - span, now, SicknessModel.MIN_DOSE);

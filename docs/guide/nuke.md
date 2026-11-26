@@ -191,12 +191,18 @@ Everything you watch move runs in real time: the flight, the flash, the wave, th
 12 hours, black rain falls from its smoke, fallout decays, and burns, radiation sickness, hearing and the power grid
 heal or are repaired. A game hour is an hour of the world's day:
 
-- in a vanilla world a day lasts 20 minutes, so a game hour passes in 50 seconds and the fires burn out in about
-  10 minutes;
+- in a vanilla world a day lasts 20 minutes, so a game hour passes in 50 seconds and the fires burn out about
+  10 minutes after those first 20;
 - with a mod that lengthens the day, the same hours take longer, up to real hours;
-- with the day cycle stopped (`doDaylightCycle false`), everything runs in real time;
-- sleeping or `/time add` moves the consequences forward with the clock: after a night's sleep the fires are out and
-  the fallout has decayed. `/time set` to an earlier time never turns them back;
+- with the day cycle stopped (`doDaylightCycle false`, or a mod holding the time) the sun stops, the aftermath does not:
+  it keeps the pace the day last ran at, a vanilla day's if it never ran;
+- a night everyone in the Overworld sleeps through (in single player, your own sleep) ends the 20 minutes at once and moves
+  the strike on by the hours slept: you wake to the town at its age, the fires burning down and the fallout weaker;
+- a night skipped while someone stays awake (an idle or spectating player too) changes nothing in front of them: the
+  fires and the rain keep their time, and only what nobody watches change moves on: injuries, radiation sickness,
+  hearing and power repairs;
+- `/time add` counts like a sleep; `/time set day` at night counts as the night passing while the day runs, and on a
+  stopped day only sets the light. Setting an earlier time never turns anything back;
 - `/tick freeze` holds the strike's moment like the rest of the world: the flash, wave and clouds stand still while you
   look around, and `/tick step` moves them on.
 

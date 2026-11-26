@@ -135,6 +135,10 @@ public final class Incoming {
         // After the mod releases its tickets and work: finish generation started before exit (otherwise the unload loop hangs).
         NeoForge.EVENT_BUS.addListener(EventPriority.LOWEST, ua.zentix.incoming.util.StopDrain::onServerStopping);
         NeoForge.EVENT_BUS.addListener(EventPriority.HIGHEST, ua.zentix.incoming.util.WorldClock::onServerTick);
+        NeoForge.EVENT_BUS.addListener(ua.zentix.incoming.util.WorldClock::onServerTickPre);
+        NeoForge.EVENT_BUS.addListener(ua.zentix.incoming.util.WorldClock::onCommand);
+        // flight and the blast wave are never jumped: a jump counted during a front waits for it to cross
+        ua.zentix.incoming.util.WorldClock.holdJumpsWhile(ua.zentix.incoming.nuclear.NuclearStrikes::frontCrossing);
         NeoForge.EVENT_BUS.addListener(FlightStatus::onServerTick);
         // Last: order and round events queued by this tick's impacts and nuclear work go out in it.
         NeoForge.EVENT_BUS.addListener(EventPriority.LOWEST, ua.zentix.incoming.strike.Orders::onServerTick);

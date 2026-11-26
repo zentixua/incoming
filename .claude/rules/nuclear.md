@@ -126,12 +126,8 @@ Ruins and everything in `nuclear/world/` are in `nuclear-world.md`.
 
 - Post-wave pall (`client/nuclear/PallField` field, `NukePall` at camera/into frame, `NukeAsh` ash;
   `client/fx/layer/PallPass` renders): dust follows ground pressure and front arrival, haze over the ignition zone
-  lives the storm's smoke on the detonation clock (`PallField.clock`, set by `ClientNuclear.Active.clockTicksAt`:
-  `NukeClock` over the client world clock `ClientClock`; `S2C.NukeClock` carries the server's world clock and every
-  ended show's end clock, once a second while the dimension holds detonations, so its latest copy in a Flashback
-  snapshot restores them after a seek (`ClientNuclear.SHOW_ENDS` outlives `rewound`); a recording without it estimates
-  the show end as a vanilla day); no time-of-day logic: sleep, `/time add` move it on through the clock, `/time set` backward never
-  rewinds (AGENTS.md “Time”). Pace game-tick timers to the clock on a fixed game-time grid (`BurnsEffect`: every
+  lives the storm's smoke on the strike clock S (`PallField.clock`, set by `ClientNuclear.Active.clockTicksAt`:
+  `util/StrikeClock` over the client clocks `ClientClock`; clocks below); no time-of-day logic here. Pace game-tick timers to the clock on a fixed game-time grid (`BurnsEffect`: every
   20th game tick, never on the timer's own remainder, which a correction keeps landing on); dust stays on real time; detonation lives on the client while pall remains visible. Field laws in Java and copied in `shaders/include/pall.glsl` (`PallGlslTest` reads
   shader functions and compares with Java; edit laws in both); fireball/fire lighting on pall (`pallBallShare`,
   `pallBurn`) copies `CloudPuffs.ball` and `burn`: change lighting there too.
@@ -438,10 +434,29 @@ Ruins and everything in `nuclear/world/` are in `nuclear-world.md`.
   with ±25 ms arrival jitter. With `-Dincoming.nukeDiag=true`, `nukeFrame` logs epoch, detonation, receive-clock
   nanoseconds, shown age, confirmed age, lead, steering and held status. `nukeAnchor` logs receipt time and server
   age, and `nukeEvent` logs server tick, ordinal, due age, shown age, signed skew (shown minus due), decision and reason.
-- `Detonation.dayTime` is unread, kept for the save/packet formats. Slow consequences use the world clock
-  (`WorldClock`; the client's `ClientClock` mirrors its day) and the detonation clock; server anchors per detonation (`NuclearEvents.Anchor`: world clock at burst and show end) are
-  persisted, and doses step per detonation by Δτ (`NuclearEvents.stepFrom`, `FalloutModel.decayHours` for a sleep's
-  long step). A burst-clock anchor for a detonation dated in the past (tests) uses `NuclearEvents.add(d, level)`, which
+- Clocks (AGENTS.md “Time”, `docs/design/time.md` §8.3). Each detonation has two ages (`util/StrikeClock`): the motion
+  age M (real time plus jumps counted in its dimension) for what is in the air, the strike clock S (M through the
+  show, then the world's rate joined by the rate blend `StrikeClock.blend`, dS/dt = 1 + (k − 1)·smoothstep(r/60 s): never
+  above k, never catching up the show) for what stays in place. Server: `NuclearEvents.motion`/`seconds` now,
+  `motionAt`/`secondsAt` at a past game time from the saved world-clock history (`util/StrikeHistory`: a sample a real
+  minute until M passes 12 h, plus the show's end, the blend's end and both sides of each counted jump); client:
+  `ClientNuclear.Active.motionTicksAt`/`clockTicksAt`. The show ends at `NukeClock.SHOW_S` or at the first counted jump
+  (`NuclearEvents.endShows`, each tick); the blend's end is an anchor (`rampRate`), so a later change of k never moves
+  the past. World clocks (`util/WorldClock`): `now` with every jump (doses, injuries, outages, repairs), `rateClock`
+  without jumps, `pace` (k, ≥ 1, measured only from a step that follows a running step at its cadence, so a nudge of a
+  stopped day or the first step after a stop keeps it; the counting state is saved, so a load does too), and per
+  dimension `counted` (nobody awake: sleep in single player; `held` while a front crosses, `NuclearStrikes.frontCrossing`;
+  a strike born meanwhile takes counted + held as its past) and `unseen` (someone awake: clocks of what nobody sees add
+  it). Who is awake is noted at `ServerTickEvent.Pre`: vanilla wakes the sleepers inside the tick that skips the night.
+  Fixed-time dimensions count no jumps. `/time set` is told apart from `/time add` by `CommandEvent`'s last child context
+  (`/execute … run` too); datapack functions fire none, so their forward sets count as additions (limit). `S2C.NukeClock` carries the clocks, the receiver's dimension's jumps and every
+  detonation's anchors once a second to every player (detonations or not), on a show's end and on entry, so its latest
+  copy in a Flashback snapshot restores them after a seek (`ClientNuclear.ANCHORS` outlives `rewound`); a recording
+  made before the anchors reads as a 20-minute show and no jumps (`S2C.NukeClock.Clocks.NONE`).
+- `Detonation.dayTime` is unread, kept for the save/packet formats. Anchors per detonation (`NuclearEvents.Anchor`: the
+  world clock at burst and show end, which date bodies' exposure, and the `StrikeClock` anchors) and the history are
+  persisted; a save without them reads as a 20-minute show, no jumps. Doses step per detonation by ΔS
+  (`NuclearEvents.stepFrom`, `FalloutModel.decayHours` for a sleep's long step). A burst-clock anchor for a detonation dated in the past (tests) uses `NuclearEvents.add(d, level)`, which
   backdates it as a vanilla day. Detonation stream codec (`Detonation.STREAM_CODEC`, 3.1.0 fields)
   is frozen: new fields go in `CODEC` (save, `optionalFieldOf`) and at end of each detonation packet (`NukeDetonation`,
   `NukeSync`; replay.md).

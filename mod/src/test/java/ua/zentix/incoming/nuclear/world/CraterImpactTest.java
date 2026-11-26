@@ -50,7 +50,7 @@ class CraterImpactTest {
         when(level.getGameTime()).thenReturn(now);
         Detonation burst = new Detonation(1, new Vec3(0.5, 64, 0.5), 64, 1, true, 0,
                 0, 0, 20000, 42, 0.05f, false, 1, Detonation.NO_DAY_TIME, false, false);
-        events.add(burst, 0);
+        events.add(burst, 0, 0);
         events.impact(burst.id(), RoundRef.of(UUID.randomUUID(), 0, "craterError"), null);
         events.craterProgress(burst.id(), 0, false);
         WorkClock budget = WorkClock.counting(1);
