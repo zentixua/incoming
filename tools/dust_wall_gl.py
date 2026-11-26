@@ -474,6 +474,7 @@ for script in ("dust_wall_contract_gl.py", "wall_layer_identity.py", "nuclear_vo
 if (Path(__file__).resolve().parents[1] / "mod/build/uw-probe/law-1000kt.json").exists():
     failed |= subprocess.run([sys.executable, str(Path(__file__).with_name("uw_probe") / "onetap_flip.py")]).returncode != 0
 else:
-    print("FAIL    onetap_flip: no law table; run (cd mod && ./gradlew test --tests '*DustLawDumpProbe') first")
+    print("FAIL    onetap_flip: no law table; run (cd mod && JAVA_TOOL_OPTIONS=-Duw.probe=true ./gradlew test "
+          "--tests '*DustLawDumpProbe' --rerun) first (without the property the probe skips itself)")
     failed = True
 sys.exit(failed)
