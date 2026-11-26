@@ -84,22 +84,23 @@ def main(mode):
     programs = {name: h.link(name) for name in (*PALL, SINGLE)}
     programs.update(zip(WALL, (h.march_setup(), h.link(WALL[1]), h.link(WALL[2]))))
     scene = h.make_scene(100)
-    empty = h.texture(*h.rgba, 128, 4, np.zeros((4, 128, 4), np.float32))
-    dusty = h.texture(*h.rgba, 128, 1, [(0, 20, .11, .3)] * 128)
+    empty = h.texture(*h.rgba, 128, h.ROWS, np.zeros((h.ROWS, 128, 4), np.float32))
+    # the whole-lifetime table (PallField.lifetime): row 0 arrival and paved, 32 age rows of top and depth
+    # one source in the dust wave's table (dust_wall_contract_gl.source_table: a 20-block layer, its frame inputs)
+    dusty = h.texture(*h.rgba, 128, h.ROWS, h.source_table())
     screen = framebuffer(h.size, h.size, g.GL_RGBA8)
     targets = {name: framebuffer(h.low, h.low, g.GL_RGBA32F if name == "fx_pall_foot" else g.GL_RGBA16F)
                for name in PALL[:-1]}
     targets[PALL[-1]] = targets[DISPLAY] = screen
     targets[SINGLE] = targets["fx_pall"]
     targets[LAYER] = targets["fx_pall_mix"]
-    targets[MARCH] = framebuffer(h.low, h.low, g.GL_RGBA16F, count=2)
-    colour = g.glGetFragDataLocation(programs[MARCH], "fragColor")
-    bounds = g.glGetFragDataLocation(programs[MARCH], "wallDepth")
-    assert {colour, bounds} == {0, 1}
-    g.glDrawBuffers(2, [g.GL_COLOR_ATTACHMENT0 + (slot != colour) for slot in range(2)])
+    targets[MARCH] = framebuffer(h.low, h.low, g.GL_RGBA16F, count=3)
+    outputs = {g.glGetFragDataLocation(programs[MARCH], n): k for k, n in enumerate(("fragColor", "wallDepth", "wallSplit"))}
+    assert set(outputs) == {0, 1, 2}
+    g.glDrawBuffers(3, [g.GL_COLOR_ATTACHMENT0 + outputs[slot] for slot in range(3)])
     for name in (PACK, RESOLVE):
-        targets[name] = framebuffer(2 * h.low, h.low, g.GL_RGBA16F)
-    previous = h.texture(g.GL_RGBA16F, g.GL_RGBA, 2 * h.low, h.low)
+        targets[name] = framebuffer(3 * h.low, h.low, g.GL_RGBA16F)
+    previous = h.texture(g.GL_RGBA16F, g.GL_RGBA, 3 * h.low, h.low)
     # The same offscreen pipeline and formats in every schedule. The matrices and sizes are explicit
     # so that the froxels and the empty mushroom execute a valid, bounded first draw.
     march = programs[WALL[0]]
@@ -136,11 +137,13 @@ def main(mode):
         g.glActiveTexture(g.GL_TEXTURE0 + 12)
         g.glBindTexture(g.GL_TEXTURE_3D, wall_noise if name == WALL[0] else pall_noise)
         if name == WALL[0]:
-            g.glUniform4f(h.loc(program, "DwRing"), *((0, 0, 0, 1) if preparing else (800, 0, 100, 800)))
+            g.glUniform1f(h.loc(program, "DwSourceCount"), 1)
+            g.glUniform4f(h.loc(program, "DwSlotsA"), 0, 1, 2, 3)
             g.glUniform2f(h.loc(program, "DwFrame"), 1, 128)
             h.bind(program, 1, scene)
             h.bind(program, 2, empty if preparing else dusty)
             h.bind(program, 3, empty)
+            h.bind(program, 4, empty)
         elif name == PACK:
             for unit, tex in enumerate(targets[MARCH].textures):
                 h.bind(program, unit, tex)
@@ -164,9 +167,10 @@ def main(mode):
                 h.bind(program, 11, targets["fx_pall_froxel_sum"].textures[0])
                 g.glUniform1i(h.loc(program, "PallLayerFrame"), int(stage == LAYER))
                 wall = stage in (LAYER, DISPLAY)
-                g.glUniform4f(h.loc(program, "PallYoung"), 0, 1, 0, int(wall))
+                # the dust pass's divisor gates the wall insertion (0: no dust pass this frame)
+                g.glUniform1f(h.loc(program, "DwDiv"), 4 if wall else 0)
                 if wall:
-                    h.bind(program, 4, targets[RESOLVE].textures[0])
+                    h.bind(program, 6, targets[RESOLVE].textures[0])
         h.quad(program)
 
     def frame(names, preparing):
@@ -190,15 +194,15 @@ def main(mode):
     assert g.glGetError() == g.GL_NO_ERROR
     def check_atlas(preparing):
         targets[MARCH].bind()
-        light, depth = (h.read(h.low, h.low, i) for i in range(2))
+        light, depth, split = (h.read(h.low, h.low, i) for i in range(3))
         assert np.isfinite(light).all() and np.isfinite(depth).all()
         if preparing:
-            assert np.all(light == (0, 0, 0, 1)) and np.all(depth == (0, 0, 0, 1))
+            assert np.all(light == (0, 0, 0, 1)) and np.all(depth == (0, 0, 0, 1)) and np.all(split == 0)
         else:
             assert light[1, 1, 3] < .99 and depth[1, 1, 1] > 0
         for name in (PACK, RESOLVE):
             targets[name].bind()
-            assert np.array_equal(h.read(2 * h.low, h.low), np.concatenate((light, depth), axis=1)), name
+            assert np.array_equal(h.read(3 * h.low, h.low), np.concatenate((light, depth, split), axis=1)), name
 
     check_atlas(False)
     if preparation:

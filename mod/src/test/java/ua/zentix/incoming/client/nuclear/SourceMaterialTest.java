@@ -28,6 +28,9 @@ class SourceMaterialTest {
         assertEquals(true, hidden.wet().orElseThrow());
         assertEquals(DustMaterial.WATER, hidden.material(0, 0).value().orElseThrow());
         assertFalse(hidden.material(0, 0).committed());
+        assertTrue(hidden.material(0, 0).provisional(), "the ground-zero seed is asked again until the server commits the cell");
+        assertFalse(hidden.material(0, 0).settled());
+        assertTrue(first.settled(), "a legacy world's first local answer is final");
         assertTrue(hidden.material(1_000_000, 0).value().isEmpty());
         var inbox = new MaterialInbox();
         var map = ua.zentix.incoming.nuclear.material.MaterialMap.build(

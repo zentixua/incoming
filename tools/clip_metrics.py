@@ -19,6 +19,14 @@ read one at a time and taken to 720 rows (as a video is decoded), so a long 1080
           Frame-to-frame pulsing: per pixel the temporal median of |second difference| of luma over 5 s chunks (smooth
           motion gives ~0; a debris piece crossing a pixel in a frame or two does not count), mean and p99 over the
           region, share of pixels above 1/255; --map writes where it is (×20) under a middle frame.
+  lattice <png> [--region x0,y0,x1,y1]
+          A regular dot lattice on a dust face (an interleaved or decimated sampling pattern that the history keeps): the
+          strongest repeat of the face's fine detail (luma - Gaussian blur sigma 3 px at 720 rows) at lags of 6-30 px, its
+          normalised 2D autocorrelation over the warm dust pixels of the region (red over blue, eroded 8 px). Billows and
+          lobes stay under 0.15 (main's wall at 3.9 km: 0.08-0.13); a dot lattice the eye reads as a screen door repeats above
+          it (the new wave's step-3 frames near the passage: 0.18-0.62). Exit 1 above LATTICE. Limit: a smooth face upsampled
+          from a coarse lattice (1/6) repeats at its own period too (0.4-0.6 on a dot-free harness image): compare takes at
+          the same divisor, and judge the frames themselves.
   period  <png> [--band y0,y1] [--x1 f] [--edge]
           Repetition along x inside a band: normalised autocorrelation of the band's high-passed column-mean luma
           (--edge: of the band's lower edge, the strongest dark-over-light step per column at sub-pixel row). Prints
@@ -54,6 +62,7 @@ VIDEO = {".mp4", ".webm", ".mkv", ".mov", ".avi"}
 ROWS = 720  # every input is measured at this height, as the video decode gives
 BLOCK, REACH, TEXTURED = 32, 8, 0.8
 CHUNK = 150  # frames per flicker median (5 s at 30 fps): bounds memory, still robust to passing debris
+LATTICE = 0.15  # repeat peak of a dust face's fine detail: main's wall at 3.9 km 0.05-0.13, the dot lattice 0.18-0.62 (step-3 frames)
 STAIRCASE = 10.0  # slope kurtosis (est., from a handful of wave frames): smooth multi-scale edges 4-9, a reported staircase 34
 
 
@@ -237,6 +246,33 @@ def period(signal: np.ndarray, min_lag: int = 2) -> tuple[int, float]:
     return int(best), float(max(0.0, ac[best]))
 
 
+def lattice(image: np.ndarray, region) -> tuple[float, int]:
+    """The repeat peak of the dust face's fine detail (6-30 px lags) and the dust pixel count; nan below 20 000 pixels."""
+    from scipy.ndimage import binary_erosion
+    h, w = image.shape[:2]
+    if h != ROWS:
+        image = np.asarray(Image.fromarray(image.astype(np.uint8)).resize((round(w * ROWS / h), ROWS), Image.BILINEAR), np.float32)
+        h, w = image.shape[:2]
+    x0, y0, x1, y1 = region
+    im = image[int(y0 * h):int(y1 * h), int(x0 * w):int(x1 * w)] / 255.0
+    lum = im @ np.array([0.2126, 0.7152, 0.0722])
+    dust = binary_erosion((im[..., 0] > im[..., 2] + 0.03) & (lum > 0.15), iterations=8)
+    if dust.sum() < 20000:
+        return float("nan"), int(dust.sum())
+    fine = (lum - gaussian_filter(lum, 3)) * dust
+    shape = (2 * fine.shape[0], 2 * fine.shape[1])
+    acf = np.fft.irfft2(np.abs(np.fft.rfft2(fine, s=shape)) ** 2, s=shape)
+    overlap = np.fft.irfft2(np.abs(np.fft.rfft2(dust.astype(np.float64), s=shape)) ** 2, s=shape)
+    norm = acf / np.maximum(overlap, 1)
+    norm /= norm[0, 0]
+    best = 0.0
+    for dy in range(0, 31):
+        for dx in range(-30, 31):
+            if 36 <= dy * dy + dx * dx <= 900:
+                best = max(best, float(norm[dy, dx % shape[1]]))
+    return best, int(dust.sum())
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
     sub = parser.add_subparsers(dest="command", required=True)
@@ -250,12 +286,22 @@ def main(argv: list[str] | None = None) -> int:
             p.add_argument("--lag", type=float, default=0.1)
         else:
             p.add_argument("--map", type=Path)
+    p = sub.add_parser("lattice")
+    p.add_argument("source", type=Path)
+    p.add_argument("--region", type=lambda t: fractions(t, 4), default=(0.0, 0.1, 1.0, 0.52))
     p = sub.add_parser("period")
     p.add_argument("source", type=Path)
     p.add_argument("--band", type=lambda t: fractions(t, 2), default=(0.0, 1.0))
     p.add_argument("--x1", type=float, default=1.0)
     p.add_argument("--edge", action="store_true")
     args = parser.parse_args(argv)
+
+    if args.command == "lattice":
+        image = np.asarray(Image.open(args.source).convert("RGB"), np.float32)
+        peak, n = lattice(image, args.region)
+        verdict = "too little dust" if peak != peak else "dot lattice" if peak > LATTICE else "no lattice"
+        print(f"{args.source.name}: dust face repeat peak {peak:.3f} at 6-30 px over {n} dust pixels ({verdict})")
+        return 1 if peak > LATTICE else 0
 
     if args.command == "period":
         image = np.asarray(Image.open(args.source).convert("L"), np.float32)

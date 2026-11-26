@@ -11,16 +11,18 @@ import java.util.List;
  * @param nukeGate tick of {@code wait:nuke} (subsequent steps wait for a detonation packet), −1 if absent
  * @param blastGates ticks of {@code wait:blast} in order (each gates steps on the next server explosion)
  * @param end tick of "SCENARIO done"
+ * @param frontGate tick of {@code wait:front} (subsequent steps wait until the newest detonation's front has passed the
+ *        camera's ground point), −1 if absent
  * @param warnings skipped steps to log
  */
-record CommandPlan(List<Step> steps, int nukeGate, List<Integer> blastGates, int end, List<String> warnings) {
+record CommandPlan(List<Step> steps, int nukeGate, List<Integer> blastGates, int end, List<String> warnings, int frontGate) {
     /** The longest {@code wait:N} is an hour of play, tick. */
     static final int MAX_WAIT = 72_000;
     /** At what tick do the steps begin and how long after the last one to wait until “SCENARIO done”. */
     static final int START = 100, TAIL = 100;
 
     enum Kind {
-        COMMAND, SHOT, HUD_OFF, HUD_ON, SKIP, FRAMES, STORM, BURNABLE, MAX_YIELD, WAVE, PALL, PAIR, SITE;
+        COMMAND, SHOT, HUD_OFF, HUD_ON, SKIP, FRAMES, STORM, BURNABLE, MAX_YIELD, WAVE, PALL, PAIR, SITE, DW;
 
         /** Reads or moves the world's own server (the client's integrated one): a joined server skips it. */
         boolean ownServer() {
@@ -39,12 +41,15 @@ record CommandPlan(List<Step> steps, int nukeGate, List<Integer> blastGates, int
         List<Step> steps = new ArrayList<>();
         List<String> warnings = new ArrayList<>();
         List<Integer> blasts = new ArrayList<>();
-        int t = START, gate = -1;
+        int t = START, gate = -1, front = -1;
         for (String c : ScenarioCommands.split(spec)) {
             // "wait:nuke" - before the generic "wait:N": otherwise it would be parsed as a number and skipped
             if (c.equals("wait:nuke")) {
                 if (gate >= 0) warnings.add("the second “wait:nuke” is skipped - you can wait for the detonation once");
                 else gate = t;
+            } else if (c.equals("wait:front")) {
+                if (front >= 0) warnings.add("the second «wait:front» is skipped - you can wait for the front once");
+                else front = t;
             } else if (c.equals("wait:blast")) {
                 blasts.add(t);
             } else if (c.startsWith("wait:")) {
@@ -74,6 +79,10 @@ record CommandPlan(List<Step> steps, int nukeGate, List<Integer> blastGates, int
             } else if (c.startsWith("wave:")) {
                 // world wave speed (CUSTOM preset, nuclear.wave_speed), as on the host servers
                 steps.add(new Step(t, Kind.WAVE, c.substring("wave:".length()).strip()));
+                t += 1;
+            } else if (c.startsWith("dw:")) {
+                // dust wave diagnostics (DustWallDiag): rung=N|-1|-2, history=0|1, interleave=0|1, dump=<name>
+                steps.add(new Step(t, Kind.DW, c.substring("dw:".length()).strip()));
                 t += 1;
             } else if (c.startsWith("pall:")) {
                 // client dust quality OFF|LOW|MEDIUM|HIGH
@@ -105,6 +114,6 @@ record CommandPlan(List<Step> steps, int nukeGate, List<Integer> blastGates, int
                 t += gap;
             }
         }
-        return new CommandPlan(steps, gate, List.copyOf(blasts), t + TAIL, warnings);
+        return new CommandPlan(steps, gate, List.copyOf(blasts), t + TAIL, warnings, front);
     }
 }

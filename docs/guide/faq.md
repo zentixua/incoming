@@ -17,7 +17,7 @@ English · [Русский](ru/faq.md)
 | "Nuclear strikes: operators and the world host only…", "Nuclear weapons are off…", "… is above this world's limit…" | the world owner decides in Settings → Nuclear weapons; in your own single-player world that is you ([nuclear strike](nuke.md)) |
 | "Too many strikes in progress…" | the world owner set a limit: wait for impacts or [abort](designator.md#abort) |
 | "Mission given to launchers…" | [launchers](launcher.md#mission) are linked to the designator; unlink them with RMB to make it fire by itself |
-| "Incoming: your graphics card stalled on the nuclear cloud…" | one frame of the nuclear cloud took your graphics card over a second, so the fireball, mushroom cloud and dust stay off until you restart the game; update the graphics driver, set "Mushroom cloud, dust wall and pall" lower, and [report it](https://github.com/zentixua/incoming/issues) with your log |
+| "Incoming: your graphics card stalled on the nuclear cloud…" | one frame of the nuclear cloud took your graphics card over a second, so the fireball, mushroom cloud and dust stay off until you restart the game; update the graphics driver, set "Mushroom cloud and dust wave" lower, and [report it](https://github.com/zentixua/incoming/issues) with your log |
 
 ## Troubleshooting
 
@@ -32,7 +32,7 @@ version? Run `/lss clearcache` once on that server.
 
 **No sound from the mod.** Check the Ambient/Environment slider.
 
-**The game stutters during a strike.** If only the picture stutters, lower "Mushroom cloud, dust wall and pall"
+**The game stutters during a strike.** If only the picture stutters, lower "Mushroom cloud and dust wave"
 or try without shaders. If mobs and redstone slow down for everyone, reduce simultaneous strikes, especially in
 unexplored areas. The owner can also adjust [world settings](settings.md#world-settings); slower destruction gives
 the rest of the game more time. Memory needs depend on your modpack.

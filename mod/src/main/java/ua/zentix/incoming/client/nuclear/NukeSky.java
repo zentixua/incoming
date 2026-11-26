@@ -10,7 +10,7 @@ import ua.zentix.incoming.nuclear.Detonation;
 
 /**
  * Sky and fog: white at the flash, then amber while the ball is brighter than the sky ({@link #amber}: seconds by day,
- * about 10 s at night; {@link NukeRenderer} colors the sky); orange-brown from dust and smoke near ground zero; gray-brown and close in black rain.
+ * about 10 s at night; {@link NukeRenderer} colors the sky); gray-brown and close in black rain.
  * Vanilla weather is unchanged: black rain is local.
  */
 public final class NukeSky {
@@ -60,27 +60,13 @@ public final class NukeSky {
         if (ClientNuclear.isEmpty() && rain <= 0) return;
         float partial = (float) e.getPartialTick();
         float r = e.getRed(), g = e.getGreen(), b = e.getBlue();
-        // brown haze near ground zero: a minute after dust-wall arrival, denser at shorter distances
         Vec3 cam = e.getCamera().getPosition();
-        float dust = 0, amber = 0;
-        for (ClientNuclear.Active a : ClientNuclear.detonations()) {
-            Detonation d = a.d;
-            amber = Math.max(amber, amber(a, cam, partial));
-            double dist = cam.distanceTo(d.burst());
-            double near = 1 - dist / (d.radiusMax() * 2);
-            if (near <= 0) continue;
-            // haze is dust brought by the wall: measured from its arrival at the camera
-            double t = (a.ticks(partial) - d.arrivalTicks(dist)) / (20.0 * d.scale());
-            if (t < 0.5) continue;
-            dust = Math.max(dust, (float) (0.45 * near * Math.exp(-t / 45) * CloudPuffs.smooth(0.5, 4, t)));
-        }
+        float amber = 0;
+        for (ClientNuclear.Active a : ClientNuclear.detonations()) amber = Math.max(amber, amber(a, cam, partial));
         // amber glare while the ball and mushroom glow
         r = Mth.lerp(amber * 0.5f, r, 1f);
         g = Mth.lerp(amber * 0.5f, g, 0.6f);
         b = Mth.lerp(amber * 0.5f, b, 0.3f);
-        r = Mth.lerp(dust, r, 0.62f);
-        g = Mth.lerp(dust, g, 0.38f);
-        b = Mth.lerp(dust, b, 0.2f);
         r = Mth.lerp(rain * 0.75f, r, 0.2f);
         g = Mth.lerp(rain * 0.75f, g, 0.19f);
         b = Mth.lerp(rain * 0.75f, b, 0.17f);

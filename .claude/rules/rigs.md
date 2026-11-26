@@ -60,4 +60,8 @@ paths:
 - `tools/prod_client.py --video` copies Artem's `options.txt`; with `fullscreen:true` the window grows to the nested
   screen and `x11_record.py` (which starts a segment only at exactly `--size`) records nothing after the menu: run
   `--copy-only --dir D`, set `fullscreen:false` in `D/options.txt`, then `--no-copy --dir D --video …`. x11grab also
-  yields some all-black and duplicate frames; exclude them from per-frame metrics.
+  yields all-black, partly black (torn: whole rows uniform black, ~13 % of a nuke take's frames) and duplicate frames;
+  exclude them from per-frame metrics and clips. Each take overwrites the instance's `logs/run.jfr` and `gc.log`: copy them
+  out per take. LOD Server Support serves a single-player world only with `--prop lss.test.integratedServer=true`;
+  `/publish` opens a LAN socket on every interface, and `rig/LoopbackGuard` stops the server (the client then sits in the
+  menu while the recorder runs: a take wrapper must stop on a guard line or a silent log).

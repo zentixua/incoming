@@ -5,9 +5,8 @@
 
     uv run tools/dust_wall_ray_cost.py <checkout> [readbacks.npz]
 
-The 128x128 rays face a synthetic dust and haze field from 400 blocks away. The off and fully
-owned rings isolate the handoff. The narrower ring puts both transitions and the fireball
-footprint in the same view. The haze-free and wet cases exercise independent media.
+The 128x128 rays face a synthetic fire-zone haze field from 400 blocks away (the pall's only table
+row; the ground dust is the dust pass's). The wet case reads the water map under the pall.
 """
 import argparse
 from pathlib import Path
@@ -61,28 +60,15 @@ def main():
     uniform("PallAirFog", .4, .45, .5, 600)
     uniform("PallAirSky", .45, .5, .57)
     uniform("PallSunTop", 1, 1, 1, 1)
-    uniform("PallEyeLofted", .0005, .1, .1)
     uniform("PallEyeTau", .2, .15)
     uniform("PallGround0", 1000, -10, 10, 5)
-    matrix("PallSlot0", [(0, -400, -80, 1200), (2, 1, 50, 2), (1, 0, 1/6, 5/6), (.03, 100, 4, .5)])
-    matrix("PallWall0", [(440, 90, 70, .02), (0, 10, 1, .02), (0, 1, 1, 50), (1, 1, 1, 1)])
 
-    rim = (70, 145, 80, 470)
     images = {}
-    for label, ring, haze, wet in (
-        ("off", (0, 0, 0, 0), .004, False),
-        ("owned", (0, 0, 0, 1200), .004, False),
-        ("rim", rim, .004, False),
-        ("dry_empty", rim, 0, False),
-        ("wet", rim, .004, True),
-    ):
-        table = np.zeros((3, 128, 4), np.float32)
-        table[0] = (.009, 140, .1, .2)
-        table[1] = (.004, 80, .65, 0)
-        table[2] = (haze, 160, 0, .45)
-        h.bind(program, 1, h.texture(*h.rgba, 128, 3, table))
-        uniform("PallWater0", 300, 70, .003 if wet else 0, int(wet))
-        uniform("PallYoung", *ring)
+    for label, wet in (("dry", False), ("wet", True)):
+        matrix("PallSlot0", [(0, -400, -80, 1200), (2, 1, 50, 2), (1, 0, 0, .5), (0, 100, 4, int(wet))])
+        table = np.zeros((1, 128, 4), np.float32)
+        table[0] = (.004, 160, .2, 0)
+        h.bind(program, 1, h.texture(*h.rgba, 128, 1, table))
         h.quad(program)
         g.glFinish()
         image = h.read(size, size).copy()
@@ -96,8 +82,7 @@ def main():
             g.glFinish()
             times.append(1000 * (perf_counter() - start))
         print(f"{label}: {median(times):.3f} ms; T {transmission.min():.5f}..{transmission.max():.5f}", flush=True)
-    assert not np.array_equal(images["off"], images["owned"])
-    assert not np.array_equal(images["rim"], images["wet"])
+    assert not np.array_equal(images["dry"], images["wet"])
     assert g.glGetError() == g.GL_NO_ERROR
     if args.readbacks is not None:
         np.savez(args.readbacks, **images)

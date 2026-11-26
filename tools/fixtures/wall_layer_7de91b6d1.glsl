@@ -36,21 +36,24 @@ WallLayer wallLayer(sampler2D atlas, sampler2D scene, vec2 pixel, float here, fl
     wall.depth = vec3(0.0);
     if (pallHand(here)) return wall;
     ivec2 size = textureSize(scene, 0), low = textureSize(atlas, 0);
-    low.x /= 2;
+    low.x /= 3; // (the atlas holds three parts: light, span, split; the reference reads two)
     vec2 at = pixel / div - 0.5;
-    ivec2 base = ivec2(floor(at + 0.5));
+    // (the shipped gather: the four nearest march pixels, bilinear; 7de91b6d1 took a 3 x 3 tent)
+    ivec2 base = ivec2(floor(at));
+    vec2 f = at - vec2(base);
     vec4 sum = vec4(0.0), fallback = vec4(0.0);
     vec3 depths = vec3(0.0), otherDepths = vec3(0.0);
     float weights = 0.0, other = 0.0;
-    for (int k = 0; k < 9; k++) {
-        ivec2 c = clamp(base + ivec2(k % 3 - 1, k / 3 - 1), ivec2(0), low - 1);
+    for (int k = 0; k < 4; k++) {
+        ivec2 o = ivec2(k % 2, k / 2);
+        ivec2 c = clamp(base + o, ivec2(0), low - 1);
         vec2 px = min((vec2(c) + 0.5) * div, vec2(size) - 0.5);
         float there = pallScene(texelFetch(scene, ivec2(px), 0).r);
         vec4 v = texelFetch(atlas, c, 0);
         vec4 span = texelFetch(atlas, c + ivec2(low.x, 0), 0);
         if (!pallValid(v) || !pallValid(span)) continue;
-        vec2 tent = max(1.5 - abs(vec2(c) - at), vec2(0.0));
-        float w = tent.x * tent.y;
+        vec2 bl = mix(vec2(1.0) - f, f, vec2(o));
+        float w = bl.x * bl.y;
         wallCut(v, span, here);
         float cover = 1.0 - v.a;
         vec3 z = span.rgb / max(1.0 - span.a, 1e-6);

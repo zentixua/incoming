@@ -1,7 +1,8 @@
 # /// script
 # dependencies = ["pyopengl", "numpy"]
 # ///
-"""Compare the shipped wall filter with the 7de91b6d1 algorithm on identical llvmpipe inputs."""
+"""Compare the shipped wall filter with the 7de91b6d1 algorithm (its gather the shipped four-tap one, its atlas three parts) on
+identical llvmpipe inputs: light and depths; the clipped transmission follows the two-interval law the contract harness checks."""
 from pathlib import Path
 
 import numpy as np
@@ -60,7 +61,10 @@ def fixture(rng, width, height, div, extra, density):
         for values in (light, span):
             invalid = rng.random(shape) < 0.05
             values[invalid, rng.integers(0, 4)] = rng.choice([np.nan, np.inf, -np.inf, -1.0, 1.5, 7e4])
-    atlas = np.concatenate((light, span), axis=1)
+    # the split third (wall_layer.glsl): one interval, A whole (its exit and B's entry at the span's end, A's opacity the whole
+    # opacity, A's share of the light all of it), so the shipped thirds filter reduces to the reference's homogeneous layer
+    split = np.stack((z1 * cover, z1 * cover, cover, cover), -1).astype(np.float32)
+    atlas = np.concatenate((light, span, split), axis=1)
     depth = np.where(rng.random((height, width)) < 0.5, 50.0, 400.0).astype(np.float32)
     depth[:, : width // 3] = rng.uniform(1, 700, (height, width // 3))
     special = rng.random((height, width))
@@ -103,13 +107,23 @@ def main():
                         for mode in (0, 1):
                             args = (width, height, tex, scene, div, offset, mode)
                             expected, actual = draw(base, *args), draw(current, *args)
-                            bits_differ = expected.view(np.uint32) != actual.view(np.uint32)
+                            # (within float rounding: the shipped clip and split compute the same law in another order)
+                            bits_differ = (expected.view(np.uint32) != actual.view(np.uint32)) & ~(np.abs(expected - actual) <= 2e-6 + 4e-7 * np.abs(expected))
                             zeros = (expected == 0) & (actual == 0)
                             bad = bits_differ & ~zeros
+                            if mode == 1:
+                                # the clipped transmission is the two-interval law (the split third), not the reference's one
+                                # layer: tools/dust_wall_contract_gl.py checks it (volume, crossing, sparse taps)
+                                bad[..., 3] = False
+                            if mode == 0:
+                                # a fully transmitting result: consumers ignore its light (WallLayer), and the shipped filter
+                                # returns an empty neighbourhood early
+                                clear = (expected[..., 3] == 1) & (actual[..., 3] == 1)
+                                bad[..., :3] &= ~clear[..., None]
                             if bad.any():
                                 pos = tuple(np.argwhere(bad)[0])
                                 raise AssertionError(f"case {cases}, {div=}, {density=}, {offset=}, {mode=}, {pos}: "
-                                                     f"expected {expected[pos]}, got {actual[pos]}")
+                                                     f"expected {expected[pos]}, got {actual[pos]}; pixel {expected[pos[:2]]} / {actual[pos[:2]]}")
                             signed_zeros += np.count_nonzero(bits_differ & zeros)
                             total += expected.size
                         cases += 1

@@ -28,8 +28,9 @@ import ua.zentix.incoming.util.Air;
  * edge density vanishes and the head fades, separating from the front — dust remains in place (MET: "stopped moving along the ground at
  * 945 m").
  * <p>
- * The wedge is a volume in the pall pass ({@code PallPass}: {@code pallWall*} in {@code pall.glsl}, slot parameters — {@link #slot}),
- * with layer eddies — noise in dust coordinates ({@link #carried}): billows form where the front tore dust from the ground and
+ * The head's laws ({@link #slot}, {@link #sigma}, {@link #tau}) serve the camera: dust at the eye, sound muffling and the camera's dust
+ * ({@code NukePall}); the ground dust on screen is the dust pass's ({@code DustWallPass}), and the pall pass draws only the Wilson cloud
+ * of {@link #slot}. Layer eddies — noise in dust coordinates ({@link #carried}): billows form where the front tore dust from the ground and
  * stay there, shifted by wind behind the front by its phase displacement (tens of meters), while the front moves on. Relative to the front,
  * edge dust moves up and backward — the roller rolls this way. Model meters and seconds; world conversion through {@link Detonation#blocks}.
  */
@@ -80,7 +81,7 @@ public final class BlastWall {
     static final double WILSON_AT = 0.93, WILSON_WIDTH = 0.06;
     /** Wilson-cloud optical depth across the shell at its densest time. */
     static final double WILSON_TAU = 0.5;
-    /** Wall slot parameters for the shader ({@link #slot}): head (mat4) and Wilson cloud (vec4). */
+    /** Wall slot parameters ({@link #slot}): head (mat4 layout) and Wilson cloud (vec4, the pall shader's). */
     public static final int SLOT = 20;
 
     private final Detonation d;
@@ -280,7 +281,7 @@ public final class BlastWall {
     }
 
     /**
-     * Head-dust position in its own coordinates — where it was lofted (copy — {@code pallWallOrigin}): point (rx, rz — ground distance from
+     * Head-dust position in its own coordinates — where it was lofted: point (rx, rz — ground distance from
      * ground zero, z — above terrain) minus displacement with wind behind the front ({@code carried} × {@link #carriedShare} at
      * phase fraction u); air is stationary at ground level, above it follows the turbulent boundary-layer 1/7 law (z relative to wedge-end
      * top {@code top}), upward — 0.02–0.08 of displacement (Kuhl §3.4: vertical layer speed is 0.02 u∞ at the bottom and 0.04–0.12 at
@@ -295,7 +296,7 @@ public final class BlastWall {
 
     /**
      * Eddy turn of head dust (radians, positive — top outward) at phase fraction {@code phase} since the front: {@link #EDDY} × {@link #ROLL_GAIN} ×
-     * wind path so far ({@code carried} × {@link #carriedShare}) / eddy diameter {@code size} (blocks). Copy {@code pallWallRollAngle}.
+     * wind path so far ({@code carried} × {@link #carriedShare}) / eddy diameter {@code size} (blocks).
      */
     static double rollAngle(double phase, double carried, double size) {
         return ROLL_GAIN * EDDY * carried * carriedShare(phase) / Math.max(size, 1);
@@ -304,7 +305,7 @@ public final class BlastWall {
     /**
      * Dust-coordinate point (x, height, z: {@link #origin}) turned within its eddy, into {@code into}: eddies of diameter {@code size} side by side
      * along the ground outward ({@code outX}, {@code outZ} — unit), resting on it; the turn {@code angle} is full at an eddy's centre and falls to
-     * zero at its rim (squared), so neighbouring eddies meet without a seam and dust outside them stays. Copy {@code pallWallRoll}.
+     * zero at its rim (squared), so neighbouring eddies meet without a seam and dust outside them stays.
      */
     static void roll(double x, double y, double z, double outX, double outZ, double size, double angle, double[] into) {
         double along = x * outX + z * outZ, half = 0.5 * size;
@@ -344,7 +345,7 @@ public final class BlastWall {
      * ∫₀^u (1 − x)e^(−x) dx / e^(−1) = u·e^(1 − u). At positive-phase end — 1; negative-phase wind reverses
      * (peak e^(−2) of the maximum, at 2t₊), and dust returns: 0.74 at 2t₊, 0.09 at 5t₊; total wave impulse is zero,
      * and distant air returns to its original location. Deviation: a strong nearby wave decays more steeply (b &gt; 1), leaving residual
-     * displacement — absent here. Copy — {@code pallWallCarried}.
+     * displacement — absent here.
      */
     static double carriedShare(double u) {
         if (u <= 0) return 0;
@@ -380,8 +381,8 @@ public final class BlastWall {
     }
 
     /**
-     * Wall slot parameters for {@code pall.glsl} at time t (model seconds), blocks and 1/block; false — neither head nor Wilson
-     * cloud ({@code into} zeroed). Head is column-major mat4 ({@code pallWall*}):
+     * Wall slot parameters at time t (model seconds), blocks and 1/block; false — neither head nor Wilson
+     * cloud ({@code into} zeroed). Head is column-major mat4 ({@link #sigma}, {@link #tau}):
      * <ul>
      *     <li>[0..3] — dust leading edge from ground zero, wedge length, top at its end; extinction scale (1/block; 0 — no
      *     head);</li>
@@ -393,7 +394,7 @@ public final class BlastWall {
      *     <li>[12..15] — dust over hard ground relative to soil ({@link #pavedShare}) at leading edge and wedge end; ground dust
      *     extinction at wave phase end, at leading edge and wedge end — fractions of scale.</li>
      * </ul>
-     * [16..19] — Wilson cloud ({@code pallWilson}): shell-center radius from the detonation point, half-thickness, central
+     * [16..19] — Wilson cloud ({@code pallWilson} in {@code pall.glsl}): shell-center radius from the detonation point, half-thickness, central
      * extinction (0 — no cloud), detonation-point height above ground zero.
      */
     public boolean slot(double t, float[] into) {
@@ -464,9 +465,9 @@ public final class BlastWall {
         return d.blocks((WILSON_AT + 2 * WILSON_WIDTH) * d.metres(d.frontRadius(t * 20 * d.scale())));
     }
 
-    // ---------------------------------------------------------------- wedge laws (shared with shader: pallWall* in pall.glsl)
+    // ---------------------------------------------------------------- wedge laws
 
-    /** Wedge top at fraction u of its length behind the edge, fraction of end top: u^(5/6) (Kuhl); full behind the wedge. Copy {@code pallWallTop}. */
+    /** Wedge top at fraction u of its length behind the edge, fraction of end top: u^(5/6) (Kuhl); full behind the wedge. */
     static double top(double u) {
         return Math.pow(Mth.clamp(u, 0, 1), 5 / 6.0);
     }
@@ -474,7 +475,7 @@ public final class BlastWall {
     /**
      * Ground density at wedge fraction u relative to its end: material lofted by this phase fraction ({@link DustModel#lifted}) in a
      * layer with top {@link #top}; column above ground grows rearward with lofted material. Densest at u ≈ 0.1 (2.6 times); behind the wedge,
-     * 1. Copy {@code pallWallShape}.
+     * 1.
      */
     static double shape(double u) {
         if (u <= 0) return 0;
@@ -482,7 +483,7 @@ public final class BlastWall {
         return DustModel.lifted(x) / Math.pow(Math.max(x, 1e-4), 5 / 6.0);
     }
 
-    /** Head share behind the wedge: from {@link #HANDOFF_FROM} to {@link #HANDOFF_TO} of its length, hand over to pall. Copy {@code pallWallFade}. */
+    /** Head share behind the wedge: from {@link #HANDOFF_FROM} to {@link #HANDOFF_TO} of its length, hand over to pall. */
     static double handoff(double u) {
         return 1 - smooth(HANDOFF_FROM, HANDOFF_TO, u);
     }
@@ -492,7 +493,7 @@ public final class BlastWall {
      * edge (blocks; negative ahead), {@code z} — above terrain (blocks), {@code len} — wedge length, {@code top} — its
      * end top. Vertically, pall profile ({@link PallField#profile}) up to the local wedge top; below map terrain, down to
      * half the local top (map is coarser than the world; with the full top, a dense curb with a flat top stood on the leading
-     * edge wherever real ground lies below the map). Copy {@code pallWallMean}.
+     * edge wherever real ground lies below the map).
      */
     static double mean(double s, double z, double len, double top) {
         double u = s / Math.max(len, 0.001);
@@ -507,14 +508,14 @@ public final class BlastWall {
      * the rest as 1 − e^(−age/{@link DustModel#SALTATION_S}) (Anderson &amp; Haff 1988: flux reaches steady state in about a second),
      * {@code rate} — e-folds over the wedge length. Total lofted mass stays the steady-state law ({@link DustModel#column}); only the
      * foot of the head is younger and thinner — the leading edge thickens over the first metres to tens of metres behind the front
-     * instead of standing at full density on an exact circle. Copy {@code pallWallDevelop}.
+     * instead of standing at full density on an exact circle.
      */
     static double develop(double u, double rate, double prompt) {
         return 1 - (1 - prompt) * Math.exp(-Math.max(u, 0) * rate);
     }
 
     /**
-     * Mean-head extinction (without billows) at a point, 1/block, as in {@code pallWallAt} and {@code pallWallMean}: {@code slot}
+     * Mean-head extinction (without billows) at a point, 1/block (the shape of {@link #mean}): {@code slot}
      * contains {@link #slot} parameters; {@code relX}, {@code relZ} — point relative to ground zero (blocks); {@code up} — above its terrain;
      * {@code wet} — water fraction below it (over water the head is spray: lower and behind the dust edge).
      */
@@ -534,8 +535,7 @@ public final class BlastWall {
 
     /**
      * Head extinction multiplier {@code s} blocks behind the edge (including spray lag): dust from edge to wedge end, developing
-     * ({@link #develop}) and thinner over hard ground ({@code hard} share, {@link #pavedShare}); spray has its own. Copy
-     * {@code pallWallDensity}.
+     * ({@link #develop}) and thinner over hard ground ({@code hard} share, {@link #pavedShare}); spray has its own.
      */
     static double density(float[] slot, double s, double wet, double hard) {
         double v = s / Math.max(slot[1], 0.001), u = Mth.clamp(v, 0, 1);
@@ -546,7 +546,7 @@ public final class BlastWall {
 
     /**
      * Debris dust over hard ground relative to soil at {@code s} blocks behind the dust edge: from the leading edge's ratio to the wedge end's
-     * by wedge share ({@link #pavedShare} at both, slot 12 and 13) — as {@code pallWallDensity} and the head material in {@code fx_pall}.
+     * by wedge share ({@link #pavedShare} at both, slot 12 and 13), as {@link #density}.
      */
     static double paved(float[] slot, double s) {
         double u = Mth.clamp(s / Math.max(slot[1], 0.001), 0, 1);

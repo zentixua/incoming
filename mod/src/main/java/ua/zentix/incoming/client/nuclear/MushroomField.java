@@ -747,9 +747,10 @@ public final class MushroomField {
     /**
      * Inflow share at height {@code h} ({@code mushFootNarrow}): from layer top (or half merge height if lower)
      * fades by merge height {@code merge} (band beyond wall, {@link #footBand}; not density, which already matches
-     * the stem there).
+     * the stem there). No merge height (the carpet at the wall no denser than the stem): no band, the stem stands on the carpet.
      */
     static double footNarrow(double h, double top, double merge) {
+        if (merge <= 0) return 0;
         return 1 - smooth(Math.min(top, 0.5 * merge), merge + 1e-6, h);
     }
 
@@ -774,13 +775,13 @@ public final class MushroomField {
     /**
      * Ground reflectance beneath mushroom per channel (rgb into {@code out}, linear, in diffuse light): what stem, skirt and cap
      * underside see below is not bare ground ({@code PALL_LAND}, {@code PALL_SEA} over water), but the top of the wave dust layer
-     * lying on it ({@link PallField#dustTau}: dust and spray optical depth, no haze, at {@link #GROUND_AT} stem radii from ground zero; (est.) location
+     * lying on it ({@link PallField#drawnTau}: dust and spray optical depth as the dust wave draws it, no haze, at {@link #GROUND_AT} stem radii from ground zero; (est.) location
      * is estimated: stem bottom mostly sees nearby ground). Layer above ground uses two streams: ground at τ = 0 toward dust R∞
      * (thick-layer color is dust color itself, {@link NukePall#DUST}; spray over water), as e^(−2kτ) ({@link #slabOver}).
      */
     static void groundUnder(ClientNuclear.Active a, double stemR, float partial, double[] out) {
         double under = a.water.under(), land = PallLight.LAND + (PallLight.SEA - PallLight.LAND) * under, ticks = a.ticks(partial);
-        double tau = a.pall.visible(ticks) ? a.pall.dustTau(GROUND_AT * stemR, 0, ticks, NukePall.water(a)) : 0;
+        double tau = a.pall.visible(ticks) ? a.pall.drawnTau(GROUND_AT * stemR, 0, ticks, NukePall.water(a)) : 0;
         int top = mix(DUST, CloudPuffs.SPRAY, under);
         double g = PallLight.truncated(G);
         for (int i = 0; i < 3; i++) out[i] = slabOver(PallLight.linear(channel(top, i)), g, tau, land);

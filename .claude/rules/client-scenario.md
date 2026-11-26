@@ -34,7 +34,9 @@ Client scenarios log `SCENARIO …` lines (sounds, fps, flash; `SCENARIO far`: d
 `SCENARIO nuke-sound`: nuclear echo, rays, reflection delay/level, tracks, start anchor `by sound|tick`; burning city,
 own OpenAL sources with obstruction, per-tick `FireWatch` cost). Use these and frames to check look/sound.
 `commands` scenario (`incoming.commands`, semicolon-separated steps, `ScenarioCommands`/`CommandPlan`): commands,
-`wait:N`, `shot:<name>`, `hud:off|on`, `wait:nuke` (wait for detonation packet), `wait:blast` (wait for next server
+`wait:N`, `shot:<name>`, `hud:off|on`, `wait:nuke` (wait for detonation packet), `wait:front` (once: later steps wait until the newest detonation's
+in-game front has passed the ground under the camera; after `incoming nuke now` use it alone, since `wait:nuke` after
+the command's own gap waits for a second detonation), `wait:blast` (wait for next server
 explosion, at most 3600 ticks), `maxyield:<kt>` (server yield ceiling), `burnable` (to the most flammable land
 within 4 km, 200 blocks up), `skip:<s>` (time skip to that many seconds after the last detonation, as scenario
 `firestorm`), `storm:on|off`, `frames:<name>:<count>:<yaw>:<blocks>` (consecutive frames while turning/moving, each
@@ -60,8 +62,11 @@ Create, Sable and Aeronautics, no pack) kept up in a saved world, `tools/dev_cli
   vanilla asks once, `start` confirms it (`press`).
 - Keys: XTEST events (xdotool) never reach the game's Xwayland window inside a nested KWin `--virtual`, so the devtest
   `DevHands` reads one-line files from `mod/run/client/dev/inbox` (`incoming.dev.inbox`, set by `-PhotSwap`): `cmd`,
-  `reload` (answered when the reload has finished), `shot`, `hud`, `press <button>`; it logs every opened screen
-  (`DEV screen`).
+  `reload` (answered when the reload has finished), `shot`, `hud`, `press <button>`, `dw <key>=<value>` (the dust wave's
+  diagnostics, as the scenario's `dw:` steps; `rung=N` pins the pall's rung here too), `age` (the newest detonation's shown
+  age, front radius and eye distance: a hold at a front distance, since `/tick step` paces with the frame rate) and
+  `watch on|off` (a one-frame dropout logged as `DEV pop`; it stalls the GPU every frame); it logs every opened screen
+  (`DEV screen`). The bare `reload` reads `build/resources`: a shader edit in `src` needs `swap`.
 - The scene: `cmd 'tp @s …'`, `time set`, the burst once, `tick freeze` at the moment, `tick step <ticks>` to move it.
   A server burst leaves its ruins in the copy (the client saves it on `stop`): an untouched map is a new `<save>` name
   with `--from` again.
@@ -131,7 +136,8 @@ with Iris.
   white/black concrete marker pairs along the street, faces 4.5–59.5 m from the camera `cam 15 1.6 0 1.6`, n ≤ 12 rounds at
   once at the side-street crossings, none in the marker street: the eye inside a B-2 ×12 salvo's dust; the shot log's
   `veil set` lists the veil Gaussians, from which the law's transmittance to each marker follows). `nuke <kt> [air|ground]`: `/incoming nuke now`
-  6 km away; `airburst`: SAM burst 30 m above point; `sam`: loaded SAM at point and Shahed from 1400 blocks north
+  6 km away (`… also <dx> <dz> <delay s>`, up to 15 groups: more detonations of that yield (dx, dz) m from the
+  first, delay s after it on the client's world-tick clock: crossing waves, a nuke into old haze); `airburst`: SAM burst 30 m above point; `sam`: loaded SAM at point and Shahed from 1400 blocks north
   through it (like probe `sam-side`), time from interceptor launch rail exit (trail, rail-exit cloud, motor;
   `track on` follows it), `clear` removes SAM; `sam` starts at gameTime 6000 (same branch-comparison air, leaves
   time of day unchanged). `launch`/`flight <weapon> [from]`: real launch (`/incoming salvo … from`; final `own`

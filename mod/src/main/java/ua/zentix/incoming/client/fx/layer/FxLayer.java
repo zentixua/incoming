@@ -146,6 +146,7 @@ public final class FxLayer {
             e.registerShader(new ShaderInstance(e.getResourceProvider(), Incoming.id("fx_dustwall"), DefaultVertexFormat.POSITION), s -> DustWallPass.march = s);
             e.registerShader(new ShaderInstance(e.getResourceProvider(), Incoming.id("fx_dustwall_resolve"), DefaultVertexFormat.POSITION), s -> DustWallPass.resolve = s);
             e.registerShader(new ShaderInstance(e.getResourceProvider(), Incoming.id("fx_dustwall_pack"), DefaultVertexFormat.POSITION), s -> DustWallPass.pack = s);
+            e.registerShader(new ShaderInstance(e.getResourceProvider(), Incoming.id("fx_dustwall_limit"), DefaultVertexFormat.POSITION), s -> DustWallPass.limit = s);
             DustWallPass.reset();
         } catch (IOException ex) {
             DustWallPass.march = DustWallPass.resolve = DustWallPass.pack = null;
@@ -222,6 +223,9 @@ public final class FxLayer {
             GPU.second();
             HEAT.second();
             DustWallPass.GPU.second();
+            DustWallPass.GPU_MARCH.second();
+            DustWallPass.GPU_PACK.second();
+            DustWallPass.GPU_RESOLVE.second();
             FxBloom.second();
             LayerTimes.second();
             frameNanos = frameMax = cleanMax = cleanCpu = 0;

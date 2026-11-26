@@ -48,10 +48,10 @@ Prism: `~/.var/app/org.prismlauncher.PrismLauncher/data/PrismLauncher/` (`tools/
                                            its Gradle step and another Gradle run in the same tree (GameTest) collide on
                                            downloadAssets: start the second after the client's launch script exists;
                                            scenarios and what each captures: in the script header
-    dev_client.sh start|cmd|hud|swap|reload|shot|stop ← the look loop: ModDevGradle runClient (the mod and its dependencies) straight
+    dev_client.sh start|cmd|hud|dw|age|watch|swap|reload|shot|stop|status ← the look loop: ModDevGradle runClient (the mod and its dependencies) straight
                                            into a saved world (a reflinked copy of a real map), JetBrains Runtime from the Gradle
                                            toolchain with JDWP on loopback; `swap` compiles, redefines changed classes (jdb) and presses
-                                           the F3+T reload for changed resources; chat commands, reload, F2 and F1 as files the
+                                           the F3+T reload for changed resources; chat commands, reload, F2, F1 and dust-wave diagnostics (dw) as files the
                                            client reads (devtest DevHands: the nested display passes it no keyboard input); shared
                                            GPU slot or CPU (laptop_job.sh --soft); how to work: client-scenario.md, “Standard dev client”
     sandbox.sh start|fx|swap|shot|restart|stop|jbr ← effects sandbox (vanilla: shared GPU slot or CPU, unless shaders/sodium/dh/gpu): a client with only the mod (+ Iris with a shaderpack, Sodium without one, DH) in a
@@ -85,12 +85,13 @@ Prism: `~/.var/app/org.prismlauncher.PrismLauncher/data/PrismLauncher/` (`tools/
                                            harness): thin foreground, hand and pane in its composite, history at a new
                                            occluder and on an uneven lattice, the march at the world's edge, straight down
                                            and on a valley floor; exit 1 on a failed check; run it on dust wall shader changes
-    dust_wall_contract_gl.py [checkout] [case ...] ← Mesa GL contracts for depth ordering, ownership and reprojection.
-                                           Use motion for camera translation/rotation and edge for slopes and convex corners.
+    dust_wall_contract_gl.py [checkout] [case ...] ← Mesa GL contracts for depth ordering and reprojection.
+                                           Use motion for camera translation/rotation, edge for slopes and convex corners, skin for the march reaching the
+                                           wall's dense face cell by cell after a thin span.
                                            dust_wall_gl.py runs every case.
     wall_layer_identity.py               ← fixed-seed llvmpipe comparison with fixtures/wall_layer_7de91b6d1.glsl, run by
                                            dust_wall_gl.py. Checks light, depth and clipped transmission across 672 cases.
-    pall_single_gl.py                    ← compares the general and single-burst ray in seven llvmpipe scenes, including
+    pall_single_gl.py                    ← compares the general and single-burst ray in six llvmpipe scenes, including
                                            haze, soot and a populated cap with a missing-body negative control. Run by dust_wall_gl.py.
     dust_wall_ray_cost.py <checkout> [readbacks.npz] ← llvmpipe timings and optional RGBA32F readbacks for the pall ray pass
     nested_kwin.sh                       ← nested KWin for the client: no window and no host sound, its own D-Bus bus without starting services

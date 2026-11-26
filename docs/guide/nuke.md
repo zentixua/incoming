@@ -150,21 +150,28 @@ The cap stands kilometres above the haze, so it keeps the sun longer than the gr
 cloud turns golden, then red, and the edge of the earth's shadow climbs the stem and the cap; a large cap stays lit for a
 while after sunset on the ground.
 
-A ground burst leaves a crater and radioactive fallout downwind. Over water, spray takes the place of the dust wall.
+A ground burst leaves a crater and radioactive fallout downwind. Over water the same wave tears up white spray instead of
+dust: lower, and gone within a few minutes. A burst on water also throws out a base surge, a ring of droplet fog rolling out
+from the falling water column.
 The wave tears the dust up from the ground exactly where it touches it: every spot raises its own dust, a little more or
 less, a little earlier or later than its neighbours, and that dust shoots up and stays where it was torn up while the
 wave runs on. Each spot's dust rises to about one and a half times the height of the layer and settles back to it within
 about a second, so a small, uneven crest runs just behind the wave. Bare earth, fields and forests
 throw up thick dust; rock, roads, roofs and snow give only the dust of broken buildings, so there the wall is lower and
-thinner and the dust left behind is lighter.
+thinner and the dust left behind is lighter. The dust lies on the ground itself: it runs up over hills and down into
+valleys, and reaches all the way to the ground you see.
 For the first seconds a thin white condensation shell stands over the wave: the air behind it expands and cools below its dew
 point (Minecraft air is humid enough for it in clear weather and in rain).
-The dust has the colour of the ground it comes from: grey-brown over grass, fields and forest, pale tan over sand. Right
+The dust has the colour of the ground it comes from: grey-brown over grass, fields and forest, pale tan over sand, grey
+over roads, roofs and rock. Its coarse soil stays low and looks darker and earthier, the fine dust on the tops of the billows
+is paler, and patches of ground torn up side by side differ a little in tint. Right
 behind the wave it is clean dust; smoke darkens it only as the fires under it grow, over minutes, and only burning
 fires light it orange from below. The dust billows in lumps and eddies: the wave's wind throws it outward, the
 reverse wind stalls it and brings part of it back, then the air drawn in under the rising fireball lets the low dust creep
 toward ground zero. For tens of seconds the layer stays restless: swells rise and sag, tongues of dust lift, gusts shove
-patches aside; then it calms to the slow roll of a dust storm, swirling a little and drifting with the wind.
+patches aside; then it calms to the slow roll of a dust storm, swirling a little and drifting with the wind. The same dust
+thins over the following hours into a haze that drifts with the wind; where the dust of several nukes meets, it adds up.
+With **Mushroom cloud and dust wave** set to OFF, the dust wave is not drawn: none of this dust, mist or base surge. Spray drops near you and dust from breaking buildings remain.
 Burns, radiation and falling debris can still hurt you after the flash, so stay under cover and watch your dose.
 
 ![A dust wave approaches beneath the mushroom cloud at dusk](../media/blast-wave-dusk-hq.jpg)
@@ -198,7 +205,7 @@ firestorm has formed, at least 20 real minutes after the burst.
 ### Ending the aftermath
 
 The host or an operator can end everything nuclear at once with `/incoming clear`. Besides aborting strikes in flight,
-it makes the world forget past nuclear blasts: for every player the mushroom cloud, the pall of dust and smoke, the
+it makes the world forget past nuclear blasts: for every player the mushroom cloud, the dust wave and the smoke, the
 firestorm and black rain disappear, and fallout stops irradiating. What the blast already did stays: ruins and
 scorched ground, blocks that are burning (ordinary fire, burning out as usual) and the dose players have taken
 (`/incoming radiation clear` removes it). The ruin zone stops growing, so chunks it had not reached yet stay as they

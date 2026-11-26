@@ -45,9 +45,9 @@ public final class ClientNuclear {
         public final boolean live;
         /** Fireball/fire light on dust and water under epicenter ({@link CloudPuffs}). */
         public final CloudPuffs puffs;
-        /** Shock-wave dust wall: rolling head and Wilson cloud ({@link BlastWall}; pall renders it, {@link NukePall}). */
+        /** The blast wave: its shock front and the Wilson cloud ({@link BlastWall}; the dust it lofts is the dust wave's, {@link DustSources}). */
         public final BlastWall wall;
-        /** Water under burst ({@link NukeWater#resolve}): column in mushroom volume, base surge in pall. */
+        /** Water under burst ({@link NukeWater#resolve}): the column in the mushroom volume; the base surge is the dust wave's. */
         final BurstWater water;
         /**
          * Post-wave pall ({@link NukePall}): dust on real time, fire haze on the detonation's clock ({@link #clockTicksAt}).
@@ -57,9 +57,25 @@ public final class ClientNuclear {
         public final FireStorm storm;
         /** Terrain under pall ({@link PallGround}): end of its ray where no world lies behind. */
         final PallGround ground;
+
+        /** Diagnostics: this detonation's terrain map ({@link PallGround#writeDiag}). */
+        public void writeGroundDiag(String prefix) throws java.io.IOException {
+            ground.writeDiag(prefix);
+        }
         private SourceMaterial source;
+        /** The dust wave's material tiles ({@link #materialTiles}): kept across a replay seek's copy, filled once. */
+        private DustMaterialTiles tiles;
         private UUID revision;
         private int seed = -1;
+
+        /** The ground material the dust wave draws for this detonation ({@link DustMaterialTiles}). */
+        public DustMaterialTiles materialTiles() {
+            if (tiles == null) {
+                tiles = new DustMaterialTiles(d, sourceMaterial());
+                pall.materials(tiles);
+            }
+            return tiles;
+        }
 
         /** Stable server revision, or the first local answer at each legacy world cell. */
         public SourceMaterial sourceMaterial() {
@@ -125,6 +141,8 @@ public final class ClientNuclear {
             this.wall = known == null ? new BlastWall(d) : known.wall;
             this.water = known == null ? new BurstWater() : known.water;
             this.pall = known == null ? new PallField(d) : known.pall;
+            if (known != null) this.tiles = known.tiles;
+            this.pall.prepareWave();
             this.pall.clock(this::clockTicksAt);
             this.storm = known == null ? new FireStorm(d, pall) : known.storm;
             if (known == null) NukeWater.resolve(this, Minecraft.getInstance().level);
@@ -477,6 +495,7 @@ public final class ClientNuclear {
                 a.revision = revision;
                 a.seed = -1;
                 a.source = null;
+                a.tiles = null;
             }
             DETONATIONS.put(d.id(), a);
         }
@@ -610,6 +629,7 @@ public final class ClientNuclear {
         MATERIALS.clear();
         stopAll();
         DETONATIONS.clear();
+        DustGround.reset();
         SHOW_ENDS.clear();
         WARNINGS.clear();
         radiation = null;
@@ -678,6 +698,8 @@ public final class ClientNuclear {
         // column-top water for pall map (its matter); absent under ceiling (Nether), like terrain
         FarTerrain.Water water = heights == null ? null : FarTerrain.water(level), hard = heights == null ? null : FarTerrain.hard(level),
                 sand = heights == null ? null : FarTerrain.sand(level);
+        // the dust's eye-centred ground (its floor over the drawn chunks and the near kilometres)
+        if (!DETONATIONS.isEmpty()) DustGround.tick(level, eye, mc.options.getEffectiveRenderDistance());
         held = holds(level.tickRateManager().runsNormally(), ua.zentix.incoming.client.replay.Replay.active());
         for (Iterator<Active> it = DETONATIONS.values().iterator(); it.hasNext(); ) {
             Active a = it.next();
@@ -690,7 +712,10 @@ public final class ClientNuclear {
             NukeWater.resolve(a, level);
             double wall = a.wall.reach(a.seconds(0));
             double seen = Math.hypot(eye.x - a.d.burst().x, eye.z - a.d.burst().z);
-            if (a.pall.visible(a.ticks(0)) || wall > 0) a.ground.survey(a.ticks(0), wall, seen, heights, water, hard, sand);
+            if (a.pall.visible(a.ticks(0)) || wall > 0) {
+                if (now % 20 == 0) a.ground.learnAround();
+                a.ground.survey(a.ticks(0), wall, seen, heights, water, hard, sand);
+            }
             // firestorm tornadoes follow terrain beneath them
             // the tick's own age: a frame-fraction query of the next tick would advance the clock past every frame of this one
             if (heights != null) a.storm.track(a.ticks(0) / 20.0, heights);
