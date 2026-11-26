@@ -17,7 +17,8 @@ import java.util.List;
  * @param pulse     detonations whose light and prompt radiation this body has received
  * @param blast     detonations whose blast wave this body has received
  * @param falloutAt game time up to which fallout dose is accounted ({@code MobFallout}); -1 — never
- * @param falloutClock world clock ({@code util.WorldClock}) at {@code falloutAt}; NaN — unknown (saved before it was kept)
+ * @param falloutClock world clock ({@code util.WorldClock}) at {@code falloutAt}; NaN — unknown (saved before it was kept).
+ *                     Unread: a late mob dates its exposure by the detonation's strike clock; kept for the save format
  */
 public record NukeSeen(long bornAt, List<Integer> pulse, List<Integer> blast, long falloutAt, double falloutClock) {
     public static final NukeSeen NONE = new NukeSeen(-1, List.of(), List.of(), -1, Double.NaN);

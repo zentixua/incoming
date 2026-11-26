@@ -17,7 +17,8 @@ import java.util.Objects;
  *     a sleep heals as a night does.</li>
  *     <li>The owner steps it about once a second while the state is in the world. A step after a gap longer than
  *     {@link #PRESENT_GAP} game ticks is an absence (a player offline, a mob in an unloaded chunk): nothing elapsed for
- *     the state. Bodies age only while present.</li>
+ *     the state. Bodies age only while present. A step in another dimension (whose clocks are its own) counts nothing
+ *     either.</li>
  * </ul>
  * Causes: the youngest detonation that acted on the state ({@link #strike}; all detonations' shows last alike and a counted
  * jump ends all of a dimension's shows at once, so the youngest ends last), and the latest end of a conventional strike's
@@ -62,6 +63,8 @@ public final class RecoveryClock {
     private double behind;
     /** The last step ran wholly at the world's rate: no show, the blend over. */
     private boolean settled;
+    /** The last step counted nothing ({@link #fresh}). */
+    private boolean fresh = true;
     /** A gap between steps longer than this is an absence, game ticks. */
     private long gap = PRESENT_GAP;
 
@@ -124,6 +127,11 @@ public final class RecoveryClock {
         return settled;
     }
 
+    /** The last step counted nothing: the first, after a load, an absence or a dimension change. */
+    public boolean fresh() {
+        return fresh;
+    }
+
     /** The youngest detonation cause; {@link #NO_STRIKE} — none. */
     public int strike() {
         return strike;
@@ -163,11 +171,14 @@ public final class RecoveryClock {
         // a jump nobody in the dimension was awake for ends the shows there (rule 7); a detonation's own clock says so itself
         if (dc > 0 && until != NONE && until > game) until = game;
         boolean inShow = showing(game, shows);
-        if (dg < 0 || dg > gap) {
-            // first step, load, or back after an absence: nothing elapsed for the state
+        if (dg < 0 || dg > gap || !sameDim) {
+            // first step, load, back after an absence, or another dimension's clocks (a portal; on a client, the first
+            // clocks a server tells): nothing elapsed for the state, at most a second lost
             perTick = 0;
             settled = false;
+            fresh = true;
         } else {
+            fresh = false;
             double real = dg * WorldClock.REAL_RATE, world = Math.max(real, rate - lastRate);
             double share = inShow ? 0 : share(lastGame, game);
             double before = clock;

@@ -86,9 +86,11 @@ public final class LateExposureGameTests {
                 for (Mob m : late) {
                     var dose = RadiationTicker.dose(m);
                     h.assertTrue(dose.doseGy() > 1, String.format(Locale.ROOT, "a cow loaded after the detonation got %.2f Gy", dose.doseGy()));
-                    // world-clock ticks (sickness keeps the world's hours): the world clock at the burst
-                    long burst = (long) Math.floor(NuclearEvents.get(level).burstClock(d, level.getGameTime(), WorldClock.now(level)));
-                    h.assertTrue(dose.exposedAt() == burst, "sickness runs from " + dose.exposedAt() + ", not from the detonation " + burst);
+                    // the body's clock did not move while the cow was out of the world: its sickness runs from the burst, as long
+                    // ago as the detonation's own strike clock S says (in the show, real seconds); one clock tick is 3.6 s
+                    double since = RadiationTicker.hoursSinceExposure(m, dose) * 3600, s = NuclearEvents.get(level).seconds(d, level);
+                    h.assertTrue(Math.abs(since - s) <= 2 * WorldClock.SECONDS_PER_TICK + 2,
+                            String.format(Locale.ROOT, "sickness runs from %.1f s ago, the detonation was %.1f s ago", since, s));
                     h.assertFalse(m.isAlive(), "a cow loaded after the detonation survived " + Math.round(BlastBody.wound(level, d, m, null).death() * 100) + " % lethal pressure");
                     h.assertTrue(m.getRemainingFireTicks() <= 0, "clothes caught fire long after the flash");
                 }

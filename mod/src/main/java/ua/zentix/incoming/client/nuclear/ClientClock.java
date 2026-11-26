@@ -45,6 +45,8 @@ public final class ClientClock {
             }
         } else {
             lastLevel = new WeakReference<>(level);
+            // a new client world (login, portal): its clocks are not known until the server tells them
+            dimension = null;
         }
         lastDay = day;
         lastGame = game;

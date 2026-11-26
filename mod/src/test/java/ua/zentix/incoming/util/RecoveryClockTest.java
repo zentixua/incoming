@@ -161,15 +161,24 @@ class RecoveryClockTest {
         assertEquals(RecoveryClock.PRESENT_GAP, c.clock() - before, 1e-6);
     }
 
-    /** A new dimension's jump counters are another dimension's: they never read as a jump. */
+    /**
+     * A new dimension's clocks are its own (the jump counters; on a client the first clocks a server tells): the step into
+     * it counts nothing, not even a resynchronised clock, and the next one runs as usual.
+     */
     @Test
     void aDimensionChangeIsNoJump() {
         World w = new World();
         RecoveryClock c = new RecoveryClock(0);
         w.step(c);
         w.counted = 50_000;
+        w.rate += 1_000_000;
         w.dim = "the_nether";
+        assertEquals(0, runFor(w, c, 20), 0);
         assertEquals(20 * VANILLA, runFor(w, c, 20), 1e-6);
+        // the same tick in another dimension is no division by zero
+        w.dim = OVERWORLD;
+        w.step(c);
+        assertEquals(0, c.over(20), 0);
     }
 
     /** A district never leaves: a long gap is time that passed. It falls behind the world only through its show and the blend. */

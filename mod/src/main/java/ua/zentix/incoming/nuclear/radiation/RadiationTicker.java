@@ -231,7 +231,7 @@ public final class RadiationTicker {
     }
 
     /** Body-clock hours since dose crossed 1 Gy ({@link BodyClock}, as last stepped: a login reads the state it left with). */
-    static double hoursSinceExposure(LivingEntity e, RadiationDose r) {
+    public static double hoursSinceExposure(LivingEntity e, RadiationDose r) {
         return (BodyClock.of(e).clock() - r.exposedAt()) / WorldClock.HOUR;
     }
 

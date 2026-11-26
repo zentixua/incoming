@@ -44,10 +44,15 @@ public final class BodyClock {
         return of(e).clock();
     }
 
-    /** Recovery over the last second ({@link WorldClock#PACE_TICKS} game ticks), world-clock ticks: paces effect durations. */
+    /**
+     * Recovery over the last second ({@link WorldClock#PACE_TICKS} game ticks), world-clock ticks: paces effect durations.
+     * Right after the body came into the world (or its clock began) the effect's own game ticks stand: {@link
+     * WorldClock#PACE_TICKS}.
+     */
     public static double lastSecond(LivingEntity e) {
         step(e);
-        return of(e).over(WorldClock.PACE_TICKS);
+        RecoveryClock c = of(e);
+        return c.fresh() ? WorldClock.PACE_TICKS : c.over(WorldClock.PACE_TICKS);
     }
 
     /** Detonation {@code d} acted on the body (dose, rain, burn): it holds the body's clock at real rate during its show. */
