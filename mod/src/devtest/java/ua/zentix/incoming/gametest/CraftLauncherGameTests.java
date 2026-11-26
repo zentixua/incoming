@@ -177,10 +177,7 @@ public final class CraftLauncherGameTests {
         Rails[] rails = new Rails[1];
         h.onEachTick(() -> {
             if (!moving[0]) return;
-            ServerSubLevel sub = (ServerSubLevel) craft[0];
-            PhysicsPipeline pipeline = SubLevelContainer.getContainer(level).physicsSystem().getPipeline();
-            Vector3d v = pipeline.getLinearVelocity(sub, new Vector3d()), w = pipeline.getAngularVelocity(sub, new Vector3d());
-            pipeline.addLinearAndAngularVelocity(sub, new Vector3d(-v.x, -v.y, 10 - v.z), w.negate(new Vector3d()));
+            Physics.drive(level, craft[0], new Vector3d(0, 0, 10));
             if (lancet[0].flightPhase().onLauncher()) {
                 rails[0] = be[0].rails();
                 railSpeed[0] = be[0].velocity(rails[0].point(0));
@@ -396,7 +393,7 @@ public final class CraftLauncherGameTests {
         StrikeGameTests.afterTest(h, () -> {
             for (StrikeProjectile p : StrikeWorld.projectiles(level)) if (p.ownerId() == null && p.position().distanceTo(site) < 512) p.discard();
             VirtualFlights.get(level).clear(level, p -> p.ownerId() == null && p.position().distanceTo(site) < 2048);
-            for (SubLevelAccess s : SubLevels.near(level, site, 16)) remove(level, s);
+            for (SubLevelAccess s : SubLevels.near(level, site, 16)) Physics.remove(level, s);
         });
         return be;
     }
@@ -446,10 +443,10 @@ public final class CraftLauncherGameTests {
         Hold(GameTestHelper h) {
             // the held craft, wherever it went: unheld after the test it would fall on through the void, simulated
             StrikeGameTests.afterTest(h, () -> {
-                if (craft[0] != null) remove(h.getLevel(), craft[0]);
+                if (craft[0] != null) Physics.remove(h.getLevel(), craft[0]);
             });
             h.onEachTick(() -> {
-                if (at != null) teleport(h, craft[0], at, turn != null ? turn : new Quaterniond().rotateY(Math.toRadians(yaw)));
+                if (at != null) Physics.teleport(h.getLevel(), craft[0], at, turn != null ? turn : new Quaterniond().rotateY(Math.toRadians(yaw)));
             });
         }
 
@@ -474,18 +471,37 @@ public final class CraftLauncherGameTests {
         }
     }
 
-    /** Put {@code craft} at {@code at}, turned by {@code turn}, at rest (Sable's physics pipeline). */
-    private static void teleport(GameTestHelper h, SubLevelAccess craft, Vec3 at, Quaterniond turn) {
-        ServerSubLevel sub = (ServerSubLevel) craft;
-        PhysicsPipeline pipeline = SubLevelContainer.getContainer(h.getLevel()).physicsSystem().getPipeline();
-        pipeline.resetVelocity(sub);
-        pipeline.teleport(sub, new Vector3d(at.x, at.y, at.z), new Quaterniond(turn));
-    }
+    /**
+     * Every Sable call of these tests, beyond the companion's {@link SubLevelAccess}: a class of its own, unannotated,
+     * loaded only once a test has found Sable. NeoForge loads every {@code @GameTestHolder} class wherever GameTests are
+     * enabled, also in a client without Sable (the effects sandbox, a cloud scenario client), and the JVM verifier loads
+     * every type the holder's code passes to a Sable method: one such call in the holder, even inside a lambda, stops that
+     * client at start with {@code NoClassDefFoundError}.
+     */
+    private static final class Physics {
+        private Physics() {}
 
-    /** Remove {@code craft} through Sable's container: its command's sub-level selector does not parse a UUID here. */
-    private static void remove(ServerLevel level, SubLevelAccess craft) {
-        SubLevel sub = (SubLevel) craft;
-        if (!sub.isRemoved()) SubLevelContainer.getContainer(level).removeSubLevel(sub, SubLevelRemovalReason.REMOVED);
+        /** Put {@code craft} at {@code at}, turned by {@code turn}, at rest (Sable's physics pipeline). */
+        static void teleport(ServerLevel level, SubLevelAccess craft, Vec3 at, Quaterniond turn) {
+            ServerSubLevel sub = (ServerSubLevel) craft;
+            PhysicsPipeline pipeline = SubLevelContainer.getContainer(level).physicsSystem().getPipeline();
+            pipeline.resetVelocity(sub);
+            pipeline.teleport(sub, new Vector3d(at.x, at.y, at.z), new Quaterniond(turn));
+        }
+
+        /** Set {@code craft}'s velocity to {@code velocity} blocks/s, without spin (Sable's physics pipeline). */
+        static void drive(ServerLevel level, SubLevelAccess craft, Vector3dc velocity) {
+            ServerSubLevel sub = (ServerSubLevel) craft;
+            PhysicsPipeline pipeline = SubLevelContainer.getContainer(level).physicsSystem().getPipeline();
+            Vector3d v = pipeline.getLinearVelocity(sub, new Vector3d()), w = pipeline.getAngularVelocity(sub, new Vector3d());
+            pipeline.addLinearAndAngularVelocity(sub, new Vector3d(velocity).sub(v), w.negate(new Vector3d()));
+        }
+
+        /** Remove {@code craft} through Sable's container: its command's sub-level selector does not parse a UUID here. */
+        static void remove(ServerLevel level, SubLevelAccess craft) {
+            SubLevel sub = (SubLevel) craft;
+            if (!sub.isRemoved()) SubLevelContainer.getContainer(level).removeSubLevel(sub, SubLevelRemovalReason.REMOVED);
+        }
     }
 
     private static void command(ServerLevel level, String command, boolean quiet) {

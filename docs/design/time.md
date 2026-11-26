@@ -1,6 +1,7 @@
 # Time in Incoming: one principle for how long consequences last (design note)
 
-Status: adopted (Artem, 26.11: the principle and the points of §11); the design for the follow-up PRs of §9 and §10.
+Status: adopted (Artem, 26.11: the principle and the points of §11) and implemented: §12 names the PR for every change
+of §9 and every mismatch of §10, or the reason one stays.
 Code references are `path:line` against `main` at the time of writing; `J/` is `mod/src/main/java/ua/zentix/incoming/`.
 The numbers come from code reading and from throwaway probes over the shipped models (`PallField`, `CloudModel`,
 `DustModel`, `FalloutModel`; 15 kt surface burst, defaults, game scale), quoted where used.
@@ -522,6 +523,8 @@ is awake; otherwise it moves only doses, injuries and repairs.
 
 ## 10. Every mechanic against pack conditions: mismatches, ranked
 
+The "What happens now" column describes the mod before the fixes; §12 names what holds now.
+
 From the inventories and a separate audit of pack conditions (tick rate, time control, gamerules, pause, servers,
 replays, dimensions). Most player-visible first; the "Fix" column names the §9 change.
 
@@ -568,3 +571,47 @@ gamerules the mod needs. Server lag slows the show and the server's work alike.
   by their laws.
 - Owner's call within the principle: fallout follows its law to the end (change 8), so the ground near ground zero
   stays measurably hot for years of world time, as for a real surface burst.
+
+## 12. Implementation
+
+Every change of §9, by the PR that made it:
+
+| # | Change | PR |
+|---|---|---|
+| 1 | Inside-sight cap as a camera property | #780 |
+| 2 | Clocks: M and S, the rate blend, counted jumps, the stopped-day rate, `/time set`, saved anchors | #778 |
+| 3 | The air reads M; a night everyone slept through clears the strike's dust and smoke | #782 |
+| 4 | Handoffs: smoke parcels, black rain under them and its deposit landing with the rain | #784 |
+| 4 | Handoffs: fallout arrives on M and ages on the ground | #785 |
+| 5 | Shared states and outages; the conventional show sets the hearing clock | #783 |
+| 6 | Bodies age while present; hearing kept across relog | #783 |
+| 7 | Client clocks follow the level's tick and the replay position; shimmer off the wall clock | #776 |
+| 8 | Fallout to its law's end as a compact ground field; crater progress kept | #785 |
+| 9 | `doFireTick false` | #777 |
+| 10 | Conventional strikes recorded on the server, sent to late joiners and on a seek | #786 |
+
+Every mismatch of §10, by its fix or its reason:
+
+| # | Condition | Fixed by, or reason |
+|---|---|---|
+| 1 | Dust see-through from outside | #780 |
+| 2 | Vanilla day: the dust hangs an hour, a sleep does not clear it | #782 (the law's hour stays, §8.2) |
+| 3 | `doFireTick false` | #777 |
+| 4 | `/time set day` at night | #778 |
+| 5 | Recovery 72× fast during a show | #783 |
+| 6 | Stopped sun | #778 |
+| 7 | Dedicated server, player offline | #783 |
+| 8 | Flashback pause, `/tick freeze` | #776 |
+| 9 | Shimmer on the wall clock | #776 |
+| 10 | The missile's crater fire burns 16 real minutes | Not a time defect: the principle keeps the law (its last fifth is never compressed, rule 5). Whether `FuelFires`' 16 min is right is a law check of its own, outside this note. |
+| 11 | Sleep during a show | #778 (shows end, fires move on), #782 (air), #785 (fallout on the ground) |
+| 12 | Late joiner after a conventional strike | #786 |
+| 13 | Day mods setting `dayTime`: no clock without detonations | #778 (the clock packet reaches every player once a second) |
+| 14 | Day 7 of a detonation | #785 |
+| 15 | `/tick freeze` and the world clock | #778 |
+| 16 | Day mods stepping +N every M ticks | #778 |
+| 17 | `/tick rate`, `/tick sprint`, Flashback speed on the client | #776 |
+| 18 | Long days: 72 winds a day | Limit kept: the wind stays on game ticks so a sleep never swings it in one tick (#779 records it in `not-physical.md` and `WindTest`) |
+| 19 | Other packs: sea level 63, relight with `randomTickSpeed 0` | #779 |
+| 20 | `restore_spread_seconds` tooltip | #779 |
+
