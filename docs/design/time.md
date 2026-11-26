@@ -1,9 +1,9 @@
 # Time in Incoming: one principle for how long consequences last (design note)
 
-Status: proposal for Artem's decision. Analysis only; nothing here is adopted until he decides. Code references are
-`path:line` against `main` at the time of writing; `J/` is `mod/src/main/java/ua/zentix/incoming/`. The numbers come
-from code reading and from a throwaway unit probe over the shipped models (`PallField`, `CloudModel`; 15 kt surface
-burst, defaults, game scale), quoted where used.
+Status: adopted (Artem, 26.11: the principle and the points of §11); the design for the follow-up PRs of §9 and §10.
+Code references are `path:line` against `main` at the time of writing; `J/` is `mod/src/main/java/ua/zentix/incoming/`.
+The numbers come from code reading and from throwaway probes over the shipped models (`PallField`, `CloudModel`,
+`DustModel`, `FalloutModel`; 15 kt surface burst, defaults, game scale), quoted where used.
 
 How this note was made:
 - an inventory of every time-dependent phenomenon (§3);
@@ -201,8 +201,8 @@ Notes on the cells:
 - P5: compressing the motion multiplies every drift by k; the dust drifting at half the wind (2.5–7.5 m/s) would cross
   the map at 180–540 m/s.
 - P6: a conventional cloud has no physical loss of its soot; reading its density at the day's age while its size grows
-  in real time draws mass it never lost (a Shahed cloud two minutes after its apex keeps about 1/340 of its drawn mass,
-  §8.1). Its smoke is gone 3–6 min after the hit, about a minute after its apex, which the realism persona names a
+  in real time draws mass it never lost (a Shahed cloud two minutes after a 2-min apex keeps about 1/760 of its drawn
+  mass; probe `review-probes/blend.py`). Its smoke is gone 3–6 min after the hit, about a minute after its apex, which the realism persona names a
   dealbreaker.
 - P7–P9 make the state depend on who looks, stands or sleeps where, which no shared world can hold: a replay seek
   cannot know who was watching, and fallout or fire cannot differ between two players standing side by side.
@@ -244,7 +244,7 @@ the priorities met by default, "+L" for one met only by a lever that persona alr
 | P1 everything on the day | 3 | 3, DB | 2, DB | 5 | 2 |
 | P2 everything real | 3, DB ×2 | 4, DB | 5 | 3, DB | 4 |
 | P3 real, levers move it | 4 +L | 5 | 5 | 3, DB | 1 |
-| **P4 air real, ground on the day (chosen)** | **4 +L** | **5** | **5** | **4** | **0** |
+| **P4 air real, ground on the day (chosen)** | **4 +L** | **4** | **5** | **4** | **0; 2 under a one-sleeper rule** |
 | P5 whole law on the day | 4 | 3, DB | 3, DB | 5 | 2 |
 | P6 appearance on the day | 5 | 3, DB | 4 | 5 | 1 |
 | P7 watched real | 4 +L | 4 | 3, DB | 3 | 1 |
@@ -269,9 +269,13 @@ How the deciding cells come out:
   missile's crater fire off in 4 s), the realism fan's "effects that disagree" (fallout and rain footprints shrinking
   with the day) and the survival player's and admin's "danger where I did not aim" (a 12× fallout hot spot).
 
-P4 is the only principle that hits no dealbreaker and leaves just one wish to a lever: the survival player's and the
-admin's wish for the nuclear dust to be gone by 20–25 min on a vanilla day. §8.2 shows by number that no principle
-grants it without a seam.
+P4 and P11 hit no dealbreaker in single-player and under the default sleep rule; P11 is P4 on every dry day and ties
+the rest to random weather. P4 leaves two wishes open:
+- The survival player's and the admin's wish for the nuclear dust to be gone by 20–25 min on a vanilla day. §8.2 shows
+  by number that no principle grants it without a seam.
+- Under a one-sleeper rule with others awake, the sleeper's wish that the night moves the fires and the air
+  (survival's and the realism fan's dealbreaker 2, in that case only). The watchers' wish not to see things vanish wins
+  (rule 7); doses, injuries and repairs still move.
 
 ## 8. The choice: the air in real time, the ground on the world's day
 
@@ -316,9 +320,13 @@ By §8.1 the dust cannot be shortened without a seam. What the principle gives e
   one vanilla day. Sleeping then clears the air (rule 7). So the murk over the base lasts at most until ~31 min after
   the burst, by which time 11 % of the light passes anyway. His dealbreaker ("more than ~20 min with no way to sleep it
   off") is not hit.
-- **Admin on a server.** The night skip clears it only when every player in the overworld sleeps. Otherwise the dust
+- **Admin on a server.** The night skip clears it only when every player in the overworld sleeps (rule 7). Otherwise the dust
   keeps its ~1 h, drifting away. This is his one unmet wish, not a dealbreaker: it ends by a known law, at ~95 min at
   most.
+
+Two physical laws, not time rules, could shorten it under some conditions: rain washing the dust out on rainy days,
+and an advective clearing that ties the dust's hour to the wind instead of the fitted 800 s. Both are separate law
+work with their own references.
 
 Shortening the dust on short days is possible only as a marked deviation against "smoke or fire shorter than its law"
 (Artem, 19.11): the drawn blanket would lose its mass without landing it anywhere. Visibly, after the show it clears in
@@ -345,13 +353,20 @@ take it: it is the one decision left to Artem (§11).
    - Smoke leaving a fire is emitted per real second at the law's rate for the fire's strength at its S, then lives on
      M. A fire never flares when the day compresses it; on a short day it emits less in total, because it burns for
      less real time.
-   - The haze over and downwind of the fires is these parcels. Black rain is their rain-out, where they are.
+   - The haze over and downwind of the fires is these parcels. Black rain is their rain-out, where they are, while they
+     are drawn; the rain's window (`BlackRainModel.END_S`) becomes the parcels' law. At k = 1 a point gets its 90 min;
+     on a vanilla day the fires stop feeding the parcels within ~10 min of the show, so a point gets at most ~8–10 min.
    - Fallout arrives where and when its law carries it (M), also from the stabilized cloud after it is too thin to
-     see, as in reality. It decays in flight on M and on the ground on S.
+     see, as in reality. Its age on the ground at a place is its arrival age (M) plus the strike clock that has passed
+     there since it landed (S now − S at arrival). The same holds for black-rain deposit. S at any past real time comes
+     from a saved history of the world clock per detonation (one sample a real minute until its last arrival, at
+     most ~11 h).
 5. **The show is the strike's own phase, from its laws.**
    - A detonation's show lasts 20 min: Hiroshima's firestorm formed about 20 min after the burst.
    - A conventional strike's show lasts until its cloud has stopped rising (the cloud law's apex, π/N: 2–5 min) and its
-     own crater fuel has burnt out (`FuelFires`: Shahed 2.5 min, missile 16 min). No fire's fade is ever compressed.
+     own crater fuel has burnt out (`FuelFires`: Shahed 2.5 min, missile 16 min), so a crater fire's fade (its last
+     fifth, 192 s for a missile) is never compressed. The firestorm burns down on S by design: it lasts hours of world
+     time.
    - After a show, S joins the world's rate by a new rate blend: dS/dt = 1 + (k − 1)·u, with u a smoothstep of r / 60 s
      (presentation), r the real seconds since the show's end and k the world's rate without jumps. It never overshoots
      k and never catches up the show. Today's join catches up instead and peaks at 120.8× real under a vanilla day.
@@ -361,15 +376,17 @@ take it: it is the one decision left to Artem (§11).
    - A mod that turns the vanilla cycle off but advances the time itself is measured as running.
 7. **Jumps.** A jump is a forward step of the day of at least an hour in one tick: a sleep skip, `/time add`, or,
    while the day runs, a `/time set` whose forward distance (modulo one day) is under 12 hours (a night skip).
-   - A jump counts only when no awake player (spectators included) is in its dimension: single-player sleep, or every
-     player there asleep. It then adds its hours once to M and S of every strike in that dimension and ends their
+   - With no awake player (spectators and idle players included) in its dimension (single-player sleep, or every
+     player there asleep), a jump adds its hours once to M and S of every strike in that dimension and ends their
      shows.
-   - With an awake player there, it counts as real time. Only the sky moves, as vanilla moves only the sky and the
-     weather. Nothing changes in front of anyone.
-   - Smaller steps go through the rate blend. With the day stopped, `/time set` only chooses the light. A backward set
-     never invents days.
+   - With an awake player there, nothing drawn changes in front of anyone: the air (M), the fires and the shows keep
+     their time. The jump still moves what nobody sees change: ground dose and contamination, injuries, outages and
+     repairs (each a recovery clock of its own, rule 8). So a sleep or an op's `/time add` heals and repairs as a night
+     does, as the 10.11 rule has it, while the watchers' picture stays whole.
+   - A step under an hour is a rate, not a jump: the in-place clocks follow it through the world clock, the air ignores
+     it. With the day stopped, `/time set` only chooses the light. A backward set never invents days.
    - Flight and the blast wave are never jumped: they finish in seconds at their speed, and their damage stays in the
-     work budget.
+     work budget. A jump that falls while a front is still crossing is counted when the front ends (within ~1 min).
    - Gradual time-lapse sleep mods are a rate: the ground follows it and the air keeps real time (limit: after a lapsed
      night the plumes are where real time puts them).
 8. **Shared states and bodies.** A state with several causes (a body's hearing, burns and sickness; a district's
@@ -400,8 +417,8 @@ Vanilla day, 15 kt, wind 5–15 m/s at 1 km unless stated. A world hour is 50 re
    - Body, if hit: hearing heals in 16 world hours (13 min after the show), burns in weeks of world time.
    - Power: a tripped zone is back 2–24 world hours after the show (100 s–20 min), a damaged belt in 2–14 world days
      (40 min–4.7 h).
-   - The next night comes at most ~11 min after the show. Sleeping then (up to 11.5 h) clears the dust and smoke, puts
-     the fires out and lowers the dose.
+   - The next night comes at most ~11 min after the show. Sleeping then (up to 11.5 h) clears the dust and smoke,
+     leaves the firestorm smouldering out (it is out by 9–12 h of its clock) and lowers the dose.
 2. **YouTuber's sequence.**
    - Shahed: the cloud rises for 2–5 min, the crater fire burns its 2.5 min, and the cloud leaves the village with the
      wind in a minute or two, then recedes for tens of minutes (about 40 at 8 m/s).
@@ -413,8 +430,10 @@ Vanilla day, 15 kt, wind 5–15 m/s at 1 km unless stated. A world hour is 50 re
    repaired in 18 h. A sleep shared by everyone skips its hours for everything at once.
 4. **Friends' server.**
    - With the default sleep share, the night is skipped only when everyone sleeps; then everything moves on together.
-   - With a one-sleeper rule and friends awake, only the sky moves. Their show and every aftermath go on in front of
-     them; the sleeper wakes to a morning sky over the aftermath at its real age.
+   - With a one-sleeper rule and friends awake, the sky moves and so do doses, injuries and repairs. The show, the
+     air and the fires go on in front of the watchers; the sleeper wakes to a morning sky over the aftermath at its
+     real age. This is the second conflict no principle removes: one shared world cannot both keep the watchers'
+     picture and advance the sleeper's; the watchers win (no vanishing in front of anyone).
 5. **War server.**
    - Conventional clouds leave each site with the wind in a minute or two and recede in one direction. The smoke
      budget (at most 128 cloud sources, 2 ms per frame) bounds the cost at any count.
@@ -430,7 +449,8 @@ Vanilla day, 15 kt, wind 5–15 m/s at 1 km unless stated. A world hour is 50 re
    - Hearing heals in 80 min, a tripped zone in 10 min–2 h, fallout on the ground in ~14 h.
    - A seasons mod changes this only if it changes the day's length.
 8. **Conventional raids on a village.** Each hit's cloud rises for 2–5 min while its crater fire burns, then drifts out
-   of the village with the wind. Houses burn as ordinary game fire. Hearing heals in ~15 min, or at once with a sleep.
+   of the village with the wind. Houses burn as ordinary game fire. Hearing heals 16–19 min after a Shahed hit and about 30 min after a missile's
+   (its show includes the 16-min crater fire), or at once with a sleep.
    Raids do not pile up over the village: every cloud leaves downwind.
 9. **Late joiner and replay.** A friend joining at minute 10 sees minute 10: the same clouds in the same places, the
    fire at the same stage. A replay seek shows that moment's state; a pause stops everything.
@@ -460,11 +480,11 @@ replays. Frame-cost changes are benched where marked.
 | 1 | The inside-sight cap becomes a camera property (§1.1): it weighs each ray's segment inside the layer by the eye's depth below the local layer top; outside the dust every ray reads the law through the transfer. Not a time change; marked presentation. | `PallField.visible/lifetime`, `dustwall.glsl`, `DustSources`, `DustWallGlslTest`, `PallFieldTest`, `tools/dust_wall_gl.py`; guide `not-physical.md` | none | Every pack: from outside, the blanket stays dark through the show instead of 55 % see-through after a minute; inside, the view is unchanged (200 m → 700 m). Bench: no new work per ray. |
 | 2 | Clocks: M and S per strike, the new rate blend (rule 5), counted jumps (rule 7), the measured stopped-day rate (rule 6), the `/time set` rule, the saved counter and show-end anchors. | `WorldClock` (k without jumps, the counter, the stopped rate), `ClientClock`, `NukeClock`, `NukeClockTest` (no overshoot), `NuclearEvents.Anchor`/`endShows`, `ClientNuclear.clockTicksAt`, `S2C.NukeClock` | Clock packet with the counter to every client once a second; `ShowEnd` gains the show's real end; PROTOCOL bump. Save: counter and stopped rate in `WorldClock`, two `Anchor` fields. Old replays: a 20-min show, no jumps | Sleeping alone during a show wakes you to the aftermath at its world age; a night skip with friends awake changes nothing in front of them; a stopped sun no longer turns a 30-min aftermath into 12 real hours. |
 | 3 | The air reads M: dust, mushroom, clouds, ground dust, trails and smoke add counted jumps to their real age. | `DustSources.source`, `ClientNuclear` (mushroom, `CloudPuffs`), `client/fx/smoke` (`SmokeGrid`, `BlastTime`), `FireSmoke`, `TrailModel`; texts `nuclear.md`, `dust-wave.md` | uses change 2 | After a night everyone slept through, the sky is clear of the strike's dust and smoke; otherwise the air runs as today. |
-| 4 | Handoffs (rule 4): the haze over and downwind of the fires becomes smoke parcels (emission per real second at the fire's current strength, motion on M), replacing today's plume capped at 2 fire zones; black rain is their rain-out; fallout arrives on M and decays on S after landing. | `PallField` (`hazeEnvelope`, `plume`, `PLUME_MAX`), `pall.glsl`, `BlackRainModel`, `FalloutModel`, `RadiationTicker`, `NukeSky` | none (from anchors) | Rain only under drawn smoke, never kilometres ahead of it; fallout with its cloud at the visible wind. Bench under a 24-hour day (worst case: the band out to 22–36 km for 2 h) and a vanilla day. |
+| 4 | Handoffs (rule 4): the haze over and downwind of the fires becomes smoke parcels (emission per real second at the fire's current strength, motion on M), replacing today's plume capped at 2 fire zones; black rain is their rain-out while drawn; fallout and rain deposit arrive on M and age on the ground by arrival age plus S since landing (world-clock history per detonation). | `PallField` (`hazeEnvelope`, `plume`, `PLUME_MAX`), `pall.glsl`, `BlackRainModel`, `FalloutModel`, `RadiationTicker`, `NukeSky` | none (from anchors) | Rain only under drawn smoke, never kilometres ahead of it; fallout with its cloud at the visible wind. Bench under a 24-hour day (worst case: the band out to 22–36 km for 2 h) and a vanilla day. |
 | 5 | Shared states and outages (rule 8); the conventional show (rule 5) sets the hearing clock of a conventional blast. | `RadiationTicker`, `SicknessModel`, `BurnsEffect`/`BurnInjury`, `Deafness`/`HearingModel`, `grid/Outage`, `Blackouts`, `PowerGrid`, `S2C.Blast` (show end); `client-sound.md` | Save: a recovery clock per body and district, old times read as world clock. Packet: blast show end, PROTOCOL bump | During a show, hearing, burns, sickness and power no longer recover 72× fast. |
 | 6 | Bodies age while present; hearing kept across relog. | `RadiationTicker`, `SicknessModel`, `Deafness`, `HearingModel`, `BurnsEffect` | Save: body clock per player and mob. Packet: ear state, PROTOCOL bump | No fatal-stage login after a night offline; relogging no longer cures deafness. |
 | 7 | Client clocks follow the client level's tick and the replay position; heat shimmer leaves the wall clock. | `IncomingClient` smoke, trail and blast clocks, `HeatPass` | none | `/tick freeze` and Flashback pause stop conventional smoke; exported video shimmers at the right speed. |
-| 8 | A detonation is forgotten only after its last fallout lands and its ground dose is below the natural background, not at a fixed 7 days; crater progress kept until done. | `NuclearEvents`, `FORGET_AFTER_S` | Save: crater progress | No one-step drop of the dosimeter. |
+| 8 | Fallout follows its law to the end: after the trace's last arrival above the radiation model's own floor (out to ~270 km, ~11 h), a detonation keeps only a compact ground field (bounded cells, evaluated only near players) that decays by its law and is dropped when its strongest cell falls below that floor. That is years of world time at ground zero, as for a real surface burst; `/incoming clear` removes it. Crater progress kept until done. | `NuclearEvents`, `FORGET_AFTER_S`, `FalloutModel`, `RadiationTicker` | Save: the compact field, crater progress, the world-clock history (rule 4) | No one-step drop of the dosimeter at day 7; the ground near ground zero stays measurably hot, decaying. |
 | 9 | `doFireTick false` (rule 11). | `strike/StrikeRules`, `Warheads`, `StagedExplosion`, `RuinPlan`, `DebrisSpawner`, `FuelFires` | none | No permanent static flames on such servers. |
 | 10 | Conventional strikes recorded on the server and sent to late joiners and on a seek. | `strike/`, `S2C.Blast`, `IncomingClient` | Packet and record, PROTOCOL bump | A friend joining sees the clouds still up. |
 
@@ -481,15 +501,17 @@ AGENTS.md "Time" would read (replacing the current paragraph):
 > outages, injuries) runs real during the strike's show (20 min for a detonation; a conventional strike until its
 > cloud's apex and its fuel's burn-out), then at the world's rate (`util/WorldClock`: never slower than real, never
 > backward; vanilla 72×, day-length mods 1×; a stopped day keeps its last rate), joined by a rate blend. Handoffs
-> carry the state: smoke at its fire's strength, rain and fallout with their carrier. A night skip with no awake
-> player in the dimension counts once on both and ends a show; with someone awake only the sky moves. Shared states
+> carry the state: smoke at its fire's strength, rain and fallout with their carrier. A jump (sleep, `/time add`, a
+> night-skipping `/time set`) with no awake player in the dimension counts once on both and ends a show; with someone
+> awake it moves only what nobody sees change (doses, injuries, repairs). Shared states
 > recover at real rate while any cause is in its show; bodies age only while present. Real time is game time. No new
 > time settings; durations come from the laws.
 
 What P4 keeps: the 20-minute nuclear show, the world clock and its floor, the movement axis (`scale_preset`, flight
 and wave speed), every law's own durations, the existing caps `CloudModel.LIFE_MAX` (1 h) and the trail's 1200 s (a
 separate question for the laws' visibility thresholds). Two decisions of 10.11 change. A stopped day keeps its last
-rate instead of running real time. Sleep moves the show only when nobody in the dimension is awake.
+rate instead of running real time. A jump moves the show, the air and the fires only when nobody in the dimension
+is awake; otherwise it moves only doses, injuries and repairs.
 
 ## 10. Every mechanic against pack conditions: mismatches, ranked
 
@@ -501,7 +523,7 @@ replays, dimensions). Most player-visible first; the "Fix" column names the §9 
 | 1 | Any nuke, every pack | The dust blanket is drawn see-through from outside a minute after the front (§1.1) | 1 | every game |
 | 2 | Vanilla day, after a nuke | The dust hangs about an hour over the area; a night's sleep does not clear it | its law stays (§8.2); a night everyone sleeps through clears it (3) | every vanilla game |
 | 3 | `doFireTick false` | No gamerule is read before placing fire (`strike/StrikeRules.java:30`); ruin, flash, blast and debris fires (up to 20 000 per detonation, `nuclear/world/RuinPlan.java:1175`, `warhead/Warheads.java:489`, `StagedExplosion.java:1447`, `DebrisSpawner.java:51`) never go out | 9 | common on servers |
-| 4 | `/time set day` at night (the usual op skip) | `dayTime` moves backward and the world clock counts that tick as real (`util/WorldClock.java:106-125`, `ClientClock.java:30`): no night passes for the aftermath | 2 (rule 7) | common with ops |
+| 4 | `/time set day` at night (the usual op skip) | `dayTime` moves backward and the world clock counts that tick as real (`util/WorldClock.java:106-125`, `ClientClock.java:30`): no night passes for the aftermath | 2 (rule 7: counted as a jump; with the op awake it moves doses, injuries and repairs) | common with ops |
 | 5 | Vanilla day, during the nuke's show | Hearing, burns, sickness and power recover 72× fast while the show runs in real time (§3.1, 1) | 5 | every vanilla game |
 | 6 | Stopped sun (always-noon servers, creative) | Real time: a nuke's firestorm burns 12 real hours, fallout lasts 7 real days | 2 (rule 6) | common |
 | 7 | Dedicated server, player offline | Sickness advances offline (login at the fatal stage); burns are frozen offline; hearing is cured by relogging | 6 | common |
@@ -524,15 +546,18 @@ tick's day advance counts as rate), a 2-hour day in single steps (exactly 12×),
 dimension change for detonations, Nether and End (the overworld day is shared), the Flashback nuclear clock, and the
 gamerules the mod needs. Server lag slows the show and the server's work alike.
 
-## 11. Needs Artem's word
+## 11. Decided (Artem, 26.11)
 
-- Adopt P4, "the air in real time, the ground on the world's day", with the rules of §8.3 and the AGENTS.md "Time"
-  wording in §9.
-- The one open choice (§8.2): on a vanilla day the nuclear dust keeps its physical hour (half clear at 45 min after the
-  burst), cleared by a night everyone sleeps through. This note's proposal keeps it. Shortening it to ~1.5 min after
-  the show is possible only as a marked deviation from "smoke or fire shorter than its law" (19.11).
-- A stopped day keeps its last rate instead of real time (changes the 10.11 rule).
-- A night skip with no awake player in the dimension ends the show (today the show ignores sleep); with someone awake
-  only the sky moves.
-- With `doFireTick false` strikes leave no block fire burning forever; the crater fire and the firestorm still burn and
-  end by their laws.
+- P4, "the air in real time, the ground on the world's day", with the rules of §8.3 and the AGENTS.md "Time" wording
+  of §9.
+- On a vanilla day the nuclear dust keeps its physical hour (half clear at 45 min after the burst) and a night everyone
+  sleeps through clears it; no shortening deviation (§8.2).
+- A stopped day keeps its last rate instead of real time (replaces the 10.11 clause).
+- A night skip with no awake player in the dimension ends the show. With someone awake, nothing drawn changes; doses,
+  injuries and repairs still move. Artem's accepted wording was "otherwise only the sky moves"; the second review
+  showed that this would silently drop the 10.11 rule that a sleep heals as a night does, so the invisible states keep
+  it.
+- With `doFireTick false` strikes leave no block fire burning forever; the crater fire and the firestorm burn and end
+  by their laws.
+- Owner's call within the principle: fallout follows its law to the end (change 8), so the ground near ground zero
+  stays measurably hot for years of world time, as for a real surface burst.

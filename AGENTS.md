@@ -160,12 +160,12 @@ defense, `launcher/`, `grid/` blackout, `sound/`, `client/`, `work/` tick budget
   differs, server flight is shared.
   `scale_preset`: `GAME` default flight 0/wave 0.35, `REAL` real life, `CUSTOM` uses `flight_speed`,
   `nuclear.wave_speed`, `nuclear.effects_scale` as set.
-- **Time** (Artem, 10.11): no modes. What players watch move (flight, flash, wave, mushroom, the first 20 minutes of
-  fires) runs in real seconds; slow consequences (fires burning out, black rain, fallout decay, sickness, burns, hearing,
-  power repairs) follow the world's day through `util/WorldClock` (time of day, never slower than real, never backward:
-  vanilla 72×, day-length mods 1×, stopped day real, sleep/`/time add` jump forward). Each detonation runs
-  `nuclear/NukeClock`: real for the 20-minute show, then joins the world clock over a minute (`nuclear.md`). An
-  effect never precedes its cause (`NukeClockTest`). No new time settings; durations stay in world hours.
+- **Time** (Artem, 26.11; rules in `docs/design/time.md` §8.3): the air in real time, the ground on the world's day.
+  What a strike puts into the air (clouds, dust, smoke, rain and fallout in flight) lives its whole law in real time;
+  no term of it is compressed. What stays in place (fires, contamination, outages, injuries) runs real during the show
+  (nuke 20 min; conventional to cloud apex and fuel burn-out), then at the world's rate (`util/WorldClock`: never
+  slower than real, never backward; stopped day keeps its last rate). A jump (sleep, `/time`) with nobody awake moves
+  both and ends a show; with someone awake only unseen states (doses, injuries, repairs). No time setting.
 - **Physics deviations** only preset scale, Artem's decision or concept 4's owner call; mark every one “not
   physical” in code and guide deviation list (game flight speeds/heights, wave 0.35; real values in weapon table). No
   silent deviations. Presentation boosts change no facts, so are not deviations.
