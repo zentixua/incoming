@@ -151,6 +151,8 @@ public final class HeatPass {
          * light (linear, for light threshold); pixel angle, rad.
          */
         public double exposure = 1, open = 1, pixel = 1e-3;
+        /** Frame time on the client level's tick, s ({@code SmokeGrid.seconds}): the shimmer's eddies advect on it. */
+        double seconds;
         /**
          * Frame fire light at eye (white-wall illuminance at eye, linear, noon white wall = 1, without
          * adaptation): drives next frame's eye adaptation ({@link #atEye()}).
@@ -641,16 +643,33 @@ public final class HeatPass {
     private static final Vector4f FACE_SHADE = new Vector4f();
     private static final int[] VIEWPORT = new int[4];
     private static int copy = -1, copyW, copyH;
-    private static final long BORN = System.nanoTime();
+
+    private static final Vector4f CLOCK = new Vector4f();
 
     private HeatPass() {}
 
-    /** Source frame: skylight/eye adaptation before collection (define light threshold). */
-    public static Frame begin(ClientLevel level, double exposure, double pixel) {
+    /**
+     * Shimmer clock at {@code seconds} of level time: gas advects the eddy pattern in two layers half a cycle apart
+     * ({@link #HAZE_CYCLE}); per layer the cycle fraction and its pattern index ({@link #CYCLE_SEEDS}), computed in double,
+     * not float time.
+     */
+    static Vector4f clock(double seconds, Vector4f into) {
+        double cycles = seconds / HAZE_CYCLE, half = cycles + 0.5;
+        return into.set((float) (cycles - Math.floor(cycles)), (float) (Math.floor(cycles) % CYCLE_SEEDS),
+                (float) (half - Math.floor(half)), (float) (Math.floor(half) % CYCLE_SEEDS + 0.5));
+    }
+
+    /**
+     * Source frame: skylight/eye adaptation before collection (define light threshold); {@code seconds} the frame's
+     * time on the client level's tick, so shimmer stands still under pause, {@code /tick freeze} and a paused replay,
+     * slows with {@code /tick rate} and runs at the video's pace in an export.
+     */
+    public static Frame begin(ClientLevel level, double exposure, double pixel, double seconds) {
         Frame f = FRAME;
         f.begin();
         f.exposure = exposure;
         f.pixel = pixel;
+        f.seconds = seconds;
         int c = Minecraft.getInstance().gameRenderer.lightTexture().lightPixels.getPixelRGBA(0, 15);
         OPEN_SKY.set((c & 0xFF) / 255f, (c >> 8 & 0xFF) / 255f, (c >> 16 & 0xFF) / 255f);
         FACE_SHADE.set(level.getShade(Direction.UP, true), level.getShade(Direction.DOWN, true), level.getShade(Direction.NORTH, true),
@@ -729,10 +748,8 @@ public final class HeatPass {
         s.safeGetUniform("HeatShape").set(f.shape);
         s.safeGetUniform("HeatAxis").set(f.axis);
         s.safeGetUniform("HeatGas").set(f.gas);
-        // gas advects eddy pattern: two layers half-cycle apart; cycle fraction/index in double, not float time
-        double cycles = (System.nanoTime() - BORN) / 1e9 / HAZE_CYCLE, half = cycles + 0.5;
-        s.safeGetUniform("HeatClock").set((float) (cycles - Math.floor(cycles)), (float) (Math.floor(cycles) % CYCLE_SEEDS),
-                (float) (half - Math.floor(half)), (float) (Math.floor(half) % CYCLE_SEEDS + 0.5));
+        clock(f.seconds, CLOCK);
+        s.safeGetUniform("HeatClock").set(CLOCK.x, CLOCK.y, CLOCK.z, CLOCK.w);
         s.safeGetUniform("HeatFront").set(f.front);
         s.safeGetUniform("HeatFrontShape").set(f.frontShape.x, f.frontShape.y, f.frontShape.z, f.frontShape.w);
         s.safeGetUniform("HeatFrontChemical").set(f.frontNuke[0] ? 0f : 1f, f.frontNuke[1] ? 0f : 1f);

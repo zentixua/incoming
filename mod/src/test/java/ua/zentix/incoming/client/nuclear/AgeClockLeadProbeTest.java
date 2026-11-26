@@ -31,7 +31,7 @@ class AgeClockLeadProbeTest {
                 maxRuinLag = Math.max(maxRuinLag, clock.at(0) - due);
             }
             drain(events, clock.at(0), scatter, expired, maxScatter);
-            clock.tick(1 + own * 50_000_000L);
+            clock.tick(1 + own * 50_000_000L, ua.zentix.incoming.client.ClientTicks.NOMINAL_NANOS);
             for (int f = 0; f < 3; f++) {
                 drain(events, clock.at(f / 3.0), scatter, expired, maxScatter);
             }

@@ -7,7 +7,7 @@ import ua.zentix.incoming.Incoming;
 import java.util.ArrayList;
 import java.util.List;
 
-/** Client effect timelines (blasts, gas vents, collapses): tick with the world, stop when paused. */
+/** Client effect timelines (blasts, gas vents, collapses): tick with the level, stand still while it does not run (pause, {@code /tick freeze}, a paused replay). */
 public final class Effects {
     private Effects() {}
 

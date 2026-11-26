@@ -229,7 +229,9 @@ public final class IncomingClient {
 
     private static void preTick(ClientTickEvent.Pre e) {
         Minecraft mc = Minecraft.getInstance();
-        if (mc.level != null && !mc.isPaused()) ua.zentix.incoming.client.fx.BlastTime.advance();
+        // conventional effects run on the level's tick: paused, /tick freeze and a paused replay hold them (ClientTicks)
+        ClientTicks.pre(mc);
+        if (ClientTicks.runs()) ua.zentix.incoming.client.fx.BlastTime.advance();
     }
 
     private static void tick(ClientTickEvent.Post e) {
@@ -256,19 +258,22 @@ public final class IncomingClient {
         ClientSounds.tick();
         FarRenderer.tick();
         FxLayer.tick();
-        ua.zentix.incoming.client.fx.smoke.SmokeGrid.tick();
+        // the conventional strike's moving picture (smoke, crater fire, particles, blast timelines, ground shake) stands
+        // still while the level does not run
+        boolean runs = ClientTicks.runs();
+        if (runs) ua.zentix.incoming.client.fx.smoke.SmokeGrid.tick();
         // local-chunk fire in the nuke's burning city supplies its roar; smoke from crater fuel and substation oil
         Vec3 fireEye = mc.gameRenderer.getMainCamera().getPosition();
         ua.zentix.incoming.client.fx.FireWatch.tick(mc.level, (int) Math.floor(fireEye.x) >> 4, (int) Math.floor(fireEye.z) >> 4,
                 mc.options.getEffectiveRenderDistance());
-        ua.zentix.incoming.client.fx.FireSmoke.tick(mc.level);
-        // particles tick after the world, like the vanilla engine; they stand still while frozen
-        if (mc.level.tickRateManager().runsNormally()) {
+        ua.zentix.incoming.client.fx.FireSmoke.tick(mc.level, runs);
+        // particles tick after the world, like the vanilla engine
+        if (runs) {
             FxPool.INSTANCE.tick(mc.level);
             Fragments.tick();
+            Effects.tick();
         }
-        Effects.tick();
-        CameraShake.tick(CameraShake.standing(mc.player));
+        CameraShake.tick(CameraShake.standing(mc.player), runs);
         Flash.tick();
         Concussion.tick();
         Alerts.tick();

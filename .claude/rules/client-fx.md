@@ -1481,7 +1481,7 @@ paths:
   shift — in fractions of an arc-minute, not a pixel (`resolve`: presentation; a pixel at a 70° field — 4 minutes; through
   binoculars — a pixel): the earlier δn·√(L/ℓ) in pixels gave 0.01–0.1 px — the shimmer was “nowhere” (FX 23.10). The
   pattern — noise octaves from ℓ; the gas carries it by flow across the map (two layers offset by half a cycle in
-  `HeatClock`: time in float with a pattern shifted by place would tear the jet into grain). Copies — `haze*` in
+  `HeatClock` on level time: float time with a pattern shifted by place tears jets to grain). Copies — `haze*` in
   `fx_heat.fsh` (`HazeGlslTest`), visibility — `HazeTest`. The pass runs only where it can change a pixel
   (`HeatArea`): a ball or a jet reaches a sphere where its light (L·r²/d², a jet q·length/D² from its axis) still moves a
   display channel by half an 8-bit step at the most sensitive pixel — the one equal to the face's open-sky light, the
