@@ -392,13 +392,13 @@ public final class PallField {
      * see-through warm haze, not a wall), then farther as the law thins it. The law's τ (60–96 at 4.5 km from 1 Mt over
      * 5–10 min) would hold the camera in a 50-block fog for ten minutes. The sight belongs to the camera, not to the dust: the
      * table carries it per age node beside the law ({@link #lifetime}), and a camera takes it by its share ({@link #sight};
-     * {@code dustwall.glsl}: {@code DwSight}); a camera outside the dust reads the law as {@link #drawn} draws it on every ray
+     * {@code dustwall.glsl}: {@code DwSight}); a camera outside the dust reads the law's column as drawn ({@link #column}) on every ray
      * (from a hill, 15 kt at 1.5 km passes 1 % of the light straight down at one minute and 1.7 % at twenty;
      * {@code DustSightTest}). The drawn depth saturates at the extinction that gives that sight (Koschmieder over the
      * transfer of the law's column, {@link #seeCeiling}), by age through the haze level's fade (none while the textured young
      * level owns the column: take 33 holds); from five minutes on the ceiling falls with the law's own thinning. Returned as
      * the τ the transfer turns into that drawn depth (its inverse, interpolated between age nodes as τ, as the inside view
-     * always was); a camera's share moves each level's drawn column to that transfer ({@link #column}, {@code dwDustDensity}).
+     * always was); a camera's share takes the haze level's column to the transfer of it ({@link #column}, {@code dwHaze}).
      */
     private double sighted(DustModel.Column c, double age, double tau, double topBlocks) {
         double drawn = transfer(tau), fade = 1 - textured(age);
@@ -486,26 +486,15 @@ public final class PallField {
     }
 
     /**
-     * The drawn column's vertical optical depth from the law's at age (model s): the textured young level draws its law through
-     * {@link #transfer} (the matte face), the haze level the law itself up to the depth the screen shows ({@link #hazeDepth}),
-     * blended by the textured level's share ({@code dustwall.glsl}: the two levels' densities by {@code dwTextured}). Seen from
-     * above or from a hill, a blanket of the law's depth hides the ground as the law does (through the transfer, 15 kt passed
-     * 15 % of the light straight down at 2 km after a minute, law τ 6.7).
-     */
-    public static double drawn(double tau, double age) {
-        double f = textured(age), haze = hazeDepth(tau);
-        return f >= 1 ? transfer(tau) : f <= 0 ? haze : haze + f * (transfer(tau) - haze);
-    }
-
-    /**
-     * The haze level's drawn column ({@code dwHazeDepth}): the law's optical depth, softly held under the depth a ray
-     * leaves the dust at ({@code dwMarch} stops at a transmittance of 1 %: ln 100): deeper dust shows nothing more from any
-     * view. The fourth-power soft minimum keeps the law within 1 % up to τ 2 (0.4 % at 1.5); a camera inside takes its
-     * sight, the readers of the carpet at the stem's foot a carpet no denser than one the screen can show.
+     * The haze level's drawn column ({@code dwHazeDepth}) seen from outside the dust: the law's whole column (its paved share,
+     * the table's fade), softly held under the depth a ray leaves the dust at ({@code dwMarch} stops at a transmittance of
+     * 1 %: ln 100): deeper dust shows nothing more from any view. The eighth-power soft minimum keeps the law within 1 % up to
+     * τ 3.3 and never passes more than 1.5 % of the light straight down where the law passes under 1 %. The textured young level draws the law through {@link #transfer} (the matte face), a camera inside
+     * the dust its inside sight; the readers of the carpet at the stem's foot get a carpet no denser than the screen shows.
      */
     static double hazeDepth(double tau) {
-        double u = tau / HAZE_SEEN;
-        return tau / Math.sqrt(Math.sqrt(1 + u * u * u * u));
+        double u = tau / HAZE_SEEN, u2 = u * u, u4 = u2 * u2;
+        return tau / Math.sqrt(Math.sqrt(Math.sqrt(1 + u4 * u4)));
     }
 
     /** {@link #hazeDepth}'s ceiling: the march's exit optical depth, ln 100 ({@code DW_SEEN}). */
@@ -1299,7 +1288,7 @@ public final class PallField {
 
     /**
      * The drawn dust wave's noise-free column at source point (rx, rz) from ground zero, model time t ({@code dustwall.glsl}:
-     * {@code dwHaze}'s column): out[0] its vertical optical depth (the law's as {@link #drawn} draws it, the young head's density,
+     * {@code dwHaze}'s column): out[0] its vertical optical depth (the law's as drawn: the textured level's transfer, the haze level's held law ({@link #hazeDepth}), the young head's density,
      * over hard ground only its debris dust — the paved share of table row 0 — and the last table spacing's fade), out[1] its
      * top, blocks (0.95 of the table's, as drawn); 0 where no dust. One copy for every Java reader of the drawn dust. The law,
      * as a camera outside the dust sees it; {@link #drawnColumn(float[], int, double, double, double, double, double, double,
@@ -1312,7 +1301,7 @@ public final class PallField {
 
     /**
      * {@link #drawnColumn} as a camera with inside-sight share {@code sight} ({@link #sight}) draws it: the drawn depth
-     * moves from the law's ({@link #drawn}) to the transfer of the inside sight's ({@link #sighted}, the table's
+     * moves from the law's to the transfer of the inside sight's ({@link #sighted}, the table's
      * {@link #SIGHT_ROW} rows) by the share ({@code dustwall.glsl}: {@code dwDustDensity}'s {@code DwSight}).
      */
     public static void drawnColumn(float[] table, int n, double end, double reach, double t, double rx, double rz, double hard,
@@ -1342,12 +1331,17 @@ public final class PallField {
         double row = table[4 * j + 1] + fx * (table[4 * (j + 1) + 1] - table[4 * j + 1]);
         double paved = 1 + hard * (row - 1);
         double edge = reach * (1 - 1.0 / (n - 1)), fade = 1 - smoothstep(edge, reach, r);
-        double seen = drawn(tau, age);
+        double seen = tau;
         if (sight > 0) {
             int os = 4 * ((SIGHT_ROW + k) * n + j);
-            seen += sight * (transfer(table[os] + f * (table[os + 2] - table[os])) - seen);
+            seen = tau + sight * (table[os] + f * (table[os + 2] - table[os]) - tau);
         }
-        out[0] = seen * (1 + 0.5 * Math.exp(-age / 1.1)) * paved * fade;
+        // the textured level: the transfer of the law (the camera's inside sight by its share); the haze level: the law's whole
+        // column held under what the screen shows (hazeDepth), taken to the textured level's reading by the share; between
+        // them by the textured share ({@code dwHaze}, {@code dwDustDensity})
+        double scale = (1 + 0.5 * Math.exp(-age / 1.1)) * paved * fade, tex = transfer(seen) * scale, outside = hazeDepth(tau * scale);
+        double haze = outside + sight * (tex - outside);
+        out[0] = haze + textured(age) * (tex - haze);
         out[1] = 0.95 * top;
         if (out.length < 6) return;
         out[2] = age;

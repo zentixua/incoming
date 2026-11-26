@@ -11,8 +11,9 @@ it, and lays no dust from behind a foreground surface; the resolve drops history
 moved in, with no history, and reads the previous frame on the march lattice when the frame width is not a multiple of the
 divisor (its last column too); the march stops at the world behind the pixel, a straight-down ray sees the layer as a
 slightly tilted one does, the layer lies on the local ground (a valley), a ray over rising ground does not skip it, no
-dust lies inside the fireball's ground footprint, and the head does not turn around ground zero
-nor ride out with the front,
+dust lies inside the fireball's ground footprint, seen from above the settled haze draws the law's whole column (over soil
+and hard ground, held at the march's exit depth) while a camera inside sees its sight on land and at a shore, and the head
+does not turn around ground zero nor ride out with the front,
 and the wall's edges along the front do not repeat. Optional arguments: a Java 21
 executable and the Veil parser classpath to link the programs after Veil's parse and print as well (VeilPrintProbe.java
 beside this script is not shipped; ShaderSourceTest covers Veil in the build)."""
@@ -129,12 +130,15 @@ def march_cases():
     src = expand("""#version 150
 uniform float Floor;
 uniform vec2 Shelf;
+// the source ground's water share and hard share (the material tiles' stand-ins)
+uniform float Water;
+uniform float Hard;
 // the ground: Floor, or Shelf.y blocks from Shelf.x blocks ahead of the eye on x (a rise)
 uniform vec4 DwEye; uniform vec4 DwRing; uniform vec4 DwLife; uniform vec4 DwBall; uniform vec3 DwBallLight; uniform float DwCut;
 uniform vec3 DwFire; uniform vec2 DwRelief; uniform vec4 DwSurge;
 float dwFloorEye(vec2 xz) { return Shelf.y > 0.0 && xz.x > Shelf.x ? Shelf.y : Floor; }
 float dwOpenEye(vec3 p) { return 1.0; }
-vec2 dwSoilAt(vec2 xz) { return vec2(0.0); }
+vec2 dwSoilAt(vec2 xz) { return vec2(Hard, 0.0); }
 float dwAirT(float t, float dy) { return 1.0; }
 vec3 dwAirLight(vec3 rd) { return vec3(0.0); }
 #moj_import <incoming:dustwall.glsl>
@@ -151,6 +155,9 @@ void main() {
     fragColor = vec4(wall.rgb, wall.a);
 }
 """)
+    stub = "vec2 soil = dwSoilAt(xz);\n    return vec3(0.0, soil.y, soil.x);"
+    assert stub in src, "the harness's material stub moved"
+    src = src.replace(stub, "vec2 soil = dwSoilAt(xz);\n    return vec3(Water, soil.y, soil.x);")
     p = gl["compileProgram"](gl["compileShader"]((core / "fx_dustwall.vsh").read_text(), g.GL_VERTEX_SHADER),
                              gl["compileShader"](src, g.GL_FRAGMENT_SHADER), validate=False)
     target(1, 1, [(g.GL_RGBA32F, g.GL_RGBA)])
@@ -236,23 +243,23 @@ void main() {
 
     def haze(tau):
         # PallField.hazeDepth: the law's depth held under the march's exit depth, ln 100
-        return tau / (1 + (tau / np.log(100)) ** 4) ** 0.25
+        return tau / (1 + (tau / np.log(100)) ** 8) ** 0.125
 
     def transfer(tau):
         return tau if tau <= 1 else 1 + 0.073 * (tau - 1) + (1 - 0.073) * 0.5 * (1 - np.exp(-(tau - 1) / 0.5))
     lifetime(p, [(0, 20, 3.0, 0)] * 128, seen=1.2)
     law = sighted(0)
     for w in (0.5, 1.0):
-        want = (haze(3) + (transfer(1.2) - haze(3)) * w) / haze(3)
+        want = (haze(3) + (transfer(3 + (1.2 - 3) * w) - haze(3)) * w) / haze(3)
         got = sighted(w) / law
         check(abs(got - want) < 0.02, f"inside sight {w}: drawn depth {got:.4f} of the law's, expected {want:.4f}")
     g.glUniform1f(loc(p, "Sight"), 0)
 
-    # from above the layer (the RC take: 400 m up, 70° down, 70 s and 2 min after a 15 kt surface burst at 2 km, the ground
-    # showed through): the haze level's drawn depth is the law's along the ray (τ/sin of the pitch; PallField.hazeDepth holds
-    # it within 1 % at τ 2), as the history averages the march over its sample offsets (eight here; one offset alone errs by up
-    # to 5 %), and a thick column (law τ 8, drawn 4.47: the march's exit depth) is opaque. Through the transfer the law's 2
-    # drew 1.47 (74 % of it) and the law's 8 passed 12 % of the light at 70°
+    # from above the layer (400 m up, 70° down, 2 km from a 15 kt surface burst, 70 s and two minutes: the view of the RC take):
+    # the haze level's drawn depth is the law's along the ray (τ/sin of the pitch; PallField.hazeDepth holds it within 1 % to
+    # τ 3.3), as the history averages the march over its sample offsets (eight here; one offset alone errs by up to 5 %), and a
+    # thick column (law τ 8, drawn 4.6: the march's exit depth) is opaque. The transfer alone draws the law's 2 as 1.47 (74 %
+    # of it) and passes 12 % of the light through the law's 8 at 70°
     def above(tau, up, pitch):
         lifetime(p, [(0, 20, tau, 0)] * 128)
         down = np.radians(pitch)
@@ -274,6 +281,36 @@ void main() {
               f"from {up} blocks up, {pitch}° down, law τ 2: drawn depth {-np.log(t):.4f} along the ray, the law's {law:.4f}")
         t, law = above(8.0, up, pitch)
         check(t < 0.015, f"from {up} blocks up, {pitch}° down, law τ 8: T={t:.4f}, expected opaque (the law's {np.exp(-law):.1e})")
+    # a camera inside old dust (share 1) straight down through a shore point (water share w, no spray: the table's spray row
+    # is 0): the column holds the soil's share of the inside sight, never denser than over land; hard ground (paved share
+    # 0.3 of the soil's dust) seen from above, outside: the hold of the law's column there, not 0.3 of the soil's hold
+    # (review probe shore_inside_gl.py)
+    def straight(law, seen, water, sight, hard=0.0, paved=0.0):
+        lifetime(p, [(0, 20, law, paved)] * 128, seen=seen)
+        g.glUniform1f(loc(p, "Hard"), hard)
+        g.glUniform1f(loc(p, "Water"), water)
+        g.glUniform1f(loc(p, "Sight"), sight)
+        g.glUniform1f(loc(p, "Floor"), 0)
+        g.glUniform2f(loc(p, "DwRelief"), 0, 0)
+        g.glUniform4f(loc(p, "DwEye"), 100, 40, 0, 120)
+        g.glUniform3f(loc(p, "Dir"), 0, -1, 0)
+        g.glUniform1f(loc(p, "End"), 40)
+        g.glUniform1f(loc(p, "Jitter"), 0.5)
+        quad(p)
+        return float(-np.log(max(read(1, 1)[0, 0, 3], 1e-30)))
+    for law in (3.0, 10.0):
+        land = straight(law, 1.2, 0.0, 1.0)
+        for w in (0.25, 0.5, 0.75):
+            shore = straight(law, 1.2, w, 1.0)
+            check(shore <= land * 1.02, f"inside the dust, law τ {law}, a shore point (water {w}) draws {shore:.3f}, at most land's {land:.3f}")
+    for law in (10.0, 15.0):
+        hard = straight(law, law, 0.0, 0.0, hard=1.0, paved=0.3)
+        check(abs(hard / haze(0.3 * law) - 1) < 0.1,
+              f"hard ground from above, paved 0.3, law τ {law}: drawn {hard:.3f}, the hold of the law there {haze(0.3 * law):.3f}")
+    g.glUniform1f(loc(p, "Hard"), 0)
+    g.glUniform1f(loc(p, "Water"), 0)
+    g.glUniform1f(loc(p, "Sight"), 0)
+    g.glUniform1f(loc(p, "Jitter"), 0.8)
     lifetime(p, [(0, 20, 10.0, 0)] * 128)
 
 

@@ -61,7 +61,7 @@ paths:
   (`PallGround`, atlas `Sampler3`), the floor beyond the eye's tiles, and two ground-material tiles
   (`DustMaterialTiles`: fine at the server's dense cell, coarse at its outer cell; RGBA8 water/sand/hard/known, filled
   1024 cells a frame from `SourceMaterial`; a known cell never changes). Water is a material of the same wave: the material
-  mixes the dust law's column with the spray's (`dwMaterialLaw`, spray row); a water burst's base surge is a second
+  mixes the dust law's column with the spray's (`dwDustDensity`, spray row); a water burst's base surge is a second
   source term (`dwSurge`). The dust never lies indoors (the outdoor-air window) and never under the fireball's ground
   footprint.
 
@@ -77,7 +77,8 @@ paths:
   (`PallField.PRESENT_HEIGHT`: the crest just under a 120 m camera's horizon at 4.5 km from 1 Mt), the hump, the
   transfer of the textured young level (`dwTransfer` ↔ `PallField.transfer`: optical depth above 1 drawn compressed, the
   matte face; the haze level draws the law's depth held under the march's exit depth ln 100, `dwHazeDepth` ↔
-  `PallField.hazeDepth`, within 1 % of the law up to τ 2; the two by `dwTextured`, `PallField.drawn`) and the sight inside old dust
+  `PallField.hazeDepth`, applied to the law's whole column after material, paved share and fade, within 1 % of the law up
+  to τ 3.3; the two by `dwTextured`, `PallField.column`) and the sight inside old dust
   (`PallField.sighted`: about 200 m at one minute, 700 m by five, then the law's own thinning).
 - The inside sight is the camera's, not the dust's. The table holds the law's optical depth per age node and, in its
   sight rows (`PallField.SIGHT_ROW`, `DW_SIGHT_ROW`: one texel per age interval with both nodes' value and slope), the
@@ -85,13 +86,16 @@ paths:
   within 3 %, `DustSightTest.insideTheColumnIsMainsAtEveryAge`). Each source's frame inputs carry the camera's share
   (`DwSight`, texel 5's w: `PallField.sight`, the eye's depth below the haze level's own top there, envelope × (1 +
   swell + plume) from `DustNoise`'s copy of `dwSwellField`/`dwPlume` on the march's lattice, over its soft edge, × its
-  column against the sight's ceiling, taken in over the eye's dust's first 2 s), and the density moves each level's drawn
-  depth to the transfer of the sight's by that share (`dwSight`: one fetch per radius node, no work at share 0; the rows
-  keep τ, interpolated as τ between age nodes). Outside the dust every ray reads the law as drawn (`PallField.drawn`; from
-  a hill, 15 kt at 1.5 km straight down: 1 % of the light at one minute, 1.7 % at twenty, opaque slant; 400 m above at
-  2 km, 70° down, under 1 % at 70 s and 2 min, where the transfer passed 12–20 %: `DustSightTest.fromAboveTheHazeIsTheLaw`,
-  `tools/dust_wall_gl.py` "from N blocks up"). The ceiling keeps the carpet at the stem's foot under the stem's density
-  (`StemFootTest`: the law's carpet there, 0.6/block at 60 s from 15 kt, would raise a new bell). Java readers of the world's dust (stem foot, the mushroom's ground, breach dust) read the
+  column against the sight's ceiling, taken in over the eye's dust's first 2 s), and the density moves the law's depth to
+  the sight's by that share before the water share (`dwSight`: one fetch per radius node, no work at share 0); the haze
+  level takes its held outside column to the transfer of that by the same share (`dwHaze`), so a camera inside sees main's
+  column on land and at shores (`tools/dust_wall_gl.py` shore case). Outside the dust every ray reads the law's whole
+  column as drawn (`PallField.column`): from a hill, 15 kt at 1.5 km straight down 1 % of the light at one minute, 1.7 % at
+  twenty, opaque slant; from 400 m above at 2 km, 70° down, under 1 % at 70 s and two minutes over soil and over hard ground
+  (`DustSightTest.fromAboveTheHazeIsTheLaw`, `hardGroundFromAboveFollowsTheLaw`, `tools/dust_wall_gl.py` "from N blocks
+  up" and hard-ground cases); the transfer alone passes 12–20 % there. The hold keeps the carpet at the stem's foot under
+  the stem's density (`StemFootTest`: the bare law's carpet there, 0.6/block at 60 s from 15 kt, raises a bell that breaks
+  off at its top). Java readers of the world's dust (stem foot, the mushroom's ground, breach dust) read the
   law as drawn; the eye's readers (`DustSources.eyeDepth`, `PallField.addDrawnEye`) take the camera's share (`DustSightTest`,
   `DustNoiseTest`, `DustWaveCopiesTest`, `tools/dust_wall_gl.py` noise and inside-sight cases).
 
@@ -143,8 +147,8 @@ paths:
 
 ## Pitfalls
 - A view from above shows the ground through the dust only where something is drawn behind it: vanilla's render distance is
-  a sphere and draws nothing 400 m below, so a vanilla frame from above has sky behind the dust and reads opaque at 15 %
-  transmission; Voxy or DH LODs put the ground there (the RC take: the ground through the transfer's blanket). Judge views
+  a sphere (at 12 chunks nothing 400 m below is drawn: a 70° ray from 400 m meets the ground at 426 m, 27 chunks), so such a
+  frame has sky behind the dust and reads opaque at 15 % transmission; Voxy or DH LODs put the ground there (the RC take: the ground through the transfer's blanket). Judge views
   from above with LODs (`tools/client_scenario.sh commands voxy`) and the march's dump (`dw:dump`, `dw:probe=-2`).
 - The per-ray tuft (T6) lifts the far top seen edge-on only: a ray meeting the band nearer than about 1 km looks down into the
   near dust and takes none (`dwRayTuft`). Clamped to its 600 m column point, every such ray took its azimuth's tuft and lifted

@@ -10,7 +10,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
  * The sight inside old dust belongs to the camera ({@link PallField#sight}, {@code dustwall.glsl}: {@code DwSight}): from outside
- * the dust every ray reads the law as drawn ({@link PallField#drawn}: the haze level the law's depth, the young textured level its
+ * the dust every ray reads the law as drawn ({@link PallField#drawnColumn}: the haze level the law's held column, the young textured level its
  * transfer), so the blanket seen from a hill or from above stays opaque while the law's column is thick; a camera inside sees what
  * main drew, at every age (about 200 m at one minute, 700 m by five); walking out of the dust moves no far ray by a step.
  */
@@ -63,7 +63,7 @@ class DustSightTest {
     /**
      * Complaint (time.md §1.1): a minute after the front the blanket was drawn see-through from outside, 55 % of the light
      * straight down at 1.5 km from 15 kt. From outside the column is the law's to what the screen shows (the haze level,
-     * {@link PallField#drawn}): it passes 1 % of the light straight down at one minute (law τ 14.0) and 1.7 % at twenty (τ 5.2),
+     * {@link PallField#hazeDepth}): it passes 1 % of the light straight down at one minute (law τ 14.0) and 1.7 % at twenty (τ 5.2),
      * and seen slant (three times the vertical path) it stays opaque through those twenty minutes.
      */
     @Test
@@ -80,10 +80,9 @@ class DustSightTest {
     }
 
     /**
-     * Complaint (RC take, 26.11): from 400 m above the layer, 2 km from a 15 kt surface burst, 70° down, the ground showed
-     * through the blanket at 70 s and two minutes (the transfer drew the law's τ 6.7–8.2 as about 1.9: 15 % of the light).
-     * Seen from outside, the haze level draws the law's own depth up to the depth the screen shows (the march's exit, ln 100):
-     * the column is that once the textured level has gone (60 s), the law within 1 % up to τ 2, and the 70° ray passes under
+     * From 400 m above the layer, 2 km from a 15 kt surface burst, 70° down, at 70 s and two minutes, the ground stays hidden
+     * under the blanket (the transfer alone draws the law's τ 6.7–9 as about 1.9: 15 % of the light). Seen from outside, the haze level draws the law's own depth up to the depth the screen shows (the march's exit, ln 100):
+     * the column is that once the textured level has gone (60 s), the law within 1 % up to τ 3.3, and the 70° ray passes under
      * 1 % of the light while the law's column is over 6; the textured young level keeps the transfer.
      */
     @Test
@@ -97,11 +96,11 @@ class DustSightTest {
             if (c[3] > 6) assertTrue(Math.exp(-c[0] / down) < 0.01, "70° down at " + age + " s: " + Math.exp(-c[0] / down));
         }
         assertTrue(w.column(j, 70)[3] > 6 && w.column(j, 120)[3] > 6, "the law's column at 70 s and 2 min: " + w.column(j, 70)[3]);
-        for (double tau = 0.01; tau <= 2; tau += 0.01)
+        for (double tau = 0.01; tau <= 3.3; tau += 0.01)
             assertEquals(tau, PallField.hazeDepth(tau), 0.01 * tau, "the haze level's column is the law's at τ " + tau);
         for (double tau = 2; tau < 400; tau *= 1.1)
-            assertTrue(PallField.hazeDepth(tau) <= PallField.HAZE_SEEN && PallField.hazeDepth(tau * 1.1) > PallField.hazeDepth(tau),
-                    "held under the march's exit depth, rising, at τ " + tau);
+            assertTrue(PallField.hazeDepth(tau) <= PallField.HAZE_SEEN && PallField.hazeDepth(tau * 1.1) >= PallField.hazeDepth(tau),
+                    "held under the march's exit depth, never falling, at τ " + tau);
         // the young textured level: the law through the transfer (the matte face), and between them by the textured share
         double[] young = w.column(j, 10);
         assertEquals(PallField.transfer(young[3]) * (1 + 0.5 * Math.exp(-10 / 1.1)), young[0], 1e-9 * young[0], "at 10 s");
@@ -109,6 +108,30 @@ class DustSightTest {
         double f = PallField.textured(42);
         double haze = PallField.hazeDepth(mid[3]);
         assertEquals(haze + f * (PallField.transfer(mid[3]) - haze), mid[0], 1e-9 * mid[0], "at 42 s");
+    }
+
+    /**
+     * Over hard ground (roads, roofs, rock: the table's paved share of the soil's dust) the column seen from above is the hold
+     * of the law's column there, as over soil: 15 kt at 1, 1.5 and 2 km, 70 s and two minutes, eye 400 m up, 70° down, the drawn
+     * transmission within ×1.5 of the law's, or under 1.5 % where the law's is under 1 % (the hold's most straight down;
+     * review probe {@code DustAboveHardGroundProbeTest}).
+     */
+    @Test
+    void hardGroundFromAboveFollowsTheLaw() {
+        Wave w = Wave.of(15);
+        double down = Math.sin(Math.toRadians(70));
+        for (double m : new double[] {1000, 1500, 2000}) {
+            int j = w.node(m);
+            for (double age : new double[] {70, 120}) {
+                double[] soil = new double[6], hard = new double[6];
+                PallField.drawnColumn(w.table, N, w.end, w.reach, w.time(j, age), w.radius(j), 0, 0, 0, soil);
+                PallField.drawnColumn(w.table, N, w.end, w.reach, w.time(j, age), w.radius(j), 0, 1, 0, hard);
+                double law = soil[3] * w.table[4 * j + 1], tLaw = Math.exp(-law / down), tDrawn = Math.exp(-hard[0] / down);
+                assertEquals(PallField.hazeDepth(law), hard[0], 1e-6 * law, m + " m, " + age + " s: the hold of the law's column");
+                assertTrue(tDrawn < 0.015 && tLaw < 0.01 || tDrawn < 1.5 * tLaw && tDrawn > tLaw / 1.5,
+                        m + " m, " + age + " s: drawn T " + tDrawn + ", the law's " + tLaw);
+            }
+        }
     }
 
     /**

@@ -74,13 +74,14 @@ class DustWaveCopiesTest {
     void theSightShareIsAFrameInput() throws Exception {
         String s = Files.readString(GLSL);
         assertTrue(s.contains("vec4 b = dwParam(4), f = dwParam(5), r = dwParam(6);") && s.contains("DwSight = f.a;"), "DwSight from texel 5's w");
-        assertTrue(s.contains("seenD = seen > 0.0 ? dwTransfer(dwSight(r, a0)) : 0.0;")
-                        && s.contains("float lawHaze = dwHazeDepth(law.y);") && s.contains("gDwTauHaze = lawHaze + seen * (seenD - lawHaze);") && s.contains("gDwTauTex = tex + seen * (seenD - tex);"),
-                "the density moves each level's drawn depth to the inside sight's transfer by the share");
-        // PallField.drawn: the haze level draws the law's depth, the textured level (the young head and its puffs) its transfer
-        assertTrue(s.contains("float tc = gDwTauHaze * (1.0 + 0.5 * exp(-a / 1.1)) * paved") && s.contains("float tex = dwTransfer(law.y);")
-                && s.contains("float taud = gDwTauTex * (1.0 + 0.5 * exp(-a / 1.1));")
-                && s.contains("float taup = gDwTauTex * (1.0 + 0.5 * exp(-a / 1.1));"), "each level's drawn column");
+        assertTrue(s.contains("gDwLawOut = mix(law.y, sp.y, mat.x);") && s.contains("if (DwSight > 0.0) law.y = mix(law.y, dwSight(r, a0), DwSight);")
+                        && s.contains("law = vec2(mix(law.x, sp.x, mat.x), mix(law.y, sp.y, mat.x));"),
+                "the density moves the law's depth to the inside sight's by the share (the outside law kept beside it)");
+        // PallField.column: the haze level draws the law's whole column held (dwHazeDepth), taken to the transfer of the sight
+        // by the share; the textured level (the young head and its puffs) the transfer
+        assertTrue(s.contains("float out_ = dwHazeDepth(gDwLawOut * k);") && s.contains("float tc = DwSight > 0.0 ? out_ + DwSight * (dwTransfer(law.y) * k - out_) : out_;")
+                && s.contains("float taud = dwTransfer(law.y) * (1.0 + 0.5 * exp(-a / 1.1));")
+                && s.contains("float taup = dwTransfer(law.y) * (1.0 + 0.5 * exp(-a / 1.1));"), "each level's drawn column");
         String sources = Files.readString(Path.of("src/main/java/ua/zentix/incoming/client/nuclear/DustSources.java"));
         assertTrue(sources.contains("p[4 * 5 + 3] = (float) sight;"), "DustSources writes the share to texel 5's w");
     }
