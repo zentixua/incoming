@@ -126,11 +126,10 @@ Ruins and everything in `nuclear/world/` are in `nuclear-world.md`.
 
 - Post-wave pall (`client/nuclear/PallField` field, `NukePall` at camera/into frame, `NukeAsh` ash;
   `client/fx/layer/PallPass` renders): dust follows ground pressure and front arrival; the haze is the fires' smoke
-  parcels (`nuclear/model/SmokeParcels`, one law for server rain and client haze from clock anchors, no packet;
-  laws in its javadoc): a point reads the newest parcel over it, travel counted from the zone's downwind edge
+  parcels (`nuclear/model/SmokeParcels`: server rain and client haze from clock anchors; laws in its javadoc): a point reads the newest parcel over it, travel counted from the zone's downwind edge
   (`DownwindFireZoneSmokeTest`), alike in Java, `pall.glsl` and `startSeconds`; drawn faded only below `GONE`
   (`theBandHasNoCut`). Row channel a = parcels by travel (128 nodes, `SmokeParcels.drawn` both sides); fire light = row b ×
-  the zone's fire share at the point (a third table read broke `fx_pall_composite`'s AMD budget). Terrain map: band to
+  the zone's fire share at the point (a third read broke the AMD budget). Terrain map: band to
   `MAP_DOWNWIND` fire radii; slot box: parcels within `NukePall.AIR_DEPTH` air depths of the eye. No time-of-day logic here. Pace game-tick timers to the clock on a fixed game-time grid (`BurnsEffect`: every
   20th game tick, never on the timer's own remainder, which a correction keeps landing on); dust stays on real time; detonation lives on the client while pall remains visible. Field laws in Java and copied in `shaders/include/pall.glsl` (`PallGlslTest` reads
   shader functions and compares with Java; edit laws in both); fireball/fire lighting on pall (`pallBallShare`,
