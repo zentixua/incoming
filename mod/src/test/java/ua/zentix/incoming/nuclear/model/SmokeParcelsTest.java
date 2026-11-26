@@ -142,6 +142,27 @@ public class SmokeParcelsTest {
         assertEquals(0, new SmokeParcels(15, 0, 0, 5).length(c), 0, "no fires, no parcels");
     }
 
+    /**
+     * No cut: where a parcel thins to the drawn limit ({@link SmokeParcels#GONE}) its drawn column fades to nothing instead of
+     * dropping from 0.05 to 0 (that step drew a straight cut across the band, `parcels-maps` in the mission folder): between
+     * samples 10 m apart, never 0 beside a column of half the limit or more.
+     */
+    @Test
+    void theBandHasNoCut() {
+        for (double k : new double[]{1, 72}) {
+            for (double t : new double[]{26 * 60, 32 * 60, 3600, 4 * 3600, 9 * 3600, 20 * 3600}) {
+                SmokeParcels.Clock c = day(k, t);
+                double last = HIROSHIMA.carried(0, c) * HIROSHIMA.depth();
+                for (double s = 10; s <= HIROSHIMA.length(c); s += 10) {
+                    double v = HIROSHIMA.carried(s, c) * HIROSHIMA.depth();
+                    assertTrue(Math.min(v, last) > 0 || Math.max(v, last) < 0.5 * SmokeParcels.GONE,
+                            "k " + k + ", " + t + " s: cut from " + last + " to " + v + " at " + s + " m");
+                    last = v;
+                }
+            }
+        }
+    }
+
     /** On a vanilla day the haze leaves the fire zone with the wind once the fires are out: the air is not compressed. */
     @Test
     void theHazeLeavesWithTheWind() {

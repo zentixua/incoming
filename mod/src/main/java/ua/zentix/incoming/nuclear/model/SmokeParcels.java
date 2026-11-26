@@ -107,13 +107,20 @@ public record SmokeParcels(double yieldKt, double fireRadiusM, double windDirRad
     }
 
     /**
-     * Column of the parcel at shift {@code s} relative to full-strength smoke over the fire zone: its emission over its widening;
-     * 0 where it is not drawn ({@link #GONE}).
+     * Column of the parcel at shift {@code s} relative to full-strength smoke over the fire zone: its emission over its widening,
+     * faded out between {@link #FADE}·{@link #GONE} and {@link #GONE}; 0 where it is not drawn.
      */
     public double carried(double s, Clock c) {
-        double v = emitted(s, c) / widen(s);
-        return v * depth() >= GONE ? v : 0;
+        double v = emitted(s, c) / widen(s), tau = v * depth();
+        if (tau < GONE) return 0;
+        // presentation: a parcel reaching GONE would vanish from a column of 0.05, a straight cut across the band where the
+        // fires' strength or the widening crosses it; it fades over its last halving instead (the law's column above, none below)
+        double f = Math.min(1, (tau - GONE) / ((FADE - 1) * GONE));
+        return v * f * f * (3 - 2 * f);
     }
+
+    /** {@link #carried} fades in from {@link #GONE} to this many times it (presentation). */
+    public static final double FADE = 2;
 
     /** Nodes along the axis at which the parcels are drawn (the pall's haze row, {@code PallField.BINS}). */
     public static final int NODES = 128;

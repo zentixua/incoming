@@ -98,7 +98,7 @@ class BlackRainModelTest {
                         if (!HIROSHIMA.raining(x, z, c)) continue;
                         double s = p.shift(x, c);
                         assertTrue(s <= p.wind() * c.motion(), "k " + k + ": rain ahead of its smoke at " + x + " m, " + t + " s");
-                        assertTrue(p.drawn(s, c) > 0 && p.under(x, z, c), "k " + k + ": rain from a clear sky at " + x + ", " + z + ", " + t + " s");
+                        assertTrue(p.drawn(s, c) * p.depth() >= SmokeParcels.GONE && p.under(x, z, c), "k " + k + ": rain from a clear sky at " + x + ", " + z + ", " + t + " s");
                     }
                 }
             }

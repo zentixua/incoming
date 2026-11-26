@@ -129,7 +129,8 @@ Ruins and everything in `nuclear/world/` are in `nuclear-world.md`.
   parcels (`nuclear/model/SmokeParcels`, time.md §8.3 rule 4): each real second the zone emits at `FireStormLaw.smoke` of
   its strike clock S, the parcel moves downwind on the motion age M at the detonation's wind and widens by `SPREAD` (0.2,
   the Hiroshima band) per metre, its column thinned by the same factor, drawn while its vertical depth is ≥ `GONE` (0.05:
-  15 kt ~114 km, 6–10 h at a 24-hour day); S at an earlier M comes from the anchors alone (`StrikeClock.strikeAtMotion`:
+  15 kt ~114 km, 6–10 h at a 24-hour day), faded over its last halving (`FADE`, presentation: the step drew a straight
+  cut across the band, `SmokeParcelsTest.theBandHasNoCut`); rain needs the drawn column ≥ `GONE`; S at an earlier M comes from the anchors alone (`StrikeClock.strikeAtMotion`:
   even rate between show end, blend end and now; counted jumps since the show's end as the newest stretch of M), so server
   and clients read the same parcels with no packet. Client: `PallField.Band` (128 axis nodes, `SmokeParcels.drawn`
   interpolation, the haze row's channel a), clock `PallField.parcels` ← `ClientNuclear.Active.parcelClock`; server:

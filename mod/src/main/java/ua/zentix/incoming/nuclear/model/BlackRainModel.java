@@ -38,8 +38,8 @@ public record BlackRainModel(double yieldKt, double fireRadiusM, double windDirR
     }
 
     /**
-     * Whether black rain falls at the point now: under its drawn parcel, which left the fires inside the rain window and has
-     * travelled less than {@link #DRIFT_S}.
+     * Whether black rain falls at the point now: under its drawn parcel (its drawn column at least {@link SmokeParcels#GONE}),
+     * which left the fires inside the rain window and has travelled less than {@link #DRIFT_S}.
      */
     public boolean raining(double x, double z, SmokeParcels.Clock c) {
         if (fireRadiusM <= 0) return false;
@@ -47,7 +47,7 @@ public record BlackRainModel(double yieldKt, double fireRadiusM, double windDirR
         if (!p.under(x, z, c)) return false;
         double s = p.shift(x * Math.cos(windDirRad) + z * Math.sin(windDirRad), c), travel = s / p.wind();
         double left = c.motion() - travel;
-        return travel <= DRIFT_S && left >= START_S && left < END_S && p.drawn(s, c) > 0;
+        return travel <= DRIFT_S && left >= START_S && left < END_S && p.drawn(s, c) * p.depth() >= SmokeParcels.GONE;
     }
 
     /**
