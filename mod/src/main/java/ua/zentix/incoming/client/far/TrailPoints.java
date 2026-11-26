@@ -149,6 +149,14 @@ final class TrailPoints {
         for (long s = first; s < next; s++) birth[index(s)]++;
     }
 
+    /**
+     * A jump nobody in this dimension saw ({@code CountedJump}): every live point is {@code ticks} older (its motion age M), as
+     * the air it marks; what the jump leaves past its life fades at the next {@link #expire}.
+     */
+    void age(long ticks) {
+        for (long s = first; s < next; s++) birth[index(s)] -= ticks;
+    }
+
     /** Projectile trail vanishes immediately (all-clear: flight ended without explosion). */
     void kill(int owner) {
         for (long s = first; s < next; s++) {

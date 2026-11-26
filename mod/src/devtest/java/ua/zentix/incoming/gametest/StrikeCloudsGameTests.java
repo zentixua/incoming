@@ -58,6 +58,8 @@ public final class StrikeCloudsGameTests {
         IncomingConfig.SERVER.debrisStay.set(false);
         level.setWeatherParameters(24000, 0, false, false);
         StrikeGameTests.afterTest(h, () -> IncomingConfig.SERVER.debrisStay.set(debris));
+        // earlier batches' clouds share the level and the joiner's capped list: only this strike's are this check's
+        StrikeClouds.clearForTest(level);
         Vec3 at = Vec3.atBottomCenterOf(h.absolutePos(CENTER));
         var live = FuelFireGameTests.Watcher.near(h, at.add(20, 0, 0), S2C.Blast.class);
         var lists = FuelFireGameTests.Watcher.near(h, at.add(0, 0, 20), S2C.StrikeClouds.class);
@@ -82,7 +84,10 @@ public final class StrikeCloudsGameTests {
                 StrikeClouds.joinForTest(joiner.player);
                 h.assertTrue(joiner.got.size() == 1, "packets to the joiner: " + joiner.got.size());
                 List<S2C.StrikeClouds.Cloud> mine = at(joiner.got.getFirst(), at);
-                h.assertTrue(mine.size() == 1, "the joiner's clouds at the strike: " + mine);
+                h.assertTrue(mine.size() == 1, "the joiner's clouds at the strike: " + mine + "; the packet holds "
+                        + joiner.got.getFirst().clouds().size() + " of at most " + S2C.StrikeClouds.MAX + ", newest " + joiner.got.getFirst().clouds().stream()
+                        .filter(c -> c.kind() != S2C.StrikeClouds.FUEL).mapToLong(S2C.StrikeClouds.Cloud::born).min().orElse(-1) + " against the aged strike's "
+                        + (born - MINUTE_10));
                 S2C.StrikeClouds.Cloud c = mine.getFirst();
                 h.assertTrue(c.packet().equals(sent), "not the live packet: " + c.packet() + " against " + sent);
                 double age = StrikeClouds.motion(c, level.getGameTime(), WorldClock.counted(level));

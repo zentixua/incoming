@@ -1563,7 +1563,7 @@ paths:
   calculation.
 
 - Ordinary blasts use `BlastTime`: a monotonic counter on `ClientTickEvent.Pre`, birth in the same counter, tick
-  fraction from the frame. Post-tick counters of `FarBlasts`/`SmokeGrid` could age an event by a tick right at creation
-  from another Post listener: the Shahed's front was already at 26 m on the first frame of age 0. `BlastEffects.Timeline`
-  does not perform age 0 a second time in the same tick. The counter does not depend on world time sync packets; the
-  nuke clock and the shared `Effects` queue are unchanged by this.
+  fraction from the frame (a post-tick counter aged an event by a tick at creation: the Shahed's front was at 26 m on
+  its first frame). `BlastEffects.Timeline` does not perform age 0 twice in one tick. It ignores world time packets; a
+  jump nobody in the dimension saw advances it once (`CountedJump`, `client-smoke.md`): an effect reading it takes a leap of
+  hours in one tick by ending, not looping over elapsed ticks.

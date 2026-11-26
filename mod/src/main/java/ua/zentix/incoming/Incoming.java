@@ -141,6 +141,8 @@ public final class Incoming {
         NeoForge.EVENT_BUS.addListener(ua.zentix.incoming.util.WorldClock::onCommand);
         // flight and the blast wave are never jumped: a jump counted during a front waits for it to cross
         ua.zentix.incoming.util.WorldClock.holdJumpsWhile(ua.zentix.incoming.nuclear.NuclearStrikes::frontCrossing);
+        // a held night seen by someone awake on waking: strikes born during the hold drop it
+        ua.zentix.incoming.util.WorldClock.onHeldSeen((level, held) -> ua.zentix.incoming.nuclear.NuclearEvents.get(level).heldSeen(level, held));
         NeoForge.EVENT_BUS.addListener(FlightStatus::onServerTick);
         // Last: order and round events queued by this tick's impacts and nuclear work go out in it.
         NeoForge.EVENT_BUS.addListener(EventPriority.LOWEST, ua.zentix.incoming.strike.Orders::onServerTick);

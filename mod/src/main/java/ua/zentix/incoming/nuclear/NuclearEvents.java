@@ -281,12 +281,32 @@ public final class NuclearEvents extends SavedData {
     }
 
     /**
+     * A night held for a front in {@code level} ({@code held} world-clock ticks) turned out seen (someone awake when the front
+     * ended, {@link WorldClock#counted}): a strike born during the hold took it as its past ({@link #add}), and the count will
+     * never include it, so its anchors and history drop it; strikes born before the night are untouched.
+     */
+    public void heldSeen(ServerLevel level, double held) {
+        double counted = WorldClock.counted(level);
+        for (var e : clocks.entrySet()) {
+            StrikeClock c = e.getValue().clock();
+            if (!(c.jumpsAtStrike() > counted)) continue;
+            double end = c.ended() && c.jumpsAtEnd() > counted ? c.jumpsAtEnd() - held : c.jumpsAtEnd();
+            Anchor a = e.getValue();
+            e.setValue(new Anchor(a.id(), a.burst(), a.showEnd(),
+                    new StrikeClock(c.jumpsAtStrike() - held, c.endAge(), c.rateAtEnd(), end, c.rateAtRamp())));
+            StrikeHistory h = histories.get(e.getKey());
+            if (h != null) h.withdraw(counted, held);
+            setDirty();
+        }
+    }
+
+    /**
      * Add detonation {@code d} in {@code level}: its burst clock is the world clock now, or, for a detonation dated in the past
      * (tests, imports), the world clock that many game ticks ago as under a vanilla day.
      */
     public void add(Detonation d, ServerLevel level) {
         long age = Math.max(0, level.getGameTime() - d.gameTime());
-        // jumps held for a front before the burst are this strike's past too
+        // jumps held for a front before the burst are this strike's past too (if the night turns out seen, heldSeen)
         add(d, WorldClock.now(level) - age, WorldClock.rateClock(level) - age, WorldClock.counted(level) + WorldClock.held(level),
                 WorldClock.unseen(level), age);
     }
