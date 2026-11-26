@@ -32,6 +32,14 @@ record CommandPlan(List<Step> steps, int nukeGate, List<Integer> blastGates, int
 
     record Step(int tick, Kind kind, String arg) {}
 
+    /**
+     * A gate planned for {@code gate} while steps wait at {@code tick}: a later gate moves with the waiting steps (one tick),
+     * the gate being waited at and earlier ones stay; −1 (none) stays.
+     */
+    static int later(int gate, int tick) {
+        return gate > tick ? gate + 1 : gate;
+    }
+
     static CommandPlan parse(String spec) {
         return parse(spec, 40);
     }

@@ -4011,7 +4011,7 @@ public final class ClientScenario {
             return;
         }
         nukeGateWaited++;
-        steps.replaceAll(s -> s.at >= tick ? new Step(s.at + 1, s.action) : s);
+        holdLater();
     }
 
     /**
@@ -4032,12 +4032,7 @@ public final class ClientScenario {
             return;
         }
         blastGateWaited++;
-        steps.replaceAll(s -> s.at >= tick ? new Step(s.at + 1, s.action) : s);
-        int first = blastGates.removeFirst();
-        java.util.List<Integer> rest = new ArrayList<>(blastGates);
-        blastGates.clear();
-        blastGates.add(first);
-        for (int g : rest) blastGates.add(g + 1);
+        holdLater();
     }
 
     /**
@@ -4070,7 +4065,20 @@ public final class ClientScenario {
             return;
         }
         frontGateWaited++;
+        holdLater();
+    }
+
+    /**
+     * One tick of waiting at a gate: every later step and every later gate ({@code wait:nuke}, {@code wait:front}, the next
+     * {@code wait:blast}) move a tick, so a gate planned after this one still comes after the steps before it.
+     */
+    private void holdLater() {
         steps.replaceAll(s -> s.at >= tick ? new Step(s.at + 1, s.action) : s);
+        nukeGate = CommandPlan.later(nukeGate, tick);
+        frontGate = CommandPlan.later(frontGate, tick);
+        java.util.List<Integer> gates = new ArrayList<>(blastGates);
+        blastGates.clear();
+        for (int g : gates) blastGates.add(CommandPlan.later(g, tick));
     }
 
     /**
