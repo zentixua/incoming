@@ -31,7 +31,7 @@ Ruins and everything in `nuclear/world/` are in `nuclear-world.md`.
     detonations and scheduled strikes), `NuclearWarhead` (detonation, light and radiation for one entity),
     `NuclearStrikes` (ICBM launch, timer, world events, client synchronization);
   - `radiation/` — player dose (attachment), `RadiationTicker` (once per second: fallout field × shielding +
-    contamination), `Shielding` (block shielding by path mass: rays toward burst and sky for detonation, rays toward
+    contamination), `GroundFallout` (each deposit's landing at a point and its ground age, below), `Shielding` (block shielding by path mass: rays toward burst and sky for detonation, rays toward
     surrounding sky-exposed surfaces for fallout), `WornShielding` (worn items: data map, else Mekanism; sum ≤ 1;
     new exposure only), `FlashBurns` (light burns by armor slot: skin, clothes, metal; shock),
     `FlashEyes` (retinal burns: visual-field spots, attachment `RETINA`, packet `S2C.RetinaScars`, full list/state;
@@ -475,8 +475,30 @@ Ruins and everything in `nuclear/world/` are in `nuclear-world.md`.
   (`radiation/Ears`, attachment `EAR`, opaque tag ≤ `C2S.Ear.EAR_BYTES`, `S2C.Ear` on login).
 - `Detonation.dayTime` is unread, kept for the save/packet formats. Anchors per detonation (`NuclearEvents.Anchor`: the
   world clock at burst and show end, which date bodies' exposure, and the `StrikeClock` anchors) and the history are
-  persisted; a save without them reads as a 20-minute show, no jumps. Doses step per detonation by ΔS
-  (`NuclearEvents.stepFrom`, `FalloutModel.decayHours` for a sleep's long step). A burst-clock anchor for a detonation dated in the past (tests) uses `NuclearEvents.add(d, level)`, which
+  persisted; a save without them reads as a 20-minute show, no jumps.
+- Fallout on the ground (time.md §8.3 rule 4, `GroundFallout`). Each deposit lands at a point when its carrier brings it:
+  the plume at motion age `FalloutModel.arrivalHours` (also after the mushroom is too thin to see), black-rain dust when
+  its rain reaches the point (`BlackRainModel.startSeconds`, a motion age; `NuclearEvents.landingByMotion` for both, never
+  the strike clock, which a vanilla day passes ahead of the rain: `probe_rain_landing`). From then it ages on the detonation's ground clock
+  G (`NuclearEvents.ground`: S plus the `unseen` jumps since the burst; a night someone stayed awake for moves doses, not
+  the air or the fires): ground age = landing age + G since (`FalloutModel.Landing`: arrival and the ground clock's lead
+  over M at the landing, `StrikeHistory.groundLead`, found by `ageAtMotion`). One age for the whole field
+  would read 1/53, 1/91 and 1/129 of the law at 13, 20 and 40 km on a vanilla day (`FalloutGroundAgeTest`). Doses step per
+  source by ΔG (`NuclearEvents.stepFrom`) as the analytic integral from the landing (`FalloutModel.groundDose`; a mob's
+  gap and a sleep's long step alike); body contamination ages as the youngest deposit landed where the body stands.
+  `FalloutModel.FLOOR` (0.01 R/h) is the radiation floor: the history is compacted once the plume's last landing above
+  it (`lastLandingHours`: 270 km, 11.24 h for 15 kt in 24 km/h wind) and all rain have landed, both on M
+  (`StrikeHistory.compact`, at most 96 samples, under 4 KB; later jumps one sample each; a full history merges a jump
+  into the one before it, read earlier, never later). A detonation forgotten at day 7 of S (`FORGET_AFTER_S`; its air, fires and rain are
+  over) keeps its fallout as a ground field (`NuclearEvents.groundFields`: the detonation in `past` with its anchors and
+  history) while its peak at its youngest ground age is above the floor (15 kt surface burst: 9.55·10⁵ world hours,
+  109 world years, 1.5 real years on a vanilla day); `/incoming clear` drops it. Live detonations and fields are read
+  only within `Detonation.groundReach` (`FalloutModel.boundH1`: a proven bound, `GroundFallout.NEGLIGIBLE`, a tenth of the
+  floor: 15 kt reaches 344 km after a world week, 36 km after a world year), taken at the youngest ground age at the step's
+  start (`GroundFallout.reach`: a mob's account over months reads every point above the cut then), so a far or old one
+  costs one distance check per player a second and per mob pass; within reach one H+1 evaluation and a binary search of
+  its history (0.4 µs; a reach 0.9 µs, reused while the age grows under 5 %: `GroundFalloutCostTest`). No step at day 7
+  (GameTest `nuke_ground_field`), an awake night (`nuke_ground_unseen`), `NuclearGroundFieldTest`. A burst-clock anchor for a detonation dated in the past (tests) uses `NuclearEvents.add(d, level)`, which
   backdates it as a vanilla day. Detonation stream codec (`Detonation.STREAM_CODEC`, 3.1.0 fields)
   is frozen: new fields go in `CODEC` (save, `optionalFieldOf`) and at end of each detonation packet (`NukeDetonation`,
   `NukeSync`; replay.md).
