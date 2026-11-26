@@ -373,12 +373,11 @@ public final class NuclearEvents extends SavedData {
                 force = true;
                 setDirty();
             }
-            StrikeHistory h = histories.get(d.id());
-            if (h != null) {
-                int before = h.size();
-                h.sample(age, rate, counted, c.motion(age, counted), force);
-                if (h.size() != before) setDirty();
-            }
+            // a detonation saved before its history: from now on (earlier moments as a vanilla day)
+            StrikeHistory h = histories.computeIfAbsent(d.id(), k -> new StrikeHistory());
+            int samples = h.size();
+            h.sample(age, rate, counted, c.motion(age, counted), force);
+            if (h.size() != samples) setDirty();
         }
         return ended;
     }

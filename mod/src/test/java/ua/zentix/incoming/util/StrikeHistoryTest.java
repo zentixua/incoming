@@ -32,6 +32,10 @@ class StrikeHistoryTest {
             assertEquals(counted, r[1], 0, "the counted jumps at " + age);
             assertEquals(c.strike(age, age, counted), c.strike(age, r[0], r[1]), 1e-9);
         }
+        // before the first sample (history begun late): as a vanilla day
+        StrikeHistory late = new StrikeHistory();
+        late.sample(30_000, 50_000, 0, 1500, false);
+        assertArrayEquals(new double[]{40_000, 0}, late.at(20_000, 31_000, 51_000, 0), 1e-9);
         // past the last sample: interpolated to now
         assertArrayEquals(new double[]{80_000, night}, h.at(80_000, 90_000, 90_000, night), 1e-9);
         // saved and loaded whole
@@ -46,6 +50,12 @@ class StrikeHistoryTest {
         StrikeHistory h = new StrikeHistory();
         for (long age = 0; age < 20L * 72_000; age += 1200) h.sample(age, age, 0, age / 20.0, false);
         assertEquals(StrikeHistory.UNTIL_S / 60 + 1, h.size(), 1);
+        // a counted jump later still leaves its two samples: moments after it read it
+        long late = 20L * 72_000;
+        h.sample(late, late, 5000, late / 20.0 + 5000 * 3.6, false);
+        assertEquals(StrikeHistory.UNTIL_S / 60 + 3, h.size(), 1);
+        assertEquals(5000, h.at(late + 100, late + 200, late + 200, 5000)[1], 0);
+        assertEquals(0, h.at(late - 100, late + 200, late + 200, 5000)[1], 0);
     }
 
     /** A world saved before the clock without jumps, the pace and the jumps loads with the vanilla pace and no jumps. */

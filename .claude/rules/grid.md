@@ -45,7 +45,8 @@ paths:
 
 - Nuclear outages repair by damage (`Outage.damageLightAt`, `dead`/`damaged` = ground ranges of `Blackouts.DEAD_PSI` 5 and
   `DAMAGED_PSI` 1): never inside `dead`, days in the belt, hours outside it, on the world clock (`WorldClock`, 1000 ticks per hour of the day; `Blackouts.now`; cascade speed divides by
-  `Blackouts.rate` so a vanilla day keeps its pace and a stopped day stretches it to real hours); the
+  `Blackouts.rate` so a vanilla day keeps its pace and a 24-hour day stretches it to real hours; a stopped day keeps
+  the pace it last ran at); the
   restoration cascade starts at `Outage.restoreFrom` and lives as long as repairs (a restarted one skips districts issued
   before the restart, `Sweep.issued`). Substations the strike hit repair as their district does; a destroyed one reroutes
   its area at `Outage.rerouteAt` but stays unpowered while its zone is destroyed (`PowerGrid.destroyed`).
@@ -67,8 +68,8 @@ paths:
 ## Pitfalls
 - Outage times (`darkAt`, `lightAt`, `restoreAt`) are on the grid clock (`Blackouts.now` = `WorldClock.ticks`), never game
   time: pass `Blackouts.now(level)` to `PowerGrid.dark`/`darkSince`, in tests too. With the day stopped (GameTest
-  servers) the clock advances at the real floor (1/72 tick a tick) and jumps with the time of day, so it parts from
-  game time by whatever ran before; `darkChunkRoundTripsThroughDisk` passed `getGameTime()` and failed in one CI shard
+  servers) the clock advances at the last running pace (vanilla: 1 tick a tick on a fresh server) and jumps with the
+  time of day, so it parts from game time by whatever ran before; `darkChunkRoundTripsThroughDisk` passed `getGameTime()` and failed in one CI shard
   order ("the block is already bright"), passed in others.
 - Lamp-twin models and states come from the vanilla jar via `tools/gen_grid_assets.py` (do not edit by hand);
   substation textures: `tools/gen_textures.py`. Vanilla assigns the cutout layer to lanterns and end rods in code

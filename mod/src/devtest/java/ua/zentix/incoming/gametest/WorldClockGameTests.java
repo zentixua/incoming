@@ -170,12 +170,15 @@ public final class WorldClockGameTests {
         double[] before = WorldClock.get(server).readingsForTest();
         try {
             server.tickRateManager().setFrozen(true);
+            // the manager decides at its tick whether game elements run (as at a server tick's start)
+            server.tickRateManager().tick();
             WorldClock.onServerTick(new ServerTickEvent.Post(() -> true, server));
             double[] frozen = WorldClock.get(server).readingsForTest();
             h.assertTrue(frozen[0] == before[0] && frozen[1] == before[1], "the clock counted a frozen tick: "
                     + java.util.Arrays.toString(before) + " → " + java.util.Arrays.toString(frozen));
         } finally {
             server.tickRateManager().setFrozen(false);
+            server.tickRateManager().tick();
         }
         WorldClock.onServerTick(new ServerTickEvent.Post(() -> true, server));
         h.assertTrue(WorldClock.get(server).readingsForTest()[0] > before[0], "the running clock did not count");

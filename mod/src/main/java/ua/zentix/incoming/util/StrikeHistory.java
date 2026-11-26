@@ -6,8 +6,8 @@ import java.util.Arrays;
 
 /**
  * A strike's world-clock history ({@code docs/design/time.md} §8.3 rule 4): the clock without jumps and the counted jumps at
- * one real moment per real minute, at the show's end, at the blend's end and on both sides of each counted jump, until the
- * motion age passes {@link #UNTIL_S}. With the strike's anchors ({@link StrikeClock}) it gives the strike clock S at any past
+ * one real moment per real minute until the motion age passes {@link #UNTIL_S}, and at the show's end, at the blend's end
+ * and on both sides of each counted jump. With the strike's anchors ({@link StrikeClock}) it gives the strike clock S at any past
  * real moment: what lands from the air (fallout, black rain) at a motion age ages on the ground by the strike clock since.
  * Between samples the clock without jumps runs evenly; a jump belongs to the sample at which it was counted.
  */
@@ -31,12 +31,13 @@ public final class StrikeHistory {
 
     /**
      * Take a sample at real age {@code age} if one is due: the first, a real minute since the last, a changed count of jumps
-     * (then both sides: the moment before it was counted and after), or {@code force} (the show's or the blend's end); never
-     * after the motion age {@code motionS} passes {@link #UNTIL_S}.
+     * (then both sides: the moment before it was counted and after), or {@code force} (the show's or the blend's end). After
+     * the motion age {@code motionS} passes {@link #UNTIL_S} only jumps and {@code force} are sampled.
      */
     public void sample(long age, double rate, double counted, double motionS, boolean force) {
-        if (motionS > UNTIL_S && n > 0) return;
         if (n > 0 && age < ages[n - 1]) return;
+        // past the last arrival only the rare moments that change the clock's course: a counted jump, a show's end
+        if (motionS > UNTIL_S && n > 0 && !force && counted == jumps[n - 1]) return;
         if (n > 0 && counted != jumps[n - 1]) {
             add(age, rate, jumps[n - 1]);
             add(age, rate, counted);
@@ -64,7 +65,8 @@ public final class StrikeHistory {
     public double[] at(double age, long ageNow, double rateNow, double countedNow) {
         if (n == 0 || age >= ageNow) return new double[]{rateNow, countedNow};
         int i = last(age);
-        if (i < 0) return new double[]{rates[0], jumps[0]};
+        // before the first sample (a strike saved before its history began there): as a vanilla day, no jumps before it
+        if (i < 0) return new double[]{rates[0] - (ages[0] - age), jumps[0]};
         long a0 = ages[i], a1 = i + 1 < n ? ages[i + 1] : ageNow;
         double r0 = rates[i], r1 = i + 1 < n ? rates[i + 1] : rateNow;
         double rate = a1 <= a0 ? r1 : r0 + (r1 - r0) * (age - a0) / (a1 - a0);
