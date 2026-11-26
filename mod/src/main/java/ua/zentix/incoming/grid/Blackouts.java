@@ -327,6 +327,20 @@ public final class Blackouts {
     }
 
     /**
+     * One second of outage {@code o} held by its causes' shows, with its recovery clock {@code c} and the lag it had when the
+     * hold began ({@code base}); the clocks as {@link RecoveryClock#step} takes them. The result trails the grid clock by the
+     * world's rate it did not take. A jump nobody was awake for ends the conventional show in {@code c}; the outage keeps that
+     * end ({@link Outage#showEndsAt}), so the next second cannot hold it again until the planned end.
+     */
+    static Outage step(Outage o, RecoveryClock c, long base, long game, double rate, double counted, double unseen, Object dim,
+                       RecoveryClock.Shows shows) {
+        c.strike(o.strike());
+        if (o.until() != Outage.NO_SHOW) c.until(o.until());
+        c.step(game, rate, counted, unseen, dim, shows);
+        return o.lagging(base + Math.round(c.behind())).showEndsAt(c.until());
+    }
+
+    /**
      * Once a second: each outage whose cause's show may still hold it falls behind the grid clock by the world's rate it
      * does not take ({@link Outage#lag}, {@link RecoveryClock}): real rate through the show, then the rate blend. Once the
      * blend is over, or a repair is due, the outage is released and its lag stays.
@@ -339,11 +353,9 @@ public final class Blackouts {
         for (Outage o : List.copyOf(grid.outages())) {
             if (!o.held()) continue;
             RecoveryClock c = world.holds.computeIfAbsent(o.id(), k -> RecoveryClock.district());
-            c.strike(o.strike());
-            if (o.until() != Outage.NO_SHOW) c.until(o.until());
-            c.step(level.getGameTime(), WorldClock.rateClock(level), WorldClock.counted(level), WorldClock.unseen(level), level.dimension(), shows);
             if (!world.holdBase.containsKey(o.id())) world.holdBase.put(o.id(), o.lag());
-            Outage next = o.lagging(world.holdBase.get(o.id()) + Math.round(c.behind()));
+            Outage next = step(o, c, world.holdBase.get(o.id()), level.getGameTime(), WorldClock.rateClock(level), WorldClock.counted(level),
+                    WorldClock.unseen(level), level.dimension(), shows);
             // released once the blend is over, or once a repair falls due (a sleep moved the clock past the first repair):
             // a lag growing under a running restoration would rebuild it every second and darken districts it relit
             if (c.settled() || now(level) >= next.restoreFrom()) {

@@ -204,6 +204,15 @@ public record Outage(int id, double x, double z, double radius, long start, doub
                 Math.max(this.until, until));
     }
 
+    /**
+     * Same outage, its conventional show over at game time {@code end} if that is sooner (a jump nobody was awake for ended
+     * it, time rule 7): a planned end kept on the outage would hold its repairs again.
+     */
+    public Outage showEndsAt(long end) {
+        return until == NO_SHOW || end >= until ? this
+                : new Outage(id, x, z, radius, start, speed, restoreAt, restoreSpread, node, dead, damaged, lag, strike, end);
+    }
+
     /** Same outage, no show holding its repairs any more (an admin's restore, or the shows and the blend are over). */
     public Outage released() {
         return new Outage(id, x, z, radius, start, speed, restoreAt, restoreSpread, node, dead, damaged, lag, -1, NO_SHOW);
