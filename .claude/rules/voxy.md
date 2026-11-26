@@ -61,28 +61,47 @@ paths:
   dedicated servers do not have it, hence a packet rather than a server call. Section light is supplied; Voxy does not
   calculate it: null means dark (black LODs); loaded chunks use the world's light engine (missing sky layer above
   terrain = 15), copies use `compat/CopyLight` from their blocks within the chunk (disk light would keep a dark district
-  lit). All sections, including empty ones: air from a demolished tower erases it. Delivery uses start/chunks/finish
-  batches and `C2S.LodBatchReceived`: one unacknowledged batch per connection, a single bootstrap chunk, then a
-  fractional chunks/tick quota from the client's vanilla `ChunkBatchSizeCalculator` (0.01–64, like PlayerChunkSender).
-  Each batch also holds at most 256 KiB before acknowledgement (one larger indivisible chunk may stand alone): a
-  chunk-count window alone can leave MiB behind a fast proxy with a slow downstream. This bounds in-flight data;
-  it is not a bytes/tick throttle. `fastProxyCannotAccumulateAMultiMiBBatchBeforeItsSlowClientAcknowledges` guards it.
-  The three client handlers run on the same network thread. Before ack, poll Voxy's public
+  lit). All sections, including empty ones: air from a demolished tower erases it. Delivery is an acknowledged byte
+  window per connection (`net/LodBatchFlow`): the server thread keeps up to `STOCK_BYTES` (2 MiB) of its queue ready on
+  the connection's network event loop, topped up each tick, the only rate ceiling (40 MiB/s of sections at 20 TPS);
+  the event loop writes chunks while the window and Netty allow, at most `PUMP_BYTES` per task, marks a batch
+  (`S2C.LodBatchFinished`) every 64 KiB, and the client acknowledges marks cumulatively (`C2S.LodBatchReceived`,
+  handled on the server's network thread, so a freed window sends at once, not on the next tick). The window is the
+  line's bandwidth-delay product plus `TARGET_NANOS` (100 ms, LEDBAT's largest target) of own queue, estimated as BBR
+  does: the highest delivery rate of the last 1–2 minutes times the lowest mark-to-ack time of the last 9–10, a 1.25/0.75
+  probing round trip in eight, within one batch of what is in flight (RFC 6817 max_allowed_cwnd), between `WINDOW_MIN`
+  (128 KiB) and `WINDOW_MAX` (1.5 MiB). Never size it by mark-to-ack delay itself: on the same connection LSS's queue
+  and LTE jitter raise it, and a delay-based window gave ruins 6 % of the line beside a 100 ms foreign queue and 16 %
+  with the jitter alone (`VoxyLodsSharedLineTest`). Our own
+  queue and another sender's look the same from here: the target is how much of a foreign queue the window holds its
+  share against and how much own queue a slow line carries (88–222 ms from 4.5 to 0.6 MB/s on a default kernel,
+  `slowerLinesKeepTheLineFullWithAShortQueue`). With `tcp_notsent_lowat` on the socket (netcup's Crafty container) the
+  socket holds at most 47 KB unsent on the rig (2.5 MB without), so the window's bytes beyond TCP's own window wait in
+  the stock; what then queues in the line is TCP's window, shared with LSS, whose traffic sets the game-packet wait
+  while it streams (rig: LSS at 0.54 or 1.66 MB/s in the same phase, p95 wait 12 or 260 ms). Sizes count section bytes before the connection's compression, which
+  shrinks ruin chunks 5.7× (rig, 26.11.2026); `WINDOW_MAX` is ~280 KB on the wire, just over the 240 KB a 4.5 MB/s, 54 ms LTE link
+  holds in flight. One acknowledged batch per round trip, as vanilla's chunk sender does at its client-measured rate,
+  is round-trip bound: on that link it carried 0.07 MB/s and the 48 MiB queue overflowed. The window bounds what can
+  wait ahead of game packets anywhere between server and client, a buffering proxy included
+  (`fastProxyHoldsAtMostOneWindowBeforeItsSlowClientAcknowledges`); `acknowledgementsKeepAnLteLineFullWithoutAStandingQueue`
+  and `slowerLinesKeepTheLineFullWithAShortQueue` simulate lines from 0.6 to 4.5 MB/s. A mark not above the client's
+  last one starts a new server session on the same client channel (a proxy's backend switch): the client acknowledges
+  it. The client handlers run on the same network thread. Before acknowledging, poll Voxy's public
   `VoxyCommon.getInstance().getIngestService().getTaskCount()` (sections queued, not started) on the event loop until
   it is at most LSS's own halt mark, 6144 (`VoxyIngest.INGEST_HALT_SECTIONS`); never block the network thread. Not
   "until empty": LSS keeps that queue in the thousands while it fills its radius, and an empty-queue wait cut ruin
   LODs to ~100 chunks a minute with half dropped (Zearth 07.11.2026). Running tasks remain bounded by its worker pool.
-  Missing counter disables Incoming delivery.
-  Timing includes transfer and background queue drain. Calculator
-  state belongs to the channel; batch IDs survive dimension changes and reject old/duplicate/early acknowledgements.
-  Netty still gates every chunk: active/writable, at least 16 KiB headroom, no more than 32 KiB pending even with a
-  raised watermark, and at most one outstanding chunk write including event-loop dispatch. A large indivisible
-  chunk can cross the watermark once. There is no fixed byte-rate throttle. The waiting queue holds at most 48 MiB;
-  a fresh copy replaces a waiting copy. `VoxyLods.room` gates `DhUpdates`, `FarLods` and `FrontLods`, even with DH:
-  excess updates for Voxy players would otherwise be lost. Copy engine light layers (`getData` fills the live layer
-  for a uniform one); a heavy-zone copy goes to DH `DhUpdates.LEAD` before the front, but Voxy ingests immediately —
-  give it a “not before front” deadline (`VoxyLods.send(…, notBefore)`). Regressions: `VoxyLodsTest`, `LodBatchFlowTest`
-  and GameTest batch `voxy_backpressure`.
+  Missing counter disables Incoming delivery. Batch IDs survive dimension changes (a dimension change drops the queue
+  and the stock, not the window) and reject old/duplicate/early acknowledgements. Netty still gates every chunk:
+  active/writable, at least 16 KiB headroom, no more than 32 KiB pending even with a raised watermark, and at most one
+  outstanding chunk write, whose completion sends the next. A large indivisible chunk can cross the watermark once, and
+  one larger than the window goes alone. The waiting queue holds at most 48 MiB;
+  a fresh copy replaces a waiting copy (not one already handed to the event loop). `VoxyLods.room` gates `DhUpdates`,
+  `FarLods` and `FrontLods`, even with DH: excess updates for Voxy players would otherwise be lost. Copy engine light
+  layers (`getData` fills the live layer for a uniform one); a heavy-zone copy goes to DH `DhUpdates.LEAD` before the
+  front, but Voxy ingests immediately — give it a “not before front” deadline (`VoxyLods.send(…, notBefore)`).
+  Regressions: `VoxyLodsTest`, `LodBatchFlowTest`, `ClientLodBatchesTest` and GameTest batch `voxy_backpressure`.
+  Per-batch timing: `-Dincoming.lodDiag=true` (`LODDIAG` lines on server and client, wall-clock milliseconds).
 - LOD Server Support 0.19/0.20 (server) observes `ChunkSerializer.write` at RETURN, not block-change events:
   `ChunkSaveDataHook` → `ServerReceiverGlue.onChunkSaveData` → `DirtyContentFilter.observeSave`. It hashes serialized
   block states, biomes and light. A changed observation marks the column dirty and immediately deletes its old store

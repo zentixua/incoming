@@ -11,6 +11,8 @@ import ua.zentix.incoming.net.S2C;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Locale;
+import java.util.PriorityQueue;
 import java.util.function.BiConsumer;
 
 import static org.junit.jupiter.api.Assertions.*;
@@ -37,15 +39,13 @@ class VoxyLodsTest {
 
     private static final class Receiver implements BiConsumer<CustomPacketPayload, PacketSendListener> {
         final List<S2C.VoxyChunk> chunks = new ArrayList<>();
-        final List<S2C.LodBatchFinished> batches = new ArrayList<>();
+        final List<S2C.LodBatchFinished> marks = new ArrayList<>();
         boolean completeWrites = true;
         PacketSendListener pending;
-        int starts;
 
         @Override
         public void accept(CustomPacketPayload p, PacketSendListener done) {
-            if (p instanceof S2C.LodBatchStart) starts++;
-            if (p instanceof S2C.LodBatchFinished batch) batches.add(batch);
+            if (p instanceof S2C.LodBatchFinished mark) marks.add(mark);
             if (p instanceof S2C.VoxyChunk chunk) {
                 chunks.add(chunk);
                 if (completeWrites) done.onSuccess();
@@ -53,139 +53,232 @@ class VoxyLodsTest {
             }
         }
 
-        void ack(VoxyLods.Viewer viewer, float rate) {
-            assertTrue(viewer.flow.acknowledge(batches.getLast().id(), rate));
+        long bytes() {
+            return chunks.stream().mapToLong(c -> c.sections().length).sum();
+        }
+
+        void ackAll(VoxyLods.Viewer viewer) {
+            viewer.acknowledged(marks.getLast().id());
         }
     }
 
+    /** A server tick, then the connection's event loop runs what it was given (pumps yield and reschedule). */
+    private static void tick(VoxyLods.Viewer viewer, EmbeddedChannel channel) {
+        viewer.stockUp();
+        viewer.pump();
+        channel.runPendingTasks();
+    }
+
     @Test
-    void unwritableConnectionKeeps48MiBInOurQueueFor1200Ticks() {
+    void unwritableConnectionKeeps48MiBWaitingFor1200Ticks() {
         SlowChannel channel = new SlowChannel();
         try {
             channel.writeAndFlush(Unpooled.buffer(64 * 1024).writeZero(64 * 1024));
             assertFalse(channel.isWritable());
-            VoxyLods.Viewer viewer = new VoxyLods.Viewer();
+            Receiver client = new Receiver();
+            VoxyLods.Viewer viewer = new VoxyLods.Viewer(channel, client);
             byte[] data = new byte[64 * 1024];
             for (int i = 0; i < 768; i++) viewer.offer(i, packet(i, data));
             assertEquals(48L << 20, viewer.bytes);
-            for (int tick = 0; tick < 1200; tick++) viewer.drain(channel, (p, done) -> fail("blocked connection accepted a payload"));
-            assertEquals(768, viewer.queue.size());
-            assertEquals(48L << 20, viewer.bytes);
-            assertEquals(0, viewer.sent);
+            for (int t = 0; t < 1200; t++) tick(viewer, channel);
+            assertTrue(client.chunks.isEmpty(), "blocked connection accepted a payload");
+            assertEquals(48L << 20, viewer.bytes + viewer.stockBytes(), "nothing lost while waiting");
+            assertEquals(VoxyLods.STOCK_BYTES, viewer.stockBytes(), "the network thread holds at most its stock");
             channel.resume();
-            Receiver client = new Receiver();
-            viewer.drain(channel, client);
-            assertEquals(1, viewer.sent, "one bootstrap chunk measures the connection");
-            assertEquals(1, client.batches.size());
+            tick(viewer, channel);
+            assertEquals(VoxyLods.WINDOW_MIN, client.bytes(), "a whole window goes once the connection drains");
+            assertFalse(client.marks.isEmpty());
         } finally {
             channel.finishAndReleaseAll();
         }
     }
 
     @Test
-    void noAckMeansNoNewBatchEvenWhenTransportWritesComplete() {
+    void fastProxyHoldsAtMostOneWindowBeforeItsSlowClientAcknowledges() {
         EmbeddedChannel channel = new EmbeddedChannel();
         try {
-            VoxyLods.Viewer viewer = new VoxyLods.Viewer();
-            for (int i = 0; i < 100; i++) viewer.offer(i, packet(i, new byte[1024]));
-            Receiver client = new Receiver();
-            for (int tick = 0; tick < 1200; tick++) viewer.drain(channel, client);
-            assertEquals(1, client.starts);
-            assertEquals(1, client.chunks.size());
-            assertEquals(99, viewer.queue.size());
-            assertEquals(1, client.batches.getFirst().chunks());
-            client.ack(viewer, 32);
-            viewer.drain(channel, client);
-            assertEquals(33, client.chunks.size(), "acknowledged rate sizes the next batch");
-            assertEquals(32, client.batches.getLast().chunks());
-            client.ack(viewer, 0.25f);
-            for (int tick = 0; tick < 3; tick++) viewer.drain(channel, client);
-            assertEquals(2, client.starts, "fractional quota must accumulate");
-            viewer.drain(channel, client);
-            assertEquals(3, client.starts);
-            assertEquals(1, client.batches.getLast().chunks());
-        } finally {
-            channel.finishAndReleaseAll();
-        }
-    }
-
-    @Test
-    void fastProxyCannotAccumulateAMultiMiBBatchBeforeItsSlowClientAcknowledges() {
-        EmbeddedChannel channel = new EmbeddedChannel();
-        try {
-            VoxyLods.Viewer viewer = new VoxyLods.Viewer();
             Receiver proxy = new Receiver(); // Every local write completes immediately, as with a buffering proxy.
-            viewer.offer(0, packet(0, new byte[1024]));
-            viewer.drain(channel, proxy);
-            proxy.ack(viewer, 64);
-            byte[] data = new byte[32 * 1024];
-            for (int i = 1; i <= 64; i++) viewer.offer(i, packet(i, data));
-            for (int tick = 0; tick < 1200; tick++) viewer.drain(channel, proxy);
+            VoxyLods.Viewer viewer = new VoxyLods.Viewer(channel, proxy);
+            byte[] data = new byte[40 * 1024];
+            for (int i = 0; i < 200; i++) viewer.offer(i, packet(i, data));
+            for (int t = 0; t < 1200; t++) tick(viewer, channel);
             assertTrue(channel.isWritable());
-            assertEquals(8, proxy.batches.getLast().chunks(), "64 chunks would leave 2 MiB ahead of keepalive");
-            assertEquals(256 * 1024, proxy.chunks.stream().skip(1).mapToInt(p -> p.sections().length).sum());
-            assertEquals(56, viewer.queue.size());
-            proxy.ack(viewer, 64);
-            viewer.drain(channel, proxy);
-            assertEquals(17, viewer.sent, "another bounded batch follows the client acknowledgement");
+            long window = viewer.flow.window();
+            assertTrue(proxy.bytes() >= window && proxy.bytes() < window + data.length,
+                    "no acknowledgement, no more than one window ahead of keepalive: " + proxy.bytes());
+            assertTrue(proxy.marks.size() > 1, "several batches in flight, each acknowledgeable");
+            int sent = proxy.chunks.size();
+            viewer.acknowledged(proxy.marks.getFirst().id());
+            channel.runPendingTasks();
+            assertTrue(proxy.chunks.size() > sent, "an acknowledgement sends at once, without a server tick");
+            assertEquals(proxy.chunks.size(), viewer.sent.get());
+            int more = 200;
+            for (int round = 0; round < 50; round++) {
+                while (viewer.bytes < 4L << 20) viewer.offer(more, packet(more++, data)); // a backlog that keeps the window full
+                proxy.ackAll(viewer); // instant acknowledgements: no queueing delay, the window opens fully
+                tick(viewer, channel);
+            }
+            for (int t = 0; t < 1200; t++) tick(viewer, channel);
+            assertEquals(VoxyLods.WINDOW_MAX, viewer.flow.window());
+            assertTrue(viewer.flow.inFlight() < VoxyLods.WINDOW_MAX + data.length, "the window never opens past its ceiling");
         } finally {
             channel.finishAndReleaseAll();
         }
     }
 
-    @Test
-    void eventLoopDispatchAndFailedWritesRemainBoundedInsideABatch() {
+    /**
+     * A line of {@code wireBytesPerMs} with {@code oneWayMs} each way, chunks of 40 KiB compressing {@code compression}×,
+     * a backlog that never runs out, acknowledgements as soon as marks arrive: the steady standing queue ahead of a game
+     * packet (ms) and the share of the line the chunks use, after five seconds.
+     */
+    private static double[] line(double wireBytesPerMs, double oneWayMs, double compression) {
         EmbeddedChannel channel = new EmbeddedChannel();
         try {
-            VoxyLods.Viewer viewer = new VoxyLods.Viewer();
-            for (int i = 0; i < 20; i++) viewer.offer(i, packet(i, new byte[40 * 1024]));
-            Receiver client = new Receiver();
-            viewer.drain(channel, client);
-            client.ack(viewer, 8);
-            client.completeWrites = false;
-            for (int tick = 0; tick < 1200; tick++) viewer.drain(channel, client);
-            assertTrue(channel.isWritable(), "event-loop dispatch has not encoded anything yet");
-            assertEquals(2, client.chunks.size());
-            assertEquals(18, viewer.queue.size());
-            assertFalse(viewer.flow.acknowledge(viewer.flow.id(), 64), "unfinished batch cannot be acknowledged");
-            client.pending.onSuccess();
-            viewer.drain(channel, client);
-            assertEquals(3, client.chunks.size());
-            client.pending.onFailure();
-            viewer.drain(channel, client);
-            assertEquals(4, client.chunks.size(), "failed write also releases its reservation");
+            record Event(double at, int ack) {}
+            PriorityQueue<Event> events = new PriorityQueue<>((a, b) -> Double.compare(a.at, b.at));
+            double[] now = {0}, lineFree = {0}, steadyQueueMs = {0};
+            long[] delivered = {0};
+            double measureFrom = 5000, measureTo = 20000;
+            BiConsumer<CustomPacketPayload, PacketSendListener> link = (p, done) -> {
+                double wire = p instanceof S2C.VoxyChunk c ? c.sections().length / compression : 8;
+                if (now[0] >= measureFrom) steadyQueueMs[0] = Math.max(steadyQueueMs[0], lineFree[0] - now[0]);
+                lineFree[0] = Math.max(lineFree[0], now[0]) + wire / wireBytesPerMs;
+                double arrives = lineFree[0] + oneWayMs;
+                if (p instanceof S2C.VoxyChunk c && arrives >= measureFrom && arrives < measureTo) delivered[0] += c.sections().length;
+                if (p instanceof S2C.LodBatchFinished mark) events.add(new Event(arrives + oneWayMs, mark.id()));
+                if (done != null) done.onSuccess(); // the kernel buffer takes the write at once
+            };
+            VoxyLods.Viewer viewer = new VoxyLods.Viewer(channel, link, () -> (long) (now[0] * 1e6));
+            byte[] data = new byte[40 * 1024];
+            int next = 0;
+            for (double t = 0; t < measureTo; t += 50) events.add(new Event(t, -1));
+            while (!events.isEmpty()) {
+                Event e = events.poll();
+                now[0] = e.at;
+                if (e.ack < 0) {
+                    while (viewer.bytes < 8L << 20) viewer.offer(next, packet(next++, data));
+                    tick(viewer, channel);
+                } else {
+                    viewer.acknowledged(e.ack);
+                    channel.runPendingTasks();
+                }
+            }
+            return new double[]{steadyQueueMs[0], delivered[0] / (measureTo - measureFrom) / compression / wireBytesPerMs};
         } finally {
             channel.finishAndReleaseAll();
         }
     }
 
+    /**
+     * The LTE case measured on the rig (26.11.2026): 4.5 MB/s, 54 ms round trip, ruin chunks compressing 5.7× on the
+     * wire. A tick-paced sender with one acknowledged batch at a time delivered 0.07 MB/s of that line.
+     */
     @Test
-    void largeChunksDoNotStallPermanentlyOrBuildAnOutboundBacklog() {
+    void acknowledgementsKeepAnLteLineFullWithoutAStandingQueue() {
+        double[] lte = line(4500, 27, 5.7);
+        assertTrue(lte[1] > 0.9, "line share " + lte[1]);
+        assertTrue(lte[0] < 30, "standing queue ahead of game packets " + lte[0] + " ms");
+    }
+
+    /**
+     * Review probe of PR #774: a window fixed for the LTE link queued 184–983 ms ahead of game packets on slower lines
+     * and less compressible chunks (2.5×, est., detailed city chunks with global palettes). The adaptive window keeps
+     * them full with 88–222 ms, its target of 100 ms plus probing; a socket with tcp_notsent_lowat keeps even that out
+     * of the game packets' way.
+     */
+    @Test
+    void slowerLinesKeepTheLineFullWithAShortQueue() {
+        StringBuilder report = new StringBuilder();
+        boolean ok = true;
+        for (double[] l : new double[][]{{4500, 27, 2.5}, {1250, 20, 5.7}, {1250, 20, 2.5}, {625, 20, 5.7}, {625, 20, 2.5}}) {
+            double[] r = line(l[0], l[1], l[2]);
+            String row = String.format(Locale.ROOT, "%.2f MB/s, RTT %.0f ms, %.1fx: standing queue %.0f ms, line share %.2f",
+                    l[0] / 1000, 2 * l[1], l[2], r[0], r[1]);
+            report.append("\n  ").append(row);
+            // Own queue: about the target plus one probing round trip (1.25×), never what a fixed window would hold.
+            ok &= r[0] < 250 && r[1] > 0.9;
+        }
+        System.out.println("slower lines:" + report);
+        assertTrue(ok, "slower lines:" + report);
+    }
+
+    @Test
+    void oneChunkWriteOutstandingAndFailedWritesReleaseIt() {
+        EmbeddedChannel channel = new EmbeddedChannel();
+        try {
+            Receiver client = new Receiver();
+            client.completeWrites = false;
+            VoxyLods.Viewer viewer = new VoxyLods.Viewer(channel, client);
+            for (int i = 0; i < 20; i++) viewer.offer(i, packet(i, new byte[40 * 1024]));
+            for (int t = 0; t < 1200; t++) tick(viewer, channel);
+            assertTrue(channel.isWritable(), "event-loop dispatch has not encoded anything yet");
+            assertEquals(1, client.chunks.size());
+            client.pending.onSuccess();
+            channel.runPendingTasks(); // the connection's event loop
+            assertEquals(2, client.chunks.size(), "the completed write sends the next chunk without a server tick");
+            client.pending.onFailure();
+            channel.runPendingTasks();
+            assertEquals(3, client.chunks.size(), "a failed write also releases its reservation");
+        } finally {
+            channel.finishAndReleaseAll();
+        }
+    }
+
+    /** Netty completes a write before it subtracts its bytes from the pending count: pumping inside the callback stalls. */
+    @Test
+    void asyncWriteCompletionContinuesWithoutAServerTick() {
         SlowChannel channel = new SlowChannel();
         try {
-            VoxyLods.Viewer viewer = new VoxyLods.Viewer();
-            byte[] large = new byte[250 * 1024];
-            viewer.offer(1, packet(1, large));
-            viewer.offer(2, packet(2, large));
             Receiver client = new Receiver();
             BiConsumer<CustomPacketPayload, PacketSendListener> transport = (p, done) -> {
                 if (p instanceof S2C.VoxyChunk chunk) {
+                    client.chunks.add(chunk);
                     channel.writeAndFlush(Unpooled.wrappedBuffer(chunk.sections())).addListener(future -> {
                         if (future.isSuccess()) done.onSuccess();
                         else done.onFailure();
                     });
                 } else client.accept(p, done);
             };
-            for (int tick = 0; tick < 1200; tick++) viewer.drain(channel, transport);
-            assertFalse(channel.isWritable());
-            assertEquals(1, viewer.sent);
-            assertEquals(250 * 1024L, viewer.bytes);
+            VoxyLods.Viewer viewer = new VoxyLods.Viewer(channel, transport);
+            for (int i = 0; i < 3; i++) viewer.offer(i, packet(i, new byte[40 * 1024])); // within the first window
+            tick(viewer, channel);
+            assertEquals(1, client.chunks.size(), "one outstanding write");
             channel.resume();
-            viewer.drain(channel, transport); // finish the first batch after its stalled write
-            client.ack(viewer, 1);
-            viewer.drain(channel, transport);
-            assertEquals(2, viewer.sent);
-            assertEquals(0, viewer.bytes);
+            channel.runPendingTasks();
+            assertEquals(3, client.chunks.size(), "completions chain the rest on the event loop");
+        } finally {
+            channel.finishAndReleaseAll();
+        }
+    }
+
+    @Test
+    void chunksLargerThanTheWindowGoAloneAndDoNotStall() {
+        SlowChannel channel = new SlowChannel();
+        try {
+            Receiver client = new Receiver();
+            BiConsumer<CustomPacketPayload, PacketSendListener> transport = (p, done) -> {
+                if (p instanceof S2C.VoxyChunk chunk) {
+                    client.chunks.add(chunk);
+                    channel.writeAndFlush(Unpooled.wrappedBuffer(chunk.sections())).addListener(future -> {
+                        if (future.isSuccess()) done.onSuccess();
+                        else done.onFailure();
+                    });
+                } else client.accept(p, done);
+            };
+            VoxyLods.Viewer viewer = new VoxyLods.Viewer(channel, transport);
+            byte[] large = new byte[VoxyLods.WINDOW_MAX + 1024];
+            viewer.offer(1, packet(1, large));
+            viewer.offer(2, packet(2, large));
+            for (int t = 0; t < 1200; t++) tick(viewer, channel);
+            assertFalse(channel.isWritable());
+            assertEquals(1, client.chunks.size());
+            channel.resume();
+            channel.runPendingTasks();
+            assertEquals(1, client.marks.size(), "the full window is marked once");
+            tick(viewer, channel);
+            assertEquals(1, client.chunks.size(), "no acknowledgement, no second window");
+            client.ackAll(viewer);
+            assertEquals(2, client.chunks.size());
         } finally {
             channel.finishAndReleaseAll();
         }
@@ -195,21 +288,24 @@ class VoxyLodsTest {
     void normalTrafficHeadroomAndAbsolutePendingLimitBothApply() {
         SlowChannel channel = new SlowChannel();
         try {
-            VoxyLods.Viewer viewer = new VoxyLods.Viewer();
+            Receiver client = new Receiver();
+            VoxyLods.Viewer viewer = new VoxyLods.Viewer(channel, client);
             viewer.offer(1, packet(1, new byte[1024]));
             channel.writeAndFlush(Unpooled.buffer(50 * 1024).writeZero(50 * 1024));
             assertTrue(channel.isWritable());
-            viewer.drain(channel, (p, done) -> fail("insufficient game-packet headroom"));
+            tick(viewer, channel);
+            assertTrue(client.chunks.isEmpty(), "insufficient game-packet headroom");
             channel.config().setWriteBufferHighWaterMark(4 * 1024 * 1024);
             assertTrue(channel.bytesBeforeUnwritable() > VoxyLods.WRITE_HEADROOM);
-            viewer.drain(channel, (p, done) -> fail("raised watermark bypassed absolute pending limit"));
+            tick(viewer, channel);
+            assertTrue(client.chunks.isEmpty(), "raised watermark bypassed absolute pending limit");
             channel.resume();
-            viewer.drain(channel, new Receiver());
-            assertEquals(1, viewer.sent);
+            tick(viewer, channel);
+            assertEquals(1, client.chunks.size());
             channel.close();
             viewer.offer(2, packet(2, new byte[1024]));
-            viewer.drain(channel, (p, done) -> fail("closed channel accepted a LOD"));
-            assertEquals(1, viewer.queue.size());
+            tick(viewer, channel);
+            assertEquals(1, client.chunks.size(), "closed channel accepted a LOD");
         } finally {
             channel.finishAndReleaseAll();
         }
@@ -219,7 +315,8 @@ class VoxyLodsTest {
     void freshCopyReplacesWaitingCopyAtCapacityAndEveryChunkEventuallyArrives() {
         EmbeddedChannel channel = new EmbeddedChannel();
         try {
-            VoxyLods.Viewer viewer = new VoxyLods.Viewer();
+            Receiver client = new Receiver();
+            VoxyLods.Viewer viewer = new VoxyLods.Viewer(channel, client);
             byte[] data = new byte[64 * 1024];
             for (int i = 0; i < 768; i++) viewer.offer(i, packet(i, data));
             S2C.VoxyChunk fresh = packet(3, new byte[64 * 1024]);
@@ -228,41 +325,103 @@ class VoxyLodsTest {
             assertEquals(1, viewer.dropped);
             assertEquals(768, viewer.queue.size());
             assertEquals(48L << 20, viewer.bytes);
-            Receiver client = new Receiver();
-            for (int tick = 0; tick < 1000 && !viewer.queue.isEmpty(); tick++) {
-                viewer.drain(channel, client);
-                client.ack(viewer, 64);
+            for (int t = 0; t < 1000 && client.chunks.size() < 768; t++) {
+                tick(viewer, channel);
+                client.ackAll(viewer);
             }
             assertEquals(768, client.chunks.size());
             assertSame(fresh, client.chunks.stream().filter(p -> p.x() == 3).findFirst().orElseThrow());
-            assertEquals(0, viewer.bytes);
+            assertEquals(0, viewer.bytes + viewer.stockBytes());
         } finally {
             channel.finishAndReleaseAll();
         }
     }
 
     @Test
-    void dimensionQueueResetDoesNotResetBatchIdsOrAcceptOldAcks() {
+    void dimensionChangeDropsWaitingChunksButKeepsTheWindowAndBatchIds() {
         EmbeddedChannel channel = new EmbeddedChannel();
         try {
-            VoxyLods.Viewer viewer = new VoxyLods.Viewer();
             Receiver client = new Receiver();
-            viewer.offer(1, packet(1, new byte[1024]));
-            viewer.drain(channel, client);
-            int first = viewer.flow.id();
-            viewer.queue.clear();
-            viewer.bytes = 0;
-            viewer.offer(2, packet(2, new byte[1024]));
-            viewer.drain(channel, client);
-            assertEquals(1, viewer.sent, "dimension change must still wait for old batch acknowledgement");
-            client.ack(viewer, 1);
-            assertFalse(viewer.flow.acknowledge(first, 64), "duplicate acknowledgement");
-            viewer.drain(channel, client);
-            assertNotEquals(first, viewer.flow.id());
-            assertFalse(viewer.flow.acknowledge(first, 64), "old dimension acknowledgement");
-            assertEquals(2, viewer.sent);
+            VoxyLods.Viewer viewer = new VoxyLods.Viewer(channel, client);
+            byte[] data = new byte[40 * 1024];
+            for (int i = 0; i < 100; i++) viewer.offer(i, packet(i, data));
+            tick(viewer, channel);
+            int first = client.marks.getLast().id();
+            int sent = client.chunks.size();
+            viewer.clear();
+            assertEquals(0, viewer.bytes + viewer.stockBytes());
+            viewer.pump();
+            assertEquals(sent, client.chunks.size(), "the previous world's stock is gone");
+            viewer.offer(1000, packet(1000, data));
+            tick(viewer, channel);
+            assertEquals(sent, client.chunks.size(), "the window still holds the previous world's unacknowledged chunks");
+            viewer.acknowledged(first);
+            assertEquals(sent + 1, client.chunks.size());
+            assertTrue(client.marks.getLast().id() > first, "batch IDs continue across the change");
         } finally {
             channel.finishAndReleaseAll();
         }
+    }
+
+    /** @return {window KiB at burst start, max queue ms in the burst's first 10 s, ms of those 10 s with queue > 100 ms} */
+    private static double[] burstAfterTrickle(double rate, double oneWay, double compression) {
+        EmbeddedChannel channel = new EmbeddedChannel();
+        try {
+            record Event(double at, int ack) {}
+            PriorityQueue<Event> events = new PriorityQueue<>((a, b) -> Double.compare(a.at, b.at));
+            double[] now = {0}, lineFree = {0};
+            BiConsumer<CustomPacketPayload, PacketSendListener> link = (p, done) -> {
+                double wire = p instanceof S2C.VoxyChunk c ? c.sections().length / compression : 8;
+                lineFree[0] = Math.max(lineFree[0], now[0]) + wire / rate;
+                if (p instanceof S2C.LodBatchFinished mark) events.add(new Event(lineFree[0] + 2 * oneWay, mark.id()));
+                if (done != null) done.onSuccess();
+            };
+            VoxyLods.Viewer viewer = new VoxyLods.Viewer(channel, link, () -> (long) (now[0] * 1e6));
+            byte[] data = new byte[40 * 1024];
+            int next = 0;
+            double burst = 30000, end = burst + 10000, windowAtBurst = -1, maxQueue = 0, over = 0;
+            for (double t = 0; t < end; t += 50) events.add(new Event(t, -1));
+            for (double t = burst; t < end; t += 1) events.add(new Event(t, -2));
+            while (!events.isEmpty()) {
+                Event e = events.poll();
+                now[0] = e.at;
+                if (e.ack == -2) {
+                    double q = Math.max(0, lineFree[0] - now[0]);
+                    maxQueue = Math.max(maxQueue, q);
+                    if (q > 100) over++;
+                } else if (e.ack == -1) {
+                    if (now[0] < burst) {
+                        if (((long) now[0]) % 1000 == 0) viewer.offer(next, packet(next++, data)); // trickle: one chunk a second
+                    } else {
+                        if (windowAtBurst < 0) windowAtBurst = viewer.flow.window() / 1024.0;
+                        while (viewer.bytes < 8L << 20) viewer.offer(next, packet(next++, data)); // a strike's ruins
+                    }
+                    viewer.stockUp();
+                    viewer.pump();
+                    channel.runPendingTasks();
+                } else {
+                    viewer.acknowledged(e.ack);
+                    channel.runPendingTasks();
+                }
+            }
+            return new double[]{windowAtBurst, maxQueue, over};
+        } finally {
+            channel.finishAndReleaseAll();
+        }
+    }
+
+    /** Review probe (PR #774, round 2): a trickle between strikes must not open the window for the next burst. */
+    @Test
+    void aTrickleDoesNotOpenTheWindowForTheNextBurst() {
+        StringBuilder report = new StringBuilder();
+        boolean ok = true;
+        for (double[] l : new double[][]{{4500, 27, 5.7}, {1250, 20, 5.7}, {1250, 20, 2.5}, {625, 20, 5.7}, {625, 20, 2.5}}) {
+            double[] r = burstAfterTrickle(l[0], l[1], l[2]);
+            report.append(String.format(Locale.ROOT, "%n  %.2f MB/s, RTT %.0f ms, %.1fx: window at burst %4.0f KiB, max queue %4.0f ms, %4.0f ms of the first 10 s above 100 ms",
+                    l[0] / 1000, 2 * l[1], l[2], r[0], r[1], r[2]));
+            ok &= r[1] < 200;
+        }
+        System.out.println("burst after trickle:" + report);
+        assertTrue(ok, "burst after trickle:" + report);
     }
 }

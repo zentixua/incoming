@@ -16,6 +16,7 @@ import ua.zentix.incoming.client.lod.LodRefreshHints;
 import ua.zentix.incoming.compat.LodSections;
 import ua.zentix.incoming.compat.HandleFailures;
 import ua.zentix.incoming.net.C2S;
+import ua.zentix.incoming.net.LodDiag;
 import ua.zentix.incoming.net.S2C;
 
 import java.lang.invoke.MethodHandle;
@@ -95,19 +96,41 @@ public final class VoxyIngest {
 
     /** Public Voxy service counter: never acknowledge another batch while its background queue is backed up. */
     static boolean backlogged() {
-        if (!available()) return false;
+        int queued = taskCount();
+        return queued >= 0 && backlogged(queued);
+    }
+
+    /** Voxy's queued ingest sections ({@code getTaskCount}); -1 without Voxy or its instance. */
+    static int taskCount() {
+        if (!available()) return -1;
         try {
             Object instance = instanceOf.invoke();
-            if (instance == null) return false;
+            if (instance == null) return -1;
             Object service = ingestService.invoke(instance);
-            return service != null && backlogged((int) taskCount.invoke(service));
+            return service == null ? -1 : (int) taskCount.invoke(service);
         } catch (LinkageError | Exception error) {
             broken = true;
             Incoming.LOG.warn("Voxy: cannot measure ingest backlog; stopping Incoming LOD delivery ({})", error.toString());
-            return false;
+            return -1;
         } catch (Throwable error) {
             throw HandleFailures.propagate(error);
         }
+    }
+
+    /** {@link LodDiag}: bytes and {@code rawIngest} time of the current batch (network thread). */
+    private static long diagBytes, diagIngestNanos;
+
+    static void diagReset() {
+        diagBytes = 0;
+        diagIngestNanos = 0;
+    }
+
+    static long diagBytes() {
+        return diagBytes;
+    }
+
+    static long diagIngestNanos() {
+        return diagIngestNanos;
     }
 
     /** World login: tell the server whether to send chunks. */
@@ -126,6 +149,7 @@ public final class VoxyIngest {
             ingested = level;
             HINTS.begin(level);
         }
+        long diagStart = LodDiag.ON ? System.nanoTime() : 0;
         try {
             Object world = of.invoke((Level) level);
             if (world == null) return;
@@ -134,6 +158,10 @@ public final class VoxyIngest {
                 if (!ok) return;
             }
             HINTS.remember(level, ChunkPos.asLong(p.x(), p.z()));
+            if (LodDiag.ON) {
+                diagBytes += p.sections().length;
+                diagIngestNanos += System.nanoTime() - diagStart;
+            }
         } catch (LinkageError e) {
             broken = true;
             Incoming.LOG.warn("Voxy: rawIngest no longer matches ({}) — strike damage far away shows in Voxy only when you get there", e.toString());

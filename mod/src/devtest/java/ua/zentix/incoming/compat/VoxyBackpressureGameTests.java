@@ -84,37 +84,64 @@ public final class VoxyBackpressureGameTests {
                     connection.send(packet, listener);
                 }
             };
-            VoxyLods.Viewer viewer = new VoxyLods.Viewer();
+            VoxyLods.Viewer viewer = VoxyLods.Viewer.of(player);
             byte[] data = new byte[250 * 1024];
             var dimension = h.getLevel().dimension().location();
-            byte[] small = new byte[32 * 1024];
-            for (int i = 0; i < 8; i++) viewer.offer(i, new S2C.VoxyChunk(dimension, i, 0, i == 0 ? data : small));
-            for (int tick = 0; tick < 1200; tick++) viewer.drain(player);
-            h.assertTrue(viewer.sent == 1 && viewer.queue.size() == 7, "slow connection did not stop the player drain");
+            int small = 32 * 1024;
+            for (int i = 0; i < 8; i++) viewer.offer(i, new S2C.VoxyChunk(dimension, i, 0, new byte[i == 0 ? data.length : small]));
+            for (int tick = 0; tick < 1200; tick++) {
+                viewer.drain();
+                channel.runPendingTasks(); // the connection's event loop
+            }
+            h.assertTrue(viewer.sent.get() == 1 && viewer.bytes + viewer.stockBytes() == 7L * small, "slow connection did not stop the sender");
             h.assertFalse(channel.isWritable(), "test transport did not retain the encoded LOD");
-            S2C.VoxyChunk fresh = new S2C.VoxyChunk(dimension, 1, 0, new byte[32 * 1024]);
-            viewer.offer(1, fresh);
             channel.draining = true;
             channel.flush();
-            viewer.drain(player); // complete the stalled bootstrap batch
-            h.assertTrue(batches.size() == 1, "missing bootstrap finish marker");
-            for (int tick = 0; tick < 1200; tick++) viewer.drain(player);
-            h.assertTrue(viewer.sent == 1, "write completion was mistaken for client acknowledgement");
-            h.assertTrue(viewer.flow.acknowledge(batches.getFirst().id(), 8), "matching acknowledgement rejected");
-            viewer.drain(player);
-            h.assertTrue(batches.size() == 2 && batches.getLast().chunks() == 7, "acknowledged rate did not size next batch");
-            h.assertTrue(viewer.sent == 8 && viewer.bytes == 0, "Connection completion did not resume delivery");
+            channel.runPendingTasks();
+            h.assertTrue(viewer.sent.get() == 1 && !batches.isEmpty(), "the oversized chunk did not hold the window until acknowledged");
+            viewer.acknowledged(batches.getLast().id());
+            channel.runPendingTasks();
+            h.assertTrue(viewer.sent.get() == 8, "Connection write completion did not resume delivery within the window: sent " + viewer.sent.get()
+                    + ", waiting " + (viewer.bytes + viewer.stockBytes()) + ", in flight " + viewer.flow.inFlight() + ", window " + viewer.flow.window());
+            h.assertTrue(batches.stream().mapToInt(S2C.LodBatchFinished::chunks).sum() == 8, "sent chunks not all marked for acknowledgement");
+            for (int i = 8; i < 68; i++) viewer.offer(i, new S2C.VoxyChunk(dimension, i, 0, new byte[small]));
+            for (int tick = 0; tick < 1200; tick++) {
+                viewer.drain();
+                channel.runPendingTasks();
+            }
+            long window = viewer.flow.window();
+            h.assertTrue(viewer.flow.inFlight() >= window && viewer.flow.inFlight() < window + small && viewer.sent.get() < 68,
+                    "write completion was mistaken for client acknowledgement: " + viewer.flow.inFlight() + " bytes in flight, window " + window);
+            for (int round = 0; round < 100 && viewer.sent.get() < 68; round++) {
+                viewer.acknowledged(batches.getLast().id());
+                viewer.drain();
+                channel.runPendingTasks();
+            }
+            h.assertTrue(viewer.sent.get() == 68 && viewer.bytes + viewer.stockBytes() == 0, "acknowledgements did not send the rest");
             int received = 0;
             for (ByteBuf bytes; (bytes = channel.readOutbound()) != null; ) {
                 if (bytes.readableBytes() > 1) received++;
                 bytes.release();
             }
-            h.assertTrue(received == 8, "not all chunks reached the transport");
+            h.assertTrue(received == 68, "not all chunks reached the transport");
             h.succeed();
         } finally {
             channel.finishAndReleaseAll();
         }
     }
+    /** On the main thread an acknowledgement waits for the server tick: one window per tick, not per round trip. */
+    @GameTest(template = "range", timeoutTicks = 20, batch = "voxy_backpressure", skyAccess = true)
+    public static void acknowledgementsAreHandledOnTheNetworkThread(GameTestHelper h) {
+        java.util.Map<net.minecraft.network.ConnectionProtocol, java.util.Map<net.minecraft.resources.ResourceLocation,
+                net.neoforged.neoforge.network.registration.PayloadRegistration<?>>> all = ObfuscationReflectionHelper.getPrivateValue(
+                net.neoforged.neoforge.network.registration.NetworkRegistry.class, null, "PAYLOAD_REGISTRATIONS");
+        var registration = all.get(net.minecraft.network.ConnectionProtocol.PLAY).get(ua.zentix.incoming.net.C2S.LodBatchReceived.TYPE.id());
+        h.assertTrue(registration != null, "acknowledgement payload not registered");
+        h.assertFalse(registration.handler() instanceof net.neoforged.neoforge.network.handling.MainThreadPayloadHandler,
+                "acknowledgements are handled on the main thread");
+        h.succeed();
+    }
+
     /** The real mark-to-disk-to-queue path, with an old copy already waiting at the queue cap. */
     @GameTest(template = "range", timeoutTicks = 400, batch = "voxy_saved_update", skyAccess = true)
     public static void pausedMarkSurvivesUnloadAndReplacesItsWaitingCopy(GameTestHelper h) {
@@ -129,7 +156,7 @@ public final class VoxyBackpressureGameTests {
         data.putInt("zPos", unloaded.z);
         data.putString("Status", ChunkStatus.FULL.getName());
         ua.zentix.incoming.util.RegionFiles.write(level, unloaded, data);
-        VoxyLods.Viewer viewer = new VoxyLods.Viewer();
+        VoxyLods.Viewer viewer = new VoxyLods.Viewer(null, (packet, listener) -> {});
         byte[] old = new byte[64 * 1024];
         long key = unloaded.toLong();
         for (int i = 0; i < 767; i++) viewer.offer(i, new S2C.VoxyChunk(level.dimension().location(), i, 0, old));
