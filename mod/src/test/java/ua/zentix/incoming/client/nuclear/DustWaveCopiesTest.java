@@ -38,13 +38,53 @@ class DustWaveCopiesTest {
         }
     }
 
+    /**
+     * The haze level's top the camera's share reads ({@link DustNoise}: {@code dwEnvelope}, {@code dwPlume}, {@code dwRamp},
+     * {@code dwSoft}) is the shader's; the swell field on the lattice is held by {@code DustNoiseTest} and
+     * {@code tools/dust_wall_gl.py}.
+     */
+    @Test
+    void hazeTopEqualsTheShader() throws Exception {
+        String s = Files.readString(GLSL).replace("const float DW_RISE = 0.12, DW_HOLD = 0.25, DW_FALL = 0.3;",
+                "const float DW_RISE = 0.12;\nconst float DW_HOLD = 0.25;\nconst float DW_FALL = 0.3;")
+                .replace("const float DW_SHEAR_S = 300.0, DW_PLUME = 2.5;", "const float DW_SHEAR_S = 300.0;\nconst float DW_PLUME = 2.5;");
+        GlslFunction envelope = GlslFunction.parse(s, "dwEnvelope"), plume = GlslFunction.parse(s, "dwPlume"),
+                ramp = GlslFunction.parse(s, "dwRamp"), soft = GlslFunction.parse(s, "dwSoft");
+        for (double a = 0; a < 4000; a = a * 1.17 + 0.05) {
+            for (double h : new double[] {5, 40, 120})
+                assertEquals(DustNoise.envelope(a, h, 1.65), envelope.call(Map.of("a", a, "h", h, "k", 1.65)), 1e-9, "dwEnvelope " + a);
+            for (double l = 0; l <= 1; l += 0.05)
+                assertEquals(DustNoise.plume(l, a, 0.8), plume.call(Map.of("L", l, "a", a, "hot", 0.8)), 1e-9, "dwPlume " + l + " " + a);
+            assertEquals(DustNoise.ramp(a, 6.5, 1.2), ramp.call(Map.of("a", a, "c", 6.5, "w", 1.2)), 1e-12, "dwRamp " + a);
+            assertEquals(DustNoise.soft(a - 3), soft.call(Map.of("x", a - 3)), 1e-12, "dwSoft " + a);
+        }
+        String text = Files.readString(GLSL);
+        for (String c : new String[] {"const float DW_BULGE = " + DustNoise.BULGE + ",", "DW_SHEAR_S = " + DustNoise.SHEAR_S + ",",
+                "DW_PLUME = " + DustNoise.PLUME + ";", "const float DW_EDDY_S = " + DustNoise.EDDY_S + ";",
+                "const float DW_LATTICE = " + DustNoise.SIDE + ".0;"})
+            assertTrue(text.contains(c), "shader constant " + c);
+    }
+
+    /** The camera's share reaches the march with the source: the frame inputs' sixth texel's w ({@code dwLoad}: DwSight). */
+    @Test
+    void theSightShareIsAFrameInput() throws Exception {
+        String s = Files.readString(GLSL);
+        assertTrue(s.contains("vec4 b = dwParam(4), f = dwParam(5), r = dwParam(6);") && s.contains("DwSight = f.a;"), "DwSight from texel 5's w");
+        assertTrue(s.contains("if (DwSight > 0.0) law.y = mix(law.y, dwSight(r, a0), DwSight);"),
+                "the density moves the law's depth to the inside sight's by the share");
+        String sources = Files.readString(Path.of("src/main/java/ua/zentix/incoming/client/nuclear/DustSources.java"));
+        assertTrue(sources.contains("p[4 * 5 + 3] = (float) sight;"), "DustSources writes the share to texel 5's w");
+    }
+
     /** The source table's layout in the shader is the one the pass uploads (rows per source, the spray and frame-input rows, nodes). */
     @Test
     void tableLayoutIsTheShaders() throws Exception {
         String s = Files.readString(GLSL);
         int rows = ua.zentix.incoming.client.fx.layer.DustWallPass.ROWS;
-        assertTrue(s.contains("const int DW_SPRAY_ROW = " + rows + ", DW_PARAMS_ROW = " + (rows + 1) + ", DW_ROWS = "
-                + ua.zentix.incoming.client.fx.layer.DustWallPass.SOURCE_ROWS + ";"), "row layout");
+        int sources = ua.zentix.incoming.client.fx.layer.DustWallPass.SOURCE_ROWS;
+        assertTrue(s.contains("const int DW_SPRAY_ROW = " + rows + ", DW_SIGHT_ROW = " + PallField.SIGHT_ROW + ", DW_PARAMS_ROW = "
+                + (sources - 1) + ", DW_ROWS = " + sources + ";"), "row layout");
+        assertEquals(rows + 1, PallField.SIGHT_ROW, "the inside sight's rows follow the spray row");
         assertTrue(s.contains("const float DW_NODES = " + ua.zentix.incoming.client.fx.layer.DustWallPass.NODES + ".0;"), "nodes");
     }
 

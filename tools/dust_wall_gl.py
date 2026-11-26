@@ -34,14 +34,20 @@ context, link, target, texture, bind, quad, read, loc, check = (
 AGES = 32
 
 
-def lifetime(p, nodes, end=1e4):
-    """The whole-lifetime table (PallField.lifetime: row 0 arrival and paved, rows 1.. top and depth per log age, slopes 0)
-    from per-node (arrival, layer top, law depth, paved), the same at every age; binds it on unit 2 with DwLife."""
-    data = np.zeros((1 + AGES, len(nodes), 4), np.float32)
+SIGHT_ROW, TABLE_ROWS = 2 + AGES, 2 * AGES + 1
+
+
+def lifetime(p, nodes, end=1e4, seen=None):
+    """The whole-lifetime table (PallField.lifetime: row 0 arrival and paved, rows 1.. top and depth per log age, slopes 0,
+    the inside sight's rows from SIGHT_ROW: its depth, the law's unless seen) from per-node (arrival, layer top, law depth,
+    paved), the same at every age; binds it on unit 2 with DwLife."""
+    data = np.zeros((TABLE_ROWS, len(nodes), 4), np.float32)
     for i, (arrival, top, depth, paved) in enumerate(nodes):
         data[0, i] = (arrival, paved, 0, 0)
-        data[1:, i] = (top, depth, 0, 0)
-    bind(p, 2, texture(g.GL_RGBA32F, g.GL_RGBA, len(nodes), 1 + AGES, data.reshape(-1, 4)))
+        data[1:1 + AGES, i] = (top, depth, 0, 0)
+        sight = depth if seen is None else seen
+        data[SIGHT_ROW:, i] = (sight, 0, sight, 0)
+    bind(p, 2, texture(g.GL_RGBA32F, g.GL_RGBA, len(nodes), TABLE_ROWS, data.reshape(-1, 4)))
     g.glUniform4f(loc(p, "DwLife"), end, 0.05, 0, 0)
 
 
@@ -134,8 +140,11 @@ vec3 dwAirLight(vec3 rd) { return vec3(0.0); }
 #moj_import <incoming:dustwall.glsl>
 uniform vec3 Dir;
 uniform float End;
+// the camera's share of the inside sight (the pass loads it per source: dwLoad)
+uniform float Sight;
 out vec4 fragColor;
 void main() {
+    DwSight = Sight;
     vec4 wall = dwMarch(normalize(Dir), End, 0.8, 0.001, 128);
     fragColor = vec4(wall.rgb, wall.a);
 }
@@ -208,6 +217,90 @@ void main() {
     cut = march(2, (1, 0, 0), 20)
     g.glUniform1f(loc(p, "DwCut"), 0)
     check(abs(cut[3] - 1) < 1e-5, f"ray inside the fireball's ground footprint: T={cut[3]:.4f}, expected 1")
+
+    # the camera's inside sight (PallField.sighted, the table's sight rows): straight down through old dust (2 min, the haze
+    # level), the depth the transfer reads moves from the law's (10) to the inside sight's (1.2) by the camera's share
+    def sighted(w):
+        g.glUniform1f(loc(p, "Sight"), w)
+        g.glUniform1f(loc(p, "Floor"), 0)
+        g.glUniform2f(loc(p, "DwRelief"), 0, 0)
+        g.glUniform4f(loc(p, "DwEye"), 100, 40, 0, 120)
+        g.glUniform3f(loc(p, "Dir"), 0, -1, 0)
+        g.glUniform1f(loc(p, "End"), 40)
+        quad(p)
+        return -np.log(read(1, 1)[0, 0, 3])
+
+    def transfer(tau):
+        return tau if tau <= 1 else 1 + 0.073 * (tau - 1) + (1 - 0.073) * 0.5 * (1 - np.exp(-(tau - 1) / 0.5))
+    lifetime(p, [(0, 20, 10.0, 0)] * 128, seen=1.2)
+    law = sighted(0)
+    for w in (0.5, 1.0):
+        want = transfer(10 + (1.2 - 10) * w) / transfer(10)
+        got = sighted(w) / law
+        check(abs(got - want) < 0.02, f"inside sight {w}: drawn depth {got:.4f} of the law's, expected {want:.4f}")
+    g.glUniform1f(loc(p, "Sight"), 0)
+    lifetime(p, [(0, 20, 10.0, 0)] * 128)
+
+
+def java_bytes(seed, n):
+    """java.util.Random(seed).nextBytes of n bytes (DustNoise.values: the march's lattice)."""
+    mask = (1 << 48) - 1
+    s = (seed ^ 0x5DEECE66D) & mask
+    out = bytearray(n)
+    for i in range(0, n, 4):
+        s = (s * 0x5DEECE66D + 0xB) & mask
+        r = s >> 16
+        for k in range(min(4, n - i)):
+            out[i + k] = (r >> (8 * k)) & 0xFF
+    return bytes(out)
+
+
+def noise_case():
+    """The haze level's swell field the camera's inside share reads (DustNoise.swell) is the shader's dwSwellField on the
+    uploaded lattice: the points and values of DustNoiseTest, within the texture filter's 8-bit weights (up to 2.4e-3 here)."""
+    core, expand = gl["CORE"], gl["expand"]
+    src = expand("""#version 150
+uniform vec4 DwEye; uniform vec4 DwRing; uniform vec4 DwLife; uniform vec4 DwBall; uniform vec3 DwBallLight; uniform float DwCut;
+uniform vec3 DwFire; uniform vec2 DwRelief; uniform vec4 DwSurge;
+float dwFloorEye(vec2 xz) { return 0.0; }
+float dwOpenEye(vec3 p) { return 1.0; }
+vec2 dwSoilAt(vec2 xz) { return vec2(0.0); }
+float dwAirT(float t, float dy) { return 1.0; }
+vec3 dwAirLight(vec3 rd) { return vec3(0.0); }
+#moj_import <incoming:dustwall.glsl>
+uniform vec3 At;
+out vec4 fragColor;
+void main() {
+    float L;
+    float s = dwSwellField(At.xy, At.z, L);
+    fragColor = vec4(s, L, 0.0, 1.0);
+}
+""")
+    p = gl["compileProgram"](gl["compileShader"]((core / "fx_dustwall.vsh").read_text(), g.GL_VERTEX_SHADER),
+                             gl["compileShader"](src, g.GL_FRAGMENT_SHADER), validate=False)
+    target(1, 1, [(g.GL_RGBA32F, g.GL_RGBA)])
+    g.glUseProgram(p)
+    side = 128
+    values = java_bytes(0xD057, side ** 3)
+    g.glActiveTexture(g.GL_TEXTURE0 + 12)
+    noise = g.glGenTextures(1)
+    g.glBindTexture(g.GL_TEXTURE_3D, noise)
+    for k, v in ((g.GL_TEXTURE_MIN_FILTER, g.GL_LINEAR), (g.GL_TEXTURE_MAG_FILTER, g.GL_LINEAR), (g.GL_TEXTURE_WRAP_S, g.GL_REPEAT),
+                 (g.GL_TEXTURE_WRAP_T, g.GL_REPEAT), (g.GL_TEXTURE_WRAP_R, g.GL_REPEAT)):
+        g.glTexParameteri(g.GL_TEXTURE_3D, k, v)
+    g.glPixelStorei(g.GL_UNPACK_ALIGNMENT, 1)
+    g.glTexImage3D(g.GL_TEXTURE_3D, 0, g.GL_R8, side, side, side, 0, g.GL_RED, g.GL_UNSIGNED_BYTE, values)
+    g.glUniform1i(loc(p, "DwNoise"), 12)
+    # (x, z, age; swell, L) as DustNoiseTest.POINTS
+    for x, z, a, swell, big in ((1564, 0, 300, 0.177846, 0.647493), (1500, 120, 60, 0.247608, 0.750244),
+                                (-800, 2300, 600, -0.156478, 0.375046), (3100, -410, 30, 0.166536, 0.635245),
+                                (220, -75, 1200, -0.048085, 0.465325), (0, 0, 5, 0.042303, 0.530606),
+                                (777, 777, 120, -0.411438, 0.491826), (-2500, -1300, 3000, -0.059747, 0.456688)):
+        g.glUniform3f(loc(p, "At"), x, z, a)
+        quad(p)
+        r = read(1, 1)[0, 0]
+        check(abs(r[0] - swell) < 4e-3 and abs(r[1] - big) < 4e-3,
+              f"swell field at ({x}, {z}) {a} s: shader {r[0]:.6f} L {r[1]:.6f}, Java {swell:.6f} L {big:.6f}")
 
 
 def turning_case():
@@ -433,6 +526,7 @@ for name, p in programs.items():
             print(f"Linked fx_dustwall{name} after the Veil parser round trip")
 resolve_cases(programs["_resolve"])
 march_cases()
+noise_case()
 turning_case()
 period_case()
 # The full pass contract and its camera-motion and screen-edge regressions use llvmpipe.
@@ -445,6 +539,7 @@ for script in ("dust_wall_contract_gl.py", "wall_layer_identity.py", "nuclear_vo
 if (Path(__file__).resolve().parents[1] / "mod/build/uw-probe/law-1000kt.json").exists():
     failed |= subprocess.run([sys.executable, str(Path(__file__).with_name("uw_probe") / "onetap_flip.py")]).returncode != 0
 else:
-    print("FAIL    onetap_flip: no law table; run (cd mod && ./gradlew test --tests '*DustLawDumpProbe') first")
+    print("FAIL    onetap_flip: no law table; run (cd mod && JAVA_TOOL_OPTIONS=-Duw.probe=true ./gradlew test "
+          "--tests '*DustLawDumpProbe' --rerun) first (without the property the probe skips itself)")
     failed = True
 sys.exit(failed)

@@ -36,14 +36,19 @@ uniform float DwDetail;
 // burst; dust over hard ground relative to soil, PallField.paved; the fire zone's share; 0), rows 1 + k per age node k (age =
 // DwLife.y · ((1 + DwLife.x / DwLife.y)^(k / (DW_AGES − 1)) − 1)): (the presentation layer top, blocks; the column's vertical
 // optical depth the transfer reads; both slopes per age node); row 1 + DW_AGES per node: water spray (extinction where the
-// blast wind strips the densest spray, 1/block; stripping height, blocks: PallField.spray, sprayFrom); the last row: the
-// source's frame inputs (DustSources, read by dwLoad). Node i at radius i / (DW_NODES − 1) × reach.
-const int DW_SPRAY_ROW = 33, DW_PARAMS_ROW = 34, DW_ROWS = 35;
+// blast wind strips the densest spray, 1/block; stripping height, blocks: PallField.spray, sprayFrom); rows DW_SIGHT_ROW + k
+// per age interval k, k + 1: the optical depth a camera inside the dust sees (PallField.sighted) and its slope at node k, then
+// at node k + 1; the last row: the source's frame inputs (DustSources, read by dwLoad). Node i at radius i / (DW_NODES − 1) ×
+// reach.
+const int DW_SPRAY_ROW = 33, DW_SIGHT_ROW = 34, DW_PARAMS_ROW = 65, DW_ROWS = 66;
 const float DW_NODES = 128.0;
 // the source table: the rows above per source (DW_NODES × DW_ROWS each, RGBA32F)
 uniform sampler2D Sampler2;
 // the height over which the dust thins to its floor at the current march sample (dwFloor: by the fine tile's share)
 float gDwFloorSoft = 3.0;
+// presentation: the camera's share of the inside sight in the source being read (PallField.sight: 0 outside its dust, where
+// every ray reads the law through the transfer; dwLoad from the frame inputs, set by the harness)
+float DwSight = 0.0;
 #ifdef DW_SOURCES
 // Several detonations: one table (Sampler2) holds every source of the frame at DW_ROWS rows each; the march
 // sums their extinction and extinction-weighted light at every sample (each source's light finished before the next). The
@@ -103,6 +108,7 @@ void dwLoad(int k) {
     DwBallLight = b.rgb;
     DwCut = b.a;
     DwFire = f.rgb;
+    DwSight = f.a;
     DwRelief = r.xy;
     DwSurge = dwParam(7);
     DwGround = dwParam(8);
@@ -316,6 +322,26 @@ vec2 dwLaw(float r, float a) {
     vec2 v = mix(dwLawAt(i, u), dwLawAt(i + 1, u), x - float(i));
     v.y *= 1.0 - smoothstep(DW_AGES - 2.0, DW_AGES - 1.0, dwAgeU(a));
     return v;
+}
+// the optical depth a camera inside the dust sees at node i, age coordinate u (presentation, PallField.sighted: about 200 m at
+// one minute, 700 m by five, then the law's own thinning; the haze level's fade by age, as the law's own nodes): the cubic
+// Hermite of its age interval's row (both nodes in one texel)
+float dwSightAt(int i, float u) {
+#ifdef DW_DIAG
+    gDwFetches += 1.0;
+#endif
+    float k = clamp(floor(u), 0.0, DW_AGES - 2.0), f = clamp(u - k, 0.0, 1.0);
+    vec4 p = texelFetch(Sampler2, ivec2(i, gDwRow + DW_SIGHT_ROW + int(k)), 0);
+    float f2 = f * f, f3 = f2 * f;
+    return max((2.0 * f3 - 3.0 * f2 + 1.0) * p.x + (f3 - 2.0 * f2 + f) * p.y + (-2.0 * f3 + 3.0 * f2) * p.z + (f3 - f2) * p.w, 0.0);
+}
+// dwLaw's depth as a camera inside the dust sees it (the same reading: radius nodes, the table's end)
+float dwSight(float r, float a) {
+    if (a <= 0.0) return 0.0;
+    float u = min(dwAgeU(a), DW_AGES - 1.0);
+    float x = clamp(r / max(DwRing.w, 1.0), 0.0, 1.0) * (DW_NODES - 1.0);
+    int i = int(min(floor(x), DW_NODES - 2.0));
+    return mix(dwSightAt(i, u), dwSightAt(i + 1, u), x - float(i)) * (1.0 - smoothstep(DW_AGES - 2.0, DW_AGES - 1.0, dwAgeU(a)));
 }
 
 // the density transfer (presentation): the drawn column's vertical optical depth from the law's. τ itself up to 1 (thin haze
@@ -809,6 +835,8 @@ float dwDustDensity(vec3 g, bool coarse) {
     vec2 law = dwLaw(r, a0);
     gDwWhy = 3.0;
     if (law.y <= 0.0) return 0.0;
+    // a camera inside the dust takes its share of the inside sight's depth (DwSight); outside it, the law
+    if (DwSight > 0.0) law.y = mix(law.y, dwSight(r, a0), DwSight);
     gDwWhy = 6.0;
     // the source ground's material (one fetch): over water the column is spray's, at a shore both by share
     vec3 mat = dwMaterial(q.xz);
