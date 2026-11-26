@@ -175,6 +175,7 @@ public final class Incoming {
         NeoForge.EVENT_BUS.addListener(ua.zentix.incoming.util.Terrain::onLogin);
         NeoForge.EVENT_BUS.addListener(ua.zentix.incoming.util.Terrain::onChangeDimension);
         NeoForge.EVENT_BUS.addListener(ua.zentix.incoming.util.Terrain::onRespawn);
+        NeoForge.EVENT_BUS.addListener(ua.zentix.incoming.util.Terrain::onServerTick);
         NeoForge.EVENT_BUS.addListener(NuclearStrikes::onLogin);
         NeoForge.EVENT_BUS.addListener(NuclearStrikes::onChangeDimension);
         NeoForge.EVENT_BUS.addListener(NuclearStrikes::onRespawn);

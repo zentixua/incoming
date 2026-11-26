@@ -39,8 +39,10 @@ public final class Ballistics {
         }
 
         /**
-         * Coefficient at world altitude {@code y} (above the reference sea level {@link Air#SEA}: the game drag law is
-         * level-free, so server and virtual flight agree everywhere) and air-relative {@code speed} blocks/tick, 1/block.
+         * Coefficient at world altitude {@code y} and air-relative {@code speed} blocks/tick, 1/block. Density is taken
+         * above the reference sea level {@link Air#SEA}, not the world's: the drag law also serves level-free spec tables
+         * ({@code WeaponSpec.reach}), and a flat world's offset (126 m) changes standard-atmosphere density by 1.2 %
+         * ({@code SeaLevelTest}), while the wind in the same trajectory reads the world's sea level.
          */
         public double at(double y, double speed) {
             double h = y - Air.SEA;

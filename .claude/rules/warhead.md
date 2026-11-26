@@ -79,9 +79,10 @@ paths:
   only ground, whole blocks with a random addition by the fractional part; not if the charge above ground is deeper than
   the depth), `Craters.ignite` (the fuel fireball `FuelFireball` — without the crater share `POOL_SHARE`, one number and one
   ball with the client: `FuelFireball.Sweep` — growth, rising to 0.75·D and drift by the world's wind, as in the picture
-  (`CloudModelTest.serverFireballIsTheBallThePlayerSees`); fuel rain falls on (`Warheads.soaked`: vanilla
-  `isRainingAt` on it or its top face) is wet and never ignites (Kerr et al. 1971: wet leaves virtually impossible to
-  ignite), fuel under a roof or canopy stays dry, GameTest `fuel_fire_rain`; the crater's fuel pool burns in rain
+  (`CloudModelTest.serverFireballIsTheBallThePlayerSees`); fuel rain falls on (`Warheads.soaked`: raining, a
+  rainy biome, nothing but leaves above it by `MOTION_BLOCKING_NO_LEAVES`; not vanilla `isRainingAt`, whose heightmap
+  stops at each column's top leaf and leaves 58 % of an oak crown dry) is wet and never ignites (Kerr et al. 1971: wet
+  leaves virtually impossible to ignite), fuel under a roof stays dry, GameTests `fuel_fire_rain`, `fuel_fire_rain_crown`; the crater's fuel pool burns in rain
   regardless (`FuelFires`); the impulse of a place — for the whole burning; inside the ball
   full, outside — (r/d)²; a walk through air from the near cells to the far ones (not from the larger impulse: for a risen
   ball it is largest in the air above it, and the limit would end the walk there), up to `PulseIgnition.FLOOR` and not

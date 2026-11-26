@@ -67,6 +67,13 @@ class SeaLevelTest {
         assertEquals(10, LocalWind.OPEN.above(-53, -63), 1e-12);
     }
 
+    /** The reference sea level in the drag law: a flat world's offset (126 m) changes air density by 1.2 % ({@code Ballistics.Drag}). */
+    @Test
+    void referenceSeaShiftsDragDensityLittle() {
+        double shift = 1 - StandardAtmosphere.density(126) / StandardAtmosphere.density(0);
+        assertEquals(0.012, shift, 0.0005);
+    }
+
     /** No world code reads a fixed sea level: {@code Air.SEA} only in the named level-free laws, no other 63 constant. */
     @Test
     void noFixedSeaLevelInWorldCode() throws IOException {

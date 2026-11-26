@@ -1018,14 +1018,19 @@ public final class Warheads {
     }
 
     /**
-     * Rain falls on the fuel at {@code at} (on it or on its top face, as vanilla rain reaches a block: open sky, a rainy
-     * biome): its surface is wet, and "wet or green leaves are virtually impossible to ignite and even when ignited will
-     * not participate in the development of a persistent fire" (Kerr et al. 1971, DNA N2:TR 2-70, p. 4-2; the same for
-     * the thin dry fuels of {@code PulseIgnition}: their thresholds are for dry kindling), so the fireball's seconds of
-     * light ignite none of it. Fuel under a roof or a canopy stays dry. A fuel pool burns in rain all the same
-     * ({@link FuelFires}). Ready chunks only (the caller checks).
+     * Rain falls on the fuel at {@code at}: it is raining, the biome rains there and nothing but leaves stands above it
+     * ({@code MOTION_BLOCKING_NO_LEAVES}: rain passes through a crown and wets every leaf and the ground beneath it,
+     * interception and throughfall). Its surface is wet, and "wet or green leaves are virtually impossible to ignite and
+     * even when ignited will not participate in the development of a persistent fire" (Kerr et al. 1971, DNA N2:TR 2-70,
+     * p. 4-2; the same for the thin dry fuels of {@code PulseIgnition}: their thresholds are for dry kindling), so the
+     * fireball's seconds of light ignite none of it. Fuel under a roof stays dry. A fuel pool burns in rain all the same
+     * ({@link FuelFires}). Ready chunks only (the caller checks); {@code RainCrownGameTests}, {@code fuel_fire_rain}.
      */
     public static boolean soaked(ServerLevel level, BlockPos at) {
-        return level.isRaining() && (level.isRainingAt(at) || level.isRainingAt(at.above()));
+        if (!level.isRaining()) return false;
+        // first air above the highest non-leaf blocking block: fuel at or above its top is under open sky (leaves aside)
+        if (at.getY() + 1 < Terrain.height(level, net.minecraft.world.level.levelgen.Heightmap.Types.MOTION_BLOCKING_NO_LEAVES, at.getX(), at.getZ()))
+            return false;
+        return level.getBiome(at).value().getPrecipitationAt(at) == net.minecraft.world.level.biome.Biome.Precipitation.RAIN;
     }
 }

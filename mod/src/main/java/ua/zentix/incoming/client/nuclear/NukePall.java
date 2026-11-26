@@ -310,7 +310,7 @@ public final class NukePall {
         // no detonation: no dust wave (the shared frame keeps the last nuclear frame's inputs otherwise)
         f.dustWall.active = false;
         double range = Sight.range(level.getRainLevel(partial), level.getThunderLevel(partial));
-        Sight.Air a = Sight.Air.at(eye.y - ua.zentix.incoming.util.Terrain.sea(level), range);
+        Sight.Air a = Sight.Air.at(eye.y - ua.zentix.incoming.client.fx.ClientAir.now().sea(), range);
         f.air.set((float) a.haze(), (float) a.clean(), (float) a.weather(), (float) (1 / Sight.HAZE_HEIGHT));
         light(level, eye, partial, f);
         openSky(level, f.openSky, f.faceShade);
@@ -530,7 +530,7 @@ public final class NukePall {
      * {@code top} (blocks above sea level), zero below it.
      */
     static void sky(ClientLevel level, Vec3 eye, float partial, double top, Sky into) {
-        into.eyeUp = (float) (eye.y - ua.zentix.incoming.util.Terrain.sea(level));
+        into.eyeUp = (float) (eye.y - ua.zentix.incoming.client.fx.ClientAir.now().sea());
         float angle = level.getTimeOfDay(partial) * Mth.TWO_PI;
         into.sx = -Mth.sin(angle);
         into.sy = Mth.cos(angle);

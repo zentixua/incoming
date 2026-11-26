@@ -25,7 +25,7 @@ public record Air(Wind wind, double stability, double humidity, int sea) {
     public static final double SURFACE_CLEAR = ua.zentix.incoming.sound.Air.HUMIDITY / 100;
     /**
      * Reference sea level, blocks ({@link Terrain#VANILLA_SEA}), only for laws evaluated without a world: spec tables
-     * ({@code WeaponSpec.reach}), the game ballistic drag ({@code Ballistics.Drag}), flame tables, tests. Those read
+     * ({@code WeaponSpec.reach}) and the game ballistic drag that serves them ({@code Ballistics.Drag}), tests. Those read
      * the standard atmosphere, whose scale is kilometres: the sea levels of common generators (−63 flat to a few hundred)
      * shift its density by at most a few percent there, which never reaches the screen. In a world, every height
      * above sea level reads {@link #sea} ({@code SeaLevelTest} guards the uses).

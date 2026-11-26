@@ -52,11 +52,13 @@ paths:
   `InstantChunks`). `Terrain.height` gives `CHUNK` without selection to callers already knowing readiness:
   `LaunchSite`, `Warheads` explosions, `nuclear/world`, ICBM site behind player in `NuclearStrikes`.
 - The world's sea level is `Terrain.sea(level)`: the server reads its generator (flat worlds −63, a pack's noise
-  settings), a client what `S2C.SeaLevel` sent for its current level (login, dimension change, respawn; 63 until then,
-  never another level's value). Every height above sea level in a world starts there: `Air` carries it (`Air.sea`,
+  settings), a client what `S2C.SeaLevel` sent for its current level (login, dimension change, respawn and every
+  `Terrain.SEA_RESEND` 600 ticks, so a Flashback recording started mid-session holds it; 63 until then, never another
+  level's value). A Flashback replay server sends none: its viewers get the recorded value, and its own level is not
+  the recorded world. Every height above sea level in a world starts there: `Air` carries it (`Air.sea`,
   wind profile, contrails), client water plane, haze, pall sun height, flame and re-entry glow, interceptor ceiling.
-  `Air.SEA` (63) is only for level-free laws (spec tables, `Ballistics.Drag`, tests): the standard atmosphere's scale is
-  kilometres, so other generators' sea levels shift it by a few percent there; `SeaLevelTest` counts its uses.
+  `Air.SEA` (63) is only for level-free laws (spec tables and the `Ballistics.Drag` they use, tests): a flat world's
+  offset changes standard-atmosphere density by 1.2 %; `SeaLevelTest` counts its uses.
 - World wind (`util/Wind`) changes every `Wind.DAY` = 24 000 game ticks, not on the world's day: a 24-hour day sees
   72 winds a day (not physical, guide `not-physical.md`). It stays on game ticks because a sleep or `/time` jump moves
   the world's day in one tick, and a wind on that clock would swing smoke, plumes, flight drift and fallout at once

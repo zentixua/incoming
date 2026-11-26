@@ -101,8 +101,8 @@ A blast is the warhead's charge in TNT, not a game explosion power. Everything f
   thin, dry fuel it reaches: leaves, dry grass, hay, books, and with the missile now and then cloth and wool. The flash
   comes from the fireball you see, which rises and drifts with the wind: tree crowns above the impact catch fire, grass on
   the ground catches more often downwind, and with the missile leaves catch a little past the ball's edge too. Planks, logs
-  and other thick wood only char in a flash that short. In rain, fuel the rain falls on is wet and does not catch; under a
-  roof or inside a tree crown it stays dry and can. The flash leaves its fire only on what burns: sand, stone,
+  and other thick wood only char in a flash that short. In rain, fuel the rain falls on is wet and does not catch, whole
+  tree crowns included, since rain runs down through the leaves; under a roof it stays dry and can. The flash leaves its fire only on what burns: sand, stone,
   earth, metal and rails never burn, and no flames from it are left standing on them. So a Shahed in a town leaves a
   few fires on dry plants near the impact, not a burning circle.
 - **Fuel in the crater**: the last quarter of the fuel stays in the crater and burns there as ordinary Minecraft fire on

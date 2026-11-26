@@ -49,9 +49,25 @@ public final class Terrain {
         seaOf = new java.lang.ref.WeakReference<>(level);
     }
 
-    /** Tells a player the sea level of the level they are in: login, dimension change, respawn. */
+    /**
+     * Ticks between repeats of {@code S2C.SeaLevel} to every player: a Flashback recording started mid-session holds the
+     * value within this time, whatever its snapshot keeps (5 bytes per player each 30 s).
+     */
+    public static final int SEA_RESEND = 600;
+
+    /**
+     * Tells a player the sea level of the level they are in: login, dimension change, respawn and every
+     * {@link #SEA_RESEND} ticks. Not from a Flashback replay server: its viewers get the recorded value, and the replay
+     * server's own level is not the recorded world.
+     */
     public static void sendSea(net.minecraft.server.level.ServerPlayer player) {
+        if (ua.zentix.incoming.compat.FlashbackReplay.isReplay(player.server)) return;
         net.neoforged.neoforge.network.PacketDistributor.sendToPlayer(player, new ua.zentix.incoming.net.S2C.SeaLevel(sea(player.serverLevel())));
+    }
+
+    public static void onServerTick(net.neoforged.neoforge.event.tick.ServerTickEvent.Post e) {
+        if (e.getServer().getTickCount() % SEA_RESEND != 0) return;
+        for (net.minecraft.server.level.ServerPlayer p : e.getServer().getPlayerList().getPlayers()) sendSea(p);
     }
 
     public static void onLogin(net.neoforged.neoforge.event.entity.player.PlayerEvent.PlayerLoggedInEvent e) {
