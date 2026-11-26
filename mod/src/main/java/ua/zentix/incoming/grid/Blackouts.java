@@ -341,6 +341,15 @@ public final class Blackouts {
     }
 
     /**
+     * Whether the hold of {@code next} ends at grid clock {@code now}: once the blend is over, or once a repair falls due (a
+     * sleep moved the clock past the first repair): a lag growing under a running restoration would rebuild it every second
+     * and darken districts it relit.
+     */
+    static boolean releases(Outage next, RecoveryClock c, long now) {
+        return c.settled() || now >= next.restoreFrom();
+    }
+
+    /**
      * Once a second: each outage whose cause's show may still hold it falls behind the grid clock by the world's rate it
      * does not take ({@link Outage#lag}, {@link RecoveryClock}): real rate through the show, then the rate blend. Once the
      * blend is over, or a repair is due, the outage is released and its lag stays.
@@ -356,9 +365,7 @@ public final class Blackouts {
             if (!world.holdBase.containsKey(o.id())) world.holdBase.put(o.id(), o.lag());
             Outage next = step(o, c, world.holdBase.get(o.id()), level.getGameTime(), WorldClock.rateClock(level), WorldClock.counted(level),
                     WorldClock.unseen(level), level.dimension(), shows);
-            // released once the blend is over, or once a repair falls due (a sleep moved the clock past the first repair):
-            // a lag growing under a running restoration would rebuild it every second and darken districts it relit
-            if (c.settled() || now(level) >= next.restoreFrom()) {
+            if (releases(next, c, now(level))) {
                 next = next.released();
                 world.holds.remove(o.id());
                 world.holdBase.remove(o.id());

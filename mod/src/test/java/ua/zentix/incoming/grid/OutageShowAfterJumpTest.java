@@ -10,7 +10,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 /**
  * A substation outage held by a conventional strike's show ({@link Blackouts#step}, once a second as {@code Blackouts.hold})
  * after a night nobody was awake for: the counted jump ends the show (time rule 7), so the remaining repair runs at the
- * world's rate after the 60 s blend, not at real rate again until the strike's planned show end. The release audit's probe.
+ * world's rate after the 60 s blend, not at real rate again until the strike's planned show end.
  */
 class OutageShowAfterJumpTest {
     private long game = 1000;
@@ -18,10 +18,14 @@ class OutageShowAfterJumpTest {
 
     /** Steps {@code o} once a second for {@code ticks} under a vanilla day; returns the outage after them. */
     private Outage run(Outage o, RecoveryClock c, double counted, long ticks) {
+        return run(o, c, counted, 0, ticks);
+    }
+
+    private Outage run(Outage o, RecoveryClock c, double counted, double unseen, long ticks) {
         for (long t = 0; t < ticks; t += 20) {
             game += 20;
             rate += 20; // vanilla day: one world-clock tick per game tick
-            o = Blackouts.step(o, c, 0, game, rate, counted, 0, "overworld", id -> RecoveryClock.NONE);
+            o = Blackouts.step(o, c, 0, game, rate, counted, unseen, "overworld", id -> RecoveryClock.NONE);
         }
         return o;
     }
@@ -50,7 +54,11 @@ class OutageShowAfterJumpTest {
         Outage o = new Outage(1, 0, 0, 512, 0, 3, 18_000, 90, 7).heldBy(-1, until);
         RecoveryClock c = RecoveryClock.district();
         o = run(o, c, 0, 120 * 20);
-        o = run(o, c, 0, 20); // the night skipped with someone awake: unseen, the show goes on
+        double before = c.clock();
+        long lag = o.lag();
+        o = run(o, c, 0, 8000, 20); // the night skipped with someone awake: unseen, the show goes on
         assertEquals(until, o.until(), "a night someone stayed awake through keeps the show's end");
+        assertTrue(c.clock() - before >= 8000, "the unseen night moved the repair by its hours");
+        assertTrue(o.lag() - lag <= 20, "the unseen night added no lag: " + (o.lag() - lag));
     }
 }

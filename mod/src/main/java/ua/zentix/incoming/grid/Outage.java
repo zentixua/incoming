@@ -25,7 +25,8 @@ import com.mojang.serialization.codecs.RecordCodecBuilder;
  * @param lag       how far the outage's recovery clock trails the grid clock, grid ticks (0 in saves from before it: their
  *                  times read as world clock)
  * @param strike    the detonation that caused it, while its show may still hold the repairs; -1 — none
- * @param until     game time the show of the conventional strike that caused it ends; {@link #NO_SHOW} — none
+ * @param until     game time the show of the conventional strike that caused it ends, shortened to the moment a jump nobody
+ *                  was awake for ended it (saved here: the outage's recovery clock is not); {@link #NO_SHOW} — none
  */
 public record Outage(int id, double x, double z, double radius, long start, double speed, long restoreAt, int restoreSpread, int node,
                      double dead, double damaged, long lag, int strike, long until) {
