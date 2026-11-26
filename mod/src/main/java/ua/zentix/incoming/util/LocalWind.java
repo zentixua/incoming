@@ -231,9 +231,9 @@ public record LocalWind(double ground, double base, double canopy, double displa
                 hill, hillLength);
     }
 
-    /** Height of world y above local ground, m (unknown ground — above sea level, as world wind). */
-    public double above(double y) {
-        return y - (Double.isNaN(ground) ? Air.SEA : ground);
+    /** Height of world y above local ground, m (unknown ground — above the world's sea level {@code sea}, as world wind). */
+    public double above(double y, int sea) {
+        return y - (Double.isNaN(ground) ? sea : ground);
     }
 
     /** Cloud cache key: correction to 2 % precision at surface-layer heights. */

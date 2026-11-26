@@ -158,7 +158,7 @@ public final class FireSmoke implements SmokeGrid.Source {
      */
     private double wind() {
         var site = ClientAir.site(x, z);
-        return ClientAir.speed(x, Math.max(y, y - site.above(y) + site.canopy()), z);
+        return ClientAir.speed(x, Math.max(y, y - site.above(y, ClientAir.now().sea()) + site.canopy()), z);
     }
 
     /** Plume from current wind at source height and stability. */

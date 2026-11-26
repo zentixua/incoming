@@ -2,7 +2,6 @@ package ua.zentix.incoming.grid.block;
 
 import net.minecraft.core.BlockPos;
 import net.minecraft.network.chat.MutableComponent;
-import net.minecraft.server.level.ServerLevel;
 import net.minecraft.util.RandomSource;
 import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.item.ItemStack;
@@ -44,16 +43,6 @@ public class UnlitEndRodBlock extends EndRodBlock implements Unlit {
     protected void neighborChanged(BlockState state, Level level, BlockPos pos, Block neighborBlock, BlockPos neighborPos, boolean movedByPiston) {
         super.neighborChanged(state, level, pos, neighborBlock, neighborPos, movedByPiston);
         Unlit.neighborChanged(state, level, pos);
-    }
-
-    @Override
-    protected boolean isRandomlyTicking(BlockState state) {
-        return true;
-    }
-
-    @Override
-    protected void randomTick(BlockState state, ServerLevel level, BlockPos pos, RandomSource random) {
-        Unlit.randomTick(state, level, pos);
     }
 
     @Override

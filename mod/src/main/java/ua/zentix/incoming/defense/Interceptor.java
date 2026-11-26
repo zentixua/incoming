@@ -184,7 +184,7 @@ public final class Interceptor {
             return;
         }
         moveTo(next);
-        if (pos.y > spec.ceiling() || pos.y < level.getMinBuildHeight()) world.burst(level, this, pos, null, End.FUEL);
+        if (pos.y > spec.ceiling(ua.zentix.incoming.util.Terrain.sea(level)) || pos.y < level.getMinBuildHeight()) world.burst(level, this, pos, null, End.FUEL);
     }
 
     /**

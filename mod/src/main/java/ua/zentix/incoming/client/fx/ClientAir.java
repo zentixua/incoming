@@ -78,7 +78,7 @@ public final class ClientAir {
     public static double speed(double x, double y, double z) {
         Air a = now();
         LocalWind site = site(x, z);
-        double h = site.above(y);
+        double h = site.above(y, a.sea());
         return a.wind().at(h, ua.zentix.incoming.util.Stability.alpha(a.stability())) * site.overGround(h);
     }
 

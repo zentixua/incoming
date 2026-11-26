@@ -172,6 +172,10 @@ public final class Incoming {
         NeoForge.EVENT_BUS.addListener(EventPriority.NORMAL, true, net.neoforged.neoforge.event.level.BlockEvent.NeighborNotifyEvent.class,
                 ua.zentix.incoming.nuclear.flash.FlashSync::onNeighborNotify);
         NeoForge.EVENT_BUS.addListener(ua.zentix.incoming.nuclear.flash.FlashSync::onLevelTick);
+        NeoForge.EVENT_BUS.addListener(ua.zentix.incoming.util.Terrain::onLogin);
+        NeoForge.EVENT_BUS.addListener(ua.zentix.incoming.util.Terrain::onChangeDimension);
+        NeoForge.EVENT_BUS.addListener(ua.zentix.incoming.util.Terrain::onRespawn);
+        NeoForge.EVENT_BUS.addListener(ua.zentix.incoming.util.Terrain::onServerTick);
         NeoForge.EVENT_BUS.addListener(NuclearStrikes::onLogin);
         NeoForge.EVENT_BUS.addListener(NuclearStrikes::onChangeDimension);
         NeoForge.EVENT_BUS.addListener(NuclearStrikes::onRespawn);

@@ -3,8 +3,13 @@ package ua.zentix.incoming.util;
 /**
  * World wind shared by everything: nuclear cloud/fallout drift ({@code NuclearWarhead}), client smoke, dust and plumes,
  * projectile flight drift. Depends only on game time, so server and client compute identically without a packet.
- * Each game day has its own wind: uniform direction, speed 5–15 m/s (same choice as nuclear per-burst wind previously);
- * between days, smoothly turns and changes strength as a vector (reversal passes through calm).
+ * Each {@link #DAY} game ticks has its own wind: uniform direction, speed 5–15 m/s; between them, smoothly turns and
+ * changes strength as a vector (reversal passes through calm).
+ * <p>
+ * Not physical: the wind's period is {@link #DAY} game ticks (one vanilla day), not the world's day ({@code WorldClock}),
+ * so a 24-hour day sees 72 winds a day. It stays on game ticks because a sleep or {@code /time} jump moves the world's
+ * day in one tick, and a wind on that clock would swing smoke, plumes, flight drift and fallout at once (guide
+ * {@code not-physical.md}, {@code WindTest.windStaysOnGameTicks}).
  * <p>
  * Wind is above the surface layer at height {@link #REFERENCE}, carrying the nuclear cloud. Below it, weakens by
  * u(z) = U·(z/{@link #REFERENCE})^p ({@link #at(double, double)}); p from stability class ({@link Stability#alpha}:
@@ -20,7 +25,7 @@ public record Wind(double direction, double speed) {
     public static final double REFERENCE = 1000;
     /** Profile not extended below this height above ground (grass/shrub roughness), m. */
     static final double FLOOR = 1;
-    /** Game day, ticks. */
+    /** Wind period, game ticks: one vanilla day (not physical, see the class note). */
     static final long DAY = 24_000;
     /** Speed: SLOWEST to SLOWEST + SPREAD, m/s. */
     static final double SLOWEST = 5, SPREAD = 10;

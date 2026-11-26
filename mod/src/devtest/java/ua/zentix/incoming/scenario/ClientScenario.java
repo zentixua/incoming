@@ -562,7 +562,7 @@ public final class ClientScenario {
                             Math.round(Math.toDegrees(bestAngle)), (int) best);
                     // viewer - above the water in 40 blocks from the shore
                     waterEye = new Vec3(at.getX() + 0.5 + Math.cos(bestAngle) * 40, 0, at.getZ() + 0.5 + Math.sin(bestAngle) * 40);
-                    waterBurst = new Vec3(at.getX() + 0.5 + Math.cos(bestAngle) * 1540, ua.zentix.incoming.client.fx.layer.WaterDecal.SEA_LEVEL, at.getZ() + 0.5 + Math.sin(bestAngle) * 1540);
+                    waterBurst = new Vec3(at.getX() + 0.5 + Math.cos(bestAngle) * 1540, ua.zentix.incoming.util.Terrain.sea(Minecraft.getInstance().level), at.getZ() + 0.5 + Math.sin(bestAngle) * 1540);
                 }
                 Minecraft.getInstance().execute(() -> {
                     cmd(String.format(java.util.Locale.ROOT, "tp @s %.1f 140 %.1f", waterEye.x, waterEye.z));
@@ -595,7 +595,7 @@ public final class ClientScenario {
         int x = (int) Math.floor(waterEye.x), z = (int) Math.floor(waterEye.z);
         // near the pond - the height of the generator (without trees; the client’s chunk might not have arrived yet)
         int ground = lake ? waterGround : mc.level.getHeight(Heightmap.Types.MOTION_BLOCKING, x, z);
-        int y = lake ? ground + 8 : Math.max(ground, ua.zentix.incoming.client.fx.layer.WaterDecal.SEA_LEVEL) + 20;
+        int y = lake ? ground + 8 : Math.max(ground, ua.zentix.incoming.util.Terrain.sea(Minecraft.getInstance().level)) + 20;
         if (lake) {
             // pond: two blocks of water below ground level near the viewer; above it and up to the viewer there is air on 40 blocks (hills
             //  and trees otherwise cover the pond); fill - stripes, no more than 32768 blocks

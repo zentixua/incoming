@@ -292,7 +292,8 @@ public final class IncomingConfig {
             gridRestoreHours = b.comment("Game hours until power starts coming back after a substation is knocked out (0: only with /incoming grid restore); after a nuclear strike power returns by the damage.",
                             "Hours of the world's day: 50 seconds each under a vanilla day, real hours with a mod that makes days 24 hours long; sleep brings power back sooner.")
                     .translation("incoming.config.grid_restore_hours").defineInRange("restore_hours", 18.0, 0.0, 12_096.0);
-            gridRestoreSpread = b.comment("Seconds (at vanilla day speed) over which power returns to all districts, in random order.")
+            gridRestoreSpread = b.comment("How long power takes to return to every district, in random order, counted on the world's day like restore_hours.",
+                            "Each unit is 72 seconds of the world's day (90 is 1 h 48 min): one real second under a vanilla day, 72 real seconds with a mod that makes days 24 hours long; sleep brings it sooner.")
                     .translation("incoming.config.grid_restore_spread").defineInRange("restore_spread_seconds", 90, 0, 3600);
             gridNuke = b.comment("Nuclear blackout requires grid.enabled and works without a substation, over the strike's whole damage reach (glass or burns, at most 16384 blocks).")
                     .translation("incoming.config.grid_nuke").define("nuke_blackout", true);

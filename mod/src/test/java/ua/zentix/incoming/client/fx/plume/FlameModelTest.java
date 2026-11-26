@@ -66,7 +66,7 @@ class FlameModelTest {
         assertNull(flame(WeaponType.DRONE, FlightPhase.CRUISE), "shahed piston does not shine");
         assertNull(flame(WeaponType.MISSILE, FlightPhase.CRUISE), "The rocket's turbofan engine does not shine");
         assertNull(flame(WeaponType.MISSILE, FlightPhase.TERMINAL), "and at its peak");
-        assertNull(ClientWeaponSpec.of(WeaponType.BUNKER).airframe(false).far().stage(FlightPhase.CRUISE).flame(64));
+        assertNull(ClientWeaponSpec.of(WeaponType.BUNKER).airframe(false).far().stage(FlightPhase.CRUISE).flame(64, ua.zentix.incoming.util.Air.SEA));
         for (FlightPhase ph : FlightPhase.values()) assertNull(ClientWeaponSpec.of(WeaponType.LOITER).airframe(false).far().stage(ph).motor());
     }
 
@@ -140,18 +140,18 @@ class FlameModelTest {
             ua.zentix.incoming.strike.ThrustCurve c = w.spec().airframe().thrust();
             assertNotNull(c);
             double y = ua.zentix.incoming.util.Air.SEA + 40;
-            Flame full = look.stage(FlightPhase.BOOST).flame(y);
+            Flame full = look.stage(FlightPhase.BOOST).flame(y, ua.zentix.incoming.util.Air.SEA);
             assertNotNull(full);
             double plateau = full.brightness() * full.area(), prev = plateau, dt = 0.002;
             for (double a = c.burn() - c.tail() - 1; a < c.burn() + 0.5; a += dt) {
-                Flame f = look.stage(FlightPhase.BOOST, a, c).flame(y);
+                Flame f = look.stage(FlightPhase.BOOST, a, c).flame(y, ua.zentix.incoming.util.Air.SEA);
                 double flux = f == null ? 0 : f.brightness() * f.area();
                 assertTrue(Math.abs(flux - prev) < 0.03 * plateau, w + " on " + a + " tick: " + prev + " → " + flux + " from " + plateau);
                 assertTrue(flux <= prev + 0.021 * plateau, w + " the light does not grow during decline: " + a);
                 prev = flux;
             }
             assertEquals(0, prev, w + ": after separation there is no fire");
-            Flame last = look.stage(FlightPhase.BOOST, c.burn() - 0.05, c).flame(y);
+            Flame last = look.stage(FlightPhase.BOOST, c.burn() - 0.05, c).flame(y, ua.zentix.incoming.util.Air.SEA);
             assertTrue(last == null || last.brightness() * last.area() < 0.01 * plateau, w + ": the lights almost went out at the department");
         }
     }

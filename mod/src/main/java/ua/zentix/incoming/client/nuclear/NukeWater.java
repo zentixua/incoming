@@ -82,7 +82,7 @@ public final class NukeWater {
         if (chunk != null) return new Under(chunk.getFluidState(new BlockPos(x, y, z)).is(FluidTags.WATER) ? 1 : 0, Source.CHUNK);
         OptionalInt depth = TerrainTiles.waterDepth(x, z);
         if (depth.isPresent()) return new Under(depth.getAsInt() > 0 ? 1 : 0, Source.TILES);
-        return new Under(guess(d.groundY(), WaterDecal.SEA_LEVEL), Source.SEA_LEVEL);
+        return new Under(guess(d.groundY(), ua.zentix.incoming.util.Terrain.sea(level)), Source.SEA_LEVEL);
     }
 
     /**

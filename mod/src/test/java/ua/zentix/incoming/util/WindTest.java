@@ -2,6 +2,10 @@ package ua.zentix.incoming.util;
 
 import org.junit.jupiter.api.Test;
 
+import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
+import java.nio.file.Path;
+
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -10,6 +14,19 @@ class WindTest {
     @Test
     void sameForEveryoneAtTheSameTime() {
         for (long t : new long[]{0, 12_345, 24_000, 1_000_000, -5}) assertEquals(Wind.at(t), Wind.at(t));
+    }
+
+    /**
+     * Limit (not physical): the wind's period is 24 000 game ticks whatever the day length, because it reads game time
+     * only (a sleep or {@code /time} jump never swings it); the guide's deviation list states the same period.
+     */
+    @Test
+    void windStaysOnGameTicks() throws Exception {
+        assertEquals(24_000, Wind.DAY);
+        String en = Files.readString(Path.of("../docs/guide/not-physical.md"), StandardCharsets.UTF_8);
+        String ru = Files.readString(Path.of("../docs/guide/ru/not-physical.md"), StandardCharsets.UTF_8);
+        assertTrue(en.contains("| Wind | ") && en.contains("every 24 000 game ticks") && en.contains("72 winds"), "not-physical.md lists the wind period");
+        assertTrue(ru.contains("| Ветер | ") && ru.contains("каждые 24 000 игровых тиков") && ru.contains("72 ветра"), "ru/not-physical.md lists the wind period");
     }
 
     @Test

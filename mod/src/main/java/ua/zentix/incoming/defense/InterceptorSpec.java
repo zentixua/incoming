@@ -74,11 +74,11 @@ public record InterceptorSpec(double radarRange, double engageRange, int railTic
     }
 
     /**
-     * The missile does not fly above this many blocks over sea level: upper altitude boundary ({@link
-     * Passport#altitudeMax}).
+     * The missile does not fly above this many blocks over the world's sea level {@code sea}
+     * ({@code util/Terrain.sea}): upper altitude boundary ({@link Passport#altitudeMax}).
      */
-    public double ceiling() {
-        return Air.SEA + passport.altitudeMax();
+    public double ceiling(int sea) {
+        return sea + passport.altitudeMax();
     }
 
     /**
