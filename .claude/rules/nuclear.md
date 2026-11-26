@@ -443,11 +443,13 @@ Ruins and everything in `nuclear/world/` are in `nuclear-world.md`.
   `ClientNuclear.Active.motionTicksAt`/`clockTicksAt`. The show ends at `NukeClock.SHOW_S` or at the first counted jump
   (`NuclearEvents.endShows`, each tick); the blend's end is an anchor (`rampRate`), so a later change of k never moves
   the past. World clocks (`util/WorldClock`): `now` with every jump (doses, injuries, outages, repairs), `rateClock`
-  without jumps, `pace` (k, measured from the day's steps, ≥ 1; a stopped day keeps it), and per dimension `counted`
-  (nobody awake: sleep in single player; held while a front crosses, `NuclearStrikes.frontCrossing`) and `unseen`
-  (someone awake: clocks of what nobody sees add it). Who is awake is noted at `ServerTickEvent.Pre`: vanilla wakes the
-  sleepers inside the tick that skips the night. Fixed-time dimensions count no jumps. `/time set` is told apart from
-  `/time add` by `CommandEvent`. `S2C.NukeClock` carries the clocks, the receiver's dimension's jumps and every
+  without jumps, `pace` (k, ≥ 1, measured only from a step that follows a running step at its cadence, so a nudge of a
+  stopped day or the first step after a stop keeps it; the counting state is saved, so a load does too), and per
+  dimension `counted` (nobody awake: sleep in single player; `held` while a front crosses, `NuclearStrikes.frontCrossing`;
+  a strike born meanwhile takes counted + held as its past) and `unseen` (someone awake: clocks of what nobody sees add
+  it). Who is awake is noted at `ServerTickEvent.Pre`: vanilla wakes the sleepers inside the tick that skips the night.
+  Fixed-time dimensions count no jumps. `/time set` is told apart from `/time add` by `CommandEvent`'s last child context
+  (`/execute … run` too); datapack functions fire none, so their forward sets count as additions (limit). `S2C.NukeClock` carries the clocks, the receiver's dimension's jumps and every
   detonation's anchors once a second to every player (detonations or not), on a show's end and on entry, so its latest
   copy in a Flashback snapshot restores them after a seek (`ClientNuclear.ANCHORS` outlives `rewound`); a recording
   made before the anchors reads as a 20-minute show and no jumps (`S2C.NukeClock.Clocks.NONE`).

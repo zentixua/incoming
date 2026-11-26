@@ -79,7 +79,10 @@ public record StrikeClock(double jumpsAtStrike, long endAge, double rateAtEnd, d
     /**
      * Strike-clock seconds since the show's end: ∫ 1 + (k − 1)·u dr with u = smoothstep(r / {@link #RAMP_S}), from the world
      * seconds {@code world} since the end (rate alone, at least {@code r}) and at the blend's end {@code atRamp} (NaN —
-     * unknown: an even rate since the end). For a constant k: r + (k − 1)·∫u.
+     * unknown: an even rate since the end). For a constant k: r + (k − 1)·∫u. Limit: inside the blend's minute it weighs
+     * the world time so far as if k had been constant, so a change of k there (a day mod reconfigured within that minute)
+     * can run S faster than the new k for the rest of the minute, and a step under an hour falling inside it counts at
+     * the blend's weight then; after the minute every world second counts whole.
      */
     public static double blend(double r, double world, double atRamp) {
         if (r <= 0) return 0;

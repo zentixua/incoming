@@ -131,6 +131,15 @@ public final class WorldClock extends SavedData {
         return j == null ? 0 : j.unseen;
     }
 
+    /**
+     * Jumps in {@code level}'s dimension counted but held while a blast front crosses ({@link #holdJumpsWhile}), ticks: they
+     * join {@link #counted} when it has crossed. A strike born meanwhile takes them as already its past.
+     */
+    public static double held(Level level) {
+        Jumps j = jumps(level);
+        return j == null ? 0 : j.pending;
+    }
+
     private static Jumps jumps(Level level) {
         return level.getServer() == null ? null : get(level.getServer()).jumps.get(level.dimension().location().toString());
     }
@@ -179,10 +188,13 @@ public final class WorldClock extends SavedData {
      * Counts the clock tick by tick from the time of day's changes. Each counted tick yields the world's rate ({@link #rate}:
      * the clock without jumps moves by it) and a jump ({@link #jump}, at least an hour, or 0).
      * <p>
-     * The rate is measured from the day's own steps: a step of d clock ticks after g real ticks sets k = d / (g real),
-     * at least 1; between steps the clock is credited at k, and a step adds only what the credit has not covered yet. So a
-     * vanilla day (+1 a tick) runs 72×, a day-length mod's +10 every 720 ticks 1×, not twice, and a day that stops keeps
-     * the last k. A step faster than {@link #MAX_STEP} clock ticks a tick (a setting, {@code /time add} under an hour) is
+     * The rate is measured from the day's own steps: a step of d clock ticks after g real ticks that follows a running
+     * step at its cadence (g at most twice the previous gap, which was within {@link #RUN_WINDOW}) sets k = d / (g real),
+     * at least 1; between steps the clock is
+     * credited at k, and a step adds only what the credit has not covered yet. So a vanilla day (+1 a tick) runs 72×, a
+     * day-length mod's +10 every 720 ticks 1×, not twice, and a day that stops keeps the last k: neither a nudge of a
+     * stopped day nor the first step after a stop measures it, and the counting state is saved, so a load does not either.
+     * A day never seen running is credited at the vanilla pace until its second step. A step faster than {@link #MAX_STEP} clock ticks a tick (a setting, {@code /time add} under an hour) is
      * added as it is and does not set k.
      */
     public static final class Steps {
@@ -245,11 +257,15 @@ public final class WorldClock extends SavedData {
                 credit(real);
                 return;
             }
-            pace = Math.max(1, d / (g * REAL_RATE));
-            lastGap = g;
+            // the pace comes only from a step that follows a running step at its cadence: its gap is the day's own. The
+            // first step after a stop or a fresh start, and a nudge of a stopped day, span time the day did not run, so
+            // they only add what the credit has not covered
+            if (lastGap > 0 && g <= 2 * lastGap + 1) pace = Math.max(1, d / (g * REAL_RATE));
             rate = Math.max(0, d - credited);
             credited = 0;
             gap = 0;
+            // a step after a long stop does not show the day running
+            lastGap = g <= RUN_WINDOW ? g : 0;
         }
 
         private void credit(long real) {
@@ -282,11 +298,31 @@ public final class WorldClock extends SavedData {
         public void pace(double k) {
             if (Double.isFinite(k)) pace = Math.max(1, k);
         }
+
+        /** Save the counting state (the world's rate, the credit since the day's last step and the gaps). */
+        public void save(CompoundTag tag) {
+            tag.putDouble("pace", pace);
+            tag.putDouble("credited", credited);
+            tag.putLong("gap", gap);
+            tag.putLong("last_gap", lastGap);
+        }
+
+        /** Load the counting state; absent values: the vanilla pace, nothing credited, the day not yet seen running. */
+        public void load(CompoundTag tag) {
+            if (tag.contains("pace")) pace(tag.getDouble("pace"));
+            credited = tag.getDouble("credited");
+            gap = Math.max(0, tag.getLong("gap"));
+            lastGap = Math.max(0, tag.getLong("last_gap"));
+        }
     }
 
-    /** {@code /time set} by any command source: its step is a set, not an addition ({@link Steps#step}). */
+    /**
+     * {@code /time set} by any command source, also through {@code /execute … run} (the last child context holds the
+     * command that runs): its step is a set, not an addition ({@link Steps#step}). Limit: datapack functions run without
+     * a {@code CommandEvent}, so a forward set they make counts like {@code /time add}.
+     */
     public static void onCommand(CommandEvent e) {
-        var nodes = e.getParseResults().getContext().getNodes();
+        var nodes = e.getParseResults().getContext().getLastChild().getNodes();
         if (nodes.size() >= 2 && "time".equals(nodes.get(0).getNode().getName()) && "set".equals(nodes.get(1).getNode().getName())) {
             MinecraftServer server = e.getParseResults().getContext().getSource().getServer();
             if (server != null) get(server).timeSet = true;
@@ -385,7 +421,7 @@ public final class WorldClock extends SavedData {
         double ticks = tag.getDouble("ticks");
         // saved before the clock without jumps: it starts where the clock is (only its differences are read)
         WorldClock c = new WorldClock(ticks, tag.contains("rate_ticks") ? tag.getDouble("rate_ticks") : ticks);
-        if (tag.contains("pace")) c.steps.pace(tag.getDouble("pace"));
+        c.steps.load(tag);
         CompoundTag saved = tag.getCompound("jumps");
         for (String dim : saved.getAllKeys()) {
             CompoundTag t = saved.getCompound(dim);
@@ -402,7 +438,7 @@ public final class WorldClock extends SavedData {
     public CompoundTag save(CompoundTag tag, HolderLookup.Provider registries) {
         tag.putDouble("ticks", ticks);
         tag.putDouble("rate_ticks", rateTicks);
-        tag.putDouble("pace", steps.pace);
+        steps.save(tag);
         CompoundTag saved = new CompoundTag();
         jumps.forEach((dim, j) -> {
             CompoundTag t = new CompoundTag();

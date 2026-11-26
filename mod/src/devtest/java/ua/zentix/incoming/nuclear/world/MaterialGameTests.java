@@ -81,7 +81,7 @@ public final class MaterialGameTests {
         survey.disk(ChunkPos.asLong((x + 256) >> 4, z >> 4), 4);
         survey.advance(now + 10001);
         var events = new NuclearEvents();
-        events.add(d, 0.0);
+        events.add(d, h.getLevel());
         events.material(d.id(), birth);
         var tag = events.save(new CompoundTag(), h.getLevel().registryAccess());
         var reload = NuclearEvents.load(tag, h.getLevel().registryAccess());
@@ -225,8 +225,8 @@ public final class MaterialGameTests {
         var events = new NuclearEvents();
         var good = source(11, 0, 0, 100, 15);
         var bad = source(12, 64, 0, 100, 15);
-        events.add(good, 0.0);
-        events.add(bad, 0.0);
+        events.add(good, h.getLevel());
+        events.add(bad, h.getLevel());
         for (var d : List.of(good, bad))
             events.material(d.id(), MaterialBirth.seal(java.util.UUID.randomUUID(), d, 10, 0, new Long2IntOpenHashMap(), null));
         var reg = h.getLevel().registryAccess();
@@ -314,7 +314,7 @@ public final class MaterialGameTests {
             birth.advance(d.gameTime() + 100000, new Long2IntOpenHashMap());
             births.add(birth);
             commitNs += System.nanoTime() - start;
-            events.add(d, 1000.0);
+            events.add(d, h.getLevel());
         }
         long committed = commitNs;
         h.succeedWhen(() -> {

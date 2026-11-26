@@ -74,7 +74,8 @@ public final class WorldClockGameTests {
         afk.setPos(Vec3.atCenterOf(h.absolutePos(new net.minecraft.core.BlockPos(4, 2, 4))));
         level.players().add(afk);
         try {
-            clock.recordAwakeForTest(server);
+            // the server's own handler, as before a tick
+            WorldClock.onServerTickPre(new ServerTickEvent.Pre(() -> true, server));
         } finally {
             level.players().remove(afk);
         }
@@ -161,6 +162,71 @@ public final class WorldClockGameTests {
             restore(server, saved);
         }
         h.succeed();
+    }
+
+    /**
+     * Rule 7 and mismatch 4 through the real path: commands through the server's dispatcher, then the server's own ticks
+     * (who is awake before the tick, the day's step after it). On a day stopped for over a minute a forward {@code /time set} (through
+     * {@code /execute … run}) only sets the light; with the day running, {@code /execute run time set} 7 hours ahead is a
+     * night skip, counted (nobody awake in the test world), and ends a show.
+     */
+    @GameTest(template = "range", timeoutTicks = 1600, batch = "clock_time_set", skyAccess = true)
+    public static void timeSetSkipsTheNightOnlyWhileTheDayRuns(GameTestHelper h) {
+        ServerLevel level = h.getLevel();
+        MinecraftServer server = level.getServer();
+        WorldClock clock = WorldClock.get(server);
+        h.assertTrue(level.players().isEmpty(), "someone is in the test world: " + level.players());
+        Map<String, double[]> saved = jumps(server);
+        var daylight = level.getGameRules().getRule(net.minecraft.world.level.GameRules.RULE_DAYLIGHT);
+        boolean ran = daylight.get();
+        long day0 = level.getDayTime();
+        NuclearEvents events = new NuclearEvents();
+        Detonation d = detonation(level, events, 12_000);
+        var source = server.createCommandSourceStack().withSuppressedOutput().withPermission(4);
+        double[] counted0 = {0}, motion0 = {0};
+        long[] target = {0};
+        int[] tick = {0};
+        Runnable cleanup = () -> {
+            daylight.set(ran, server);
+            level.setDayTime(day0);
+            WorldClock.holdJumpsWhile(NuclearStrikes::frontCrossing);
+        };
+        WorldClock.holdJumpsWhile(l -> false);
+        StrikeGameTests.afterTest(h, () -> {
+            cleanup.run();
+            restore(server, saved);
+        });
+        // the day counts as running for a minute after its last step (Steps.RUN_WINDOW): stop it, then wait that out
+        int stopped = 1300;
+        h.onEachTick(() -> {
+            int t = tick[0]++ - stopped;
+            if (t == -stopped) daylight.set(false, server);
+            if (t == 0) {
+                counted0[0] = WorldClock.counted(level);
+                target[0] = level.getDayTime() + 5000;
+                server.getCommands().performPrefixedCommand(source, "execute run time set " + target[0]);
+            } else if (t == 3) {
+                h.assertTrue(WorldClock.counted(level) == counted0[0], "a set on a stopped day counted a jump: "
+                        + (WorldClock.counted(level) - counted0[0]));
+                h.assertTrue(events.endShows(level).isEmpty() && !events.showEnded(d, level), "a set on a stopped day ended the show");
+                daylight.set(true, server);
+            } else if (t == 10) {
+                motion0[0] = events.motion(d, level);
+                target[0] = level.getDayTime() + 7000;
+                server.getCommands().performPrefixedCommand(source, "execute run time set " + target[0]);
+            } else if (t == 13) {
+                double jump = WorldClock.counted(level) - counted0[0];
+                h.assertTrue(Math.abs(jump - 7000) <= 3, "the night skip counted " + jump + " ticks, not 7000");
+                h.assertTrue(events.endShows(level).contains(d), "the night skip did not end the show");
+                double moved = events.motion(d, level) - motion0[0];
+                h.assertTrue(Math.abs(moved - jump * WorldClock.SECONDS_PER_TICK) < 1, "the motion age moved " + moved + " s");
+                // the day back as it was; the step that puts it back is counted on the next ticks, then the counters go back
+                cleanup.run();
+            } else if (t == 16) {
+                restore(server, saved);
+                h.succeed();
+            }
+        });
     }
 
     /** Rule 9, mismatch 15: a frozen tick manager stops the world clock; running, it counts. */

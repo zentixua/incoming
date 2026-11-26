@@ -240,9 +240,12 @@ public final class NuclearEvents extends SavedData {
         return scheduled;
     }
 
-    /** Detonation at world clock {@code clock} ({@link WorldClock#now}), with no jumps counted and the clock without jumps there. */
-    public void add(Detonation d, double clock) {
-        add(d, clock, clock, 0, 0);
+    /**
+     * Detonation at world clock {@code clock} ({@link WorldClock#now}) and clock without jumps {@code rate}
+     * ({@link WorldClock#rateClock}), in a dimension with no jumps counted (tests without a live clock).
+     */
+    public void add(Detonation d, double clock, double rate) {
+        add(d, clock, rate, 0, 0);
     }
 
     private void add(Detonation d, double clock, double rate, double jumps, long age) {
@@ -261,7 +264,8 @@ public final class NuclearEvents extends SavedData {
      */
     public void add(Detonation d, ServerLevel level) {
         long age = Math.max(0, level.getGameTime() - d.gameTime());
-        add(d, WorldClock.now(level) - age, WorldClock.rateClock(level) - age, WorldClock.counted(level), age);
+        // jumps held for a front before the burst are this strike's past too
+        add(d, WorldClock.now(level) - age, WorldClock.rateClock(level) - age, WorldClock.counted(level) + WorldClock.held(level), age);
     }
 
     /**

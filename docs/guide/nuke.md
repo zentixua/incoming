@@ -196,7 +196,7 @@ heal or are repaired. A game hour is an hour of the world's day:
 - with a mod that lengthens the day, the same hours take longer, up to real hours;
 - with the day cycle stopped (`doDaylightCycle false`, or a mod holding the time) the sun stops, the aftermath does not:
   it keeps the pace the day last ran at, a vanilla day's if it never ran;
-- a night everyone in the world sleeps through (in single player, your own sleep) ends the 20 minutes at once and moves
+- a night everyone in the Overworld sleeps through (in single player, your own sleep) ends the 20 minutes at once and moves
   the strike on by the hours slept: you wake to the town at its age, the fires burning down and the fallout weaker;
 - a night skipped while someone stays awake (an idle or spectating player too) changes nothing in front of them: the
   fires and the rain keep their time, and only what nobody watches change moves on: injuries, radiation sickness,

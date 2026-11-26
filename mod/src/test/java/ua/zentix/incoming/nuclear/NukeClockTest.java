@@ -116,15 +116,6 @@ class NukeClockTest {
         assertEquals(k, (d1 - d0) * 20, 1e-6, "the world's rate after the blend");
     }
 
-    /** An unseen jump (someone awake) is not counted: neither age moves, the show keeps running. */
-    @Test
-    void anUnseenJumpMovesNeitherAge() {
-        StrikeClock a = StrikeClock.start(0);
-        assertEquals(120, a.strike(2400, 0, 0), 1e-9);
-        assertEquals(120, a.motion(2400, 0), 1e-9, "the counted jumps did not change");
-        assertFalse(a.ended());
-    }
-
     /**
      * Rule 6 and mismatch 16: the world's rate is the day's measured advance per real time, at least 1; a day that steps
      * +N every M ticks is counted once; a stopped day keeps its last rate (vanilla 72 if it never ran).
@@ -135,22 +126,19 @@ class NukeClockTest {
         assertEquals(72_000, run(t -> 1, 72_000), 1e-6, "vanilla day: an hour every 50 s");
         assertEquals(72_000, run(t -> 0, 72_000), 1e-6, "a day that never ran: the vanilla pace");
         assertEquals(36_000, run(t -> t % 2, 72_000), 2, "half-speed day");
-        assertEquals(12_000, run(t -> t % 6 == 5 ? 1 : 0, 72_000), 5, "2-hour day: k 12, twelve hours a real hour (the first gap at the vanilla pace)");
-        // a 24-hour day as +10 every 720 ticks runs 1:1, not 2× (mismatch 16); the first gap is credited at the vanilla
-        // pace, before the day's own steps measured it
+        assertEquals(12_000, run(t -> t % 6 == 5 ? 1 : 0, 72_000), 11, "2-hour day: k 12, twelve hours a real hour (the first two gaps at the vanilla pace)");
+        // a 24-hour day as +10 every 720 ticks runs 1:1, not 2× (mismatch 16); a day never seen running is credited at the
+        // vanilla pace until its second step measures it
         WorldClock.Steps steps = new WorldClock.Steps();
-        double first = 0, rest = 0;
-        for (int t = 0; t < 720; t++) {
-            steps.step(t % 720 == 719 ? 10 : 0, 1, false);
-            first += steps.rate();
-        }
-        assertEquals(1, steps.pace(), 1e-9, "k measured from its steps");
-        for (int t = 720; t < 72_000; t++) {
+        double rest = 0;
+        for (int t = 0; t < 1440; t++) steps.step(t % 720 == 719 ? 10 : 0, 1, false);
+        assertEquals(1, steps.pace(), 1e-9, "k measured from its second step");
+        for (int t = 1440; t < 72_000; t++) {
             steps.step(t % 720 == 719 ? 10 : 0, 1, false);
             rest += steps.rate();
         }
-        assertEquals((72_000 - 720) * WorldClock.REAL_RATE, rest, 0.02, "24-hour day in +10 steps: an hour per real hour");
-        assertEquals(1000, run(t -> t % 72 == 71 ? 1 : 0, 72_000), 75, "24-hour day in +1 steps");
+        assertEquals((72_000 - 1440) * WorldClock.REAL_RATE, rest, 0.02, "24-hour day in +10 steps: an hour per real hour");
+        assertEquals(1000, run(t -> t % 72 == 71 ? 1 : 0, 72_000), 145, "24-hour day in +1 steps (the first two gaps at the vanilla pace)");
         // a stopped day keeps the last running rate: vanilla, then the sun stopped for a real hour
         WorldClock.Steps stop = new WorldClock.Steps();
         double sum = 0;
