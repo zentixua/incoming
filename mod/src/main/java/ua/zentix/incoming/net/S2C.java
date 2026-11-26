@@ -942,14 +942,7 @@ public final class S2C {
             return "VoxyChunk[" + dimension + " " + x + " " + z + ", " + sections.length + " bytes]";
         }
     }
-    /** Start/finish delimit a LOD batch on the same ordered network handler as its chunks. */
-    public record LodBatchStart(int id) implements CustomPacketPayload {
-        public static final Type<LodBatchStart> TYPE = new Type<>(Incoming.id("lod_batch_start"));
-        public static final StreamCodec<ByteBuf, LodBatchStart> CODEC = ByteBufCodecs.VAR_INT.map(LodBatchStart::new, LodBatchStart::id);
-        @Override
-        public Type<? extends CustomPacketPayload> type() { return TYPE; }
-    }
-
+    /** Marks the end of a Voxy LOD batch: the chunks since the previous mark, on the same ordered handler as them. */
     public record LodBatchFinished(int id, int chunks) implements CustomPacketPayload {
         public static final Type<LodBatchFinished> TYPE = new Type<>(Incoming.id("lod_batch_finished"));
         public static final StreamCodec<ByteBuf, LodBatchFinished> CODEC = StreamCodec.composite(
