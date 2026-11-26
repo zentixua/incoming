@@ -753,6 +753,9 @@ public final class PallPass {
         return TEXTURES[3];
     }
 
+    /** Why the detail was last pinned (the log's words when it is released). */
+    private static String pinReason = "pin";
+
     /** Select this view's rung before collecting the frame, so the handoff and all draws use the same resources. */
     static void beginFrame(Quality setting) {
         if (!supported()) return;
@@ -762,10 +765,10 @@ public final class PallPass {
         if (DETAIL.pin(SCENARIO && diagRung != -2 || diagRung >= 0 || FxViews.secondary() || FlashbackReplay.exporting())) {
             Step at = LADDER[Math.max(0, DETAIL.level)];
             if (DETAIL.pinned) {
-                Incoming.LOG.info("Nuclear dust pall: {}, detail pinned at the setting {}", SCENARIO ? "client scenario" : diagRung >= 0 ? "diagnostics" : FxViews.secondary() ? "secondary view" : "Flashback video export",
-                        at.describe());
+                pinReason = SCENARIO ? "client scenario" : diagRung >= 0 ? "diagnostics" : FxViews.secondary() ? "secondary view" : "Flashback video export";
+                Incoming.LOG.info("Nuclear dust pall: {}, detail pinned at the setting {}", pinReason, at.describe());
             } else {
-                Incoming.LOG.info("Nuclear dust pall: Flashback video export over, detail follows the GPU budget again from {}", at.describe());
+                Incoming.LOG.info("Nuclear dust pall: {} over, detail follows the GPU budget again from {}", pinReason, at.describe());
             }
         }
         if (diagRung >= 0 && DETAIL.pinned && DETAIL.level != Math.max(diagRung, DETAIL.ceiling)) DETAIL.force(diagRung);

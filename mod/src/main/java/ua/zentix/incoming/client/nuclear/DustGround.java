@@ -64,6 +64,12 @@ public final class DustGround {
         /** Whether any cell is known (the coarse tile's share is 1 everywhere then, else 0). */
         boolean any;
         int next;
+        /**
+         * Whether the survey has gone once round the whole tile since it turned on or re-centred far: until then the coarse
+         * tile takes each unknown cell's nearest known height afresh (a cell held at the first, time-bounded fill kept the
+         * ground next to the eye 1–2 km out: 15–31 m under the drawn chunks' edge in a valley, review step 8).
+         */
+        boolean swept;
         boolean on, dirty;
 
         Tile(boolean fine) {
@@ -105,16 +111,24 @@ public final class DustGround {
             z0 = nz;
             cell = cellNow;
             on = true;
-            // (the sweep goes on where it was: restarting it at each re-centre left a gliding eye's leading side unknown)
+            // the sweep goes on where it was on a small shift (restarting it at each re-centre left a gliding eye's leading side
+            // unknown); after a jump that kept nothing it starts again at the eye (resumed mid-sweep, the ground under a
+            // teleported eye stayed unknown for 15–100 s, review step 8)
+            if (!keep || Math.abs(di) > 16 || Math.abs(dj) > 16) {
+                next = 0;
+                swept = false;
+            }
             dirty = true;
             return true;
         }
 
         void survey(Sightline.Heights heights, int count, long until) {
             for (int n = 0; n < count; n++) {
-                if ((n & 7) == 7 && until != Long.MAX_VALUE && System.nanoTime() - until > 0) return;
+                // (every cell: a coarse cell reads four columns of up to 8 µs, every 8 cells overshot the bound to 0.47 ms)
+                if (n > 0 && until != Long.MAX_VALUE && System.nanoTime() - until > 0) return;
                 int i = ORDER[next];
                 next = (next + 1) % ORDER.length;
+                if (next == 0) swept = true;
                 double h = measure(i, heights);
                 if (Double.isNaN(h)) continue;
                 float v = (float) h;
@@ -176,9 +190,11 @@ public final class DustGround {
                     if (!Float.isNaN(known[i])) {
                         filled[i] = known[i];
                         held[i] = Float.NaN;
-                    } else if (any) {
+                    } else if (any && swept) {
                         if (Float.isNaN(held[i])) held[i] = carry[i];
                         filled[i] = held[i];
+                    } else if (any) {
+                        filled[i] = carry[i];
                     } else {
                         filled[i] = eyeGround;
                     }
@@ -304,6 +320,8 @@ public final class DustGround {
             Arrays.fill(t.knownFlag, 0);
             Arrays.fill(t.held, Float.NaN);
             t.any = false;
+            t.next = 0;
+            t.swept = false;
         }
         version++;
     }

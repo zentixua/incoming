@@ -43,7 +43,7 @@ need_running() { running || { echo "dev client is not running (tools/dev_client.
 # The java a rigLaunch script runs (its jdb redefines classes): the last quoted .../bin/java on its exec line
 rig_java() { sed -n "s/^exec env .* '\([^']*\/bin\/java\)' .*/\1/p" "$1"; }
 
-# One line to the dev client (DevHands: cmd, reload, shot, hud, press), waits for its answer; prints it, code 1 on "error"
+# One line to the dev client (DevHands: cmd, reload, shot, hud, press, dw, age, watch), waits for its answer; prints it, code 1 on "error"
 hand() {
   local id done t=0 res limit=${2:-300}
   id=$(date +%s%N); mkdir -p "$DEV/inbox"

@@ -440,4 +440,11 @@ failed = bool(gl["FAILED"])
 for script in ("dust_wall_contract_gl.py", "wall_layer_identity.py", "nuclear_volume_warmup_gl.py", "pall_single_gl.py"):
     run = subprocess.run([sys.executable, str(Path(__file__).with_name(script))])
     failed |= run.returncode != 0
+# the one-tap light (MEDIUM, LOW) has no step where the brighter light changes between the fireball and the sun; it reads the
+# law's table that DustLawDumpProbe writes
+if (Path(__file__).resolve().parents[1] / "mod/build/uw-probe/law-1000kt.json").exists():
+    failed |= subprocess.run([sys.executable, str(Path(__file__).with_name("uw_probe") / "onetap_flip.py")]).returncode != 0
+else:
+    print("FAIL    onetap_flip: no law table; run (cd mod && ./gradlew test --tests '*DustLawDumpProbe') first")
+    failed = True
 sys.exit(failed)

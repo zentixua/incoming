@@ -62,8 +62,11 @@ Create, Sable and Aeronautics, no pack) kept up in a saved world, `tools/dev_cli
   vanilla asks once, `start` confirms it (`press`).
 - Keys: XTEST events (xdotool) never reach the game's Xwayland window inside a nested KWin `--virtual`, so the devtest
   `DevHands` reads one-line files from `mod/run/client/dev/inbox` (`incoming.dev.inbox`, set by `-PhotSwap`): `cmd`,
-  `reload` (answered when the reload has finished), `shot`, `hud`, `press <button>`; it logs every opened screen
-  (`DEV screen`).
+  `reload` (answered when the reload has finished), `shot`, `hud`, `press <button>`, `dw <key>=<value>` (the dust wave's
+  diagnostics, as the scenario's `dw:` steps; `rung=N` pins the pall's rung here too), `age` (the newest detonation's shown
+  age, front radius and eye distance: a hold at a front distance, since `/tick step` paces with the frame rate) and
+  `watch on|off` (a one-frame dropout logged as `DEV pop`; it stalls the GPU every frame); it logs every opened screen
+  (`DEV screen`). The bare `reload` reads `build/resources`: a shader edit in `src` needs `swap`.
 - The scene: `cmd 'tp @s …'`, `time set`, the burst once, `tick freeze` at the moment, `tick step <ticks>` to move it.
   A server burst leaves its ruins in the copy (the client saves it on `stop`): an untouched map is a new `<save>` name
   with `--from` again.

@@ -54,7 +54,12 @@ public final class DevHands {
         Incoming.LOG.info("DEV hands: commands from {}", inbox);
     }
 
-    /** {@code watch on}: every frame's three upper pixels, a jump logged (a one-frame dropout of an effect). */
+    /**
+     * {@code watch on}: every frame's three upper pixels (1/8, 1/2, 7/8 of the width at 0.3 of the height from the top), a frame
+     * where two of them jump by more than 40 of 255 logged: a whole-frame dropout of an effect against the sky moves them by
+     * 60–150, the dust's own flicker by under 5. Three synchronous reads stall the GPU every frame: frame times under watch are
+     * not the game's.
+     */
     private boolean watch;
     private final float[] lastLuma = new float[3];
     private long frames;
@@ -66,6 +71,8 @@ public final class DevHands {
         var t = mc.getMainRenderTarget();
         frames++;
         int read = org.lwjgl.opengl.GL11.glGetInteger(org.lwjgl.opengl.GL30.GL_READ_FRAMEBUFFER_BINDING);
+        // into client memory: no pixel pack buffer bound (as SceneDepth reads)
+        com.mojang.blaze3d.platform.GlStateManager._glBindBuffer(org.lwjgl.opengl.GL21.GL_PIXEL_PACK_BUFFER, 0);
         com.mojang.blaze3d.platform.GlStateManager._glBindFramebuffer(org.lwjgl.opengl.GL30.GL_READ_FRAMEBUFFER, t.frameBufferId);
         float[] l = new float[3];
         int jumps = 0;
@@ -164,6 +171,7 @@ public final class DevHands {
             }
             case "watch" -> {
                 watch = arg.equals("on");
+                frames = 0;
                 done(id, "ok " + frames);
             }
             case "dw" -> {

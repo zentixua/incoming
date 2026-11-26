@@ -42,9 +42,13 @@ paths:
   chunks by render distance, coarse 32 m over 4 km; the atlas's last two tiles, `DwTerrain0/1`), from what the client knows
   (`FarTerrain.dust`: client chunks below permeable canopies, then LSS/Voxy/DH map tiles); the fine tile takes each cell's lowest
   column, the coarse their mean. `dwFloor` blends fine → coarse → the source's own map by share: the fine tile hands over inside
-  what it knows (8 cells); past what the client knows the coarse one holds the ground where it was last seen: an unknown cell
-  takes its nearest known cell's height at its first fill and keeps it until it is known or leaves the tile, out to the tile's
-  edge, where the source's map takes over. A mean of the known area or a blend into the map from the known edge stands over a
+  what it knows (8 cells); past what the client knows the coarse one holds the ground where it was last seen: once the
+  survey has gone round the whole tile, an unknown cell takes its nearest known cell's height and keeps it until it is known or
+  leaves the tile, out to the tile's edge, where the source's map takes over (held at the first, time-bounded fill, the cells
+  past the drawn chunks kept the ground next to the eye, 15–31 m under the edge in a valley; until the first full sweep the
+  nearest known height is taken afresh; `DustGroundFirstFillProbeTest`). The sweep goes on across a gliding re-centre and
+  starts again at the eye after a jump (teleport, respawn) or a reset (resumed mid-sweep, the ground under a teleported eye
+  stayed unknown for 15–100 s). A mean of the known area or a blend into the map from the known edge stands over a
   valley floor and ends rays down it short of the ground (`DustGroundRayEndTest`); a nearest height taken afresh at each refill
   moves the floor 1–2 km out by metres as the player moves (`DustGroundTest.farFloorHoldsWhileMoving`); `DustGroundTest` also
   holds no step over 1 m per 2 m at the drawn chunks' edge. A re-centred tile refills in the same tick (`DustGroundRecentreTest`),
@@ -165,7 +169,9 @@ paths:
   grey disc with a light ring where the main light switches between the fireball and the sun (the one-tap light's own
   boundary) and a dark grey swath down the face, so the light term keeps one hue. On MEDIUM and LOW the one shadow tap goes toward the
   brighter light and the other light takes its depth to the layer top along its own direction (one depth for both held
-  their ratio over the face: one hue; chroma detail 2.7 against HIGH's 3.8, now 3.6). At approach distances the frame air
+  their ratio over the face: one hue; chroma detail 2.7 against HIGH's 3.8, now 3.6); where the lights are within ×1.5 of
+  each other both taps are taken and the assignment blends (a hard switch stepped 12.9/255 at the median: an arc sweeping
+  over the face as the ball cools; `tools/uw_probe/onetap_flip.py`, run by `dust_wall_gl.py`, holds it under 1/255). At approach distances the frame air
   in front of the face carries ~45 % of its luminance and ~80 % of its blue (13 % air share at 700 m, the 20 km law, against
   a face 4–5 times darker than the horizon sky at noon): an albedo tint reaches the screen at under half its amplitude,
   so colour work goes through the light, not the tint (step 8, dev client: tint off or ×3 moved chroma by 0.2).

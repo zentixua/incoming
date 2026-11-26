@@ -785,7 +785,11 @@ float gDwWet = 0.0;
 // lofted ground matter's extinction (1/block) at g (soil dust, sand, spray by the source ground's material); coarse: light
 // paths (the billows' two first octaves, no streaks, no fine octaves)
 float dwDustDensity(vec3 g, bool coarse) {
-    if (!coarse) gDwSigma = 0.0;
+    // (a sample with no dust here, a water burst's surge alone, has no column above it: not the previous sample's top)
+    if (!coarse) {
+        gDwSigma = 0.0;
+        gDwSurf = 0.0;
+    }
 #ifdef DW_ANALYTIC
     gDwSurf = 1e9;
     gDwF = gDwForceF >= 0.0 ? gDwForceF : 0.0;
@@ -1062,19 +1066,25 @@ vec3 dwTexturedLight(vec3 q, vec3 rd) {
     bool oneTap = DwDetail > 0.5;
 #endif
     float depth = max(gDwSurf - (q.y - gDwFloorAt), 0.0) * gDwSigma;
+    // MEDIUM and LOW: one shadow tap, toward the brighter of the fireball and the sun; the other light takes its depth to the
+    // layer's top along its own direction (closed form, no fetch; the slant floor as the haze light's). One depth for both
+    // held their ratio over the face: one hue, the rolls read by luminance alone (step 8: chroma detail 2.7 against HIGH's two
+    // taps 3.8). Where the lights are within ×1.5 of each other both taps are taken and the assignment blends, so the light
+    // has no step where the brighter one changes (review step 8: a hard switch stepped 12.9/255 at the median, an arc
+    // sweeping over the face as the ball cools; tools/uw_probe/onetap_flip.py)
+    float wb = 1.0;
     if (oneTap) {
-        // MEDIUM and LOW: one shadow tap, toward the brighter of the fireball and the sun; the other light takes the depth to
-        // the layer's top along its own direction (closed form, no fetch). One depth for both held their ratio over the face:
-        // one hue, the rolls read by luminance alone (step 8: chroma detail 2.7 against HIGH's two taps 3.8). Where the two
-        // lights are equal the choice swaps sides with no step in their sum.
-        bool ball = dot(dwBallLight(q), vec3(1.0)) > dot(DwSunLight, vec3(1.0));
-        float tap = dwShadow(q, ball ? lb : DwSunDir);
-        float other = depth / max(ball ? DwSunDir.y : lb.y, 0.25);
-        taub = ball ? tap : other;
-        taus = ball ? other : tap;
+        float ball = dot(dwBallLight(q), vec3(1.0)), sun = dot(DwSunLight, vec3(1.0));
+        wb = smoothstep(0.4, 0.6, ball / max(ball + sun, 1e-6));
+    }
+    float tapb = !oneTap || wb > 0.0 ? dwShadow(q, lb) : 0.0;
+    float taps = !oneTap || wb < 1.0 ? dwShadow(q, DwSunDir) : 0.0;
+    if (oneTap) {
+        taub = mix(depth / max(lb.y, 0.12), tapb, wb);
+        taus = mix(taps, depth / max(DwSunDir.y, 0.12), wb);
     } else {
-        taub = dwShadow(q, lb);
-        taus = dwShadow(q, DwSunDir);
+        taub = tapb;
+        taus = taps;
     }
     float ms = 0.3 + 0.3 * exp(-0.12 * depth);
     // presentation: the swells read from above as in the Silo frame, raised dust catching more light and sags in the shade
