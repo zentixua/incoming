@@ -351,10 +351,10 @@ public final class NuclearStrikes {
         // a nominal countdown: a stalled server stops motion upstream, never a spark hovering at the burst.
         if (!approaches.isEmpty() || !due.isEmpty())
             PacketDistributor.sendToPlayersInDimension(level, new S2C.NukeApproach(now, List.copyOf(approaches)));
-        // the clocks once a second to every player, with or without detonations (the hearing clock follows them), and the
-        // moment a show ends
+        // the clocks once a second to every player, with or without detonations (the hearing clock follows them), the
+        // moment a show ends, and the tick a jump nobody saw is counted: the sleepers wake to air already that much older
         boolean ended = !events.endShows(level).isEmpty();
-        if (ended || now % 20 == 0) PacketDistributor.sendToPlayersInDimension(level, clockPacket(level));
+        if (ended || now % 20 == 0 || WorldClock.countedRose(level)) PacketDistributor.sendToPlayersInDimension(level, clockPacket(level));
         // the server's age for each detonation every tick while a show runs: clients never draw a burst ahead of it
         if (showing(events, level)) PacketDistributor.sendToPlayersInDimension(level, new S2C.NukeTick(now));
         if (now % 1200 == 0) events.prune(level);
@@ -449,11 +449,13 @@ public final class NuclearStrikes {
                 ids.put(w.strikeId(), birth.id);
             }
         }
+        // the clocks first: the detonations it rebuilds read their motion age from this dimension's count of jumps at once,
+        // so a joiner's first frame shows their air already aged
+        PacketDistributor.sendToPlayer(p, clockPacket(p.serverLevel()));
         PacketDistributor.sendToPlayer(p, new S2C.NukeSync(List.copyOf(events.detonations()), warnings, ids));
         ua.zentix.incoming.nuclear.material.MaterialDelivery.snapshot(p, events.visibleMaterials(), announced);
         PacketDistributor.sendToPlayer(p, new S2C.NukeApproach(p.serverLevel().getGameTime(),
                 events.scheduled().stream().flatMap(s -> s.arrival().stream()).toList()));
-        PacketDistributor.sendToPlayer(p, clockPacket(p.serverLevel()));
     }
 
     /** Some detonation in this dimension is still in its show ({@link S2C.NukeTick}). */

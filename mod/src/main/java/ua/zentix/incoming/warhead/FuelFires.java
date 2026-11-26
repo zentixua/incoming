@@ -84,6 +84,8 @@ public final class FuelFires {
 
     final List<Pool> pools;
     private int nextId;
+    /** Jumps counted in this dimension at the last tick, world-clock ticks (not saved); NaN — none seen yet (load). */
+    private double counted = Double.NaN;
     /** Relight count and accounting time since world load (tests/probe). */
     private long relights, nanos, ticks;
 
@@ -125,7 +127,8 @@ public final class FuelFires {
                 Codec.LONG.fieldOf("done").forGetter(p -> p.done)).apply(i, Pool::new));
 
         final int id, weapon;
-        final long blastTick;
+        /** Impact tick; moved back by the jumps counted since ({@link FuelFires#jump}), so the law's clock is the strike clock. */
+        long blastTick;
         final double reach;
         final BlockPos[] cells;
         final long[] out, relight, relitAt, seen;
@@ -338,7 +341,9 @@ public final class FuelFires {
     public static void onLevelTick(LevelTickEvent.Post event) {
         if (!(event.getLevel() instanceof ServerLevel level)) return;
         FuelFires all = level.getExistingDataOrNull(ModAttachments.FUEL_FIRES.get());
-        if (all == null || all.pools.isEmpty()) return;
+        if (all == null) return;
+        all.follow(level);
+        if (all.pools.isEmpty()) return;
         long t0 = System.nanoTime(), now = level.getGameTime();
         all.pools.removeIf(pool -> {
             boolean changed = false;
@@ -348,6 +353,25 @@ public final class FuelFires {
         });
         all.nanos += System.nanoTime() - t0;
         all.ticks++;
+    }
+
+    /**
+     * The fuel burns in place on its strike's clock (rule 3), within its show, so a jump counted in this dimension (nobody
+     * awake, {@code util/WorldClock#counted}) ages it by the jump: its law's clock moves on and a counted night burns it out.
+     * A first look (load) or a count that drops (tests putting it back) moves nothing.
+     */
+    private void follow(ServerLevel level) {
+        double c = ua.zentix.incoming.util.WorldClock.counted(level);
+        if (c > counted) jump(Math.round((c - counted) * ua.zentix.incoming.util.WorldClock.SECONDS_PER_TICK * 20));
+        counted = c;
+    }
+
+    /** Every pool's fuel {@code ticks} game ticks older (its impact and cell burn-outs earlier); burnt-out cells go next tick. */
+    private void jump(long ticks) {
+        for (Pool pool : pools) {
+            pool.blastTick -= ticks;
+            for (int k = 0; k < pool.out.length; k++) pool.out[k] -= ticks;
+        }
     }
 
     /** Crater cell {@code k} at {@code now}; whether client-known state changed (position/early fuel end). */

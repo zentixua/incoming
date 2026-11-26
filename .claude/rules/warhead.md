@@ -142,7 +142,9 @@ paths:
   `S2C.FuelFire`: the state of the crater (number, cells in burnout order, which ran out before their term, the weapon,
   the strike tick) on appearance, on every change, and to whoever receives its chunk (`onChunkSent`); smoke, light and
   rumble — on the client (`client-fx.md`). Saved with the world (attachment `fuel_fires` with a codec: after a restart the
-  fuel burns out in its term, `FuelFiresCodecTest`). `fire = false` — no fuel fire either. GameTest `FuelFireGameTests`
+  fuel burns out in its term, `FuelFiresCodecTest`). The fuel burns within its strike's show, on its strike clock: a jump
+  counted in the dimension (nobody awake, `WorldClock.counted`) moves every pool's impact and cell burn-outs back by it,
+  so a counted night burns it out (`follow`, `fuel_fire_counted_night`); a night someone saw does not. `fire = false` — no fuel fire either. GameTest `FuelFireGameTests`
   (`fuel_fire_*`, with `doFireTick` — it is off on the GameTest server): in every tick every cell is fire on a support, the
   last one goes out in the term of the law, and after that there is no fire on bare ground; a roof — fuel on the floor; the
   flooring is gone — it drips down, and a player nearby gets new places over the network (`Watcher`: a packet listener in
