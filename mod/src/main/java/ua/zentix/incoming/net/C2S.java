@@ -247,7 +247,8 @@ public final class C2S {
     public record Ear(net.minecraft.nbt.CompoundTag state) implements CustomPacketPayload {
         /** Largest ear state, bytes: 16 doses of three numbers and the clock fit in about 1 KB. */
         public static final long EAR_BYTES = 8192;
-        public static final Type<Ear> TYPE = new Type<>(Incoming.id("ear"));
+        /** Not {@code ear}: a client-bound and a server-bound payload may not share an id. */
+        public static final Type<Ear> TYPE = new Type<>(Incoming.id("ear_told"));
         public static final StreamCodec<ByteBuf, Ear> CODEC = ByteBufCodecs.compoundTagCodec(() -> net.minecraft.nbt.NbtAccounter.create(EAR_BYTES))
                 .map(Ear::new, Ear::state);
 
