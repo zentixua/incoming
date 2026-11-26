@@ -310,7 +310,11 @@ public final class FuelFireGameTests {
         }
 
         static <T extends CustomPacketPayload> Watcher<T> near(GameTestHelper h, Vec3 pos, Class<T> payloadType) {
-            ServerLevel level = h.getLevel();
+            return in(h, h.getLevel(), pos, payloadType);
+        }
+
+        /** A watcher at {@code pos} in {@code level} (any dimension). */
+        static <T extends CustomPacketPayload> Watcher<T> in(GameTestHelper h, ServerLevel level, Vec3 pos, Class<T> payloadType) {
             FakePlayer player = new FakePlayer(level, new GameProfile(UUID.randomUUID(), "fuel-fire-watcher"));
             player.setPos(pos);
             Connection connection = new Connection(PacketFlow.SERVERBOUND);

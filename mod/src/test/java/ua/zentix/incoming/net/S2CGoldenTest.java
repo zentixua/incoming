@@ -133,7 +133,11 @@ class S2CGoldenTest {
                         new S2C.NukeDetonation(D.withFires(false).withRain(false).withBlockFire(false), 242f, 9, A, (byte) 2)),
                 golden(S2C.NukeMaterialSources.TYPE, S2C.NukeMaterialSources.CODEC, new S2C.NukeMaterialSources(List.of(A, B))),
                 golden(S2C.NukeMaterial.TYPE, S2C.NukeMaterial.CODEC, new S2C.NukeMaterial(A, 0, 0, new byte[]{1, 7, 0})),
-                golden(S2C.NukeClock.TYPE, S2C.NukeClock.CODEC, new S2C.NukeClock(91_234.5, List.of(new S2C.NukeClock.ShowEnd(3, 81_234.25), new S2C.NukeClock.ShowEnd(7, 0)))),
+                // 1 - release 3.1.0; 2 - clocks: the clock without jumps, the world's rate, jumps and two-age anchors
+                golden(S2C.NukeClock.TYPE, S2C.NukeClock.CODEC, new S2C.NukeClock(91_234.5, List.of(new S2C.NukeClock.ShowEnd(3, 81_234.25), new S2C.NukeClock.ShowEnd(7, 0))),
+                        new S2C.NukeClock(91_234.5, List.of(), new S2C.NukeClock.Clocks(90_000.25, 72, 13_000, 7_000, List.of(
+                                new S2C.NukeClock.Anchor(3, 0, 24_000, 80_000.5, 13_000, 81_200.5),
+                                new S2C.NukeClock.Anchor(7, 13_000, -1, Double.NaN, Double.NaN, Double.NaN))))),
                 golden(S2C.NukeTick.TYPE, S2C.NukeTick.CODEC, new S2C.NukeTick(2_000_000_123L)),
                 golden(S2C.NukeCancelled.TYPE, S2C.NukeCancelled.CODEC, new S2C.NukeCancelled(List.of(7, 300_000))),
                 golden(S2C.NukeDebris.TYPE, S2C.NukeDebris.CODEC, new S2C.NukeDebris(4, List.of(

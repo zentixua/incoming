@@ -115,13 +115,11 @@ public final class RadiationTicker {
     /** One radiation second of {@code players} under detonations {@code list}: the clocks step once for all of them. */
     static void step(ServerLevel level, List<? extends ServerPlayer> players, List<Detonation> list) {
         NuclearEvents events = NuclearEvents.get(level);
-        // each detonation's clock now and a second ago (NukeClock): the field at its own time, the dose over its own step
-        long now = level.getGameTime();
-        double clock = WorldClock.now(level);
+        // each detonation's strike clock now and a second ago (StrikeClock): the field at its own time, the dose over its own step
         Clocks c = new Clocks(list.size());
         for (int i = 0; i < c.now.length; i++) {
             Detonation d = list.get(i);
-            c.now[i] = events.seconds(d, now, clock);
+            c.now[i] = events.seconds(d, level);
             c.before[i] = events.stepFrom(d, c.now[i]);
             if (d.hasFallout() && (c.newest < 0 || c.now[i] < c.now[c.newest])) c.newest = i;
         }

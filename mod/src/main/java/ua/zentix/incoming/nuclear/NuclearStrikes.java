@@ -12,6 +12,7 @@ import net.minecraft.world.phys.Vec3;
 import net.neoforged.neoforge.event.entity.player.PlayerEvent;
 import net.neoforged.neoforge.event.level.ChunkEvent;
 import net.neoforged.neoforge.event.tick.ServerTickEvent;
+import ua.zentix.incoming.util.WorldClock;
 import net.neoforged.neoforge.network.PacketDistributor;
 import org.jetbrains.annotations.Nullable;
 import ua.zentix.incoming.Incoming;
@@ -349,14 +350,13 @@ public final class NuclearStrikes {
         // a nominal countdown: a stalled server stops motion upstream, never a spark hovering at the burst.
         if (!approaches.isEmpty() || !due.isEmpty())
             PacketDistributor.sendToPlayersInDimension(level, new S2C.NukeApproach(now, List.copyOf(approaches)));
-        double worldClock = ua.zentix.incoming.util.WorldClock.now(level);
-        // the clock once a second (with the server's time packet) and the moment a show ends
-        boolean ended = !events.endShows(now, worldClock).isEmpty();
-        if (!events.detonations().isEmpty() && (ended || now % 20 == 0))
-            PacketDistributor.sendToPlayersInDimension(level, clockPacket(events, now, worldClock));
+        // the clocks once a second to every player, with or without detonations (the hearing clock follows them), and the
+        // moment a show ends
+        boolean ended = !events.endShows(level).isEmpty();
+        if (ended || now % 20 == 0) PacketDistributor.sendToPlayersInDimension(level, clockPacket(level));
         // the server's age for each detonation every tick while a show runs: clients never draw a burst ahead of it
-        if (showing(events, now, worldClock)) PacketDistributor.sendToPlayersInDimension(level, new S2C.NukeTick(now));
-        if (now % 1200 == 0) events.prune(now, worldClock);
+        if (showing(events, level)) PacketDistributor.sendToPlayersInDimension(level, new S2C.NukeTick(now));
+        if (now % 1200 == 0) events.prune(level);
         long t1 = System.nanoTime();
         NuclearWorld world = NuclearWorld.get(level);
         world.tick(level, clock);
@@ -450,23 +450,33 @@ public final class NuclearStrikes {
         ua.zentix.incoming.nuclear.material.MaterialDelivery.snapshot(p, events.visibleMaterials(), announced);
         PacketDistributor.sendToPlayer(p, new S2C.NukeApproach(p.serverLevel().getGameTime(),
                 events.scheduled().stream().flatMap(s -> s.arrival().stream()).toList()));
-        PacketDistributor.sendToPlayer(p, clockPacket(events, p.serverLevel().getGameTime(), ua.zentix.incoming.util.WorldClock.now(p.serverLevel())));
+        PacketDistributor.sendToPlayer(p, clockPacket(p.serverLevel()));
     }
 
     /** Some detonation in this dimension is still in its show ({@link S2C.NukeTick}). */
-    static boolean showing(NuclearEvents events, long gameNow, double clockNow) {
-        for (Detonation d : events.detonations()) if (Double.isNaN(events.showEndClock(d, gameNow, clockNow))) return true;
+    static boolean showing(NuclearEvents events, ServerLevel level) {
+        for (Detonation d : events.detonations()) if (!events.showEnded(d, level)) return true;
         return false;
     }
 
-    /** The world clock and the clock at each ended show's end, for this dimension's players ({@link S2C.NukeClock}). */
-    static S2C.NukeClock clockPacket(NuclearEvents events, long gameNow, double clockNow) {
-        List<S2C.NukeClock.ShowEnd> ends = new java.util.ArrayList<>();
-        for (Detonation d : events.detonations()) {
-            double at = events.showEndClock(d, gameNow, clockNow);
-            if (!Double.isNaN(at)) ends.add(new S2C.NukeClock.ShowEnd(d.id(), at));
+    /** The world clocks and this dimension's detonation anchors, for its players ({@link S2C.NukeClock}). */
+    static S2C.NukeClock clockPacket(ServerLevel level) {
+        List<S2C.NukeClock.Anchor> anchors = new java.util.ArrayList<>();
+        for (NuclearEvents.Anchor a : NuclearEvents.get(level).anchors()) {
+            ua.zentix.incoming.util.StrikeClock c = a.clock();
+            anchors.add(new S2C.NukeClock.Anchor(a.id(), c.jumpsAtStrike(), c.endAge(), c.rateAtEnd(), c.jumpsAtEnd(), c.rateAtRamp()));
         }
-        return new S2C.NukeClock(clockNow, ends);
+        return new S2C.NukeClock(WorldClock.now(level), List.of(), new S2C.NukeClock.Clocks(WorldClock.rateClock(level),
+                WorldClock.pace(level), WorldClock.counted(level), WorldClock.unseen(level), anchors));
+    }
+
+    /** A blast front still crosses {@code level}: a counted jump waits for it ({@link WorldClock#holdJumpsWhile}). */
+    public static boolean frontCrossing(ServerLevel level) {
+        if (!level.hasData(ua.zentix.incoming.registry.ModAttachments.NUCLEAR_WORLD)) return false;
+        NuclearWorld world = NuclearWorld.get(level);
+        long now = level.getGameTime();
+        for (Detonation d : NuclearEvents.get(level).detonations()) if (world.frontBusy(d, now)) return true;
+        return false;
     }
 
     private static void sync(ServerLevel level) {

@@ -2522,7 +2522,7 @@ public final class NuclearGameTests {
         Detonation old = new Detonation(d.id(), d.burst(), d.groundY(), d.yieldKt(), d.surface(), level.getGameTime() - (long) (NuclearEvents.FORGET_AFTER_S * 20) - 21,
                 d.windDir(), d.windSpeed(), d.visibility(), d.seed(), d.scale(), d.fallout(), d.wave());
         events.add(old, level);
-        events.prune(level.getGameTime(), WorldClock.now(level));
+        events.prune(level);
         h.assertFalse(events.detonations().contains(old), "the old explosion is not forgotten");
         h.assertTrue(events.past().contains(old), "a forgotten explosion is not remembered for destruction");
         h.assertTrue(events.isPast(old.id()), "a forgotten explosion cannot be recognized by its number");

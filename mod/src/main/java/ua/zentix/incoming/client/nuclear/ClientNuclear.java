@@ -15,6 +15,7 @@ import ua.zentix.incoming.net.S2C;
 import ua.zentix.incoming.nuclear.NuclearStrikes;
 import ua.zentix.incoming.nuclear.Detonation;
 import ua.zentix.incoming.nuclear.NukeClock;
+import ua.zentix.incoming.util.StrikeClock;
 import ua.zentix.incoming.nuclear.material.DustMaterial;
 import ua.zentix.incoming.nuclear.material.MaterialInbox;
 import ua.zentix.incoming.nuclear.radiation.RetinaScars;
@@ -50,10 +51,10 @@ public final class ClientNuclear {
         /** Water under burst ({@link NukeWater#resolve}): the column in the mushroom volume; the base surge is the dust wave's. */
         final BurstWater water;
         /**
-         * Post-wave pall ({@link NukePall}): dust on real time, fire haze on the detonation's clock ({@link #clockTicksAt}).
+         * Post-wave pall ({@link NukePall}): dust on real time, fire haze on the strike clock ({@link #clockTicksAt}).
          */
         public final PallField pall;
-        /** Firestorm over the burning city ({@link FireStorm}): on the detonation's clock ({@link #clockTicksAt}). */
+        /** Firestorm over the burning city ({@link FireStorm}): on the strike clock ({@link #clockTicksAt}). */
         public final FireStorm storm;
         /** Terrain under pall ({@link PallGround}): end of its ray where no world lies behind. */
         final PallGround ground;
@@ -107,10 +108,12 @@ public final class ClientNuclear {
         private long lastFrameNanos;
         private boolean discarded;
         /**
-         * Estimated world clock at the end of the show ({@link NukeClock}) when the server has not said ({@link #SHOW_ENDS}:
-         * a recording made before the server sent it); NaN — not estimated yet.
+         * Estimated clocks ({@link StrikeClock}) when the server has not said ({@link #ANCHORS}: a detonation newer than the
+         * last clock packet, or a recording made before the server sent them); null — not estimated yet.
          */
-        private double guessedShowEnd = Double.NaN;
+        private StrikeClock guessed;
+        /** Counted jumps in this dimension when this client learned of the detonation: its estimate before the server says. */
+        private final double jumpsAtEntry = ClientClock.counted();
         final NukeSounds.Schedule sounds;
 
         Active(Detonation d, boolean live, long clientNow) {
@@ -179,18 +182,33 @@ public final class ClientNuclear {
             return ticks(partialTick) / (20.0 * d.scale());
         }
 
+        /** This detonation's two ages: the server's anchors, or an estimate until it says. */
+        StrikeClock strikeClock(double realTicks) {
+            StrikeClock told = ANCHORS.get(d.id());
+            if (told != null) return told;
+            if (realTicks / 20.0 <= NukeClock.SHOW_S) return StrikeClock.start(jumpsAtEntry);
+            // not told (a recording made before the server sent it): a 20-minute show, as if the day had run at vanilla
+            // speed since its end, no jumps
+            if (guessed == null || !guessed.ended()) guessed = StrikeClock.start(jumpsAtEntry).end(NukeClock.SHOW_TICKS,
+                    ClientClock.rateClock() - (realTicks - NukeClock.SHOW_TICKS), jumpsAtEntry);
+            return guessed;
+        }
+
         /**
-         * The detonation's clock ({@link NukeClock}) at {@code realTicks} client ticks since detonation (now or a moment ago),
-         * in ticks: real through the show, then the world clock — fire, its smoke and black rain live the world's hours.
+         * The strike clock S ({@link StrikeClock#strike}) at {@code realTicks} client ticks since detonation (now or a moment
+         * ago), in ticks: real through the show, then the world's rate joined by the blend. What stays in place (fire, its
+         * smoke and light, black rain) lives on it. The clock without jumps advances on client ticks; within a tick it is
+         * carried at the world's rate by the shown age's fraction, so the clock moves smoothly between ticks.
          */
         public double clockTicksAt(double realTicks) {
-            double real = realTicks / 20.0;
-            if (real <= NukeClock.SHOW_S) return realTicks;
-            double now = ClientClock.now();
-            Double told = SHOW_ENDS.get(d.id());
-            // not told by the server (old recording): as if the day had run at vanilla speed since the show's end
-            if (told == null && Double.isNaN(guessedShowEnd)) guessedShowEnd = now - (real - NukeClock.SHOW_S) * 20;
-            return NukeClock.fromClock(real, now - (told != null ? told : guessedShowEnd)) * 20;
+            double within = Math.min(1, realTicks - ticks(0));
+            double rate = ClientClock.rateClock() + within * ClientClock.pace() * ua.zentix.incoming.util.WorldClock.REAL_RATE;
+            return strikeClock(realTicks).strike(realTicks, rate, ClientClock.counted()) * 20;
+        }
+
+        /** The motion age M ({@link StrikeClock#motion}) at {@code realTicks} client ticks since detonation, in ticks. */
+        public double motionTicksAt(double realTicks) {
+            return strikeClock(realTicks).motion(realTicks, ClientClock.counted()) * 20;
         }
 
         /** Detonation-clock seconds now. */
@@ -452,17 +470,26 @@ public final class ClientNuclear {
     }
 
     /**
-     * The server's world clock at the end of each ended show in this dimension ({@link S2C.NukeClock}); the latest packet
-     * replaces it whole, and a replay seek keeps it (the detonations are rebuilt, this is not).
+     * Each detonation's clock anchors in this dimension ({@link S2C.NukeClock}); the latest packet replaces them whole, and
+     * a replay seek keeps them (the detonations are rebuilt, these are not).
      */
-    private static final Map<Integer, Double> SHOW_ENDS = new HashMap<>();
+    private static final Map<Integer, StrikeClock> ANCHORS = new HashMap<>();
 
-    /** The server's clock: the client's world clock continues from it, and each ended show follows it from its end. */
+    /** The server's clocks: the client's world clocks continue from them, and each detonation's two ages follow its anchors. */
     public static void clock(S2C.NukeClock p) {
-        ClientClock.set(p.clock());
-        SHOW_ENDS.clear();
-        for (S2C.NukeClock.ShowEnd e : p.ends()) SHOW_ENDS.put(e.id(), e.at());
-        for (Active a : DETONATIONS.values()) if (SHOW_ENDS.containsKey(a.d.id())) a.clock.ended();
+        ClientClock.set(p);
+        ANCHORS.clear();
+        if (p.clocks().known()) {
+            for (S2C.NukeClock.Anchor a : p.clocks().anchors())
+                ANCHORS.put(a.id(), new StrikeClock(a.jumps(), a.endAge(), a.endRate(), a.endJumps(), a.rampRate()));
+        } else {
+            // a recording made before the anchors: a 20-minute show, no jumps, the clock without jumps where the clock is
+            for (S2C.NukeClock.ShowEnd e : p.ends()) ANCHORS.put(e.id(), StrikeClock.start(0).end(NukeClock.SHOW_TICKS, e.at(), 0));
+        }
+        for (Active a : DETONATIONS.values()) {
+            StrikeClock c = ANCHORS.get(a.d.id());
+            if (c != null && c.ended()) a.clock.ended();
+        }
     }
 
     /** The server's game time this tick ({@link S2C.NukeTick}): each detonation's anchor ({@link AgeClock}). */
@@ -630,7 +657,7 @@ public final class ClientNuclear {
         stopAll();
         DETONATIONS.clear();
         DustGround.reset();
-        SHOW_ENDS.clear();
+        ANCHORS.clear();
         WARNINGS.clear();
         radiation = null;
         CLOCK.reset();
