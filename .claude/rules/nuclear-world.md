@@ -273,8 +273,8 @@ paths:
   column at 3–5 km, 1 Mt; GameTest `flashIgnitesOnlyDryFuel`; rain does not enter the plan: cured turf grows only in
   biomes without precipitation, paper and fabric are mostly indoors, and a rain-exposed hay bale, scaffolding or
   outdoor fabric the layer lights goes out by vanilla rain on its first fire ticks, so the background plan carries no
-  per-block rain exposure; conventional fireballs do check it, `warhead.md`. Limit: with `doFireTick` false vanilla
-  rain puts nothing out, so those few rain-exposed fuels the flash lights burn in rain as in dry weather), with wave-blown fires marked — position roll not below chance × `Blowout.keep(psi)` —
+  per-block rain exposure; conventional fireballs do check it, `warhead.md`. With `doFireTick` false, where vanilla
+  rain would put nothing out, the flash lights no block fire at all (`Detonation.blockFire`, `warhead.md`)), with wave-blown fires marked — position roll not below chance × `Blowout.keep(psi)` —
   `RuinPlan.blown`; biomes; `FlashFaces`); one unit per ready layer writes like ruins (`RuinPlan.applyFlash`: directly
   into sections, section packets, LODs, `FlashSync.chars`), no earlier than light at the chunk's point nearest the
   sphere reaches ignition threshold (`Detonation.flashTicks`, emitted pulse fraction
