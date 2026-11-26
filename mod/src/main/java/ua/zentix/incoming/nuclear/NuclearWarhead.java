@@ -203,12 +203,12 @@ public final class NuclearWarhead {
         if (rem < 1) return true;
         float gy = (float) (rem / PromptRadiationModel.REM_PER_GY);
         if (living instanceof ServerPlayer player) {
-            if (IncomingConfig.SERVER.nukeRadiation.get()) RadiationTicker.addDose(player, gy);
+            if (IncomingConfig.SERVER.nukeRadiation.get()) RadiationTicker.addDose(player, gy, d);
         } else if (IncomingConfig.SERVER.nukeMobRadiation.get()) {
-            // mobs get sick like players (undead and armor stands do not)
-            if (RadiationTicker.affectsMob(living)) RadiationTicker.addDose(living, gy, late
-                    ? (long) Math.floor(NuclearEvents.get(level).burstClock(d, level.getGameTime(), ua.zentix.incoming.util.WorldClock.now(level)))
-                    : ua.zentix.incoming.util.WorldClock.ticks(level));
+            // mobs get sick like players (undead and armor stands do not); a mob loaded late was dosed at the burst, as long
+            // ago as the detonation's own strike clock says (its body had that one cause then)
+            if (RadiationTicker.affectsMob(living)) RadiationTicker.addDose(living, gy, d, late
+                    ? NuclearEvents.get(level).seconds(d, level) / ua.zentix.incoming.util.WorldClock.SECONDS_PER_TICK : 0);
         } else if (rem >= 1000) {
             StrikeOwner.hurt(living, ModDamageTypes.source(level, ModDamageTypes.RADIATION, null, attacker), Float.MAX_VALUE);
         } else if (rem >= 400) {

@@ -273,13 +273,16 @@ file changes.
   energy is its shock = peak − 38.7 dB, while conventional positive phases last milliseconds and the whole wave is
   audible), not peak: a 140 dB peak threshold (CHABA) would deafen players 70 km from a nuke and a kilometer from a
   Shahed. Filter `Deafness.gain`/`highs` (lows: cochlear loss with recruitment plus conductive loss; highs: difference),
-  also for own sources. Hearing clock is `ClientClock.now` (the world clock with every jump): the server's value once a
-  second (`S2C.NukeClock`, with or without detonations), between them the client's own count by the server's rule
-  (`WorldClock.Steps`) over its level's game ticks, not `getGameTime`: sleep restores hearing. Jumps count only in the
-  same client world while game time advanced normally: a new client world (portal) starts with zero clocks and its
-  time packet would otherwise count as sleep; server clock corrections move both times. Respawn:
+  also for own sources. Hearing clock is the ear's `util/RecoveryClock` (time.md rule 8): real while a blast that hurt
+  it is in its show (`Deafness.nuke`: the detonation, `ClientNuclear.showEnd`; `Deafness.blast`: the conventional show
+  `S2C.Blast.show` announced by seed, `Deafness.announce`), then the blend over `ClientClock.rateClock` (the server's
+  values once a second, between them the client's own count by `WorldClock.Steps` over its level's game ticks); every
+  jump counts, so sleep restores hearing. The jump counters are per dimension: the ear's clock rebaselines when
+  `ClientClock.dimension` changes (the first clock packet in a new dimension), so a portal is no sleep. The ear is told to
+  the server every `TELL_TICKS` while hurt (`C2S.Ear`, never from a replay) and restored on login (`S2C.Ear`,
+  `Deafness.restore`): the clock does not move while away. Respawn:
   `ClientPlayerNetworkEvent.Clone` with old player `isDeadOrDying` (dimension change also clones, hearing remains).
-  Multiple waves use `HearingModel.Ear` (within 2 game minutes, ~1.7 s, one dose). Wave sounds themselves (hit, pops,
+  Multiple waves use `HearingModel.Ear` (within 2 minutes of event time, real plus counted jumps, one dose). Wave sounds themselves (hit, pops,
   glass; own-source shock uses `before` in `OwnSources.play`) use `Deafness.before`, hearing as it was before the wave;
   otherwise a non-preloaded recording on first use would start after ear injury and be muffled by its own wave.
   Ringing is its own non-positional loop (`relative`, inside the head: an ear-positioned world source would lag a tick
@@ -319,7 +322,9 @@ file changes.
   probe-recording loudness with the model. The look-gate flyby had an alert siren over the motor in its separate scene
   (harmonics 436/877/1314 Hz), unlike after the launch scene: measure the motor in its tone band (shaft 125 Hz × pitch).
   Compare the sound window in a raid with the same isolated hit only at the same hearing state: raid (99 Shaheds,
-  first at 30–50 blocks) by second 10 is one deafness dose (`HearingModel.Ear`: waves within 2 game minutes add),
+  first at 30–50 blocks) by second 10 is one deafness dose (`HearingModel.Ear`: waves within 2 real minutes add; the
+  numbers below were measured while the window was 1.7 s of a vanilla day's world clock, which split hits 2 s apart:
+  one dose now sums them, `RaidHearingTest`),
   threshold shift ~80 dB in highs and ~27 in lows — full-band volume −10.9 dB, highs down to −40 dB (filter limit),
   ringing at ~4.9 kHz — the suppression and spectral-difference mechanism in the near-hit window (raid versus single;
   bands depend on window/method: reviewer with Hann window got −8.8/−9.9/−19.5/−1.4/−43.8 dB at

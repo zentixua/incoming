@@ -9,16 +9,29 @@ import com.mojang.serialization.codecs.RecordCodecBuilder;
  * (after {@code restoreAt}, in random order over {@code restoreSpread} ticks: a substation hit, a command) or, for a nuclear
  * strike, by what its blast did to each district ({@link #damageLightAt}). All are functions of district and time: both
  * the server and a chunk loaded an hour later know whether it should be dark.
+ * <p>
+ * Repairs run on the outage's own recovery clock ({@code docs/design/time.md} §8.3 rule 8, {@link
+ * ua.zentix.incoming.util.RecoveryClock}): real time while its cause is in its show (a detonation's 20 minutes, a
+ * conventional strike until its cloud's apex and fuel's burn-out), then the world's day through the rate blend; every jump
+ * counts. That clock trails the grid clock by {@code lag}, which grows only during the show and the blend
+ * ({@link Blackouts}), so every repair time here is its time on the outage's clock plus {@code lag}. Darkening keeps the grid
+ * clock.
  *
  * @param node      grid node whose failure caused this; -1 — not a node (nuclear strike, command)
  * @param restoreAt when to start restoring light uniformly; {@link #NEVER} — not uniformly (by damage, or by command)
  * @param dead      nuclear strike: ground range of {@link Blackouts#DEAD_PSI}, blocks — the grid there is destroyed
  * @param damaged   nuclear strike: ground range of {@link Blackouts#DAMAGED_PSI}, blocks; negative — not a nuclear
  *                  outage (no damage law)
+ * @param lag       how far the outage's recovery clock trails the grid clock, grid ticks (0 in saves from before it: their
+ *                  times read as world clock)
+ * @param strike    the detonation that caused it, while its show may still hold the repairs; -1 — none
+ * @param until     game time the show of the conventional strike that caused it ends; {@link #NO_SHOW} — none
  */
 public record Outage(int id, double x, double z, double radius, long start, double speed, long restoreAt, int restoreSpread, int node,
-                     double dead, double damaged) {
+                     double dead, double damaged, long lag, int strike, long until) {
     public static final long NEVER = Long.MAX_VALUE;
+    /** {@link #until} without a conventional show. */
+    public static final long NO_SHOW = Long.MIN_VALUE;
     /** District darkening-time variation: ±25 % of cascade arrival. The same variation applies to repair times. */
     private static final double SPREAD = 0.5;
     /** Game clock: 1000 ticks are one hour (a Minecraft day is 24 hours), as for fallout and radiation. */
@@ -44,6 +57,12 @@ public record Outage(int id, double x, double z, double radius, long start, doub
         this(id, x, z, radius, start, speed, restoreAt, restoreSpread, node, -1, -1);
     }
 
+    /** Outage whose repairs no show holds (command, explosions that are no strike, tests). */
+    public Outage(int id, double x, double z, double radius, long start, double speed, long restoreAt, int restoreSpread, int node,
+                  double dead, double damaged) {
+        this(id, x, z, radius, start, speed, restoreAt, restoreSpread, node, dead, damaged, 0, -1, NO_SHOW);
+    }
+
     public static final Codec<Outage> CODEC = RecordCodecBuilder.create(i -> i.group(
             Codec.INT.fieldOf("id").forGetter(Outage::id),
             Codec.DOUBLE.fieldOf("x").forGetter(Outage::x),
@@ -55,7 +74,10 @@ public record Outage(int id, double x, double z, double radius, long start, doub
             Codec.INT.fieldOf("restore_spread").forGetter(Outage::restoreSpread),
             Codec.INT.optionalFieldOf("node", -1).forGetter(Outage::node),
             Codec.DOUBLE.optionalFieldOf("dead", -1.0).forGetter(Outage::dead),
-            Codec.DOUBLE.optionalFieldOf("damaged", -1.0).forGetter(Outage::damaged)
+            Codec.DOUBLE.optionalFieldOf("damaged", -1.0).forGetter(Outage::damaged),
+            Codec.LONG.optionalFieldOf("lag", 0L).forGetter(Outage::lag),
+            Codec.INT.optionalFieldOf("strike", -1).forGetter(Outage::strike),
+            Codec.LONG.optionalFieldOf("until", NO_SHOW).forGetter(Outage::until)
     ).apply(i, Outage::new));
 
     /** District is inside the outage area. */
@@ -79,9 +101,14 @@ public record Outage(int id, double x, double z, double radius, long start, doub
         return start + Math.round(distance(district) / speed * (1 - SPREAD / 2 + SPREAD * Districts.unit(district, 3)));
     }
 
-    /** When light returns to district; {@link #NEVER} — never. */
+    /** When uniform light restoration starts, grid clock; {@link #NEVER} — not uniformly. */
+    public long repairsAt() {
+        return restoreAt == NEVER ? NEVER : restoreAt + lag;
+    }
+
+    /** When light returns to district (grid clock); {@link #NEVER} — never. */
     public long lightAt(long district) {
-        long uniform = restoreAt == NEVER ? NEVER : restoreAt + Math.round(restoreSpread * Districts.unit(district, 4));
+        long uniform = restoreAt == NEVER ? NEVER : restoreAt + lag + Math.round(restoreSpread * Districts.unit(district, 4));
         return Math.min(uniform, damageLightAt(district));
     }
 
@@ -106,7 +133,7 @@ public record Outage(int id, double x, double z, double radius, long start, doub
         } else {
             hours = lerp(TRIPPED_LAST_HOURS, TRIPPED_FIRST_HOURS, (d - damaged) / Math.max(1, radius - damaged));
         }
-        return start + Math.round(hours * TICKS_PER_HOUR * (1 - SPREAD / 2 + SPREAD * Districts.unit(district, 4)));
+        return start + lag + Math.round(hours * TICKS_PER_HOUR * (1 - SPREAD / 2 + SPREAD * Districts.unit(district, 4)));
     }
 
     private static double lerp(double a, double b, double t) {
@@ -115,8 +142,8 @@ public record Outage(int id, double x, double z, double radius, long start, doub
 
     /** Earliest moment any district can get light back (restoration cascade starts then); {@link #NEVER} — never. */
     public long restoreFrom() {
-        long damage = byDamage() ? start + Math.round(TRIPPED_FIRST_HOURS * TICKS_PER_HOUR * (1 - SPREAD / 2)) : NEVER;
-        return Math.min(restoreAt, damage);
+        long damage = byDamage() ? start + lag + Math.round(TRIPPED_FIRST_HOURS * TICKS_PER_HOUR * (1 - SPREAD / 2)) : NEVER;
+        return Math.min(repairsAt(), damage);
     }
 
     /** District is dark from this outage at {@code now}. */
@@ -126,7 +153,7 @@ public record Outage(int id, double x, double z, double radius, long start, doub
 
     /** Light returned to every district: outage can be forgotten. */
     public boolean over(long now) {
-        if (restoreAt != NEVER && now >= restoreAt + restoreSpread) return true;
+        if (restoreAt != NEVER && now >= restoreAt + lag + restoreSpread) return true;
         // by damage without a destroyed district (high burst, small yield): over once the longest repair is done
         return byDamage() && now > rerouteAt() && !anyDestroyed();
     }
@@ -155,12 +182,36 @@ public record Outage(int id, double x, double z, double radius, long start, doub
      * the same weeks), so a substation the blast destroyed does not keep its own area beyond the destroyed zone dark forever.
      */
     public long rerouteAt() {
-        return start + Math.round(DAMAGED_LAST_HOURS * TICKS_PER_HOUR * (1 + SPREAD / 2));
+        return start + lag + Math.round(DAMAGED_LAST_HOURS * TICKS_PER_HOUR * (1 + SPREAD / 2));
     }
 
-    /** Same outage with uniform light restoration starting at {@code at}, over {@code spread} ticks (overrides the damage law where sooner). */
+    /**
+     * Same outage with uniform light restoration starting at grid clock {@code at}, over {@code spread} ticks (overrides the
+     * damage law where sooner); {@link #NEVER} — not uniformly.
+     */
     public Outage restoring(long at, int spread) {
-        return new Outage(id, x, z, radius, start, speed, at, spread, node, dead, damaged);
+        return new Outage(id, x, z, radius, start, speed, at == NEVER ? NEVER : at - lag, spread, node, dead, damaged, lag, strike, until);
+    }
+
+    /** Whether a show may still hold its repairs (a cause is recorded). */
+    public boolean held() {
+        return strike >= 0 || until != NO_SHOW;
+    }
+
+    /** Same outage, also caused by detonation {@code strike} (-1 — none) or a conventional strike whose show ends at {@code until}. */
+    public Outage heldBy(int strike, long until) {
+        return new Outage(id, x, z, radius, start, speed, restoreAt, restoreSpread, node, dead, damaged, lag, Math.max(this.strike, strike),
+                Math.max(this.until, until));
+    }
+
+    /** Same outage, no show holding its repairs any more (an admin's restore, or the shows and the blend are over). */
+    public Outage released() {
+        return new Outage(id, x, z, radius, start, speed, restoreAt, restoreSpread, node, dead, damaged, lag, -1, NO_SHOW);
+    }
+
+    /** Same outage, its clock trailing the grid clock by {@code lag} ticks. */
+    public Outage lagging(long lag) {
+        return new Outage(id, x, z, radius, start, speed, restoreAt, restoreSpread, node, dead, damaged, lag, strike, until);
     }
 
     /** Latest district darkening time in this area (cascade reached its edge). */

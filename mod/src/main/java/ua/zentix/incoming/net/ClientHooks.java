@@ -61,6 +61,8 @@ public interface ClientHooks {
 
     default void retinaScars(S2C.RetinaScars p) {}
 
+    default void ear(S2C.Ear p) {}
+
     default void flights(S2C.Flights p) {}
 
     default void farFlights(S2C.FarFlights p) {}

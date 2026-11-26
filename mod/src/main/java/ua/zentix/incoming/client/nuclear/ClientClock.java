@@ -20,6 +20,8 @@ public final class ClientClock {
     private static final long RESYNC = 20;
     private static double ticks, rate, counted, unseen;
     private static long lastDay, lastGame;
+    /** The dimension the server told the jump counters for ({@link #counted}, {@link #unseen} are per dimension). */
+    private static Object dimension;
     private static WeakReference<ClientLevel> lastLevel = new WeakReference<>(null);
     private static final WorldClock.Steps STEPS = new WorldClock.Steps();
 
@@ -51,6 +53,8 @@ public final class ClientClock {
     /** The server's clocks now: the client continues from them (a lagging server pulls it back). */
     static void set(S2C.NukeClock p) {
         ticks = p.clock();
+        ClientLevel level = net.minecraft.client.Minecraft.getInstance().level;
+        dimension = level == null ? null : level.dimension();
         S2C.NukeClock.Clocks c = p.clocks();
         if (c.known()) {
             rate = c.rate();
@@ -83,6 +87,11 @@ public final class ClientClock {
     /** Jumps counted in this dimension, world-clock ticks ({@link WorldClock#counted}). */
     public static double counted() {
         return counted;
+    }
+
+    /** The dimension whose jumps {@link #counted} and {@link #unseen} are (the one the server last told them for). */
+    public static Object dimension() {
+        return dimension;
     }
 
     /** Jumps not counted in this dimension, world-clock ticks ({@link WorldClock#unseen}). */

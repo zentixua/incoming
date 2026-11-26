@@ -25,9 +25,10 @@ import java.util.UUID;
  * {@link BurnInjury#SHOCK_LEFT}, death at expiry ({@code burn_shock} damage: unaffected by armor, fire resistance,
  * resistance or enchantments). Milk and other remedies do not heal burns; a totem of undying saves as from any death.
  * <p>
- * Healing and shock run on the world clock ({@link WorldClock}), not game ticks: once a second the remaining duration
- * (and that of weaker burns kept beneath) is corrected by how far the world clock moved — a slow or stopped day stretches
- * them to real hours, a night's sleep heals a night's worth. The second is the game time's (every
+ * Healing and shock run on the body's clock ({@link BodyClock}), not game ticks: once a second the remaining duration
+ * (and that of weaker burns kept beneath) is corrected by how far that clock moved — real time while the detonation that
+ * burned the body is in its show, then the world's day (a 24-hour day stretches them to real hours, a night's sleep heals a
+ * night's worth). The second is the game time's (every
  * {@link WorldClock#PACE_TICKS}th game tick), not the duration's: the correction changes the duration, and a trigger on
  * its own remainder would land on the same remainder again and stop the burn healing.
  */
@@ -62,12 +63,12 @@ public class BurnsEffect extends MobEffect {
             return true;
         }
         if (burns != null && !e.level().isClientSide() && e.level().getGameTime() % WorldClock.PACE_TICKS == 0)
-            pace(e, burns, WorldClock.PACE_TICKS - WorldClock.lastSecond(e.level()));
+            pace(e, burns, WorldClock.PACE_TICKS - BodyClock.lastSecond(e));
         return true;
     }
 
     /**
-     * Burns took {@link WorldClock#PACE_TICKS} game ticks of healing; the world clock moved by a different amount: add the
+     * Burns took {@link WorldClock#PACE_TICKS} game ticks of healing; the body's clock moved by a different amount: add the
      * difference ({@code ticks}, positive — slower day) to the remaining time of this burn and those beneath it. Never past
      * the end (shock fires on the tick after).
      */

@@ -77,7 +77,8 @@ with a nuclear warhead still waits 90 seconds before launch, even with early war
 - **The wave deafens.** At 15 kt it dulls sound out to about 4 km, and closer in everything sounds as if your ears
   were stuffed with cotton. Hearing comes back over game hours: up to 16 beyond 1.5 km, two game days at 1 km. A faint ringing comes with it,
   heard only when it is quiet: beyond 1.5 km for less than a game hour, loud and long only within about 1 km. From 5 psi
-  (about 1.1 km) eardrums can tear, and everything stays dull for 4–8 game weeks. Death restores your hearing.
+  (about 1.1 km) eardrums can tear, and everything stays dull for 4–8 game weeks. Death restores your hearing; logging
+  out and back in does not.
 - **Do not look at the fireball.** Its light reaches only those who can see it, under open sky or through a window, and
   burns the side of the body that faces it.
 - **Burns** depend on the yield: the pulse of a bigger burst is longer, and skin takes more of it. At 15 kt bare skin
@@ -201,6 +202,12 @@ heal or are repaired. A game hour is an hour of the world's day:
 - a night skipped while someone stays awake (an idle or spectating player too) changes nothing in front of them: the
   fires and the rain keep their time, and only what nobody watches change moves on: injuries, radiation sickness,
   hearing and power repairs;
+- burns, radiation sickness, hearing and the power in a district heal or are repaired in real time while any strike
+  that caused them is in its first minutes: a nuclear blast's 20, a Shahed's or missile's until its cloud has stopped
+  rising and the fuel in its crater has burnt out (about 2 to 16 minutes). A body hurt by two blasts close together
+  heals in real time until both are over;
+- your injuries and hearing change only while you are in the world: logged out, radiation sickness does not progress,
+  burns do not heal and hearing does not come back, and you return to them as you left them;
 - `/time add` counts like a sleep; `/time set day` at night counts as the night passing while the day runs, and on a
   stopped day only sets the light. Setting an earlier time never turns anything back;
 - `/tick freeze` holds the strike's moment like the rest of the world: the flash, wave and clouds stand still while you

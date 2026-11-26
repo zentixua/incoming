@@ -55,7 +55,7 @@ public final class S2C {
      * ({@link #NO_WEAPON}) — infer from kind as kind was chosen then ({@link #weaponType}).
      */
     public record Blast(int kind, Vec3 pos, int material, float surfaceY, long seed, Optional<UUID> projectile, int weapon, Vec3 axis,
-                        boolean fuelApart, Optional<Support> support) implements CustomPacketPayload {
+                        boolean fuelApart, Optional<Support> support, int show) implements CustomPacketPayload {
         public static final int DRONE = 0, MISSILE = 1, BUNKER = 2, ROCKET = 3;
         /** No weapon in packet (recording predates this field). */
         public static final int NO_WEAPON = -1;
@@ -73,6 +73,12 @@ public final class S2C {
         private static final StreamCodec<ByteBuf, Boolean> FUEL_APART = StreamCodecs.trailing(ByteBufCodecs.BOOL, false);
         /** No packet support (recording predates field; serverless explosion; charge not against barrier). */
         private static final StreamCodec<ByteBuf, Optional<Support>> SUPPORT = StreamCodecs.trailing(ByteBufCodecs.optional(Support.CODEC), Optional.empty());
+        /**
+         * The strike's show, game ticks from the blast ({@code warhead.StrikeShow}: until the cloud's apex and the crater fuel's
+         * burn-out): hearing it harms recovers at real rate until then. {@code StrikeShow.NONE} — none (a recording made before
+         * this field, an explosion that is no strike).
+         */
+        private static final StreamCodec<ByteBuf, Integer> SHOW = StreamCodecs.trailing(ByteBufCodecs.VAR_INT, ua.zentix.incoming.warhead.StrikeShow.NONE);
         public static final StreamCodec<ByteBuf, Blast> CODEC = StreamCodec.of((b, p) -> {
             ByteBufCodecs.VAR_INT.encode(b, p.kind);
             StreamCodecs.VEC3.encode(b, p.pos);
@@ -84,9 +90,16 @@ public final class S2C {
             AXIS.encode(b, p.axis);
             FUEL_APART.encode(b, p.fuelApart);
             SUPPORT.encode(b, p.support);
+            SHOW.encode(b, p.show);
         }, b -> new Blast(ByteBufCodecs.VAR_INT.decode(b), StreamCodecs.VEC3.decode(b), ByteBufCodecs.VAR_INT.decode(b),
                 ByteBufCodecs.FLOAT.decode(b), ByteBufCodecs.VAR_LONG.decode(b), PROJECTILE.decode(b), WEAPON.decode(b), AXIS.decode(b),
-                FUEL_APART.decode(b), SUPPORT.decode(b)));
+                FUEL_APART.decode(b), SUPPORT.decode(b), SHOW.decode(b)));
+
+        /** Explosion without a show ({@code StrikeShow.NONE}). */
+        public Blast(int kind, Vec3 pos, int material, float surfaceY, long seed, Optional<UUID> projectile, int weapon, Vec3 axis,
+                     boolean fuelApart, Optional<Support> support) {
+            this(kind, pos, material, surfaceY, seed, projectile, weapon, axis, fuelApart, support, ua.zentix.incoming.warhead.StrikeShow.NONE);
+        }
 
         /** Explosion without warhead axis (bomb, post-nuclear presentation): downward axis. */
         public Blast(int kind, Vec3 pos, int material, float surfaceY, long seed, Optional<UUID> projectile, int weapon) {
@@ -976,6 +989,18 @@ public final class S2C {
         public static final StreamCodec<ByteBuf, Radiation> CODEC = StreamCodec.composite(
                 ByteBufCodecs.FLOAT, Radiation::doseGy, ByteBufCodecs.FLOAT, Radiation::rate,
                 ByteBufCodecs.FLOAT, Radiation::contamination, ByteBufCodecs.VAR_INT, Radiation::stage, Radiation::new);
+
+        @Override
+        public Type<? extends CustomPacketPayload> type() {
+            return TYPE;
+        }
+    }
+
+    /** The player's ear as the server kept it ({@link C2S.Ear}), on login: hearing is kept across relogging. Empty — a healthy ear. */
+    public record Ear(net.minecraft.nbt.CompoundTag state) implements CustomPacketPayload {
+        public static final Type<Ear> TYPE = new Type<>(Incoming.id("ear"));
+        public static final StreamCodec<ByteBuf, Ear> CODEC = ByteBufCodecs.compoundTagCodec(() -> net.minecraft.nbt.NbtAccounter.create(C2S.Ear.EAR_BYTES))
+                .map(Ear::new, Ear::state);
 
         @Override
         public Type<? extends CustomPacketPayload> type() {

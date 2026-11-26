@@ -397,6 +397,20 @@ public final class ClientNuclear {
     private static long playbackEpoch;
     private static final ClockLead CLOCK = new ClockLead();
     private static final Map<Integer, Active> DETONATIONS = new LinkedHashMap<>();
+
+    /**
+     * Where detonation {@code id}'s show stands for a recovery clock ({@link ua.zentix.incoming.util.RecoveryClock.Shows}): the
+     * game time it ended, {@code RUNNING}, or {@code NONE} when this client does not know the detonation (long over).
+     */
+    public static long showEnd(int id) {
+        Active a = DETONATIONS.get(id);
+        if (a != null) {
+            StrikeClock c = a.strikeClock(a.ticks(0));
+            return c.ended() ? a.d.gameTime() + c.endAge() : ua.zentix.incoming.util.RecoveryClock.RUNNING;
+        }
+        StrikeClock told = ANCHORS.get(id);
+        return told != null && !told.ended() ? ua.zentix.incoming.util.RecoveryClock.RUNNING : ua.zentix.incoming.util.RecoveryClock.NONE;
+    }
     private static final Map<Integer, S2C.NukeWarning> WARNINGS = new LinkedHashMap<>();
     @Nullable
     private static S2C.Radiation radiation;

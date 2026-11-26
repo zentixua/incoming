@@ -47,12 +47,21 @@ paths:
   other chunks.
 
 - Nuclear outages repair by damage (`Outage.damageLightAt`, `dead`/`damaged` = ground ranges of `Blackouts.DEAD_PSI` 5 and
-  `DAMAGED_PSI` 1): never inside `dead`, days in the belt, hours outside it, on the world clock (`WorldClock`, 1000 ticks per hour of the day; `Blackouts.now`; cascade speed divides by
+  `DAMAGED_PSI` 1): never inside `dead`, days in the belt, hours outside it, on the outage's recovery clock (below) over the world clock (`WorldClock`, 1000 ticks per hour of the day; `Blackouts.now`; cascade speed divides by
   `Blackouts.rate` so a vanilla day keeps its pace and a 24-hour day stretches it to real hours; a stopped day keeps
   the pace it last ran at); the
   restoration cascade starts at `Outage.restoreFrom` and lives as long as repairs (a restarted one skips districts issued
   before the restart, `Sweep.issued`). Substations the strike hit repair as their district does; a destroyed one reroutes
   its area at `Outage.rerouteAt` but stays unpowered while its zone is destroyed (`PowerGrid.destroyed`).
+- Repairs follow time.md rule 8: real while the outage's cause is in its show (`Outage.strike`, the detonation;
+  `Outage.until`, a conventional strike's show end from `Warheads.showOf` → `StrikeShow`), then the blend. `Outage.lag`
+  (grid ticks the outage's clock trails the grid clock, saved; 0 in old saves) grows once a second in `Blackouts.hold`
+  (`util/RecoveryClock.district`, kept in the non-persistent `BlackoutWorld.holds`), then the outage is `released`;
+  every repair time adds it (`lightAt`, `repairsAt`, `restoreFrom`, `over`, `rerouteAt`), darkening does not. Stored
+  `restoreAt` is on the outage's clock: outside `Outage` read `repairsAt`. A command restore releases the hold. Per
+  outage, not per district: a district under two outages relights when both are done, each held only by its own cause
+  (a district clock would hold whole outage areas: a Shahed substation hit would hold a 16 km nuclear repair). Nothing
+  is due while held, so `PowerGrid.hold` keeps the restoration's progress.
 - Nuclear outage radius is the whole damage reach (`Detonation.radiusMax`), capped by `Blackouts.NUKE_MAX_RADIUS` 16384
   (measured cost in its javadoc), not `grid.max_radius` (substations, commands). Cascade build: `Sweep.buildRow` is
   one unit of at most `Sweep.SEGMENT` chunks of a row's circle chord, districts per row via `Districts.row` (same result as

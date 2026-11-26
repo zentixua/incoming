@@ -440,6 +440,7 @@ final class StagedExplosion implements UnitQueue.Job {
                 at.x, at.y, at.z, power, fire, destroy, ModParticles.NONE.get(), ModParticles.NONE.get(), ModSounds.SILENT);
         explosion = e;
         RULES.put(e, area.rules());
+        SHOWS.put(e, area.show());
         if (calculator != null) damage = calculator;
         boolean cancelled = EventHooks.onExplosionStart(level, e);
         time(ExplosionStage.START, t);
@@ -599,6 +600,7 @@ final class StagedExplosion implements UnitQueue.Job {
         // Start handlers already see charge ({@link #chargeOf}) and rules ({@link #rulesOf}).
         CHARGES.put(e, charge);
         RULES.put(e, area.rules());
+        SHOWS.put(e, area.show());
         cancelled = EventHooks.onExplosionStart(level, e);
         started = true;
         time(ExplosionStage.START, t);
@@ -1115,6 +1117,15 @@ final class StagedExplosion implements UnitQueue.Job {
 
     /** World rules of ongoing mod explosions ({@link #rulesOf}). */
     private static final java.util.Map<Explosion, StrikeRules> RULES = java.util.Collections.synchronizedMap(new java.util.WeakHashMap<>());
+    /** Show ends of ongoing mod explosions' strikes ({@link #showOf}). */
+    private static final java.util.Map<Explosion, Long> SHOWS = java.util.Collections.synchronizedMap(new java.util.WeakHashMap<>());
+
+    /** Game time the strike of a mod explosion ends its show ({@link StrikeShow}); {@link Long#MIN_VALUE} — none or not ours. */
+    static long showOf(Explosion e) {
+        Long s = SHOWS.get(e);
+        return s != null ? s : Long.MIN_VALUE;
+    }
+
     /** Rules of the craft explosion running now ({@link #craftCharge}). */
     @Nullable
     private static StrikeRules craftRules;

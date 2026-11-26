@@ -87,7 +87,7 @@ public final class PowerGrid extends SavedData {
 
     /** Outage caused by a node failure whose power restoration has not started yet. */
     public Optional<Outage> downOutage(int node, long now) {
-        return outages.stream().filter(o -> o.node() == node && now < o.restoreAt()).findFirst();
+        return outages.stream().filter(o -> o.node() == node && now < o.repairsAt()).findFirst();
     }
 
     // ---------------------------------------------------------------- outages
@@ -102,7 +102,8 @@ public final class PowerGrid extends SavedData {
 
     /** Add an outage like {@code o}, under a new number. */
     public Outage addOutage(Outage o) {
-        o = new Outage(nextId++, o.x(), o.z(), o.radius(), o.start(), o.speed(), o.restoreAt(), o.restoreSpread(), o.node(), o.dead(), o.damaged());
+        o = new Outage(nextId++, o.x(), o.z(), o.radius(), o.start(), o.speed(), o.restoreAt(), o.restoreSpread(), o.node(), o.dead(), o.damaged(),
+                o.lag(), o.strike(), o.until());
         outages.add(o);
         setDirty();
         return o;
@@ -114,6 +115,20 @@ public final class PowerGrid extends SavedData {
             if (outages.get(i).id() == o.id()) {
                 outages.set(i, o);
                 lightSwept.remove(o.id());
+                setDirty();
+                return;
+            }
+        }
+    }
+
+    /**
+     * Update an outage's recovery clock (its {@link Outage#lag} and causes) in place: its restoration cascade keeps its
+     * progress, since nothing is due while a show holds it.
+     */
+    public void hold(Outage o) {
+        for (int i = 0; i < outages.size(); i++) {
+            if (outages.get(i).id() == o.id()) {
+                outages.set(i, o);
                 setDirty();
                 return;
             }

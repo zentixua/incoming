@@ -493,7 +493,7 @@ public final class NukeSounds {
          */
         private void hurtEars(double pa, double tPlus, Outdoor.@Nullable Path path) {
             double lost = path == null ? 0 : Outdoor.pressureLoss(path), highs = path == null ? 1 : Outdoor.pressureHighs(path);
-            Deafness.blast(HearingModel.exposure(pa, tPlus) - lost + 20 * Math.log10(Math.max(1e-3, highs)), pa / 1000 * Math.pow(10, -lost / 20), d.seed());
+            Deafness.nuke(HearingModel.exposure(pa, tPlus) - lost + 20 * Math.log10(Math.max(1e-3, highs)), pa / 1000 * Math.pow(10, -lost / 20), d.seed(), d.id());
         }
 
         /**

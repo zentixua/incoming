@@ -91,25 +91,14 @@ public final class MobFallout {
         double roentgens = 0, spanHours = 0;
         long span = 0;
         long[] froms = new long[detonations.size()];
-        double[] fromClocks = new double[froms.length];
         for (int i = 0; i < froms.length; i++) {
             Detonation d = detonations.get(i);
             // own account; none — since the detonation (it was there, unloaded or not), or this pass for an old world's mob
             long from;
-            double fromClock;
-            if (seen.falloutAt() >= 0 && seen.falloutAt() >= d.gameTime()) {
-                from = seen.falloutAt();
-                // an account saved before the world clock was kept: as if the day had run at vanilla speed since
-                fromClock = Double.isNaN(seen.falloutClock()) ? clock - (now - from) : seen.falloutClock();
-            } else if (seen.falloutAt() >= 0 || d.id() >= lateFrom) {
-                from = d.gameTime();
-                fromClock = events.burstClock(d, now, clock);
-            } else {
-                from = passStart;
-                fromClock = clock - (now - from);
-            }
+            if (seen.falloutAt() >= 0 && seen.falloutAt() >= d.gameTime()) from = seen.falloutAt();
+            else if (seen.falloutAt() >= 0 || d.id() >= lateFrom) from = d.gameTime();
+            else from = passStart;
             froms[i] = from;
-            fromClocks[i] = Math.min(fromClock, clock);
             if (from >= now) continue;
             double s0 = events.secondsAt(d, level, from), s1 = events.seconds(d, level);
             roentgens += exposure(d, mob.getX(), mob.getZ(), s0, s1);
@@ -140,15 +129,17 @@ public final class MobFallout {
                 return before + r * gyPerR;
             }, now - span, now, SicknessModel.MIN_DOSE);
         }
-        long first = now - span;
-        double firstClock = clock;
-        for (int i = 0; i < froms.length; i++) if (froms[i] == first) firstClock = Math.min(firstClock, fromClocks[i]);
-        RadiationTicker.addDose(mob, (float) gy, (long) Math.floor(between(first, firstClock, now, clock, at)));
-    }
-
-    /** World clock at game time {@code t} between two readings, running evenly between them. */
-    static double between(long t0, double clock0, long t1, double clock1, long t) {
-        return t1 <= t0 ? clock1 : clock0 + (clock1 - clock0) * (double) (t - t0) / (t1 - t0);
+        // the dose's cause is the youngest detonation whose fallout reached the mob in this account; the sickness started as long
+        // ago as that detonation's own strike clock has run since the crossing (the mob was out of the world meanwhile, its
+        // body clock did not move)
+        Detonation cause = null;
+        for (int i = 0; i < froms.length; i++) {
+            Detonation d = detonations.get(i);
+            if (froms[i] < now && d.hasFallout() && (cause == null || d.id() > cause.id())) cause = d;
+        }
+        if (cause == null) return;
+        double ago = at >= now ? 0 : (events.seconds(cause, level) - events.secondsAt(cause, level, at)) / WorldClock.SECONDS_PER_TICK;
+        RadiationTicker.addDose(mob, (float) gy, cause, ago);
     }
 
     /**

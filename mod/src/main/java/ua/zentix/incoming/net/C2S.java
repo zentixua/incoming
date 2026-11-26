@@ -239,6 +239,24 @@ public final class C2S {
             return java.util.Arrays.hashCode(chunks);
         }
     }
+    /**
+     * The player's ear as the client keeps it ({@code client/nuclear/Deafness}): kept by the server in a player attachment
+     * and given back on login ({@link S2C.Ear}), so relogging cures nothing. Opaque to the server, bounded in size
+     * ({@link #EAR_BYTES}). Empty — a healthy ear.
+     */
+    public record Ear(net.minecraft.nbt.CompoundTag state) implements CustomPacketPayload {
+        /** Largest ear state, bytes: 16 doses of three numbers and the clock fit in about 1 KB. */
+        public static final long EAR_BYTES = 8192;
+        public static final Type<Ear> TYPE = new Type<>(Incoming.id("ear"));
+        public static final StreamCodec<ByteBuf, Ear> CODEC = ByteBufCodecs.compoundTagCodec(() -> net.minecraft.nbt.NbtAccounter.create(EAR_BYTES))
+                .map(Ear::new, Ear::state);
+
+        @Override
+        public Type<? extends CustomPacketPayload> type() {
+            return TYPE;
+        }
+    }
+
     /** Voxy LOD batches up to this mark have arrived and Voxy has room for more (cumulative). */
     public record LodBatchReceived(int id) implements CustomPacketPayload {
         public static final Type<LodBatchReceived> TYPE = new Type<>(Incoming.id("lod_batch_received"));

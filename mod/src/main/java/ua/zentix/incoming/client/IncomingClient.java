@@ -572,6 +572,12 @@ public final class IncomingClient {
         }
 
         @Override
+        public void ear(S2C.Ear p) {
+            // the player's own ear, not an event: also accepted during replay seeking
+            ua.zentix.incoming.client.nuclear.Deafness.restore(p.state());
+        }
+
+        @Override
         public void retinaScars(S2C.RetinaScars p) {
             // eye state, not an event: also accepted during replay seeking
             NukeFlash.scars(p.scars());
