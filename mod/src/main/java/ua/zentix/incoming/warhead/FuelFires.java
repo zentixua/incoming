@@ -223,6 +223,23 @@ public final class FuelFires {
         if (pool.reach <= 0) return;
         BlockPos at = pool.cells[0];
         PacketDistributor.sendToPlayersNear(level, null, at.getX() + 0.5, at.getY(), at.getZ() + 0.5, pool.reach, pool.packet());
+        ua.zentix.incoming.strike.StrikeClouds.changed(level);
+    }
+
+    /** A burning crater as players around it know it: its state, where it is and its packet reach. */
+    public record Burning(S2C.FuelFire state, Vec3 at, double reach) {}
+
+    /** Craters still burning in {@code level} that clients are told about ({@code strike/StrikeClouds} resends them). */
+    public static List<Burning> burning(ServerLevel level) {
+        FuelFires all = level.getExistingDataOrNull(ModAttachments.FUEL_FIRES.get());
+        if (all == null || all.pools.isEmpty()) return List.of();
+        List<Burning> out = new ArrayList<>(all.pools.size());
+        for (Pool pool : all.pools) {
+            if (pool.reach <= 0 || pool.finished()) continue;
+            BlockPos at = pool.cells[0];
+            out.add(new Burning(pool.packet(), new Vec3(at.getX() + 0.5, at.getY(), at.getZ() + 0.5), pool.reach));
+        }
+        return out;
     }
 
     /** Chunk sent to player (joined, approached, returned): send current crater states whose first cell is there. */

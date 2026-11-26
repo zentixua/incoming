@@ -105,6 +105,17 @@ class S2CGoldenTest {
                         new S2C.Blast(S2C.Blast.ROCKET, P, 3, 70.5f, -42L, Optional.of(A), 4, new Vec3(0.6, -0.8, 0), true,
                                 Optional.of(new S2C.Blast.Support(false, 1.2f, 1.75f, new Vec3(1, 0, 0), 0.5f)))),
                 golden(S2C.FuelFire.TYPE, S2C.FuelFire.CODEC, new S2C.FuelFire(7, List.of(new BlockPos(-1234, 70, 98765), new BlockPos(1, -63, -4096)), 0b10L, 2, 123_456_789L)),
+                golden(S2C.StrikeClouds.TYPE, S2C.StrikeClouds.CODEC, new S2C.StrikeClouds(List.of(
+                        new S2C.StrikeClouds.Cloud(S2C.StrikeClouds.BLAST, 123_456L, 2500.5, new ua.zentix.incoming.util.Air(
+                                new ua.zentix.incoming.util.Wind(1.5, 7.25), 3, 0.5), 64.5f,
+                                new S2C.Blast(S2C.Blast.ROCKET, P, 3, 70.5f, -42L, Optional.of(A), 4, new Vec3(0.6, -0.8, 0), true,
+                                        Optional.of(new S2C.Blast.Support(false, 1.2f, 1.75f, new Vec3(1, 0, 0), 0.5f)))),
+                        new S2C.StrikeClouds.Cloud(S2C.StrikeClouds.ENTRY, 7L, 0, ua.zentix.incoming.util.Air.CALM, Float.NaN, new S2C.BunkerImpact(P, 2, 247.5f)),
+                        new S2C.StrikeClouds.Cloud(S2C.StrikeClouds.VENT, 8L, 0, ua.zentix.incoming.util.Air.CALM, Float.NaN, new S2C.Vent(Q, 1, 8.25f)),
+                        new S2C.StrikeClouds.Cloud(S2C.StrikeClouds.COLLAPSE, 9L, 0, ua.zentix.incoming.util.Air.CALM, Float.NaN, new S2C.Collapse(P, 4, 162.5f)),
+                        new S2C.StrikeClouds.Cloud(S2C.StrikeClouds.AIRBURST, 10L, 0, ua.zentix.incoming.util.Air.CALM, Float.NaN, new S2C.Intercept(P, true, Optional.of(B), 99)),
+                        new S2C.StrikeClouds.Cloud(S2C.StrikeClouds.FUEL, 123_456_789L, 0, ua.zentix.incoming.util.Air.CALM, Float.NaN,
+                                new S2C.FuelFire(7, List.of(new BlockPos(-1234, 70, 98765), new BlockPos(1, -63, -4096)), 0b10L, 2, 123_456_789L))))),
                 golden(S2C.BunkerImpact.TYPE, S2C.BunkerImpact.CODEC, new S2C.BunkerImpact(P, 2, S2C.BunkerImpact.OLD_SPEED), new S2C.BunkerImpact(P, 2, 247.5f)),
                 golden(S2C.Vent.TYPE, S2C.Vent.CODEC, new S2C.Vent(Q, 1, S2C.Vent.OLD_AIR_KG), new S2C.Vent(Q, 1, 8.25f)),
                 golden(S2C.Collapse.TYPE, S2C.Collapse.CODEC, new S2C.Collapse(P, 4, S2C.Collapse.OLD_VOLUME), new S2C.Collapse(P, 4, 162.5f)),

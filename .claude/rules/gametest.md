@@ -60,7 +60,9 @@ paths:
   methods needing only position and UUID (`NuclearStrikes.launchFrom`). To check server packets to nearby players
   (`PacketDistributor.sendToPlayersNear` searches the server player list), use `FuelFireGameTests.Watcher`: `FakePlayer`
   with its own `ServerGamePacketListenerImpl` recording wanted packets and swallowing others, in the player list's
-  `players` field (`getPlayers()` is read-only in NeoForge) for the test, without login or world presence. Server-state
+  `players` field (`getPlayers()` is read-only in NeoForge) for the test, without login or world presence, so it is absent
+  from `ServerLevel.players()`: server code that sends to a world's players reads the server player list filtered by level,
+  as `PacketDistributor` does (`StrikeClouds.onLevelTick`). Server-state
   checks do not see transmission (FV review, round 2).
 - GameTest servers tick without pauses (`GameTestServer.waitUntilNextTick` only executes tasks): tick deadlines pass
   faster than background generation. Platform chunks load synchronously; neighbors beyond its edge load in the

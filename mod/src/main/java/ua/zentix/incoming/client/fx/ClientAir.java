@@ -49,6 +49,11 @@ public final class ClientAir {
      * {@link LocalWind#base} belongs to the cell rather than the point: sources use {@link #site(double, double, double)}.
      */
     public static LocalWind site(double x, double z) {
+        return site(x, z, now());
+    }
+
+    /** Same under world air {@code a} (a resent strike's cloud keeps the air of its moment). */
+    public static LocalWind site(double x, double z, Air a) {
         Minecraft mc = Minecraft.getInstance();
         ClientLevel level = mc == null ? null : mc.level;
         if (level == null) return LocalWind.OPEN;
@@ -56,7 +61,6 @@ public final class ClientAir {
             CACHE.clear();
             cached = new java.lang.ref.WeakReference<>(level);
         }
-        Air a = now();
         long turn = Math.floorMod(Math.round(a.wind().direction() / TURN), Math.round(2 * Math.PI / TURN));
         long key = (Math.floorDiv((long) Math.floor(x), CELL) & 0x3FFFFFL) << 42 | (Math.floorDiv((long) Math.floor(z), CELL) & 0x3FFFFFL) << 20 | turn;
         LocalWind site = CACHE.get(key);
@@ -72,6 +76,11 @@ public final class ClientAir {
     /** Ground wind at site (x, z), measured from the surface at world height y (below the blast). */
     public static LocalWind site(double x, double y, double z) {
         return site(x, z).from(y);
+    }
+
+    /** Same under world air {@code a}. */
+    public static LocalWind site(double x, double y, double z, Air a) {
+        return site(x, z, a).from(y);
     }
 
     /** Ground-wind speed at site (x, z) and world height y, m/s: world wind at height above the site ground, with its correction. */

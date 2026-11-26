@@ -166,7 +166,7 @@ public final class FarBlasts {
         ChemicalFront front;
 
         Event(ClientLevel level, BlastSource source, CloudModel model, double x, double y, double z, GroundMaterial ground, long seed,
-              boolean near, BlastSource voice) {
+              boolean near, BlastSource voice, @Nullable Resent resent) {
             this.level = level;
             this.source = source;
             this.voice = voice;
@@ -178,7 +178,9 @@ public final class FarBlasts {
             this.ground = ground;
             this.water = ground.isWater() && source.chargeKg() > 0 ? water(level, new Vec3(x, y, z), source.chargeKg(), model.air) : null;
             this.seed = seed;
-            this.born = BlastTime.ticks();
+            // a resent strike happened before the client knew it: it is that old now; its far rumble is still to come only
+            // while its front has not yet reached the ear (FarBlasts.cloud decides)
+            this.born = BlastTime.ticks() - (resent == null ? 0 : resent.ticks());
             this.near = near;
             this.soundPending = !near;
             // Fuel in the crater burns as fire on the server's blocks: its smoke and sound come with it in a packet (BlastEffects.fuelFire)
@@ -484,6 +486,19 @@ public final class FarBlasts {
      */
     @Nullable
     public static CloudModel add(S2C.Blast p) {
+        return add(p, null);
+    }
+
+    /**
+     * A strike the client did not see happen ({@code ClientStrikeClouds}: a late join, a replay seek): its cloud, without
+     * flash or sound, at its age {@code resent}, in the air of its moment and over the ground as it was before the crater.
+     * Live packets ({@code resent} null) read the air and ground now.
+     */
+    public record Resent(long ticks, ua.zentix.incoming.util.Air air, float surface) {}
+
+    /** {@link #add(S2C.Blast)} for a resent strike ({@link Resent}) or a live one ({@code resent} null). */
+    @Nullable
+    public static CloudModel add(S2C.Blast p, @Nullable Resent resent) {
         ClientLevel level = Minecraft.getInstance().level;
         if (level == null) return null;
         Vec3 pos = p.pos();
@@ -495,15 +510,16 @@ public final class FarBlasts {
             ua.zentix.incoming.warhead.BuriedBlast law = BlastSource.law(pos.y, p.surfaceY());
             if (!law.breaches()) return null;
             Vec3 top = new Vec3(pos.x, p.surfaceY(), pos.z);
-            CloudModel model = CloudModel.buried(source, air(level, pos), law, ground.isWater(), ground(level, top));
-            return cloud(level, source, model, top, ground, p.seed());
+            CloudModel model = CloudModel.buried(source, air(level, pos, resent), law, ground.isWater(), ground(level, top));
+            return cloud(level, source, model, top, ground, p.seed(), source, resent);
         }
         // The impact is on whatever is under the point (ground, roof, wall — it does not matter; above a craft in the air — the terrain far below): what
         // is around, and at what height, is seen from the top blocks (ground); what it hit and whether there is a void behind it — the server's
         // breach along the axis of impact (the support in the packet, target)
-        double hob = overSurface(level, pos);
+        double hob = overSurface(level, pos, resent);
         BlastTarget target = target(p, ground, source.chargeKg(), hob);
-        return cloud(level, source, new CloudModel(source, air(level, pos), target, hob, ground(level, pos)), pos, ground, p.seed());
+        return cloud(level, source, new CloudModel(source, air(level, pos, resent), target, hob, ground(level, pos)), pos, ground, p.seed(),
+                source, resent);
     }
 
     /**
@@ -520,15 +536,29 @@ public final class FarBlasts {
      */
     public static CloudModel cloud(ClientLevel level, BlastSource source, CloudModel model, Vec3 at, GroundMaterial ground, long seed,
                                    BlastSource voice) {
-        Event e = new Event(level, source, model, at.x, at.y, at.z, ground, seed, near(at), voice);
+        return cloud(level, source, model, at, ground, seed, voice, null);
+    }
+
+    /** Same for a strike resent at its age ({@link Resent}), or a live one ({@code resent} null). */
+    public static CloudModel cloud(ClientLevel level, BlastSource source, CloudModel model, Vec3 at, GroundMaterial ground, long seed,
+                                   BlastSource voice, @Nullable Resent resent) {
+        Event e = new Event(level, source, model, at.x, at.y, at.z, ground, seed, near(at), voice, resent);
+        // a resent strike's rumble plays only if its front is still on the way to the ear (a player out of a portal 2 s
+        // after a hit 3 km away hears it at 8.7 s), never one that has passed
+        if (resent != null && e.soundPending) e.soundPending = stillHeard(e.soundFront(), e.blastDistanceTo(camera()), resent.ticks());
         trace(e, FarTerrain.of(level), camera());
-        clear(e, camera(), 0);
+        clear(e, camera(), resent == null ? 0 : resent.ticks());
         admit(EVENTS, e, CAP, old -> {
             old.alive = false;
             if (old.soundPending) SOUNDS.addLast(old);
         });
         SmokeGrid.add(e);
         return model;
+    }
+
+    /** A strike {@code ageTicks} old, {@code d} blocks from the ear: its front ({@link #arrivalTicks}) has not reached it yet. */
+    static boolean stillHeard(@Nullable ChemicalFront front, double d, long ageTicks) {
+        return arrivalTicks(front, d) > ageTicks;
     }
 
     /** {@code e} goes to the end of {@code events}; beyond {@code cap} the first one goes to {@code gone} (picture — yes, sound — on its own schedule). */
@@ -554,11 +584,17 @@ public final class FarBlasts {
      */
     @Nullable
     public static CloudModel airburst(Vec3 pos, BlastSource source, long seed) {
+        return airburst(pos, source, seed, null);
+    }
+
+    /** Same for a burst resent at its age ({@link Resent}), or a live one ({@code resent} null). */
+    @Nullable
+    public static CloudModel airburst(Vec3 pos, BlastSource source, long seed, @Nullable Resent resent) {
         ClientLevel level = Minecraft.getInstance().level;
         if (level == null) return null;
         double hob = heightAbove(level, pos);
-        return cloud(level, source, new CloudModel(source, air(level, pos), BlastTarget.of(GroundMaterial.STONE, source.chargeKg(), hob), hob,
-                ground(level, pos)), pos, GroundMaterial.STONE, seed);
+        return cloud(level, source, new CloudModel(source, air(level, pos, resent), BlastTarget.of(GroundMaterial.STONE, source.chargeKg(), hob), hob,
+                ground(level, pos)), pos, GroundMaterial.STONE, seed, source, resent);
     }
 
     /**
@@ -624,6 +660,11 @@ public final class FarBlasts {
         return overSurface(FarTerrain.dust(level), pos);
     }
 
+    /** Same, for a resent strike over the ground the server measured before its crater ({@link Resent#surface}). */
+    static double overSurface(ClientLevel level, Vec3 pos, @Nullable Resent resent) {
+        return resent == null || Float.isNaN(resent.surface()) ? overSurface(level, pos) : Math.max(0, pos.y - resent.surface());
+    }
+
     /** Same, by heights {@code heights} (the first air above the top of the column). */
     static double overSurface(Sightline.Heights heights, Vec3 pos) {
         double ground = Double.NaN;
@@ -663,12 +704,17 @@ public final class FarBlasts {
      * a hill); humidity — the air's own; 1 at the water (the condensation cloud), over the water — the field.
      */
     public static CloudModel.Air air(ClientLevel level, Vec3 pos) {
+        return air(level, pos, null);
+    }
+
+    /** Same for a resent strike: the world air of its moment, over the ground before its crater ({@link Resent}). */
+    public static CloudModel.Air air(ClientLevel level, Vec3 pos, @Nullable Resent resent) {
         net.minecraft.core.BlockPos at = net.minecraft.core.BlockPos.containing(pos);
         boolean water = !level.getFluidState(at).isEmpty() || !level.getFluidState(at.below()).isEmpty();
-        ua.zentix.incoming.util.Air air = ClientAir.now();
+        ua.zentix.incoming.util.Air air = resent == null ? ClientAir.now() : resent.air();
         // the place's correction is measured from the surface under the explosion (under a crown — from the ground beneath it): the cloud's heights are measured from the same surface too
         return CloudModel.Air.of(air, water ? 1 : air.humidity(),
-                water ? ua.zentix.incoming.util.LocalWind.OPEN : ClientAir.site(pos.x, pos.y - overSurface(level, pos), pos.z));
+                water ? ua.zentix.incoming.util.LocalWind.OPEN : ClientAir.site(pos.x, pos.y - overSurface(level, pos, resent), pos.z, air));
     }
 
     /**

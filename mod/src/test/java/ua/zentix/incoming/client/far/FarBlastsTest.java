@@ -28,7 +28,7 @@ class FarBlastsTest {
         Class<?> eventType = Class.forName(FarBlasts.class.getName() + "$Event");
         var constructor = eventType.getDeclaredConstructor(net.minecraft.client.multiplayer.ClientLevel.class,
                 BlastSource.class, CloudModel.class, double.class, double.class, double.class,
-                ua.zentix.incoming.warhead.GroundMaterial.class, long.class, boolean.class, BlastSource.class);
+                ua.zentix.incoming.warhead.GroundMaterial.class, long.class, boolean.class, BlastSource.class, FarBlasts.Resent.class);
         constructor.setAccessible(true);
         var collect = FarBlasts.class.getDeclaredMethod("light", eventType, FarView.class, FarSprites.class,
                 ua.zentix.incoming.client.fx.layer.FxLights.class, double.class, double.class, double.class,
@@ -46,7 +46,7 @@ class FarBlastsTest {
             m.emittedLight(t, physical);
             assertTrue(t < m.fireSeconds && physical[3] > 0, "a hidden body has nonzero flux: " + w);
             Object event = constructor.newInstance(null, m.source, m, 0, 0, 0,
-                    ua.zentix.incoming.warhead.GroundMaterial.DIRT, 1L, false, m.source);
+                    ua.zentix.incoming.warhead.GroundMaterial.DIRT, 1L, false, m.source, null);
             var lights = new ua.zentix.incoming.client.fx.layer.FxLights();
             // The actual FarBlasts.light path, one hundred hidden strikes: neither occupy a slot nor draw the body before returning.
             for (int i = 0; i < 100; i++) collect.invoke(null, event, day, null, lights, t * 20, 0, 0, 200, 200, 0);

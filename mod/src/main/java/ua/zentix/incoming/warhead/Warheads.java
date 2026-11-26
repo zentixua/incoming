@@ -46,6 +46,7 @@ import ua.zentix.incoming.registry.ModDataMaps;
 import ua.zentix.incoming.registry.ModParticles;
 import ua.zentix.incoming.registry.ModTags;
 import ua.zentix.incoming.strike.ImpactCost;
+import ua.zentix.incoming.strike.StrikeClouds;
 import ua.zentix.incoming.strike.StrikeOwner;
 import ua.zentix.incoming.strike.StrikeWorld;
 import ua.zentix.incoming.strike.Timeline;
@@ -109,7 +110,7 @@ public final class Warheads {
         double hit = BunkerImpact.equivalentTnt(WeaponSpec.BUNKER.payload().article().dryMass(), speed);
         double reach = Math.max(IncomingConfig.SERVER.farRange.get(), Math.min(IncomingConfig.FAR_RANGE_MAX,
                 HearingModel.audibleRangeM(BunkerImpact.airTnt(hit))));
-        PacketDistributor.sendToPlayersNear(level, null, point.x, point.y, point.z, reach, new S2C.BunkerImpact(point, mat.ordinal(), (float) speed));
+        StrikeClouds.send(level, point, reach, new S2C.BunkerImpact(point, mat.ordinal(), (float) speed));
         // Estimate: use equal TNT energy for the kinetic contact pulse; this is not a measured impact spectrum.
         // TM coupling is applied once to the full source energy, not again after subtracting its airborne share.
         quake(level, new S2C.Quake(point, hit, 0, mat.ordinal(), level.getGameTime()));
@@ -651,9 +652,10 @@ public final class Warheads {
                 onCraft = inPlots || !SubLevels.near(level, pos, 1).isEmpty();
                 // Struck material and whether slab over void: same breach that will remove slab (client target visual).
                 Optional<S2C.Blast.Support> support = onCraft || !(spec.charge() > 0) ? Optional.empty() : support(level, pos, spec.charge(), axis, direct);
-                PacketDistributor.sendToPlayersNear(level, null, pos.x, pos.y, pos.z, reach,
+                // the ground under the point before the crater: a late joiner's client builds the cloud over it, not over the crater
+                StrikeClouds.send(level, pos, reach,
                         new S2C.Blast(kind, pos, mat.ordinal(), (float) pos.y, seed, Optional.ofNullable(direct).map(Entity::getUUID), weapon.id(), axis,
-                                true, support));
+                                true, support), StrikeClouds.surface(level, pos));
                 // Warhead bursts at impact face: breaches slab over void (SlabBreach); craft
                 // hull is not world obstacle.
                 main = spec.charge() > 0 ? List.of(charge(level, area, pos, spec.charge(),
@@ -774,7 +776,7 @@ public final class Warheads {
 
                 // Visible to far_range, audible to air-escaped charge share's sound range (HearingModel).
                 double reach = Math.max(IncomingConfig.SERVER.farRange.get(), Math.min(IncomingConfig.FAR_RANGE_MAX, HearingModel.audibleRangeM(air)));
-                PacketDistributor.sendToPlayersNear(level, null, pos.x, pos.y, pos.z, reach,
+                StrikeClouds.send(level, pos, reach,
                         new S2C.Blast(S2C.Blast.BUNKER, pos, mat.ordinal(), cover, level.random.nextLong(), Optional.ofNullable(direct).map(Entity::getUUID),
                                 WeaponType.BUNKER.id()));
 
@@ -826,7 +828,7 @@ public final class Warheads {
                     unit(level, area, main, ImpactCost.Kind.DEBRIS, "Vent", l -> {
                         if (!happened()) return 0;
                         double air = law.airCharge(hole);
-                        PacketDistributor.sendToPlayersNear(l, null, entry.x, entry.y, entry.z,
+                        StrikeClouds.send(l, entry,
                                 Math.max(IncomingConfig.SERVER.farRange.get(), Math.min(IncomingConfig.FAR_RANGE_MAX, HearingModel.audibleRangeM(air))),
                                 new S2C.Vent(entry, ventMat.ordinal(), (float) air));
                         return 1;
@@ -1001,8 +1003,7 @@ public final class Warheads {
                 Vec3 sv = new Vec3(pos.x, cover, pos.z);
                 // Subsidence dust: fraction of ground lost into hole (cavity volume), raised by falling (like crater).
                 double cavity = 4.0 / 3 * Math.PI * Math.pow(rc, 3);
-                PacketDistributor.sendToPlayersNear(level, null, sv.x, sv.y, sv.z, IncomingConfig.SERVER.farRange.get(),
-                        new S2C.Collapse(sv, ventMat.ordinal(), (float) cavity));
+                StrikeClouds.send(level, sv, IncomingConfig.SERVER.farRange.get(), new S2C.Collapse(sv, ventMat.ordinal(), (float) cavity));
             }
             return n;
         }

@@ -59,6 +59,16 @@ paths:
   aim-down-sights. A camera beyond recorded chunks shows holes with caves, so film paths stay over recorded ground;
   players'-eyes film moves the viewer on Flashback's server (`tools/replayscan` `Film.spectate`), otherwise nearby sounds vanish.
 
+- Conventional strike state (`S2C.StrikeClouds`, server `strike/StrikeClouds`, client `client/far/ClientStrikeClouds`):
+  live cloud events (`Blast`, `BunkerImpact`, `Vent`, `Collapse`, `Intercept`) are one-shots, dropped in a seek, so
+  their clouds and the crater fires also come as one full-state list per player, sent on join and at most once a second
+  after new events: the snapshot's last packet is the whole state. The client applies it through `Replay.event` and
+  keeps the last list across the seek reset (`IncomingClient.rewound` → `ClientStrikeClouds.rewound`), so the order of
+  reset and seek-read list does not matter; it builds each listed cloud at the replay position's motion age, skips
+  those born later (they come live) and those seen live (keyed by the live packet). A strike in the last second before
+  the seek position is missing until the next recorded list. Each cloud and its packet are framed
+  (`StreamCodecs.framed`): the nested packets keep their trailing fields, an unknown kind is skipped.
+
 ## Server → client packet format
 - Flashback stores each mod packet as bytes and reads it across versions with the current codec. One frame is exactly
   one packet (`ReplayReader` splits recordings by action length; connections use Netty frames; a mod packet extends to

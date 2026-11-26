@@ -11,7 +11,7 @@ import ua.zentix.incoming.strike.ServerActions;
  * incompatible change, letting NeoForge report different mod versions instead of crashing.
  */
 public final class IncomingNetwork {
-    public static final String PROTOCOL = "66";
+    public static final String PROTOCOL = "67";
 
     private IncomingNetwork() {}
 
@@ -23,6 +23,7 @@ public final class IncomingNetwork {
         r.playToClient(S2C.Vent.TYPE, S2C.Vent.CODEC, (p, ctx) -> ClientHooks.get().vent(p));
         r.playToClient(S2C.Collapse.TYPE, S2C.Collapse.CODEC, (p, ctx) -> ClientHooks.get().collapse(p));
         r.playToClient(S2C.FuelFire.TYPE, S2C.FuelFire.CODEC, (p, ctx) -> ClientHooks.get().fuelFire(p));
+        r.playToClient(S2C.StrikeClouds.TYPE, S2C.StrikeClouds.CODEC, (p, ctx) -> ClientHooks.get().strikeClouds(p));
         r.playToClient(S2C.GridFailure.TYPE, S2C.GridFailure.CODEC, (p, ctx) -> ClientHooks.get().gridFailure(p));
         r.playToClient(S2C.GridDistrict.TYPE, S2C.GridDistrict.CODEC, (p, ctx) -> ClientHooks.get().gridDistrict(p));
         r.playToClient(S2C.Quake.TYPE, S2C.Quake.CODEC, (p, ctx) -> ClientHooks.get().quake(p));

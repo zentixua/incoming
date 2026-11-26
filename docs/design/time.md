@@ -123,8 +123,9 @@ burn shock kills in 25 s–10 min.
 5. **The longest conventional effects ignore the day.** A Shahed cloud stays up to an hour under a vanilla day (three
    in-game days), drifting 10–20 km downwind by its end; a trail is capped at a fixed 1200 s labelled "an in-game day";
    sleep leaves both.
-6. **Client-only state.** Conventional clouds and crater smoke are not shown to a late joiner and vanish on a replay
-   seek; hearing loss is cured by relogging (it is client state), while burns and sickness persist.
+6. **Client-only state.** Hearing loss is cured by relogging (it is client state), while burns and sickness persist.
+   Conventional clouds and crater smoke are recorded on the server (`strike/StrikeClouds`): a late joiner and a replay
+   seek see them at their age.
 7. **Wind transport on the detonation clock.** The black-rain band starts at a downwind point at `START_S` + distance /
    wind in detonation-clock seconds (`nuclear/model/BlackRainModel.java:40-49`), fallout arrives at distance / wind in
    clock hours (`FalloutModel`), while the haze plume that carries them grows on real ticks (`PallField.plume`). Under a
@@ -531,7 +532,7 @@ replays, dimensions). Most player-visible first; the "Fix" column names the §9 
 | 9 | Flashback export, pause, freeze | Heat shimmer runs on the wall clock (`client/fx/layer/HeatPass.java:644,733`) | 7 | creators |
 | 10 | A missile hit | The crater fuel fire burns 16 real minutes and stays loud ("burns forever") | the time principle keeps the law; whether `FuelFires`' 16 min is right is a separate law check | every game |
 | 11 | Sleep during a show | Fires, rain and fallout stay at the minute of the sleep while the sky jumped hours | 2 | common in single-player |
-| 12 | Late joiner after a conventional strike | Clouds and crater smoke are client-only and not sent | 10 | common on servers |
+| 12 | Late joiner after a conventional strike | The server keeps each strike's clouds and burning craters (`strike/StrikeClouds`) and sends them on join, dimension change and respawn; a Flashback seek rebuilds them at their motion age | 10 | common on servers |
 | 13 | Day-length mods that set `dayTime` themselves | Without detonations the server does not send its clock, so the client's hearing clock counts vanilla steps (`ClientClock.java:30`, `NuclearStrikes.java:355`) | 2 | depends on the mod |
 | 14 | Day 7 of a detonation | Fallout drops to zero in one step when the detonation is forgotten; unfinished crater progress is dropped | 8 | every long game |
 | 15 | `/tick freeze` | The world clock keeps counting real time on frozen ticks (`WorldClock.java:112-125`) | 2 (rule 9) | rare |

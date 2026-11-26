@@ -28,6 +28,7 @@ import ua.zentix.incoming.Incoming;
 import ua.zentix.incoming.IncomingConfig;
 import ua.zentix.incoming.client.aim.Designator;
 import ua.zentix.incoming.client.cam.ProjectileCamera;
+import ua.zentix.incoming.client.far.ClientStrikeClouds;
 import ua.zentix.incoming.client.far.FarRenderer;
 import ua.zentix.incoming.client.flight.FlightTracks;
 import ua.zentix.incoming.client.fx.BlastEffects;
@@ -300,6 +301,8 @@ public final class IncomingClient {
         Concussion.reset();
         Alerts.reset();
         ClientNuclear.rewound();
+        // conventional clouds and crater smoke at the new position's ages, from the last list read
+        ClientStrikeClouds.rewound();
     }
 
     /** Mouse wheel in binoculars selects a weapon instead of a hotbar slot. */
@@ -348,6 +351,7 @@ public final class IncomingClient {
         FarRenderer.reset();
         ua.zentix.incoming.client.fx.smoke.SmokeGrid.reset();
         ua.zentix.incoming.client.fx.FireSmoke.reset();
+        ClientStrikeClouds.reset();
         FxPool.INSTANCE.clear();
         FxLayer.reset();
         Fragments.reset();
@@ -392,20 +396,25 @@ public final class IncomingClient {
                 if (!live) return;
                 p.projectile().ifPresent(FlightTracks::impact);
                 if (ownBlasts()) BlastEffects.blast(p);
+                ClientStrikeClouds.live(p);
             });
         }
 
         @Override
         public void bunkerImpact(S2C.BunkerImpact p) {
             Replay.event("bunker", live -> {
-                if (live && ownBlasts()) BlastEffects.bunkerImpact(p);
+                if (!live) return;
+                if (ownBlasts()) BlastEffects.bunkerImpact(p);
+                ClientStrikeClouds.live(p);
             });
         }
 
         @Override
         public void vent(S2C.Vent p) {
             Replay.event("vent", live -> {
-                if (live && ownBlasts()) BlastEffects.vent(p);
+                if (!live) return;
+                if (ownBlasts()) BlastEffects.vent(p);
+                ClientStrikeClouds.live(p);
             });
         }
 
@@ -416,10 +425,21 @@ public final class IncomingClient {
             });
         }
 
+        /**
+         * Conventional strikes still in the air: a state, applied live or past, after a seek's reset (the replay marker
+         * runs the reset before it hands over the events read in the seek).
+         */
+        @Override
+        public void strikeClouds(S2C.StrikeClouds p) {
+            Replay.event("strike_clouds", live -> ClientStrikeClouds.sync(p));
+        }
+
         @Override
         public void collapse(S2C.Collapse p) {
             Replay.event("collapse", live -> {
-                if (live && ownBlasts()) BlastEffects.collapse(p);
+                if (!live) return;
+                if (ownBlasts()) BlastEffects.collapse(p);
+                ClientStrikeClouds.live(p);
             });
         }
 
@@ -600,6 +620,7 @@ public final class IncomingClient {
                 if (!live) return;
                 p.target().ifPresent(FlightTracks::impact);
                 BlastEffects.intercept(p);
+                ClientStrikeClouds.live(p);
             });
         }
 

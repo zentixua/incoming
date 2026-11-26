@@ -177,6 +177,13 @@ public final class ModAttachments {
             () -> AttachmentType.builder(ua.zentix.incoming.warhead.FuelFires::new)
                     .serialize(ua.zentix.incoming.warhead.FuelFires.CODEC, f -> !f.isEmpty()).build());
 
+    /**
+     * Conventional strike clouds still in the air ({@code strike/StrikeClouds}): resent to late joiners and replay seeks;
+     * not saved, a restart drops the clouds in the air.
+     */
+    public static final Supplier<AttachmentType<ua.zentix.incoming.strike.StrikeClouds>> STRIKE_CLOUDS = REGISTER.register("strike_clouds",
+            () -> AttachmentType.builder(ua.zentix.incoming.strike.StrikeClouds::new).build());
+
     /** World: nuclear queues — front, light, craters, chunks, fallout on mobs ({@link NuclearWorld}); not saved. */
     public static final Supplier<AttachmentType<NuclearWorld>> NUCLEAR_WORLD = REGISTER.register("nuclear_world",
             () -> AttachmentType.builder(NuclearWorld::new).build());
