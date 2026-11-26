@@ -108,6 +108,11 @@ public final class FireSmoke implements SmokeGrid.Source {
     double x, y, z, blocks, fire;
     final double start;
     double end = Double.NaN;
+    /**
+     * Grid seconds the jumps nobody saw added after {@link #start} ({@link #jump}): the smoke is that much older, the fire
+     * itself is not (it stays in place and burns on its own clock, the server's cells for crater fuel).
+     */
+    double jumped;
     /** World changed: source leaves the grid. */
     boolean gone;
     /**
@@ -242,7 +247,7 @@ public final class FireSmoke implements SmokeGrid.Source {
         }
         for (var it = POOLS.iterator(); it.hasNext(); ) {
             FireSmoke f = it.next();
-            double share = f.burning.applyAsDouble(now - f.start);
+            double share = f.burning.applyAsDouble(now - f.start - f.jumped);
             f.blocks = share;
             if (share <= 0 && now > f.start) {
                 f.end = now;
@@ -259,6 +264,15 @@ public final class FireSmoke implements SmokeGrid.Source {
             f.record(now, f.blocks, f.fire);
             f.air();
         }
+    }
+
+    /**
+     * A jump nobody in this dimension saw ({@code AirJump}, {@code by} real ticks): the grid clock has moved, so the smoke
+     * already emitted is that much older and far downwind; a source keeps burning where it was, its smoke drawn from it again
+     * as a whole plume of its present strength (the smoke it gave off meanwhile).
+     */
+    public static void jump(long by) {
+        for (FireSmoke f : POOLS) f.jumped += by / 20.0;
     }
 
     /**

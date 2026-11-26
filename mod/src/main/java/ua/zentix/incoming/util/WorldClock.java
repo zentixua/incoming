@@ -75,6 +75,8 @@ public final class WorldClock extends SavedData {
     /** Jumps of one dimension, world-clock ticks. */
     static final class Jumps {
         double counted, unseen, pending;
+        /** Game time at which {@link #counted} last rose (not saved): its players learn of it that tick ({@link #countedRose}). */
+        long roseAt = Long.MIN_VALUE;
     }
 
     /** While true for a dimension, its counted jumps wait (a blast front crossing it: flight and the wave are never jumped). */
@@ -114,6 +116,15 @@ public final class WorldClock extends SavedData {
     /** The world's rate k: world time per real time, at least 1 (vanilla 72; a stopped day keeps its last rate). */
     public static double pace(Level level) {
         return level.getServer() == null ? Steps.VANILLA_PACE : get(level.getServer()).steps.pace;
+    }
+
+    /**
+     * The jumps counted in {@code level}'s dimension rose this tick: its players are told at once, so the strikes' air they
+     * wake to is already as old as the night made it.
+     */
+    public static boolean countedRose(Level level) {
+        Jumps j = jumps(level);
+        return j != null && j.roseAt == level.getGameTime();
     }
 
     /** Jumps counted in {@code level}'s dimension so far (nobody there awake), ticks: they move its strikes. */
@@ -380,6 +391,7 @@ public final class WorldClock extends SavedData {
             if (j != null && j.pending > 0 && !hold.test(level)) {
                 j.counted += j.pending;
                 j.pending = 0;
+                j.roseAt = level.getGameTime();
             }
         }
     }

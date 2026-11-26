@@ -131,7 +131,9 @@ Ruins and everything in `nuclear/world/` are in `nuclear-world.md`.
   (`theBandHasNoCut`). Row channel a = parcels by travel (128 nodes, `SmokeParcels.drawn` both sides); fire light = row b ×
   the zone's fire share at the point (a third read broke the AMD budget). Terrain map: band to
   `MAP_DOWNWIND` fire radii; slot box: parcels within `NukePall.AIR_DEPTH` air depths of the eye. No time-of-day logic here. Pace game-tick timers to the clock on a fixed game-time grid (`BurnsEffect`: every
-  20th game tick, never on the timer's own remainder, which a correction keeps landing on); dust stays on real time; detonation lives on the client while pall remains visible. Field laws in Java and copied in `shaders/include/pall.glsl` (`PallGlslTest` reads
+  20th game tick, never on the timer's own remainder, which a correction keeps landing on); dust, spray, the base surge,
+  their drift and the ash and paper falling from them live on the motion age M (`PallField.motion`, set by
+  `ClientNuclear.Active.motionTicksAt`; the field's callers pass the shown real age, the field maps it); detonation lives on the client while pall remains visible. Field laws in Java and copied in `shaders/include/pall.glsl` (`PallGlslTest` reads
   shader functions and compares with Java; edit laws in both); fireball/fire lighting on pall (`pallBallShare`,
   `pallBurn`) copies `CloudPuffs.ball` and `burn`: change lighting there too.
   Dust and dust-wall head are one layer (`nuclear/model/DustModel`; laws: “Blast-lofted dust” survey, “cinema-level
@@ -473,6 +475,15 @@ Ruins and everything in `nuclear/world/` are in `nuclear-world.md`.
   reaching a player (`BodyClockGameTests.falloutHoldsThePlayersClock`), `FlashBurns`. Detonation ids are per
   dimension: a step in another dimension drops the cause (`CrossDimensionCauseTest`). The ear is the client's (`client-sound.md`), kept on the server across relogs
   (`radiation/Ears`, attachment `EAR`, opaque tag ≤ `C2S.Ear.EAR_BYTES`, `S2C.Ear` on login).
+- The air on M (rule 2): the dust wave (`DustSources` through `Active.airSeconds`), the pall's dust (`PallField.motion`),
+  the mushroom and its light on the dust (`MushroomField.shape`, `CloudPuffs.pallLightNow`), breach dust (`BlastDust`),
+  scorch smoke (`FlashAftermath`) and the detonation's retirement read `Active.airTicks`/`airSeconds`; the front, flash,
+  Wilson cloud, sounds and ruin events keep the shown real age (a counted jump waits for the front), fire reads S. A
+  counted jump is sent the tick it is counted (`WorldClock.countedRose`), and a joiner gets the clocks before the
+  detonations (`NuclearStrikes.sync`), so what a sleeper or joiner first sees is already the aged state; a jump nobody saw
+  needs no crossfade, and the dust pass restarts its history on the clock's jump. `ClientClock.set` reports a rise of the
+  counted jumps within one level (another level adopts the count; `unseen` never moves the air), and `fx/AirJump` moves
+  the conventional air by it (`client-smoke.md`).
 - `Detonation.dayTime` is unread, kept for the save/packet formats. Anchors per detonation (`NuclearEvents.Anchor`: the
   world clock at burst and show end, which date bodies' exposure, and the `StrikeClock` anchors) and the history are
   persisted; a save without them reads as a 20-minute show, no jumps.

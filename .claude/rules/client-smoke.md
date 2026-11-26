@@ -63,6 +63,15 @@ paths:
   (a crater changes the inner band). A model costs ~2.5–3 ms to build, live or resent, so resent builds share
   `BUILD_NANOS` (3 ms) a tick, nearest first, each waiting up to `CHUNK_WAIT` for the chunk under it.
 
+## Time
+- Every conventional cloud, ground dust, smoke source and trail ages on the motion age M (`docs/design/time.md` §8.3
+  rule 2): `BlastTime`, the grid clock (`SmokeGrid`) and trail births (`TrailPoints.age`) move by a jump nobody in the
+  dimension saw, once, when `ClientClock.set` reports it (`fx/AirJump`); nobody watched, so there is no crossfade. A
+  counted jump is at least an hour, past `CloudModel.LIFE_MAX` and every trail's life. What stays in place keeps its own
+  clock: a crater fuel source burns by its real age on the server's cells (`FireSmoke.jumped`), and its plume after the
+  jump is its present strength along its whole reach (the history interpolates across the jump), never a gap or an old
+  plume. Sources compare grid seconds only as differences; a new one must not hold a clock of its own that skips jumps.
+
 ## Look reference
 - Conventional strike (Artem, 25.10, real strike footage): flash → fireball → debris → a light, see-through dust haze
   over the site that settles soon; a smallish beige dust mushroom; tall black columns only later, from fires.

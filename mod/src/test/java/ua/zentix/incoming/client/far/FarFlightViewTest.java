@@ -274,6 +274,27 @@ class FarFlightViewTest {
         assertTrue(pts.getLast().tick <= 22);
     }
 
+    /**
+     * Rule 2: a trail is air; a night nobody saw (8 h, {@code AirJump}) makes every point that much older, so a Shahed's trail
+     * laid before it is gone after it, while a point laid after it lives its own life.
+     */
+    @Test
+    void aCountedNightAgesTrails() {
+        FlightTrack t = track(WeaponType.DRONE, 0, 40, tick -> tick <= 20 ? FlightPhase.BOOST : FlightPhase.CRUISE);
+        TrailPoints p = new TrailPoints();
+        FarFlightView.sample(new FarFlightView.Far(t, 1), 40, p);
+        p.expire(40);
+        assertFalse(p.isEmpty(), "the trail lives two seconds after it was laid");
+        long night = 8 * 3600 * 20;
+        p.age(night);
+        p.expire(40);
+        assertTrue(p.isEmpty(), "the trail outlived an 8-hour night");
+        Trail trail = far(WeaponType.DRONE).stage(FlightPhase.BOOST).trail();
+        p.add(0, 100, 0, 41, trail, 0, 1, TrailPoints.NONE, 0.01f, 1200, 0, 5, 0, 0, 0.01f, 3);
+        p.expire(42);
+        assertFalse(p.isEmpty(), "a point laid after the night");
+    }
+
     @Test
     void ribbonToneMatchesSmokeTextures() throws java.io.IOException {
         // volume billows lie on the tape: with the same average tone they are its irregularities, not dark beads

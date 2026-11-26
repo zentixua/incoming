@@ -266,6 +266,43 @@ public final class WorldClockGameTests {
         });
     }
 
+    /**
+     * Rule 2: the tick a night nobody watched is counted, its players get the count (not at the next second's packet), so the
+     * air of every strike they wake to is already as old as the night made it.
+     */
+    @GameTest(template = "range", timeoutTicks = 60, batch = "clock_air", skyAccess = true)
+    public static void aCountedNightReachesThePlayersAtOnce(GameTestHelper h) {
+        ServerLevel level = h.getLevel();
+        MinecraftServer server = level.getServer();
+        WorldClock clock = WorldClock.get(server);
+        Map<String, double[]> saved = jumps(server);
+        var watcher = FuelFireGameTests.Watcher.in(h, level, new Vec3(0, 100, 0), S2C.NukeClock.class);
+        double expected = saved.get(dim(level))[0] + NIGHT;
+        long[] jumpedAt = {Long.MIN_VALUE}, seenAt = {Long.MIN_VALUE};
+        StrikeGameTests.afterTest(h, () -> {
+            WorldClock.holdJumpsWhile(NuclearStrikes::frontCrossing);
+            restore(server, saved);
+        });
+        h.onEachTick(() -> {
+            if (jumpedAt[0] != Long.MIN_VALUE && seenAt[0] == Long.MIN_VALUE
+                    && watcher.got.stream().anyMatch(p -> p.clocks().counted() == expected)) seenAt[0] = level.getGameTime();
+            // away from the once-a-second packet (15 ticks later): only the jump itself can send one sooner
+            if (jumpedAt[0] == Long.MIN_VALUE && level.getGameTime() % 20 == 5) {
+                WorldClock.holdJumpsWhile(l -> false);
+                clock.recordAwakeForTest(server);
+                watcher.got.clear();
+                clock.jumpForTest(server, NIGHT);
+                h.assertTrue(WorldClock.countedRose(level), "the count did not rise this tick");
+                jumpedAt[0] = level.getGameTime();
+            }
+        });
+        h.succeedWhen(() -> {
+            h.assertTrue(seenAt[0] != Long.MIN_VALUE, "no clock packet with the counted night yet: " + watcher.got);
+            h.assertTrue(seenAt[0] - jumpedAt[0] <= 2, "the count reached the players " + (seenAt[0] - jumpedAt[0])
+                    + " ticks after the jump: with the once-a-second packet, not at once");
+        });
+    }
+
     /** The clocks and the jumps survive a restart; a world saved before them loads with none. */
     @GameTest(template = "range", timeoutTicks = 20, batch = "clock_save", skyAccess = true)
     public static void theClocksSurviveARestart(GameTestHelper h) {

@@ -164,7 +164,7 @@ final class BlastDust implements SmokeGrid.Source {
     public boolean emit(double seconds, SmokeGrid.Sink out) {
         if (gone) return false;
         Detonation d = a.d;
-        double t = a.ticks(0) + (seconds - SmokeGrid.seconds(0)) * 20;
+        double t = a.airTicks(0) + (seconds - SmokeGrid.seconds(0)) * 20;
         drawn = 0;
         tauMax = massDrawn = 0;
         streaks.removeIf(s -> {
@@ -214,7 +214,7 @@ final class BlastDust implements SmokeGrid.Source {
     public double puffGrowth(double seconds) {
         if (streaks.isEmpty()) return 2;
         Streak s = streaks.getLast();
-        double t = a.ticks(0) + (seconds - SmokeGrid.seconds(0)) * 20;
+        double t = a.airTicks(0) + (seconds - SmokeGrid.seconds(0)) * 20;
         parcel(s.gust, s.gust.arrival, t, parcel);
         return Math.max(1, (s.r0 + parcel[3]) / s.r0);
     }

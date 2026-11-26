@@ -14,6 +14,10 @@ import java.lang.ref.WeakReference;
  * (a frozen or paused level stops it; real time is game time), and leaves the counted jumps to the server. A time packet
  * that moves game time too (a new client world after a portal, lag correction beyond a second) is a resync, not elapsed
  * time. Without server values only differences mean anything (hearing recovery).
+ * <p>
+ * A rise of the counted jumps within one level is a jump nobody in this dimension saw ({@link #set} returns it): the air of
+ * every strike here ages by it (its motion age M, {@code util/StrikeClock}). A new level (another dimension, another world)
+ * adopts the server's count without a jump; the jumps someone was awake for ({@link #unseen}) never move the air.
  */
 public final class ClientClock {
     /** A game-time step further than this from one tick is a resync. */
@@ -23,6 +27,10 @@ public final class ClientClock {
     /** The dimension the server told the jump counters for ({@link #counted}, {@link #unseen} are per dimension). */
     private static Object dimension;
     private static WeakReference<ClientLevel> lastLevel = new WeakReference<>(null);
+    /** The level whose count {@link #counted} holds; null — none yet. */
+    private static WeakReference<Object> countedIn = new WeakReference<>(null);
+    /** Real ticks per world-clock tick of a jump: an hour of the day (1000 ticks) is 3600 real seconds of the air. */
+    public static final double AIR_TICKS_PER_CLOCK_TICK = WorldClock.SECONDS_PER_TICK * 20;
     private static final WorldClock.Steps STEPS = new WorldClock.Steps();
 
     private ClientClock() {}
@@ -52,12 +60,18 @@ public final class ClientClock {
         lastGame = game;
     }
 
-    /** The server's clocks now: the client continues from them (a lagging server pulls it back). */
-    static void set(S2C.NukeClock p) {
+    /**
+     * The server's clocks now, received in {@code level}: the client continues from them (a lagging server pulls it back).
+     * Returns the jump nobody in this dimension saw since the last packet in the same level, in real ticks of the air; 0 —
+     * none (no rise, another level, or a recording made before the counter).
+     */
+    static double set(S2C.NukeClock p, Object level) {
         ticks = p.clock();
         ClientLevel level = net.minecraft.client.Minecraft.getInstance().level;
         dimension = level == null ? null : level.dimension();
         S2C.NukeClock.Clocks c = p.clocks();
+        double was = counted;
+        boolean same = level != null && countedIn.get() == level;
         if (c.known()) {
             rate = c.rate();
             STEPS.pace(c.pace());
@@ -69,6 +83,8 @@ public final class ClientClock {
             counted = 0;
             unseen = 0;
         }
+        countedIn = new WeakReference<>(level);
+        return same && counted > was ? (counted - was) * AIR_TICKS_PER_CLOCK_TICK : 0;
     }
 
     /** Clock now with every jump, world-clock ticks (1000 an hour): what nobody sees change. */
