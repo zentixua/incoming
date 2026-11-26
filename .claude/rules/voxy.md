@@ -66,11 +66,19 @@ paths:
   the connection's network event loop, topped up each tick, the only rate ceiling (40 MiB/s of sections at 20 TPS);
   the event loop writes chunks while the window and Netty allow, at most `PUMP_BYTES` per task, marks a batch
   (`S2C.LodBatchFinished`) every 64 KiB, and the client acknowledges marks cumulatively (`C2S.LodBatchReceived`,
-  handled on the server's network thread, so a freed window sends at once, not on the next tick). The window must
-  cover the line's bandwidth-delay product without a standing queue, on every line: it follows LEDBAT (RFC 6817), mark-
-  to-ack time minus the lowest of the last one to two minutes against a 25 ms target, between `WINDOW_MIN` (128 KiB)
-  and `WINDOW_MAX` (1.5 MiB). Sizes count section bytes before the connection's compression, which shrinks ruin
-  chunks 5.7× (rig, 26.11.2026); `WINDOW_MAX` is ~280 KB on the wire, just over the 240 KB a 4.5 MB/s, 54 ms LTE link
+  handled on the server's network thread, so a freed window sends at once, not on the next tick). The window is the
+  line's bandwidth-delay product plus `TARGET_NANOS` (100 ms, LEDBAT's largest target) of own queue, estimated as BBR
+  does: the highest delivery rate of the last 1–2 minutes times the lowest mark-to-ack time of the last 9–10, a 1.25/0.75
+  probing round trip in eight, within one batch of what is in flight (RFC 6817 max_allowed_cwnd), between `WINDOW_MIN`
+  (128 KiB) and `WINDOW_MAX` (1.5 MiB). Never size it by mark-to-ack delay itself: on the same connection LSS's queue
+  and LTE jitter raise it, and a delay-based window gave ruins 6 % of the line beside a 100 ms foreign queue and 16 %
+  with the jitter alone (`VoxyLodsSharedLineTest`). Our own
+  queue and another sender's look the same from here: the target is how much of a foreign queue the window holds its
+  share against and how much own queue a slow line carries (88–222 ms from 4.5 to 0.6 MB/s on a default kernel,
+  `slowerLinesKeepTheLineFullWithAShortQueue`). With `tcp_notsent_lowat` on the socket (netcup's Crafty container) the
+  Netty gate keeps the window's bytes in the stock, out of game packets' way: game-packet wait p95 12 ms with LSS and a
+  strike's ruins on the LTE rig, 143 ms without. Sizes count section bytes before the connection's compression, which
+  shrinks ruin chunks 5.7× (rig, 26.11.2026); `WINDOW_MAX` is ~280 KB on the wire, just over the 240 KB a 4.5 MB/s, 54 ms LTE link
   holds in flight. One acknowledged batch per round trip, as vanilla's chunk sender does at its client-measured rate,
   is round-trip bound: on that link it carried 0.07 MB/s and the 48 MiB queue overflowed. The window bounds what can
   wait ahead of game packets anywhere between server and client, a buffering proxy included

@@ -80,18 +80,18 @@ public final class VoxyLods {
      * (4.5 MB/s, 54 ms round trip) holds in flight, so such a line stays full. One chunk larger than the window goes alone.
      */
     static final int WINDOW_MAX = 3 << 19;
-    /**
-     * The window never closes below this. Against a mod that fills the connection's queue for seconds (LSS filling its
-     * radius: round trips of 300 ms on that LTE link) it still carries about 10 chunks a second; 64 KiB left a 0.6 MB/s
-     * line 57 % used. On a line that slow with poorly compressible chunks (2.5×) the floor alone is 84 ms of line and,
-     * measured into the base delay, holds a 144 ms queue (simulation, `slowerLinesKeepTheLineFullWithAShortQueue`).
-     */
+    /** The window never closes below this: two batches, so acknowledgements keep coming on any line. */
     static final int WINDOW_MIN = 128 * 1024;
     /**
-     * Queueing delay the window aims at (LEDBAT TARGET, RFC 6817 allows up to 100 ms): half a server tick ahead of game
-     * packets, not visible as lag, enough to keep a line full between acknowledgements.
+     * Our own queue the window allows beyond the line's bandwidth-delay product ({@link LodBatchFlow}): LEDBAT's largest
+     * TARGET (RFC 6817). It is also how much of another sender's queue (LSS on the same connection) the window holds its
+     * share against: after a strike with LSS re-sending columns, mark-to-ack times on the LTE rig were 65 ms above base
+     * at p90 (26.11.2026). A 25 ms target there gave ruins 6 % of the line beside a 100 ms foreign queue (simulation,
+     * `VoxyLodsSharedLineTest`), this one 38 %. On slow lines it is the queue game packets wait behind while a backlog
+     * streams, 88–222 ms from 4.5 down to 0.6 MB/s (`slowerLinesKeepTheLineFullWithAShortQueue`), unless the socket caps
+     * unsent data (`tcp_notsent_lowat`), when the Netty gate keeps the window's bytes in the stock instead.
      */
-    static final long TARGET_NANOS = 25_000_000;
+    static final long TARGET_NANOS = 100_000_000;
     /** A batch mark, so an acknowledgement, at least every this many section bytes: the window refills as chunks land. */
     static final int BATCH_BYTES = 64 * 1024;
     /**

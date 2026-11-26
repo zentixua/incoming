@@ -45,37 +45,55 @@ class LodBatchFlowTest {
         assertTrue(flow.hasRoom());
     }
 
-    /** One window per round trip, acknowledged after {@code delay}: the window after {@code rounds} of them. */
-    private static long rounds(LodBatchFlow flow, int rounds, long[] clock, long delay) {
-        for (int r = 0; r < rounds; r++) {
-            while (flow.hasRoom()) flow.chunkSent(10);
-            int id = flow.mark(clock[0]);
-            clock[0] += delay;
-            assertTrue(flow.acknowledge(id, clock[0]));
+    /**
+     * Pipelined delivery for {@code seconds}: the window is kept full of one-batch chunks, each acknowledged
+     * {@code delay} after its mark. The window at the end.
+     */
+    private static long run(LodBatchFlow flow, long[] clock, long delay, double seconds) {
+        java.util.ArrayDeque<long[]> pending = new java.util.ArrayDeque<>();
+        long end = clock[0] + (long) (seconds * 1e9);
+        while (clock[0] < end) {
+            while (flow.hasRoom()) {
+                flow.chunkSent(10);
+                pending.add(new long[]{flow.mark(clock[0]), clock[0] + delay});
+            }
+            long[] next = pending.poll();
+            clock[0] = Math.max(clock[0], next[1]);
+            assertTrue(flow.acknowledge((int) next[0], clock[0]));
         }
         return flow.window();
     }
 
     @Test
-    void windowGrowsWithoutQueueingAndShrinksToTheFloorAboveTheTarget() {
+    void windowOpensToTheCeilingAndDoesNotYieldToJitterOrAForeignQueue() {
         LodBatchFlow flow = new LodBatchFlow(100, 1000, 10, 25 * MS);
         long[] clock = {0};
         assertEquals(100, flow.window(), "starts at the floor");
-        assertEquals(1000, rounds(flow, 40, clock, 54 * MS), "no queueing delay: up to the ceiling");
-        long held = rounds(flow, 5, clock, 54 * MS + 20 * MS);
-        assertTrue(held > 900, "queue under the target keeps growing slowly or holds: " + held);
-        assertEquals(100, rounds(flow, 30, clock, 54 * MS + 80 * MS), "a queue three times the target closes it to the floor");
-        assertEquals(1000, rounds(flow, 40, clock, 54 * MS), "the queue drained: open again");
+        assertEquals(1000, run(flow, clock, 54 * MS, 5), "a line wider than the ceiling: open to it");
+        assertEquals(1000, run(flow, clock, 54 * MS + 150 * MS, 30), "another sender's queue or the line's jitter: the rate maximum holds");
     }
 
     @Test
-    void baseDelayForgetsAMinuteOldLowRoundTrip() {
+    void aTrickleKeepsTheWindowNearWhatIsInFlight() {
         LodBatchFlow flow = new LodBatchFlow(100, 1000, 10, 25 * MS);
         long[] clock = {0};
-        rounds(flow, 40, clock, 10 * MS);
-        clock[0] += 2 * LodBatchFlow.BASE_BUCKET_NANOS;
-        rounds(flow, 3, clock, 80 * MS); // a longer route from now on: one bucket roll measures it as queue
-        clock[0] += LodBatchFlow.BASE_BUCKET_NANOS;
-        assertEquals(1000, rounds(flow, 40, clock, 80 * MS), "the new route's delay became the base");
+        run(flow, clock, 54 * MS, 5);
+        for (int i = 0; i < 100; i++) { // one chunk at a time, at base delay
+            flow.chunkSent(10);
+            int id = flow.mark(clock[0]);
+            clock[0] += 54 * MS;
+            assertTrue(flow.acknowledge(id, clock[0]));
+        }
+        assertEquals(100, flow.window(), "RFC 6817 max_allowed_cwnd: a window nobody fills closes to the floor");
+    }
+
+    @Test
+    void aLongerRouteBecomesTheBaseAfterTheBaseHistory() {
+        LodBatchFlow flow = new LodBatchFlow(100, 1000, 10, 25 * MS);
+        long[] clock = {0};
+        run(flow, clock, 10 * MS, 5);
+        long shrunk = run(flow, clock, 80 * MS, 5 * 60); // the old rate expired, the old base not yet: too small a window
+        assertTrue(shrunk < 1000, "window " + shrunk);
+        assertEquals(1000, run(flow, clock, 80 * MS, 6 * 60), "the new route's delay became the base");
     }
 }

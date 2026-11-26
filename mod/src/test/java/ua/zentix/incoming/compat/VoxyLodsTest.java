@@ -112,7 +112,9 @@ class VoxyLodsTest {
             channel.runPendingTasks();
             assertTrue(proxy.chunks.size() > sent, "an acknowledgement sends at once, without a server tick");
             assertEquals(proxy.chunks.size(), viewer.sent.get());
+            int more = 200;
             for (int round = 0; round < 50; round++) {
+                while (viewer.bytes < 4L << 20) viewer.offer(more, packet(more++, data)); // a backlog that keeps the window full
                 proxy.ackAll(viewer); // instant acknowledgements: no queueing delay, the window opens fully
                 tick(viewer, channel);
             }
@@ -180,8 +182,9 @@ class VoxyLodsTest {
 
     /**
      * Review probe of PR #774: a window fixed for the LTE link queued 184–983 ms ahead of game packets on slower lines
-     * and less compressible chunks (2.5×, est., detailed city chunks with global palettes). Below 100 ms, except where the
-     * window floor alone outlasts the line (0.6 MB/s at 2.5×: 84 ms of floor, 144 ms of queue).
+     * and less compressible chunks (2.5×, est., detailed city chunks with global palettes). The adaptive window keeps
+     * them full with 88–222 ms, its target of 100 ms plus probing; a socket with tcp_notsent_lowat keeps even that out
+     * of the game packets' way.
      */
     @Test
     void slowerLinesKeepTheLineFullWithAShortQueue() {
@@ -192,9 +195,8 @@ class VoxyLodsTest {
             String row = String.format(Locale.ROOT, "%.2f MB/s, RTT %.0f ms, %.1fx: standing queue %.0f ms, line share %.2f",
                     l[0] / 1000, 2 * l[1], l[2], r[0], r[1]);
             report.append("\n  ").append(row);
-            // A line too slow for the window floor queues the floor's own bytes and measures them into the base delay.
-            double floorMs = VoxyLods.WINDOW_MIN / l[2] / l[0];
-            ok &= r[0] < Math.max(100, 2 * floorMs) && r[1] > 0.9;
+            // Own queue: about the target plus one probing round trip (1.25×), never what a fixed window would hold.
+            ok &= r[0] < 250 && r[1] > 0.9;
         }
         System.out.println("slower lines:" + report);
         assertTrue(ok, "slower lines:" + report);
@@ -359,5 +361,67 @@ class VoxyLodsTest {
         } finally {
             channel.finishAndReleaseAll();
         }
+    }
+
+    /** @return {window KiB at burst start, max queue ms in the burst's first 10 s, ms of those 10 s with queue > 100 ms} */
+    private static double[] burstAfterTrickle(double rate, double oneWay, double compression) {
+        EmbeddedChannel channel = new EmbeddedChannel();
+        try {
+            record Event(double at, int ack) {}
+            PriorityQueue<Event> events = new PriorityQueue<>((a, b) -> Double.compare(a.at, b.at));
+            double[] now = {0}, lineFree = {0};
+            BiConsumer<CustomPacketPayload, PacketSendListener> link = (p, done) -> {
+                double wire = p instanceof S2C.VoxyChunk c ? c.sections().length / compression : 8;
+                lineFree[0] = Math.max(lineFree[0], now[0]) + wire / rate;
+                if (p instanceof S2C.LodBatchFinished mark) events.add(new Event(lineFree[0] + 2 * oneWay, mark.id()));
+                if (done != null) done.onSuccess();
+            };
+            VoxyLods.Viewer viewer = new VoxyLods.Viewer(channel, link, () -> (long) (now[0] * 1e6));
+            byte[] data = new byte[40 * 1024];
+            int next = 0;
+            double burst = 30000, end = burst + 10000, windowAtBurst = -1, maxQueue = 0, over = 0;
+            for (double t = 0; t < end; t += 50) events.add(new Event(t, -1));
+            for (double t = burst; t < end; t += 1) events.add(new Event(t, -2));
+            while (!events.isEmpty()) {
+                Event e = events.poll();
+                now[0] = e.at;
+                if (e.ack == -2) {
+                    double q = Math.max(0, lineFree[0] - now[0]);
+                    maxQueue = Math.max(maxQueue, q);
+                    if (q > 100) over++;
+                } else if (e.ack == -1) {
+                    if (now[0] < burst) {
+                        if (((long) now[0]) % 1000 == 0) viewer.offer(next, packet(next++, data)); // trickle: one chunk a second
+                    } else {
+                        if (windowAtBurst < 0) windowAtBurst = viewer.flow.window() / 1024.0;
+                        while (viewer.bytes < 8L << 20) viewer.offer(next, packet(next++, data)); // a strike's ruins
+                    }
+                    viewer.stockUp();
+                    viewer.pump();
+                    channel.runPendingTasks();
+                } else {
+                    viewer.acknowledged(e.ack);
+                    channel.runPendingTasks();
+                }
+            }
+            return new double[]{windowAtBurst, maxQueue, over};
+        } finally {
+            channel.finishAndReleaseAll();
+        }
+    }
+
+    /** Review probe (PR #774, round 2): a trickle between strikes must not open the window for the next burst. */
+    @Test
+    void aTrickleDoesNotOpenTheWindowForTheNextBurst() {
+        StringBuilder report = new StringBuilder();
+        boolean ok = true;
+        for (double[] l : new double[][]{{4500, 27, 5.7}, {1250, 20, 5.7}, {1250, 20, 2.5}, {625, 20, 5.7}, {625, 20, 2.5}}) {
+            double[] r = burstAfterTrickle(l[0], l[1], l[2]);
+            report.append(String.format(Locale.ROOT, "%n  %.2f MB/s, RTT %.0f ms, %.1fx: window at burst %4.0f KiB, max queue %4.0f ms, %4.0f ms of the first 10 s above 100 ms",
+                    l[0] / 1000, 2 * l[1], l[2], r[0], r[1], r[2]));
+            ok &= r[1] < 200;
+        }
+        System.out.println("burst after trickle:" + report);
+        assertTrue(ok, "burst after trickle:" + report);
     }
 }
