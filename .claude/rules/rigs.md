@@ -65,3 +65,10 @@ paths:
   out per take. LOD Server Support serves a single-player world only with `--prop lss.test.integratedServer=true`;
   `/publish` opens a LAN socket on every interface, and `rig/LoopbackGuard` stops the server (the client then sits in the
   menu while the recorder runs: a take wrapper must stop on a guard line or a silent log).
+- A player's slow line without sudo: one user and network namespace (`unshare -U -n --map-user=$(id -u)
+  --map-group=$(id -g) --keep-caps`, inside a `laptop_job.sh` unit) holds the `rigLaunch` server and client; there
+  `tc` shapes loopback (a `prio` qdisc, a `u32 match ip sport <server port>` filter to a `netem delay rate` band for
+  server→client, delay only for the rest) and `sysctl` sets per-namespace `tcp_congestion_control` and
+  `tcp_notsent_lowat`. Sample the server socket with `ss -tin` (`bytes_acked`, `notsent`, `rtt`). netem's delay is
+  constant: real mobile jitter is absent, model it in a simulation. The rig runs the tree's `build/classes`: never
+  compile in that tree while it runs (a queued GPU job starts later on whatever is compiled then).

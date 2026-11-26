@@ -152,6 +152,11 @@ go in run files and the PR, not in chat. New knowledge (a gauge trap, a new prob
 into that area's `.claude/rules` or this skill by PR in the same thread; status and numbers go into the report.
 
 ## Gauges that lie
+- Lag a bulk sender adds to game packets on one connection is the socket's unsent bytes at line rate plus `rtt` minus
+  the base round trip, never `rtt` or `notsent` alone: with `tcp_notsent_lowat` the same queue leaves `notsent` (0 KB)
+  and appears in `rtt` (300 ms+ on an LTE rig while LSS streamed). Compare runs only with the other senders' wire rate
+  beside it: LSS's traffic in the same phase differed 3× between runs. Mod payload sizes are not wire bytes: Voxy
+  chunk sections compress 5.7× on the connection.
 - JFR names the client's render thread `main` (its OS name, in `/proc` schedstat and `top`, is `Render thread`);
   filtering JFR samples by `Render thread` finds none. Render-thread stall stacks carry Mojang's line numbers: map them
   with `javap -l -c` on the runtime class (work.md), never on the decompiled sources.
