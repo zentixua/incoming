@@ -279,6 +279,16 @@ times and the pall's budget are not frame costs: frame cost belongs to the GPU a
   (`-Dincoming.pall.adaptive=true`): pinned, a 1 Mt passage at 3 km held the pall at 30–59 ms a frame, a cost the game
   steps down from within a second. While a detonation is live the scenario logs `SCENARIO nuke-layer` every half second
   (layer GPU by pass, smoke fill, near dust); the `far` line exists only once distant blasts do.
+- A single-player frame-time run puts the integrated server on the client's CPU. At the Silo city spot (1 Mt at 3 km,
+  front −1..+1 s) the single-player JVM keeps 13.2 cores busy with 8.6–9.2 more queued (C2 4.7–5.3 cores, three
+  quarters of its compiles there recompiles), against 5.3–9.8 busy and 0.4–2.3 queued for the same client on a dedicated
+  server; the worst second has 8–12 frames there and 33–46 on the server. Capping the compiler threads
+  (`-XX:CICompilerCount=4`) only hands those cores to chunk meshing (12 frames). The player's server case: `commands` with
+  `--prop incoming.server=host:port` and no `--world` joins that server (its resource pack accepted, as a player who
+  answered yes); `maxyield:` and `wave:` are then the server's own config, `spark …` profiles the server and `sparkc …`
+  the client. A tunnel to netcup over the tailnet carries 2.2 MB/s, over its public address 12–16 MB/s (the players'
+  route): through the slow one the wave's whole-chunk deliveries take 12 s, through the public one 5–6 s, as in single
+  player.
 - `pall-front`: night post-front pall, camera 400 m from surface 15 kt, 120 m above ground (like host replay frame),
   frames relative to camera-front arrival. `INCOMING_EXPORT=2560x1440`: game frame larger than window, like Flashback
   video export; window reports output size (`Window.framebufferWidth/Height` fields via reflection; Flashback mixes

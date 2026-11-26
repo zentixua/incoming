@@ -169,6 +169,8 @@ public final class ClientScenario {
     /** The client has a detailed city for measuring fire ({@code incoming.scenario.city}), null - no. */
     @org.jetbrains.annotations.Nullable
     private final FireCity city = FireCity.of(System.getProperty("incoming.scenario.city"));
+    /** {@code incoming.server}: join this dedicated server (host:port) instead of opening a world; null in a world. */
+    private static final String SERVER = System.getProperty("incoming.server");
 
     public ClientScenario(IEventBus modBus) {
         String scenario = System.getProperty("incoming.scenario");
@@ -291,6 +293,18 @@ public final class ClientScenario {
         if (started || !(e.getScreen() instanceof TitleScreen)) return;
         started = true;
         Minecraft mc = Minecraft.getInstance();
+        // a dedicated server instead of a world (incoming.server=host:port, the commands scenario): the player's
+        //  multiplayer case, with the server's own JVM elsewhere; the commands go to it as chat commands of an operator
+        if (SERVER != null) {
+            Incoming.LOG.info("SCENARIO connect {}", SERVER);
+            var data = new net.minecraft.client.multiplayer.ServerData("incoming-scenario", SERVER,
+                    net.minecraft.client.multiplayer.ServerData.Type.OTHER);
+            // the server's recommended resource pack is taken, as a player who answered yes once (no prompt to click)
+            data.setResourcePackStatus(net.minecraft.client.multiplayer.ServerData.ServerPackStatus.ENABLED);
+            net.minecraft.client.gui.screens.ConnectScreen.startConnecting(e.getScreen(), mc,
+                    net.minecraft.client.multiplayer.resolver.ServerAddress.parseString(SERVER), data, false, null);
+            return;
+        }
         // player's world copy (tools/prod_client.py --world): open it instead of creating a scenario world
         String world = System.getProperty("incoming.world");
         if (world != null) {
@@ -3628,9 +3642,17 @@ public final class ClientScenario {
                     pickEpicentre();
                     cmd(String.format(java.util.Locale.ROOT, "tp @s %d 200 %d", fsX, fsZ));
                 });
-                case MAX_YIELD -> at(step.tick(), () -> ua.zentix.incoming.IncomingConfig.SERVER.nukeMaxYield.set(Integer.parseInt(step.arg())));
+                // on a dedicated server these are its own config (incoming-server.toml there): this client cannot set them
+                case MAX_YIELD -> at(step.tick(), () -> {
+                    if (SERVER != null) Incoming.LOG.info("SCENARIO maxyield:{} is the server's config on {}", step.arg(), SERVER);
+                    else ua.zentix.incoming.IncomingConfig.SERVER.nukeMaxYield.set(Integer.parseInt(step.arg()));
+                });
                 case SITE -> at(step.tick(), () -> pickSite(step.arg()));
                 case WAVE -> at(step.tick(), () -> {
+                    if (SERVER != null) {
+                        Incoming.LOG.info("SCENARIO wave:{} is the server's config on {}", step.arg(), SERVER);
+                        return;
+                    }
                     ua.zentix.incoming.IncomingConfig.SERVER.scalePreset.set(ua.zentix.incoming.IncomingConfig.ScalePreset.CUSTOM);
                     ua.zentix.incoming.IncomingConfig.SERVER.nukeWaveSpeed.set(Double.parseDouble(step.arg()));
                 });
