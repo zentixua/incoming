@@ -117,6 +117,9 @@ public final class DustGround {
             if (!keep || Math.abs(di) > 16 || Math.abs(dj) > 16) {
                 next = 0;
                 swept = false;
+                // the old place's held edge would come back past the new drawn chunks once the new sweep wraps (a 22.5 m pop
+                // 640 m out after a 1 km jump, review step 8 round 2: DustGroundJumpHeldProbeTest)
+                Arrays.fill(held, Float.NaN);
             }
             dirty = true;
             return true;

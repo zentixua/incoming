@@ -1074,7 +1074,7 @@ vec3 dwTexturedLight(vec3 q, vec3 rd) {
     // sweeping over the face as the ball cools; tools/uw_probe/onetap_flip.py)
     float wb = 1.0;
     if (oneTap) {
-        float ball = dot(dwBallLight(q), vec3(1.0)), sun = dot(DwSunLight, vec3(1.0));
+        float ball = dot(dwBallLight(q), vec3(1.0)), sun = dot(DwSunLight, vec3(1.0)) * smoothstep(-0.05, 0.05, DwSunDir.y);
         wb = smoothstep(0.4, 0.6, ball / max(ball + sun, 1e-6));
     }
     float tapb = !oneTap || wb > 0.0 ? dwShadow(q, lb) : 0.0;
