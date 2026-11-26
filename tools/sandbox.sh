@@ -32,6 +32,8 @@
 #                                          The nuke near the camera: shot wall 'nuke 15 near' --cam '60 15 0 5' --at -0.5,0.1,1 —
 #                                          houses from the debris scene; time starts when the front reaches them (client-scenario.md)
 #   tools/sandbox.sh restart [start options] stop and start again (after a change that hot swap cannot apply)
+#   tools/sandbox.sh check                 start check (CI): the vanilla client on a CPU display in this shell, its world
+#                                          and one frame, then stop; code 1 with the log tail and crash report if it does not start
 #   tools/sandbox.sh jbr                   install JetBrains Runtime (shared by all trees, mod/run/jbr in the main tree):
 #                                          hot swap then accepts new fields, methods and lambdas; start selects it automatically
 #   tools/sandbox.sh stop | status          done with visuals: stop, then tools/gpu_lease.sh release
@@ -58,7 +60,11 @@ export JAVA_HOME="${JAVA_HOME:-$HOME/.var/app/org.prismlauncher.PrismLauncher/da
 # instance (not the command-line path: with MC_DIR pointing to the instance, sandbox mod paths contain it and would stop the sandbox itself)
 source "$(dirname "$0")/gpu_lease.sh"
 export INCOMING_GPU_OWNER="${INCOMING_GPU_OWNER:-$(lease_owner "$ROOT")}"
-running() { [ -n "$(systemctl --user list-units "$UNIT-*" --state=active --no-legend --plain)" ]; }
+# the sandbox's client is alive: its laptop job's unit, or (check) the display wrapper this shell started
+running() {
+  if [ -n "${CHECK_PID:-}" ]; then kill -0 "$CHECK_PID" 2>/dev/null
+  else [ -n "$(systemctl --user list-units "$UNIT-*" --state=active --no-legend --plain)" ]; fi
+}
 
 # Activity of the sandbox's job: every command (fx, swap) touches fx/active, also every 10 s while one runs; seconds
 # since the last one (or since the world became ready), nothing while the client is not ready yet
@@ -210,8 +216,52 @@ OPT
   grep -q '^renderClouds:' "$1" || echo 'renderClouds:"true"' >> "$1"
 }
 
+# Status files of a new client: ready, stopped, last command and renderer belong to the previous one
+fresh_fx() {
+  mkdir -p "$RUN/logs" "$FX"
+  rm -f "$FX/ready" "$FX/stopped" "$FX/active"
+  # renderer of this client for `shot` (a CPU take records sound separately); a vanilla client writes its own at launch
+  rm -f "$FX/renderer"
+}
+
+# The client's run directory and launch script (build/rig/sandbox.sh: Gradle builds, then exits) for window size $1;
+# $2 non-empty: Sodium and Iris without a shader pack. Code 1: build failed, 2: mods of the mode missing
+prepare() {
+  local size=$1 sodium=$2 pack
+  cat > "$RUN/alsoft.conf" <<CONF
+[general]
+drivers = wave
+frequency = 48000
+channels = stereo
+sample-type = int16
+[wave]
+file = $RUN/audio.wav
+CONF
+  client_options "$RUN/options.txt"
+  mkdir -p "$RUN/config"
+  if [ -n "$sodium" ]; then
+    # Sodium's renderer with Iris loaded and no shader pack (the vanilla picture through Sodium)
+    printf 'enableShaders=false\ndisableUpdateMessage=true\n' > "$RUN/config/iris.properties"
+  elif [ -n "${INCOMING_SHADERS:-}" ]; then
+    local MC; MC="$(python3 "$ROOT/tools/paths.py" MC)"
+    pack="$(sed -n 's/^shaderPack=//p' "$MC/config/iris.properties" 2>/dev/null)"
+    # Without the shader pack the sandbox would silently run without it: frames "under Iris" would lack the pack
+    [ -n "$pack" ] && [ -e "$MC/shaderpacks/$pack" ] \
+      || { echo "shaders: no instance shader pack ($MC: iris.properties \"$pack\") — tools/paths.py or MC_DIR" >&2; return 2; }
+    mkdir -p "$RUN/shaderpacks"
+    rm -rf "${RUN:?}/shaderpacks/$pack"
+    cp -r "$MC/shaderpacks/$pack" "$RUN/shaderpacks/"
+    printf 'enableShaders=true\nshaderPack=%s\ndisableUpdateMessage=true\n' "$pack" > "$RUN/config/iris.properties"
+  fi
+  (cd "$ROOT/mod" && INCOMING_SANDBOX=1 INCOMING_SCENARIO=sandbox INCOMING_SIZE=$size ./gradlew rigLaunch -PrigRun=runClientScenario \
+      -PrigOut=sandbox -q --console=plain) || return 1
+  # Gradle copies mods from the instance mods directory by patterns (build.gradle), silently skipping missing ones:
+  # without this check, `shaders` would capture without Iris, `dh` without Distant Horizons
+  mods_check "$RUN/mods" || return 2
+}
+
 start() {
-  local size=1280x720 opts=() pack wait= fresh= gpu= sodium=
+  local size=1280x720 opts=() wait= fresh= gpu= sodium=
   while [ $# -gt 0 ]; do
     case "$1" in
       --wait) wait=--wait ;;
@@ -262,41 +312,9 @@ start() {
     echo "vanilla: a shared GPU slot if one is free, else the CPU (llvmpipe); frames only, not frame costs"
   fi
   local t0; t0=$(date +%s.%N)
-  mkdir -p "$RUN/logs" "$FX"
-  rm -f "$FX/ready" "$FX/stopped" "$FX/active"
-  # renderer of this client for `shot` (a CPU take records sound separately); a vanilla client writes its own at launch
-  rm -f "$FX/renderer"
+  fresh_fx
   [ -n "${INCOMING_SANDBOX_VANILLA:-}" ] || echo gpu > "$FX/renderer"
-  cat > "$RUN/alsoft.conf" <<CONF
-[general]
-drivers = wave
-frequency = 48000
-channels = stereo
-sample-type = int16
-[wave]
-file = $RUN/audio.wav
-CONF
-  client_options "$RUN/options.txt"
-  mkdir -p "$RUN/config"
-  if [ -n "$sodium" ]; then
-    # Sodium's renderer with Iris loaded and no shader pack (the vanilla picture through Sodium)
-    printf 'enableShaders=false\ndisableUpdateMessage=true\n' > "$RUN/config/iris.properties"
-  elif [ -n "${INCOMING_SHADERS:-}" ]; then
-    local MC; MC="$(python3 "$ROOT/tools/paths.py" MC)"
-    pack="$(sed -n 's/^shaderPack=//p' "$MC/config/iris.properties" 2>/dev/null)"
-    # Without the shader pack the sandbox would silently run without it: frames "under Iris" would lack the pack
-    [ -n "$pack" ] && [ -e "$MC/shaderpacks/$pack" ] \
-      || { echo "shaders: no instance shader pack ($MC: iris.properties \"$pack\") — tools/paths.py or MC_DIR" >&2; exit 2; }
-    mkdir -p "$RUN/shaderpacks"
-    rm -rf "${RUN:?}/shaderpacks/$pack"
-    cp -r "$MC/shaderpacks/$pack" "$RUN/shaderpacks/"
-    printf 'enableShaders=true\nshaderPack=%s\ndisableUpdateMessage=true\n' "$pack" > "$RUN/config/iris.properties"
-  fi
-  (cd "$ROOT/mod" && INCOMING_SANDBOX=1 INCOMING_SCENARIO=sandbox INCOMING_SIZE=$size ./gradlew rigLaunch -PrigRun=runClientScenario \
-      -PrigOut=sandbox -q --console=plain) || exit 1
-  # Gradle copies mods from the instance mods directory by patterns (build.gradle), silently skipping missing ones:
-  # without this check, `shaders` would capture without Iris, `dh` without Distant Horizons
-  mods_check "$RUN/mods" || exit 2
+  prepare "$size" "$sodium" || exit $?
   local build; build=$(since "$t0")
   local w=${size%x*} h=${size#*x}
   local jobmode=--light; [ -n "${INCOMING_SANDBOX_VANILLA:-}" ] && jobmode=--soft
@@ -479,6 +497,51 @@ shot() {
   echo "from command to last frame and audio: $(since "$t0") s"
 }
 
+# Start check (CI "Песочница"; cloud or netcup without laptop jobs; on the laptop inside `tools/laptop_job.sh --soft`):
+# the client `start` runs in vanilla mode, prepared the same way, here on a CPU display (soft_gl.sh: nested KWin or
+# xvfb-run), until its world is ready and a `blast drone` frame is on disk; then stopped. A client that cannot start
+# (a crash at launch, a screen before the world) fails it with the log tail and the crash report.
+# INCOMING_SANDBOX_CHECK_LIMIT: seconds for the client to reach its world (default 900: a cold llvmpipe compiles shaders)
+check() {
+  local limit=${INCOMING_SANDBOX_CHECK_LIMIT:-900} t0 waited=0 png
+  unset INCOMING_SHADERS INCOMING_DH
+  export INCOMING_SANDBOX_VANILLA=1 INCOMING_CPU_ONLY=1
+  soft_gl_env
+  t0=$(date +%s.%N)
+  fresh_fx
+  rm -rf "${FX:?}/out/check" "$RUN"/crash-reports
+  prepare 1280x720 "" || return 1
+  echo "check: build $(since "$t0") s"
+  INCOMING_RENDERER_FILE="$FX/renderer" vanilla_display "sandbox-check-$TREE_ID" 1280 720 "bash $ROOT/mod/build/rig/sandbox.sh" \
+    > "$RUN/logs/client.out" 2>&1 &
+  CHECK_PID=$!
+  trap check_stop EXIT
+  until [ -f "$FX/ready" ]; do
+    if ! running || [ $waited -ge "$limit" ]; then
+      { running && echo "sandbox check: no world within $limit s" || echo "sandbox check: the client exited before its world"
+        grep 'SANDBOX screen' "$RUN/logs/latest.log" 2>/dev/null | tail -n 1
+        tail -n 30 "$RUN/logs/latest.log" "$RUN/logs/client.out"
+        for f in "$RUN"/crash-reports/*; do [ -f "$f" ] && head -n 40 "$f"; done; } >&2
+      return 1
+    fi
+    sleep 1; waited=$((waited + 1))
+  done
+  echo "check: client ready in $(cat "$FX/ready") s (JVM → world); $(grep -m1 '^renderer:' "$RUN/logs/client.out")"
+  ( shot check 'blast drone' --at 1 --wav 0 --no-swap ) || { echo "sandbox check: no frame" >&2; tail -n 30 "$RUN/logs/latest.log" >&2; return 1; }
+  png=$(compgen -G "$FX/out/check/*.png" | head -n 1)
+  [ -n "$png" ] && [ -s "$png" ] || { echo "sandbox check: frame file missing in $FX/out/check" >&2; return 1; }
+  echo "sandbox check: started and took a frame ($png), $(since "$t0") s"
+}
+
+# end of check: the client JVM first (its JFR dump), then its display
+check_stop() {
+  [ -n "${CHECK_PID:-}" ] || return 0
+  stop_jvms $(jvms_under "$CHECK_PID")
+  kill -TERM "$CHECK_PID" 2>/dev/null
+  wait "$CHECK_PID" 2>/dev/null
+  CHECK_PID=
+}
+
 # source tools/sandbox.sh: functions only (tools/test_sandbox.sh)
 [ "${BASH_SOURCE[0]}" = "$0" ] || return 0
 cmd=${1:-}
@@ -487,6 +550,7 @@ case "$cmd" in
   start) start "$@" ;;
   restart) stop; sleep 2; start "$@" ;;
   stop) stop ;;
+  check) check ;;
   jbr) jbr ;;
   status) if running; then echo "running; ready in $(cat "$FX/ready" 2>/dev/null) s; last command $(idle_seconds || echo '–') s ago; hot swap: $(cat "$FX/hotswap" 2>/dev/null)"
           else echo "not running$(stopped_note)"; fi; lease_status || true ;;

@@ -34,12 +34,17 @@ paths:
 - Optional LSS integration: `./gradlew runGameTestServer -PwithLss '-PgametestOnly=lss_.*'`. The runtime jar defaults
   to `lss_version`; `-PlssTestVersion=<Modrinth version ID>` checks another supported LSS runtime without changing the
   compile API. The GameTest server needs `lss.test.integratedServer=true` (the Gradle flag supplies it). Tests register
-  only when LSS is installed; ordinary shards remain independent of it. Keep LSS implementation calls in an
-  unannotated nested class: NeoForge reflects every method on the holder, including synthetic lambda capture
-  signatures, before calling the generator's optional-mod guard. SQLite and the 200-tick dirty broadcaster
-  use background threads/wall time, so these tests run at game pace and wait for actual receipts/rows, never a fixed
+  only when LSS is installed; ordinary shards remain independent of it. SQLite and the 200-tick dirty broadcaster use
+  background threads/wall time, so these tests run at game pace and wait for actual receipts/rows, never a fixed
   sleep. A no-op store-policy receipt fences queued deletes before a test deposits replacement bytes; the asynchronous
   store can otherwise apply an older unconditional delete after the test's new deposit.
+- Optional mods (LSS, Sable beyond the companion's `SubLevelAccess`, Create, Aeronautics) in a GameTest: every call into
+  them sits in an unannotated nested class, loaded only after the test found the mod (`CraftLauncherGameTests.Physics`,
+  `DisplayLinkGameTests.Board`). NeoForge loads every `@GameTestHolder` class wherever GameTests are enabled, the dev
+  clients included, and reflects its methods (synthetic lambda signatures too); the JVM verifier loads every type the
+  holder's code passes to the mod's methods, even inside a lambda. One such call stops a client without that mod at
+  launch (`NoClassDefFoundError` in `GameTestHooks.addGameTestMethods`): the effects sandbox and cloud scenario clients
+  run the mod alone. CI “Песочница” (`tools/sandbox.sh check`) starts that client.
 - Sable craft in GameTests (`CraftLauncherGameTests`): a craft assembled on a fresh platform can fall through it
   before Sable has built that ground's collision (to y −1373 in one run), so a test that needs a pose holds the craft
   by teleporting it every tick through Sable's `PhysicsPipeline` (`Hold`: lifted, at rest, turned as the test sets).

@@ -121,6 +121,10 @@ with Iris.
   Finish visuals with `stop`, then `tools/gpu_lease.sh release`; otherwise lease expires after 10 idle minutes.
   Why lease instead of job queue/memory rule: rule failed (23.10 three GPU jobs at once, sandbox restarted five
   times), process semaphores (`sem`, `ts`) do not hold GPU between frames while editing.
+  The client runs `devtest` without Create and Sable: a GameTest holder that calls them directly stops it at launch
+  (`gametest.md`, optional mods). `tools/sandbox.sh check` starts the same vanilla client on a CPU display in its own
+  shell (CI “Песочница”: Xvfb; laptop: inside `laptop_job.sh --soft`), waits for the world (`INCOMING_SANDBOX_CHECK_LIMIT`,
+  900 s), takes one `blast drone` frame and stops; laptop, warm: build 5 s, world 69 s, done in 84 s.
   `shaders` without Sodium/Iris jars, `dh` without Distant Horizons jar in sandbox mods (Gradle takes instance mods
   by patterns, silently skips missing) exits 2 explaining missing mods/Gradle source, instead of recording without
   Iris (`tools/test_sandbox.sh`). Sandbox installs no mods into pack: own `run/sandbox`.

@@ -54,12 +54,13 @@ Prism: `~/.var/app/org.prismlauncher.PrismLauncher/data/PrismLauncher/` (`tools/
                                            the F3+T reload for changed resources; chat commands, reload, F2, F1 and dust-wave diagnostics (dw) as files the
                                            client reads (devtest DevHands: the nested display passes it no keyboard input); shared
                                            GPU slot or CPU (laptop_job.sh --soft); how to work: client-scenario.md, “Standard dev client”
-    sandbox.sh start|fx|swap|shot|restart|stop|jbr ← effects sandbox (vanilla: shared GPU slot or CPU, unless shaders/sodium/dh/gpu): a client with only the mod (+ Iris with a shaderpack, Sodium without one, DH) in a
+    sandbox.sh start|fx|swap|shot|restart|stop|check|jbr ← effects sandbox (vanilla: shared GPU slot or CPU, unless shaders/sodium/dh/gpu): a client with only the mod (+ Iris with a shaderpack, Sodium without one, DH) in a
                                            flat world, an effect by the /fx command in seconds, hot code swap and
                                            resource reload without a new client, frames and WAV in one command (`shot`; `--at none`
                                            sound only, its take in a 160×90 window at 20 fps);
                                            a nuke at the camera: `nuke 15 near`; how to work: client-scenario.md,
-                                           “Effects sandbox”; check without a client: test_sandbox.sh (CI);
+                                           “Effects sandbox”; check without a client: test_sandbox.sh (CI); `check`: the
+                                           client starts into its world and takes a frame (CI “Песочница”);
                                            no command for INCOMING_SANDBOX_IDLE s (1800; 0 never): the client stops itself
     stray_clients.sh [--host vps] [--idle S] [--max-age S] ← report only: job units whose caller is gone, sandboxes and dev
                                            clients idle past the limit, other jobs over 12 h, client JVMs whose wrapper is gone; exit 1 when any; never
@@ -234,7 +235,8 @@ Prism: `~/.var/app/org.prismlauncher.PrismLauncher/data/PrismLauncher/` (`tools/
   does not build the mod or run GameTest (`tools/replayscan` has its own build and unit tests, `tools/look_gate` the run
   validity test, `tools/stand` the wrapper build, its unit tests and test_gate.py); store pages (`docs/store`,
   `docs/media`, `docs/guide`, README, `.github/scripts`, `publish.yml`) only their check `test_store*.py`; `mod/`, CI and
-  unknown paths get the full check, and a manual run (release) always runs everything. Shader changes (and
+  unknown paths get the full check, and a manual run (release) always runs everything. The mod's checks and changes to
+  `tools/sandbox.sh` or `tools/soft_gl.sh` also start the sandbox client (“Песочница”, `sandbox.sh check`). Shader changes (and
   `amd_shader_check.py`, its test and budget) also run “Компилятор AMD”. The jar is the artifact
   `incoming-jar`.
 - A push to `main` and a release do not recheck a tree that already fully passed a successful run of this repository

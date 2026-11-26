@@ -60,6 +60,7 @@ jobs:
       store: ${{ steps.diff.outputs.store }}
       mod: ${{ steps.diff.outputs.mod }}
       rig: ${{ steps.diff.outputs.rig }}
+      sandbox: ${{ steps.diff.outputs.sandbox }}
       replayscan: ${{ steps.diff.outputs.replayscan }}
       lookgate: ${{ steps.diff.outputs.lookgate }}
       stand: ${{ steps.diff.outputs.stand }}
@@ -84,10 +85,10 @@ jobs:
             *) base= ;;
           esac
           if [ -z "$base" ]; then
-            mod=true; rig=true; replayscan=true; lookgate=true; stand=true; store=true; amd=true
+            mod=true; rig=true; sandbox=true; replayscan=true; lookgate=true; stand=true; store=true; amd=true
             echo "Full checks ($GITHUB_EVENT_NAME)" >> "$GITHUB_STEP_SUMMARY"
           else
-            mod=false; rig=false; replayscan=false; lookgate=false; stand=false; store=false; amd=false
+            mod=false; rig=false; sandbox=false; replayscan=false; lookgate=false; stand=false; store=false; amd=false
             # --no-renames: moving out of mod/ is also deletion within mod/.
             files=$(git diff --name-only --no-renames "$base" HEAD)
             while IFS= read -r f; do
@@ -101,22 +102,26 @@ jobs:
                 mod/src/main/resources/assets/incoming/shaders/*) mod=true; amd=true ;;
                 tools/amd_shader_check.py|tools/test_amd_shader_check.py|tools/fixtures/amd_shader_budget.json) amd=true ;;
                 mod/*|tools/fetch_runtime_mods.py|tools/paths.py|tools/clean_install.py) mod=true ;;
-                tools/rig_procs.sh|tools/test_rig_procs.sh|tools/gpu_lease.sh|tools/test_gpu_lease.sh|tools/laptop_job.sh|tools/sandbox.sh|tools/dev_client.sh|tools/test_sandbox.sh|tools/stray_clients.sh|tools/test_stray_clients.sh|tools/nested_kwin.sh|tools/soft_gl.sh|tools/stress.sh|tools/mp_scenario.sh|tools/client_scenario.sh|tools/probes/*) rig=true ;;
+                # The sandbox's own start (job Песочница) also follows its scripts.
+                tools/sandbox.sh|tools/soft_gl.sh) rig=true; sandbox=true ;;
+                tools/rig_procs.sh|tools/test_rig_procs.sh|tools/gpu_lease.sh|tools/test_gpu_lease.sh|tools/laptop_job.sh|tools/dev_client.sh|tools/test_sandbox.sh|tools/stray_clients.sh|tools/test_stray_clients.sh|tools/nested_kwin.sh|tools/stress.sh|tools/mp_scenario.sh|tools/client_scenario.sh|tools/probes/*) rig=true ;;
                 tools/replayscan/*) replayscan=true ;;
                 # prod_client.py prepares look-gate client instance copy (no Dynamic FPS idle; tested there too).
                 tools/look_gate/*|tools/media/*|tools/prod_client.py) lookgate=true ;;
                 tools/stand/*) stand=true ;;
                 # Store publishing (publish.yml) and the pages and gallery it uploads (guide images too): test_store*.py only.
                 .github/scripts/*|.github/workflows/publish.yml|docs/store/*|docs/media/*|docs/guide/*|README.md|README.ru.md) store=true ;;
-                .github/*) mod=true; rig=true; replayscan=true; lookgate=true; stand=true; store=true; amd=true ;;
+                .github/*) mod=true; rig=true; sandbox=true; replayscan=true; lookgate=true; stand=true; store=true; amd=true ;;
                 tools/*|docs/*|*.md|.claude/*|.claude-plugin/*|.gitignore) ;;
                 *) mod=true ;;
               esac
             done <<< "$files"
-            { echo "Mod (build, unit tests, GameTest): $mod; rig shutdown: $rig; replay analysis: $replayscan; look gate: $lookgate; scene bench: $stand; store pages: $store; AMD compiler: $amd"; echo; echo '```'; echo "$files"; echo '```'; } >> "$GITHUB_STEP_SUMMARY"
+            [ "$mod" = true ] && sandbox=true
+            { echo "Mod (build, unit tests, GameTest): $mod; rig shutdown: $rig; sandbox start: $sandbox; replay analysis: $replayscan; look gate: $lookgate; scene bench: $stand; store pages: $store; AMD compiler: $amd"; echo; echo '```'; echo "$files"; echo '```'; } >> "$GITHUB_STEP_SUMMARY"
           fi
           echo "mod=$mod" >> "$GITHUB_OUTPUT"
           echo "rig=$rig" >> "$GITHUB_OUTPUT"
+          echo "sandbox=$sandbox" >> "$GITHUB_OUTPUT"
           echo "replayscan=$replayscan" >> "$GITHUB_OUTPUT"
           echo "lookgate=$lookgate" >> "$GITHUB_OUTPUT"
           echo "stand=$stand" >> "$GITHUB_OUTPUT"
@@ -318,6 +323,44 @@ jobs:
           path: |
             mod/run/clean-install-*/**/*.log
             mod/run/clean-install-*/**/crash-reports/*.txt
+          if-no-files-found: ignore
+
+  # The effects sandbox's client starts (tools/sandbox.sh check): the mod alone with devtest, without Create or Sable,
+  # on llvmpipe under Xvfb, reaches its world and writes one frame. NeoForge loads every GameTest holder class in that
+  # client too, and one that needs an absent mod stops it at launch; only a real start shows every such cause.
+  sandbox:
+    name: Песочница
+    needs: changes
+    if: needs.changes.outputs.sandbox == 'true' && needs.changes.outputs.reuse == ''
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: 21
+
+      - uses: gradle/actions/setup-gradle@v5
+        with:
+          cache-read-only: true
+
+      - name: Sandbox start
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y xvfb libgl1-mesa-dri
+          tools/sandbox.sh check
+
+      - name: Sandbox logs
+        if: failure()
+        uses: actions/upload-artifact@v6
+        with:
+          name: logs-sandbox
+          path: |
+            mod/run/sandbox/logs/*.log
+            mod/run/sandbox/logs/client.out
+            mod/run/sandbox/crash-reports/
           if-no-files-found: ignore
 
   gametest:
@@ -538,7 +581,7 @@ jobs:
   # One status per commit: everything required passed; unnecessary checks skipped.
   ci:
     name: Итог
-    needs: [changes, knowledge, build, unit, gametest, lss_gametest, clean_install, reuse, store, rig, replayscan, lookgate, stand, amd_shaders]
+    needs: [changes, knowledge, build, unit, gametest, lss_gametest, clean_install, sandbox, reuse, store, rig, replayscan, lookgate, stand, amd_shaders]
     # Runs after failed/skipped/canceled jobs too: skipped jobs count as success, so “Итог” skipped
     # in a canceled run would be green without build/GameTest — instead it runs and fails in canceled runs.
     if: always()
@@ -547,7 +590,7 @@ jobs:
     steps:
       - name: Required checks passed
         run: |
-          echo 'changes: ${{ needs.changes.result }}; knowledge: ${{ needs.knowledge.result }}; build: ${{ needs.build.result }}; unit tests: ${{ needs.unit.result }}; GameTest: ${{ needs.gametest.result }}; LSS integration: ${{ needs.lss_gametest.result }}; clean install: ${{ needs.clean_install.result }}; reused checked run: ${{ needs.reuse.result }}; store pages: ${{ needs.store.result }}; rig shutdown: ${{ needs.rig.result }}; replay analysis: ${{ needs.replayscan.result }}; look gate: ${{ needs.lookgate.result }}; scene bench: ${{ needs.stand.result }}; AMD compiler: ${{ needs.amd_shaders.result }}'
+          echo 'changes: ${{ needs.changes.result }}; knowledge: ${{ needs.knowledge.result }}; build: ${{ needs.build.result }}; unit tests: ${{ needs.unit.result }}; GameTest: ${{ needs.gametest.result }}; LSS integration: ${{ needs.lss_gametest.result }}; clean install: ${{ needs.clean_install.result }}; sandbox start: ${{ needs.sandbox.result }}; reused checked run: ${{ needs.reuse.result }}; store pages: ${{ needs.store.result }}; rig shutdown: ${{ needs.rig.result }}; replay analysis: ${{ needs.replayscan.result }}; look gate: ${{ needs.lookgate.result }}; scene bench: ${{ needs.stand.result }}; AMD compiler: ${{ needs.amd_shaders.result }}'
           [ '${{ contains(needs.*.result, 'failure') || contains(needs.*.result, 'cancelled') }}' = false ]
           # Release: every check ran here, except mod checks reused from the run that passed them on this very tree.
           if [ '${{ github.event_name == 'workflow_dispatch' && inputs.release }}' = true ]; then
@@ -555,7 +598,7 @@ jobs:
               [ "$result" != skipped ]
             done
             [ '${{ needs.reuse.result }}' = success ] || \
-              [ '${{ needs.build.result }} ${{ needs.unit.result }} ${{ needs.gametest.result }} ${{ needs.lss_gametest.result }} ${{ needs.clean_install.result }}' = 'success success success success success' ]
+              [ '${{ needs.build.result }} ${{ needs.unit.result }} ${{ needs.gametest.result }} ${{ needs.lss_gametest.result }} ${{ needs.clean_install.result }} ${{ needs.sandbox.result }}' = 'success success success success success success' ]
           fi
 
   release:
