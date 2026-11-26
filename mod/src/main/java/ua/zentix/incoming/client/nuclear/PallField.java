@@ -447,7 +447,7 @@ public final class PallField {
         source(dx, dz, ticks, w);
         DustMaterialTiles m = materials;
         column(table, ua.zentix.incoming.client.fx.layer.DustWallPass.NODES, lifetimeEnd(), reach, ticks / (20.0 * d.scale()), w[0],
-                w[1], m == null ? 0 : m.hard(w[0], w[1]), 0, c);
+                w[1], m == null ? 0 : m.hard(w[0], w[1]), 0, 0, c);
         if (c[0] <= 0) return 0;
         double age = c[2], r = Math.hypot(w[0], w[1]);
         double top = hazeTop(w[0], w[1], age, c[1], c[5], d.windDir(), d.windSpeed() > 0);
@@ -1267,12 +1267,13 @@ public final class PallField {
         l[2] = 1;
         if (table == null) return;
         DustMaterialTiles m = materials;
-        drawnColumn(table, ua.zentix.incoming.client.fx.layer.DustWallPass.NODES, lifetimeEnd(), reach, air(ticks) / (20.0 * d.scale()),
-                w[0], w[1], m == null ? 0 : m.hard(w[0], w[1]), sight, c);
+        // (the water share mixes the column before the haze level's hold, as dwDustDensity does)
+        double wet = water.at(w[0], w[1]);
+        column(table, ua.zentix.incoming.client.fx.layer.DustWallPass.NODES, lifetimeEnd(), reach, air(ticks) / (20.0 * d.scale()),
+                w[0], w[1], m == null ? 0 : m.hard(w[0], w[1]), sight, wet, c);
         if (c[0] <= 0) return;
         double top = c[1];
-        double wet = water.at(w[0], w[1]);
-        l[0] = 1.25 * c[0] / Math.max(0.9483 * top - 2.854, 1) * (1 - wet);
+        l[0] = 1.25 * c[0] / Math.max(0.9483 * top - 2.854, 1);
         l[2] = Math.max(top, 1);
     }
 
@@ -1306,7 +1307,13 @@ public final class PallField {
      */
     public static void drawnColumn(float[] table, int n, double end, double reach, double t, double rx, double rz, double hard,
             double sight, double[] out) {
-        column(table, n, end, reach, t, rx, rz, hard, sight, out);
+        column(table, n, end, reach, t, rx, rz, hard, sight, 0, out);
+    }
+
+    /** {@link #drawnColumn} over ground that is water by share {@code wet} (no spray): the world's readers at a shore. */
+    static void drawnColumn(float[] table, int n, double end, double reach, double t, double rx, double rz, double hard,
+            double sight, double wet, double[] out) {
+        column(table, n, end, reach, t, rx, rz, hard, sight, wet, out);
     }
 
     /**
@@ -1314,7 +1321,7 @@ public final class PallField {
      * (the law's), the table's top and the fire zone's share (row 0).
      */
     private static void column(float[] table, int n, double end, double reach, double t, double rx, double rz, double hard,
-            double sight, double[] out) {
+            double sight, double wet, double[] out) {
         out[0] = 0;
         out[1] = 1;
         double r = Math.hypot(rx, rz), x = Math.min(r / Math.max(reach, 1), 1) * (n - 1);
@@ -1331,15 +1338,17 @@ public final class PallField {
         double row = table[4 * j + 1] + fx * (table[4 * (j + 1) + 1] - table[4 * j + 1]);
         double paved = 1 + hard * (row - 1);
         double edge = reach * (1 - 1.0 / (n - 1)), fade = 1 - smoothstep(edge, reach, r);
-        double seen = tau;
+        double seen = tau, dry = 1 - wet;
         if (sight > 0) {
             int os = 4 * ((SIGHT_ROW + k) * n + j);
             seen = tau + sight * (table[os] + f * (table[os + 2] - table[os]) - tau);
         }
+        // (over water by share wet the column is the soil's share, the spray none here: dwDustDensity's mix)
+        seen *= dry;
         // the textured level: the transfer of the law (the camera's inside sight by its share); the haze level: the law's whole
         // column held under what the screen shows (hazeDepth), taken to the textured level's reading by the share; between
         // them by the textured share ({@code dwHaze}, {@code dwDustDensity})
-        double scale = (1 + 0.5 * Math.exp(-age / 1.1)) * paved * fade, tex = transfer(seen) * scale, outside = hazeDepth(tau * scale);
+        double scale = (1 + 0.5 * Math.exp(-age / 1.1)) * paved * fade, tex = transfer(seen) * scale, outside = hazeDepth(dry * tau * scale);
         double haze = outside + sight * (tex - outside);
         out[0] = haze + textured(age) * (tex - haze);
         out[1] = 0.95 * top;

@@ -135,6 +135,26 @@ class DustSightTest {
     }
 
     /**
+     * At a shore (the ground water by half, no spray) the world's readers take the column the march draws: seen from outside the
+     * hold of the mixed column, not half the soil's hold (review 2: 2.30 against the shader's 4.37 at law τ 10); a camera inside,
+     * the transfer of the soil's share of its sight-mixed column.
+     */
+    @Test
+    void aShoreIsTheMixedColumn() {
+        Wave w = Wave.of(15);
+        int j = w.node(1000);
+        for (double age : new double[] {70, 300}) {
+            double[] soil = new double[6], shore = new double[6], inside = new double[6], insideSoil = new double[6];
+            PallField.drawnColumn(w.table, N, w.end, w.reach, w.time(j, age), w.radius(j), 0, 0, 0, soil);
+            PallField.drawnColumn(w.table, N, w.end, w.reach, w.time(j, age), w.radius(j), 0, 0, 0, 0.5, shore);
+            assertEquals(PallField.hazeDepth(0.5 * soil[3]), shore[0], 1e-6 * soil[3], age + " s, outside");
+            PallField.drawnColumn(w.table, N, w.end, w.reach, w.time(j, age), w.radius(j), 0, 0, 1, 0.5, inside);
+            PallField.drawnColumn(w.table, N, w.end, w.reach, w.time(j, age), w.radius(j), 0, 0, 1, insideSoil);
+            assertTrue(inside[0] <= insideSoil[0] + 1e-9, age + " s, inside: the shore " + inside[0] + ", land " + insideSoil[0]);
+        }
+    }
+
+    /**
      * Inside, the drawn column is main's at every age through the haze level's fade window and after it, at five distances
      * and two yields, within 3 %: main's drawn vertical column for a camera inside (the cap baked into its table, read by its
      * {@code drawnColumn}), measured on origin/main 30f530d6d (review probe {@code InsideWindowProbeTest}).

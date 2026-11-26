@@ -229,8 +229,8 @@ void main() {
     check(abs(cut[3] - 1) < 1e-5, f"ray inside the fireball's ground footprint: T={cut[3]:.4f}, expected 1")
 
     # the camera's inside sight (PallField.sighted, the table's sight rows): straight down through old dust (2 min, the haze
-    # level), the drawn depth moves from the law's (3: the haze level draws the law to the march's exit depth, PallField.drawn) to the transfer of the
-    # inside sight's (1.2) by the camera's share
+    # level), the drawn depth moves from the law's (3, held under the march's exit depth: PallField.hazeDepth) to the transfer
+    # of the law moved toward the inside sight's (1.2) by the camera's share, by that share (PallField.column, dwHaze)
     def sighted(w):
         g.glUniform1f(loc(p, "Sight"), w)
         g.glUniform1f(loc(p, "Floor"), 0)
@@ -255,7 +255,7 @@ void main() {
         check(abs(got - want) < 0.02, f"inside sight {w}: drawn depth {got:.4f} of the law's, expected {want:.4f}")
     g.glUniform1f(loc(p, "Sight"), 0)
 
-    # from above the layer (400 m up, 70° down, 2 km from a 15 kt surface burst, 70 s and two minutes: the view of the RC take):
+    # from above the layer (400 m up, 70° down, 2 km from a 15 kt surface burst, 70 s and two minutes):
     # the haze level's drawn depth is the law's along the ray (τ/sin of the pitch; PallField.hazeDepth holds it within 1 % to
     # τ 3.3), as the history averages the march over its sample offsets (eight here; one offset alone errs by up to 5 %), and a
     # thick column (law τ 8, drawn 4.6: the march's exit depth) is opaque. The transfer alone draws the law's 2 as 1.47 (74 %

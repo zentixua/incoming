@@ -148,7 +148,7 @@ paths:
 ## Pitfalls
 - A view from above shows the ground through the dust only where something is drawn behind it: vanilla's render distance is
   a sphere (at 12 chunks nothing 400 m below is drawn: a 70° ray from 400 m meets the ground at 426 m, 27 chunks), so such a
-  frame has sky behind the dust and reads opaque at 15 % transmission; Voxy or DH LODs put the ground there (the RC take: the ground through the transfer's blanket). Judge views
+  frame has sky behind the dust and reads opaque at 15 % transmission; Voxy or DH LODs put the ground there. Judge views
   from above with LODs (`tools/client_scenario.sh commands voxy`) and the march's dump (`dw:dump`, `dw:probe=-2`).
 - The per-ray tuft (T6) lifts the far top seen edge-on only: a ray meeting the band nearer than about 1 km looks down into the
   near dust and takes none (`dwRayTuft`). Clamped to its 600 m column point, every such ray took its azimuth's tuft and lifted
