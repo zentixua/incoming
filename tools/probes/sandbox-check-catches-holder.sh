@@ -10,10 +10,10 @@ WT=$(cd "${1:-$(dirname "$0")/../..}" && pwd)
 F=$WT/mod/src/devtest/java/ua/zentix/incoming/gametest/ProbeSableHolderGameTests.java
 LOG=$WT/mod/run/probe-sable-holder.log
 cd "$WT" || exit 2
+mkdir -p "$WT/mod/run"
 [ -e "$F" ] && { echo "PROBE: $F exists already" >&2; exit 2; }
 tools/sandbox.sh check > "$LOG" 2>&1 || { echo "PROBE FAIL: the tree does not start (see $LOG)"; exit 1; }
 trap 'rm -f "$F"' EXIT
-mkdir -p "$WT/mod/run"
 cat > "$F" <<'JAVA'
 package ua.zentix.incoming.gametest;
 
