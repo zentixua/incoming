@@ -32,8 +32,9 @@
 #                                          The nuke near the camera: shot wall 'nuke 15 near' --cam '60 15 0 5' --at -0.5,0.1,1 —
 #                                          houses from the debris scene; time starts when the front reaches them (client-scenario.md)
 #   tools/sandbox.sh restart [start options] stop and start again (after a change that hot swap cannot apply)
-#   tools/sandbox.sh check                 start check (CI): the vanilla client on a CPU display in this shell, its world
-#                                          and one frame, then stop; code 1 with the log tail and crash report if it does not start
+#   tools/sandbox.sh check                 start check (CI): the vanilla client on a CPU display (its own laptop job where a
+#                                          systemd user manager exists), its world and one frame, then stop; code 1 with the
+#                                          log tail and crash report if it does not start, 75 while this tree's sandbox runs
 #   tools/sandbox.sh jbr                   install JetBrains Runtime (shared by all trees, mod/run/jbr in the main tree):
 #                                          hot swap then accepts new fields, methods and lambdas; start selects it automatically
 #   tools/sandbox.sh stop | status          done with visuals: stop, then tools/gpu_lease.sh release
@@ -497,13 +498,21 @@ shot() {
   echo "from command to last frame and audio: $(since "$t0") s"
 }
 
-# Start check (CI "Песочница"; cloud or netcup without laptop jobs; on the laptop inside `tools/laptop_job.sh --soft`):
+# Start check (CI "Песочница"; on the laptop and netcup it puts itself into a `tools/laptop_job.sh --soft` job):
 # the client `start` runs in vanilla mode, prepared the same way, here on a CPU display (soft_gl.sh: nested KWin or
 # xvfb-run), until its world is ready and a `blast drone` frame is on disk; then stopped. A client that cannot start
 # (a crash at launch, a screen before the world) fails it with the log tail and the crash report.
 # INCOMING_SANDBOX_CHECK_LIMIT: seconds for the client to reach its world (default 900: a cold llvmpipe compiles shaders)
 check() {
   local limit=${INCOMING_SANDBOX_CHECK_LIMIT:-900} t0 waited=0 png
+  # this tree's sandbox shares the game directory and the inbox: a second client would take its commands
+  running && { echo "sandbox is running ($UNIT): tools/sandbox.sh stop first" >&2; return 75; }
+  # with a systemd user manager (laptop, netcup) and not yet inside a laptop job: the client goes into its own one, with
+  # its memory admission and ceiling, as `start`'s (an agent's own unit is not one: its cgroup is not incoming-job-*)
+  if ! grep -q '/incoming-job-[^/]*\.service' /proc/self/cgroup 2>/dev/null && command -v systemd-run >/dev/null \
+      && systemctl --user show-environment >/dev/null 2>&1; then
+    exec "$ROOT/tools/laptop_job.sh" --soft "sandbox-check-$TREE_ID" -- "$ROOT/tools/sandbox.sh" check
+  fi
   unset INCOMING_SHADERS INCOMING_DH
   export INCOMING_SANDBOX_VANILLA=1 INCOMING_CPU_ONLY=1
   soft_gl_env
@@ -512,10 +521,11 @@ check() {
   rm -rf "${FX:?}/out/check" "$RUN"/crash-reports
   prepare 1280x720 "" || return 1
   echo "check: build $(since "$t0") s"
+  # set before the launch: a signal right after it (CI cancel, timeout) still stops the client
+  trap check_stop EXIT
   INCOMING_RENDERER_FILE="$FX/renderer" vanilla_display "sandbox-check-$TREE_ID" 1280 720 "bash $ROOT/mod/build/rig/sandbox.sh" \
     > "$RUN/logs/client.out" 2>&1 &
   CHECK_PID=$!
-  trap check_stop EXIT
   until [ -f "$FX/ready" ]; do
     if ! running || [ $waited -ge "$limit" ]; then
       { running && echo "sandbox check: no world within $limit s" || echo "sandbox check: the client exited before its world"

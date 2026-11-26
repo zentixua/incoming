@@ -236,7 +236,7 @@ Prism: `~/.var/app/org.prismlauncher.PrismLauncher/data/PrismLauncher/` (`tools/
   validity test, `tools/stand` the wrapper build, its unit tests and test_gate.py); store pages (`docs/store`,
   `docs/media`, `docs/guide`, README, `.github/scripts`, `publish.yml`) only their check `test_store*.py`; `mod/`, CI and
   unknown paths get the full check, and a manual run (release) always runs everything. The mod's checks and changes to
-  `tools/sandbox.sh` or `tools/soft_gl.sh` also start the sandbox client (“Песочница”, `sandbox.sh check`). Shader changes (and
+  `tools/sandbox.sh`, `tools/soft_gl.sh` or `tools/gpu_lease.sh` also start the sandbox client (“Песочница”, `sandbox.sh check`). Shader changes (and
   `amd_shader_check.py`, its test and budget) also run “Компилятор AMD”. The jar is the artifact
   `incoming-jar`.
 - A push to `main` and a release do not recheck a tree that already fully passed a successful run of this repository
