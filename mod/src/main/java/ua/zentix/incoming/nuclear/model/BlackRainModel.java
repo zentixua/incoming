@@ -88,7 +88,8 @@ public record BlackRainModel(double yieldKt, double fireRadiusM, double windDirR
 
     /**
      * Dose rate from rain-washed ground deposits at H+1, R/h, at strike-clock {@code seconds}, once the rain has reached the
-     * point: it lands when its rain arrives on the motion age, and from then on ages on the strike clock ({@link #landedStrike}).
+     * point: it lands when its rain arrives on the motion age ({@link #landedStrike}); on the server it then ages on the
+     * detonation's ground clock ({@code GroundFallout}).
      * Full near the fire zone, decaying e-fold over a third of the band downwind, Gaussian across it with half the half-width.
      */
     public double depositH1(double x, double z, double seconds, SmokeParcels.Clock c) {

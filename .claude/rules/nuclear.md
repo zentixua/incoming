@@ -255,7 +255,7 @@ Ruins and everything in `nuclear/world/` are in `nuclear-world.md`.
   and follow `FarLods`); `NukeAfter.realFire` draws and sounds the model storm in local chunks too, trust untouched.
   Plans always carry fire, writes decide. GameTests `nuke_flash_firetick_off`/`_on` (rule flipped after the burst),
   `NukeAfterBlockFireTest`. Black rain is the
-  parcels' rain-out (`BlackRainModel`: onset on M, deposit landing then and ageing on S, `BlackRainDepositSeamTest`;
+  parcels' rain-out (`BlackRainModel`: onset on M, deposit landing then and ageing on the ground clock, `GroundFallout`, `BlackRainDepositSeamTest`;
   rain only under drawn haze, `PallFieldTest.blackRainFallsOnlyUnderTheDrawnHaze`). Black rain
   needs fires and `Detonation.rain` (`nuclear.black_rain` at detonation, same packet rule): off, `BlackRainModel` gets no
   fire zone, so no rain picture/sound, washout or skin contamination on server and client alike (the live rule still

@@ -154,4 +154,32 @@ public final class GroundFieldGameTests {
         }
         h.succeed();
     }
+
+    /**
+     * Rule 8 through the ground-fallout loop: black rain falling on a player makes its detonation the body's cause (a 15 kt
+     * airburst with fires, 22 minutes in: rain over the fire zone since minute 20, no plume), while a player beyond every
+     * source's reach gains no cause. Fallout reaching a player: {@code BodyClockGameTests.falloutHoldsThePlayersClock}.
+     */
+    @GameTest(template = "range", timeoutTicks = 20, batch = "nuke_ground_cause", skyAccess = true)
+    public static void rainHoldsThePlayersClock(GameTestHelper h) {
+        ServerLevel level = h.getLevel();
+        Vec3 at = Vec3.atBottomCenterOf(h.absolutePos(SPOT));
+        FakePlayer wet = new FakePlayer(level, new GameProfile(UUID.randomUUID(), "rain_cause"));
+        wet.moveTo(at);
+        FakePlayer far = new FakePlayer(level, new GameProfile(UUID.randomUUID(), "far_cause"));
+        NuclearEvents events = new NuclearEvents();
+        Detonation d = new Detonation(NuclearEvents.get(level).nextId(), at.add(0, 600, 0), at.y, 15, false, level.getGameTime() - 22 * 1200,
+                0f, 6.7f, 20_000, 7, 1f, true, 0.35f, Detonation.NO_DAY_TIME, true, true);
+        events.add(d, level);
+        events.endShows(level);
+        far.moveTo(at.add(d.groundReach(events.youngestGround(d, level) / 3600, FalloutModel.FLOOR * GroundFallout.NEGLIGIBLE) + 100, 0, 0));
+        h.assertTrue(d.blackRainAt(at.x, at.z, events.parcels(d, level)), "no rain over the fire zone at minute 22");
+        h.assertTrue(BodyClock.of(wet).strike() == ua.zentix.incoming.util.RecoveryClock.NO_STRIKE
+                && BodyClock.of(far).strike() == ua.zentix.incoming.util.RecoveryClock.NO_STRIKE, "a body already had a cause");
+        RadiationTicker.step(level, events, List.of(wet, far), List.of(d), List.of());
+        h.assertTrue(BodyClock.of(wet).strike() == d.id(), "rain on the player is not its body's cause: " + BodyClock.of(wet).strike());
+        h.assertTrue(BodyClock.of(far).strike() == ua.zentix.incoming.util.RecoveryClock.NO_STRIKE, "a player beyond the reach took the cause");
+        RadiationTicker.clear(wet);
+        h.succeed();
+    }
 }
