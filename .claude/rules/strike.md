@@ -99,7 +99,12 @@ paths:
   `Hearing.RANGE`, 60 s of sound); only-visible every 4 ticks to `visibility.far_range` (8000 blocks horizontally,
   including B-2 overhead at real 12 km level), at most 64 nearest; packet `S2C.FarFlights`; during launch (burning
   booster) also server ready-chunk ground below projectile, `FarFlight.ground`, distant client launch cloud rests on
-  it, `FlightTrack.launchGround`); explosion packets `S2C.Blast` reach `far_range` or quiet-night charge audibility,
+  it, `FlightTrack.launchGround`); explosion packets `S2C.Blast` (and the other cloud events: bomb entry, vent, collapse, SAM burst; all through
+  `StrikeClouds.send`, rule 10 of `docs/design/time.md`: kept with time, counted jumps, world air and pre-crater ground in a
+  non-persistent world attachment, at most 256, pruned at motion age `LIFE_S` = `CloudModel.LIFE_MAX`, so a counted jump
+  clears them and a restart drops them; each player gets `S2C.StrikeClouds` with the clouds and `FuelFires.burning` craters
+  within each packet's reach on login, dimension change, respawn and at most once per `SYNC_TICKS` after new events) reach
+  `far_range` or quiet-night charge audibility,
   `HearingModel.audibleRangeM`, capped by `IncomingConfig.FAR_RANGE_MAX`, whichever reaches farther).
 - `target/`: `Target` (point; map location `Ground`, server finds height, canopy-inclusive top from ready chunk,
   otherwise estimated client map top `C2S.AimHint.mapSurface`, without it generator `getBaseHeight` no lower than its

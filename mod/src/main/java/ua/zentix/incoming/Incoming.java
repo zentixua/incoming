@@ -118,6 +118,11 @@ public final class Incoming {
         NeoForge.EVENT_BUS.addListener(ua.zentix.incoming.warhead.SurfaceDamage::onLevelTick);
         NeoForge.EVENT_BUS.addListener(ua.zentix.incoming.warhead.FuelFires::onLevelTick);
         NeoForge.EVENT_BUS.addListener(ua.zentix.incoming.warhead.FuelFires::onChunkSent);
+        // After FuelFires: a crater fire that changed this tick is in the packet.
+        NeoForge.EVENT_BUS.addListener(ua.zentix.incoming.strike.StrikeClouds::onLevelTick);
+        NeoForge.EVENT_BUS.addListener(ua.zentix.incoming.strike.StrikeClouds::onLogin);
+        NeoForge.EVENT_BUS.addListener(ua.zentix.incoming.strike.StrikeClouds::onChangeDimension);
+        NeoForge.EVENT_BUS.addListener(ua.zentix.incoming.strike.StrikeClouds::onRespawn);
         NeoForge.EVENT_BUS.addListener(ua.zentix.incoming.warhead.SurfaceDamage::onEntityJoin);
         NeoForge.EVENT_BUS.addListener(EventPriority.LOWEST, ua.zentix.incoming.warhead.SurfaceDamage::onPlace);
         NeoForge.EVENT_BUS.addListener(EventPriority.LOWEST, ua.zentix.incoming.warhead.SurfaceDamage::onBreak);

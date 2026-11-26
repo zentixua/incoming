@@ -29,7 +29,6 @@ import net.minecraft.world.phys.Vec3;
 import net.neoforged.neoforge.capabilities.Capabilities;
 import net.neoforged.neoforge.common.NeoForge;
 import net.neoforged.neoforge.event.level.BlockDropsEvent;
-import net.neoforged.neoforge.network.PacketDistributor;
 import org.jetbrains.annotations.Nullable;
 import ua.zentix.incoming.Incoming;
 import ua.zentix.incoming.claim.Claims;
@@ -422,7 +421,7 @@ final class StrikeCollapse implements UnitQueue.Job {
         if (base != null) {
             GroundMaterial m = common == null ? null : GroundMaterial.of(common);
             // dust from the fallen material: a block of wall or floor stands for StrikeSupport.MATERIAL m³ of real material
-            PacketDistributor.sendToPlayersNear(level, null, base.x, base.y, base.z, IncomingConfig.SERVER.farRange.get(),
+            ua.zentix.incoming.strike.StrikeClouds.send(level, base, IncomingConfig.SERVER.farRange.get(),
                     new S2C.Collapse(base, (m == null ? GroundMaterial.BRICK : m).ordinal(), (float) (mass * StrikeSupport.MATERIAL)));
         }
     }

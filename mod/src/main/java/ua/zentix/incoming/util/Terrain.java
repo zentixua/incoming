@@ -199,6 +199,28 @@ public final class Terrain {
         return level.getHeight(type, x, z);
     }
 
+    /**
+     * Top block of a column that dust lies on and blasts stand over, in a chunk already in hand: the
+     * {@code MOTION_BLOCKING} top, but under a canopy the first solid below the leaves (permeable foliage does not
+     * stand in for the forest floor). The client's blast clouds and the server's record of them read the same column.
+     */
+    public static int dustTop(LevelChunk chunk, int x, int z) {
+        int top = chunk.getHeight(Heightmap.Types.MOTION_BLOCKING, x & 15, z & 15);
+        BlockPos.MutableBlockPos p = new BlockPos.MutableBlockPos(x, top, z);
+        return belowCanopy(top, chunk.getMinBuildHeight(), chunk.getBlockState(p).is(net.minecraft.tags.BlockTags.LEAVES), y -> {
+            var s = chunk.getBlockState(p.setY(y));
+            return !Heightmap.Types.MOTION_BLOCKING_NO_LEAVES.isOpaque().test(s);
+        });
+    }
+
+    /** Pure column operation: a full solid is a surface regardless of what it was built for. */
+    public static int belowCanopy(int top, int bottom, boolean leaves, java.util.function.IntPredicate permeable) {
+        if (!leaves) return top;
+        int y = top;
+        while (y > bottom && permeable.test(y)) y--;
+        return y;
+    }
+
     /** Surface-height source, precise to coarse; {@link #estimate} takes the first allowed one. */
     public enum Source {
         /** Ready-chunk heightmap. */

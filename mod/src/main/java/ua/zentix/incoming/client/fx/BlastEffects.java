@@ -77,9 +77,15 @@ public final class BlastEffects {
      */
     public static void intercept(S2C.Intercept p) {
         BlastSource source = BlastSource.air(Airburst.CHARGE_KG);
-        CloudModel cloud = FarBlasts.airburst(p.pos(), source, p.seed());
+        CloudModel cloud = interceptCloud(p, null);
         if (bodyOnly(p.pos())) Effects.add(new Body(p.pos(), GroundMaterial.STONE, p.seed(), source));
         else if (FarBlasts.near(p.pos()) && cloud != null) Effects.add(new Airburst(p.pos(), p.seed(), p.kill(), cloud));
+    }
+
+    /** The burst's cloud, live or resent at its age ({@link FarBlasts.Resent}). */
+    @Nullable
+    public static CloudModel interceptCloud(S2C.Intercept p, FarBlasts.@Nullable Resent resent) {
+        return FarBlasts.airburst(p.pos(), BlastSource.air(Airburst.CHARGE_KG), p.seed(), resent);
     }
 
     /**
@@ -641,15 +647,8 @@ public final class BlastEffects {
     public static void bunkerImpact(S2C.BunkerImpact p) {
         GroundMaterial mat = GroundMaterial.byId(p.material());
         Vec3 pos = p.pos();
-        ClientLevel world = Minecraft.getInstance().level;
         double tnt = BunkerImpact.equivalentTnt(WeaponType.BUNKER.spec().striker().article().dryMass(), p.speed());
-        if (world != null && !mat.isWater()) {
-            // into water — no soil dust (spray particles below)
-            double d = WeaponType.BUNKER.spec().striker().article().diameter();
-            BlastSource none = new BlastSource(WeaponType.BUNKER, 0, 0, true, false);
-            FarBlasts.cloud(world, none, CloudModel.dust(none, FarBlasts.air(world, pos), BunkerImpact.entryVolume(d), 2 * d), pos, mat,
-                    Double.doubleToLongBits(pos.x * 31 + pos.z), thud(tnt));
-        }
+        bunkerImpactCloud(p, null);
         if (!FarBlasts.near(pos)) return;
         Effects.add(new Timeline(pos, mat, 0, null) {
             @Override
@@ -694,6 +693,20 @@ public final class BlastEffects {
         if (FarBlasts.near(burn.centre())) BlastSounds.fire(burn, 0);
     }
 
+    /** The bomb entry's dust cloud, live or resent at its age ({@link FarBlasts.Resent}). */
+    public static void bunkerImpactCloud(S2C.BunkerImpact p, FarBlasts.@Nullable Resent resent) {
+        GroundMaterial mat = GroundMaterial.byId(p.material());
+        Vec3 pos = p.pos();
+        ClientLevel world = Minecraft.getInstance().level;
+        // into water — no soil dust (spray particles nearby)
+        if (world == null || mat.isWater()) return;
+        double tnt = BunkerImpact.equivalentTnt(WeaponType.BUNKER.spec().striker().article().dryMass(), p.speed());
+        double d = WeaponType.BUNKER.spec().striker().article().diameter();
+        BlastSource none = new BlastSource(WeaponType.BUNKER, 0, 0, true, false);
+        FarBlasts.cloud(world, none, CloudModel.dust(none, FarBlasts.air(world, pos, resent), BunkerImpact.entryVolume(d), 2 * d), pos, mat,
+                Double.doubleToLongBits(pos.x * 31 + pos.z), thud(tnt), resent);
+    }
+
     /**
      * Blast gases vent through the bore: a cloud of the charge share that entered the air ({@code airKg}), from the bore mouth, using
      * the same cloud model (heat, soot, dust; drawn by the layer); distant rumble is muffled, underground; nearby — vent roar.
@@ -703,11 +716,7 @@ public final class BlastEffects {
     public static void vent(S2C.Vent p) {
         GroundMaterial mat = GroundMaterial.byId(p.material());
         Vec3 pos = p.pos();
-        ClientLevel world = Minecraft.getInstance().level;
-        if (world != null) {
-            BlastSource gas = new BlastSource(WeaponType.BUNKER, p.airKg(), 0, true, true);
-            FarBlasts.cloud(world, gas, new CloudModel(gas, FarBlasts.air(world, pos), mat.isWater()), pos, mat, Double.doubleToLongBits(pos.x * 17 + pos.z));
-        }
+        ventCloud(p, null);
         if (!FarBlasts.near(pos)) return;
         Effects.add(new Timeline(pos, mat, 0, null) {
             @Override
@@ -729,14 +738,8 @@ public final class BlastEffects {
     public static void collapse(S2C.Collapse p) {
         Vec3 pos = p.pos();
         GroundMaterial mat = GroundMaterial.byId(p.material());
-        ClientLevel world = Minecraft.getInstance().level;
         double tnt = BuriedBlast.collapseTnt(p.volume());
-        if (world != null) {
-            BlastSource none = new BlastSource(WeaponType.BUNKER, 0, 0, true, true);
-            double r = Math.cbrt(3 * p.volume() / (4 * Math.PI));
-            FarBlasts.cloud(world, none, CloudModel.dust(none, FarBlasts.air(world, pos), p.volume(), r), pos, mat,
-                    Double.doubleToLongBits(pos.x * 13 + pos.z), thud(tnt));
-        }
+        collapseCloud(p, null);
         if (!FarBlasts.near(pos)) return;
         Effects.add(new Timeline(pos, mat, 0, null) {
             @Override
@@ -749,5 +752,28 @@ public final class BlastEffects {
                 BlastSounds.collapse(pos, tnt);
             }
         });
+    }
+
+    /** The vent's gas cloud, live or resent at its age ({@link FarBlasts.Resent}). */
+    public static void ventCloud(S2C.Vent p, FarBlasts.@Nullable Resent resent) {
+        ClientLevel world = Minecraft.getInstance().level;
+        if (world == null) return;
+        GroundMaterial mat = GroundMaterial.byId(p.material());
+        Vec3 pos = p.pos();
+        BlastSource gas = new BlastSource(WeaponType.BUNKER, p.airKg(), 0, true, true);
+        FarBlasts.cloud(world, gas, new CloudModel(gas, FarBlasts.air(world, pos, resent), mat.isWater()), pos, mat,
+                Double.doubleToLongBits(pos.x * 17 + pos.z), gas, resent);
+    }
+
+    /** The collapse's dust cloud, live or resent at its age ({@link FarBlasts.Resent}). */
+    public static void collapseCloud(S2C.Collapse p, FarBlasts.@Nullable Resent resent) {
+        ClientLevel world = Minecraft.getInstance().level;
+        if (world == null) return;
+        Vec3 pos = p.pos();
+        GroundMaterial mat = GroundMaterial.byId(p.material());
+        BlastSource none = new BlastSource(WeaponType.BUNKER, 0, 0, true, true);
+        double r = Math.cbrt(3 * p.volume() / (4 * Math.PI));
+        FarBlasts.cloud(world, none, CloudModel.dust(none, FarBlasts.air(world, pos, resent), p.volume(), r), pos, mat,
+                Double.doubleToLongBits(pos.x * 13 + pos.z), thud(BuriedBlast.collapseTnt(p.volume())), resent);
     }
 }

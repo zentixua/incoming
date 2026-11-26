@@ -56,6 +56,13 @@ paths:
   or BlockState access in planning; emits (terrain) stay on the client thread. `SmokePipelineTest`: the planned frame
   k + 1 draws exactly the inline frame k on the 100-strike raid, also on a real thread, and world exit mid-plan drains it.
 
+- A strike the client did not see (`ClientStrikeClouds`: late join, dimension change, replay seek) is built by the same
+  paths with `FarBlasts.Resent`: born its motion age ago, silent, in the world air of its moment (wind, stability,
+  humidity from the server; the local site under that wind) and over the ground the server measured before the crater
+  (`StrikeClouds.surface`, the client's `overSurface` columns, `Terrain.dustTop`). The dust sectors read today's ground
+  (a crater changes the inner band). A model costs ~2.5–3 ms to build, live or resent, so resent builds share
+  `BUILD_NANOS` (3 ms) a tick, nearest first, each waiting up to `CHUNK_WAIT` for the chunk under it.
+
 ## Look reference
 - Conventional strike (Artem, 25.10, real strike footage): flash → fireball → debris → a light, see-through dust haze
   over the site that settles soon; a smallish beige dust mushroom; tall black columns only later, from fires.

@@ -47,20 +47,12 @@ public final class FarTerrain {
     }
 
     static int dustY(LevelChunk chunk, int x, int z) {
-        int top = chunk.getHeight(Heightmap.Types.MOTION_BLOCKING, x & 15, z & 15);
-        BlockPos.MutableBlockPos p = new BlockPos.MutableBlockPos(x, top, z);
-        return belowCanopy(top, chunk.getMinBuildHeight(), chunk.getBlockState(p).is(net.minecraft.tags.BlockTags.LEAVES), y -> {
-            var s = chunk.getBlockState(p.setY(y));
-            return !Heightmap.Types.MOTION_BLOCKING_NO_LEAVES.isOpaque().test(s);
-        });
+        return ua.zentix.incoming.util.Terrain.dustTop(chunk, x, z);
     }
 
-    /** Pure column operation for tests: a full solid is a surface regardless of what it was built for. */
+    /** Pure column operation for tests ({@link ua.zentix.incoming.util.Terrain#belowCanopy}). */
     static int belowCanopy(int top, int bottom, boolean leaves, java.util.function.IntPredicate permeable) {
-        if (!leaves) return top;
-        int y = top;
-        while (y > bottom && permeable.test(y)) y--;
-        return y;
+        return ua.zentix.incoming.util.Terrain.belowCanopy(top, bottom, leaves, permeable);
     }
 
     /**

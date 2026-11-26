@@ -235,6 +235,104 @@ public final class S2C {
     }
 
     /**
+     * Conventional strikes still in the air around a player ({@code strike/StrikeClouds}, rule 10 of the time note): every
+     * cloud whose law still shows it and every crater fuel fire still burning, each with what the client needs to rebuild it
+     * at its age. Sent on login, dimension change and respawn, and after new strikes (at most once a second); the last one
+     * is the whole state, so a Flashback snapshot, which keeps only the last packet of a type, holds it too.
+     */
+    public record StrikeClouds(List<Cloud> clouds) implements CustomPacketPayload {
+        public static final Type<StrikeClouds> TYPE = new Type<>(Incoming.id("strike_clouds"));
+        /** Most clouds in one packet: the client draws at most as many explosion events ({@code FarBlasts.CAP}). */
+        public static final int MAX = 256;
+        /** Cloud packets by kind; a kind a reader does not know is skipped. */
+        public static final int BLAST = 0, ENTRY = 1, VENT = 2, COLLAPSE = 3, AIRBURST = 4, FUEL = 5;
+
+        /**
+         * One strike's cloud or crater fire.
+         *
+         * @param kind    {@link #BLAST} ... {@link #FUEL}
+         * @param born    server game time of the event, ticks
+         * @param jumps   counted jumps of its dimension at the event ({@code WorldClock.counted}), clock ticks: the
+         *                motion age adds those counted since
+         * @param air     world air at the event: the cloud drifts in it all its life
+         * @param surface ground under the blast point as the client measures it ({@code FarBlasts.overSurface}), from
+         *                the server's chunks before the crater; NaN: unknown, the client measures it
+         * @param packet  the event's own packet, as sent live
+         */
+        public record Cloud(int kind, long born, double jumps, ua.zentix.incoming.util.Air air, float surface, CustomPacketPayload packet) {
+            private static final StreamCodec<ByteBuf, ua.zentix.incoming.util.Air> AIR = StreamCodec.composite(
+                    ByteBufCodecs.FLOAT, a -> (float) a.wind().direction(), ByteBufCodecs.FLOAT, a -> (float) a.wind().speed(),
+                    ByteBufCodecs.FLOAT, a -> (float) a.stability(), ByteBufCodecs.FLOAT, a -> (float) a.humidity(),
+                    (d, s, c, h) -> new ua.zentix.incoming.util.Air(new ua.zentix.incoming.util.Wind(d, s), c, h));
+            /** Kind of {@code packet}; -1 for a packet that is no cloud. */
+            public static int kindOf(CustomPacketPayload p) {
+                return switch (p) {
+                    case Blast b -> BLAST;
+                    case BunkerImpact b -> ENTRY;
+                    case Vent v -> VENT;
+                    case Collapse c -> COLLAPSE;
+                    case Intercept i -> AIRBURST;
+                    case FuelFire f -> FUEL;
+                    default -> -1;
+                };
+            }
+
+            @SuppressWarnings("unchecked")
+            private static StreamCodec<ByteBuf, CustomPacketPayload> codec(int kind) {
+                StreamCodec<ByteBuf, ? extends CustomPacketPayload> c = switch (kind) {
+                    case BLAST -> Blast.CODEC;
+                    case ENTRY -> BunkerImpact.CODEC;
+                    case VENT -> Vent.CODEC;
+                    case COLLAPSE -> Collapse.CODEC;
+                    case AIRBURST -> Intercept.CODEC;
+                    case FUEL -> FuelFire.CODEC;
+                    default -> null;
+                };
+                return (StreamCodec<ByteBuf, CustomPacketPayload>) c;
+            }
+
+            /** Each cloud and its packet in a frame: the packets' own trailing fields stay theirs, unknown kinds decode to null. */
+            static final StreamCodec<ByteBuf, Cloud> CODEC = StreamCodecs.framed(StreamCodec.of((b, c) -> {
+                ByteBufCodecs.VAR_INT.encode(b, c.kind);
+                ByteBufCodecs.VAR_LONG.encode(b, c.born);
+                ByteBufCodecs.DOUBLE.encode(b, c.jumps);
+                AIR.encode(b, c.air);
+                ByteBufCodecs.FLOAT.encode(b, c.surface);
+                StreamCodecs.framed(codec(c.kind)).encode(b, c.packet);
+            }, b -> {
+                int kind = ByteBufCodecs.VAR_INT.decode(b);
+                StreamCodec<ByteBuf, CustomPacketPayload> c = codec(kind);
+                // a kind this reader does not know may carry anything after it: its frame is skipped whole
+                if (c == null) return null;
+                long born = ByteBufCodecs.VAR_LONG.decode(b);
+                double jumps = ByteBufCodecs.DOUBLE.decode(b);
+                ua.zentix.incoming.util.Air air = AIR.decode(b);
+                float surface = ByteBufCodecs.FLOAT.decode(b);
+                return new Cloud(kind, born, jumps, air, surface, StreamCodecs.framed(c).decode(b));
+            }));
+        }
+
+        public static final StreamCodec<ByteBuf, StrikeClouds> CODEC = StreamCodec.of((b, p) -> {
+            ByteBufCodecs.VAR_INT.encode(b, p.clouds.size());
+            for (Cloud c : p.clouds) Cloud.CODEC.encode(b, c);
+        }, b -> {
+            int n = ByteBufCodecs.VAR_INT.decode(b);
+            if (n < 0 || n > MAX) throw new DecoderException("strike clouds: " + n);
+            List<Cloud> out = new ArrayList<>(n);
+            for (int i = 0; i < n; i++) {
+                Cloud c = Cloud.CODEC.decode(b);
+                if (c != null) out.add(c);
+            }
+            return new StrikeClouds(List.copyOf(out));
+        });
+
+        @Override
+        public Type<? extends CustomPacketPayload> type() {
+            return TYPE;
+        }
+    }
+
+    /**
      * Roof above cavity collapsed: surface subsidence.
      *
      * @param volume ground volume lost into subsidence, m³ (cavity volume; recordings predating field: {@link #OLD_VOLUME})

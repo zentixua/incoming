@@ -32,6 +32,8 @@ public final class FarRenderer {
 
     /** Client tick (unpaused). */
     public static void tick() {
+        // strikes resent by the server first: their clouds join this tick's events
+        ClientStrikeClouds.tick();
         FarBlasts.tick();
         FarFlightView.tick();
     }

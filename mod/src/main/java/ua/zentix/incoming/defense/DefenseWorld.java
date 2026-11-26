@@ -4,7 +4,6 @@ import net.minecraft.core.BlockPos;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.phys.Vec3;
 import net.neoforged.neoforge.event.tick.LevelTickEvent;
-import net.neoforged.neoforge.network.PacketDistributor;
 import org.jetbrains.annotations.Nullable;
 import ua.zentix.incoming.Incoming;
 import ua.zentix.incoming.IncomingConfig;
@@ -150,7 +149,7 @@ public final class DefenseWorld {
         boolean kill = end == Interceptor.End.KILL && target != null;
         if (kill) target.intercepted(level, "SAM " + f.launcher(), f.site(), f.owner());
         Incoming.LOG.debug("Interceptor from SAM {} against {}: {} at {}", f.launcher(), f.target(), end, BlockPos.containing(at));
-        PacketDistributor.sendToPlayersNear(level, null, at.x, at.y, at.z, IncomingConfig.SERVER.farRange.get(),
+        ua.zentix.incoming.strike.StrikeClouds.send(level, at, IncomingConfig.SERVER.farRange.get(),
                 new S2C.Intercept(at, kill, kill ? Optional.of(target.getUUID()) : Optional.empty(), level.random.nextLong()));
         ua.zentix.incoming.strike.FarFlights.endInterceptor(level, f, at);
         end(f, end);

@@ -319,6 +319,11 @@ paused Flashback replay hold its clouds, crater smoke, ground shake and the shim
 `/tick step` moves them on, a slower `/tick rate` slows them with the world, and an exported Flashback video plays
 them at the replay's pace.
 
+Clouds and crater fires belong to the world, not to whoever watched the hit: a player who joins later, comes back from
+another dimension or respawns sees those still up at their age, carried as far as the wind has taken them, and a
+Flashback replay shows them after a jump forward or back. Leaving the world or restarting the server clears the clouds still in the air; the
+crater fires burn on.
+
 The size, rise, colour and light of every blast come from the charge and the fuel left in the tanks; the smoke and the
 fireball are drawn from simulations of real gas, baked in Blender, the same way up close and far away. A film curve
 keeps the bright fireball's folds and dark soot visible as it billows and cools. This changes how its light is shown,
