@@ -20,25 +20,21 @@ class BlackRainDepositSeamTest {
     }
 
     /**
-     * The server doses the deposit through {@link Detonation#falloutRateAt} at the strike clock S ({@code RadiationTicker}),
-     * and its rain arrives on the motion age ({@link BlackRainModel#startSeconds}). On a vanilla day S runs 72× after the show:
-     * the deposit lands with its rain, not when S passes the rain's onset (15 kt airburst, 5 and 11 km downwind).
+     * The server lands the deposit at the motion age its rain reaches the point ({@link Detonation#rainStartSeconds},
+     * {@code GroundFallout} through {@code NuclearEvents.landingByMotion}; GameTest {@code probe_rain_landing}), with its
+     * law's amplitude ({@link Detonation#rainH1}). On a vanilla day S runs 72× after the show: the deposit still lands with
+     * its rain, not when S passes the rain's onset (15 kt airburst, 5 and 11 km downwind; no jumps, so M is real time).
      */
     @Test
     void depositLandsWithItsRainOnAVanillaDay() {
         Detonation d = airburst(15, 2.5f);
         for (double x : new double[]{5000, 11_000}) {
-            double deposit = Double.NaN, rain = Double.NaN, rate = 0;
-            for (double t = 0; t < 4 * 3600 && (Double.isNaN(deposit) || Double.isNaN(rain)); t += 5) {
-                SmokeParcels.Clock c = SmokeParcelsTest.day(72, t);
-                double s = c.strikeAt(c.motion());
-                if (Double.isNaN(deposit) && d.falloutRateAt(x, 0, s, c) > 0) {
-                    deposit = t;
-                    rate = d.falloutRateAt(x, 0, s, c);
-                }
-                if (Double.isNaN(rain) && d.blackRainAt(x, 0, c)) rain = t;
+            double deposit = d.rainStartSeconds(x, 0), rain = Double.NaN;
+            assertTrue(Double.isFinite(deposit) && d.rainH1(x, 0) > 0, x + " m downwind: no deposit");
+            for (double t = 0; t < 4 * 3600 && Double.isNaN(rain); t += 5) {
+                if (d.blackRainAt(x, 0, SmokeParcelsTest.day(72, t))) rain = t;
             }
-            assertTrue(deposit >= rain - 5, x + " m downwind: deposit at " + deposit / 60 + " real min (" + rate + " R/h), its rain at " + rain / 60 + " real min");
+            assertTrue(deposit >= rain - 5, x + " m downwind: deposit at " + deposit / 60 + " real min, its rain at " + rain / 60 + " real min");
         }
     }
 

@@ -2445,8 +2445,9 @@ public final class NuclearGameTests {
                 double gain = Double.longBitsToDouble(gains.get(i)[1]);
                 // tick-by-tick sum over the pass (the show: real time, a tick is 1/72000 h)
                 double roentgens = 0;
-                for (long k = t - ticks; k < t; k++) roentgens += d.falloutRateAt(grazing.getX(), grazing.getZ(), (k - d.gameTime()) / 20.0,
-                        ua.zentix.incoming.nuclear.model.SmokeParcels.Clock.of((k - d.gameTime()) / 20.0, m -> m)) / 72_000.0;
+                // in the show the ground age is the time since the burst; the plume landed before the pass
+                double h1 = d.falloutH1(grazing.getX(), grazing.getZ());
+                for (long k = t - ticks; k < t; k++) roentgens += ua.zentix.incoming.nuclear.model.FalloutModel.groundRate(h1, (k - d.gameTime()) / 72_000.0) / 72_000.0;
                 double expected = roentgens * Shielding.fallout(level, RadiationTicker.middle(grazing)) * RadiationTicker.GY_PER_R;
                 h.assertTrue(Math.abs(gain / expected - 1) < 0.05, "per round " + ticks + " tick dose " + gain + " Gr, we were waiting " + expected);
             }

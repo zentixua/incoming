@@ -403,8 +403,10 @@ paths:
   the front check and set it, as does the late queue, so whichever path comes first wins (a body loaded on the tick the
   front crosses it, a quick reload queued twice). The join event only measures distances: reaches of past detonations
   (cold after a restart) are computed in `LateExposure.work`, one per work unit, then waiting bodies are sorted, then
-  each body's detonations, one per unit. `MobFallout` integrates each mob's dose since its own `falloutAt` (log-grid integral for gaps
-  over 2 passes). Worlds saved before the mark: detonations below `NuclearEvents.lateFrom` stay as they were (hit bodies
+  each body's detonations, one per unit. `MobFallout` integrates each mob's dose since its own `falloutAt` (analytic integral over each
+  deposit's ground age, `GroundFallout`; live detonations and ground fields, `NuclearEvents.falloutSources`). An unfinished
+  crater keeps digging, and its saved progress stays, after its detonation is forgotten (`NuclearEvents.prune`; restored
+  from `past` too). Worlds saved before the mark: detonations below `NuclearEvents.lateFrom` stay as they were (hit bodies
   carry no mark). GameTest `LateExposureGameTests`, `LateExposureOrderGameTests`, unit `MobFalloutTest`. Estimate: the late body reads the world as it
   is on load (ruins may have replaced its shelter).
 - Burial: ruins bypass `setBlock`, so vanilla only detects a body inside blocks via suffocation. Burial uses a

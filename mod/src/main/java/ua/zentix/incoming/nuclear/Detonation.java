@@ -13,6 +13,7 @@ import ua.zentix.incoming.nuclear.model.FalloutModel;
 import ua.zentix.incoming.nuclear.model.FireballModel;
 import ua.zentix.incoming.nuclear.model.FrontProfile;
 import ua.zentix.incoming.nuclear.model.HobBlast;
+import ua.zentix.incoming.nuclear.model.SmokeParcels;
 import ua.zentix.incoming.nuclear.model.ThermalModel;
 import ua.zentix.incoming.util.StreamCodecs;
 import ua.zentix.incoming.util.Terrain;
@@ -398,25 +399,75 @@ public record Detonation(int id, Vec3 burst, double groundY, double yieldKt, boo
         return fallout && (falloutModel().surfaceFraction() > 0 || blackRainModel().fireRadiusM() > 0);
     }
 
-    /**
-     * Fallout dose rate at point, R/h: surface-burst plume and black-rain washout, on the detonation's clock ({@link NukeClock}:
-     * real time through the show, so the plume lands as the visible cloud passes; then the world clock, so its decay takes
-     * the hours the world lives through).
-     *
-     * The black-rain deposit lands as its rain arrives, on the motion age ({@link BlackRainModel#landedStrike}).
-     *
-     * @param seconds detonation-clock seconds after the burst (now or earlier)
-     * @param parcels the detonation's smoke-parcel clock now (when the rain reached the point)
-     */
-    public double falloutRateAt(double x, double z, double seconds, ua.zentix.incoming.nuclear.model.SmokeParcels.Clock parcels) {
-        if (!hasFallout()) return 0;
-        double hours = seconds / 3600, mx = metres(x - burst.x), mz = metres(z - burst.z);
-        double rain = blackRainModel().depositH1(mx, mz, seconds, parcels);
-        double decay = Math.pow(Math.max(hours, FalloutModel.MIN_DECAY_HOURS), -FalloutModel.DECAY_EXP);
-        return falloutModel().doseRate(mx, mz, hours) + rain * decay;
+    /** Surface-burst plume's dose rate at the point at H+1, R/h ({@link FalloutModel#doseRateAtH1}); 0 — no fallout. */
+    public double falloutH1(double x, double z) {
+        return hasFallout() ? falloutModel().doseRateAtH1(metres(x - burst.x), metres(z - burst.z)) : 0;
     }
 
-    /** Detonation-clock seconds after the burst until the surface-burst plume deposits at the point. */
+    /** Black-rain deposit's dose rate at the point at H+1, R/h ({@link BlackRainModel#depositH1}); 0 — outside the band or no fallout. */
+    public double rainH1(double x, double z) {
+        if (!hasFallout()) return 0;
+        double mx = metres(x - burst.x), mz = metres(z - burst.z);
+        // the amplitude once landed: when it lands is the landing's (GroundFallout), not the model's strike-clock gate
+        return Double.isFinite(blackRainModel().startSeconds(mx, mz)) ? blackRainModel().depositH1(mx, mz, Double.POSITIVE_INFINITY, LANDED) : 0;
+    }
+
+    /**
+     * Motion-age seconds after the burst when black rain, and its deposit, reaches the point (the air's clock, time.md §8.3
+     * rule 4); infinity — never.
+     */
+    public double rainStartSeconds(double x, double z) {
+        return blackRainModel().startSeconds(metres(x - burst.x), metres(z - burst.z));
+    }
+
+    /**
+     * Motion-age seconds of the plume's last landing above the radiation floor ({@link FalloutModel#lastLandingHours});
+     * 0 — no plume.
+     */
+    public double lastLandingSeconds() {
+        return hasFallout() ? Caches.lastLanding(this) : 0;
+    }
+
+    /** Motion-age seconds by which all black-rain deposit has landed (the rain has ended everywhere); 0 — no rain. */
+    public double rainLandedSeconds() {
+        return hasFallout() ? blackRainModel().endSeconds() : 0;
+    }
+
+    /** A parcel clock by which every rain has reached the ground: the deposit's amplitude without its landing gate. */
+    private static final SmokeParcels.Clock LANDED = SmokeParcels.Clock.of(Double.POSITIVE_INFINITY, m -> 0);
+
+    /** Strongest H+1 dose rate on the ground, R/h: the plume's and the rain deposit's peaks. */
+    public double groundPeakH1() {
+        if (!hasFallout()) return 0;
+        BlackRainModel rain = blackRainModel();
+        return falloutModel().peakH1() + (rain.fireRadiusM() > 0 ? BlackRainModel.RAIN_H1 * yieldKt / 15 * rain.airShare() : 0);
+    }
+
+    /**
+     * Distance from the burst, blocks, beyond which this detonation's fallout and rain deposit stay under {@code rate} R/h
+     * for ground ages of at least {@code groundHours}: the plume's bound ({@link FalloutModel#reachMetres}) and the
+     * rain band's far corner (the fire zone plus the parcels' travel, {@link BlackRainModel#DRIFT_S} of wind and at most
+     * their reach {@link SmokeParcels#reach}, widening by {@link SmokeParcels#SPREAD}).
+     */
+    public double groundReach(double groundHours, double rate) {
+        return Caches.groundReach(this, groundHours, rate);
+    }
+
+    /** {@link #groundReach} computed (the bound's bisection). */
+    private double groundReachNow(double groundHours, double rate) {
+        if (!hasFallout()) return 0;
+        double r = falloutModel().reachMetres(groundHours, rate);
+        BlackRainModel rain = blackRainModel();
+        double peak = rain.fireRadiusM() > 0 ? BlackRainModel.RAIN_H1 * yieldKt / 15 * rain.airShare() : 0;
+        if (FalloutModel.groundRate(peak, groundHours) >= rate) {
+            SmokeParcels p = rain.parcels();
+            double travel = Math.min(p.wind() * BlackRainModel.DRIFT_S, p.reach());
+            r = Math.max(r, Math.hypot(rain.fireRadiusM() + travel, rain.fireRadiusM() + SmokeParcels.SPREAD * travel));
+        }
+        return blocks(r);
+    }
+
+    /** Motion-age seconds after the burst until the surface-burst plume deposits at the point. */
     public double falloutArrivalSeconds(double x, double z) {
         return falloutModel().arrivalHours(metres(x - burst.x), metres(z - burst.z)) * 3600;
     }
@@ -460,6 +511,26 @@ public record Detonation(int id, Vec3 burst, double groundY, double yieldKt, boo
         /** Height samples between ground and burst for {@link #blastReach}. */
         private static final int REACH_HEIGHTS = 32;
         private static final java.util.Map<Detonation, BlackRainModel> RAIN = java.util.Collections.synchronizedMap(new java.util.WeakHashMap<>());
+        private static final java.util.Map<Detonation, Double> LANDING = java.util.Collections.synchronizedMap(new java.util.WeakHashMap<>());
+
+        /** Last reach per detonation: {ground hours, rate, blocks}. */
+        private static final java.util.Map<Detonation, double[]> GROUND_REACH = java.util.Collections.synchronizedMap(new java.util.WeakHashMap<>());
+        /** A reach is reused for ground ages up to this factor older (the bound shrinks with age: the old one covers it). */
+        private static final double REACH_REUSE = 1.05;
+
+        static double groundReach(Detonation d, double groundHours, double rate) {
+            // the law does not decay before its half-hour floor: one reach for every younger age
+            groundHours = Math.max(groundHours, FalloutModel.MIN_DECAY_HOURS);
+            double[] last = GROUND_REACH.get(d);
+            if (last != null && last[1] == rate && groundHours >= last[0] && groundHours <= last[0] * REACH_REUSE) return last[2];
+            double r = d.groundReachNow(groundHours, rate);
+            GROUND_REACH.put(d, new double[]{groundHours, rate, r});
+            return r;
+        }
+
+        static double lastLanding(Detonation d) {
+            return LANDING.computeIfAbsent(d, x -> x.falloutModel().lastLandingHours() * 3600);
+        }
 
         static double ruinRadius(Detonation d) {
             return RUINS.computeIfAbsent(d, x -> Math.min(x.radiusMax() * 1.5, Math.max(x.radiusMax(), x.groundRange(RUIN_EDGE_KPA))));
