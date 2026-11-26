@@ -45,7 +45,7 @@ Launch an ICBM or fit a nuclear warhead to a cruise missile or B-2 bomb. By defa
 **Minecraft 1.21.1 · NeoForge 21.1.264+ · Java 21.** Incoming is required on the server and every client.
 No other mods are required.
 
-Create, Create Aeronautics with Sable, Distant Horizons, Voxy through Roxy, Iris, Jade, CC:Tweaked, Mekanism, FTB Teams and Open Parties and Claims are optional.
+Create, Create Aeronautics with Sable, Distant Horizons, Voxy through Roxy, Iris, Vista, Jade, CC:Tweaked, Mekanism, FTB Teams and Open Parties and Claims are optional.
 See [compatibility and supported versions](https://github.com/zentixua/incoming/blob/main/docs/guide/compatibility.md).
 
 ## FAQ

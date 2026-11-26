@@ -39,7 +39,7 @@ Incoming добавляет удары с воздуха со взрывами, 
 **Minecraft 1.21.1 · NeoForge 21.1.264+ · Java 21.** Incoming нужен на сервере и у каждого игрока.
 Другие моды не обязательны.
 
-Дополнительно поддерживаются Create, Create Aeronautics с Sable, Distant Horizons, Voxy через Roxy, Iris, Jade, CC:Tweaked, Mekanism, FTB Teams и Open Parties and Claims.
+Дополнительно поддерживаются Create, Create Aeronautics с Sable, Distant Horizons, Voxy через Roxy, Iris, Vista, Jade, CC:Tweaked, Mekanism, FTB Teams и Open Parties and Claims.
 Версии и подробности — в [руководстве по совместимости](https://github.com/zentixua/incoming/blob/main/docs/guide/ru/compatibility.md).
 
 ## Частые вопросы
