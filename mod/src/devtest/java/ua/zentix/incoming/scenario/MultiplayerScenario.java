@@ -56,6 +56,8 @@ final class MultiplayerScenario {
         }
         int t = tick - joinedAt;
         if (t % 20 == 0 && !ClientFlights.all().isEmpty()) logFlights();
+        // a returning player is a late joiner: the server resends the clouds of strikes that burst while it was away (time rule 10)
+        if (rejoins > 0 && t % 200 == 0 && t <= 800) Incoming.LOG.info("SCENARIO mp late clouds at {} t: {}", t, ua.zentix.incoming.client.far.FarBlasts.describe());
         if (attacker) attackerStep(mc, t);
         else targetStep(mc, t);
     }
