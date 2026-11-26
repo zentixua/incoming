@@ -793,9 +793,9 @@ public final class PallField {
     /**
      * Node i of the haze row: the fire zone's smoke by radius i (its extinction at full strength, 1/block: the fire share once the
      * front has passed, the parcel read widened at its shift), height (blocks; no lower than eventual dust top), fire light from
-     * below 0..1 at radius i (the fires light only the smoke above them), and the parcels' strength at along-wind node i
-     * ({@link Band}: emission at its strike clock over its widening, 0 where not drawn; node i at shift i/(BINS − 1) of
-     * {@link #parcelLength}). The pall's haze at a point is extinction × strength ({@code pallField}, {@link #layers}).
+     * below 0..1 at radius i (the fires light only the smoke above them), and the parcels' strength at node i ({@link Band}:
+     * emission at its strike clock over its widening, faded where not seen; node i at travel i/(BINS − 1) of
+     * {@link #parcelLength} past the zone's downwind edge). The pall's haze at a point is extinction × strength ({@code pallField}, {@link #layers}).
      */
     void haze(int i, double ticks, double[] out) {
         out[0] = age(i, ticks) > 0 ? perBlock(SIGMA_HAZE) * fire[i] : 0;
@@ -806,7 +806,7 @@ public final class PallField {
     }
 
     /**
-     * The smoke parcels along the wind at one moment ({@link SmokeParcels}): strength per node (shift j/(BINS − 1) of
+     * The smoke parcels along the wind at one moment ({@link SmokeParcels}): strength per node (travel j/(BINS − 1) of
      * {@code length}, blocks), the axis length, and the first and last drawn node (−1: none).
      */
     record Band(double ticks, float[] carried, double length, int first, int last) {
@@ -814,12 +814,12 @@ public final class PallField {
             return last >= 0;
         }
 
-        /** Shift of node j, blocks. */
+        /** Travel of node j's parcel past the fire zone's downwind edge, blocks. */
         double at(int j) {
             return length * j / (BINS - 1);
         }
 
-        /** Strength at shift {@code along} blocks, linear between nodes: as the shader reads the row's last channel. */
+        /** Strength of the parcel that has travelled {@code along} blocks, linear between nodes: as the shader reads the row's last channel. */
         double strength(double along) {
             if (length <= 0) return carried[0];
             double x = Math.max(0, Math.min(1, along / length)) * (BINS - 1);
@@ -911,7 +911,7 @@ public final class PallField {
         Band b = band(ticks);
         if (fireReach <= 0 || !b.drawn()) return 0;
         double s = b.at(b.last);
-        return s + hazeRadius() * widen(s);
+        return Math.min(s + fireReach, b.length) + hazeRadius() * widen(s);
     }
 
     /**
@@ -927,13 +927,18 @@ public final class PallField {
         out[2] = out[3] = Double.NEGATIVE_INFINITY;
         boolean any = false;
         for (int j = Math.max(b.first - 1, 0); j <= Math.min(b.last + 1, BINS - 1); j++) {
-            double s = b.at(j), r = hazeRadius() * widen(s), x = ux * s, z = uz * s;
-            if (Math.hypot(x - ex, z - ez) - r > within) continue;
-            any = true;
-            out[0] = Math.min(out[0], x - r);
-            out[1] = Math.min(out[1], z - r);
-            out[2] = Math.max(out[2], x + r);
-            out[3] = Math.max(out[3], z + r);
+            // the parcel that has travelled s stands abreast of the axis at s past the zone's downwind edge; the newest also
+            // over the whole zone
+            double s = b.at(j), r = hazeRadius() * widen(s);
+            for (double g : s > 0 ? new double[]{Math.min(s + fireReach, b.length)} : new double[]{0, Math.min(fireReach, b.length)}) {
+                double x = ux * g, z = uz * g;
+                if (Math.hypot(x - ex, z - ez) - r > within) continue;
+                any = true;
+                out[0] = Math.min(out[0], x - r);
+                out[1] = Math.min(out[1], z - r);
+                out[2] = Math.max(out[2], x + r);
+                out[3] = Math.max(out[3], z + r);
+            }
         }
         return any;
     }
@@ -1333,11 +1338,13 @@ public final class PallField {
             // the smoke parcel over the point (pallField): the fire zone's haze shifted downwind and widened, at its strength
             Band b = band(ticks);
             double ux = Math.cos(d.windDir()), uz = Math.sin(d.windDir());
-            double along = Math.max(0, Math.min(b.length, dx * ux + dz * uz)), widen = widen(along);
+            // the band's axis abreast of the point; the newest parcel over it, by its travel past the zone's downwind edge
+            double down = dx * ux + dz * uz, along = Math.max(0, Math.min(b.length, down));
+            double travel = Math.max(0, Math.min(b.length, down - fireReach)), widen = widen(travel);
             double sx = (dx - ux * along) / widen, sz = (dz - uz * along) / widen, uh = Math.hypot(sx, sz) / reach;
             if (uh < 1) {
                 haze(bin(uh * reach), ticks, v);
-                double carried = b.strength(along);
+                double carried = b.strength(travel);
                 if (v[0] > 0 && carried > 0) {
                     out[3] = v[0] * carried * (1 - water.at(sx, sz)) * edge(uh);
                     out[4] = Math.max(v[1], 1);
@@ -1375,11 +1382,13 @@ public final class PallField {
         if (fireReach > 0) {
             Band b = band(ticks);
             double ux = Math.cos(d.windDir()), uz = Math.sin(d.windDir());
-            double along = Math.max(0, Math.min(b.length, dx * ux + dz * uz)), widen = widen(along);
+            // the band's axis abreast of the point; the newest parcel over it, by its travel past the zone's downwind edge
+            double down = dx * ux + dz * uz, along = Math.max(0, Math.min(b.length, down));
+            double travel = Math.max(0, Math.min(b.length, down - fireReach)), widen = widen(travel);
             double sx = (dx - ux * along) / widen, sz = (dz - uz * along) / widen, uh = Math.hypot(sx, sz) / reach;
             if (uh < 1) {
                 int i = bin(uh * reach);
-                double haze = age(i, ticks) > 0 ? 0.8 * fire[i] * b.strength(along) * edge(uh) : 0;
+                double haze = age(i, ticks) > 0 ? 0.8 * fire[i] * b.strength(travel) * edge(uh) : 0;
                 if (haze > ash) ash = Math.max(ash, haze * (1 - water.at(sx, sz)));
             }
         }

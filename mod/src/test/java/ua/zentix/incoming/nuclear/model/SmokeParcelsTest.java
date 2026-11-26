@@ -126,14 +126,16 @@ public class SmokeParcelsTest {
 
     /**
      * Widening: the Hiroshima band (Uda), 5.5 km half-width 17 km beyond the 2 km fire zone; the column thins by the same factor,
-     * and a parcel is drawn until its column is below {@link SmokeParcels#GONE}.
+     * and a parcel is seen (and rains) while its column is at least {@link SmokeParcels#GONE}, drawn fading out to half that.
      */
     @Test
     void parcelsWidenAndThinUntilTheyAreGone() {
         assertEquals(5500, HIROSHIMA.fireRadiusM() * HIROSHIMA.widen(19_000), 300);
         assertEquals(0.62, HIROSHIMA.depth(), 0.01, "full-strength haze column: 900 m visibility, 260 m top");
         double reach = HIROSHIMA.reach();
-        assertEquals(SmokeParcels.GONE, HIROSHIMA.depth() / HIROSHIMA.widen(reach), 1e-9, "drawn to where its column is gone");
+        assertEquals(SmokeParcels.GONE, HIROSHIMA.depth() / HIROSHIMA.widen(reach), 1e-9, "seen to where its column is gone");
+        assertEquals(SmokeParcels.GONE / SmokeParcels.FADE, HIROSHIMA.depth() / HIROSHIMA.widen(HIROSHIMA.drawnReach()), 1e-9,
+                "drawn, fading, to half of that");
         // at a 24-hour day the parcels at full strength reach the rain band's end (2 h of travel, 18 km at 2.5 m/s) and beyond
         SmokeParcels.Clock c = day(1, 2.5 * 3600);
         assertTrue(HIROSHIMA.carried(2.5 * 7200, c) > 0);
@@ -143,7 +145,7 @@ public class SmokeParcelsTest {
     }
 
     /**
-     * No cut: where a parcel thins to the drawn limit ({@link SmokeParcels#GONE}) its drawn column fades to nothing instead of
+     * No cut: where a parcel thins past the seen limit ({@link SmokeParcels#GONE}) its drawn column fades to nothing instead of
      * dropping from 0.05 to 0 (that step drew a straight cut across the band, `parcels-maps` in the mission folder): between
      * samples 10 m apart, never 0 beside a column of half the limit or more.
      */

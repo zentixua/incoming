@@ -234,7 +234,8 @@ public final class ShieldingGameTests {
                 level.getGameTime() - age, 0, 5, 20_000, 7, 0.1f, true, Detonation.OLD_WAVE);
         double seconds = NuclearEvents.get(level).seconds(d, level);
         h.assertTrue(d.blackRainAt(at.x, at.z, NuclearEvents.get(level).parcels(d, level)), "no black rain at ground zero at " + seconds + " s");
-        h.assertTrue(d.falloutRateAt(at.x, at.z, seconds) > MobFallout.BACKGROUND, "no fallout at ground zero: " + d.falloutRateAt(at.x, at.z, seconds));
+        h.assertTrue(d.falloutRateAt(at.x, at.z, seconds, NuclearEvents.get(level).parcels(d, level)) > MobFallout.BACKGROUND,
+                "no fallout at ground zero: " + d.falloutRateAt(at.x, at.z, seconds, NuclearEvents.get(level).parcels(d, level)));
         h.assertTrue(Detonation.underOpenSky(level, bare.getEyePosition()), "the players are not under the open sky");
         RadiationTicker.step(level, List.of(bare, one, full, before), List.of(d));
         RadiationDose b = RadiationTicker.dose(bare), o = RadiationTicker.dose(one), f = RadiationTicker.dose(full);

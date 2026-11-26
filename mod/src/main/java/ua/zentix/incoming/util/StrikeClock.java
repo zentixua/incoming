@@ -81,7 +81,10 @@ public record StrikeClock(double jumpsAtStrike, long endAge, double rateAtEnd, d
      * leaving it then carried ({@code nuclear/model/SmokeParcels}). From the anchors and the present reading alone, so the
      * server and every client get the same answer without a history: through the show S = M; after it the clock without jumps
      * is taken as running evenly between the known readings (the show's end, the blend's end, now: exact for a steady day), and
-     * the counted jumps since the show's end as the newest stretch of M (S and M advance together across a jump).
+     * the counted jumps since the show's end as the newest stretch of M (S and M advance together across a jump). Limit: the
+     * anchors carry no jump times, so real time after such a jump is read at the real rate, not k (8 h slept, then 1000 s
+     * awake on a vanilla day: those 1000 s of smoke read S up to 71 000 s too young); it matters only while fires still smoke
+     * after a counted jump, which itself ends the show and moves S on by hours.
      *
      * @param ageNow  real ticks since the strike now
      * @param rateNow clock without jumps now, world-clock ticks

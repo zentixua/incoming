@@ -48,13 +48,13 @@ class MobFalloutTest {
                 20_000, 0, 1f, true, 0.25f, 0L, false);
         double x = 18_000, arrival = d.falloutArrivalSeconds(x, 0) / 3600, h0 = 0.4, h1 = 10.4;
         assertEquals(2, arrival, 0.01);
-        double rate = d.falloutRateAt(x, 0, h1 * 3600);
+        double rate = d.falloutRateAt(x, 0, h1 * 3600, ua.zentix.incoming.nuclear.model.SmokeParcels.Clock.of(h1 * 3600, m -> m));
         double truth = rate * FalloutModel.decayHours(arrival, h1);
         // within the log grid's one step at the arrival (arrivalStepInsideTheSpan)
-        assertEquals(truth, MobFallout.exposure(d, x, 0, h0 * 3600, h1 * 3600), truth * 0.03);
+        assertEquals(truth, MobFallout.exposure(d, x, 0, h0 * 3600, h1 * 3600, ua.zentix.incoming.nuclear.model.SmokeParcels.Clock.of(h1 * 3600, m -> m)), truth * 0.03);
         assertTrue(rate * FalloutModel.decayHours(h0, h1) > 2 * truth, "the old extrapolation it replaces");
         // a short step is the rate × time
-        assertEquals(rate / 3600, MobFallout.exposure(d, x, 0, h1 * 3600 - 1, h1 * 3600), 1e-12);
+        assertEquals(rate / 3600, MobFallout.exposure(d, x, 0, h1 * 3600 - 1, h1 * 3600, ua.zentix.incoming.nuclear.model.SmokeParcels.Clock.of(h1 * 3600, m -> m)), 1e-12);
     }
 
     /** Nothing before the span start or for an empty span. */

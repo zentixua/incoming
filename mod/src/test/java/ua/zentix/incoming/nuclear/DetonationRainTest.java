@@ -22,7 +22,7 @@ class DetonationRainTest {
         assertTrue(AIR.blackRainAt(0, 0, ua.zentix.incoming.nuclear.model.SmokeParcels.Clock.of(RAINING, m -> m)));
         assertTrue(AIR.blackRainEndSeconds() > RAINING);
         assertTrue(AIR.hasFallout(), "airburst rain washes radioactivity down");
-        assertTrue(AIR.falloutRateAt(0, 0, RAINING * 4) > 0);
+        assertTrue(AIR.falloutRateAt(0, 0, RAINING * 4, ua.zentix.incoming.nuclear.model.SmokeParcels.Clock.of(RAINING * 4, m -> m)) > 0);
     }
 
     @Test
@@ -31,7 +31,7 @@ class DetonationRainTest {
         for (double t = 0; t < 4 * 3600; t += 5) assertFalse(dry.blackRainAt(0, 0, ua.zentix.incoming.nuclear.model.SmokeParcels.Clock.of(t, m -> m)));
         assertEquals(0, dry.blackRainEndSeconds(), 0);
         assertFalse(dry.hasFallout(), "an airburst without rain leaves no fallout");
-        assertEquals(0, dry.falloutRateAt(0, 0, RAINING * 4), 0);
+        assertEquals(0, dry.falloutRateAt(0, 0, RAINING * 4, ua.zentix.incoming.nuclear.model.SmokeParcels.Clock.of(RAINING * 4, m -> m)), 0);
         assertTrue(dry.fires(), "fires stay");
     }
 }

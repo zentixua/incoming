@@ -19,7 +19,7 @@ class BlackRainModelTest {
     void noFiresNoRain() {
         BlackRainModel dry = new BlackRainModel(15, 0, 0, 2.5, 1);
         for (double s = 0; s < 8000; s += 10) assertFalse(dry.raining(0, 0, day(1, s)));
-        assertEquals(0, dry.depositH1(0, 0, 1e6), 0);
+        assertEquals(0, dry.depositH1(0, 0, 1e6, SmokeParcels.Clock.of(1e6, m -> m)), 0);
         assertEquals(0, dry.endSeconds(), 0);
     }
 
@@ -37,6 +37,9 @@ class BlackRainModelTest {
             assertFalse(HIROSHIMA.raining(0, 0, day(k, start - 1)));
             assertTrue(HIROSHIMA.raining(0, 0, day(k, start + 1)));
             assertTrue(HIROSHIMA.raining(-1500, 0, day(k, start + 30)));
+            // the whole burning zone, its downwind half too: the smoke over it is the smoke leaving now
+            assertTrue(HIROSHIMA.raining(1500, 0, day(k, start + 1)), "k " + k + ": the downwind half of the zone");
+            assertEquals(start, HIROSHIMA.startSeconds(1900, 0), 1e-9);
         }
         assertTrue(HIROSHIMA.raining(-1500, 0, day(1, start + 300)));
         assertFalse(HIROSHIMA.raining(0, 0, day(1, start + BlackRainModel.durationSeconds() + 1)));
@@ -98,7 +101,7 @@ class BlackRainModelTest {
                         if (!HIROSHIMA.raining(x, z, c)) continue;
                         double s = p.shift(x, c);
                         assertTrue(s <= p.wind() * c.motion(), "k " + k + ": rain ahead of its smoke at " + x + " m, " + t + " s");
-                        assertTrue(p.drawn(s, c) * p.depth() >= SmokeParcels.GONE && p.under(x, z, c), "k " + k + ": rain from a clear sky at " + x + ", " + z + ", " + t + " s");
+                        assertTrue(p.law(s, c) * p.depth() >= SmokeParcels.GONE && p.drawn(s, c) > 0 && p.under(x, z, c), "k " + k + ": rain from a clear sky at " + x + ", " + z + ", " + t + " s");
                     }
                 }
             }
@@ -117,12 +120,12 @@ class BlackRainModelTest {
     @Test
     void airBurstRainIsWeaklyRadioactive() {
         double start = HIROSHIMA.startSeconds(2500, 0);
-        assertEquals(0, HIROSHIMA.depositH1(2500, 0, start - 1), 0);
-        double h1 = HIROSHIMA.depositH1(2500, 0, start);
+        assertEquals(0, HIROSHIMA.depositH1(2500, 0, start - 1, SmokeParcels.Clock.of(start - 1, m -> m)), 0);
+        double h1 = HIROSHIMA.depositH1(2500, 0, start, SmokeParcels.Clock.of(start, m -> m));
         double hours = start / 3600;
         double total = 5 * h1 * Math.pow(hours, -0.2);
         assertTrue(total > 1 && total < 40, "dose for the entire time, R: " + total);
-        assertEquals(0, new BlackRainModel(15, 2000, 0, 2.5, 0).depositH1(2500, 0, start), 0, "for the ground-based, everything is in the trace");
-        assertTrue(HIROSHIMA.depositH1(15000, 0, 1e6) < h1, "weaker downwind");
+        assertEquals(0, new BlackRainModel(15, 2000, 0, 2.5, 0).depositH1(2500, 0, start, SmokeParcels.Clock.of(start, m -> m)), 0, "for the ground-based, everything is in the trace");
+        assertTrue(HIROSHIMA.depositH1(15000, 0, 1e6, SmokeParcels.Clock.of(1e6, m -> m)) < h1, "weaker downwind");
     }
 }

@@ -10,11 +10,13 @@ package ua.zentix.incoming.nuclear.model;
  *     day it emits less in total, because it burns for less real time.</li>
  *     <li><b>Motion.</b> A parcel lives on the motion age M (real time plus counted jumps): the wind carries the fire zone's disk of
  *     smoke downwind at {@link #wind}, and it widens by {@link #SPREAD} per metre travelled, its column thinning by the same
- *     factor (mass kept). At ground point (down, cross) from the epicentre (down along the wind) the haze is the parcel shifted by
- *     {@link #shift}: emitted shift / wind ago.</li>
- *     <li><b>Drawn</b> while its vertical optical depth is at least {@link #GONE}, the pall's own visibility rule (95 % of the sun
- *     passes): {@link #carried} is 0 past it. The picture draws the parcels at {@link #NODES} axis nodes ({@link #drawn}); black
- *     rain falls only where that drawn strength is above 0.</li>
+ *     factor (mass kept). At ground point (down, cross) from the epicentre (down along the wind) the haze is the newest parcel
+ *     over it: over the zone the smoke leaving now, downwind of it the smoke that left the zone's downwind edge
+ *     {@link #shift} / wind ago, across the wind the zone's smoke widened by that travel ({@link #axis}).</li>
+ *     <li><b>Seen</b> while its vertical optical depth is at least {@link #GONE}, the pall's own visibility rule (95 % of the sun
+ *     passes; {@link #law}), drawn fading out below it ({@link #carried}, {@link #FADE}). The picture draws the parcels at
+ *     {@link #NODES} axis nodes ({@link #drawn}); black rain and its deposit fall only from a seen parcel, where the picture draws
+ *     it.</li>
  * </ul>
  * Metres, seconds, wind toward (cos, sin) of {@code windDirRad}.
  *
@@ -83,19 +85,42 @@ public record SmokeParcels(double yieldKt, double fireRadiusM, double windDirRad
         return 1 + SPREAD * Math.max(s, 0) / Math.max(fireRadiusM, 1);
     }
 
-    /** Farthest shift at which a parcel of full strength is still drawn, m; 0 — no fires or never drawn. */
+    /**
+     * Farthest travel at which a parcel of full strength is still seen ({@link #GONE}), m: the law's reach of what rains and
+     * lands; 0 — no fires.
+     */
     public double reach() {
+        return reachAt(GONE);
+    }
+
+    /** Farthest travel at which a parcel of full strength is still drawn (its fade's end, {@link #GONE}/{@link #FADE}), m. */
+    public double drawnReach() {
+        return reachAt(GONE / FADE);
+    }
+
+    private double reachAt(double tau) {
         if (fireRadiusM <= 0) return 0;
-        return Math.max(0, fireRadiusM * (depth() / GONE - 1) / SPREAD);
+        return Math.max(0, fireRadiusM * (depth() / tau - 1) / SPREAD);
     }
 
-    /** Axis of the parcels now, m: as far as the oldest parcel has travelled, no farther than any parcel is drawn. */
+    /** Travel of the oldest drawn parcel now, m: as far as the first one has gone, no farther than any parcel is drawn. */
     public double length(Clock c) {
-        return fireRadiusM <= 0 ? 0 : Math.min(wind() * Math.max(c.motion(), 0), reach());
+        return fireRadiusM <= 0 ? 0 : Math.min(wind() * Math.max(c.motion(), 0), drawnReach());
     }
 
-    /** The parcel over ground point {@code down} metres downwind of the epicentre: its shift, m (0 over the upwind zone). */
+    /**
+     * The newest parcel over ground point {@code down} metres downwind of the epicentre: its travel past the fire zone's downwind
+     * edge, m. Over the burning zone the smoke is the newest (0); downwind of it, the smoke that left the edge travel / wind ago.
+     */
     public double shift(double down, Clock c) {
+        return Math.max(0, Math.min(down - fireRadiusM, length(c)));
+    }
+
+    /**
+     * Where the band's axis stands abreast of ground point {@code down}, m from the epicentre: the point itself along the wind, from
+     * the epicentre to the oldest parcel's centre. The band across the wind is the fire zone's smoke widened by its parcel's travel.
+     */
+    public double axis(double down, Clock c) {
         return Math.max(0, Math.min(down, length(c)));
     }
 
@@ -106,20 +131,26 @@ public record SmokeParcels(double yieldKt, double fireRadiusM, double windDirRad
         return left <= 0 ? 0 : FireStormLaw.smoke(c.strikeAt(left), FireStormLaw.PEAK_S);
     }
 
+    /** The law's column of the parcel that has travelled {@code s}, relative to full-strength smoke over the fire zone. */
+    public double law(double s, Clock c) {
+        return emitted(s, c) / widen(s);
+    }
+
     /**
-     * Column of the parcel at shift {@code s} relative to full-strength smoke over the fire zone: its emission over its widening,
-     * faded out between {@link #FADE}·{@link #GONE} and {@link #GONE}; 0 where it is not drawn.
+     * The drawn column of the parcel that has travelled {@code s}, relative to full-strength smoke over the fire zone: the law's
+     * where it is seen ({@link #GONE} and thicker); below it, faded out to nothing at {@link #GONE}/{@link #FADE}.
      */
     public double carried(double s, Clock c) {
-        double v = emitted(s, c) / widen(s), tau = v * depth();
-        if (tau < GONE) return 0;
-        // presentation: a parcel reaching GONE would vanish from a column of 0.05, a straight cut across the band where the
-        // fires' strength or the widening crosses it; it fades over its last halving instead (the law's column above, none below)
-        double f = Math.min(1, (tau - GONE) / ((FADE - 1) * GONE));
+        double v = law(s, c), tau = v * depth(), low = GONE / FADE;
+        if (tau >= GONE) return v;
+        if (tau <= low) return 0;
+        // presentation: cut at GONE, a parcel would vanish from a 0.05 column, a straight edge across the band where the fires'
+        // strength or the widening crosses it; below GONE it fades out over its next halving instead (the law's column above)
+        double f = (tau - low) / (GONE - low);
         return v * f * f * (3 - 2 * f);
     }
 
-    /** {@link #carried} fades in from {@link #GONE} to this many times it (presentation). */
+    /** A parcel thinner than {@link #GONE} fades out until it is this many times thinner (presentation). */
     public static final double FADE = 2;
 
     /** Nodes along the axis at which the parcels are drawn (the pall's haze row, {@code PallField.BINS}). */
@@ -144,13 +175,13 @@ public record SmokeParcels(double yieldKt, double fireRadiusM, double windDirRad
     }
 
     /**
-     * Whether ground point (x, z) metres from the epicentre lies under its parcel's disk: the fire zone widened by the shift,
-     * centred on the axis at that shift.
+     * Whether ground point (x, z) metres from the epicentre lies under the band: within the fire zone's radius widened by its
+     * parcel's travel ({@link #shift}) of the band's axis ({@link #axis}).
      */
     public boolean under(double x, double z, Clock c) {
         if (fireRadiusM <= 0) return false;
         double ux = Math.cos(windDirRad), uz = Math.sin(windDirRad);
-        double down = x * ux + z * uz, s = shift(down, c);
-        return Math.hypot(x - ux * s, z - uz * s) <= fireRadiusM * widen(s);
+        double down = x * ux + z * uz, g = axis(down, c);
+        return Math.hypot(x - ux * g, z - uz * g) <= fireRadiusM * widen(shift(down, c));
     }
 }

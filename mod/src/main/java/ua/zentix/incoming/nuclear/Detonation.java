@@ -403,12 +403,15 @@ public record Detonation(int id, Vec3 burst, double groundY, double yieldKt, boo
      * real time through the show, so the plume lands as the visible cloud passes; then the world clock, so its decay takes
      * the hours the world lives through).
      *
-     * @param seconds detonation-clock seconds after the burst
+     * The black-rain deposit lands as its rain arrives, on the motion age ({@link BlackRainModel#landedStrike}).
+     *
+     * @param seconds detonation-clock seconds after the burst (now or earlier)
+     * @param parcels the detonation's smoke-parcel clock now (when the rain reached the point)
      */
-    public double falloutRateAt(double x, double z, double seconds) {
+    public double falloutRateAt(double x, double z, double seconds, ua.zentix.incoming.nuclear.model.SmokeParcels.Clock parcels) {
         if (!hasFallout()) return 0;
         double hours = seconds / 3600, mx = metres(x - burst.x), mz = metres(z - burst.z);
-        double rain = blackRainModel().depositH1(mx, mz, seconds);
+        double rain = blackRainModel().depositH1(mx, mz, seconds, parcels);
         double decay = Math.pow(Math.max(hours, FalloutModel.MIN_DECAY_HOURS), -FalloutModel.DECAY_EXP);
         return falloutModel().doseRate(mx, mz, hours) + rain * decay;
     }
@@ -424,11 +427,6 @@ public record Detonation(int id, Vec3 burst, double groundY, double yieldKt, boo
      */
     public boolean blackRainAt(double x, double z, ua.zentix.incoming.nuclear.model.SmokeParcels.Clock c) {
         return blackRainModel().raining(metres(x - burst.x), metres(z - burst.z), c);
-    }
-
-    /** The fires' smoke parcels (no fires at detonation: none), metres and seconds of the model. */
-    public ua.zentix.incoming.nuclear.model.SmokeParcels smokeParcels() {
-        return Caches.parcels(this);
     }
 
     /** Motion-age seconds after the burst until black rain ends everywhere. */
@@ -491,15 +489,6 @@ public record Detonation(int id, Vec3 burst, double groundY, double yieldKt, boo
                 }
                 return x.blocks(m);
             });
-        }
-
-        private static final java.util.Map<Detonation, ua.zentix.incoming.nuclear.model.SmokeParcels> PARCELS =
-                java.util.Collections.synchronizedMap(new java.util.WeakHashMap<>());
-
-        static ua.zentix.incoming.nuclear.model.SmokeParcels parcels(Detonation d) {
-            // the fire zone where light ignites, as for black rain and the client's haze; none if the server lit no fires
-            return PARCELS.computeIfAbsent(d, x -> new ua.zentix.incoming.nuclear.model.SmokeParcels(x.yieldKt, x.fires ? x.fireRadiusM() : 0,
-                    x.windDir, x.windSpeed));
         }
 
         static BlackRainModel blackRain(Detonation d) {

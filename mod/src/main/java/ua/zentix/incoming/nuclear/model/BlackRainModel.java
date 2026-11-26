@@ -38,8 +38,9 @@ public record BlackRainModel(double yieldKt, double fireRadiusM, double windDirR
     }
 
     /**
-     * Whether black rain falls at the point now: under its drawn parcel (its drawn column at least {@link SmokeParcels#GONE}),
-     * which left the fires inside the rain window and has travelled less than {@link #DRIFT_S}.
+     * Whether black rain falls at the point now: under its parcel (the newest over it, {@link SmokeParcels#under}), seen by the
+     * law ({@link SmokeParcels#GONE}) and drawn, which left the fires inside the rain window and has travelled less than
+     * {@link #DRIFT_S}.
      */
     public boolean raining(double x, double z, SmokeParcels.Clock c) {
         if (fireRadiusM <= 0) return false;
@@ -47,21 +48,32 @@ public record BlackRainModel(double yieldKt, double fireRadiusM, double windDirR
         if (!p.under(x, z, c)) return false;
         double s = p.shift(x * Math.cos(windDirRad) + z * Math.sin(windDirRad), c), travel = s / p.wind();
         double left = c.motion() - travel;
-        return travel <= DRIFT_S && left >= START_S && left < END_S && p.drawn(s, c) * p.depth() >= SmokeParcels.GONE;
+        return travel <= DRIFT_S && left >= START_S && left < END_S && p.law(s, c) * p.depth() >= SmokeParcels.GONE
+                && p.drawn(s, c) > 0;
     }
 
     /**
-     * Motion age at which the first rain reaches the point, seconds after detonation (the first rain-bearing parcels leave the
-     * fires at full strength); infinity — outside the band.
+     * Motion age at which the first rain reaches the point, seconds after detonation: the first rain-bearing parcels leave the
+     * fires at full strength at {@link #START_S} and travel past the zone's downwind edge; infinity — outside the band.
      */
     public double startSeconds(double x, double z) {
         if (fireRadiusM <= 0) return Double.POSITIVE_INFINITY;
         SmokeParcels p = parcels();
         double ux = Math.cos(windDirRad), uz = Math.sin(windDirRad);
-        double down = x * ux + z * uz, s = Math.max(0, down), travel = s / p.wind();
-        if (travel > DRIFT_S || s > p.reach() || Math.hypot(x - ux * s, z - uz * s) > fireRadiusM * p.widen(s))
+        double down = x * ux + z * uz, s = Math.max(0, down - fireRadiusM), travel = s / p.wind();
+        double onset = START_S + travel, g = Math.max(0, Math.min(down, Math.min(p.wind() * onset, p.drawnReach())));
+        if (travel > DRIFT_S || s > p.reach() || Math.hypot(x - ux * g, z - uz * g) > fireRadiusM * p.widen(s))
             return Double.POSITIVE_INFINITY;
-        return START_S + travel;
+        return onset;
+    }
+
+    /**
+     * Strike-clock seconds at which the rain deposit landed at the point: its rain's arrival on the motion age
+     * ({@link #startSeconds}) read on the strike clock of the moment; infinity — the rain has not reached it yet, or never will.
+     */
+    public double landedStrike(double x, double z, SmokeParcels.Clock c) {
+        double m = startSeconds(x, z);
+        return Double.isFinite(m) && m <= c.motion() ? c.strikeAt(m) : Double.POSITIVE_INFINITY;
     }
 
     /** Length of the rain window over the fires, motion-age seconds: a point at a 24-hour day gets all of it. */
@@ -75,12 +87,12 @@ public record BlackRainModel(double yieldKt, double fireRadiusM, double windDirR
     }
 
     /**
-     * Dose rate from rain-washed ground deposits at H+1, R/h, once the rain has reached the point ({@code seconds} ≥
-     * {@link #startSeconds}): full near the fire zone, decaying e-fold over a third of the band downwind, Gaussian across it
-     * with half the half-width.
+     * Dose rate from rain-washed ground deposits at H+1, R/h, at strike-clock {@code seconds}, once the rain has reached the
+     * point: it lands when its rain arrives on the motion age, and from then on ages on the strike clock ({@link #landedStrike}).
+     * Full near the fire zone, decaying e-fold over a third of the band downwind, Gaussian across it with half the half-width.
      */
-    public double depositH1(double x, double z, double seconds) {
-        if (airShare <= 0 || seconds < startSeconds(x, z)) return 0;
+    public double depositH1(double x, double z, double seconds, SmokeParcels.Clock c) {
+        if (airShare <= 0 || seconds < landedStrike(x, z, c)) return 0;
         double down = x * Math.cos(windDirRad) + z * Math.sin(windDirRad);
         double cross = -x * Math.sin(windDirRad) + z * Math.cos(windDirRad);
         double past = Math.max(0, down - fireRadiusM), wind = parcels().wind();
