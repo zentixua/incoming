@@ -747,6 +747,16 @@ public final class NuclearPrep {
     /** Ready ruin plan for chunk reached by its detonation's wave; null if none. */
     @Nullable
     RuinPlan arrivedPlan(ServerLevel level, NuclearEvents events, long chunk, long now) {
+        Arrived a = arrived(level, events, chunk, now);
+        return a == null ? null : a.plan();
+    }
+
+    /** Ready ruin plan reached by its detonation's wave, with that detonation (its fire choice, {@link RuinContext#blockFires}). */
+    record Arrived(RuinPlan plan, Detonation d) {}
+
+    /** {@link #arrivedPlan} with the detonation; null if none. */
+    @Nullable
+    Arrived arrived(ServerLevel level, NuclearEvents events, long chunk, long now) {
         for (Prep p : preps) {
             if (p.detonation < 0 || p.draining) continue;
             RuinPlan plan = p.plans.get(chunk);
@@ -754,7 +764,7 @@ public final class NuclearPrep {
             for (Detonation d : events.detonations()) {
                 // a chunk claim protection denied to the detonation gets no ruins in its copy either (NuclearClaims)
                 if (d.id() == p.detonation && ScarQueue.due(d, new ChunkPos(chunk)) <= now) {
-                    return NuclearClaims.get(level).denied(d.id(), chunk) ? RuinPlan.EMPTY : plan;
+                    return new Arrived(NuclearClaims.get(level).denied(d.id(), chunk) ? RuinPlan.EMPTY : plan, d);
                 }
             }
         }
@@ -1262,7 +1272,7 @@ public final class NuclearPrep {
                     p.farAtDetonation, p.farRunning.size(), p.farSkipped, RuinWorkers.summary());
             p.nextZoneReport = now + ZONE_REPORT;
             long t2 = System.nanoTime();
-            p.lods.handOff(d);
+            p.lods.handOff(level, d);
             if (NukeDiag.ON) Incoming.LOG.info("DIAG hand-off #{}: far at detonation {} ms ({} chunks), log {} ms, LODs and order {} ms", d.id(),
                     (t1 - t0) / 100_000 / 10.0, p.order.length, (t2 - t1) / 100_000 / 10.0, (System.nanoTime() - t2) / 100_000 / 10.0);
             return new Handoff(p.plans, p.ruins);

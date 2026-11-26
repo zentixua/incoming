@@ -120,10 +120,12 @@ final class Craters {
      * on nearby stone/sand. At Shahed impact, one fifth dry grass and three quarters foliage ignite, less toward
      * edge; missile almost all grass/leaves inside, leaves also at 1.5 radii (quarter) and canopy above ball;
      * fabric rarely ({@code FuelFireballTest}). Queue traversal ({@link Ignition}) after {@code after} explosions
-     * if explosion {@code happened}. The caller holds the strike's {@code world.fire} ({@link BlastArea#rules}).
+     * if explosion {@code happened}. The caller holds the strike's {@code world.fire} ({@link BlastArea#rules}); none with
+     * {@code doFireTick} off ({@link ua.zentix.incoming.strike.StrikeRules#fireBurnsOut}).
      */
     static void ignite(ServerLevel level, BlastArea area, List<StagedExplosion> after, BooleanSupplier happened, Vec3 pos, double fuelKg) {
-        if (FuelFireball.ballKg(fuelKg) <= 0) return;
+        // the ball lights ordinary game fire: with doFireTick off it would stand forever
+        if (FuelFireball.ballKg(fuelKg) <= 0 || !ua.zentix.incoming.strike.StrikeRules.fireBurnsOut(level)) return;
         StrikeWorld.get(level).impacts().add(level, new Ignition(area.retain(), after, happened, pos, FuelFireball.ballKg(fuelKg)));
     }
 

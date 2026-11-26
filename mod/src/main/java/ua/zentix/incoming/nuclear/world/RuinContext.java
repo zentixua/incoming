@@ -481,6 +481,17 @@ final class RuinContext {
     }
 
     /**
+     * Whether a write of detonation {@code d}'s ruins or flash layer (world or LOD copy) lights block fire:
+     * {@code nuclear.fires}, and {@link Detonation#blockFire} ({@code doFireTick} at detonation: with it off the city's
+     * fire would stand forever). The client follows the same flag (the firestorm then drawn from its model), so the world
+     * and the picture agree however the rule changes later. Plans always carry their fire; the write decides
+     * ({@code ScarQueue.budget} for the world).
+     */
+    static boolean blockFires(Detonation d) {
+        return IncomingConfig.SERVER.nukeFires.get() && d.blockFire();
+    }
+
+    /**
      * Plan snapshots (server thread): radius-{@link RuinPlanner#REACH} square fully loaded. Property table
      * published after snapshots, only table read by background plan ({@code view} for server thread).
      */

@@ -39,7 +39,8 @@ import java.util.Optional;
  * ({@link FireStorm#gate}: the server burns and local-chunk fire has not been extinguished); local chunks use real fire only.
  * Wind into fire and secondary explosions use the {@link FireField} model (server fire count), scaled by actual burning in
  * local chunks relative to the model there ({@link #trust}), and excluding fire already burning in local chunks (one fire counter per
- * detonation).
+ * detonation). Where the server lights no block fire ({@link Detonation#blockFire}: {@code doFireTick} off) local chunks have
+ * none to show or compare: the model burns there too, at full trust.
  */
 final class NukeAfter {
     static final int QUADRANTS = FireRoar.QUADRANTS;
@@ -65,7 +66,7 @@ final class NukeAfter {
     private static final int RUINS_KEPT = 512;
     private static final double COLLAPSE_RATE = 1 / 50.0;
     /** While local chunks contain little model coverage (fewer expected fires than this), trust the model as is. */
-    private static final double TRUST_MIN = 40;
+    static final double TRUST_MIN = 40;
 
     private final ClientNuclear.Active a;
     private final Detonation d;
@@ -183,7 +184,7 @@ final class NukeAfter {
                 // local chunks show actual fire: the model there is for comparison only
                 // the model counts every column as fueled: weigh it by the storm's terrain survey
                 double fueled = each * a.storm.fuelAt(x, z);
-                if (level.getChunkSource().getChunk((int) Math.floor(x) >> 4, (int) Math.floor(z) >> 4, false) != null) {
+                if (realFire(d, level.getChunkSource().getChunk((int) Math.floor(x) >> 4, (int) Math.floor(z) >> 4, false) != null)) {
                     modelHere += fueled;
                     continue;
                 }
@@ -195,7 +196,7 @@ final class NukeAfter {
         seenLoaded = seen[0];
         // comparison: model versus local-chunk fire, smoothly (fire starts with the flash, the wave blows some out, it does not fade immediately)
         if (modelHere >= TRUST_MIN) {
-            trust += 0.2 * (Math.min(4, seen[0] / modelHere) - trust);
+            trust = trust(trust, modelHere, seen[0]);
             // for the storm, only while fire is young: vanilla fire later burns out its own way, while the storm burns its hours
             if (t < f.lastIgnition() + FireField.RISE + 0.7 * FireField.TAU) a.storm.seen(trust);
         }
@@ -207,8 +208,22 @@ final class NukeAfter {
     }
 
     /**
+     * Whether a place shows the server's real fire instead of the model: a local chunk, where the server lights block fire
+     * ({@link Detonation#blockFire}). Without block fire ({@code doFireTick} off) nothing burns there to show or compare with,
+     * so the model burns there too and trust ({@link #trust(double, double, double)}) never learns "no fire".
+     */
+    static boolean realFire(Detonation d, boolean localChunk) {
+        return localChunk && d.blockFire();
+    }
+
+    /** One trust step: toward local-chunk fire {@code seen} over the model there {@code modelHere} (at most 4), smoothly. */
+    static double trust(double trust, double modelHere, double seen) {
+        return trust + 0.2 * (Math.min(4, seen / modelHere) - trust);
+    }
+
+    /**
      * Distant storm into the roar ({@link #fire}): cells currently burning on the storm map ({@link FireStorm#map}: fraction of cell area
-     * burning — the same flame drawn by the pall), except local chunks (real fire there), with model trust
+     * burning — the same flame drawn by the pall), except local chunks (real fire there, if the server lights it), with model trust
      * ({@link FireStorm#gate}). Cell heat is burning area × {@link FirePlume#BLOCK_WATTS} (burning wood face, W/m²).
      *
      * @return distant storm heat, W
@@ -226,7 +241,7 @@ final class NukeAfter {
             double flame = map[c * FireStorm.CHANNELS];
             if (flame <= 0) continue;
             double x = b.x + (c % side + 0.5) * cell - half, z = b.z + (c / side + 0.5) * cell - half;
-            if (level.getChunkSource().getChunk((int) Math.floor(x) >> 4, (int) Math.floor(z) >> 4, false) != null) continue;
+            if (realFire(d, level.getChunkSource().getChunk((int) Math.floor(x) >> 4, (int) Math.floor(z) >> 4, false) != null)) continue;
             double watts = gate * flame * area * FirePlume.BLOCK_WATTS;
             fire.add(x - ear.x, y - ear.y, z - ear.z, watts);
             sum += watts;

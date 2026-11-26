@@ -1,6 +1,8 @@
 package ua.zentix.incoming.strike;
 
 import com.mojang.serialization.Codec;
+import net.minecraft.world.level.GameRules;
+import net.minecraft.world.level.Level;
 import ua.zentix.incoming.IncomingConfig;
 
 /**
@@ -23,6 +25,28 @@ public record StrikeRules(boolean blockDamage, boolean shatterGlass, boolean fir
     public static final Codec<StrikeRules> CODEC = Codec.INT.xmap(StrikeRules::of, StrikeRules::bits);
 
     private static final int BLOCK_DAMAGE = 1, SHATTER_GLASS = 2, FIRE = 4, DEBRIS_STAY = 8, COLLAPSE = 16, GRID = 32;
+
+    /** Tests measuring where strikes light fire in a frozen world ({@link #lightFrozenFireForTest}). */
+    private static volatile boolean frozenFireLit;
+
+    /**
+     * Whether a block fire lit now burns out by itself: the vanilla gamerule {@code doFireTick}. With it off a fire neither
+     * ages nor spreads and stands forever, so strikes, ruins and debris light none; the crater fuel fire, which removes its
+     * own blocks at burn-out ({@code FuelFires}), and the drawn firestorm still burn by their laws. Read when the fire would
+     * be placed: the gamerule is the world's, not part of an order.
+     */
+    public static boolean fireBurnsOut(Level level) {
+        return frozenFireLit || level.getGameRules().getBoolean(GameRules.RULE_DOFIRETICK);
+    }
+
+    /**
+     * GameTest only: the GameTest server runs with {@code doFireTick} off so that a check counts the fire a strike lit
+     * before vanilla fire grows or goes out; with this set, strikes light it there as with the rule on. The checks of the
+     * rule itself clear it in their own batch.
+     */
+    public static void lightFrozenFireForTest(boolean lit) {
+        frozenFireLit = lit;
+    }
 
     /** The rules as the world's config holds them now. */
     public static StrikeRules live() {

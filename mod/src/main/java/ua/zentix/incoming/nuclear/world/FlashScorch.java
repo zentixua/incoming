@@ -137,8 +137,8 @@ public final class FlashScorch {
         this.fixedBudget = budget;
     }
 
-    /** For checks: flash layer only for these chunks (fully in memory), with its own fire counter. */
-    public static FlashScorch forTest(Detonation d, long[] chunks, ColumnScar.Budget budget) {
+    /** For checks: flash layer only for these chunks (fully in memory), with its own fire counter (null: the detonation's, as in play). */
+    public static FlashScorch forTest(Detonation d, long[] chunks, @Nullable ColumnScar.Budget budget) {
         return new FlashScorch(d, chunks.clone(), budget);
     }
 

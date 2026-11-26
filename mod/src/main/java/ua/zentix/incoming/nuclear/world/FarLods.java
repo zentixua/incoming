@@ -498,10 +498,10 @@ public final class FarLods {
         if (taken.isEmpty()) return;
         RuinPlanner.ensureOwnStates();
         Blast.PropsView view = Blast.publish();
-        boolean fires = IncomingConfig.SERVER.nukeFires.get();
         DiskShots.Format f = format;
         for (int i = 0; i < taken.size(); i++) {
             Read r = taken.get(i);
+            boolean fires = RuinContext.blockFires(r.ring.d);
             RuinContext.Grid g = r.ring.ruins.scorchGrid(level, made.get(i), view);
             java.util.concurrent.CompletableFuture.supplyAsync(() -> build(f, r.scorch.sections(), RuinPlanner.scorch(g), fires, r.lights, true), RuinWorkers.executor(RuinWorkers.Priority.FAR))
                     .exceptionally(e -> new Built(r.chunk, null, false, r.lights, "error: " + e)).thenAccept(b -> built.add(new Completion(b, r.generation)));
@@ -537,7 +537,8 @@ public final class FarLods {
             done(r.chunk);
             return false;
         }
-        RuinPlan plan = nuclear.prep().arrivedPlan(level, events, r.chunk, now);
+        NuclearPrep.Arrived arrived = nuclear.prep().arrived(level, events, r.chunk, now);
+        RuinPlan plan = arrived == null ? null : arrived.plan();
         if (plan == null && ruins) {
             byte state = disk.get(r.chunk);
             if (state == 0 && scanning < SCANS) {
@@ -573,7 +574,8 @@ public final class FarLods {
         reading.add(r.chunk);
         DiskShots.Format f = format;
         // Voxy-only request: send copy only if different from disk
-        boolean fires = IncomingConfig.SERVER.nukeFires.get(), lights = (kind & LIGHTS) != 0 && !refreshFor.containsKey(r.chunk);
+        // the copy's fire as the world's: the detonation's choice (no plan: nothing to light)
+        boolean fires = arrived != null && RuinContext.blockFires(arrived.d()), lights = (kind & LIGHTS) != 0 && !refreshFor.containsKey(r.chunk);
         // unplanned chunk may carry ground trace (district light included): snapshot, trace plan, copy
         Ring near = plan == null ? ringOf(r.chunk, now) : null;
         // a chunk claim protection denied to the ring's detonation keeps its copy without trace (NuclearClaims)

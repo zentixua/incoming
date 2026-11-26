@@ -119,7 +119,7 @@ class S2CGoldenTest {
                                 D.withWave(Detonation.OLD_WAVE).withDayTime(Detonation.NO_DAY_TIME), Q)))),
                 golden(S2C.NukeWarning.TYPE, S2C.NukeWarning.CODEC, W),
                 // 1 - release 3.1.0; 2 - wave (wall speed); 3 - blackout (EMR); 4 — time of day of detonation; 5 - fires;
-                // 6 - strike id; 7 - black rain
+                // 6 - strike id; 7 - black rain; 8 - material source; 9 - ground class; 10 - block fire
                 golden(S2C.NukeDetonation.TYPE, S2C.NukeDetonation.CODEC,
                         new S2C.NukeDetonation(D.withWave(Detonation.OLD_WAVE).withDayTime(Detonation.NO_DAY_TIME), 0f),
                         new S2C.NukeDetonation(D.withDayTime(Detonation.NO_DAY_TIME), 0f),
@@ -129,7 +129,8 @@ class S2CGoldenTest {
                         new S2C.NukeDetonation(D.withFires(false), 242f, 9),
                         new S2C.NukeDetonation(D.withFires(false).withRain(false), 242f, 9),
                         new S2C.NukeDetonation(D.withFires(false).withRain(false), 242f, 9, A),
-                        new S2C.NukeDetonation(D.withFires(false).withRain(false), 242f, 9, A, (byte) 2)),
+                        new S2C.NukeDetonation(D.withFires(false).withRain(false), 242f, 9, A, (byte) 2),
+                        new S2C.NukeDetonation(D.withFires(false).withRain(false).withBlockFire(false), 242f, 9, A, (byte) 2)),
                 golden(S2C.NukeMaterialSources.TYPE, S2C.NukeMaterialSources.CODEC, new S2C.NukeMaterialSources(List.of(A, B))),
                 golden(S2C.NukeMaterial.TYPE, S2C.NukeMaterial.CODEC, new S2C.NukeMaterial(A, 0, 0, new byte[]{1, 7, 0})),
                 golden(S2C.NukeClock.TYPE, S2C.NukeClock.CODEC, new S2C.NukeClock(91_234.5, List.of(new S2C.NukeClock.ShowEnd(3, 81_234.25), new S2C.NukeClock.ShowEnd(7, 0)))),
@@ -153,7 +154,8 @@ class S2CGoldenTest {
                         new S2C.NukeSync(List.of(D, D2), List.of(W)),
                         new S2C.NukeSync(List.of(D.withFires(false), D2), List.of(W)),
                         new S2C.NukeSync(List.of(D.withFires(false), D2.withRain(false)), List.of(W)),
-                        new S2C.NukeSync(List.of(D.withFires(false), D2.withRain(false)), List.of(W), Map.of(4, A))),
+                        new S2C.NukeSync(List.of(D.withFires(false), D2.withRain(false)), List.of(W), Map.of(4, A)),
+                        new S2C.NukeSync(List.of(D.withFires(false), D2.withRain(false).withBlockFire(false)), List.of(W), Map.of(4, A))),
                 golden(S2C.Radiation.TYPE, S2C.Radiation.CODEC, new S2C.Radiation(1.5f, 250f, 0.125f, 2)),
                 // 1 - without target entities; 2 - their network numbers are listed at the end
                 golden(S2C.Flights.TYPE, S2C.Flights.CODEC, new S2C.Flights(List.of(

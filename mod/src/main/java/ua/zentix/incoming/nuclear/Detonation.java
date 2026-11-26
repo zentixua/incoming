@@ -45,10 +45,14 @@ import ua.zentix.incoming.util.Terrain;
  *                   replayed detonations default to yes, as before
  * @param rain      black rain falls from this detonation's fires ({@code nuclear.black_rain} at detonation): without it no
  *                   rain, its washout or skin contamination; old-version saved or replayed detonations default to yes, as before
+ * @param blockFire the server lights the fires as blocks ({@code doFireTick} at detonation, {@code StrikeRules.fireBurnsOut}):
+ *                   without it no block fire burns in loaded chunks and the client draws and hears the firestorm there from
+ *                   its model instead of comparing it with the fire it sees; old-version saved or replayed detonations
+ *                   default to yes, as before
  */
 public record Detonation(int id, Vec3 burst, double groundY, double yieldKt, boolean surface, long gameTime,
                          float windDir, float windSpeed, float visibility, long seed, float scale, boolean fallout, float wave,
-                         long dayTime, boolean fires, boolean rain) {
+                         long dayTime, boolean fires, boolean rain, boolean blockFire) {
 
     /** Distant wall speed for detonations saved before {@code wave_speed}: 3 blocks per tick. */
     public static final float OLD_WAVE = (float) (3 / FrontProfile.SOUND_SPEED);
@@ -66,6 +70,13 @@ public record Detonation(int id, Vec3 burst, double groundY, double yieldKt, boo
                       float windDir, float windSpeed, float visibility, long seed, float scale, boolean fallout, float wave,
                       long dayTime) {
         this(id, burst, groundY, yieldKt, surface, gameTime, windDir, windSpeed, visibility, seed, scale, fallout, wave, dayTime, true);
+    }
+
+    /** Detonation with block fire. */
+    public Detonation(int id, Vec3 burst, double groundY, double yieldKt, boolean surface, long gameTime,
+                      float windDir, float windSpeed, float visibility, long seed, float scale, boolean fallout, float wave,
+                      long dayTime, boolean fires, boolean rain) {
+        this(id, burst, groundY, yieldKt, surface, gameTime, windDir, windSpeed, visibility, seed, scale, fallout, wave, dayTime, fires, rain, true);
     }
 
     /** Detonation with black rain. */
@@ -90,9 +101,19 @@ public record Detonation(int id, Vec3 burst, double groundY, double yieldKt, boo
             Codec.BOOL.fieldOf("fallout").forGetter(Detonation::fallout),
             Codec.FLOAT.optionalFieldOf("wave", OLD_WAVE).forGetter(Detonation::wave),
             Codec.LONG.optionalFieldOf("day_time", NO_DAY_TIME).forGetter(Detonation::dayTime),
-            Codec.BOOL.optionalFieldOf("fires", true).forGetter(Detonation::fires),
+            Fires.CODEC.forGetter(d -> new Fires(d.fires, d.blockFire)),
             Codec.BOOL.optionalFieldOf("black_rain", true).forGetter(Detonation::rain)
-    ).apply(i, Detonation::new));
+    ).apply(i, (id, burst, groundY, yieldKt, surface, gameTime, windDir, windSpeed, visibility, seed, scale, fallout, wave, dayTime, fires, rain) ->
+            new Detonation(id, burst, groundY, yieldKt, surface, gameTime, windDir, windSpeed, visibility, seed, scale, fallout, wave, dayTime,
+                    fires.fires, rain, fires.blockFire)));
+
+    /** Saved fire fields, one group: a record codec takes at most 16 fields. */
+    private record Fires(boolean fires, boolean blockFire) {
+        static final com.mojang.serialization.MapCodec<Fires> CODEC = RecordCodecBuilder.mapCodec(i -> i.group(
+                Codec.BOOL.optionalFieldOf("fires", true).forGetter(Fires::fires),
+                Codec.BOOL.optionalFieldOf("block_fire", true).forGetter(Fires::blockFire)
+        ).apply(i, Fires::new));
+    }
 
     /**
      * Packet detonation uses release 3.1.0 fields, without {@code wave} ({@link #OLD_WAVE}) or time of day. Format is frozen:
@@ -124,19 +145,23 @@ public record Detonation(int id, Vec3 burst, double groundY, double yieldKt, boo
     };
 
     public Detonation withWave(float wave) {
-        return new Detonation(id, burst, groundY, yieldKt, surface, gameTime, windDir, windSpeed, visibility, seed, scale, fallout, wave, dayTime, fires, rain);
+        return new Detonation(id, burst, groundY, yieldKt, surface, gameTime, windDir, windSpeed, visibility, seed, scale, fallout, wave, dayTime, fires, rain, blockFire);
     }
 
     public Detonation withFires(boolean fires) {
-        return new Detonation(id, burst, groundY, yieldKt, surface, gameTime, windDir, windSpeed, visibility, seed, scale, fallout, wave, dayTime, fires, rain);
+        return new Detonation(id, burst, groundY, yieldKt, surface, gameTime, windDir, windSpeed, visibility, seed, scale, fallout, wave, dayTime, fires, rain, blockFire);
+    }
+
+    public Detonation withBlockFire(boolean blockFire) {
+        return new Detonation(id, burst, groundY, yieldKt, surface, gameTime, windDir, windSpeed, visibility, seed, scale, fallout, wave, dayTime, fires, rain, blockFire);
     }
 
     public Detonation withRain(boolean rain) {
-        return new Detonation(id, burst, groundY, yieldKt, surface, gameTime, windDir, windSpeed, visibility, seed, scale, fallout, wave, dayTime, fires, rain);
+        return new Detonation(id, burst, groundY, yieldKt, surface, gameTime, windDir, windSpeed, visibility, seed, scale, fallout, wave, dayTime, fires, rain, blockFire);
     }
 
     public Detonation withDayTime(long dayTime) {
-        return new Detonation(id, burst, groundY, yieldKt, surface, gameTime, windDir, windSpeed, visibility, seed, scale, fallout, wave, dayTime, fires, rain);
+        return new Detonation(id, burst, groundY, yieldKt, surface, gameTime, windDir, windSpeed, visibility, seed, scale, fallout, wave, dayTime, fires, rain, blockFire);
     }
 
     /** Far-zone threshold: 0.5 psi (glass). */

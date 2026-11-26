@@ -18,6 +18,7 @@ import net.minecraft.server.network.ServerGamePacketListenerImpl;
 import net.minecraft.server.players.PlayerList;
 import net.minecraft.world.level.block.BaseFireBlock;
 import net.minecraft.world.level.block.Blocks;
+import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.phys.Vec3;
 import net.neoforged.fml.util.ObfuscationReflectionHelper;
 import net.neoforged.neoforge.common.util.FakePlayer;
@@ -146,6 +147,68 @@ public final class FuelFireGameTests {
     @GameTest(template = "range", timeoutTicks = 3600, batch = "fuel_fire_drone", skyAccess = true)
     public static void droneFuelBurnsOnTheCraterFloorAsLongAsItLasts(GameTestHelper h) {
         groundTest(h, WeaponType.DRONE);
+    }
+
+    /**
+     * Rule 11 of the time note (docs/design/time.md §8.3), {@code doFireTick} off, strike fire as in the game
+     * ({@code StrikeRules.lightFrozenFireForTest(false)}), debris staying: the Shahed's fuel ball, blast and burning debris
+     * light no block fire (it would stand forever); the crater fuel fire still burns its law's cells and time, and at
+     * burn-out removes every one of its blocks, though each cell has a log beside it (with fire tick on the log keeps a
+     * game fire going, {@link #droneFuelBurnsOnTheCraterFloorAsLongAsItLasts}). After the law's end no fire block is left
+     * within {@link #MINE} of the impact.
+     */
+    @GameTest(template = "range", timeoutTicks = 3600, batch = "fuel_fire_firetick_off", skyAccess = true)
+    public static void withoutFireTickNoFireOutlivesTheStrike(GameTestHelper h) {
+        ServerLevel level = h.getLevel();
+        Vec3 at = Vec3.atBottomCenterOf(h.absolutePos(CENTER));
+        FuelPool law = WeaponType.DRONE.spec().pool();
+        net.minecraft.world.level.GameRules.BooleanValue rule = level.getGameRules().getRule(net.minecraft.world.level.GameRules.RULE_DOFIRETICK);
+        boolean was = rule.get(), debris = IncomingConfig.SERVER.debrisStay.get();
+        rule.set(false, level.getServer());
+        IncomingConfig.SERVER.debrisStay.set(true);
+        ua.zentix.incoming.strike.StrikeRules.lightFrozenFireForTest(false);
+        level.setWeatherParameters(24000, 0, false, false);
+        StrikeGameTests.afterTest(h, () -> {
+            rule.set(was, level.getServer());
+            IncomingConfig.SERVER.debrisStay.set(debris);
+            ua.zentix.incoming.strike.StrikeRules.lightFrozenFireForTest(true);
+        });
+        long born = level.getGameTime(), end = born + Math.round(20 * law.seconds());
+        Set<BlockPos> ever = new HashSet<>();
+        int[] most = {0}, logs = {0};
+        Warheads.detonate(level, WeaponType.DRONE, at, null, null);
+        h.onEachTick(() -> {
+            List<BlockPos> now = cells(level, at);
+            most[0] = Math.max(most[0], now.size());
+            ever.addAll(now);
+            // once every cell burns (explosion work spans ticks, longer on a busy runner): a log in the wall beside every
+            // cell (a fuel beside a combustible)
+            if (logs[0] == 0 && now.size() == law.cells() && level.getGameTime() < end - 200) {
+                for (BlockPos c : now) {
+                    for (net.minecraft.core.Direction d : net.minecraft.core.Direction.Plane.HORIZONTAL) {
+                        BlockPos n = c.relative(d);
+                        BlockState s = level.getBlockState(n);
+                        if (s.isAir() || s.getBlock() instanceof BaseFireBlock || !s.getFluidState().isEmpty()) continue;
+                        level.setBlock(n, Blocks.OAK_LOG.defaultBlockState(), 2);
+                        logs[0]++;
+                    }
+                }
+            }
+        });
+        h.succeedWhen(() -> {
+            h.assertTrue(level.getGameTime() > end + 2, "the law's burn time is not over");
+            h.assertTrue(StrikeWorld.get(level).idle(), "the strike is not over");
+            int left = 0;
+            BlockPos lo = BlockPos.containing(at.x - MINE, at.y - 12, at.z - MINE), hi = BlockPos.containing(at.x + MINE, at.y + 12, at.z + MINE);
+            for (BlockPos p : BlockPos.betweenClosed(lo, hi)) if (level.getBlockState(p).getBlock() instanceof BaseFireBlock) left++;
+            String got = String.format(Locale.ROOT, "doFireTick off: fuel cells %d (law %d), logs beside them %d, fire blocks left after %.1f s: %d",
+                    most[0], law.cells(), logs[0], law.seconds(), left);
+            Incoming.LOG.info("FUELFIRE {}", got);
+            h.assertTrue(most[0] == law.cells(), got);
+            h.assertTrue(logs[0] > 0, got);
+            h.assertTrue(cells(level, at).isEmpty(), got);
+            h.assertTrue(left == 0, got);
+        });
     }
 
     @GameTest(template = "range", timeoutTicks = 21000, batch = "fuel_fire_missile", skyAccess = true)

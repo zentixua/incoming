@@ -19,6 +19,7 @@ import ua.zentix.incoming.claim.BlockGate;
 import ua.zentix.incoming.net.S2C;
 import ua.zentix.incoming.nuclear.model.FuelPool;
 import ua.zentix.incoming.registry.ModAttachments;
+import ua.zentix.incoming.strike.StrikeRules;
 import ua.zentix.incoming.strike.WeaponType;
 import ua.zentix.incoming.util.Terrain;
 
@@ -345,7 +346,9 @@ public final class FuelFires {
         BlockPos below = cell.below();
         boolean moved = false;
         if (level.getBlockState(below).getCollisionShape(level, below).isEmpty()) {
-            // Support burned/broken: fuel drips down same column; fire at old site no longer belongs to it.
+            // Support burned/broken: fuel drips down same column; fire at old site no longer belongs to it (game fire then,
+            // which with doFireTick off would stand forever: it goes with the fuel).
+            if (!StrikeRules.fireBurnsOut(level)) burnOut(level, cell);
             BlockPos to = land(level, cell);
             if (to == null) {
                 pool.finish(k, true);
@@ -381,16 +384,19 @@ public final class FuelFires {
 
     /**
      * Cell fuel exhausted: extinguish if fuel alone sustained fire, no nearby combustible or eternal-fire support
-     * (netherrack); by combustible, game fire continues.
+     * (netherrack); by combustible, game fire continues. With {@code doFireTick} off no game fire continues or goes out
+     * ({@link StrikeRules#fireBurnsOut}): the cell's fire goes with its fuel, beside combustibles and on netherrack too.
      */
     private static void burnOut(ServerLevel level, BlockPos cell) {
         BlockState s = level.getBlockState(cell);
         if (!(s.getBlock() instanceof BaseFireBlock)) return;
-        BlockPos below = cell.below();
-        if (level.getBlockState(below).isFireSource(level, below, Direction.UP)) return;
-        for (Direction d : DIRECTIONS) {
-            BlockPos n = cell.relative(d);
-            if (level.getBlockState(n).isFlammable(level, n, d.getOpposite())) return;
+        if (StrikeRules.fireBurnsOut(level)) {
+            BlockPos below = cell.below();
+            if (level.getBlockState(below).isFireSource(level, below, Direction.UP)) return;
+            for (Direction d : DIRECTIONS) {
+                BlockPos n = cell.relative(d);
+                if (level.getBlockState(n).isFlammable(level, n, d.getOpposite())) return;
+            }
         }
         ua.zentix.incoming.work.BlockLighting.changed(level, cell);
         level.removeBlock(cell, false);

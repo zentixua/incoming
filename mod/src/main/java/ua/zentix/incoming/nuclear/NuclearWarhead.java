@@ -96,7 +96,7 @@ public final class NuclearWarhead {
                 g.visibility(), random.nextLong(), scale, IncomingConfig.SERVER.nukeFallout.get(),
                 (float) IncomingConfig.SERVER.waveSpeed(), level.getDayTime(),
                 IncomingConfig.SERVER.nukeFires.get() && IncomingConfig.SERVER.nukeMaxFires.get() > 0,
-                IncomingConfig.SERVER.nukeBlackRain.get());
+                IncomingConfig.SERVER.nukeBlackRain.get(), ua.zentix.incoming.strike.StrikeRules.fireBurnsOut(level));
         events.add(d, ua.zentix.incoming.util.WorldClock.now(level));
         if (round != null) events.impact(d.id(), round, owner);
         // grid.enabled as the order was made (a strike without one: the config now)

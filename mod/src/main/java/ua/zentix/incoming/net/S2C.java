@@ -649,9 +649,10 @@ public final class S2C {
      * outage), where lamps short with EMP arcs.
      * <p>
      * Format only grows at end (replay.md): 3.1.0 fields, then {@code wave}, {@code blackout}, detonation time of day
-     * ({@link Detonation#dayTime}), fires ({@link Detonation#fires}), strike id and black rain ({@link Detonation#rain}),
-     * each appended to packet end; recordings predating them read “as before”: wall speed {@link Detonation#OLD_WAVE},
-     * no EMP, time of day unknown, fires enabled, no strike, black rain enabled.
+     * ({@link Detonation#dayTime}), fires ({@link Detonation#fires}), strike id, black rain ({@link Detonation#rain}), material
+     * source, ground class and block fire ({@link Detonation#blockFire}), each appended to packet end; recordings predating
+     * them read “as before”: wall speed {@link Detonation#OLD_WAVE}, no EMP, time of day unknown, fires enabled, no strike,
+     * black rain enabled, no material source, ground unknown, block fire lit.
      */
     public record NukeDetonation(Detonation detonation, float blackout, int strikeId, @org.jetbrains.annotations.Nullable UUID id, byte ground) implements CustomPacketPayload {
         public NukeDetonation {
@@ -676,7 +677,8 @@ public final class S2C {
         public static final StreamCodec<ByteBuf, NukeDetonation> CODEC = StreamCodec.composite(
                 BASE, p -> p, StreamCodecs.trailing(ByteBufCodecs.optional(UUIDUtil.STREAM_CODEC), Optional.empty()), NukeDetonation::material,
                 StreamCodecs.trailing(ByteBufCodecs.BYTE, (byte) -1), NukeDetonation::ground,
-                (p, material, ground) -> new NukeDetonation(p.detonation, p.blackout, p.strikeId, material.orElse(null), ground));
+                StreamCodecs.trailing(ByteBufCodecs.BOOL, true), p -> p.detonation.blockFire(),
+                (p, material, ground, blockFire) -> new NukeDetonation(p.detonation.withBlockFire(blockFire), p.blackout, p.strikeId, material.orElse(null), ground));
 
         @Override
         public Type<? extends CustomPacketPayload> type() {
@@ -760,8 +762,9 @@ public final class S2C {
     /**
      * World entry/dimension change: active detonations and flying ICBMs in this dimension. Listed detonations use 3.1.0
      * fields ({@link Detonation#STREAM_CODEC}); additional data (wall speed {@link Detonation#wave}, time
-     * of day {@link Detonation#dayTime}, fires {@link Detonation#fires}, black rain {@link Detonation#rain}) in trailing
-     * packet lists, one entry per detonation (format grows at end, replay.md): older recordings lack lists — “as before”.
+     * of day {@link Detonation#dayTime}, fires {@link Detonation#fires}, black rain {@link Detonation#rain}, after the
+     * material map block fire {@link Detonation#blockFire}) in trailing packet lists, one entry per detonation (format grows
+     * at end, replay.md): older recordings lack lists — “as before”.
      */
     public record NukeSync(List<Detonation> detonations, List<NukeWarning> warnings, java.util.Map<Integer, UUID> materials)
             implements CustomPacketPayload {
@@ -778,16 +781,26 @@ public final class S2C {
                 p -> p.detonations.stream().map(Detonation::fires).toList(),
                 StreamCodecs.trailing(ByteBufCodecs.BOOL.apply(ByteBufCodecs.list()), List.of()),
                 p -> p.detonations.stream().map(Detonation::rain).toList(),
-                StreamCodecs.trailing(ByteBufCodecs.map(java.util.HashMap::new, ByteBufCodecs.VAR_INT, UUIDUtil.STREAM_CODEC), java.util.Map.of()), NukeSync::materials,
-                (detonations, warnings, waves, dayTimes, fires, rain, materials) -> new NukeSync(extended(detonations, waves, dayTimes, fires, rain), warnings, materials));
+                Tail.CODEC, p -> new Tail(p.materials, p.detonations.stream().map(Detonation::blockFire).toList()),
+                (detonations, warnings, waves, dayTimes, fires, rain, tail) -> new NukeSync(
+                        extended(detonations, waves, dayTimes, fires, rain, tail.blockFire), warnings, tail.materials));
+
+        /** Packet end: the material map, then block fire per detonation (one composite holds at most 7 fields). */
+        private record Tail(java.util.Map<Integer, UUID> materials, List<Boolean> blockFire) {
+            static final StreamCodec<ByteBuf, Tail> CODEC = StreamCodec.composite(
+                    StreamCodecs.trailing(ByteBufCodecs.map(java.util.HashMap::new, ByteBufCodecs.VAR_INT, UUIDUtil.STREAM_CODEC), java.util.Map.of()), Tail::materials,
+                    StreamCodecs.trailing(ByteBufCodecs.BOOL.apply(ByteBufCodecs.list()), List.of()), Tail::blockFire,
+                    Tail::new);
+        }
 
         /** Detonations with trailing-list fields (empty list: field absent from recording). */
         private static List<Detonation> extended(List<Detonation> detonations, List<Float> waves, List<Long> dayTimes,
-                List<Boolean> fires, List<Boolean> rain) {
+                List<Boolean> fires, List<Boolean> rain, List<Boolean> blockFire) {
             check("waves", waves, detonations);
             check("day times", dayTimes, detonations);
             check("fires", fires, detonations);
             check("black rain", rain, detonations);
+            check("block fire", blockFire, detonations);
             List<Detonation> out = new ArrayList<>(detonations.size());
             for (int i = 0; i < detonations.size(); i++) {
                 Detonation d = detonations.get(i);
@@ -795,6 +808,7 @@ public final class S2C {
                 if (!dayTimes.isEmpty()) d = d.withDayTime(dayTimes.get(i));
                 if (!fires.isEmpty()) d = d.withFires(fires.get(i));
                 if (!rain.isEmpty()) d = d.withRain(rain.get(i));
+                if (!blockFire.isEmpty()) d = d.withBlockFire(blockFire.get(i));
                 out.add(d);
             }
             return out;
