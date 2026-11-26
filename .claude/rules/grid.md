@@ -54,7 +54,9 @@ paths:
   before the restart, `Sweep.issued`). Substations the strike hit repair as their district does; a destroyed one reroutes
   its area at `Outage.rerouteAt` but stays unpowered while its zone is destroyed (`PowerGrid.destroyed`).
 - Repairs follow time.md rule 8: real while the outage's cause is in its show (`Outage.strike`, the detonation;
-  `Outage.until`, a conventional strike's show end from `Warheads.showOf` → `StrikeShow`), then the blend. `Outage.lag`
+  `Outage.until`, a conventional strike's show end from `Warheads.showOf` → `StrikeShow`, shortened on the outage to the
+  moment a jump nobody was awake for ended it, since the recovery clock in `BlackoutWorld.holds` is not saved and the
+  next second would re-arm the planned end; `Blackouts.step`), then the blend. `Outage.lag`
   (grid ticks the outage's clock trails the grid clock, saved; 0 in old saves) grows once a second in `Blackouts.hold`
   (`util/RecoveryClock.district`, kept in the non-persistent `BlackoutWorld.holds`), then the outage is `released`;
   every repair time adds it (`lightAt`, `repairsAt`, `restoreFrom`, `over`, `rerouteAt`), darkening does not. Stored
