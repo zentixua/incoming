@@ -114,34 +114,35 @@ paths:
 - AMD's Windows driver compiles each program (glc) in the game, unseen by `GpuWatch`; the nuclear volume programs
   are its largest. CI “Компилятор AMD” (`tools/amd_shader_check.py`) fails past `tools/fixtures/amd_shader_budget.json`;
   growth needs a reason in the PR and `--record`.
-- Soft smoke at half resolution — `fx/layer/HalfPass` (off-screen particles, GPU Gems 3 ch. 23; the low-resolution
-  translucency of Unreal/Unity). Puff cost is the fragment count: 0.73–0.80 ms per screen of fill at 2560×1600 (RTX 4060
-  laptop, sandbox raid of 40, drain frame), of which raster and blending of the quad area is ~0.2 ms per screen even with a
-  constant shader (the overdraw is local: tens of layers in a cloud's middle), the six-way light maps and powers ~0.2,
-  places and alpha the rest; a puff-only program saved 7 % (not register pressure). Puffs, veil cells and glare in the
-  eye (pure light, alpha 0, a smooth halo; sorted by its source's distance, night glare would cut most tiles) at least
-  `HalfPass.WIDE` (24 px) across both edges draw into an RGBA16F half target (light premultiplied, alpha transmittance:
-  blend ONE, 1−a / ZERO, 1−a), laid once onto the frame (`fx_half_composite`, ONE, SRC_ALPHA) with depth-aware upsampling:
-  a checkerboard min/max half-resolution world distance (`fx_half_depth`) gives every 2×2 sample neighbourhood both sides of
-  a silhouette, a pixel takes bilinear where the four samples lie at its depth (10 %) and the nearest-depth sample where
-  they straddle an edge, so smoke stays sharp in front of and behind a roof edge. Thinner quads (a lying dust club
-  edge-on, a few pixels thin) stay at full resolution: at half they broke into steps and holes. Puffs are mostly drawn
-  smaller than their 128-pixel frames, so the frame's finest octave was already filtered; 1:1 crops show the same
-  billows. The target has no hardware depth: smoke behind the world is hidden by the world distance (`FxHalf`: soft edge,
-  or a hard test at softness 0), and outputs clamp to 0..1 as in the 8-bit frame (a NaN in the float target drew black
-  blocks). Order: per tile (64 px) the cut is the sorted place of its last full-resolution quad (fire, glare, particles,
-  a thin puff); on that tile a soft quad behind the cut draws in the frame in order, one in front of it into the target,
-  so each tile gets its full-resolution quads in order and the half smoke on top, which is the layer's order exactly
-  (fire inside smoke: smoke behind it full, in front of it half). The target is laid right after the last soft quad;
-  nearer quads (glare and veil of bright sources in the eye, particles at the camera) draw over it in order and set no
-  cuts: night glare covers most of the frame, and with the lay at the end 370 of 6100 puffs went half in the night raid of
-  40. A quad over tiles on both sides draws in both passes, each fragment by its tile (`HalfCut`, `quadPlace` =
-  gl_VertexID / 4) and the quad clipped (`gl_ClipDistance`) to the bounding rectangle of its tiles on that side
-  (`HalfRect`, per quad and pass); upsampling mixes only samples of tiles with the same cut. Two draw calls per frame plus
-  one lay: laying the target before each fire in smoke (35–56 lays in the raid) cost ~30–40 µs each (the lay waits for the
-  target), deciding whole quads chained nearly every puff behind some fire to full resolution, and a draw call per run
-  (hundreds, each a full `apply`) starved the GPU. `HalfPassTest` composes random tile scenes against the layer's order.
-  Sandbox raid 40, 2560×1600: puffs 0.26–0.34 ms per screen, quads pass 5.7–6.7 → 3.0 ms (edge, 45 s), 4.8 → 1.9 ms (60 s).
+- Soft smoke at half resolution — `fx/layer/HalfPass` (off-screen particles, GPU Gems 3 ch. 23). Puff cost is the
+  fragment count: 0.73–0.80 ms per screen of fill at 2560×1600 (RTX 4060 laptop, sandbox raid of 40, drain frame),
+  raster and blending of the quad area alone ~0.2 ms per screen with a constant shader (the overdraw is local: tens of
+  layers in a cloud's middle), the six-way light maps and powers ~0.2, places and alpha the rest; a puff-only program
+  saved 7 % (not register pressure). Puffs, veil cells and glare in the eye (pure light, alpha 0, a smooth halo; sorted
+  by its source's distance, night glare would cut most tiles) at least `HalfPass.WIDE` (24 px) across both edges draw
+  into an RGBA16F half target (light premultiplied, alpha transmittance: blend ONE, 1−a / ZERO, 1−a), laid once onto the
+  frame (`fx_half_composite`, ONE, SRC_ALPHA) with depth-aware upsampling: a checkerboard min/max half-resolution world
+  distance (`fx_half_depth`) gives every 2×2 sample neighbourhood both sides of a silhouette, a pixel takes bilinear
+  where the four samples lie at its depth (10 %) and the nearest-depth sample where they straddle an edge, so smoke
+  stays sharp in front of and behind a roof edge. Thinner quads (a lying dust club edge-on, a few pixels thin) stay at
+  full resolution: at half they broke into steps and holes. Puffs mostly draw below their 128-pixel frames (their finest
+  octave already filtered; 1:1 crops show the same billows). The target has no hardware depth: smoke behind the world is
+  hidden by the world distance (`FxHalf`: soft edge, or a hard test at softness 0), and outputs clamp to 0..1 as in the
+  8-bit frame (a NaN in the float target drew black blocks). Order: per tile (64 px) the cut is the sorted place of its
+  last full-resolution quad (fire, glare, particles, a thin puff); on that tile a soft quad behind the cut draws in the
+  frame in order, one in front of it into the target, which keeps the layer's order exactly (fire inside smoke: smoke
+  behind it full, in front of it half). The target is laid right after the last soft quad; nearer quads (glare and veil
+  of bright sources in the eye, particles at the camera) draw over it in order and set no cuts: night glare covers most
+  of the frame (`Plan.late`). A quad over tiles on both sides draws in both passes, each fragment by its tile
+  (`HalfCut`, `quadPlace` = gl_VertexID / 4) and the quad clipped (`gl_ClipDistance`) to the bounding rectangle of its
+  tiles on that side (`HalfRect`, per quad and pass); upsampling mixes only samples of tiles with the same cut. Two draw
+  calls per frame plus one lay: laying the target before each fire in smoke (35–56 lays in the raid) cost ~30–40 µs each
+  (the lay waits for the target), deciding whole quads chained nearly every puff behind some fire to full resolution,
+  and a draw call per run (hundreds, each a full `apply`) starved the GPU. `HalfPassTest` composes random tile scenes
+  against the layer's order. Sandbox raid 40, 2560×1600: puffs 0.26–0.34 ms per screen, quads pass 5.7–6.7 → 3.0 ms
+  (edge, 45 s), 4.8 → 1.9 ms (60 s). Cut and rectangle textures load each frame via an unpack buffer with new storage:
+  from client memory the load held the render thread 14–18 ms a frame (1 Mt front, city at 3 km) (`HalfPassUploadTest`;
+  layer line `uploads`).
 - Own particles (`client/fx/particle`) are not the vanilla engine but their own pool (`FxPool`) and their own layer after the
   world (`fx/layer/FxLayer`). Vanilla's layer has one queue without sorting (whoever was born later is on top: a launch smoke
   10 blocks away lies behind the impact columns hundreds of blocks off), an overfull queue silently evicts old clouds, and a

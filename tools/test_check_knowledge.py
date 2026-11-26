@@ -88,6 +88,21 @@ class GateTest(unittest.TestCase):
     def test_this_repository_passes(self):
         self.assertEqual(check_knowledge.check(ROOT), [])
 
+    def test_anchored_rules_must_stay(self):
+        # the look loop (Artem 25.11): a rewrite that drops an anchored rule fails the gate instead of silently
+        skill = check_knowledge.PLUGIN / "skills/look/SKILL.md"
+        text = (ROOT / skill).read_text(encoding="utf-8")
+        self.repo.write(str(skill), text)
+        self.repo.write("docs/dev-pipeline.md", (ROOT / "docs/dev-pipeline.md").read_text(encoding="utf-8"))
+        self.repo.write("AGENTS.md", AGENTS + "- Look changes iterate in the dev client; whole-pack takes and the matrix only for the\n  final set.\n")
+        self.assertEqual(self.problems(), [])
+        start, end = text.index("## 4. Iterate in the dev client"), text.index("## 5. Judge in motion")
+        self.repo.write(str(skill), text[:start] + text[end:])
+        self.repo.write("AGENTS.md", AGENTS)
+        lost = [p for p in self.problems() if "lost the rule" in p]
+        self.assertEqual(len(lost), 4, self.problems())
+        self.assertEqual(sum(p.startswith("AGENTS.md:") for p in lost), 2, lost)
+
     def test_size_inside_the_agreed_look_is_ours(self):
         # Artem 22.11: he sets the goal, not a height; a mission must never stop to ask him a size, height or shape
         agents = " ".join((ROOT / "AGENTS.md").read_text(encoding="utf-8").split())

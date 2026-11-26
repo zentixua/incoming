@@ -284,7 +284,7 @@ public final class NuclearPrep {
     private final List<Prep> preps = new ArrayList<>();
     /** Strikes whose preparation failed: do not restart (otherwise error logged every tick). */
     private final java.util.Set<Integer> failed = new java.util.HashSet<>();
-    private final WorkClock clock = WorkClock.decaying(0.5);
+    private WorkClock clock = WorkClock.decaying(0.5);
 
     /** Total prebuilt ruins across strikes (tests, status). */
     public int plannedChunks() {
@@ -1162,6 +1162,34 @@ public final class NuclearPrep {
                     watch.available() ? "old generation" : "heap", live >> 20, Runtime.getRuntime().maxMemory() >> 20, heapStrikes);
         }
         return heapStrikes >= 2;
+    }
+
+    /**
+     * For tests: wait until every zone layout building in the background ({@link #layout}) is done, at most
+     * {@code millis}; whether all are. A GameTest that finishes the mod's background work at each tick waits here too.
+     */
+    boolean awaitLayoutsForTest(long millis) {
+        long until = System.nanoTime() + millis * 1_000_000L;
+        for (Prep p : preps) {
+            CompletableFuture<Layout> layout = p.layout;
+            if (layout == null) continue;
+            try {
+                layout.get(Math.max(0, until - System.nanoTime()), java.util.concurrent.TimeUnit.NANOSECONDS);
+            } catch (java.util.concurrent.TimeoutException e) {
+                return false;
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+                return false;
+            } catch (java.util.concurrent.ExecutionException e) {
+                // the preparation reports and drops a failed layout on its next tick
+            }
+        }
+        return true;
+    }
+
+    /** For tests: the preparation's work clock (a counting clock keeps its units per tick off the wall); null: real. */
+    void useClockForTest(@Nullable WorkClock test) {
+        clock = test != null ? test : WorkClock.decaying(0.5);
     }
 
     /** For tests: stop all preparations as under memory pressure. */

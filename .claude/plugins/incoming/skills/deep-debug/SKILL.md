@@ -86,13 +86,18 @@ Where: Artem's laptop, only when he is not playing (`tools/gpu_lease.sh --wait`)
   a good neighbour. Log every term per pixel (march samples, density, transmittance, light and shadow terms, history
   blend) and name the term that differs, with its numbers, before any fix attempt. Changing a knob and re-judging
   frames is guessing.
-- **Client CPU**: spark on the client, render thread time, frame p50/p95.
+- **Client CPU**: spark on the client, render thread time, frame p50/p95. More work or slower work: per-thread
+  hardware counters, `LC_ALL=C perf stat -e instructions:u,cycles:u,task-clock --per-thread -p <pid> -I 100 -x,`
+  (user processes may count their own threads), joined with the frame log: instructions per frame and IPC on the
+  render thread split a heavier frame from one starved by other threads. `-p` counts only threads alive when perf
+  attaches: start it after the world loads; take compiler-thread load from schedstat.
 - **GPU clocks**: `nvidia-smi` log once a second; 45 s warm-up; the clock is written beside each view.
 - **Frames**: the same spot, the same moment after the strike, against `main` (`tools/sandbox.sh shot`); the scene
   bench for frame cost.
 - **Other vendors' drivers** (AMD, no such GPU here): `tools/amd_shader_check.py` gives AMD's own compiler output
   per program (VGPRs, scratch, code size, compiler memory and seconds); Mesa llvmpipe is the second compiler.
-- **Shaders**: the hold rig (age the cloud once, keep the client, hot reload), a probe channel per term.
+- **Shaders**: the dev client held at the defect (look skill section 4: the burst once, `/tick freeze`, F3+T per
+  change), a probe channel per term.
 
 Traps: Dynamic FPS caps to 15 FPS exactly after 300 s (`dynamic_fps.json` `{"idle":{"timeout":0}}`); scenarios pin a
 quality ladder step, compare only equal steps (frame time as in the game: `-Dincoming.pall.adaptive=true`);
@@ -150,6 +155,14 @@ into that area's `.claude/rules` or this skill by PR in the same thread; status 
   threads per period, so with the client's dozens of busy threads its render-thread sample count is a small, uneven
   fraction of wall time: use it for shares inside the thread, never for milliseconds. Per-frame cost comes from a
   render-thread sampler and frame log in the scenario client (the `incoming.hitch` probe).
+- The probe's per-frame GPU ms (GL timestamps) counts the GPU's idle gaps while the render thread waits for a core:
+  at a 1 Mt city front frames showed 57–61 ms "GPU" at 8–46 % `nvidia-smi` utilisation, CPU-bound. Read GPU utilisation
+  and `hitch-sched` run-queue wait before calling frames GPU-bound.
+- A JIT burst at an event is mostly recompiles, not warm-up: split C2 compile time in the window by each method's
+  history in the compile recording (first compile; recompile after a recorded `jdk.Deoptimization`; recompile without
+  one: cold code flushed after `CodeCache GC Threshold` collections, or a dependency invalidation, `-Xlog:codecache*,
+  dependencies`). At a 1 Mt city front 70–78 % of 20–27 CPU-s of C2 in 4 s were recompiles. Our own long methods compile
+  to units 50× their bytecode (`javap -c` sizes): a 2,550-byte one recompiled at 100–135 kB each time.
 - `MinecraftServer.getTickTimesNanos` misses work done in `ServerTickEvent.Post`: take tick cost from spark
   tickmonitor or tick-start intervals. GC-log "Reaching safepoint" lines inside ZGC concurrent phases are not game
   stops: game threads keep running.
@@ -157,7 +170,6 @@ into that area's `.claude/rules` or this skill by PR in the same thread; status 
   value of the string or pixel he sees).
 - A bug from Artem's game: his Flashback replay (instance `flashback/replays`, copy first) is a data source: the login
   packet gives the game mode, snapshots `set_time`, `move_entities` positions; read where he stood and when.
-- Shader probes: the hold rig ages the cloud once (dust off, render distance 2), then the client polls command files
-  (`tp <up> <pitch>`, `prop <key> <value>`, `reload`, `shot <name>`, `quit`); copy edited shaders into
-  `mod/build/resources/main` and `reload` (~50 s); after toggling a mode wait ~80 ticks (temporal history); a probe
-  channel writes one term's value as the pall output with alpha 0 (channel 39 = linear calibration ramp).
+- Shader probes: in the dev client (look skill section 4) the cloud ages once, then `/tick freeze` holds it; each edited
+  shader goes in by `tools/dev_client.sh swap` (F3+T); after toggling a mode wait ~80 ticks (temporal history); a
+  probe channel writes one term's value as the pall output with alpha 0 (channel 39 = linear calibration ramp).

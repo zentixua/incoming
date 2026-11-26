@@ -489,10 +489,13 @@ public final class RuinGameTests {
      * Ruins in advance on the border of the preparation squares (each 5-th chunk): a blank terracotta wall in the last column of the
      *  chunk of one square, a house with ceilings in the adjacent square (15 kt in the air, 1 block = 20 m). The squares
      *  are prepared separately, and the ruins at their border are the same as in the middle: the wall is collapsing along with the house. If there is no
-     *  border of squares on the site (1 times from 25 in its place), the wall stands on the usual border of chunks. When the zone chunks are already on the disk
-     *  (the tests unloaded them before), after the detonation the zone behind the wave works: headers and chunks from the disk and plans - according to the
-     *  wall clock, so the wait for the ruins goes on at the pace of the game (on CI the server GameTest ticks without pauses, ~2000 tick/s, and
-     * 850 tick after detonation ends before the zone releases squares).
+     *  border of squares on the site (1 times from 25 in its place), the wall stands on the usual border of chunks. Zone chunks
+     *  earlier batches left on disk are planned from disk during the flight; within 2400 ticks of the detonation no plan
+     *  is left and the zone behind the wave holds no square. On game ticks only: the mod's background work (zone layout, disk reads,
+     *  plans) is finished at each tick and tickets are loaded at once ({@link BackgroundSettle}), the work clocks count
+     *  units, and the load pace admits every load ({@link ua.zentix.incoming.work.OpenLoadPace}). At a wall-clock pace
+     *  (50 ms a tick) the runner decides whether the preparation's disk plans are ready by the detonation, and with them
+     *  what the zone has to do.
      */
     @GameTest(template = "range", timeoutTicks = 3000, batch = "nuke_prep_border", skyAccess = true)
     public static void wallOnPrepTileBorderFalls(GameTestHelper h) {
@@ -528,22 +531,29 @@ public final class RuinGameTests {
         }
         BlockPos wallAt = wall;
         boolean x = alongX;
+        // the wall's chunk was ruined by an earlier check beside this site, as GameTest grid neighbours leave it: the
+        // strike ruins it again, since its number is the newer one (NuclearGameTests.nextId)
+        level.getChunkAt(h.absolutePos(wallAt)).setData(ModAttachments.CHUNK_SCAR, NuclearGameTests.nextId(level));
         detonation(h, CENTER, 0, 15, 0.05f); // only backfilling of the layer under the site: blasting - according to schedule
         double scale = IncomingConfig.SERVER.nukeEffectsScale.get();
         IncomingConfig.SERVER.nukeEffectsScale.set(0.05);
         NuclearWorld w = NuclearWorld.get(level);
         NuclearWorld.useClock(level.getServer(), WorkClock.counting(1_000_000L));
+        w.usePreparationClockForTest(WorkClock.counting(1_000_000L));
+        var pace = ua.zentix.incoming.work.OpenLoadPace.install(level.getServer());
         NuclearEvents events = NuclearEvents.get(level);
         long now = level.getGameTime();
         Vec3 target = Vec3.atBottomCenterOf(h.absolutePos(CENTER));
         events.schedule(new NuclearEvents.ScheduledStrike(events.nextId(), target, 15, true, now, now + 300, target, java.util.Optional.empty(), false));
-        Runnable restore = () -> {
+        StrikeGameTests.afterTest(h, () -> {
             IncomingConfig.SERVER.nukeEffectsScale.set(scale);
             NuclearWorld.useClock(level.getServer(), new WorkClock());
+            w.usePreparationClockForTest(null);
+            ua.zentix.incoming.work.OpenLoadPace.restore(level.getServer(), pace);
             NuclearStrikes.clear(level);
-        };
-        long[] tickAt = {System.nanoTime()};
+        });
         h.onEachTick(() -> {
+            BackgroundSettle.settle(level);
             Detonation d = events.detonations().stream().filter(e -> e.burst().distanceTo(target) < 400).findFirst().orElse(null);
             String failure = null;
             if (d != null) {
@@ -556,9 +566,9 @@ public final class RuinGameTests {
                             && house.getExistingData(ModAttachments.CHUNK_SCAR).orElse(0) >= d.id();
                 }
                 if (!scarred || w.plannedChunks() > 0 || w.prepTiles() > 0) {
-                    RuinBackgroundGameTests.gamePace(tickAt);
                     if (level.getGameTime() < d.gameTime() + 2400) return;
-                    failure = "the ruins near the wall did not stand behind 2400 tick after the explosion: left " + w.plannedChunks() + ", squares " + w.prepTiles();
+                    failure = "the ruins near the wall did not stand behind 2400 tick after the explosion: left " + w.plannedChunks() + ", squares " + w.prepTiles()
+                            + ", wall and house chunks scarred " + scarred;
                 } else if (w.ruinStats()[0] == 0) {
                     failure = "not a single chunk fell into place according to a ready-made plan";
                 } else {
@@ -572,11 +582,9 @@ public final class RuinGameTests {
                         }
                     }
                 }
-                restore.run();
                 if (failure != null) throw new GameTestAssertException(failure);
                 h.succeed();
             } else if (level.getGameTime() > now + 1150) {
-                restore.run();
                 throw new GameTestAssertException("there was no explosion");
             }
         });

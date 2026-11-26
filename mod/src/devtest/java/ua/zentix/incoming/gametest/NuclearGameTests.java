@@ -122,18 +122,25 @@ public final class NuclearGameTests {
     }
 
     /**
-     * The numbers of explosions of checks are different for everyone: the ruins of the explosion ({@code RuinContext}) live by number, and the sites GameTest
-     *  between the batch are the same places; with a random number, a matching explosion would take the light shadow height maps from the last
-     *  check at this site (“not a single fire”).
+     * Number for a check's own detonation, from the level's detonation counter ({@link NuclearEvents#nextId}), the one
+     * sequence the game numbers strikes by. Every check gets a different number: the ruins of a detonation
+     * ({@code RuinContext}) live by number, and GameTest sites of different batches lie side by side; a repeated number
+     * would take the light shadow height maps of an earlier check at this site (“not a single fire”). One sequence:
+     * a chunk ruined by a check carries that number ({@code CHUNK_SCAR}), and the ruin queue treats a chunk whose mark
+     * is not below a detonation's number as already ruined by a newer one. A number from a separate counter above the
+     * level's outranks every later strike check beside it: its ruin queue skips those chunks while its preparation plans
+     * them, and the zone behind the wave holds their square to the end ({@code RuinGameTests.wallOnPrepTileBorderFalls}).
      */
-    static final java.util.concurrent.atomic.AtomicInteger IDS = new java.util.concurrent.atomic.AtomicInteger(1_000_000);
+    static int nextId(ServerLevel level) {
+        return NuclearEvents.get(level).nextId();
+    }
 
     private static Detonation raw(GameTestHelper h, BlockPos at, double hob, double yieldKt, float scale) {
         return rawAt(h, h.absolutePos(at), hob, yieldKt, scale);
     }
 
     private static Detonation rawAt(GameTestHelper h, BlockPos g, double hob, double yieldKt, float scale) {
-        return new Detonation(IDS.incrementAndGet(), new Vec3(g.getX() + 0.5, g.getY() + hob, g.getZ() + 0.5), g.getY(),
+        return new Detonation(NuclearGameTests.nextId(h.getLevel()), new Vec3(g.getX() + 0.5, g.getY() + hob, g.getZ() + 0.5), g.getY(),
                 yieldKt, hob <= 0, h.getLevel().getGameTime(), 0, 0, 20_000, 7, scale, false, Detonation.OLD_WAVE);
     }
 
@@ -2080,7 +2087,7 @@ public final class NuclearGameTests {
         Cow inside = h.spawn(EntityType.COW, CENTER.east(10));
         Cow ahead = h.spawn(EntityType.COW, CENTER.east(26));
         BlockPos g = h.absolutePos(CENTER);
-        Detonation d = new Detonation(IDS.incrementAndGet(), Vec3.atBottomCenterOf(g), g.getY(), 0.1, true,
+        Detonation d = new Detonation(NuclearGameTests.nextId(level), Vec3.atBottomCenterOf(g), g.getY(), 0.1, true,
                 level.getGameTime() - 2, 0, 0, 20_000, 7, 0.05f, false, Detonation.OLD_WAVE);
         h.assertTrue(d.frontRadius(1) > 10 && d.frontRadius(2) > 26 && d.frontRadius(1) < 26, "the front is not where the check awaits");
         NuclearEvents.get(level).add(d, level);
@@ -2379,7 +2386,7 @@ public final class NuclearGameTests {
         h.assertTrue(sick.hasEffect(ModEffects.RADIATION_SICKNESS), "a cow with 1000 Gr does not have radiation sickness");
         // ground detonation with fallout already landed 100 s ago; the cow is at the epicenter - in the very wake
         BlockPos g = h.absolutePos(CENTER);
-        Detonation d = new Detonation(IDS.incrementAndGet(), Vec3.atBottomCenterOf(g), g.getY(), 15, true,
+        Detonation d = new Detonation(NuclearGameTests.nextId(level), Vec3.atBottomCenterOf(g), g.getY(), 15, true,
                 level.getGameTime() - 2000 - FALLOUT_LANDED_TICKS, 0, 5, 20_000, 7, 0.1f, true, Detonation.OLD_WAVE);
         MobFallout fallout = new MobFallout();
         WorkClock clock = WorkClock.counting(1_000_000L);
@@ -2415,7 +2422,7 @@ public final class NuclearGameTests {
                 WorldClock.now(level) - Math.min(level.getGameTime(), MobFallout.PERIOD)));
         for (int i = 0; i < 2 * MobFallout.PERIOD + 100; i++) h.spawn(EntityType.SHEEP, CENTER.offset(-20 + i % 41, 0, 5 + i / 41));
         BlockPos g = h.absolutePos(CENTER);
-        Detonation d = new Detonation(IDS.incrementAndGet(), Vec3.atBottomCenterOf(g), g.getY(), 15, true,
+        Detonation d = new Detonation(NuclearGameTests.nextId(level), Vec3.atBottomCenterOf(g), g.getY(), 15, true,
                 level.getGameTime() - 2000 - FALLOUT_LANDED_TICKS, 0, 5, 20_000, 7, 0.1f, true, Detonation.OLD_WAVE);
         MobFallout fallout = new MobFallout();
         WorkClock clock = WorkClock.counting(1_000_000L);
@@ -2804,7 +2811,7 @@ public final class NuclearGameTests {
 
     /** 15 kt near the ground in {@code distance} blocks west of {@code target}, 1 block = 1 m. */
     private static Detonation blastFromWest(GameTestHelper h, Vec3 target, double distance) {
-        return new Detonation(IDS.incrementAndGet(), new Vec3(target.x - distance, target.y, target.z), target.y, 15, true,
+        return new Detonation(NuclearGameTests.nextId(h.getLevel()), new Vec3(target.x - distance, target.y, target.z), target.y, 15, true,
                 h.getLevel().getGameTime(), 0, 0, 20_000, 7, 1, false, Detonation.OLD_WAVE);
     }
 }

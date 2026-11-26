@@ -74,15 +74,15 @@ cd mod && ./gradlew runScenarioSweep      # flight scenarios, all seeds; -Pscena
                                          # -PscenarioOnly=<regex> selects; -PscenarioRealChunks uses real loading
 cd mod && ./gradlew runScenarioRecord     # rerecord trajectory baseline; explain shifts in the scenario PR
 tools/client_scenario.sh nuke            # headless: mod/run/scenario/screenshots/*.png, audio.wav, logs
-tools/sandbox.sh shot <name> '<effect>'   # effect frames/WAV, shared GPU or CPU, never queued (client-scenario.md)
+tools/dev_client.sh start <save>         # the look loop (client-scenario.md)
 tools/stand/run.sh <name> ci:<branch> --packs none --scenes 100  # scene bench, ~3 GPU min; tools/stand/README.md
 tools/deploy.sh                          # jar → dist/ for friends and mods/ without pack auto-update
 python3 tools/logscan.py [--since 18:30]   # after play: mod errors, strikes, detonations, Sable
 ```
-Scripts using numpy/scipy/soundfile/Pillow declare dependencies in `# /// script` (PEP 723); run
+Scripts needing numpy/scipy/soundfile/Pillow declare them in `# /// script` (PEP 723); run
 `uv run tools/<script>.py`, install nothing into system Python. Without an instance (cloud/CI):
 `python3 tools/fetch_runtime_mods.py` → `./gradlew runGameTestServer -PmcModsDir=run/ci-mods`.
-CI checks each commit once, on `main` push and PR; branches without PRs get no CI, so open a draft immediately.
+CI checks each commit once, on `main` push and PR; branches without PRs get none: open a draft at once.
 Checks follow changed paths (`tools.md`); Итог decides merge, failing if any needed check fails or is canceled.
 Release steps: `tools.md`.
 A PR changing packet/entity-data formats bumps `IncomingNetwork.PROTOCOL`. A release with behavior/lang keys different
@@ -222,12 +222,13 @@ queues, little rework; each mission's budget is checked against its measured loa
   ./gradlew runGameTestServer -PgametestOnly=…`). Numeric claims get unit tests/GameTest; comment/guide promises held
   by tests. Documentation-only changes use the applicable CI checks, without a game run. Split large work.
 - **Visual/audio:** the `look` skill (scope, traits and mechanism before code; clips judged in motion); the player's
-  eye decides, numbers inform. Before/after frames/WAV in PR; where frames render: `client-scenario.md`. Scene bench (100-strike frame
-  cost versus `main`) only for changes that can change frame cost: render/FX code, shaders, particle or draw counts
-  (Artem, 30.10); once, on the final PR head after review; colors, textures, sounds, text, server, tools skip it. Never
-  merge above frame-cost limit or with a bench look flag unanswered in the PR (intended or fixed). No
-  full-pack Iris recording per PR. A new version for Artem's review (frames, clip, animation) first goes beside the one
-  he last saw, same times: what he accepted must still hold by number.
+  eye decides, numbers inform. Look changes iterate in the dev client (look skill); whole-pack takes and the matrix
+  only for the final set. Before/after frames/WAV in PR; where frames render: `client-scenario.md`. Scene bench
+  (100-strike frame cost versus `main`) only for changes that can change frame cost: render/FX code, shaders, particle
+  or draw counts (Artem, 30.10); once, on the final PR head after review; colors, textures, sounds, text, server, tools
+  skip it. Never merge above frame-cost limit or with a bench look flag unanswered in the PR (intended or fixed). No
+  full-pack Iris recording per PR. A new version for Artem's review (frames, clip, animation) first goes beside the
+  one he last saw, same times: what he accepted must still hold by number.
 - **Performance starts with measurement:** GPU time by layer parts (mod markers, bench line, F3), RenderDoc frame
   (`mod/run/renderdoc/`, Python analysis); edit the numerically identified cause, not a presumed model.
 - **One run answers everything** (Artem, 18.11): before any run that observes the system (test, measurement,
@@ -254,10 +255,10 @@ queues, little rework; each mission's budget is checked against its measured loa
   checks the first round's fixes and new serious defects in them); a defect class surviving both stops the work for the
   root-cause analysis above, not a third round. Merge only without an open serious finding: fixed, or recorded in the PR as an explicit
   limit. Before each release, one Codex audit of the whole `main` diff since the last release.
-- **Effort** (Artem, 19.11), for every agent, task and review: the working range is low/medium/high.
-  **medium** is the default. **high** for work that needs deep reasoning: diagnosis of an unknown cause, physics
-  laws, rendering, performance, concurrency, and reviews of such changes. **low** for mechanical work: renames,
-  moving or copying text, routine checks, collecting files or logs. Above high only when high demonstrably failed on
+- **Effort** (Artem, 19.11), for every agent, task and review: the range is low/medium/high.
+  **medium** by default. **high** for work that needs deep reasoning: diagnosis of an unknown cause, physics
+  laws, rendering, performance, concurrency, and reviews of such changes. **low**: mechanical work (renames,
+  moving text, routine checks, collecting files or logs). Above high only when high demonstrably failed on
   that task (a missed serious error or a wrong result), stated in the PR or report.
 - **The task owner merges** once every condition but Итог holds (review fixes and probe pushed, any needed
   bench in and answered): `gh pr ready` and `gh pr merge --auto --squash`; it lands on green Итог (sole required
@@ -273,10 +274,11 @@ queues, little rework; each mission's budget is checked against its measured loa
   through `util/Terrain`. Nuclear loads use background vanilla `TicketType` (`NuclearTickets`).
 - `Locale.ROOT` for command numbers: Artem's Russian locale makes `String.format("%.1f")` use comma.
 - Heavy laptop jobs through `tools/laptop_job.sh` (own systemd service; `--gpu` waits for Artem's game to close and
-  leases the GPU; `--soft` vanilla clients run at idle CPU priority; each job has a memory ceiling); full-pack jobs (≈12 GB, `--full`) run singly, GPU-free jobs may overlap within 32 GB; fix excess use in code.
+  leases the GPU; `--soft` vanilla clients run at idle CPU priority; each job has a memory ceiling); full-pack jobs
+  (≈12 GB, `--full --acceptance`) run singly, GPU-free jobs may overlap within 32 GB; fix excess use in code.
   `/tmp` is RAM tmpfs: large clones/instance copies/frames go to disk, e.g. ignored `mod/run/`.
-- Checks must never reach Artem's screen/speakers. Clients only via `tools/nested_kwin.sh` (`--virtual`, no desktop
-  window/host OpenAL audio, scenario audio to file); without KWin (cloud), `xvfb-run` with same muted host audio (`rigs.md`).
+- Checks must never reach Artem's screen/speakers: clients only via `tools/nested_kwin.sh --virtual`, without KWin
+  (cloud) `xvfb-run`; no host audio, scenario audio to file (`rigs.md`).
 
 ## `.claude/rules/` files
 - `tools.md`: layout, `tools/` scripts, CI.

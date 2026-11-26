@@ -32,7 +32,7 @@ public final class NukeAsh {
      * dust); {@code a} — the detonation whose pall covers the camera (wind, paper).
      */
     static void tick(ClientLevel level, Vec3 cam, double rate, double sigma, @Nullable ClientNuclear.Active a) {
-        if (rate <= 0.01 || a == null || level.dimensionType().hasCeiling()) return;
+        if (rate <= 0.01 || a == null || level.dimensionType().hasCeiling() || ClientNuclear.held()) return;
         Detonation d = a.d;
         double ticks = a.ticks(0);
         double paper = a.pall.paperRate(cam.x - d.burst().x, cam.z - d.burst().z, ticks, NukePall.water(a));

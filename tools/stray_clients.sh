@@ -6,8 +6,9 @@
 #
 # A job unit (tools/laptop_job.sh: incoming-job-<name>-<caller pid>) is a stray when
 #   - its caller (the laptop_job.sh whose pid ends the unit name) is gone: nobody waits for it;
-#   - it is an effects sandbox (incoming-job-sandbox-*) whose tree had no command (fx/active, fx/inbox, fx/ready) for
-#     --idle seconds (default 1800, the sandbox's own INCOMING_SANDBOX_IDLE): its job ended without `stop`;
+#   - it is a kept-up client, the effects sandbox (incoming-job-sandbox-*: fx/active, fx/inbox, fx/ready) or the dev
+#     client (incoming-job-devclient-*: dev/inbox), whose tree had no command for --idle seconds (default 1800, the
+#     sandbox's own INCOMING_SANDBOX_IDLE): its job ended without `stop`;
 #   - any other job running longer than --max-age seconds (default 43200: the longest measured job, a 7 h GameTest
 #     run, with margin; laptop_job.sh header).
 # A client JVM (launch script under mod/build/rig/) outside any job unit whose wrapper is gone is a stray too: its
@@ -17,11 +18,14 @@
 set -uo pipefail
 PROC=${STRAY_PROC:-/proc}
 
-# seconds since the last sandbox command of tree $1: newest of fx/active (every command), fx/inbox (its directory changes
-# with each command file, also on sandboxes older than fx/active) and fx/ready; nothing without any of them
+# seconds since the last command of the kept-up client of tree $1 (kind $2: sandbox, default, or devclient): newest of
+# the sandbox's fx/active (every command), fx/inbox (its directory changes with each command file, also on sandboxes
+# older than fx/active) and fx/ready, or the dev client's dev/inbox; nothing without any of them
 sandbox_idle() {
-  local fx=$1/mod/run/sandbox/fx f t last=
-  for f in "$fx/active" "$fx/inbox" "$fx/ready"; do
+  local fx=$1/mod/run/sandbox/fx f t last= files
+  files=("$fx/active" "$fx/inbox" "$fx/ready")
+  [ "${2:-sandbox}" = devclient ] && files=("$1/mod/run/client/dev/inbox")
+  for f in "${files[@]}"; do
     t=$(stat -c %Y "$f" 2>/dev/null) || continue
     [ -z "$last" ] || [ "$t" -gt "$last" ] && last=$t
   done
@@ -88,8 +92,8 @@ orphan_jvm() {
 verdict() {
   local unit=$1 alive=$2 age=$3 idle=$4
   if [ "$alive" = 0 ]; then echo "caller gone"
-  elif [[ $unit == incoming-job-sandbox-* ]]; then
-    [ -n "$idle" ] && [ "$idle" -ge "$IDLE" ] && echo "no sandbox command for $((idle / 60)) min"
+  elif [[ $unit == incoming-job-sandbox-* || $unit == incoming-job-devclient-* ]]; then
+    [ -n "$idle" ] && [ "$idle" -ge "$IDLE" ] && echo "no client command for $((idle / 60)) min"
   elif [ "$age" -ge "$MAX_AGE" ]; then echo "running $((age / 3600)) h"
   fi
 }
@@ -98,7 +102,11 @@ report() {
   local unit tree age idle alive why n=0 pid
   for unit in $(systemctl --user list-units 'incoming-job-*' --state=active --no-legend --plain 2>/dev/null | awk '{print $1}'); do
     tree=$(unit_tree "$unit"); age=$(unit_age "$unit")
-    idle=; [[ $unit == incoming-job-sandbox-* ]] && [ -n "$tree" ] && idle=$(sandbox_idle "$tree")
+    idle=
+    [ -n "$tree" ] && case $unit in
+      incoming-job-sandbox-*) idle=$(sandbox_idle "$tree") ;;
+      incoming-job-devclient-*) idle=$(sandbox_idle "$tree" devclient) ;;
+    esac
     alive=0; caller_alive "$unit" && alive=1
     why=$(verdict "$unit" "$alive" "$age" "$idle")
     [ -n "$why" ] || continue

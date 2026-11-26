@@ -95,6 +95,19 @@ public final class NuclearWorld {
         return prep.frontStats(strike);
     }
 
+    /**
+     * For tests: layouts building in the background done, the zones of all preparations ({@link NuclearPrep}) and the
+     * ruin settlement's pass ({@link RuinSettle}), each waited for at most {@code millis}; whether all are.
+     */
+    public boolean awaitLayoutsForTest(long millis) {
+        return prep.awaitLayoutsForTest(millis) && settle.awaitLayoutForTest(millis);
+    }
+
+    /** For tests: the preparation's own work clock ({@link NuclearPrep}); {@code null} puts back the real one. */
+    public void usePreparationClockForTest(@Nullable WorkClock clock) {
+        prep.useClockForTest(clock);
+    }
+
     /** Deterministic front send-budget clock for an existing preparation; other clocks stay real (tests). */
     public boolean useFrontClockForTest(int strike, java.util.function.LongSupplier time) {
         return prep.useFrontClockForTest(strike, time);

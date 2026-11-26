@@ -48,6 +48,12 @@ Prism: `~/.var/app/org.prismlauncher.PrismLauncher/data/PrismLauncher/` (`tools/
                                            its Gradle step and another Gradle run in the same tree (GameTest) collide on
                                            downloadAssets: start the second after the client's launch script exists;
                                            scenarios and what each captures: in the script header
+    dev_client.sh start|cmd|hud|swap|reload|shot|stop ← the look loop: ModDevGradle runClient (the mod and its dependencies) straight
+                                           into a saved world (a reflinked copy of a real map), JetBrains Runtime from the Gradle
+                                           toolchain with JDWP on loopback; `swap` compiles, redefines changed classes (jdb) and presses
+                                           the F3+T reload for changed resources; chat commands, reload, F2 and F1 as files the
+                                           client reads (devtest DevHands: the nested display passes it no keyboard input); shared
+                                           GPU slot or CPU (laptop_job.sh --soft); how to work: client-scenario.md, “Standard dev client”
     sandbox.sh start|fx|swap|shot|restart|stop|jbr ← effects sandbox (vanilla: shared GPU slot or CPU, unless shaders/sodium/dh/gpu): a client with only the mod (+ Iris with a shaderpack, Sodium without one, DH) in a
                                            flat world, an effect by the /fx command in seconds, hot code swap and
                                            resource reload without a new client, frames and WAV in one command (`shot`; `--at none`
@@ -55,8 +61,8 @@ Prism: `~/.var/app/org.prismlauncher.PrismLauncher/data/PrismLauncher/` (`tools/
                                            a nuke at the camera: `nuke 15 near`; how to work: client-scenario.md,
                                            “Effects sandbox”; check without a client: test_sandbox.sh (CI);
                                            no command for INCOMING_SANDBOX_IDLE s (1800; 0 never): the client stops itself
-    stray_clients.sh [--host vps] [--idle S] [--max-age S] ← report only: job units whose caller is gone, sandboxes idle past
-                                           the limit, other jobs over 12 h, client JVMs whose wrapper is gone; exit 1 when any; never
+    stray_clients.sh [--host vps] [--idle S] [--max-age S] ← report only: job units whose caller is gone, sandboxes and dev
+                                           clients idle past the limit, other jobs over 12 h, client JVMs whose wrapper is gone; exit 1 when any; never
                                            stops anything; test: test_stray_clients.sh (CI)
     amd_shader_check.py [--only R] [--record] [--tree D] ← every core and post program through AMD's OpenGL compiler offline
                                            (glc of RGA 2.13, gfx1032 = RX 6600 XT; vanilla stages and includes from the 1.21.1
@@ -95,7 +101,7 @@ Prism: `~/.var/app/org.prismlauncher.PrismLauncher/data/PrismLauncher/` (`tools/
     soft_gl.sh                           ← vanilla clients, sourced: vanilla_display (shared GPU slot, else CPU at once), CPU rendering (Mesa llvmpipe): GL vendor/thread/heap
                                            environment, memory ceiling and admission, CPU display (nested KWin on a
                                            wayland-incoming-soft-<name> socket, else xvfb-run); details: client-scenario.md, “Vanilla rendering”
-    laptop_job.sh [--gpu|--light|--soft] [--full] <name> -- <command> ← heavy job on the host's laptop: its own temporary systemd service
+    laptop_job.sh [--gpu|--light|--soft] [--full --acceptance] <name> -- <command> ← heavy job on the host's laptop: its own temporary systemd service
                                            (not in the Claude group), the laptop does not sleep, everything of it is stopped on exit; no queue;
                                            --gpu [--wait] takes the GPU lease of its session (another session's: refusal 75; with
                                            --wait, in the lease queue) and waits until Artem's game is closed; his game started during the
@@ -103,6 +109,8 @@ Prism: `~/.var/app/org.prismlauncher.PrismLauncher/data/PrismLauncher/` (`tools/
                                            at the end, “laptop_job <name>: exit N”; --status: what runs and who holds the GPU;
                                            --soft: a vanilla client (shared GPU slot or CPU), no lease, CPUWeight=idle, MemoryMax from soft_gl.sh, no swap;
                                            every job has a memory ceiling (--ceiling <mode>): 10 GB + 4 GB swap, --full (whole pack) 20 GB,
+                                           --full only with --acceptance (a final take: refused with 2 without it, each counted as a
+                                           `take` row of its task in the load log),
                                            from measured unit peaks; past it the unit stops itself and the output says “memory ceiling …
                                            reached”; INCOMING_JOB_MEM/INCOMING_JOB_SWAP for one job; without a sleep inhibitor where none is allowed (a server);
                                            every job runs in agents.slice (laptop-agents: one ceiling for all agent work, rigs.md); a job

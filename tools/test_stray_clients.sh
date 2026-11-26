@@ -33,6 +33,15 @@ fake 102 bash "$tmp/busy/tools/laptop_job.sh" --light sandbox-busy-cd34 -- "$tmp
 fake 202 bash "$tmp/busy/tools/laptop_job.sh" --in-unit gpu sandbox-busy-cd34 102 -- "$tmp/busy/tools/sandbox.sh" _run 1280 720
 fake 203 bash -c 'source "$1/tools/soft_gl.sh"; vanilla_display …' _ "$tmp/gone" nuke   # caller 103 gone
 fake 104 bash "$tmp/gone/tools/laptop_job.sh"; fake 204 bash "$tmp/gone/tools/laptop_job.sh" --in-unit light x 104 --
+# dev clients (tools/dev_client.sh, also kept up under nohup): one idle two hours, one with a fresh command
+for d in devidle devbusy; do mkdir -p "$tmp/$d/tools" "$tmp/$d/mod/run/client/dev/inbox"; done
+touch -d "@$(( $(date +%s) - 7200 ))" "$tmp/devidle/mod/run/client/dev/inbox"
+unit incoming-job-devclient-devidle-ef56-106.service 206 $(( (100000 - 7300) * 1000000 ))
+unit incoming-job-devclient-devbusy-ab78-107.service 207 $(( (100000 - 7300) * 1000000 ))
+fake 106 bash "$tmp/devidle/tools/laptop_job.sh" --soft devclient-devidle-ef56 -- "$tmp/devidle/tools/dev_client.sh" _run 1280 720
+fake 206 bash "$tmp/devidle/tools/dev_client.sh" _run 1280 720
+fake 107 bash "$tmp/devbusy/tools/laptop_job.sh" --soft devclient-devbusy-ab78 -- "$tmp/devbusy/tools/dev_client.sh" _run 1280 720
+fake 207 bash "$tmp/devbusy/tools/dev_client.sh" _run 1280 720
 fake 105 bash -c sleep; fake 205 bash "$tmp/gone/tools/laptop_job.sh" --in-unit soft x 105 --   # pid reused by another program
 systemctl() {
   case "$2" in
@@ -50,12 +59,13 @@ caller_alive incoming-job-sandbox-idle-ab12-101.service && ! caller_alive incomi
   && ! caller_alive incoming-job-guide-105.service && ok "caller: a live laptop_job.sh only (a reused pid is not)" || bad "caller_alive"
 out=$(report); rc=$?
 echo "$out" | sed 's/^/  /'
-[ $rc = 1 ] && [ "$(grep -c '^stray' <<< "$out")" = 4 ] \
-  && grep -q 'sandbox-idle-ab12-101.*no sandbox command for 120 min' <<< "$out" \
+[ $rc = 1 ] && [ "$(grep -c '^stray' <<< "$out")" = 5 ] \
+  && grep -q 'devclient-devidle-ef56-106.*no client command for 120 min' <<< "$out" && ! grep -q devbusy <<< "$out" \
+  && grep -q 'sandbox-idle-ab12-101.*no client command for 120 min' <<< "$out" \
   && grep -q 'nuke-103.*caller gone' <<< "$out" && grep -q 'guide-105.*caller gone' <<< "$out" \
   && grep -q 'sweep-104.*running 13 h' <<< "$out" && ! grep -q busy <<< "$out" \
-  && ok "report: idle sandbox, callerless and over-age jobs listed; a working sandbox not" || bad "report: rc $rc"
-unset 'MAIN[incoming-job-sandbox-idle-ab12-101.service]' 'MAIN[incoming-job-nuke-103.service]' 'MAIN[incoming-job-sweep-104.service]' 'MAIN[incoming-job-guide-105.service]'
+  && ok "report: idle sandbox and dev client, callerless and over-age jobs listed; working ones not" || bad "report: rc $rc"
+unset 'MAIN[incoming-job-sandbox-idle-ab12-101.service]' 'MAIN[incoming-job-nuke-103.service]' 'MAIN[incoming-job-sweep-104.service]' 'MAIN[incoming-job-guide-105.service]' 'MAIN[incoming-job-devclient-devidle-ef56-106.service]'
 out=$(report); rc=$?
 [ $rc = 0 ] && [[ $out == "no stray clients on "* ]] && ok "report: nothing stray, exit 0" || bad "report clean: rc $rc $out"
 # orphaned client JVM: its parent no longer names the launch script (adopted by init, the user manager or a subreaper)

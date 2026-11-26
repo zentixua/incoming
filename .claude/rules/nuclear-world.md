@@ -161,8 +161,10 @@ paths:
   an entire square for one non-whole ring chunk would lose its chunks' disk plans; GameTest `zoneLoadsEveryChunkWithPlan`),
   at most 6 squares at once (a square already fully in memory uses no slot and is held only if its chunks have ready
   plans: the detonation area is released on the detonation tick, otherwise such a chunk leaves memory before the wave
-  and loses its plan); the queue builds their ruins in background; release a square when its chunks' ruins are applied
-  or the remainder wait only for neighbors — each then takes its own neighbor ticket (`ScarQueue.holdForTile`;
+  and loses its plan); the queue builds their ruins in background; a chunk the queue refuses for a detonation (its
+  `CHUNK_SCAR` not below the detonation's number: a newer wave ruined it first) drops that detonation's prepared plan,
+  or the plan holds its square to the end of the hold (GameTest `refusedChunkDropsItsPreparedPlan`); release a square
+  when its chunks' ruins are applied or the remainder wait only for neighbors — each then takes its own neighbor ticket (`ScarQueue.holdForTile`;
   otherwise a chunk under another ticket takes none of its own, nobody loads its neighbors in an unloaded square,
   and zone slots stall for thousands of ticks; `-Dincoming.nukeDiag=true` logs “DIAG”) (line “zone behind the wave —
   X of Y chunks done”); preparation and ruin queue live only in memory (non-persistent `NuclearWorld`): a server restart
@@ -426,6 +428,11 @@ paths:
   Ruin plans do not store completed sections: blackout darkens lamps directly in the palette
   (`ChunkLights.applyInPlace`) during the cascade, and a pre-cascade section copy would relight them (while whole-section
   fingerprints would become “stale” in 882 of 10881 zone chunks), so only plan positions are written.
+- `RuinPlan.write` runs as small phases of `RuinPlan.Write` (each at most 600 bytecode bytes, `RuinWriteShapeTest`). A
+  single write method compiles to 100–135 kB and recompiles on each branch a city chunk first takes at the front (layer
+  fire, block entities): 1 Mt over a city viewer at 3 km, six recompiles and 3.85 CPU-s of C2 in the 4 s of the front, on
+  cores the client's render thread waits for; with phases the largest is 35 kB. A new write step goes into a phase of
+  its own.
 - Slow nuclear ticks (> 50 ms) log a breakdown (ruin queue includes visits and waiting jobs per tick, prebuilt ruins
   separately; checking a waiting job is not a lane-clock unit but continues until tick deadline and its time counts
   toward the lane: `WorkClock.overdue`, `spent`); every run keeps a JFR ring in `<run dir>/run.jfr` and GC/safepoint

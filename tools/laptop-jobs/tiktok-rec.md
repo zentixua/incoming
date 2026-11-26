@@ -66,7 +66,7 @@ Bytes in the source and in the new LOD copy — equal; no `distantHorizonPaths` 
 ## 3. Analysis (GPU not needed)
 During analysis, in `$T/game/config/iris.properties` — `enableShaders=false`. For each replay:
 ```sh
-timeout -k 60 2h $S/laptop_job.sh --full scan-$N -- python3 $S/prod_client.py --no-copy --dir $T/game \
+timeout -k 60 2h $S/laptop_job.sh --full --acceptance scan-$N -- python3 $S/prod_client.py --no-copy --dir $T/game \
   --incoming-jar $T/game/day/incoming-3.0.1.jar --size 640x360 --jvm=-Xmx8g --prop replayscan.replay=$T/replays/$N.zip \
   --prop replayscan.out=$T/out/$N --prop replayscan.viewers=players --prop replayscan.every=2
 uv run $S/replayscan/replaydb.py build $T/out/$N
@@ -89,7 +89,7 @@ there are markers.
 `enableShaders=true` in `$T/game/config/iris.properties`; shader pack — as Artem's, his are off — Complementary
 Reimagined from `shaderpacks/`. Window — not the frame size (default 1280×720). For each row of `$T/clips/film/runs.json`:
 ```sh
-$S/laptop_job.sh --full tiktok-rec -- python3 $S/prod_client.py --no-copy --dir $T/game \
+$S/laptop_job.sh --full --acceptance tiktok-rec -- python3 $S/prod_client.py --no-copy --dir $T/game \
   --incoming-jar $T/game/day/incoming-3.0.1.jar --jvm=-Xmx12g --prop replayscan.film=<plan from runs.json>
 ```
 Success: in `$T/game/logs/latest.log` — `Film: done`; for each plan — `Film: the replay viewer spectates <player> on the
