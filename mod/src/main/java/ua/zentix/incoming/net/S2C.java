@@ -76,9 +76,10 @@ public final class S2C {
         /**
          * The strike's show, game ticks from the blast ({@code warhead.StrikeShow}: until the cloud's apex and the crater fuel's
          * burn-out): hearing it harms recovers at real rate until then. {@code StrikeShow.NONE} — none (a recording made before
-         * this field, an explosion that is no strike).
+         * this field, an explosion that is no strike). Written plus one: "none" is one byte, not a negative varint's five.
          */
-        private static final StreamCodec<ByteBuf, Integer> SHOW = StreamCodecs.trailing(ByteBufCodecs.VAR_INT, ua.zentix.incoming.warhead.StrikeShow.NONE);
+        private static final StreamCodec<ByteBuf, Integer> SHOW = StreamCodecs.trailing(ByteBufCodecs.VAR_INT.map(v -> v - 1, v -> v + 1),
+                ua.zentix.incoming.warhead.StrikeShow.NONE);
         public static final StreamCodec<ByteBuf, Blast> CODEC = StreamCodec.of((b, p) -> {
             ByteBufCodecs.VAR_INT.encode(b, p.kind);
             StreamCodecs.VEC3.encode(b, p.pos);
