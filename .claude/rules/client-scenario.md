@@ -123,8 +123,9 @@ with Iris.
   times), process semaphores (`sem`, `ts`) do not hold GPU between frames while editing.
   The client runs `devtest` without Create and Sable: a GameTest holder that calls them directly stops it at launch
   (`gametest.md`, optional mods). `tools/sandbox.sh check` starts the same vanilla client on a CPU display in its own
-  shell (CI “Песочница”: Xvfb; with a systemd user manager it puts itself into a `laptop_job.sh --soft` job; refused
-  while this tree's sandbox runs), waits for the world (`INCOMING_SANDBOX_CHECK_LIMIT`,
+  shell (CI “Песочница”: Xvfb; as with `start`, Gradle prepares outside any ceiling and, where a systemd user manager
+  exists, GitHub's runner included, the client alone goes into a `laptop_job.sh --soft` job, whose heap + 2 GB ceiling a
+  cold decompile overruns; refused while this tree's sandbox runs), waits for the world (`INCOMING_SANDBOX_CHECK_LIMIT`,
   900 s), takes one `blast drone` frame and stops; laptop, warm: build 5 s, world 69 s, done in 84 s (CI: 68, 105,
   196 s). That the check catches a holder calling Sable: `tools/probes/sandbox-check-catches-holder.sh` (by hand, two starts).
   `shaders` without Sodium/Iris jars, `dh` without Distant Horizons jar in sandbox mods (Gradle takes instance mods
