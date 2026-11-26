@@ -107,15 +107,17 @@ class PallGlslTest {
         assertEquals(2 * PallField.ROWS, ua.zentix.incoming.client.fx.layer.PallPass.ROWS, "table rows - not for two slots");
         String f = body(GLSL, "PallAt pallField(");
         assertTrue(f.contains("vec4 haze = texture(table, vec2(min(uh, 1.0), S[2].w));"), "haze - not in its own row");
-        assertEquals(3, occurrences(f, "texture(table"), "the pall reads its one row: shape by radius, parcels by shift, fires at the point");
-        assertEquals(3, occurrences(f, "S[2].w)"), "the pall reads one table row");
+        assertEquals(2, occurrences(f, "texture(table"), "the pall reads its one row twice: shape by radius, parcels by travel "
+                + "(a third read put fx_pall_composite over its AMD compiler budget)");
+        assertEquals(2, occurrences(f, "S[2].w)"), "the pall reads one table row");
         assertTrue(f.contains("float len = S[1].z, down = dot(q, S[2].xy), along = clamp(down, 0.0, len), travel = clamp(down - S[3].x, 0.0, len);")
                 && f.contains("float widen = 1.0 + PALL_PARCEL_SPREAD * travel / max(S[3].x, 1.0);")
                 && f.contains("vec2 source = (q - S[2].xy * along) / widen;"),
                 "the parcel over the point is not the newest one (travel past the zone's downwind edge) across the widened zone");
         assertTrue(f.contains("float carried = texture(table, vec2((travel / max(len, 1.0) * (PALL_BINS - 1.0) + 0.5) / PALL_BINS, S[2].w)).a;")
                 && f.contains("sh = haze.r * carried * pallEdge(uh)"), "the parcels' strength is not read by shift at its nodes");
-        assertTrue(f.contains("if (r < 1.0) fire = texture(table, vec2(r, S[2].w)).b;"), "fire light is not the fires under the point");
+        assertTrue(f.contains("float fire = haze.b * (1.0 - smoothstep(0.85 * S[3].x, 1.05 * S[3].x, length(q)));"),
+                "fire light is not the fires under the point (the zone's fire share, PallField.fire)");
         assertTrue(f.contains("if (S[3].w > 0.5 && sh + fire > 0.0) {") && f.contains("sh *= 1.0 - pallWater(ground, S, G, source);"),
                 "the haze's source water - read without water under the pall, or not at its source");
         assertEquals(ua.zentix.incoming.nuclear.model.SmokeParcels.SPREAD, scalar(GLSL, "PALL_PARCEL_SPREAD"), 1e-7);

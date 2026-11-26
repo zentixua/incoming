@@ -176,8 +176,10 @@ PallAt pallField(sampler2D table, sampler2D ground, mat4 S, vec4 G, vec3 p, floa
     float uh = length(source) / reach;
     vec4 haze = texture(table, vec2(min(uh, 1.0), S[2].w));
     float carried = texture(table, vec2((travel / max(len, 1.0) * (PALL_BINS - 1.0) + 0.5) / PALL_BINS, S[2].w)).a;
-    float top = max(haze.g, 1.0), sh = haze.r * carried * pallEdge(uh), r = length(q) / reach, fire = 0.0;
-    if (r < 1.0) fire = texture(table, vec2(r, S[2].w)).b;
+    // the fires light only the smoke above them: the zone's fire share at the point itself (PallField.fire, 0.85–1.05 of its
+    // radius), on the row's fire light read at the parcel's source
+    float top = max(haze.g, 1.0), sh = haze.r * carried * pallEdge(uh);
+    float fire = haze.b * (1.0 - smoothstep(0.85 * S[3].x, 1.05 * S[3].x, length(q)));
     float wet = 0.0;
     if (S[3].w > 0.5 && sh + fire > 0.0) {
         sh *= 1.0 - pallWater(ground, S, G, source);

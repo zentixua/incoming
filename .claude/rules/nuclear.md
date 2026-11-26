@@ -138,7 +138,8 @@ Ruins and everything in `nuclear/world/` are in `nuclear-world.md`.
   even rate between show end, blend end and now; counted jumps since the show's end as the newest stretch of M), so server
   and clients read the same parcels with no packet. Client: `PallField.Band` (128 axis nodes, `SmokeParcels.drawn`
   interpolation, the haze row's channel a), clock `PallField.parcels` ← `ClientNuclear.Active.parcelClock`; server:
-  `NuclearEvents.parcels`. Fire light only over the fires (the row's b at the point's own radius). The terrain map covers
+  `NuclearEvents.parcels`. Fire light only over the fires (the row's b times the zone's fire share at the point itself; a third table read put
+  `fx_pall_composite` 14 % over its AMD compiler memory, recorded at 1344 MB for the parcels' second read). The terrain map covers
   the band `MAP_DOWNWIND` (2) fire radii; farther parcels lie on its edge terrain. The slot box holds only parcels within
   `NukePall.AIR_DEPTH` (6.9) optical depths of the frame air from the eye (clear air 35 km): a box over the whole band
   spreads the ray's fixed steps thin over the near haze. No time-of-day logic here. Pace game-tick timers to the clock on a fixed game-time grid (`BurnsEffect`: every
