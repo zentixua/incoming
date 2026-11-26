@@ -41,8 +41,7 @@ Vertical optical depth τ of the column at 1564 m from 15 kt, and the share of l
 
 Between 43 s and 63 s after the front the drawn column goes from 21 % to 55 % see-through (closer in, at 782 m, from 3 % to
 58 %), which is the thinning Artem saw. Seen slant from a hill (path about 3× the vertical) the uncapped column stays
-opaque for about 20 minutes; the capped one passes 17 % of the light after one minute. The rule `.claude/rules/dust-wave.md`
-says the dust's age clock is `NukeClock`; the code says real time (`PallField.java:42,1034`), as `nuclear.md` does.
+opaque for about 20 minutes; the capped one passes 17 % of the light after one minute.
 
 So the symptom has its own cause (a presentation that belongs to the eye inside the dust is applied to the whole
 column), separate from the time question. Section 6 fixes both; the time principle alone would not cure it.
@@ -281,8 +280,7 @@ AGENTS.md "Time" would read (replacing the current paragraph):
 > a show; real time is game time (lag, `/tick`, pause); a body's injuries age only while it is in the world. No time
 > settings; durations come from the laws.
 
-The rule `.claude/rules/dust-wave.md` is corrected in the same PR as change 2 (it names `NukeClock` as the dust's clock
-while the code uses real time).
+`.claude/rules/dust-wave.md` and `nuclear.md` name the dust's clock; change 2 rewrites both.
 
 ### 6.2 What C keeps
 
