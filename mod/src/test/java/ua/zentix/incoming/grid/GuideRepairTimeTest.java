@@ -11,8 +11,8 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 /**
  * The guide's blackout timing (docs/guide/blackout.md, both languages): a substation a Shahed-136 or missile knocks out
  * holds its outage's recovery clock at real rate through the strike's show ({@link Blackouts}, {@link RecoveryClock#district}),
- * so in a vanilla world power starts coming back about 15 minutes after the show, not after the hit. This replays
- * {@code Blackouts.hold}'s arithmetic once a second under a vanilla day (one world-clock tick per game tick) and reads when
+ * so in a vanilla world power starts coming back about 15 minutes after the show, not after the hit. This steps the outage
+ * through {@code Blackouts.step} once a second, with {@code Blackouts.releases}, under a vanilla day (one world-clock tick per game tick) and reads when
  * the first district may relight.
  */
 class GuideRepairTimeTest {
@@ -27,11 +27,8 @@ class GuideRepairTimeTest {
         for (long g = 0; g < 10 * 72_000; g += 20) {
             // vanilla day: the grid clock (WorldClock.ticks) and the clock without jumps both advance 1 per game tick
             if (o.held()) {
-                c.strike(o.strike());
-                if (o.until() != Outage.NO_SHOW) c.until(o.until());
-                c.step(g, g, 0, 0, "overworld", RecoveryClock.Shows.NONE_KNOWN);
-                Outage next = o.lagging(base + Math.round(c.behind()));
-                if (c.settled() || g >= next.restoreFrom()) next = next.released();
+                Outage next = Blackouts.step(o, c, base, g, g, 0, 0, "overworld", RecoveryClock.Shows.NONE_KNOWN);
+                if (Blackouts.releases(next, c, g)) next = next.released();
                 o = next;
             }
             if (g >= o.restoreFrom()) return g / 20.0;

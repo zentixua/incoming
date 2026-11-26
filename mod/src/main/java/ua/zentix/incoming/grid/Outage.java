@@ -25,7 +25,8 @@ import com.mojang.serialization.codecs.RecordCodecBuilder;
  * @param lag       how far the outage's recovery clock trails the grid clock, grid ticks (0 in saves from before it: their
  *                  times read as world clock)
  * @param strike    the detonation that caused it, while its show may still hold the repairs; -1 — none
- * @param until     game time the show of the conventional strike that caused it ends; {@link #NO_SHOW} — none
+ * @param until     game time the show of the conventional strike that caused it ends, shortened to the moment a jump nobody
+ *                  was awake for ended it (saved here: the outage's recovery clock is not); {@link #NO_SHOW} — none
  */
 public record Outage(int id, double x, double z, double radius, long start, double speed, long restoreAt, int restoreSpread, int node,
                      double dead, double damaged, long lag, int strike, long until) {
@@ -202,6 +203,15 @@ public record Outage(int id, double x, double z, double radius, long start, doub
     public Outage heldBy(int strike, long until) {
         return new Outage(id, x, z, radius, start, speed, restoreAt, restoreSpread, node, dead, damaged, lag, Math.max(this.strike, strike),
                 Math.max(this.until, until));
+    }
+
+    /**
+     * Same outage, its conventional show over at game time {@code end} if that is sooner (a jump nobody was awake for ended
+     * it, time rule 7): a planned end kept on the outage would hold its repairs again.
+     */
+    public Outage showEndsAt(long end) {
+        return until == NO_SHOW || end >= until ? this
+                : new Outage(id, x, z, radius, start, speed, restoreAt, restoreSpread, node, dead, damaged, lag, strike, end);
     }
 
     /** Same outage, no show holding its repairs any more (an admin's restore, or the shows and the blend are over). */
