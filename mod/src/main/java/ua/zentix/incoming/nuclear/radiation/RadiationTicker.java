@@ -29,12 +29,13 @@ import ua.zentix.incoming.nuclear.Detonation;
 import ua.zentix.incoming.nuclear.NuclearEvents;
 import ua.zentix.incoming.nuclear.model.FalloutModel;
 import ua.zentix.incoming.nuclear.model.SicknessModel;
+import ua.zentix.incoming.nuclear.model.SmokeParcels;
 import ua.zentix.incoming.registry.ModAttachments;
 import ua.zentix.incoming.registry.ModDamageTypes;
 import ua.zentix.incoming.registry.ModEffects;
-import ua.zentix.incoming.nuclear.NukeClock;
 import ua.zentix.incoming.util.WorldClock;
 
+import java.util.ArrayList;
 import java.util.List;
 
 /**
@@ -117,68 +118,79 @@ public final class RadiationTicker {
 
     public static void tick(ServerLevel level) {
         if (!IncomingConfig.SERVER.nukeRadiation.get() || level.getGameTime() % 20 != 0) return;
-        List<Detonation> list = NuclearEvents.get(level).detonations();
-        step(level, level.players(), list);
+        NuclearEvents events = NuclearEvents.get(level);
+        step(level, level.players(), events.detonations(), events.groundFields());
     }
 
-    /** One radiation second of {@code players} under detonations {@code list}: the clocks step once for all of them. */
+    /** One radiation second of {@code players} under detonations {@code list} (no ground fields). */
     static void step(ServerLevel level, List<? extends ServerPlayer> players, List<Detonation> list) {
-        NuclearEvents events = NuclearEvents.get(level);
-        // each detonation's strike clock now and a second ago (StrikeClock): the field at its own time, the dose over its own step
-        Clocks c = new Clocks(list.size());
-        for (int i = 0; i < c.now.length; i++) {
-            Detonation d = list.get(i);
-            c.now[i] = events.seconds(d, level);
-            c.parcels[i] = events.parcels(d, level);
-            c.before[i] = events.stepFrom(d, c.now[i]);
-            if (d.hasFallout() && (c.newest < 0 || c.now[i] < c.now[c.newest])) c.newest = i;
-        }
+        step(level, players, list, List.of());
+    }
+
+    /**
+     * One radiation second of {@code players} under live detonations {@code list} and ground fields {@code grounds}: each
+     * source's ground clock steps once for all of them ({@link NuclearEvents#stepFrom}).
+     */
+    static void step(ServerLevel level, List<? extends ServerPlayer> players, List<Detonation> list, List<Detonation> grounds) {
+        step(level, NuclearEvents.get(level), players, list, grounds);
+    }
+
+    /** The same with detonation records {@code events} (tests: a detached list does no world work). */
+    static void step(ServerLevel level, NuclearEvents events, List<? extends ServerPlayer> players, List<Detonation> list, List<Detonation> grounds) {
+        // black rain falls from the fires' smoke parcels (their clock); the dust on the ground ages on the ground clock
+        SmokeParcels.Clock[] rain = new SmokeParcels.Clock[list.size()];
+        for (int i = 0; i < rain.length; i++) rain[i] = events.parcels(list.get(i), level);
+        List<GroundFallout.Source> sources = new ArrayList<>(list.size() + grounds.size());
+        for (Detonation d : list) if (d.hasFallout()) sources.add(source(events, level, d));
+        for (Detonation d : grounds) sources.add(source(events, level, d));
         for (ServerPlayer p : players) {
             if (p.isSpectator()) continue;
-            tick(level, p, list, c);
+            tick(level, events, p, list, rain, sources);
         }
     }
 
-    /** Detonation clocks for one radiation second ({@link NukeClock}): seconds now and at the previous second. */
-    private static final class Clocks {
-        final double[] now, before;
-        /** Each detonation's smoke parcels' clock (black rain falls from them). */
-        final ua.zentix.incoming.nuclear.model.SmokeParcels.Clock[] parcels;
-        /** Youngest detonation with fallout; −1 — none. */
-        int newest = -1;
-
-        Clocks(int n) {
-            now = new double[n];
-            before = new double[n];
-            parcels = new ua.zentix.incoming.nuclear.model.SmokeParcels.Clock[n];
-        }
-
-        /** Dose hours of detonation {@code i}'s step at its decaying rate ({@link FalloutModel#decayHours}). */
-        double doseHours(int i) {
-            return FalloutModel.decayHours(before[i] / 3600, now[i] / 3600);
-        }
+    private static GroundFallout.Source source(NuclearEvents events, ServerLevel level, Detonation d) {
+        double ground = events.ground(d, level);
+        return GroundFallout.source(events, level, d, ground, events.stepFrom(d, ground));
     }
 
-    private static void tick(ServerLevel level, ServerPlayer p, List<Detonation> list, Clocks c) {
+    private static void tick(ServerLevel level, NuclearEvents events, ServerPlayer p, List<Detonation> list, SmokeParcels.Clock[] rain,
+                             List<GroundFallout.Source> sources) {
         double field = 0, roentgens = 0;
-        boolean blackRain = false;
-        for (int i = 0; i < c.now.length; i++) {
-            Detonation d = list.get(i);
-            field += d.falloutRateAt(p.getX(), p.getZ(), c.now[i], c.parcels[i]);
-            // over the step's own course: a long step (a sleep) counts nothing before the dust or rain reached the player
-            double r = MobFallout.exposure(d, p.getX(), p.getZ(), c.before[i], c.now[i], c.parcels[i]);
+        // the dust on the body ages as the youngest deposit landed where the player stands; elsewhere as the newest source
+        double age = Double.NaN, step = 0;
+        GroundFallout.Source newest = null;
+        for (GroundFallout.Source s : sources) {
+            GroundFallout.Point at = GroundFallout.at(events, level, s, p.getX(), p.getZ());
+            field += at.rate(s.ground());
+            // over the step's own course: a long step (a sleep) counts nothing before the dust reached the player
+            double r = at.dose(s.before(), s.ground());
             roentgens += r;
-            boolean rain = d.blackRainAt(p.getX(), p.getZ(), c.parcels[i]);
-            if (rain) blackRain = true;
-            // a detonation whose fallout or rain reaches the body holds its clock during its show
-            if (!p.isCreative() && (r >= MobFallout.BACKGROUND * c.doseHours(i) || rain)) BodyClock.cause(p, d);
+            // a detonation whose fallout reaches the body holds its clock during its show
+            if (!p.isCreative() && r > 0 && r >= MobFallout.BACKGROUND * (s.ground() - s.before()) / 3600) BodyClock.cause(p, s.d());
+            double here = at.youngestHours(s.ground());
+            if (!Double.isNaN(here) && (Double.isNaN(age) || here < age)) {
+                age = here;
+                step = (s.ground() - s.before()) / 3600;
+            }
+            if (newest == null || s.ground() < newest.ground()) newest = s;
+        }
+        if (Double.isNaN(age) && newest != null) {
+            age = newest.ground() / 3600;
+            step = (newest.ground() - newest.before()) / 3600;
+        }
+        boolean blackRain = false;
+        for (int i = 0; i < rain.length; i++) {
+            if (!list.get(i).blackRainAt(p.getX(), p.getZ(), rain[i])) continue;
+            blackRain = true;
+            // so does one whose rain falls on it
+            if (!p.isCreative()) BodyClock.cause(p, list.get(i));
         }
         RadiationDose r = dose(p);
         // what the body wears stops a share of new exposure: fallout and new rain dust, not the dust already on it
         double worn = roentgens > 0 || blackRain ? WornShielding.transmitted(p) : 1;
         // the dust on the body is the same fission products as the ground under it: it decays by the same law and clock
-        double contamination = c.newest < 0 ? r.contamination()
-                : decay(r.contamination(), c.now[c.newest] / 3600, (c.now[c.newest] - c.before[c.newest]) / 3600);
+        double contamination = newest == null ? r.contamination() : decay(r.contamination(), age, step);
         // the rule also applies live: detonations saved before it was stored with them read as rain on
         if (blackRain && IncomingConfig.SERVER.nukeBlackRain.get() && Detonation.underOpenSky(level, p.getEyePosition())) {
             contamination = rained(contamination, field, worn);
@@ -187,7 +199,7 @@ public final class RadiationTicker {
         if (contamination < 0.01) contamination = 0;
         double shield = field >= MobFallout.BACKGROUND ? Shielding.fallout(level, middle(p)) : 0;
         double rate = field * shield + contamination;
-        double contaminationHours = c.newest < 0 ? REAL_SECOND_HOURS : c.doseHours(c.newest);
+        double contaminationHours = newest == null ? REAL_SECOND_HOURS : FalloutModel.decayHours(age - step, age);
         // in creative mode the counter shows the field, but no dose accumulates and no sickness develops
         double gy = r.doseGy() + (p.isCreative() ? 0 : (roentgens * shield * worn + contamination * contaminationHours) * GY_PER_R);
         long exposed = r.isExposed() || gy < 1 ? r.exposedAt() : (long) Math.floor(BodyClock.now(p));
@@ -207,8 +219,8 @@ public final class RadiationTicker {
 
     /**
      * Contamination dose rate after one more step of {@code stepHours}, R/h: Way–Wigner t^−1.2 decay like the fallout it came
-     * from ({@link FalloutModel#doseRate}), {@code ageHours} after the newest detonation with fallout (est.: dust from an older
-     * one decays a little slower).
+     * from ({@link FalloutModel#groundRate}), at ground age {@code ageHours}: the youngest deposit landed where the body is,
+     * else the newest source's ground clock (est.: dust picked up elsewhere or from an older deposit decays a little slower).
      */
     static double decay(double contamination, double ageHours, double stepHours) {
         double before = Math.max(ageHours - stepHours, FalloutModel.MIN_DECAY_HOURS), after = Math.max(ageHours, FalloutModel.MIN_DECAY_HOURS);
