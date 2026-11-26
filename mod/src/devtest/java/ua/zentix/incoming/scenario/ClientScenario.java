@@ -4109,19 +4109,28 @@ public final class ClientScenario {
     /**
      * Step {@code pause:on|off}: the single-player pause without its menu (as F3+Esc), so a frame shows the held world; the
      * scenario keeps counting client ticks (they run under the pause), the integrated server and the client level stop.
+     * Vanilla's "Game Paused" title stays at the top of the frame. {@code pause:off} closes only that screen.
      */
-    private static void pauseGame(boolean on) {
+    private void pauseGame(boolean on) {
         Minecraft mc = Minecraft.getInstance();
         if (on) mc.pauseGame(true);
-        else mc.setScreen(null);
-        Incoming.LOG.info("SCENARIO pause {}: screen {}", on ? "on" : "off", mc.screen == null ? "none" : mc.screen.getClass().getSimpleName());
+        else if (mc.screen instanceof net.minecraft.client.gui.screens.PauseScreen) mc.setScreen(null);
+        // vanilla decides the pause in the next frame's tick: read what it decided (a published world or another open screen
+        // does not pause)
+        at(tick + 2, () -> Incoming.LOG.info("SCENARIO pause {}: paused {}, screen {}", on ? "on" : "off", mc.isPaused(),
+                mc.screen == null ? "none" : mc.screen.getClass().getSimpleName()));
     }
 
     /**
      * Step {@code sleep}: the camera player lies down, through vanilla's own check ({@code ServerPlayer.startSleepInBed}), in a
      * bed placed at its feet facing south; vanilla skips the night once the sleep is deep if the day runs. The outcome
-     * ({@code asleep} or vanilla's refusal) goes to the log as {@code SCENARIO sleep}.
+     * ({@code asleep} or vanilla's refusal) goes to the log as {@code SCENARIO sleep}, the skip itself as {@code SCENARIO sleep
+     * finished} (old and new day time). The two blocks at and south of the feet become the bed, which stays, with the
+     * respawn point.
      */
+    /** The night-skip listener is registered once, at the first {@code sleep} step. */
+    private static boolean sleepWatched;
+
     private static void sleepInBed() {
         Minecraft mc = Minecraft.getInstance();
         var server = mc.getSingleplayerServer();
@@ -4130,6 +4139,16 @@ public final class ClientScenario {
         server.execute(() -> {
             net.minecraft.server.level.ServerPlayer p = server.getPlayerList().getPlayer(id);
             if (p == null) return;
+            // vanilla's sleep share counts no spectator: lying down would skip nothing
+            if (p.isSpectator()) {
+                Incoming.LOG.warn("SCENARIO sleep refused: the player is a spectator, vanilla skips no night for one");
+                return;
+            }
+            if (!sleepWatched) {
+                sleepWatched = true;
+                NeoForge.EVENT_BUS.addListener((net.neoforged.neoforge.event.level.SleepFinishedTimeEvent e) ->
+                        Incoming.LOG.info("SCENARIO sleep finished: night skipped, day time {} -> {}", e.getLevel().getLevelData().getDayTime(), e.getNewTime()));
+            }
             var level = p.serverLevel();
             BlockPos foot = p.blockPosition();
             BlockPos head = foot.relative(net.minecraft.core.Direction.SOUTH);
