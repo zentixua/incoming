@@ -4115,7 +4115,7 @@ public final class ClientScenario {
                 var list = ua.zentix.incoming.client.nuclear.ClientNuclear.detonations();
                 Vec3 cam = mc.gameRenderer.getMainCamera().getPosition();
                 String rain = list.isEmpty() ? "-" : String.format(java.util.Locale.ROOT, "trail=%b sky=%b",
-                        list.getLast().d.blackRainAt(cam.x, cam.z, list.getLast().clockSeconds(0)),
+                        list.getLast().d.blackRainAt(cam.x, cam.z, list.getLast().parcelClock(list.getLast().ticks(0))),
                         ua.zentix.incoming.nuclear.Detonation.underOpenSky(mc.level, cam));
                 Incoming.LOG.info("SCENARIO {} white={} rain={} {} fps={}", name, ua.zentix.incoming.client.nuclear.NukeFlash.whiteness(0),
                         ua.zentix.incoming.client.nuclear.NukeSky.blackRain(), rain, mc.getFps());

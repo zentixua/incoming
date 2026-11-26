@@ -125,9 +125,18 @@ Ruins and everything in `nuclear/world/` are in `nuclear-world.md`.
   quiet animals.
 
 - Post-wave pall (`client/nuclear/PallField` field, `NukePall` at camera/into frame, `NukeAsh` ash;
-  `client/fx/layer/PallPass` renders): dust follows ground pressure and front arrival, haze over the ignition zone
-  lives the storm's smoke on the strike clock S (`PallField.clock`, set by `ClientNuclear.Active.clockTicksAt`:
-  `util/StrikeClock` over the client clocks `ClientClock`; clocks below); no time-of-day logic here. Pace game-tick timers to the clock on a fixed game-time grid (`BurnsEffect`: every
+  `client/fx/layer/PallPass` renders): dust follows ground pressure and front arrival; the haze is the fires' smoke
+  parcels (`nuclear/model/SmokeParcels`, time.md §8.3 rule 4): each real second the zone emits at `FireStormLaw.smoke` of
+  its strike clock S, the parcel moves downwind on the motion age M at the detonation's wind and widens by `SPREAD` (0.2,
+  the Hiroshima band) per metre, its column thinned by the same factor, drawn while its vertical depth is ≥ `GONE` (0.05:
+  15 kt ~114 km, 6–10 h at a 24-hour day); S at an earlier M comes from the anchors alone (`StrikeClock.strikeAtMotion`:
+  even rate between show end, blend end and now; counted jumps since the show's end as the newest stretch of M), so server
+  and clients read the same parcels with no packet. Client: `PallField.Band` (128 axis nodes, `SmokeParcels.drawn`
+  interpolation, the haze row's channel a), clock `PallField.parcels` ← `ClientNuclear.Active.parcelClock`; server:
+  `NuclearEvents.parcels`. Fire light only over the fires (the row's b at the point's own radius). The terrain map covers
+  the band `MAP_DOWNWIND` (2) fire radii; farther parcels lie on its edge terrain. The slot box holds only parcels within
+  `NukePall.AIR_DEPTH` (6.9) optical depths of the frame air from the eye (clear air 35 km): a box over the whole band
+  spreads the ray's fixed steps thin over the near haze. No time-of-day logic here. Pace game-tick timers to the clock on a fixed game-time grid (`BurnsEffect`: every
   20th game tick, never on the timer's own remainder, which a correction keeps landing on); dust stays on real time; detonation lives on the client while pall remains visible. Field laws in Java and copied in `shaders/include/pall.glsl` (`PallGlslTest` reads
   shader functions and compares with Java; edit laws in both); fireball/fire lighting on pall (`pallBallShare`,
   `pallBurn`) copies `CloudPuffs.ball` and `burn`: change lighting there too.
@@ -251,7 +260,11 @@ Ruins and everything in `nuclear/world/` are in `nuclear-world.md`.
   `RuinContext.blockFires(d)` (front copies built before the burst under another rule are dropped at `FrontLods.handOff`
   and follow `FarLods`); `NukeAfter.realFire` draws and sounds the model storm in local chunks too, trust untouched.
   Plans always carry fire, writes decide. GameTests `nuke_flash_firetick_off`/`_on` (rule flipped after the burst),
-  `NukeAfterBlockFireTest`. Black rain
+  `NukeAfterBlockFireTest`. Black rain is the
+  rain-out of the drawn smoke parcels (`BlackRainModel.raining`): under a parcel that left the fires in the window
+  `START_S`–`END_S` of M and has travelled under `DRIFT_S`, where `SmokeParcels.drawn` > 0 (90 min a point at a 24-hour
+  day, ≤ 10 min on a vanilla day; `BlackRainModelTest`, `PallFieldTest.blackRainFallsOnlyUnderTheDrawnHaze`);
+  `startSeconds` is its onset on M; the deposit's size does not depend on how much smoke passed. Black rain
   needs fires and `Detonation.rain` (`nuclear.black_rain` at detonation, same packet rule): off, `BlackRainModel` gets no
   fire zone, so no rain picture/sound, washout or skin contamination on server and client alike (the live rule still
   gates contamination for detonations saved before the field, which read as rain on). Storm

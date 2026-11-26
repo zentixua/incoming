@@ -318,6 +318,28 @@ public final class NuclearEvents extends SavedData {
     }
 
     /**
+     * Detonation {@code d}'s smoke-parcel clock now ({@code nuclear/model/SmokeParcels}): M now, and S at a past M from the
+     * anchors alone ({@link StrikeClock#strikeAtMotion}), the same reading every client makes, so the rain the server doses and
+     * the rain clients draw fall from the same parcels.
+     */
+    public ua.zentix.incoming.nuclear.model.SmokeParcels.Clock parcels(Detonation d, ServerLevel level) {
+        StrikeClock c = clock(d, level);
+        long age = level.getGameTime() - d.gameTime();
+        double rate = WorldClock.rateClock(level), jumps = WorldClock.counted(level), m = c.motion(age, jumps);
+        return new ua.zentix.incoming.nuclear.model.SmokeParcels.Clock() {
+            @Override
+            public double motion() {
+                return m;
+            }
+
+            @Override
+            public double strikeAt(double at) {
+                return c.strikeAtMotion(at, age, rate, jumps);
+            }
+        };
+    }
+
+    /**
      * Detonation {@code d}'s strike clock S at a past game time {@code game} (now or earlier), seconds since the burst: from
      * its world-clock history ({@link StrikeHistory}).
      */

@@ -77,6 +77,36 @@ public record StrikeClock(double jumpsAtStrike, long endAge, double rateAtEnd, d
     }
 
     /**
+     * Strike clock S, seconds, at the moment the motion age was {@code m} seconds (now or earlier): the fire's state that smoke
+     * leaving it then carried ({@code nuclear/model/SmokeParcels}). From the anchors and the present reading alone, so the
+     * server and every client get the same answer without a history: through the show S = M; after it the clock without jumps
+     * is taken as running evenly between the known readings (the show's end, the blend's end, now: exact for a steady day), and
+     * the counted jumps since the show's end as the newest stretch of M (S and M advance together across a jump).
+     *
+     * @param ageNow  real ticks since the strike now
+     * @param rateNow clock without jumps now, world-clock ticks
+     * @param jumpsNow counted jumps now, world-clock ticks
+     */
+    public double strikeAtMotion(double m, double ageNow, double rateNow, double jumpsNow) {
+        double now = motion(ageNow, jumpsNow);
+        if (m >= now) return strike(ageNow, rateNow, jumpsNow);
+        if (!ended() || m <= motion(endAge, jumpsAtEnd)) return m;
+        double jumped = Math.max(0, jumpsNow - jumpsAtEnd) * S;
+        if (m >= now - jumped) return strike(ageNow, rateNow, jumpsNow) - (now - m);
+        double r = m - motion(endAge, jumpsAtEnd), rNow = (ageNow - endAge) / 20.0;
+        return strike(endAge + r * 20, rateAt(r, rNow, rateNow), jumpsAtEnd);
+    }
+
+    /** Clock without jumps {@code r} real seconds after the show's end, even between the known readings (end, blend's end, now). */
+    private double rateAt(double r, double rNow, double rateNow) {
+        if (!Double.isNaN(rateAtRamp) && rNow > RAMP_S) {
+            if (r <= RAMP_S) return rateAtEnd + (rateAtRamp - rateAtEnd) * r / RAMP_S;
+            return rateAtRamp + (rateNow - rateAtRamp) * (r - RAMP_S) / (rNow - RAMP_S);
+        }
+        return rNow <= 0 ? rateAtEnd : rateAtEnd + (rateNow - rateAtEnd) * Math.min(r / rNow, 1);
+    }
+
+    /**
      * Strike-clock seconds since the show's end: ∫ 1 + (k − 1)·u dr with u = smoothstep(r / {@link #RAMP_S}), from the world
      * seconds {@code world} since the end (rate alone, at least {@code r}) and at the blend's end {@code atRamp} (NaN —
      * unknown: an even rate since the end). For a constant k: r + (k − 1)·∫u. Limit: inside the blend's minute it weighs

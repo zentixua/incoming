@@ -74,8 +74,9 @@ class PallGlslTest {
     /**
      * The pall's table holds one row per slot, the haze ({@link PallField#row} writes {@link PallField#haze} at every node, none over open
      * sea), the slot points the shader to it ({@link NukePall#tableRows}: S[2].w) and flags water under the pall (S[3].w), and
-     * {@code pallField} reads the haze at its source on the trail axis, the water map only with water under the pall. No dust, spray or
-     * base surge is in the pall's shader: they are the dust pass's.
+     * {@code pallField} reads the smoke parcel over the point (the fire zone's smoke by radius, widened by its shift, at the parcels'
+     * strength by shift, the fire light at the point's own radius), the source water on the fire zone, the water map only with water
+     * under the pall. No dust, spray or base surge is in the pall's shader: they are the dust pass's.
      */
     @Test
     void hazeIsThePallsOnlyRow() {
@@ -106,9 +107,19 @@ class PallGlslTest {
         assertEquals(2 * PallField.ROWS, ua.zentix.incoming.client.fx.layer.PallPass.ROWS, "table rows - not for two slots");
         String f = body(GLSL, "PallAt pallField(");
         assertTrue(f.contains("vec4 haze = texture(table, vec2(min(uh, 1.0), S[2].w));"), "haze - not in its own row");
-        assertEquals(1, occurrences(f, "texture(table"), "the pall reads one table row");
-        assertTrue(f.contains("if (S[3].w > 0.5 && sh + fire > 0.0) {") && f.contains("float dry = 1.0 - pallWater(ground, S, G, source);"),
+        assertEquals(3, occurrences(f, "texture(table"), "the pall reads its one row: shape by radius, parcels by shift, fires at the point");
+        assertEquals(3, occurrences(f, "S[2].w)"), "the pall reads one table row");
+        assertTrue(f.contains("float widen = 1.0 + PALL_PARCEL_SPREAD * along / max(S[3].x, 1.0);")
+                && f.contains("vec2 source = (q - S[2].xy * along) / widen;"), "the parcel over the point is not the widened fire zone");
+        assertTrue(f.contains("float carried = texture(table, vec2((along / max(len, 1.0) * (PALL_BINS - 1.0) + 0.5) / PALL_BINS, S[2].w)).a;")
+                && f.contains("sh = haze.r * carried * pallEdge(uh)"), "the parcels' strength is not read by shift at its nodes");
+        assertTrue(f.contains("if (r < 1.0) fire = texture(table, vec2(r, S[2].w)).b;"), "fire light is not the fires under the point");
+        assertTrue(f.contains("if (S[3].w > 0.5 && sh + fire > 0.0) {") && f.contains("sh *= 1.0 - pallWater(ground, S, G, source);"),
                 "the haze's source water - read without water under the pall, or not at its source");
+        assertEquals(ua.zentix.incoming.nuclear.model.SmokeParcels.SPREAD, scalar(GLSL, "PALL_PARCEL_SPREAD"), 1e-7);
+        assertEquals(PallField.BINS, scalar(GLSL, "PALL_BINS"), 0);
+        assertEquals(PallField.BINS, ua.zentix.incoming.nuclear.model.SmokeParcels.NODES, "the haze row's nodes are the parcels' drawn nodes");
+        assertEquals(PallField.column(0), ua.zentix.incoming.nuclear.model.SmokeParcels.COLUMN, 1e-12, "the parcels' column is the pall's profile");
         assertTrue(body(GLSL, "vec2 pallSoil(").contains("if (G.x <= 0.0 || S[1].w < 1.5) return vec2(0.0);"), "soil read without hard ground or sand under the pall");
         for (String gone : new String[]{"pallWall", "pallSurge", "PallWater", "PallYoung", "wallShare", "froxelEnd"}) {
             assertEquals(-1, GLSL.indexOf(gone), "pall.glsl still draws ground dust: " + gone);

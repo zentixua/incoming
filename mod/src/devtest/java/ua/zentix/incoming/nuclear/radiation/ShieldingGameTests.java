@@ -228,12 +228,12 @@ public final class ShieldingGameTests {
         dress(full, CHAINMAIL);
         dress(before, CHAINMAIL);
         RadiationTicker.addDose(before, 2);
-        // the rain starts over the fire zone at BlackRainModel.START_S, the end of the show: real time, one second's step
+        // the rain starts over the fire zone at BlackRainModel.START_S, the end of the show (the first rain-bearing smoke parcel): real time, one second's step
         long age = (long) (BlackRainModel.START_S * 20);
         Detonation d = new Detonation(NuclearEvents.get(level).nextId(), at, at.y, 15, true,
                 level.getGameTime() - age, 0, 5, 20_000, 7, 0.1f, true, Detonation.OLD_WAVE);
         double seconds = NuclearEvents.get(level).seconds(d, level);
-        h.assertTrue(d.blackRainAt(at.x, at.z, seconds), "no black rain at ground zero at " + seconds + " s");
+        h.assertTrue(d.blackRainAt(at.x, at.z, NuclearEvents.get(level).parcels(d, level)), "no black rain at ground zero at " + seconds + " s");
         h.assertTrue(d.falloutRateAt(at.x, at.z, seconds) > MobFallout.BACKGROUND, "no fallout at ground zero: " + d.falloutRateAt(at.x, at.z, seconds));
         h.assertTrue(Detonation.underOpenSky(level, bare.getEyePosition()), "the players are not under the open sky");
         RadiationTicker.step(level, List.of(bare, one, full, before), List.of(d));

@@ -334,11 +334,9 @@ class PallFieldTest {
         assertTrue(p.visible(20 * 3600), "within an hour the dust had settled everywhere");
     }
 
-    /** Haze of the node at the centre at {@code ticks} client ticks, 1/block. */
+    /** Haze over the centre of the fire zone at {@code ticks} client ticks, 1/block. */
     private static double haze(PallField p, double ticks) {
-        double[] v = new double[4];
-        p.haze(1, ticks, v);
-        return v[0];
+        return p.hazeSigma(0, 0, ticks);
     }
 
     /**
@@ -352,7 +350,11 @@ class PallFieldTest {
         assertTrue(haze(p, 20 * 6 * 3600) > 0, "6 hours: still smouldering");
         assertEquals(0, haze(p, 20 * (FireStorm.OUT_S + 1)), 1e-12, "burnt out");
         assertTrue(p.visible(20 * 6 * 3600));
-        assertFalse(p.visible(20 * (FireStorm.OUT_S + 7200)), "fires out, dust settled");
+        // fires out: the last smoke parcels drift away downwind and thin out within hours (the air in real time)
+        double gone = -1;
+        for (double t = FireStorm.OUT_S; t < FireStorm.OUT_S + 12 * 3600 && gone < 0; t += 600) if (!p.visible(20 * t)) gone = t;
+        assertTrue(gone > 0, "the smoke never leaves");
+        assertEquals(0, haze(p, 20 * (FireStorm.OUT_S + 600)), 1e-12, "the smoke has left the burnt-out zone");
     }
 
     /**
@@ -371,6 +373,33 @@ class PallFieldTest {
         slept.clock(t -> t < 20 * 1800 ? t : t + 20 * 13 * 3600);
         assertTrue(haze(slept, 20 * 1700) > 0, "before the sleep");
         assertEquals(0, haze(slept, 20 * 1900), 1e-12, "slept through the night: the fires are out");
+    }
+
+    /**
+     * The haze is the smoke parcels (time.md §8.3, rule 4), and black rain falls only where they are drawn: the server's rain
+     * ({@link Detonation#blackRainAt}) and the pall's haze read the same parcels from the same clock. A 15 kt airburst, wind
+     * 2.5 m/s, at a 24-hour day and a vanilla day: wherever and whenever it rains the haze stands over the point.
+     */
+    @Test
+    void blackRainFallsOnlyUnderTheDrawnHaze() {
+        Detonation air = new Detonation(5, new Vec3(0, 664, 0), 64, 15, false, 0, 0.3f, 2.5f, 20_000, 0, 1f, true, 0.25f, 0L, true);
+        for (double k : new double[]{1, 72}) {
+            PallField p = new PallField(air);
+            p.parcels(t -> ua.zentix.incoming.nuclear.model.SmokeParcelsTest.day(k, t / 20.0));
+            int rained = 0;
+            for (double t = 1200; t < 4 * 3600; t += 300) {
+                ua.zentix.incoming.nuclear.model.SmokeParcels.Clock c = ua.zentix.incoming.nuclear.model.SmokeParcelsTest.day(k, t);
+                for (double down = -3000; down <= 40_000; down += 1000) {
+                    for (double cross = -12_000; cross <= 12_000; cross += 2000) {
+                        double x = down * Math.cos(0.3) - cross * Math.sin(0.3), z = down * Math.sin(0.3) + cross * Math.cos(0.3);
+                        if (!air.blackRainAt(x, z, c)) continue;
+                        rained++;
+                        assertTrue(p.hazeSigma(x, z, 20 * t) > 0, "k " + k + ": rain without drawn haze at " + down + ", " + cross + ", " + t + " s");
+                    }
+                }
+            }
+            assertTrue(rained > 10, "k " + k + ": it never rained");
+        }
     }
 
     /** No fires (high detonation: no ignition on the ground): no haze, pall ends with the dust. */

@@ -418,12 +418,20 @@ public record Detonation(int id, Vec3 burst, double groundY, double yieldKt, boo
         return falloutModel().arrivalHours(metres(x - burst.x), metres(z - burst.z)) * 3600;
     }
 
-    /** Whether black rain falls at the point (same on server and client), {@code seconds} on the detonation's clock. */
-    public boolean blackRainAt(double x, double z, double seconds) {
-        return blackRainModel().raining(metres(x - burst.x), metres(z - burst.z), seconds);
+    /**
+     * Whether black rain falls at the point (same on server and client): under the fires' drawn smoke parcels
+     * ({@link ua.zentix.incoming.nuclear.model.SmokeParcels}) on the detonation's two ages {@code c}.
+     */
+    public boolean blackRainAt(double x, double z, ua.zentix.incoming.nuclear.model.SmokeParcels.Clock c) {
+        return blackRainModel().raining(metres(x - burst.x), metres(z - burst.z), c);
     }
 
-    /** Detonation-clock seconds after the burst until black rain ends everywhere. */
+    /** The fires' smoke parcels (no fires at detonation: none), metres and seconds of the model. */
+    public ua.zentix.incoming.nuclear.model.SmokeParcels smokeParcels() {
+        return Caches.parcels(this);
+    }
+
+    /** Motion-age seconds after the burst until black rain ends everywhere. */
     public double blackRainEndSeconds() {
         return blackRainModel().endSeconds();
     }
@@ -435,6 +443,13 @@ public record Detonation(int id, Vec3 burst, double groundY, double yieldKt, boo
     public static boolean underOpenSky(net.minecraft.world.level.Level level, Vec3 pos) {
         return Terrain.height(level, net.minecraft.world.level.levelgen.Heightmap.Types.MOTION_BLOCKING,
                 net.minecraft.util.Mth.floor(pos.x), net.minecraft.util.Mth.floor(pos.z)) <= pos.y;
+    }
+
+    /** Ground radius of the zone the light pulse ignites, m (whether or not the server lit fires). */
+    double fireRadiusM() {
+        double hob = Math.max(0, hobMetres());
+        double slant = ThermalModel.rangeForFluence(ThermalModel.ignite(yieldKt), yieldKt, surface, visibility);
+        return Math.sqrt(Math.max(0, slant * slant - hob * hob));
     }
 
     /** Caches expensive to compute per call (arrival table, maximum radius). */
@@ -478,13 +493,20 @@ public record Detonation(int id, Vec3 burst, double groundY, double yieldKt, boo
             });
         }
 
+        private static final java.util.Map<Detonation, ua.zentix.incoming.nuclear.model.SmokeParcels> PARCELS =
+                java.util.Collections.synchronizedMap(new java.util.WeakHashMap<>());
+
+        static ua.zentix.incoming.nuclear.model.SmokeParcels parcels(Detonation d) {
+            // the fire zone where light ignites, as for black rain and the client's haze; none if the server lit no fires
+            return PARCELS.computeIfAbsent(d, x -> new ua.zentix.incoming.nuclear.model.SmokeParcels(x.yieldKt, x.fires ? x.fireRadiusM() : 0,
+                    x.windDir, x.windSpeed));
+        }
+
         static BlackRainModel blackRain(Detonation d) {
             return RAIN.computeIfAbsent(d, x -> {
                 // fire zone where light ignites (as for ruins and client firestorm); absent if server does not ignite fires;
                 // without black rain (world rule) the fires make no rain cloud
-                double hob = Math.max(0, x.hobMetres());
-                double slant = ThermalModel.rangeForFluence(ThermalModel.ignite(x.yieldKt), x.yieldKt, x.surface, x.visibility);
-                double fire = x.fires && x.rain ? Math.sqrt(Math.max(0, slant * slant - hob * hob)) : 0;
+                double fire = x.fires && x.rain ? x.fireRadiusM() : 0;
                 return new BlackRainModel(x.yieldKt, fire, x.windDir, x.windSpeed, 1 - x.falloutModel().surfaceFraction());
             });
         }

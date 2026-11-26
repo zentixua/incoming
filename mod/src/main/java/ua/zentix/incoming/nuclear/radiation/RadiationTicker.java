@@ -129,6 +129,7 @@ public final class RadiationTicker {
         for (int i = 0; i < c.now.length; i++) {
             Detonation d = list.get(i);
             c.now[i] = events.seconds(d, level);
+            c.parcels[i] = events.parcels(d, level);
             c.before[i] = events.stepFrom(d, c.now[i]);
             if (d.hasFallout() && (c.newest < 0 || c.now[i] < c.now[c.newest])) c.newest = i;
         }
@@ -141,12 +142,15 @@ public final class RadiationTicker {
     /** Detonation clocks for one radiation second ({@link NukeClock}): seconds now and at the previous second. */
     private static final class Clocks {
         final double[] now, before;
+        /** Each detonation's smoke parcels' clock (black rain falls from them). */
+        final ua.zentix.incoming.nuclear.model.SmokeParcels.Clock[] parcels;
         /** Youngest detonation with fallout; −1 — none. */
         int newest = -1;
 
         Clocks(int n) {
             now = new double[n];
             before = new double[n];
+            parcels = new ua.zentix.incoming.nuclear.model.SmokeParcels.Clock[n];
         }
 
         /** Dose hours of detonation {@code i}'s step at its decaying rate ({@link FalloutModel#decayHours}). */
@@ -164,7 +168,7 @@ public final class RadiationTicker {
             // over the step's own course: a long step (a sleep) counts nothing before the dust or rain reached the player
             double r = MobFallout.exposure(d, p.getX(), p.getZ(), c.before[i], c.now[i]);
             roentgens += r;
-            boolean rain = d.blackRainAt(p.getX(), p.getZ(), c.now[i]);
+            boolean rain = d.blackRainAt(p.getX(), p.getZ(), c.parcels[i]);
             if (rain) blackRain = true;
             // a detonation whose fallout or rain reaches the body holds its clock during its show
             if (!p.isCreative() && (r >= MobFallout.BACKGROUND * c.doseHours(i) || rain)) BodyClock.cause(p, d);
