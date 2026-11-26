@@ -170,7 +170,7 @@ public final class ClientScenario {
     @org.jetbrains.annotations.Nullable
     private final FireCity city = FireCity.of(System.getProperty("incoming.scenario.city"));
     /** {@code incoming.server}: join this dedicated server (host:port) instead of opening a world; null in a world. */
-    private static final String SERVER = System.getProperty("incoming.server");
+    private static final String JOIN = System.getProperty("incoming.server");
 
     public ClientScenario(IEventBus modBus) {
         String scenario = System.getProperty("incoming.scenario");
@@ -290,19 +290,26 @@ public final class ClientScenario {
                 }
             }
         }
+        // a join that fails or drops leaves the client on the disconnect screen with no world ticks: end the run
+        if (started && JOIN != null && e.getScreen() instanceof net.minecraft.client.gui.screens.DisconnectedScreen) {
+            Incoming.LOG.error("SCENARIO disconnected from {}: {}", JOIN, e.getScreen().getTitle().getString());
+            Incoming.LOG.info("SCENARIO done");
+            Minecraft.getInstance().stop();
+            return;
+        }
         if (started || !(e.getScreen() instanceof TitleScreen)) return;
         started = true;
         Minecraft mc = Minecraft.getInstance();
         // a dedicated server instead of a world (incoming.server=host:port, the commands scenario): the player's
         //  multiplayer case, with the server's own JVM elsewhere; the commands go to it as chat commands of an operator
-        if (SERVER != null) {
-            Incoming.LOG.info("SCENARIO connect {}", SERVER);
-            var data = new net.minecraft.client.multiplayer.ServerData("incoming-scenario", SERVER,
+        if (JOIN != null) {
+            Incoming.LOG.info("SCENARIO connect {}", JOIN);
+            var data = new net.minecraft.client.multiplayer.ServerData("incoming-scenario", JOIN,
                     net.minecraft.client.multiplayer.ServerData.Type.OTHER);
             // the server's recommended resource pack is taken, as a player who answered yes once (no prompt to click)
             data.setResourcePackStatus(net.minecraft.client.multiplayer.ServerData.ServerPackStatus.ENABLED);
             net.minecraft.client.gui.screens.ConnectScreen.startConnecting(e.getScreen(), mc,
-                    net.minecraft.client.multiplayer.resolver.ServerAddress.parseString(SERVER), data, false, null);
+                    net.minecraft.client.multiplayer.resolver.ServerAddress.parseString(JOIN), data, false, null);
             return;
         }
         // player's world copy (tools/prod_client.py --world): open it instead of creating a scenario world
@@ -3606,7 +3613,7 @@ public final class ClientScenario {
 
     /**
      * Commands from {@code incoming.commands} (semicolon-separated, except semicolons in brackets or quotes —
-     * {@link ScenarioCommands}) in the open world, to check modpack mods respond (e.g. a recording copy:
+     * {@link ScenarioCommands}) in the open world or on the joined server ({@code incoming.server}), to check modpack mods respond (e.g. a recording copy:
      * {@code /dh pregen status}, {@code /chunky}); replies go to chat, chat to the client log.
      * Besides commands: {@code wait:N} adds N ticks (0…{@value CommandPlan#MAX_WAIT}); {@code wait:nuke} makes later steps
      * relative to client receipt of a new detonation packet (once per scenario; server may lag the client clock, so a
@@ -3623,13 +3630,19 @@ public final class ClientScenario {
                 Math.max(1, Integer.getInteger("incoming.commands.gap", 40)));
         for (String w : plan.warnings()) Incoming.LOG.warn("SCENARIO commands: {}", w);
         if (plan.nukeGate() >= 0) nukeGate = plan.nukeGate();
-        blastGates.addAll(plan.blastGates());
+        // wait:blast counts the integrated server's explosions: on a joined server it would only wait out its limit
+        if (JOIN != null && !plan.blastGates().isEmpty()) Incoming.LOG.warn("SCENARIO commands: wait:blast needs the world's own server, skipped on {}", JOIN);
+        else blastGates.addAll(plan.blastGates());
         if (!blastGates.isEmpty()) {
             NeoForge.EVENT_BUS.addListener((net.neoforged.neoforge.event.level.ExplosionEvent.Start e) -> {
                 if (!e.getLevel().isClientSide()) serverBlasts.incrementAndGet();
             });
         }
         for (CommandPlan.Step step : plan.steps()) {
+            if (JOIN != null && step.kind().ownServer()) {
+                Incoming.LOG.warn("SCENARIO commands: {} needs the world's own server, skipped on {}", step.kind(), JOIN);
+                continue;
+            }
             switch (step.kind()) {
                 case SHOT -> shot(step.tick(), step.arg());
                 case HUD_OFF, HUD_ON -> {
@@ -3644,13 +3657,13 @@ public final class ClientScenario {
                 });
                 // on a dedicated server these are its own config (incoming-server.toml there): this client cannot set them
                 case MAX_YIELD -> at(step.tick(), () -> {
-                    if (SERVER != null) Incoming.LOG.info("SCENARIO maxyield:{} is the server's config on {}", step.arg(), SERVER);
+                    if (JOIN != null) Incoming.LOG.info("SCENARIO maxyield:{} is the server's config on {}", step.arg(), JOIN);
                     else ua.zentix.incoming.IncomingConfig.SERVER.nukeMaxYield.set(Integer.parseInt(step.arg()));
                 });
                 case SITE -> at(step.tick(), () -> pickSite(step.arg()));
                 case WAVE -> at(step.tick(), () -> {
-                    if (SERVER != null) {
-                        Incoming.LOG.info("SCENARIO wave:{} is the server's config on {}", step.arg(), SERVER);
+                    if (JOIN != null) {
+                        Incoming.LOG.info("SCENARIO wave:{} is the server's config on {}", step.arg(), JOIN);
                         return;
                     }
                     ua.zentix.incoming.IncomingConfig.SERVER.scalePreset.set(ua.zentix.incoming.IncomingConfig.ScalePreset.CUSTOM);
