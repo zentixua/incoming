@@ -601,6 +601,31 @@ public final class NukePall {
         into.glowOnSmoke = (float) CloudPuffs.glowOnSmoke(ambient);
     }
 
+    /** The eye's veil below this share of white is not drawn (under half a screen step at its peak). */
+    static final double VEIL_FLOOR = 0.002;
+    /** Copy of the composite's {@code FLASH_VEIL}: Stiles–Holladay 10·E/θ² over a white wall E/π is 31.4·F/θ², × this. */
+    static final double FLASH_VEIL = 0.35;
+    private static final org.joml.Vector4f COLUMN = new org.joml.Vector4f();
+
+    /**
+     * Peak of the composite's eye veil ({@code flashVeil}) this frame: at each ball's disc edge, 31.4·F/θ²·{@link #FLASH_VEIL}
+     * with F the ball's light at the eye at the frame's exposure; the brightest ball.
+     */
+    static double veilPeak(PallPass.Frame f) {
+        double peak = 0;
+        for (int i = 0; i < 4; i++) {
+            f.balls.getColumn(i, COLUMN);
+            float r = COLUMN.w;
+            if (r <= 0) continue;
+            double d2 = COLUMN.x * COLUMN.x + COLUMN.y * COLUMN.y + COLUMN.z * COLUMN.z;
+            double disc = Math.toDegrees(Math.atan(r / Math.sqrt(d2)));
+            f.ballLight.getColumn(i, COLUMN);
+            double light = 0.2126 * COLUMN.x + 0.7152 * COLUMN.y + 0.0722 * COLUMN.z;
+            peak = Math.max(peak, FLASH_VEIL * 31.4 / (disc * disc) * light * r * r / Math.max(d2, r * r));
+        }
+        return peak;
+    }
+
     /**
      * The frame's one exposure for the composite (DESIGN fireball-light §4.1): the daylight multiplier, the daylight share
      * that gives the eye's veil (only while a ball lights the frame), and the strongest amber dome with its direction, whose
@@ -616,7 +641,10 @@ public final class NukePall {
                 toward = a.d.burst().subtract(eye).normalize();
             }
         }
-        f.flash.set((float) NukeLight.daylight(), f.ballsLit ? (float) NukeLight.day() : 0, amber, 0);
+        // the eye's veil only while it can show: its peak (at the ball's disc) above VEIL_FLOOR of white, else the composite
+        // skips its per-pixel term (+0.24 ms at 1080p while it runs, RTX 4060 under the shader pack)
+        boolean veil = f.ballsLit && veilPeak(f) >= VEIL_FLOOR;
+        f.flash.set((float) NukeLight.daylight(), veil ? (float) NukeLight.day() : 0, amber, 0);
         f.amber.set((float) toward.x, (float) toward.y, (float) toward.z, 0);
     }
 

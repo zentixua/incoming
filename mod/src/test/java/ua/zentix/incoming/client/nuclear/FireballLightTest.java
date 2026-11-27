@@ -102,7 +102,14 @@ class FireballLightTest {
         assertTrue(renderer.contains("shown, 1 - NukeLight.daySky(), GLARE)"));
         assertFalse(renderer.contains("1 - NukeLight.day()"));
         String pall = Files.readString(Path.of("src/main/java/ua/zentix/incoming/client/nuclear/NukePall.java"));
-        assertTrue(pall.contains("f.ballsLit ? (float) NukeLight.day() : 0"), "the composite's veil carries the setting");
+        assertTrue(pall.contains("veil ? (float) NukeLight.day() : 0"), "the composite's veil carries the setting");
+    }
+
+    @Test
+    void theVeilCopyMatchesTheShader() throws IOException {
+        String composite = Files.readString(SHADERS.resolve("core/fx_pall_composite.fsh"));
+        assertTrue(composite.contains("const float FLASH_VEIL = " + (float) NukePall.FLASH_VEIL + ";"), "NukePall.veilPeak copies flashVeil");
+        assertTrue(composite.contains("float k = FLASH_VEIL * 31.4 / (th * th)"));
     }
 
     @Test
