@@ -137,6 +137,25 @@ float shade(vec3 p, vec4 over) {
 // and reflection from illuminated ground (mushBallFace); through pall overhead (over), direct beam e^(−τ/μ) plus
 // downward scattering (two streams, like sun in shade), scaled by face sky share (1 + n.y)/2. No terrain/building
 // shadows: ball lights behind hills/houses equally (only slopes facing away are dark).
+// PROBE fireball-light: screen-space shadow toward the ball (contact shadows of houses, trees, the player within the frame)
+float ballShadow(vec3 p, vec3 v) {
+    mat4 vp = inverse(InvViewProj);
+    ivec2 size = textureSize(Sampler1, 0);
+    float t = 0.4;
+    for (int i = 0; i < 28; i++) {
+        t *= 1.22;
+        vec3 q = p + v * t;
+        vec4 c = vp * vec4(q, 1.0);
+        if (c.w <= 0.0) break;
+        vec2 uv = c.xy / c.w * 0.5 + 0.5;
+        if (any(lessThan(uv, vec2(0.0))) || any(greaterThan(uv, vec2(1.0)))) break;
+        float scene = pallScene(texelFetch(Sampler1, ivec2(uv * vec2(size)), 0).r);
+        float behind = dot(q, PallForward) - scene;
+        if (behind > 0.25 + 0.03 * t && behind < 6.0 + 0.3 * t) return 0.0;
+    }
+    return 1.0;
+}
+
 vec3 ballLight(vec3 p, vec3 n, vec4 over) {
     vec3 sum = vec3(0.0);
     for (int i = 0; i < 4; i++) {
@@ -150,7 +169,7 @@ vec3 ballLight(vec3 p, vec3 n, vec4 over) {
             through = exp(-over.x / mu);
             diffuse = max(pallDiffuse(over.y, over.z, over.x, over.x, over.w, mu, 1.0, 1.0, 0.0, 0.0, 0.0, -0.6666667), 0.0);
         }
-        float face = mushBallFace(dot(n, v), v.y, n.y, PallBallLight[i].w * d, over.w, through, diffuse);
+        float face = mushBallFace(dot(n, v), v.y, n.y, PallBallLight[i].w * d, over.w, through * ballShadow(p, v), diffuse);
         sum += PallBallLight[i].rgb * (mushBallFalloff(d2, b.w * b.w) * face);
     }
     return sum;
