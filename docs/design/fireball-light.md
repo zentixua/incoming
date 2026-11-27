@@ -242,6 +242,10 @@ not glow: crepuscular rays, as the sun makes. The pall's haze has a short march 
 clouds or terrain in clear air need new march steps, a new cost.
 
 ### 4.5 Later: shadows of the second sun (physics)
+Status: not shipped. A screen-space march over the frame's depth was built and taken out in review: a caster off
+screen casts nothing, so a shadow came and went as the head turned (concept 2: the same in every view). The world-
+anchored parts below are the follow-up.
+
 - **Cause:** direct light travels in straight lines from the ball (G&D §7.18). Anchored to the ground and to whatever
   casts the shadow.
 - **Only the direct beam is shadowed.** The scattered fill of the 18.10 law stays, so the shadows are soft-filled,
@@ -305,7 +309,7 @@ the air blast, seconds later.
 | 4.2 eye overlay | one GUI post pass, ~0.1 ms (est., the shape of `Concussion`) | while the eyes recover |
 | 4.3 veil, aureole, corona | terms in the composite pass and the glare quad's shape | while the ball shines |
 | 4.4 shafts | new march steps through clear air | while the ball shines |
-| 4.5 shadows | flash-mark masks, a height-map march and a screen ray; not measured (the mock ran on a CPU renderer) | about 10 s per burst |
+| 4.5 shadows (follow-up) | flash-mark masks and a height-map march; not built | about 10 s per burst |
 | 4.6 glitter path | a term in the water decal | while the ball shines over water |
 
 Each item is measured on the GPU during implementation and gets the scene bench on its final head (AGENTS.md).
