@@ -579,7 +579,7 @@ the fog color reads the sky before the `ComputeFogColor` renewal, one tick less 
   thresholds). A cell closes 200 ticks before the front reaches its nearest ground point; surveys continue after
   detonation; instant sources start from the observations at birth.
 - Class by column plurality, ties water, sand, soil, hard; unread cells: 1/d²-weighted vote of the 8 nearest measured
-  closed centres (`MaterialMap.Nearest`: one nearest drew edge cells into strips); cells due together share samples. Ground-zero wetness: origin block, surveyed ground, soil.
+  closed centres (`MaterialMap.Nearest`); cells due together share samples. Ground-zero wetness: origin block, surveyed ground, soil.
 - `NuclearEvents` keeps the UUID across detonation: open sources save birth samples, timestamped observations and
   frontier tick; finished ones packed cells. A malformed entry is isolated; a worker failure publishes uniform seed.
 - Checkpoints stand alone (partial maps carry fractional origin and sealed extent); four cells per byte, byte runs

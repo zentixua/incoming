@@ -140,8 +140,8 @@ class FireballLightTest {
         String lighting = body(composite, "vec3 ballLitWorld(");
         int cross = lighting.indexOf("lit += vec3(CROSS"), wash = lighting.indexOf("lit = pallWashWhite(lit);"), display = lighting.indexOf("vec3 shown = ");
         assertTrue(cross >= 0 && cross < wash && wash < display, "the nuclear world: CROSS, then the wash, then the display");
-        assertTrue(heat.contains("lit = pallWashWhite(lit + vec3(CROSS * max(dot(lit, LUMA) - 1.0, 0.0)));"),
-                "the conventional world light takes the same wash (one law for the world above white)");
+        assertTrue(heat.contains("lit += vec3(CROSS * max(dot(lit, LUMA) - 1.0, 0.0));") && !heat.contains("pallWashWhite(lit"),
+                "conventional world light keeps its look (a few whites at most)");
         double[][] worlds = {{0.25, 0.45, 0.15}, {0.45, 0.25, 0.2}, {0.6, 0.62, 0.55}};
         double[] ball = {1, 0.78, 0.55};
         for (double[] w : worlds) {

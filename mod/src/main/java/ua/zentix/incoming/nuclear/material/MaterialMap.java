@@ -101,9 +101,9 @@ public final class MaterialMap {
      * distance by world X, then Z). One nearest centre draws the measured area's edge cells out along straight rays across
      * all unread ground: one pond cell at the edge of ground zero's loaded chunks becomes a 64-block strip of water
      * kilometres long, the dust over it a thin spray trench drifting with the wind. A water body wider than a few cells
-     * at the edge (a shore) keeps its class out along its own side.
+     * at the edge (a shore) keeps its class out along its own side. K (est.): a measured edge cell's ring of neighbours, so
+     * one odd cell is outvoted by its own ring.
      */
-    /** Votes per unread cell (est.): a measured edge cell's ring of neighbours, so one odd cell is outvoted by its own ring. */
     static final int K = 8;
     static final class Nearest {
         final Site[] sites = new Site[K];

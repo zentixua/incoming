@@ -97,15 +97,20 @@ public final class NukeLight {
         ClientLevel level = mc.level;
         if (level == null) return;
         Vec3 camera = e.getCamera().getPosition();
-        double now = at / 20, fire = 0, lasting = 0;
+        double now = at / 20, fire = 0;
         double ambient = FarView.ambient(level, partial);
         CAMERA.clear();
-        for (ClientNuclear.Active a : ClientNuclear.detonations()) {
+        var all = ClientNuclear.detonations();
+        double[] lights = new double[all.size()], ages = new double[all.size()];
+        int i = 0;
+        for (ClientNuclear.Active a : all) {
             FlashLight.Eye eye = sample(level, a, camera, partial);
             CAMERA.put(a, eye);
             fire += eye.light();
-            if (eye.light() > 0) lasting = Math.max(lasting, a.seconds(partial));
+            lights[i] = eye.light();
+            ages[i++] = a.seconds(partial);
         }
+        double lasting = lasting(ambient, lights, ages);
         setting = flashSetting();
         update(now, ambient, fire, lasting);
         if (!ua.zentix.incoming.client.fx.layer.FxViews.secondary()) NukeFlash.frame();
@@ -116,7 +121,19 @@ public final class NukeLight {
         update(now, ambient, fire, 0);
     }
 
-    /** As above; lasting: seconds the summed light has shone (the brightest lit source's age), for a rebuilt state. */
+    /**
+     * How long the light has lasted, for a rebuilt state: the oldest age among the sources whose own light stands over the
+     * daylight by {@link #ABOVE_DAY} (a cooled cloud of an earlier burst still emits a little and stays in the list for
+     * minutes; its age is not the lasting light's).
+     */
+    static double lasting(double ambient, double[] lights, double[] ages) {
+        double unflashed = Sight.exposure(ambient, 0), most = 0;
+        for (int i = 0; i < lights.length; i++)
+            if (Math.log(unflashed / Sight.exposure(ambient, lights[i])) > ABOVE_DAY) most = Math.max(most, ages[i]);
+        return most;
+    }
+
+    /** As above; lasting: seconds the light has lasted ({@link #lasting}), for a rebuilt state. */
     static void update(double now, double ambient, double fire, double lasting) {
         sky = dayShare(ambient);
         day = sky * setting;
