@@ -680,7 +680,10 @@ public final class FarBlasts {
      * farther out — the map's terrain tiles ({@link FarTerrain}); if we know nothing — above sea level.
      */
     static double heightAbove(ClientLevel level, Vec3 pos) {
-        double ground = FarTerrain.dust(level).at((int) Math.floor(pos.x), (int) Math.floor(pos.z));
+        int x = (int) Math.floor(pos.x), z = (int) Math.floor(pos.z);
+        double ground = FarTerrain.dust(level).at(x, z);
+        // a tile column under leaves whose ground its source did not measure: the canopy's top, not the sea
+        if (Double.isNaN(ground)) ground = FarTerrain.of(level).at(x, z);
         if (Double.isNaN(ground)) ground = ua.zentix.incoming.util.Terrain.sea(level);
         return Math.max(0, pos.y - ground);
     }

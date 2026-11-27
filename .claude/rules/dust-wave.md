@@ -40,7 +40,9 @@ paths:
   noise-free (`gDwFull`). A source first drawn already aged fades in over 1 s (live only).
 - Ground: the dust lies on the eye's own ground (`DustGround`: two 128² tiles centred on the eye, fine 4–16 m over the drawn
   chunks by render distance, coarse 32 m over 4 km; the atlas's last two tiles, `DwTerrain0/1`), from what the client knows
-  (`FarTerrain.dust`: client chunks below permeable canopies, then LSS/Voxy/DH map tiles); the fine tile takes each cell's lowest
+  (`FarTerrain.dust`: client chunks below permeable canopies, then the LSS/Voxy/DH map tiles' ground under canopies, `TerrainTiles.dustGround`;
+  a tile column under leaves whose ground its source did not measure, an LSS column saved before canopies were kept, is unknown: the
+  canopy tops stood the dust 20-35 m over a jungle's floor past the loaded chunks and cut the blanket seen from above along their square); the fine tile takes each cell's lowest
   column, the coarse their mean. `dwFloor` blends fine → coarse → the source's own map by share: the fine tile hands over inside
   what it knows (8 cells); past what the client knows the coarse one holds the ground where it was last seen: once the
   survey has gone round the whole tile, an unknown cell takes its nearest known cell's height and keeps it until it is known or

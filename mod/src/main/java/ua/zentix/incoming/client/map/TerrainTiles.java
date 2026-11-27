@@ -106,18 +106,21 @@ public final class TerrainTiles {
 
     /**
      * Tile column tops: height, vanilla map colour ({@link MapColor#id}) and water depth; inputs to pixel painting
-     * ({@link #paint}) and larger tile composition. 16 KB per tile.
+     * ({@link #paint}) and larger tile composition, with the canopy for the dust's ground. 20 KB per tile.
      */
     static final class Columns {
         static final short NONE = Short.MIN_VALUE;
         final short[] height = new short[SIZE * SIZE];
         final byte[] color = new byte[SIZE * SIZE];
         final byte[] depth = new byte[SIZE * SIZE];
+        /** Canopy over the ground ({@link TerrainSource.Column#canopy}), −1 unknown. */
+        final byte[] canopy = new byte[SIZE * SIZE];
         /** Columns with data. */
         int filled;
 
         Columns() {
             Arrays.fill(height, NONE);
+            Arrays.fill(canopy, (byte) -1);
         }
 
         boolean has(int i) {
@@ -128,6 +131,7 @@ public final class TerrainTiles {
             height[i] = (short) Mth.clamp(c.height(), Short.MIN_VALUE + 1, Short.MAX_VALUE);
             color[i] = (byte) c.color().id;
             depth[i] = (byte) Math.min(c.waterDepth(), Byte.MAX_VALUE);
+            canopy[i] = (byte) (c.canopy() > LssColumns.MAX_CANOPY ? -1 : c.canopy());
             filled++;
         }
 
@@ -137,6 +141,7 @@ public final class TerrainTiles {
             height[i] = from.height[j];
             color[i] = from.color[j];
             depth[i] = from.depth[j];
+            canopy[i] = from.canopy[j];
             if (has(i)) filled++;
         }
 
@@ -534,6 +539,32 @@ public final class TerrainTiles {
     /** Water depth above bottom in a column (0 land, capped at 16), as {@link #height}. */
     public static OptionalInt waterDepth(int x, int z) {
         return column(x, z, true);
+    }
+
+    /**
+     * Where nuclear dust lies in column (x, z) ({@link TerrainSource.Column#ground}: the ground under a canopy, as the
+     * client chunks give it), from the most detailed ready tile; {@link Double#NaN} unknown, also under leaves whose ground
+     * the source did not measure.
+     */
+    public static double dustGround(int x, int z) {
+        for (int i = layers.size() - 1; i >= 0; i--) {
+            Layer layer = layers.get(i);
+            if (!live(layer)) continue;
+            TerrainSource.Column now = layer.source.peek(x, z);
+            if (now != null) return now.ground();
+            Map<Key, Tile> tiles = layer.tiles;
+            for (int l = 0; l <= MAX_LEVEL; l++) {
+                int span = SIZE << l;
+                Tile t = tiles.get(new Key(l, Math.floorDiv(x, span), Math.floorDiv(z, span)));
+                if (t == null || t.columns == null) continue;
+                int px = Math.floorMod(x, span) >> l, pz = Math.floorMod(z, span) >> l;
+                int j = pz * SIZE + px;
+                if (!t.columns.has(j)) continue;
+                return new TerrainSource.Column(t.columns.height[j], MapColor.byId(t.columns.color[j] & 0x3F), t.columns.depth[j],
+                        t.columns.canopy[j]).ground();
+            }
+        }
+        return Double.NaN;
     }
 
     private static OptionalInt column(int x, int z, boolean water) {

@@ -41,8 +41,10 @@ paths:
   unseen) → `WorldSection.copyDataTo` → `release()` immediately → `releaseRef`. If the section is not in memory, Voxy
   reads its database on the calling thread: background threads only (map tiles and the `Incoming Voxy terrain` scan).
   Voxy levels (voxel 1–16 blocks) = tile levels: a level L tile reads level L sections. A level > 0 voxel is the most
-  opaque of eight, the upper one on ties (`Mipper`); air only if all are air: column top is the cell's highest block,
-  height is the voxel midpoint (`VoxyColumns.height`, ±2^L/2); water shallower than a voxel over a solid bed becomes
+  opaque of eight (leaves count as fully opaque), on ties the +x child, then +y, then +z (`Mipper`); air only if all are air: column top is the cell's highest block,
+  height is the voxel midpoint (`VoxyColumns.height`, ±2^L/2); under leaves the scan goes on to the ground (`GROUND`, the canopy, read
+  past the colour across sections, at most 63 blocks); above level 0 only an air voxel between leaves and ground proves it
+  (a level-4 forest read 10-21 m under its floor), else unknown; water shallower than a voxel over a solid bed becomes
   the bed (more opaque) — rivers are “dry” at coarse levels. If a reread coarse summary changes, evict finer ones
   underneath from memory (`dropFiner`): `peek` takes fine data first and would give rays pre-crater terrain. World closed
   during read: `IllegalStateException` and `isLive() == false`: forget the world, find it again (do not disable);
