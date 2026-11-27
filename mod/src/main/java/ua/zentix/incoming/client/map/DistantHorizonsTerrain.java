@@ -21,6 +21,7 @@ import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.level.ChunkPos;
 import net.minecraft.world.level.EmptyBlockGetter;
 import net.minecraft.world.level.block.state.BlockState;
+import net.minecraft.world.level.levelgen.Heightmap;
 import net.minecraft.world.level.material.MapColor;
 import org.jetbrains.annotations.Nullable;
 import ua.zentix.incoming.Incoming;
@@ -48,6 +49,9 @@ import java.util.concurrent.atomic.AtomicLong;
  * Class loads only with DH installed (see {@link TerrainTiles}): its API references cannot resolve without DH.
  */
 final class DistantHorizonsTerrain implements TerrainSource {
+    /** Ground under a canopy: what stops the scan down through leaves ({@code Terrain.dustTop}). */
+    private static final java.util.function.Predicate<BlockState> GROUND = Heightmap.Types.MOTION_BLOCKING_NO_LEAVES.isOpaque();
+
     /**
      * API major version the mod was built against (7.2.0, DH 3.3.x). {@code getApiMajorVersion} Javadoc says it changes
      * only for incompatible changes, so another version is not ours: terrain then comes only from chunks.
@@ -234,9 +238,20 @@ final class DistantHorizonsTerrain implements TerrainSource {
             MapColor color = color(p);
             if (color == MapColor.NONE) continue;
             int depth = p.blockStateWrapper.isLiquid() ? waterDepth(column, i) : 0;
-            return new Column(p.topYBlockPos, color, depth);
+            return new Column(p.topYBlockPos, color, depth, canopy(column, i));
         }
         return null;
+    }
+
+    /** Blocks from the top point {@code top} down to the ground under leaves ({@code Terrain.dustTop}); 0 without; −1 none. */
+    private static int canopy(DhApiTerrainDataPoint[] column, int top) {
+        if (!(column[top].blockStateWrapper.getWrappedMcObject() instanceof BlockState t) || !ua.zentix.incoming.util.Terrain.canopy(t)) return 0;
+        for (int i = top + 1; i < column.length; i++) {
+            DhApiTerrainDataPoint p = column[i];
+            if (p != null && p.blockStateWrapper != null && p.blockStateWrapper.getWrappedMcObject() instanceof BlockState s
+                    && GROUND.test(s)) return Math.max(0, column[top].topYBlockPos - p.topYBlockPos);
+        }
+        return -1;
     }
 
     private static int waterDepth(DhApiTerrainDataPoint[] column, int water) {

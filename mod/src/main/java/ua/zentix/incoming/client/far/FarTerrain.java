@@ -38,11 +38,12 @@ public final class FarTerrain {
      */
     public static Sightline.Heights dust(ClientLevel level) {
         DustHeightCache cache = DustHeightCache.forWorld(level);
-        Sightline.Heights fallback = of(level);
         return (x, z) -> {
             LevelChunk chunk = level.getChunkSource().getChunk(x >> 4, z >> 4, false);
+            // past the client chunks the LOD tiles' ground under canopies, as the chunks give it: their canopy tops stood the
+            // dust 20-35 m over a jungle's floor there, and a blanket seen from above was cut along the loaded chunks' square
             return cache.at(x, z, level.getGameTime(), chunk == null ? 20 : 1,
-                    (cx, cz) -> chunk == null ? fallback.at(cx, cz) : dustY(chunk, cx, cz) + 1);
+                    (cx, cz) -> chunk == null ? TerrainTiles.dustGround(cx, cz) : dustY(chunk, cx, cz) + 1);
         };
     }
 

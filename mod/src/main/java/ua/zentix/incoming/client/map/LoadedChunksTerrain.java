@@ -88,7 +88,11 @@ final class LoadedChunksTerrain implements TerrainSource {
                     BlockState state = level.getBlockState(pos.set(x, y, z));
                     MapColor color = state.getMapColor(level, pos);
                     if (color == MapColor.NONE) continue;
-                    return new Column(y + 1, color, state.getFluidState().is(FluidTags.WATER) ? waterDepth(level, x, y, z) : 0);
+                    // where dust lies under a canopy, as FarTerrain.dust reads the chunk
+                    net.minecraft.world.level.chunk.LevelChunk chunk = level.getChunk(x >> 4, z >> 4);
+                    int ground = ua.zentix.incoming.util.Terrain.dustTop(chunk, x, z) + 1;
+                    return new Column(y + 1, color, state.getFluidState().is(FluidTags.WATER) ? waterDepth(level, x, y, z) : 0,
+                            Math.max(0, y + 1 - ground));
                 }
                 return null;
             }

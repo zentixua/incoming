@@ -7,10 +7,22 @@ import org.jetbrains.annotations.Nullable;
 /** Map terrain source: ground top and colour in each column. */
 interface TerrainSource {
     /**
-     * Column top: first air height above ground (as in a heightmap), top block's map colour, and water depth
-     * above the bottom (0 means land).
+     * Column top: first air height above ground (as in a heightmap), top block's map colour, water depth above the
+     * bottom (0 means land), and the canopy: blocks from the top down to the ground under leaves and what grows through
+     * them ({@code Terrain.dustTop}, where nuclear dust lies; 0 without leaves on top), −1 unknown.
      */
-    record Column(int height, MapColor color, int waterDepth) {}
+    record Column(int height, MapColor color, int waterDepth, int canopy) {
+        /** A column whose canopy is unknown. */
+        Column(int height, MapColor color, int waterDepth) {
+            this(height, color, waterDepth, -1);
+        }
+
+        /** Where dust lies: the ground under a canopy, the top without one; {@code Double.NaN} under an unknown canopy. */
+        double ground() {
+            if (canopy >= 0) return height - canopy;
+            return color == MapColor.PLANT ? Double.NaN : height;
+        }
+    }
 
     /** Column reader for one tile; owns its caches, closed after the tile. */
     interface Reader extends AutoCloseable {

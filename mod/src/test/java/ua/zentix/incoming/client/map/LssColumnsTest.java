@@ -89,6 +89,34 @@ class LssColumnsTest {
         assertEquals(67, top(tree, 0, 0, 0).height(), "crown - a barrier to rays");
     }
 
+    /**
+     * Under a canopy the column knows the ground the dust lies on, as the client chunks give it (Terrain.dustTop): beside the
+     * trunk the grass under the crown, through the trunk the log's top; without leaves on top no canopy. LOD tiles without it
+     * stood the nuclear dust on a jungle's crowns past the loaded chunks and cut its blanket along their square.
+     */
+    @Test
+    void canopyGroundUnderLeaves() {
+        var air = Blocks.AIR.defaultBlockState();
+        var leaves = Blocks.OAK_LEAVES.defaultBlockState();
+        var beside = column(0, 8, 0, 0, 64, Blocks.DIRT.defaultBlockState(), Blocks.GRASS_BLOCK.defaultBlockState(), air, air, air, air,
+                leaves, leaves, leaves);
+        TerrainSource.Column c = top(beside, 0, 0, 0);
+        assertEquals(73, c.height());
+        assertEquals(7, c.canopy());
+        assertEquals(66, c.ground(), "the grass under the crown");
+        var log = Blocks.OAK_LOG.defaultBlockState();
+        var trunk = column(0, 8, 0, 0, 64, Blocks.DIRT.defaultBlockState(), Blocks.GRASS_BLOCK.defaultBlockState(), log, log, log, log,
+                leaves, leaves, leaves);
+        assertEquals(70, top(trunk, 0, 0, 0).ground(), "the log's top");
+        var field = column(0, 8, 0, 0, 64, Blocks.DIRT.defaultBlockState(), Blocks.GRASS_BLOCK.defaultBlockState());
+        assertEquals(0, top(field, 0, 0, 0).canopy());
+        assertEquals(66, top(field, 0, 0, 0).ground());
+        // a column saved before canopies were measured: leaves on top, ground unknown
+        int old = LssColumns.pack(73, MapColor.PLANT.id, 0);
+        assertTrue(Double.isNaN(LssColumns.column(old).ground()));
+        assertEquals(66, LssColumns.column(LssColumns.pack(66, MapColor.GRASS.id, 0)).ground(), "no leaves: the top");
+    }
+
     /** The glass holds a height map, but it has no color on the map: the color and height of the first block with the color below it. */
     @Test
     void colourlessTopLooksBelow() {
