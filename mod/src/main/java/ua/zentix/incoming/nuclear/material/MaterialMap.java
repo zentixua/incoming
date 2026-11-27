@@ -96,8 +96,9 @@ public final class MaterialMap {
         }
     }
     /**
-     * The material an unread cell takes: the plurality of its {@link #K} nearest measured centres, a tie to the nearest of
-     * the tied (ties in distance by world X, then Z). One nearest centre drew the measured area's edge cells out along
+     * The material an unread cell takes: the class of its {@link #K} nearest measured centres with the most votes weighted
+     * by inverse squared distance (Shepard's interpolation for classes), a tie to the nearest centre's class (ties in
+     * distance by world X, then Z). One nearest centre drew the measured area's edge cells out along
      * straight rays across all unread ground: one pond chunk at the edge of the ground zero's loaded chunks laid a 64-block
      * strip of water 4 km long toward the camera, the dust over it a thin spray trench drifting with the wind. A pond within the measured ground still counts; a shore's unread water still takes the
      * shore's majority near it.
@@ -124,13 +125,11 @@ public final class MaterialMap {
             dist[at] = d;
         }
         int material() {
-            int[] votes = new int[4];
-            for (int i = 0; i < n; i++) votes[sites[i].material]++;
-            int most = 0;
-            for (int v : votes) most = Math.max(most, v);
-            // the nearest centre whose class has the most votes
-            for (int i = 0; i < n; i++) if (votes[sites[i].material] == most) return sites[i].material;
-            return DustMaterial.SOIL.ordinal();
+            double[] votes = new double[4];
+            for (int i = 0; i < n; i++) votes[sites[i].material] += 1.0 / Math.max(dist[i], 1);
+            int best = n == 0 ? DustMaterial.SOIL.ordinal() : sites[0].material;
+            for (int k = 0; k < 4; k++) if (votes[k] > votes[best]) best = k;
+            return best;
         }
     }
 

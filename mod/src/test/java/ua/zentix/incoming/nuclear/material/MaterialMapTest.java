@@ -59,7 +59,7 @@ class MaterialMapTest {
     /**
      * One water cell at the edge of the measured ground is not drawn out along a ray: with one nearest centre, every unread
      * cell east of it in its row took its class, a straight 64-block strip of water kilometres long (the dust over it a thin
-     * spray trench). The unread cells take the plurality of their nearest measured centres; the measured map and the
+     * spray trench). The unread cells take the weighted vote of their nearest measured centres; the measured map and the
      * frontier agree.
      */
     @Test void anEdgeCellIsNotDrawnOutAlongARay() {
