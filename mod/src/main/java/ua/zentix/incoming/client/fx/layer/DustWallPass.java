@@ -171,9 +171,9 @@ public final class DustWallPass {
      */
     public static final int MAX_SOURCES = 16;
     /**
-     * Presentation (chosen): the most a march ray with no world behind it is raised toward the undrawn ground's horizon, blocks
-     * of height at the drawn world's edge ({@code dustwall.glsl} {@code dwRayFloor}): a standing eye's strip (its 1.6 m at
-     * the edge) with room for a step or a low rise under it; 0 when an LOD mod drew the far ground this frame.
+     * Presentation (chosen): the eye height over the drawn world's edge up to which a march ray with no world behind it is
+     * drawn as from the ground ({@code dustwall.glsl} {@code dwRayFloor}; fading out by twice that): a standing eye (1.6 m)
+     * with room for a step or a low rise under it; 0 when an LOD mod drew the far ground this frame.
      */
     static final float HORIZON_LIFT = 4f;
     /**

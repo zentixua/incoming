@@ -14,7 +14,7 @@ fails where the march draws the wave there anyway:
   20 blocks over the ground there (no strip to close);
 - low render distance: the same at 6 chunks (PallFloorFrom 72), the pixel 5.5° down
   (ground 312 blocks out);
-- LOD hole: an eye 30 up with LODs drawn, one pixel 3° down where the LOD terrain has a hole (scene depth: none); its ray
+- LOD hole: an eye 30 up with LODs drawn (DwHorizonLift 0, as DustWallPass sets it), one pixel 3° down where the LOD terrain has a hole (scene depth: none); its ray
   meets the ground 572 blocks out, the wave's near edge stands 800 out: the LOD ground around the hole hides the wave.
 Also prints the eye-above-the-haze case (eye 30 up over a thin layer, the pixel 8° down): the transmittance and the ray's
 end, so the slant path through the layer can be compared between checkouts."""
@@ -35,10 +35,11 @@ FLAT = [0] * 16
 h["context"]()
 
 
-def pixel(program, eye, wall_from_eye, pitch, floor_from=168.0, scene=1e9):
+def pixel(program, eye, wall_from_eye, pitch, floor_from=168.0, scene=1e9, lift=4.0):
     source(program, eye=eye, ring=(800, 0, 100, 800), relief=(0, 0), ground=(4096, 0, 0, 64), rows=FLAT)
     g.glUseProgram(program)
     g.glUniform1f(loc(program, "PallFloorFrom"), floor_from)
+    g.glUniform1f(loc(program, "DwHorizonLift"), lift)
     pitch_view(program, pitch)
     light = march(program, make_scene(scene), 2)[0][1, 1, 3]
     g.glUniform1f(loc(program, "DwProbe"), -2)
@@ -61,9 +62,9 @@ print(f"6 chunks: eye 30 up, 5.5° down, ground {ground_at:.0f} out, wave from 6
 check(t > 0.99, "at 6 chunks an eye on a hill sees no wave below the wave's own foot")
 
 ground_at = 30 / np.tan(np.radians(3.0))
-t, end, end_y = pixel(program, (0, 30, 800 + 800, 10), 800, 3.0)
+t, end, end_y = pixel(program, (0, 30, 800 + 800, 10), 800, 3.0, lift=0.0)
 lod = ground_at * np.cos(np.radians(3.0))
-t_lod, _, _ = pixel(program, (0, 30, 800 + 800, 10), 800, 3.0, scene=lod)
+t_lod, _, _ = pixel(program, (0, 30, 800 + 800, 10), 800, 3.0, scene=lod, lift=0.0)
 print(f"LOD hole: eye 30 up, 3° down, LOD ground {ground_at:.0f} out, wave from 800: hole T={t:.4f} (ray end {end:.0f}), "
       f"the LOD pixel beside it T={t_lod:.4f}")
 check(abs(t - t_lod) < 0.05, "a hole in the LOD terrain shows no dust the LOD ground around it hides")

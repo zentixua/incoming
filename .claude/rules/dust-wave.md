@@ -179,14 +179,17 @@ paths:
   ground there, so a ray ended on the undrawn ground in front of a wave standing on it: the wave floated over a strip of
   sky between the drawn edge's angle and its foot's (15 kt from 2 km, 12 chunks: a ray 0.5° down ended 315 m out, the wall
   400 m out, transmittance 1.000 against 0.005 one march row up; 7 px at 1080p, shrinking as the wall came in). A ray under
-  the undrawn ground is raised toward that ground's horizon along its bearing (`dwRayFloor`'s `dir`, presentation) by
-  what its clearance over the floor at the drawn edge leaves of `DustWallPass.HORIZON_LIFT` (4 m; 0 when an LOD mod drew
-  the far ground this frame, `SceneDepth.lod`): a standing eye's strip closes; an eye on a hill or a roof passes the edge
-  metres up and keeps the sky under the wave (a fixed raise angle drew the wave below its own foot from a hill, 70 % taller
-  at 12 chunks, and showed dust through holes in LOD terrain: `tools/dust_wall_horizon_probe.py`). Every row of the strip
-  shows the same horizon ray. The 1 px left at the edge is vanilla's fogged last metres of terrain
-  (`tools/dust_wall_contract_gl.py horizon`). The raise, the horizon and the ray's end share one search loop: a second loop
-  of floor reads was unrolled by AMD's compiler (`fx_dustwall` 114 → 150 KB). The march, resolve and
+  the undrawn ground's horizon along its bearing is moved toward that horizon (`dwRayFloor`'s `dir`, presentation):
+  `dir.y + w ×` the rise it needs to clear the ground, `w` full for an eye up to `DustWallPass.HORIZON_LIFT` (4 m) over the
+  floor at the drawn edge, none from twice that, 0 when an LOD mod drew the far ground this frame (`SceneDepth.lod`; an
+  LOD mod whose far ground is not built yet keeps the strip). A standing eye's strip shows the horizon ray, the foot on the
+  drawn edge; a hill or a roof keeps main's ray end. Rows stay in order and each changes at its own eye height: one raised
+  ray for every row flipped the whole strip within 5 cm of eye height, a fixed raise angle drew the wave below its foot from a
+  hill and through LOD holes (`tools/dust_wall_lift_threshold_probe.py`, `dust_wall_horizon_probe.py`, both in
+  `dust_wall_gl.py`; the root cause: a raised ray chosen from a quantity constant across the strip's rows). The 1 px left at
+  the edge is vanilla's fogged last metres of terrain (`tools/dust_wall_contract_gl.py horizon`). The horizon, the ray's end
+  and a part-way ray's second search share one loop (a dynamic second pass): a second loop of floor reads was unrolled by
+  AMD's compiler (`fx_dustwall` 114 → 150 KB). The march, resolve and
   composite judge "the same place" by one rule (`pallSamePlace`: a looser rule in one pass let dust from behind a foreground
   edge through another). The frame air (haze, weather) lies in front of the dust (`pallAir`, `pallAirLightOf`).
 - A source's terrain map spans its pall's whole extent (1 Mt: 508 m cells) and its four fixed columns per cell know 4–13 of

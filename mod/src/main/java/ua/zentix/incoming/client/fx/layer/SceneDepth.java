@@ -308,12 +308,12 @@ public final class SceneDepth {
         }
     }
 
-    /** This frame's see-through surfaces ({@link #glass}, the distance texture's second channel) are filled. */
     /** Whether this frame's scene depth holds an LOD mod's far ground ({@link LodDepth}). */
     static boolean lod() {
         return lodDrawn;
     }
 
+    /** This frame's see-through surfaces ({@link #glass}, the distance texture's second channel) are filled. */
     static boolean see() {
         return see;
     }
