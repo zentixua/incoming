@@ -173,11 +173,16 @@ public final class NukeRenderer {
             double film = NukeExposure.filmShare(MushroomModel.rollUp(s.t(), d.yieldKt(), d.surface()), BALL[3] * air);
             double shown = film * NukeExposure.capShown(BALL[0] * adapt * air, BALL[1] * adapt * air, BALL[2] * adapt * air, adapt)
                     + (1 - film) * Math.min(1, Math.pow(seen, 1 / 2.2));
-            lights.add(dx, dy, dz, r, surface, Math.min(1, Math.pow(surface, 1 / 2.2)), lr, lg, lb);
+            // the ball's light on layer particles and smoke at the frame's one exposure, as on the world and the pall
+            double framed = BALL[3] * NukeLight.frameExposure();
+            lights.add(dx, dy, dz, r, framed, Math.min(1, Math.pow(framed, 1 / 2.2)), lr, lg, lb);
             // glare follows how the frame sees the surface: with ball exposure set by it through the air (mushAt in fx_pall), and overexposure
             double body = BALL[3] * adapt * air;
             double exposed = (film * body * NukeExposure.gain(body, adapt) + (1 - film) * seen) * (FxViews.secondary() ? 1 : NukeFlash.overexposure(a, view.partial()));
-            if (NukeLight.camera(a).seen() && seen > Sight.THRESHOLD) out.eyeLight(dx, dy, dz, r, exposed, view.pixel(), cr, cg, cb, shown, GLARE);
+            // by day the pall composite draws the eye's veil (flashVeil, scaled by the Flash setting itself); this quad keeps
+            // the glare and the night veil: the handoff follows the sky alone, so a lower setting never sums the two
+            if (NukeLight.camera(a).seen() && seen > Sight.THRESHOLD)
+                out.eyeLight(dx, dy, dz, r, exposed, view.pixel(), cr, cg, cb, shown, 1 - NukeLight.daySky(), GLARE);
         }
     }
 

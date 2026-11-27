@@ -516,15 +516,17 @@ Like Hiroshima photos: wood charred toward sphere, stone soot-darkened, light hu
   facing surface though flat ground gets less direct light from low sphere), day one minute, night 10 (cone plateau
   of dark adaptation). Night-adaptedness by eye-local sky/block light 0–15 (sky darkness from time/weather like server
   vanilla, not recomputed client-side): day 15 daytime, open-sky night 4/darker nighttime; nearby torch nearly daytime
-  eye. 15 kt day/3 km ~50 s, night/10 km ~7.5 min. Screen veil from pulse maximum (white frame before): bright
-  afterimage darkens in seconds to gray by day/black at night, fades (1 − t/T)²; glare under 10 s scales veil down
-  proportionally. Permanent server retinal burns (player `RETINA`, cleared by death, ≤ 8 spots): sphere seen within
+  eye. 15 kt day/3 km ~50 s, night/10 km ~7.5 min. Flash blindness from pulse maximum (white frame before), a
+  bounded post pass over the picture that never dims the exposure (docs/design/fireball-light.md §4.2): the bleached eye's
+  white clearing (hold 0.5 % of T, ≤ 0.3 s, fading over 0.7 s; full facing the ball, a third turned away), a light
+  desaturation by day, fading (1 − t/T)²; the colour-shifting afterimage spot carries the long dazzle; glare under 10 s
+  scales it down proportionally. Permanent server retinal burns (player `RETINA`, cleared by death, ≤ 8 spots): sphere seen within
   60° of gaze, inside figure range (day/night blend by eye light; burn range grows with visibility, air alone sets
   it, §12.86; surface same as airburst figure, no data, upper bound (est.)), spot at sphere's retinal position/size
   (pulse samples players' gaze first). Client soft dark spots in configured FOV, paler at sides (§12.85: peripheral
   burns usually unnoticed). Distant sphere visibility also local terrain: dense heightmap every 8 blocks to 512
-  (all entities). Creative/spectator are cameras, not eyes: no glare/burn, existing spots hidden (Flashback viewer
-  spectator); white frame/afterimage for all. Sleeping eyes closed; death clears glare. Player-strike retinal burns,
+  (all entities). Creative players have eyes (flash blindness is perception, not injury) but get no retinal
+  burns and see no existing spots; spectators are cameras (Flashback viewer spectator); white frame/afterimage for all. Sleeping eyes closed; death clears glare. Player-strike retinal burns,
   like skin, respect launcher's injury rules (PvP off/friendly team); temporary glare/white frame affects all.
 - **Radiation** for players/mobs (except undead; `mob_radiation` disables). Do not tick mobs every second: `MobFallout`
   adds fallout dose every 10 s under nuclear-work budget; mob's `radiation_sickness` handles same stages (nausea,
@@ -686,8 +688,10 @@ All from one `ClientNuclearEvents` list (event + time), updated in `ClientTickEv
   `NukeExposure.overexposure`: K^(e^(−u/0.2 s)) after second maximum, K camera sphere light at second maximum relative
   to frame exposure; frame gain/lens-scattered light, 15 kt/1.4 km white to ~0.25 s, normal by 1 s); strength
   `min(1, Q/2 + 0.6*T)` from admitted fluence and transmission (`FlashLight`; inherited glare calibration, (est.)). Fireball exposed for fire/visible surface, film curve
-  like conventional (`NukeExposure`). Blindness: after white, slow-fading dark-orange retinal spot at sphere location
-  (gaze-following afterimage), 5–30 s. Field glare/retinal burns §4 “Eyes”. Existing client `flash` (0 disables).
+  like conventional (`NukeExposure`). Blindness: after white, a slow-fading retinal spot at sphere location
+  (gaze-following afterimage, white-yellow, then orange, then violet), 5–30 s. Field glare/retinal burns §4 “Eyes”. By
+  day the frame sees the flash through one exposure, with the eye's veiling glare around the ball
+  (docs/design/fireball-light.md). Existing client `flash` (0 disables).
 - **Shared visible source and camera — `FlashLight` / `NukeLight`:** apparent emitting temperature follows
   `T = 7700 * [(P(t)/P(t_max)) * (R_max/R_cap)^2]^(1/4)`. G&D 1977 fig. 7.84 is normalized thermal power,
   not visible lumens; `BlackBody` converts its temperature to RGB/photopic luminance. The equivalent spherical
@@ -712,7 +716,8 @@ All from one `ClientNuclearEvents` list (event + time), updated in `ClientTickEv
   The summed eye light F drives `Sight.exposure(ambient,F)` with a 0.2 s exponential follow in log exposure,
   using game/render time. Reset/seek reconstructs adapted state; frame readers never advance it separately.
   World, pall, dust and amber use that exposure. Firebody gain/film retains its ambient reference and cancels frame
-  exposure once. Vanilla sky flash renews one tick only while admitted frame overexposure remains visible.
+  exposure once. Vanilla sky flash (a switch: white sky, full-day light map) renews only while the flash's white fill
+  covers ≥ 0.98 of the frame, so its end never shows (it ended at ~1.85 s at night and the picture jumped).
   Sources: [G&D VII §§7.14, 7.83–7.88](https://www.atomicarchive.com/resources/documents/effects/glasstone-dolan/chapter7.html),
   [G&D XII figs. 12.88a/b](https://www.atomicarchive.com/resources/documents/effects/glasstone-dolan/chapter12.html).
 - **Sky/fog** (`ViewportEvent.ComputeFogColor`, `RenderFog`): first seconds white/yellow, then orange-brown; black-rain
