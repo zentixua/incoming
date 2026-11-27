@@ -93,8 +93,9 @@ class FireballLightTest {
     @Test
     void theEyesVeilStaysOffTheBallAndOutOfTheNight() throws IOException {
         String composite = Files.readString(SHADERS.resolve("core/fx_pall_composite.fsh"));
-        assertTrue(composite.contains("vec3 veil = flashVeil(dir0) * (PallFlash.y * behind);"),
-                "the veil by day only, and only where the pall leaves the world or sky behind (never over the ball's disc)");
+        assertTrue(composite.contains("vec3 veil = flashVeil(dir0, behind) * PallFlash.y;"), "the veil by day only");
+        assertTrue(composite.contains("max(behind, smoothstep(disc * 1.02, disc * 1.25, theta))"),
+                "in the eye: over the shell and smoke, never over the ball's own disc");
         assertTrue(composite.contains("return min(veil, vec3(FLASH_VEIL_PEAK));") && composite.contains("const float FLASH_VEIL_PEAK = 0.3;"),
                 "under the ball's on-screen brightness: its pattern stays readable");
         assertTrue(composite.contains("laid.rgb += held * (1.0 - shown) * flashAmber(dir0);"),

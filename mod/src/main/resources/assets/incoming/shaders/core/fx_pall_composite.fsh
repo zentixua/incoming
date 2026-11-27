@@ -478,7 +478,7 @@ vec3 flashAmber(vec3 dir) {
 // presentation, tuned to the reference films (ring at 2 radii 1.3–2 times the sky, at most half the ball).
 const float FLASH_VEIL = 0.35;
 const float FLASH_VEIL_PEAK = 0.3;
-vec3 flashVeil(vec3 dir) {
+vec3 flashVeil(vec3 dir, float behind) {
     vec3 veil = vec3(0.0);
     for (int i = 0; i < 4; i++) {
         vec4 b = PallBalls[i];
@@ -486,7 +486,10 @@ vec3 flashVeil(vec3 dir) {
         float d2 = dot(b.xyz, b.xyz), d = sqrt(d2);
         float theta = degrees(acos(clamp(dot(dir, b.xyz / d), -1.0, 1.0)));
         float th = max(theta, degrees(atan(b.w / d)));
-        float k = FLASH_VEIL * 31.4 / (th * th) * min(1.0, 30.0 / th);
+        // in the eye, so over the Wilson shell and smoke too; never over the ball's own disc (as FxBloom: no glow on the
+        // glowing body), where only what the pall lets through behind it takes it
+        float disc = degrees(atan(b.w / d));
+        float k = FLASH_VEIL * 31.4 / (th * th) * min(1.0, 30.0 / th) * max(behind, smoothstep(disc * 1.02, disc * 1.25, theta));
         veil += PallBallLight[i].rgb * (b.w * b.w / max(d2, b.w * b.w)) * k;
     }
     return min(veil, vec3(FLASH_VEIL_PEAK));
@@ -646,7 +649,7 @@ void main() {
         if (depth >= 1e8 && PallFlash.z > 0.004) laid.rgb += held * (1.0 - shown) * flashAmber(dir0);
     }
     if (PallFlash.y > 0.0 && balls) {
-        vec3 veil = flashVeil(dir0) * (PallFlash.y * behind);
+        vec3 veil = flashVeil(dir0, behind) * PallFlash.y;
         if (dot(veil, LUMA) > 1e-4) {
             vec3 shownNow = laid.rgb + laid.a * texelFetch(Sampler9, full, 0).rgb;
             laid = vec4(pallDisplay(pallLinear(shownNow.r) + veil.r), pallDisplay(pallLinear(shownNow.g) + veil.g),
