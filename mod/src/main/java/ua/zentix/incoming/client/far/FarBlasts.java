@@ -163,6 +163,8 @@ public final class FarBlasts {
         boolean alive = true;
         /** This client saw the blast happen (not a strike rebuilt for a late join, dimension change or seek, {@link Resent}). */
         final boolean witnessed;
+        /** The client level's game time when the blast arrived. */
+        final long tick;
         /** Shock-wave front over time ({@link #front}); null — not computed yet. */
         @Nullable
         ChemicalFront front;
@@ -184,6 +186,7 @@ public final class FarBlasts {
             // while its front has not yet reached the ear (FarBlasts.cloud decides)
             this.born = BlastTime.ticks() - (resent == null ? 0 : resent.ticks());
             this.witnessed = resent == null;
+            this.tick = level == null ? 0 : level.getGameTime();
             this.near = near;
             this.soundPending = !near;
             // Fuel in the crater burns as fire on the server's blocks: its smoke and sound come with it in a packet (BlastEffects.fuelFire)
@@ -476,10 +479,24 @@ public final class FarBlasts {
                 .orElseGet(() -> BlastTarget.of(material, tnt, hob));
     }
 
-    /** This client saw a blast happen within {@code reach} blocks (horizontal) of (x, z), and still keeps it. */
-    public static boolean witnessed(double x, double z, double reach) {
-        for (Event e : EVENTS) if (e.witnessed && Math.hypot(e.x - x, e.z - z) <= reach) return true;
+    /**
+     * Game ticks between the server's blast tick and the client's game time when its packet arrived (⚠ est.: the packet goes
+     * out in the blast's tick; the client's clock follows the server's within the time sync and network delay).
+     */
+    static final long WITNESS_TICKS = 20;
+
+    /**
+     * This client saw the blast of game tick {@code blastTick} happen within {@code reach} blocks (horizontal) of (x, z), and
+     * still keeps it: an older crater learned after the fact never matches a fresh blast beside it.
+     */
+    public static boolean witnessed(double x, double z, double reach, long blastTick) {
+        for (Event e : EVENTS) if (witnesses(e.witnessed, e.x, e.z, e.tick, x, z, reach, blastTick)) return true;
         return false;
+    }
+
+    /** A blast seen live at (ex, ez) arriving at game tick {@code tick} is the one of {@code blastTick} at (x, z). */
+    static boolean witnesses(boolean live, double ex, double ez, long tick, double x, double z, double reach, long blastTick) {
+        return live && Math.abs(tick - blastTick) <= WITNESS_TICKS && Math.hypot(ex - x, ez - z) <= reach;
     }
 
     /** An explosion packet closer than {@link #NEAR} to the camera: particles draw it and the near model voices it. */
@@ -710,7 +727,7 @@ public final class FarBlasts {
 
     /**
      * Air at the explosion place: the world's air ({@link ClientAir}) with the wind at the place's ground ({@link ClientAir#site}: a street, crowns,
-     * a hill); humidity — the air's own; at the water, the near-surface air's ({@link #humidity}), over the water — the field.
+     * a hill); humidity — the air's own, at the water too ({@link #humidity}); over the water — the field.
      */
     public static CloudModel.Air air(ClientLevel level, Vec3 pos) {
         return air(level, pos, null);
@@ -722,19 +739,19 @@ public final class FarBlasts {
         boolean water = !level.getFluidState(at).isEmpty() || !level.getFluidState(at.below()).isEmpty();
         ua.zentix.incoming.util.Air air = resent == null ? ClientAir.now() : resent.air();
         // the place's correction is measured from the surface under the explosion (under a crown — from the ground beneath it): the cloud's heights are measured from the same surface too
-        return CloudModel.Air.of(air, humidity(air, water),
+        return CloudModel.Air.of(air, humidity(air),
                 water ? ua.zentix.incoming.util.LocalWind.OPEN : ClientAir.site(pos.x, pos.y - overSurface(level, pos, resent), pos.z, air));
     }
 
     /**
-     * Humidity of the air a blast happens in, 0..1: the world's air ({@link ua.zentix.incoming.util.Air#humidity}); at the water,
-     * the near-surface air over it ({@link ua.zentix.incoming.util.Air#surfaceHumidity}: 0.7 in clear weather, saturated in rain).
-     * Only a film at the water surface itself is saturated, not the air metres above it the blast's shell expands into:
-     * taken as saturated, a cruise missile at the waterline drew a 40 m Wilson cloud for 0.21 s, a white burst over the
-     * frame (rc-video raid clip, 5.85 s); in clear-weather surface air it is 21 m for 0.12 s, mostly inside its fireball and dust.
+     * Humidity of the air a blast happens in, 0..1: the world's air ({@link ua.zentix.incoming.util.Air#humidity}: 0.5 in
+     * clear weather, saturated in rain), the same at the water as on land: only a film at the water surface is saturated,
+     * not the air metres above it the blast's shell expands into. Taken as saturated, a cruise missile at the waterline
+     * draws a 40 m Wilson cloud for 0.21 s, a white burst over the frame; in the world's clear-weather air 13 m for 0.07 s,
+     * inside its fireball, as on land ({@code WaterBlastAirTest}).
      */
-    static double humidity(ua.zentix.incoming.util.Air air, boolean water) {
-        return water ? air.surfaceHumidity() : air.humidity();
+    static double humidity(ua.zentix.incoming.util.Air air) {
+        return air.humidity();
     }
 
     /**

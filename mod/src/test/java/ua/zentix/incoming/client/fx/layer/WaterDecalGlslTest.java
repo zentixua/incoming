@@ -9,6 +9,7 @@ import java.nio.file.Path;
 import java.util.Map;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
  * The water decal's height band ({@code fx_water.fsh} {@code surfaceBand}): every height a shader pack's waves give the
@@ -21,6 +22,16 @@ class WaterDecalGlslTest {
     private static final double NEAR_TOL = 0.01, FAR_TOL = 0.037;
     /** Jitter allowance at the draw edge: {@link WaterDecal#PACK_JITTER} pixels × a 70° frame's pixel angle at 1080 rows × 400 m. */
     private static final double FAR_JITTER = WaterDecal.PACK_JITTER * Math.toRadians(70) / 1080 * 400;
+
+    /** A common player frame: 70° vertical FOV over 1080 rows. */
+    private static final double PIXEL = Math.toRadians(70) / 1080;
+
+    /** The band under a pack at {@code len} m, eye {@code eyeAbove} m above the surface: tol and jitter as {@code main()} computes them. */
+    private static double seen(double h, double len, double eyeAbove) throws IOException {
+        double horizontal = Math.sqrt(Math.max(0, len * len - eyeAbove * eyeAbove));
+        double tol = Math.clamp(0.01 + 2.4e-6 * len * eyeAbove, 0.01, 0.037);
+        return band(h, true, tol, WaterDecal.PACK_JITTER * PIXEL * horizontal);
+    }
 
     private static double band(double h, boolean pack, double tol, double jitter) throws IOException {
         GlslFunction f = GlslFunction.parse(Files.readString(FSH).replaceAll("//[^\n]*", ""), "surfaceBand");
@@ -45,6 +56,36 @@ class WaterDecalGlslTest {
     }
 
     @Test
+    void crestCeilingIsBelowFarmlandTops() throws IOException {
+        java.util.regex.Matcher m = java.util.regex.Pattern.compile("const float CREST_CEILING = ([0-9.]+);").matcher(Files.readString(FSH));
+        assertTrue(m.find());
+        assertEquals(15.0 / 16 - 8.0 / 9 - 0.004, Double.parseDouble(m.group(1)), 1e-5);
+    }
+
+    /** Photon's crests are water at every distance and eye height the decal draws at (the band never narrows below main's). */
+    @Test
+    void photonCrestsAreWaterAtEveryDistance() throws IOException {
+        for (double d = 5; d <= 400; d += 15)
+            for (double eye : new double[] {1.7, 10, 30}) assertEquals(1, seen(photon(1, 1), d, eye), 0, "crest at " + d + " m, eye " + eye);
+    }
+
+    /**
+     * Farmland and dirt path tops (15/16) across a field, 2 m eye height, 20–250 m, read exactly (review round 1: the crest margin
+     * added on top of the distance jitter took them for water from 120 m).
+     */
+    @Test
+    void farmlandAcrossAFieldIsNotWater() throws IOException {
+        double h = 15.0 / 16 - 8.0 / 9;
+        for (double d = 20; d <= 250; d += 10) assertEquals(0, seen(h, d, 2), 0, "farmland at " + d + " m is taken as water");
+    }
+
+    /** A full block top at the draw edge (400 m, eye 30 m above: tol 0.037) read low by that tolerance is not water. */
+    @Test
+    void fullBlockTopReadLowByTheBandsOwnToleranceIsNotWater() throws IOException {
+        assertEquals(0, seen(1 - 8.0 / 9 - 0.037, 400, 30), 0);
+    }
+
+    @Test
     void complementaryTroughsStayWater() throws IOException {
         // WAVING_WATER_VERTEX: −0.05 ± 0.025 under open sky, −0.05 under a roof
         for (double h = -0.075; h <= -0.025; h += 0.005) assertEquals(1, band(h, true, NEAR_TOL, 0), 0, "Complementary " + h);
@@ -58,7 +99,7 @@ class WaterDecalGlslTest {
         assertEquals(0, band(15.0 / 16 - 8.0 / 9, false, NEAR_TOL, 0), 0);
         // under a pack up close: farmland and path tops stay out
         assertEquals(0, band(15.0 / 16 - 8.0 / 9, true, NEAR_TOL, 0), 0);
-        // at the draw edge a full block top read slightly low wraps to +1/9 above the water top: never water
-        assertEquals(0, band(1 - 8.0 / 9 - 0.01, true, FAR_TOL, FAR_JITTER), 0);
+        // at the draw edge a full block top read low wraps to +1/9 above the water top: never water
+        assertEquals(0, band(1 - 8.0 / 9 - FAR_TOL, true, FAR_TOL, FAR_JITTER), 0);
     }
 }

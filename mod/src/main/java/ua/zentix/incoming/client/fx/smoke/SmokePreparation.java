@@ -174,7 +174,8 @@ public final class SmokePreparation {
 
     /**
      * Every source's state at grid time {@code seconds}, one line each (dev diagnostics): kind, age, bounds (empty, size),
-     * culled, selected, sample age, clumps and their summed drop, dust and soot masses in the drawn sample.
+     * culled, selected, sample age, clumps and their summed drop, dust and soot masses in the drawn sample (blobs in kg,
+     * tubes in kg per metre at their two ends: a mixed sum, for a pop's onset, not a balance).
      */
     public String describe(double seconds) {
         StringBuilder b = new StringBuilder();

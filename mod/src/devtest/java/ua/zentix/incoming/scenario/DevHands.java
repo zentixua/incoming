@@ -216,7 +216,7 @@ public final class DevHands {
                 done(id, "ok");
             }
             case "smoke" -> {
-                // every smoke source's preparation state, now and each second while on (a pop's cause by source)
+                // every smoke source's preparation state, now and twice a second while on (a pop's cause by source)
                 smoke = arg.equals("on");
                 Incoming.LOG.info("DEV smoke {} | {}", ua.zentix.incoming.client.far.FarRenderer.describeSmoke(),
                         ua.zentix.incoming.client.fx.smoke.SmokeGrid.describeSources());

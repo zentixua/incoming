@@ -112,8 +112,8 @@ public final class FireSmoke implements SmokeGrid.Source {
      * Grid clock, s, from which this client draws the plume: {@link #start} for a fire it learned of after the fact (late join,
      * returning to the chunk, a strike rebuilt after a seek: that plume is already out there), or the moment it learned of the
      * fuel when it watched the blast itself. The server pours the fuel in a work unit after the crater, seconds after the
-     * blast in a salvo (a Grad salvo's units ran 94 ticks): drawn from the blast, that delay's plume appeared whole in one
-     * frame as a straight rod (rc-video raid clip, 31.7 s).
+     * blast in a salvo (a Grad salvo's units run about 90 ticks): drawn from the blast, that delay's plume would appear whole
+     * in one frame as a straight rod.
      */
     double shown;
     /** World changed: source leaves the grid. */

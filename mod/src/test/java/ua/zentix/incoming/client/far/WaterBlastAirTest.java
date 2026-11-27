@@ -19,18 +19,17 @@ class WaterBlastAirTest {
     private static final Air CLEAR = new Air(new Wind(3, 0), Stability.D, 0.5), RAIN = new Air(new Wind(3, 0), Stability.D, 1);
 
     @Test
-    void theAirOverWaterIsTheNearSurfaceAir() {
-        assertEquals(CLEAR.surfaceHumidity(), FarBlasts.humidity(CLEAR, true), 0);
-        assertTrue(FarBlasts.humidity(CLEAR, true) < 1, "clear weather over a lake is not saturated");
-        assertEquals(1, FarBlasts.humidity(RAIN, true), 0, "rain saturates it");
-        assertEquals(CLEAR.humidity(), FarBlasts.humidity(CLEAR, false), 0, "land keeps the world air");
+    void aBlastAtTheWaterTakesTheWorldsAirAsOnLand() {
+        assertEquals(CLEAR.humidity(), FarBlasts.humidity(CLEAR), 0, "the world's air, as on land");
+        assertTrue(FarBlasts.humidity(CLEAR) < 1, "clear weather over a lake is not saturated");
+        assertEquals(1, FarBlasts.humidity(RAIN), 0, "rain saturates it");
     }
 
     @Test
     void aMissileAtTheWaterlineOnAClearDayHasNoFrameWideWilsonCloud() {
         double kg = WeaponType.MISSILE.spec().charge();
-        Condensation clear = new Condensation(kg, true, FarBlasts.humidity(CLEAR, true)), saturated = new Condensation(kg, true, 1);
+        Condensation clear = new Condensation(kg, true, FarBlasts.humidity(CLEAR)), saturated = new Condensation(kg, true, 1);
         assertTrue(saturated.reach > 35, "saturated: " + saturated.reach + " m");
-        assertTrue(clear.reach < 25 && clear.life < 0.13, "clear day at the water: " + clear.reach + " m, " + clear.life + " s");
+        assertTrue(clear.reach < 15 && clear.life < 0.08, "clear day at the water: " + clear.reach + " m, " + clear.life + " s");
     }
 }
