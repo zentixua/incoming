@@ -439,7 +439,7 @@ public final class FarBlasts {
         BlastTarget t = model.target;
         if (t.family() != BlastTarget.Family.SOIL || source.underground() || source.chargeKg() <= 0) return null;
         double r = ua.zentix.incoming.nuclear.model.CraterModel.chargeRadius(source.chargeKg(), t.material().soil());
-        Ejecta e = new Ejecta(r, t.ballistic(source.chargeKg()), t.matter().clods);
+        Ejecta e = new Ejecta(r, t.ballistic(source.chargeKg()), t.matter().clods, Ejecta.terminal(t.matter().grain, t.matter().grainDensity));
         return e.grains > 0 ? e : null;
     }
 
