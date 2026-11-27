@@ -57,6 +57,7 @@ public final class NukeLight {
         Vec3 camera = e.getCamera().getPosition();
         double now = TickTime.at(ticks, partial) / 20, fire = 0;
         double ambient = FarView.ambient(level, partial);
+        ambientNow = ambient;
         CAMERA.clear();
         for (ClientNuclear.Active a : ClientNuclear.detonations()) {
             FlashLight.Eye eye = sample(level, a, camera, partial);
@@ -88,12 +89,17 @@ public final class NukeLight {
     static void tick() { ticks++; }
     static double exposure() { return exposure; }
     /** PROBE fireball-light: eye recovery time constant after the flash, s. */
-    static final double RECOVER_S = Double.parseDouble(System.getProperty("incoming.probe.recover", "1.5"));
+    static final double RECOVER_S = Double.parseDouble(System.getProperty("incoming.probe.recover", "0.2"));
+    /** PROBE fireball-light: share of the flash the frame adapts to: 0.5 by day, 1 at night (presentation). */
+    public static double flashPower() {
+        double day = Math.clamp((ambientNow - 0.17) / (1 - 0.17), 0, 1);
+        return 1 - (1 - Double.parseDouble(System.getProperty("incoming.probe.adapt", "0.5"))) * day;
+    }
+    static double ambientNow = 1;
     /** PROBE fireball-light: frame exposure relative to the exposure without the flash (<= 1). */
     public static double flashRatio() {
         if (Boolean.getBoolean("incoming.probe.off")) return 1;
-        // presentation: the eye adapts locally, the frame partly (a power, like the fire film curve's FOLLOW)
-        return Math.pow(Math.min(1, exposure / Math.max(bodyExposure, 1e-12)), Double.parseDouble(System.getProperty("incoming.probe.adapt", "0.5")));
+        return Math.min(1, exposure / Math.max(bodyExposure, 1e-12));
     }
     static double bodyExposure() { return bodyExposure; }
     static FlashLight.Eye camera(ClientNuclear.Active a) { return CAMERA.getOrDefault(a, FlashLight.Eye.DARK); }

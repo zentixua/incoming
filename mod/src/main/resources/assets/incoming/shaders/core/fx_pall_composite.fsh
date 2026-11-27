@@ -47,7 +47,8 @@ uniform vec3 PallSunLight;
 uniform vec3 PallSkyLight;
 // z: pall-frame downsample factor
 uniform vec4 PallFrame;
-// PROBE fireball-light: x = frame exposure under the flash relative to the exposure without it (linear, <= 1)
+// PROBE fireball-light: x = eye exposure under the flash relative to the exposure without it r (linear, <= 1), y = share p the
+// frame follows: the frame's exposure is r^p of its unflashed one; the ball's light (in eye units, × r) is shown × r^(p−1)
 uniform vec4 PallFlash;
 // firestorm: slot fire maps, fire slots (pall.glsl), patch/flicker noise (own texture unit, PallPass)
 uniform sampler2D Sampler3;
@@ -321,7 +322,8 @@ vec3 ballLitWorld(ivec2 full, vec3 n, float kept, vec3 added) {
         glass = texelFetch(FxGlass, full, 0);
         world = clamp((world - glass.rgb) / max(glass.a, 1.0 / 255.0), 0.0, 1.0);
     }
-    kept = pallDisplay(pallLinear(kept) * PallFlash.x);
+    kept = pallDisplay(pallLinear(kept) * pow(PallFlash.x, PallFlash.y));
+    added *= pow(max(PallFlash.x, 1e-9), PallFlash.y - 1.0);
     vec3 lit = vec3(relit(world.r, kept, open.r, added.r), relit(world.g, kept, open.g, added.g),
             relit(world.b, kept, open.b, added.b));
     lit += vec3(CROSS * max(dot(lit, LUMA) - 1.0, 0.0));
@@ -455,7 +457,7 @@ void main() {
     // lights it as it lights the world around (ballLight, with the pall overhead at the eye): a dark hand in a world the flash
     // made bright looked cut out of another scene
     if (pallHand(depth)) {
-        fragColor = vec4(0.0, 0.0, 0.0, pallDisplay(PallFlash.x));
+        fragColor = vec4(0.0, 0.0, 0.0, pallDisplay(pow(PallFlash.x, PallFlash.y)));
         if (PallLayerFrame == 0 && PallBalls[0].w > 0.0) {
             vec4 farHand = InvViewProj * vec4((vec2(full) + 0.5) / vec2(fullSize) * 2.0 - 1.0, 1.0, 1.0);
             vec3 dirHand = normalize(farHand.xyz / farHand.w);
@@ -591,6 +593,24 @@ void main() {
     // brighter world: pall plus the ball-lit world behind it (alpha 0, blending ignores frame); the lit pixel holds the
     // surface over the world, as the frame did
     if (whole && pallValid(pall)) laid = vec4(laid.rgb + laid.a * ballLit, 0.0);
-    else laid.a *= pallDisplay(PallFlash.x);
+    else laid.a *= pallDisplay(pow(PallFlash.x, PallFlash.y));
+    // PROBE: veiling glare in the eye from each ball, Stiles–Holladay 10·E/θ² (θ in degrees) over a white wall E/π:
+    // 31.4·F/θ², F the ball's light at the eye in frame units; beyond 30° falling as 1/θ³
+    vec3 veil = vec3(0.0);
+    for (int i = 0; i < 4; i++) {
+        vec4 b = PallBalls[i];
+        if (b.w <= 0.0) continue;
+        float d2 = dot(b.xyz, b.xyz);
+        float theta = degrees(acos(clamp(dot(dir0, b.xyz / sqrt(d2)), -1.0, 1.0)));
+        float disc = degrees(atan(b.w / sqrt(d2)));
+        float th = max(theta, disc);
+        float k = 31.4 / (th * th) * (th > 30.0 ? 30.0 / th : 1.0);
+        veil += PallBallLight[i].rgb * (b.w * b.w / max(d2, b.w * b.w)) * pow(max(PallFlash.x, 1e-9), PallFlash.y - 1.0) * k;
+    }
+    veil = min(veil, vec3(1.0));
+    if (dot(veil, LUMA) > 1e-4) {
+        // over the composited pixel: its display value plus the veil in linear light (premultiplied: frame × a stays)
+        laid.rgb = vec3(pallDisplay(pallLinear(laid.r) + veil.r), pallDisplay(pallLinear(laid.g) + veil.g), pallDisplay(pallLinear(laid.b) + veil.b));
+    }
     fragColor = laid;
 }
