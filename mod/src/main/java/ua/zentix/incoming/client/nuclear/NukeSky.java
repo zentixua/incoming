@@ -50,7 +50,8 @@ public final class NukeSky {
 
     /** Air-lit sky from the same admitted light and followed exposure as the world and dust. */
     static float amber(ClientNuclear.Active a, Vec3 cam, float partial) {
-        double lit = NukeLight.camera(a).light() * NukeLight.exposure();
+        // the ball's light scattered by the air, at the frame's one exposure (the composite keeps it out of the daylight dimming)
+        double lit = NukeLight.camera(a).light() * NukeLight.frameExposure();
         return (float) Math.min(1, lit);
     }
 

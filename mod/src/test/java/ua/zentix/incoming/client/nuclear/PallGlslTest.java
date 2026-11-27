@@ -544,7 +544,13 @@ class PallGlslTest {
         assertTrue(shown.contains("shownCover = min(cover * lum, 1.0);"), "overexposure - a fraction of a pixel, not more than the entire pixel");
         assertTrue(march.contains("vec4 res = vec4(shown, min(transmit, 1.0));") && !march.contains("transmit + lost"),
                 "frame transmission - real: haze shows airlight in place of matter, never what lies behind it (sun through the cap)");
-        assertEquals(4, occurrences(composite, "pallDisplay("), "shadow on the world in the screen - once, world in the light of the balls - once per channel");
+        // shadow on the world into the screen once; world in the light of the balls once per channel; the frame's one flash
+        // exposure (DESIGN fireball-light §4.1) once for the world's own light and once for the rest of the frame; the eye's
+        // veil over the finished pixel once per channel
+        // (and once for a see-through pane's own light in the ball-lit world, as the unlit path takes it with the frame)
+        assertEquals(10, occurrences(composite, "pallDisplay("), "every conversion into the screen is counted");
+        assertEquals(1, occurrences(body(composite, "vec3 ballLitWorld("), "pallDisplay(pallLinear(kept) * PallFlash.x)"),
+                "the world's own light takes the flash exposure once, in linear light");
         assertTrue(composite.contains("float kept = mix(1.0, pallDisplay(shade(p, over)), seen * open);")
                         && composite.contains("float open = pallOpenHere(air);") && composite.contains("vec3 air = p - 0.5 * dir;"),
                 "the shadow on the world is on the screen, in the distance it melts into haze and fog, it is not underground");

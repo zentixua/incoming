@@ -93,16 +93,17 @@ with a nuclear warhead still waits 90 seconds before launch, even with early war
 - **If you see a flash in the distance**, you have seconds before the wave arrives: get behind a slope, into a
   basement, into a pit.
 - **The flash blinds.** It dazzles everyone who sees the fireball, and more weakly everyone under the open sky it lights
-  up: the whole view goes bright, then grey by day or black at night, and clears over seconds or minutes. The closer
-  you are, the longer it lasts, and at night, when your eyes have got used to the dark, far longer: at 15 kt about
-  50 seconds at 3 km by day, several minutes at 10 km at night. If you were looking towards the fireball, its image
-  burns a blind spot into your eyes for good, at 15 kt out to about 30 km by day and 50 km at night. The spot moves
-  with your gaze and is fainter off to the side; it goes away only when you die. In creative and spectator mode you
-  still see the white flash and its afterimage, but your sight is not dimmed and the spots are hidden.
+  up. The view goes white. As it clears, an afterimage of the fireball stays where you saw it: bright at first, then
+  orange, then violet, moving with your gaze. By day the view stays a little pale and washed out; it recovers over
+  seconds or minutes. You can always see through it. The closer you are, the longer it lasts, and at night, when
+  your eyes have got used to the dark, far longer: at 15 kt about 50 seconds at 3 km by day, several minutes at 10 km at
+  night. If you were looking towards the fireball, its image burns a blind spot into your eyes for good, at 15 kt out to
+  about 30 km by day and 50 km at night. The spot moves with your gaze and is fainter off to the side; it goes away only
+  when you die. Creative mode is dazzled the same way but gets no blind spots; spectator mode only sees the white flash
+  and the afterimage. The Flash setting weakens or turns all of it off.
   A sealed shelter blocks the new flash; windows and cave mouths admit scattered light according to the opening.
   Torches do not let the flash through rock. A fireball partly hidden by hills or trees lights you only by its visible
-  part. The camera adapts to the fireball light within seconds, revealing the
-  illuminated ground and cloud; survival eye injury can last longer. Entering cover does not erase an acquired afterimage.
+  part. Entering cover does not erase an acquired afterimage.
 - **Leave the fallout trail, or wait it out indoors.** Fallout lies on everything open to the sky and shines through
   roofs and walls: a block of stone or earth stops nearly all of it, a block of wood about 95%, glass almost nothing,
   and an open doorway lets it in. Water washes the dust off you (rain does not); otherwise it fades only as slowly
@@ -129,7 +130,9 @@ suit of its own.
 
 ## What happens
 
-The siren warns players near the target. The flash comes first; the fireball rises into a mushroom cloud.
+The siren warns players near the target. The flash comes first. By day, for a second or two, the fireball outshines the
+sun: everything facing it is lit white, the ordinary daylight steps back behind it, and the air around it glows. Then
+the day returns, and the fireball rises into a mushroom cloud. At night the fireball lights the land orange.
 Then the wave reaches the ground around it, breaking buildings and throwing up dust. The sound reaches you with the wave.
 Fires and thick dust can make the area hard to see through long after the strike. Torches, lanterns and other light
 sources light the dust around them and keep lighting the ground under the dust's shadow; with LambDynamicLights, so does

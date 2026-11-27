@@ -98,10 +98,7 @@ Ruins and everything in `nuclear/world/` are in `nuclear-world.md`.
   then L·R²/d²; without this, at 0.5–1 s it merged with the sphere as a white disk) and glare/veil
   (`NukeExposure.capShown`); glare size follows brightness with fireball exposure and frame overexposure. Droplet phase
   near the sphere averages its disk (`hgDisc`, `NukeExposureTest`): nearby sphere spans tens of degrees; point-source
-  peak (g 0.85: 82 versus ~11 for a 30° disk) made the shell several times brighter than the sphere. Flash frame
-  (`NukeFlash.overexposed`): overexposure X = K^(e^(−u/0.2 s)) after the second maximum (K is camera flash light versus
-  exposure, `FlashLight.Eye.peak`); frame gain X^(1/2.2) via “frame × (1 + c)” blending and lens-scattered light
-  X/100; at 15 kt, 1.4 km, white until ~0.25 s, ×3 at 0.5 s, back by one second.
+  peak (g 0.85: 82 versus ~11 for a 30° disk) made the shell several times brighter than the sphere. Flash frame: `NukeFlash.overexposed` (law and numbers: DESIGN-nuke §6).
   Eye-glare veil starts at pulse maximum. Volume noise prepares from world entry (`IncomingClient.login`):
   `/incoming nuke now` has no warning, otherwise the sphere has no body for its first second. Mushroom daytime world
   shadow is a shadow map (`fx_mush_shadow`, output `fx_pall_composite`; `client-fx.md`; tile and world top: texels 17, 18).
@@ -561,7 +558,9 @@ Ruins and everything in `nuclear/world/` are in `nuclear-world.md`.
 ## Shared nuclear flash light
 `FlashLight` is the visible pulse/area source and opening-transfer law; `NukeLight` owns one frame sample/exposure
 before fog. All nuclear illumination uses its exposure; firebody film keeps a separate ambient reference and
-cancels frame exposure once. `FlashLight.temperature` is escaping brightness temperature, distinct from the old
+cancels frame exposure once. By day one frame exposure E0·r^(½·day) (design fireball-light): daylight ×
+`daylight()`, ball light (amber dome included) × `frameExposure()`; the eye veil is `flashVeil` alone. Not covered:
+quad daylight, vanilla hand; no ball shadows (screen-space ones changed with the view). Blindness never dims it. `FlashLight.temperature` is escaping brightness temperature, distinct from the old
 core/mixed gas temperatures. Do not substitute it into server energy or injury calculations. Source derivation,
 opening approximation and outside-OpenAir limitation: DESIGN-nuke §6. Sealed eye/world pixels get no new flash;
 block light is never an opening. A distant ball is seen by the visible share of its disc above the terrain line
@@ -569,10 +568,9 @@ block light is never an opening. A distant ball is seen by the visible share of 
 a ground ball's centre sits at ground level for seconds, and tree crowns 2 km out hid it while 94–98 % of the disc was
 open, cutting the light 3.5 times (Zearth 09.11.2026, `NukeLightShareTest`); glare and dazzle stay yes/no at half. Paused game time cannot advance adaptation; reset/seek reconstructs exposure.
 Transient frame flash must skip non-live detonations reconstructed by sync/seek; their steady illumination still adapts.
-Vanilla sky flash (`ClientLevel.setSkyFlashTime`) mixes sky and fog toward white by min(1, timer − partial tick): a
-timer renewed to one tick each frame is a 20 Hz sawtooth (replay capture 10.11: ±0.055 frame luminance, corr 0.97 with
-the partial tick); `NukeFlash.SKY_FLASH_TICKS` is 3, since the fog color reads the sky before the `ComputeFogColor`
-renewal and so sees one tick less right after a tick (`NukeFlashSkyTest`).
+Vanilla sky flash (`ClientLevel.setSkyFlashTime`; a switch, also full-day light map: only under ≥ 0.98 white fill) mixes sky and fog toward white by min(1, timer − partial tick): a
+timer renewed to one tick each frame is a 20 Hz sawtooth (replay 10.11: ±0.055 luminance); `SKY_FLASH_TICKS` is 3:
+the fog color reads the sky before the `ComputeFogColor` renewal, one tick less after a tick (`NukeFlashSkyTest`).
 
 ## Dust source material
 
