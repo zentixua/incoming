@@ -604,7 +604,8 @@ void main() {
         float theta = degrees(acos(clamp(dot(dir0, b.xyz / sqrt(d2)), -1.0, 1.0)));
         float disc = degrees(atan(b.w / sqrt(d2)));
         float th = max(theta, disc);
-        float k = 31.4 / (th * th) * (th > 30.0 ? 30.0 / th : 1.0);
+        // no glow over the glowing body itself (as FxBloom): the ball's own pixels show the ball and its pattern
+        float k = 31.4 / (th * th) * (th > 30.0 ? 30.0 / th : 1.0) * smoothstep(disc, disc * 1.2, theta) * PallFlash.y;
         veil += PallBallLight[i].rgb * (b.w * b.w / max(d2, b.w * b.w)) * pow(max(PallFlash.x, 1e-9), -0.5 * PallFlash.y) * k;
     }
     // its peak stays below the ball's on-screen value (~0.5 of white linear and above), so the ball's pattern stays readable
