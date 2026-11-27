@@ -414,7 +414,9 @@ final class Cameras {
         List<double[]> live = shot.live();
         for (int t = shot.a(); t <= shot.b(); t += 2) {
             Pose p = c.path().at(t);
-            if (c.roam() ? w.loaded(p.pos()) && !w.free(p.pos()) : !w.free(p.pos())) free = false;
+            // a camera in a chunk the replay has not loaded yet is unknown, not blocked, fixed or roaming: candidates are scored
+            // at the live warm-up's start, where a shot far from the recorded player's earlier places has no chunks yet
+            if (w.loaded(p.pos()) && !w.free(p.pos())) free = false;
             Vec3 aim = s.aim(t);
             if (aim == null) continue;
             Subject.Key k = s.keyAt(t);
