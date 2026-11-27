@@ -215,4 +215,18 @@ class FireballLightTest {
         }
         return c[c.length - 1][1];
     }
+
+    /**
+     * The frame's light is sampled again at every new game time, not only after a frame event: a Flashback video export draws
+     * its frames without the frame events, and the exposure stayed at its pre-export value through a whole export (the world
+     * white, the dust a flat orange for a megaton's pulse).
+     */
+    @Test
+    void theLightIsSampledAtEveryNewGameTime() throws IOException {
+        assertTrue(NukeLight.fresh(false, 10, 10), "after a frame event");
+        assertTrue(NukeLight.fresh(true, 10, 10.25), "an exported frame, no frame event");
+        assertFalse(NukeLight.fresh(true, 10.25, 10.25), "the same frame's later fog calls");
+        String light = Files.readString(Path.of("src/main/java/ua/zentix/incoming/client/nuclear/NukeLight.java"));
+        assertTrue(light.contains("if (!fresh(prepared, preparedAt, at)) return;"), "the fog-colour hook samples by game time");
+    }
 }

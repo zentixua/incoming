@@ -62,8 +62,20 @@ public final class NukeLight {
     /** This frame's {@link #flashSetting}, read by the frame (the law itself takes no game state). */
     private static double setting = 1;
     private static boolean prepared;
+    /** The game time (ticks plus partial tick) the frame's light was last sampled at. */
+    private static double preparedAt = Double.NaN;
 
     private NukeLight() {}
+
+    /**
+     * Whether a fog-colour call at game time {@code at} must sample the light again: once per frame event, and on any new game
+     * time. A Flashback video export draws its frames directly, without the frame events (replay.md): with the frame event
+     * alone the exposure stayed at its pre-export value through the whole export, the ball's light shown at the unflashed
+     * exposure, the world white and the dust a flat orange for a megaton's whole pulse.
+     */
+    static boolean fresh(boolean prepared, double preparedAt, double at) {
+        return !prepared || at != preparedAt;
+    }
 
     public static void begin(RenderFrameEvent.Pre e) {
         ua.zentix.incoming.client.fx.layer.FxViews.outerFrame();
@@ -77,14 +89,16 @@ public final class NukeLight {
     public static void frame(ViewportEvent.ComputeFogColor e) {
         ua.zentix.incoming.client.fx.layer.FxViews.begin(e.getCamera());
         if (ua.zentix.incoming.client.fx.layer.FxViews.skipped()) return;
-        if (prepared) return;
+        float partial = (float) e.getPartialTick();
+        double at = TickTime.at(ticks, partial);
+        if (!fresh(prepared, preparedAt, at)) return;
         prepared = true;
+        preparedAt = at;
         Minecraft mc = Minecraft.getInstance();
         ClientLevel level = mc.level;
         if (level == null) return;
-        float partial = (float) e.getPartialTick();
         Vec3 camera = e.getCamera().getPosition();
-        double now = TickTime.at(ticks, partial) / 20, fire = 0;
+        double now = at / 20, fire = 0;
         double ambient = FarView.ambient(level, partial);
         CAMERA.clear();
         for (ClientNuclear.Active a : ClientNuclear.detonations()) {
