@@ -918,8 +918,8 @@ paths:
   (stone, brick, planks — roof or rock) `Surface.HARD`: only settled dust, 0.6 g/m² after AP-42; water — no dust). Under
   a permeable crown the client looks for the forest floor (`FarTerrain.dustY`: only foliage and air let through; solid
   wood/stone/water hold the same way). Its material determines the source and the terrain of the cold flow;
-  `FarTerrain.dust` caches the samples for the current tick, including on a rewind; no chunk — bare soil at the height
-  of the map's tile; no tile either — the height is unknown: exactly at the blast's height above what is under the
+  `FarTerrain.dust` caches the samples for the current tick, including on a rewind; no chunk — soil at the tile's
+  ground under canopy; no tile either — the height is unknown: exactly at the blast's height above what is under the
   point, lower: without this the SAM's break far away would lie on contact with the ground — a "plate" of dust in the
   air), the power — nuclear of the same pressure at the surface (`CloudModel.equivalentKt`: W/0.5, the share of energy
   in the wave for the nuke — half; Broad against Kinney–Graham — within a third, `GroundDustTest`), the blast height

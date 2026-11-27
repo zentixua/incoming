@@ -10,6 +10,7 @@ import net.minecraft.world.level.material.FluidState;
 import net.minecraft.world.level.material.Fluids;
 import net.minecraft.world.level.material.MapColor;
 import org.jetbrains.annotations.Nullable;
+import ua.zentix.incoming.util.Terrain;
 
 import java.io.DataInputStream;
 import java.io.DataOutputStream;
@@ -30,7 +31,8 @@ import java.util.function.Predicate;
  * computed and stored here, so covered by unit tests.
  * <p>
  * Column packed in an {@code int}: height + 2048 (12 bits), {@link MapColor} ID (6 bits), water depth 0–16 (5 bits),
- * presence bit; 0 means nothing known about the column.
+ * presence bit, canopy depth 0–63 (6 bits) and its known bit (a column saved before canopies were measured has none:
+ * unknown); 0 means nothing known about the column.
  */
 final class LssColumns {
     /** Water deeper than this has the same map darkness (as in {@link LoadedChunksTerrain}). */
@@ -42,15 +44,34 @@ final class LssColumns {
     /** Coarse chunk columns: centre of each 4×4 block cell, the same columns as a level 2 tile. */
     static final int COARSE = 16;
     private static final int PRESENT = 1 << 23;
+    /** Canopy depth known (bits 24–29 hold it). */
+    private static final int CANOPY = 1 << 30;
+    /**
+     * Deepest canopy kept, blocks, by every source (6 bits here): deeper reads as unknown, also the bound of a scan down through
+     * leaves (chosen: over twice a vanilla jungle or dark-oak crown's height over its floor; a modded giant tree past it is unknown).
+     */
+    static final int MAX_CANOPY = 63;
     private static final int HEIGHT_BIAS = 2048;
     /** {@code MOTION_BLOCKING} heightmap blocks: block movement or contain fluid. */
     private static final Predicate<BlockState> MOTION_BLOCKING = Heightmap.Types.MOTION_BLOCKING.isOpaque();
+    /** Ground under a canopy: what stops the scan down through leaves ({@code Terrain.dustTop}). */
+    private static final Predicate<BlockState> GROUND = Heightmap.Types.MOTION_BLOCKING_NO_LEAVES.isOpaque();
 
     private LssColumns() {}
 
     static int pack(int height, int color, int waterDepth) {
+        return pack(height, color, waterDepth, -1);
+    }
+
+    /** As {@link #pack(int, int, int)} with the canopy depth (−1 or over {@link #MAX_CANOPY}: unknown). */
+    static int pack(int height, int color, int waterDepth, int canopy) {
         int h = Math.max(0, Math.min(4095, height + HEIGHT_BIAS));
-        return PRESENT | h | (color & 0x3F) << 12 | Math.min(MAX_WATER_DEPTH, Math.max(0, waterDepth)) << 18;
+        int c = canopy >= 0 && canopy <= MAX_CANOPY ? CANOPY | canopy << 24 : 0;
+        return PRESENT | h | (color & 0x3F) << 12 | Math.min(MAX_WATER_DEPTH, Math.max(0, waterDepth)) << 18 | c;
+    }
+
+    static int canopy(int packed) {
+        return (packed & CANOPY) != 0 ? packed >>> 24 & 0x3F : -1;
     }
 
     static boolean present(int packed) {
@@ -71,7 +92,7 @@ final class LssColumns {
 
     @Nullable
     static TerrainSource.Column column(int packed) {
-        return present(packed) ? new TerrainSource.Column(height(packed), MapColor.byId(color(packed)), waterDepth(packed)) : null;
+        return present(packed) ? new TerrainSource.Column(height(packed), MapColor.byId(color(packed)), waterDepth(packed), canopy(packed)) : null;
     }
 
     /** Chunk section: 16³ blocks at local coordinates. */
@@ -111,14 +132,30 @@ final class LssColumns {
             if (MOTION_BLOCKING.test(s.block(x, y & 15, z))) break;
         }
         if (y < 0) return 0;
+        int ground = ground(sections, x, y, z);
         // First map-coloured block below, as in the client chunk layer.
         for (int bottom = Math.max(0, y + 1 - MAX_COLORLESS); y >= bottom; y--) {
             BlockState state = block(sections, x, y, z);
             MapColor color = state == null ? MapColor.NONE : state.getMapColor(EmptyBlockGetter.INSTANCE, BlockPos.ZERO);
             if (color == MapColor.NONE) continue;
-            return pack(minY + y + 1, color.id, water(state.getFluidState()) ? waterDepth(sections, x, y, z) : 0);
+            return pack(minY + y + 1, color.id, water(state.getFluidState()) ? waterDepth(sections, x, y, z) : 0,
+                    ground < 0 ? -1 : Math.max(0, y - ground));
         }
         return 0;
+    }
+
+    /**
+     * The block the dust lies on under the {@code MOTION_BLOCKING} top {@code top} ({@code Terrain.dustTop}): the top itself
+     * without leaves on it, else the first block down through leaves and what grows through them; −1 none in the sections.
+     */
+    private static int ground(@Nullable Section[] sections, int x, int top, int z) {
+        BlockState t = block(sections, x, top, z);
+        if (t == null || !Terrain.canopy(t)) return top;
+        for (int y = top; y >= Math.max(0, top - MAX_CANOPY); y--) {
+            BlockState state = block(sections, x, y, z);
+            if (state != null && GROUND.test(state)) return y;
+        }
+        return -1;
     }
 
     @Nullable

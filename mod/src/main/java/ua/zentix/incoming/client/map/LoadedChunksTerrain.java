@@ -9,6 +9,7 @@ import net.minecraft.world.level.levelgen.Heightmap;
 import net.minecraft.world.level.material.MapColor;
 import net.neoforged.neoforge.event.level.ChunkEvent;
 import org.jetbrains.annotations.Nullable;
+import ua.zentix.incoming.util.Terrain;
 
 import java.util.HashSet;
 import java.util.Set;
@@ -88,7 +89,11 @@ final class LoadedChunksTerrain implements TerrainSource {
                     BlockState state = level.getBlockState(pos.set(x, y, z));
                     MapColor color = state.getMapColor(level, pos);
                     if (color == MapColor.NONE) continue;
-                    return new Column(y + 1, color, state.getFluidState().is(FluidTags.WATER) ? waterDepth(level, x, y, z) : 0);
+                    // where dust lies under a canopy, as FarTerrain.dust reads the chunk
+                    int ground = Terrain.dustTop(level.getChunk(x >> 4, z >> 4), x, z) + 1;
+                    int canopy = Math.max(0, y + 1 - ground);
+                    return new Column(y + 1, color, state.getFluidState().is(FluidTags.WATER) ? waterDepth(level, x, y, z) : 0,
+                            canopy <= LssColumns.MAX_CANOPY ? canopy : -1);
                 }
                 return null;
             }

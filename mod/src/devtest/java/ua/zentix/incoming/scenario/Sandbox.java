@@ -584,6 +584,10 @@ final class Sandbox {
                 placeCamera();
                 finish("ok");
             }
+            case DW -> {
+                DustWallSteps.apply(c.args().getFirst());
+                finish("ok");
+            }
             case HUD -> {
                 mc.options.hideGui = c.args().getFirst().equals("off");
                 finish("ok");
