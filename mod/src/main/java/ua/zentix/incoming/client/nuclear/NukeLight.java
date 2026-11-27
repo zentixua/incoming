@@ -88,11 +88,12 @@ public final class NukeLight {
     static void tick() { ticks++; }
     static double exposure() { return exposure; }
     /** PROBE fireball-light: eye recovery time constant after the flash, s. */
-    static final double RECOVER_S = Double.parseDouble(System.getProperty("incoming.probe.recover", "3"));
+    static final double RECOVER_S = Double.parseDouble(System.getProperty("incoming.probe.recover", "1.5"));
     /** PROBE fireball-light: frame exposure relative to the exposure without the flash (<= 1). */
     public static double flashRatio() {
         if (Boolean.getBoolean("incoming.probe.off")) return 1;
-        return Math.min(1, exposure / Math.max(bodyExposure, 1e-12));
+        // presentation: the eye adapts locally, the frame partly (a power, like the fire film curve's FOLLOW)
+        return Math.pow(Math.min(1, exposure / Math.max(bodyExposure, 1e-12)), Double.parseDouble(System.getProperty("incoming.probe.adapt", "0.5")));
     }
     static double bodyExposure() { return bodyExposure; }
     static FlashLight.Eye camera(ClientNuclear.Active a) { return CAMERA.getOrDefault(a, FlashLight.Eye.DARK); }
