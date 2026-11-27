@@ -210,7 +210,8 @@ public final class NukeFlash {
 
     /** Eyes rather than a camera: neither creative nor spectator (nor a replay viewer). */
     private static boolean eyes(@Nullable LocalPlayer p) {
-        return p != null && !p.isCreative() && !p.isSpectator();
+        // PROBE fireball-light: a creative player has eyes too (dazzle is perception, not injury)
+        return p != null && !p.isSpectator();
     }
 
     /** Respawn after death: the new body does not carry the dead eyes' dazzle or afterimage (server sends retinal spots). */

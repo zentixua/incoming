@@ -176,7 +176,8 @@ public final class NukeRenderer {
             lights.add(dx, dy, dz, r, surface, Math.min(1, Math.pow(surface, 1 / 2.2)), lr, lg, lb);
             // glare follows how the frame sees the surface: with ball exposure set by it through the air (mushAt in fx_pall), and overexposure
             double body = BALL[3] * adapt * air;
-            double exposed = (film * body * NukeExposure.gain(body, adapt) + (1 - film) * seen) * (FxViews.secondary() ? 1 : NukeFlash.overexposure(a, view.partial()));
+            // PROBE fireball-light: glare from the ball's true brightness against the eye's exposure, not its film-curve value
+            double exposed = seen * (FxViews.secondary() ? 1 : NukeFlash.overexposure(a, view.partial()));
             if (NukeLight.camera(a).seen() && seen > Sight.THRESHOLD) out.eyeLight(dx, dy, dz, r, exposed, view.pixel(), cr, cg, cb, shown, GLARE);
         }
     }

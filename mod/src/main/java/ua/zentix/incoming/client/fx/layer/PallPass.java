@@ -1098,6 +1098,7 @@ public final class PallPass {
         c.safeGetUniform("PallBalls").set(balls ? f.balls : NO_FIRE);
         c.safeGetUniform("PallBallLight").set(f.ballLight);
         c.safeGetUniform("PallOpenSky").set(f.openSky.x, f.openSky.y, f.openSky.z);
+        c.safeGetUniform("PallFlash").set((float) ua.zentix.incoming.client.nuclear.NukeLight.flashRatio(), 0f, 0f, 0f);
         c.safeGetUniform("PallFaceShade").set(f.faceShade.x, f.faceShade.y, f.faceShade.z, f.faceShade.w);
         if (submits(c, warming)) {
             OpenAir.bind(c, open, warming);

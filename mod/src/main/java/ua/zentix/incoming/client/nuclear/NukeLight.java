@@ -71,7 +71,9 @@ public final class NukeLight {
     static void update(double now, double ambient, double fire) {
         bodyExposure = Sight.exposure(ambient, 0);
         double target = Sight.exposure(ambient, fire);
-        exposure = Double.isNaN(last) ? target : FlashLight.follow(exposure, target, Math.max(0, now - last), NukeExposure.ADAPT_S);
+        // PROBE fireball-light: the eye takes the flash at once and recovers slowly (bleached, then re-dilating)
+        exposure = Double.isNaN(last) ? target : FlashLight.follow(exposure, target, Math.max(0, now - last),
+                target < exposure ? NukeExposure.ADAPT_S : RECOVER_S);
         last = now;
     }
 
@@ -85,6 +87,13 @@ public final class NukeLight {
 
     static void tick() { ticks++; }
     static double exposure() { return exposure; }
+    /** PROBE fireball-light: eye recovery time constant after the flash, s. */
+    static final double RECOVER_S = Double.parseDouble(System.getProperty("incoming.probe.recover", "3"));
+    /** PROBE fireball-light: frame exposure relative to the exposure without the flash (<= 1). */
+    public static double flashRatio() {
+        if (Boolean.getBoolean("incoming.probe.off")) return 1;
+        return Math.min(1, exposure / Math.max(bodyExposure, 1e-12));
+    }
     static double bodyExposure() { return bodyExposure; }
     static FlashLight.Eye camera(ClientNuclear.Active a) { return CAMERA.getOrDefault(a, FlashLight.Eye.DARK); }
 
