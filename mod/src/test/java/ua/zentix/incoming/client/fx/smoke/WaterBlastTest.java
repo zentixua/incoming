@@ -215,7 +215,8 @@ class WaterBlastTest {
                     if (sh == sv) water[0] += wet;
                     else assertTrue(sh > 3 * sv, wt.name() + " at " + time + " s: stretched spray billow σh " + sh + ", σv " + sv);
                 }, 0, 0, 0);
-                assertEquals(WaterBlast.asGridDrops(w.water) * w.aloft(t), water[0], 1e-6 * WaterBlast.asGridDrops(w.water), wt.name());
+                // round segments: the jets' airborne water and the veil stripped from them
+                assertEquals(WaterBlast.asGridDrops(w.water) * w.aloft(t) + w.veil(t), water[0], 1e-6 * WaterBlast.asGridDrops(w.water), wt.name());
             }
         }
     }
@@ -263,7 +264,8 @@ class WaterBlastTest {
         assertEquals(1, w.aloft(0.5 * w.rise), 0);
         assertTrue(w.aloft(1.2 * w.rise) < 1 && w.aloft(1.2 * w.rise) > 0, "the curtain falls in parts");
         assertEquals(0, w.aloft(2 * w.rise + 1e-6), 0);
-        assertTrue(topBlob(w, 2 * w.rise + 1e-6) < 0.1 * w.height, "no column: water has landed, only spray remains above water");
+        // the jets' water has landed; above the water only the veil stripped from them is left, translucent
+        assertTrue(w.veilTau(2 * w.rise + 1e-6) < 3, "veil after the fall: optical depth " + w.veilTau(2 * w.rise + 1e-6));
         // water lands up to 2H'·sin2θ from the center: inside R, reaching R with the falling-jet halo
         assertEquals(2 * apex, w.fallen(2 * w.rise), 0.02 * w.radius);
         assertTrue(w.fallen(2 * w.rise) < w.radius && w.fallen(2 * w.rise) > 0.4 * w.radius, "centers land at " + w.fallen(2 * w.rise));
@@ -275,9 +277,11 @@ class WaterBlastTest {
         WaterBlast w = new WaterBlast(50, 0, DEEP, CloudModel.Air.STANDARD);
         double t = 2 * w.rise;
         List<Double> taus = new ArrayList<>();
-        w.blobs(t, (x, y, z, ax, ay, az, sh, sv, soot, dust, water, r, g, b, k, rise) -> taus.add(CloudModel.DROP_K * water / (2 * Math.PI * sh * sv)), 0, 0,
-                0);
-        assertEquals(WaterBlast.RING, taus.size(), "after landing, only the spray ring remains");
+        w.blobs(t, (x, y, z, ax, ay, az, sh, sv, soot, dust, water, r, g, b, k, rise) -> {
+            // the flat ring; round segments are the jets' veil
+            if (sh > 3 * sv) taus.add(CloudModel.DROP_K * water / (2 * Math.PI * sh * sv));
+        }, 0, 0, 0);
+        assertEquals(WaterBlast.RING, taus.size(), "after landing, the spray ring and the veil remain");
         assertTrue(taus.getFirst() > 3 * CloudModel.SEEN, "spray ring visible: optical depth " + taus.getFirst());
         double life = w.mistLife() - t;
         assertTrue(life > 3 && life < 120, "spray after column landing " + life + " s");
@@ -312,6 +316,43 @@ class WaterBlastTest {
         WaterBlast windy = new WaterBlast(6.4, 0.5, 4, gale);
         assertTrue(windy.suspended() > 0, "20 m/s wind suspends the drops");
         assertTrue(windy.mistSigmaV(20) > 2 * windy.mistSigmaV(0), "and the layer grows upward");
+    }
+
+    /**
+     * The column leaves a veil where it stood (rc-video raid clip, 14.3 s: a Shahed's column on the water was gone in one
+     * step as its last jet fell): the fine spray stripped from the jets stays, drifts and evaporates within seconds in
+     * clear-weather surface air, so the column fades instead of vanishing; visible during the fall, gone well before the mist.
+     */
+    @Test
+    void theColumnFadesIntoAVeil() {
+        CloudModel.Air clear = new CloudModel.Air(0.012, 3, 0, 0.14, 3, ua.zentix.incoming.util.Air.SURFACE_CLEAR);
+        WaterBlast w = new WaterBlast(WeaponType.DRONE.spec().charge(), 0, DEEP, clear);
+        double fall = 2 * w.rise;
+        assertTrue(w.veilTau(fall) > 3 * CloudModel.SEEN, "the veil is seen as the last jet falls: " + w.veilTau(fall));
+        assertTrue(w.veilLife() > fall + 1, "it outlives the fall by more than a second: " + (w.veilLife() - fall) + " s");
+        assertTrue(w.veilLife() < fall + 2 * w.evaporation(WaterBlast.VEIL_DROP_R), "and evaporates: " + (w.veilLife() - fall) + " s");
+        double prev = Double.POSITIVE_INFINITY;
+        for (double t = fall; t < w.veilLife(); t += 0.1) {
+            double tau = w.veilTau(t);
+            assertTrue(tau <= prev + 1e-12, "the veil only thins after the fall: " + t);
+            prev = tau;
+        }
+    }
+
+    /**
+     * Drops evaporate by Maxwell's law in air below saturation: 50 µm mist in clear-weather surface air (70 %) in 38 s, the
+     * veil's 20 µm in 6 s (Rogers, Yau, eq. 7.18 at 15 °C); saturated air keeps them. The mist no longer outlives its
+     * drops (it lived 107 s on settling alone).
+     */
+    @Test
+    void dropsEvaporateBelowSaturation() {
+        CloudModel.Air clear = new CloudModel.Air(0.012, 3, 0, 0.14, 3, 0.7), rain = new CloudModel.Air(0.012, 3, 0, 0.14, 3, 1);
+        WaterBlast w = new WaterBlast(50, 0, DEEP, clear);
+        assertEquals(38, w.evaporation(WaterBlast.MIST_DROP_R), 2);
+        assertEquals(6.1, w.evaporation(WaterBlast.VEIL_DROP_R), 0.4);
+        assertEquals(Double.POSITIVE_INFINITY, new WaterBlast(50, 0, DEEP, rain).evaporation(WaterBlast.MIST_DROP_R), 0);
+        assertEquals(0, w.mistLeft(w.evaporation(WaterBlast.MIST_DROP_R) + 0.1), 0);
+        assertTrue(w.mistLife() < w.landing() + w.evaporation(WaterBlast.MIST_DROP_R) + 1e-9, "mist life " + w.mistLife());
     }
 
     /** Foam: immediate at the cavity, elsewhere when water lands; fades. Wave: shallow-water limit and dω/dk at finite depth. */
