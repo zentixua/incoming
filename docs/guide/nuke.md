@@ -131,8 +131,9 @@ suit of its own.
 ## What happens
 
 The siren warns players near the target. The flash comes first. By day, for a second or two, the fireball outshines the
-sun: everything facing it is lit white, the ordinary daylight steps back behind it, and the air around it glows. Then
-the day returns, and the fireball rises into a mushroom cloud. At night the fireball lights the land orange.
+sun: everything facing it is lit white, the ordinary daylight steps back behind it, and the air around it glows. A large
+burst shines for many seconds: your eyes adjust to it, so the land and dust it lights keep their colour and detail
+while the daylight sky behind them dims. Then the day returns, and the fireball rises into a mushroom cloud. At night the fireball lights the land orange.
 Then the wave reaches the ground around it, breaking buildings and throwing up dust. The sound reaches you with the wave.
 Fires and thick dust can make the area hard to see through long after the strike. Torches, lanterns and other light
 sources light the dust around them and keep lighting the ground under the dust's shadow; with LambDynamicLights, so does

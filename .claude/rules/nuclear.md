@@ -558,7 +558,9 @@ Ruins and everything in `nuclear/world/` are in `nuclear-world.md`.
 ## Shared nuclear flash light
 `FlashLight` is the visible pulse/area source and opening-transfer law; `NukeLight` owns one frame sample/exposure
 before fog. All nuclear illumination uses its exposure; firebody film keeps a separate ambient reference and
-cancels frame exposure once. By day one frame exposure E0·r^(½·day) (design fireball-light): daylight ×
+cancels frame exposure once. By day one frame exposure E0·r^(f·day) (design fireball-light), f from ½ for a flash to
+`FOLLOW_LASTING` 0.85 as the eye adapts to a lasting light (`NukeLight.adapt`, 4 s; held at ½ a 1 Mt pulse kept the world
+and dust it lights at 3–9 whites for 15 s at 4.5 km, `FireballLightTest`): daylight ×
 `daylight()`, ball light (amber dome included) × `frameExposure()`; the eye veil is `flashVeil` alone. Not covered:
 quad daylight, vanilla hand; no ball shadows (screen-space ones changed with the view). Blindness never dims it. `FlashLight.temperature` is escaping brightness temperature, distinct from the old
 core/mixed gas temperatures. Do not substitute it into server energy or injury calculations. Source derivation,

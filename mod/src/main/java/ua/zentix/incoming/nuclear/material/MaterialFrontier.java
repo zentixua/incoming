@@ -76,7 +76,7 @@ final class MaterialFrontier {
             while (next < end) {
                 int i = index(next++);
                 through = Math.max(through, distance[i]);
-                int value = counts[i] == 0 ? known.nearest(x[i], z[i], seed) : MaterialMap.winner(counts[i]);
+                int value = counts[i] == 0 ? known.vote(x[i], z[i], seed) : MaterialMap.winner(counts[i]);
                 cells[i / 4] |= (byte) (value << (2 * (i % 4)));
             }
         }
@@ -103,11 +103,11 @@ final class MaterialFrontier {
             }
             levels[n] = new Block(sites, MaterialMap.Tree.build(sites, 0, sites.length, true));
         }
-        int nearest(int x, int z, int seed) {
-            MaterialMap.Site best = null;
-            for (Block b : levels) if (b != null)
-                best = b.tree.nearest(x, z, best == null ? b.tree.site() : best);
-            return best == null ? seed : best.material();
+        /** The plurality of the measured centres nearest (x, z) ({@link MaterialMap.Nearest}); the seed while none is measured. */
+        int vote(int x, int z, int seed) {
+            var q = new MaterialMap.Nearest(x, z);
+            for (Block b : levels) if (b != null) b.tree.nearest(q);
+            return q.n == 0 ? seed : q.material();
         }
     }
 }

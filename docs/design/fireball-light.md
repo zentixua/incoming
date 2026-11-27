@@ -170,7 +170,11 @@ The two reviews measured each round. Their findings are why the proposal reads a
   returns at the present 0.2 s camera follow.
 - **At night nothing changes.** `main`'s night works (section 3): a dark-adapted view already takes the ball's light
   in full.
-- **Presentation:** the power ½, one marked constant like the fire film curve's `FOLLOW`. Full adaptation turns the
+- **Presentation:** the power ½ for a flash, one marked constant like the fire film curve's `FOLLOW`. A lasting light
+  is followed further: the power moves to 0.85 as the eye adapts (`NukeLight.FOLLOW_LASTING`, time constant 4 s), since
+  held at ½ through a megaton's ten-second pulse the world and dust the ball lights stood at 3–9 whites for 15 s at
+  4.5 km from 1 Mt, one flat white and orange fill; a 15 kt flash keeps at least 0.8 of its square-root brightness. A
+  world pixel far above white washes toward white (`pallOverWhite`), never to a neon copy of its hue. Full adaptation turns the
   day black (mock round 2), none shows nothing (`main`). Its weight follows the sky's ambient light (`FarView.ambient`),
   1 by day and 0 at night.
 - **Earlier complaint (18.10):** "in the first seconds the second sun gives sharp shadows across the entire map". The

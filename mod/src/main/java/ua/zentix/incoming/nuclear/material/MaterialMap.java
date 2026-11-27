@@ -67,7 +67,13 @@ public final class MaterialMap {
         Tree tree = Tree.build(measured, 0, measured.length, true);
         byte[] cells = new byte[(counts.length + 3) / 4];
         grid.visit((i, x, z, size) -> {
-            int value = counts[i] == 0 ? tree.nearest(x, z, tree.site).material : winner(counts[i]);
+            int value;
+            if (counts[i] != 0) value = winner(counts[i]);
+            else {
+                var vote = new Nearest(x, z);
+                tree.nearest(vote);
+                value = vote.material();
+            }
             cells[i / 4] |= (byte) (value << (2 * (i % 4)));
         });
         int origin = grid.index(bounds.x(), bounds.z());
@@ -89,6 +95,45 @@ public final class MaterialMap {
             return dx * dx + dz * dz;
         }
     }
+    /**
+     * The material an unread cell takes: the plurality of its {@link #K} nearest measured centres, a tie to the nearest of
+     * the tied (ties in distance by world X, then Z). One nearest centre drew the measured area's edge cells out along
+     * straight rays across all unread ground: one pond chunk at the edge of the ground zero's loaded chunks laid a 64-block
+     * strip of water 4 km long toward the camera, the dust over it a thin spray trench drifting with the wind. A pond within the measured ground still counts; a shore's unread water still takes the
+     * shore's majority near it.
+     */
+    static final int K = 8;
+    static final class Nearest {
+        final int x, z;
+        final Site[] sites = new Site[K];
+        final long[] dist = new long[K];
+        int n;
+        Nearest(int x, int z) { this.x = x; this.z = z; }
+        /** The worst kept squared distance, or infinity while fewer than K are kept. */
+        long bound() { return n < K ? Long.MAX_VALUE : dist[K - 1]; }
+        void offer(Site s) {
+            long d = s.distance(x, z);
+            if (n == K && (d > dist[K - 1] || d == dist[K - 1] && Tree.X.compare(s, sites[K - 1]) >= 0)) return;
+            int at = n < K ? n++ : K - 1;
+            while (at > 0 && (dist[at - 1] > d || dist[at - 1] == d && Tree.X.compare(sites[at - 1], s) > 0)) {
+                sites[at] = sites[at - 1];
+                dist[at] = dist[at - 1];
+                at--;
+            }
+            sites[at] = s;
+            dist[at] = d;
+        }
+        int material() {
+            int[] votes = new int[4];
+            for (int i = 0; i < n; i++) votes[sites[i].material]++;
+            int most = 0;
+            for (int v : votes) most = Math.max(most, v);
+            // the nearest centre whose class has the most votes
+            for (int i = 0; i < n; i++) if (votes[sites[i].material] == most) return sites[i].material;
+            return DustMaterial.SOIL.ordinal();
+        }
+    }
+
     /** Exact squared distance between cell centres. Equal distances use world X then Z. */
     record Tree(Site site, boolean splitX, Tree left, Tree right) {
         static final Comparator<Site> X = Comparator.comparingInt(Site::x).thenComparingInt(Site::z);
@@ -99,14 +144,13 @@ public final class MaterialMap {
             int mid = (from + end) >>> 1;
             return new Tree(sites[mid], splitX, build(sites, from, mid, !splitX), build(sites, mid + 1, end, !splitX));
         }
-        Site nearest(int x, int z, Site best) {
-            long d = site.distance(x, z), b = best.distance(x, z);
-            if (d < b || d == b && X.compare(site, best) < 0) best = site;
-            long delta = splitX ? x - site.x : z - site.z;
+        /** Offers this subtree's sites near (q.x, q.z) to q: every site nearer than q's K-th is offered. */
+        void nearest(Nearest q) {
+            q.offer(site);
+            long delta = splitX ? q.x - site.x : q.z - site.z;
             Tree near = delta < 0 ? left : right, far = delta < 0 ? right : left;
-            if (near != null) best = near.nearest(x, z, best);
-            if (far != null && delta * delta <= best.distance(x, z)) best = far.nearest(x, z, best);
-            return best;
+            if (near != null) near.nearest(q);
+            if (far != null && delta * delta <= q.bound()) far.nearest(q);
         }
     }
 

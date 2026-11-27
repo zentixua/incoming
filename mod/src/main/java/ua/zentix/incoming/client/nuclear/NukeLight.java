@@ -254,7 +254,7 @@ public final class NukeLight {
     }
 
     /** Diagnostic only; samples and clock are not advanced by readers. */
-    static String describe() {
+    public static String describe() {
         double fire = 0;
         for (FlashLight.Eye eye : CAMERA.values()) fire += eye.light();
         return String.format(java.util.Locale.ROOT, "time %.3f s, eye %.6g, exposure %.6g, body %.6g, day %.2f, slow %.3f, frame %.6g, daylight %.4f, sources %d",
