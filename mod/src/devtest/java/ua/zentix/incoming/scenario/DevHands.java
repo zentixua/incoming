@@ -50,6 +50,11 @@ public final class DevHands {
     public DevHands() {
         String dir = System.getProperty("incoming.dev.inbox");
         inbox = dir == null ? null : Path.of(dir);
+        // -Dincoming.dev.smoke=true: the smoke log from the start, in any client with the scenario jar (a Flashback export too)
+        if (Boolean.getBoolean("incoming.dev.smoke")) {
+            smoke = true;
+            if (inbox == null) NeoForge.EVENT_BUS.addListener(this::tick);
+        }
         if (inbox == null) return;
         NeoForge.EVENT_BUS.addListener(this::tick);
         NeoForge.EVENT_BUS.addListener(this::opened);
@@ -64,6 +69,8 @@ public final class DevHands {
      * not the game's.
      */
     private boolean watch;
+    /** {@code smoke on}: every smoke source's state twice a second ({@code DEV smoke}). */
+    private boolean smoke;
     private final float[] lastLuma = new float[3];
     private long frames;
     private final java.nio.ByteBuffer px = org.lwjgl.BufferUtils.createByteBuffer(4);
@@ -104,6 +111,9 @@ public final class DevHands {
     private void tick(ClientTickEvent.Post e) {
         Minecraft mc = Minecraft.getInstance();
         tick++;
+        if (smoke && tick % 10 == 0 && mc.level != null)
+            Incoming.LOG.info("DEV smoke t {} fps {} | {} | {}", mc.level.getGameTime(), mc.getFps(),
+                    ua.zentix.incoming.client.far.FarRenderer.describeSmoke(), ua.zentix.incoming.client.fx.smoke.SmokeGrid.describeSources());
         for (var it = presses.iterator(); it.hasNext(); ) {
             Object[] p = it.next();
             String result = press(mc, (String) p[1]);
@@ -120,7 +130,7 @@ public final class DevHands {
             ua.zentix.incoming.client.nuclear.ClientNuclear.rewound();
             done((String) k[0], (String) k[2]);
         }
-        if (tick % 4 != 0) return;
+        if (inbox == null || tick % 4 != 0) return;
         List<Path> files;
         try (Stream<Path> list = Files.list(inbox)) {
             files = list.filter(f -> f.getFileName().toString().endsWith(".cmd")).sorted().toList();
@@ -208,6 +218,13 @@ public final class DevHands {
                 }
                 done(id, "ok");
             }
+            case "smoke" -> {
+                // every smoke source's preparation state, now and twice a second while on (a pop's cause by source)
+                smoke = arg.equals("on");
+                Incoming.LOG.info("DEV smoke {} | {}", ua.zentix.incoming.client.far.FarRenderer.describeSmoke(),
+                        ua.zentix.incoming.client.fx.smoke.SmokeGrid.describeSources());
+                done(id, "ok");
+            }
             case "watch" -> {
                 watch = arg.equals("on");
                 frames = 0;
@@ -217,7 +234,7 @@ public final class DevHands {
                 DustWallSteps.apply(arg);
                 done(id, "ok");
             }
-            default -> throw new IllegalArgumentException("unknown: " + line + " (cmd, reload, shot, hud, press, dw, age, skip, watch, describe)");
+            default -> throw new IllegalArgumentException("unknown: " + line + " (cmd, reload, shot, hud, press, dw, age, skip, watch, smoke, describe)");
         }
     }
 

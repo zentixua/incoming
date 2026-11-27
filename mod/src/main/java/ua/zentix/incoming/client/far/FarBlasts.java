@@ -704,7 +704,7 @@ public final class FarBlasts {
 
     /**
      * Air at the explosion place: the world's air ({@link ClientAir}) with the wind at the place's ground ({@link ClientAir#site}: a street, crowns,
-     * a hill); humidity — the air's own; 1 at the water (the condensation cloud), over the water — the field.
+     * a hill); humidity — the air's own, at the water too ({@link #humidity}); over the water — the field.
      */
     public static CloudModel.Air air(ClientLevel level, Vec3 pos) {
         return air(level, pos, null);
@@ -716,8 +716,19 @@ public final class FarBlasts {
         boolean water = !level.getFluidState(at).isEmpty() || !level.getFluidState(at.below()).isEmpty();
         ua.zentix.incoming.util.Air air = resent == null ? ClientAir.now() : resent.air();
         // the place's correction is measured from the surface under the explosion (under a crown — from the ground beneath it): the cloud's heights are measured from the same surface too
-        return CloudModel.Air.of(air, water ? 1 : air.humidity(),
+        return CloudModel.Air.of(air, humidity(air),
                 water ? ua.zentix.incoming.util.LocalWind.OPEN : ClientAir.site(pos.x, pos.y - overSurface(level, pos, resent), pos.z, air));
+    }
+
+    /**
+     * Humidity of the air a blast happens in, 0..1: the world's air ({@link ua.zentix.incoming.util.Air#humidity}: 0.5 in
+     * clear weather, saturated in rain), the same at the water as on land: only a film at the water surface is saturated,
+     * not the air metres above it the blast's shell expands into. Taken as saturated, a cruise missile at the waterline
+     * draws a 40 m Wilson cloud for 0.21 s, a white burst over the frame; in the world's clear-weather air 13 m for 0.07 s,
+     * inside its fireball, as on land ({@code WaterBlastAirTest}).
+     */
+    static double humidity(ua.zentix.incoming.util.Air air) {
+        return air.humidity();
     }
 
     /**

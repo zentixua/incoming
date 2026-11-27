@@ -48,7 +48,7 @@ Prism: `~/.var/app/org.prismlauncher.PrismLauncher/data/PrismLauncher/` (`tools/
                                            its Gradle step and another Gradle run in the same tree (GameTest) collide on
                                            downloadAssets: start the second after the client's launch script exists;
                                            scenarios and what each captures: in the script header
-    dev_client.sh start|cmd|hud|dw|age|watch|swap|reload|shot|stop|status ← the look loop: ModDevGradle runClient (the mod and its dependencies) straight
+    dev_client.sh start|cmd|hud|dw|age|watch|smoke|swap|reload|shot|stop|status ← the look loop: ModDevGradle runClient (the mod and its dependencies) straight
                                            into a saved world (a reflinked copy of a real map), JetBrains Runtime from the Gradle
                                            toolchain with JDWP on loopback; `swap` compiles, redefines changed classes (jdb) and presses
                                            the F3+T reload for changed resources; chat commands, reload, F2, F1 and dust-wave diagnostics (dw) as files the
