@@ -33,14 +33,11 @@ import ua.zentix.incoming.nuclear.model.WaterModel;
  * leaves mist, share {@link #MIST} of fine drops ({@link #MIST_DROP_R}), as base-surge ring: visible
  * edge at base-surge radius ({@link #surgeRadius}, nuke law), layer top at its height; drifts
  * and spreads like cloud, drops settle into water through layer bottom ({@link #mistLeft}).</li>
- * <li><b>Veil</b>: air drag strips fine spray from the jets' surface along their whole flight ({@link #VEIL} of the column
- * water, drops {@link #VEIL_DROP_R}); it stays where the jets flew, spreads and drifts with the wind and evaporates in
- * seconds ({@link #evaporation}): the falling column leaves a fading veil where it stood, rather than its spray vanishing
- * with the last jet (rc-video raid clip, 14.3 s: the column gone in one step).</li>
  * <li><b>Evaporation</b>: drops in air below saturation shrink by Maxwell's law, r·dr/dt = (S − 1)/(F_k + F_d) (Rogers,
  * Yau, “A Short Course in Cloud Physics”, 3rd ed., 1989, eq. 7.18), at ambient humidity S (⚠ the spray's own vapour
  * slows it: an upper bound on the rate); extinction ∝ r², so it falls linearly to zero at r₀²·(F_k + F_d)/(2(1 − S)):
- * the mist's 50 µm drops 38 s in clear-weather surface air, the veil's 20 µm 6 s. Saturated air (rain) keeps them.</li>
+ * the mist's 50 µm drops 38 s in clear-weather surface air (they lived 107 s on settling alone, a flat white layer
+ * on the water long after the blast; rc-video raid clip, 9–27 s). Saturated air (rain) keeps them.</li>
  * <li><b>On water</b>: foam where water landed (bubbly water, ⚠ decays over {@link #FOAM_S} s, est.), and wave from
  * explosion cavity: ring travels at group velocity for wavelength equal to column-base diameter, in shallow water no
  * faster than √(gD) ({@link #waveRadius}).</li>
@@ -70,12 +67,6 @@ public final class WaterBlast {
      * fall at ~4 m/s and immediately enter water (size is est., by settling speed).
      */
     static final double MIST_DROP_R = 50e-6;
-    /**
-     * Column water share air drag strips from the jets as fine spray (⚠ est.: aerodynamic stripping of a water surface;
-     * at 0.3 % the falling column visibly leaves a translucent white veil where it stood; 0.1 % read as a faint wisp), and
-     * its drop radius, m (⚠ est.: stripping gives drops of tens of µm).
-     */
-    static final double VEIL = 0.003, VEIL_DROP_R = 20e-6;
     /** Water vapour gas constant, J/(kg·K); latent heat of vaporization, J/kg; water density, kg/m³. */
     static final double RV = 461.5, LV = 2.45e6, RHO_WATER = 1000;
     /** Thermal conductivity of air at 15 °C, W/(m·K) (Rogers, Yau, table 7.1). */
@@ -135,8 +126,8 @@ public final class WaterBlast {
     private final CloudModel.Air air;
     /** Charge, kg TNT. */
     private final double kg;
-    /** Mist and veil lifetimes, s (computed once). */
-    private double mistLife = -1, veilLife = -1;
+    /** Mist lifetime, s (computed once). */
+    private double mistLife = -1;
 
     /**
      * @param tntKg      charge, kg TNT
@@ -289,67 +280,6 @@ public final class WaterBlast {
         return deficit <= 0 ? Double.POSITIVE_INFINITY : r * r * DIFFUSION_RESISTANCE / (2 * deficit);
     }
 
-    /** Flight of the fastest water of a jet at angle a from vertical, s: the veil is shed over it. */
-    private double shedding(double a) {
-        return flight(1, a);
-    }
-
-    /**
-     * Veil extinction share left at age t of a jet at angle a, 0..1: shed evenly over the jet's flight, each part evaporating
-     * {@link #evaporation} after it was shed (extinction ∝ r², linear in its age).
-     */
-    double veilLeft(double t, double a) {
-        double f = shedding(a), dry = evaporation(VEIL_DROP_R);
-        if (t <= 0 || f <= 0) return 0;
-        // parts shed between 0 and min(t, f): ages from t − min(t, f) to t
-        double lo = t - Math.min(t, f), hi = t, sum;
-        if (Double.isInfinite(dry)) sum = hi - lo;
-        else {
-            double a0 = Math.min(lo, dry), a1 = Math.min(hi, dry);
-            sum = (a1 - a0) - (a1 * a1 - a0 * a0) / (2 * dry);
-        }
-        return Math.max(0, sum) / f;
-    }
-
-    /** Veil drops at age t over all jets, as grid drops ({@link #asGridDrops}): the extinction left after evaporation. */
-    double veil(double t) {
-        if (t > veilLife()) return 0;
-        double sum = 0;
-        for (int k = 0; k < TILTS.length; k++) sum += AROUND[k] * veilLeft(t, TILTS[k] * cone);
-        return asGridDrops(VEIL * water, VEIL_DROP_R) / directions() * sum;
-    }
-
-    /** Mean age of the veil of a jet at angle a at age t, s: its parts' drift and spread. */
-    private double veilAge(double t, double a) {
-        double f = shedding(a);
-        return t - 0.5 * Math.min(t, f);
-    }
-
-    /** Veil σ at age t, m: the jet's own section, spread by the air over its drift ({@link CloudModel#spreadH}). */
-    double veilSigma(double t, double a) {
-        double s = CloudModel.spreadH(air.spread(), Math.max(1, Math.hypot(air.windX(), air.windZ()) * air.wind(0.5 * height)) * veilAge(t, a));
-        return Math.sqrt(jet * jet + s * s);
-    }
-
-    /** Veil optical depth across the vertical jet's veil at its middle at age t: its visible life ends below {@link CloudModel#SEEN}. */
-    double veilTau(double t) {
-        double kg = VEIL * water / directions() * veilLeft(t, 0), len = Math.max(1, top(Math.min(t, rise)));
-        return CloudModel.DROP_K * asGridDrops(kg, VEIL_DROP_R) / (len * Math.sqrt(2 * Math.PI) * veilSigma(t, 0));
-    }
-
-    /** Veil lifetime, s: after the jets fell, until its optical depth falls below the visibility threshold. */
-    public double veilLife() {
-        if (veilLife >= 0) return veilLife;
-        double lo = 2 * rise, hi = CloudModel.LIFE_MAX;
-        if (veilTau(lo) < CloudModel.SEEN) return veilLife = lo;
-        for (int i = 0; i < 40; i++) {
-            double mid = 0.5 * (lo + hi);
-            if (veilTau(mid) >= CloudModel.SEEN) lo = mid;
-            else hi = mid;
-        }
-        return veilLife = hi;
-    }
-
     /** When water starts falling into water, s: slowest jet. */
     double landing() {
         return flight(SPEED_MIN, cone);
@@ -385,7 +315,7 @@ public final class WaterBlast {
             if (mistTau(mid) >= CloudModel.SEEN) lo = mid;
             else hi = mid;
         }
-        mistLife = Math.max(Math.max(landing() + lo, 2 * rise), veilLife());
+        mistLife = Math.max(landing() + lo, 2 * rise);
         return mistLife;
     }
 
@@ -460,13 +390,6 @@ public final class WaterBlast {
             double r = speed * t + SmokeBounds.PUFF * jet;
             out.box(x - r, y - SmokeBounds.PUFF * jet, z - r, x + r, y + r, z + r);
         }
-        if (t <= veilLife()) {
-            // veil: from the water to the highest jet's apex, drifted by the wind over its mean age, spread
-            double sg = veilSigma(t, cone), lean = air.wind(0.5 * height) * veilAge(t, 0), up = top(Math.min(t, rise));
-            double side = speed * speed * Math.sin(2 * cone) / (2 * G) + SmokeBounds.PUFF * sg;
-            double cx = x + air.windX() * lean, cz = z + air.windZ() * lean;
-            out.box(cx - side, y - SmokeBounds.PUFF * sg, cz - side, cx + side, y + up + SmokeBounds.PUFF * sg, cz + side);
-        }
         double since = t - landing();
         if (since > 0 && t <= mistLife()) {
             double r = surgeRadius(since), sv = mistSigmaV(since);
@@ -497,22 +420,6 @@ public final class WaterBlast {
                 double az = 2 * Math.PI * (i + 0.5 * k) / AROUND[k], ox = side * Math.cos(az), oz = side * Math.sin(az);
                 out.segment(x + mid * ox, y + mid * up - drop, z + mid * oz, half * ox, half * up, half * oz, jet, jet, 0, 0, each * share, 1, 1, 1,
                         CloudModel.T_AIR_K, lift);
-            }
-        }
-        if (t <= veilLife()) {
-            // veil: per jet direction, a segment from the water to the jet's apex (the highest point its water reached so
-            // far), drifted by the wind over its mean age; extinction left after evaporation
-            double veil = asGridDrops(VEIL * water, VEIL_DROP_R) / directions();
-            for (int k = 0; k < TILTS.length; k++) {
-                double a = TILTS[k] * cone, left = veilLeft(t, a);
-                if (left <= 0) continue;
-                double flown = Math.min(t, speed * Math.cos(a) / G), up = speed * Math.cos(a) * flown - 0.5 * G * flown * flown;
-                double reach = speed * Math.sin(a) * flown, sg = veilSigma(t, a), lean = air.wind(0.5 * up) * veilAge(t, a);
-                for (int i = 0; i < AROUND[k]; i++) {
-                    double az = 2 * Math.PI * (i + 0.5 * k) / AROUND[k], ox = Math.cos(az) * reach * 0.5, oz = Math.sin(az) * reach * 0.5;
-                    out.segment(x + ox + air.windX() * lean, y + 0.5 * up, z + oz + air.windZ() * lean, ox, 0.5 * up, oz, sg, sg, 0, 0,
-                            veil * left, 1, 1, 1, CloudModel.T_AIR_K, 0);
-                }
             }
         }
         double since = t - landing();
