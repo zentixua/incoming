@@ -62,7 +62,7 @@ public final class SceneDepth {
      */
     private static int layerFbo = -1, layerDraw = -1, layerRead = -1;
     /** This frame looks through see-through surfaces. */
-    private static boolean see;
+    private static boolean see, lodDrawn;
     /** 1×1 stand-in for {@code FxGlass} with nothing to read (a sampler on the frame being drawn is a feedback loop, on 0 incomplete). */
     private static int idle = -1;
     /** The other texture holds the frame before this one: the last two updates both succeeded at this size. */
@@ -113,6 +113,7 @@ public final class SceneDepth {
         int previous = GlStateManager._getInteger(GL30.GL_DRAW_FRAMEBUFFER_BINDING);
         GL11.glGetIntegerv(GL11.GL_VIEWPORT, VIEWPORT);
         boolean lod = !FxViews.secondary() && LodDepth.current(LOD);
+        lodDrawn = lod;
         GlStateManager._glBindFramebuffer(GlConst.GL_FRAMEBUFFER, fbo);
         RenderSystem.viewport(0, 0, width, height);
         // every pixel writes the layer's hardware depth; the depth function is restored after
@@ -305,6 +306,11 @@ public final class SceneDepth {
         } finally {
             MemoryUtil.memFree(b);
         }
+    }
+
+    /** Whether this frame's scene depth holds an LOD mod's far ground ({@link LodDepth}). */
+    static boolean lod() {
+        return lodDrawn;
     }
 
     /** This frame's see-through surfaces ({@link #glass}, the distance texture's second channel) are filled. */
