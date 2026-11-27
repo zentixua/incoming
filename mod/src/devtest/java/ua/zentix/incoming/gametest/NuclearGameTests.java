@@ -1454,7 +1454,14 @@ public final class NuclearGameTests {
     @GameTest(template = "range", timeoutTicks = 40, batch = "nuke_stale_plan", skyAccess = true)
     public static void minedPlankMakesPlanStaleBeforeTheFlash(GameTestHelper h) {
         ServerLevel level = h.getLevel();
-        BlockPos plank = CENTER.west(8);
+        // a plank whose own rubble does not land back on its cell (RuinPlanner.leavesRubble, 12 % of positions): there the
+        // plank is not in the plan at all
+        BlockPos plank = null;
+        for (int dz = 0; dz < 7 && plank == null; dz++) {
+            BlockPos p = CENTER.west(8).south(dz % 2 == 0 ? dz / 2 : -(dz + 1) / 2);
+            if (!RuinPlanner.leavesRubble(h.absolutePos(p))) plank = p;
+        }
+        h.assertTrue(plank != null, "every plank position on the row leaves its own rubble");
         h.setBlock(plank, Blocks.OAK_PLANKS);
         Detonation d = detonation(h, CENTER, 0, 15, 0.025f);
         LevelChunk chunk = level.getChunkAt(h.absolutePos(plank));
@@ -1462,9 +1469,8 @@ public final class NuclearGameTests {
         h.setBlock(plank, Blocks.AIR);
         ColumnScar.Budget budget = new ColumnScar.Budget(false);
         h.assertFalse(plan.apply(level, chunk, d, budget), "a plan made over a mined plank was set before the flash");
-        // after the flash a plank a player mined is not taken for burned out; planned over the untouched chunk (a plan made
-        // over the ruins the burned-out step writes depends on where their rubble lands, a position hash: rubble sheltering
-        // the plank left it out of the plan, and mining it could not stale the plan)
+        // every plan here is made over the untouched chunk: a plan made over ruins depends on where their rubble lands
+        // (position hash). After the flash a plank a player mined is not taken for burned out
         h.setBlock(plank, Blocks.OAK_PLANKS);
         RuinPlan mined = RuinPlanner.plan(level, d, chunk);
         chunk.setData(ua.zentix.incoming.registry.ModAttachments.FLASH_LAYER, d.id());
