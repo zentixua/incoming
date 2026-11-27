@@ -72,10 +72,10 @@ public final class WaterBlast {
     static final double MIST_DROP_R = 50e-6;
     /**
      * Column water share air drag strips from the jets as fine spray (⚠ est.: aerodynamic stripping of a water surface;
-     * with it the veil's optical depth across the column is about 2 at the jets' fall, a translucent white veil), and
+     * at 0.3 % the falling column visibly leaves a translucent white veil where it stood; 0.1 % read as a faint wisp), and
      * its drop radius, m (⚠ est.: stripping gives drops of tens of µm).
      */
-    static final double VEIL = 0.001, VEIL_DROP_R = 20e-6;
+    static final double VEIL = 0.003, VEIL_DROP_R = 20e-6;
     /** Water vapour gas constant, J/(kg·K); latent heat of vaporization, J/kg; water density, kg/m³. */
     static final double RV = 461.5, LV = 2.45e6, RHO_WATER = 1000;
     /** Thermal conductivity of air at 15 °C, W/(m·K) (Rogers, Yau, table 7.1). */
