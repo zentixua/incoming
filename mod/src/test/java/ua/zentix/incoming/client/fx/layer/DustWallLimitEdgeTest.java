@@ -11,8 +11,8 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 /**
  * The pall's rays read their world distance from the dust limit's texture at the block pixel clamped into the frame
  * ({@code fx_pall.glsl}: {@code clamp(full, 0, size - 1)}); the limit pass ({@code fx_dustwall_limit.fsh}) writes that same
- * clamped pixel. With an odd width or height the last block's centre lies past the edge: the limit wrote only unclamped centres,
- * and the edge ray read a texel nobody wrote (haze, mushroom and firestorm gone in a 1-2 px strip, release audit of 3.14.0).
+ * clamped pixel. With an odd width or height the last block's centre lies past the edge: a pass writing only unclamped
+ * centres leaves the edge ray a texel nobody wrote (haze, mushroom and firestorm gone in a 1-2 px strip).
  */
 class DustWallLimitEdgeTest {
     private static final Path SHADERS = Path.of("src/main/resources/assets/incoming/shaders");

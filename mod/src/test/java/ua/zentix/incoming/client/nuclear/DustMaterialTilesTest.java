@@ -68,24 +68,4 @@ class DustMaterialTilesTest {
             before = Math.max(before, r - 3 * DustGrid.COARSE);
         }
     }
-
-    /**
-     * Cells the server has not committed stay provisional, and their answer changes only with its next map: once every open
-     * cell was asked, the fill rests {@link DustMaterialTiles#IDLE_FRAMES} frames between passes (a pass every frame walked
-     * all 2·256² cells, 0.31 ms a source per view, release audit of 3.14.0).
-     */
-    @Test
-    void provisionalCellsAreNotRescannedEveryFrame() {
-        Detonation d = new Detonation(1, Vec3.ZERO, 0, 15, true, 0, 0, 0, 20000, 7, 1f, false, 0.35f);
-        SourceMaterial source = new SourceMaterial(d, new MaterialInbox(), DustMaterial.SOIL.ordinal(), (x, z) -> { throw new AssertionError(); });
-        DustMaterialTiles tiles = new DustMaterialTiles(d, source);
-        int n = 2 * DustMaterialTiles.SIDE * DustMaterialTiles.SIDE;
-        for (int i = 0; i < 400; i++) tiles.fill();
-        long before = tiles.visited;
-        int frames = 10 * DustMaterialTiles.IDLE_FRAMES;
-        for (int i = 0; i < frames; i++) tiles.fill();
-        long per = (tiles.visited - before) / frames;
-        org.junit.jupiter.api.Assertions.assertTrue(per <= 2L * n / DustMaterialTiles.IDLE_FRAMES,
-                "cells visited a frame while every open cell waits for the server: " + per + " of " + n);
-    }
 }

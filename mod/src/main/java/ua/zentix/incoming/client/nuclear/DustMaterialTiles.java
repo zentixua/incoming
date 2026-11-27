@@ -21,8 +21,8 @@ public final class DustMaterialTiles {
     static final int PER_FRAME = 1024;
     /**
      * Once every open cell was asked since the server's last map, frames between passes: such cells change only with a new
-     * map or a late local answer, and a full pass each frame walked all 2·256² cells (0.31 ms a source per view, release
-     * audit of 3.14.0) for as long as a cell stayed provisional.
+     * map, and with few cells open a pass each frame walks all 2·256² cells (0.31 ms a source per view) for as long as a cell
+     * stays provisional.
      */
     static final int IDLE_FRAMES = 20;
 
