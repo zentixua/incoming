@@ -524,6 +524,11 @@ public final class PallPass {
          */
         public final Matrix4f balls = new Matrix4f().zero(), ballLight = new Matrix4f().zero();
         public boolean ballsLit;
+        /**
+         * The frame's one exposure under a nuclear flash ({@code NukeLight}, DESIGN fireball-light §4.1): daylight multiplier,
+         * daylight share of the sky (the eye's veil), amber dome strength; and the eye-relative direction of that dome.
+         */
+        public final Vector4f flash = new Vector4f(1, 0, 0, 0), amber = new Vector4f(0, 1, 0, 0);
         /** Open-sky light on a white block as Minecraft draws it (lightmap: sky 15, blocks 0), on screen. */
         public final Vector3f openSky = new Vector3f(1);
         /**
@@ -1098,6 +1103,8 @@ public final class PallPass {
         c.safeGetUniform("PallBalls").set(balls ? f.balls : NO_FIRE);
         c.safeGetUniform("PallBallLight").set(f.ballLight);
         c.safeGetUniform("PallOpenSky").set(f.openSky.x, f.openSky.y, f.openSky.z);
+        c.safeGetUniform("PallFlash").set(f.flash.x, f.flash.y, f.flash.z, f.flash.w);
+        c.safeGetUniform("PallAmber").set(f.amber.x, f.amber.y, f.amber.z, f.amber.w);
         c.safeGetUniform("PallFaceShade").set(f.faceShade.x, f.faceShade.y, f.faceShade.z, f.faceShade.w);
         if (submits(c, warming)) {
             OpenAir.bind(c, open, warming);
