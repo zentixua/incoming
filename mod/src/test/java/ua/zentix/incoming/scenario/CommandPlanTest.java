@@ -115,4 +115,12 @@ class CommandPlanTest {
         assertEquals(blast, CommandPlan.later(blast, blast), "the gate being waited at stays");
         assertEquals(-1, CommandPlan.later(-1, blast), "no gate stays none");
     }
+
+    @Test
+    void leaveIsAStep() {
+        CommandPlan p = CommandPlan.parse("wait:20;leave");
+        assertTrue(p.warnings().isEmpty(), p.warnings().toString());
+        assertEquals(CommandPlan.Kind.LEAVE, p.steps().getFirst().kind());
+        assertEquals(CommandPlan.START + 20, p.steps().getFirst().tick());
+    }
 }

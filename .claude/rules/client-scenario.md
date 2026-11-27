@@ -47,7 +47,8 @@ above it facing north), `wave:<x>` (CUSTOM preset, `nuclear.wave_speed`), `pall:
 single-player pause without its menu, vanilla's "Game Paused" title in the frame; client ticks still count; `SCENARIO
 pause` logs whether vanilla paused), `sleep` (the player lies down through vanilla's check in a bed placed at its feet,
 which stays: night and a non-spectator player; the day must run for vanilla to skip the night, logged as `SCENARIO sleep
-finished`). Every shot with a
+finished`), `leave` (leaves the world as "Save and Quit"; the run ends once Flashback has written the replay it recorded,
+`SCENARIO left: replay …`: a filming take sets `automaticallyStart` and `quicksave` in the copy's Flashback config). Every shot with a
 detonation also logs `SCENARIO shot … nuke:` (`NukePall.describe`) and `… wall:` (devtest `WallProbe`: model time, dust edge −
 shock radius, wedge/top, fire zone and flame, frame sky/exposure, camera biome, and the head colour `NukePall.dustLight` gives on
 the camera line with its soot share, sand share and fire term). With the shaderpack and no DH, ground beyond render distance is

@@ -130,6 +130,74 @@ final class ReplayCheck {
         Incoming.LOG.info("SCENARIO replay left world");
     }
 
+    /** Ticks a replay may go without growing before {@code leave} gives up; ticks its finished zip must hold its size. */
+    private static final int LEAVE_WAIT = 2400, LEAVE_STABLE = 40;
+
+    /**
+     * The commands scenario's {@code leave} step: leave the world as "Save and Quit" does, wait until Flashback has written the
+     * replay it was recording, then stop the client. Flashback writes the zip under its final name, so a replay is finished
+     * when it opens as a zip (the central directory is written last) and its size has held for {@link #LEAVE_STABLE} ticks;
+     * the wait gives up {@link #LEAVE_WAIT} ticks after the last growth. Logs {@code SCENARIO left: replay <file> <bytes>},
+     * or {@code SCENARIO left: FAIL …} with the folder's contents, then {@code SCENARIO done}. A filming take records with
+     * Flashback ({@code recordingControls.automaticallyStart} and {@code quicksave} in the copy's
+     * {@code config/flashback/flashback.json}) and ends with this step.
+     */
+    static void leaveAndStop() {
+        long since = System.currentTimeMillis();
+        Class<?> flashback;
+        try {
+            flashback = Class.forName("com.moulberry.flashback.Flashback");
+        } catch (ClassNotFoundException e) {
+            flashback = null;
+        }
+        Class<?> fb = flashback;
+        int[] idle = {0}, held = {0};
+        long[] size = {-1};
+        boolean[] over = {false};
+        NeoForge.EVENT_BUS.addListener((ClientTickEvent.Post e) -> {
+            Minecraft mc = Minecraft.getInstance();
+            if (over[0] || mc.level != null) return;
+            String fail = null;
+            Path zip = null;
+            try {
+                if (fb == null) fail = "Flashback not loaded";
+                else {
+                    zip = newestReplay(fb, since);
+                    long now = zip == null ? -1 : Files.size(zip);
+                    if (now != size[0]) {
+                        idle[0] = 0;
+                        held[0] = 0;
+                    } else {
+                        idle[0]++;
+                        if (now > 0 && whole(zip)) held[0]++;
+                    }
+                    size[0] = now;
+                    if (held[0] < LEAVE_STABLE) {
+                        if (idle[0] < LEAVE_WAIT) return;
+                        fail = "no finished replay " + LEAVE_WAIT + " ticks after its last growth: " + list(replayFolder(fb).getParent());
+                    }
+                }
+            } catch (ReflectiveOperationException | IOException ex) {
+                fail = "replay folder unreadable: " + ex;
+            }
+            over[0] = true;
+            if (fail == null) Incoming.LOG.info("SCENARIO left: replay {} {} bytes", zip, size[0]);
+            else Incoming.LOG.error("SCENARIO left: FAIL {}", fail);
+            Incoming.LOG.info("SCENARIO done");
+            mc.stop();
+        });
+        Minecraft.getInstance().tell(ReplayCheck::leave);
+    }
+
+    /** A zip whose central directory is written: Flashback has closed it. */
+    private static boolean whole(Path zip) {
+        try (java.util.zip.ZipFile z = new java.util.zip.ZipFile(zip.toFile())) {
+            return z.size() > 0;
+        } catch (IOException e) {
+            return false;
+        }
+    }
+
     private void onTick(ClientTickEvent.Post e) {
         if (finished) return;
         Minecraft mc = Minecraft.getInstance();
@@ -381,14 +449,24 @@ final class ReplayCheck {
     }
 
     private Path replayFolder() throws ReflectiveOperationException {
+        return replayFolder(flashback);
+    }
+
+    private static Path replayFolder(Class<?> flashback) throws ReflectiveOperationException {
         return (Path) flashback.getMethod("getReplayFolder").invoke(null);
     }
 
     private Path newestReplay() throws ReflectiveOperationException, IOException {
-        Path dir = replayFolder();
+        return newestReplay(flashback, 0);
+    }
+
+    /** The newest replay zip modified at or after {@code since} (epoch ms), null if none. */
+    private static Path newestReplay(Class<?> flashback, long since) throws ReflectiveOperationException, IOException {
+        Path dir = replayFolder(flashback);
         if (!Files.isDirectory(dir)) return null;
         try (Stream<Path> s = Files.list(dir)) {
-            return s.filter(p -> p.getFileName().toString().endsWith(".zip")).max(Comparator.comparing(p -> p.toFile().lastModified())).orElse(null);
+            return s.filter(p -> p.getFileName().toString().endsWith(".zip") && p.toFile().lastModified() >= since)
+                    .max(Comparator.comparing(p -> p.toFile().lastModified())).orElse(null);
         }
     }
 

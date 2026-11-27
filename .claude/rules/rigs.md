@@ -59,9 +59,15 @@ paths:
 - Stop background scripts by PID: `pkill -f <pattern>` also matches your own shell's command line and kills it.
 - `tools/prod_client.py --video` copies Artem's `options.txt`; with `fullscreen:true` the window grows to the nested
   screen and `x11_record.py` (which starts a segment only at exactly `--size`) records nothing after the menu: run
-  `--copy-only --dir D`, set `fullscreen:false` in `D/options.txt`, then `--no-copy --dir D --video …`. x11grab also
-  yields all-black, partly black (torn: whole rows uniform black, ~13 % of a nuke take's frames) and duplicate frames;
-  exclude them from per-frame metrics and clips. Each take overwrites the instance's `logs/run.jfr` and `gc.log`: copy them
+  `--copy-only --dir D`, set `fullscreen:false` in `D/options.txt`, then `--no-copy --dir D --video …`. `--video` is a
+  diagnostic, never a clip: x11grab reads the window on its own 60 Hz clock, not at the game's buffer swaps, so it catches
+  the window between swaps (black, torn frames) and resends the last picture while the game moves on (frozen frames), and
+  its 1080p60 grab and encoder share the unit's CPU with the game. Measured on a 26 s full-pack nuke clip: 108 black, 16
+  torn and 199 frozen frames of 1559 (longest freeze 1.75 s); through a nuke the machine sits at 100 % CPU, the game JVM gets
+  18-30 % of it and draws 1-9 fps, against 35-52 fps for the same pack and a 15 kt ground burst without the recorder. Clips for Artem and
+  players are Flashback recordings exported by Flashback (`tools/media/README.md`, `tools/replayscan` filming);
+  `tools/clip_check.py` passes each delivered file (no black, torn or frozen frames, constant clock, whole file, audio as
+  long as the video) before it leaves. Each take overwrites the instance's `logs/run.jfr` and `gc.log`: copy them
   out per take. LOD Server Support serves a single-player world only with `--prop lss.test.integratedServer=true`;
   `/publish` opens a LAN socket on every interface, and `rig/LoopbackGuard` stops the server (the client then sits in the
   menu while the recorder runs: a take wrapper must stop on a guard line or a silent log).

@@ -3719,6 +3719,7 @@ public final class ClientScenario {
                 case SLEEP -> at(step.tick(), ClientScenario::sleepInBed);
                 case SKIP -> at(step.tick(), () -> fsSkip(Double.parseDouble(step.arg())));
                 case FRAMES -> at(step.tick(), () -> frameRun(step.arg()));
+                case LEAVE -> at(step.tick(), ReplayCheck::leaveAndStop);
             }
         }
         at(plan.end(), () -> {

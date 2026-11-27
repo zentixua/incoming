@@ -22,7 +22,7 @@ record CommandPlan(List<Step> steps, int nukeGate, List<Integer> blastGates, int
     static final int START = 100, TAIL = 100;
 
     enum Kind {
-        COMMAND, SHOT, HUD_OFF, HUD_ON, SKIP, FRAMES, STORM, BURNABLE, MAX_YIELD, WAVE, PALL, PAIR, SITE, DW, PAUSE, SLEEP;
+        COMMAND, SHOT, HUD_OFF, HUD_ON, SKIP, FRAMES, STORM, BURNABLE, MAX_YIELD, WAVE, PALL, PAIR, SITE, DW, PAUSE, SLEEP, LEAVE;
 
         /** Reads or moves the world's own server (the client's integrated one): a joined server skips it. */
         boolean ownServer() {
@@ -122,6 +122,11 @@ record CommandPlan(List<Step> steps, int nukeGate, List<Integer> blastGates, int
                 // the camera player lies down in a bed placed at its feet (a real sleep: vanilla skips the night once the
                 // sleep is deep, 100 ticks, if the day runs; needs night and a non-spectator player)
                 steps.add(new Step(t, Kind.SLEEP, ""));
+                t += 1;
+            } else if (c.equals("leave")) {
+                // leave the world as "Save and Quit" does; the run ends once Flashback has written its replay (ReplayCheck.leaveAndStop):
+                // later steps never run
+                steps.add(new Step(t, Kind.LEAVE, ""));
                 t += 1;
             } else if (c.equals("hud:off") || c.equals("hud:on")) {
                 steps.add(new Step(t, c.equals("hud:off") ? Kind.HUD_OFF : Kind.HUD_ON, ""));
