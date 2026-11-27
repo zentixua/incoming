@@ -47,7 +47,7 @@ final class Cameras {
     /**
      * Candidate: keyframe camera ({@code path}) or player's eyes ({@code player}, no way - camera Flashback
      *  becomes that player). {@code designed} - the camera is specified by the plan and is displayed first, if not rejected;
-     * {@code roam} - the path is specified by the plan and goes where the client does not have chunks (in blocks, the camera is only where there is a chunk).
+     * {@code roam} - the path is specified by the plan and keeps its order (not sorted by score).
      */
     record Candidate(String name, @Nullable Path path, @Nullable String player, boolean gui, double fov, boolean designed, boolean roam) {}
 
@@ -188,6 +188,16 @@ final class Cameras {
         double open(View v, Vec3 at, double size, int rays) {
             return Cameras.open(level, v.eye(), at, v.right(), v.up(), size, rays);
         }
+    }
+
+    /**
+     * A candidate camera at a sample is blocked only where the client holds the chunk and a block is within half a block. The
+     * replay holds only chunks the recorder saw: a camera placed away from them (a shot from far above or far off) has none, so
+     * there it is unknown, not blocked; the export checks every frame for blocks ({@link FrameLog}) and terrain outside the
+     * replay's chunks ({@code low_out}).
+     */
+    static boolean blocked(boolean loaded, boolean free) {
+        return loaded && !free;
     }
 
     /** Camera in a block: there is a block closer than half a block from it (according to client chunks: no chunk - no blocks). */
@@ -401,7 +411,7 @@ final class Cameras {
      *  object in the frame (with fields {@link #SAFE}) is visible (rays to the middle and edges - no less than 0.4, not through clouds and not in
      *  fog), no smaller {@code share} frame width and not in the smoke of previous strikes - for the entire time and for the last second;
      *  each event of the plan - in the frame and visible in at least half of the first 12 tick ({@link #keySeen}); after events -
-     * object visible; the camera is in the air along the entire path (the plan path, {@code roam}, is where the client has a chunk). {@code pass} -
+     * object visible; the camera is in the air along the entire path where the client has a chunk ({@link #blocked}). {@code pass} -
      * these shares are not less than the plan thresholds.
      */
     static Score score(Candidate c, Subject s, Plan.Shot shot, double aspect, World w) {
@@ -414,7 +424,7 @@ final class Cameras {
         List<double[]> live = shot.live();
         for (int t = shot.a(); t <= shot.b(); t += 2) {
             Pose p = c.path().at(t);
-            if (c.roam() ? w.loaded(p.pos()) && !w.free(p.pos()) : !w.free(p.pos())) free = false;
+            if (blocked(w.loaded(p.pos()), w.free(p.pos()))) free = false;
             Vec3 aim = s.aim(t);
             if (aim == null) continue;
             Subject.Key k = s.keyAt(t);

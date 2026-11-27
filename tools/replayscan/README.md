@@ -190,7 +190,7 @@ use diameter; without diameter, 16 blocks), `need` (thresholds; `loud` below 0 d
   key before/after them). Optional `roll` and `fov` on each key interpolate into Flashback's native camera and
   lens tracks; a key without `fov` uses the camera's `fov`. `rise` gives backup copies of the same path this many blocks higher (plan
   order, not score): a person set the path, so it also goes where the client has no chunks (only DH renders
-  terrain there), and "camera in blocks" is checked only where a chunk exists;
+  terrain there); "camera in blocks" is checked only where a chunk exists, for every camera;
 - `pilot` — FPV drone pass by an impact (`subject.keys`, the one nearest the end of the projectile path), angle
   `fov`: pilot (`Pilot`) lays out a path through the replay world as a person seeing everything ahead would fly;
   drone controls (speed, turn, climb) at nodes every 24 ticks, cross-entropy search. Cost considers clearance from
@@ -225,8 +225,8 @@ without Incoming) on sightline/at camera (`smother`: frame-grid ray fraction blo
 40 blocks; ≥0,6 is smoke-filled), clouds, render-edge fog, actual rendering (entity section built;
 Incoming draws absent client projectiles by server track), full-world readiness, audible engine
 (mod sound source trails projectile by travel during propagation), each event visibility in first
-12 ticks, whether camera is the player, free-camera block collision (`inside`: any frame fails; `path`
-can enter chunks absent during scoring), lower frame terrain outside replay chunks (`low_out`: lower
+12 ticks, whether camera is the player, free-camera block collision (`inside`: any frame fails; a camera
+can stand in chunks absent during scoring), lower frame terrain outside replay chunks (`low_out`: lower
 ray within 128 blocks crosses an absent client chunk and reaches ground by 128; only DH terrain there,
 seabed/caves without water, or void; >2 % of frames fails), DH LOD depth (`dh`: 1 own, −1 world, 0 no
 LOD/neither; world-depth frame fails). `sounds.jsonl` records loud sounds inside/outside frame.
