@@ -168,8 +168,7 @@ final class FrontDust implements SmokeGrid.Source {
                 double along = cover.leaves() || y > pos.y - Math.max(0, hob) + 2 ? 1 : FrontLitter.along(r, Math.hypot(r, hob));
                 double friction = BlastLitter.friction(front.kpa(slant), along);
                 if (!BlastLitter.tearsCover(front.kpa(slant), along)) continue;
-                double contrast = Math.min(1, friction / DustModel.Surface.COVERED.threshold() - 1) * tufts(Mth.floor(x), Mth.floor(z));
-                if (contrast <= 0) continue;
+                double contrast = Math.min(1, friction / DustModel.Surface.COVERED.threshold() - 1);
                 patches.add(new Patch(x, y, z, slant, front.arrivalSeconds(slant),
                         BlastModel.chemicalPhaseSeconds(slant, front.tntKg, front.surface), SPREAD * Math.max(dr, 2 * Math.PI * r / spokes),
                         2 * Math.PI * r * dr / spokes, contrast, air.windX(y + HEIGHT / 2), air.windZ(y + HEIGHT / 2), air.stability()));
@@ -177,25 +176,6 @@ final class FrontDust implements SmokeGrid.Source {
             }
         }
         return patches.isEmpty() ? null : new FrontDust(level, front, pos, born, patches, places, counts, radii, dr);
-    }
-
-    /** Share of patches the front tears nothing from ({@link #tufts}). */
-    static final double UNTORN = 0.35;
-
-    /**
-     * presentation: how much a patch tears, by its ground column, mean 1 (the ring's stock unchanged): turf tears in tufts
-     * where it is weak, not evenly; {@link #UNTORN} of the patches tear nothing, the rest from little to three times the mean.
-     * Torn evenly, the patches merged into one sheet: from eye level inside the ring the meadow turned flat beige out to its
-     * edge, then green again (rc-video raid clip, 5.1–8 s); patchy, the green shows between the puffs. Deterministic by
-     * position: the same ground tears alike for every client and every replay.
-     */
-    static double tufts(int bx, int bz) {
-        long h = (bx * 0x9E3779B97F4A7C15L) ^ (bz * 0xC2B2AE3D27D4EB4FL);
-        h ^= h >>> 31;
-        h *= 0xBF58476D1CE4E5B9L;
-        h ^= h >>> 29;
-        double u = (h >>> 11) * 0x1.0p-53;
-        return u < UNTORN ? 0 : 2 * (u - UNTORN) / ((1 - UNTORN) * (1 - UNTORN));
     }
 
     /**
