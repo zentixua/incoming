@@ -31,7 +31,16 @@ public final class NukeLight {
     private static Map<ClientNuclear.Active, FlashLight.Eye> CAMERA = new IdentityHashMap<>();
     private static final double PEAK = BlackBody.luminance(FireballModel.PEAK_K);
     private static long ticks;
-    private static double last = Double.NaN, exposure = 1, bodyExposure = 1;
+    private static double last = Double.NaN, exposure = 1, bodyExposure = 1, day = 1;
+    /**
+     * Share of the flash the frame follows by day (presentation, marked): the frame's exposure is the unflashed one times
+     * r^{@value}, r = flash exposure / unflashed exposure (DESIGN fireball-light §4.1). A frame fully adapted to the ball's light
+     * turned the day black (mock round 2); one that keeps the daylight exposure showed the brightest thing in the world as a
+     * mid-grey disc on an ordinary day ({@code main} before this change: the glow ring at 2 radii as bright as the sky).
+     */
+    static final double FOLLOW_DAY = 0.5;
+    /** {@link FarView#ambient} of a clear night: the one-exposure change fades out toward it (night stays as it was). */
+    static final double NIGHT_AMBIENT = 0.17;
     private static boolean prepared;
 
     private NukeLight() {}
@@ -69,6 +78,7 @@ public final class NukeLight {
 
     /** Advance the one exposure state from a frame's summed illumination; no wall clock. */
     static void update(double now, double ambient, double fire) {
+        day = dayShare(ambient);
         bodyExposure = Sight.exposure(ambient, 0);
         double target = Sight.exposure(ambient, fire);
         exposure = Double.isNaN(last) ? target : FlashLight.follow(exposure, target, Math.max(0, now - last), NukeExposure.ADAPT_S);
@@ -84,8 +94,45 @@ public final class NukeLight {
     }
 
     static void tick() { ticks++; }
+    /** The eye's flash exposure (dazzle, glare): ball light seen at this exposure is in eye units. */
     static double exposure() { return exposure; }
     static double bodyExposure() { return bodyExposure; }
+    /** This frame's daylight share of the sky ({@link #dayShare}). */
+    static double day() { return day; }
+
+    /** Daylight share of the sky's ambient light: 1 by day, 0 at a clear night or darker. */
+    static double dayShare(double ambient) {
+        return Math.clamp((ambient - NIGHT_AMBIENT) / (1 - NIGHT_AMBIENT), 0, 1);
+    }
+
+    /** Flash exposure against the unflashed one, r ≤ 1. */
+    static double ratio(double exposure, double bodyExposure) {
+        return Math.min(1, exposure / Math.max(bodyExposure, 1e-30));
+    }
+
+    /**
+     * The frame's one exposure for the ball's light (world, pall, mushroom, amber sky), relative to the eye's: r^(−f·day).
+     * By day the frame follows the flash only partly ({@link #FOLLOW_DAY}), so what the ball lights shows brighter than at
+     * the eye's full adaptation; at night 1, as before.
+     */
+    static double ballGain(double ratio, double day) {
+        return Math.pow(Math.max(ratio, 1e-30), -FOLLOW_DAY * day);
+    }
+
+    /** The same exposure for daylight terms (vanilla world, sky, clouds, the pall's sun and sky light): r^(f·day) ≤ 1. */
+    static double daylightGain(double ratio, double day) {
+        return Math.pow(Math.max(ratio, 1e-30), FOLLOW_DAY * day);
+    }
+
+    /** {@link #exposure} as the frame shows the ball's light: the one frame exposure (DESIGN fireball-light §4.1). */
+    public static double frameExposure() {
+        return exposure * ballGain(ratio(exposure, bodyExposure), day);
+    }
+
+    /** This frame's daylight multiplier under the flash, linear, ≤ 1 (1 without a flash or at night). */
+    public static double daylight() {
+        return daylightGain(ratio(exposure, bodyExposure), day);
+    }
     static FlashLight.Eye camera(ClientNuclear.Active a) { return CAMERA.getOrDefault(a, FlashLight.Eye.DARK); }
 
     /** Same light law for the player's eye at pulse acquisition and the frame camera at render time. */
@@ -153,8 +200,8 @@ public final class NukeLight {
     static String describe() {
         double fire = 0;
         for (FlashLight.Eye eye : CAMERA.values()) fire += eye.light();
-        return String.format(java.util.Locale.ROOT, "time %.3f s, eye %.6g, exposure %.6g, body %.6g, sources %d",
-                last, fire, exposure, bodyExposure, CAMERA.size());
+        return String.format(java.util.Locale.ROOT, "time %.3f s, eye %.6g, exposure %.6g, body %.6g, day %.2f, frame %.6g, daylight %.4f, sources %d",
+                last, fire, exposure, bodyExposure, day, frameExposure(), daylight(), CAMERA.size());
     }
 
     static void reset() {
@@ -162,6 +209,7 @@ public final class NukeLight {
         ticks = 0;
         last = Double.NaN;
         exposure = bodyExposure = 1;
+        day = 1;
         prepared = false;
     }
 
@@ -171,6 +219,7 @@ public final class NukeLight {
         private double last = Double.NaN;
         private double exposure = 1;
         private double bodyExposure = 1;
+        private double day = 1;
         private boolean prepared;
 
         public void swap() {
@@ -186,6 +235,9 @@ public final class NukeLight {
             double oldbodyExposure = NukeLight.bodyExposure;
             NukeLight.bodyExposure = bodyExposure;
             bodyExposure = oldbodyExposure;
+            double oldday = NukeLight.day;
+            NukeLight.day = day;
+            day = oldday;
             boolean oldprepared = NukeLight.prepared;
             NukeLight.prepared = prepared;
             prepared = oldprepared;

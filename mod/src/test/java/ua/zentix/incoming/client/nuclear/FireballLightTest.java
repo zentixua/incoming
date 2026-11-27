@@ -1,0 +1,91 @@
+package ua.zentix.incoming.client.nuclear;
+
+import org.junit.jupiter.api.Test;
+
+import java.io.IOException;
+import java.nio.file.Files;
+import java.nio.file.Path;
+
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertTrue;
+
+/**
+ * The first seconds of a nuclear burst seen through one eye (DESIGN fireball-light): the frame's one exposure by day, the
+ * eye's flash blindness as a bounded overlay, the afterimage's colours. Artem, 27.11.2026: the fireball read as a
+ * high-contrast texture pasted on an ordinary day, and the blindness ended abruptly.
+ */
+class FireballLightTest {
+    private static final Path SHADERS = Path.of("src/main/resources/assets/incoming/shaders");
+
+    @Test
+    void theDayFollowsTheFlashPartlyAndTheNightAsBefore() {
+        assertEquals(1, NukeLight.dayShare(1), 1e-12);
+        assertEquals(0, NukeLight.dayShare(NukeLight.NIGHT_AMBIENT), 1e-12);
+        assertEquals(0, NukeLight.dayShare(0.12), 1e-12);
+        // 15 kt at 2 km, 0.5 s: the ball's light ~158 noons, eye exposure 1/159 of the unflashed one
+        double r = 1 / 159.0;
+        double daylight = NukeLight.daylightGain(r, 1), ball = NukeLight.ballGain(r, 1);
+        assertEquals(Math.sqrt(r), daylight, 1e-12, "by day the ordinary light steps back by the square root");
+        assertEquals(1, daylight * ball, 1e-12, "one exposure: what the daylight loses, the ball's light keeps");
+        assertTrue(ball * 158 * r > 10, "faces toward the ball blow out white (" + ball * 158 * r + " whites)");
+        // at night nothing changes: the dark-adapted view already takes the ball's light in full
+        assertEquals(1, NukeLight.daylightGain(r, 0), 1e-12);
+        assertEquals(1, NukeLight.ballGain(r, 0), 1e-12);
+        // without a flash, or once the eye has caught up, the frame is the unflashed one
+        assertEquals(1, NukeLight.daylightGain(NukeLight.ratio(1, 1), 1), 1e-12);
+        assertEquals(1, NukeLight.ratio(2, 1), 1e-12, "a ratio never brightens the day");
+    }
+
+    @Test
+    void flashBlindnessIsBoundedSoTheWorldStaysVisible() {
+        for (float dark : new float[]{0, 0.5f, 1}) {
+            float[] start = NukeFlash.look(0, 30, 1, dark);
+            assertTrue(start[0] <= NukeFlash.GREY_MAX && start[1] <= NukeFlash.LIFT_MAX && start[2] <= NukeFlash.NIGHT_DIM);
+            assertTrue(start[0] < 1 && start[1] < 1 && start[2] < 1, "never a solid card");
+            double before = Double.MAX_VALUE;
+            for (double t = 0; t < 30; t += 0.5) {
+                float[] l = NukeFlash.look(t, 30, 1, dark);
+                double sum = l[0] + l[1] + l[2];
+                assertTrue(sum <= before + 1e-6, "fades, never comes back: t " + t);
+                before = sum;
+            }
+            float[] end = NukeFlash.look(30, 30, 1, dark);
+            assertEquals(0, end[0] + end[1] + end[2], 1e-9, "gone by its deadline");
+        }
+        // by day the bleached eye's glow pales the picture; at night the dark-adapted eye loses the dim light instead
+        assertTrue(NukeFlash.look(10, 60, 1, 0)[1] > NukeFlash.look(10, 60, 1, 1)[1]);
+        assertEquals(0, NukeFlash.look(10, 60, 1, 0)[2], 1e-9);
+        assertTrue(NukeFlash.look(10, 60, 1, 1)[2] > 0);
+        // a weak dose: a weak veil
+        assertTrue(NukeFlash.look(0, 30, 0.2f, 0)[0] < NukeFlash.look(0, 30, 1, 0)[0]);
+    }
+
+    @Test
+    void theAfterimageTurnsFromWhiteToVioletAsItFades() {
+        float[] first = NukeFlash.afterColour(0), mid = NukeFlash.afterColour(1.5f), late = NukeFlash.afterColour(8);
+        assertTrue(first[0] > 0.9f && first[1] > 0.85f, "a positive white-yellow image first");
+        assertTrue(mid[0] > mid[1] && mid[1] > mid[2], "then orange");
+        assertTrue(late[2] > late[1] && late[0] > late[1], "then violet (Feynman's purple splotch)");
+    }
+
+    @Test
+    void creativePlayersHaveEyesSpectatorsAreCameras() throws IOException {
+        String flash = Files.readString(Path.of("src/main/java/ua/zentix/incoming/client/nuclear/NukeFlash.java"));
+        String eyes = flash.substring(flash.indexOf("static boolean eyes("), flash.indexOf("static boolean eyes(") + 200);
+        assertTrue(eyes.contains("!p.isSpectator()"));
+        assertFalse(eyes.contains("isCreative"), "flash blindness is perception, not injury: creative gets it too");
+        assertFalse(flash.contains("g.fill(0, 0, w, h, (Math.min(255, (int) (a * 255)) << 24)"), "no uniform card over the picture");
+    }
+
+    @Test
+    void theEyesVeilStaysOffTheBallAndOutOfTheNight() throws IOException {
+        String composite = Files.readString(SHADERS.resolve("core/fx_pall_composite.fsh"));
+        assertTrue(composite.contains("vec3 veil = flashVeil(dir0) * (PallFlash.y * behind);"),
+                "the veil by day only, and only where the pall leaves the world or sky behind (never over the ball's disc)");
+        assertTrue(composite.contains("return min(veil, vec3(FLASH_VEIL_PEAK));") && composite.contains("const float FLASH_VEIL_PEAK = 0.3;"),
+                "under the ball's on-screen brightness: its pattern stays readable");
+        assertTrue(composite.contains("laid.rgb += held * (1.0 - shown) * flashAmber(dir0);"),
+                "the amber dome is ball light: only the sky under it dims");
+    }
+}

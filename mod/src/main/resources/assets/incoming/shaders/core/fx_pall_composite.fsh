@@ -47,6 +47,13 @@ uniform vec3 PallSunLight;
 uniform vec3 PallSkyLight;
 // z: pall-frame downsample factor
 uniform vec4 PallFrame;
+// The frame's one exposure under a nuclear flash (NukeLight, DESIGN fireball-light §4.1): x — daylight multiplier D ≤ 1
+// (linear) for everything the vanilla frame drew (world, sky, clouds, hand), the ball's light already at the same exposure
+// (PallBallLight); y — daylight share of the sky (1 by day, 0 at night): the eye's veiling glare; z — the amber sky
+// dome's strength (NukeRenderer.drawSkyGlow), whose ball light is exempt from D
+uniform vec4 PallFlash;
+// eye-relative unit direction to the brightest detonation (xyz) for the amber dome
+uniform vec4 PallAmber;
 // firestorm: slot fire maps, fire slots (pall.glsl), patch/flicker noise (own texture unit, PallPass)
 uniform sampler2D Sampler3;
 uniform sampler2D Sampler4;
@@ -300,6 +307,8 @@ vec3 ballLitWorld(ivec2 full, vec3 n, float kept, vec3 added) {
         glass = texelFetch(FxGlass, full, 0);
         world = clamp((world - glass.rgb) / max(glass.a, 1.0 / 255.0), 0.0, 1.0);
     }
+    // the world's own (daylight) light at the frame's one exposure; the ball's added light already is (§4.1)
+    kept = pallDisplay(pallLinear(kept) * PallFlash.x);
     vec3 lit = vec3(relit(world.r, kept, open.r, added.r), relit(world.g, kept, open.g, added.g),
             relit(world.b, kept, open.b, added.b));
     lit += vec3(CROSS * max(dot(lit, LUMA) - 1.0, 0.0));
@@ -424,6 +433,33 @@ vec4 wallForeground(vec4 entry, vec4 total, vec3 dir, vec2 span, float t, Medium
     return mix(entry, total, share);
 }
 
+// The amber dome's light in this direction (NukeRenderer.drawSkyGlow, same colour and falloff toward the burst), screen
+// values: alpha × colour as it was blended over the sky
+vec3 flashAmber(vec3 dir) {
+    float toward = max(dot(dir, PallAmber.xyz), 0.0);
+    return vec3(1.0, 0.55, 0.22) * (PallFlash.z * (0.2 + 0.5 * toward * toward * toward));
+}
+
+// The eye's veiling glare from each ball (DESIGN fireball-light §4.3), linear on white: Stiles–Holladay L = 10·E/θ² (θ in
+// degrees) over a white wall E/π, i.e. 31.4·F/θ² with F the ball's light at the eye at the frame's exposure; steeper beyond
+// 30°. FLASH_VEIL scales it, FLASH_VEIL_PEAK keeps it under the ball's on-screen brightness (its pattern stays readable);
+// presentation, tuned to the reference films (ring at 2 radii 1.3–2 times the sky, at most half the ball).
+const float FLASH_VEIL = 0.35;
+const float FLASH_VEIL_PEAK = 0.3;
+vec3 flashVeil(vec3 dir) {
+    vec3 veil = vec3(0.0);
+    for (int i = 0; i < 4; i++) {
+        vec4 b = PallBalls[i];
+        if (b.w <= 0.0) continue;
+        float d2 = dot(b.xyz, b.xyz), d = sqrt(d2);
+        float theta = degrees(acos(clamp(dot(dir, b.xyz / d), -1.0, 1.0)));
+        float th = max(theta, degrees(atan(b.w / d)));
+        float k = FLASH_VEIL * 31.4 / (th * th) * min(1.0, 30.0 / th);
+        veil += PallBallLight[i].rgb * (b.w * b.w / max(d2, b.w * b.w)) * k;
+    }
+    return min(veil, vec3(FLASH_VEIL_PEAK));
+}
+
 void main() {
     ivec2 fullSize = textureSize(Sampler1, 0), lowSize = textureSize(Sampler0, 0);
     ivec2 full = ivec2(gl_FragCoord.xy);
@@ -433,7 +469,7 @@ void main() {
     // lights it as it lights the world around (ballLight, with the pall overhead at the eye): a dark hand in a world the flash
     // made bright looked cut out of another scene
     if (pallHand(depth)) {
-        fragColor = vec4(0.0, 0.0, 0.0, 1.0);
+        fragColor = vec4(0.0, 0.0, 0.0, pallDisplay(PallFlash.x));
         if (PallLayerFrame == 0 && PallBalls[0].w > 0.0) {
             vec4 farHand = InvViewProj * vec4((vec2(full) + 0.5) / vec2(fullSize) * 2.0 - 1.0, 1.0, 1.0);
             vec3 dirHand = normalize(farHand.xyz / farHand.w);
@@ -568,6 +604,24 @@ void main() {
     }
     // brighter world: pall plus the ball-lit world behind it (alpha 0, blending ignores frame); the lit pixel holds the
     // surface over the world, as the frame did
+    // what the pall leaves of the world and sky behind it, before the flash exposure: the eye's veil does not fall on the ball
+    float behind = pallValid(pall) ? pall.a : 1.0;
     if (whole && pallValid(pall)) laid = vec4(laid.rgb + laid.a * ballLit, 0.0);
+    else {
+        // the vanilla frame at the flash exposure; the amber dome over the sky is ball light, so only the sky under it dims
+        float shown = pallDisplay(PallFlash.x), held = laid.a;
+        laid.a *= shown;
+        if (depth >= 1e8 && PallFlash.z > 0.004) laid.rgb += held * (1.0 - shown) * flashAmber(dir0);
+    }
+    if (PallFlash.y > 0.0 && balls) {
+        vec3 veil = flashVeil(dir0) * (PallFlash.y * behind);
+        if (dot(veil, LUMA) > 1e-4) {
+            vec3 shownNow = laid.rgb + laid.a * texelFetch(Sampler9, full, 0).rgb;
+            laid = vec4(pallDisplay(pallLinear(shownNow.r) + veil.r), pallDisplay(pallLinear(shownNow.g) + veil.g),
+                    pallDisplay(pallLinear(shownNow.b) + veil.b), 0.0);
+            // half a screen step of noise: the wide veil's 8-bit steps would show as rings over a dark frame
+            laid.rgb += (fract(sin(dot(gl_FragCoord.xy, vec2(12.9898, 78.233))) * 43758.5453) - 0.5) / 255.0;
+        }
+    }
     fragColor = laid;
 }

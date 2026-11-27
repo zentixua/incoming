@@ -1,5 +1,7 @@
 package ua.zentix.incoming.client.nuclear;
 
+import com.google.gson.JsonSyntaxException;
+import com.mojang.blaze3d.pipeline.RenderTarget;
 import com.mojang.blaze3d.platform.GlStateManager;
 import com.mojang.blaze3d.systems.RenderSystem;
 import com.mojang.blaze3d.vertex.BufferBuilder;
@@ -12,11 +14,15 @@ import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.client.multiplayer.ClientLevel;
 import net.minecraft.client.player.LocalPlayer;
+import net.minecraft.client.renderer.PostChain;
 import net.minecraft.client.renderer.ShaderInstance;
+import net.minecraft.server.packs.resources.ResourceManager;
+import net.minecraft.server.packs.resources.ResourceManagerReloadListener;
 import net.minecraft.util.Mth;
 import net.minecraft.world.phys.Vec3;
 import org.jetbrains.annotations.Nullable;
 import org.joml.Matrix4f;
+import ua.zentix.incoming.Incoming;
 import ua.zentix.incoming.IncomingConfig;
 import ua.zentix.incoming.client.TickTime;
 import ua.zentix.incoming.client.fx.Flash;
@@ -28,6 +34,7 @@ import ua.zentix.incoming.nuclear.model.FlashLight;
 import ua.zentix.incoming.nuclear.radiation.FlashEyes;
 import ua.zentix.incoming.nuclear.radiation.RetinaScars;
 
+import java.io.IOException;
 import java.util.List;
 
 /**
@@ -43,9 +50,10 @@ import java.util.List;
  * (ball seen — full; unseen — sky-scattered through openings; sealed — none) and dark adaptation:
  * a bright afterimage at first, turning gray by day or black at night after seconds, fading by the deadline; shorter
  * dazzle means a weaker veil. Retinal burns are permanent dark spots where the ball was on the retina (from server,
- * {@link FlashEyes}); they move with gaze. Creative and spectator use a camera rather than eyes (they cannot be injured): no
- * dazzle or spots in these modes (spots remain attached to the player), with the same white screen and afterimage; the Flashback
- * viewer is a spectator. A sleeping player has closed eyes. Death clears dazzle.
+ * {@link FlashEyes}); they move with gaze. A creative player has eyes too: flash blindness is perception, not injury, so
+ * creative gets the dazzle (DESIGN fireball-light §4.2; it ended in 0.6 s there, Artem 27.11: "the blindness ends abruptly");
+ * retinal burns stay survival-only (the server injures no creative player). A spectator, and the Flashback viewer, is a
+ * camera: white screen and afterimage only. A sleeping player has closed eyes. Death clears dazzle.
  */
 public final class NukeFlash {
     @Nullable
@@ -73,10 +81,18 @@ public final class NukeFlash {
     private static final double VEIL_X = 100, GAIN_MAX = 16;
     /** Overexposure below which the frame stays unchanged: gain is smaller than a screen step. */
     private static final double SETTLED = 1.004;
-    /** Initial dazzle veil (almost nothing discernible in the field) and time for the bright afterimage to darken, s. */
-    private static final float VEIL = 0.9f, AFTERGLOW_S = 2;
-    /** Veil after the afterimage: gray by day (dazzled cones), black at night. */
-    private static final float DAY_GREY = 0.45f;
+    /**
+     * Flash blindness over the picture at full bleach (presentation, bounded so the world always stays visible; DESIGN
+     * fireball-light §4.2): colour lost toward grey, the bleached eye's glow lifting the blacks (warm white, fading over
+     * {@link #AFTERGLOW_S}, then {@link #DAY_LIFT} by day), and at night the dim light a dark-adapted eye has lost. It replaced
+     * a uniform fill at 0.9 opacity, grey by day and black at night, that hid the whole picture.
+     */
+    static final float GREY_MAX = 0.75f, LIFT_MAX = 0.55f, DAY_LIFT = 0.3f, NIGHT_DIM = 0.6f, AFTERGLOW_S = 2;
+    private static final net.minecraft.resources.ResourceLocation EYE_CHAIN = Incoming.id("shaders/post/flash_eye.json");
+    @Nullable
+    private static PostChain eyeChain;
+    private static boolean eyeBroken;
+    private static int eyeWidth, eyeHeight;
     /** Field dazzle: start (local client ticks, pulse end), duration in s, strength 0..1, degree of dark adaptation. */
     private static double veilStart, veilSeconds;
     private static float veilStrength, veilDark;
@@ -208,9 +224,9 @@ public final class NukeFlash {
         if (afterLeft > 0) afterLeft--;
     }
 
-    /** Eyes rather than a camera: neither creative nor spectator (nor a replay viewer). */
-    private static boolean eyes(@Nullable LocalPlayer p) {
-        return p != null && !p.isCreative() && !p.isSpectator();
+    /** Eyes rather than a camera: any player but a spectator (or a replay viewer, who is one); creative included. */
+    static boolean eyes(@Nullable LocalPlayer p) {
+        return p != null && !p.isSpectator();
     }
 
     /** Respawn after death: the new body does not carry the dead eyes' dazzle or afterimage (server sends retinal spots). */
@@ -308,6 +324,23 @@ public final class NukeFlash {
     }
 
     /**
+     * Afterimage colour t s after the flash (presentation of the afterimage's "flight of colours", DESIGN fireball-light §4.2):
+     * a positive white-yellow image first, then orange, then a violet one (Feynman at Trinity: "this purple splotch").
+     */
+    static float[] afterColour(float t) {
+        float[][] keys = {{0, 1f, 0.92f, 0.7f}, {1.5f, 0.55f, 0.24f, 0.08f}, {6, 0.3f, 0.1f, 0.42f}};
+        if (t <= keys[0][0]) return new float[]{keys[0][1], keys[0][2], keys[0][3]};
+        for (int i = 1; i < keys.length; i++) {
+            if (t <= keys[i][0]) {
+                float u = (t - keys[i - 1][0]) / (keys[i][0] - keys[i - 1][0]);
+                return new float[]{Mth.lerp(u, keys[i - 1][1], keys[i][1]), Mth.lerp(u, keys[i - 1][2], keys[i][2]), Mth.lerp(u, keys[i - 1][3], keys[i][3])};
+            }
+        }
+        float[] k = keys[keys.length - 1];
+        return new float[]{k[1], k[2], k[3]};
+    }
+
+    /**
      * Afterimage — an orange spot where the ball was on the retina at flash time, fading slowly; moves with
      * gaze like a real one: turn your head and the spot stays at the same screen position while the ball moves away. Screen position and size
      * come from flash time: FOV changes (spyglass, sprinting) do not move it, just as they do not move the retina.
@@ -328,30 +361,77 @@ public final class NukeFlash {
         // spot up to 800 pixels — analytic glow (an image would show texture-pixel squares)
         BufferBuilder b = Tesselator.getInstance().begin(VertexFormat.Mode.QUADS, DefaultVertexFormat.POSITION_TEX_COLOR);
         Matrix4f m = g.pose().last().pose();
-        spot(b, m, x, y, px, 0.55f, 0.24f, 0.08f, a);
-        spot(b, m, x, y, px / 3, 0.6f, 0.4f, 0.2f, a * 0.5f);
+        float[] c = afterColour((afterTotal - afterLeft + partial) / 20f);
+        spot(b, m, x, y, px, c[0], c[1], c[2], a);
+        spot(b, m, x, y, px / 3, Math.min(1, c[0] * 1.1f), Math.min(1, c[1] * 1.6f), Math.min(1, c[2] * 2.5f), a * 0.5f);
         BufferUploader.drawWithShader(b.buildOrThrow());
         RenderSystem.defaultBlendFunc();
         RenderSystem.disableBlend();
     }
 
     /**
-     * Dazzle veil: from pulse maximum (before it — white frame, {@link #overexposed}), fades by its deadline as
-     * (1 − t/T)²; color is a bright afterimage darkening over seconds (toward gray by day, black at night: a dark-adapted
-     * eye cannot see dim light).
+     * Flash blindness (DESIGN fireball-light §4.2): from pulse maximum (before it — white frame, {@link #overexposed}), a
+     * post pass over the finished picture whose strength fades by its deadline as (1 − t/T)² ({@link #look}). It never lowers
+     * the frame's exposure: the world stays visible through it.
      */
     private static void veil(GuiGraphics g, float partial, int w, int h) {
         if (veilSeconds <= 0) return;
         double t = (TickTime.at(ticks, partial) - veilStart) / 20;
         if (t < 0 || t >= veilSeconds) return;
-        double life = 1 - t / veilSeconds;
-        float a = (float) (VEIL * life * life * veilStrength);
-        if (a <= 0.004f) return;
-        float base = DAY_GREY * (1 - veilDark), glow = (float) Math.exp(-t / AFTERGLOW_S);
-        float c = base + (1 - base) * glow;
-        int r = (int) (255 * c), gr = (int) (255 * c * 0.96f), b = (int) (255 * c * 0.88f);
-        g.fill(0, 0, w, h, (Math.min(255, (int) (a * 255)) << 24) | (r << 16) | (gr << 8) | b);
+        float[] look = look(t, veilSeconds, veilStrength, veilDark);
+        if (look[0] + look[1] + look[2] <= 0.004f) return;
+        Minecraft mc = Minecraft.getInstance();
+        RenderTarget main = mc.getMainRenderTarget();
+        PostChain post = eyeChain(mc, main);
+        if (post == null) return;
+        // what the GUI drew below this layer (the flash, camera overlays) is part of what the eye sees
+        g.flush();
+        post.setUniform("Grey", look[0]);
+        post.setUniform("Lift", look[1]);
+        post.setUniform("Dim", look[2]);
+        post.process(0);
+        main.bindWrite(false);
     }
+
+    /**
+     * Flash blindness at t s of a T s dazzle of strength k (0..1) with dark adaptation dark (0 day .. 1 night): {grey, lift, dim},
+     * each a bounded share of the bleach (1 − t/T)²·k, so the world stays visible. The lift is the bleached eye's own glow:
+     * warm white at first, settling to {@link #DAY_LIFT} by day and to nothing at night, where the dark-adapted eye instead
+     * loses the dim light ({@link #NIGHT_DIM}).
+     */
+    static float[] look(double t, double seconds, float k, float dark) {
+        if (seconds <= 0 || t < 0 || t >= seconds) return new float[3];
+        double life = 1 - t / seconds, bleach = life * life * k;
+        double glow = Math.exp(-t / AFTERGLOW_S);
+        double lift = LIFT_MAX * (glow + (1 - glow) * DAY_LIFT / LIFT_MAX * (1 - dark));
+        return new float[]{(float) (GREY_MAX * bleach), (float) (lift * bleach), (float) (NIGHT_DIM * dark * (1 - glow) * bleach)};
+    }
+
+    @Nullable
+    private static PostChain eyeChain(Minecraft mc, RenderTarget main) {
+        if (eyeChain == null && !eyeBroken) {
+            try {
+                eyeChain = new PostChain(mc.getTextureManager(), mc.getResourceManager(), main, EYE_CHAIN);
+                eyeWidth = eyeHeight = -1;
+            } catch (IOException | JsonSyntaxException e) {
+                eyeBroken = true;
+                org.slf4j.LoggerFactory.getLogger(NukeFlash.class).warn("Flash blindness on screen is off: {} did not load", EYE_CHAIN, e);
+            }
+        }
+        if (eyeChain != null && (main.width != eyeWidth || main.height != eyeHeight)) {
+            eyeWidth = main.width;
+            eyeHeight = main.height;
+            eyeChain.resize(eyeWidth, eyeHeight);
+        }
+        return eyeChain;
+    }
+
+    /** Resource reload: the flash-blindness pass is built again from the new resources. */
+    public static final ResourceManagerReloadListener RELOAD = (ResourceManager manager) -> {
+        if (eyeChain != null) eyeChain.close();
+        eyeChain = null;
+        eyeBroken = false;
+    };
 
     /**
      * Retinal burns — dark, soft-edged spots where the ball was on the retina, in the player's configured FOV (like

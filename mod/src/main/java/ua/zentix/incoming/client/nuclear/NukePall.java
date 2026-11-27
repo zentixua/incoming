@@ -255,6 +255,7 @@ public final class NukePall {
         openSky(level, f.openSky, f.faceShade);
         double open = 0.2126 * PallLight.linear(f.openSky.x) + 0.7152 * PallLight.linear(f.openSky.y) + 0.0722 * PallLight.linear(f.openSky.z);
         f.ballsLit = MushroomField.balls(all, eye, partial, air, f.exposure, open, f.balls, f.ballLight);
+        flash(all, eye, partial, f);
         List<ClientNuclear.Active> visible = new ArrayList<>();
         if (q != PallPass.Quality.OFF) for (ClientNuclear.Active a : all) if (visible(a, partial)) visible.add(a);
         if (visible.isEmpty() && f.mushroomCount == 0 && !f.ballsLit && !dust) return null;
@@ -330,6 +331,7 @@ public final class NukePall {
         f.balls.zero();
         f.ballLight.zero();
         f.ballsLit = false;
+        f.flash.set(1, 0, 0, 0);
         PallPass.Quality q = quality();
         f.quality = q == PallPass.Quality.OFF ? PallPass.Quality.LOW : q;
         f.slot0.zero();
@@ -474,8 +476,10 @@ public final class NukePall {
         f.sunTop.set(SKY.top[0], SKY.top[1], SKY.top[2], SKY.eyeUp);
         // airlight: the sky vanilla draws behind distant matter, without its sun, moon and stars (fx_pall: pallAirLight)
         float[] fog = ua.zentix.incoming.client.fx.layer.FxLayer.fogColor();
-        f.airSky.set(SKY.shown[0], SKY.shown[1], SKY.shown[2]);
-        f.airFog.set(fog[0], fog[1], fog[2], Minecraft.getInstance().gameRenderer.getRenderDistance());
+        // the sky behind matter dims with the sky itself under the flash (fx_pall_composite: PallFlash), in screen values
+        float shownDay = (float) PallLight.display(NukeLight.daylight());
+        f.airSky.set(SKY.shown[0] * shownDay, SKY.shown[1] * shownDay, SKY.shown[2] * shownDay);
+        f.airFog.set(fog[0] * shownDay, fog[1] * shownDay, fog[2] * shownDay, Minecraft.getInstance().gameRenderer.getRenderDistance());
         f.base = SKY.base;
         f.exposure = SKY.exposure;
         f.bodyExposure = (float) NukeLight.bodyExposure();
@@ -584,9 +588,36 @@ public final class NukePall {
         }
         // wall reflection and fire glow (on screen) add to on-screen sky light — this value
         into.base = ambient;
-        // mushroom glow is a black body at real brightness (noon white wall = 1): into frame with eye adaptation to sky
-        into.exposure = (float) NukeLight.exposure();
+        // mushroom glow is a black body at real brightness (noon white wall = 1): into frame at the frame's one exposure
+        // (NukeLight.frameExposure; the ball's own film curve cancels it, so only the light it casts changes)
+        into.exposure = (float) NukeLight.frameExposure();
+        // daylight on matter under the flash: the same one exposure (DESIGN fireball-light §4.1), 1 without a flash or at night
+        float daylight = (float) NukeLight.daylight();
+        for (int c = 0; c < 3; c++) {
+            into.sky[c] *= daylight;
+            into.top[c] *= daylight;
+            into.sun[c] *= daylight;
+        }
         into.glowOnSmoke = (float) CloudPuffs.glowOnSmoke(ambient);
+    }
+
+    /**
+     * The frame's one exposure for the composite (DESIGN fireball-light §4.1): the daylight multiplier, the daylight share
+     * that gives the eye's veil (only while a ball lights the frame), and the strongest amber dome with its direction, whose
+     * light the composite keeps out of the daylight dimming.
+     */
+    static void flash(List<ClientNuclear.Active> all, Vec3 eye, float partial, PallPass.Frame f) {
+        float amber = 0;
+        Vec3 toward = new Vec3(0, 1, 0);
+        for (ClientNuclear.Active a : all) {
+            float k = NukeSky.amber(a, eye, partial);
+            if (k > amber) {
+                amber = k;
+                toward = a.d.burst().subtract(eye).normalize();
+            }
+        }
+        f.flash.set((float) NukeLight.daylight(), f.ballsLit ? (float) NukeLight.day() : 0, amber, 0);
+        f.amber.set((float) toward.x, (float) toward.y, (float) toward.z, 0);
     }
 
     /**
