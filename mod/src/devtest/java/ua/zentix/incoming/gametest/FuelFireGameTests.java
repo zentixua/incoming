@@ -209,7 +209,7 @@ public final class FuelFireGameTests {
      * Rule 11 of the time note (docs/design/time.md §8.3), {@code doFireTick} off, strike fire as in the game
      * ({@code StrikeRules.lightFrozenFireForTest(false)}), debris staying: the Shahed's fuel ball, blast and burning debris
      * light no block fire (it would stand forever); the crater fuel fire still burns its law's cells and time, and at
-     * burn-out removes every one of its blocks, though each cell has a log beside it (with fire tick on the log keeps a
+     * burn-out removes every one of its blocks, though logs stand beside the cells (with fire tick on a log keeps a
      * game fire going, {@link #droneFuelBurnsOnTheCraterFloorAsLongAsItLasts}). After the law's end no fire block is left
      * within {@link #MINE} of the impact.
      */
