@@ -63,6 +63,8 @@ public final class DevHands {
      * not the game's.
      */
     private boolean watch;
+    /** {@code smoke on}: every smoke source's state twice a second ({@code DEV smoke}). */
+    private boolean smoke;
     private final float[] lastLuma = new float[3];
     private long frames;
     private final java.nio.ByteBuffer px = org.lwjgl.BufferUtils.createByteBuffer(4);
@@ -103,6 +105,9 @@ public final class DevHands {
     private void tick(ClientTickEvent.Post e) {
         Minecraft mc = Minecraft.getInstance();
         tick++;
+        if (smoke && tick % 10 == 0 && mc.level != null)
+            Incoming.LOG.info("DEV smoke t {} fps {} | {} | {}", mc.level.getGameTime(), mc.getFps(),
+                    ua.zentix.incoming.client.far.FarRenderer.describeSmoke(), ua.zentix.incoming.client.fx.smoke.SmokeGrid.describeSources());
         for (var it = presses.iterator(); it.hasNext(); ) {
             Object[] p = it.next();
             String result = press(mc, (String) p[1]);
@@ -205,6 +210,13 @@ public final class DevHands {
                 }
                 done(id, "ok");
             }
+            case "smoke" -> {
+                // every smoke source's preparation state, now and each second while on (a pop's cause by source)
+                smoke = arg.equals("on");
+                Incoming.LOG.info("DEV smoke {} | {}", ua.zentix.incoming.client.far.FarRenderer.describeSmoke(),
+                        ua.zentix.incoming.client.fx.smoke.SmokeGrid.describeSources());
+                done(id, "ok");
+            }
             case "watch" -> {
                 watch = arg.equals("on");
                 frames = 0;
@@ -214,7 +226,7 @@ public final class DevHands {
                 DustWallSteps.apply(arg);
                 done(id, "ok");
             }
-            default -> throw new IllegalArgumentException("unknown: " + line + " (cmd, reload, shot, hud, press, dw, age, skip, watch, describe)");
+            default -> throw new IllegalArgumentException("unknown: " + line + " (cmd, reload, shot, hud, press, dw, age, skip, watch, smoke, describe)");
         }
     }
 

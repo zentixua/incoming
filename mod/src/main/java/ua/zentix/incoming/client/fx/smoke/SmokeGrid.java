@@ -258,6 +258,11 @@ public final class SmokeGrid {
 
     private static final List<Source> SOURCES = new ArrayList<>();
     private static SmokePreparation PREPARATION = new SmokePreparation();
+
+    /** Dev diagnostics: every source's preparation state now ({@link SmokePreparation#describe}). */
+    public static String describeSources() {
+        return SOURCES.size() + " sources" + PREPARATION.describe(seconds(0));
+    }
     /** Sources whose clumps entered this frame's grid (quads render others, {@link #quads}). */
     private static java.util.Set<Source> IN_GRID = java.util.Collections.newSetFromMap(new java.util.IdentityHashMap<>());
     private static Frame FRAME = new Frame();
