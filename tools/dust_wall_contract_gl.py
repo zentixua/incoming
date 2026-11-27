@@ -47,8 +47,10 @@ def march_setup():
     g.glUseProgram(program)
     g.glUniformMatrix4fv(loc(program, "InvViewProj"), 1, True, np.linalg.inv(projection).astype(np.float32))
     g.glUniform3f(loc(program, "PallForward"), 0, 0, -1)
-    # the drawn world reaches 168 blocks along the ground (12 chunks, PallPass.floorFrom)
+    # every case: the drawn world reaches 168 blocks along the ground (12 chunks, NukePall.floorFrom; the relief search
+    # starts there, as in the game), the horizon lift as without LODs (DustWallPass.HORIZON_LIFT)
     g.glUniform1f(loc(program, "PallFloorFrom"), 168)
+    g.glUniform1f(loc(program, "DwHorizonLift"), 4)
     g.glUniform1f(loc(program, "DwDiv"), 4)
     g.glUniform1f(loc(program, "DwSourceCount"), 1)
     g.glUniform4f(loc(program, "DwSlotsA"), 0, 1, 2, 3)
@@ -707,9 +709,16 @@ def horizon_cases():
         strip, level = light[0, 1, 3], light[1, 1, 3]
         print(f"eye 1.62 up, wall {wall} out: the strip's row T={strip:.4f}, the level row T={level:.4f}")
         check(strip < 0.05 and level < 0.05, f"the wave {wall} blocks out stands on the drawn edge, no sky under it")
+    # with LODs drawn this frame the far ground is there: no raise (a hole in the LOD terrain keeps the relief's end)
+    g.glUseProgram(program)
+    g.glUniform1f(loc(program, "DwHorizonLift"), 0)
+    lod = march(program, make_scene(1e9), 2)[0][0, 1, 3]
+    g.glUniform1f(loc(program, "DwHorizonLift"), 4)
+    print(f"eye 1.62 up, wall 2000 out, LODs drawn: the strip's row T={lod:.4f}")
+    check(lod > 0.99, "with LODs drawn a ray under the ground is not raised")
     # an eye 20 up, looking 4° down at a wall 2 km out: its ray meets the undrawn ground 286 blocks out, raised by the lift's
-    # 4 m at the drawn edge it still meets it 410 out: the sky stays (vanilla's undrawn ground, as in any view from above;
-    # raised to the horizon it would cross the layer 14 blocks up)
+    # passes the drawn edge 8 m up, so it is not raised: the sky stays (vanilla's undrawn ground, as in any view from above;
+    # raised to the horizon it would cross the layer 14 blocks up). More such eyes: tools/dust_wall_horizon_probe.py
     source(program, eye=(0, 20, 2800, 10))
     pitch_view(program, 4)
     high = march(program, make_scene(1e9), 2)[0][1, 1, 3]

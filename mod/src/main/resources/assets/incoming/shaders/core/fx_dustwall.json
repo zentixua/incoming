@@ -24,6 +24,7 @@
         { "name": "DwSandBulk", "type": "float", "count": 3, "values": [0.7, 0.6, 0.45] },
         { "name": "PallAir", "type": "float", "count": 4, "values": [0.0, 0.0, 0.0, 0.0] },
         { "name": "PallFloorFrom", "type": "float", "count": 1, "values": [0.0] },
+        { "name": "DwHorizonLift", "type": "float", "count": 1, "values": [0.0] },
         { "name": "PallAirSky", "type": "float", "count": 3, "values": [0.0, 0.0, 0.0] },
         { "name": "PallAirFog", "type": "float", "count": 4, "values": [0.0, 0.0, 0.0, 0.0] },
         { "name": "DwFrame", "type": "float", "count": 2, "values": [0.0, 128.0] },

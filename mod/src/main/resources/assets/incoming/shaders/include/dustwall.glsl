@@ -181,10 +181,9 @@ vec3 dwMaterial(vec2 xz) {
     if (DwMatCoarse.z <= 0.0) return vec3(0.0);
     return dwMaterialTile(DwMatCoarse, 1.0, xz);
 }
-// presentation (est.): the most a ray with no world behind it is raised toward the undrawn ground's horizon, in blocks of height
-// at the drawn world's edge: a standing eye's strip (1.6 m at the edge) plus the coarse floor's error there. A higher eye looks
-// down onto ground Minecraft does not draw (sky past the drawn chunks without LODs) and keeps that limit
-const float DW_HORIZON_LIFT = 4.0;
+// presentation: the most a ray with no world behind it is raised toward the undrawn ground's horizon, blocks of height at the
+// drawn world's edge (DustWallPass.HORIZON_LIFT; 0 when an LOD mod drew the far ground this frame: no strip to close)
+uniform float DwHorizonLift;
 // where the ray dir from the eye (unit) goes under the terrain map of the nearest source (source 0), searched past the drawn
 // world (from: the render distance along the ground or up/down) in 64 steps growing with distance and a secant; 1e9 when it
 // does not: a pixel with no world behind it ends there (the pall's pallFloor law on the dust's own map; 24 steps stepped over
@@ -192,31 +191,35 @@ const float DW_HORIZON_LIFT = 4.0;
 // Minecraft draws no ground there, so a ray that met that ground ended in front of a wave standing on it, and the wave floated
 // over a strip of sky as wide as the angle between the drawn edge and its foot (15 kt from 2 km, 12 chunks: a ray 0.5° down
 // ended 315 m out, the wall 400 m out; the strip shrank as the wall came in). Such a ray is raised (dir) toward the undrawn
-// ground's horizon along its bearing, by at most DW_HORIZON_LIFT at the drawn edge (presentation: the strip shows the foot of
-// what stands on that ground, on the drawn world's edge, as the horizon is on screen): fully raised it ends nowhere; raised by
-// the most it ends where the raised ray meets the ground. One search serves both rays and the horizon (the steepest rise to
+// ground's horizon along its bearing (presentation: the strip shows the foot of what stands on that ground, on the drawn
+// world's edge, as the horizon is on screen), by what its clearance over the floor at the drawn edge leaves of DwHorizonLift:
+// a near-ground eye's strip closes, an eye on a hill or a roof passes the edge metres up and is not raised (a fixed angle drew
+// the wave below its own foot from a hill, 70 % taller at 12 chunks). Fully raised it ends nowhere; raised by the most it
+// ends where the raised ray meets the ground. One search serves both rays and the horizon (the steepest rise to
 // the floor, half a block over it) — a second loop of floor reads unrolled on AMD's compiler (114 → 150 KB)
 float dwRayFloor(inout vec3 dir, float from, float jitter) {
     dwLoad(0);
     if (DwGround.x <= 0.0) return 1e9;
     float near = from / max(max(length(dir.xz), abs(dir.y)), 1e-3);
-    // the raised ray: dir.y + rise per block along the ray (none for a ray close to straight down)
-    float hl = length(dir.xz);
-    float rise = hl > 0.2 ? DW_HORIZON_LIFT / max(from, 1.0) * hl : 0.0;
-    vec3 dir2 = dir + vec3(0.0, rise, 0.0);
     vec2 span = pallBox(dir, vec3(-DwEye.x - DwGround.x, -1e6, -DwEye.z - DwGround.x),
             vec3(-DwEye.x + DwGround.x, DwGround.z - DwEye.y, -DwEye.z + DwGround.x));
     float ta = max(max(span.x, near), 1.0), tb = span.y;
+    vec3 q0 = DwEye.xyz + dir * ta;
+    float d0 = q0.y - dwFloorCoarse(q0.xz);
+    // the raised ray: dir.y + rise per block along the ray, what the ray's clearance over the floor at the drawn edge leaves of
+    // the lift (a search starting past the edge: the ray passed the edge over the map's top)
+    float edge = ta <= near + 1.0 ? d0 : DwEye.y + dir.y * near - DwGround.z;
+    float rise = clamp(DwHorizonLift - edge, 0.0, DwHorizonLift) / max(near, 1.0);
+    vec3 dir2 = dir + vec3(0.0, rise, 0.0);
     // past the map's bottom the raised ray is under every floor (it met it before)
     if (dir2.y < 0.0) tb = min(tb, max((DwGround.y - DwEye.y) / dir2.y, ta) + 4.0 * DwGround.w);
     if (tb <= ta) return 1e9;
     float ratio = pow(tb / ta, 1.0 / 64.0);
-    vec3 q0 = DwEye.xyz + dir * ta;
     // the ray ends on the floor the dust lies on (the eye's coarse tile, then the map). The pall's law (pallFloor): where that
     // floor at the start stands over the ray (the ray passed over the real ground of the drawn chunks), it drops under the ray
     // there and is as it was four map cells farther; without it every ray past the drawn chunks under a map standing over the
     // eye ends at their edge with no dust
-    float fade = 4.0 * DwGround.w, d0 = q0.y - dwFloorCoarse(q0.xz);
+    float fade = 4.0 * DwGround.w;
     float lift = max(1.0 - d0, 0.0) * step(ta, near + 1.0);
     float prevT = ta, prevD = d0 + lift, prevD2 = prevD + rise * ta, top = (0.5 - d0) / ta;
     float t = ta * pow(ratio, jitter);
