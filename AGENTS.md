@@ -219,8 +219,8 @@ queues, little rework; each mission's budget is checked against its measured loa
   (existing mod law, new laws sourced). Small edits directly. A brief gives goal, decisions, references, done numbers,
   not the implementation. The player outcome stays fixed: fixing evidence stays in, new outcomes go to a follow-up PR.
 - **Validation:** code changes need build and touched-area GameTest (`./gradlew build`; GameTest
-  `./gradlew runGameTestServer -PgametestOnly=…`, on the laptop in `tools/laptop_job.sh`). Numeric claims get unit tests/GameTest; comment/guide promises held
-  by tests. Documentation-only changes use the applicable CI checks, without a game run. Split large work.
+  `./gradlew runGameTestServer -PgametestOnly=…`, on the laptop in `tools/laptop_job.sh`). Numeric claims get unit
+  tests/GameTest; comment/guide promises held by tests. Documentation-only changes use the applicable CI checks, without a game run. Split large work.
 - **Visual/audio:** the `look` skill (scope, traits and mechanism before code; clips judged in motion); the player's
   eye decides, numbers inform. Look changes iterate in the dev client (look skill); whole-pack takes and the matrix
   only for the final set. Before/after frames/WAV in PR; where frames render: `client-scenario.md`. Scene bench
