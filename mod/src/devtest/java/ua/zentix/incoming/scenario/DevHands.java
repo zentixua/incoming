@@ -49,6 +49,11 @@ public final class DevHands {
     public DevHands() {
         String dir = System.getProperty("incoming.dev.inbox");
         inbox = dir == null ? null : Path.of(dir);
+        // -Dincoming.dev.smoke=true: the smoke log from the start, in any client with the scenario jar (a Flashback export too)
+        if (Boolean.getBoolean("incoming.dev.smoke")) {
+            smoke = true;
+            if (inbox == null) NeoForge.EVENT_BUS.addListener(this::tick);
+        }
         if (inbox == null) return;
         NeoForge.EVENT_BUS.addListener(this::tick);
         NeoForge.EVENT_BUS.addListener(this::opened);
@@ -124,7 +129,7 @@ public final class DevHands {
             ua.zentix.incoming.client.nuclear.ClientNuclear.rewound();
             done((String) k[0], (String) k[2]);
         }
-        if (tick % 4 != 0) return;
+        if (inbox == null || tick % 4 != 0) return;
         List<Path> files;
         try (Stream<Path> list = Files.list(inbox)) {
             files = list.filter(f -> f.getFileName().toString().endsWith(".cmd")).sorted().toList();
