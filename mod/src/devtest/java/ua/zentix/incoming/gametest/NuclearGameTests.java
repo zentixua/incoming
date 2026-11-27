@@ -1454,7 +1454,14 @@ public final class NuclearGameTests {
     @GameTest(template = "range", timeoutTicks = 40, batch = "nuke_stale_plan", skyAccess = true)
     public static void minedPlankMakesPlanStaleBeforeTheFlash(GameTestHelper h) {
         ServerLevel level = h.getLevel();
-        BlockPos plank = CENTER.west(8);
+        // a plank whose own rubble does not land back on its cell (RuinPlanner.leavesRubble, 12 % of positions): there the
+        // plank is not in the plan at all
+        BlockPos plank = null;
+        for (int dz = 0; dz < 7 && plank == null; dz++) {
+            BlockPos p = CENTER.west(8).south(dz % 2 == 0 ? dz / 2 : -(dz + 1) / 2);
+            if (!RuinPlanner.leavesRubble(h.absolutePos(p))) plank = p;
+        }
+        h.assertTrue(plank != null, "every plank position on the row leaves its own rubble");
         h.setBlock(plank, Blocks.OAK_PLANKS);
         Detonation d = detonation(h, CENTER, 0, 15, 0.025f);
         LevelChunk chunk = level.getChunkAt(h.absolutePos(plank));
@@ -1462,21 +1469,23 @@ public final class NuclearGameTests {
         h.setBlock(plank, Blocks.AIR);
         ColumnScar.Budget budget = new ColumnScar.Budget(false);
         h.assertFalse(plan.apply(level, chunk, d, budget), "a plan made over a mined plank was set before the flash");
+        // every plan here is made over the untouched chunk: a plan made over ruins depends on where their rubble lands
+        // (position hash). After the flash a plank a player mined is not taken for burned out
         h.setBlock(plank, Blocks.OAK_PLANKS);
-        RuinPlan again = RuinPlanner.plan(level, d, chunk);
-        h.setBlock(plank, Blocks.AIR);
+        RuinPlan mined = RuinPlanner.plan(level, d, chunk);
         chunk.setData(ua.zentix.incoming.registry.ModAttachments.FLASH_LAYER, d.id());
-        h.assertTrue(again.apply(level, chunk, d, budget), "a plank burned out after the flash made the plan stale");
-        // after the flash too, a plank a player mined is not taken for burned out
-        h.setBlock(plank, Blocks.OAK_PLANKS);
-        RuinPlan third = RuinPlanner.plan(level, d, chunk);
         net.minecraft.server.level.ServerPlayer player = net.neoforged.neoforge.common.util.FakePlayerFactory.getMinecraft(level);
         // what ServerPlayerGameMode.destroyBlock posts before it removes the block
         h.assertFalse(net.neoforged.neoforge.common.NeoForge.EVENT_BUS.post(new net.neoforged.neoforge.event.level.BlockEvent.BreakEvent(level,
                 h.absolutePos(plank), h.getBlockState(plank), player)).isCanceled(), "the break was canceled");
         h.setBlock(plank, Blocks.AIR);
-        chunk.setData(ua.zentix.incoming.registry.ModAttachments.FLASH_LAYER, d.id());
-        h.assertFalse(third.apply(level, chunk, d, budget), "a plank a player mined after the flash was taken for burned out");
+        h.assertFalse(mined.apply(level, chunk, d, budget), "a plank a player mined after the flash was taken for burned out");
+        // a plank that burned out after the flash, in a chunk no player broke a block in, still matches the plan
+        chunk.removeData(ua.zentix.incoming.registry.ModAttachments.PLAYER_BROKE);
+        h.setBlock(plank, Blocks.OAK_PLANKS);
+        RuinPlan again = RuinPlanner.plan(level, d, chunk);
+        h.setBlock(plank, Blocks.AIR);
+        h.assertTrue(again.apply(level, chunk, d, budget), "a plank burned out after the flash made the plan stale");
         h.succeed();
     }
 
