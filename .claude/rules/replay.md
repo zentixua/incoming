@@ -49,6 +49,9 @@ paths:
   clients retain marks on chunk unload and show the detonation layer by their own clock (`FlashMarksClient.index`:
   layer time no later than clock + 20 ticks): seeking before detonation hides traces, forward shows them. Seeking far
   ahead to a recording section where the chunk arrived before the snapshot may fail to show them (known gap).
+- Video export draws its frames without `RenderFrameEvent`: per-frame state reset only by that event stays at its
+  pre-export value through the whole export (`NukeLight.fresh` samples the nuclear light by game time). Diagnostics during an export: `incoming.dev.inbox` (devtest `DevHands`: `age`,
+  `light`, `dw`) works there too.
 - Video export (`FlashbackReplay.exporting`: `Flashback.EXPORT_JOB` non-null): frames are not real-time, so frame-budget
   controls do not reduce quality (nuclear pall detail pinned to the setting, `PallPass.Detail.pin`). During export, the
   game frame has the video's dimensions (Flashback 0.39: `ExportJob` resizes the frame and provides it as the window);

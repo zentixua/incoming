@@ -12,6 +12,7 @@ import net.neoforged.neoforge.client.event.ClientTickEvent;
 import net.neoforged.neoforge.client.event.ScreenEvent;
 import net.neoforged.neoforge.common.NeoForge;
 import ua.zentix.incoming.Incoming;
+import ua.zentix.incoming.client.fx.layer.FxViews;
 
 import java.io.IOException;
 import java.nio.file.Files;
@@ -177,6 +178,8 @@ public final class DevHands {
                 done(id, "ok");
             }
             case "press" -> presses.add(new Object[] {id, arg, tick});
+            case "light" -> done(id, "ok " + ua.zentix.incoming.client.nuclear.NukeLight.describe() + "; view secondary " + FxViews.secondary()
+                    + " skipped " + FxViews.skipped() + ", target " + mc.getMainRenderTarget().width + "x" + mc.getMainRenderTarget().height);
             case "age" -> {
                 // the newest detonation's shown age, its front's ground radius and the eye's ground distance (a hold at a
                 // front distance needs them: /tick step's pace varies with the frame rate)

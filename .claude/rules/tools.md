@@ -109,6 +109,8 @@ Prism: `~/.var/app/org.prismlauncher.PrismLauncher/data/PrismLauncher/` (`tools/
                                            --wait, in the lease queue) and waits until Artem's game is closed; his game started during the
                                            job (polled every second) stops it: “Artem's game started at T: job stopped”, exit 75;
                                            at the end, “laptop_job <name>: exit N”; --status: what runs and who holds the GPU;
+                                           the command runs in the job's own unit: environment set on an outer systemd-run
+                                           does not reach it (a script re-invoking itself must pass its mode as an argument);
                                            --soft: a vanilla client (shared GPU slot or CPU), no lease, CPUWeight=idle, MemoryMax from soft_gl.sh, no swap;
                                            every job has a memory ceiling (--ceiling <mode>): 10 GB + 4 GB swap, --full (whole pack) 20 GB,
                                            --full only with --acceptance (a final take: refused with 2 without it, each counted as a

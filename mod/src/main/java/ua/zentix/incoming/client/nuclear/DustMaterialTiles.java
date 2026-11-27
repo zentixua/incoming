@@ -151,6 +151,21 @@ public final class DustMaterialTiles {
         return (rgba[4 * (t * SIDE * SIDE + j * SIDE + i) + c] & 255) / 255.0;
     }
 
+    /**
+     * Diagnostics ({@code dw:ground=}): both tiles' RGBA8 cells and their frames, {@code <prefix>_material.rgba} and {@code .json}
+     * (counts of cells with a non-zero water, sand and hard share, and known cells).
+     */
+    public void writeDiag(String prefix, String how) throws java.io.IOException {
+        java.nio.file.Files.write(java.nio.file.Path.of(prefix + "_material.rgba"), rgba);
+        int[] count = new int[4];
+        for (int i = 0; i < rgba.length; i += 4) for (int c = 0; c < 4; c++) if (rgba[i + c] != 0) count[c]++;
+        java.nio.file.Files.writeString(java.nio.file.Path.of(prefix + "_material.json"), String.format(java.util.Locale.ROOT,
+                "{\"side\": %d, \"burst\": [%.3f, %.3f], \"origin\": [[%d, %d], [%d, %d]], \"cell\": [%d, %d], \"left\": %d, "
+                        + "\"version\": %d, \"nonzero_water\": %d, \"nonzero_sand\": %d, \"nonzero_hard\": %d, \"known\": %d, \"source\": \"%s\"}",
+                SIDE, burstX, burstZ, originX[0], originZ[0], originX[1], originZ[1], cell[0], cell[1], left, version, count[0], count[1],
+                count[2], count[3], how));
+    }
+
     /** Tile t's origin from ground zero (x, z, blocks; the shader's frame of reference), cell size and cells across. */
     public void tile(int t, float[] out, int offset, double burstX, double burstZ) {
         out[offset] = (float) (originX[t] - burstX);
