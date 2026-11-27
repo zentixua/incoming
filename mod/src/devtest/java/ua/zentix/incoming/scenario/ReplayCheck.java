@@ -130,6 +130,62 @@ final class ReplayCheck {
         Incoming.LOG.info("SCENARIO replay left world");
     }
 
+    /** Ticks to wait for Flashback's replay after {@code leave}; how long its size must hold before the run ends. */
+    private static final int LEAVE_WAIT = 2400, LEAVE_STABLE = 40;
+
+    /**
+     * The commands scenario's {@code leave} step: leave the world as "Save and Quit" does, wait until Flashback has written the
+     * replay it was recording (the newest zip in its replay folder, newer than the step, its size unchanged for
+     * {@link #LEAVE_STABLE} ticks), log {@code SCENARIO left: replay <file> <bytes>} and stop the client. A filming take
+     * records with Flashback ({@code recordingControls.automaticallyStart} and {@code quicksave} in the copy's
+     * {@code config/flashback/flashback.json}) and ends with this step, so the replay is finished before the client exits.
+     */
+    static void leaveAndStop() {
+        long since = System.currentTimeMillis();
+        Class<?> fb;
+        try {
+            fb = Class.forName("com.moulberry.flashback.Flashback");
+        } catch (ClassNotFoundException e) {
+            fb = null;
+        }
+        Class<?> flashback = fb;
+        int[] ticks = {0, 0};
+        long[] size = {-1};
+        NeoForge.EVENT_BUS.addListener((ClientTickEvent.Post e) -> {
+            Minecraft mc = Minecraft.getInstance();
+            if (mc.level != null || ticks[0] < 0) return;
+            ticks[0]++;
+            Path zip = null;
+            try {
+                if (flashback != null) {
+                    Path dir = (Path) flashback.getMethod("getReplayFolder").invoke(null);
+                    if (Files.isDirectory(dir)) {
+                        try (Stream<Path> s = Files.list(dir)) {
+                            zip = s.filter(p -> p.getFileName().toString().endsWith(".zip") && p.toFile().lastModified() >= since)
+                                    .max(Comparator.comparing(p -> p.toFile().lastModified())).orElse(null);
+                        }
+                    }
+                }
+                long now = zip == null ? -1 : Files.size(zip);
+                if (now > 0 && now == size[0]) ticks[1]++;
+                else ticks[1] = 0;
+                size[0] = now;
+            } catch (ReflectiveOperationException | IOException ex) {
+                Incoming.LOG.warn("SCENARIO left: replay folder unreadable", ex);
+                zip = null;
+                ticks[0] = LEAVE_WAIT;
+            }
+            boolean done = ticks[1] >= LEAVE_STABLE;
+            if (!done && ticks[0] < LEAVE_WAIT && flashback != null) return;
+            if (done) Incoming.LOG.info("SCENARIO left: replay {} {} bytes", zip, size[0]);
+            else Incoming.LOG.warn("SCENARIO left: no finished replay after {} ticks{}", ticks[0], flashback == null ? " (Flashback not loaded)" : "");
+            ticks[0] = -1;
+            Incoming.LOG.info("SCENARIO done");
+            mc.stop();
+        });
+        Minecraft.getInstance().tell(ReplayCheck::leave);
+    }
+
     private void onTick(ClientTickEvent.Post e) {
         if (finished) return;
         Minecraft mc = Minecraft.getInstance();
