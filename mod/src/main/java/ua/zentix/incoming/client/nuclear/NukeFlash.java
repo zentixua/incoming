@@ -87,7 +87,15 @@ public final class NukeFlash {
      * {@link #AFTERGLOW_S}, then {@link #DAY_LIFT} by day), and at night the dim light a dark-adapted eye has lost. It replaced
      * a uniform fill at 0.9 opacity, grey by day and black at night, that hid the whole picture.
      */
-    static final float GREY_MAX = 0.75f, LIFT_MAX = 0.55f, DAY_LIFT = 0.3f, NIGHT_DIM = 0.6f, AFTERGLOW_S = 2;
+    static final float GREY_MAX = 0.75f, LIFT_MAX = 0.85f, DAY_LIFT = 0.3f, NIGHT_DIM = 0.6f, AFTERGLOW_S = 2;
+    /**
+     * The near-white first phase lasts this share of the dazzle, at most {@link #HOLD_MAX} s: about 2 s for 15 kt at 2 km
+     * facing the ball by day, a fraction of a second far away (Artem 27.11: the films stay white for seconds; ours follows the
+     * dose at the eye). Presentation of the bleached eye's own glow.
+     */
+    static final float HOLD_SHARE = 0.04f, HOLD_MAX = 2;
+    /** Gaze factor of the bleached eye's glow: the ball's image on the retina (facing it) against scattered light alone. */
+    static final float TURNED_AWAY = 0.35f;
     private static final net.minecraft.resources.ResourceLocation EYE_CHAIN = Incoming.id("shaders/post/flash_eye.json");
     @Nullable
     private static PostChain eyeChain;
@@ -95,7 +103,7 @@ public final class NukeFlash {
     private static int eyeWidth, eyeHeight;
     /** Field dazzle: start (local client ticks, pulse end), duration in s, strength 0..1, degree of dark adaptation. */
     private static double veilStart, veilSeconds;
-    private static float veilStrength, veilDark;
+    private static float veilStrength, veilDark, veilGaze = 1;
     /** Retinal burns — spots in the visual field ({@link RetinaScars.Scar}). */
     private static List<RetinaScars.Scar> scars = List.of();
 
@@ -112,7 +120,7 @@ public final class NukeFlash {
         Vec3 look = p.getViewVector(1);
         double angle = Math.toDegrees(Math.acos(Mth.clamp(look.dot(d.burst().subtract(eye).normalize()), -1, 1)));
         boolean inView = !p.isSleeping() && light.seen() && angle < 60;
-        if (eyes(p) && !p.isSleeping()) dazzle(mc.level, d, eye, q);
+        if (eyes(p) && !p.isSleeping()) dazzle(mc.level, d, eye, q, gaze(angle, light.seen()));
         // spot larger than the visible ball: the eye "smears" glare
         float[] spot = inView && q >= 0.05 ? retina(mc, p, d.burst(), Math.max(d.fireballRadius(), 30) * 2.2) : null;
         if (spot != null) {
@@ -155,7 +163,7 @@ public final class NukeFlash {
     }
 
     /** Field dazzle from pulse {@code q} cal/cm² at the eye; keep existing dazzle that ends later. */
-    private static void dazzle(ClientLevel level, Detonation d, Vec3 eye, double q) {
+    private static void dazzle(ClientLevel level, Detonation d, Vec3 eye, double q, float gaze) {
         double dark = FlashEyes.darkness(level, eye);
         double seconds = EyeInjury.dazzleSeconds(q, d.yieldKt(), dark);
         float k = IncomingConfig.CLIENT.flash.get().floatValue();
@@ -169,6 +177,13 @@ public final class NukeFlash {
         veilSeconds = seconds;
         veilStrength = k * (float) Math.min(1, seconds / EyeInjury.EDGE_S);
         veilDark = (float) dark;
+        veilGaze = gaze;
+    }
+
+    /** Gaze factor at {@code angle}° between the view and the ball: 1 within 30°, {@link #TURNED_AWAY} from 90° on (or unseen). */
+    static float gaze(double angle, boolean seen) {
+        if (!seen) return TURNED_AWAY;
+        return (float) Mth.clamp(1 - (angle - 30) / 60 * (1 - TURNED_AWAY), TURNED_AWAY, 1);
     }
 
     /**
@@ -378,7 +393,7 @@ public final class NukeFlash {
         if (veilSeconds <= 0) return;
         double t = (TickTime.at(ticks, partial) - veilStart) / 20;
         if (t < 0 || t >= veilSeconds) return;
-        float[] look = look(t, veilSeconds, veilStrength, veilDark);
+        float[] look = look(t, veilSeconds, veilStrength, veilDark, veilGaze);
         if (look[0] + look[1] + look[2] <= 0.004f) return;
         Minecraft mc = Minecraft.getInstance();
         RenderTarget main = mc.getMainRenderTarget();
@@ -394,17 +409,26 @@ public final class NukeFlash {
     }
 
     /**
-     * Flash blindness at t s of a T s dazzle of strength k (0..1) with dark adaptation dark (0 day .. 1 night): {grey, lift, dim},
-     * each a bounded share of the bleach (1 − t/T)²·k, so the world stays visible. The lift is the bleached eye's own glow:
-     * warm white at first, settling to {@link #DAY_LIFT} by day and to nothing at night, where the dark-adapted eye instead
-     * loses the dim light ({@link #NIGHT_DIM}).
+     * Flash blindness at t s of a T s dazzle of strength k (0..1), dark adaptation dark (0 day .. 1 night) and gaze factor
+     * ({@link #gaze}): {grey, lift, dim}, each a bounded share of the bleach (1 − t/T)²·k, so the world stays visible. The
+     * lift is the bleached eye's own glow: near white for the hold ({@link #HOLD_SHARE} of T, at most {@link #HOLD_MAX} s;
+     * full facing the ball), then fading over {@link #AFTERGLOW_S} to {@link #DAY_LIFT} by day and to nothing at night, where
+     * the dark-adapted eye instead loses the dim light ({@link #NIGHT_DIM}).
      */
-    static float[] look(double t, double seconds, float k, float dark) {
+    static float[] look(double t, double seconds, float k, float dark, float gaze) {
         if (seconds <= 0 || t < 0 || t >= seconds) return new float[3];
         double life = 1 - t / seconds, bleach = life * life * k;
-        double glow = Math.exp(-t / AFTERGLOW_S);
-        double lift = LIFT_MAX * (glow + (1 - glow) * DAY_LIFT / LIFT_MAX * (1 - dark));
+        double hold = Math.min(HOLD_MAX, HOLD_SHARE * seconds);
+        double glow = t <= hold ? 1 : Math.exp(-(t - hold) / AFTERGLOW_S);
+        double lift = LIFT_MAX * gaze * glow + DAY_LIFT * (1 - glow) * (1 - dark);
         return new float[]{(float) (GREY_MAX * bleach), (float) (lift * bleach), (float) (NIGHT_DIM * dark * (1 - glow) * bleach)};
+    }
+
+    /** Seconds the view stays near white (lift at least {@code white}) after the pulse maximum, for the report and tests. */
+    static double whiteSeconds(double seconds, float k, float dark, float gaze, float white) {
+        double t = 0;
+        while (t < seconds && look(t, seconds, k, dark, gaze)[1] >= white) t += 0.05;
+        return t;
     }
 
     @Nullable

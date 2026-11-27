@@ -40,25 +40,37 @@ class FireballLightTest {
     @Test
     void flashBlindnessIsBoundedSoTheWorldStaysVisible() {
         for (float dark : new float[]{0, 0.5f, 1}) {
-            float[] start = NukeFlash.look(0, 30, 1, dark);
+            float[] start = NukeFlash.look(0, 30, 1, dark, 1);
             assertTrue(start[0] <= NukeFlash.GREY_MAX && start[1] <= NukeFlash.LIFT_MAX && start[2] <= NukeFlash.NIGHT_DIM);
             assertTrue(start[0] < 1 && start[1] < 1 && start[2] < 1, "never a solid card");
             double before = Double.MAX_VALUE;
             for (double t = 0; t < 30; t += 0.5) {
-                float[] l = NukeFlash.look(t, 30, 1, dark);
+                float[] l = NukeFlash.look(t, 30, 1, dark, 1);
                 double sum = l[0] + l[1] + l[2];
                 assertTrue(sum <= before + 1e-6, "fades, never comes back: t " + t);
                 before = sum;
             }
-            float[] end = NukeFlash.look(30, 30, 1, dark);
+            float[] end = NukeFlash.look(30, 30, 1, dark, 1);
             assertEquals(0, end[0] + end[1] + end[2], 1e-9, "gone by its deadline");
         }
         // by day the bleached eye's glow pales the picture; at night the dark-adapted eye loses the dim light instead
-        assertTrue(NukeFlash.look(10, 60, 1, 0)[1] > NukeFlash.look(10, 60, 1, 1)[1]);
-        assertEquals(0, NukeFlash.look(10, 60, 1, 0)[2], 1e-9);
-        assertTrue(NukeFlash.look(10, 60, 1, 1)[2] > 0);
+        assertTrue(NukeFlash.look(10, 60, 1, 0, 1)[1] > NukeFlash.look(10, 60, 1, 1, 1)[1]);
+        assertEquals(0, NukeFlash.look(10, 60, 1, 0, 1)[2], 1e-9);
+        assertTrue(NukeFlash.look(10, 60, 1, 1, 1)[2] > 0);
         // a weak dose: a weak veil
-        assertTrue(NukeFlash.look(0, 30, 0.2f, 0)[0] < NukeFlash.look(0, 30, 1, 0)[0]);
+        assertTrue(NukeFlash.look(0, 30, 0.2f, 0, 1)[0] < NukeFlash.look(0, 30, 1, 0, 1)[0]);
+    }
+
+    @Test
+    void aNearFacingLookStaysWhiteForSecondsAFarOrTurnedOneBriefly() {
+        // Artem 27.11: the films stay white for seconds; ours follows the dose at the eye, the same in creative and survival
+        double near = NukeFlash.whiteSeconds(50, 1, 0, NukeFlash.gaze(10, true), 0.6f);
+        double turned = NukeFlash.whiteSeconds(50, 1, 0, NukeFlash.gaze(120, true), 0.6f);
+        double far = NukeFlash.whiteSeconds(10, 0.4f, 0, NukeFlash.gaze(10, true), 0.6f);
+        assertTrue(near >= 2 && near <= 4, "near and facing: several seconds of near white, " + near);
+        assertTrue(turned < 0.5, "turned away: brief, " + turned);
+        assertTrue(far < near / 2, "far: brief, " + far);
+        assertEquals(NukeFlash.TURNED_AWAY, NukeFlash.gaze(10, false), 1e-6, "an unseen ball bleaches by scattered light only");
     }
 
     @Test
