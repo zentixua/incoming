@@ -246,10 +246,13 @@ final class DistantHorizonsTerrain implements TerrainSource {
     /** Blocks from the top point {@code top} down to the ground under leaves ({@code Terrain.dustTop}); 0 without; −1 none. */
     private static int canopy(DhApiTerrainDataPoint[] column, int top) {
         if (!(column[top].blockStateWrapper.getWrappedMcObject() instanceof BlockState t) || !ua.zentix.incoming.util.Terrain.canopy(t)) return 0;
-        for (int i = top + 1; i < column.length; i++) {
+        for (int i = top; i < column.length; i++) {
             DhApiTerrainDataPoint p = column[i];
             if (p != null && p.blockStateWrapper != null && p.blockStateWrapper.getWrappedMcObject() instanceof BlockState s
-                    && GROUND.test(s)) return Math.max(0, column[top].topYBlockPos - p.topYBlockPos);
+                    && GROUND.test(s)) {
+                int canopy = column[top].topYBlockPos - p.topYBlockPos;
+                return canopy <= LssColumns.MAX_CANOPY ? Math.max(0, canopy) : -1;
+            }
         }
         return -1;
     }

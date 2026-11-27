@@ -106,7 +106,7 @@ public final class TerrainTiles {
 
     /**
      * Tile column tops: height, vanilla map colour ({@link MapColor#id}) and water depth; inputs to pixel painting
-     * ({@link #paint}) and larger tile composition. 16 KB per tile.
+     * ({@link #paint}) and larger tile composition, with the canopy for the dust's ground. 20 KB per tile.
      */
     static final class Columns {
         static final short NONE = Short.MIN_VALUE;
@@ -131,7 +131,7 @@ public final class TerrainTiles {
             height[i] = (short) Mth.clamp(c.height(), Short.MIN_VALUE + 1, Short.MAX_VALUE);
             color[i] = (byte) c.color().id;
             depth[i] = (byte) Math.min(c.waterDepth(), Byte.MAX_VALUE);
-            canopy[i] = (byte) (c.canopy() > Byte.MAX_VALUE ? -1 : c.canopy());
+            canopy[i] = (byte) (c.canopy() > LssColumns.MAX_CANOPY ? -1 : c.canopy());
             filled++;
         }
 

@@ -10,6 +10,7 @@ import net.minecraft.world.level.material.FluidState;
 import net.minecraft.world.level.material.Fluids;
 import net.minecraft.world.level.material.MapColor;
 import org.jetbrains.annotations.Nullable;
+import ua.zentix.incoming.util.Terrain;
 
 import java.io.DataInputStream;
 import java.io.DataOutputStream;
@@ -45,7 +46,10 @@ final class LssColumns {
     private static final int PRESENT = 1 << 23;
     /** Canopy depth known (bits 24–29 hold it). */
     private static final int CANOPY = 1 << 30;
-    /** Deepest canopy stored: deeper reads as unknown (no vanilla tree's leaves reach that far over the ground). */
+    /**
+     * Deepest canopy kept, blocks, by every source (6 bits here): deeper reads as unknown, also the bound of a scan down through
+     * leaves (chosen: over twice a vanilla jungle or dark-oak crown's height over its floor; a modded giant tree past it is unknown).
+     */
     static final int MAX_CANOPY = 63;
     private static final int HEIGHT_BIAS = 2048;
     /** {@code MOTION_BLOCKING} heightmap blocks: block movement or contain fluid. */
@@ -146,8 +150,8 @@ final class LssColumns {
      */
     private static int ground(@Nullable Section[] sections, int x, int top, int z) {
         BlockState t = block(sections, x, top, z);
-        if (t == null || !ua.zentix.incoming.util.Terrain.canopy(t)) return top;
-        for (int y = top; y >= 0; y--) {
+        if (t == null || !Terrain.canopy(t)) return top;
+        for (int y = top; y >= Math.max(0, top - MAX_CANOPY); y--) {
             BlockState state = block(sections, x, y, z);
             if (state != null && GROUND.test(state)) return y;
         }

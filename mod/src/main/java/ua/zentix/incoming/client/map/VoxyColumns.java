@@ -9,7 +9,9 @@ import net.minecraft.world.level.material.FluidState;
 import net.minecraft.world.level.material.Fluids;
 import net.minecraft.world.level.material.MapColor;
 import org.jetbrains.annotations.Nullable;
+import ua.zentix.incoming.util.Terrain;
 
+import java.util.Arrays;
 import java.util.function.IntUnaryOperator;
 import java.util.function.LongToIntFunction;
 import java.util.function.Predicate;
@@ -21,7 +23,8 @@ import java.util.function.Predicate;
  * computed here, so covered by unit tests.
  * <p>
  * Level {@code L} Voxy section has 32³ voxels of {@code 2^L} blocks (index {@code y·1024 + z·32 + x}); above level zero,
- * Voxy combines eight smaller voxels using the most opaque, uppermost on a tie, and air only if all are air
+ * Voxy combines eight smaller voxels using the most opaque (leaves count as fully opaque), on a tie the +x child first,
+ * then +y, then +z, and air only if all are air
  * ({@code Mipper}). Thus the top non-air voxel in a column is the highest block of the {@code 2^L × 2^L} cell,
  * but its exact height within the voxel is unknown: take voxel midpoint ({@link #height}), error up to
  * ±{@code 2^L/2} blocks. Level 0 is exact, like chunks.
@@ -49,16 +52,20 @@ final class VoxyColumns {
     private static final Predicate<BlockState> NO_LEAVES = Heightmap.Types.MOTION_BLOCKING_NO_LEAVES.isOpaque();
 
     private static final byte TOP = 0, COLOR = 1, DEPTH = 2, DONE = 3;
+    private static final int SEARCHING = Integer.MIN_VALUE, UNKNOWN = Integer.MIN_VALUE + 1, NONE = Integer.MAX_VALUE;
 
     private VoxyColumns() {}
 
-    /** Block information for decoding: map colour ID (bits 0–5), {@link #KNOWN}, {@link #MOTION}, {@link #WATER}. */
+    /**
+     * Block information for decoding: map colour ID (bits 0–5), {@link #KNOWN}, {@link #MOTION}, {@link #WATER}, {@link #LEAVES},
+     * {@link #GROUND}.
+     */
     static int info(BlockState state) {
         MapColor color = state.getMapColor(EmptyBlockGetter.INSTANCE, BlockPos.ZERO);
         FluidState fluid = state.getFluidState();
         boolean water = fluid.is(FluidTags.WATER) || fluid.getType().isSame(Fluids.WATER);
         return KNOWN | color.id & 0x3F | (MOTION_BLOCKING.test(state) ? MOTION : 0) | (water ? WATER : 0)
-                | (ua.zentix.incoming.util.Terrain.canopy(state) ? LEAVES : 0) | (NO_LEAVES.test(state) ? GROUND : 0);
+                | (Terrain.canopy(state) ? LEAVES : 0) | (NO_LEAVES.test(state) ? GROUND : 0);
     }
 
     /**
@@ -82,16 +89,21 @@ final class VoxyColumns {
         private final int[] budget = new int[AREA], depth = new int[AREA], color = new int[AREA], top = new int[AREA];
         /**
          * Under leaves on top the scan goes on down to the ground ({@link #GROUND}) after colour and depth: its height,
-         * {@link Integer#MIN_VALUE} while searching, unset ({@code MAX_VALUE}) without a canopy. A column ends when both end.
+         * {@link #SEARCHING} while searching, {@link #NONE} without a canopy, {@link #UNKNOWN} where no ground was proven. A
+         * column ends when both end. Above level 0 a voxel holding leaves may hold the forest floor too (Voxy mips leaves as
+         * fully opaque, like grass and stone: a level-4 forest read 10-21 m under its floor); only an air voxel between the leaves
+         * and the ground proves the gap, else the canopy is unknown. The leaves voxel's bottom, to stop the scan
+         * {@link LssColumns#MAX_CANOPY} blocks under it.
          */
-        private final int[] ground = new int[AREA];
+        private final int[] ground = new int[AREA], crown = new int[AREA];
+        private final boolean[] gap = new boolean[AREA];
         private int open = AREA;
         /** Last supplied section: next one is one below. */
         private int lastY = Integer.MAX_VALUE;
 
         Summary(int level) {
             this.level = level;
-            java.util.Arrays.fill(ground, Integer.MAX_VALUE);
+            Arrays.fill(ground, NONE);
             this.scale = 1 << level;
             // Search 8 blocks below transparent blocks (glass, light) for colour, as in the chunk layer.
             this.colorless = Math.max(1, LssColumns.MAX_COLORLESS >> level);
@@ -121,19 +133,26 @@ final class VoxyColumns {
         }
 
         private boolean finished(int i) {
-            return state[i] == DONE && ground[i] != Integer.MIN_VALUE;
+            return state[i] == DONE && ground[i] != SEARCHING;
         }
 
         /** One voxel in column {@code i}, top-down: information for its block {@code b} (0 air or unknown). */
         private void step(int i, int b, int bottom) {
-            if (ground[i] == Integer.MIN_VALUE && (b & GROUND) != 0) {
-                ground[i] = height(level, bottom);
-                if (state[i] == DONE) open--;
+            if (ground[i] == SEARCHING) {
+                if (b == 0) gap[i] = true;
+                if ((b & GROUND) != 0 || bottom < crown[i] - LssColumns.MAX_CANOPY) {
+                    // the ground voxel's top: the block top lies in it, the gap above it is air
+                    ground[i] = (b & GROUND) != 0 && (level == 0 || gap[i]) ? bottom + scale : UNKNOWN;
+                    if (state[i] == DONE) open--;
+                }
             }
             switch (state[i]) {
                 case TOP -> {
                     if ((b & MOTION) == 0) return;
-                    if ((b & LEAVES) != 0 && (b & GROUND) == 0) ground[i] = Integer.MIN_VALUE;
+                    if ((b & LEAVES) != 0 && (b & GROUND) == 0) {
+                        ground[i] = SEARCHING;
+                        crown[i] = bottom;
+                    }
                     state[i] = COLOR;
                     budget[i] = colorless;
                     colour(i, b, bottom);
@@ -167,14 +186,16 @@ final class VoxyColumns {
             }
             if (--budget[i] > 0) return;
             // No colour below transparent blocks either: unknown column, as in the chunk layer.
+            // (its canopy is of no use without a column)
             color[i] = -1;
+            ground[i] = UNKNOWN;
             state[i] = DONE;
-            if (ground[i] != Integer.MIN_VALUE) open--;
+            open--;
         }
 
         private void close(int i) {
             state[i] = DONE;
-            if (ground[i] != Integer.MIN_VALUE) open--;
+            if (ground[i] != SEARCHING) open--;
         }
 
         /**
@@ -186,7 +207,7 @@ final class VoxyColumns {
                 if (state[i] == DEPTH) state[i] = DONE;
                 if (state[i] != DONE || color[i] < 0) continue;
                 int g = ground[i];
-                int canopy = g == Integer.MAX_VALUE ? 0 : g == Integer.MIN_VALUE ? -1 : Math.max(0, top[i] - g);
+                int canopy = g == NONE ? 0 : g == SEARCHING || g == UNKNOWN ? -1 : Math.max(0, top[i] - g);
                 out[i] = LssColumns.pack(top[i], color[i], depth[i] * scale, canopy);
             }
             return out;

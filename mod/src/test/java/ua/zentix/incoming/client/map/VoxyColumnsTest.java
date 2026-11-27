@@ -156,4 +156,18 @@ class VoxyColumnsTest {
         int[] open = new Stack(0).put(3, 4, 40, LEAF).summarize(9, 1);
         assertTrue(Double.isNaN(LssColumns.column(at(open, 3, 4)).ground()));
     }
+
+    /**
+     * Above level 0 a voxel holding leaves may hold the floor too (Voxy mips leaves as fully opaque): only an air voxel between
+     * the leaves and the ground proves the canopy; leaves straight on a ground voxel leave it unknown (VoxyCoarseCanopyProbeTest).
+     */
+    @Test
+    void coarseCanopyNeedsAnAirGap() {
+        // level 2 (4-block voxels): ground voxel at 28-31, air 32-35, leaves 36-39
+        int[] gap = new Stack(2).put(3, 4, 28, SOIL).put(3, 4, 36, LEAF).summarize(9, -2);
+        TerrainSource.Column c = LssColumns.column(at(gap, 3, 4));
+        assertEquals(32, c.ground(), "the ground voxel's top");
+        int[] mixed = new Stack(2).put(3, 4, 28, SOIL).put(3, 4, 32, LEAF).summarize(9, -2);
+        assertTrue(Double.isNaN(LssColumns.column(at(mixed, 3, 4)).ground()), "no gap: unknown");
+    }
 }
