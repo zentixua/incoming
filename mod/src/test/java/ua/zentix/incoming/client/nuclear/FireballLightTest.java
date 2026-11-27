@@ -136,8 +136,12 @@ class FireballLightTest {
         String pall = Files.readString(SHADERS.resolve("include/pall.glsl"));
         GlslFunction over = GlslFunction.parse(pall, "pallOverWhite");
         String composite = Files.readString(SHADERS.resolve("core/fx_pall_composite.fsh"));
-        assertTrue(composite.contains("lit = vec3(pallOverWhite(lit.r, lum), pallOverWhite(lit.g, lum), pallOverWhite(lit.b, lum));"),
-                "the world's relit pixel takes the wash toward white");
+        String heat = Files.readString(SHADERS.resolve("core/fx_heat.fsh"));
+        String lighting = body(composite, "vec3 ballLitWorld(");
+        int cross = lighting.indexOf("lit += vec3(CROSS"), wash = lighting.indexOf("lit = pallWashWhite(lit);"), display = lighting.indexOf("vec3 shown = ");
+        assertTrue(cross >= 0 && cross < wash && wash < display, "the nuclear world: CROSS, then the wash, then the display");
+        assertTrue(heat.contains("lit = pallWashWhite(lit + vec3(CROSS * max(dot(lit, LUMA) - 1.0, 0.0)));"),
+                "the conventional world light takes the same wash (one law for the world above white)");
         double[][] worlds = {{0.25, 0.45, 0.15}, {0.45, 0.25, 0.2}, {0.6, 0.62, 0.55}};
         double[] ball = {1, 0.78, 0.55};
         for (double[] w : worlds) {
@@ -190,8 +194,9 @@ class FireballLightTest {
         assertEquals(Math.pow(0.01, NukeLight.FOLLOW_LASTING), NukeLight.daylightGain(0.01, 1, 1), 1e-12, "fully adapted: the lasting share");
         assertEquals(1, NukeLight.daylightGain(0.01, 0, 1), 1e-12, "the night as before");
         double a = 1;
-        for (int i = 0; i < 60; i++) a = NukeLight.adapt(a, 0, 1 / 60.0);
-        assertTrue(a < 0.01, "back in daylight the adaptation is gone within a second: " + a);
+        for (int i = 0; i < 60 * 20; i++) a = NukeLight.adapt(a, 0, 1 / 60.0);
+        assertTrue(a < 0.01, "back in daylight the adaptation fades within 20 s: " + a);
+        assertEquals(1, NukeLight.daylightGain(1, 1, 1), 1e-12, "and an adapted eye without a flash sees the plain day");
     }
 
     /** The ball's light on screen in whites (noon whites at the eye × ball gain × r) at the given seconds, the slow state stepped at 60 fps. */
@@ -228,5 +233,14 @@ class FireballLightTest {
         assertFalse(NukeLight.fresh(true, 10.25, 10.25), "the same frame's later fog calls");
         String light = Files.readString(Path.of("src/main/java/ua/zentix/incoming/client/nuclear/NukeLight.java"));
         assertTrue(light.contains("if (!fresh(prepared, preparedAt, at)) return;"), "the fog-colour hook samples by game time");
+    }
+
+    private static String body(String source, String head) {
+        int from = source.indexOf(head), depth = 0;
+        for (int i = source.indexOf('{', from); i < source.length(); i++) {
+            if (source.charAt(i) == '{') depth++;
+            if (source.charAt(i) == '}' && --depth == 0) return source.substring(from, i + 1);
+        }
+        throw new AssertionError(head);
     }
 }

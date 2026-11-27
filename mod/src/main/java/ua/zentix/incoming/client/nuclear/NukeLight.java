@@ -34,7 +34,7 @@ public final class NukeLight {
     private static double last = Double.NaN, exposure = 1, bodyExposure = 1, day = 1, sky = 1;
     /**
      * The eye's slow adaptation, 0..1: how far it has adapted to a lasting light, growing with {@link #SLOW_UP_S} while the
-     * ball's light exceeds the daylight, lost with {@link NukeExposure#ADAPT_S} once it no longer does.
+     * ball's light exceeds the daylight and fading at that pace once it no longer does ({@link #adapt}).
      */
     private static double slow;
     /**
@@ -47,9 +47,9 @@ public final class NukeLight {
     /**
      * Share of the flash the frame follows once the eye has had time to adapt to a lasting light (presentation, est.): the
      * square root holds for a flash, and an eye or a camera held for seconds in a light tens of noons strong adapts most of
-     * the way (cone light adaptation, auto-exposure). At {@value #FOLLOW_DAY} for the whole of a megaton's ten-second pulse,
-     * the world and the dust the ball lights stood at 3–9 whites for 15 s at 4.5 km from 1 Mt: one flat white and orange
-     * fill until the ball had cooled. Below 1: the sun-lit day stays faintly visible beside the ball's light.
+     * the way (cone light adaptation, auto-exposure). At {@value #FOLLOW_DAY} through a megaton's ten-second pulse the world
+     * and the dust the ball lights stand at 3–9 whites for 15 s at 4.5 km from 1 Mt, one flat white and orange fill. Below
+     * 1: the sun-lit day keeps a dim share beside the ball's light.
      */
     static final double FOLLOW_LASTING = 0.85;
     /**
@@ -69,9 +69,8 @@ public final class NukeLight {
 
     /**
      * Whether a fog-colour call at game time {@code at} must sample the light again: once per frame event, and on any new game
-     * time. A Flashback video export draws its frames directly, without the frame events (replay.md): with the frame event
-     * alone the exposure stayed at its pre-export value through the whole export, the ball's light shown at the unflashed
-     * exposure, the world white and the dust a flat orange for a megaton's whole pulse.
+     * time. A Flashback video export draws its frames directly, without the frame events (replay.md): sampled per frame
+     * event alone, an export keeps its pre-export exposure and shows the ball's light at the unflashed one, the world white.
      */
     static boolean fresh(boolean prepared, double preparedAt, double at) {
         return !prepared || at != preparedAt;
@@ -98,34 +97,53 @@ public final class NukeLight {
         ClientLevel level = mc.level;
         if (level == null) return;
         Vec3 camera = e.getCamera().getPosition();
-        double now = at / 20, fire = 0;
+        double now = at / 20, fire = 0, lasting = 0;
         double ambient = FarView.ambient(level, partial);
         CAMERA.clear();
         for (ClientNuclear.Active a : ClientNuclear.detonations()) {
             FlashLight.Eye eye = sample(level, a, camera, partial);
             CAMERA.put(a, eye);
             fire += eye.light();
+            if (eye.light() > 0) lasting = Math.max(lasting, a.seconds(partial));
         }
         setting = flashSetting();
-        update(now, ambient, fire);
+        update(now, ambient, fire, lasting);
         if (!ua.zentix.incoming.client.fx.layer.FxViews.secondary()) NukeFlash.frame();
     }
 
     /** Advance the one exposure state from a frame's summed illumination; no wall clock. */
     static void update(double now, double ambient, double fire) {
+        update(now, ambient, fire, 0);
+    }
+
+    /** As above; lasting: seconds the summed light has shone (the brightest lit source's age), for a rebuilt state. */
+    static void update(double now, double ambient, double fire, double lasting) {
         sky = dayShare(ambient);
         day = sky * setting;
         bodyExposure = Sight.exposure(ambient, 0);
         double target = Sight.exposure(ambient, fire);
         double dt = Double.isNaN(last) ? 0 : Math.max(0, now - last);
         exposure = Double.isNaN(last) ? target : FlashLight.follow(exposure, target, dt, NukeExposure.ADAPT_S);
-        slow = adapt(slow, Math.log(1 / ratio(exposure, bodyExposure)), dt);
+        double x = Math.log(1 / ratio(exposure, bodyExposure));
+        // a rebuilt state (seek, world entry, sync, respawn) takes the adaptation of an eye that watched the light since it began
+        slow = Double.isNaN(last) ? (x > ABOVE_DAY ? 1 - Math.exp(-Math.max(lasting, 0) / SLOW_UP_S) : 0) : adapt(slow, x, dt);
         last = now;
     }
 
-    /** The slow adaptation a after dt seconds under a light x = ln(1/r) over the daylight (above 0.1: brighter than it by a tenth). */
+    /**
+     * The light counts as lasting while it stands over the daylight by more than this, ln(1/r) (est.: a tenth brighter than
+     * the day; below that the frame's exposure is within 8 % of the unflashed one whatever the follow share).
+     */
+    static final double ABOVE_DAY = 0.1;
+
+    /**
+     * The slow adaptation a after dt seconds under a light x = ln(1/r) over the daylight: it grows while the light lasts and
+     * fades at the same pace once it is gone (an eye readapts to the dark no faster than to the light), so the ball hidden
+     * for a moment behind a tree keeps the adapted look.
+     */
     static double adapt(double a, double x, double dt) {
-        return x > 0.1 ? 1 - (1 - a) * Math.exp(-dt / SLOW_UP_S) : a * Math.exp(-dt / NukeExposure.ADAPT_S);
+        double k = Math.exp(-dt / SLOW_UP_S);
+        return x > ABOVE_DAY ? 1 - (1 - a) * k : a * k;
     }
 
     /** Pre-flash state, before the first live source starts to brighten the frame. */
@@ -281,7 +299,9 @@ public final class NukeLight {
         last = Double.NaN;
         exposure = bodyExposure = 1;
         day = sky = 1;
+        slow = 0;
         prepared = false;
+        preparedAt = Double.NaN;
     }
 
     /** Saved only for secondary views; swapping leaves the primary draw path and operation order unchanged. */
@@ -292,7 +312,9 @@ public final class NukeLight {
         private double bodyExposure = 1;
         private double day = 1;
         private double sky = 1;
+        private double slow;
         private boolean prepared;
+        private double preparedAt = Double.NaN;
 
         public void swap() {
             Map<ClientNuclear.Active, FlashLight.Eye> oldCAMERA = NukeLight.CAMERA;
@@ -313,9 +335,15 @@ public final class NukeLight {
             double oldsky = NukeLight.sky;
             NukeLight.sky = sky;
             sky = oldsky;
+            double oldslow = NukeLight.slow;
+            NukeLight.slow = slow;
+            slow = oldslow;
             boolean oldprepared = NukeLight.prepared;
             NukeLight.prepared = prepared;
             prepared = oldprepared;
+            double oldpreparedAt = NukeLight.preparedAt;
+            NukeLight.preparedAt = preparedAt;
+            preparedAt = oldpreparedAt;
         }
     }
 }

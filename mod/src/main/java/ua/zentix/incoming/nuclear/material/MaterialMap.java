@@ -66,12 +66,12 @@ public final class MaterialMap {
         Site[] measured = sites.toArray(Site[]::new);
         Tree tree = Tree.build(measured, 0, measured.length, true);
         byte[] cells = new byte[(counts.length + 3) / 4];
+        var vote = new Nearest(0, 0);
         grid.visit((i, x, z, size) -> {
             int value;
             if (counts[i] != 0) value = winner(counts[i]);
             else {
-                var vote = new Nearest(x, z);
-                tree.nearest(vote);
+                tree.nearest(vote.at(x, z));
                 value = vote.material();
             }
             cells[i / 4] |= (byte) (value << (2 * (i % 4)));
@@ -98,18 +98,21 @@ public final class MaterialMap {
     /**
      * The material an unread cell takes: the class of its {@link #K} nearest measured centres with the most votes weighted
      * by inverse squared distance (Shepard's interpolation for classes), a tie to the nearest centre's class (ties in
-     * distance by world X, then Z). One nearest centre drew the measured area's edge cells out along
-     * straight rays across all unread ground: one pond chunk at the edge of the ground zero's loaded chunks laid a 64-block
-     * strip of water 4 km long toward the camera, the dust over it a thin spray trench drifting with the wind. A pond within the measured ground still counts; a shore's unread water still takes the
-     * shore's majority near it.
+     * distance by world X, then Z). One nearest centre draws the measured area's edge cells out along straight rays across
+     * all unread ground: one pond cell at the edge of ground zero's loaded chunks becomes a 64-block strip of water
+     * kilometres long, the dust over it a thin spray trench drifting with the wind. A water body wider than a few cells
+     * at the edge (a shore) keeps its class out along its own side.
      */
+    /** Votes per unread cell (est.): a measured edge cell's ring of neighbours, so one odd cell is outvoted by its own ring. */
     static final int K = 8;
     static final class Nearest {
-        final int x, z;
         final Site[] sites = new Site[K];
         final long[] dist = new long[K];
         int n;
-        Nearest(int x, int z) { this.x = x; this.z = z; }
+        int x, z;
+        Nearest(int x, int z) { at(x, z); }
+        /** Reused for another cell (no garbage per cell on a 330,000-cell map). */
+        Nearest at(int x, int z) { this.x = x; this.z = z; n = 0; return this; }
         /** The worst kept squared distance, or infinity while fewer than K are kept. */
         long bound() { return n < K ? Long.MAX_VALUE : dist[K - 1]; }
         void offer(Site s) {
@@ -124,8 +127,9 @@ public final class MaterialMap {
             sites[at] = s;
             dist[at] = d;
         }
+        private final double[] votes = new double[4];
         int material() {
-            double[] votes = new double[4];
+            java.util.Arrays.fill(votes, 0);
             for (int i = 0; i < n; i++) votes[sites[i].material] += 1.0 / Math.max(dist[i], 1);
             int best = n == 0 ? DustMaterial.SOIL.ordinal() : sites[0].material;
             for (int k = 0; k < 4; k++) if (votes[k] > votes[best]) best = k;

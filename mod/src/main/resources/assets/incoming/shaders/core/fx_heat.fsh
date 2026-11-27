@@ -404,7 +404,7 @@ void main() {
                 world = clamp((world - glass.rgb) / max(glass.a, 1.0 / 255.0), 0.0, 1.0);
             }
             vec3 lit = vec3(relit(world.r, 1.0, open.r, added.r), relit(world.g, 1.0, open.g, added.g), relit(world.b, 1.0, open.b, added.b));
-            lit += vec3(CROSS * max(dot(lit, LUMA) - 1.0, 0.0));
+            lit = pallWashWhite(lit + vec3(CROSS * max(dot(lit, LUMA) - 1.0, 0.0)));
             vec3 shown = vec3(pallDisplay(lit.r), pallDisplay(lit.g), pallDisplay(lit.b));
             world = glass.rgb + glass.a * (shown / max(max(max(shown.r, shown.g), shown.b), 1.0));
         }

@@ -104,8 +104,9 @@ final class MaterialFrontier {
             levels[n] = new Block(sites, MaterialMap.Tree.build(sites, 0, sites.length, true));
         }
         /** The weighted vote of the measured centres nearest (x, z) ({@link MaterialMap.Nearest}); the seed while none is measured. */
+        private final MaterialMap.Nearest q = new MaterialMap.Nearest(0, 0);
         int vote(int x, int z, int seed) {
-            var q = new MaterialMap.Nearest(x, z);
+            q.at(x, z);
             for (Block b : levels) if (b != null) b.tree.nearest(q);
             return q.n == 0 ? seed : q.material();
         }

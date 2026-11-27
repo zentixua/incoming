@@ -314,8 +314,7 @@ vec3 ballLitWorld(ivec2 full, vec3 n, float kept, vec3 added) {
     vec3 lit = vec3(relit(world.r, kept, open.r, added.r), relit(world.g, kept, open.g, added.g),
             relit(world.b, kept, open.b, added.b));
     lit += vec3(CROSS * max(dot(lit, LUMA) - 1.0, 0.0));
-    float lum = dot(lit, LUMA);
-    lit = vec3(pallOverWhite(lit.r, lum), pallOverWhite(lit.g, lum), pallOverWhite(lit.b, lum));
+    lit = pallWashWhite(lit);
     vec3 shown = vec3(pallDisplay(lit.r), pallDisplay(lit.g), pallDisplay(lit.b));
     // the pane's own light at the frame's flash exposure too, as on the unlit path (where the whole destination takes it)
     return glass.rgb * pallDisplay(PallFlash.x) + glass.a * (shown / max(max(max(shown.r, shown.g), shown.b), 1.0));

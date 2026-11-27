@@ -46,7 +46,7 @@ class MaterialMapTest {
         assertEquals(4, disk.get(lake));
     }
 
-    @Test void unknownCellUsesNearestMeasuredCentreAndTiesUseWorldOrder() {
+    @Test void unknownCellBetweenTwoCentresTakesTheNearestAndTiesUseWorldOrder() {
         var source = new Long2IntOpenHashMap();
         source.put(ChunkPos.asLong(-4, 0), 4);
         source.put(ChunkPos.asLong(4, 0), 4 << 4);
@@ -80,6 +80,17 @@ class MaterialMapTest {
         var grid = new DustGrid(DustGrid.Bounds.of(d));
         for (int x = 160; x < 1000; x += 64)
             if (grid.index(x, 96) >= 0) assertEquals(DustMaterial.SOIL, live.material(x, 96), "frontier: no strip at x " + x);
+    }
+
+    /** A sea along the measured ground's edge (a shore burst's measured half) still reaches out as water past it. */
+    @Test void aShoreAtTheEdgeKeepsItsWaterOutward() {
+        var source = new Long2IntOpenHashMap();
+        int soil = 15 << (4 * DustMaterial.SOIL.ordinal()), water = 15 << (4 * DustMaterial.WATER.ordinal());
+        for (int cx = -8; cx < 4; cx++)
+            for (int cz = -8; cz < 8; cz++) source.put(ChunkPos.asLong(cx, cz), cx >= 0 ? water : soil);
+        var map = MaterialMap.build(new DustGrid.Bounds(0, 0, 2048, 4096), source, -1, 12);
+        for (int x = 96; x < 2000; x += 64) for (int z = -96; z <= 96; z += 64)
+            assertEquals(DustMaterial.WATER, map.material(x, z), "the sea past the shore at x " + x + ", z " + z);
     }
 
     @Test void largestSourceAndSeventeenColdSourcesFitOnTheWire() {
