@@ -1,5 +1,6 @@
 """clip_check.py on synthetic takes whose answer is known. Run: python3 -m unittest tools/test_clip_check.py"""
 import os
+import random
 import shutil
 import subprocess
 import sys
@@ -40,11 +41,16 @@ class ClassifyTest(unittest.TestCase):
         self.assertEqual(0, sum(x["black"] or x["torn"] or x["repeat"] for x in f))
 
     def test_recorder_faults_are_named(self):
-        f = clip_check.classify(take(40, black={10}, torn={20}, repeat={30, 31}))
+        # a freeze longer than one game tick at 60 fps (3 frames)
+        f = clip_check.classify(take(45, black={10}, torn={20}, repeat={30, 31, 32, 33}))
         self.assertEqual([10], [x["i"] for x in f if x["black"]])
         self.assertEqual([20], [x["i"] for x in f if x["torn"]])
-        self.assertEqual([30, 31], [x["i"] for x in f if x["repeat"]])
-        self.assertEqual(2, clip_check.longest(x["repeat"] for x in f))
+        self.assertEqual([30, 31, 32, 33], [x["i"] for x in f if x["repeat"]])
+        self.assertEqual(4, clip_check.longest(x["repeat"] for x in f))
+
+    def test_one_tick_of_unchanged_frames_is_the_game_rhythm(self):
+        f = clip_check.classify(take(45, repeat={30, 31}))
+        self.assertEqual(0, sum(x["repeat"] for x in f))
 
     def test_dark_scene_is_not_black(self):
         # a night take: every frame dark, none of them a dropout
@@ -70,10 +76,10 @@ class VideoTest(unittest.TestCase):
             good = self.encode(take(30), d, "good.mp4")
             report, _ = clip_check.check(good, fps=30, size=f"{W}x{H}")
             self.assertEqual([], report["fails"], report)
-            bad = self.encode(take(30, black={12}, repeat={20}), d, "bad.mp4")
+            bad = self.encode(take(30, black={12}, repeat={20, 21, 22}), d, "bad.mp4")
             report, _ = clip_check.check(bad, fps=30, audio=True)
             self.assertEqual(1, report["black"], report)
-            self.assertEqual(1, report["repeat"], report)
+            self.assertEqual(3, report["repeat"], report)
             self.assertIn("no audio stream", report["fails"])
 
 
@@ -196,6 +202,80 @@ class TruncatedTest(unittest.TestCase):
             except subprocess.CalledProcessError as e:
                 self.fail(f"traceback instead of a failing report: {e}")
             self.assertNotEqual([], report["fails"])
+
+
+# Review probes (rc-video review 2).
+
+def pair(full):
+    return full, b"".join(full[y * W:(y + 1) * W:2] for y in range(0, H, 2))
+
+
+class BlackRunTest(unittest.TestCase):
+    """A dropout of 6 or more black frames (100 ms at 60 fps) inside a lit, moving scene is a broken capture."""
+
+    def test_black_run_of_six_is_named(self):
+        frames = [pair(picture(k, W, H)) for k in range(60)]
+        for k in range(20, 26):
+            frames[k] = (bytes(W * H), bytes(DW * DH))
+        f = clip_check.classify(frames)
+        self.assertNotEqual([], [x["i"] for x in f if x["black"]], "a 6-frame black dropout passes")
+
+    def test_black_run_of_twenty_is_named(self):
+        frames = [pair(picture(k, W, H)) for k in range(80)]
+        for k in range(30, 50):
+            frames[k] = (bytes(W * H), bytes(DW * DH))
+        f = clip_check.classify(frames)
+        self.assertNotEqual([], [x["i"] for x in f if x["black"]], "a 20-frame black dropout passes")
+
+
+class TickSceneTest(unittest.TestCase):
+    """A 60 fps export of a 20 tps game with a fixed camera: what changes only per tick changes on every third frame
+    (block texture animation, block changes, fire). An explosion that starts on a tick is a large change after two
+    unchanged frames: a correct export, not a frozen recorder."""
+
+    def test_explosion_after_tick_only_motion_is_not_frozen(self):
+        rnd = random.Random(1)
+        base = bytearray(picture(0, W, H))
+        frames, cur = [], bytearray(base)
+        for k in range(120):
+            if k % 3 == 0:                                   # a tick: animated water over the lower third
+                cur = bytearray(cur)
+                for y in range(2 * H // 3, H):
+                    for x in range(0, W, 2):
+                        cur[y * W + x] = 60 + rnd.randrange(12)
+            if k >= 90 and k % 3 == 0:                       # the blast appears on a tick and grows tick by tick
+                r = 10 + 12 * (k - 90) // 3
+                for y in range(max(0, 60 - r), min(H, 60 + r)):
+                    for x in range(max(0, 160 - r), min(W, 160 + r)):
+                        cur[y * W + x] = 250
+            frames.append(pair(bytes(cur)))
+        f = clip_check.classify(frames)
+        self.assertEqual([], [x["i"] for x in f if x["repeat"]])
+
+
+@unittest.skipUnless(shutil.which("ffmpeg") and shutil.which("ffprobe"), "needs ffmpeg")
+class DamagedFileTest(unittest.TestCase):
+    """A damaged file whose decode writes more than a pipe buffer (64 KiB) of errors must give a report, not hang:
+    decode() reads stdout to the end before it reads stderr. A real 60 s 640x360 MKV with scattered byte damage makes
+    `ffmpeg -v error` write 94 KB of errors; clip_check.py on it did not finish in 120 s (its clean twin: seconds).
+    Deterministic here: an ffmpeg wrapper that writes 128 KiB to stderr first, then runs the real ffmpeg."""
+
+    def test_large_stderr_does_not_hang(self):
+        with tempfile.TemporaryDirectory() as d:
+            clip = encode_file(moving(30), os.path.join(d, "clip.mkv"))
+            bindir = os.path.join(d, "bin")
+            os.mkdir(bindir)
+            fake = os.path.join(bindir, "ffmpeg")
+            with open(fake, "w") as f:
+                f.write("#!/bin/bash\nyes '[h264] error while decoding' | head -c 131072 >&2\nexec %s \"$@\"\n" % shutil.which("ffmpeg"))
+            os.chmod(fake, 0o755)
+            env = dict(os.environ, PATH=bindir + os.pathsep + os.environ["PATH"])
+            try:
+                p = subprocess.run([sys.executable, "-W", "ignore", os.path.join(os.path.dirname(clip_check.__file__), "clip_check.py"),
+                                    clip], capture_output=True, text=True, timeout=60, env=env)
+            except subprocess.TimeoutExpired:
+                self.fail("clip_check.py hangs when ffmpeg writes more than a pipe buffer to stderr")
+            self.assertIn("damaged file", p.stdout)
 
 
 if __name__ == "__main__":

@@ -4,12 +4,14 @@
   tools/clip_check.py <video> [...] [--fps 60] [--size 1920x1080] [--audio] [--json frames.jsonl]
 
 Every frame is decoded once (FFmpeg, grey, 320x180) and only its numbers are kept:
-- black: no pixel above 24 and a mean below a quarter of both the 5 frames before and the 5 after (a dropout, not a
-  dark scene, a fade or the dark frame before a flash);
-- torn: at least 3 pixel rows of pure black (max ≤ 18) that are not black in the frame before or after, in a frame
-  whose mean is above 40 (a half-written window buffer; letterbox bars and dark bands stay in every frame);
-- frozen: a run of unchanged frames (mean |difference| below 0.05 of 255 at 160x90) inside motion, left by a jump at
-  least 1.5 times the motion around it: the recorder sent the old picture again while the game moved on. A still scene
+- black: a run of frames with no pixel above 24 whose mean is below a quarter of both the 5 frames before the run and
+  the 5 after it (a dropout of any length, not a dark scene, a fade or the night before a flash); a run touching the
+  clip's start or end has one side and counts only up to 5 frames;
+- torn: at least 3 pixel rows of pure black (max ≤ 18) that are not black in both the frame before and after, in a
+  frame whose mean is above 40 (a half-written window buffer; letterbox bars and dark bands stay in every frame);
+- frozen: a run of unchanged frames (mean |difference| below 0.05 of 255 at 160x90) longer than one game tick of
+  frames (a 20 tps game changes on every third frame of a 60 fps export), inside motion, left by a jump at least 1.5
+  times the motion around it: the recorder sent the old picture again while the game moved on. A still scene
   ("still", reported but never failing) has no such jump.
 The clock: packet timestamps, every step 1/fps within 2 ms (Matroska keeps milliseconds), as many as decoded frames.
 A file FFmpeg reports as damaged, or whose audio is shorter or longer than its video by more than 0.5 s, fails.
@@ -22,6 +24,7 @@ import operator
 import statistics
 import subprocess
 import sys
+import tempfile
 
 W, H = 320, 180
 DW, DH = 160, 90
@@ -52,21 +55,40 @@ def classify(frames):
     return judge(out)
 
 
-def judge(st):
+def judge(st, fps=60.0):
     n = len(st)
     out = []
     for i, s in enumerate(st):
-        before = [st[j]["mean"] for j in range(max(0, i - SIDE), i)]
-        after = [st[j]["mean"] for j in range(i + 1, min(n, i + 1 + SIDE))]
-        sides = [statistics.median(x) for x in (before, after) if x]
-        black = bool(sides) and s["max"] <= BLACK_MAX and s["mean"] < 0.25 * min(sides)
-        others = (st[i - 1]["rows"] if i else 0) | (st[i + 1]["rows"] if i + 1 < n else 0)
-        tear = bin(s["rows"] & ~others).count("1")
-        torn = not black and s["mean"] > TORN_MEAN and tear >= TORN_ROWS
+        near = [st[j]["rows"] for j in (i - 1, i + 1) if 0 <= j < n]
+        both = near[0] & near[-1] if near else 0
+        tear = bin(s["rows"] & ~both).count("1")
         still = s["diff"] is not None and s["diff"] < STILL_DIFF
-        out.append({"i": i, "mean": round(s["mean"], 2), "black_rows": bin(s["rows"]).count("1"), "black": black, "torn": torn,
-                    "still": still, "repeat": False, "diff": None if s["diff"] is None else round(s["diff"], 3)})
-    # a frozen run: unchanged frames s..e entered with motion and left with a jump above the motion around it
+        out.append({"i": i, "mean": round(s["mean"], 2), "black_rows": bin(s["rows"]).count("1"), "black": False,
+                    "torn": s["mean"] > TORN_MEAN and tear >= TORN_ROWS, "still": still, "repeat": False,
+                    "diff": None if s["diff"] is None else round(s["diff"], 3)})
+    # a dropout: a run of dark frames (no pixel above 24) far darker than both the frames before it and after it, judged as
+    # one run, so a long black stretch counts whole and the night before a flash (dark on one side) does not
+    i = 0
+    while i < n:
+        if st[i]["max"] > BLACK_MAX:
+            i += 1
+            continue
+        s = i
+        while i < n and st[i]["max"] <= BLACK_MAX:
+            i += 1
+        before = [st[j]["mean"] for j in range(max(0, s - SIDE), s)]
+        after = [st[j]["mean"] for j in range(i, min(n, i + SIDE))]
+        sides = [statistics.median(x) for x in (before, after) if x]
+        run_mean = statistics.mean(st[j]["mean"] for j in range(s, i))
+        # a run at the clip's start or end has one side: only a short one (a first frame not yet drawn) is a dropout
+        edge = s == 0 or i == n
+        if sides and run_mean < 0.25 * min(sides) and (not edge or i - s <= SIDE):
+            for j in range(s, i):
+                out[j]["black"] = True
+                out[j]["torn"] = False
+    # a frozen run: unchanged frames s..e entered with motion and left with a jump above the motion around it, longer than
+    # one game tick of frames (a 20 tps game in a 60 fps export changes on every third frame by itself)
+    tick = max(1, round(fps / 20))
     i = 0
     while i < n:
         if not out[i]["still"]:
@@ -76,6 +98,8 @@ def judge(st):
         while i < n and out[i]["still"]:
             i += 1
         e = i - 1
+        if e - s + 1 < tick:
+            continue
         into = st[s - 1]["diff"] if s >= 1 else None
         leave = st[e + 1]["diff"] if e + 1 < n else None
         around = [st[j]["diff"] for j in range(max(1, s - 30), min(n, e + 31)) if j not in range(s, e + 2) and st[j]["diff"] is not None
@@ -117,20 +141,22 @@ def probe(path):
 
 def decode(path):
     """per-frame stats in one streaming decode (320x180 grey; the change at every other pixel and row, 160x90)"""
-    p = subprocess.Popen(["ffmpeg", "-v", "error", "-i", path, "-vf", f"scale={W}:{H}:flags=area,format=gray",
-                          "-fps_mode", "passthrough", "-f", "rawvideo", "-"], stdout=subprocess.PIPE, stderr=subprocess.PIPE)
-    out, prev = [], None
-    with p.stdout:
-        while True:
-            full = p.stdout.read(W * H)
-            if len(full) < W * H:
-                break
-            small = b"".join(full[y * W:(y + 1) * W:2] for y in range(0, H, 2))
-            out.append(stats(full, small, prev))
-            prev = small
-    err = p.stderr.read().decode(errors="replace").strip()
-    p.stderr.close()
-    return out, p.wait(), err
+    with tempfile.TemporaryFile() as errf:
+        p = subprocess.Popen(["ffmpeg", "-v", "error", "-i", path, "-vf", f"scale={W}:{H}:flags=area,format=gray",
+                              "-fps_mode", "passthrough", "-f", "rawvideo", "-"], stdout=subprocess.PIPE, stderr=errf)
+        out, prev = [], None
+        with p.stdout:
+            while True:
+                full = p.stdout.read(W * H)
+                if len(full) < W * H:
+                    break
+                small = b"".join(full[y * W:(y + 1) * W:2] for y in range(0, H, 2))
+                out.append(stats(full, small, prev))
+                prev = small
+        code = p.wait()
+        errf.seek(0)
+        err = errf.read(4096).decode(errors="replace").strip()
+    return out, code, err
 
 
 def check(path, fps=None, size=None, audio=False):
@@ -142,10 +168,10 @@ def check(path, fps=None, size=None, audio=False):
     video = next((s for s in streams if s["codec_type"] == "video"), None)
     sound = next((s for s in streams if s["codec_type"] == "audio"), None)
     st, code, derr = decode(path) if video else ([], 0, "")
-    frames = judge(st)
     measured = (len(pts) - 1) / (pts[-1] - pts[0]) if len(pts) > 1 and pts[-1] > pts[0] else None
     step = 1 / (fps or measured) if (fps or measured) else None
     steps = [b - a for a, b in zip(pts, pts[1:])]
+    frames = judge(st, fps or measured or 60.0)
     report = {"file": path, "codec": video and video["codec_name"], "size": video and f"{video['width']}x{video['height']}",
               "fps": round(measured, 3) if measured else None, "frames": len(frames),
               "seconds": round(len(frames) / measured, 3) if measured else None,
