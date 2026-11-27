@@ -488,6 +488,15 @@ float pallDisplay(float v) {
 const float PALL_CROSS = 0.15;
 const vec3 PALL_LUMA = vec3(0.2126, 0.7152, 0.0722);
 
+// presentation: a surface lit far above white (the ball's light on the world by day: tens of whites for seconds at 1 Mt a
+// few km out) washes toward white as film and the eye do: channel c of a pixel of luminance lum moves toward lum by
+// 1 − 1/lum. The added PALL_CROSS share alone leaves the colour's ratios almost as they were however bright the light, so
+// the hue-kept ceiling showed dark green leaves as neon green and shaded red earth as pink stripes
+float pallOverWhite(float c, float lum) {
+    if (lum <= 1.0) return c;
+    return mix(c, lum, 1.0 - 1.0 / lum);
+}
+
 // Film-like shoulder: display values to 0.6 unchanged, brighter smoothly approach 1 (same slope at 0.6). Frame clips
 // above 1: at night fire-lit billows would merge into flat orange. Use brightest channel, scale others equally to
 // preserve hue (independent channels turned white mist pink in ball light)

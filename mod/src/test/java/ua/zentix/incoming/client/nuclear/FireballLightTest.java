@@ -123,4 +123,96 @@ class FireballLightTest {
         assertTrue(composite.contains("laid.rgb += held * (1.0 - shown) * flashAmber(dir0);"),
                 "the amber dome is ball light: only the sky under it dims");
     }
+
+    /**
+     * A world lit far above white washes toward white, never to neon: at 4.5 km from 1 Mt by day the ball's light holds the
+     * world at tens of whites for seconds (the frame's exposure follows the flash by the square root), and the hue-kept
+     * ceiling with the added {@code CROSS} share alone showed dark green leaves as neon green and shaded red earth as pink
+     * stripes, the same colour at every brightness. Copy of {@code ballLitWorld}'s steps after the relight (leaves, earth and
+     * hazy distance as a shader pack draws them, the warm ball light).
+     */
+    @Test
+    void aWorldFarAboveWhiteWashesTowardWhiteNotNeon() throws IOException {
+        String pall = Files.readString(SHADERS.resolve("include/pall.glsl"));
+        GlslFunction over = GlslFunction.parse(pall, "pallOverWhite");
+        String composite = Files.readString(SHADERS.resolve("core/fx_pall_composite.fsh"));
+        assertTrue(composite.contains("lit = vec3(pallOverWhite(lit.r, lum), pallOverWhite(lit.g, lum), pallOverWhite(lit.b, lum));"),
+                "the world's relit pixel takes the wash toward white");
+        double[][] worlds = {{0.25, 0.45, 0.15}, {0.45, 0.25, 0.2}, {0.6, 0.62, 0.55}};
+        double[] ball = {1, 0.78, 0.55};
+        for (double[] w : worlds) {
+            double before = 1;
+            for (double gain : new double[]{2, 5, 10, 20, 40, 75}) {
+                double[] lit = new double[3];
+                for (int c = 0; c < 3; c++) lit[c] = Math.min(PallLight.linear(w[c]), 1) * ball[c] * gain;
+                double lum = 0.2126 * lit[0] + 0.7152 * lit[1] + 0.0722 * lit[2];
+                for (int c = 0; c < 3; c++) lit[c] += PallLight.CROSS * Math.max(lum - 1, 0);
+                double l2 = 0.2126 * lit[0] + 0.7152 * lit[1] + 0.0722 * lit[2];
+                double[] shown = new double[3];
+                double max = 0, min = Double.MAX_VALUE;
+                for (int c = 0; c < 3; c++) {
+                    shown[c] = PallLight.display(over.call(java.util.Map.of("c", lit[c], "lum", l2)));
+                    max = Math.max(max, shown[c]);
+                }
+                for (int c = 0; c < 3; c++) min = Math.min(min, shown[c]);
+                double saturation = (max - min) / Math.max(max, 1e-9);
+                if (l2 > 1) assertTrue(saturation <= before + 1e-9, "brighter is never more coloured: " + gain + " × " + java.util.Arrays.toString(w));
+                if (l2 >= 10) assertTrue(saturation < 0.12, "tens of whites read white, not neon: saturation " + saturation + " at " + gain + " × "
+                        + java.util.Arrays.toString(w));
+                before = l2 > 1 ? saturation : before;
+            }
+        }
+        // under white nothing changes
+        assertEquals(0.3, over.call(java.util.Map.of("c", 0.3, "lum", 0.8)), 1e-12);
+        assertEquals(0.3, over.call(java.util.Map.of("c", 0.3, "lum", 1.0)), 1e-12);
+    }
+
+    /**
+     * A lasting light is followed further than a flash: the eye at 4.5 km from 1 Mt by day takes 5660 noon whites of ball light
+     * at 2 s, 79 at 10 s, 9 at 16 s and 2 at 21 s (its pulse, Silo-angle geometry); held at the flash's square root the world
+     * and dust the ball lights stood at 3–9 whites for 15 s, one flat white and orange fill. 15 kt at 2 km (a flash of about a
+     * second: 137 whites falling to 3 within one second) keeps nearly the square root its day look was judged by.
+     */
+    @Test
+    void aLastingLightIsFollowedFurtherThanAFlash() {
+        double[][] megaton = {{0, 0}, {0.5, 3000}, {2, 5660}, {4, 1410}, {6, 462}, {8, 188}, {10, 79}, {13, 26.5}, {16, 9.2}, {18, 5.8},
+                {21, 2.05}, {24, 0.38}};
+        double[][] flash = {{0, 0}, {0.1, 137}, {0.5, 80}, {0.9, 17.9}, {1.5, 3.0}, {2.1, 0.7}, {2.9, 0.14}};
+        double[] mt = run(megaton, new double[]{10, 16});
+        // the ball's light on screen (whites) where it lights the world: under 2.5 at 10 s and 1.6 at 16 s (the square root: 8.8, 2.9)
+        assertTrue(mt[0] < 2.5 && mt[1] < 1.6, "a megaton's lasting light is followed: " + mt[0] + ", " + mt[1] + " whites");
+        double[] kt = run(flash, new double[]{0.5, 0.9});
+        for (int i = 0; i < kt.length; i++) {
+            double f = new double[]{80, 17.9}[i], r = 1 / (1 + f), sqrt = f * r * NukeLight.ballGain(r, 1, 0);
+            assertTrue(kt[i] > 0.8 * sqrt, "a 15 kt flash keeps nearly its square-root look: " + kt[i] + " against " + sqrt);
+        }
+        assertEquals(1, NukeLight.daylightGain(0.01, 1, 0) / Math.pow(0.01, NukeLight.FOLLOW_DAY), 1e-12, "no slow share: the square root");
+        assertEquals(Math.pow(0.01, NukeLight.FOLLOW_LASTING), NukeLight.daylightGain(0.01, 1, 1), 1e-12, "fully adapted: the lasting share");
+        assertEquals(1, NukeLight.daylightGain(0.01, 0, 1), 1e-12, "the night as before");
+        double a = 1;
+        for (int i = 0; i < 60; i++) a = NukeLight.adapt(a, 0, 1 / 60.0);
+        assertTrue(a < 0.01, "back in daylight the adaptation is gone within a second: " + a);
+    }
+
+    /** The ball's light on screen in whites (noon whites at the eye × ball gain × r) at the given seconds, the slow state stepped at 60 fps. */
+    private static double[] run(double[][] curve, double[] at) {
+        double slow = 0, dt = 1 / 60.0;
+        double[] out = new double[at.length];
+        for (double t = 0; t <= at[at.length - 1] + 1e-9; t += dt) {
+            double f = interp(curve, t), r = 1 / (1 + f);
+            slow = NukeLight.adapt(slow, Math.log(1 / r), dt);
+            for (int i = 0; i < at.length; i++) if (Math.abs(t - at[i]) < dt / 2) out[i] = f * r * NukeLight.ballGain(r, 1, slow);
+        }
+        return out;
+    }
+
+    private static double interp(double[][] c, double t) {
+        for (int i = 1; i < c.length; i++) {
+            if (t <= c[i][0]) {
+                double u = (t - c[i - 1][0]) / (c[i][0] - c[i - 1][0]);
+                return c[i - 1][1] + u * (c[i][1] - c[i - 1][1]);
+            }
+        }
+        return c[c.length - 1][1];
+    }
 }
