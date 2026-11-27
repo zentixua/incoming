@@ -1398,20 +1398,19 @@ paths:
   burst — at the burst point (`heBallHeight`: 0.45 R·(1 − hob/R)), not a hemisphere. The ball's place is one for
   everything (`ballX`/`ballHeight`/`ballZ`: puffs, sprite, light and heat of `FarBlasts` carry the same wind as the
   smoke): the fuel ball grows from the ground, its centre rises exactly to 0.75·D by the end of burning
-  (`fireballGrowsFromTheGroundWithoutJumps`); earlier the centre jumped when “which ball is bigger” changed (for a
-  missile 3.7 → 17.5 m in 0.125 s), while the light and sprite stood at the strike point while the smoke drifted 10–20 m
-  downwind (BLASTSEQ D01, `fireballAndItsSmokeShareOnePlace`). Up close (`BlastEffects.ejecta(level, model)`): ground and
+  (`fireballGrowsFromTheGroundWithoutJumps`, `fireballAndItsSmokeShareOnePlace`). Up close (`BlastEffects.ejecta(level, model)`): ground and
   solid — clods/chips by the ejecta law (`Ejecta.pieces`); a slab — crumbs from the charge's face outward (the
   breach-ejecta law, ⚠) and a spall from the hole on the back face along its axis — the face's normal, on any course
   (`BlastTarget.spall`: the pressure pushes the slab, the Gurney sandwich is one-dimensional; the Gurney plug,
-  `BlastTarget.plugSpeed`, ⚠ upper estimate; `BlastTargetSupportTest.spallLeavesThroughTheServerHole`); air — nothing
-  (earlier clods flew even at a burst above the roof). Only its own share flies as chunks (`BlastTarget.clods`: for
+  `BlastTarget.plugSpeed`, ⚠ upper estimate; `BlastTargetSupportTest.spallLeavesThroughTheServerHole`); air — nothing. Only its own share flies as chunks (`BlastTarget.clods`: for
   ground — `Matter.clods` of the ejecta; for solid and slab — the whole ejecta without dust); chunks + the curtain's grains
   + dust = mass (`EjectaTest`). The ground ejecta curtain — `fx/smoke/Ejecta` at the `FarBlasts` event (at any range,
   not only as particles): the same Housen law as the clods up close (constants — in `Ejecta`), 8 jets in a circle
   (azimuth and angle from ±10° — by the seed), each with 3 segments by share of volume (equal in logarithm from (0.2)³):
   the substance of one instant — on a chord; the section — the angle's spread over the path travelled, not thinner than
-  ¼ of the crater radius; what has fallen (returned to the launch height) — is not drawn. The curtain's light — grains
+  ¼ of the crater radius; what has fallen (returned to the launch height) — is not drawn. Grains fly at their quadratic
+  drag range (`Ejecta.curtain`, terminal speed from `Matter.grain`), clods at the exit speed: else the fast centre grains
+  are a straight rod for seconds (`EjectaTest.airDragHoldsTheFastCentreGrains`). The curtain's light — grains
   (`Matter.extinction` 3Q/(2ρd) → kg of mixture dust via `SmokeGrid.dustK` by the clods' colour): clods tens of
   centimetres across hardly hold light; their share (`Matter.clods`) — particles up close. Mass: in the air + on the
   ground = grains; ejecta + dust = the crater (`EjectaTest`).
