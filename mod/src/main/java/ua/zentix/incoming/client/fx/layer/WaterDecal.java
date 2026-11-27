@@ -60,9 +60,9 @@ public final class WaterDecal {
      * Under a shader pack, waves raise the surface above 8/9, blocks: Photon 1.4 ({@code WATER_DISPLACEMENT}, on by default) moves
      * water-top vertices by {@code (wave · 0.05 − 0.025) · (0.9 · skylight + 0.1)}, wave 0..1 ({@code include/vertex/displacement.glsl}):
      * up to +0.025, with margin. The wave takes world x and height, so it is constant along z: crests outside the band stay
-     * undarkened as straight light lines along z. The shader caps the raised band below 15/16-high tops (farmland, path) at
-     * every distance and never narrows it below the band without a pack ({@code fx_water.fsh} {@code CREST_CEILING},
-     * {@code WaterDecalGlslTest}).
+     * undarkened as straight light lines along z. The shader caps the raised band below 15/16-high tops (farmland, path) read
+     * low by the band's own depth error and jitter, and never narrows it below the band without a pack ({@code fx_water.fsh}
+     * {@code CREST_CEILING}, {@code WaterDecalGlslTest}).
      */
     static final float PACK_RISE = 0.03f;
     /** Shader-pack surface is not flat: neighbouring vertex height difference, blocks (Complementary — up to 0.05). */

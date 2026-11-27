@@ -16,7 +16,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
  * (rc-video raid clip, 5.85 s).
  */
 class WaterBlastAirTest {
-    private static final Air CLEAR = new Air(new Wind(3, 0), Stability.D, 0.5), RAIN = new Air(new Wind(3, 0), Stability.D, 1);
+    private static final Air CLEAR = new Air(new Wind(0, 3), Stability.D, 0.5), RAIN = new Air(new Wind(0, 3), Stability.D, 1);
 
     @Test
     void aBlastAtTheWaterTakesTheWorldsAirAsOnLand() {

@@ -130,15 +130,17 @@ float foamLace(vec2 rel, float foot) {
 // standing-water top above block bottom
 const float SURFACE = 8.0 / 9.0;
 
-// highest band edge the pack's crests may raise it to: 15/16 − 8/9 (farmland, path tops) less 0.004 of depth noise
+// highest band edge the pack's crests may raise it to for an exact read: 15/16 − 8/9 (farmland, path tops) less 0.004
 const float CREST_CEILING = 0.04461;
 
-// surface h blocks above the still-water top (8/9) is water's: 1 inside the band, 0 outside. Both ways the depth error (tol)
-// and frame jitter; below, the pack's wave troughs (drop); above, its crests (rise), never past CREST_CEILING and never
-// narrower than without them: crests outside the band are left undarkened, straight light lines along the wave fronts
+// surface h blocks above the still-water top (8/9) is water's: 1 inside the band, 0 outside. Both ways the depth error
+// (tol; its part beyond 0.01 grows with distance) and frame jitter; below, the pack's wave troughs (drop); above, its
+// crests (rise), up to CREST_CEILING less the same depth error and jitter, so a 15/16 top read low by them stays out, and
+// never narrower than without them. Crests outside the band (far away, where crest and farmland cannot be told apart by
+// height) are left undarkened, straight light lines along the wave fronts
 float surfaceBand(float h, float tol, float jitter, float drop, float rise) {
     if (h <= 0.0 - (tol + jitter + drop)) return 0.0;
-    if (h >= max(tol + jitter, min(tol + jitter + rise, CREST_CEILING))) return 0.0;
+    if (h >= max(tol + jitter, min(tol + jitter + rise, CREST_CEILING - (tol - 0.01) - jitter))) return 0.0;
     return 1.0;
 }
 

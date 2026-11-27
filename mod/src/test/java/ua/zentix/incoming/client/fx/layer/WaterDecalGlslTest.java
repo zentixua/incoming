@@ -62,21 +62,45 @@ class WaterDecalGlslTest {
         assertEquals(15.0 / 16 - 8.0 / 9 - 0.004, Double.parseDouble(m.group(1)), 1e-5);
     }
 
-    /** Photon's crests are water at every distance and eye height the decal draws at (the band never narrows below main's). */
+    /**
+     * Photon's crests (+0.025) are water at every distance: up close under the ceiling, farther inside the band's own error
+     * (once the ceiling falls below a crest, depth error and jitter alone already exceed it).
+     */
     @Test
     void photonCrestsAreWaterAtEveryDistance() throws IOException {
-        for (double d = 5; d <= 400; d += 15)
+        for (double d = 5; d <= 400; d += 5)
             for (double eye : new double[] {1.7, 10, 30}) assertEquals(1, seen(photon(1, 1), d, eye), 0, "crest at " + d + " m, eye " + eye);
     }
 
-    /**
-     * Farmland and dirt path tops (15/16) across a field, 2 m eye height, 20–250 m, read exactly (review round 1: the crest margin
-     * added on top of the distance jitter took them for water from 120 m).
-     */
+    /** Farmland and dirt path tops (15/16) across a field, 2 m eye height, 20–250 m, read exactly, are not water. */
     @Test
     void farmlandAcrossAFieldIsNotWater() throws IOException {
         double h = 15.0 / 16 - 8.0 / 9;
         for (double d = 20; d <= 250; d += 10) assertEquals(0, seen(h, d, 2), 0, "farmland at " + d + " m is taken as water");
+    }
+
+    /**
+     * A 15/16 top read low within the band's own error (the depth error beyond 0.01, or the pack's jitter) is water under a pack
+     * only where it is water without one: the crest margin never admits it (eye 2, 10 and 30 m, 20–400 m).
+     */
+    @Test
+    void farmlandReadWithinTheBandsOwnErrorIsNotWater() throws IOException {
+        double farmland = 15.0 / 16 - 8.0 / 9;
+        for (double eye : new double[] {2, 10, 30})
+            for (double d = 20; d <= 400; d += 10) {
+                double horizontal = Math.sqrt(d * d - eye * eye), tol = Math.clamp(0.01 + 2.4e-6 * d * eye, 0.01, 0.037);
+                double jitter = WaterDecal.PACK_JITTER * PIXEL * horizontal;
+                for (double low : new double[] {tol - 0.01, 0.5 * jitter, tol - 0.01 + jitter}) {
+                    double h = farmland - low;
+                    double without = band(h, true, tol, jitter) > 0.5 && pack(h, tol, jitter, 0) < 0.5 ? 1 : 0;
+                    assertEquals(0, without, "farmland read low by " + low + " at " + d + " m, eye " + eye + " is water only under the crest margin");
+                }
+            }
+    }
+
+    private static double pack(double h, double tol, double jitter, double rise) throws IOException {
+        GlslFunction f = GlslFunction.parse(Files.readString(FSH).replaceAll("//[^\n]*", ""), "surfaceBand");
+        return f.call(Map.of("h", h, "tol", tol, "jitter", jitter, "drop", (double) WaterDecal.PACK_DROP, "rise", rise));
     }
 
     /** A full block top at the draw edge (400 m, eye 30 m above: tol 0.037) read low by that tolerance is not water. */

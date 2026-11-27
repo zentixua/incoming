@@ -1270,9 +1270,7 @@ paths:
   run out before their time; if it lay on a smaller area — `WeaponSpec.pool(lit)`, as at the server), the Briggs plume
   and the flame's light on the smoke (`FxLights`), the hum `CraterFire` there too; a new state of the same crater
   (glass, filled in, flooded) carries the hearth and the hum over and cuts the area; when everything is over the hearth
-  goes out (`FuelBurnTest`). The fuel packet comes
-  seconds after a salvo's blast (a work unit): a client that watched the blast (`FarBlasts.witnessed`) grows the plume
-  from that moment (`FireSmoke.shown`), else its delay's plume appears whole as a rod (`FuelPlumeBirthTest`). With
+  goes out (`FuelBurnTest`). With
   `blast_effects` = false — none of this (fire on blocks belongs to the world; the mod has no smoke of its own above
   it). `FireWatch` does not count fire on fuel cells toward the fire of a nuclear city (`FuelCells`: the cell's column,
   not above it — fuel drips only downward; otherwise it would also go into the detonation fires' hum, on top of the
@@ -1362,8 +1360,7 @@ paths:
   dM/dt = −v·M/(√(2πe)·σv), `WaterBlast.mistLeft`). Upward per Briggs the layer grows only as far as the eddies at the surface hold droplets: the
   Rouse number v/(κu*), u* = √C_D·U₁₀ (Large, Pond 1981), suspension — at P ≲ 2.5 (van Rijn 1984),
   `WaterBlast.suspended`; at 6 m/s P ≈ 3.6 the layer does not grow (a layer grown like a gas is a fog wall over a salvo).
-  Below saturation the droplets evaporate (Maxwell, Rogers–Yau eq. 7.18) in their layer's air, humidified by their own
-  vapour (`WaterBlast.mistLeft`), else a flat white layer stays on the water for minutes. A blast at the water takes the
+  A blast at the water takes the
   world's air as on land (`FarBlasts.humidity`), not saturated air: that draws a 40 m Wilson cloud (`WaterBlastAirTest`). Spray — as droplets of the grid with recomputed attenuation (spray puffs — atlas `spray6`
   at the source with spray, `Source.sprayClubs`, if spray is more than smoke); clods — particles `BlastEffects.splash`.
   After the last jet returns, `Source.sprayClubs(seconds)` switches the residual mist to `puff6`: fall bands of `spray6`,
@@ -1408,9 +1405,7 @@ paths:
   not only as particles): the same Housen law as the clods up close (constants — in `Ejecta`), 8 jets in a circle
   (azimuth and angle from ±10° — by the seed), each with 3 segments by share of volume (equal in logarithm from (0.2)³):
   the substance of one instant — on a chord; the section — the angle's spread over the path travelled, not thinner than
-  ¼ of the crater radius; what has fallen (returned to the launch height) — is not drawn. Grains fly at their quadratic
-  drag range (`Ejecta.curtain`, terminal speed from `Matter.grain`), clods at the exit speed: else the fast centre grains
-  are a straight rod for seconds (`EjectaTest.airDragHoldsTheFastCentreGrains`). The curtain's light — grains
+  ¼ of the crater radius; what has fallen (returned to the launch height) — is not drawn. The curtain's light — grains
   (`Matter.extinction` 3Q/(2ρd) → kg of mixture dust via `SmokeGrid.dustK` by the clods' colour): clods tens of
   centimetres across hardly hold light; their share (`Matter.clods`) — particles up close. Mass: in the air + on the
   ground = grains; ejecta + dust = the crater (`EjectaTest`).
