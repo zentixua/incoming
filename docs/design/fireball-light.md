@@ -51,10 +51,11 @@ unknown, so a reference "time" is a position in the clip, not an age after the b
   It shrinks to 0.02 as the ball cools. The ball is 8–48 times the sky and ~50 times the ground, which is lit red.
 - **Plumbbob Priscilla** colour film (just after sunrise, from far away): the ball is 2.1–4.0 times the sky and 8–9
   times the ground. The ring at 2 radii is 1.6–1.9 times the sky beside it: the haze around the ball glows white.
-- **Upshot-Knothole Grable** colour film (15 kt, morning, daylight). In the first seconds of the clip the whole frame
-  washes out: contrast (95th over 5th percentile of luminance, the brightest 5 % excluded) is 1.4–3.3 and colour
-  saturation 0.17–0.22. Later in the clip it returns to 3.2–6.3 and 0.35–0.44. The day does not darken: it turns
-  pale and glowing, and the ball is a blown white core in a wide glow.
+- **Upshot-Knothole Grable** colour film (15 kt, morning, daylight). For several seconds of the clip, with the cap
+  already risen over its stem, the whole frame carries a uniform pale lavender cast: contrast 1.4–3.3 and saturation
+  0.17–0.36, against 3.2–6.3 and 0.35–0.44 later in the same clip. The ball's light falls more than ten times over
+  those frames while the cast holds, so the cast is the film (fogging, flare, the print), not lit air or an eye. It is
+  film look, not a target for the light.
 
 **What people perceive.**
 - Flash blindness: seconds to minutes, worse at night (G&D §12.83–12.84). Serber, 20 miles, naked eye before dawn:
@@ -87,9 +88,9 @@ frame's contrast and saturation.
 | Nothing after that in creative | no veil, only the orange retina spot | `NukeFlash.eyes`: creative and spectator get no dazzle |
 | In survival, a flat veil for up to tens of seconds | veil 0.9 opacity, (1 − t/T)² over `EyeInjury.dazzleSeconds` (up to 60 s by day, 600 s at night; weaker below 10 s); grey by day, black at night | `NukeFlash.veil`: one uniform fill, which hid the whole picture when tried in creative (mock round 1) |
 | No glow around the ball once the frame settles, by day | ring at 2 radii / sky beside it: 1.0–1.07 (Priscilla 1.6–1.9); glare 0.007 of white | `NukeRenderer.fireballs` → `FarSprites.glare`: glare and veil sized by the ball's film-curve value and capped by it (`min(HALO, SCATTER·seen)`, veil radius ≤ 10°); the nuclear ball is not in `FxBloom` |
-| The frame keeps its full daylight contrast | contrast 6.5–8.5, saturation 0.24–0.29 at 0.64–1.5 s (Grable's first seconds: 1.4–3.3 and 0.17–0.22) | the ball's light is added only to faces, at the flash exposure, over the unchanged daylight; no lit air, no wide veil |
+| No lit air: the frame keeps its full daylight contrast | contrast 6.5–8.5 at 0.64–1.5 s against 9.8 in the same scene unflashed | the ball's light is added only to faces, at the flash exposure, over the unchanged daylight; no lit air, no wide eye veil |
 | The ball itself is a mid-bright disc | shown at 0.5–0.8 of white, its pattern readable; ball/sky 1.9–2.0 (Priscilla 2.1–4.0) | `NukeExposure`: the ball on the film curve K·L^β, by design, to keep its pattern |
-| A darker ring around the ball by day | Wilson shell visibly darker than the sky beside it (0.75–1.5 s), as a blue-grey dome under the shader pack | the shell's light is capped to the ball's on-screen value (`mushBallCap`) while the sky keeps its daylight |
+| A darker ring around the ball by day | Wilson shell visibly darker than the sky beside it (0.75–1.5 s), as a blue-grey dome under the shader pack | the shell's ball light is capped to the ball's on-screen value (`mushBallCap`) while its sun and sky light and the sky behind it keep the daylight exposure |
 | The world not lit like by a second sun | the ground gets at most about one noon from the ball | `fx_pall_composite` `relit`: world × kept + albedo × F × exposure; the daylight never passes through the flash exposure |
 | No shadows from the ball | — | `ballLight`: "no terrain/building shadows" by design |
 | Sky: white, amber ~1 s, blue again by ~2 s | — | vanilla sky flash, `NukeSky.amber` |
@@ -112,133 +113,138 @@ but the frame shows it through separate cameras:
 
 ## 4. Proposal
 One idea carries it: **the frame sees the burst through one eye.** The light the model already computes reaches the
-world, the air, the glare and the eye through one exposure, and that eye takes the flash at once and recovers at an
-eye's pace. Each change is a law fix in code that exists, not an effect painted on top.
+world, the air and the glow through one exposure. The eye's own after-effects are drawn over the picture and never dim
+it. No new physics: every change is in how the frame shows light the model already has (concept 3). Each is a fix of
+code that exists, not an effect painted on top.
 
-Mock: a throwaway probe branch (`fireball-light-probe`, never merged). Its round 4 draws 4.1 (world and sky terms
-only), the eye veil of 4.3 and the screen part of 4.5 in the sandbox. Clips compare it with `main`. Measured by day,
-2 km, the same scripts as the references:
+**Core (small):** 4.1–4.3. **Later, each on its own if wanted:** 4.4–4.6.
 
-| | contrast, saturation at 0.5–0.75 s | ring at 2R / sky at 1–1.5 s | ball/sky at 1–2.5 s |
-|---|---|---|---|
-| `main` | 5.9–8.5, 0.21–0.28 | 1.0–1.07 | 1.9–2.0 |
-| mock round 4 | 2.5–4.7, 0.15–0.31 | 1.4–1.7 | 2.4–3.5 |
-| Grable (first seconds of the clip) | 1.4–3.3, 0.17–0.22 | — | 1.3–3.1 |
-| Priscilla | — | 1.6–1.9 | 2.1–4.0 |
+### Mock
+A throwaway probe branch, `fireball-light-probe`, never merged. Its last round draws 4.1 on the world and sky terms
+and the eye's veiling glare of 4.3, plus the screen-space part of 4.5. It is shown in the clips beside `main`.
 
-Earlier mock rounds, kept as evidence:
-- **Round 1** gave creative players the present dazzle veil: a beige-grey screen.
-- **Round 2** fully adapted the frame to the flash: the day turned black.
-- **Round 3** adapted it halfway, but on the daylight only: the day turned into a slate dusk. The review measured that
-  round's apparent gain against a mis-measured reference.
-- **Round 4** applies one exposure to the daylight and to the ball's light together, adds the eye's glare, and moves
-  toward the films.
+Measured by day at 2 km with the same scripts as the references. The ring is taken at 2 ball radii, with the ball's
+radius from `main`'s take of the same geometry:
 
-Mechanism rows, as the look skill asks: what causes each feature, where it is born, what it is anchored to, how it
-ends.
+| | contrast at 0.75–1.5 s (unflashed scene: 9.8) | ring at 2R / sky, at 1–1.5 s | ring at 2R / ball | ball pattern (variation in the disc) |
+|---|---|---|---|---|
+| `main` | 7.8–8.5 | 1.04 | 0.62–0.70 | 0.11–0.13 |
+| mock, last round | 4.3–8.4 | 2.6–2.8 | 0.96–1.3 | 0.19–0.25 (incl. a mask crescent) |
+| Priscilla | — | 1.4–1.75 | — | — |
+| Trinity | — | — | 0.15–0.33 | — |
 
-### 4.1 One exposure for the whole frame (physics; how much the frame follows is presentation)
+The mock lights the day and keeps the ball's pattern, but its glow is too strong: about twice Priscilla's ring over
+the sky, as bright as the ball at 2 radii. Its disc mask is analytic and leaves a dark crescent where it misses the
+drawn ball. The implementation masks by the ball's drawn coverage, as the bloom pass does, and tunes the veil's
+strength to the gate of section 8.
+
+**Not in the mock:**
+- the afterimage and pale-eye overlay of 4.2;
+- the aureole, the halation and the shafts;
+- the hand and the pall matter terms of 4.1;
+- the water path;
+- the mock dims the amber sky by day, which the real change must not.
+
+**Mock rounds:**
+- Round 1 gave creative players the present dazzle veil: a beige-grey screen.
+- Round 2 fully adapted the frame: the day turned black.
+- Round 3 dimmed the daylight without raising the ball's light: a slate dusk.
+- Round 4 lit the day but erased the ball's pattern under the glare, and darkened the night sky.
+- Rounds 5–6 apply the exposure by day only, keep the night as `main`, and keep the glow off the ball's own disc.
+
+The two reviews measured each round. Their findings are why the proposal reads as it does.
+
+### 4.1 One exposure for the world by day (physics; how far the frame follows is presentation)
 - **Cause:** the ball's light at the eye, F in noon whites (`FlashLight`, summed in `NukeLight`). Anchored to the eye.
-  Ends as F falls.
-- **Change:** one frame exposure E_f = E₀·r^p, where r = E/E₀ is the eye's flash exposure against the unflashed one.
-  Every term on screen passes through it, each consumer named:
-  - the composite's world: the daylight `kept` × r^p, the ball's added light × r^(p−1);
-  - the sky pixels;
-  - the amber sky and the aureole of 4.3, which are already in flash-exposure units, so × r^(p−1), never dimmed again;
-  - the pall, dust wall and mushroom matter light in `fx_pall` and the dust pass: their sun and sky terms × r^p, their
-    ball terms × r^(p−1);
+  Ends as F falls: about 2 s at 2 km for 15 kt.
+- **Change:** by day, one frame exposure E_f = E₀·r^½, where r = E/E₀ is the flash exposure against the unflashed
+  one. Every term on screen passes through it, each consumer named:
+  - the composite's world: the daylight `kept` × r^½, the ball's added light × r^−½;
+  - the sky pixels and the vanilla clouds × r^½;
+  - the amber sky and the aureole (4.3), already in flash-exposure units, × r^−½;
+  - the pall, dust wall and mushroom matter in `fx_pall` and the dust pass: their sun and sky terms × r^½, their ball
+    terms × r^−½;
   - the layer quads (`FarView.exposure`) and the first-person hand. Vanilla draws the hand after the composite, so it
     needs its own pass.
-- **Result by day:** faces toward the ball blow out white, the ordinary day steps back behind the glow, and the frame
-  washes out instead of darkening.
-- **Presentation:** p, the share of the flash the frame follows. p = 0.5 by day: a camera fully adapted turns the day
-  black (round 2), an unadapted one shows nothing (`main`). At night p = 1, which keeps `main`'s working night: a
-  dark-adapted eye takes the full flash. p follows the sky's ambient light, as `Sight.adapted` does. One marked
-  constant, like the fire film curve's `FOLLOW`.
+- **Result:** faces toward the ball blow out white and the ordinary day steps back behind the light. Then the frame
+  returns at the present 0.2 s camera follow.
+- **At night nothing changes.** `main`'s night works (section 3): a dark-adapted view already takes the ball's light
+  in full.
+- **Presentation:** the power ½, one marked constant like the fire film curve's `FOLLOW`. Full adaptation turns the
+  day black (mock round 2), none shows nothing (`main`). Its weight follows the sky's ambient light (`FarView.ambient`),
+  1 by day and 0 at night.
 - **Earlier complaint (18.10):** "in the first seconds the second sun gives sharp shadows across the entire map". The
-  fix gave faces turned away from the ball scattered and ground-reflected light, so the world is white at the peak and
-  a face toward the ball is 5–6 times a side face by 2 s (`MushroomGlslTest.ballLightsWhatFacesAway`). 4.1 keeps that
-  law. Faces turned away are lit by the same scattered light, × r^(p−1). A new screen-level check holds the
-  toward/away ratio on screen to the test's, at its geometry (15 kt, 4 km): the old test checks the model, not the
-  screen.
-- **Where:** `fx_pall_composite` (`relit`, sky pixels), `fx_pall` and the dust pass (matter light), `NukeLight` (the
-  ratio and p), the hand, `FarView.exposure`.
+  fix gave faces turned away scattered and ground-reflected light, so the world is white at the peak and a face toward
+  the ball is 5–6 times a side face by 2 s (`MushroomGlslTest.ballLightsWhatFacesAway`). 4.1 keeps that law: faces
+  turned away get the same scattered light × r^−½. A new screen-level check holds the toward/away ratio on screen to
+  the test's at its geometry (15 kt, 4 km). The old test checks the model, not the screen.
+- **Wilson shell:** dimming its sun and sky light with the sky would keep it as dark against the sky as now; only its
+  ball term can lift it. The exposure factor applies before `mushBallCap`, so the cap still holds the shell's ball
+  light under the ball's on-screen value. The shell lightens against the dimmed sky without merging into the ball
+  (the fix of "the shell merged with the sphere as a white disk at 0.5–1 s"). A check holds that the shell never
+  merges with the ball at 0.3–1.5 s for 1, 15 and 250 kt.
+- **Where:** `fx_pall_composite` (`relit`, the sky pixels), `fx_pall` and the dust pass (matter light), `NukeLight`
+  (the ratio and its weight), the hand, `FarView.exposure`.
 
-### 4.2 One eye: flash blindness that recovers at an eye's pace (physics: bleaching; the veil's look is presentation)
-- **Cause:** bleached photopigments (G&D §12.83). The dose at the eye is already computed: `NukeLight.sample`, by
-  distance, line of sight, openings and weather.
-- **One eye state:** a bleached share B from that dose, recovering by `EyeInjury.dazzleSeconds`' law (10 s at the edge
-  of the flash-blindness range, up to 60 s by day and 600 s at night). B drives everything the eye does after the flash:
-  - the frame's exposure tail: the white catches up at 0.2 s as now, then the remaining sensitivity loss follows B;
-  - the veil's look.
-  The mock's separate 1.5 s exposure tail (round 3) was a second law for the same bleaching and is dropped. Round 4
-  ran without it.
-- **The veil's look** replaces the uniform grey fill at 0.9 opacity, which erased the picture (round 1). It shows what
-  flash blindness is:
+### 4.2 The eye: flash blindness drawn over the picture, recovering at an eye's pace (physics: bleaching; its look is presentation)
+- **Cause:** bleached photopigments (G&D §12.83). The dose at the eye is already computed (`NukeLight.sample`: distance,
+  line of sight, openings, weather), and so is its recovery time (`EyeInjury.dazzleSeconds`: 10 s at the edge of the
+  flash-blindness range, up to 60 s by day and 600 s at night).
+- **One eye state, an overlay only.** A bleached share B from that dose, fading by that law, drives one GUI post pass
+  over the finished picture. It never lowers the frame's exposure: an exposure tail would hold the world dark while the
+  ball's light falls fifty times within a second, which is how mock round 3 darkened the night. The pass draws:
   - a strong afterimage where the ball was on the retina: white-yellow first, then a coloured negative (Feynman's
-    purple). It is larger than the ball and follows the gaze; it grows from the existing retina spot;
-  - lower contrast and colour over the whole view, with lifted blacks: Artem's "pale screen". Its strength is B;
-  - the world stays visible through it, so the player sees the radiance of 4.1 and 4.3 through damaged eyes, not a
-    grey card.
+    purple). It is larger than the ball, follows the gaze, and grows from the existing retina spot;
+  - lifted blacks, lower contrast and colour, each at most a bounded share of B: Artem's "pale screen". The world
+    always stays visible through it.
+- **It replaces** the uniform grey or black fill at 0.9 opacity (`NukeFlash.veil`), which erased the picture (mock
+  round 1). The white frame of the flash itself keeps its present 0.2 s camera catch-up, so the end of the white is
+  carried by the afterimage and the pale view, never by a cut.
 - **Creative players get it too.** Flash blindness is perception, not injury: a creative player cannot be hurt, but
   has eyes. Spectators and replay viewers stay a camera, without it. Permanent retinal burns stay survival-only.
 - **Night:** the long night dose (up to 600 s at the full bleach) applies in creative as in survival. It fades as
-  (1 − t/T)², so most of it is faint. The `flash` client setting and calm mode scale or disable all of it, as they do
-  every flash path today.
-- **Where:** `NukeLight` (the exposure tail from B), `NukeFlash` (the veil as a GUI post pass shaped like `Concussion`'s
-  `PostChain`; `eyes`).
+  (1 − t/T)² and is a bounded overlay, so most of it is a faint afterimage. The `flash` client setting and calm mode
+  scale or disable it, as they do every flash path today.
+- **Where:** `NukeFlash` (the veil as a post pass shaped like `Concussion`'s `PostChain`; `eyes`).
 
-### 4.3 Radiance: the ball glows as bright as it is (physics: eye scatter and lit air; halation is presentation)
+### 4.3 Radiance: a glow around the ball, as bright as the ball is (physics: eye scatter and lit air)
 - **Cause:** the ball's true brightness against E_f. Anchored to the ball and the eye. It ends as the ball cools: the
   glow shrinks with brightness, as on the Trinity film (ring at 2 radii 0.3 of the ball at the brightest, 0.02 late).
-- **Change 1, glare and veil from true brightness.** Glare and veil are sized by the ball's real brightness × E_f, not
-  by its film-curve value. The eye's veiling glare keeps its real tail: Stiles–Holladay 10·E/θ², falling faster
-  beyond 30°, instead of the 10° cap. The mock's whole-frame washout comes from this.
-  - The glare's peak stays below the ball's on-screen value, so the surface pattern stays readable
-    (`NukeExposureTest.fireballKeepsItsPatternFromOneToFiveSeconds`).
-  - The wide veil gets the half-step noise the bloom and the smoke veil use. Without it, 8-bit rings show over a dark
-    frame (mock round 3, night).
+- **Change 1, the eye's veiling glare.** It is sized by the ball's real light at the eye × E_f, with the
+  Stiles–Holladay tail (10·E/θ², falling faster beyond 30°) instead of the present 10° cap. It is drawn only outside
+  the ball's disc: the existing rule of the bloom pass, no glow over the glowing body. So the ball's own pixels show
+  the ball and its pattern (`NukeExposureTest.fireballKeepsItsPatternFromOneToFiveSeconds`). Its peak stays below the
+  ball's on-screen value, with the half-step noise the bloom and the smoke veil use against 8-bit rings.
 - **Change 2, lit air (aureole).** The air along each view ray scatters the ball's light forward (G&D §7.19), with
-  Henyey–Greenstein in the existing `Sight.Air` haze. It is brightest beside the ball and present over the whole sky.
-  This is the white glowing haze of the Priscilla film.
-- **Change 3, halation.** The nuclear ball enters the bloom pass. The ball is a pall volume, not a layer quad, so this
-  needs its own emission write from `fx_pall` into the bloom target: new work with its own cost, not free.
-  Presentation, marked. With the player's `bloom` OFF, changes 1 and 2 still carry the radiance.
-- **The Wilson shell keeps its law and its cap.** The cap fixed "the shell merged with the sphere as a white disk at
-  0.5–1 s". Under 4.1 the shell's sun and sky light dim with the sky behind it, so it no longer stands as a dark ring
-  by day. A check holds that the shell never merges with the ball at 0.3–1.5 s for 1, 15 and 250 kt.
+  Henyey–Greenstein in the existing `Sight.Air` haze. It is brightest beside the ball and spread over the whole sky:
+  the glowing haze around the ball on the Priscilla film. An analytic term like the present `Haze` extinction: no
+  march.
+- **Change 3, the eye's ciliary corona.** Faint radial streaks around the brightest light: the eye's own optics, never
+  a camera's hexagonal flare. A shape for the existing glare quad, only while the ball outshines everything else.
+- **Halation** (the nuclear ball in the bloom pass) is not needed: changes 1 and 2 carry the glow. It would need a new
+  emission write from `fx_pall` into the bloom target.
 
-### 4.4 Rays (physics; the eye's own streaks are physics of the eye)
-"Rays" in real footage and experience are two things:
-- **Shafts of light and shadow through lit air.** They form where clouds, the Wilson cloud, smoke, dust or terrain
-  stand between the ball and the air, as crepuscular rays from the sun do. The aureole of 4.3 gets the shadow test of
-  4.5 along the view ray: where the ball is hidden from a stretch of air, that stretch does not glow. Born at the
-  flash, anchored to what casts them, gone when the ball fades. Physical.
-- **Streaks around the brightest light in the eye:** the ciliary corona, radial spikes the eye's own optics put on any
-  overwhelming point of light. Physical for the eye, never a camera's hexagonal lens flare. Subtle, only while the
-  ball is far brighter than everything else, in the glare quad's shape.
+### 4.4 Later: shafts of light through clouds, smoke and dust (physics)
+Where a cloud, the Wilson cloud, smoke, dust or terrain stands between the ball and a stretch of air, that stretch does
+not glow: crepuscular rays, as the sun makes. The pall's haze has a short march to carry it. Shafts behind vanilla
+clouds or terrain in clear air need new march steps, a new cost.
 
-### 4.5 Shadows of the second sun (physics)
+### 4.5 Later: shadows of the second sun (physics)
 - **Cause:** direct light travels in straight lines from the ball (G&D §7.18). Anchored to the ground and to whatever
-  casts the shadow. Born at the flash; they swing slowly as the cap rises, and end when the ball fades.
-- **Only the direct beam is shadowed.** The scattered fill of 4.1 (the 18.10 law) stays. Shadows are visible but not
-  black: white everywhere at the peak, then the direction appears, within the screen-level ratio of 4.1.
+  casts the shadow.
+- **Only the direct beam is shadowed.** The scattered fill of the 18.10 law stays, so the shadows are soft-filled,
+  never black, within the screen-level ratio of 4.1.
 - **One phenomenon with the scorch.** The server already computes this burst's shadows for the flash marks
-  (`FlashShadows`, the 16×16 masks of `FlashMarks`). The live shadow must fall where the scorch silhouette is left.
-  - Within the flash-mark range, the masks drive the live shadow on marked faces.
-  - Beyond it, a march over the client height map toward the ball. The pall's height map has cells tens of metres
-    across: it resolves terrain, not houses, so a finer map near the eye is needed (`FarTerrain`'s client chunks).
-  - Near detail: a short screen-space ray over the scene depth, as in the mock. It cannot shadow the player's own
-    body, and it leaves the screen at once when the ball is behind the camera, so it is only the near-detail
-    complement, never the whole.
-- **Where:** `ballLight` in `fx_pall_composite`; `mushBallFace` in `mushroom.glsl` (the direct beam only); the flash
-  marks' client mirror.
+  (`FlashShadows`, `FlashMarks`), so the live shadow falls where the scorch silhouette is left:
+  - within the flash-mark range, the marks' masks drive the shadow on marked faces;
+  - beyond it, a march over a fine client height map toward the ball (the pall's map is too coarse for houses);
+  - near detail: a short screen-space ray. It cannot shadow the player's own body, and it loses the ball behind the
+    camera, so it only complements the other two.
 
-### 4.6 Water: the second sun's glitter path (physics)
-Over water the strongest second-sun cue is the ball's reflection: a glitter path from the ball to the eye, as the sun
-makes, white at the flash and orange as the ball cools. The release-candidate take shows only a peach tint on the
-water. The water decal (`fx/layer/WaterDecal`) draws the path from the ball's direction and brightness, with the
-wave-slope spread of the sun's glitter (Cox–Munk).
+### 4.6 Later: water, the second sun's glitter path (physics)
+Over water the ball's reflection draws a glitter path to the eye, as the sun does: white at the flash, orange as the
+ball cools. The release-candidate take shows only a peach tint on the water. The path is a term in the water decal
+(`fx/layer/WaterDecal`), with the sun glitter's wave-slope spread (Cox–Munk).
 
 ### 4.7 Order and time (kept)
 The flash, the light, the heat and the fires come first, in silence. The sirens fade and the animals go quiet
@@ -248,16 +254,15 @@ silence between flash and wave is the most frightening part of every account (Sp
 minute"). Nothing is added to it.
 
 ### 4.8 Conditions
-- **Yields:** 1 kt flashes and fades within about half a second. 1 Mt's pulse lasts ~10 s (G&D §2.40), so its day
-  washes out and its glow holds for ~10 s, which is what that yield does. The 250 kt rollup case
-  (`NukeExposureTest.bigCapsDoNotBlowTheFrameAgainAtRollup`) is re-checked under the new glare sizing.
-- **Shader pack:** the relit path's neon foliage seen under the pack gets more weight under 4.1, so the acceptance
-  runs under the pack in Artem's instance at acceptance time. The release-candidate take used Photon; `client.md`
-  names Complementary, and one of the two is stale.
+- **Yields:** 1 kt flashes and fades within about half a second. 1 Mt's pulse lasts ~9 s (10·t_max), so its day
+  stays lit and glowing about that long, which is what that yield does. The 250 kt rollup case
+  (`NukeExposureTest.bigCapsDoNotBlowTheFrameAgainAtRollup`) is re-checked under the new glow.
+- **Shader pack:** the relit path's neon foliage under the pack gets more weight under 4.1. The acceptance runs under
+  the pack in Artem's instance: Photon at the time of this proposal.
 - **Multiplayer and server:** nothing changes on the server, and no packet or protocol changes. Each player's light,
   eyes and dazzle follow their own position, gaze and game mode, as now.
 - **Settings:** the `flash` client setting (0 disables) and calm mode govern every new term. No new setting.
-- **Player guide:** creative players now get flash blindness, and the radiance changes the look. Both languages are
+- **Player guide:** creative players now get flash blindness, and the glow changes the look. Both languages are
   updated in the implementing PR.
 
 ## 5. Eyes, ears and body: Artem's question on disorientation
@@ -284,12 +289,11 @@ the air blast, seconds later.
 ## 6. Cost
 | Item | Frame cost (RTX 4060, 1080p) | When |
 |---|---|---|
-| 4.1 one exposure | multiplies in passes that already run, plus a hand pass | while the ball shines |
-| 4.2 eye veil | one GUI post pass, ~0.1 ms (est., the shape of `Concussion`) | while the eyes recover |
-| 4.3 glare, veil, aureole | glare quads exist; the veil and aureole are terms in existing passes | while the ball shines |
-| 4.3 halation | a new emission write from `fx_pall` into the bloom target, plus the existing bloom pass (0.12–0.19 ms full-frame at 2560×1600, client-fx.md) | while the ball shines |
-| 4.4 shafts | the 4.5 shadow test along view rays inside the existing haze march | while the ball shines |
-| 4.5 shadows | height-map march, flash-mark masks and a 24–28 step screen ray; not measured (the mock ran on a CPU renderer) | about 10 s per burst |
+| 4.1 one exposure | multiplies in passes that already run, plus a hand pass | by day, while the ball shines |
+| 4.2 eye overlay | one GUI post pass, ~0.1 ms (est., the shape of `Concussion`) | while the eyes recover |
+| 4.3 veil, aureole, corona | terms in the composite pass and the glare quad's shape | while the ball shines |
+| 4.4 shafts | new march steps through clear air | while the ball shines |
+| 4.5 shadows | flash-mark masks, a height-map march and a screen ray; not measured (the mock ran on a CPU renderer) | about 10 s per burst |
 | 4.6 glitter path | a term in the water decal | while the ball shines over water |
 
 Each item is measured on the GPU during implementation and gets the scene bench on its final head (AGENTS.md).
@@ -304,17 +308,18 @@ Each item is measured on the GPU during implementation and gets the scene bench 
   shows it.
 
 ## 8. Checks a change must pass
-- **Day look gate.** Measured inside the picture as on the films, at 2 and 5 km:
-  - washout in the light pulse: contrast ≤ 4 and saturation ≤ 0.3 (Grable 1.4–3.3 and 0.17–0.22; `main` 5.9–8.5);
-  - glow: ring at 2 radii / sky ≥ 1.4 (Priscilla 1.6–1.9; `main` 1.0–1.07);
+- **Day look gate.** At 2 and 5 km, 0.75–2 s after the burst, measured inside the picture as on the films:
+  - glow: the ring at 2 ball radii (radius from the model's projected cap) is 1.3–2.0 times the sky beside it
+    (Priscilla 1.4–1.75; `main` 1.04) and at most half the ball (Trinity 0.15–0.33; `main` 0.62–0.70, which is
+    sky-dominated);
+  - the ball's pattern: luminance variation inside the disc stays at `main`'s level;
   - the gate passes the reference frames and fails `main`.
-- **Night is no worse than `main`:** ground, sky and ring-at-2-radii within `main`'s ranges (section 3), against
-  Trinity.
+- **Night is unchanged:** ground, sky and ring within `main`'s ranges (section 3).
 - **Earlier complaints keep their tests:**
   - the ball's pattern at 1–5 s, the rolled cap at night through haze, no re-blown frame at rollup for big yields
     (`NukeExposureTest`);
   - the vanilla sky-flash sawtooth (`NukeFlashSkyTest`);
   - the 18.10 ratio on screen (4.1, new);
-  - the shell never merging with the ball (4.3, new).
+  - the shell never merging with the ball (4.1, new).
 - **The whole first minute in the matrix:** 1 and 15 kt and 1 Mt; day and night; land and water; 2, 5 and 15 km;
   under the host's shader pack.
