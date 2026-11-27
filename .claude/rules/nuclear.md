@@ -568,10 +568,9 @@ block light is never an opening. A distant ball is seen by the visible share of 
 a ground ball's centre sits at ground level for seconds, and tree crowns 2 km out hid it while 94–98 % of the disc was
 open, cutting the light 3.5 times (Zearth 09.11.2026, `NukeLightShareTest`); glare and dazzle stay yes/no at half. Paused game time cannot advance adaptation; reset/seek reconstructs exposure.
 Transient frame flash must skip non-live detonations reconstructed by sync/seek; their steady illumination still adapts.
-Vanilla sky flash (`ClientLevel.setSkyFlashTime`) mixes sky and fog toward white by min(1, timer − partial tick): a
-timer renewed to one tick each frame is a 20 Hz sawtooth (replay capture 10.11: ±0.055 frame luminance, corr 0.97 with
-the partial tick); `NukeFlash.SKY_FLASH_TICKS` is 3, since the fog color reads the sky before the `ComputeFogColor`
-renewal and so sees one tick less right after a tick (`NukeFlashSkyTest`).
+Vanilla sky flash (`ClientLevel.setSkyFlashTime`; a switch, also full-day light map: only under ≥ 0.98 white fill) mixes sky and fog toward white by min(1, timer − partial tick): a
+timer renewed to one tick each frame is a 20 Hz sawtooth (replay 10.11: ±0.055 luminance); `SKY_FLASH_TICKS` is 3:
+the fog color reads the sky before the `ComputeFogColor` renewal, one tick less after a tick (`NukeFlashSkyTest`).
 
 ## Dust source material
 

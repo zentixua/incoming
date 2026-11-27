@@ -716,7 +716,8 @@ All from one `ClientNuclearEvents` list (event + time), updated in `ClientTickEv
   The summed eye light F drives `Sight.exposure(ambient,F)` with a 0.2 s exponential follow in log exposure,
   using game/render time. Reset/seek reconstructs adapted state; frame readers never advance it separately.
   World, pall, dust and amber use that exposure. Firebody gain/film retains its ambient reference and cancels frame
-  exposure once. Vanilla sky flash renews one tick only while admitted frame overexposure remains visible.
+  exposure once. Vanilla sky flash (a switch: white sky, full-day light map) renews only while the flash's white fill
+  covers ≥ 0.98 of the frame, so its end never shows (it ended at ~1.85 s at night and the picture jumped).
   Sources: [G&D VII §§7.14, 7.83–7.88](https://www.atomicarchive.com/resources/documents/effects/glasstone-dolan/chapter7.html),
   [G&D XII figs. 12.88a/b](https://www.atomicarchive.com/resources/documents/effects/glasstone-dolan/chapter12.html).
 - **Sky/fog** (`ViewportEvent.ComputeFogColor`, `RenderFog`): first seconds white/yellow, then orange-brown; black-rain
