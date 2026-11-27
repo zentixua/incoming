@@ -202,8 +202,10 @@ The two reviews measured each round. Their findings are why the proposal reads a
     alone, a third. The positive afterimage of an intense flash lasts seconds, and the spot carries that.
   - In the sandbox the full view could take far less than first planned. A 2 s near-white hold with desaturation 0.75,
     and then a 0.6 s hold with desaturation 0.35 and a night dimming of 0.4, turned the frames of the second sun into a
-    pale card by day and killed the orange-lit night. The full-view part is now a light desaturation (≤ 0.15) and, at
-    night after the glow, a dimming (≤ 0.25). The afterimage spot, local and colour-shifting, carries the long dazzle.
+    pale card by day and killed the orange-lit night; a desaturation of 0.15 with a dimming of 0.25 still turned the
+    night brownish grey. The full-view part is now a light desaturation by day (≤ 0.15) and the white clearing; at night
+    only the clearing, so the orange-lit night keeps its colour. The afterimage spot, local and colour-shifting, carries
+    the long dazzle.
   - The film's white-out is overexposed film and is not a target (Artem, 27.11).
   - Near-white seconds for 15 kt (lift ≥ 0.4) after the pulse maximum: about 0.6 s facing the ball at 2 km and 0.4 s at
     15 km; turned away, none beyond the white frame itself.
@@ -212,8 +214,8 @@ The two reviews measured each round. Their findings are why the proposal reads a
   carried by the afterimage and the pale view, never by a cut.
 - **Creative players get it too.** Flash blindness is perception, not injury: a creative player cannot be hurt, but
   has eyes. Spectators and replay viewers stay a camera, without it. Permanent retinal burns stay survival-only.
-- **Night:** the long night dose (up to 600 s at the full bleach) applies in creative as in survival. It fades as
-  (1 − t/T)² and is a bounded overlay, so most of it is a faint afterimage. The `flash` client setting and calm mode
+- **Night:** the long night dose (up to 600 s at the full bleach) applies in creative as in survival: the white clearing
+  and the afterimage, whose own time (5–30 s) is the existing retina-spot law. The `flash` client setting and calm mode
   scale or disable it, as they do every flash path today.
 - **Where:** `NukeFlash` (the veil as a post pass shaped like `Concussion`'s `PostChain`; `eyes`).
 

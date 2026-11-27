@@ -41,22 +41,21 @@ class FireballLightTest {
     void flashBlindnessIsBoundedSoTheWorldStaysVisible() {
         for (float dark : new float[]{0, 0.5f, 1}) {
             float[] start = NukeFlash.look(0, 30, 1, dark, 1);
-            assertTrue(start[0] <= NukeFlash.GREY_MAX && start[1] <= NukeFlash.LIFT_MAX && start[2] <= NukeFlash.NIGHT_DIM);
-            assertTrue(start[0] < 1 && start[1] < 1 && start[2] < 1, "never a solid card");
+            assertTrue(start[0] <= NukeFlash.GREY_MAX && start[1] <= NukeFlash.LIFT_MAX);
+            assertTrue(start[0] < 1 && start[1] < 1, "never a solid card");
             double before = Double.MAX_VALUE;
             for (double t = 0; t < 30; t += 0.5) {
                 float[] l = NukeFlash.look(t, 30, 1, dark, 1);
-                double sum = l[0] + l[1] + l[2];
+                double sum = l[0] + l[1];
                 assertTrue(sum <= before + 1e-6, "fades, never comes back: t " + t);
                 before = sum;
             }
             float[] end = NukeFlash.look(30, 30, 1, dark, 1);
-            assertEquals(0, end[0] + end[1] + end[2], 1e-9, "gone by its deadline");
+            assertEquals(0, end[0] + end[1], 1e-9, "gone by its deadline");
         }
-        // by day the bleached eye's glow pales the picture; at night the dark-adapted eye loses the dim light instead
+        // by day the bleached eye's glow and colour loss pale the picture; at night the orange-lit night keeps its colour
         assertTrue(NukeFlash.look(10, 60, 1, 0, 1)[1] > NukeFlash.look(10, 60, 1, 1, 1)[1]);
-        assertEquals(0, NukeFlash.look(10, 60, 1, 0, 1)[2], 1e-9);
-        assertTrue(NukeFlash.look(10, 60, 1, 1, 1)[2] > 0);
+        assertEquals(0, NukeFlash.look(10, 60, 1, 1, 1)[0], 1e-9);
         // a weak dose: a weak veil
         assertTrue(NukeFlash.look(0, 30, 0.2f, 0, 1)[0] < NukeFlash.look(0, 30, 1, 0, 1)[0]);
     }

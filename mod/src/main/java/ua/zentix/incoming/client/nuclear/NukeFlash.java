@@ -83,11 +83,12 @@ public final class NukeFlash {
     private static final double SETTLED = 1.004;
     /**
      * Flash blindness over the picture at full bleach (presentation, bounded so the world always stays visible; DESIGN
-     * fireball-light §4.2): colour lost toward grey, the bleached eye's glow lifting the blacks (warm white, fading over
-     * {@link #AFTERGLOW_S}, then {@link #DAY_LIFT} by day), and at night the dim light a dark-adapted eye has lost. It replaced
+     * fireball-light §4.2): colour lost toward grey by day, the bleached eye's glow lifting the blacks (warm white, fading over
+     * {@link #AFTERGLOW_S}, then {@link #DAY_LIFT} by day). At night only the glow and the afterimage: the orange-lit night
+     * keeps its colour (a desaturation of 0.15 and a dimming of 0.25 turned it brownish grey in the sandbox takes). It replaced
      * a uniform fill at 0.9 opacity, grey by day and black at night, that hid the whole picture.
      */
-    static final float GREY_MAX = 0.15f, LIFT_MAX = 0.6f, DAY_LIFT = 0.04f, NIGHT_DIM = 0.25f, AFTERGLOW_S = 0.7f;
+    static final float GREY_MAX = 0.15f, LIFT_MAX = 0.6f, DAY_LIFT = 0.04f, AFTERGLOW_S = 0.7f;
     /**
      * The near-white first phase lasts this share of the dazzle, at most {@link #HOLD_MAX} s: about 0.3 s for 15 kt at 2 km
      * facing the ball by day, a tenth of a second at 15 km. Presentation of the bleached eye's own glow; its long tail is the
@@ -396,7 +397,7 @@ public final class NukeFlash {
         double t = (TickTime.at(ticks, partial) - veilStart) / 20;
         if (t < 0 || t >= veilSeconds) return;
         float[] look = look(t, veilSeconds, veilStrength, veilDark, veilGaze);
-        if (look[0] + look[1] + look[2] <= 0.004f) return;
+        if (look[0] + look[1] <= 0.004f) return;
         Minecraft mc = Minecraft.getInstance();
         RenderTarget main = mc.getMainRenderTarget();
         PostChain post = eyeChain(mc, main);
@@ -405,25 +406,23 @@ public final class NukeFlash {
         g.flush();
         post.setUniform("Grey", look[0]);
         post.setUniform("Lift", look[1]);
-        post.setUniform("Dim", look[2]);
         post.process(0);
         main.bindWrite(false);
     }
 
     /**
      * Flash blindness at t s of a T s dazzle of strength k (0..1), dark adaptation dark (0 day .. 1 night) and gaze factor
-     * ({@link #gaze}): {grey, lift, dim}, each a bounded share of the bleach (1 − t/T)²·k, so the world stays visible. The
-     * lift is the bleached eye's own glow: near white for the hold ({@link #HOLD_SHARE} of T, at most {@link #HOLD_MAX} s;
-     * full facing the ball), then fading over {@link #AFTERGLOW_S} to {@link #DAY_LIFT} by day and to nothing at night, where
-     * the dark-adapted eye instead loses the dim light ({@link #NIGHT_DIM}).
+     * ({@link #gaze}): {grey, lift}, each a bounded share of the bleach (1 − t/T)²·k, so the world stays visible. The lift is
+     * the bleached eye's own glow: near white for the hold ({@link #HOLD_SHARE} of T, at most {@link #HOLD_MAX} s; full facing
+     * the ball), then fading over {@link #AFTERGLOW_S} to {@link #DAY_LIFT} by day and to nothing at night; the grey is by day.
      */
     static float[] look(double t, double seconds, float k, float dark, float gaze) {
-        if (seconds <= 0 || t < 0 || t >= seconds) return new float[3];
+        if (seconds <= 0 || t < 0 || t >= seconds) return new float[2];
         double life = 1 - t / seconds, bleach = life * life * k;
         double hold = Math.min(HOLD_MAX, HOLD_SHARE * seconds);
         double glow = t <= hold ? 1 : Math.exp(-(t - hold) / AFTERGLOW_S);
         double lift = LIFT_MAX * gaze * glow + DAY_LIFT * (1 - glow) * (1 - dark);
-        return new float[]{(float) (GREY_MAX * bleach), (float) (lift * bleach), (float) (NIGHT_DIM * dark * (1 - glow) * bleach)};
+        return new float[]{(float) (GREY_MAX * (1 - dark) * bleach), (float) (lift * bleach)};
     }
 
     /** Seconds the view stays near white (lift at least {@code white}) after the pulse maximum, for the report and tests. */

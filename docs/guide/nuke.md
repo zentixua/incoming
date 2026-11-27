@@ -94,8 +94,8 @@ with a nuclear warhead still waits 90 seconds before launch, even with early war
   basement, into a pit.
 - **The flash blinds.** It dazzles everyone who sees the fireball, and more weakly everyone under the open sky it lights
   up. The view goes white. As it clears, an afterimage of the fireball stays where you saw it: bright at first, then
-  orange, then violet, moving with your gaze. The view stays pale and washed out by day, and dim at night, and recovers
-  over seconds or minutes. You can always see through it. The closer you are, the longer it lasts, and at night, when
+  orange, then violet, moving with your gaze. By day the view stays a little pale and washed out; it recovers over
+  seconds or minutes. You can always see through it. The closer you are, the longer it lasts, and at night, when
   your eyes have got used to the dark, far longer: at 15 kt about 50 seconds at 3 km by day, several minutes at 10 km at
   night. If you were looking towards the fireball, its image burns a blind spot into your eyes for good, at 15 kt out to
   about 30 km by day and 50 km at night. The spot moves with your gaze and is fainter off to the side; it goes away only
