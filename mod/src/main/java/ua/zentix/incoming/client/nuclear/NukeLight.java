@@ -41,6 +41,8 @@ public final class NukeLight {
     static final double FOLLOW_DAY = 0.5;
     /** {@link FarView#ambient} of a clear night: the one-exposure change fades out toward it (night stays as it was). */
     static final double NIGHT_AMBIENT = 0.17;
+    /** This frame's {@link #flashSetting}, read by the frame (the law itself takes no game state). */
+    private static double setting = 1;
     private static boolean prepared;
 
     private NukeLight() {}
@@ -72,13 +74,14 @@ public final class NukeLight {
             CAMERA.put(a, eye);
             fire += eye.light();
         }
+        setting = flashSetting();
         update(now, ambient, fire);
         if (!ua.zentix.incoming.client.fx.layer.FxViews.secondary()) NukeFlash.frame();
     }
 
     /** Advance the one exposure state from a frame's summed illumination; no wall clock. */
     static void update(double now, double ambient, double fire) {
-        day = dayShare(ambient);
+        day = dayShare(ambient) * setting;
         bodyExposure = Sight.exposure(ambient, 0);
         double target = Sight.exposure(ambient, fire);
         exposure = Double.isNaN(last) ? target : FlashLight.follow(exposure, target, Math.max(0, now - last), NukeExposure.ADAPT_S);
@@ -97,8 +100,17 @@ public final class NukeLight {
     /** The eye's flash exposure (dazzle, glare): ball light seen at this exposure is in eye units. */
     static double exposure() { return exposure; }
     static double bodyExposure() { return bodyExposure; }
-    /** This frame's daylight share of the sky ({@link #dayShare}). */
+    /** This frame's daylight share of the sky ({@link #dayShare}) times the Flash setting ({@link #flashSetting}). */
     static double day() { return day; }
+
+    /**
+     * The player's Flash brightness setting, capped in calm mode (vanilla Hide Lightning Flashes, {@code Flash.calm}): it scales
+     * the day's one-exposure change and the eye's veil like every other flash path (0: the frame keeps its daylight exposure).
+     */
+    static double flashSetting() {
+        double k = ua.zentix.incoming.IncomingConfig.CLIENT.flash.get();
+        return ua.zentix.incoming.client.fx.Flash.calm() ? Math.min(k, ua.zentix.incoming.client.fx.Flash.CALM) : k;
+    }
 
     /** Daylight share of the sky's ambient light: 1 by day, 0 at a clear night or darker. */
     static double dayShare(double ambient) {
