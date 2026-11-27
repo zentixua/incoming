@@ -46,7 +46,7 @@ class MaterialMapTest {
         assertEquals(4, disk.get(lake));
     }
 
-    @Test void unknownCellUsesNearestMeasuredCentreAndTiesUseWorldOrder() {
+    @Test void unknownCellBetweenTwoCentresTakesTheNearestAndTiesUseWorldOrder() {
         var source = new Long2IntOpenHashMap();
         source.put(ChunkPos.asLong(-4, 0), 4);
         source.put(ChunkPos.asLong(4, 0), 4 << 4);
@@ -54,6 +54,43 @@ class MaterialMapTest {
         assertEquals(DustMaterial.WATER, map.material(32, 32));
         assertEquals(DustMaterial.SAND, map.material(300, 32));
         assertTrue(map.wet());
+    }
+
+    /**
+     * One water cell at the edge of the measured ground is not drawn out along a ray: with one nearest centre, every unread
+     * cell east of it in its row took its class, a straight 64-block strip of water kilometres long (the dust over it a thin
+     * spray trench). The unread cells take the weighted vote of their nearest measured centres; the measured map and the
+     * frontier agree.
+     */
+    @Test void anEdgeCellIsNotDrawnOutAlongARay() {
+        var source = new Long2IntOpenHashMap();
+        int soil = 15 << (4 * DustMaterial.SOIL.ordinal()), water = 15 << (4 * DustMaterial.WATER.ordinal());
+        for (int cx = -8; cx < 4; cx++)
+            for (int cz = -8; cz < 8; cz++) source.put(ChunkPos.asLong(cx, cz), cx >= 0 && cz >= 4 ? water : soil);
+        var bounds = new DustGrid.Bounds(0, 0, 2048, 4096);
+        var map = MaterialMap.build(bounds, source, -1, 12);
+        assertEquals(DustMaterial.WATER, map.material(32, 96), "the measured water cell stays water");
+        for (int x = 160; x < 2000; x += 64) assertEquals(DustMaterial.SOIL, map.material(x, 96), "no strip of water at x " + x);
+        // the frontier (live sources) reduces by the same rule
+        var d = new Detonation(-1, new Vec3(0.5, 64, 0.5), 64, 1000, true, 0, 0, 0, 20_000, 7, 1, false, 1);
+        var frontier = new MaterialFrontier(d, DustMaterial.SOIL.ordinal());
+        frontier.observe(source);
+        frontier.closeThrough(Long.MAX_VALUE);
+        var live = frontier.snapshot(12);
+        var grid = new DustGrid(DustGrid.Bounds.of(d));
+        for (int x = 160; x < 1000; x += 64)
+            if (grid.index(x, 96) >= 0) assertEquals(DustMaterial.SOIL, live.material(x, 96), "frontier: no strip at x " + x);
+    }
+
+    /** A sea along the measured ground's edge (a shore burst's measured half) still reaches out as water past it. */
+    @Test void aShoreAtTheEdgeKeepsItsWaterOutward() {
+        var source = new Long2IntOpenHashMap();
+        int soil = 15 << (4 * DustMaterial.SOIL.ordinal()), water = 15 << (4 * DustMaterial.WATER.ordinal());
+        for (int cx = -8; cx < 4; cx++)
+            for (int cz = -8; cz < 8; cz++) source.put(ChunkPos.asLong(cx, cz), cx >= 0 ? water : soil);
+        var map = MaterialMap.build(new DustGrid.Bounds(0, 0, 2048, 4096), source, -1, 12);
+        for (int x = 96; x < 2000; x += 64) for (int z = -96; z <= 96; z += 64)
+            assertEquals(DustMaterial.WATER, map.material(x, z), "the sea past the shore at x " + x + ", z " + z);
     }
 
     @Test void largestSourceAndSeventeenColdSourcesFitOnTheWire() {
