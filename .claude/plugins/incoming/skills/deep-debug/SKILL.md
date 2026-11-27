@@ -98,6 +98,9 @@ Where: Artem's laptop, only when he is not playing (`tools/gpu_lease.sh --wait`)
   bench for frame cost.
 - **Other vendors' drivers** (AMD, no such GPU here): `tools/amd_shader_check.py` gives AMD's own compiler output
   per program (VGPRs, scratch, code size, compiler memory and seconds); Mesa llvmpipe is the second compiler.
+- **A cloud that pops, vanishes in a step or appears whole**: `-Dincoming.dev.smoke=true` (scenario jar; also a Flashback
+  export through `prod_client.py --prop`) or `tools/dev_client.sh smoke on` logs every smoke source twice a second
+  (kind, age, bounds, selection, sample age, clumps, masses): the source and the tick it ends, against its law.
 - **Shaders**: the dev client held at the defect (look skill section 4: the burst once, `/tick freeze`, F3+T per
   change), a probe channel per term.
 

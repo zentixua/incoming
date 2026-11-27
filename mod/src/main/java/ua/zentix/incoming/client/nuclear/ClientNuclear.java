@@ -63,6 +63,8 @@ public final class ClientNuclear {
         /** Diagnostics: this detonation's terrain map ({@link PallGround#writeDiag}). */
         public void writeGroundDiag(String prefix) throws java.io.IOException {
             ground.writeDiag(prefix);
+            if (tiles != null) tiles.writeDiag(prefix, "revision " + revision + ", seed " + seed + ", map "
+                    + (source == null ? "none" : String.valueOf(source.committedMap() != null)));
         }
         private SourceMaterial source;
         /** The dust wave's material tiles ({@link #materialTiles}): kept across a replay seek's copy, filled once. */

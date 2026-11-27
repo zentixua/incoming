@@ -172,6 +172,30 @@ public final class SmokePreparation {
         }
     }
 
+    /**
+     * Every source's state at grid time {@code seconds}, one line each (dev diagnostics): kind, age, bounds (empty, size),
+     * culled, selected, sample age, clumps and their summed drop, dust and soot masses in the drawn sample (blobs in kg,
+     * tubes in kg per metre at their two ends: a mixed sum, for a pop's onset, not a balance).
+     */
+    public String describe(double seconds) {
+        StringBuilder b = new StringBuilder();
+        for (Entry e : entries.values()) {
+            SmokeBounds o = e.bounds;
+            double water = 0, dust = 0, soot = 0;
+            int n = e.ready == null ? 0 : e.ready.count;
+            for (int k = 0; k < n; k++) {
+                int i = k * Snapshot.WIDTH + 3;
+                if (e.ready.data[k * Snapshot.WIDTH] == 0) { soot += e.ready.data[i + 8]; dust += e.ready.data[i + 9]; water += e.ready.data[i + 10]; }
+                else { soot += e.ready.data[i + 5] + e.ready.data[i + 12]; dust += e.ready.data[i + 6] + e.ready.data[i + 13]; }
+            }
+            b.append(String.format(java.util.Locale.ROOT, "%n  %s@%x age %.2f bounds %s y %.0f..%.0f w %.0f sel %b sample %s clumps %d water %.3g dust %.3g soot %.3g dead %b",
+                    e.source.getClass().getSimpleName(), System.identityHashCode(e.source), e.source.age(seconds), o.empty() ? "empty" : "box",
+                    o.minY, o.maxY, Math.max(o.maxX - o.minX, o.maxZ - o.minZ), e.selected,
+                    e.hasSample ? String.format(java.util.Locale.ROOT, "%.2f", seconds - e.sampledAt) : "none", n, water, dust, soot, e.dead));
+        }
+        return b.toString();
+    }
+
     /** Reusable raw model output. Camera-dependent selection, lighting and merging still run in the current frame. */
     private static final class Snapshot implements SmokeGrid.Sink {
         private static final int WIDTH = 23;

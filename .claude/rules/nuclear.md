@@ -556,12 +556,13 @@ Ruins and everything in `nuclear/world/` are in `nuclear-world.md`.
   full-resolution pass and allowed a halo over nearby Iris masonry (`arrival 1`, house 50, camera 11/2/0/800).
 
 ## Shared nuclear flash light
-`FlashLight` is the visible pulse/area source and opening-transfer law; `NukeLight` owns one frame sample/exposure
-before fog. All nuclear illumination uses its exposure; firebody film keeps a separate ambient reference and
-cancels frame exposure once. By day one frame exposure E0·r^(½·day) (design fireball-light): daylight ×
-`daylight()`, ball light (amber dome included) × `frameExposure()`; the eye veil is `flashVeil` alone. Not covered:
-quad daylight, vanilla hand; no ball shadows (screen-space ones changed with the view). Blindness never dims it. `FlashLight.temperature` is escaping brightness temperature, distinct from the old
-core/mixed gas temperatures. Do not substitute it into server energy or injury calculations. Source derivation,
+`FlashLight`: visible pulse/area source, opening-transfer law; `NukeLight`: one frame sample/exposure before fog,
+used by all nuclear illumination (firebody film cancels it once against its own ambient reference). By day one frame
+exposure E0·r^(f·day) (design fireball-light; f ½ for a flash, 0.85 for a lasting light, `NukeLight.adapt`): daylight
+× `daylight()`, ball light (amber dome too) × `frameExposure()`; eye veil `flashVeil`. Not covered: quad daylight,
+vanilla hand; no ball shadows (screen-space ones moved with view). Blindness never dims it.
+`FlashLight.temperature` is escaping brightness temperature, not core/mixed gas temperature: never in server energy
+or injury. Source derivation,
 opening approximation and outside-OpenAir limitation: DESIGN-nuke §6. Sealed eye/world pixels get no new flash;
 block light is never an opening. A distant ball is seen by the visible share of its disc above the terrain line
 (`NukeLight.share`: `Sightline` from the ground under the centre, `FarBlasts.visible`), not one ray to its centre:
@@ -577,8 +578,8 @@ the fog color reads the sky before the `ComputeFogColor` renewal, one tick less 
 - Server cells: 64 blocks out to optical depth 1 at one second, 256 blocks out to 0.05 (presentation keeps its own
   thresholds). A cell closes 200 ticks before the front reaches its nearest ground point; surveys continue after
   detonation; instant sources start from the observations at birth.
-- Class by column plurality, ties water, sand, soil, hard; unread cells take the nearest measured closed centre (ties
-  by world X, then Z); cells due together share samples. Ground-zero wetness: origin block, surveyed ground, soil.
+- Class by column plurality, ties water, sand, soil, hard; unread cells: 1/d²-weighted vote of the 8 nearest measured
+  closed centres (`MaterialMap.Nearest`); cells due together share samples. Ground-zero wetness: origin block, surveyed ground, soil.
 - `NuclearEvents` keeps the UUID across detonation: open sources save birth samples, timestamped observations and
   frontier tick; finished ones packed cells. A malformed entry is isolated; a worker failure publishes uniform seed.
 - Checkpoints stand alone (partial maps carry fractional origin and sealed extent); four cells per byte, byte runs
@@ -586,5 +587,5 @@ the fog color reads the sky before the `ComputeFogColor` renewal, one tick less 
   needs 82,718 B of values, 17 sources fit in 1.5 MB. Cold delivery nearest first, 12,500 material bytes per part,
   20 parts per rolling second per viewer.
 - `ClientNuclear.Active.sourceMaterial()`: class, commit status, origin wetness; the detonation packet carries the
-  frozen seed for an unwarned viewer (`frozenFallback()` until the cell arrives); empty outside the footprint;
-  sources without a revision freeze the first local terrain answer per cell.
+  frozen seed for an unwarned viewer (`frozenFallback()` until its cell arrives); empty outside the footprint; a source
+  without a revision freezes the first local terrain answer per cell.

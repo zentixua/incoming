@@ -1624,11 +1624,11 @@ final class Sandbox {
             Incoming.LOG.error("SANDBOX frame {} not written", to, ex);
         }
         cap.frames.add(String.format(Locale.ROOT, "{\"t\": %.2f, \"age\": %.3f, \"file\": \"%s\", \"fps\": %d}", t, age, file, mc.getFps()));
-        Incoming.LOG.info("SANDBOX shot {} age {} s (t = 0 at {}) fps {} day time {}; layer: {}; smoke: {}; flight: {}; air: {}; pall: {}", file, String.format(Locale.ROOT, "%.3f", age), clock, mc.getFps(),
+        Incoming.LOG.info("SANDBOX shot {} age {} s (t = 0 at {}) fps {} day time {}; layer: {}; smoke: {}; flight: {}; air: {}; pall: {}; sources: {}", file, String.format(Locale.ROOT, "%.3f", age), clock, mc.getFps(),
                 mc.level.getDayTime() % 24000,
                 ua.zentix.incoming.client.fx.layer.FxLayer.describeTiming(), ua.zentix.incoming.client.far.FarRenderer.describeSmoke(),
                 ua.zentix.incoming.client.far.FarFlightView.describe(), ua.zentix.incoming.client.fx.ClientAir.now(),
-                ua.zentix.incoming.client.nuclear.NukePall.describe());
+                ua.zentix.incoming.client.nuclear.NukePall.describe(), ua.zentix.incoming.client.fx.smoke.SmokeGrid.describeSources());
         cap.next++;
         if (cap.next >= cap.times.length) pace(20);
         else paceFrame();

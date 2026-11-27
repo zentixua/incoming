@@ -4,7 +4,7 @@
 // near epicenter. Pixel position from view-axis distance to the nearest surface, the water's own top (Sampler0, SceneDepth: g) and frame
 // matrices; water means horizontal surface with neighboring pixels at same height (walls, trunks,
 // grass, mobs, slopes and object edges against sky at same within-block height are not water), at standing-water top,
-// 8/9 block (lower under shaderpack, for its waves); beyond render distance (DH LOD), sea-level surface or below-sea
+// 8/9 block (lower or higher under shaderpack, for its waves); beyond render distance (DH LOD), sea-level surface or below-sea
 // position, then ray/surface intersection. Ring profiles in Sampler1: one ring per row, x is square root of front-to-center
 // path fraction; r darkness, g foam, b conventional-explosion lace (0 for nuke). Each ring has own noise from center (distant world
 // coordinates lack float fractional precision; detonation center stays fixed).
@@ -22,8 +22,8 @@ uniform vec4 Haze;
 // pixel angle, rad
 uniform float Pixel;
 // shaderpack (0 without): x: how far waves lower surface below 8/9, blocks; y: surface height difference from vertex
-// to neighbor, blocks; z: frame TAA jitter, pixels
-uniform vec3 Pack;
+// to neighbor, blocks; z: frame TAA jitter, pixels; w: how far waves raise surface above 8/9, blocks
+uniform vec4 Pack;
 // rings: eye-relative center x/z; water-front radius; trailing profile length, blocks
 uniform vec4 Ring0;
 uniform vec4 Ring1;
@@ -130,6 +130,20 @@ float foamLace(vec2 rel, float foot) {
 // standing-water top above block bottom
 const float SURFACE = 8.0 / 9.0;
 
+// highest band edge the pack's crests may raise it to for an exact read: 15/16 − 8/9 (farmland, path tops) less 0.004
+const float CREST_CEILING = 0.04461;
+
+// surface h blocks above the still-water top (8/9) is water's: 1 inside the band, 0 outside. Both ways the depth error
+// (tol; its part beyond 0.01 grows with distance) and frame jitter; below, the pack's wave troughs (drop); above, its
+// crests (rise), up to CREST_CEILING less the same depth error and jitter, so a 15/16 top read low by them stays out, and
+// never narrower than without them. Crests outside the band (far away, where crest and farmland cannot be told apart by
+// height) are left undarkened, straight light lines along the wave fronts
+float surfaceBand(float h, float tol, float jitter, float drop, float rise) {
+    if (h <= 0.0 - (tol + jitter + drop)) return 0.0;
+    if (h >= max(tol + jitter, min(tol + jitter + rise, CREST_CEILING - (tol - 0.01) - jitter))) return 0.0;
+    return 1.0;
+}
+
 void main() {
     ivec2 size = textureSize(Sampler0, 0);
     ivec2 px = ivec2(gl_FragCoord.xy);
@@ -159,7 +173,7 @@ void main() {
     // shaderpack frame jitter shifts depth ray: position-height error is shift × distance
     float jitter = Pack.z * Pixel * length(ray.xz);
     float h = fract(CamY + p.y) - SURFACE;
-    bool water = level && h > -(tol + jitter + Pack.x) && h < tol + jitter;
+    bool water = level && surfaceBand(h, tol, jitter, Pack.x, Pack.w) > 0.5;
     if (!water && length(p.xz) > WaterParams.x) {
         float sea = WaterParams.y;
         if (level && p.y > sea - 1.2 && p.y < sea + 0.15) {

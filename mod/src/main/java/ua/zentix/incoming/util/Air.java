@@ -7,12 +7,12 @@ import ua.zentix.incoming.sound.Propagation;
 /**
  * Current world air shared by server and client: world wind ({@link Wind}, same as nuclear), stability class
  * ({@link Stability}) from surface wind, sun and cloud cover, and humidity. Used by projectile flight (drift), smoke,
- * blast clouds and trails. Minecraft has no humidity: rain and thunderstorms saturate air (humidity over water 1),
+ * blast clouds and trails. Minecraft has no humidity: rain and thunderstorms saturate air (humidity 1),
  * clear weather 0.5 (⚠ estimate: mean upper-troposphere humidity is tens of percent).
  *
  * @param wind      world wind
  * @param stability stability class, 0 (A) .. 5 (F)
- * @param humidity  humidity over water, 0..1
+ * @param humidity  humidity aloft and of the air a blast shell expands into, 0..1 (near the ground: {@link #surfaceHumidity})
  * @param sea       the world's sea level, blocks ({@link Terrain#sea}): heights above sea level start here
  */
 public record Air(Wind wind, double stability, double humidity, int sea) {

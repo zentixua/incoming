@@ -14,6 +14,8 @@
 #                         (about 0.7 GB an hour), else no sound
 #   tools/dev_client.sh cmd '<command>' …      chat commands in order (without the slash): tp @s 3514 73 -2298 55 -2
 #   tools/dev_client.sh hud on|off              F1
+#   tools/dev_client.sh smoke on|off            log every smoke source twice a second ("DEV smoke": kind, age, bounds,
+#                                               selected, sample age, clumps and their masses; the puff fill): a cloud's pop by source
 #   tools/dev_client.sh watch on|off            log every frame whose upper screen jumps in luminance ("DEV pop": a
 #                                               one-frame dropout of an effect), with the dust pass's state
 #   tools/dev_client.sh age                     the newest detonation's shown age (s), front radius and eye distance (blocks)
@@ -47,7 +49,7 @@ need_running() { running || { echo "dev client is not running (tools/dev_client.
 # The java a rigLaunch script runs (its jdb redefines classes): the last quoted .../bin/java on its exec line
 rig_java() { sed -n "s/^exec env .* '\([^']*\/bin\/java\)' .*/\1/p" "$1"; }
 
-# One line to the dev client (DevHands: cmd, reload, shot, hud, press, dw, age, skip, watch), waits for its answer; prints it, code 1 on "error"
+# One line to the dev client (DevHands: cmd, reload, shot, hud, press, dw, age, skip, watch, smoke), waits for its answer; prints it, code 1 on "error"
 hand() {
   local id done t=0 res limit=${2:-300}
   id=$(date +%s%N); mkdir -p "$DEV/inbox"
@@ -216,6 +218,7 @@ case "$c" in
   age) need_running; hand age ;;
   skip) need_running; [ $# -ge 1 ] || { echo "skip <seconds>" >&2; exit 2; }; hand "skip $1" ;;
   watch) need_running; hand "watch ${1:-on}" ;;
+  smoke) need_running; hand "smoke ${1:-on}" ;;
   describe) need_running; hand describe ;;
   dw) need_running; for a in "$@"; do hand "dw $a" || exit 1; done ;;
   shot) need_running; [ $# -ge 1 ] || { echo "shot <name> [--settle s]" >&2; exit 2; }; shot "$@" ;;

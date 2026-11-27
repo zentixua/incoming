@@ -48,7 +48,7 @@ Prism: `~/.var/app/org.prismlauncher.PrismLauncher/data/PrismLauncher/` (`tools/
                                            its Gradle step and another Gradle run in the same tree (GameTest) collide on
                                            downloadAssets: start the second after the client's launch script exists;
                                            scenarios and what each captures: in the script header
-    dev_client.sh start|cmd|hud|dw|age|watch|swap|reload|shot|stop|status ← the look loop: ModDevGradle runClient (the mod and its dependencies) straight
+    dev_client.sh start|cmd|hud|dw|age|watch|smoke|swap|reload|shot|stop|status ← the look loop: ModDevGradle runClient (the mod and its dependencies) straight
                                            into a saved world (a reflinked copy of a real map), JetBrains Runtime from the Gradle
                                            toolchain with JDWP on loopback; `swap` compiles, redefines changed classes (jdb) and presses
                                            the F3+T reload for changed resources; chat commands, reload, F2, F1 and dust-wave diagnostics (dw) as files the
@@ -109,6 +109,8 @@ Prism: `~/.var/app/org.prismlauncher.PrismLauncher/data/PrismLauncher/` (`tools/
                                            --wait, in the lease queue) and waits until Artem's game is closed; his game started during the
                                            job (polled every second) stops it: “Artem's game started at T: job stopped”, exit 75;
                                            at the end, “laptop_job <name>: exit N”; --status: what runs and who holds the GPU;
+                                           the command runs in the job's own unit: environment set on an outer systemd-run
+                                           does not reach it (a script re-invoking itself must pass its mode as an argument);
                                            --soft: a vanilla client (shared GPU slot or CPU), no lease, CPUWeight=idle, MemoryMax from soft_gl.sh, no swap;
                                            every job has a memory ceiling (--ceiling <mode>): 10 GB + 4 GB swap, --full (whole pack) 20 GB,
                                            --full only with --acceptance (a final take: refused with 2 without it, each counted as a

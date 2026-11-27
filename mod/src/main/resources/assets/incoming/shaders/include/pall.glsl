@@ -488,6 +488,20 @@ float pallDisplay(float v) {
 const float PALL_CROSS = 0.15;
 const vec3 PALL_LUMA = vec3(0.2126, 0.7152, 0.0722);
 
+// presentation: a surface lit far above white (the ball's light on the world by day: tens of whites for seconds at 1 Mt a
+// few km out) washes toward white as film and the eye do: channel c of a pixel of luminance lum moves toward lum by
+// 1 − 1/lum. The added PALL_CROSS share alone keeps the colour's ratios however bright the light, so the hue-kept ceiling
+// shows dark green leaves as neon green and shaded red earth as pink stripes
+float pallOverWhite(float c, float lum) {
+    if (lum <= 1.0) return c;
+    return mix(c, lum, 1.0 - 1.0 / lum);
+}
+// the world lit above white, after the CROSS share: every channel washed by the pixel's own luminance (pallOverWhite)
+vec3 pallWashWhite(vec3 lit) {
+    float lum = dot(lit, PALL_LUMA);
+    return vec3(pallOverWhite(lit.r, lum), pallOverWhite(lit.g, lum), pallOverWhite(lit.b, lum));
+}
+
 // Film-like shoulder: display values to 0.6 unchanged, brighter smoothly approach 1 (same slope at 0.6). Frame clips
 // above 1: at night fire-lit billows would merge into flat orange. Use brightest channel, scale others equally to
 // preserve hue (independent channels turned white mist pink in ball light)

@@ -32,7 +32,7 @@ from pathlib import Path
 
 AGENTS_MAX = 28 * 1024
 RULE_MAX = 64 * 1024
-RULE_OVERSIZE = {"client-fx.md": 181_752}  # bytes; lower it when the rule shrinks, drop it once under RULE_MAX
+RULE_OVERSIZE = {"client-fx.md": 180_995}  # bytes; lower it when the rule shrinks, drop it once under RULE_MAX
 RULE_SLACK = 1024  # an oversized rule may sit this far under its ceiling; further shrinking must lower the ceiling
 HOOK_EVENTS = {"SessionStart", "InstructionsLoaded", "PostToolUse", "Stop"}
 HOOK_COMMAND = 'python3 "${CLAUDE_PLUGIN_ROOT}/hooks/knowledge.py"'

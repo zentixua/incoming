@@ -207,10 +207,18 @@ public final class Terrain {
     public static int dustTop(LevelChunk chunk, int x, int z) {
         int top = chunk.getHeight(Heightmap.Types.MOTION_BLOCKING, x & 15, z & 15);
         BlockPos.MutableBlockPos p = new BlockPos.MutableBlockPos(x, top, z);
-        return belowCanopy(top, chunk.getMinBuildHeight(), chunk.getBlockState(p).is(net.minecraft.tags.BlockTags.LEAVES), y -> {
+        return belowCanopy(top, chunk.getMinBuildHeight(), canopy(chunk.getBlockState(p)), y -> {
             var s = chunk.getBlockState(p.setY(y));
             return !Heightmap.Types.MOTION_BLOCKING_NO_LEAVES.isOpaque().test(s);
         });
+    }
+
+    /**
+     * A canopy block over the ground where dust lies: leaves ({@code minecraft:leaves}, or a leaves block a mod left
+     * untagged). One rule for the client chunks and every LOD source's columns.
+     */
+    public static boolean canopy(net.minecraft.world.level.block.state.BlockState state) {
+        return state.is(net.minecraft.tags.BlockTags.LEAVES) || state.getBlock() instanceof net.minecraft.world.level.block.LeavesBlock;
     }
 
     /** Pure column operation: a full solid is a surface regardless of what it was built for. */

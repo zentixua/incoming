@@ -216,14 +216,13 @@ paths:
   tolerance on the drop the canopy would be speckled with “water”.
   The height tolerance is 0.01 block up close (block tops at 14/16, a chest, an ender chest, 7 layers of snow, lie within
   0.014 of 8/9; mud and soul sand are drawn as whole blocks, at 14/16 they have only collision) and up to 0.037 at the draw
-  edge (the depth error grows as d²). Under a shaderpack (`IrisApi.isShaderPackInUse`, via reflection) the surface is lower:
-  Complementary Reimagined by default lowers the water top with vertices (`WAVING_WATER_VERTEX`: −0.05 ± 0.025 block), and
-  with vanilla's tolerance there would be no decal on the water up close at all. So the tolerance downward is wider by 0.08
-  (`WaterDecal.PACK_DROP`, which also takes in the top of a chest), the drop to the neighbor is further widened by the
+  edge (the depth error grows as d²). Under a shaderpack (`IrisApi.isShaderPackInUse`, via reflection) waves move the
+  top: Complementary lowers it (`WAVING_WATER_VERTEX`: −0.05 ± 0.025 block), Photon 1.4 moves it ±0.025, constant along z.
+  The band is wider downward by 0.08 (`WaterDecal.PACK_DROP`, also a chest top) and upward by 0.03 (`PACK_RISE`; crests
+  outside it are undarkened straight lines, `WaterDecalGlslTest`), the drop to the neighbor is further widened by the
   difference of their surfaces between vertices (`PACK_STEP`), and both ways by the frame jitter for TAA (`PACK_JITTER`:
-  depth is written by a ray shifted by a fraction of a pixel, so the height is off by the shift × distance; with
-  Complementary by default it is up to 0.055 pixel, up to 0.014 block at 150 blocks). The pack sways the foliage, and in a
-  wide band in the canopies rare “water” dots remain. Beyond 0.8 of the draw distance the surface is at sea level (LOD DH
+  depth is written by a ray shifted by a fraction of a pixel: height off by shift × distance; Complementary up to 0.055
+  pixel, 0.014 block at 150 blocks). Swaying foliage leaves rare “water” dots in canopies. Beyond 0.8 of the draw distance the surface is at sea level (LOD DH
   draws water in whole blocks), or a place below sea level uses the intersection of the ray with the surface (LOD without
   water depth shows the bottom). That is why at a distance beaches exactly at sea level darken, and so do the bottoms of
   gullies below it, while lakes above sea level do not.
@@ -919,8 +918,8 @@ paths:
   (stone, brick, planks — roof or rock) `Surface.HARD`: only settled dust, 0.6 g/m² after AP-42; water — no dust). Under
   a permeable crown the client looks for the forest floor (`FarTerrain.dustY`: only foliage and air let through; solid
   wood/stone/water hold the same way). Its material determines the source and the terrain of the cold flow;
-  `FarTerrain.dust` caches the samples for the current tick, including on a rewind; no chunk — bare soil at the height
-  of the map's tile; no tile either — the height is unknown: exactly at the blast's height above what is under the
+  `FarTerrain.dust` caches the samples for the current tick, including on a rewind; no chunk — soil at the tile's
+  ground under canopy; no tile either — the height is unknown: exactly at the blast's height above what is under the
   point, lower: without this the SAM's break far away would lie on contact with the ground — a "plate" of dust in the
   air), the power — nuclear of the same pressure at the surface (`CloudModel.equivalentKt`: W/0.5, the share of energy
   in the wave for the nuke — half; Broad against Kinney–Graham — within a third, `GroundDustTest`), the blast height
@@ -1271,7 +1270,7 @@ paths:
   run out before their time; if it lay on a smaller area — `WeaponSpec.pool(lit)`, as at the server), the Briggs plume
   and the flame's light on the smoke (`FxLights`), the hum `CraterFire` there too; a new state of the same crater
   (glass, filled in, flooded) carries the hearth and the hum over and cuts the area; when everything is over the hearth
-  goes out (`FuelBurnTest`; review FV: earlier the place and the time came from the first packet). With
+  goes out (`FuelBurnTest`). With
   `blast_effects` = false — none of this (fire on blocks belongs to the world; the mod has no smoke of its own above
   it). `FireWatch` does not count fire on fuel cells toward the fire of a nuclear city (`FuelCells`: the cell's column,
   not above it — fuel drips only downward; otherwise it would also go into the detonation fires' hum, on top of the
@@ -1342,30 +1341,27 @@ paths:
   burning debris light particles and puffs (`FireSmoke.lights`, `Exhaust.lights` → `FxLights`).
 - A blast on water — `fx/smoke/WaterBlast` at the `FarBlasts` event (no crater dust: `CloudModel(…, onWater)`): size —
   Swisdak 1978, table 14 (charge and reduced depth; the safety margin reduced, est.), time — ballistics √(2H'/g). The
-  nuclear analogy gave the Shahed only 14 m hidden by the ball, instead of ~78 m. The table's H and R are the visible
-  plume, and the visible edge of the spray lies on them (thickness along the ray up to `CloudModel.SEEN`), not the
-  middles of the jets: with the middles on H and R the dense jet was visible another 3–4σ farther, the Grad column came
-  out three times wider than the law, and the salvo's camera at 30 m fell inside — an evenly grey frame (final pass
-  3.7.0; `WaterBlastTest.everyWeaponThrowsAColumnOfTheLawSize`). A jet in one direction is a segment (`Sink.segment`:
+  table's H and R are the visible plume: the visible edge of the spray lies on them (thickness along the ray up to
+  `CloudModel.SEEN`), not the middles of the jets, else the dense jet shows 3–4σ farther and a salvo camera at 30 m sits
+  inside an evenly grey frame (`WaterBlastTest.everyWeaponThrowsAColumnOfTheLawSize`). A jet in one direction is a segment (`Sink.segment`:
   water of one instant at different speeds lies on a line) of round section, `WaterBlast.jet`; the jet's halo is
   `JET_HALO` in radius (est. of the shape), the middle of the fast one — at H − halo. R is the largest visible radius
   over the whole flight, and the spray goes farthest as it falls: the cone — by the envelope (the outermost fast jets
-  land at 2H'·sin2θ, with the halo of the falling jet — R; at the apex the column is ~¾R); with a cone by the apex the
-  curtain on the descent went out to 1.41R (review #445); the test — up to 2 × the rise. An elongated Gaussian layer is
+  land at 2H'·sin2θ, with the halo of the falling jet — R; at the apex the column is ~¾R); the test — up to 2 × the rise. An elongated Gaussian layer is
   drawn as a stretched frame — a band with straight sides (the salvo's “sheets”); there are no spray puffs with
   σv ≠ σh except the flat ring (`jetsAreRoundSegments`, `WaterSalvoTest`). Segment puffs wait like point puffs
-  (`SmokePuffs.hold`: merging and the fill budget; earlier a segment was drawn outside the budget), and each — with its
+  (`SmokePuffs.hold`: merging and the fill budget), and each — with its
   own frame, reflection and wander, like tube puffs (`vary`): identical frames side by side look like a stack of coins.
   Surface and depth — by the client's chunk (`FarBlasts.water`); with no chunk — a contact charge on deep water; the
   jets start at the surface, not at a submerged charge.
   Foam and the wave ring — `WaterDecal` (group speed capped at √(gD)); as it falls, the water spreads in a ring of the
   base wave (the same law as the nuke, `WaterModel.surgeReach/surgeTop`: the visible edge of the ring and the top of the
   layer); the ring's water dust — droplets of 50 µm (Stokes, 0.3 m/s; they settle through the layer's bottom,
-  dM/dt = −v·M/(√(2πe)·σv), `WaterBlast.mistLeft`; with the droplets of the 0.5 mm column the ring was thinner than the
-  visibility threshold). Upward per Briggs the layer grows only as far as the eddies at the surface hold droplets: the
+  dM/dt = −v·M/(√(2πe)·σv), `WaterBlast.mistLeft`). Upward per Briggs the layer grows only as far as the eddies at the surface hold droplets: the
   Rouse number v/(κu*), u* = √C_D·U₁₀ (Large, Pond 1981), suspension — at P ≲ 2.5 (van Rijn 1984),
-  `WaterBlast.suspended`; at 6 m/s P ≈ 3.6 — the layer does not grow (earlier it grew, like a gas, to 28 m in 20 s — a
-  wall of fog over the salvo); spray — as droplets of the grid with recomputed attenuation (spray puffs — atlas `spray6`
+  `WaterBlast.suspended`; at 6 m/s P ≈ 3.6 the layer does not grow (a layer grown like a gas is a fog wall over a salvo).
+  A blast at the water takes the
+  world's air as on land (`FarBlasts.humidity`), not saturated air: that draws a 40 m Wilson cloud (`WaterBlastAirTest`). Spray — as droplets of the grid with recomputed attenuation (spray puffs — atlas `spray6`
   at the source with spray, `Source.sprayClubs`, if spray is more than smoke); clods — particles `BlastEffects.splash`.
   After the last jet returns, `Source.sprayClubs(seconds)` switches the residual mist to `puff6`: fall bands of `spray6`,
   stretched over the thin layer at the water, looked like white ribbons above the grass. Ordinary foam — lace in the
@@ -1399,14 +1395,11 @@ paths:
   burst — at the burst point (`heBallHeight`: 0.45 R·(1 − hob/R)), not a hemisphere. The ball's place is one for
   everything (`ballX`/`ballHeight`/`ballZ`: puffs, sprite, light and heat of `FarBlasts` carry the same wind as the
   smoke): the fuel ball grows from the ground, its centre rises exactly to 0.75·D by the end of burning
-  (`fireballGrowsFromTheGroundWithoutJumps`); earlier the centre jumped when “which ball is bigger” changed (for a
-  missile 3.7 → 17.5 m in 0.125 s), while the light and sprite stood at the strike point while the smoke drifted 10–20 m
-  downwind (BLASTSEQ D01, `fireballAndItsSmokeShareOnePlace`). Up close (`BlastEffects.ejecta(level, model)`): ground and
+  (`fireballGrowsFromTheGroundWithoutJumps`, `fireballAndItsSmokeShareOnePlace`). Up close (`BlastEffects.ejecta(level, model)`): ground and
   solid — clods/chips by the ejecta law (`Ejecta.pieces`); a slab — crumbs from the charge's face outward (the
   breach-ejecta law, ⚠) and a spall from the hole on the back face along its axis — the face's normal, on any course
   (`BlastTarget.spall`: the pressure pushes the slab, the Gurney sandwich is one-dimensional; the Gurney plug,
-  `BlastTarget.plugSpeed`, ⚠ upper estimate; `BlastTargetSupportTest.spallLeavesThroughTheServerHole`); air — nothing
-  (earlier clods flew even at a burst above the roof). Only its own share flies as chunks (`BlastTarget.clods`: for
+  `BlastTarget.plugSpeed`, ⚠ upper estimate; `BlastTargetSupportTest.spallLeavesThroughTheServerHole`); air — nothing. Only its own share flies as chunks (`BlastTarget.clods`: for
   ground — `Matter.clods` of the ejecta; for solid and slab — the whole ejecta without dust); chunks + the curtain's grains
   + dust = mass (`EjectaTest`). The ground ejecta curtain — `fx/smoke/Ejecta` at the `FarBlasts` event (at any range,
   not only as particles): the same Housen law as the clods up close (constants — in `Ejecta`), 8 jets in a circle
