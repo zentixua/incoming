@@ -100,7 +100,7 @@ with a nuclear warhead still waits 90 seconds before launch, even with early war
   night. If you were looking towards the fireball, its image burns a blind spot into your eyes for good, at 15 kt out to
   about 30 km by day and 50 km at night. The spot moves with your gaze and is fainter off to the side; it goes away only
   when you die. Creative mode is dazzled the same way but gets no blind spots; spectator mode only sees the white flash
-  and the afterimage. The Flash setting weakens or turns all of it off.
+  and the afterimage. The "Flash brightness" setting weakens or turns all of it off.
   A sealed shelter blocks the new flash; windows and cave mouths admit scattered light according to the opening.
   Torches do not let the flash through rock. A fireball partly hidden by hills or trees lights you only by its visible
   part. Entering cover does not erase an acquired afterimage.

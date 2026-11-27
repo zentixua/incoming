@@ -93,6 +93,7 @@ public final class MobFallout {
         long[] froms = new long[detonations.size()];
         double[] fromGrounds = new double[froms.length];
         GroundFallout.Point[] points = new GroundFallout.Point[froms.length];
+        double[] doses = new double[froms.length];
         for (int i = 0; i < froms.length; i++) {
             Detonation d = detonations.get(i);
             // own account; none — since the detonation (it was there, unloaded or not), or this pass for an old world's mob
@@ -106,7 +107,8 @@ public final class MobFallout {
             GroundFallout.Source s = new GroundFallout.Source(d, g1, g0, reach(events, level, d, g0, g1));
             points[i] = GroundFallout.at(events, level, s, mob.getX(), mob.getZ());
             fromGrounds[i] = g0;
-            roentgens += points[i].dose(g0, g1);
+            doses[i] = points[i].dose(g0, g1);
+            roentgens += doses[i];
             span = Math.max(span, now - from);
             spanHours = Math.max(spanHours, (g1 - g0) / 3600);
         }
@@ -136,7 +138,7 @@ public final class MobFallout {
         Detonation cause = null;
         for (int i = 0; i < froms.length; i++) {
             Detonation d = detonations.get(i);
-            if (froms[i] < now && d.hasFallout() && (cause == null || d.id() > cause.id())) cause = d;
+            if (froms[i] < now && d.hasFallout() && doses[i] > 0 && (cause == null || d.id() > cause.id())) cause = d;
         }
         if (cause == null) return;
         double ago = at >= now ? 0 : (events.seconds(cause, level) - events.secondsAt(cause, level, at)) / WorldClock.SECONDS_PER_TICK;
