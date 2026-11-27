@@ -98,10 +98,7 @@ Ruins and everything in `nuclear/world/` are in `nuclear-world.md`.
   then L·R²/d²; without this, at 0.5–1 s it merged with the sphere as a white disk) and glare/veil
   (`NukeExposure.capShown`); glare size follows brightness with fireball exposure and frame overexposure. Droplet phase
   near the sphere averages its disk (`hgDisc`, `NukeExposureTest`): nearby sphere spans tens of degrees; point-source
-  peak (g 0.85: 82 versus ~11 for a 30° disk) made the shell several times brighter than the sphere. Flash frame
-  (`NukeFlash.overexposed`): overexposure X = K^(e^(−u/0.2 s)) after the second maximum (K is camera flash light versus
-  exposure, `FlashLight.Eye.peak`); frame gain X^(1/2.2) via “frame × (1 + c)” blending and lens-scattered light
-  X/100; at 15 kt, 1.4 km, white until ~0.25 s, ×3 at 0.5 s, back by one second.
+  peak (g 0.85: 82 versus ~11 for a 30° disk) made the shell several times brighter than the sphere. Flash frame: `NukeFlash.overexposed` (law and numbers: DESIGN-nuke §6).
   Eye-glare veil starts at pulse maximum. Volume noise prepares from world entry (`IncomingClient.login`):
   `/incoming nuke now` has no warning, otherwise the sphere has no body for its first second. Mushroom daytime world
   shadow is a shadow map (`fx_mush_shadow`, output `fx_pall_composite`; `client-fx.md`; tile and world top: texels 17, 18).
@@ -561,17 +558,9 @@ Ruins and everything in `nuclear/world/` are in `nuclear-world.md`.
 ## Shared nuclear flash light
 `FlashLight` is the visible pulse/area source and opening-transfer law; `NukeLight` owns one frame sample/exposure
 before fog. All nuclear illumination uses its exposure; firebody film keeps a separate ambient reference and
-cancels frame exposure once. By day the frame sees the flash through one exposure E0·r^(f·day) (`NukeLight.FOLLOW_DAY`
-0.5, presentation; `day` = daylight share × Flash setting, calm-capped; docs/design/fireball-light.md): daylight terms ×
-`daylight()` (the composite's world, sky pixels and Iris hand via `PallFlash.x`; the pall's sun, sky and airlight in
-`NukePall`), the ball's light × `frameExposure()` (`PallExposure`, amber sky, `FxLights`). The amber dome is ball light:
-the composite dims only the sky under it (`flashAmber`, a copy of `drawSkyGlow`'s dome). At night it changes nothing.
-The eye's veiling glare by day is the composite's `flashVeil` (Stiles–Holladay, never over the ball's disc); the eye
-quad keeps only its glare then (`FarSprites.eyeLight` veil share 1 − day): one model. Limits: conventional layer quads
-(smoke, trails, debris) and the vanilla first-person hand keep the unflashed exposure for the 1–2 s; the ball casts no
-shadows (a screen-space march came and went with the head turning, review #796). Flash blindness (`NukeFlash.look`,
-`program/flash_eye`) is an overlay that never lowers the exposure (an exposure tail darkened the night while the ball's
-light fell fifty times in a second); creative has eyes, retinal burns stay survival-only. `FlashLight.temperature` is escaping brightness temperature, distinct from the old
+cancels frame exposure once. By day one frame exposure E0·r^(½·day) (design fireball-light): daylight ×
+`daylight()`, ball light (amber dome included) × `frameExposure()`; the eye veil is `flashVeil` alone. Not covered:
+layer quads, vanilla hand; no ball shadows (screen-space ones changed with the view). Blindness never dims it. `FlashLight.temperature` is escaping brightness temperature, distinct from the old
 core/mixed gas temperatures. Do not substitute it into server energy or injury calculations. Source derivation,
 opening approximation and outside-OpenAir limitation: DESIGN-nuke §6. Sealed eye/world pixels get no new flash;
 block light is never an opening. A distant ball is seen by the visible share of its disc above the terrain line
