@@ -87,13 +87,14 @@ public final class NukeFlash {
      * {@link #AFTERGLOW_S}, then {@link #DAY_LIFT} by day), and at night the dim light a dark-adapted eye has lost. It replaced
      * a uniform fill at 0.9 opacity, grey by day and black at night, that hid the whole picture.
      */
-    static final float GREY_MAX = 0.75f, LIFT_MAX = 0.85f, DAY_LIFT = 0.3f, NIGHT_DIM = 0.6f, AFTERGLOW_S = 2;
+    static final float GREY_MAX = 0.35f, LIFT_MAX = 0.7f, DAY_LIFT = 0.12f, NIGHT_DIM = 0.4f, AFTERGLOW_S = 1;
     /**
-     * The near-white first phase lasts this share of the dazzle, at most {@link #HOLD_MAX} s: about 2 s for 15 kt at 2 km
-     * facing the ball by day, a fraction of a second far away (Artem 27.11: the films stay white for seconds; ours follows the
-     * dose at the eye). Presentation of the bleached eye's own glow.
+     * The near-white first phase lasts this share of the dazzle, at most {@link #HOLD_MAX} s: about 0.6 s for 15 kt at 2 km
+     * facing the ball by day, a fifth of a second at 15 km. Presentation of the bleached eye's own glow; its long tail is the
+     * afterimage spot, which leaves the rest of the view to the light the ball casts. A longer, stronger full-view glow (2 s
+     * hold, desaturation 0.75) turned every frame into a beige card that hid the second sun it was meant to follow.
      */
-    static final float HOLD_SHARE = 0.04f, HOLD_MAX = 2;
+    static final float HOLD_SHARE = 0.01f, HOLD_MAX = 0.6f;
     /** Gaze factor of the bleached eye's glow: the ball's image on the retina (facing it) against scattered light alone. */
     static final float TURNED_AWAY = 0.35f;
     private static final net.minecraft.resources.ResourceLocation EYE_CHAIN = Incoming.id("shaders/post/flash_eye.json");
