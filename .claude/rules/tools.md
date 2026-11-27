@@ -191,7 +191,7 @@ Prism: `~/.var/app/org.prismlauncher.PrismLauncher/data/PrismLauncher/` (`tools/
                                            for the sound audio.wav (prod_client.py --video, --size); diagnostics only (black,
                                            torn, frozen frames: rigs.md), clips come from Flashback's export
     clip_check.py <video>…               ← every frame of a delivered clip: black, torn and frozen frames, constant frame clock,
-                                           whole file, size, fps, audio length (exit 1 on any); test_clip_check.py (CI, rig job)
+                                           whole file, size, fps, audio length and peak (exit 1 on any); test_clip_check.py (CI, rig job)
     stress.sh                            ← load bench (cloud, xvfb): a dedicated server with a director (src/devtest/.../stress) and three players
                                            without windows; salvos of 30, exit/entry, Nether, nuke, “Abort”; the summary is the STRESS lines in the log
     build_sounds.py [sections]           ← all sounds: CC0/CC BY recordings from Freesound (cache tools/.sound-cache) + synthesis

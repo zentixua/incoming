@@ -17,13 +17,15 @@ class NukeLightSourceTest {
     private static final String CLIENT = "java/ua/zentix/incoming/client/";
     private static final String SHADER = "resources/assets/incoming/shaders/";
     private static final Map<String, String[]> READERS = Map.ofEntries(
-            Map.entry("nuclear/NukeFlash.java", new String[]{"NukeLight.sample(", "NukeLight.camera(a)", "light.fluence()", "light.strength()", "light.peak(NukeLight.bodyExposure())", "lightUpWorld(mc.level, whiteness("}),
-            Map.entry("nuclear/NukeSky.java", new String[]{"NukeLight.camera(a).light() * NukeLight.exposure()"}),
-            Map.entry("nuclear/NukePall.java", new String[]{"into.exposure = (float) NukeLight.exposure()", "f.exposure = SKY.exposure"}),
+            Map.entry("nuclear/NukeFlash.java", new String[]{"NukeLight.sample(", "NukeLight.camera(a)", "light.fluence()", "light.strength()", "light.peak(NukeLight.bodyExposure())", "lightUpWorld(mc.level, cover("}),
+            Map.entry("nuclear/NukeSky.java", new String[]{"NukeLight.camera(a).light() * NukeLight.frameExposure()"}),
+            Map.entry("nuclear/NukePall.java", new String[]{"into.exposure = (float) NukeLight.frameExposure()", "f.exposure = SKY.exposure",
+                    "float daylight = (float) NukeLight.daylight()", "f.flash.set((float) NukeLight.daylight()"}),
             Map.entry("nuclear/MushroomField.java", new String[]{"FlashLight.source(s,", "FlashLight.coreTemperature(s,", "BALL[0] * exposure"}),
             Map.entry("nuclear/CloudPuffs.java", new String[]{"FlashLight.source(s,"}),
             Map.entry("nuclear/NukeRenderer.java", new String[]{"FlashLight.source(s,", "exposure = NukeLight.exposure()", "NukeLight.camera(a).seen()"}),
-            Map.entry("fx/layer/PallPass.java", new String[]{"safeGetUniform(\"PallExposure\").set(f.exposure)", "safeGetUniform(\"PallBodyExposure\").set(f.bodyExposure)"}));
+            Map.entry("fx/layer/PallPass.java", new String[]{"safeGetUniform(\"PallExposure\").set(f.exposure)", "safeGetUniform(\"PallBodyExposure\").set(f.bodyExposure)",
+                    "safeGetUniform(\"PallFlash\").set(f.flash.x"}));
 
     private static Map<String, String> sources() throws IOException {
         Map<String, String> out = new LinkedHashMap<>();
@@ -84,7 +86,9 @@ class NukeLightSourceTest {
         String hand = composite.substring(start, composite.indexOf("return;", start));
         assertTrue(hand.contains("ballLight(p, n, pallOver(p)) * flashOpening(pallOpenHere(vec3(0.0)))"),
                 "hand must gate the actual added light with raw skylight at the eye");
-        assertTrue(hand.contains("fragColor = vec4(0.0, 0.0, 0.0, 1.0)"));
+        // the hand left as drawn, at the frame's one exposure under a flash (DESIGN fireball-light §4.1)
+        assertTrue(hand.contains("fragColor = vec4(0.0, 0.0, 0.0, 1.0);"), "the layer frame's hand pixel holds no pall (review 3, S1)");
+        assertFalse(hand.contains("PallFlash.x"), "no flash exposure written into the hand's pall pixel");
         assertTrue(hand.contains("if (dot(added, LUMA) > 1e-6)"), "zero admitted light must leave the hand pixel intact");
         assertFalse(hand.contains("pallSurfaceLevel(") || hand.contains("Sampler10"), "lamps cannot open the shelter");
         GlslFunction opening = GlslFunction.parse(Files.readString(ROOT.resolve(SHADER + "include/pall.glsl")), "flashOpening");

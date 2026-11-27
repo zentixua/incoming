@@ -278,5 +278,35 @@ class DamagedFileTest(unittest.TestCase):
             self.assertIn("damaged file", p.stdout)
 
 
+@unittest.skipUnless(shutil.which("ffmpeg") and shutil.which("ffprobe"), "needs ffmpeg")
+class AudioPeakTest(unittest.TestCase):
+    """Flashback's float export carries sound over full scale (no output limiter): +2.3 dBFS at a 15 kt wave's arrival."""
+
+    def clip(self, d, amplitude, codec="pcm_f32le", ext="mkv"):
+        path = os.path.join(d, f"a{amplitude}.{ext}")
+        video = encode_file(moving(60), os.path.join(d, "v.mkv"))
+        subprocess.run(["ffmpeg", "-v", "error", "-y", "-i", video, "-f", "lavfi", "-i",
+                        f"aevalsrc={amplitude}*sin(2*PI*440*t):s=48000:d=1", "-map", "0:v", "-map", "1:a", "-c:v", "copy",
+                        "-c:a", codec, "-shortest", path], check=True)
+        return path
+
+    def test_over_full_scale_fails(self):
+        with tempfile.TemporaryDirectory() as d:
+            report, _ = clip_check.check(self.clip(d, 1.3))
+        self.assertTrue(any("audio peak" in f for f in report["fails"]), report)
+        self.assertAlmostEqual(2.28, report["audio_peak_db"], delta=0.1)
+
+    def test_limited_sound_passes(self):
+        with tempfile.TemporaryDirectory() as d:
+            report, _ = clip_check.check(self.clip(d, 0.84))
+        self.assertFalse(any("audio peak" in f for f in report["fails"]), report)
+
+    def test_aac_over_full_scale_fails(self):
+        # the delivered path: AAC in MP4 keeps the float export's overs
+        with tempfile.TemporaryDirectory() as d:
+            report, _ = clip_check.check(self.clip(d, 1.3, "aac", "mp4"))
+        self.assertTrue(any("audio peak" in f for f in report["fails"]), report)
+
+
 if __name__ == "__main__":
     unittest.main()

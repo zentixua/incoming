@@ -193,6 +193,7 @@ public final class IncomingClient {
         e.registerReloadListener(ua.zentix.incoming.client.nuclear.NukeBallSurface.INSTANCE);
         e.registerReloadListener(ua.zentix.incoming.client.sound.Envelopes.INSTANCE);
         e.registerReloadListener(Concussion.RELOAD);
+        e.registerReloadListener(NukeFlash.RELOAD);
         e.registerReloadListener(VolumeReload.LISTENER);
     }
 
