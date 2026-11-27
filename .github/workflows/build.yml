@@ -459,7 +459,7 @@ jobs:
       - name: Checked-tree reuse
         run: python3 -m unittest discover -s tools -p 'test_ci_reuse.py' -v
       - name: Delivered clip frames
-        run: sudo apt-get install -y -qq ffmpeg > /dev/null && python3 -m unittest discover -s tools -p 'test_clip_check.py' -v
+        run: sudo apt-get update -qq > /dev/null && sudo apt-get install -y -qq --no-install-recommends ffmpeg > /dev/null && python3 -m unittest discover -s tools -p 'test_clip_check.py' -v
 
   # Flashback replay analysis (tools/replayscan): analysis-mod build and unit tests, no game.
   replayscan:
