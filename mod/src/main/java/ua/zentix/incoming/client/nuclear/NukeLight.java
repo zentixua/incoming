@@ -90,10 +90,9 @@ public final class NukeLight {
     static double exposure() { return exposure; }
     /** PROBE fireball-light: eye recovery time constant after the flash, s. */
     static final double RECOVER_S = Double.parseDouble(System.getProperty("incoming.probe.recover", "0.2"));
-    /** PROBE fireball-light: share of the flash the frame adapts to: 0.5 by day, 1 at night (presentation). */
+    /** PROBE fireball-light: daylight share (1 by day, 0 at night): the one-exposure change acts by day only. */
     public static double flashPower() {
-        double day = Math.clamp((ambientNow - 0.17) / (1 - 0.17), 0, 1);
-        return 1 - (1 - Double.parseDouble(System.getProperty("incoming.probe.adapt", "0.5"))) * day;
+        return Math.clamp((ambientNow - 0.17) / (1 - 0.17), 0, 1);
     }
     static double ambientNow = 1;
     /** PROBE fireball-light: frame exposure relative to the exposure without the flash (<= 1). */
