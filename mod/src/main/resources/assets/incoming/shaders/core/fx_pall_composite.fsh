@@ -475,10 +475,10 @@ void main() {
     // lights it as it lights the world around (ballLight, with the pall overhead at the eye): a dark hand in a world the flash
     // made bright looked cut out of another scene
     if (pallHand(depth)) {
-        // the frame's flash exposure only on the displayed frame: the layer frame holds the pall alone, and a hand pixel
-        // there is no pall (a dark hand-shaped hole in the glare quads read it as one)
+        // the hand as drawn: it takes the flash exposure only where the ball lights it (ballLitWorld below), and then the
+        // daylight share is what dims; an unlit hand's frame exposure is ~1 then. Writing the flash exposure here made the
+        // layer frame's hand a dark pall (code review 3) and cost the AMD compiler ~200 MB.
         fragColor = vec4(0.0, 0.0, 0.0, 1.0);
-        if (PallLayerFrame == 0) fragColor.a = pallDisplay(PallFlash.x);
         if (PallLayerFrame == 0 && PallBalls[0].w > 0.0) {
             vec4 farHand = InvViewProj * vec4((vec2(full) + 0.5) / vec2(fullSize) * 2.0 - 1.0, 1.0, 1.0);
             vec3 dirHand = normalize(farHand.xyz / farHand.w);

@@ -88,8 +88,7 @@ class NukeLightSourceTest {
                 "hand must gate the actual added light with raw skylight at the eye");
         // the hand left as drawn, at the frame's one exposure under a flash (DESIGN fireball-light §4.1)
         assertTrue(hand.contains("fragColor = vec4(0.0, 0.0, 0.0, 1.0);"), "the layer frame's hand pixel holds no pall (review 3, S1)");
-        assertTrue(hand.contains("if (PallLayerFrame == 0) fragColor.a = pallDisplay(PallFlash.x);"),
-                "the flash exposure only on the displayed frame");
+        assertFalse(hand.contains("PallFlash.x"), "no flash exposure written into the hand's pall pixel");
         assertTrue(hand.contains("if (dot(added, LUMA) > 1e-6)"), "zero admitted light must leave the hand pixel intact");
         assertFalse(hand.contains("pallSurfaceLevel(") || hand.contains("Sampler10"), "lamps cannot open the shelter");
         GlslFunction opening = GlslFunction.parse(Files.readString(ROOT.resolve(SHADER + "include/pall.glsl")), "flashOpening");
