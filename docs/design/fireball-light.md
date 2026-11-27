@@ -254,8 +254,7 @@ anchored parts below are the follow-up.
   (`FlashShadows`, `FlashMarks`), so the live shadow falls where the scorch silhouette is left:
   - within the flash-mark range, the marks' masks drive the shadow on marked faces;
   - beyond it, a march over a fine client height map toward the ball (the pall's map is too coarse for houses);
-  - near detail: a short screen-space ray. It cannot shadow the player's own body, and it loses the ball behind the
-    camera, so it only complements the other two.
+  - near detail would need a world-anchored source too: a screen-space ray changes with the view (removed, above).
 
 ### 4.6 Later: water, the second sun's glitter path (physics)
 Over water the ball's reflection draws a glitter path to the eye, as the sun does: white at the flash, orange as the
@@ -326,8 +325,13 @@ Each item is measured on the GPU during implementation and gets the scene bench 
 ## 8. Checks a change must pass
 - **Day look gate.** At 2 and 5 km, 0.75–2 s after the burst, measured inside the picture as on the films:
   - glow: the ring at 2 ball radii (radius from the model's projected cap) is 1.3–2.0 times the sky beside it
-    (Priscilla 1.4–1.75; `main` 1.04) and at most half the ball (Trinity 0.15–0.33; `main` 0.62–0.70, which is
-    sky-dominated);
+    (Priscilla 1.4–1.75; `main` 1.04). The ring against the ball is not a day gate: by day it is dominated by the sky
+    (Priscilla ~0.5, `main` 0.65–0.73); Trinity's 0.15–0.33 is a night film.
+  - Shipped head, 2 km by day, 1–2 s, 1080p GPU takes:
+    - ring/sky 1.39–1.49 (`main` 1.08–1.24);
+    - ring/ball 0.59–0.80;
+    - ball pattern variation 0.14–0.16 (`main` 0.10–0.11);
+    - contrast in the light pulse 1.9–2.1 (`main` 8.2–8.9), back to 7.5 by 3 s.
   - the ball's pattern: luminance variation inside the disc stays at `main`'s level;
   - the gate passes the reference frames and fails `main`.
 - **Night is unchanged:** ground, sky and ring within `main`'s ranges (section 3).

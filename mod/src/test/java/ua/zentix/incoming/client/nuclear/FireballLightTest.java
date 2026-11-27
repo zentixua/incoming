@@ -95,6 +95,17 @@ class FireballLightTest {
     }
 
     @Test
+    void byDayTheEyeQuadLeavesItsVeilToTheCompositeAtAnySetting() throws IOException {
+        // one model of one phenomenon (review 3 S2, review 4 N1): the quad's veil share follows the sky alone, while the
+        // composite's flashVeil takes day × Flash setting; a calm or lower setting must not draw both
+        String renderer = Files.readString(Path.of("src/main/java/ua/zentix/incoming/client/nuclear/NukeRenderer.java"));
+        assertTrue(renderer.contains("shown, 1 - NukeLight.daySky(), GLARE)"));
+        assertFalse(renderer.contains("1 - NukeLight.day()"));
+        String pall = Files.readString(Path.of("src/main/java/ua/zentix/incoming/client/nuclear/NukePall.java"));
+        assertTrue(pall.contains("f.ballsLit ? (float) NukeLight.day() : 0"), "the composite's veil carries the setting");
+    }
+
+    @Test
     void theEyesVeilStaysOffTheBallAndOutOfTheNight() throws IOException {
         String composite = Files.readString(SHADERS.resolve("core/fx_pall_composite.fsh"));
         assertTrue(composite.contains("vec3 veil = flashVeil(dir0, behind) * PallFlash.y;"), "the veil by day only");

@@ -348,8 +348,10 @@ public final class NukeFlash {
      * Afterimage colour t s after the flash (presentation of the afterimage's "flight of colours", DESIGN fireball-light §4.2):
      * a positive white-yellow image first, then orange, then a violet one (Feynman at Trinity: "this purple splotch").
      */
+    private static final float[][] AFTER_KEYS = {{0, 1f, 0.92f, 0.7f}, {1.5f, 0.55f, 0.24f, 0.08f}, {6, 0.3f, 0.1f, 0.42f}};
+
     static float[] afterColour(float t) {
-        float[][] keys = {{0, 1f, 0.92f, 0.7f}, {1.5f, 0.55f, 0.24f, 0.08f}, {6, 0.3f, 0.1f, 0.42f}};
+        float[][] keys = AFTER_KEYS;
         if (t <= keys[0][0]) return new float[]{keys[0][1], keys[0][2], keys[0][3]};
         for (int i = 1; i < keys.length; i++) {
             if (t <= keys[i][0]) {

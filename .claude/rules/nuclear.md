@@ -560,7 +560,7 @@ Ruins and everything in `nuclear/world/` are in `nuclear-world.md`.
 before fog. All nuclear illumination uses its exposure; firebody film keeps a separate ambient reference and
 cancels frame exposure once. By day one frame exposure E0·r^(½·day) (design fireball-light): daylight ×
 `daylight()`, ball light (amber dome included) × `frameExposure()`; the eye veil is `flashVeil` alone. Not covered:
-layer quads, vanilla hand; no ball shadows (screen-space ones changed with the view). Blindness never dims it. `FlashLight.temperature` is escaping brightness temperature, distinct from the old
+quad daylight, vanilla hand; no ball shadows (screen-space ones changed with the view). Blindness never dims it. `FlashLight.temperature` is escaping brightness temperature, distinct from the old
 core/mixed gas temperatures. Do not substitute it into server energy or injury calculations. Source derivation,
 opening approximation and outside-OpenAir limitation: DESIGN-nuke §6. Sealed eye/world pixels get no new flash;
 block light is never an opening. A distant ball is seen by the visible share of its disc above the terrain line

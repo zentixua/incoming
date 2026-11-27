@@ -31,7 +31,7 @@ public final class NukeLight {
     private static Map<ClientNuclear.Active, FlashLight.Eye> CAMERA = new IdentityHashMap<>();
     private static final double PEAK = BlackBody.luminance(FireballModel.PEAK_K);
     private static long ticks;
-    private static double last = Double.NaN, exposure = 1, bodyExposure = 1, day = 1;
+    private static double last = Double.NaN, exposure = 1, bodyExposure = 1, day = 1, sky = 1;
     /**
      * Share of the flash the frame follows by day (presentation, marked): the frame's exposure is the unflashed one times
      * r^{@value}, r = flash exposure / unflashed exposure (DESIGN fireball-light §4.1). A frame fully adapted to the ball's light
@@ -81,7 +81,8 @@ public final class NukeLight {
 
     /** Advance the one exposure state from a frame's summed illumination; no wall clock. */
     static void update(double now, double ambient, double fire) {
-        day = dayShare(ambient) * setting;
+        sky = dayShare(ambient);
+        day = sky * setting;
         bodyExposure = Sight.exposure(ambient, 0);
         double target = Sight.exposure(ambient, fire);
         exposure = Double.isNaN(last) ? target : FlashLight.follow(exposure, target, Math.max(0, now - last), NukeExposure.ADAPT_S);
@@ -100,6 +101,8 @@ public final class NukeLight {
     /** The eye's flash exposure (dazzle, glare): ball light seen at this exposure is in eye units. */
     static double exposure() { return exposure; }
     static double bodyExposure() { return bodyExposure; }
+    /** This frame's daylight share of the sky ({@link #dayShare}), without the Flash setting. */
+    static double daySky() { return sky; }
     /** This frame's daylight share of the sky ({@link #dayShare}) times the Flash setting ({@link #flashSetting}). */
     static double day() { return day; }
 
@@ -225,7 +228,7 @@ public final class NukeLight {
         ticks = 0;
         last = Double.NaN;
         exposure = bodyExposure = 1;
-        day = 1;
+        day = sky = 1;
         prepared = false;
     }
 
@@ -236,6 +239,7 @@ public final class NukeLight {
         private double exposure = 1;
         private double bodyExposure = 1;
         private double day = 1;
+        private double sky = 1;
         private boolean prepared;
 
         public void swap() {
@@ -254,6 +258,9 @@ public final class NukeLight {
             double oldday = NukeLight.day;
             NukeLight.day = day;
             day = oldday;
+            double oldsky = NukeLight.sky;
+            NukeLight.sky = sky;
+            sky = oldsky;
             boolean oldprepared = NukeLight.prepared;
             NukeLight.prepared = prepared;
             prepared = oldprepared;

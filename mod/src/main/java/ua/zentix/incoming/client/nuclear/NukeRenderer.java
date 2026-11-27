@@ -179,9 +179,10 @@ public final class NukeRenderer {
             // glare follows how the frame sees the surface: with ball exposure set by it through the air (mushAt in fx_pall), and overexposure
             double body = BALL[3] * adapt * air;
             double exposed = (film * body * NukeExposure.gain(body, adapt) + (1 - film) * seen) * (FxViews.secondary() ? 1 : NukeFlash.overexposure(a, view.partial()));
-            // by day the pall composite draws the eye's veil (flashVeil); this quad keeps the glare and the night veil
+            // by day the pall composite draws the eye's veil (flashVeil, scaled by the Flash setting itself); this quad keeps
+            // the glare and the night veil: the handoff follows the sky alone, so a lower setting never sums the two
             if (NukeLight.camera(a).seen() && seen > Sight.THRESHOLD)
-                out.eyeLight(dx, dy, dz, r, exposed, view.pixel(), cr, cg, cb, shown, 1 - NukeLight.day(), GLARE);
+                out.eyeLight(dx, dy, dz, r, exposed, view.pixel(), cr, cg, cb, shown, 1 - NukeLight.daySky(), GLARE);
         }
     }
 
