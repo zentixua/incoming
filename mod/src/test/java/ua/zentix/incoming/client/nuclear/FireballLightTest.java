@@ -64,10 +64,10 @@ class FireballLightTest {
     @Test
     void aNearFacingLookStaysWhiteForSecondsAFarOrTurnedOneBriefly() {
         // Artem 27.11: the films stay white for seconds; ours follows the dose at the eye, the same in creative and survival
-        double near = NukeFlash.whiteSeconds(58, 1, 0, NukeFlash.gaze(10, true), 0.5f);
-        double turned = NukeFlash.whiteSeconds(58, 1, 0, NukeFlash.gaze(120, true), 0.5f);
-        double far = NukeFlash.whiteSeconds(19, 1, 0, NukeFlash.gaze(10, true), 0.5f);
-        assertTrue(near >= 0.5 && near <= 1.5, "near and facing: about a second of near white, " + near);
+        double near = NukeFlash.whiteSeconds(58, 1, 0, NukeFlash.gaze(10, true), 0.4f);
+        double turned = NukeFlash.whiteSeconds(58, 1, 0, NukeFlash.gaze(120, true), 0.4f);
+        double far = NukeFlash.whiteSeconds(19, 1, 0, NukeFlash.gaze(10, true), 0.4f);
+        assertTrue(near >= 0.4 && near <= 1.2, "near and facing: under a second of near white as it clears, " + near);
         assertTrue(turned < 0.5, "turned away: brief, " + turned);
         assertTrue(far < near * 0.75, "far: shorter, " + far);
         assertEquals(NukeFlash.TURNED_AWAY, NukeFlash.gaze(10, false), 1e-6, "an unseen ball bleaches by scattered light only");
