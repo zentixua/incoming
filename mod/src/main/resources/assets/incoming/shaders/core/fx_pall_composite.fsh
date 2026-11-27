@@ -140,36 +140,9 @@ float shade(vec3 p, vec4 over) {
 // Fireball world light at eye-relative p, normal n, linear, on white wall (like PallSunLight): Lambertian sphere
 // (MushroomModel.light) emits L·R²/max(d², R²), direct face-cosine beam, air-scattered light from surrounding sky,
 // and reflection from illuminated ground (mushBallFace); through pall overhead (over), direct beam e^(−τ/μ) plus
-// downward scattering (two streams, like sun in shade), scaled by face sky share (1 + n.y)/2. The direct beam is shadowed
-// by what the frame's depth shows between the point and the ball (ballShadow, near detail only); terrain and buildings off
-// screen or far away cast none.
-// Share of the ball's direct beam that reaches eye-relative p along v, from the scene depth (DESIGN fireball-light §4.5:
-// shadows of the second sun, near detail): a march toward the ball over the frame's own depth, 0 where something on screen
-// stands in the way. A contact shadow only: it fades out near the frame's edges and beyond SHADOW_FAR, where the depth knows
-// nothing (the march would invent streaks), so the beam is kept there.
-const float SHADOW_FAR = 160.0;
-float ballShadow(vec3 p, vec3 v) {
-    float far = length(p);
-    if (far > SHADOW_FAR) return 1.0;
-    mat4 vp = inverse(InvViewProj);
-    ivec2 size = textureSize(Sampler1, 0);
-    float t = 0.4;
-    for (int i = 0; i < 24; i++) {
-        t *= 1.25;
-        vec3 q = p + v * t;
-        vec4 c = vp * vec4(q, 1.0);
-        if (c.w <= 0.0) break;
-        vec2 uv = c.xy / c.w * 0.5 + 0.5;
-        float edge = min(min(uv.x, 1.0 - uv.x), min(uv.y, 1.0 - uv.y));
-        if (edge <= 0.0) break;
-        float scene = pallScene(texelFetch(Sampler1, ivec2(uv * vec2(size)), 0).r);
-        float behind = dot(q, PallForward) - scene;
-        if (behind > 0.25 + 0.03 * t && behind < 4.0 + 0.25 * t)
-            return 1.0 - smoothstep(0.0, 0.06, edge) * (1.0 - smoothstep(0.6 * SHADOW_FAR, SHADOW_FAR, far));
-    }
-    return 1.0;
-}
-
+// downward scattering (two streams, like sun in shade), scaled by face sky share (1 + n.y)/2. No terrain/building
+// shadows: ball lights behind hills/houses equally (only slopes facing away are dark). A screen-space shadow was tried and
+// left out: it came and went as the head turned (a caster off screen casts nothing).
 vec3 ballLight(vec3 p, vec3 n, vec4 over) {
     vec3 sum = vec3(0.0);
     for (int i = 0; i < 4; i++) {
@@ -184,10 +157,6 @@ vec3 ballLight(vec3 p, vec3 n, vec4 over) {
             diffuse = max(pallDiffuse(over.y, over.z, over.x, over.x, over.w, mu, 1.0, 1.0, 0.0, 0.0, 0.0, -0.6666667), 0.0);
         }
         float face = mushBallFace(dot(n, v), v.y, n.y, PallBallLight[i].w * d, over.w, through, diffuse);
-        // only the direct beam is shadowed: the air- and ground-scattered fill stays (the 18.10 law: no black shadows
-        // across the map)
-        float nv = dot(n, v);
-        if (nv > 0.0) face -= (1.0 - ballShadow(p, v)) * exp(-PallBallLight[i].w * d) * nv * through;
         sum += PallBallLight[i].rgb * (mushBallFalloff(d2, b.w * b.w) * face);
     }
     return sum;
@@ -345,7 +314,8 @@ vec3 ballLitWorld(ivec2 full, vec3 n, float kept, vec3 added) {
             relit(world.b, kept, open.b, added.b));
     lit += vec3(CROSS * max(dot(lit, LUMA) - 1.0, 0.0));
     vec3 shown = vec3(pallDisplay(lit.r), pallDisplay(lit.g), pallDisplay(lit.b));
-    return glass.rgb + glass.a * (shown / max(max(max(shown.r, shown.g), shown.b), 1.0));
+    // the pane's own light at the frame's flash exposure too, as on the unlit path (where the whole destination takes it)
+    return glass.rgb * pallDisplay(PallFlash.x) + glass.a * (shown / max(max(max(shown.r, shown.g), shown.b), 1.0));
 }
 
 // Intersect each body once per ray. The entry, wall interior and glass can then
@@ -475,7 +445,8 @@ vec3 flashAmber(vec3 dir) {
 // The eye's veiling glare from each ball (DESIGN fireball-light §4.3), linear on white: Stiles–Holladay L = 10·E/θ² (θ in
 // degrees) over a white wall E/π, i.e. 31.4·F/θ² with F the ball's light at the eye at the frame's exposure; steeper beyond
 // 30°. FLASH_VEIL scales it, FLASH_VEIL_PEAK keeps it under the ball's on-screen brightness (its pattern stays readable);
-// presentation, tuned to the reference films (ring at 2 radii 1.3–2 times the sky, at most half the ball).
+// presentation, tuned to the reference films (DESIGN fireball-light §8: the ring at 2 ball radii 1.3–2 times the sky beside
+// it, Plumbbob Priscilla 1.4–1.75, and at most half the ball, Trinity 0.15–0.33).
 const float FLASH_VEIL = 0.35;
 const float FLASH_VEIL_PEAK = 0.3;
 vec3 flashVeil(vec3 dir, float behind) {
@@ -504,7 +475,10 @@ void main() {
     // lights it as it lights the world around (ballLight, with the pall overhead at the eye): a dark hand in a world the flash
     // made bright looked cut out of another scene
     if (pallHand(depth)) {
-        fragColor = vec4(0.0, 0.0, 0.0, pallDisplay(PallFlash.x));
+        // the frame's flash exposure only on the displayed frame: the layer frame holds the pall alone, and a hand pixel
+        // there is no pall (a dark hand-shaped hole in the glare quads read it as one)
+        fragColor = vec4(0.0, 0.0, 0.0, 1.0);
+        if (PallLayerFrame == 0) fragColor.a = pallDisplay(PallFlash.x);
         if (PallLayerFrame == 0 && PallBalls[0].w > 0.0) {
             vec4 farHand = InvViewProj * vec4((vec2(full) + 0.5) / vec2(fullSize) * 2.0 - 1.0, 1.0, 1.0);
             vec3 dirHand = normalize(farHand.xyz / farHand.w);

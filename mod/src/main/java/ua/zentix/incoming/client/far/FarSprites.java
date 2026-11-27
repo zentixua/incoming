@@ -414,8 +414,17 @@ public final class FarSprites implements SmokePuffs.Out {
      */
     public void eyeLight(double dx, double dy, double dz, double radius, double seen, double pixel, float r, float g, float b, double shown,
                          double[] out) {
+        eyeLight(dx, dy, dz, radius, seen, pixel, r, g, b, shown, 1, out);
+    }
+
+    /**
+     * {@link #eyeLight} with its veil part at share {@code veil} (0..1): the nuclear ball by day leaves its veil to the pall
+     * composite's eye veil, one model of one phenomenon (DESIGN fireball-light §4.3).
+     */
+    public void eyeLight(double dx, double dy, double dz, double radius, double seen, double pixel, float r, float g, float b, double shown,
+                         double veil, double[] out) {
         Sight.light(radius, seen, Math.sqrt(dx * dx + dy * dy + dz * dz), pixel, out);
-        glare(dx, dy, dz, radius, out, seen, r, g, b, 1, shown);
+        glare(dx, dy, dz, radius, out, seen, r, g, b, 1, shown, veil);
     }
 
     /**
@@ -443,11 +452,16 @@ public final class FarSprites implements SmokePuffs.Out {
      * probe ({@link SourceProbes}).
      */
     private void glare(double dx, double dy, double dz, double radius, double[] o, double seen, float r, float g, float b, double w, double shown) {
+        glare(dx, dy, dz, radius, o, seen, r, g, b, w, shown, 1);
+    }
+
+    private void glare(double dx, double dy, double dz, double radius, double[] o, double seen, float r, float g, float b, double w, double shown,
+                       double veil) {
         if (w <= 0) return;
         int probe = probes.add(dx, dy, dz, radius);
         FxQuads.Part was = out.part(FxQuads.Part.GLARE);
         eye(dx, dy, dz, o[3], r, g, b, (float) (Math.min(Math.min(Sight.HALO, Sight.SCATTER * seen), shown) * w), probe);
-        if (o[4] > 0) eye(dx, dy, dz, o[4], r, g, b, (float) (Math.min(Sight.VEIL_PEAK, shown) * w), probe);
+        if (o[4] > 0 && veil > 0) eye(dx, dy, dz, o[4], r, g, b, (float) (Math.min(Sight.VEIL_PEAK, shown) * w * veil), probe);
         out.part(was);
     }
 

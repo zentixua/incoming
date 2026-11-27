@@ -547,7 +547,8 @@ class PallGlslTest {
         // shadow on the world into the screen once; world in the light of the balls once per channel; the frame's one flash
         // exposure (DESIGN fireball-light §4.1) once for the world's own light, once for the hand and once for the rest of the
         // frame; the eye's veil over the finished pixel once per channel
-        assertEquals(10, occurrences(composite, "pallDisplay("), "every conversion into the screen is counted");
+        // (and once for a see-through pane's own light in the ball-lit world, as the unlit path takes it with the frame)
+        assertEquals(11, occurrences(composite, "pallDisplay("), "every conversion into the screen is counted");
         assertEquals(1, occurrences(body(composite, "vec3 ballLitWorld("), "pallDisplay(pallLinear(kept) * PallFlash.x)"),
                 "the world's own light takes the flash exposure once, in linear light");
         assertTrue(composite.contains("float kept = mix(1.0, pallDisplay(shade(p, over)), seen * open);")

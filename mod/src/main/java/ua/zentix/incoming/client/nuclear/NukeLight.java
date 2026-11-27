@@ -105,7 +105,9 @@ public final class NukeLight {
 
     /**
      * The player's Flash brightness setting, capped in calm mode (vanilla Hide Lightning Flashes, {@code Flash.calm}): it scales
-     * the day's one-exposure change and the eye's veil like every other flash path (0: the frame keeps its daylight exposure).
+     * the day's share in the one-exposure change and the eye's veil like every other flash path (0: the frame keeps its
+     * daylight exposure). Between full day and night (dusk, a lower setting) the frame's exposure moves log-linearly between
+     * the unflashed one and r^{@value #FOLLOW_DAY} of it.
      */
     static double flashSetting() {
         double k = ua.zentix.incoming.IncomingConfig.CLIENT.flash.get();
@@ -123,12 +125,14 @@ public final class NukeLight {
     }
 
     /**
-     * The frame's one exposure for the ball's light (world, pall, mushroom, amber sky), relative to the eye's: r^(−f·day).
+     * The frame's one exposure for the ball's light (world, pall, mushroom, amber sky), relative to the eye's: r^((f − 1)·day).
      * By day the frame follows the flash only partly ({@link #FOLLOW_DAY}), so what the ball lights shows brighter than at
      * the eye's full adaptation; at night 1, as before.
      */
     static double ballGain(double ratio, double day) {
-        return Math.pow(Math.max(ratio, 1e-30), -FOLLOW_DAY * day);
+        // the ball's light is in eye units (× E = E0·r); at the frame's exposure E0·r^(f·day) it is × r^(f·day − 1), and
+        // the change fades out with day (r^(day − day) = 1 at night)
+        return Math.pow(Math.max(ratio, 1e-30), (FOLLOW_DAY - 1) * day);
     }
 
     /** The same exposure for daylight terms (vanilla world, sky, clouds, the pall's sun and sky light): r^(f·day) ≤ 1. */

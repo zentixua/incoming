@@ -291,8 +291,11 @@ public final class NukeFlash {
         float partial = delta.getGameTimeDeltaPartialTick(false);
         int w = g.guiWidth(), h = g.guiHeight();
         overexposed(g, partial, w, h);
-        if (eyes(Minecraft.getInstance().player)) {
-            if (!scars.isEmpty()) scars(g, w, h);
+        LocalPlayer viewer = Minecraft.getInstance().player;
+        if (eyes(viewer)) {
+            // permanent retinal burns are an injury: survival only, as the server gives them (a burnt survivor in creative
+            // sees none)
+            if (!scars.isEmpty() && !viewer.isCreative()) scars(g, w, h);
             veil(g, partial, w, h);
         }
         if (afterLeft > 0) afterimage(g, partial, w, h);

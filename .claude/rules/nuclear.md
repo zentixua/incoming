@@ -561,7 +561,17 @@ Ruins and everything in `nuclear/world/` are in `nuclear-world.md`.
 ## Shared nuclear flash light
 `FlashLight` is the visible pulse/area source and opening-transfer law; `NukeLight` owns one frame sample/exposure
 before fog. All nuclear illumination uses its exposure; firebody film keeps a separate ambient reference and
-cancels frame exposure once. `FlashLight.temperature` is escaping brightness temperature, distinct from the old
+cancels frame exposure once. By day the frame sees the flash through one exposure E0·r^(f·day) (`NukeLight.FOLLOW_DAY`
+0.5, presentation; `day` = daylight share × Flash setting, calm-capped; docs/design/fireball-light.md): daylight terms ×
+`daylight()` (the composite's world, sky pixels and Iris hand via `PallFlash.x`; the pall's sun, sky and airlight in
+`NukePall`), the ball's light × `frameExposure()` (`PallExposure`, amber sky, `FxLights`). The amber dome is ball light:
+the composite dims only the sky under it (`flashAmber`, a copy of `drawSkyGlow`'s dome). At night it changes nothing.
+The eye's veiling glare by day is the composite's `flashVeil` (Stiles–Holladay, never over the ball's disc); the eye
+quad keeps only its glare then (`FarSprites.eyeLight` veil share 1 − day): one model. Limits: conventional layer quads
+(smoke, trails, debris) and the vanilla first-person hand keep the unflashed exposure for the 1–2 s; the ball casts no
+shadows (a screen-space march came and went with the head turning, review #796). Flash blindness (`NukeFlash.look`,
+`program/flash_eye`) is an overlay that never lowers the exposure (an exposure tail darkened the night while the ball's
+light fell fifty times in a second); creative has eyes, retinal burns stay survival-only. `FlashLight.temperature` is escaping brightness temperature, distinct from the old
 core/mixed gas temperatures. Do not substitute it into server energy or injury calculations. Source derivation,
 opening approximation and outside-OpenAir limitation: DESIGN-nuke §6. Sealed eye/world pixels get no new flash;
 block light is never an opening. A distant ball is seen by the visible share of its disc above the terrain line

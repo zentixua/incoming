@@ -27,7 +27,12 @@ class FireballLightTest {
         double r = 1 / 159.0;
         double daylight = NukeLight.daylightGain(r, 1), ball = NukeLight.ballGain(r, 1);
         assertEquals(Math.sqrt(r), daylight, 1e-12, "by day the ordinary light steps back by the square root");
-        assertEquals(1, daylight * ball, 1e-12, "one exposure: what the daylight loses, the ball's light keeps");
+        // one exposure (review 3, M1): the ball's light in eye units (× E = E0·r) and the daylight (× E0) reach the same frame
+        // exposure, for any follow share, any day share
+        double e0 = 1, e = e0 * r;
+        assertEquals(e0 * NukeLight.daylightGain(r, 1), e * NukeLight.ballGain(r, 1), 1e-12, "by day: one frame exposure");
+        // at night both keep the earlier exposures (daylight unflashed, the ball's light at the eye's)
+        assertEquals(1, NukeLight.daylightGain(r, 0) * NukeLight.ballGain(r, 0), 1e-12);
         assertTrue(ball * 158 * r > 10, "faces toward the ball blow out white (" + ball * 158 * r + " whites)");
         // at night nothing changes: the dark-adapted view already takes the ball's light in full
         assertEquals(1, NukeLight.daylightGain(r, 0), 1e-12);
@@ -61,7 +66,7 @@ class FireballLightTest {
     }
 
     @Test
-    void aNearFacingLookStaysWhiteForSecondsAFarOrTurnedOneBriefly() {
+    void aNearFacingLookClearsWithinASecondAFarOrTurnedOneSooner() {
         // Artem 27.11: the films stay white for seconds; ours follows the dose at the eye, the same in creative and survival
         double near = NukeFlash.whiteSeconds(58, 1, 0, NukeFlash.gaze(10, true), 0.4f);
         double turned = NukeFlash.whiteSeconds(58, 1, 0, NukeFlash.gaze(120, true), 0.4f);
