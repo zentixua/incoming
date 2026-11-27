@@ -135,6 +135,7 @@ class VoxyCoarseCanopyProbeTest {
         for (int level : new int[] {1, 2, 4}) {
             int n = 1 << level;
             double worst = 0, worstOld = 0;
+            int known = 0, all = 0;
             for (int g = 56; g <= 79; g++) {
                 int[][][] b = forest(g);
                 for (int ox = 0; ox < SIDE; ox += n) {
@@ -143,6 +144,10 @@ class VoxyCoarseCanopyProbeTest {
                         for (int x = ox; x < ox + n; x++) for (int z = oz; z < oz + n; z++) real += dustGround(b, x, z);
                         real /= n * n;
                         TerrainSource.Column c = coarse(b, level, ox, oz);
+                        all++;
+                        // an unknown column (no air voxel proves the gap) leaves the cell to DustGround's nearest known ground
+                        if (Double.isNaN(c.ground())) continue;
+                        known++;
                         double err = c.ground() - real, old = c.height() - real;
                         if (Math.abs(err) > Math.abs(worst)) worst = err;
                         if (Math.abs(old) > Math.abs(worstOld)) worstOld = old;
@@ -152,7 +157,11 @@ class VoxyCoarseCanopyProbeTest {
                     }
                 }
             }
-            log.append(String.format(Locale.ROOT, "level %d: worst PR ground error %.1f m, worst old top error %.1f m%n", level, worst, worstOld));
+            log.append(String.format(Locale.ROOT, "level %d: known %d of %d, worst ground error %.1f m, worst old top error %.1f m%n",
+                    level, known, all, worst, worstOld));
+            // level 1 proves most of this forest's canopies (73 % known at review 2 of #800); a rule that made every coarse
+            // column unknown would pass the error check alone
+            if (level == 1) assertTrue(known >= 0.6 * all, "level 1 knows " + known + " of " + all);
         }
         System.out.println(log);
         bad.stream().forEach(System.out::println);

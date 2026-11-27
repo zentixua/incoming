@@ -139,7 +139,9 @@ final class VoxyColumns {
         /** One voxel in column {@code i}, top-down: information for its block {@code b} (0 air or unknown). */
         private void step(int i, int b, int bottom) {
             if (ground[i] == SEARCHING) {
-                if (b == 0) gap[i] = true;
+                // the voxel right above the ground must be air (or what the floor would out-mip: no MOTION), not lower leaves
+                if (b == 0 || (b & MOTION) == 0) gap[i] = true;
+                else if ((b & LEAVES) != 0) gap[i] = false;
                 if ((b & GROUND) != 0 || bottom < crown[i] - LssColumns.MAX_CANOPY) {
                     // the ground voxel's top: the block top lies in it, the gap above it is air
                     ground[i] = (b & GROUND) != 0 && (level == 0 || gap[i]) ? bottom + scale : UNKNOWN;
