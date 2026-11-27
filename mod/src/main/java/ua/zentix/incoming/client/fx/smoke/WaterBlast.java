@@ -33,11 +33,6 @@ import ua.zentix.incoming.nuclear.model.WaterModel;
  * leaves mist, share {@link #MIST} of fine drops ({@link #MIST_DROP_R}), as base-surge ring: visible
  * edge at base-surge radius ({@link #surgeRadius}, nuke law), layer top at its height; drifts
  * and spreads like cloud, drops settle into water through layer bottom ({@link #mistLeft}).</li>
- * <li><b>Evaporation</b>: drops in air below saturation shrink by Maxwell's law, r·dr/dt = (S − 1)/(F_k + F_d) (Rogers,
- * Yau, “A Short Course in Cloud Physics”, 3rd ed., 1989, eq. 7.18), at the humidity S of the air around them: ambient
- * plus the mist's own vapour ({@link #mistLeft}); extinction ∝ r². In clear-weather surface air 50 µm drops evaporate in
- * 38 s of ambient air ({@link #evaporation}), the mist in its own vapour later; without evaporation a flat white layer
- * stays on the water for minutes. Saturated air (rain) keeps them.</li>
  * <li><b>On water</b>: foam where water landed (bubbly water, ⚠ decays over {@link #FOAM_S} s, est.), and wave from
  * explosion cavity: ring travels at group velocity for wavelength equal to column-base diameter, in shallow water no
  * faster than √(gD) ({@link #waveRadius}).</li>
@@ -67,23 +62,6 @@ public final class WaterBlast {
      * fall at ~4 m/s and immediately enter water (size is est., by settling speed).
      */
     static final double MIST_DROP_R = 50e-6;
-    /** Water vapour gas constant, J/(kg·K); latent heat of vaporization, J/kg; water density, kg/m³. */
-    static final double RV = 461.5, LV = 2.45e6, RHO_WATER = 1000;
-    /** Thermal conductivity of air at 15 °C, W/(m·K) (Rogers, Yau, table 7.1). */
-    static final double K_AIR = 0.0253;
-    /**
-     * F_k + F_d at the model's 15 °C air (Rogers, Yau, eq. 7.17–7.18), s/m²: heat conduction and vapour diffusion; vapour
-     * diffusivity 2.11·10⁻⁵·(T/273.15)^1.94 m²/s (Pruppacher, Klett, “Microphysics of Clouds and Precipitation”, 1997,
-     * eq. 13-3).
-     */
-    static final double DIFFUSION_RESISTANCE;
-
-    static {
-        double t = CloudModel.T_AIR_K, diffusivity = 2.11e-5 * Math.pow(t / 273.15, 1.94);
-        double fd = RHO_WATER * RV * t / (diffusivity * Condensation.saturation(t));
-        double fk = (LV / (RV * t) - 1) * LV * RHO_WATER / (K_AIR * t);
-        DIFFUSION_RESISTANCE = fk + fd;
-    }
     /** Near-ground air viscosity, Pa·s (15 °C). */
     static final double AIR_MU = 1.81e-5;
     /**
@@ -250,40 +228,22 @@ public final class WaterBlast {
     }
 
     /**
-     * Mist extinction share left since seconds after fall begins (airborne share × drop cross-section share). Drops settle
-     * through the layer bottom, flux v·c(0), c(0) at water surface; ring clump (Gaussian σv centered at height σv,
-     * {@link #blobs}) has water per unit area c(0)·√(2π)·e^½·σv, hence dM/dt = −v·M / (√(2π)·e^½·σv(t)); upward spreading
-     * slows drop loss. Below saturation the drops evaporate (Maxwell, see the class): d(r²)/dt = −2(1 − S)/(F_k + F_d), and
-     * Stokes settling ∝ r² slows with them. S is the layer air's humidity: ambient plus the vapour the mist itself gave off,
-     * spread over the layer's air (ring area × √(2π)·e^½·σv) and the air the wind brings through it; that vapour is
-     * 50–95 % of the layer's deficit over the mist's life (calm to breeze), so it slows evaporation as much as the ambient
-     * deficit drives it. Midpoint steps over 48 equal parts.
+     * Mist share still airborne since seconds after fall begins: drops settle through layer bottom,
+     * flux v·c(0), c(0) at water surface; ring clump (Gaussian σv centered at height σv, {@link #blobs}) has water layer
+     * per unit area c(0)·√(2π)·e^½·σv, hence dM/dt = −v·M / (√(2π)·e^½·σv(t)); initially (layer top at
+     * base-surge height), like mixed layer of that height, e^(−v·t/h); upward spreading slows drop loss.
+     * Evaporation not modeled: it only shortens lifetime.
      */
     double mistLeft(double since) {
         if (since <= 0) return 1;
-        int n = 48;
-        double dt = since / n, v = mistSettling(), depth = Math.sqrt(2 * Math.PI * Math.E), ambient = Math.min(1, air.humidity());
-        double kg = MIST * water, saturated = Condensation.saturation(CloudModel.T_AIR_K) / (RV * CloudModel.T_AIR_K);
-        double wind = Math.hypot(air.windX(), air.windZ()) * air.wind(surgeTop()), r0 = MIST_DROP_R * MIST_DROP_R;
-        double share = 1, aloft = 1, vented = 0;
-        for (int i = 0; i < n && share > 0; i++) {
-            double t = dt * (i + 0.5), sv = mistSigmaV(t), radius = surgeRadius(t), layer = depth * sv;
-            vented += wind * dt * 2 * radius * layer;
-            double vapour = kg * aloft * (1 - share * Math.sqrt(share));
-            double humidity = Math.min(1, ambient + vapour / (saturated * (Math.PI * radius * radius * layer + vented)));
-            aloft *= Math.exp(-v * share / layer * dt);
-            share = Math.max(0, share - 2 * (1 - humidity) / (DIFFUSION_RESISTANCE * r0) * dt);
+        // midpoint integral over 24 equal steps: σv(t) is smooth (√(σ0² + (k·travel)²))
+        int n = 24;
+        double sum = 0, v = mistSettling(), depth = Math.sqrt(2 * Math.PI * Math.E);
+        for (int i = 0; i < n; i++) {
+            double t = since * (i + 0.5) / n;
+            sum += v / (depth * mistSigmaV(t)) * since / n;
         }
-        return share * aloft;
-    }
-
-    /**
-     * Seconds for drops of radius {@code r} m to evaporate in this blast's air (Maxwell's law, r² falls linearly; see the
-     * class); infinity in saturated air.
-     */
-    double evaporation(double r) {
-        double deficit = 1 - air.humidity();
-        return deficit <= 0 ? Double.POSITIVE_INFINITY : r * r * DIFFUSION_RESISTANCE / (2 * deficit);
+        return Math.exp(-sum);
     }
 
     /** When water starts falling into water, s: slowest jet. */

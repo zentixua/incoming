@@ -426,10 +426,7 @@ wide at its widest, as the spray falls back (about three quarters of that at the
 Shahed's column reaches its top in under four seconds and is back in the water by about seven and a half; slower jets
 fall earlier, leaving foam and a low ring of water mist. The mist droplets are about 0.1 mm across and settle at
 0.3 m/s, and an ordinary wind over water cannot hold them up: the mist stays a thin layer on the water, drifts
-downwind and thins out: in clear weather half of it is gone in about 4 seconds for Grad and 8 for the Shahed (about 5
-and 10 in rain). Unless the air is saturated the droplets also evaporate, slowed by the mist's own vapour, so in clear
-weather the last of it is gone within about 35 to 60 seconds, sooner in a breeze; in rain it lasts up to a few minutes.
-Only a gale lifts it higher. A wave ring spreads across the water at a
+downwind and thins out: half of it settles in about 5 seconds for Grad and 10 for the Shahed. Only a gale lifts it higher. A wave ring spreads across the water at a
 speed that depends on water depth. Clumps of water fly as particles. Fuel that lands on water spreads too
 thin to keep burning, so no fire is left after the ball.
 

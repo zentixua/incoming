@@ -161,10 +161,6 @@ public final class FarBlasts {
         float open = 1;
         /** The cloud's source is still needed (the event is alive). */
         boolean alive = true;
-        /** This client saw the blast happen (not a strike rebuilt for a late join, dimension change or seek, {@link Resent}). */
-        final boolean witnessed;
-        /** The client level's game time when the blast arrived. */
-        final long tick;
         /** Shock-wave front over time ({@link #front}); null — not computed yet. */
         @Nullable
         ChemicalFront front;
@@ -185,8 +181,6 @@ public final class FarBlasts {
             // a resent strike happened before the client knew it: it is that old now; its far rumble is still to come only
             // while its front has not yet reached the ear (FarBlasts.cloud decides)
             this.born = BlastTime.ticks() - (resent == null ? 0 : resent.ticks());
-            this.witnessed = resent == null;
-            this.tick = level == null ? 0 : level.getGameTime();
             this.near = near;
             this.soundPending = !near;
             // Fuel in the crater burns as fire on the server's blocks: its smoke and sound come with it in a packet (BlastEffects.fuelFire)
@@ -439,7 +433,7 @@ public final class FarBlasts {
         BlastTarget t = model.target;
         if (t.family() != BlastTarget.Family.SOIL || source.underground() || source.chargeKg() <= 0) return null;
         double r = ua.zentix.incoming.nuclear.model.CraterModel.chargeRadius(source.chargeKg(), t.material().soil());
-        Ejecta e = new Ejecta(r, t.ballistic(source.chargeKg()), t.matter().clods, Ejecta.terminal(t.matter().grain, t.matter().grainDensity));
+        Ejecta e = new Ejecta(r, t.ballistic(source.chargeKg()), t.matter().clods);
         return e.grains > 0 ? e : null;
     }
 
@@ -477,26 +471,6 @@ public final class FarBlasts {
         return p.support().map(s -> BlastTarget.of(material, s.loose(), s.slab(), s.breach(), p.pos().subtract(s.normal().scale(s.lift())),
                         s.normal()))
                 .orElseGet(() -> BlastTarget.of(material, tnt, hob));
-    }
-
-    /**
-     * Game ticks between the server's blast tick and the client's game time when its packet arrived (⚠ est.: the packet goes
-     * out in the blast's tick; the client's clock follows the server's within the time sync and network delay).
-     */
-    static final long WITNESS_TICKS = 20;
-
-    /**
-     * This client saw the blast of game tick {@code blastTick} happen within {@code reach} blocks (horizontal) of (x, z), and
-     * still keeps it: an older crater learned after the fact never matches a fresh blast beside it.
-     */
-    public static boolean witnessed(double x, double z, double reach, long blastTick) {
-        for (Event e : EVENTS) if (witnesses(e.witnessed, e.x, e.z, e.tick, x, z, reach, blastTick)) return true;
-        return false;
-    }
-
-    /** A blast seen live at (ex, ez) arriving at game tick {@code tick} is the one of {@code blastTick} at (x, z). */
-    static boolean witnesses(boolean live, double ex, double ez, long tick, double x, double z, double reach, long blastTick) {
-        return live && Math.abs(tick - blastTick) <= WITNESS_TICKS && Math.hypot(ex - x, ez - z) <= reach;
     }
 
     /** An explosion packet closer than {@link #NEAR} to the camera: particles draw it and the near model voices it. */

@@ -108,14 +108,6 @@ public final class FireSmoke implements SmokeGrid.Source {
     double x, y, z, blocks, fire;
     final double start;
     double end = Double.NaN;
-    /**
-     * Grid clock, s, from which this client draws the plume: {@link #start} for a fire it learned of after the fact (late join,
-     * returning to the chunk, a strike rebuilt after a seek: that plume is already out there), or the moment it learned of the
-     * fuel when it watched the blast itself. The server pours the fuel in a work unit after the crater, seconds after the
-     * blast in a salvo (a Grad salvo's units run about 90 ticks): drawn from the blast, that delay's plume would appear whole
-     * in one frame as a straight rod.
-     */
-    double shown;
     /** World changed: source leaves the grid. */
     boolean gone;
     /**
@@ -139,7 +131,6 @@ public final class FireSmoke implements SmokeGrid.Source {
         this.blocks = blocks;
         this.fire = blocks;
         this.start = seconds;
-        this.shown = seconds;
     }
 
     /** History record: at seconds, blocks blocks burned in a fire of strength fire. */
@@ -316,13 +307,6 @@ public final class FireSmoke implements SmokeGrid.Source {
     @org.jetbrains.annotations.Nullable
     public static FuelBurn fuel(ClientLevel level, int id, ua.zentix.incoming.nuclear.model.FuelPool law, java.util.List<BlockPos> cells,
                                 long smothered, double age) {
-        return fuel(level, id, law, cells, smothered, age, false);
-    }
-
-    /** The same; {@code witnessed}: this client saw the blast happen, so its plume starts now ({@link #shown}). */
-    @org.jetbrains.annotations.Nullable
-    public static FuelBurn fuel(ClientLevel level, int id, ua.zentix.incoming.nuclear.model.FuelPool law, java.util.List<BlockPos> cells,
-                                long smothered, double age, boolean witnessed) {
         if (level != world) {
             reset();
             world = level;
@@ -338,9 +322,7 @@ public final class FireSmoke implements SmokeGrid.Source {
             return null;
         }
         FuelBurn burn = new FuelBurn(id, law, cells.size(), cells, smothered);
-        FireSmoke f = pool(level, burn, age);
-        if (witnessed) f.shown = SmokeGrid.seconds(0);
-        POOL_IDS.put(id, f);
+        POOL_IDS.put(id, pool(level, burn, age));
         return burn;
     }
 
@@ -370,12 +352,6 @@ public final class FireSmoke implements SmokeGrid.Source {
         return f;
     }
 
-    /** The crater source with server id {@code id}; null if none. */
-    @org.jetbrains.annotations.Nullable
-    static FireSmoke crater(int id) {
-        return POOL_IDS.get(id);
-    }
-
     /** Rebuild fuel-cell index ({@link #FUEL}) from burning craters. */
     private static void columns() {
         FUEL.index(POOLS.stream().filter(f -> f.burn != null).map(f -> f.burn.live()).toList());
@@ -400,16 +376,11 @@ public final class FireSmoke implements SmokeGrid.Source {
     public boolean emit(double seconds, SmokeGrid.Sink out) {
         if (gone) return false;
         double u = plume.wind, stability = plume.stability;
-        double far = reach(seconds);
+        double far = Math.min(visible, u * (seconds - start));
         if (!Double.isNaN(end) && u * (seconds - end) >= far) return false;
         if (far <= 0) return true;
         lay(fuel, x, y, z, wx, wz, u, stability, far, plume.size, path -> blocksAt(seconds - path / u), path -> fireAt(seconds - path / u), out);
         return true;
-    }
-
-    /** Plume length drawn at seconds, m: the path its smoke has travelled since {@link #shown}, within the visible reach. */
-    double reach(double seconds) {
-        return Math.min(visible, plume.wind * (seconds - shown));
     }
 
     /**

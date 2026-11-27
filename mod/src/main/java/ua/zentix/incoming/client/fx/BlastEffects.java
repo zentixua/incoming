@@ -683,18 +683,10 @@ public final class BlastEffects {
         ua.zentix.incoming.nuclear.model.FuelPool pool = WeaponType.byId(p.weapon()).spec().pool(p.cells().size());
         long age = Math.max(0, level.getGameTime() - p.blastTick());
         if (pool.seconds() <= 0 || age / 20.0 >= pool.seconds()) return;
-        BlockPos first = p.cells().getFirst();
-        FuelBurn burn = FireSmoke.fuel(level, p.id(), pool, p.cells(), p.smothered(), age / 20.0,
-                FarBlasts.witnessed(first.getX() + 0.5, first.getZ() + 0.5, WITNESS_REACH, p.blastTick()));
+        FuelBurn burn = FireSmoke.fuel(level, p.id(), pool, p.cells(), p.smothered(), age / 20.0);
         // rumble for fires within {@link FarBlasts#NEAR}, as before (no crater sound is started farther away)
         if (burn != null && FarBlasts.near(burn.centre())) BlastSounds.fire(burn, (int) age);
     }
-
-    /**
-     * A crater's fuel cells lie this close to its blast point, blocks (horizontal; ⚠ est., a generous bound): the crater radius
-     * plus the fuel's flow down its slopes ({@code warhead/FuelFires}: the largest pool, a missile's 9 cells, spreads a few blocks).
-     */
-    static final double WITNESS_REACH = 16;
 
     /** Crater fuel smoke and rumble at the impact point (no server block fire: old recording, sandbox without a server). */
     private static void legacyPool(Vec3 pos, ua.zentix.incoming.nuclear.model.FuelPool pool) {

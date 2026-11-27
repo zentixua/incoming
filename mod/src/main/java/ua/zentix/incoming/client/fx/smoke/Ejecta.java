@@ -15,13 +15,9 @@ import net.minecraft.world.phys.Vec3;
  * <li><b>Angle</b>: {@value #ANGLE_DEG}° ± {@value #SPREAD_DEG}° above horizontal, uniform (est.) (code estimate: sources lack
  * contact-charge angular distribution, physics.md), uniform azimuth; instantaneous ejection at explosion (excavation
  * lasts milliseconds to tens of milliseconds versus seconds of flight).</li>
- * <li><b>Flight</b>: g = 9.81; curtain grains (diameter d, {@link BlastTarget.Matter#grain}) with quadratic air drag, terminal
- * speed v_t = √(4ρ_g·d·g/(3C_d·ρ_a)), C_d {@value #GRAIN_CD} (est.: sphere at Re 10²–10³): a mm grain falls at 7.5 m/s. A grain
- * flies the range of a ballistic element at {@link #curtain} speed v_t·√(ln(1 + (v/v_t)²)) (⚠ approximation, exact in both
- * limits: v ≪ v_t no drag, v ≫ v_t the logarithmic drag range): a Grad crater's 70 m/s centre grains slow within metres;
- * without drag they fly a straight thin chord for 11 s and half a kilometre, a rigid rod over the frame. Clods (nearby
- * particles, {@link #pieces}) keep the exit speed: tens of centimetres, little drag. An element returning to ejection
- * height is on ground.</li>
+ * <li><b>Flight</b>: no drag, g = 9.81 (est.) (submillimetre grains at tens of m/s already have significant drag: curtain
+ * slightly higher and farther than real; magnitude not estimated, mod has no grain-curtain drag law);
+ * an element returning to ejection height is on ground.</li>
  * <li><b>Light</b>: curtain visible through grains ({@link BlastTarget.Matter#extinction}); tens-of-centimetre clods
  * attenuate light hundreds of times less per kilogram; their share ({@link BlastTarget.Matter#clods}) is nearby
  * particles, rather than curtain.</li>
@@ -43,12 +39,8 @@ public final class Ejecta {
     /** Curtain jets around circle and segments per jet. */
     public static final int JETS = 8, BANDS = 3;
 
-    /** Grain drag coefficient (est.: sphere at Re 10²–10³) and air density, kg/m³. */
-    static final double GRAIN_CD = 0.5, AIR = 1.225;
     /** Crater radius, m; ballistic ejecta, kg (excluding airborne dust); curtain grains within it, kg. */
     public final double radius, mass, grains;
-    /** Curtain grain terminal speed, m/s (infinite: no drag). */
-    public final double terminal;
     /** Speed at crater rim and maximum speed, m/s. */
     public final double vRim, vMax;
     /** Volume share at cutoff: (FROM)³. */
@@ -62,19 +54,13 @@ public final class Ejecta {
      * @param clods  clod ejecta share (not curtain)
      */
     public Ejecta(double radius, double mass, double clods) {
-        this(radius, mass, clods, Double.POSITIVE_INFINITY);
-    }
-
-    /** The same with curtain grains of terminal speed {@code terminal} m/s ({@link #terminal(double, double)}). */
-    public Ejecta(double radius, double mass, double clods, double terminal) {
-        this.terminal = terminal > 0 ? terminal : Double.POSITIVE_INFINITY;
         this.radius = Math.max(0, radius);
         this.mass = Math.max(0, mass);
         this.grains = this.mass * (1 - Math.clamp(clods, 0, 1));
         vRim = C2 * Math.sqrt(G * this.radius);
         uMin = FROM * FROM * FROM;
-        vMax = curtain(speed(uMin));
-        settled = flight(curtain(speed(uMin + 0.1 * (1 - uMin))), Math.toRadians(ANGLE_DEG));
+        vMax = speed(uMin);
+        settled = flight(speed(uMin + 0.1 * (1 - uMin)), Math.toRadians(ANGLE_DEG));
         life = flight(vMax, Math.toRadians(ANGLE_DEG + SPREAD_DEG));
     }
 
@@ -121,25 +107,6 @@ public final class Ejecta {
         return vRim * Math.pow(Math.max(u, uMin), -1 / (3 * MU));
     }
 
-    /** Terminal speed of a grain of diameter {@code d} m and density {@code density} kg/m³ in air, m/s. */
-    public static double terminal(double d, double density) {
-        return d > 0 && density > 0 ? Math.sqrt(4 * density * d * G / (3 * GRAIN_CD * AIR)) : Double.POSITIVE_INFINITY;
-    }
-
-    /** Curtain grain's ballistic-equivalent speed for exit speed v, m/s: v_t·√(ln(1 + (v/v_t)²)) (see the class). */
-    public double curtain(double v) {
-        if (Double.isInfinite(terminal)) return v;
-        double q = v / terminal;
-        return terminal * Math.sqrt(Math.log1p(q * q));
-    }
-
-    /** Exit speed whose curtain speed is {@code c}: the inverse of {@link #curtain}. */
-    double exit(double c) {
-        if (Double.isInfinite(terminal)) return c;
-        double q = c / terminal;
-        return q * q > 700 ? Double.POSITIVE_INFINITY : terminal * Math.sqrt(Math.expm1(q * q));
-    }
-
     /** Ejection position, m from centre: x = R·u^⅓. */
     public double from(double u) {
         return Math.cbrt(Math.max(u, 0)) * radius;
@@ -153,7 +120,7 @@ public final class Ejecta {
     /** Volume share whose slower elements at angle el are on ground by age t (above 1 means all airborne). */
     double landed(double t, double el) {
         if (t <= 0 || vRim <= 0) return Double.POSITIVE_INFINITY;
-        double v = exit(G * t / (2 * Math.sin(el)));
+        double v = G * t / (2 * Math.sin(el));
         return Math.pow(v / vRim, -3 * MU);
     }
 
@@ -197,10 +164,10 @@ public final class Ejecta {
                 double ua = bound(b), ub = Math.min(bound(b + 1), last);
                 if (ub <= ua) continue;
                 // Segment ends: volume-share ua (fast) and ub (slow) elements: ejection position + straight path − fall.
-                double va = curtain(speed(ua)), vb = curtain(speed(ub));
+                double va = speed(ua), vb = speed(ub);
                 double ra = from(ua) + va * t * side, ya = va * t * up - drop, rb = from(ub) + vb * t * side, yb = vb * t * up - drop;
                 double mx = 0.5 * (ra + rb), my = Math.max(0, 0.5 * (ya + yb)), hx = 0.5 * (ra - rb), hy = 0.5 * (ya - yb);
-                double sigma = Math.max(spread * curtain(speed(Math.sqrt(ua * ub))) * t, 0.25 * radius);
+                double sigma = Math.max(spread * speed(Math.sqrt(ua * ub)) * t, 0.25 * radius);
                 double kg = grains / JETS * (ub - ua) / (1 - uMin);
                 out.jet(mx * cx, my, mx * cz, hx * cx, hy, hx * cz, sigma, kg);
             }

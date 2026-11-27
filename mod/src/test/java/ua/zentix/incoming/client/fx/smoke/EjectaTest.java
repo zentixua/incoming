@@ -13,28 +13,7 @@ class EjectaTest {
 
     static Ejecta of(double tnt) {
         BlastTarget t = BlastTarget.of(GroundMaterial.DIRT, tnt, 0);
-        return new Ejecta(CraterModel.chargeRadius(tnt, CraterModel.Soil.DRY), t.mass(tnt) * (1 - CloudModel.DUST_LOFTED), t.matter().clods,
-                Ejecta.terminal(t.matter().grain, t.matter().grainDensity));
-    }
-
-    /**
-     * Air drag holds the curtain's fast centre grains (rc-video raid clip, 31.6–38 s: without it a Grad crater's 70 m/s grains
-     * flew an 11 s, half-kilometre straight chord, a rigid brown rod over the frame): mm soil grains fall at 7.5 m/s; slow grains
-     * keep their exit speed, fast ones the logarithmic drag range; every charge's curtain is down within seconds and tens of metres.
-     */
-    @Test
-    void airDragHoldsTheFastCentreGrains() {
-        double vt = Ejecta.terminal(1e-3, 2650);
-        assertEquals(7.5, vt, 0.2);
-        Ejecta grad = of(6.4), ballistic = new Ejecta(grad.radius, grad.mass, BlastTarget.Matter.DIRT.clods);
-        assertTrue(ballistic.vMax > 50 && ballistic.life > 8, "without drag: " + ballistic.vMax + " m/s, " + ballistic.life + " s");
-        assertEquals(grad.speed(1), grad.curtain(grad.speed(1)), 0.05 * grad.speed(1), "a rim grain barely feels the air");
-        for (double tnt : CHARGES) {
-            Ejecta e = of(tnt);
-            double reach = e.radius + e.vMax * e.vMax / Ejecta.G;
-            assertTrue(e.life < 4 && reach < 40, tnt + " kg: curtain " + e.life + " s, reach " + reach + " m");
-            for (double v = 0.5; v < 300; v *= 1.3) assertEquals(v, e.exit(e.curtain(v)), 1e-6 * v, "inverse at " + v);
-        }
+        return new Ejecta(CraterModel.chargeRadius(tnt, CraterModel.Soil.DRY), t.mass(tnt) * (1 - CloudModel.DUST_LOFTED), t.matter().clods);
     }
 
     /**

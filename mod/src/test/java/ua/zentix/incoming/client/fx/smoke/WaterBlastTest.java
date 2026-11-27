@@ -314,26 +314,6 @@ class WaterBlastTest {
         assertTrue(windy.mistSigmaV(20) > 2 * windy.mistSigmaV(0), "and the layer grows upward");
     }
 
-    /**
-     * Drops evaporate by Maxwell's law below saturation: 50 µm in 38 s of clear-weather surface air (70 %, Rogers, Yau, eq. 7.18
-     * at 15 °C). The mist's own vapour humidifies its layer (review round 1: 50–95 % of the layer's deficit), so it lasts
-     * longer than that, longest in calm air, and saturated air keeps it longest; it never outlives the strike record.
-     */
-    @Test
-    void dropsEvaporateBelowSaturation() {
-        CloudModel.Air breeze = new CloudModel.Air(0.012, 3, 0, 0.14, 3, 0.7), calm = new CloudModel.Air(0.012, 0, 0, 0.14, 3, 0.7),
-                rain = new CloudModel.Air(0.012, 3, 0, 0.14, 3, 1);
-        WaterBlast w = new WaterBlast(50, 0, DEEP, breeze), still = new WaterBlast(50, 0, DEEP, calm), wet = new WaterBlast(50, 0, DEEP, rain);
-        double dry = w.evaporation(WaterBlast.MIST_DROP_R);
-        assertEquals(38, dry, 2);
-        assertEquals(Double.POSITIVE_INFINITY, wet.evaporation(WaterBlast.MIST_DROP_R), 0);
-        for (double t = 1; t < 120; t += 1) assertTrue(w.mistLeft(t) <= w.mistLeft(t - 1) + 1e-12, "the mist only thins: " + t);
-        assertTrue(w.mistLeft(10) < wet.mistLeft(10), "evaporation thins the mist");
-        assertTrue(w.mistLife() > w.landing() + dry, "its own vapour slows it: " + w.mistLife());
-        assertTrue(still.mistLife() > w.mistLife(), "longer in calm air: " + still.mistLife() + " versus " + w.mistLife());
-        assertTrue(wet.mistLife() > w.mistLife() && wet.mistLife() <= ua.zentix.incoming.strike.StrikeClouds.LIFE_S, "rain " + wet.mistLife());
-    }
-
     /** Foam: immediate at the cavity, elsewhere when water lands; fades. Wave: shallow-water limit and dω/dk at finite depth. */
     @Test
     void foamAndWaveOnTheWater() {
