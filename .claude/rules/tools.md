@@ -188,7 +188,10 @@ Prism: `~/.var/app/org.prismlauncher.PrismLauncher/data/PrismLauncher/` (`tools/
                                            screen is cropped to the window), the world is an animated WebP (three to four times lighter than GIF);
                                            the first frame and the length of each are numbers in the script; no series: the animation is untouched
     x11_record.py                        ← the client's window in the nested KWin → a video in real time (ffmpeg x11grab) with time marks
-                                           for the sound audio.wav (prod_client.py --video, --size)
+                                           for the sound audio.wav (prod_client.py --video, --size); diagnostics only (black,
+                                           torn, repeated frames: rigs.md), clips come from Flashback's export
+    clip_check.py <video>…               ← every frame of a delivered clip: black, torn and repeated frames, constant frame clock,
+                                           size, fps, audio (exit 1 on any); test_clip_check.py (CI, rig job)
     stress.sh                            ← load bench (cloud, xvfb): a dedicated server with a director (src/devtest/.../stress) and three players
                                            without windows; salvos of 30, exit/entry, Nether, nuke, “Abort”; the summary is the STRESS lines in the log
     build_sounds.py [sections]           ← all sounds: CC0/CC BY recordings from Freesound (cache tools/.sound-cache) + synthesis

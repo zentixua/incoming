@@ -104,6 +104,7 @@ jobs:
                 mod/*|tools/fetch_runtime_mods.py|tools/paths.py|tools/clean_install.py) mod=true ;;
                 # The sandbox's own start (job Песочница) also follows its scripts (sandbox.sh sources the other two).
                 tools/sandbox.sh|tools/soft_gl.sh|tools/gpu_lease.sh) rig=true; sandbox=true ;;
+                tools/clip_check.py|tools/test_clip_check.py|tools/x11_record.py) rig=true ;;
                 tools/rig_procs.sh|tools/test_rig_procs.sh|tools/test_gpu_lease.sh|tools/laptop_job.sh|tools/dev_client.sh|tools/test_sandbox.sh|tools/stray_clients.sh|tools/test_stray_clients.sh|tools/nested_kwin.sh|tools/stress.sh|tools/mp_scenario.sh|tools/client_scenario.sh|tools/probes/*) rig=true ;;
                 tools/replayscan/*) replayscan=true ;;
                 # prod_client.py prepares look-gate client instance copy (no Dynamic FPS idle; tested there too).
@@ -457,6 +458,8 @@ jobs:
         run: python3 -m unittest discover -s tools -p 'test_release_checks.py' -v
       - name: Checked-tree reuse
         run: python3 -m unittest discover -s tools -p 'test_ci_reuse.py' -v
+      - name: Delivered clip frames
+        run: sudo apt-get install -y -qq ffmpeg > /dev/null && python3 -m unittest discover -s tools -p 'test_clip_check.py' -v
 
   # Flashback replay analysis (tools/replayscan): analysis-mod build and unit tests, no game.
   replayscan:

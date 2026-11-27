@@ -12,6 +12,11 @@ Timing: ffmpeg assigns wall-clock timestamps to frames (`-use_wallclock_as_times
 is the "start:" line in its <segment>.log, also recorded in <file>.jsonl. With --audio, the appearance time of that file
 is recorded there too (the OpenAL Soft "wave" driver creates it when opening audio and then writes in real time);
 these two timestamps align audio with video. The exit code is the command exit code. Requires ffmpeg with x11grab.
+
+Diagnostics only, never a clip for players or Artem: x11grab reads the window on its own clock, not at the game's buffer
+swaps, and the take's encoder shares the CPU with the game. The 3.14.0 candidate's take gave 9.4 % black, 1.2 % torn and
+72 % repeated frames in its clip (tools/clip_check.py), and around the nuke the game got 18-30 % of a CPU at 100 %.
+Clips come from Flashback's export (tools/media/README.md); every segment's log says so.
 """
 import argparse
 import ctypes
@@ -163,7 +168,9 @@ def main():
         with open(log, encoding="utf-8", errors="replace") as f:
             m = START.search(f.read())
         mark(event="segment_end", file=f"{base}.{seg:03d}.mkv", start=float(m.group(1)) if m else None,
-             code=ffmpeg.returncode, wall=time.time())
+             code=ffmpeg.returncode, wall=time.time(), diagnostic_only=True)
+        print(f"x11_record: {base}.{seg:03d}.mkv is a diagnostic capture (black, torn and repeated frames); "
+              "clips come from Flashback's export, tools/media/README.md", file=sys.stderr)
         ffmpeg = None
 
     next_check = 0.0
