@@ -188,6 +188,8 @@ paths:
   (`Collapse`): a destroyed block's spot may hold rubble, so check that the block is gone, not that the spot is air.
   A broken full block on the ground lands back on its own cell as itself for 12 % of positions
   (`RuinPlanner.leavesRubble`): a lone test block must sit where it leaves none (`blastBreaksLightKeepsMasonryFellsTrees`).
+  A plan made over a chunk the test already ruined depends on where that rubble landed: plan each step over the
+  untouched chunk (`minedPlankMakesPlanStaleBeforeTheFlash`).
 - Background ruin workers run in wall time (0.5–1.3 s for a 1 kt chunk locally, 50–510 unthrottled ticks): a test that
   waits for them runs at game speed (`chunkWithheldUntilRuins`), or CI's unthrottled ticks spend its timeout first.
   Game speed still races them: a check whose outcome depends on when background work lands finishes it at each tick

@@ -21,7 +21,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /** The top of the columns from sections Voxy is like the layer of client chunks and LSS, at rough levels it is the middle of the voxel. */
 class VoxyColumnsTest {
-    private static final int GRASS = 1, STONE = 2, WATER = 3, GLASS = 4, TALL_GRASS = 5, SAND = 6;
+    private static final int GRASS = 1, STONE = 2, WATER = 3, GLASS = 4, TALL_GRASS = 5, SAND = 6, LEAF = 7, SOIL = 8;
     /** Block number - bits 27–46, like Voxy ({@code Mapper.getBlockId}). */
     private static final LongToIntFunction ID = v -> (int) (v >>> 27 & 0xFFFFF);
     private static final IntUnaryOperator INFO = id -> switch (id) {
@@ -31,6 +31,8 @@ class VoxyColumnsTest {
         case WATER -> VoxyColumns.KNOWN | VoxyColumns.MOTION | VoxyColumns.WATER | MapColor.WATER.id;
         case GLASS -> VoxyColumns.KNOWN | VoxyColumns.MOTION;
         case TALL_GRASS -> VoxyColumns.KNOWN | MapColor.PLANT.id;
+        case LEAF -> VoxyColumns.KNOWN | VoxyColumns.MOTION | VoxyColumns.LEAVES | MapColor.PLANT.id;
+        case SOIL -> VoxyColumns.KNOWN | VoxyColumns.MOTION | VoxyColumns.GROUND | MapColor.GRASS.id;
         default -> 0;
     };
 
@@ -139,5 +141,33 @@ class VoxyColumnsTest {
         assertTrue((water & VoxyColumns.WATER) != 0 && (water & VoxyColumns.MOTION) != 0, "water holds MOTION_BLOCKING");
         assertEquals(0, VoxyColumns.info(Blocks.SHORT_GRASS.defaultBlockState()) & VoxyColumns.MOTION);
         assertEquals(MapColor.NONE.id, VoxyColumns.info(Blocks.GLASS.defaultBlockState()) & 0x3F);
+    }
+
+    /** Under leaves the scan goes on to the ground the dust lies on (the canopy), across sections; none: no canopy. */
+    @Test
+    void canopyGroundUnderLeaves() {
+        int[] c = new Stack(0).put(3, 4, 30, SOIL).put(3, 4, 32, LEAF).put(3, 4, 33, LEAF).put(5, 4, 30, SOIL).summarize(9, -2);
+        TerrainSource.Column crown = LssColumns.column(at(c, 3, 4));
+        assertEquals(34, crown.height());
+        assertEquals(3, crown.canopy());
+        assertEquals(31, crown.ground());
+        assertEquals(0, LssColumns.column(at(c, 5, 4)).canopy());
+        // leaves with nothing under them in the sections read: the ground is unknown
+        int[] open = new Stack(0).put(3, 4, 40, LEAF).summarize(9, 1);
+        assertTrue(Double.isNaN(LssColumns.column(at(open, 3, 4)).ground()));
+    }
+
+    /**
+     * Above level 0 a voxel holding leaves may hold the floor too (Voxy mips leaves as fully opaque): only an air voxel between
+     * the leaves and the ground proves the canopy; leaves straight on a ground voxel leave it unknown (VoxyCoarseCanopyProbeTest).
+     */
+    @Test
+    void coarseCanopyNeedsAnAirGap() {
+        // level 2 (4-block voxels): ground voxel at 28-31, air 32-35, leaves 36-39
+        int[] gap = new Stack(2).put(3, 4, 28, SOIL).put(3, 4, 36, LEAF).summarize(9, -2);
+        TerrainSource.Column c = LssColumns.column(at(gap, 3, 4));
+        assertEquals(32, c.ground(), "the ground voxel's top");
+        int[] mixed = new Stack(2).put(3, 4, 28, SOIL).put(3, 4, 32, LEAF).summarize(9, -2);
+        assertTrue(Double.isNaN(LssColumns.column(at(mixed, 3, 4)).ground()), "no gap: unknown");
     }
 }

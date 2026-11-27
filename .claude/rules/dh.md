@@ -19,7 +19,8 @@ paths:
   dependency `lss`, compileOnly `lss_version`) uses its public client API `LSSApi.registerColumnConsumer`: subscribe in
   `FMLClientSetupEvent` (its API touches its network classes); with a subscriber, the LSS client downloads even without
   Voxy. Columns arrive on its `LSS-ColumnProcessor` thread: column tops are calculated there too
-  (`LssColumns.summarize`, like the client-chunk layer: `MOTION_BLOCKING`, map color, water) and stored in memory;
+  (`LssColumns.summarize`, like the client-chunk layer: `MOTION_BLOCKING`, map color, water, the canopy down to the ground
+  under leaves, `Terrain.canopy`; a column saved before canopies were kept has none until LSS resends it, `/lss clearcache`) and stored in memory;
   let no exception escape — LSS would consider the chunk unaccepted and resend to everyone (including Voxy).
   The LSS client stores receipt marks (`.lss/cache`) and on reentry requests only changed data, so columns also live
   on disk (`incoming/lss-terrain/<server>/world-<seed hash>/<dimension>.bin`, every 2 minutes and on world exit); if the
