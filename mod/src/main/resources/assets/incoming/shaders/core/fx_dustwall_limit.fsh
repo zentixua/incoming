@@ -30,7 +30,9 @@ float wallDepthAt(WallLayer w, float t) {
 void main() {
     ivec2 p = ivec2(gl_FragCoord.xy);
     vec2 low = floor(vec2(p) / PallLimit.x);
-    if (ivec2((low + 0.5) * PallLimit.x) != p || any(notEqual(ivec2(mod(low, PallLimit.y)), ivec2(PallLimit.zw)))) discard;
+    // the pixel the pall's ray reads for this block: clamped into the frame like its read (an odd width or height puts the
+    // last block's centre past the edge, and that texel was never written)
+    if (min(ivec2((low + 0.5) * PallLimit.x), textureSize(Sampler1, 0) - 1) != p || any(notEqual(ivec2(mod(low, PallLimit.y)), ivec2(PallLimit.zw)))) discard;
     vec2 raw = texelFetch(Sampler1, p, 0).rg;
     float here = pallScene(raw.r);
     WallLayer w = wallLayer(Sampler0, Sampler1, vec2(p) + 0.5, here, DwDiv);

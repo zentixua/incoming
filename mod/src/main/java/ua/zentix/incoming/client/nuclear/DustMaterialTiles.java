@@ -19,6 +19,12 @@ public final class DustMaterialTiles {
     public static final int SIDE = 256;
     /** Cells asked per frame (both tiles together): a full fill takes about a second at 60 fps. */
     static final int PER_FRAME = 1024;
+    /**
+     * Once every open cell was asked since the server's last map, frames between passes: such cells change only with a new
+     * map or a late local answer, and a full pass each frame walked all 2·256² cells (0.31 ms a source per view, release
+     * audit of 3.14.0) for as long as a cell stayed provisional.
+     */
+    static final int IDLE_FRAMES = 20;
 
     private final SourceMaterial source;
     private final DustGrid grid;
@@ -29,6 +35,10 @@ public final class DustMaterialTiles {
     /** RGBA8 of both tiles, tile-major, x fastest; known flags in the alpha byte. */
     public final byte[] rgba = new byte[2 * SIDE * SIDE * 4];
     private int cursor, version, uploaded = -1, left = 2 * SIDE * SIDE;
+    /** Cells visited since the server's last map; frames to skip while every open cell has been asked. */
+    private int swept, idle;
+    /** Cells visited by every fill (tests). */
+    long visited;
     /** The server's map the cursor last restarted for ({@link SourceMaterial#committedMap}). */
     private Object lastMap;
     /** Both tiles' cells in fill order: rings outward from ground zero's cell, the fine and coarse tile's ring r together. */
@@ -77,10 +87,16 @@ public final class DustMaterialTiles {
         if (map != lastMap) {
             lastMap = map;
             cursor = 0;
+            swept = 0;
+            idle = 0;
+        }
+        if (idle > 0) {
+            idle--;
+            return false;
         }
         boolean changed = false;
-        int n = 2 * SIDE * SIDE;
-        for (int asked = 0, scanned = 0; asked < PER_FRAME && scanned < n; scanned++) {
+        int n = 2 * SIDE * SIDE, scanned = 0;
+        for (int asked = 0; asked < PER_FRAME && scanned < n; scanned++) {
             int i = ORDER[cursor];
             cursor = (cursor + 1) % n;
             int o = 4 * i;
@@ -108,6 +124,12 @@ public final class DustMaterialTiles {
             rgba[o + 3] = (byte) 255;
             left--;
             changed = true;
+        }
+        swept += scanned;
+        visited += scanned;
+        if (swept >= n) {
+            swept = 0;
+            idle = IDLE_FRAMES;
         }
         if (changed) version++;
         return changed;

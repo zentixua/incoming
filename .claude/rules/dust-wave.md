@@ -34,8 +34,8 @@ paths:
   soil's bulk colour (no near-black); light paths see the large shapes only.
 - Sources: `DustSources.frame` takes every detonation with dust left on its table, nearest first, up to 16 a frame
   (`DustWallPass.MAX_SOURCES`), in every view (secondary views keep their own march targets and history,
-  `DustWallPass.ViewState`, swapped inside `PallPass.ViewState`). One source table holds every source (`DW_ROWS` = 35 rows
-  each: arrival row, 32 log-age rows, the spray row, the frame-input row; `dwLoad`); slots are stable per detonation
+  `DustWallPass.ViewState`, swapped inside `PallPass.ViewState`). One source table holds every source (`DW_ROWS` = 66 rows
+  each: arrival row, 32 log-age rows, the spray row, 31 inside-sight rows, the frame-input row; `dwLoad`); slots are stable per detonation
   (`SLOT_OF`, idle slots free after 120 frames). A ray draws its eight nearest source crossings in full, further ones
   noise-free (`gDwFull`). A source first drawn already aged fades in over 1 s (live only).
 - Ground: the dust lies on the eye's own ground (`DustGround`: two 128² tiles centred on the eye, fine 4–16 m over the drawn

@@ -136,7 +136,8 @@ public final class MobFallout {
         Detonation cause = null;
         for (int i = 0; i < froms.length; i++) {
             Detonation d = detonations.get(i);
-            if (froms[i] < now && d.hasFallout() && (cause == null || d.id() > cause.id())) cause = d;
+            if (froms[i] < now && d.hasFallout() && points[i] != null && points[i] != GroundFallout.Point.NONE
+                    && (cause == null || d.id() > cause.id())) cause = d;
         }
         if (cause == null) return;
         double ago = at >= now ? 0 : (events.seconds(cause, level) - events.secondsAt(cause, level, at)) / WorldClock.SECONDS_PER_TICK;
