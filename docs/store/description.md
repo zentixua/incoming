@@ -40,6 +40,13 @@ Launch an ICBM or fit a nuclear warhead to a cruise missile or B-2 bomb. By defa
 - **Strike Designator:** aim through binoculars, or press Shift+RMB with it in hand to open the console: weapon, salvo, spread, target and map. Set routes, or watch through a projectile's camera.
 - **Fixed launchers:** load ammunition, assign a target with the designator and fire with redstone, also from a Create Aeronautics aircraft in flight.
 
+### For servers and modpacks
+
+- **Events and commands:** scripts and other mods (KubeJS included) see every strike order, round, nuclear burst and power outage and can refuse an order, so a pack can set its own price, cooldown or scoring. Strikes take tags, `/incoming status` lists them, and `/incoming rule` changes world rules while the world runs.
+- **Rules:** a permission mod such as LuckPerms decides who may launch; claims from Open Parties and Claims, FTB Chunks and others keep their blocks against every strike; FTB Teams and Open Parties and Claims parties are sides, and the SAM spares their rounds.
+- **Signals:** advancements and statistics; redstone from the SAM during an air raid and from a working substation; Create Display Links, Jade and CC:Tweaked computers read the SAM and the fixed launcher.
+- **Data:** recipes take common ingredients from other mods, and packs can give any worn item radiation shielding (Mekanism's hazmat suit works out of the box). See [For server owners and pack makers](https://github.com/zentixua/incoming/blob/main/docs/guide/packs.md).
+
 ## Requirements and dependencies
 
 **Minecraft 1.21.1 · NeoForge 21.1.264+ · Java 21.** Incoming is required on the server and every client.
