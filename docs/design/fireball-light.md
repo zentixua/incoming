@@ -197,13 +197,16 @@ The two reviews measured each round. Their findings are why the proposal reads a
     purple). It is larger than the ball, follows the gaze, and grows from the existing retina spot;
   - lifted blacks, lower contrast and colour, each at most a bounded share of B: Artem's "pale screen". The world
     always stays visible through it;
-  - the bleached eye's own glow first: near white for a hold of 4 % of the dazzle time, at most 2 s, then fading over
-    2 s. Facing the ball (its image on the retina) at full strength; turned away, from scattered light alone, a third.
-    The positive afterimage of an intense flash lasts seconds. The film's white-out is overexposed film and is not a
-    target (Artem, 27.11).
-  Resulting near-white seconds for 15 kt (lift ≥ 0.6): day 2.8 / 2.4 / 1.5 s at 2 / 5 / 15 km facing the ball, under
-  0.5 s turned away; night ~2.7 s facing. The pale or dim view then fades over the dose's recovery time (day ~28 / 20 /
-  9 s with desaturation ≥ 0.2).
+  - the bleached eye's own glow first: a white clearing that holds for 0.5 % of the dazzle time (at most 0.3 s) and
+    fades over 0.7 s. Facing the ball (its image on the retina) at full strength; turned away, from scattered light
+    alone, a third. The positive afterimage of an intense flash lasts seconds, and the spot carries that.
+  - In the sandbox the full view could take far less than first planned. A 2 s near-white hold with desaturation 0.75,
+    and then a 0.6 s hold with desaturation 0.35 and a night dimming of 0.4, turned the frames of the second sun into a
+    pale card by day and killed the orange-lit night. The full-view part is now a light desaturation (≤ 0.15) and, at
+    night after the glow, a dimming (≤ 0.25). The afterimage spot, local and colour-shifting, carries the long dazzle.
+  - The film's white-out is overexposed film and is not a target (Artem, 27.11).
+  - Near-white seconds for 15 kt (lift ≥ 0.4) after the pulse maximum: about 0.6 s facing the ball at 2 km and 0.4 s at
+    15 km; turned away, none beyond the white frame itself.
 - **It replaces** the uniform grey or black fill at 0.9 opacity (`NukeFlash.veil`), which erased the picture (mock
   round 1). The white frame of the flash itself keeps its present 0.2 s camera catch-up, so the end of the white is
   carried by the afterimage and the pale view, never by a cut.
