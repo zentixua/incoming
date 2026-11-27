@@ -198,7 +198,7 @@ public final class CloudModel {
         /**
          * Air at the explosion site from world air ({@link ua.zentix.incoming.util.Air}, shared by flight, sound and smoke): stability
          * N, wind-profile exponent and spread class from its stability class ({@link Stability}), wind at 10 m
-         * above ground, humidity from it (saturated in rain) or 1 at water.
+         * above ground, humidity from it (saturated in rain; at water the near-surface air's, {@code FarBlasts.humidity}).
          *
          * @param humidity humidity at the explosion site, 0..1
          */
