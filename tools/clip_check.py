@@ -18,10 +18,12 @@ A file FFmpeg reports as damaged, or whose audio is shorter or longer than its v
 Audio: its decoded peak must stay under -0.5 dBFS. Flashback renders an export's sound through a float OpenAL loopback
 device without OpenAL Soft's output limiter, which live play has (integer output): a nuclear wave's arrival in a 15 kt
 export reached +2.3 dBFS (443 samples over full scale) and clips in every player; deliver it through a limiter (rigs.md).
+Sample peak of the first audio stream (Flashback exports one); a stream that does not decode fails.
 Exit 1 when any clip fails; one JSON report line per clip. Why the checks exist: rigs.md (x11grab captures).
 Needs ffmpeg/ffprobe on PATH; no Python packages.
 """
 import argparse
+import array
 import json
 import math
 import operator
@@ -36,7 +38,8 @@ BLACK_MAX, ROW_BLACK, TORN_MEAN, TORN_ROWS = 24, 18, 40, 3
 STILL_DIFF, MOTION_DIFF, JUMP = 0.05, 0.5, 1.5
 SIDE = 5
 CLOCK_SLACK, AUDIO_SLACK = 0.002, 0.5
-# the highest decoded audio peak, dBFS (room for AAC's overshoot of a signal limited at -1 dBFS)
+# the highest decoded audio peak, dBFS: the delivery limiter (rigs.md) holds -1.5 dBFS, AAC's overshoot left the two nuclear
+# clips at -1.41 and -1.51 dBFS; 1 dB over that is a missing limiter, not codec noise
 PEAK_MAX_DB = -0.5
 DAMAGE = ("premature", "invalid", "corrupt", "error", "truncat", "missing")
 
@@ -146,11 +149,11 @@ def probe(path):
 
 
 def peak(path):
-    """the audio's highest decoded sample, dBFS (float decode: values over full scale are kept), or None"""
-    import array
+    """the first audio stream's highest decoded sample, dBFS (float decode keeps values over full scale; -inf for silence),
+    or None when it does not decode"""
     p = subprocess.Popen(["ffmpeg", "-v", "quiet", "-i", path, "-map", "0:a:0", "-f", "f32le", "-"],
                          stdout=subprocess.PIPE, stderr=subprocess.DEVNULL)
-    top, any_ = 0.0, False
+    top, samples = 0.0, 0
     with p.stdout:
         while True:
             chunk = p.stdout.read(1 << 20)
@@ -159,10 +162,11 @@ def peak(path):
             a = array.array("f")
             a.frombytes(chunk[:len(chunk) // 4 * 4])
             if a:
-                any_ = True
+                samples += len(a)
                 top = max(top, max(a), -min(a))
-    p.wait()
-    return (20 * math.log10(top) if top > 0 else -math.inf) if any_ else None
+    if p.wait() or not samples:
+        return None
+    return 20 * math.log10(top) if top > 0 else -math.inf
 
 
 def decode(path):
@@ -208,6 +212,8 @@ def check(path, fps=None, size=None, audio=False):
               "audio_s": round(audio_s, 3) if audio_s is not None else None}
     level = peak(path) if sound else None
     report["audio_peak_db"] = round(level, 2) if level is not None and level > -math.inf else None
+    if sound and level is None:
+        fails.append("audio does not decode")
     if not video or not frames:
         fails.append("no video frames decoded")
     complaint = " ".join(x for x in (perr, derr) if x)

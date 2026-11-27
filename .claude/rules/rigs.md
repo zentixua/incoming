@@ -68,9 +68,9 @@ paths:
   players are Flashback recordings exported by Flashback (`tools/media/README.md`, `tools/replayscan` filming);
   `tools/clip_check.py` passes each delivered file (no black, torn or frozen frames, constant clock, whole file, audio as
   long as the video, its decoded peak under -0.5 dBFS) before it leaves. Flashback renders an export's sound through a
-  float OpenAL loopback device opened without `ALC_OUTPUT_LIMITER_SOFT` (its `MixinAudioLibrary`), so OpenAL Soft's output
-  limiter, on in live play's integer output, is off: a 15 kt wave's arrival reached +2.3 dBFS (443 samples over full scale,
-  1 Mt +2.4) in the export and clips in every player. The sound of a delivered clip goes through
+  float OpenAL loopback device opened without `ALC_OUTPUT_LIMITER_SOFT` (its `MixinAudioLibrary`), so OpenAL Soft's
+  output limiter, on in live play's integer output, is off: a 15 kt wave's arrival reached +2.3 dBFS in the export (443
+  samples over full scale; a 1 Mt test burst +2.4) and clips in every player. A delivered clip's sound goes through
   `alimiter=limit=0.84:level=false:attack=1:release=50:asc=true` (−1.4 dBFS after AAC, loudness −0.3 LU). Each take overwrites the instance's `logs/run.jfr` and `gc.log`: copy them
   out per take. LOD Server Support serves a single-player world only with `--prop lss.test.integratedServer=true`;
   `/publish` opens a LAN socket on every interface, and `rig/LoopbackGuard` stops the server (the client then sits in the
