@@ -92,12 +92,16 @@ void main() {
     float jitter = fract(phase.z + DwFrame.x * 0.618034);
     // no world behind the pixel (beyond the drawn chunks, between LODs): the ray ends on the relief map traced from the eye,
     // as the pall's (pallFloor); where the world is drawn its depth alone ends the ray (the coarse map stood over open
-    // streets and hid the dust down them)
-    float floorT = axis >= 1e8 ? dwRayFloor(dir, PallFloorFrom, jitter) : -1.0;
-    if (axis >= 1e8) tEnd = min(tEnd, floorT);
-    // pixel size per block of distance at this resolution
+    // streets and hid the dust down them). A ray under the undrawn ground is raised toward its horizon (dwRayFloor: the
+    // wave stands on the drawn world's edge, not over a strip of sky)
+    // pixel size per block of distance at this resolution (the pixel's own ray, before any raise)
     vec4 side = InvViewProj * vec4(ndc + vec2(2.0 * DwDiv / float(size.x), 0.0), 1.0, 1.0);
     float foot = length(normalize(side.xyz / side.w) - dir);
+    float floorT = -1.0;
+    if (axis >= 1e8) {
+        floorT = dwRayFloor(dir, PallFloorFrom, jitter);
+        tEnd = floorT;
+    }
     gDwProbeK = DwProbe - 1.0;
     fragColor = dwMarch(dir, min(tEnd, 30000.0), jitter, foot, int(DwFrame.y));
     float cover = 1.0 - fragColor.a;

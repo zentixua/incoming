@@ -171,6 +171,12 @@ public final class DustWallPass {
      */
     public static final int MAX_SOURCES = 16;
     /**
+     * Presentation (chosen): the eye height over the drawn world's edge up to which a march ray with no world behind it is
+     * drawn as from the ground ({@code dustwall.glsl} {@code dwRayFloor}; fading out by twice that): a standing eye (1.6 m)
+     * with room for a step or a low rise under it; 0 when an LOD mod drew the far ground this frame.
+     */
+    static final float HORIZON_LIFT = 4f;
+    /**
      * Rows per source in the source table ({@code DW_ROWS}): row 0, the law by age, the spray row, the inside sight by age, the
      * frame inputs row.
      */
@@ -353,6 +359,7 @@ public final class DustWallPass {
             m.safeGetUniform("DwMistBulk").set(f.mistBulk.x, f.mistBulk.y, f.mistBulk.z);
             m.safeGetUniform("PallAir").set(pall.air.x, pall.air.y, pall.air.z, pall.air.w);
             m.safeGetUniform("PallFloorFrom").set(pall.floorFrom);
+            m.safeGetUniform("DwHorizonLift").set(SceneDepth.lod() ? 0f : HORIZON_LIFT);
             m.safeGetUniform("PallAirSky").set(pall.airSky.x, pall.airSky.y, pall.airSky.z);
             m.safeGetUniform("PallAirFog").set(pall.airFog.x, pall.airFog.y, pall.airFog.z, pall.airFog.w);
             int part = warming ? -1 : GPU_MARCH.begin();

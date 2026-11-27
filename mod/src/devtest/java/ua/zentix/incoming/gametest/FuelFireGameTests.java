@@ -209,7 +209,7 @@ public final class FuelFireGameTests {
      * Rule 11 of the time note (docs/design/time.md §8.3), {@code doFireTick} off, strike fire as in the game
      * ({@code StrikeRules.lightFrozenFireForTest(false)}), debris staying: the Shahed's fuel ball, blast and burning debris
      * light no block fire (it would stand forever); the crater fuel fire still burns its law's cells and time, and at
-     * burn-out removes every one of its blocks, though each cell has a log beside it (with fire tick on the log keeps a
+     * burn-out removes every one of its blocks, though logs stand beside the cells (with fire tick on a log keeps a
      * game fire going, {@link #droneFuelBurnsOnTheCraterFloorAsLongAsItLasts}). After the law's end no fire block is left
      * within {@link #MINE} of the impact.
      */
@@ -237,15 +237,28 @@ public final class FuelFireGameTests {
             List<BlockPos> now = cells(level, at);
             most[0] = Math.max(most[0], now.size());
             ever.addAll(now);
-            // once every cell burns (explosion work spans ticks, longer on a busy runner): a log in the wall beside every
-            // cell (a fuel beside a combustible)
+            // once every cell burns (explosion work spans ticks, longer on a busy runner): a log beside every cell (a fuel
+            // beside a combustible), in the bowl's wall where the cell touches it, else in an open neighbour: the crater's
+            // shape follows the position hash, and a floor whose cells touched no wall placed no log (4 CI runs, 27.11)
             if (logs[0] == 0 && now.size() == law.cells() && level.getGameTime() < end - 200) {
+                Set<BlockPos> cellSet = new HashSet<>(now);
                 for (BlockPos c : now) {
+                    BlockPos open = null;
+                    int walls = 0;
                     for (net.minecraft.core.Direction d : net.minecraft.core.Direction.Plane.HORIZONTAL) {
                         BlockPos n = c.relative(d);
                         BlockState s = level.getBlockState(n);
-                        if (s.isAir() || s.getBlock() instanceof BaseFireBlock || !s.getFluidState().isEmpty()) continue;
+                        if (s.getBlock() instanceof BaseFireBlock || !s.getFluidState().isEmpty() || cellSet.contains(n)) continue;
+                        if (s.isAir()) {
+                            if (open == null) open = n;
+                            continue;
+                        }
                         level.setBlock(n, Blocks.OAK_LOG.defaultBlockState(), 2);
+                        logs[0]++;
+                        walls++;
+                    }
+                    if (walls == 0 && open != null) {
+                        level.setBlock(open, Blocks.OAK_LOG.defaultBlockState(), 2);
                         logs[0]++;
                     }
                 }
