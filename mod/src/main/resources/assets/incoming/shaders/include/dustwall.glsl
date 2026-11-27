@@ -181,18 +181,34 @@ vec3 dwMaterial(vec2 xz) {
     if (DwMatCoarse.z <= 0.0) return vec3(0.0);
     return dwMaterialTile(DwMatCoarse, 1.0, xz);
 }
+// presentation (est.): the most a ray with no world behind it is raised toward the undrawn ground's horizon, in blocks of height
+// at the drawn world's edge: a standing eye's strip (1.6 m at the edge) plus the coarse floor's error there. A higher eye looks
+// down onto ground Minecraft does not draw (sky past the drawn chunks without LODs) and keeps that limit
+const float DW_HORIZON_LIFT = 4.0;
 // where the ray dir from the eye (unit) goes under the terrain map of the nearest source (source 0), searched past the drawn
 // world (from: the render distance along the ground or up/down) in 64 steps growing with distance and a secant; 1e9 when it
 // does not: a pixel with no world behind it ends there (the pall's pallFloor law on the dust's own map; 24 steps stepped over
-// a 64-block ridge 400 blocks out in about half the frames: tools/dust_wall_contract_gl.py relief)
-float dwRayFloor(vec3 dir, float from, float jitter) {
+// a 64-block ridge 400 blocks out in about half the frames: tools/dust_wall_contract_gl.py relief).
+// Minecraft draws no ground there, so a ray that met that ground ended in front of a wave standing on it, and the wave floated
+// over a strip of sky as wide as the angle between the drawn edge and its foot (15 kt from 2 km, 12 chunks: a ray 0.5° down
+// ended 315 m out, the wall 400 m out; the strip shrank as the wall came in). Such a ray is raised (dir) toward the undrawn
+// ground's horizon along its bearing, by at most DW_HORIZON_LIFT at the drawn edge (presentation: the strip shows the foot of
+// what stands on that ground, on the drawn world's edge, as the horizon is on screen): fully raised it ends nowhere; raised by
+// the most it ends where the raised ray meets the ground. One search serves both rays and the horizon (the steepest rise to
+// the floor, half a block over it) — a second loop of floor reads unrolled on AMD's compiler (114 → 150 KB)
+float dwRayFloor(inout vec3 dir, float from, float jitter) {
     dwLoad(0);
     if (DwGround.x <= 0.0) return 1e9;
     float near = from / max(max(length(dir.xz), abs(dir.y)), 1e-3);
+    // the raised ray: dir.y + rise per block along the ray (none for a ray close to straight down)
+    float hl = length(dir.xz);
+    float rise = hl > 0.2 ? DW_HORIZON_LIFT / max(from, 1.0) * hl : 0.0;
+    vec3 dir2 = dir + vec3(0.0, rise, 0.0);
     vec2 span = pallBox(dir, vec3(-DwEye.x - DwGround.x, -1e6, -DwEye.z - DwGround.x),
             vec3(-DwEye.x + DwGround.x, DwGround.z - DwEye.y, -DwEye.z + DwGround.x));
     float ta = max(max(span.x, near), 1.0), tb = span.y;
-    if (dir.y < 0.0) tb = min(tb, max((DwGround.y - DwEye.y) / dir.y, ta) + 4.0 * DwGround.w);
+    // past the map's bottom the raised ray is under every floor (it met it before)
+    if (dir2.y < 0.0) tb = min(tb, max((DwGround.y - DwEye.y) / dir2.y, ta) + 4.0 * DwGround.w);
     if (tb <= ta) return 1e9;
     float ratio = pow(tb / ta, 1.0 / 64.0);
     vec3 q0 = DwEye.xyz + dir * ta;
@@ -202,17 +218,28 @@ float dwRayFloor(vec3 dir, float from, float jitter) {
     // eye ends at their edge with no dust
     float fade = 4.0 * DwGround.w, d0 = q0.y - dwFloorCoarse(q0.xz);
     float lift = max(1.0 - d0, 0.0) * step(ta, near + 1.0);
-    float prevT = ta, prevD = d0 + lift;
+    float prevT = ta, prevD = d0 + lift, prevD2 = prevD + rise * ta, top = (0.5 - d0) / ta;
     float t = ta * pow(ratio, jitter);
+    bool under = prevD <= 0.0;
     for (int i = 0; i <= 64; i++) {
         float tt = min(t, tb);
         vec3 q = DwEye.xyz + dir * tt;
-        float d = q.y - dwFloorCoarse(q.xz) + lift * max(1.0 - (tt - ta) / fade, 0.0);
-        if (d <= 0.0) return prevT + (tt - prevT) * max(prevD, 0.0) / max(prevD - d, 1e-6);
+        float f = q.y - dwFloorCoarse(q.xz);
+        float d = f + lift * max(1.0 - (tt - ta) / fade, 0.0), d2 = d + rise * tt;
+        top = max(top, (0.5 - f) / tt);
+        under = under || d <= 0.0;
+        if (d2 <= 0.0) {
+            // the raised ray meets the ground: it ends there
+            dir = normalize(dir2);
+            return (prevT + (tt - prevT) * max(prevD2, 0.0) / max(prevD2 - d2, 1e-6)) * length(dir2);
+        }
         prevT = tt;
         prevD = d;
+        prevD2 = d2;
         t *= ratio;
     }
+    // under the ground and raised clear of it: to the horizon (the steepest rise over the ray), ending nowhere
+    if (under) dir = normalize(dir + vec3(0.0, min(top, rise), 0.0));
     return 1e9;
 }
 #else

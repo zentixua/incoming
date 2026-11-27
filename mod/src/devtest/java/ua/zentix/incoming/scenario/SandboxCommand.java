@@ -77,6 +77,8 @@ import java.util.Locale;
  *       On a CPU renderer the world slows while frames are due (a frame takes ~0.3 s there), so each frame is taken within a
  *       fraction of a tick of its second; such a take's sound is not real-time, so {@code tools/sandbox.sh shot} records sound
  *       in a second, unslowed take of the same effect ({@code none});</li>
+ *   <li>{@code dw <key>=<value>} — one dust-wave diagnostic, as the client scenario's {@code dw:} step ({@code DustWallSteps}:
+ *       {@code probe=-2} each ray's end, {@code dump=<name>} the march targets, {@code freezeage=1} a still wave, …);</li>
  *   <li>{@code again} — the last effect once more (after a hot code swap), {@code clear} — remove all effects,
  *       {@code reload} — reload resources (like F3+T: shaders, textures, sounds, language), {@code wait <ticks>}.</li>
  * </ul>
@@ -93,7 +95,7 @@ record SandboxCommand(Verb verb, List<String> args) {
     /** {@code pane}: the wall's distance in front of the camera by default, blocks. */
     static final double PANE_DISTANCE = 4;
 
-    enum Verb { ICBM, ARRIVAL, BLAST, REAL, NUKE, AIRBURST, LAUNCH, FLIGHT, FIRE, SPENT, CAM, STANCE, WEATHER, TIME, HUD, OVERLAY, ZOOM, TRACK, SHOTS, AGAIN, CLEAR, RELOAD, WAIT, RAID, SAM, HOUSE, SCENERY, SURFACE, TURN, UI, COLLAPSE, PANE, MOB, GRAPHICS }
+    enum Verb { ICBM, ARRIVAL, BLAST, REAL, NUKE, AIRBURST, LAUNCH, FLIGHT, FIRE, SPENT, CAM, STANCE, WEATHER, TIME, HUD, OVERLAY, ZOOM, TRACK, SHOTS, AGAIN, CLEAR, RELOAD, WAIT, RAID, SAM, HOUSE, SCENERY, SURFACE, TURN, UI, COLLAPSE, PANE, MOB, GRAPHICS, DW }
 
     /** An effect (repeated by {@code again} and captured by {@code shots}). */
     boolean effect() {
@@ -234,6 +236,10 @@ record SandboxCommand(Verb verb, List<String> args) {
             case GRAPHICS -> {
                 need(1, 1);
                 if (!List.of("fast", "fancy", "fabulous").contains(args.getFirst())) throw new IllegalArgumentException("graphics fast|fancy|fabulous");
+            }
+            case DW -> {
+                need(1, 1);
+                if (!args.getFirst().matches("[a-z]+=\\S+")) throw new IllegalArgumentException("dw <key>=<value>");
             }
             case COLLAPSE -> {
                 need(1, 1);

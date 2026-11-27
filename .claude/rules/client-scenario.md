@@ -175,6 +175,8 @@ with Iris.
   `stance stand|fly`: standing creative player with flight off, or spectator (default); check body/neck lean
   standing with `cam … 1.62 …`, then `wait 10` to land; in flight only impact tremor visible.
   `weather clear|rain`: own bench weather; afterward `wait 40` for client rain/humidity.
+  `dw <key>=<value>`: one dust-wave diagnostic, as the client scenario's `dw:` step (`DustWallSteps`: `probe=-2` each ray's
+  end, `dump=<name>` the march targets into `run/sandbox/screenshots`, `freezeage=1` a still wave; it stays set until changed).
 - `tools/sandbox.sh shot <name> '<effect>' --at 0.1,0.5,1,3|none --wav 4 [--cam …] [--time night] [--overlay]`: one command
   from edit to frames: build/replacement (`swap`), `clear`, effect; screenshot is first rendered frame after target
   tick (`capture.json` `age` includes tick fraction), audio slice from `audio.wav` (48 kHz) from effect start

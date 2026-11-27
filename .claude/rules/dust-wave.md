@@ -175,7 +175,15 @@ paths:
   march pixel's offsets start at its own integer-hashed phases: a spatial pattern (interleaved gradient noise) keeps its
   pattern through the history as a lattice of dots.
 - Where the scene has no depth the ray ends on the nearest source's relief traced from the eye in 64 steps (`dwRayFloor`;
-  24 stepped over a 64-block ridge 400 blocks out); where the world is drawn its depth alone ends it. The march, resolve and
+  24 stepped over a 64-block ridge 400 blocks out); where the world is drawn its depth alone ends it. Minecraft draws no
+  ground there, so a ray ended on the undrawn ground in front of a wave standing on it: the wave floated over a strip of
+  sky between the drawn edge's angle and its foot's (15 kt from 2 km, 12 chunks: a ray 0.5° down ended 315 m out, the wall
+  400 m out, transmittance 1.000 against 0.005 one march row up; 7 px at 1080p, shrinking as the wall came in). A ray under
+  the undrawn ground is raised toward that ground's horizon along its bearing (`dwRayFloor`'s `dir`, presentation), at most
+  `DW_HORIZON_LIFT` (4 m at the drawn edge): the foot stands on the drawn edge for an eye near the ground; a higher eye
+  keeps the sky under it (vanilla's undrawn ground, as views from above). The 1 px left at the edge is vanilla's fogged
+  last metres of terrain (`tools/dust_wall_contract_gl.py horizon`). The raised ray, the horizon and the ray's end share one
+  search loop: a second loop of floor reads was unrolled by AMD's compiler (`fx_dustwall` 114 → 150 KB). The march, resolve and
   composite judge "the same place" by one rule (`pallSamePlace`: a looser rule in one pass let dust from behind a foreground
   edge through another). The frame air (haze, weather) lies in front of the dust (`pallAir`, `pallAirLightOf`).
 - A source's terrain map spans its pall's whole extent (1 Mt: 508 m cells) and its four fixed columns per cell know 4–13 of
