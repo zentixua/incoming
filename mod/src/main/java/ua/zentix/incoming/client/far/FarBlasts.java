@@ -161,6 +161,8 @@ public final class FarBlasts {
         float open = 1;
         /** The cloud's source is still needed (the event is alive). */
         boolean alive = true;
+        /** This client saw the blast happen (not a strike rebuilt for a late join, dimension change or seek, {@link Resent}). */
+        final boolean witnessed;
         /** Shock-wave front over time ({@link #front}); null — not computed yet. */
         @Nullable
         ChemicalFront front;
@@ -181,6 +183,7 @@ public final class FarBlasts {
             // a resent strike happened before the client knew it: it is that old now; its far rumble is still to come only
             // while its front has not yet reached the ear (FarBlasts.cloud decides)
             this.born = BlastTime.ticks() - (resent == null ? 0 : resent.ticks());
+            this.witnessed = resent == null;
             this.near = near;
             this.soundPending = !near;
             // Fuel in the crater burns as fire on the server's blocks: its smoke and sound come with it in a packet (BlastEffects.fuelFire)
@@ -471,6 +474,12 @@ public final class FarBlasts {
         return p.support().map(s -> BlastTarget.of(material, s.loose(), s.slab(), s.breach(), p.pos().subtract(s.normal().scale(s.lift())),
                         s.normal()))
                 .orElseGet(() -> BlastTarget.of(material, tnt, hob));
+    }
+
+    /** This client saw a blast happen within {@code reach} blocks (horizontal) of (x, z), and still keeps it. */
+    public static boolean witnessed(double x, double z, double reach) {
+        for (Event e : EVENTS) if (e.witnessed && Math.hypot(e.x - x, e.z - z) <= reach) return true;
+        return false;
     }
 
     /** An explosion packet closer than {@link #NEAR} to the camera: particles draw it and the near model voices it. */

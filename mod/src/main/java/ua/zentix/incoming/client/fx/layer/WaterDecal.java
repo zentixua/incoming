@@ -38,7 +38,7 @@ import java.util.Locale;
  * water identified by a level surface (surface behind pixel horizontal, neighbours at the same height: walls, trunks,
  * grass, mobs and object edges against the sky at the same within-block height are not water) at still-water top — 8/9 block
  * (within render distance; water writes depth in vanilla and Iris; tolerance grows with distant depth error and, under a shader pack,
- * its waves and frame jitter, {@link #PACK_DROP}, {@link #PACK_STEP}, {@link #PACK_JITTER}); beyond render distance (DH LOD) — sea surface
+ * its waves and frame jitter, {@link #PACK_DROP}, {@link #PACK_RISE}, {@link #PACK_STEP}, {@link #PACK_JITTER}); beyond render distance (DH LOD) — sea surface
  * or a point below it, then ray/sea-surface intersection (LOD without water depth shows the bottom). Each ring has its own ripple and foam
  * noise from its centre. Minecraft or the shader pack draws water; the decal only darkens it and adds white
  * foam, with the same air haze and Minecraft fog as particles.
@@ -56,6 +56,15 @@ public final class WaterDecal {
      * water-top vertices ({@code WAVING_WATER_VERTEX}: −0.05 ± 0.025 under open sky, −0.05 under a roof), with margin.
      */
     static final float PACK_DROP = 0.08f;
+    /**
+     * Under a shader pack, waves raise the surface above 8/9, blocks: Photon 1.4 ({@code WATER_DISPLACEMENT}, on by default) moves
+     * water-top vertices by {@code (wave · 0.05 − 0.025) · (0.9 · skylight + 0.1)}, wave 0..1 ({@code include/vertex/displacement.glsl}):
+     * up to +0.025, with margin. The wave takes world x and height, so it is constant along z: with the still-water band alone
+     * the crests fell outside it in straight lines along z, the water there left undarkened (15 % of water pixels within 400 m
+     * of a 15 kt ring's camera). Up close the band stays below 15/16-high tops (farmland, path: +0.049); at the draw edge, with
+     * the depth error and jitter, below a block top read slightly low (+0.111, {@code WaterDecalGlslTest}).
+     */
+    static final float PACK_RISE = 0.03f;
     /** Shader-pack surface is not flat: neighbouring vertex height difference, blocks (Complementary — up to 0.05). */
     static final float PACK_STEP = 0.05f;
     /**
@@ -153,7 +162,7 @@ public final class WaterDecal {
         s.safeGetUniform("Haze").set(haze.x, haze.y, haze.z, haze.w);
         s.safeGetUniform("Pixel").set((float) view.pixel());
         boolean pack = shaderPack();
-        s.safeGetUniform("Pack").set(pack ? PACK_DROP : 0f, pack ? PACK_STEP : 0f, pack ? PACK_JITTER : 0f);
+        s.safeGetUniform("Pack").set(pack ? PACK_DROP : 0f, pack ? PACK_STEP : 0f, pack ? PACK_JITTER : 0f, pack ? PACK_RISE : 0f);
         for (int i = 0; i < RINGS; i++) {
             double[] r = RING[i];
             s.safeGetUniform(RING_UNIFORMS[i]).set((float) (r[0] - cam.x), (float) (r[1] - cam.z), (float) r[2], (float) r[3]);
