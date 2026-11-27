@@ -162,7 +162,7 @@ public final class NukeFlash {
             }
         }
         // Resample even a flash first received in shelter: leaving cover during its pulse can expose the camera.
-        if (mc.level != null) lightUpWorld(mc.level, whiteness(partial));
+        if (mc.level != null) lightUpWorld(mc.level, cover(partial));
     }
 
     /** Field dazzle from pulse {@code q} cal/cm² at the eye; keep existing dazzle that ends later. */
@@ -224,17 +224,37 @@ public final class NukeFlash {
      * flash the timer runs out by itself.
      */
     static final int SKY_FLASH_TICKS = 3;
+    /**
+     * Share of the frame the flash's white fill must cover for the vanilla sky flash to run. Vanilla's sky flash is a switch,
+     * not a level: any timer turns the sky white and the world's light map to full day ({@code LightTexture}). Renewed while
+     * the screen was any whiter than a screen step, it ended ~1.85 s after a 15 kt burst at night, and the whole picture
+     * jumped within three frames from a pink day-lit scene to the orange ball-lit night (sky 0.13 → 0.02, ground 0.08 →
+     * 0.04 linear; Artem 27.11: "as if the colour grade is cut"). Under a full white fill the switch is hidden; past it the
+     * ball's own light on the world (the pall composite) carries the scene continuously.
+     */
+    static final double SKY_FLASH_COVER = 0.98;
 
     /** Vanilla sky flash follows this frame's admitted flash, rather than an independent yield-duration clock. */
-    private static void lightUpWorld(ClientLevel level, double white) {
+    private static void lightUpWorld(ClientLevel level, double cover) {
         if (IncomingConfig.CLIENT.flash.get() <= 0 || Flash.calm()) return;
-        int timer = skyFlashTimer(white);
+        int timer = skyFlashTimer(cover);
         if (timer > 0) level.setSkyFlashTime(Math.max(level.getSkyFlashTime(), timer));
     }
 
-    /** Ticks to renew the vanilla sky flash for screen whiteness {@code white}: none once it is below a screen step. */
-    static int skyFlashTimer(double white) {
-        return white >= 1.0 / 255 ? SKY_FLASH_TICKS : 0;
+    /** Ticks to renew the vanilla sky flash while the white fill covers {@code cover} of the frame: only near full. */
+    static int skyFlashTimer(double cover) {
+        return cover >= SKY_FLASH_COVER ? SKY_FLASH_TICKS : 0;
+    }
+
+    /** Share of the frame the flash's white fill covers now ({@link #overexposed}: strength × X / {@link #VEIL_X}, at most 1). */
+    static float cover(float partialTick) {
+        ClientNuclear.Active a = current;
+        if (a == null || strength <= 0) return 0;
+        return coverOf(strength, overexposure(a, partialTick));
+    }
+
+    static float coverOf(float strength, double x) {
+        return (float) (strength * Math.min(1, x / VEIL_X));
     }
 
     static void tick() {

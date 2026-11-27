@@ -17,7 +17,7 @@ class NukeLightSourceTest {
     private static final String CLIENT = "java/ua/zentix/incoming/client/";
     private static final String SHADER = "resources/assets/incoming/shaders/";
     private static final Map<String, String[]> READERS = Map.ofEntries(
-            Map.entry("nuclear/NukeFlash.java", new String[]{"NukeLight.sample(", "NukeLight.camera(a)", "light.fluence()", "light.strength()", "light.peak(NukeLight.bodyExposure())", "lightUpWorld(mc.level, whiteness("}),
+            Map.entry("nuclear/NukeFlash.java", new String[]{"NukeLight.sample(", "NukeLight.camera(a)", "light.fluence()", "light.strength()", "light.peak(NukeLight.bodyExposure())", "lightUpWorld(mc.level, cover("}),
             Map.entry("nuclear/NukeSky.java", new String[]{"NukeLight.camera(a).light() * NukeLight.frameExposure()"}),
             Map.entry("nuclear/NukePall.java", new String[]{"into.exposure = (float) NukeLight.frameExposure()", "f.exposure = SKY.exposure",
                     "float daylight = (float) NukeLight.daylight()", "f.flash.set((float) NukeLight.daylight()"}),
