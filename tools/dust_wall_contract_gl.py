@@ -47,6 +47,10 @@ def march_setup():
     g.glUseProgram(program)
     g.glUniformMatrix4fv(loc(program, "InvViewProj"), 1, True, np.linalg.inv(projection).astype(np.float32))
     g.glUniform3f(loc(program, "PallForward"), 0, 0, -1)
+    # every case: the drawn world reaches 168 blocks along the ground (12 chunks, NukePall.floorFrom; the relief search
+    # starts there, as in the game), the horizon lift as without LODs (DustWallPass.HORIZON_LIFT)
+    g.glUniform1f(loc(program, "PallFloorFrom"), 168)
+    g.glUniform1f(loc(program, "DwHorizonLift"), 4)
     g.glUniform1f(loc(program, "DwDiv"), 4)
     g.glUniform1f(loc(program, "DwSourceCount"), 1)
     g.glUniform4f(loc(program, "DwSlotsA"), 0, 1, 2, 3)
@@ -682,6 +686,46 @@ def relief_cases():
     check(abs(sky - depth) < 0.01, "relief in front of the dust span still hides it")
 
 
+def pitch_view(program, degrees):
+    """The view pitched down by degrees (the march's rays and its forward axis)."""
+    c, s_ = np.cos(np.radians(degrees)), np.sin(np.radians(-degrees))
+    view = np.array([[1, 0, 0, 0], [0, c, s_, 0], [0, -s_, c, 0], [0, 0, 0, 1]], np.float32)
+    g.glUseProgram(program)
+    g.glUniformMatrix4fv(loc(program, "InvViewProj"), 1, True, np.linalg.inv(projection @ view).astype(np.float32))
+    g.glUniform3f(loc(program, "PallForward"), 0, -s_, -c)
+
+
+def horizon_cases():
+    """Artem 27.11: a wave standing on the ground past the drawn chunks floated over a strip of sky. A ray with no world
+    behind it that goes under the undrawn ground is raised toward that ground's horizon (dwRayFloor): flat ground, the drawn
+    world to 168 blocks, the march's lower row 0.19-0.57° down (the strip: under the drawn edge's 0.55° and over the
+    wall's foot), a 20-block layer whose near edge stands 400 and 2000 blocks out."""
+    program = march_setup()
+    flat = [0] * 16
+    for wall in (400, 2000):
+        source(program, eye=(0, 1.62, 800 + wall, 10), ring=(800, 0, 100, 800), relief=(0, 0), ground=(4096, 0, 0, 64),
+               rows=flat)
+        light = march(program, make_scene(1e9), 2)[0]
+        strip, level = light[0, 1, 3], light[1, 1, 3]
+        print(f"eye 1.62 up, wall {wall} out: the strip's row T={strip:.4f}, the level row T={level:.4f}")
+        check(strip < 0.05 and level < 0.05, f"the wave {wall} blocks out stands on the drawn edge, no sky under it")
+    # with LODs drawn this frame the far ground is there: no raise (a hole in the LOD terrain keeps the relief's end)
+    g.glUseProgram(program)
+    g.glUniform1f(loc(program, "DwHorizonLift"), 0)
+    lod = march(program, make_scene(1e9), 2)[0][0, 1, 3]
+    g.glUniform1f(loc(program, "DwHorizonLift"), 4)
+    print(f"eye 1.62 up, wall 2000 out, LODs drawn: the strip's row T={lod:.4f}")
+    check(lod > 0.99, "with LODs drawn a ray under the ground is not raised")
+    # an eye 20 up, looking 4° down at a wall 2 km out: its ray meets the undrawn ground 286 blocks out, raised by the lift's
+    # passes the drawn edge 8 m up, so it is not raised: the sky stays (vanilla's undrawn ground, as in any view from above;
+    # raised to the horizon it would cross the layer 14 blocks up). More such eyes: tools/dust_wall_horizon_probe.py
+    source(program, eye=(0, 20, 2800, 10))
+    pitch_view(program, 4)
+    high = march(program, make_scene(1e9), 2)[0][1, 1, 3]
+    print(f"eye 20 up, 4° down at a wall 2 km out: T={high:.4f}")
+    check(high > 0.99, "a high eye's ray down onto the undrawn ground is not raised past the lift")
+
+
 def bright_air():
     mp = march_setup()
     comp = link("fx_pall_composite")
@@ -842,6 +886,7 @@ def main():
         "weather": lambda: weather_haze(march_setup(), composite_program),
         "history2": history_cases,
         "relief": relief_cases,
+        "horizon": horizon_cases,
         "fog": bright_air,
         "limit": ray_limit,
         "skin": skin_case,
