@@ -13,10 +13,8 @@ is the "start:" line in its <segment>.log, also recorded in <file>.jsonl. With -
 is recorded there too (the OpenAL Soft "wave" driver creates it when opening audio and then writes in real time);
 these two timestamps align audio with video. The exit code is the command exit code. Requires ffmpeg with x11grab.
 
-Diagnostics only, never a clip for players or Artem: x11grab reads the window on its own clock, not at the game's buffer
-swaps, and the take's encoder shares the CPU with the game. The 3.14.0 candidate's take gave 9.4 % black, 1.2 % torn and
-72 % repeated frames in its clip (tools/clip_check.py), and around the nuke the game got 18-30 % of a CPU at 100 %.
-Clips come from Flashback's export (tools/media/README.md); every segment's log says so.
+Diagnostics only, never a clip: black, torn and frozen frames and a starved game (rigs.md, numbers there). Clips come
+from Flashback's export (tools/media/README.md); every segment's log says so.
 """
 import argparse
 import ctypes

@@ -1,18 +1,19 @@
 #!/usr/bin/env python3
-"""Frame-by-frame check of a delivered clip: no black or torn frames, no repeated frames, constant frame rate.
+"""Frame-by-frame check of a delivered clip: no black, torn or frozen frames, a constant frame clock, whole file.
 
-  tools/clip_check.py <video> [...] [--fps 60] [--size 1920x1080] [--audio] [--max-repeat 0] [--json report.jsonl]
+  tools/clip_check.py <video> [...] [--fps 60] [--size 1920x1080] [--audio] [--json frames.jsonl]
 
-Every frame is decoded (FFmpeg, grey, 320x180) and classified:
-- black: a frame whose mean luma falls below a quarter of its neighbours' median (±5 frames) with no pixel above 24:
-  a capture that sampled the window between buffer swaps (x11grab gave 10.7 % of the frames around a nuke);
-- torn: whole pixel rows of pure black (max ≤ 18) in a frame whose mean is above 40: a half-written window buffer
-  (2.1 % of the same take);
-- repeat: the same picture as the frame before (mean |difference| at 160x90 below 0.05 of 255): the game drew no new
-  frame in time and the recorder sent the old one again (39 % of the same take).
-Timestamps must be a constant step of 1/fps. Exit 1 when any check fails; the report line per clip is JSON.
-Video for players comes from Flashback's export (tools/media/README.md), which renders each frame from the replay
-and never repeats or tears one; tools/x11_record.py captures are diagnostics, never clips.
+Every frame is decoded once (FFmpeg, grey, 320x180) and only its numbers are kept:
+- black: no pixel above 24 and a mean below a quarter of both the 5 frames before and the 5 after (a dropout, not a
+  dark scene, a fade or the dark frame before a flash);
+- torn: at least 3 pixel rows of pure black (max ≤ 18) that are not black in the frame before or after, in a frame
+  whose mean is above 40 (a half-written window buffer; letterbox bars and dark bands stay in every frame);
+- frozen: a run of unchanged frames (mean |difference| below 0.05 of 255 at 160x90) inside motion, left by a jump at
+  least 1.5 times the motion around it: the recorder sent the old picture again while the game moved on. A still scene
+  ("still", reported but never failing) has no such jump.
+The clock: packet timestamps, every step 1/fps within 2 ms (Matroska keeps milliseconds), as many as decoded frames.
+A file FFmpeg reports as damaged, or whose audio is shorter or longer than its video by more than 0.5 s, fails.
+Exit 1 when any clip fails; one JSON report line per clip. Why the checks exist: rigs.md (x11grab captures).
 Needs ffmpeg/ffprobe on PATH; no Python packages.
 """
 import argparse
@@ -25,24 +26,64 @@ import sys
 W, H = 320, 180
 DW, DH = 160, 90
 BLACK_MAX, ROW_BLACK, TORN_MEAN, TORN_ROWS = 24, 18, 40, 3
-REPEAT_DIFF = 0.05
+STILL_DIFF, MOTION_DIFF, JUMP = 0.05, 0.5, 1.5
+SIDE = 5
+CLOCK_SLACK, AUDIO_SLACK = 0.002, 0.5
+DAMAGE = ("premature", "invalid", "corrupt", "error", "truncat", "missing")
+
+
+def stats(full, small, prev_small):
+    """mean, max, black-row mask and change from the previous frame: all classify needs of one frame"""
+    mask = 0
+    if len(full) == W * H:
+        for y in range(H):
+            if max(full[y * W:(y + 1) * W]) <= ROW_BLACK:
+                mask |= 1 << y
+    diff = None if prev_small is None else sum(map(abs, map(operator.sub, small, prev_small))) / len(small)
+    return {"mean": sum(full) / len(full), "max": max(full), "rows": mask, "diff": diff}
 
 
 def classify(frames):
-    """frames: list of (grey W×H bytes, grey DW×DH bytes). Returns per-frame dicts (mean, black, torn, repeat, diff)."""
-    means = [sum(f) / len(f) for f, _ in frames]
-    out = []
-    prev = None
-    for i, (full, small) in enumerate(frames):
-        near = [means[j] for j in range(max(0, i - 5), min(len(frames), i + 6)) if j != i]
-        ref = statistics.median(near) if near else means[i]
-        black = max(full) <= BLACK_MAX and means[i] < 0.25 * ref
-        rows = sum(1 for y in range(H) if max(full[y * W:(y + 1) * W]) <= ROW_BLACK) if len(full) == W * H else 0
-        torn = not black and means[i] > TORN_MEAN and rows >= TORN_ROWS
-        diff = None if prev is None else sum(map(abs, map(operator.sub, small, prev))) / len(small)
-        out.append({"i": i, "mean": round(means[i], 2), "black_rows": rows, "black": black, "torn": torn,
-                    "repeat": diff is not None and diff < REPEAT_DIFF, "diff": None if diff is None else round(diff, 3)})
+    """frames: list of (grey W×H bytes, grey DW×DH bytes) → per-frame dicts. Tests use this; check() streams."""
+    out, prev = [], None
+    for full, small in frames:
+        out.append(stats(full, small, prev))
         prev = small
+    return judge(out)
+
+
+def judge(st):
+    n = len(st)
+    out = []
+    for i, s in enumerate(st):
+        before = [st[j]["mean"] for j in range(max(0, i - SIDE), i)]
+        after = [st[j]["mean"] for j in range(i + 1, min(n, i + 1 + SIDE))]
+        sides = [statistics.median(x) for x in (before, after) if x]
+        black = bool(sides) and s["max"] <= BLACK_MAX and s["mean"] < 0.25 * min(sides)
+        others = (st[i - 1]["rows"] if i else 0) | (st[i + 1]["rows"] if i + 1 < n else 0)
+        tear = bin(s["rows"] & ~others).count("1")
+        torn = not black and s["mean"] > TORN_MEAN and tear >= TORN_ROWS
+        still = s["diff"] is not None and s["diff"] < STILL_DIFF
+        out.append({"i": i, "mean": round(s["mean"], 2), "black_rows": bin(s["rows"]).count("1"), "black": black, "torn": torn,
+                    "still": still, "repeat": False, "diff": None if s["diff"] is None else round(s["diff"], 3)})
+    # a frozen run: unchanged frames s..e entered with motion and left with a jump above the motion around it
+    i = 0
+    while i < n:
+        if not out[i]["still"]:
+            i += 1
+            continue
+        s = i
+        while i < n and out[i]["still"]:
+            i += 1
+        e = i - 1
+        into = st[s - 1]["diff"] if s >= 1 else None
+        leave = st[e + 1]["diff"] if e + 1 < n else None
+        around = [st[j]["diff"] for j in range(max(1, s - 30), min(n, e + 31)) if j not in range(s, e + 2) and st[j]["diff"] is not None
+                  and st[j]["diff"] >= STILL_DIFF]
+        if into is not None and leave is not None and into > MOTION_DIFF and leave > MOTION_DIFF and around \
+                and leave >= JUMP * statistics.median(around):
+            for j in range(s, e + 1):
+                out[j]["repeat"] = True
     return out
 
 
@@ -54,64 +95,89 @@ def longest(flags):
     return best
 
 
+def run(cmd):
+    return subprocess.run(cmd, capture_output=True, text=True)
+
+
 def probe(path):
-    out = subprocess.run(["ffprobe", "-v", "error", "-show_entries",
-                          "stream=index,codec_type,codec_name,width,height,r_frame_rate,avg_frame_rate,pix_fmt,sample_rate,channels",
-                          "-of", "json", path], capture_output=True, text=True, check=True).stdout
-    streams = json.loads(out)["streams"]
-    pts = subprocess.run(["ffprobe", "-v", "error", "-select_streams", "v:0", "-show_entries", "frame=pts_time",
-                          "-of", "csv=p=0", path], capture_output=True, text=True, check=True).stdout.split()
-    return streams, [float(p) for p in pts if p and p != "N/A"]
+    """streams, sorted video packet times, audio span (s) or None, FFmpeg's complaint if any"""
+    p = run(["ffprobe", "-v", "error", "-show_entries",
+             "stream=index,codec_type,codec_name,width,height,r_frame_rate,sample_rate,channels", "-of", "json", path])
+    if p.returncode:
+        raise ValueError((p.stderr.strip() or "ffprobe failed").splitlines()[-1])
+    streams = json.loads(p.stdout).get("streams", [])
+    v = run(["ffprobe", "-v", "error", "-select_streams", "v:0", "-show_entries", "packet=pts_time", "-of", "csv=p=0", path])
+    pts = sorted(float(x) for x in v.stdout.split() if x and x != "N/A")
+    a = run(["ffprobe", "-v", "error", "-select_streams", "a:0", "-show_entries", "packet=pts_time,duration_time", "-of", "csv=p=0", path])
+    spans = [[float(x) for x in line.split(",") if x and x != "N/A"] for line in a.stdout.split()]
+    spans = [s for s in spans if s]
+    audio = (max(s[0] + (s[1] if len(s) > 1 else 0) for s in spans) - min(s[0] for s in spans)) if spans else None
+    return streams, pts, audio, (v.stderr + a.stderr).strip()
 
 
 def decode(path):
-    """(320x180 grey, 160x90 grey) bytes per frame, in decode order."""
-    def read(size):
-        w, h = size
-        p = subprocess.Popen(["ffmpeg", "-v", "error", "-i", path, "-vf", f"scale={w}:{h}:flags=area,format=gray",
-                              "-fps_mode", "passthrough", "-f", "rawvideo", "-"], stdout=subprocess.PIPE)
-        frames = []
+    """per-frame stats in one streaming decode (320x180 grey; the change at every other pixel and row, 160x90)"""
+    p = subprocess.Popen(["ffmpeg", "-v", "error", "-i", path, "-vf", f"scale={W}:{H}:flags=area,format=gray",
+                          "-fps_mode", "passthrough", "-f", "rawvideo", "-"], stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+    out, prev = [], None
+    with p.stdout:
         while True:
-            b = p.stdout.read(w * h)
-            if len(b) < w * h:
+            full = p.stdout.read(W * H)
+            if len(full) < W * H:
                 break
-            frames.append(b)
-        p.wait()
-        return frames
-    full, small = read((W, H)), read((DW, DH))
-    return list(zip(full, small))
+            small = b"".join(full[y * W:(y + 1) * W:2] for y in range(0, H, 2))
+            out.append(stats(full, small, prev))
+            prev = small
+    err = p.stderr.read().decode(errors="replace").strip()
+    p.stderr.close()
+    return out, p.wait(), err
 
 
-def check(path, fps=None, size=None, audio=False, max_repeat=0):
-    streams, pts = probe(path)
+def check(path, fps=None, size=None, audio=False):
+    fails = []
+    try:
+        streams, pts, audio_s, perr = probe(path)
+    except ValueError as e:
+        return {"file": path, "fails": [f"unreadable: {e}"]}, []
     video = next((s for s in streams if s["codec_type"] == "video"), None)
     sound = next((s for s in streams if s["codec_type"] == "audio"), None)
-    frames = classify(decode(path))
+    st, code, derr = decode(path) if video else ([], 0, "")
+    frames = judge(st)
+    measured = (len(pts) - 1) / (pts[-1] - pts[0]) if len(pts) > 1 and pts[-1] > pts[0] else None
+    step = 1 / (fps or measured) if (fps or measured) else None
     steps = [b - a for a, b in zip(pts, pts[1:])]
-    step = statistics.median(steps) if steps else 0
     report = {"file": path, "codec": video and video["codec_name"], "size": video and f"{video['width']}x{video['height']}",
-              "fps": round(1 / step, 3) if step else None, "frames": len(frames), "seconds": round(len(frames) * step, 2) if step else None,
+              "fps": round(measured, 3) if measured else None, "frames": len(frames),
+              "seconds": round(len(frames) / measured, 3) if measured else None,
               "black": sum(f["black"] for f in frames), "torn": sum(f["torn"] for f in frames),
               "repeat": sum(f["repeat"] for f in frames), "longest_repeat": longest(f["repeat"] for f in frames),
-              "max_step_s": round(max(steps), 4) if steps else None,
-              "audio": sound and f"{sound['codec_name']} {sound.get('sample_rate')} Hz {sound.get('channels')} ch"}
-    fails = []
+              "still": sum(f["still"] for f in frames), "max_step_s": round(max(steps), 4) if steps else None,
+              "audio": sound and f"{sound['codec_name']} {sound.get('sample_rate')} Hz {sound.get('channels')} ch",
+              "audio_s": round(audio_s, 3) if audio_s is not None else None}
+    if not video or not frames:
+        fails.append("no video frames decoded")
+    complaint = " ".join(x for x in (perr, derr) if x)
+    if code or any(w in complaint.lower() for w in DAMAGE):
+        fails.append(f"damaged file: {complaint.splitlines()[0] if complaint else f'ffmpeg exit {code}'}")
+    if pts and len(pts) != len(frames):
+        fails.append(f"{len(pts)} packets but {len(frames)} decoded frames")
     if report["black"]:
         fails.append(f"{report['black']} black frames")
     if report["torn"]:
         fails.append(f"{report['torn']} torn frames")
-    if report["repeat"] > max_repeat:
-        fails.append(f"{report['repeat']} repeated frames (longest run {report['longest_repeat']})")
-    if steps and max(steps) > 1.5 * step:
-        fails.append(f"frame clock not constant: a step of {max(steps):.3f} s against {step:.4f} s")
-    if fps and report["fps"] and abs(report["fps"] - fps) > 0.01 * fps:
-        fails.append(f"{report['fps']} fps, not {fps}")
+    if report["repeat"]:
+        fails.append(f"{report['repeat']} frozen frames (longest run {report['longest_repeat']})")
+    if step and steps and any(abs(s - step) > CLOCK_SLACK for s in steps):
+        bad = max(steps, key=lambda s: abs(s - step))
+        fails.append(f"frame clock not constant: a step of {bad:.4f} s against {step:.4f} s")
+    if fps and measured and abs(measured - fps) > 0.005 * fps:
+        fails.append(f"{measured:.3f} fps, not {fps}")
     if size and report["size"] != size:
         fails.append(f"size {report['size']}, not {size}")
     if audio and not sound:
         fails.append("no audio stream")
-    if not frames:
-        fails.append("no frames decoded")
+    if sound and audio_s is not None and report["seconds"] and abs(audio_s - report["seconds"]) > AUDIO_SLACK:
+        fails.append(f"audio {audio_s:.2f} s against video {report['seconds']:.2f} s")
     report["fails"] = fails
     return report, frames
 
@@ -122,18 +188,19 @@ def main():
     ap.add_argument("--fps", type=float, help="required frame rate")
     ap.add_argument("--size", help="required WxH")
     ap.add_argument("--audio", action="store_true", help="require an audio stream")
-    ap.add_argument("--max-repeat", type=int, default=0, help="repeated frames allowed (default 0)")
     ap.add_argument("--json", help="per-frame lines (JSON) of every clip")
     a = ap.parse_args()
     bad = 0
     lines = open(a.json, "w") if a.json else None
     for v in a.video:
-        report, frames = check(v, a.fps, a.size, a.audio, a.max_repeat)
-        print(json.dumps(report, ensure_ascii=False))
+        report, frames = check(v, a.fps, a.size, a.audio)
+        print(json.dumps(report, ensure_ascii=False), flush=True)
         bad += bool(report["fails"])
         if lines:
             for f in frames:
                 lines.write(json.dumps({"file": v, **f}) + "\n")
+    if lines:
+        lines.close()
     sys.exit(1 if bad else 0)
 
 
