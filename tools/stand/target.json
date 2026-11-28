@@ -6,6 +6,18 @@
     "none": "a graphics card about half an RTX 4060 at 1920x1080 without a shader pack, stood in by the laptop at 2560x1600 (1.98 times the pixels) without one; nuclear dust MEDIUM"
   },
   "rows": [
+    {"scene": "100-strikes", "pack": "photon", "windows": ["100/outside", "100/edge", "100/inside"],
+     "fps_p50": 60, "fps_low1": 40, "slow": 0, "incoming_ms": 6,
+     "why": "28.11 survey, 3.14.0 on the bench (survey-conventional-bench): 70-81 fps, frame p95 15.0-17.4 ms, Incoming layer 3.2-4.6 ms. Holds today's level with the laptop's 6-29 % clock spread as margin; 6 ms caps smoke, heat and bloom together."},
+    {"scene": "100-impact", "pack": "photon", "windows": ["100-hit"],
+     "fps_p50": 28, "fps_low1": 20, "slow": 0,
+     "why": "The moment 100 Shaheds land (fireballs, flash, wave, debris): 3.14.0 33 fps, frame p95 47.4 ms. The same floor as the nuke: the heaviest moment of a conventional strike is held to the heaviest of a nuclear one."},
+    {"scene": "100-strikes", "pack": "none", "windows": ["100/outside", "100/edge", "100/inside"],
+     "fps_p50": 100, "fps_low1": 60, "slow": 0, "incoming_ms": 6,
+     "why": "Survey without a shader pack: 145-153 fps, frame p95 8.7-9.3 ms, Incoming layer 2.7-4.4 ms; the floor keeps a half-4060 card at 1920x1080 above 60 fps in 1 % of frames."},
+    {"scene": "100-impact", "pack": "none", "windows": ["100-hit"],
+     "fps_p50": 36, "fps_low1": 26, "slow": 0,
+     "why": "Survey without a shader pack: 44 fps, frame p95 34.5 ms; the same floor as the nuke without one."},
     {"scene": "nuke-dust", "pack": "photon", "windows": ["nuke/dust", "nuke2/dust"],
      "fps_p50": 28, "fps_low1": 20, "slow": 0, "incoming_ms": 18, "pall_ms": 15, "pall_peak_ms": 20,
      "why": "28.11 repro at Artem's spot, 2.8 km inside the dust, +3..+4 min (repro-report Q1, Q4): pall 21-29 ms against its MEDIUM budget 15, other Incoming passes 2.2-2.9, the rest of the frame 15.8 ms. Pall held to its own budget and the rest at 3 ms gives 15.8 + 18 = 33.8 ms, 29.6 fps; 1 % low from the measured p99 spread (x1.39 of the median). Peak: budget plus one ladder rung (each rung 0.5-0.85 of the next)."},
