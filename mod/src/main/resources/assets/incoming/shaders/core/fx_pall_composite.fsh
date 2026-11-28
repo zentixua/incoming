@@ -16,9 +16,6 @@ uniform float DwDiv;
 uniform float DwHazeOnly;
 // 1 — the dust atlas's taps are cut at the pixel's depth once, after filtering (wall_layer.glsl gWallCutOnce; PallPass.Step.cutOnce)
 uniform float DwCutOnce;
-// diagnostics (DustWallDiag.composite, a client scenario's cost split): a sum of 1 no flames, 2 no shadow or ball light on the
-// world, 4 no dust atlas read, 8 no near-volume read; 0 the picture
-uniform float PallDiag;
 const float DW_HAZE_AT_EYE = 8.0;
 uniform int PallLayerFrame;
 
@@ -512,8 +509,7 @@ void main() {
     // end, sky — all of it up to there
     float nearDepth = min(depth, nearEnd);
     vec4 nearWorld = vec4(0.0, 0.0, 0.0, 1.0);
-    int diag = int(PallDiag + 0.5);
-    if (PallFroxel.z > 0.0 && (diag & 8) == 0) {
+    if (PallFroxel.z > 0.0) {
         nearWorld = froxelNear(Sampler11, PallFroxel, vec2(full) + 0.5, nearDepth);
         pall = froxelOver(nearWorld, pall);
     }
@@ -526,7 +522,7 @@ void main() {
     MediumSpans spans;
     bool haveSpans = false;
     gWallCutOnce = DwCutOnce > 0.5;
-    if (DwDiv > 0.0 && (diag & 4) == 0) {
+    if (DwDiv > 0.0) {
         wall = wallLayer(Sampler6, Sampler1, vec2(full) + 0.5, depth, DwDiv);
         if (wall.light.a < 1.0) {
             bool aroundEye = DwHazeOnly > 0.5 && wall.depth.x < DW_HAZE_AT_EYE;
@@ -543,7 +539,7 @@ void main() {
         fragColor = pall;
         return;
     }
-    if ((PallFire0[0].x > 0.0 || PallFire1[0].x > 0.0) && (diag & 1) == 0) {
+    if (PallFire0[0].x > 0.0 || PallFire1[0].x > 0.0) {
         vec2 ndc = (vec2(full) + 0.5) / vec2(fullSize) * 2.0 - 1.0;
         vec4 farPoint = InvViewProj * vec4(ndc, 1.0, 1.0), nextPoint = InvViewProj * vec4(ndc + vec2(0.0, 2.0 / float(fullSize.y)), 1.0, 1.0);
         vec3 dir = normalize(farPoint.xyz / farPoint.w);
@@ -567,7 +563,7 @@ void main() {
     // a fireball brightens the world behind the pall: the whole pixel is written, the pall over this ball-lit world
     vec3 ballLit = vec3(0.0);
     bool whole = false;
-    if (depth < 1e8 && (PallSun.w > 0.0 || balls) && pall.a > 0.005 && (diag & 2) == 0) {
+    if (depth < 1e8 && (PallSun.w > 0.0 || balls) && pall.a > 0.005) {
         vec2 ndc = (vec2(full) + 0.5) / vec2(fullSize) * 2.0 - 1.0;
         vec4 farPoint = InvViewProj * vec4(ndc, 1.0, 1.0);
         vec3 dir = normalize(farPoint.xyz / farPoint.w);

@@ -19,7 +19,6 @@
         { "name": "PallLayerFrame", "type": "int", "count": 1, "values": [ 0 ] },
         { "name": "DwDiv", "type": "float", "count": 1, "values": [4.0] },
         { "name": "DwHazeOnly", "type": "float", "count": 1, "values": [0.0] },
-        { "name": "PallDiag", "type": "float", "count": 1, "values": [0.0] },
         { "name": "DwCutOnce", "type": "float", "count": 1, "values": [0.0] },
         { "name": "FxSee", "type": "float", "count": 1, "values": [ 0.0 ] },
         { "name": "PallLamps", "type": "float", "count": 1, "values": [0.0] },

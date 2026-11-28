@@ -798,20 +798,17 @@ paths:
   against the last image on its original sample lattice, then reuses that storage for the next output.
   Near volume (froxels, the standard fog-the-camera-stands-in method: Wronski AC4 2014, Frostbite): the pall nearer than
   `VOLUME_FAR` 256 blocks along the view axis is a screen-aligned volume of 64 exponential slices, each slice a tile of a
-  2D RGBA16F atlas (GL 3.2, no 3D render targets); cells 16/12/8 full-frame pixels wide for LOW/MEDIUM/HIGH
-  (`Quality.tile`). `fx_pall_froxel` evaluates `pallSource` at a jittered point per cell and blends it into the previous
-  volume reprojected in world space with weight `VOLUME_CURRENT` 0.1; `fx_pall_froxel_sum` integrates front to back with
-  the rays' step law and air haze, storing linear light and the transmittance seen so far. The composite reads it at each
-  pixel's own depth (no screen-space history at silhouettes: the old interleaved near rays left trails and rims there)
+  2D RGBA16F atlas (GL 3.2: no 3D targets); cells 16/12/8 px wide for LOW/MEDIUM/HIGH (`Quality.tile`). `fx_pall_froxel` evaluates `pallSource` at a jittered point per cell and blends it into the previous
+  volume reprojected in world space (weight `VOLUME_CURRENT` 0.1); `fx_pall_froxel_sum` integrates front to back with
+  the rays' step law and air haze into linear light and transmittance, in two draws (8-slice blocks, then cells; one
+  loop over all slices in front cost 1.0–1.3 ms, `pall_froxel_sum_gl.py`). Coarse rungs update whole slices in turn
+  (`Step.volume`; a cell checkerboard saved nothing). The composite reads it at each pixel's own depth (no screen-space
+  history at silhouettes: old interleaved near rays left trails and rims)
   and joins it with the rays beyond in linear light (`froxelOver`); layer quads read `fx_pall_mix` (volume plus rays per
-  reduced pixel). Mushrooms (with the eye's optical depth through them, `mushEyeTau`), explosion smoke and fire whirls
-  (`whirlCell`) nearer than the boundary are injected into the cells; the rays take them only from the boundary, so
-  near matter is ordered against near haze. The Wilson cloud stays in the rays. The rays begin at the volume's far
-  boundary; the march, the composite (read-out and upsample correction) and `fx_pall_mix` take the same boundary
+  reduced pixel). Mushrooms (eye depth `mushEyeTau`), explosion smoke and fire whirls (`whirlCell`) nearer than the
+  boundary are injected into the cells; the rays take them from the boundary on, ordering near matter against near haze. The Wilson cloud stays in the rays, which begin at the volume's far boundary; the march, the composite (read-out and upsample correction) and `fx_pall_mix` take the same boundary
   (`ShaderSourceTest.nearVolumeEndsWhereTheRaysBegin`). Emission past half-float range is
-  clamped, not dropped (a hole). Same-frame checks (32-px checker tiles, history off): the volume over 0–256 equals the
-  per-pixel ray over that span (up view red 100.8 vs 101.2); sequential shots drift with fires and history, so A/B only
-  within one frame.
+  clamped, not dropped (a hole). Same-frame A/B only (32-px checker tiles, history off): volume over 0–256 = the per-pixel ray (red 100.8 vs 101.2).
   Time — `glQueryCounter(GL_TIMESTAMP)` marks before and after the passes, in a ring of 4 pairs, read when ready (without
   waiting). Not `GL_TIME_ELAPSED`: that query is single in OpenGL for everyone, and Minecraft holds it for the whole frame
   while F3's GPU load is on screen (`TimerQuery`) — a nested one would not start. Pairs taken before the pall had gone

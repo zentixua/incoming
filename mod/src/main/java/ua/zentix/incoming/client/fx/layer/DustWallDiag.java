@@ -40,11 +40,6 @@ public final class DustWallDiag {
     public static volatile boolean split = true;
     /** False: layer quads and source probes read no dust in front of them (pall_front.glsl dustWallThrough). */
     public static volatile boolean frontDust = true;
-    /**
-     * The pall composite's terms left out for a cost split (fx_pall_composite PallDiag): a sum of 1 flames, 2 shadow and ball
-     * light on the world, 4 the dust atlas read, 8 the near volume read; 0 as shipped.
-     */
-    public static volatile int composite;
     /** Not null: the next drawn frame writes the pass's targets to files with this path prefix, then clears it. */
     public static volatile String dump;
 

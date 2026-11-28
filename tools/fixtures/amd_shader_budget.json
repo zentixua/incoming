@@ -130,8 +130,8 @@
   },
   "fx_pall_froxel_sum": {
    "code_vert": 476,
-   "code_frag": 2324,
-   "memory_mb": 67,
+   "code_frag": 7296,
+   "memory_mb": 68,
    "scratch": 0
   },
   "fx_pall_mix": {

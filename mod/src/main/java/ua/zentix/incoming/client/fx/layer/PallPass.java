@@ -1182,7 +1182,6 @@ public final class PallPass {
         // 0 — no dust pass this frame (fx_pall_composite: Sampler6 is the dust pass's atlas)
         c.safeGetUniform("DwDiv").set(f.dustWall.active ? (float) DustWallPass.divisor() : 0f);
         c.safeGetUniform("DwHazeOnly").set(f.dustWall.active && DustWallPass.hazeOnly ? 1f : 0f);
-        c.safeGetUniform("PallDiag").set((float) DustWallDiag.composite);
         c.safeGetUniform("DwCutOnce").set(LADDER[DETAIL.level].cutOnce() ? 1f : 0f);
         c.safeGetUniform("PallFroxel").set(f.quality.tile, VOLUME_NEAR, VOLUME_FAR, 0f);
         c.safeGetUniform("PallLamps").set(lamps ? 1f : 0f);
