@@ -40,7 +40,7 @@ public final class VoxyIngest {
     @Nullable
     private static MethodHandle worldOf, rawIngest, instanceOf, ingestService, taskCount;
     // Coordinate-only, best-effort recovery: history and a burst of callbacks must both stay bounded.
-    private static final LodRefreshHints HINTS = new LodRefreshHints(65536, 4096);
+    private static final LodRefreshHints HINTS = new LodRefreshHints(C2S.VoxyStale.REMEMBERED, 4096);
     private static volatile boolean broken;
     @Nullable
     private static volatile ClientLevel ingested;

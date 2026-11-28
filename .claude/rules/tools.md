@@ -183,6 +183,8 @@ Prism: `~/.var/app/org.prismlauncher.PrismLauncher/data/PrismLauncher/` (`tools/
                                            visibility through the player's eyes or set cameras, ground measurements at explosions) and replaydb.py —
                                            a DuckDB database with queries for video plans (launches, flybys, ground strikes); filming plans of
                                            Flashback video with a check of every frame (-Dreplayscan.film); README.md there
+    replay_payloads.py <replay.zip>      ← bytes of a Flashback replay by action and by mod payload (--seconds: per recorded
+                                           second): what a recording keeps and who sends it
     clips/                               ← short clips from replay data: moments.py (candidates), plan.py (filming plans),
                                            edit.py (editing, captions, flash check by frames); README.md there
     guide_images.sh [frames]             ← guide pictures docs/guide/img from the frames of `client_scenario.sh guide`: recipes

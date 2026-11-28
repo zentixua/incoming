@@ -211,6 +211,9 @@ class S2CGoldenTest {
                 golden(S2C.Intercept.TYPE, S2C.Intercept.CODEC, new S2C.Intercept(P, true, Optional.of(B), 99)),
                 golden(S2C.RadarScope.TYPE, S2C.RadarScope.CODEC, new S2C.RadarScope(Q, 2000, 1200, 2, 6, List.of(
                         new S2C.Blip(-150.5f, 300.25f, 45f, 1, S2C.Blip.HOSTILE | S2C.Blip.ENGAGED)))),
+                golden(S2C.VoxyChunkRaw.TYPE, S2C.VoxyChunkRaw.CODEC, new S2C.VoxyChunkRaw(new S2C.VoxyChunk(
+                        net.minecraft.resources.ResourceLocation.withDefaultNamespace("overworld"), -3, 70000, new byte[]{0, 2, 1, (byte) 0x80, 0x7f}))),
+                // too short to deflate smaller: stored, so the sample does not depend on the zlib build (deflated: StreamCodecsTest)
                 golden(S2C.VoxyChunk.TYPE, S2C.VoxyChunk.CODEC, new S2C.VoxyChunk(net.minecraft.resources.ResourceLocation.withDefaultNamespace("overworld"), -3, 70000,
                         new byte[]{0, 2, 1, (byte) 0x80, 0x7f})),
                 golden(S2C.LodBatchFinished.TYPE, S2C.LodBatchFinished.CODEC, new S2C.LodBatchFinished(300, 32)),

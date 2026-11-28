@@ -11,10 +11,8 @@ import net.minecraft.world.level.LevelHeightAccessor;
 import net.minecraft.world.level.chunk.LevelChunk;
 import net.minecraft.world.level.chunk.ChunkAccess;
 import net.minecraft.world.level.chunk.ProtoChunk;
-import net.minecraft.world.level.chunk.UpgradeData;
 import net.minecraft.world.level.chunk.status.ChunkStatus;
 import net.minecraft.world.level.chunk.storage.ChunkSerializer;
-import net.minecraft.world.ticks.ProtoChunkTicks;
 import net.neoforged.neoforge.event.tick.LevelTickEvent;
 import org.jetbrains.annotations.Nullable;
 import ua.zentix.incoming.Incoming;
@@ -614,10 +612,12 @@ public final class FarLods {
     static Built build(DiskShots.Format f, DiskShots.Sections s, @Nullable RuinPlan plan, boolean fires, boolean lights, boolean scorch) {
         long chunk = s.pos().toLong();
         if (s.skip() != null) return new Built(chunk, null, false, lights, s.skip());
+        // disk fingerprints before the plan writes into these sections: Voxy players get only what can differ from disk
+        long[] disk = ua.zentix.incoming.compat.LodSections.prints(s.sections());
         int biomes = plan == null ? 0 : plan.applyToCopy(s.sections(), fires, f.biomes(), f.minSection());
         if (biomes < 0) return new Built(chunk, null, false, lights, "stale plan");
-        ProtoChunk copy = new ProtoChunk(s.pos(), UpgradeData.EMPTY, s.sections(), new ProtoChunkTicks<>(), new ProtoChunkTicks<>(),
-                LevelHeightAccessor.create(f.minY(), f.height()), f.biomes(), null);
+        ProtoChunk copy = new ua.zentix.incoming.compat.LodSections.DiskCopy(s.pos(), s.sections(), disk,
+                LevelHeightAccessor.create(f.minY(), f.height()), f.biomes());
         copy.setPersistedStatus(ChunkStatus.FULL);
         return new Built(chunk, copy, plan != null && plan.changedBlocks() + plan.fireCount() + biomes > 0, lights, null, scorch);
     }

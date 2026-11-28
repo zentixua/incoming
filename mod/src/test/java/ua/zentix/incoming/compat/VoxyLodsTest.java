@@ -319,7 +319,9 @@ class VoxyLodsTest {
             VoxyLods.Viewer viewer = new VoxyLods.Viewer(channel, client);
             byte[] data = new byte[64 * 1024];
             for (int i = 0; i < 768; i++) viewer.offer(i, packet(i, data));
-            S2C.VoxyChunk fresh = packet(3, new byte[64 * 1024]);
+            byte[] changed = new byte[64 * 1024];
+            changed[0] = 1;
+            S2C.VoxyChunk fresh = packet(3, changed);
             viewer.offer(3, fresh);
             viewer.offer(900, packet(900, data));
             assertEquals(1, viewer.dropped);
@@ -332,6 +334,57 @@ class VoxyLodsTest {
             assertEquals(768, client.chunks.size());
             assertSame(fresh, client.chunks.stream().filter(p -> p.x() == 3).findFirst().orElseThrow());
             assertEquals(0, viewer.bytes + viewer.stockBytes());
+        } finally {
+            channel.finishAndReleaseAll();
+        }
+    }
+
+    /**
+     * A chunk with the bytes last queued for the player is not sent again (its Voxy has them; a Flashback recording would
+     * keep a second copy), a changed one is; after LOD Server Support overwrote it on the client, or in another world,
+     * the same bytes go again.
+     */
+    @Test
+    void sameBytesAreNotSentTwiceUntilTheClientLosesThem() {
+        EmbeddedChannel channel = new EmbeddedChannel();
+        try {
+            Receiver client = new Receiver();
+            VoxyLods.Viewer viewer = new VoxyLods.Viewer(channel, client);
+            byte[] ruins = new byte[30_000], more = ruins.clone();
+            ruins[7] = 3;
+            more[7] = 4;
+            viewer.offer(1, packet(1, ruins));
+            viewer.offer(1, packet(1, ruins.clone())); // waiting: no second copy queued
+            assertEquals(1, viewer.queue.size());
+            tick(viewer, channel);
+            client.ackAll(viewer);
+            viewer.offer(1, packet(1, ruins.clone())); // already sent
+            assertEquals(0, viewer.queue.size());
+            assertEquals(2, viewer.repeats);
+            viewer.offer(1, packet(1, more)); // the ruins grew
+            assertEquals(1, viewer.queue.size());
+            tick(viewer, channel);
+            client.ackAll(viewer);
+            viewer.forget(1); // LSS wrote the disk chunk into the client's Voxy
+            viewer.offer(1, packet(1, more.clone()));
+            assertEquals(1, viewer.queue.size());
+            tick(viewer, channel);
+            client.ackAll(viewer);
+            viewer.clear(); // another world
+            viewer.offer(1, packet(1, more.clone()));
+            assertEquals(1, viewer.queue.size());
+            tick(viewer, channel);
+            assertEquals(4, client.chunks.size());
+            // a full queue drops a chunk: it is not remembered as sent
+            VoxyLods.Viewer full = new VoxyLods.Viewer(null, (p, l) -> {});
+            byte[] big = new byte[64 * 1024];
+            for (int i = 0; i < 768; i++) full.offer(i, packet(i, big));
+            full.offer(900, packet(900, ruins));
+            assertEquals(1, full.dropped);
+            full.queue.clear(); // as if sent
+            full.bytes = 0;
+            full.offer(900, packet(900, ruins));
+            assertEquals(1, full.queue.size(), "a dropped chunk goes when there is room");
         } finally {
             channel.finishAndReleaseAll();
         }

@@ -11,7 +11,7 @@ import ua.zentix.incoming.strike.ServerActions;
  * incompatible change, letting NeoForge report different mod versions instead of crashing.
  */
 public final class IncomingNetwork {
-    public static final String PROTOCOL = "68";
+    public static final String PROTOCOL = "69";
 
     private IncomingNetwork() {}
 
@@ -78,6 +78,7 @@ public final class IncomingNetwork {
         event.registrar(PROTOCOL).executesOn(net.neoforged.neoforge.network.registration.HandlerThread.NETWORK)
                 .playToServer(C2S.LodBatchReceived.TYPE, C2S.LodBatchReceived.CODEC, ua.zentix.incoming.compat.VoxyLods::batchReceived)
                 .playToClient(S2C.VoxyChunk.TYPE, S2C.VoxyChunk.CODEC, (p, ctx) -> ClientHooks.get().voxyChunk(p))
+                .playToClient(S2C.VoxyChunkRaw.TYPE, S2C.VoxyChunkRaw.CODEC, (p, ctx) -> ClientHooks.get().voxyChunk(p.chunk()))
                 .playToClient(S2C.LodBatchFinished.TYPE, S2C.LodBatchFinished.CODEC, (p, ctx) -> ClientHooks.get().lodBatchFinished(p, ctx));
     }
 }

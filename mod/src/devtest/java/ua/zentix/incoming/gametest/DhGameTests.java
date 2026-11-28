@@ -3,6 +3,7 @@ package ua.zentix.incoming.gametest;
 import it.unimi.dsi.fastutil.longs.Long2IntOpenHashMap;
 import it.unimi.dsi.fastutil.longs.LongArrayList;
 import net.minecraft.core.BlockPos;
+import net.minecraft.core.SectionPos;
 import net.minecraft.gametest.framework.GameTest;
 import net.minecraft.gametest.framework.GameTestHelper;
 import net.minecraft.server.level.ServerLevel;
@@ -166,6 +167,64 @@ public final class DhGameTests {
         }
         h.assertTrue(cells > 0, "the city is not destroyed: there is nothing to compare");
         Incoming.LOG.info("LOD in the distance: {} copies coincided with the ruins, {} places", compared, cells);
+        h.succeed();
+    }
+
+    /**
+     * A ruin copy for Voxy players ({@code LodSections.DiskCopy}) leaves out only sections the ruins did not touch: below
+     * its lowest sent section every block is the chunk's own before the wave (what Voxy already holds), and from it up
+     * every block is the copy's. The flat test world has its surface in the lowest section, so the chunk gets a stone
+     * plateau 40 blocks high with a glazed pillar on it: the wave breaks the glass in section -1, the dark stone of
+     * sections -4 and -3 stays out. Logs the bytes raw and on the wire against the whole copy.
+     */
+    @GameTest(template = "range", timeoutTicks = 100, batch = "dh_ruins_voxy", skyAccess = true)
+    public static void farCopyForVoxyLeavesOutOnlyUntouchedSections(GameTestHelper h) {
+        ServerLevel level = h.getLevel();
+        ChunkPos c = new ChunkPos(h.absolutePos(new BlockPos(8, 1, 8)));
+        int ground = h.absolutePos(new BlockPos(0, 1, 0)).getY(), plateau = ground + 40;
+        BlockState stone = Blocks.STONE.defaultBlockState(), glass = Blocks.GLASS.defaultBlockState();
+        for (int x = 0; x < 16; x++) for (int z = 0; z < 16; z++) for (int y = ground; y < plateau; y++) level.setBlock(c.getBlockAt(x, y, z), stone, 2);
+        for (int x = 7; x <= 9; x++) {
+            for (int z = 7; z <= 9; z++) {
+                for (int y = plateau; y < plateau + 6; y++) level.setBlock(c.getBlockAt(x, y, z), stone, 2);
+                for (int y = plateau + 6; y < plateau + 9; y++) level.setBlock(c.getBlockAt(x, y, z), glass, 2);
+            }
+        }
+        // 2 psi: glass breaks, a 3×3 stone pillar six high and the plateau stand
+        Detonation d = NuclearGameTests.atPsi(h, new BlockPos(-600, 0, 8), true, new BlockPos(8, 1, 8), 2);
+        for (int dx = -RuinPlanner.REACH; dx <= RuinPlanner.REACH; dx++) {
+            for (int dz = -RuinPlanner.REACH; dz <= RuinPlanner.REACH; dz++) level.getChunk(c.x + dx, c.z + dz);
+        }
+        LevelChunk chunk = level.getChunk(c.x, c.z);
+        RuinPlan plan = RuinPlanner.planFresh(level, d, chunk, false);
+        h.assertTrue(plan.changedBlocks() > 0, "the wave broke nothing in " + c);
+        ProtoChunk copy = FarLods.testCopy(level, chunk, plan, false);
+        h.assertTrue(copy instanceof ua.zentix.incoming.compat.LodSections.DiskCopy, "the copy of " + c + " is not a disk copy");
+        var biomes = level.registryAccess().registryOrThrow(net.minecraft.core.registries.Registries.BIOME);
+        byte[] data = ua.zentix.incoming.compat.LodSections.ofCopy(copy, true);
+        var back = ua.zentix.incoming.compat.LodSections.read(data, biomes);
+        int from = back.getFirst().y(), changed = SectionPos.blockToSectionCoord(plateau + 6);
+        h.assertTrue(from > copy.getMinSection() && from <= changed - 1, "first section sent " + from + ", the glass is in " + changed);
+        h.assertTrue(back.getLast().y() == copy.getMaxSection() - 1, "the top section is not sent");
+        for (int y = level.getMinBuildHeight(); y < level.getMaxBuildHeight(); y++) {
+            for (int x = 0; x < 16; x++) {
+                for (int z = 0; z < 16; z++) {
+                    BlockPos p = c.getBlockAt(x, y, z);
+                    BlockState far = copy.getBlockState(p);
+                    BlockState held = (y >> 4) < from ? chunk.getBlockState(p) : back.get((y >> 4) - from).blocks().getBlockState(x, y & 15, z);
+                    h.assertTrue(held == far, "Voxy would hold " + held + " at " + p + ", the copy has " + far);
+                }
+            }
+        }
+        ProtoChunk plain = new ProtoChunk(c, net.minecraft.world.level.chunk.UpgradeData.EMPTY, level, biomes, null);
+        for (int i = 0; i < copy.getSections().length; i++) plain.getSections()[i] = copy.getSections()[i];
+        int whole = ua.zentix.incoming.compat.LodSections.ofCopy(plain, true).length;
+        io.netty.buffer.ByteBuf b = io.netty.buffer.Unpooled.buffer();
+        ua.zentix.incoming.net.S2C.VoxyChunk.CODEC.encode(b, new ua.zentix.incoming.net.S2C.VoxyChunk(level.dimension().location(), c.x, c.z, data));
+        int wire = b.readableBytes();
+        b.release();
+        h.assertTrue(data.length < whole && wire < data.length, "whole " + whole + " bytes, trimmed " + data.length + ", on the wire " + wire);
+        Incoming.LOG.info("Voxy LOD copy of a ruined chunk: {} bytes whole, {} from section {}, {} on the wire", whole, data.length, from, wire);
         h.succeed();
     }
 

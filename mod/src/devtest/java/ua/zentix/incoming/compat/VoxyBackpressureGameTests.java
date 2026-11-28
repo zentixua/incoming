@@ -227,4 +227,36 @@ public final class VoxyBackpressureGameTests {
         });
     }
 
+
+    /**
+     * A chunk the server sent to a player lands in that player's Voxy from the world, so a later copy with the bytes last
+     * queued to them goes again: outage 1's dark copy, the player visits while the lights come back, outage 2's dark
+     * copy is the same bytes (review 1 of the recording fix, S1). The hook is the registered {@code ChunkWatchEvent.Sent}
+     * listener.
+     */
+    @GameTest(template = "range", timeoutTicks = 40, batch = "voxy_seen")
+    public static void aChunkThePlayerReceivedGoesAgainWithTheSameBytes(GameTestHelper h) {
+        var level = h.getLevel();
+        FakePlayer player = new FakePlayer(level, new GameProfile(UUID.randomUUID(), "lod-visitor"));
+        VoxyLods.Viewer viewer = new VoxyLods.Viewer(null, (packet, listener) -> {});
+        VoxyLods.testViewer(level.getServer(), player.getUUID(), viewer);
+        try {
+            var chunk = level.getChunkAt(h.absolutePos(new BlockPos(8, 1, 8)));
+            long key = chunk.getPos().toLong();
+            byte[] dark = new byte[30_000];
+            dark[11] = 5;
+            var dimension = level.dimension().location();
+            viewer.offer(key, new S2C.VoxyChunk(dimension, chunk.getPos().x, chunk.getPos().z, dark));
+            viewer.queue.clear(); // delivered
+            viewer.bytes = 0;
+            viewer.offer(key, new S2C.VoxyChunk(dimension, chunk.getPos().x, chunk.getPos().z, dark.clone()));
+            h.assertTrue(viewer.queue.isEmpty(), "a repeat with nothing in between was sent again");
+            net.neoforged.neoforge.common.NeoForge.EVENT_BUS.post(new net.neoforged.neoforge.event.level.ChunkWatchEvent.Sent(player, chunk, level));
+            viewer.offer(key, new S2C.VoxyChunk(dimension, chunk.getPos().x, chunk.getPos().z, dark.clone()));
+            h.assertTrue(viewer.queue.size() == 1, "the second outage's dark copy was not queued after the player received the chunk");
+        } finally {
+            VoxyLods.testViewer(level.getServer(), player.getUUID(), null);
+        }
+        h.succeed();
+    }
 }

@@ -103,6 +103,11 @@ public final class VoxyLods {
     static final int STOCK_BYTES = 2 << 20;
     /** Section bytes one pump task writes before it yields the event loop to other connections and game packets. */
     static final int PUMP_BYTES = 256 * 1024;
+    /**
+     * Chunks per player whose last bytes are remembered ({@link Viewer#offer}): no more than the client remembers to
+     * report LSS overwrites of ({@link C2S.VoxyStale#REMEMBERED}), 4 MiB of map at most.
+     */
+    static final int REMEMBERED = C2S.VoxyStale.REMEMBERED;
     /** Maximum waiting player queue size; this does not bound bytes already handed to the connection. */
     static final long QUEUE_BYTES = 48L << 20;
     /** Estimated chunk size (for {@link #room}): 24 sections with palettes and surface light — ~40 KB before compression. */
@@ -159,16 +164,45 @@ public final class VoxyLods {
             return new Viewer(connection.channel(), (packet, listener) -> connection.send(new ClientboundCustomPayloadPacket(packet), listener));
         }
 
+        /**
+         * Server thread. A chunk with the same bytes as the last one queued for this player in this world is not sent
+         * again: its Voxy already has it (2 719 of 17 390 chunks after a 300 kt strike, 28.11.2026), and a Flashback
+         * recording would keep each copy. Whatever else writes the chunk into the client's Voxy {@link #forget}s it:
+         * the server sending the chunk itself (Voxy rebuilds what the player sees) and LOD Server Support (its overwrite
+         * reported by the client).
+         */
         void offer(long chunk, S2C.VoxyChunk packet) {
+            offer(chunk, packet, print(packet.sections()));
+        }
+
+        void offer(long chunk, S2C.VoxyChunk packet, long print) {
+            if (last.containsKey(chunk) && last.get(chunk) == print) {
+                repeats++;
+                return;
+            }
             S2C.VoxyChunk was = queue.remove(chunk);
             if (was != null) bytes -= was.sections().length;
             if (bytes + packet.sections().length > QUEUE_BYTES) {
                 dropped++;
+                last.remove(chunk);
                 return;
             }
             queue.put(chunk, packet);
             bytes += packet.sections().length;
+            // a bound, not a cache policy: past it, chunks may go again once
+            if (last.size() >= REMEMBERED) last.clear();
+            last.put(chunk, print);
         }
+
+        /** The client's Voxy no longer holds what was sent for {@code chunk}: the player received it or LSS wrote it. */
+        void forget(long chunk) {
+            last.remove(chunk);
+        }
+
+        /** Last queued bytes by chunk, as {@link #print}: server thread. */
+        private final it.unimi.dsi.fastutil.longs.Long2LongOpenHashMap last = new it.unimi.dsi.fastutil.longs.Long2LongOpenHashMap();
+        /** Chunks not sent again since the minute report: same bytes as the last queued ({@link #offer}). */
+        long repeats;
 
         /** Server thread, every tick: top up the event loop's stock and let it send. Never waits for the network. */
         void drain() {
@@ -203,6 +237,7 @@ public final class VoxyLods {
         /** Server thread: a dimension change drops what the client no longer needs, including the stock. */
         void clear() {
             queue.clear();
+            last.clear();
             bytes = 0;
             for (S2C.VoxyChunk packet; (packet = stock.poll()) != null; ) stockBytes.addAndGet(-packet.sections().length);
         }
@@ -381,6 +416,7 @@ public final class VoxyLods {
         Set<ServerPlayer> seeing = loaded ? new HashSet<>(level.getChunkSource().chunkMap.getPlayers(pos, false)) : Set.of();
         for (ServerPlayer p : level.players()) {
             Viewer viewer = v.viewers.get(p.getUUID());
+            if (viewer != null && seeing.contains(p)) viewer.forget(pos.toLong()); // its Voxy rebuilds it from the world
             if (viewer == null || only != null && !only.equals(p.getUUID()) || seeing.contains(p) || !near(p, pos)) continue;
             to.add(p.getUUID());
         }
@@ -398,6 +434,13 @@ public final class VoxyLods {
         });
     }
 
+    /** 64-bit fingerprint of a chunk's bytes: CRC32C in the high half, {@code Arrays.hashCode} in the low, the length mixed in. */
+    static long print(byte[] b) {
+        java.util.zip.CRC32C crc = new java.util.zip.CRC32C();
+        crc.update(b);
+        return crc.getValue() << 32 ^ (java.util.Arrays.hashCode(b) & 0xffffffffL) ^ (long) b.length << 40;
+    }
+
     private static boolean near(ServerPlayer p, ChunkPos pos) {
         ChunkPos at = p.chunkPosition();
         return Math.max(Math.abs(at.x - pos.x), Math.abs(at.z - pos.z)) <= FarLods.FAR_CHUNKS;
@@ -410,10 +453,11 @@ public final class VoxyLods {
             return;
         }
         S2C.VoxyChunk packet = new S2C.VoxyChunk(b.dimension.location(), ChunkPos.getX(b.chunk), ChunkPos.getZ(b.chunk), b.data);
+        long print = print(b.data);
         for (UUID id : b.to) {
             Viewer viewer = viewers.get(id);
             if (viewer == null || viewer.dimension != b.dimension) continue;
-            viewer.offer(b.chunk, packet);
+            viewer.offer(b.chunk, packet, print);
         }
     }
 
@@ -461,11 +505,12 @@ public final class VoxyLods {
             for (Map.Entry<UUID, Viewer> entry : viewers.entrySet()) {
                 Viewer v = entry.getValue();
                 long sent = v.sent.getAndSet(0);
-                if (sent + v.dropped == 0) continue;
+                if (sent + v.dropped + v.repeats == 0) continue;
                 ServerPlayer p = server.getPlayerList().getPlayer(entry.getKey());
-                Incoming.LOG.info("Voxy LODs of changed chunks to {}: sent {}, queued {} ({} KiB), dropped {} (queue full)",
-                        p == null ? entry.getKey() : p.getGameProfile().getName(), sent, v.queue.size(), v.bytes >> 10, v.dropped);
+                Incoming.LOG.info("Voxy LODs of changed chunks to {}: sent {}, queued {} ({} KiB), dropped {} (queue full), not repeated {}",
+                        p == null ? entry.getKey() : p.getGameProfile().getName(), sent, v.queue.size(), v.bytes >> 10, v.dropped, v.repeats);
                 v.dropped = 0;
+                v.repeats = 0;
             }
         }
     }
@@ -509,6 +554,8 @@ public final class VoxyLods {
         Viewer viewer = get(p.getServer()).viewers.get(p.getUUID());
         if (viewer == null) return;
         ServerLevel level = p.serverLevel();
+        // forgetting is free, the budget is for refreshes
+        for (long chunk : packet.chunks()) viewer.forget(chunk);
         int n = 0;
         for (long chunk : packet.chunks()) {
             if (viewer.staleBudget <= 0) break;
@@ -518,6 +565,23 @@ public final class VoxyLods {
             n++;
         }
         if (n > 0) Incoming.LOG.debug("Voxy LODs: {} chunks overwritten by LOD Server Support at {}, sent again if still changed", n, p.getGameProfile().getName());
+    }
+
+    /** Checks: {@code viewer} stands for player {@code id} (null removes it). */
+    public static void testViewer(MinecraftServer server, UUID id, @Nullable Viewer viewer) {
+        if (viewer == null) get(server).viewers.remove(id);
+        else get(server).viewers.put(id, viewer);
+    }
+
+    /**
+     * The server sent a world chunk to a player: their Voxy rebuilds it from that, so a later copy with the bytes last
+     * queued to them is no repeat ({@link Viewer#offer}). Server thread.
+     */
+    public static void onChunkSent(net.neoforged.neoforge.event.level.ChunkWatchEvent.Sent e) {
+        ServerPlayer p = e.getPlayer();
+        if (p.getServer() == null || !p.getServer().overworld().hasData(ModAttachments.VOXY_LODS)) return;
+        Viewer viewer = get(p.getServer()).viewers.get(p.getUUID());
+        if (viewer != null) viewer.forget(e.getPos().toLong());
     }
 
     public static void onLogout(PlayerEvent.PlayerLoggedOutEvent e) {

@@ -155,4 +155,80 @@ class LodSectionsTest {
         // house in 4 section: stone, walls and light - less than 20 KB (light - only where it is not uniform)
         assertTrue(data.length < 20_000, data.length + " byte");
     }
+
+    /** Stone below y 40 with a shaft at x 0, z 0 down to {@code shaft}; house walls on y 40–52 over the square 4..11, roof on 52. */
+    private static BlockState town(int x, int y, int z, boolean roof, int shaft) {
+        if (x == 0 && z == 0 && y >= shaft) return Blocks.AIR.defaultBlockState();
+        if (y < 40) return (x * 7 + y * 3 + z) % 11 == 0 ? Blocks.COAL_ORE.defaultBlockState() : Blocks.STONE.defaultBlockState();
+        boolean inside = x >= 4 && x <= 11 && z >= 4 && z <= 11;
+        boolean wall = inside && (x == 4 || x == 11 || z == 4 || z == 11) && y <= 52;
+        if (wall || roof && inside && y == 52) return Blocks.STONE_BRICKS.defaultBlockState();
+        return Blocks.AIR.defaultBlockState();
+    }
+
+    /** A disk copy of {@code disk} after {@code ruins} wrote into it, as {@code FarLods.build} makes it. */
+    private static LodSections.DiskCopy ruined(Fill disk, Fill ruins) {
+        LevelChunkSection[] s = sections(disk);
+        long[] prints = LodSections.prints(s);
+        LevelChunkSection[] after = sections(ruins);
+        for (int i = 0; i < s.length; i++) {
+            for (int y = 0; y < 16; y++) for (int z = 0; z < 16; z++) for (int x = 0; x < 16; x++) {
+                BlockState b = after[i].getBlockState(x, y, z);
+                if (b != s[i].getBlockState(x, y, z)) s[i].setBlockState(x, y, z, b, false);
+            }
+        }
+        return new LodSections.DiskCopy(new ChunkPos(5, -2), s, prints, LevelHeightAccessor.create(0, 64), biomes);
+    }
+
+    /**
+     * What Voxy holds after the trimmed copy lands on the disk state it had (the sections sent replace their own, the
+     * rest stay) is the whole ruined copy, blocks and light: the sections left out are the ones the ruins cannot change.
+     */
+    private static void landsAsTheWholeCopy(Fill disk, LodSections.DiskCopy copy, int from) {
+        List<LodSections.Section> sent = LodSections.read(LodSections.ofCopy(copy, true), biomes);
+        assertEquals(from, sent.get(0).y(), "lowest section sent");
+        assertEquals(4 - from, sent.size());
+        LevelChunkSection[] kept = sections(disk);
+        CopyLight before = CopyLight.of(kept, true), after = CopyLight.of(copy.getSections(), true);
+        for (int i = 0; i < 4; i++) {
+            LevelChunkSection held = i < from ? kept[i] : sent.get(i - from).blocks();
+            for (int y = 0; y < 16; y++) for (int z = 0; z < 16; z++) for (int x = 0; x < 16; x++) {
+                assertEquals(copy.getSections()[i].getBlockState(x, y, z), held.getBlockState(x, y, z), "block " + x + " " + (i * 16 + y) + " " + z);
+                if (i < from) {
+                    assertEquals(after.sky(x, i * 16 + y, z), before.sky(x, i * 16 + y, z), "sky light kept at " + x + " " + (i * 16 + y) + " " + z);
+                    assertEquals(after.block(x, i * 16 + y, z), before.block(x, i * 16 + y, z), "block light kept at " + x + " " + (i * 16 + y) + " " + z);
+                }
+            }
+        }
+    }
+
+    @Test
+    void ruinsSendFromTheSectionBelowTheirLowestChange() {
+        Fill disk = (x, y, z) -> town(x, y, z, true, 64);
+        // the roof (section 3) falls: the house's lower floor (section 2) gets sky, the stone below keeps its dark
+        LodSections.DiskCopy copy = ruined(disk, (x, y, z) -> town(x, y, z, false, 64));
+        landsAsTheWholeCopy(disk, copy, 2);
+        ProtoChunk plain = new ProtoChunk(copy.getPos(), UpgradeData.EMPTY, LevelHeightAccessor.create(0, 64), biomes, null);
+        for (int i = 0; i < 4; i++) plain.getSections()[i] = copy.getSections()[i];
+        int whole = LodSections.ofCopy(plain, true).length, trimmed = LodSections.ofCopy(copy, true).length;
+        assertTrue(trimmed < whole - 2 * 2048, "trimmed " + trimmed + " of " + whole + " bytes: two stone sections left out");
+    }
+
+    @Test
+    void skyLitSectionsBelowTheChangeGoToo() {
+        // a shaft open to the sky down to y 20: the sky reaches section 1, so its light may change with the roof's
+        Fill disk = (x, y, z) -> town(x, y, z, true, 20);
+        landsAsTheWholeCopy(disk, ruined(disk, (x, y, z) -> town(x, y, z, false, 20)), 1);
+    }
+
+    @Test
+    void aCopyEqualToDiskGoesWhole() {
+        // district light back, a saved chunk: Voxy may hold an older copy anywhere in it
+        Fill disk = (x, y, z) -> town(x, y, z, true, 64);
+        landsAsTheWholeCopy(disk, ruined(disk, disk), 0);
+        assertEquals(0, LodSections.from(new long[]{1, 2, 3}, new long[]{1, 2, 3}, i -> false));
+        assertEquals(0, LodSections.from(new long[]{1, 2, 3}, new long[]{9, 2, 3}, i -> false), "the bottom section changed");
+        assertEquals(1, LodSections.from(new long[]{1, 2, 3}, new long[]{1, 2, 9}, i -> false));
+        assertEquals(0, LodSections.from(new long[]{1, 2, 3}, new long[]{1, 2, 9}, i -> true));
+    }
 }

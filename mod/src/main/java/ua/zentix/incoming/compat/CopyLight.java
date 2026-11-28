@@ -154,6 +154,12 @@ public final class CopyLight {
         return layer(sky[i]);
     }
 
+    /** Section {@code i} has sky light anywhere (false without a sky). */
+    public boolean skyLit(int i) {
+        for (byte b : sky[i]) if (b != 0) return true;
+        return false;
+    }
+
     /** Section {@code i} is entirely under open sky (skylight 15 everywhere). */
     public boolean fullSky(int i) {
         for (byte b : sky[i]) if (b != 15) return false;
