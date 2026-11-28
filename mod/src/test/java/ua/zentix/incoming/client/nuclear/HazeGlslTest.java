@@ -3,6 +3,8 @@ package ua.zentix.incoming.client.nuclear;
 import org.junit.jupiter.api.Test;
 import ua.zentix.incoming.client.fx.layer.HeatPass;
 import ua.zentix.incoming.client.fx.smoke.CloudModel;
+import ua.zentix.incoming.client.fx.smoke.FirePlume;
+import ua.zentix.incoming.util.Stability;
 
 import java.io.IOException;
 import java.io.InputStream;
@@ -45,6 +47,49 @@ class HazeGlslTest {
         assertEquals(HeatPass.SWIRL, constant("HAZE_SWIRL"), 1e-12);
         assertEquals(HeatPass.HAZE_CYCLE, constant("HAZE_CYCLE"), 1e-12);
         assertEquals(HeatPass.CONE_FLAT, constant("HAZE_CONE_FLAT"), 1e-15);
+        assertEquals(HeatPass.EDDY, constant("HAZE_EDDY"), 1e-12);
+        assertEquals(HeatPass.N0 * HeatPass.TURBULENCE, constant("HAZE_AMP"), 1e-12);
+        assertEquals(FirePlume.BLOCK_WATTS * FirePlume.CONVECTIVE, constant("STORM_BLOCK_WATTS"), 1e-6);
+        assertEquals(FirePlume.FLAME_K - CloudModel.T_AIR_K, constant("STORM_FLAME_EXCESS"), 1e-3);
+    }
+
+    /**
+     * The firestorm's hot air in the shader ({@code storm*}) is the plume of a fire of f·spacing² blocks ({@link FirePlume}: Heskestad
+     * excess and axis speed) at the ray's height, its radius as an ordinary fire's ({@code HeatPass.Frame.plume}: source radius or
+     * 0.12 of the height), and its plumes cover their share of the ground.
+     */
+    @Test
+    void firestormAirIsTheFirePlumeLaw() {
+        GlslFunction excess = GlslFunction.parse(GLSL, "stormExcess"), speed = GlslFunction.parse(GLSL, "stormSpeed"),
+                radius = GlslFunction.parse(GLSL, "stormRadius"), cover = GlslFunction.parse(GLSL, "stormCover");
+        for (double spacing : new double[]{8, 32}) {
+            for (double f = 0.002; f < 4; f *= 2.3) {
+                FirePlume p = new FirePlume(f * spacing * spacing, FirePlume.CALM, Stability.D);
+                for (double z = 0.05; z < 400; z *= 1.8) {
+                    Map<String, Double> at = Map.of("f", f, "spacing", spacing, "z", z);
+                    String where = "share " + f + ", spacing " + spacing + ", " + z + " m";
+                    assertEquals(p.excess(z), excess.call(at), 2e-5 * p.excess(z), where);
+                    assertEquals(p.axisSpeed(z), speed.call(at), 2e-5 * p.axisSpeed(z), where);
+                    double r = Math.max(2 * p.size, 0.12 * z);
+                    assertEquals(r, radius.call(at), 1e-9 * r, where);
+                    assertEquals(Math.min(1, Math.PI * r * r / (spacing * spacing)), cover.call(at), 1e-6, where);
+                }
+            }
+        }
+    }
+
+    /**
+     * Air over ground that does not burn stays still: the firestorm's shift comes only from the fire map's burning share along the
+     * ray (a zone-wide column at the mean fire put the eye inside hot air everywhere in the zone, and the whole frame trembled).
+     * The whole pass on llvmpipe: {@code tools/heat_shimmer_gl.py}.
+     */
+    @Test
+    void firestormShimmerReadsTheBurningShareAlongTheRay() {
+        String storm = GLSL.substring(GLSL.indexOf("vec2 stormShift("), GLSL.indexOf("vec2 heatShift("));
+        assertTrue(storm.contains("textureLod(Sampler3, uv, lod).r") && storm.contains("textureLod(Sampler4, uv, lod).r"), storm);
+        assertTrue(storm.contains("f *= s.w;") && storm.contains("if (f <= 1e-5 || len <= 0.0) continue;"), "no burning share — no hot air");
+        assertTrue(storm.contains("len * stormCover(f, s.y, z)"), "path through plumes is the covered share");
+        assertTrue(GLSL.contains("return shift + stormShift(dir, dist, res, wa, wb);"), "the field adds to the columns' shift");
     }
 
     @Test

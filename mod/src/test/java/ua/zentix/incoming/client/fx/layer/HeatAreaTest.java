@@ -168,6 +168,31 @@ class HeatAreaTest {
         assertTrue(new HeatArea().of(nuke, VIEW, PROJECTION, 1, 1e-4).whole, "a nuclear front keeps the whole screen");
     }
 
+    /**
+     * A firestorm field is its fire map's hot layer, not a hot column: no column slot, at most two fields, its layer as high as the
+     * strongest cell's plume stays hot, and its area is the layer over the map (whole screen with the eye inside it).
+     */
+    @Test
+    void firestormFieldTakesItsHotLayer() {
+        int side = 16;
+        float[] map = new float[side * side * 4];
+        map[4 * (5 * side + 7)] = 1;
+        HeatPass.Frame f = new HeatPass.Frame();
+        f.storm(0, -3000, -9000, side * 90 / 2.0, 90, 32, 1, 1, map, side, "a", 1);
+        assertFalse(f.hotAny(), "a firestorm takes no hot-gas column");
+        assertTrue(f.stormAny());
+        double top = f.storm.getColumn(2, new Vector4f()).z;
+        ua.zentix.incoming.client.fx.smoke.FirePlume p = new ua.zentix.incoming.client.fx.smoke.FirePlume(32 * 32, 1, 3);
+        assertEquals(HeatPass.COOL, p.excess(top), 0.01, "the layer ends where the strongest plume cools to the cutoff");
+        HeatArea a = new HeatArea().of(f, VIEW, PROJECTION, 1, 1e-4);
+        assertEquals(1, a.count);
+        assertFalse(a.whole, "a field 9 km ahead is a part of the screen");
+        f.storm(0, -10, 0, 5000, 90, 32, 1, 1, map, side, "b", 1);
+        f.storm(0, -10, 0, 5000, 90, 32, 1, 1, map, side, "c", 1);
+        assertEquals("b", f.stormOwner[1], "two fields at most");
+        assertTrue(new HeatArea().of(f, VIEW, PROJECTION, 1, 1e-4).whole, "the eye inside a field's layer");
+    }
+
     @Test
     void mergedRectanglesKeepLightFirst() {
         HeatPass.Frame f = ball(-200, 0, -1000, 2, 1);

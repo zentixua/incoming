@@ -82,8 +82,8 @@
   },
   "fx_heat": {
    "code_vert": 476,
-   "code_frag": 35080,
-   "memory_mb": 83,
+   "code_frag": 39536,
+   "memory_mb": 90,
    "scratch": 0
   },
   "fx_heat_shadow": {

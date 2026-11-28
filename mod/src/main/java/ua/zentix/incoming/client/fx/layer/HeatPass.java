@@ -18,14 +18,18 @@ import org.joml.Matrix4fc;
 import org.joml.Vector3f;
 import org.joml.Vector4f;
 import org.lwjgl.opengl.GL11;
+import org.lwjgl.opengl.GL13;
 import org.lwjgl.opengl.GL30;
+import org.lwjgl.system.MemoryUtil;
 import ua.zentix.incoming.Incoming;
 import ua.zentix.incoming.client.fx.plume.Flame;
 import ua.zentix.incoming.client.fx.plume.FlameModel;
 import ua.zentix.incoming.client.fx.smoke.CloudModel;
 import ua.zentix.incoming.client.fx.smoke.FirePlume;
 import ua.zentix.incoming.nuclear.model.ShockOptics;
+import ua.zentix.incoming.util.Stability;
 
+import java.nio.FloatBuffer;
 import java.util.Arrays;
 
 /**
@@ -143,6 +147,15 @@ public final class HeatPass {
         private final double[] lightWeight = new double[4], hotWeight = new double[4], frontWeight = new double[2], jetWeight = new double[4];
         /** Frame hot-gas column shift, pixels (most noticeable position, as in selection). */
         final double[] hotShift = new double[4];
+        /**
+         * Firestorm fields ({@link #storm}), slots 0 and 1: column k — eye-relative map centre on the ground (x, ground y, z), map
+         * half-side (w; 0 — absent); column 2 + k — map cell, source spacing, top of the hot air above the ground, fire-model trust.
+         */
+        final Matrix4f storm = new Matrix4f().zero();
+        /** Slot fire maps (RGBA per cell, x fastest, burning share in r), their side, owner and fill generation (texture upload). */
+        final float[][] stormMap = new float[2][];
+        final int[] stormSide = new int[2], stormVersion = new int[2];
+        final Object[] stormOwner = new Object[2];
         /** Slot front is nuclear (conventional explosions cannot evict it: their presence leaves nuclear visuals unchanged). */
         private final boolean[] frontNuke = new boolean[2];
         private final Vector4f column = new Vector4f();
@@ -181,6 +194,9 @@ public final class HeatPass {
             gas.zero();
             front.zero();
             frontShape.zero();
+            storm.zero();
+            Arrays.fill(stormMap, null);
+            Arrays.fill(stormOwner, null);
             jets.zero();
             jetAxis.zero();
             jetSize.zero();
@@ -217,6 +233,10 @@ public final class HeatPass {
 
         boolean hotAny() {
             return hot.m03() > 0 || hot.m13() > 0 || hot.m23() > 0 || hot.m33() > 0;
+        }
+
+        boolean stormAny() {
+            return storm.m03() > 0 || storm.m13() > 0;
         }
 
         boolean frontAny() {
@@ -319,24 +339,43 @@ public final class HeatPass {
          * Heskestad), temperature is midpoint excess, speed axial there ({@link FirePlume#axisSpeed}); share share.
          */
         public void plume(double x, double y, double z, FirePlume p, double share) {
-            plumes(x, y, z, p, share, 0);
+            if (share <= 0) return;
+            double h = reach(p), r = Math.max(2 * p.size, 0.12 * h);
+            hot(x, y, z, h, r, CloudModel.T_AIR_K + p.excess(0.5 * h) * share, p.axisSpeed(0.5 * h), EDDY * r);
         }
 
-        /**
-         * Hot gas above a field of sources like {@code p}, in a circle of radius {@code across} blocks, eye-relative ground center
-         * (x, y, z) (nuclear firestorm): each source column as {@link #plume}; whole field column has its height/temperature,
-         * field width, each source's eddies (field is many adjacent plumes, not one).
-         */
-        public void plumes(double x, double y, double z, FirePlume p, double share, double across) {
-            if (share <= 0) return;
+        /** Height above plume {@code p}'s source where its Heskestad axial excess ({@link FirePlume#excess}) falls to {@link #COOL}. */
+        static double reach(FirePlume p) {
             double lo = p.flameHeight(), hi = 400;
             for (int i = 0; i < 30; i++) {
                 double mid = 0.5 * (lo + hi);
                 if (p.excess(mid) > COOL) lo = mid;
                 else hi = mid;
             }
-            double h = lo, r = Math.max(2 * p.size, 0.12 * h);
-            hot(x, y, z, h, Math.max(r, across), CloudModel.T_AIR_K + p.excess(0.5 * h) * share, p.axisSpeed(0.5 * h), EDDY * r);
+            return lo;
+        }
+
+        /**
+         * Firestorm field (nuclear, {@code NukeHeat}): hot air only above the cells that burn. The fire map {@code map} (RGBA per
+         * cell, x fastest, side {@code side}, cell {@code cell} blocks, burning share of the cell's area in r) is centred at
+         * eye-relative ground point (x, y, z) with half-side {@code half}; {@code owner} and {@code version} identify its fill
+         * for the texture upload. Each point of the {@code spacing}-block source grid is a fire of its share × {@code gate}
+         * (fire-model trust) fire blocks per spacing² ({@link FirePlume}: Heskestad excess and speed at the ray's height), its
+         * plumes cover their share of the ground ({@code fx_heat}: {@code stormShift}). The hot layer reaches as high as the
+         * strongest cell's plume ({@code peak} = largest share × gate) stays {@link #COOL} above the air. At most two fields.
+         */
+        public void storm(double x, double y, double z, double half, double cell, double spacing, double gate, double peak, float[] map,
+                          int side, Object owner, int version) {
+            if (!(half > 0) || !(peak > 0) || map == null || side <= 0 || map.length < side * side * 4) return;
+            int k = storm.m03() > 0 ? 1 : 0;
+            if (k == 1 && storm.m13() > 0) return;
+            double top = reach(new FirePlume(peak * spacing * spacing, FirePlume.CALM, Stability.D));
+            storm.setColumn(k, column.set((float) x, (float) y, (float) z, (float) half));
+            storm.setColumn(2 + k, column.set((float) cell, (float) spacing, (float) top, (float) gate));
+            stormMap[k] = map;
+            stormSide[k] = side;
+            stormOwner[k] = owner;
+            stormVersion[k] = version;
         }
 
         /**
@@ -709,7 +748,7 @@ public final class HeatPass {
      * projection map eye-relative positions to clip space. Sources only off screen or too faint to move a pixel — no pass.
      */
     static boolean needed(Frame f, Matrix4fc view, Matrix4fc projection) {
-        if (shader == null || !(f.lit() || f.hotAny() || f.frontAny())) return false;
+        if (shader == null || !(f.lit() || f.hotAny() || f.stormAny() || f.frontAny())) return false;
         float shade = Math.min(Math.min(FACE_SHADE.x, FACE_SHADE.y), Math.min(FACE_SHADE.z, FACE_SHADE.w));
         double visible = HeatArea.visible(OPEN_SKY.x, OPEN_SKY.y, OPEN_SKY.z, Math.max(shade, 0.05f));
         return AREA.of(f, view, projection, f.adapted(), visible).count > 0;
@@ -728,7 +767,7 @@ public final class HeatPass {
         ShaderInstance s = shader;
         HeatArea area = AREA;
         // shifted pixels read the copy up to SHIFT_REACH away; light alone reads its own pixel
-        int margin = f.hotAny() || f.frontAny() ? HeatArea.SHIFT_REACH : 0;
+        int margin = f.hotAny() || f.stormAny() || f.frontAny() ? HeatArea.SHIFT_REACH : 0;
         if (s == null || scene < 0 || area.count == 0 || !copyFrame(area, margin)) return false;
         VIEW_PROJECTION.set(projection).mul(view);
         VIEW_PROJECTION.invert(INVERSE);
@@ -741,6 +780,10 @@ public final class HeatPass {
         RenderSystem.setShaderTexture(0, copy);
         RenderSystem.setShaderTexture(1, scene);
         RenderSystem.setShaderTexture(2, shadows ? shadowTex : copy);
+        for (int k = 0; k < 2; k++) {
+            int map = stormMap(k, f);
+            RenderSystem.setShaderTexture(3 + k, map >= 0 ? map : copy);
+        }
         common(s, f, pixel);
         s.safeGetUniform("HeatShadow").set(shadows ? 1f : 0f, 0f, 0f, 0f);
         s.safeGetUniform("Haze").set(haze.x, haze.y, haze.z, haze.w);
@@ -748,12 +791,13 @@ public final class HeatPass {
         s.safeGetUniform("HeatShape").set(f.shape);
         s.safeGetUniform("HeatAxis").set(f.axis);
         s.safeGetUniform("HeatGas").set(f.gas);
+        s.safeGetUniform("HeatStorm").set(f.storm);
         clock(f.seconds, CLOCK);
         s.safeGetUniform("HeatClock").set(CLOCK.x, CLOCK.y, CLOCK.z, CLOCK.w);
         s.safeGetUniform("HeatFront").set(f.front);
         s.safeGetUniform("HeatFrontShape").set(f.frontShape.x, f.frontShape.y, f.frontShape.z, f.frontShape.w);
         s.safeGetUniform("HeatFrontChemical").set(f.frontNuke[0] ? 0f : 1f, f.frontNuke[1] ? 0f : 1f);
-        s.safeGetUniform("HeatFrame").set(f.frontAny() ? 1f : 0f, (float) pixel, f.lit() ? 1f : 0f, f.hotAny() ? 1f : 0f);
+        s.safeGetUniform("HeatFrame").set(f.frontAny() ? 1f : 0f, (float) pixel, f.lit() ? 1f : 0f, f.hotAny() || f.stormAny() ? 1f : 0f);
         s.safeGetUniform("HeatReach").set(area.whole ? 1e9f : HeatArea.SHIFT_REACH);
         SceneDepth.bindSee(s);
         boolean drawn = quads(s, area, 0, area.count, copyW, copyH, 0);
@@ -908,6 +952,54 @@ public final class HeatPass {
         return true;
     }
 
+    /** Slot firestorm fire maps for the pass (burning share, R16F with mip levels), side, owner and fill generation; −1 — none yet. */
+    private static final int[] STORM_TEX = {-1, -1}, STORM_SIDE = new int[2], STORM_VERSION = new int[2];
+    private static final Object[] STORM_OWNER = new Object[2];
+    @Nullable
+    private static FloatBuffer stormBuffer;
+
+    /**
+     * Frame storm slot {@code k}'s fire map as a texture, uploaded when its fill changed: the burning share only, mip levels
+     * are clusters of cells (a far step of {@code stormShift} reads the level as wide as itself); zero beyond the map. Its
+     * own small copy (128 KB at the largest map), not the pall's map: the shimmer does not depend on the pall's slots or
+     * quality. −1 — no storm in the slot.
+     */
+    private static int stormMap(int k, Frame f) {
+        float[] map = f.stormMap[k];
+        int side = f.stormSide[k];
+        if ((k == 0 ? f.storm.m03() : f.storm.m13()) <= 0 || map == null || side <= 0) return -1;
+        if (STORM_TEX[k] < 0) {
+            STORM_TEX[k] = GlStateManager._genTexture();
+            GlStateManager._bindTexture(STORM_TEX[k]);
+            GlStateManager._texParameter(GlConst.GL_TEXTURE_2D, GlConst.GL_TEXTURE_MIN_FILTER, GL11.GL_LINEAR_MIPMAP_LINEAR);
+            GlStateManager._texParameter(GlConst.GL_TEXTURE_2D, GlConst.GL_TEXTURE_MAG_FILTER, GlConst.GL_LINEAR);
+            GlStateManager._texParameter(GlConst.GL_TEXTURE_2D, GlConst.GL_TEXTURE_WRAP_S, GL13.GL_CLAMP_TO_BORDER);
+            GlStateManager._texParameter(GlConst.GL_TEXTURE_2D, GlConst.GL_TEXTURE_WRAP_T, GL13.GL_CLAMP_TO_BORDER);
+            STORM_SIDE[k] = 0;
+        }
+        if (f.stormOwner[k] == STORM_OWNER[k] && f.stormVersion[k] == STORM_VERSION[k] && side == STORM_SIDE[k]) return STORM_TEX[k];
+        int n = side * side;
+        if (stormBuffer == null || stormBuffer.capacity() < n) {
+            if (stormBuffer != null) MemoryUtil.memFree(stormBuffer);
+            stormBuffer = MemoryUtil.memAllocFloat(n);
+        }
+        FloatBuffer buf = stormBuffer;
+        buf.clear();
+        for (int i = 0; i < n; i++) buf.put(map[4 * i]);
+        buf.flip();
+        GlStateManager._bindTexture(STORM_TEX[k]);
+        GlStateManager._pixelStore(GL11.GL_UNPACK_ROW_LENGTH, 0);
+        GlStateManager._pixelStore(GL11.GL_UNPACK_SKIP_ROWS, 0);
+        GlStateManager._pixelStore(GL11.GL_UNPACK_SKIP_PIXELS, 0);
+        GlStateManager._pixelStore(GL11.GL_UNPACK_ALIGNMENT, 4);
+        GL11.glTexImage2D(GL11.GL_TEXTURE_2D, 0, GL30.GL_R16F, side, side, 0, GL11.GL_RED, GL11.GL_FLOAT, buf);
+        GL30.glGenerateMipmap(GL11.GL_TEXTURE_2D);
+        STORM_OWNER[k] = f.stormOwner[k];
+        STORM_VERSION[k] = f.stormVersion[k];
+        STORM_SIDE[k] = side;
+        return STORM_TEX[k];
+    }
+
     /** For scenario line: frame sources. */
     public static String describe() {
         Frame f = FRAME;
@@ -933,6 +1025,12 @@ public final class HeatPass {
             if (c.w <= 0) continue;
             Vector4f s = f.shape.getColumn(i, new Vector4f()), g = f.gas.getColumn(i, new Vector4f());
             sb.append(String.format(java.util.Locale.ROOT, " [r %.1f h %.0f dT %.0f px %.2f]", c.w, s.x, g.x, f.hotShift[i]));
+        }
+        for (int i = 0; i < 2; i++) {
+            f.storm.getColumn(i, c);
+            if (c.w <= 0) continue;
+            Vector4f s = f.storm.getColumn(2 + i, new Vector4f());
+            sb.append(String.format(java.util.Locale.ROOT, " <storm half %.0f cell %.0f spacing %.0f top %.0f trust %.2f>", c.w, s.x, s.y, s.z, s.w));
         }
         return sb.toString();
     }

@@ -103,7 +103,7 @@ jobs:
                 tools/release_checks.py|tools/prepare_publish.py|tools/test_release_checks.py|tools/ci_reuse.py|tools/test_ci_reuse.py) mod=true; rig=true ;;
                 # Shaders also go through AMD's compiler (tools/amd_shader_check.py).
                 mod/src/main/resources/assets/incoming/shaders/*) mod=true; amd=true ;;
-                tools/amd_shader_check.py|tools/test_amd_shader_check.py|tools/fixtures/amd_shader_budget.json) amd=true ;;
+                tools/amd_shader_check.py|tools/test_amd_shader_check.py|tools/fixtures/amd_shader_budget.json|tools/heat_shimmer_gl.py) amd=true ;;
                 mod/*|tools/fetch_runtime_mods.py|tools/paths.py|tools/clean_install.py) mod=true ;;
                 # The sandbox's own start (job Песочница) also follows its scripts (sandbox.sh sources the other two).
                 tools/sandbox.sh|tools/soft_gl.sh|tools/gpu_lease.sh) rig=true; sandbox=true ;;
@@ -525,7 +525,8 @@ jobs:
 
   # Every shader program through AMD's offline OpenGL compiler (glc from RGA, no GPU): code size, compiler memory and spills
   # against tools/fixtures/amd_shader_budget.json. AMD's Windows driver runs this compiler inside the game; a program
-  # past its budget freezes AMD machines on its first use (#656).
+  # past its budget freezes AMD machines on its first use (#656). The heat pass also runs on Mesa llvmpipe: a still
+  # camera stays still outside each source's own hot air (tools/heat_shimmer_gl.py).
   amd_shaders:
     name: Компилятор AMD
     needs: changes
@@ -543,6 +544,12 @@ jobs:
         run: python3 -m unittest discover -s tools -p 'test_amd_shader_check.py' -v
       - name: AMD compiler budget
         run: python3 tools/amd_shader_check.py --jobs 2
+      - uses: astral-sh/setup-uv@v6
+      - name: Heat shimmer stays over its source (Mesa llvmpipe)
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y libegl1 libegl-mesa0 libgl1-mesa-dri
+          uv run tools/heat_shimmer_gl.py
 
   lss_gametest:
     name: LSS GameTest ${{ matrix.version }}
