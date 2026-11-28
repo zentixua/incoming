@@ -123,4 +123,23 @@ class BlastGustTest {
         assertEquals(0, BlastDust.layerTop(d, groundM, 0), 1e-9);
         assertTrue(BlastDust.layerTop(d, groundM, 20) > 0 && BlastDust.layerTop(d, groundM, 100) > BlastDust.layerTop(d, groundM, 20));
     }
+
+    /** The clock is read once a tick, whatever the number of pieces asking, and again on the next tick (a replaced record too). */
+    @Test
+    void clockIsReadOncePerTick() {
+        long[] tick = {7};
+        int[] reads = {0};
+        double[] age = {100};
+        BlastGust.TickClock c = new BlastGust.TickClock(3, () -> tick[0], id -> {
+            assertEquals(3, id);
+            reads[0]++;
+            return age[0];
+        });
+        for (int i = 0; i < 1000; i++) assertEquals(100, c.getAsDouble());
+        assertEquals(1, reads[0]);
+        tick[0]++;
+        age[0] = 40;
+        assertEquals(40, c.getAsDouble());
+        assertEquals(2, reads[0]);
+    }
 }

@@ -779,6 +779,13 @@ public final class ClientNuclear {
         return held;
     }
 
+    /** Client ticks done ({@link #tick}): the stamp for readers that keep a clock value until the clocks move again. */
+    static long ticked() {
+        return ticks;
+    }
+
+    private static long ticks;
+
     public static void tick() {
         Minecraft mc = Minecraft.getInstance();
         ClientLevel level = mc.level;
@@ -837,6 +844,8 @@ public final class ClientNuclear {
         NukePall.tick(level, eye);
         SoundFilters.loops();
         Geiger.tick();
+        // after every clock moved: a reader keeping a value for the tick reads it again from here on
+        ticks++;
     }
 
     /**

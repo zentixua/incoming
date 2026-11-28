@@ -24,6 +24,7 @@ import ua.zentix.incoming.util.OpenBox;
 import net.neoforged.neoforge.client.extensions.common.IClientBlockExtensions;
 import org.joml.Quaternionf;
 import org.joml.Vector3f;
+import org.jetbrains.annotations.Nullable;
 import ua.zentix.incoming.nuclear.radiation.Shielding;
 
 
@@ -261,6 +262,44 @@ public final class Fragments {
     public static void reset() {
         LIVE.clear();
         CRAFT.clear();
+        Look.LAST.level = null;
+    }
+
+    /**
+     * What a piece takes from its block: texture, tint (grass, foliage: the biome blend around the block) and material.
+     * One removed block breaks into several pieces in a row ({@code NukeDust.debris}), each asking the same: the last
+     * block's answer is kept for the tick (building it per piece was 12 % of {@code Fragments} time at a nuclear front).
+     */
+    private static final class Look {
+        static final Look LAST = new Look();
+        @Nullable ClientLevel level;
+        @Nullable BlockState state;
+        long pos, tick;
+        TextureAtlasSprite sprite;
+        /** RGB tint, or -1 without tint. */
+        int tint;
+        /** Shielding material (NaN until asked). */
+        double material;
+
+        static Look of(ClientLevel level, BlockState state, BlockPos from) {
+            Look l = LAST;
+            long pos = from.asLong();
+            if (l.level == level && l.state == state && l.pos == pos && l.tick == Fragments.tick) return l;
+            l.level = level;
+            l.state = state;
+            l.pos = pos;
+            l.tick = Fragments.tick;
+            l.sprite = Minecraft.getInstance().getBlockRenderer().getBlockModelShaper().getTexture(state, level, from);
+            l.tint = IClientBlockExtensions.of(state).areBreakingParticlesTinted(state, level, from)
+                    ? Minecraft.getInstance().getBlockColors().getColor(state, level, from, 0) & 0xFFFFFF : -1;
+            l.material = Double.NaN;
+            return l;
+        }
+
+        double material(ClientLevel level, BlockPos from, BlockState state) {
+            if (Double.isNaN(material)) material = Shielding.material(level, from, state);
+            return material;
+        }
     }
 
     /** Piece: rectangular body with half-sizes along its axes, rotated around its own axis, block texture on faces. */
@@ -329,9 +368,10 @@ public final class Fragments {
             gravity = 0;
             friction = 1;
             lifetime = life;
-            drag = drag(terminalMps > 0 ? terminalMps : terminal(kind, Shielding.material(level, from, state), len));
+            Look look = Look.of(level, state, from);
+            drag = drag(terminalMps > 0 ? terminalMps : terminal(kind, look.material(level, from, state), len));
             lift = (float) (LIFT_MIN + ((edge ? LIFT_EDGE : LIFT_MAX) - LIFT_MIN) * random.nextDouble());
-            TextureAtlasSprite sprite = Minecraft.getInstance().getBlockRenderer().getBlockModelShaper().getTexture(state, level, from);
+            TextureAtlasSprite sprite = look.sprite;
             // face uses a texture patch the size of the body (16 pixels per block); glass uses the edge: window is transparent except the frame
             // and edge highlights, and the particle does not draw transparent pixels
             float span = Mth.clamp(2 * Math.max(half[0], half[1]), 0.125f, 1);
@@ -340,8 +380,8 @@ public final class Fragments {
             u1 = sprite.getU(ou + span);
             v0 = sprite.getV(ov);
             v1 = sprite.getV(ov + span);
-            if (IClientBlockExtensions.of(state).areBreakingParticlesTinted(state, level, from)) {
-                int c = Minecraft.getInstance().getBlockColors().getColor(state, level, from, 0);
+            if (look.tint >= 0) {
+                int c = look.tint;
                 rCol = (c >> 16 & 0xFF) / 255f;
                 gCol = (c >> 8 & 0xFF) / 255f;
                 bCol = (c & 0xFF) / 255f;

@@ -368,7 +368,7 @@ Ruins and everything in `nuclear/world/` are in `nuclear-world.md`.
   within 48 blocks of camera, one per chunk beyond, to `NukeDust.NEAR`; fades into Kuhl layer). With game wave
   (`wave_speed` 0.35), near-burst front is slower than real wind behind it: cap wind at in-game front speed, air path
   at front position, no wind ahead (`BlastGustTest.piecesStayBehindTheFront`: without speed cap, a leaf clump at 600 m
-  reached 7 blocks/tick in one tick and overtook front). Wind clock uses detonation ID (`ClientNuclear.ticksOf`): entry
+  reached 7 blocks/tick in one tick and overtook front). Wind clock uses detonation ID (`ClientNuclear.ticksOf`, once a tick: `BlastGust.TickClock`): entry
   and seek replace detonation records while airborne pieces remain. Surface litter is only turf, litter and leaves
   (`NukeDust.litter`), light sheets; no pieces from stone, sand or snow. At most 256 streaks per detonation
   (`BlastDust.MAX_STREAKS`, nearer evicts farther). Server-toppled trunks are also “removed positions” (log relocates),

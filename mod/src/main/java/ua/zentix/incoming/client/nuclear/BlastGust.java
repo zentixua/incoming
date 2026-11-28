@@ -54,8 +54,37 @@ public final class BlastGust implements Fragments.Wind {
      * clock their wind would freeze for about ten seconds. No detonation means no wind.
      */
     static BlastGust at(ClientNuclear.Active a, Vec3 at) {
-        int id = a.d.id();
-        return of(a.d, at, () -> ClientNuclear.ticksOf(id));
+        return of(a.d, at, new TickClock(a.d.id(), ClientNuclear::ticked, ClientNuclear::ticksOf));
+    }
+
+    /**
+     * The detonation clock by ID, read once per client tick: every tick reader takes {@code ticks(0)}, which holds within a
+     * tick (a record replaced by sync or seek shows from the next tick). A thousand pieces asking the clock map each tick
+     * were 5 % of {@code Fragments} time at a nuclear front.
+     */
+    static final class TickClock implements DoubleSupplier {
+        private final int id;
+        private final java.util.function.LongSupplier stamp;
+        private final java.util.function.IntToDoubleFunction clock;
+        private long seen = Long.MIN_VALUE;
+        private double now;
+
+        /** Detonation {@code id}'s {@code clock}, read again when {@code stamp} changes. */
+        TickClock(int id, java.util.function.LongSupplier stamp, java.util.function.IntToDoubleFunction clock) {
+            this.id = id;
+            this.stamp = stamp;
+            this.clock = clock;
+        }
+
+        @Override
+        public double getAsDouble() {
+            long tick = stamp.getAsLong();
+            if (tick != seen) {
+                seen = tick;
+                now = clock.applyAsDouble(id);
+            }
+            return now;
+        }
     }
 
     /** Wind from detonation {@code d}'s wave at {@code at}; {@code clock} is ticks since detonation. */
