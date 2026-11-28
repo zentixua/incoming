@@ -51,9 +51,9 @@ void wallCut(inout vec4 light, inout vec4 span, inout vec4 split, float surface)
     vec3 depth = span.rgb / cover;
     vec4 s = vec4(split.xy / cover, 1.0 - split.z, split.w / cover);
     float fraction = wallFraction(depth, surface);
-    WallLayer wall = WallLayer(light, depth, s);
+    // (wallTo at the surface, its share taken once)
     float share = wallPrefixShare(surface, depth.x, s.x, s.z, s.y, depth.y, light.a, s.w);
-    light = wallTo(wall, surface);
+    light = vec4(light.rgb * share, wallPrefixT(surface, depth.x, s.x, s.z, s.y, depth.y, light.a));
     float now = 1.0 - light.a;
     if (surface <= s.x) {
         // inside A: B is gone, A ends at the surface and holds all that is left
@@ -72,6 +72,11 @@ void wallCut(inout vec4 light, inout vec4 span, inout vec4 split, float surface)
     split = vec4(s.xy * now, 1.0 - s.z, s.w * now);
 }
 
+// The pall composite on the volume's coarser rungs (PallPass.Step.cutOnce, its DwCutOnce): the taps of the pixel's depth class are
+// filtered whole and the filtered layer is cut at the pixel's depth once (the four cuts were most of the composite's dust cost:
+// Artem's Zearth scene, 4–5 ms of its 6–8 at 2560×1600). Taps of one depth class differ in their dust's span by little; where a
+// tap's dust ends just behind the pixel and its neighbour's just in front, the one cut takes their mean span
+bool gWallCutOnce = false;
 WallLayer wallLayer(sampler2D atlas, sampler2D scene, vec2 pixel, float here, float div) {
     WallLayer wall;
     wall.light = vec4(0.0, 0.0, 0.0, 1.0);
@@ -113,7 +118,7 @@ WallLayer wallLayer(sampler2D atlas, sampler2D scene, vec2 pixel, float here, fl
                 vec4 span = texelFetch(atlas, c + ivec2(low.x, 0), 0);
                 vec4 split = texelFetch(atlas, c + ivec2(2 * low.x, 0), 0);
                 if (!pallValid(v) || !pallValid(span)) continue;
-                wallCut(v, span, split, here);
+                if (!gWallCutOnce) wallCut(v, span, split, here);
                 float w = wx[x] * wy[y];
                 sum += w * v;
                 float c0 = max(1.0 - span.a, 1e-6);
@@ -136,6 +141,16 @@ WallLayer wallLayer(sampler2D atlas, sampler2D scene, vec2 pixel, float here, fl
         vec4 sp = splits / max(weights * cover, 1e-6);
         // A's transmittance from its filtered opacity (never under the whole's)
         wall.split = vec4(sp.xy, max(1.0 - splits.z / weights, wall.light.a), clamp(sp.w, 0.0, 1.0));
+        if (gWallCutOnce && cover > 0.0) {
+            // the filtered layer in the atlas's form, cut once at the pixel's depth
+            vec4 span = vec4(wall.depth * cover, wall.light.a);
+            vec4 split = vec4(wall.split.xy * cover, 1.0 - wall.split.z, wall.split.w * cover);
+            wallCut(wall.light, span, split, here);
+            cover = clamp(1.0 - wall.light.a, 0.0, 1.0);
+            float c0 = max(cover, 1e-6);
+            wall.depth = span.rgb / c0;
+            wall.split = vec4(split.xy / c0, max(1.0 - split.z, wall.light.a), clamp(split.w / c0, 0.0, 1.0));
+        }
         wall.light.rgb = pallShown(max(wall.light.rgb, vec3(0.0)), cover);
     }
     return wall;

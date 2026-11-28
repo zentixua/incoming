@@ -303,27 +303,26 @@ class PallDetailTest {
      */
     @Test
     void nearVolumeAndStepsLetTheFloorFit() {
-        // the floor's parts at the old floor (rung 8, 22 steps, every near cell): rays 8, near volume 5.5, the rest 7.5
-        PallPass.Step old = new PallPass.Step(2, 22, 2, 6, 96, 1), floor = PallPass.LADDER[FLOOR];
-        double rest = 7.5, rays = 8, near = 5.5;
-        double atFloor = rest + rays * floor.cost() / old.cost() + near * floor.volumeCost() / old.volumeCost();
+        // the parts at the old floor (rung 8: 22 steps, every near cell, four dust cuts): rays 8, near volume 5, composites 6.5,
+        // the rest 2.8 (Zearth +150…+380 s)
+        PallPass.Step old = new PallPass.Step(2, 22, 2, 6, 96, 1, false), floor = PallPass.LADDER[FLOOR];
+        double rest = 2.8, rays = 8, near = 5, composite = 6.5;
+        double atFloor = rest + rays * floor.cost() / old.cost() + near * floor.volumeCost() / old.volumeCost()
+                + composite * floor.compositeCost() / old.compositeCost();
         assertTrue(atFloor <= B, "the floor fits MEDIUM's budget at Artem's scene: " + atFloor);
-        // at MEDIUM's own rung the same scene: rays 34 (measured, rung 2), near 5.5, rest 7.5 → the first fitting rung, not
-        // the floor
+        // at MEDIUM's own rung the same scene: rays 28 (measured, rung 2) → the first fitting rung, not the floor
         PallPass.Detail d = new PallPass.Detail();
         d.setting(PallPass.Quality.MEDIUM);
         long now = 0;
-        for (int i = 0; i < 40; i++) d.sample(rest + 34 + near, 34, 0, 0, near, d.generation, now += 16 * MS);
+        double r2 = 28;
+        for (int i = 0; i < 40; i++) d.sample(rest + r2 + near + composite, r2, 0, 0, near, composite, d.generation, now += 16 * MS);
         int to = d.level;
         assertTrue(to > PallPass.Quality.MEDIUM.step() && to <= FLOOR, "down: " + to);
-        PallPass.Step at = PallPass.LADDER[to], from = PallPass.LADDER[PallPass.Quality.MEDIUM.step()];
-        double estimate = rest + 34 * at.cost() / from.cost() + near * at.volumeCost() / from.volumeCost();
-        assertTrue(estimate <= B, "the chosen rung fits: " + estimate);
-        if (to > 0) {
-            PallPass.Step above = PallPass.LADDER[to - 1];
-            double over = rest + 34 * above.cost() / from.cost() + near * above.volumeCost() / from.volumeCost();
-            assertTrue(over > B || to - 1 <= PallPass.Quality.MEDIUM.step(), "no finer rung fits: " + over);
-        }
+        PallPass.Step from = PallPass.LADDER[PallPass.Quality.MEDIUM.step()];
+        java.util.function.IntToDoubleFunction at = k -> rest + r2 * PallPass.LADDER[k].cost() / from.cost()
+                + near * PallPass.LADDER[k].volumeCost() / from.volumeCost() + composite * PallPass.LADDER[k].compositeCost() / from.compositeCost();
+        assertTrue(at.applyAsDouble(to) <= B || to == FLOOR, "the chosen rung fits: " + at.applyAsDouble(to));
+        assertTrue(at.applyAsDouble(to - 1) > B, "no finer rung fits: " + at.applyAsDouble(to - 1));
     }
 
     /** A near-volume cell that takes a point every n-th frame takes the share that keeps its e-fold time in frames. */

@@ -165,7 +165,7 @@ public final class PallPass {
      * {@code volume}-th frame, in turn, at the share that keeps the cell's time constant ({@link #volumeShare}), and keep their
      * reprojected value between ({@code fx_pall_froxel}).
      */
-    record Step(int factor, int steps, int interleave, int wallDiv, int wallSteps, int volume) {
+    record Step(int factor, int steps, int interleave, int wallDiv, int wallSteps, int volume, boolean cutOnce) {
         /** Relative frame cost: rays — pixels / (factor · interleave)², each with its steps. */
         double cost() {
             return steps / (double) (factor * factor * interleave * interleave);
@@ -187,12 +187,23 @@ public final class PallPass {
             return VOLUME_KEEP + (1 - VOLUME_KEEP) / volume;
         }
 
+        /** Relative cost of the composites: their dust read with four cuts per pixel, or one ({@link #COMPOSITE_ONCE}). */
+        double compositeCost() {
+            return cutOnce ? COMPOSITE_ONCE : 1;
+        }
+
         /** Log form: {@code 1/2 × 28 steps}, with {@code , rays 1/4 per frame} when interleaved. */
         String describe() {
-            return String.format(Locale.ROOT, "1/%d × %d steps%s%s", factor, steps, interleave > 1 ? ", rays 1/" + interleave * interleave + " per frame" : "",
-                    volume > 1 ? ", near volume 1/" + volume + " per frame" : "");
+            return String.format(Locale.ROOT, "1/%d × %d steps%s%s%s", factor, steps, interleave > 1 ? ", rays 1/" + interleave * interleave + " per frame" : "",
+                    volume > 1 ? ", near volume 1/" + volume + " per frame" : "", cutOnce ? ", dust cut once" : "");
         }
     }
+
+    /**
+     * Composites' cost with the dust cut once per pixel against four times (est. from Artem's Zearth scene: the dust read 4–5 ms
+     * of 6–8, most of it the cuts).
+     */
+    static final double COMPOSITE_ONCE = 0.6;
 
     /** Near volume cost share that every cell pays every frame (reprojection, turn), est. */
     static final double VOLUME_KEEP = 0.15;
@@ -211,7 +222,8 @@ public final class PallPass {
      * rays per frame (n = 3, 4) drew the cellular lattice that burns in when the view stands still (each untraced pixel pulled
      * toward its block's bounds for n² frames; Artem 08.11, measured |dL| ×4.3 from n = 1 to the floor). The near volume
      * interleaves with the rays (half its cells a frame from the first interleaved rung, a quarter from the last two above LOW),
-     * and below LOW (rung 8) only the steps per ray thin: at Artem's Zearth scene (28.11, MEDIUM, 2560×1600) the floor of a
+     * the composites cut the dust once per pixel from rung 5 ({@link Step#cutOnce}), and below LOW (rung 8) only the steps per ray
+     * thin: at Artem's Zearth scene (28.11, MEDIUM, 2560×1600) the floor of a
      * ladder that thinned the rays alone still cost 21–29 ms against the 15 ms budget, 12–17 ms of it in parts no rung touched.
      */
     static final Step[] LADDER = {
@@ -224,9 +236,10 @@ public final class PallPass {
     // Keep the preset pictures. Interpolate the step cap by rung distance between HIGH (0), MEDIUM (2) and LOW (8); below LOW
     // 8 fewer a rung.
     private static Step rung(int index, int raySteps, int interleave, int volume) {
+        boolean cutOnce = index >= 5;
         int steps = index <= 2 ? 128 - index * (128 - 104) / 2 : index <= 8 ? 104 - Math.round((index - 2) * (104 - 96) / 6f) : 96 - 8 * (index - 8);
         int divisor = index < 2 ? 4 : index <= 5 ? 5 : 6;
-        return new Step(2, raySteps, interleave, divisor, steps, volume);
+        return new Step(2, raySteps, interleave, divisor, steps, volume, cutOnce);
     }
 
     /**
@@ -264,7 +277,7 @@ public final class PallPass {
         boolean pinned;
         /** Held at the last rung for the session ({@link #floor}): {@link GpuWatch} saw a frame far past any budget. */
         boolean floored;
-        private double sum, raySum, wallMarchSum, wallResolveSum, nearSum;
+        private double sum, raySum, wallMarchSum, wallResolveSum, nearSum, compositeSum;
         private int samples, calm, over;
         private long windowStart, holdUntil, raisedAt = Long.MIN_VALUE, quietUntil = Long.MIN_VALUE;
         private boolean skip;
@@ -307,11 +320,14 @@ public final class PallPass {
          * true — rung changed.
          */
         boolean sample(double ms, double rayMs, double wallMarchMs, double wallResolveMs, int gen, long now) {
-            return sample(ms, rayMs, wallMarchMs, wallResolveMs, 0, gen, now);
+            return sample(ms, rayMs, wallMarchMs, wallResolveMs, 0, 0, gen, now);
         }
 
-        /** As above, with the near volume's medium pass {@code nearMs} (it follows the rung's {@link Step#volume}). */
-        boolean sample(double ms, double rayMs, double wallMarchMs, double wallResolveMs, double nearMs, int gen, long now) {
+        /**
+         * As above, with the near volume's medium pass {@code nearMs} (it follows the rung's {@link Step#volume}) and the composites
+         * {@code compositeMs} ({@link Step#cutOnce}).
+         */
+        boolean sample(double ms, double rayMs, double wallMarchMs, double wallResolveMs, double nearMs, double compositeMs, int gen, long now) {
             if (gen != generation || ceiling < 0 || pinned) return false;
             if (now < quietUntil) {
                 samples = 0;
@@ -328,19 +344,21 @@ public final class PallPass {
             wallMarchSum += wallMarchMs;
             wallResolveSum += wallResolveMs;
             nearSum += Math.max(nearMs, 0);
+            compositeSum += Math.max(compositeMs, 0);
             samples++;
             if (samples < MIN_SAMPLES || now - windowStart < WINDOW_NS) return false;
             double mean = sum / samples, rays = raySum / samples;
-            double wallMarch = wallMarchSum / samples, wallResolve = wallResolveSum / samples, near = nearSum / samples;
+            double wallMarch = wallMarchSum / samples, wallResolve = wallResolveSum / samples, near = nearSum / samples,
+                    composite = compositeSum / samples;
             lastMean = mean;
             sum = 0;
-            raySum = wallMarchSum = wallResolveSum = nearSum = 0;
+            raySum = wallMarchSum = wallResolveSum = nearSum = compositeSum = 0;
             samples = 0;
             int floor = LADDER.length - 1;
             over = mean > budget ? over + 1 : 0;
             if (mean > budget && level < floor && (over >= 2 || mean > FAR_OVER * budget)) {
                 int to = level + 1;
-                while (to < floor && estimate(mean, rays, wallMarch, wallResolve, near, to) > budget) to++;
+                while (to < floor && estimate(mean, rays, wallMarch, wallResolve, near, composite, to) > budget) to++;
                 over = 0;
                 // an increase exceeded capacity — delay the next increase
                 holdUntil = now + (raisedAt != Long.MIN_VALUE && now - raisedAt < 2 * HOLD_NS ? 4 * HOLD_NS : HOLD_NS);
@@ -349,7 +367,7 @@ public final class PallPass {
                 changes++;
                 return true;
             }
-            if (level > ceiling && now >= holdUntil && estimate(mean, rays, wallMarch, wallResolve, near, level - 1) <= UP_SHARE * budget) {
+            if (level > ceiling && now >= holdUntil && estimate(mean, rays, wallMarch, wallResolve, near, composite, level - 1) <= UP_SHARE * budget) {
                 if (++calm >= CALM_WINDOWS) {
                     calm = 0;
                     holdUntil = now + HOLD_NS;
@@ -364,12 +382,13 @@ public final class PallPass {
             return false;
         }
 
-        private double estimate(double mean, double rays, double wallMarch, double wallResolve, double near, int to) {
+        private double estimate(double mean, double rays, double wallMarch, double wallResolve, double near, double composite, int to) {
             Step from = LADDER[level], next = LADDER[to];
             return mean + rays * (next.cost() / from.cost() - 1)
                     + wallMarch * (next.wallCost() / from.wallCost() - 1)
                     + wallResolve * (next.wallPixels() / from.wallPixels() - 1)
-                    + near * (next.volumeCost() / from.volumeCost() - 1);
+                    + near * (next.volumeCost() / from.volumeCost() - 1)
+                    + composite * (next.compositeCost() / from.compositeCost() - 1);
         }
 
         /**
@@ -400,7 +419,7 @@ public final class PallPass {
             generation++;
             skip = true;
             sum = 0;
-            raySum = wallMarchSum = wallResolveSum = nearSum = 0;
+            raySum = wallMarchSum = wallResolveSum = nearSum = compositeSum = 0;
             samples = 0;
         }
     }
@@ -1164,6 +1183,7 @@ public final class PallPass {
         c.safeGetUniform("DwDiv").set(f.dustWall.active ? (float) DustWallPass.divisor() : 0f);
         c.safeGetUniform("DwHazeOnly").set(f.dustWall.active && DustWallPass.hazeOnly ? 1f : 0f);
         c.safeGetUniform("PallDiag").set((float) DustWallDiag.composite);
+        c.safeGetUniform("DwCutOnce").set(LADDER[DETAIL.level].cutOnce() ? 1f : 0f);
         c.safeGetUniform("PallFroxel").set(f.quality.tile, VOLUME_NEAR, VOLUME_FAR, 0f);
         c.safeGetUniform("PallLamps").set(lamps ? 1f : 0f);
         c.safeGetUniform("InvViewProj").set(INVERSE);
@@ -1719,7 +1739,7 @@ public final class PallPass {
             long stop = GL33.glGetQueryObjecti64(QUERIES[STAMPS * i + STAMPS - 1], GL15.GL_QUERY_RESULT);
             double ms = Math.max(0, stop - start) / 1e6;
             long before = start;
-            double rays = 0, wallMarch = 0, wallResolve = 0, near = 0;
+            double rays = 0, wallMarch = 0, wallResolve = 0, near = 0, composite = 0;
             StringBuilder parts = new StringBuilder();
             // parts in the order their stamps were issued (the dust pass runs before the rays): each part is the time from the
             // stamp issued before it; a stamp never issued this frame counts nothing
@@ -1731,6 +1751,7 @@ public final class PallPass {
                 parts.append(String.format(Locale.ROOT, " %.1f", part));
                 if (q - 1 == RAYS_PART) rays = part;
                 if (q == 2) near = part;
+                if (q == STAMPS - 1) composite = part;
                 if (q == 6) wallMarch = part;
                 if (q == 7 || q == 8) wallResolve += part; // Pack and resolve both scale with atlas pixels.
                 before = Math.max(before, at);
@@ -1745,7 +1766,7 @@ public final class PallPass {
             }
             measured(ms - SUBMIT[i] / 1e6);
             int was = DETAIL.level;
-            if (DETAIL.sample(ms, rays, wallMarch, wallResolve, near, ISSUED[i], now)) {
+            if (DETAIL.sample(ms, rays, wallMarch, wallResolve, near, composite, ISSUED[i], now)) {
                 Step to = LADDER[DETAIL.level];
                 Incoming.LOG.info(String.format(Locale.ROOT,
                         "Nuclear volume rung %d → %d (setting %d, %.2f ms, budget %.1f ms), wall 1/%d × %d steps",

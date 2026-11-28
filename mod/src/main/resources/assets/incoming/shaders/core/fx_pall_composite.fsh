@@ -14,6 +14,8 @@ uniform float DwDiv;
 // the layer (a hill, a tower, a craft) sees the haze start further down the ray, behind whatever stands in front of it: the
 // split orders them as for the young wall
 uniform float DwHazeOnly;
+// 1 — the dust atlas's taps are cut at the pixel's depth once, after filtering (wall_layer.glsl gWallCutOnce; PallPass.Step.cutOnce)
+uniform float DwCutOnce;
 // diagnostics (DustWallDiag.composite, a client scenario's cost split): a sum of 1 no flames, 2 no shadow or ball light on the
 // world, 4 no dust atlas read, 8 no near-volume read; 0 the picture
 uniform float PallDiag;
@@ -523,6 +525,7 @@ void main() {
     float axis = max(dot(dir0, PallForward), 1e-3);
     MediumSpans spans;
     bool haveSpans = false;
+    gWallCutOnce = DwCutOnce > 0.5;
     if (DwDiv > 0.0 && (diag & 4) == 0) {
         wall = wallLayer(Sampler6, Sampler1, vec2(full) + 0.5, depth, DwDiv);
         if (wall.light.a < 1.0) {

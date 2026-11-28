@@ -1992,14 +1992,14 @@ void main() {
             }
         }
     }
-    // interleaved cells (PallFroxel.w = n, the rung's PallPass.Step.volume): a cell takes a new point every n-th frame, in turn
-    // (n 2: a 3D checkerboard; n 4: each 2 × 2 block of a slice in ordered-dither order, the next slice shifted), and keeps its
-    // reprojected value between; a cell with no previous value always takes one
+    // interleaved cells (PallFroxel.w = n, the rung's PallPass.Step.volume): a cell takes a new point every n-th frame and keeps
+    // its reprojected value between; a cell with no previous value always takes one. Whole slices take turns (slice k when
+    // (k + frame) mod n is 0): a slice is a tile of the atlas, so neighbouring fragments share the turn. A checkerboard of
+    // cells left every GPU thread group with some cells to evaluate and saved nothing (Artem's Zearth scene: 3.5–4.3 ms at a
+    // quarter of the cells against 3.7–5.0 at all of them)
     int every = int(PallFroxel.w + 0.5);
     if (every > 1 && before.w >= 0.0) {
-        int f = int(PallFrame.x);
-        bool turn = every == 2 ? ((cell.x + cell.y + k + f) & 1) == 0
-                : ((cell.x & 1) + 2 * ((cell.y + k) & 1)) == ((f * 3 + (f >> 2)) & 3);
+        bool turn = (k + int(PallFrame.x)) % every == 0;
         if (!turn) {
             fragColor = before;
             return;

@@ -341,7 +341,7 @@ class NuclearVolumeBudgetTest {
                 verify(frame).set(anyFloat(), eq(80f));
                 replace(PallPass.class, null, "SUBMIT", new long[4]);
                 PallPass.beginFrame(burst.quality);
-                verify(detail).sample(eq(1205d), eq(0d), eq(400d), eq(800d), anyDouble(), anyInt(), anyLong());
+                verify(detail).sample(eq(1205d), eq(0d), eq(400d), eq(800d), anyDouble(), anyDouble(), anyInt(), anyLong());
                 assertEquals(1205, PallPass.watch().cause(), 0);
                 assertEquals(GpuWatch.State.OFF, PallPass.watch().state());
             } finally {
