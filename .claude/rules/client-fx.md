@@ -792,9 +792,8 @@ paths:
   floor for minutes (`PallDetailTest.oneWindowOverBudgetKeepsTheRung`, `fixedPassesDoNotKeepDetailDown`). Never above the setting, never
   below half frame or interleave 2 (3–4 drew a lattice burning in on a still view); near-volume cells update every 1/2/4
   frames by rung (`Step.volume`, same time constant), rungs below LOW thin only ray steps (16, 12): rays alone left the floor
-  at 21–29 ms vs MEDIUM's 15 (Zearth, `PallDetailTest.nearVolumeAndStepsLetTheFloorFit`). The budget calibration uses pall-only GPU times on the RTX 4060 Laptop at 2560×1600 in a 150 kt
-  firestorm (LOW ≤ 6.1, MEDIUM ≤ 12.5, HIGH ≤ 19.2 ms looking up). Measure combined load during the passage
-  with adaptive detail enabled. The INFO line records each rung transition and its window mean. The timing
+  at 21–29 ms vs MEDIUM's 15 (Zearth, `PallDetailTest.nearVolumeAndStepsLetTheFloorFit`). Budgets: RTX 4060 Laptop, 2560×1600, 150 kt firestorm (LOW ≤ 6.1, MEDIUM ≤ 12.5, HIGH ≤ 19.2 ms
+  looking up); measure the passage with adaptive detail on. INFO logs each rung change with its window mean. The timing
   summary includes separate wall march, pack and resolve intervals followed by the shared composites. On a divisor change the wall resolves
   against the last image on its original sample lattice, then reuses that storage for the next output.
   Near volume (froxels, the standard fog-the-camera-stands-in method: Wronski AC4 2014, Frostbite): the pall nearer than
