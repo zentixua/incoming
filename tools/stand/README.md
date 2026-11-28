@@ -122,7 +122,8 @@ does not run the paired scene acceptance gate or certify visible terrain publica
    spot of the 28.11 Zearth nuke, inside the dust wall from about +100 s. Windows from the first burst (`nuke_view`):
    `show` 2–60 s (flash, ball, the wave's passage), `entry` 60.5–119.5 s (the dust wall reaching the camera; in
    `nuke2` the second burst from its detonation, 2 km from the camera), `dust` +2…+6 min (the dust around the
-   camera), a frame at each end; only that frame and half a second after it go unmeasured. A second in which the
+   camera), a frame at each end; only that frame and half a second after it go unmeasured, and the first burst's
+   first 2 s (the scene's start after the camera move), while `nuke2`'s second detonation is judged inside `entry`. A second in which the
    nuclear volume is not drawn (off, failed, turned off by the GPU watchdog) fails the target. Nothing waits for the
    server (ruins take minutes), so these scenes come after all others. Each adds about 6 minutes per pack: a
    full-scene run no longer fits the 30 GPU minutes above, so pick scenes. World rule `nuclear.max_yield = 1000`

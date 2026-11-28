@@ -17,7 +17,8 @@ Hitches and per-effect numbers (performance target, target.py):
 - `slow`: frames whose interval exceeds SLOW_MS (100 ms), with the worst one; `low1_fps`: 1 % low, 1000 / p99 interval;
 - `incoming_gpu`: mean GPU time of the Incoming effects layer (stage `after_level+`, every frame);
 - `pall`: the nuclear dust and smoke volume's GPU time (PallPass#describe once a second: mean of the last second's
-  frames; "off" or an undrawn pall is 0), mean and max over the window's samples; None without a parsable sample.
+  frames), mean and max over the window's samples, and `off`: seconds without a drawn volume (never 0 ms); None
+  without any sample.
 """
 import csv
 import json

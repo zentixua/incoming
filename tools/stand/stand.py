@@ -28,6 +28,7 @@ import itertools
 import json
 import os
 import shutil
+import signal
 import subprocess
 import sys
 import time
@@ -587,6 +588,8 @@ more (the second capture decides), target-verdict.json and a table; --post sets 
     # Warm-up first: the session's first strike compiles shaders (scene `first`); the target measures no window there
     packs, scenes = target.packs_of(tg), ["first"] + [s for s in target.scenes_of(tg) if s != "first"]
     if a.post:
+        # A stopped unit (TERM) must reach the handler below too: Python's default TERM raises nothing
+        signal.signal(signal.SIGTERM, lambda *_: sys.exit(143))
         post_status(sha_, "pending", f"Performance target {tg['version']} running", None, TARGET_STATUS)
     try:
         return release_judge(a, tg, sha_, name, packs, scenes)
@@ -599,8 +602,10 @@ more (the second capture decides), target-verdict.json and a table; --post sets 
 
 def release_judge(a, tg, sha_, name, packs, scenes):
     if not a.rejudge:
-        # A second capture left by an earlier run of the same name would decide instead of this one
-        shutil.rmtree(OUT / f"{name}-2", ignore_errors=True)
+        # Captures left by an earlier run of the same name would decide instead of this one (run.sh exits 1 also when
+        # preparation fails, leaving <name> untouched)
+        for n in (name, f"{name}-2"):
+            shutil.rmtree(OUT / n, ignore_errors=True)
         code = subprocess.run([str(HERE / "run.sh"), name, a.jar, "--packs", ",".join(packs), "--scenes", ",".join(scenes),
                                "--size", DEFAULT_SIZE, "--label", a.label or a.jar]).returncode
         if code not in (0, 1):
