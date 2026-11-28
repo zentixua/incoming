@@ -136,7 +136,11 @@ defense, `launcher/`, `grid/` blackout, `sound/`, `client/`, `work/` tick budget
   quality presets let players fit their PC. Each effect has a frame-cost limit held at any strike count; redesign
   effects that cannot perform well without hacks, discard costly, barely visible detail. Optimize what is noticeably
   slow (tick, preparation, memory, saves, frame, network), by measurement, without asking; an update is not ready
-  while such a cost remains. The highest quality setting looks best.
+  while such a cost remains. The highest quality setting looks best. **Both at once** (Artem, 28.11): a great
+  picture counts only with honest normal performance; a laggy beautiful mod and a smooth ugly one are both failures.
+  Honest means measured in real play under the player's conditions (his pack, shader pack, map; friends' weaker PCs)
+  at the heaviest moment (inside a nuke's dust minutes after the burst, a big map), judged by hitches and 1 % lows,
+  not average fps.
 - **Flight/air defense use our own game model** (Artem, 21.10): plausible/serious, not 1:1 real flight specs, guidance,
   radar or damage models. Shared class laws (inertia/bank, altitude-speed trade, gravity/drag/wind for unpowered,
   `guidance/`); game numbers in `WeaponSpec.Handling`, `Ballistic`, marked “not physical”.
