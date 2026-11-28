@@ -390,3 +390,46 @@ class ModrinthTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class PerformanceTarget(unittest.TestCase):
+    """The release preflight requires the scene bench's performance-target status on the jar's mod/ tree."""
+
+    def repo(self):
+        d = Path(tempfile.mkdtemp())
+        run = lambda *a: subprocess.run(["git", "-C", str(d), *a], check=True, capture_output=True, text=True).stdout.strip()
+        run("init", "-q", "-b", "main")
+        run("config", "user.email", "t@example.invalid")
+        run("config", "user.name", "t")
+        (d / "mod").mkdir()
+        (d / "mod/gradle.properties").write_text("mod_version=1.0.0\n")
+        run("add", "-A")
+        run("commit", "-qm", "measured")
+        measured = run("rev-parse", "HEAD")
+        (d / "docs").mkdir()
+        (d / "docs/notes.md").write_text("notes\n")
+        run("add", "-A")
+        run("commit", "-qm", "notes only")
+        return d, run, measured
+
+    def test_measured_commit_below_a_notes_only_head_counts(self):
+        d, run, measured = self.repo()
+        got = release_checks.performance_target(d, "o/r", lambda sha, repo: "success" if sha == measured else None)
+        self.assertEqual(got, measured)
+
+    def test_missing_status_blocks_the_release(self):
+        d, _, _ = self.repo()
+        with self.assertRaisesRegex(ValueError, "No performance target result"):
+            release_checks.performance_target(d, "o/r", lambda sha, repo: None)
+
+    def test_a_failed_target_blocks_the_release(self):
+        d, _, measured = self.repo()
+        with self.assertRaisesRegex(ValueError, "failure"):
+            release_checks.performance_target(d, "o/r", lambda sha, repo: "failure" if sha == measured else None)
+
+    def test_a_measured_older_jar_does_not_count(self):
+        d, run, measured = self.repo()
+        (d / "mod/gradle.properties").write_text("mod_version=1.0.1\n")
+        run("commit", "-qam", "version bump after the measurement")
+        with self.assertRaisesRegex(ValueError, "No performance target result"):
+            release_checks.performance_target(d, "o/r", lambda sha, repo: "success" if sha == measured else None)

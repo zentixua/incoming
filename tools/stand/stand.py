@@ -10,6 +10,11 @@ pair against accepted (README.md).
   stand.py gate <name>                              rejudge raw pair data → verdict.json
   stand.py pr <number> [--post] [--against <base>]    PR: head CI jar paired against main, scene "100", verdict;
                                                     --post: "Стенд сцен" status and comment
+  stand.py release <jar> [--post] [--rejudge]       release candidate against the performance target (target.json):
+                                                    its packs and scenes, a failed pack captured once more, the last
+                                                    run decides → target-verdict.json; --post: "Цель производительности"
+                                                    status on the jar's commit (needs ci:<SHA>), which the release
+                                                    preflight requires (tools/release_checks.py)
 
 <jar>: release (v3.7.0), `ci:<branch or SHA>` (build run incoming-jar artifact), or jar path.
 Packs: none (Iris without shader pack), complementary, photon; all three by default. Scenes: scenes.json IDs
@@ -41,6 +46,7 @@ import facing  # noqa: E402
 import gate  # noqa: E402
 import plan  # noqa: E402
 import results  # noqa: E402
+import target  # noqa: E402
 
 
 
@@ -61,6 +67,8 @@ REPO, PACK_REPO = "zentixua/incoming", "zentixua/open-skies-friends"
 PACKS = {"none": None, "complementary": "complementary-unbound", "photon": "photon-shader"}
 MODS = ("sodium", "iris")
 STATUS = "Стенд сцен"
+# Commit status of a release candidate that held the performance target (tools/release_checks.py requires it)
+TARGET_STATUS = "Цель производительности"
 # PR look gate scenes: "100" windows (merge condition: frame time at 100 strikes)
 GATE_SCENES = ["100"]
 # Pairs per pack: second if first failed (gate.decide)
@@ -561,8 +569,61 @@ def cmd_pr(a):
     return 0 if v["pass"] else 1
 
 
-def post_status(sha_, state, desc, url):
-    args = ["api", f"repos/{REPO}/statuses/{sha_}", "-f", f"state={state}", "-f", f"context={STATUS}", "-f", f"description={desc[:140]}"]
+def release_runs(name):
+    """Captured runs of a release check in capture order: <name>, then <name>-2 (failed packs captured again)."""
+    return [analyze(OUT / n, write=False) for n in (name, f"{name}-2") if (OUT / n / "meta.json").exists()]
+
+
+def cmd_release(a):
+    """Release candidate against the performance target: its packs and scenes (target.json), a failed pack captured once
+more (the second capture decides), target-verdict.json and a table; --post sets the "Цель производительности" status."""
+    tg = target.load()
+    if a.post and not a.jar.startswith("ci:"):
+        raise SystemExit("--post needs ci:<SHA>: the status goes on the commit the jar was built from")
+    sha_ = None
+    if a.jar.startswith("ci:"):
+        sha_ = gh("api", f"repos/{REPO}/commits/{a.jar[3:]}", "--jq", ".sha").strip() if a.post else a.jar[3:]
+    name = a.name or f"release-{(sha_ or Path(a.jar).stem)[:12]}"
+    packs, scenes = target.packs_of(tg), target.scenes_of(tg)
+    if not a.rejudge:
+        if a.post:
+            post_status(sha_, "pending", f"Performance target {tg['version']} running", None, TARGET_STATUS)
+        code = subprocess.run([str(HERE / "run.sh"), name, a.jar, "--packs", ",".join(packs), "--scenes", ",".join(scenes),
+                               "--size", DEFAULT_SIZE, "--label", a.label or a.jar]).returncode
+        if code not in (0, 1):
+            if a.post:
+                post_status(sha_, "error", f"Performance target not captured (code {code})", None, TARGET_STATUS)
+            return code
+        v = target.judge(tg, release_runs(name))
+        again = [p for p, pv in v["packs"].items() if pv["state"] == target.FAIL]
+        if again:
+            log(f"{name}: {', '.join(again)} missed the target, captured once more")
+            shutil.rmtree(OUT / f"{name}-2", ignore_errors=True)
+            code = subprocess.run([str(HERE / "run.sh"), f"{name}-2", a.jar, "--packs", ",".join(again), "--scenes", ",".join(scenes),
+                                   "--size", DEFAULT_SIZE, "--label", a.label or a.jar]).returncode
+            if code not in (0, 1):
+                if a.post:
+                    post_status(sha_, "error", f"Performance target: second capture failed (code {code})", None, TARGET_STATUS)
+                return code
+    runs = release_runs(name)
+    if not runs:
+        raise SystemExit(f"{OUT / name}: nothing captured")
+    v = target.judge(tg, runs)
+    v["jar"] = runs[0]["jar"]
+    out = OUT / name
+    (out / "target-verdict.json").write_text(json.dumps(v, indent=1, ensure_ascii=False))
+    (out / "target.md").write_text(target.table(v) + "\n")
+    log(f"{name}: performance target {tg['version']}: {STATE_WORD[v['state']]}")
+    for f in v["fails"]:
+        log("  " + f)
+    if a.post:
+        desc = (f"Holds performance target {tg['version']}" if v["pass"] else "Misses: " + v["fails"][0])
+        post_status(sha_, "success" if v["pass"] else "failure", desc, None, TARGET_STATUS)
+    return 0 if v["pass"] else 1
+
+
+def post_status(sha_, state, desc, url, context=STATUS):
+    args = ["api", f"repos/{REPO}/statuses/{sha_}", "-f", f"state={state}", "-f", f"context={context}", "-f", f"description={desc[:140]}"]
     if url:
         args += ["-f", f"target_url={url}"]
     gh(*args)
@@ -599,6 +660,9 @@ def main():
     p.add_argument("--rejudge", action="store_true", help="do not capture: rejudge the already captured pair for this head")
     p.add_argument("--against", help="baseline instead of main: release (v3.7.0), ci:<branch|SHA> or path")
     common(p); p.set_defaults(fn=cmd_pr)
+    p = sub.add_parser("release"); p.add_argument("jar"); p.add_argument("--name"); p.add_argument("--label")
+    p.add_argument("--post", action="store_true"); p.add_argument("--rejudge", action="store_true", help="do not capture: judge the captured runs")
+    p.set_defaults(fn=cmd_release)
     a = ap.parse_args()
     for pk in getattr(a, "packs", []) or []:
         if pk not in PACKS:

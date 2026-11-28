@@ -1,0 +1,22 @@
+{
+  "version": "3.14.1",
+  "about": "Performance target of a release (README.md, \"Performance target\"; judged by target.py). Rows: a pack (hardware tier), its windows (scenes.json) and the limits each must hold: fps_p50 (median), fps_low1 (1 % low), slow (frames over 100 ms), incoming_ms (Incoming effects layer GPU, mean), pall_ms (nuclear dust volume GPU, mean), pall_peak_ms (its worst second). Every number's reason is in why.",
+  "tiers": {
+    "photon": "Artem's machine: RTX 4060 laptop, 2560x1600, Photon, nuclear dust MEDIUM (the default)",
+    "none": "a graphics card about half an RTX 4060 at 1920x1080 without a shader pack, stood in by the laptop at 2560x1600 (1.98 times the pixels) without one; nuclear dust MEDIUM"
+  },
+  "rows": [
+    {"scene": "nuke-dust", "pack": "photon", "windows": ["nuke/dust", "nuke2/dust"],
+     "fps_p50": 28, "fps_low1": 20, "slow": 0, "incoming_ms": 18, "pall_ms": 15, "pall_peak_ms": 20,
+     "why": "28.11 repro at Artem's spot, 2.8 km inside the dust, +3..+4 min (repro-report Q1, Q4): pall 21-29 ms against its MEDIUM budget 15, other Incoming passes 2.2-2.9, the rest of the frame 15.8 ms. Pall held to its own budget and the rest at 3 ms gives 15.8 + 18 = 33.8 ms, 29.6 fps; 1 % low from the measured p99 spread (x1.39 of the median). Peak: budget plus one ladder rung (each rung 0.5-0.85 of the next)."},
+    {"scene": "nuke-show", "pack": "photon", "windows": ["nuke/show", "nuke2/show"],
+     "fps_low1": 20, "slow": 0, "incoming_ms": 18, "pall_ms": 15, "pall_peak_ms": 20,
+     "why": "The flash and the wave's passage (2-60 s): the same budgets; the repro's 300-690 ms frames at the wave's passage are client-tick work, and a hitch is a stop the player sees."},
+    {"scene": "nuke-dust", "pack": "none", "windows": ["nuke/dust", "nuke2/dust"],
+     "fps_p50": 36, "fps_low1": 26, "slow": 0, "incoming_ms": 18, "pall_ms": 15, "pall_peak_ms": 20,
+     "why": "Repro without the shader pack at the same spot: frame 26.9 ms, pall 16.8, other Incoming 2.9, the rest 7.2 ms. With the same budgets 25.2 ms, 39.7 fps; 1 % low by the same x1.39 spread."},
+    {"scene": "nuke-show", "pack": "none", "windows": ["nuke/show", "nuke2/show"],
+     "fps_low1": 26, "slow": 0, "incoming_ms": 18, "pall_ms": 15, "pall_peak_ms": 20,
+     "why": "As nuke-dust without the shader pack; no hitch at the wave's passage."}
+  ]
+}

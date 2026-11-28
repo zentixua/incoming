@@ -80,6 +80,41 @@ def git(*args, root=ROOT):
     return subprocess.check_output(["git", "-C", str(root), *args], text=True).strip()
 
 
+# Commit status a release candidate gets from the scene bench when it holds the performance target
+# (tools/stand/stand.py release --post; tools/stand/README.md, "Performance target")
+TARGET_STATUS = "Цель производительности"
+# Commits back from HEAD searched for a measured one with the same mod/ tree (a notes-only commit on top of it)
+TARGET_DEPTH = 30
+
+
+def target_status(sha, repo):
+    """Latest state of the performance-target status on a commit (None: never posted)."""
+    out = subprocess.check_output(["gh", "api", f"repos/{repo}/commits/{sha}/statuses", "--jq",
+                                   f'[.[] | select(.context == "{TARGET_STATUS}")][0].state // ""'], text=True).strip()
+    return out or None
+
+
+def performance_target(root=ROOT, repo=None, status=target_status):
+    """The jar being released held the performance target: a commit at or below HEAD whose mod/ tree (the jar's
+sources, version included) equals HEAD's carries a successful "Цель производительности" status. A later failure on
+the same commit wins (the newest status counts); a measured older tree does not count."""
+    repo = repo or os.environ.get("GITHUB_REPOSITORY", "zentixua/incoming")
+    subprocess.run(["git", "-C", str(root), "fetch", "--no-tags", f"--deepen={TARGET_DEPTH}", "origin"],
+                   check=False, capture_output=True)
+    tree = git("rev-parse", "HEAD:mod", root=root)
+    for sha in git("rev-list", "--first-parent", f"--max-count={TARGET_DEPTH}", "HEAD", root=root).split():
+        if git("rev-parse", f"{sha}:mod", root=root) != tree:
+            break
+        state = status(sha, repo)
+        if state == "success":
+            return sha
+        if state:
+            raise ValueError(f"Performance target {state} on {sha[:12]}: this jar must not ship "
+                             "(tools/stand/README.md, \"Performance target\")")
+    raise ValueError("No performance target result for this jar: run tools/stand/stand.py release ci:<SHA> --post on the "
+                     "release commit before releasing (tools/stand/README.md, \"Performance target\")")
+
+
 def release_preflight(root=ROOT):
     version = properties(root)["mod_version"]
     if not valid_version(version):
@@ -106,7 +141,8 @@ def release_preflight(root=ROOT):
     if changed and old_protocol == protocol:
         raise ValueError(f"Java or language resources changed since {previous}, but protocol is still {protocol}; "
                          "bump it for behavior/language changes before releasing")
-    print(f"Release preflight: PASS (v{version}, protocol {protocol}, previous {previous})")
+    measured = performance_target(root)
+    print(f"Release preflight: PASS (v{version}, protocol {protocol}, previous {previous}, performance target on {measured[:12]})")
 
 
 def main():
