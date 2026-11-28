@@ -132,11 +132,11 @@ defense, `launcher/`, `grid/` blackout, `sound/`, `client/`, `work/` tick budget
 - **Game launch, physical effects at the target.** Craft, press launch; target charge, blast, fragments, destruction
   and damage follow real specs/laws. Each number from `WeaponSpec` or law with nearby source; missing-data values
   marked `(est.)`, approximate laws identified.
-- **Picture first, then performance** (Artem, 25.10, 04.11, 08.11): optimization never visibly hurts the picture;
-  quality presets let players fit their PC. Each effect has a frame-cost limit held at any strike count; redesign
-  effects that cannot perform well without hacks, discard costly, barely visible detail. Optimize what is noticeably
-  slow (tick, preparation, memory, saves, frame, network), by measurement, without asking; an update is not ready
-  while such a cost remains. The highest quality setting looks best.
+- **Picture and performance both** (Artem, 25.10-28.11): laggy pretty and smooth ugly both fail. Optimizing
+  never visibly hurts the picture; presets fit PCs, the highest looks best. Each effect holds a frame-cost
+  limit at any strike count; redesign what needs hacks, drop costly unseen detail. Optimize what is visibly
+  slow (tick, preparation, memory, saves, frame, network) by measurement unasked: real play, player's pack and
+  shaders, heaviest moment, hitches and 1 % lows. An update is not ready while such a cost remains.
 - **Flight/air defense use our own game model** (Artem, 21.10): plausible/serious, not 1:1 real flight specs, guidance,
   radar or damage models. Shared class laws (inertia/bank, altitude-speed trade, gravity/drag/wind for unpowered,
   `guidance/`); game numbers in `WeaponSpec.Handling`, `Ballistic`, marked “not physical”.
