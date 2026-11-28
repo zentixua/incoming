@@ -1444,12 +1444,11 @@ paths:
   ray through its cells (Amanatides–Woo, `HeatPass.blocked` = `heatBlocked`, up to 160 cells; per step — neither whole
   divisions nor branches: the window by modulus — by texture repeat (`textureLod` at the cell's middle), the step axis —
   `step` by the near face; the remainder of division by 192 and the axis choice via `if` at each step cost more than a
-  sample; a two-level pass with 4³ cubes on the GPU came out more expensive (near the ground the cubes are almost always
-  occupied, nested loops diverge across threads) — do not restore without measurement; a shadow is not searched at a
+  sample; a two-level pass of 4³ cubes costs more (cubes near the ground are full, nested loops diverge) — measure
+  first; a shadow is not searched at a
   source whose direct light is less than 2 % of the whole illumination of the face (sky and fire: `WEBER`, Blackwell 1946
   contrast threshold); the point's own cell — its face). The depth of the frame does not decide shadows: behind the
-  visible face — a house's thickness or the void behind a pole (the first variant of PR #399 let light through a solid
-  house at an angle to the view). Beyond the window there are no shadows. For a ball — the visible share of the disc
+  visible face — a house's thickness or the void behind a pole. Beyond the window there are no shadows. For a ball — the visible share of the disc
   (`HeatPass.ballSeen` = `heatBallSeen`: Gauss–Chebyshev quadrature of the 2nd kind along the vertical diameter, nodes 0
   and ±0.707r, weights ½ and ¼; the lower edge — two rays: the middle and the lower node if the middle is visible,
   otherwise the upper — shares 0, ¼, ¾, 1; a single ray to the middle at a hill's edge blacked out the whole ball although
@@ -1463,16 +1462,14 @@ paths:
   takes for the pixel, from the four nearest samples, the one whose distance to the world is nearer (an object's edge
   does not take the background's visibility); common functions — `include/heat.glsl`. Occluder-window sections load in
   one batch per frame through a pixel-unpack buffer (PBO, a new one per batch): directly from memory into the texture
-  that the previous frame reads, the load waited for the GPU (+6.7 ms of the layer in the first second of a night blast
-  at the same CPU time), and sections whose blocks did not change (the fingerprint of the palette and storage, fmix64)
-  are not re-read at all. Over the full frame, the rays at a Grad salvo at night cost 2.7–3.3 ms of GPU against 0.27
-  without shadows. Light weaker than the sRGB step at black (3e-4) does not search for shadow.
+  that the previous frame reads, a load waits for the GPU (+6.7 ms of the layer at a night blast), and sections whose blocks did not change (the fingerprint of the palette and storage, fmix64)
+  are not re-read at all. Full-frame rays at a night Grad salvo: 2.7–3.3 ms GPU, 0.27 without shadows. Light weaker than the sRGB step at black (3e-4) does not search for shadow.
   The shimmer — along hot-gas columns on their own axis (`HeatPass.Frame.hot/plume` — upward; `exhaust` — along a
   nozzle's jet from `FarFlightView.lit`: the excess temperature behind the flame and the speed behind the core ∝ 1/x, the
   radius — `Flame.widthAt`): the arrival angle per Kolmogorov σ = δn·√(5.82·L/ℓ)·(ℓ/D)^(1/6) (`hazeAngle`; D — the
   spot the eye resolves in gas: the pupil or an arc-minute × distance); the eye averages fast eddies (`hazeSeen`); the
   shift — in fractions of an arc-minute, not a pixel (`resolve`: presentation; a pixel at a 70° field — 4 minutes; through
-  binoculars — a pixel): the earlier δn·√(L/ℓ) in pixels gave 0.01–0.1 px — the shimmer was “nowhere” (FX 23.10). The
+  binoculars — a pixel; δn·√(L/ℓ) in pixels gives 0.01–0.1 px, unseen). The
   pattern — noise octaves from ℓ; the gas carries it by flow across the map (two layers offset by half a cycle in
   `HeatClock` on level time: float time with a pattern shifted by place tears jets to grain). Copies — `haze*` in
   `fx_heat.fsh` (`HazeGlslTest`), visibility — `HazeTest`. The pass runs only where it can change a pixel
@@ -1482,7 +1479,7 @@ paths:
   front their own volume; the pass, its frame copy and its shadow rays run in the screen rectangles of those spheres
   (merged when the union costs no more), shifts clamp to `SHIFT_REACH` (32 px; shimmer is sub-pixel, conventional fronts
   at most 3 px) and the copy covers that margin; a nuclear front takes the whole screen. No rectangle on screen — no
-  pass: a pool fire 3 km away, nothing lit on screen, cost the full-screen pass 0.94 ms at 2560×1600 (F3, 3.9.1).
+  pass (the full-screen pass costs 0.94 ms at 2560×1600).
   `HeatAreaTest`: no pixel below the threshold changes (relit replica on every 8-bit value), every visibly lit pixel of
   random balls and jets lies inside, off-screen and faint sources draw nothing. The nuke's heat is there too
   (`client/nuclear/NukeHeat`): the shock-wave front — up to two spheres (`HeatPass.Frame.front`), the jump in the
@@ -1491,8 +1488,11 @@ paths:
   the front (at a tangent the path derivative is infinite: without the average over the pixel the ring would run as
   sparks of single pixels), no more than √(2δn) per crossing (laws — `nuclear/model/ShockOptics`, a copy in
   `fx_heat.fsh` — `front*`, checked by `ShockOpticsGlslTest`); the gas above the ball and the cap — `hot` of the ordinary
-  blast ball's law; above the storm — `plumes` (the field of hearths: a column as wide as the zone, eddies of one hearth;
-  with one zone radius the eddies would come out hundreds of metres and there would be no shimmer). A front shift below
+  blast ball's law; above the storm — `HeatPass.Frame.storm`, hot air only over burning cells:
+  own R16F copy of the fire map's burning share (free of the pall's slots and quality), two fields; `stormShift` cuts the ray in the hot layer into 8 geometric steps from 1 m, each reads the map at its
+  place (mip half the step, else fire leaks 200 m sideways) and takes the Heskestad plume of a
+  `FireStorm.sourceCell` source of that share there (`storm*` = `FirePlume`, `HazeGlslTest`), path × ground cover;
+  variances add. Still air elsewhere: `tools/heat_shimmer_gl.py` (CI). A front shift below
   `SHIFT_MIN` is not taken, and a pixel without shift is written as it was (`texelFetch`): with a nuke in progress the
   pass runs every frame, and without this, frames where nothing refracts would shift by fractions of a sample. The
   pressure on the front's sphere at an air burst — the falling wave (`HobBlast.freeAirPsi`); at the ground in the Mach

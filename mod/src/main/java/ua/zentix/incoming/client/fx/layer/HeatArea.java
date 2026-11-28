@@ -6,14 +6,14 @@ import org.joml.Vector4f;
 /**
  * Pixels the heat pass ({@link HeatPass}) can change this frame. Each source reaches a sphere: a ball or a jet as far as its
  * light can still move a display channel by half an 8-bit step ({@link #visible}), a hot-gas column and a conventional
- * front as far as their own volume (only rays through it shift). The pass, its frame copy and its shadow rays run only in
+ * front as far as their own volume (only rays through it shift), a firestorm field its hot layer over its fire map. The pass, its frame copy and its shadow rays run only in
  * the screen rectangles of those spheres; outside them it would write back the very pixel it read. No rectangle in view —
  * no pass at all (a far fire 3 km away cost the full-screen pass 0.94 ms at 2560×1600 with nothing lit on screen).
  * A nuclear front keeps the whole screen (its shift has no cap).
  */
 final class HeatArea {
-    /** Sources: four balls, four jets, four hot columns, two fronts. */
-    static final int MAX = 14;
+    /** Sources: four balls, four jets, four hot columns, two firestorm fields, two fronts. */
+    static final int MAX = 16;
     /** Half an 8-bit step of a display channel. */
     static final double HALF_STEP = 0.5 / 255;
     /** Least open-sky light {@code relit} divides by (linear, {@code include/scene.glsl}). */
@@ -89,6 +89,13 @@ final class HeatArea {
             double ax = c.x, ay = c.y, az = c.z, grow = c.w;
             double len = f.shape.getColumn(i, v).x, half = 0.5 * len;
             sphere(bx + ax * half, by + ay * half, bz + az * half, half + r0 + Math.max(0, grow) * len, view, projection);
+        }
+        for (int i = 0; i < 2; i++) {
+            f.storm.getColumn(i, c);
+            if (c.w <= 0) continue;
+            double x = c.x, y = c.y, z = c.z, half = c.w, top = f.storm.getColumn(2 + i, v).z;
+            // the hot layer over the map square: ground to top
+            sphere(x, y + 0.5 * top, z, Math.sqrt(2 * half * half + 0.25 * top * top), view, projection);
         }
         for (int i = 0; i < 2; i++) {
             f.front.getColumn(i, c);

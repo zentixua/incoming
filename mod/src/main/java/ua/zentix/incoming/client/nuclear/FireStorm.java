@@ -233,6 +233,8 @@ public final class FireStorm {
     private int version;
     /** Burning amount in the latest fill (sum of cell flames). */
     private double burning;
+    /** Largest cell flame in the latest map (burning share of its area). */
+    private double peakFlame;
     /** Time of last {@link #fill}; until when the storm is young ({@link #young}), ticks since detonation. */
     private double filledAt = Double.NaN, youngUntil = Double.NaN;
     /** Fire-model trust (server fires enabled): 0..1, written smoothly by client tick ({@link #trust}). */
@@ -309,6 +311,11 @@ public final class FireStorm {
     /** Current burning (sum of cell flames in the latest map) for the scenario line. */
     double burning() {
         return burning;
+    }
+
+    /** Largest cell flame in the latest map, burning share of the cell's area (0 — grid not ready or nothing burns). */
+    double peakFlame() {
+        return peakFlame;
     }
 
     /** Mean flame over the fire zone in the latest map, fraction of full strength (0 — grid not ready or nothing burns). */
@@ -544,9 +551,13 @@ public final class FireStorm {
         if (map.length != g.side * g.side * CHANNELS) map = new float[g.side * g.side * CHANNELS];
         fill(g, pall.clockSeconds(ticks) * 20, fuel.length == g.index.length ? fuel : null, map);
         dirty = false;
-        double sum = 0;
-        for (int i = 0; i < map.length; i += CHANNELS) sum += map[i];
+        double sum = 0, peak = 0;
+        for (int i = 0; i < map.length; i += CHANNELS) {
+            sum += map[i];
+            peak = Math.max(peak, map[i]);
+        }
         burning = sum;
+        peakFlame = peak;
         filledAt = ticks;
         version++;
         return true;

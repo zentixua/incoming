@@ -1,7 +1,6 @@
 package ua.zentix.incoming.client.nuclear;
 
 import net.minecraft.world.phys.Vec3;
-import ua.zentix.incoming.client.fx.ClientAir;
 import ua.zentix.incoming.client.fx.layer.HeatPass;
 import ua.zentix.incoming.client.fx.smoke.FirePlume;
 import ua.zentix.incoming.nuclear.Detonation;
@@ -29,9 +28,10 @@ import ua.zentix.incoming.nuclear.model.ShockOptics;
  * <li><b>Ball and cap</b> — hot gas using the same law as a conventional explosion ball ({@code FarBlasts.heat}): a column from the cap bottom
  * to its top, with cap radius and visible temperature ({@link MushroomModel#edgeTemperature}); vortices rise at the
  * cloud rise speed ({@link CloudModel#riseSpeed}).</li>
- * <li><b>Firestorm</b> — a field of fire sources: each storm-map cell contains as many fire blocks as burn in it
- * (cell strength × flame — fraction of columns, {@link FireStorm#meanFlame}, averaged over the zone; × fire-model trust), using the same
- * law as Minecraft fires ({@link FirePlume}, Heskestad); the column spans the whole ignition zone, the vortices belong to each source.</li>
+ * <li><b>Firestorm</b> — hot air only above the cells that burn: the storm's fire map (burning share of each cell's area × fire-model
+ * trust) goes to the pass ({@link HeatPass.Frame#storm}), where every source of the {@link FireStorm#sourceCell} grid is a fire of that
+ * share with the same law as other fires ({@link FirePlume}, Heskestad) at each height; its plumes cover their share of the ground,
+ * eddies are each plume's. Air over ground that does not burn stays still.</li>
  * </ul>
  */
 public final class NukeHeat {
@@ -49,7 +49,7 @@ public final class NukeHeat {
             if (a.ticks(partial) <= 0) continue;
             front(a, eye, partial, f);
             ball(a, eye, partial, f);
-            storm(a, eye, f);
+            storm(a, eye, partial, f);
         }
     }
 
@@ -103,16 +103,15 @@ public final class NukeHeat {
         f.hot(CENTRE[0] - eye.x, bottom - eye.y, CENTRE[2] - eye.z, top - bottom, d.blocks(s.capR()), kelvin, rise);
     }
 
-    private static void storm(ClientNuclear.Active a, Vec3 eye, HeatPass.Frame f) {
+    private static void storm(ClientNuclear.Active a, Vec3 eye, float partial, HeatPass.Frame f) {
         FireStorm s = a.storm;
-        int cells = s.cells();
-        if (!FireStorms.enabled || cells == 0) return;
-        double burning = s.meanFlame() * s.gate();
-        if (burning <= 0) return;
-        double cell = s.cell(), blocks = burning * cell * cell;
+        if (!FireStorms.enabled || s.cells() == 0) return;
+        s.refresh(a.ticks(partial));
+        double gate = s.gate(), peak = s.peakFlame() * gate;
+        if (peak <= 0 || s.version() == 0) return;
         Detonation d = a.d;
-        FirePlume p = new FirePlume(blocks, d.windSpeed(), ClientAir.now().stability());
         Vec3 b = d.burst();
-        f.plumes(b.x - eye.x, d.groundY() - eye.y, b.z - eye.z, p, 1, cell * Math.sqrt(cells / Math.PI));
+        f.storm(b.x - eye.x, d.groundY() - eye.y, b.z - eye.z, s.half(), s.cell(), FireStorm.sourceCell(s.cell()), gate, peak,
+                s.map(), s.side(), s, s.version());
     }
 }

@@ -94,6 +94,10 @@ Prism: `~/.var/app/org.prismlauncher.PrismLauncher/data/PrismLauncher/` (`tools/
                                            dust_wall_gl.py. Checks light, depth and clipped transmission across 672 cases.
     pall_single_gl.py                    ← compares the general and single-burst ray in six llvmpipe scenes, including
                                            haze, soot and a populated cap with a missing-body negative control. Run by dust_wall_gl.py.
+    heat_shimmer_gl.py [--checkout D]    ← fx_heat on llvmpipe with a frame copy of pixel coordinates (output = exact shift):
+                                           two frames 1/30 s apart, a still camera; small fires, the 100-strike bench's
+                                           crater fires and a firestorm map with no fire near the camera; exit 1 if a pixel
+                                           outside a source's own hot air moves > 0.06 px. CI runs it in “Компилятор AMD”
     dust_wall_ray_cost.py <checkout> [readbacks.npz] ← llvmpipe timings and optional RGBA32F readbacks for the pall ray pass
     nested_kwin.sh                       ← nested KWin for the client: no window and no host sound, its own D-Bus bus without starting services
                                            (nested_kwin_bus.conf) and XDG directories; takes the GPU lease and the client lock
@@ -244,7 +248,8 @@ Prism: `~/.var/app/org.prismlauncher.PrismLauncher/data/PrismLauncher/` (`tools/
   `docs/media`, `docs/guide`, README, `.github/scripts`, `publish.yml`) only their check `test_store*.py`; `mod/`, CI and
   unknown paths get the full check, and a manual run (release) always runs everything. The mod's checks and changes to
   `tools/sandbox.sh`, `tools/soft_gl.sh` or `tools/gpu_lease.sh` also start the sandbox client (“Песочница”, `sandbox.sh check`). Shader changes (and
-  `amd_shader_check.py`, its test and budget) also run “Компилятор AMD”. The jar is the artifact
+  `amd_shader_check.py`, its test and budget, `heat_shimmer_gl.py`) also run “Компилятор AMD” (the AMD budget and
+  `heat_shimmer_gl.py`). The jar is the artifact
   `incoming-jar`.
 - A push to `main` and a release do not recheck a tree that already fully passed a successful run of this repository
   (a PR merged without `main` moving gives the same tree): `Что изменилось` finds the tag `tested-tree-<tree>`

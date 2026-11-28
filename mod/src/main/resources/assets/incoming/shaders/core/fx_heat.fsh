@@ -16,6 +16,10 @@
 //   Gas is a column along its axis (fire/ball upward, nozzle along jet); radius grows along axis, temperature excess
 //   and speed fall as 1/x beyond their reference positions; eddy pattern uses noise octaves shrinking threefold from ℓ
 //   while larger than the resolved spot, carried by gas (two layers half a cycle apart, switching at zero weight).
+// - Firestorm: hot air stands only above the cells that burn (stormShift): along the ray through the hot layer, each step
+//   reads the fire map's burning share there and takes the Heskestad plume of a source of that share at its height; the
+//   plumes cover their share of the ground (radius² / spacing²), and the variances of the steps add up. Air above cells
+//   that do not burn is still.
 // - Nuclear shock: post-front air compressed (Rankine–Hugoniot), n − 1 ∝ density; a ray crossing the front sphere bends
 //   toward center by the extra-path derivative (thin shell: Dawson function, nuclear/model/ShockOptics, checked by
 //   ShockOpticsGlslTest), averaged over pixel width at intersection. Near tangency, pixels; away from it, nothing:
@@ -68,6 +72,12 @@ uniform vec4 HeatFrame;
 uniform vec4 HeatShadow;
 // largest shift, pixels: the pass runs and copies the frame only around its sources (HeatArea, margin SHIFT_REACH)
 uniform float HeatReach;
+// firestorm fields (HeatPass.Frame.storm), slots 0 and 1: column k — eye-relative map centre on the ground (x, ground y, z),
+// map half-side (w; 0 — absent); column 2 + k — map cell, source spacing, top of the hot air above the ground, fire-model trust
+uniform mat4 HeatStorm;
+// slot fire maps (FireStorm): burning share of the cell's area (r), mip levels — clusters of cells; zero beyond the map
+uniform sampler2D Sampler3;
+uniform sampler2D Sampler4;
 
 const float CROSS = 0.15;
 // haze law — HeatPass constants copied (checked by HazeGlslTest)
@@ -80,6 +90,19 @@ const float HAZE_EYE_S = 0.05;
 const float HAZE_SWIRL = 0.3;
 const float HAZE_CYCLE = 2.0;
 const float HAZE_CONE_FLAT = 1e-6;
+const float HAZE_EDDY = 0.2;
+const float HAZE_AMP = 1.108e-4;
+// firestorm plume law — FirePlume copied (checked by HazeGlslTest): Heskestad excess and axis speed coefficients, a fire
+// block's convective heat, W, flame excess cap, K
+const float STORM_EXCESS = 0.244459;
+const float STORM_SPEED = 0.1028045;
+const float STORM_BLOCK_WATTS = 122500.0;
+const float STORM_FLAME_EXCESS = 784.2638;
+const float STORM_PI = 3.14159265;
+// steps along the ray through the hot layer, geometric from STORM_NEAR blocks: near cells are resolved one by one, far ones
+// read the map's mip level as wide as the step
+const int STORM_STEPS = 8;
+const float STORM_NEAR = 1.0;
 // front shift below this pixel fraction is invisible: omitted (HeatPass.SHIFT_MIN)
 const float FRONT_SHIFT_MIN = 0.05;
 // presentation: conventional front's weak ripple amplified, summed shift capped at three pixels, including zoom.
@@ -112,6 +135,26 @@ float heatNoise(vec3 p) {
 float hazeDn(float excess, float amp) {
     float t0 = HAZE_T_AIR / (HAZE_T_AIR + excess);
     return amp * t0 * (1.0 - t0);
+}
+
+// Firestorm source of burning share f (fire blocks f·spacing²) at height z above the ground: Heskestad axis excess, K
+// (FirePlume.excess), axis gas speed, m/s (FirePlume.axisSpeed), plume radius (source radius or 0.12·z, as HeatPass.plume) and
+// the share of the ground its plumes cover at that height
+float stormExcess(float f, float spacing, float z) {
+    return min(STORM_EXCESS * pow(f * spacing * spacing * STORM_BLOCK_WATTS, 2.0 / 3.0) * pow(max(z, 0.1), -5.0 / 3.0), STORM_FLAME_EXCESS);
+}
+
+float stormSpeed(float f, float spacing, float z) {
+    return STORM_SPEED * pow(f * spacing * spacing * STORM_BLOCK_WATTS, 1.0 / 3.0) * pow(max(z, 0.1), -1.0 / 3.0);
+}
+
+float stormRadius(float f, float spacing, float z) {
+    return max(sqrt(f * spacing * spacing / STORM_PI), 0.12 * z);
+}
+
+float stormCover(float f, float spacing, float z) {
+    float r = stormRadius(f, spacing, z);
+    return min(1.0, STORM_PI * r * r / (spacing * spacing));
 }
 
 // Ray angle of arrival (axis standard deviation), rad: path len in gas with fluctuation dn, eddies to eddy, spot aperture (HeatPass.hazeAngle)
@@ -197,6 +240,65 @@ vec2 hazeNoise(vec3 p, vec3 axis, float eddy, float travel, float cycle, float a
     return sum / sqrt(norm);
 }
 
+// Boundary i of STORM_STEPS steps over the ray's part t0..t1: geometric from STORM_NEAR (from the entry if farther), even
+// if the whole part is nearer
+float stormStep(float t0, float t1, int i) {
+    if (i == 0) return t0;
+    float near = max(t0, STORM_NEAR), share = float(i) / float(STORM_STEPS);
+    if (t1 > near) return near * pow(t1 / near, share);
+    return t0 + (t1 - t0) * share;
+}
+
+// Image shift behind the firestorms' hot air, pixels: dir ray to world (dist), res resolved angle, wa/wb pattern layer weights.
+// The ray's part inside each field's hot layer is cut into STORM_STEPS steps; each adds the angle variance of its path
+// through plumes (path × cover) at its own burning share, excess, eddies (EDDY of the plume radius) and gas speed; the
+// eddy pattern is read once, at the variance-weighted point of both fields. No burning cell on the ray — no shift.
+vec2 stormShift(vec3 dir, float dist, float res, float wa, float wb) {
+    if (HeatStorm[0].w <= 0.0 && HeatStorm[1].w <= 0.0) return vec2(0.0);
+    float sum = 0.0, at = 0.0, eddySum = 0.0, speedSum = 0.0;
+    // one loop over both fields' steps, its bound from a uniform (HeatFrame.w is 1 here): compilers keep it a loop instead of
+    // unrolling 2 × STORM_STEPS bodies (AMD code size, tools/amd_shader_check.py)
+    int steps = int(HeatFrame.w) * 2 * STORM_STEPS;
+    for (int j = 0; j < steps; j++) {
+        int k = j / STORM_STEPS, i = j - k * STORM_STEPS;
+        vec4 m = HeatStorm[k];
+        if (m.w <= 0.0) continue;
+        vec4 s = HeatStorm[2 + k];
+        // the ray inside the slab ground..top and the map square
+        vec3 lo = vec3(m.x - m.w, m.y, m.z - m.w) / dir, hi = vec3(m.x + m.w, m.y + s.z, m.z + m.w) / dir;
+        vec3 near3 = min(lo, hi), far3 = max(lo, hi);
+        float t0 = max(0.0, max(near3.x, max(near3.y, near3.z))), t1 = min(dist, min(far3.x, min(far3.y, far3.z)));
+        if (t1 <= t0) continue;
+        float from = stormStep(t0, t1, i), to = stormStep(t0, t1, i + 1);
+        float len = to - from, mid = 0.5 * (from + to);
+        vec3 p = dir * mid;
+        vec2 uv = (p.xz - m.xz) / (2.0 * m.w) + 0.5;
+        float lod = log2(max(0.5 * len * length(dir.xz) / s.x, 1.0));
+        float f = textureLod(Sampler4, uv, lod).r;
+        if (k == 0) f = textureLod(Sampler3, uv, lod).r;
+        f *= s.w;
+        if (f <= 1e-5 || len <= 0.0) continue;
+        float z = p.y - m.y;
+        float excess = stormExcess(f, s.y, z);
+        float eddy = HAZE_EDDY * stormRadius(f, s.y, z), speed = stormSpeed(f, s.y, z);
+        // ⚠ shape: the hot air fades out between twice the cutoff excess and the cutoff, not at a step
+        float angle = smoothstep(HAZE_COOL, 2.0 * HAZE_COOL, excess) * hazeAngle(hazeDn(excess, HAZE_AMP), len * stormCover(f, s.y, z), eddy,
+                max(HAZE_PUPIL, res * mid)) * hazeSeen(eddy, speed) * (1.0 - mid / max(dist, mid + 1e-3)) / res;
+        float v = angle * angle;
+        sum += v;
+        at += v * mid;
+        eddySum += v * eddy;
+        speedSum += v * speed;
+    }
+    // below one hundredth of a pixel, skip noise (cost)
+    if (sum < 1e-4) return vec2(0.0);
+    float mid = at / sum, eddy = eddySum / sum, speed = speedSum / sum, aperture = max(HAZE_PUPIL, res * mid);
+    vec3 p = dir * mid, up = vec3(0.0, 1.0, 0.0);
+    vec2 n = wa * hazeNoise(p, up, eddy, speed * HeatClock.x * HAZE_CYCLE, HeatClock.y, aperture)
+            + wb * hazeNoise(p, up, eddy, speed * HeatClock.z * HAZE_CYCLE, HeatClock.w, aperture);
+    return sqrt(sum) / (0.45 * sqrt(wa * wa + wb * wb)) * n;
+}
+
 // Image shift behind hot gas, pixels: dir ray to world (dist) within column i (frustum along axis from base through
 // length), strength hazeAngle at segment midpoint, direction from local eddy pattern
 vec2 heatShift(vec3 dir, float dist) {
@@ -253,7 +355,7 @@ vec2 heatShift(vec3 dir, float dist) {
         // noise standard deviation ~0.45 per axis; two-layer mixture divided by √(wa² + wb²)
         shift += k / (0.45 * sqrt(wa * wa + wb * wb)) * n;
     }
-    return shift;
+    return shift + stormShift(dir, dist, res, wa, wb);
 }
 
 // Dawson function F(x) = e^(−x²)·∫₀ˣ e^(t²) dt (ShockOptics.dawson)
