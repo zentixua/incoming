@@ -289,7 +289,8 @@ class NuclearVolumeBudgetTest {
                     draws.clear();
                     PallPass.beginFrame(PallPass.Quality.LOW);
                     draw(new PallPass.Frame());
-                    assertEquals(all.subList(3, 9), draws);
+                    // a drawn frame sums the near volume in two draws (its blocks, then the cells)
+                    assertEquals(List.of("froxel", "froxelSum", "froxelSum", "march", "resolve", "mix", "composite"), draws);
                     gl11.verify(GL11::glFinish, times(3));
                 } finally {
                     feed.swap();
@@ -318,7 +319,7 @@ class NuclearVolumeBudgetTest {
                 assertEquals(GpuWatch.State.WATCHING, PallPass.watch().state());
                 draw(burst);
                 gl20.verify(() -> GL20.glUniform4fv(eq(bodyLocation), any(FloatBuffer.class)));
-                assertEquals(List.of("wall.march", "wall.pack", "wall.resolve", "wall.limit", "mushTaus", "froxel", "froxelSum", "singleMarch",
+                assertEquals(List.of("wall.march", "wall.pack", "wall.resolve", "wall.limit", "mushTaus", "froxel", "froxelSum", "froxelSum", "singleMarch",
                         "resolve", "layer", "composite"), draws);
                 state.verify(GlStateManager::_genTexture, never());
                 state.verify(() -> GlStateManager._texImage2D(anyInt(), anyInt(), anyInt(), anyInt(), anyInt(), anyInt(),

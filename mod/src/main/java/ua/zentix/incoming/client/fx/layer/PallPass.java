@@ -621,7 +621,8 @@ public final class PallPass {
     /** Ray frame, two history frames (alternating previous/current) and the whole pall in front of the world for layer quads. */
     private static int[] TEXTURES = {-1, -1, -1, -1}, FBOS = {-1, -1, -1, -1};
     /** Near volume atlases: medium, two alternating (previous/current), and pall seen to each slice; size and cell width. */
-    private static int[] VOLUME = {-1, -1, -1}, VOLUME_FBOS = {-1, -1, -1};
+    /** Near volume: two medium volumes (ping-pong), the sums, the sums' blocks (fx_pall_froxel_sum: one row of tiles). */
+    private static int[] VOLUME = {-1, -1, -1, -1}, VOLUME_FBOS = {-1, -1, -1, -1};
     private static int volumeW, volumeH, volumeTile, volumeLatest;
     /** The previous frame's medium volume exists at this size (reprojected by {@code fx_pall_froxel}). */
     private static boolean volumeHistory;
@@ -1069,7 +1070,6 @@ public final class PallPass {
                 volumeLatest = volumeNext;
                 volumeHistory = true;
                 stamp(timing, 2);
-                GlStateManager._glBindFramebuffer(GlConst.GL_FRAMEBUFFER, VOLUME_FBOS[2]);
                 RenderSystem.setShaderTexture(0, VOLUME[volumeLatest]);
                 fs.safeGetUniform("InvViewProj").set(INVERSE);
                 fs.safeGetUniform("PallForward").set(FORWARD.x, FORWARD.y, FORWARD.z);
@@ -1078,6 +1078,18 @@ public final class PallPass {
                 fs.safeGetUniform("PallAirFog").set(f.airFog.x, f.airFog.y, f.airFog.z, f.airFog.w);
                 fs.safeGetUniform("PallFroxel").set(f.quality.tile, VOLUME_NEAR, VOLUME_FAR, 0f);
                 fs.safeGetUniform("PallFroxelFrame").set(w, h, VOLUME_CURRENT, 0f);
+                // the blocks' sums, then each cell from the blocks in front of it and its own block's slices (one draw while
+                // warming: the staged warm-up compiles the program once on the sums' target)
+                if (!warming) {
+                    GlStateManager._glBindFramebuffer(GlConst.GL_FRAMEBUFFER, VOLUME_FBOS[3]);
+                    RenderSystem.viewport(0, 0, volumeW, volumeH / (VOLUME_SLICES / VOLUME_COLUMNS));
+                    fs.safeGetUniform("PallSumBlocks").set(1f);
+                    quad(fs, false, false);
+                    RenderSystem.viewport(0, 0, volumeW, volumeH);
+                    RenderSystem.setShaderTexture(1, VOLUME[3]);
+                }
+                GlStateManager._glBindFramebuffer(GlConst.GL_FRAMEBUFFER, VOLUME_FBOS[2]);
+                fs.safeGetUniform("PallSumBlocks").set(warming ? 0f : 2f);
                 quad(fs, false, warming);
                 stamp(timing, 3);
             }
@@ -1668,7 +1680,8 @@ public final class PallPass {
             GlStateManager._texParameter(GlConst.GL_TEXTURE_2D, GlConst.GL_TEXTURE_MAG_FILTER, GlConst.GL_LINEAR);
             GlStateManager._texParameter(GlConst.GL_TEXTURE_2D, GlConst.GL_TEXTURE_WRAP_S, GlConst.GL_CLAMP_TO_EDGE);
             GlStateManager._texParameter(GlConst.GL_TEXTURE_2D, GlConst.GL_TEXTURE_WRAP_T, GlConst.GL_CLAMP_TO_EDGE);
-            GlStateManager._texImage2D(GlConst.GL_TEXTURE_2D, 0, GL30.GL_RGBA16F, vw, vh, 0, GL11.GL_RGBA, GL11.GL_FLOAT, null);
+            GlStateManager._texImage2D(GlConst.GL_TEXTURE_2D, 0, GL30.GL_RGBA16F, vw, i == 3 ? vh / (VOLUME_SLICES / VOLUME_COLUMNS) : vh, 0,
+                    GL11.GL_RGBA, GL11.GL_FLOAT, null);
             GlStateManager._glBindFramebuffer(GlConst.GL_FRAMEBUFFER, VOLUME_FBOS[i]);
             GlStateManager._glFramebufferTexture2D(GlConst.GL_FRAMEBUFFER, GlConst.GL_COLOR_ATTACHMENT0, GlConst.GL_TEXTURE_2D, VOLUME[i], 0);
             ok &= GlStateManager.glCheckFramebufferStatus(GlConst.GL_FRAMEBUFFER) == GlConst.GL_FRAMEBUFFER_COMPLETE;
@@ -1865,8 +1878,8 @@ public final class PallPass {
         private int cellsH;
         private int[] TEXTURES = {-1, -1, -1, -1};
         private int[] FBOS = {-1, -1, -1, -1};
-        private int[] VOLUME = {-1, -1, -1};
-        private int[] VOLUME_FBOS = {-1, -1, -1};
+        private int[] VOLUME = {-1, -1, -1, -1};
+        private int[] VOLUME_FBOS = {-1, -1, -1, -1};
         private int volumeW;
         private int volumeH;
         private int volumeTile;

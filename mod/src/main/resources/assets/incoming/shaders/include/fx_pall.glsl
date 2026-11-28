@@ -2054,21 +2054,17 @@ void main() {
 // Pall seen up to the far boundary of each near-volume cell (pall.glsl: froxelNear), front to back along the cell's center
 // ray over the slices before it, as ray steps (pallStep, passMatter): each slice's light by its own transmittance, through
 // the air haze before it (pallAir) and the slices nearer; stored as linear light and the share of what lies behind still
-// seen, shown together with the rays behind (pall.glsl: froxelOver; Sampler0: medium volume, fx_pall_froxel)
-void main() {
-    ivec2 at = ivec2(gl_FragCoord.xy);
-    ivec2 atlas = textureSize(Sampler0, 0);
-    ivec2 tile = atlas / ivec2(PALL_FROXEL_COLUMNS, PALL_FROXEL_SLICES / PALL_FROXEL_COLUMNS);
-    ivec2 cell = at % tile;
-    int k = (at.y / tile.y) * PALL_FROXEL_COLUMNS + at.x / tile.x;
-    float axis;
-    vec3 dir = froxelRay((vec2(cell) + 0.5) * PallFroxel.x, axis);
+// seen, shown together with the rays behind (pall.glsl: froxelOver; Sampler0: medium volume, fx_pall_froxel).
+// In two draws (PallSumBlocks): 1 — each block of PALL_SUM_BLOCK slices seen on its own (light, share), a tile per block side by
+// side (Sampler0's first row); 2 — a cell composes the blocks in front of its own (Sampler1) and then its block's slices up to
+// its own: at most 7 + 8 reads, not one per slice in front of it (up to 64; the sums cost 1.0–1.3 ms at MEDIUM, Artem's
+// Zearth scene). 0 — one draw, every slice in front (the warm-up). (The uniform is declared in fx_pall_froxel_sum.fsh.)
+const int PALL_SUM_BLOCK = 8;
+// the slices [from, to] of a cell's column seen front to back from seen = 1: (linear light, share still seen)
+vec4 froxelSlices(ivec2 cell, ivec2 tile, vec3 dir, float axis, vec3 airLinear, int from, int to) {
     vec3 light = vec3(0.0);
-    float seen = 1.0, z0 = 0.0;
-    // airlight in this volume's linear light (its sum is shown with the rays behind, pallShown)
-    vec3 airShown = pallAirLight(dir);
-    vec3 airLinear = vec3(pallLinear(airShown.r), pallLinear(airShown.g), pallLinear(airShown.b));
-    for (int i = 0; i <= k; i++) {
+    float seen = 1.0, z0 = from == 0 ? 0.0 : froxelBoundary(PallFroxel, float(from));
+    for (int i = from; i <= to; i++) {
         float z1 = froxelBoundary(PallFroxel, float(i + 1));
         vec4 m = texelFetch(Sampler0, cell + tile * ivec2(i % PALL_FROXEL_COLUMNS, i / PALL_FROXEL_COLUMNS), 0);
         if (m.w > 1e-7) {
@@ -2079,7 +2075,39 @@ void main() {
         }
         z0 = z1;
     }
-    vec4 res = vec4(light, seen);
+    return vec4(light, seen);
+}
+void main() {
+    ivec2 at = ivec2(gl_FragCoord.xy);
+    ivec2 atlas = textureSize(Sampler0, 0);
+    ivec2 tile = atlas / ivec2(PALL_FROXEL_COLUMNS, PALL_FROXEL_SLICES / PALL_FROXEL_COLUMNS);
+    ivec2 cell = at % tile;
+    int k = (at.y / tile.y) * PALL_FROXEL_COLUMNS + at.x / tile.x;
+    float axis;
+    vec3 dir = froxelRay((vec2(cell) + 0.5) * PallFroxel.x, axis);
+    // airlight in this volume's linear light (its sum is shown with the rays behind, pallShown)
+    vec3 airShown = pallAirLight(dir);
+    vec3 airLinear = vec3(pallLinear(airShown.r), pallLinear(airShown.g), pallLinear(airShown.b));
+    int mode = int(PallSumBlocks + 0.5);
+    vec4 res;
+    if (mode == 1) {
+        // this draw's target is one row of tiles: tile column k is block k
+        res = froxelSlices(cell, tile, dir, axis, airLinear, k * PALL_SUM_BLOCK, k * PALL_SUM_BLOCK + PALL_SUM_BLOCK - 1);
+    } else if (mode == 2) {
+        int block = k / PALL_SUM_BLOCK;
+        vec3 light = vec3(0.0);
+        float seen = 1.0;
+        for (int b = 0; b < PALL_FROXEL_SLICES / PALL_SUM_BLOCK; b++) {
+            if (b >= block) break;
+            vec4 v = texelFetch(Sampler1, cell + ivec2(tile.x * b, 0), 0);
+            light += seen * v.rgb;
+            seen *= v.a;
+        }
+        vec4 own = froxelSlices(cell, tile, dir, axis, airLinear, block * PALL_SUM_BLOCK, k);
+        res = vec4(light + seen * own.rgb, seen * own.a);
+    } else {
+        res = froxelSlices(cell, tile, dir, axis, airLinear, 0, k);
+    }
     if (all(equal(res.rgb, res.rgb))) res.rgb = min(res.rgb, vec3(5.0e4));
     fragColor = pallValid(res) ? res : vec4(0.0, 0.0, 0.0, 1.0);
 }

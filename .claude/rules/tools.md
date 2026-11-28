@@ -97,6 +97,8 @@ Prism: `~/.var/app/org.prismlauncher.PrismLauncher/data/PrismLauncher/` (`tools/
     dust_wall_split_probe.py             ← the march's two intervals against the readers' prefix on analytic media: a reader in
                                            thin haze in front of a dense wall, with and without a clear gap (the spires),
                                            with the gap-only split as control. Run by dust_wall_gl.py.
+    pall_froxel_sum_gl.py                ← the near volume's sums in two draws (blocks, then cells) against one draw over every
+                                           slice in front, random medium on Mesa. Run by dust_wall_gl.py.
     dust_wall_ray_cost.py <checkout> [readbacks.npz] ← llvmpipe timings and optional RGBA32F readbacks for the pall ray pass
     nested_kwin.sh                       ← nested KWin for the client: no window and no host sound, its own D-Bus bus without starting services
                                            (nested_kwin_bus.conf) and XDG directories; takes the GPU lease and the client lock

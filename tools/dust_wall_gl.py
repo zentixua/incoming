@@ -604,7 +604,7 @@ period_case()
 # The full pass contract and its camera-motion and screen-edge regressions use llvmpipe.
 failed = bool(gl["FAILED"])
 for script in ("dust_wall_contract_gl.py", "dust_wall_horizon_probe.py", "dust_wall_lift_threshold_probe.py", "wall_layer_identity.py", "nuclear_volume_warmup_gl.py",
-               "pall_single_gl.py", "dust_wall_split_probe.py"):
+               "pall_single_gl.py", "dust_wall_split_probe.py", "pall_froxel_sum_gl.py"):
     run = subprocess.run([sys.executable, str(Path(__file__).with_name(script))])
     failed |= run.returncode != 0
 # the one-tap light (MEDIUM, LOW) has no step where the brighter light changes between the fireball and the sun; it reads the
