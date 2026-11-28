@@ -100,15 +100,13 @@ paths:
   (`FogRenderer`: red and green × 0.5, blue × 0.6), so do not mix distant haze with its color.
 - The layer's GPU cost is measured by the probe `fx/layer/LayerTimes` (the `FxLayer.describeTiming` line, F3 on the
   right; it runs while the line is read: F3, the line over the last 5 s, the scene bench, `always()` for scenarios and
-  the sandbox). Without it there are no marks, nor `GpuTimer`. Marks sit at pass boundaries (`LayerTimes.Pass`:
+  the sandbox). Without it: no marks, no `GpuTimer`. Marks sit at pass boundaries (`LayerTimes.Pass`:
   atlas, depth, water, pall with smoke, heat, probes, quads, glow): every frame, read 2–3 frames later. A mark between
   adjacent passes “leaks” (the previous pass's tail lands in the next), so only with `-Dincoming.fx.drain=true`
-  (never F3: F3 is a player's screen, and a drain frame stalls it 20–28 ms, ~150 ms at a 300 kt pall, every 2 s;
-  `LayerTimesTest.f3NeverDrains`; scenarios and the bench run without it) every 2 s a drain frame runs: `glFinish` before each mark, the passes are exact, and the quads are split again by part
-  (`FxQuads.Part`: puffs, veil, ribbons, fire, glare, particles, debris trails, other), each part with its own sort
-  segments in one `glMultiDrawElements`, with time and pixels (GL_SAMPLES_PASSED) measured separately. The frame is
-  copied before the parts and restored after. A quad's part is set by its writer (`FxQuads.part`, `LayerPartsTest`). New
-  drawings get their own part, not “other”. With half-resolution smoke (`HalfPass`) each part draws as the frame drew
+  (never F3: a drain frame stalls the screen up to 150 ms; `LayerTimesTest.f3NeverDrains`) every 2 s a drain frame
+  runs: `glFinish` before each mark, and the quads split by part (`FxQuads.Part`), each in one `glMultiDrawElements`
+  with time and pixels (GL_SAMPLES_PASSED); the frame is copied before the parts and restored after. A quad's part is
+  set by its writer (`FxQuads.part`, `LayerPartsTest`); new drawings get their own part, not “other”. With half-resolution smoke (`HalfPass`) each part draws as the frame drew
   it: its quads behind their tiles' cuts in the frame, the rest into the target and laid; target samples count four
   frame pixels in the part's screens.
 - AMD's Windows driver compiles each program (glc) in the game, unseen by `GpuWatch`; the nuclear volume programs
@@ -444,31 +442,27 @@ paths:
   `Fragments` counts live pieces itself (its own list of live ones: a piece the engine has not ticked for over 2 ticks
   is gone). The limit is 1200 at `Particles: All`. When there is no room, a new piece nearer the camera evicts the
   farthest one: the wave travels toward the camera, so near slots come last; otherwise all slots would go to the leaves
-  of distant chunks (`wall` frames). The rule is the old scan of all pieces on each new one (and a piece of the same
-  tick is evicted by the next one, which is nearer), but done through a heap (`fx/FarthestPool`: built once per tick,
-  when the slots ran out; new pieces of that tick join it themselves; `FarthestPoolTest` checks it against the scan):
-  a salvo of 8 Shaheds produced thousands of grass scraps in one tick, and the scan cost tens of ms. Sorting once per
-  tick without the new pieces of that tick changed the rule (review #425: a new piece 90 m away no longer evicted an
-  accepted one 100 m away in the same tick). A new source asks for slots through `Fragments.share`: free ones, but no
-  fewer than a quarter of the limit (`FrontLitter`: 8 × 900 scraps for 1200 slots meant almost all were evicted at
-  once). A piece in open air moves without vanilla's block sweep: `util/OpenBox.clear` (the swept box widened by
-  one block holds no collision shape; all-air sections answer at once) lets it step straight; near a block, near a
-  Sable craft (`SubLevels.mayHaveCraftNear`, cached per 16-block cell each tick) or above vanilla's 100-block step it
-  asks `Particle.move` (the sweep was 36 % of `Fragments` time at a 300 kt front; `FxParticle` takes the same shortcut;
-  `OpenBoxGameTests.openBoxAgreesWithTheSweep`). On touching the ground a piece stays (vanilla no longer moves a particle after a collision,
-  `stoppedByCollision`), its tumbling stops, and after a second it crumbles. On the first tick of flight its box (by the
-  largest body dimension) is pulled out of the blocks, or a long plank from a breach at floor level would sink into the
-  floor. A piece is a body of its own material (`Fragments.Kind`: debris cube, plank, glass shard, leaf — size and drag
-  are one set), torn off at rest: wind carries it (`Fragments.Wind`; for the nuke, `BlastGust`) through quadratic drag
-  on its fall speed. The step is exact per tick, with gravity around it (`Fragments.step`: a leaf's settling time is 3
-  ticks, an Euler step would diverge, and gravity in one step shifted the fall speed by 15 %). Upward wind is a share of
-  the wind along the ground: for a piece torn off the ground — 0.02–0.12 (dust layer, Kuhl); for a piece from a building
-  or a crown — up to tan 25° (flow separation at the edge of a blunt body, `Fragments.LIFT_EDGE`: without it pieces from
-  a house did not rise, while at an edge the flow tosses them). Gravity is real, 0.0245 blocks per tick² (vanilla
-  particles: 0.04). A crown piece is a tuft of foliage with a 0.2–0.35 m branch, not a leaf: a sample is drawn (several
-  per block), because a 10 cm leaf seen from 60 blocks is smaller than a pixel, and a sample of leaves had vanished. A
-  glass piece takes its texture from a corner of the block sheet: the window is transparent except for the frame and
-  glare, and particles do not draw transparent pixels.
+  of distant chunks (`wall` frames). The rule is the old scan of all pieces on each new one, but done through a heap
+  (`fx/FarthestPool`: built once per tick, when the slots ran out; new pieces of that tick join it themselves;
+  `FarthestPoolTest` checks it against the scan): a salvo of 8 Shaheds makes thousands of scraps a tick. A new source
+  asks for slots through `Fragments.share`: free ones, but no fewer than a quarter of the limit (`FrontLitter`: 8 × 900
+  scraps for 1200 slots). In open air a piece steps without vanilla's sweep (`util/OpenBox.clear`: no collision shape
+  within a block of the swept box); near blocks or a Sable craft (`SubLevels.mayHaveCraftNear`, per 16-block cell)
+  `Particle.move` decides (the sweep was 36 % of their time at a nuclear front; `FxParticle` too; `OpenBoxGameTests`).
+  On touching the ground a piece stays (vanilla no longer moves a particle after a collision, `stoppedByCollision`), its
+  tumbling stops, and after a second it crumbles. On the first tick of flight its box (by the largest body dimension) is
+  pulled out of the blocks, or a long plank from a breach at floor level would sink into the floor. A piece is a body of
+  its own material (`Fragments.Kind`: debris cube, plank, glass shard, leaf — size and drag are one set), torn off at
+  rest: wind carries it (`Fragments.Wind`; for the nuke, `BlastGust`) through quadratic drag on its fall speed. The step
+  is exact per tick, with gravity around it (`Fragments.step`: a leaf's settling time is 3 ticks, an Euler step would
+  diverge, and gravity in one step shifted the fall speed by 15 %). Upward wind is a share of the wind along the ground:
+  for a piece torn off the ground — 0.02–0.12 (dust layer, Kuhl); for a piece from a building or a crown — up to tan 25°
+  (flow separation at the edge of a blunt body, `Fragments.LIFT_EDGE`: without it pieces from a house did not rise,
+  while at an edge the flow tosses them). Gravity is real, 0.0245 blocks per tick² (vanilla particles: 0.04). A crown
+  piece is a tuft of foliage with a 0.2–0.35 m branch, not a leaf: a sample is drawn (several per block), because a 10
+  cm leaf seen from 60 blocks is smaller than a pixel, and a sample of leaves had vanished. A glass piece takes its
+  texture from a corner of the block sheet: the window is transparent except for the frame and glare, and particles do
+  not draw transparent pixels.
 - Glow (bloom) of fire, fireballs, flashes and torches — `fx/layer/FxBloom` (presentation; player setting `bloom`: OFF /
   FAST by default / FULL). The layer's pass is the same as without it. After the squares, the same `fx` shader
   (`FxGlowPass`) draws the squares again from the farthest glowing one (`FxQuads.drawGlow`, from the same vertex buffer)
@@ -837,8 +831,8 @@ paths:
   (`fx_pall_composite`, place — the air block in front of the surface) — × the share of outdoor air at the point
   (`pall.glsl`: `pallOpen`): Minecraft's sky light / 15 in the window of 96×64×96 blocks around the eye
   (`fx/layer/OpenAir`, R8 3D on the block of texture 13, by sections modulo the size: at most `OpenAir.FILL` (12) section reads
-  per frame, missing ones nearest first, then 4 held ones in rotation; a section not read yet is open air (a fresh
-  216-section window read at once cost 349 ms on the first frame after a detonation; `OpenAirTest.freshWindowFillsNearestFirstWithinTheBudget`); where there is no chunk — 1; beyond the window — open above the coarse terrain map of the slot
+  a frame, missing ones nearest first, then 4 held ones in turn; unread is open air (a whole fresh window cost 349 ms
+  in one frame; `OpenAirTest`); where there is no chunk — 1; beyond the window — open above the coarse terrain map of the slot
   (the pall beyond the far mouth of an adit is visible from its depth); below it — the share of the block where the ray
   from the eye left the window: all places of the pall and its shadow lie on rays from the eye through air, so a long
   adit and a big cave beyond the window stay closed; in a dimension without sky there is no window; in shaders —
