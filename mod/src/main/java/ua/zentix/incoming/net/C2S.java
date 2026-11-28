@@ -206,6 +206,12 @@ public final class C2S {
     public record VoxyStale(long[] chunks) implements CustomPacketPayload {
         public static final int MAX = 1024;
         /**
+         * Chunks the client remembers having ingested from the mod, so it can report them when LOD Server Support
+         * overwrites them ({@code client/VoxyIngest}); the server remembers no more of what it sent
+         * ({@code compat/VoxyLods.Viewer}), or it would skip a chunk whose overwrite nobody can report.
+         */
+        public static final int REMEMBERED = 65536;
+        /**
          * Chunk reports per client tick: 12 × 20 = 240 per second — below server per-player acceptance
          * ({@code VoxyLods.STALE_PER_SECOND}, 256); chunks beyond its limit are dropped.
          */

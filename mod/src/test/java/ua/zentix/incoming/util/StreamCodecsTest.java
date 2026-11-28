@@ -80,4 +80,17 @@ class StreamCodecsTest {
         wrong.release();
         garbage.release();
     }
+
+    /**
+     * A deflated frame as this format ships it (length 1000, frame 27 bytes of raw DEFLATE), frozen: decoding does not
+     * depend on the zlib build, so a change to the deflated branch that would break recorded replays fails here.
+     */
+    @Test
+    void shippedDeflatedFrameStillDecodes() {
+        byte[] expected = new byte[1000];
+        for (int i = 0; i < expected.length; i++) expected[i] = (byte) (i * 7 % 13);
+        ByteBuf b = Unpooled.wrappedBuffer(java.util.HexFormat.of().parseHex("e8071b636067e460e264e662e166e5616318e58c86c1683a601986610000"));
+        assertArrayEquals(expected, CODEC.decode(b));
+        assertEquals(0, b.readableBytes());
+    }
 }

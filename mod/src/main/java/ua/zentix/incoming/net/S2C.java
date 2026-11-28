@@ -1095,13 +1095,10 @@ public final class S2C {
 
     /**
      * Chunk absent from client, sent to Voxy LOD ({@code compat/VoxyLods}, Voxy players only): distant ruins, craters,
-     * detonation traces and district lamps. {@code sections}: sections with light ({@code compat/LodSections}); dimension:
+     * detonation traces and district lamps. {@code sections}: sections with light ({@code compat/LodSections}), which
+     * server queues and pacing count as they are; the wire carries them deflated ({@link StreamCodecs#deflated}): a
+     * Flashback recording keeps every received byte though a replay never ingests them ({@code replay.md}). Dimension:
      * whose chunk it is — packets from old dimension rejected after dimension change.
-     */
-    /**
-     * A chunk's sections for Voxy LODs ({@code compat/LodSections} bytes): server queues and pacing count {@code sections}
-     * as they are; the wire carries them deflated ({@link StreamCodecs#deflated}): a Flashback recording keeps every
-     * received byte though a replay never ingests them ({@code replay.md}), and ruin sections deflate about 8× (zlib 6).
      */
     public record VoxyChunk(net.minecraft.resources.ResourceLocation dimension, int x, int z, byte[] sections) implements CustomPacketPayload {
         /** Maximum chunk size: 24 globally paletted sections and two light layers — ~250 KB. */
@@ -1134,7 +1131,7 @@ public final class S2C {
 
     /**
      * {@link VoxyChunk} as releases up to 3.14.0 sent it (sections as they are), kept so their Flashback replays still
-     * read: a replay never ingests it ({@code client/VoxyIngest}).
+     * read: a replay never ingests it ({@code client/VoxyIngest}). No current server sends this id: do not reuse it.
      */
     public record VoxyChunkRaw(VoxyChunk chunk) implements CustomPacketPayload {
         public static final Type<VoxyChunkRaw> TYPE = new Type<>(Incoming.id("voxy_chunk"));

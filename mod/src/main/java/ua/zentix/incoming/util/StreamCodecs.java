@@ -63,6 +63,8 @@ public final class StreamCodecs {
                     }
                 } catch (java.util.zip.DataFormatException e) {
                     throw new io.netty.handler.codec.DecoderException(e);
+                } finally {
+                    inflater.reset(); // the thread-local state would keep the frame alive
                 }
                 return out;
             }
@@ -78,8 +80,10 @@ public final class StreamCodecs {
                 byte[] out = new byte[value.length];
                 int k = 0;
                 while (!deflater.finished() && k < out.length) k += deflater.deflate(out, k, out.length - k);
+                boolean shorter = deflater.finished() && k < value.length;
+                deflater.reset(); // the thread-local state would keep the value alive
                 net.minecraft.network.VarInt.write(b, value.length);
-                if (deflater.finished() && k < value.length) {
+                if (shorter) {
                     net.minecraft.network.VarInt.write(b, k);
                     b.writeBytes(out, 0, k);
                 } else {

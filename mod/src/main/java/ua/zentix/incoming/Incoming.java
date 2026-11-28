@@ -153,6 +153,7 @@ public final class Incoming {
         NeoForge.EVENT_BUS.addListener(DhUpdates::onLevelTick);
         NeoForge.EVENT_BUS.addListener(ua.zentix.incoming.compat.VoxyLods::onServerTick);
         NeoForge.EVENT_BUS.addListener(ua.zentix.incoming.compat.VoxyLods::onLogout);
+        NeoForge.EVENT_BUS.addListener(ua.zentix.incoming.compat.VoxyLods::onChunkSent);
         NeoForge.EVENT_BUS.addListener(FarLods::onLevelTick);
         NeoForge.EVENT_BUS.addListener(PickHints::onPlayerTick);
         NeoForge.EVENT_BUS.addListener(ArrivalTickets::onLogin);

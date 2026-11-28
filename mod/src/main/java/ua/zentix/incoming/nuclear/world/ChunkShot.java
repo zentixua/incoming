@@ -38,7 +38,7 @@ import java.util.concurrent.atomic.AtomicReferenceArray;
  * Snapshot number ({@link #serial}) tells the fracture and plan which snapshots built them ({@link RuinWindow.Stamp}):
  * a new snapshot is taken only when the old one is invalid.
  */
-final class ChunkShot {
+public final class ChunkShot {
     private static final BlockState AIR = Blocks.AIR.defaultBlockState();
 
     private static final java.util.concurrent.atomic.AtomicLong SERIALS = new java.util.concurrent.atomic.AtomicLong();
@@ -340,11 +340,12 @@ final class ChunkShot {
      * Section fingerprint as is: indexed palette states and index storage (hundreds of {@code long}, cheap). Identical
      * blocks give a different fingerprint after palette rebuild or lamp darkening; {@link #normalPrint} then decides.
      */
-    static long rawPrint(@Nullable PalettedContainer<BlockState> c) {
+    public static long rawPrint(@Nullable PalettedContainer<?> c) {
         if (c == null) return AIR_PRINT;
         var data = c.data;
         long h = data.storage().getBits();
-        Palette<BlockState> palette = data.palette();
+        Palette<?> palette = data.palette();
+        // a global palette reports the whole registry's size: its storage already holds global ids
         if (!(palette instanceof GlobalPalette)) {
             for (int k = 0; k < palette.getSize(); k++) h = mix(h, System.identityHashCode(palette.valueFor(k)));
         }

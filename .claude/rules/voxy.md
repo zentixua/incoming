@@ -66,9 +66,14 @@ paths:
   lit). All sections, including empty ones: air from a demolished tower erases it; a copy made from disk
   (`LodSections.DiskCopy`, built only by `FarLods.build`, which takes each disk section's fingerprint before the plan
   writes) starts one section below its lowest section that differs from disk, plus every sky-lit section beneath
-  (`LodSections.from`): Voxy keeps the dark untouched sections below, the disk state it holds; a copy equal to disk (a
-  restore) and a loaded chunk go whole. A chunk with the bytes last queued for that player in this world is not queued
-  again (`Viewer.offer`, up to `REMEMBERED` chunks); a `C2S.VoxyStale` report forgets it first. On the wire the sections
+  (`LodSections.from`): Voxy keeps the dark untouched sections below, normally the disk state (its own view or LSS);
+  a copy equal to disk (a restore) and a loaded chunk go whole. Limits, all out of sight from above ground: a chunk
+  Voxy never held (no LSS, never seen) gets a crust whose hollow underside shows only at a cliff at its edge; lamps an
+  earlier outage copy darkened in a dark basement below the cut stay dark there; two detonations whose far zones overlap
+  before `RuinSettle` keep the first one's ruins below the second one's cut. A chunk with the bytes last queued for that
+  player in this world is not queued again (`Viewer.offer`, at most `C2S.VoxyStale.REMEMBERED` chunks, what the client
+  remembers to report): whatever else writes it into the client's Voxy forgets it first, the server sending the
+  player the world chunk (`VoxyLods.onChunkSent`, `ChunkWatchEvent.Sent`) and a `C2S.VoxyStale` report. On the wire the sections
   are deflated (`S2C.VoxyChunk` `incoming:voxy_chunk_z`, `StreamCodecs.deflated`); every size below counts the sections
   as they are, before deflating. Delivery is an acknowledged byte
   window per connection (`net/LodBatchFlow`): the server thread keeps up to `STOCK_BYTES` (2 MiB) of its queue ready on

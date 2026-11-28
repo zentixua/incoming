@@ -6,8 +6,6 @@ import net.minecraft.core.SectionPos;
 import net.minecraft.world.level.ChunkPos;
 import net.minecraft.world.level.LevelHeightAccessor;
 import net.minecraft.world.level.chunk.PalettedContainer;
-import net.minecraft.world.level.chunk.PalettedContainerRO;
-import net.minecraft.world.level.chunk.Palette;
 import net.minecraft.world.level.chunk.ProtoChunk;
 import net.minecraft.world.level.chunk.UpgradeData;
 import net.minecraft.world.ticks.ProtoChunkTicks;
@@ -20,6 +18,7 @@ import net.minecraft.world.level.chunk.DataLayer;
 import net.minecraft.world.level.chunk.LevelChunkSection;
 import net.minecraft.world.level.lighting.LevelLightEngine;
 import org.jetbrains.annotations.Nullable;
+import ua.zentix.incoming.nuclear.world.ChunkShot;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -68,8 +67,8 @@ public final class LodSections {
     }
 
     /**
-     * Section fingerprints as they are (block and biome palettes by identity, their index storage: hundreds of
-     * {@code long}, cheap). A section written to gets a new fingerprint even where its blocks end up the same (palette
+     * Section fingerprints as they are ({@code ChunkShot.rawPrint} of blocks and of biomes: palettes by identity and index
+     * storage, hundreds of {@code long}, cheap). A section written to gets a new fingerprint even where its blocks end up the same (palette
      * growth): such a section is sent, never wrongly kept.
      */
     public static long[] prints(LevelChunkSection[] sections) {
@@ -80,21 +79,8 @@ public final class LodSections {
 
     private static long print(@Nullable LevelChunkSection s) {
         if (s == null) return 0;
-        return print(s.hasOnlyAir() ? 1 : print(1, s.getStates()), s.getBiomes());
-    }
-
-    private static long print(long h, @Nullable PalettedContainerRO<?> c) {
-        if (!(c instanceof PalettedContainer<?> container)) return mix(h, c == null ? 0 : System.identityHashCode(c));
-        var data = container.data;
-        Palette<?> palette = data.palette();
-        h = mix(h, data.storage().getBits());
-        for (int k = 0; k < palette.getSize(); k++) h = mix(h, System.identityHashCode(palette.valueFor(k)));
-        for (long v : data.storage().getRaw()) h = mix(h, v);
-        return h;
-    }
-
-    private static long mix(long h, long v) {
-        return (h ^ v) * 0x9E3779B97F4A7C15L + 1;
+        long blocks = ChunkShot.rawPrint(s.hasOnlyAir() ? null : s.getStates());
+        return blocks * 0x9E3779B97F4A7C15L ^ (s.getBiomes() instanceof PalettedContainer<?> c ? ChunkShot.rawPrint(c) : System.identityHashCode(s.getBiomes()));
     }
 
     /**
