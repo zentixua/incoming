@@ -22,18 +22,16 @@ class LayerTimesTest {
     }
 
     /**
-     * Drain frame (glFinish for each label, parts separately: 20–28 ms processor) - only upon request: F3 or the launch property
-     * . The scripts and the stand keep the sample enabled by reading the line, and 25.10 in look_gate this frame once in 2 s was a jerk in
-     *  their own metering.
+     * Drain frame (glFinish at every mark, parts separately: 20–28 ms, ~150 ms at a 300 kt pall) only with the launch
+     * property, never for F3: F3 is a player's screen, and its frame time must be the game's own.
      */
     @Test
-    void drainedFrameOnlyWhenAsked() {
+    void f3NeverDrains() {
         long s = 1_000_000_000L;
-        for (long now = 0; now < 60 * s; now += s / 60) assertEquals(false, LayerTimes.drains(false, false, 0, now));
-        assertEquals(true, LayerTimes.drains(true, false, 0, 5 * s));
-        assertEquals(true, LayerTimes.drains(false, true, 0, 5 * s));
-        assertEquals(false, LayerTimes.drains(true, false, 5 * s, 6 * s));
-        assertEquals(true, LayerTimes.drains(true, false, 5 * s, 5 * s + LayerTimes.DRAIN_EVERY_NS));
+        for (long now = 0; now < 60 * s; now += s / 60) assertEquals(false, LayerTimes.drains(false, 0, now));
+        assertEquals(true, LayerTimes.drains(true, 0, 5 * s));
+        assertEquals(false, LayerTimes.drains(true, 5 * s, 6 * s));
+        assertEquals(true, LayerTimes.drains(true, 5 * s, 5 * s + LayerTimes.DRAIN_EVERY_NS));
     }
 
     /**

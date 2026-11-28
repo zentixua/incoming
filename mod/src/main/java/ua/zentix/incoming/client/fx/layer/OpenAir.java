@@ -42,7 +42,10 @@ import java.util.Arrays;
  * <p>
  * Window uses 16³ sections, wrapped modulo texture size (world section (x, y, z) always uses the same texture slot): eye
  * enters a neighbouring section — fill only newly included sections; reread {@link #REFRESH} sections per frame
- * in rotation (light changes as the shock wave breaks walls and roofs): entire window in 36 frames.
+ * in rotation (light changes as the shock wave breaks walls and roofs): entire window in 54 frames. A frame reads at most
+ * {@link #FILL} sections from the light engine, nearest the eye first ({@link #plan}): a fresh window (the first pall frame
+ * of a detonation, a teleport) read all 216 sections in one frame, 349 ms with cold code in a 300 kt repro; sections still
+ * waiting read as outdoor air, as an unloaded chunk does, until their turn (a whole fresh window in 18 frames).
  * While the pall is out of view, the window is neither updated nor reset (returning does not refill it all);
  * reset on world change. No client chunk — outdoor air.
  */
@@ -52,11 +55,22 @@ public final class OpenAir {
     private static final int SX = SIZE_XZ / 16, SY = SIZE_Y / 16;
     /** Sections refreshed per frame. */
     static final int REFRESH = 4;
+    /** Sections read from the light engine per frame at most: new ones nearest the eye first, then the refresh. */
+    static final int FILL = 12;
+    /** Sections in the window. */
+    static final int SECTIONS = SX * SY * SX;
     /** Custom texture unit (like pall noise, {@code PallPass.NOISE_UNIT}: ShaderInstance does not bind 3D textures). */
     static final int UNIT = 13;
 
     private static int texture = -1;
     private static ByteBuffer section;
+    /** One section in texture order before upload. */
+    private static final byte[] VOXELS = new byte[2 * 4096];
+    /** This frame's window sections (x, y, z order), and those to read ({@link #plan}): window indices. */
+    private static final long[] KEYS = new long[SECTIONS];
+    private static final int[] DUE = new int[FILL];
+    /** Sections waiting (not yet read), window index and squared distance to the eye section, for {@link #plan}. */
+    private static final int[] WAIT = new int[SECTIONS], WAIT_D = new int[SECTIONS];
     /** Window contents as uploaded from the light engine (RG per voxel, texture layout): the moving-light overlay restores from it. */
     private static byte[] mirror;
     /** Voxels with block light above 0 in each slot (debug line), and their sum. */
@@ -106,26 +120,26 @@ public final class OpenAir {
         GL11.glPixelStorei(GL12.GL_UNPACK_IMAGE_HEIGHT, 0);
         GL11.glPixelStorei(GL12.GL_UNPACK_SKIP_IMAGES, 0);
         GL11.glBindTexture(GL12.GL_TEXTURE_3D, texture);
-        int i = 0, all = SX * SY * SX;
-        for (int sx = sx0; sx < sx0 + SX; sx++) {
-            for (int sy = sy0; sy < sy0 + SY; sy++) {
-                for (int sz = sz0; sz < sz0 + SX; sz++) {
-                    int slot = (Math.floorMod(sx, SX) * SY + Math.floorMod(sy, SY)) * SX + Math.floorMod(sz, SX);
-                    long key = SectionPos.asLong(sx, sy, sz);
-                    boolean due = Math.floorMod(i++ - refreshAt, all) < REFRESH;
-                    if (STORED[slot] == key && !due) continue;
-                    lit -= LIT[slot];
-                    LIT[slot] = 0;
-                    fill(level, sky, block, sx, sy, sz);
-                    keep(Math.floorMod(sx, SX) * 16, Math.floorMod(sy, SY) * 16, Math.floorMod(sz, SX) * 16);
-                    lit += LIT[slot] = litIn();
-                    GL12.glTexSubImage3D(GL12.GL_TEXTURE_3D, 0, Math.floorMod(sx, SX) * 16, Math.floorMod(sy, SY) * 16, Math.floorMod(sz, SX) * 16,
-                            16, 16, 16, GL30.GL_RG, GL11.GL_UNSIGNED_BYTE, section);
-                    STORED[slot] = key;
-                }
-            }
+        int i = 0;
+        for (int sx = sx0; sx < sx0 + SX; sx++)
+            for (int sy = sy0; sy < sy0 + SY; sy++)
+                for (int sz = sz0; sz < sz0 + SX; sz++) KEYS[i++] = SectionPos.asLong(sx, sy, sz);
+        int n = plan(KEYS, STORED, ex >> 4, ey >> 4, ez >> 4, refreshAt, DUE);
+        for (int k = 0; k < n; k++) {
+            long key = KEYS[DUE[k]];
+            int sx = SectionPos.x(key), sy = SectionPos.y(key), sz = SectionPos.z(key), slot = slot(sx, sy, sz);
+            if (STORED[slot] == key) refreshAt = (DUE[k] + 1) % SECTIONS;
+            load(level, sky, block, sx, sy, sz, slot, false);
+            STORED[slot] = key;
         }
-        refreshAt = (refreshAt + REFRESH) % all;
+        // sections still waiting hold another place's light (the window moved) or nothing yet: outdoor air until read
+        for (int k = 0; k < SECTIONS; k++) {
+            long key = KEYS[k];
+            int sx = SectionPos.x(key), sy = SectionPos.y(key), sz = SectionPos.z(key), slot = slot(sx, sy, sz);
+            if (STORED[slot] == key || STORED[slot] == ~key) continue;
+            load(level, sky, block, sx, sy, sz, slot, true);
+            STORED[slot] = ~key;
+        }
         // light carried by entities (LambDynamicLights) over the light engine's, after the sections it overlays were refreshed
         MovingLight.overlay(level, ex, ey, ez);
         GL11.glBindTexture(GL12.GL_TEXTURE_3D, 0);
@@ -140,17 +154,83 @@ public final class OpenAir {
         return Math.floorDiv(eye - size / 2 + 8, 16) * 16;
     }
 
+    /** Window slot of world section (sx, sy, sz): the window wraps modulo its size. */
+    static int slot(int sx, int sy, int sz) {
+        return (Math.floorMod(sx, SX) * SY + Math.floorMod(sy, SY)) * SX + Math.floorMod(sz, SX);
+    }
+
     /**
-     * Section skylight and block light into {@link #section} (two bytes per voxel; x fastest, then y, then z — texture order).
+     * This frame's sections to read into {@code due} (indices into {@code keys}, the window's sections), returns their count,
+     * at most {@code due.length}: sections whose slot does not hold them yet ({@code stored} ≠ key; a waiting placeholder
+     * is stored as ~key), nearest the eye section (ex, ey, ez) first; the rest of the budget, up to {@link #REFRESH},
+     * rereads held sections in rotation from window index {@code refreshAt}. Without GL: {@code OpenAirTest}.
+     */
+    static int plan(long[] keys, long[] stored, int ex, int ey, int ez, int refreshAt, int[] due) {
+        int waiting = 0;
+        for (int k = 0; k < keys.length; k++) {
+            long key = keys[k];
+            if (stored[slot(SectionPos.x(key), SectionPos.y(key), SectionPos.z(key))] == key) continue;
+            int dx = SectionPos.x(key) - ex, dy = SectionPos.y(key) - ey, dz = SectionPos.z(key) - ez;
+            int d = dx * dx + dy * dy + dz * dz, at = waiting++;
+            // insertion by distance: 216 entries at most, once per frame
+            while (at > 0 && WAIT_D[at - 1] > d) {
+                WAIT[at] = WAIT[at - 1];
+                WAIT_D[at] = WAIT_D[at - 1];
+                at--;
+            }
+            WAIT[at] = k;
+            WAIT_D[at] = d;
+        }
+        int n = Math.min(waiting, due.length);
+        System.arraycopy(WAIT, 0, due, 0, n);
+        for (int k = 0, left = Math.min(REFRESH, due.length - n); k < keys.length && left > 0; k++) {
+            int at = (refreshAt + k) % keys.length;
+            long key = keys[at];
+            if (stored[slot(SectionPos.x(key), SectionPos.y(key), SectionPos.z(key))] != key) continue;
+            due[n++] = at;
+            left--;
+        }
+        return n;
+    }
+
+    /** Section (sx, sy, sz) into window slot {@code slot}: from the light engine, or outdoor air while it waits ({@code placeholder}). */
+    private static void load(ClientLevel level, LayerLightEventListener sky, LayerLightEventListener block, int sx, int sy, int sz, int slot,
+                             boolean placeholder) {
+        if (placeholder) {
+            for (int k = 0; k < 4096; k++) {
+                VOXELS[2 * k] = (byte) 255;
+                VOXELS[2 * k + 1] = 0;
+            }
+        } else {
+            fill(level, sky, block, sx, sy, sz);
+        }
+        int tx = Math.floorMod(sx, SX) * 16, ty = Math.floorMod(sy, SY) * 16, tz = Math.floorMod(sz, SX) * 16;
+        int lamps = 0;
+        for (int z = 0; z < 16; z++) {
+            for (int y = 0; y < 16; y++) {
+                int from = 2 * ((z * 16 + y) * 16);
+                System.arraycopy(VOXELS, from, mirror, 2 * (((tz + z) * SIZE_Y + ty + y) * SIZE_XZ + tx), 32);
+                for (int b = 1; b < 32; b += 2) if (VOXELS[from + b] != 0) lamps++;
+            }
+        }
+        lit += lamps - LIT[slot];
+        LIT[slot] = lamps;
+        section.clear();
+        section.put(VOXELS).flip();
+        GL12.glTexSubImage3D(GL12.GL_TEXTURE_3D, 0, tx, ty, tz, 16, 16, 16, GL30.GL_RG, GL11.GL_UNSIGNED_BYTE, section);
+    }
+
+    /**
+     * Section skylight and block light into {@link #VOXELS} (two bytes per voxel; x fastest, then y, then z — texture order).
      */
     private static void fill(ClientLevel level, LayerLightEventListener sky, LayerLightEventListener block, int sx, int sy, int sz) {
-        section.clear();
+        byte[] v = VOXELS;
         if (level.getChunkSource().getChunkNow(sx, sz) == null || sy < level.getMinSection() || sy >= level.getMaxSection()) {
             // no chunk — unknown: outdoor air, no lamps; above world — sky, below — enclosed
             byte open = sy < level.getMinSection() ? 0 : (byte) 255;
             for (int k = 0; k < 4096; k++) {
-                section.put(2 * k, open);
-                section.put(2 * k + 1, (byte) 0);
+                v[2 * k] = open;
+                v[2 * k + 1] = 0;
             }
             return;
         }
@@ -164,27 +244,10 @@ public final class OpenAir {
                 // sections without their own data take skylight from the column above (SkyLightSectionStorage): same at every column height
                 int column = data == null ? sky.getLightValue(pos.set(sx * 16 + x, sy * 16, sz * 16 + z)) : -1;
                 for (int y = 0; y < 16; y++) {
-                    int v = column >= 0 ? column : data.get(x, y, z), k = (z * 16 + y) * 16 + x;
-                    section.put(2 * k, (byte) (v * 17));
-                    section.put(2 * k + 1, (byte) (lamps == null ? 0 : lamps.get(x, y, z) * 17));
+                    int s = column >= 0 ? column : data.get(x, y, z), k = (z * 16 + y) * 16 + x;
+                    v[2 * k] = (byte) (s * 17);
+                    v[2 * k + 1] = (byte) (lamps == null ? 0 : lamps.get(x, y, z) * 17);
                 }
-            }
-        }
-    }
-
-    /** Voxels with block light in {@link #section}. */
-    private static int litIn() {
-        int n = 0;
-        for (int k = 0; k < 4096; k++) if (section.get(2 * k + 1) != 0) n++;
-        return n;
-    }
-
-    /** {@link #section} into {@link #mirror} at texture voxel (tx, ty, tz), its lower corner. */
-    private static void keep(int tx, int ty, int tz) {
-        for (int z = 0; z < 16; z++) {
-            for (int y = 0; y < 16; y++) {
-                int from = 2 * ((z * 16 + y) * 16), to = 2 * (((tz + z) * SIZE_Y + ty + y) * SIZE_XZ + tx);
-                for (int b = 0; b < 32; b++) mirror[to + b] = section.get(from + b);
             }
         }
     }

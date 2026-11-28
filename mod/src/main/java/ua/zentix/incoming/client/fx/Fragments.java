@@ -16,10 +16,15 @@ import net.minecraft.util.RandomSource;
 import net.minecraft.world.level.LevelReader;
 import net.minecraft.world.level.block.RenderShape;
 import net.minecraft.world.level.block.state.BlockState;
+import net.minecraft.world.phys.AABB;
 import net.minecraft.world.phys.Vec3;
+import it.unimi.dsi.fastutil.longs.Long2BooleanOpenHashMap;
+import ua.zentix.incoming.compat.SubLevels;
+import ua.zentix.incoming.util.OpenBox;
 import net.neoforged.neoforge.client.extensions.common.IClientBlockExtensions;
 import org.joml.Quaternionf;
 import org.joml.Vector3f;
+import org.jetbrains.annotations.Nullable;
 import ua.zentix.incoming.nuclear.radiation.Shielding;
 
 
@@ -90,6 +95,14 @@ public final class Fragments {
     private static final int LOST = 2;
     private static long tick;
     private static final RandomSource RANDOM = RandomSource.create();
+    /**
+     * This tick's answer whether a Sable craft may be near a 16-block cell ({@link SubLevels#mayHaveCraftNear}): a piece
+     * there moves through vanilla's {@code Particle.move}, which Sable wraps to collide with craft; elsewhere a piece in open
+     * air skips the block sweep ({@link Fragment#move}). Keyed by cell, cleared every tick: pieces fly in clusters.
+     */
+    private static final Long2BooleanOpenHashMap CRAFT = new Long2BooleanOpenHashMap();
+    /** Cell size of {@link #CRAFT}, blocks, and the margin around it a craft is looked for in. */
+    private static final int CRAFT_CELL = 16, CRAFT_MARGIN = 4;
 
     private Fragments() {}
 
@@ -208,6 +221,17 @@ public final class Fragments {
         return true;
     }
 
+    /** Whether a craft may be within reach of a piece at (x, y, z) this tick. */
+    private static boolean craftNear(ClientLevel level, double x, double y, double z) {
+        int cx = Mth.floor(x / CRAFT_CELL), cy = Mth.floor(y / CRAFT_CELL), cz = Mth.floor(z / CRAFT_CELL);
+        long key = BlockPos.asLong(cx, cy, cz);
+        if (CRAFT.containsKey(key)) return CRAFT.get(key);
+        boolean near = SubLevels.mayHaveCraftNear(level, new Vec3((cx + 0.5) * CRAFT_CELL, (cy + 0.5) * CRAFT_CELL, (cz + 0.5) * CRAFT_CELL),
+                CRAFT_CELL / 2.0 + CRAFT_MARGIN);
+        CRAFT.put(key, near);
+        return near;
+    }
+
     private static int cap() {
         ParticleStatus s = Minecraft.getInstance().options.particles().get();
         return s == ParticleStatus.ALL ? CAP : s == ParticleStatus.DECREASED ? CAP / 2 : CAP / 4;
@@ -230,12 +254,52 @@ public final class Fragments {
     /** Client tick (unpaused): remove departed pieces from the count. */
     public static void tick() {
         tick++;
+        CRAFT.clear();
         LIVE.purge(f -> f.isAlive() && tick - f.ticked <= LOST);
     }
 
     /** World exit: the engine removes particles itself. */
     public static void reset() {
         LIVE.clear();
+        CRAFT.clear();
+        Look.LAST.level = null;
+    }
+
+    /**
+     * What a piece takes from its block: texture, tint (grass, foliage: the biome blend around the block) and material.
+     * One removed block breaks into several pieces in a row ({@code NukeDust.debris}), each asking the same: the last
+     * block's answer is kept for the tick (building it per piece was 12 % of {@code Fragments} time at a nuclear front).
+     */
+    private static final class Look {
+        static final Look LAST = new Look();
+        @Nullable ClientLevel level;
+        @Nullable BlockState state;
+        long pos, tick;
+        TextureAtlasSprite sprite;
+        /** RGB tint, or -1 without tint. */
+        int tint;
+        /** Shielding material (NaN until asked). */
+        double material;
+
+        static Look of(ClientLevel level, BlockState state, BlockPos from) {
+            Look l = LAST;
+            long pos = from.asLong();
+            if (l.level == level && l.state == state && l.pos == pos && l.tick == Fragments.tick) return l;
+            l.level = level;
+            l.state = state;
+            l.pos = pos;
+            l.tick = Fragments.tick;
+            l.sprite = Minecraft.getInstance().getBlockRenderer().getBlockModelShaper().getTexture(state, level, from);
+            l.tint = IClientBlockExtensions.of(state).areBreakingParticlesTinted(state, level, from)
+                    ? Minecraft.getInstance().getBlockColors().getColor(state, level, from, 0) & 0xFFFFFF : -1;
+            l.material = Double.NaN;
+            return l;
+        }
+
+        double material(ClientLevel level, BlockPos from, BlockState state) {
+            if (Double.isNaN(material)) material = Shielding.material(level, from, state);
+            return material;
+        }
     }
 
     /** Piece: rectangular body with half-sizes along its axes, rotated around its own axis, block texture on faces. */
@@ -245,6 +309,8 @@ public final class Fragments {
         private static final Quaternionf TURN = new Quaternionf();
         private static final Vector3f[] AXES = {new Vector3f(), new Vector3f(), new Vector3f()};
         private static final double[] AIR_NOW = new double[3], VEL = new double[3];
+        /** Vanilla's {@code Particle.MAXIMUM_COLLISION_VELOCITY_SQUARED}: faster steps skip collision there too. */
+        private static final double MAX_COLLISION_SPEED_SQR = 100 * 100;
 
         /** Half-sizes along body axes, blocks. */
         private final float[] half = new float[3];
@@ -257,6 +323,8 @@ public final class Fragments {
         private int delay, rest;
         /** First flight tick passed (bounds extracted from blocks). */
         private boolean out;
+        /** Vertical motion was blocked once: vanilla moves the particle no more ({@code stoppedByCollision}). */
+        private boolean stopped;
         /** Hit a block other than from above (ceiling, canopy above): vanilla no longer moves it, but does not set onGround. */
         private boolean stuck;
         /** {@link Fragments#tick} tick when the piece last ticked (stops when the engine discards it). */
@@ -300,9 +368,10 @@ public final class Fragments {
             gravity = 0;
             friction = 1;
             lifetime = life;
-            drag = drag(terminalMps > 0 ? terminalMps : terminal(kind, Shielding.material(level, from, state), len));
+            Look look = Look.of(level, state, from);
+            drag = drag(terminalMps > 0 ? terminalMps : terminal(kind, look.material(level, from, state), len));
             lift = (float) (LIFT_MIN + ((edge ? LIFT_EDGE : LIFT_MAX) - LIFT_MIN) * random.nextDouble());
-            TextureAtlasSprite sprite = Minecraft.getInstance().getBlockRenderer().getBlockModelShaper().getTexture(state, level, from);
+            TextureAtlasSprite sprite = look.sprite;
             // face uses a texture patch the size of the body (16 pixels per block); glass uses the edge: window is transparent except the frame
             // and edge highlights, and the particle does not draw transparent pixels
             float span = Mth.clamp(2 * Math.max(half[0], half[1]), 0.125f, 1);
@@ -311,8 +380,8 @@ public final class Fragments {
             u1 = sprite.getU(ou + span);
             v0 = sprite.getV(ov);
             v1 = sprite.getV(ov + span);
-            if (IClientBlockExtensions.of(state).areBreakingParticlesTinted(state, level, from)) {
-                int c = Minecraft.getInstance().getBlockColors().getColor(state, level, from, 0);
+            if (look.tint >= 0) {
+                int c = look.tint;
                 rCol = (c >> 16 & 0xFF) / 255f;
                 gCol = (c >> 8 & 0xFF) / 255f;
                 bCol = (c & 0xFF) / 255f;
@@ -387,6 +456,28 @@ public final class Fragments {
             // tumbles faster with faster airflow around it
             spin = Math.copySign((float) Math.min(0.8, 0.1 + 0.25 * rel), spin);
             angle += spin;
+        }
+
+        /**
+         * Vanilla's {@code Particle.move}, except that a step in open air with no craft near skips the block sweep, which
+         * would return the step unchanged ({@link OpenBox}); the rest of the bookkeeping is vanilla's. Vanilla's own
+         * stop flag is private, so the same condition is kept here ({@link #stopped}); a stopped piece goes on through
+         * vanilla's call (and Sable's wrapper around it), as it always did.
+         */
+        @Override
+        public void move(double dx, double dy, double dz) {
+            AABB box = getBoundingBox();
+            if (stopped || !hasPhysics || dx == 0 && dy == 0 && dz == 0 || dx * dx + dy * dy + dz * dz >= MAX_COLLISION_SPEED_SQR
+                    || craftNear(level, x, y, z)
+                    || !OpenBox.clear(level, box.minX, box.minY, box.minZ, box.maxX, box.maxY, box.maxZ, dx, dy, dz)) {
+                double y0 = y;
+                super.move(dx, dy, dz);
+                if (Math.abs(dy) >= 1.0E-5F && Math.abs(y - y0) < 1.0E-5F) stopped = true;
+                return;
+            }
+            setBoundingBox(box.move(dx, dy, dz));
+            setLocationFromBoundingbox();
+            onGround = false;
         }
 
         @Override

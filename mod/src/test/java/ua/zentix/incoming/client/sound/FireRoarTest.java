@@ -87,4 +87,33 @@ class FireRoarTest {
         roar.finish(FIRE, NIGHT);
         return roar.level(0);
     }
+
+    /**
+     * Quarter shares without trigonometry are cos² and sin² of the azimuth from the quarter's axis, as by
+     * {@code Math.atan2}: every direction, the axes and a fire straight above the ear (a signed-zero dx with dz = 0 is a fire at the ear's own column, whose quarter either law picks arbitrarily).
+     */
+    @Test
+    void quarterSharesAreTheAzimuthLaw() {
+        Random r = new Random(11);
+        double[][] at = new double[2000][];
+        for (int i = 0; i < at.length; i++) {
+            double az = 2 * Math.PI * r.nextDouble(), d = 5 + 3000 * r.nextDouble();
+            at[i] = new double[]{d * Math.cos(az), d * Math.sin(az)};
+        }
+        double[][] axes = {{7, 0}, {0, 7}, {-7, 0}, {0, -7}, {-7, -0.0}, {0.0, -7}, {-0.0, 7}, {7, -0.0}, {0, 0}};
+        for (double[][] set : new double[][][]{at, axes}) {
+            for (double[] p : set) {
+                FireRoar roar = new FireRoar();
+                roar.add(p[0], 3, p[1], 1e7);
+                double az = Math.atan2(p[1], p[0]), u = (az < 0 ? az + 2 * Math.PI : az) / (Math.PI / 2);
+                int q0 = (int) Math.floor(u) % 4, q1 = (q0 + 1) % 4;
+                double frac = u - Math.floor(u), c = Math.cos(frac * Math.PI / 2), s = Math.sin(frac * Math.PI / 2);
+                double all = roar.power(0) + roar.power(1) + roar.power(2) + roar.power(3);
+                double[] want = new double[4];
+                want[q0] += c * c;
+                want[q1] += s * s;
+                for (int q = 0; q < 4; q++) assertEquals(want[q], roar.power(q) / all, 1e-9, "quarter " + q + " at " + p[0] + ", " + p[1]);
+            }
+        }
+    }
 }

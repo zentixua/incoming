@@ -2,6 +2,7 @@ package ua.zentix.incoming.client.fx.particle;
 
 import ua.zentix.incoming.client.fx.ClientAir;
 import ua.zentix.incoming.util.Air;
+import ua.zentix.incoming.util.OpenBox;
 import net.minecraft.client.multiplayer.ClientLevel;
 import net.minecraft.client.renderer.LevelRenderer;
 import net.minecraft.client.renderer.LightTexture;
@@ -180,7 +181,9 @@ public final class FxParticle {
     private void move(ClientLevel level, double dx, double dy, double dz) {
         if (stopped) return;
         double ix = dx, iy = dy, iz = dz;
-        if (collide && (dx != 0 || dy != 0 || dz != 0) && dx * dx + dy * dy + dz * dz < MAX_COLLISION_SPEED_SQR) {
+        if (collide && (dx != 0 || dy != 0 || dz != 0) && dx * dx + dy * dy + dz * dz < MAX_COLLISION_SPEED_SQR
+                // in open air the sweep returns the motion unchanged: skip it (thousands of flakes and debris a tick)
+                && !OpenBox.clear(level, x - HALF, y, z - HALF, x + HALF, y + HEIGHT, z + HALF, dx, dy, dz)) {
             Vec3 v = Entity.collideBoundingBox(null, new Vec3(dx, dy, dz), new AABB(x - HALF, y, z - HALF, x + HALF, y + HEIGHT, z + HALF), level,
                     List.of());
             dx = v.x;

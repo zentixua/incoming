@@ -90,6 +90,11 @@ file changes.
   NeoForge's `PlaySoundSourceEvent` follows `play()` in the same sound-thread task, so at that instant it contains
   this sound's parameters. Other loops capture its startup filter (`SPR_AT_START`): our deafness filter overwrites
   SPR's long-sound updates (`updateMovingSounds`) each tick.
+- Projectile sound-path openness (`Occlusion`, ray `SoundFilters.open` through `level.clip`: Sable overrides it, so
+  our own traversal cannot replace it) takes at most `Occlusion.RAYS` (8) rays per tick for all projectiles together
+  (`Occlusion.Budget`: each casts every ⌈n / 8⌉ ticks in turn, openness keeps moving toward its last ray); a ray per
+  projectile per tick was 5 % of the render thread at a nuclear front (`OcclusionTest`). `ThroughLeaves` checks air and
+  an empty shape before the leaves tag (the tag lookup was 40 % of ray time).
 - Motor volume follows source and path, without “ref/floor/cutoff” curves: projectile-part sound power (`sound/Noise`:
   propeller from RPM, RPM ∝ entity speed; turbofan via Lighthill; solid rocket as a fraction of jet mechanical power;
   flow via Curle dipole), recording octaves (`sound/Spectra`, written by `build_sounds.py`) and path

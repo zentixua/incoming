@@ -80,7 +80,7 @@ many long ticks coincided with GC. Server ms per loaded chunk. Distribution in 5
 
 Where: Artem's laptop, only when he is not playing (`tools/gpu_lease.sh --wait`), only world copies.
 
-- **GPU time per pass**: `LayerTimes` (`-Dincoming.fx.drain=true` or F3), the bench line.
+- **GPU time per pass**: `LayerTimes` (F3 and the bench line: non-blocking pass averages; exact passes and quad parts only with `-Dincoming.fx.drain=true`).
 - **RenderDoc**: frame capture in `mod/run/renderdoc/`, cost per draw call, overdraw, analysis with its Python
   (`renderdoccmd` needs `-d "$PWD"`; run the qrenderdoc Python analysis outside nested KWin).
 - **Pixel defects** (dark spots, specks, holes, bands, flicker on an effect; Artem, 24.11: "no guessing, find the
@@ -167,10 +167,9 @@ into that area's `.claude/rules` or this skill by PR in the same thread; status 
   threads per period, so with the client's dozens of busy threads its render-thread sample count is a small, uneven
   fraction of wall time: use it for shares inside the thread, never for milliseconds. Per-frame cost comes from a
   render-thread sampler and frame log in the scenario client (the `incoming.hitch` probe).
-- F3's frame-time percentiles (and any frame log while F3 is open or `-Dincoming.fx.drain=true`) include `LayerTimes`'
-  drain frame, `glFinish` at every pass mark once every 2 s: at a 300 kt pall it costs ~150 ms against 42 ms frames
-  (p98 154 ms with F3 open, 58 ms closed, same spot). Measure frame time with F3 closed and no drain; take pass shares
-  from `SCENARIO nuke-layer` / `pall-parts` lines, not from a drained run.
+- A frame log with `-Dincoming.fx.drain=true` includes `LayerTimes`' drain frame, `glFinish` at every pass mark once
+  every 2 s: at a 300 kt pall it costs ~150 ms against 42 ms frames. Measure frame time without the drain; take pass
+  shares from `SCENARIO nuke-layer` / `pall-parts` lines, not from a drained run. F3 never drains.
 - The probe's per-frame GPU ms (GL timestamps) counts the GPU's idle gaps while the render thread waits for a core:
   at a 1 Mt city front frames showed 57–61 ms "GPU" at 8–46 % `nvidia-smi` utilisation, CPU-bound. Read GPU utilisation
   and `hitch-sched` run-queue wait before calling frames GPU-bound.
