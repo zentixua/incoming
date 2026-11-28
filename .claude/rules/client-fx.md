@@ -548,7 +548,7 @@ paths:
   smooth fields of position, baked once per frame into a 48³ grid per mushroom (`fx_mush_taus`, `Sampler10`,
   `mushTauGrid`; cells farther than 1.5 cell diagonals from matter by `mushGap` stay zero; within two cells of the
   eye “away from the eye” is traced along the ray itself), not five four-sample paths at
-  every step (laptop 07.11: −25–40 % of ray time, frames unchanged); without the grid (`PallTauReady` 0) steps compute
+  every step (−25–40 % of ray time); without the grid (`PallTauReady` 0) steps compute
   them (`mushTausAt`). Sunward billows are traced once per first-segment length along a ray (`gSunK`); a ray ends at
   `RAY_EXIT` 2 % left, the rest filled like the matter so far; per-frame compositing with blend `ONE, SRC_ALPHA` and a weight by the similarity of distance to
   the world (`fx_pall_composite`). The layer's squares then take their share of the pall in front of them (`fx.vsh`, six
@@ -793,8 +793,8 @@ paths:
   below half frame or interleave 2 (3–4 drew a lattice burning in on a still view); near-volume cells update every 1/2/4
   frames by rung (`Step.volume`, same time constant), rungs below LOW thin only ray steps (16, 12): rays alone left the floor
   at 21–29 ms vs MEDIUM's 15 (Zearth, `PallDetailTest.nearVolumeAndStepsLetTheFloorFit`). Budgets: RTX 4060 Laptop, 2560×1600, 150 kt firestorm (LOW ≤ 6.1, MEDIUM ≤ 12.5, HIGH ≤ 19.2 ms
-  looking up); measure the passage with adaptive detail on. INFO logs each rung change with its window mean. The timing
-  summary includes separate wall march, pack and resolve intervals followed by the shared composites. On a divisor change the wall resolves
+  looking up); measure the passage with adaptive detail on. INFO logs rung changes. The timing
+  summary splits wall march, pack, resolve, then composites. On a divisor change the wall resolves
   against the last image on its original sample lattice, then reuses that storage for the next output.
   Near volume (froxels, the standard fog-the-camera-stands-in method: Wronski AC4 2014, Frostbite): the pall nearer than
   `VOLUME_FAR` 256 blocks along the view axis is a screen-aligned volume of 64 exponential slices, each slice a tile of a
