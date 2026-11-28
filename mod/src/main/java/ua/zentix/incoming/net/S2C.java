@@ -1098,13 +1098,18 @@ public final class S2C {
      * detonation traces and district lamps. {@code sections}: sections with light ({@code compat/LodSections}); dimension:
      * whose chunk it is — packets from old dimension rejected after dimension change.
      */
+    /**
+     * A chunk's sections for Voxy LODs ({@code compat/LodSections} bytes): server queues and pacing count {@code sections}
+     * as they are; the wire carries them deflated ({@link StreamCodecs#deflated}): a Flashback recording keeps every
+     * received byte though a replay never ingests them ({@code replay.md}), and ruin sections deflate about 8× (zlib 6).
+     */
     public record VoxyChunk(net.minecraft.resources.ResourceLocation dimension, int x, int z, byte[] sections) implements CustomPacketPayload {
         /** Maximum chunk size: 24 globally paletted sections and two light layers — ~250 KB. */
         static final int MAX_BYTES = 1 << 20;
-        public static final Type<VoxyChunk> TYPE = new Type<>(Incoming.id("voxy_chunk"));
+        public static final Type<VoxyChunk> TYPE = new Type<>(Incoming.id("voxy_chunk_z"));
         public static final StreamCodec<ByteBuf, VoxyChunk> CODEC = StreamCodec.composite(
                 net.minecraft.resources.ResourceLocation.STREAM_CODEC, VoxyChunk::dimension, ByteBufCodecs.VAR_INT, VoxyChunk::x,
-                ByteBufCodecs.VAR_INT, VoxyChunk::z, ByteBufCodecs.byteArray(MAX_BYTES), VoxyChunk::sections, VoxyChunk::new);
+                ByteBufCodecs.VAR_INT, VoxyChunk::z, StreamCodecs.deflated(MAX_BYTES), VoxyChunk::sections, VoxyChunk::new);
 
         @Override
         public Type<? extends CustomPacketPayload> type() {
@@ -1124,6 +1129,23 @@ public final class S2C {
         @Override
         public String toString() {
             return "VoxyChunk[" + dimension + " " + x + " " + z + ", " + sections.length + " bytes]";
+        }
+    }
+
+    /**
+     * {@link VoxyChunk} as releases up to 3.14.0 sent it (sections as they are), kept so their Flashback replays still
+     * read: a replay never ingests it ({@code client/VoxyIngest}).
+     */
+    public record VoxyChunkRaw(VoxyChunk chunk) implements CustomPacketPayload {
+        public static final Type<VoxyChunkRaw> TYPE = new Type<>(Incoming.id("voxy_chunk"));
+        public static final StreamCodec<ByteBuf, VoxyChunkRaw> CODEC = StreamCodec.composite(
+                net.minecraft.resources.ResourceLocation.STREAM_CODEC, VoxyChunk::dimension, ByteBufCodecs.VAR_INT, VoxyChunk::x,
+                ByteBufCodecs.VAR_INT, VoxyChunk::z, ByteBufCodecs.byteArray(VoxyChunk.MAX_BYTES), VoxyChunk::sections, VoxyChunk::new)
+                .map(VoxyChunkRaw::new, VoxyChunkRaw::chunk);
+
+        @Override
+        public Type<? extends CustomPacketPayload> type() {
+            return TYPE;
         }
     }
     /** Marks the end of a Voxy LOD batch: the chunks since the previous mark, on the same ordered handler as them. */

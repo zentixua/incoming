@@ -170,6 +170,59 @@ public final class DhGameTests {
     }
 
     /**
+     * A ruin copy for Voxy players ({@code LodSections.DiskCopy}) leaves out only sections the ruins did not touch: below
+     * its lowest sent section every block is the chunk's own before the wave (what Voxy already holds), and from it up
+     * every block is the copy's. Logs the bytes per chunk raw and on the wire against the whole copy.
+     */
+    @GameTest(template = "range", timeoutTicks = 100, batch = "dh_ruins_voxy", skyAccess = true)
+    public static void farCopyForVoxyLeavesOutOnlyUntouchedSections(GameTestHelper h) {
+        RuinCostGameTests.city(h);
+        ServerLevel level = h.getLevel();
+        Detonation d = NuclearGameTests.atPsi(h, new BlockPos(-600, 0, 32), true, new BlockPos(32, 1, 32), 12);
+        var biomes = level.registryAccess().registryOrThrow(net.minecraft.core.registries.Registries.BIOME);
+        long whole = 0, sent = 0, wire = 0;
+        int trimmed = 0;
+        for (int rx : new int[]{24, 40}) {
+            for (int rz : new int[]{24, 40}) {
+                ChunkPos c = new ChunkPos(h.absolutePos(new BlockPos(rx, 1, rz)));
+                for (int dx = -RuinPlanner.REACH; dx <= RuinPlanner.REACH; dx++) {
+                    for (int dz = -RuinPlanner.REACH; dz <= RuinPlanner.REACH; dz++) level.getChunk(c.x + dx, c.z + dz);
+                }
+                LevelChunk chunk = level.getChunk(c.x, c.z);
+                ProtoChunk copy = FarLods.testCopy(level, chunk, RuinPlanner.planFresh(level, d, chunk, false), false);
+                h.assertTrue(copy instanceof ua.zentix.incoming.compat.LodSections.DiskCopy, "the copy of " + c + " is not a disk copy");
+                byte[] data = ua.zentix.incoming.compat.LodSections.ofCopy(copy, true);
+                var back = ua.zentix.incoming.compat.LodSections.read(data, biomes);
+                int from = back.getFirst().y();
+                h.assertTrue(back.getLast().y() == copy.getMaxSection() - 1, "the top section of " + c + " is not sent");
+                for (int y = level.getMinBuildHeight(); y < level.getMaxBuildHeight(); y++) {
+                    for (int x = 0; x < 16; x++) {
+                        for (int z = 0; z < 16; z++) {
+                            BlockPos p = c.getBlockAt(x, y, z);
+                            BlockState far = copy.getBlockState(p);
+                            BlockState held = (y >> 4) < from ? chunk.getBlockState(p) : back.get((y >> 4) - from).blocks().getBlockState(x, y & 15, z);
+                            h.assertTrue(held == far, "Voxy would hold " + held + " at " + p + ", the copy has " + far);
+                        }
+                    }
+                }
+                if (from > copy.getMinSection()) trimmed++;
+                ProtoChunk plain = new ProtoChunk(c, net.minecraft.world.level.chunk.UpgradeData.EMPTY, level, biomes, null);
+                for (int i = 0; i < copy.getSections().length; i++) plain.getSections()[i] = copy.getSections()[i];
+                whole += ua.zentix.incoming.compat.LodSections.ofCopy(plain, true).length;
+                sent += data.length;
+                io.netty.buffer.ByteBuf b = io.netty.buffer.Unpooled.buffer();
+                ua.zentix.incoming.net.S2C.VoxyChunk.CODEC.encode(b, new ua.zentix.incoming.net.S2C.VoxyChunk(level.dimension().location(), c.x, c.z, data));
+                wire += b.readableBytes();
+                b.release();
+            }
+        }
+        h.assertTrue(trimmed > 0, "no ruin copy left out a section below the city");
+        h.assertTrue(wire * 4 < whole, "on the wire " + wire + " bytes against " + whole + " whole");
+        Incoming.LOG.info("Voxy LOD copies of 4 ruined chunks: {} bytes whole, {} trimmed, {} on the wire ({} trimmed)", whole, sent, wire, trimmed);
+        h.succeed();
+    }
+
+    /**
      * A trace of an explosion in the distance behind the heavy zone ({@link FarLods#scorch}): a chunk not in the world that the wave reached, goes to DH
      *  a copy from the disk with a trace on the ground - the grass is burned, the biome is scorched, below the ground everything is as it was - and not before the wave.
      *  Chunk - data on saving the grass field of the site, recorded on a disk in the distance, where there is no world; the epicenter is in 32 blocks
