@@ -1239,10 +1239,12 @@ vec3 gDwSegLight = vec3(0.0);
 bool gDwInB = false;
 float gDwLastEnd = -1.0;
 const vec3 DW_LUMA = vec3(0.2126, 0.7152, 0.0722);
-// knot candidates: where the transmittance in front of a sample first falls to each level (optical depth 0.03 to 2.4, each
-// twice the last; above 2.4 under 10 % shows through): (depth, transmittance, light's luminance in front of it)
-const int DW_KNOTS = 7;
-vec3 gDwKnot[7] = vec3[7](vec3(0.0), vec3(0.0), vec3(0.0), vec3(0.0), vec3(0.0), vec3(0.0), vec3(0.0));
+// knot candidates: where the transmittance in front of a sample first falls to each level (optical depth 0.03 to 3.84, each
+// twice the last; above that 2 % shows through): depth, transmittance, light's luminance in front of it; levels 0-3 in the
+// A vectors, 4-7 in the B ones (vectors, not arrays: an array indexed by the count spilled the march to scratch on AMD's
+// compiler, 108 dwords against its 80)
+const int DW_KNOTS = 8;
+vec4 gDwKnotZA = vec4(0.0), gDwKnotZB = vec4(0.0), gDwKnotTA = vec4(0.0), gDwKnotTB = vec4(0.0), gDwKnotLA = vec4(0.0), gDwKnotLB = vec4(0.0);
 int gDwKnots = 0;
 // diagnostics (DustWallDiag.split false): the split at a clear gap alone
 bool gDwKnotsOn = true;
@@ -1252,10 +1254,16 @@ void dwInterval(float t, float end, float T, vec3 light) {
         gDwInB = true;
         gDwSplit = vec4(gDwLastEnd, t, T, dot(light, DW_LUMA));
     }
-    // (levels 0.03 · 2^j of optical depth: T ≤ e^(−0.03 · 2^j))
-    while (gDwKnots < DW_KNOTS && T <= exp(-0.03 * exp2(float(gDwKnots)))) {
-        gDwKnot[gDwKnots] = vec3(t, T, dot(light, DW_LUMA));
+    // (levels 0.03 · 2^j of optical depth: T ≤ e^(−0.03 · 2^j); a sample crossing several levels takes the first)
+    if (gDwKnots < DW_KNOTS && T <= exp(-0.03 * exp2(float(gDwKnots)))) {
+        float lum = dot(light, DW_LUMA);
+        if (gDwKnots < 4) {
+            gDwKnotZA[gDwKnots] = t; gDwKnotTA[gDwKnots] = T; gDwKnotLA[gDwKnots] = lum;
+        } else {
+            gDwKnotZB[gDwKnots - 4] = t; gDwKnotTB[gDwKnots - 4] = T; gDwKnotLB[gDwKnots - 4] = lum;
+        }
         gDwKnots += 1;
+        while (gDwKnots < DW_KNOTS && T <= exp(-0.03 * exp2(float(gDwKnots)))) gDwKnots += 1;
     }
     gDwLastEnd = max(gDwLastEnd, end);
 }
@@ -1269,7 +1277,7 @@ void dwKnot(float T) {
     float best = 0.02;
     for (int j = 0; j < DW_KNOTS; j++) {
         if (j >= gDwKnots) break;
-        vec3 kn = gDwKnot[j];
+        vec3 kn = j < 4 ? vec3(gDwKnotZA[j], gDwKnotTA[j], gDwKnotLA[j]) : vec3(gDwKnotZB[j - 4], gDwKnotTB[j - 4], gDwKnotLB[j - 4]);
         if (kn.x <= z0 || kn.x >= z1) continue;
         float dev = abs(tau * (kn.x - z0) / (z1 - z0) + log(max(kn.y, 1e-7)));
         if (dev > best) {
