@@ -1227,21 +1227,56 @@ float gDwCapLeft = 0.0, gDwTailTau = 0.0;
 
 // The ray's occupied intervals (the readers' prefix: wall_layer.glsl wallTo): A from the first occupied
 // sample to the last one before the first clear gap longer than max(48, 0.1 t) blocks, B the rest (later gaps merge into B).
+// Without such a gap A and B meet at the bend of the ray's optical depth (dwKnot): one homogeneous slab spread a dense wall's
+// opacity over the thin haze in front of it up to the eye, so a reader inside the haze (a smoke quad 700 blocks out, the
+// pall rays' end) saw 0.1 of transmission on a ray that stayed in the haze and 0.7 on its neighbour that left the haze's top
+// first and so had a gap: jagged grey "spires" along the haze's top, flipping with the sample jitter (hotfix-pall, 28.11).
 // gDwSplit: (A's exit, B's entry, the transmittance at A's exit, the luminance of the light in front of it); B empty while
-// gDwInB is false (dwMarch closes A at the ray's last occupied depth)
+// gDwInB is false and no knot is taken (dwMarch closes A at the ray's last occupied depth)
 vec4 gDwSplit = vec4(0.0);
 // the march's light in front of the tail segment (dwSegment)
 vec3 gDwSegLight = vec3(0.0);
 bool gDwInB = false;
 float gDwLastEnd = -1.0;
 const vec3 DW_LUMA = vec3(0.2126, 0.7152, 0.0722);
+// knot candidates: where the transmittance in front of a sample first falls to each level (optical depth 0.03 to 2.4, each
+// twice the last; above 2.4 under 10 % shows through): (depth, transmittance, light's luminance in front of it)
+const int DW_KNOTS = 7;
+vec3 gDwKnot[7] = vec3[7](vec3(0.0), vec3(0.0), vec3(0.0), vec3(0.0), vec3(0.0), vec3(0.0), vec3(0.0));
+int gDwKnots = 0;
+// diagnostics (DustWallDiag.split false): the split at a clear gap alone
+bool gDwKnotsOn = true;
 // an occupied sample over [t, end] with the transmittance T and light in front of it
 void dwInterval(float t, float end, float T, vec3 light) {
     if (gDwLastEnd >= 0.0 && !gDwInB && t - gDwLastEnd > max(48.0, 0.1 * t)) {
         gDwInB = true;
         gDwSplit = vec4(gDwLastEnd, t, T, dot(light, DW_LUMA));
     }
+    // (levels 0.03 · 2^j of optical depth: T ≤ e^(−0.03 · 2^j))
+    while (gDwKnots < DW_KNOTS && T <= exp(-0.03 * exp2(float(gDwKnots)))) {
+        gDwKnot[gDwKnots] = vec3(t, T, dot(light, DW_LUMA));
+        gDwKnots += 1;
+    }
     gDwLastEnd = max(gDwLastEnd, end);
+}
+// The ray without a clear gap: A and B meet at the candidate farthest from the chord of the optical depth between the first
+// occupied depth and the last (the profile's bend: thin haze in front of a dense wall, or a dense near layer in front of
+// thin haze), so the readers' two homogeneous pieces follow the ray's own transmittance. Within 0.02 of the chord (a uniform
+// slab) A stays whole. Continuous in the profile: two candidates trade places where they fit equally well
+void dwKnot(float T) {
+    float z0 = gDwDepth.x, z1 = gDwLastEnd, tau = -log(max(T, 1e-7));
+    if (z1 <= z0) return;
+    float best = 0.02;
+    for (int j = 0; j < DW_KNOTS; j++) {
+        if (j >= gDwKnots) break;
+        vec3 kn = gDwKnot[j];
+        if (kn.x <= z0 || kn.x >= z1) continue;
+        float dev = abs(tau * (kn.x - z0) / (z1 - z0) + log(max(kn.y, 1e-7)));
+        if (dev > best) {
+            best = dev;
+            gDwSplit = vec4(kn.x, kn.x, kn.y, kn.z);
+        }
+    }
 }
 
 // Several sources on one ray (DwSourceCount, at most DW_FRAME_SOURCES): each source's ray interval (its slab of ground and
@@ -1425,6 +1460,7 @@ vec4 dwMarch(vec3 rd, float tEnd, float jitter, float foot, int maxSteps) {
     gDwInB = false;
     gDwLastEnd = -1.0;
     gDwSplit = vec4(0.0);
+    gDwKnots = 0;
     int sources = int(min(DwSourceCount, float(DW_FRAME_SOURCES)));
     float t0 = 1e30, t1 = 0.0;
     int crossed = 0;
@@ -1472,6 +1508,7 @@ vec4 dwMarch(vec3 rd, float tEnd, float jitter, float foot, int maxSteps) {
     vec3 spanLight = vec3(0.0), spanDepth = vec3(0.0);
     vec4 spanSplit = vec4(0.0);
     bool spanInB = false;
+    int spanKnots = 0;
     // the step cap counts occupied samples (each with its light), not strides over clear air: a cap on every stride
     // handed the far thin spans to the noise-free tail, which saw none of them (the march's accuracy: 0.29 at HIGH)
     for (int i = 0; i < 640; i++) {
@@ -1507,7 +1544,7 @@ vec4 dwMarch(vec3 rd, float tEnd, float jitter, float foot, int maxSteps) {
             if (first < searchTo) {
                 // back to the span's start: its thin sample again, its span ending at that cell
                 k = spanK; T = spanT; light = spanLight; gDwDepth = spanDepth; gDwLastEnd = spanEnd; gDwInB = spanInB;
-                gDwSplit = spanSplit; gDwSamples = int(spanSamples);
+                gDwSplit = spanSplit; gDwSamples = int(spanSamples); gDwKnots = spanKnots;
                 capK = first;
             } else {
                 k = searchTo;
@@ -1574,7 +1611,7 @@ vec4 dwMarch(vec3 rd, float tEnd, float jitter, float foot, int maxSteps) {
             spanK = -1.0;
             if (cells > 1.0 && !dense && !cut) {
                 spanK = k; spanT = T; spanLight = light; spanDepth = gDwDepth; spanEnd = gDwLastEnd; spanInB = gDwInB;
-                spanSplit = gDwSplit; spanSamples = float(gDwSamples - 1);
+                spanSplit = gDwSplit; spanSamples = float(gDwSamples - 1); spanKnots = gDwKnots;
             }
             float span = min(dwGridT(k + cells), tMarch) - t;
             float al = exp(-s * span), air = dwAirT(tt, rd.y);
@@ -1618,7 +1655,10 @@ vec4 dwMarch(vec3 rd, float tEnd, float jitter, float foot, int maxSteps) {
             gDwCapLeft = before - T;
         }
     }
-    // one interval: A is the whole occupied span
-    if (!gDwInB) gDwSplit = vec4(gDwLastEnd, gDwLastEnd, T, dot(light, DW_LUMA));
+    // no clear gap: A is the whole occupied span, or A and B meet at the profile's bend
+    if (!gDwInB) {
+        gDwSplit = vec4(gDwLastEnd, gDwLastEnd, T, dot(light, DW_LUMA));
+        if (gDwKnotsOn) dwKnot(T);
+    }
     return vec4(light, T);
 }

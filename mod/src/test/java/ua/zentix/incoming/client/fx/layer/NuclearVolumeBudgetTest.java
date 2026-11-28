@@ -337,10 +337,10 @@ class NuclearVolumeBudgetTest {
                 verify(divisor).set(6f);
                 verify(previousDiv).set(4f);
                 verify(reproject).set(0f, 0f, 0f, 1f);
-                verify(frame).set(anyFloat(), eq(96f));
+                verify(frame).set(anyFloat(), eq(80f));
                 replace(PallPass.class, null, "SUBMIT", new long[4]);
                 PallPass.beginFrame(burst.quality);
-                verify(detail).sample(eq(1205d), eq(0d), eq(400d), eq(800d), anyInt(), anyLong());
+                verify(detail).sample(eq(1205d), eq(0d), eq(400d), eq(800d), anyDouble(), anyInt(), anyLong());
                 assertEquals(1205, PallPass.watch().cause(), 0);
                 assertEquals(GpuWatch.State.OFF, PallPass.watch().state());
             } finally {
@@ -394,6 +394,6 @@ class NuclearVolumeBudgetTest {
         }
         detail.floor();
         assertEquals(6, PallPass.LADDER[detail.level].wallDiv());
-        assertEquals(96, PallPass.LADDER[detail.level].wallSteps());
+        assertEquals(80, PallPass.LADDER[detail.level].wallSteps());
     }
 }

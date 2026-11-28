@@ -1976,6 +1976,35 @@ void main() {
     float z0 = froxelBoundary(PallFroxel, float(k)), z1 = froxelBoundary(PallFroxel, float(k + 1));
     float z = mix(z0, z1, j.z), t = z / axis;
     vec3 p = dir * t;
+    // where this point was in the previous frame's volume (the reprojected value the cell keeps)
+    vec4 before = vec4(-1.0);
+    if (PallFroxelFrame.w > 0.5) {
+        // its eye-relative position there, screen place and view depth
+        vec4 clip = PrevViewProj * vec4(p + PallReproject.xyz, 1.0);
+        if (clip.w > 1e-3) {
+            vec2 was = (clip.xy / clip.w * 0.5 + 0.5) * PallFroxelFrame.xy / PallFroxel.x - 0.5;
+            float first = froxelBoundary(PallFroxel, 1.0);
+            // slice centers at integers: slice 0 holds everything nearer than its far boundary
+            float s = clip.w < first ? 0.0 : log(clip.w / PallFroxel.y) / froxelGrowth(PallFroxel) - 0.5;
+            if (all(greaterThanEqual(was, vec2(-0.5))) && all(lessThanEqual(was, vec2(tile) - 0.5)) && s <= float(PALL_FROXEL_SLICES) - 0.5) {
+                vec4 b0 = froxelLerp(Sampler0, was, s);
+                if (pallValid(vec4(b0.rgb, 0.0)) && b0.w >= 0.0 && b0.w < 6.0e4) before = b0;
+            }
+        }
+    }
+    // interleaved cells (PallFroxel.w = n, the rung's PallPass.Step.volume): a cell takes a new point every n-th frame, in turn
+    // (n 2: a 3D checkerboard; n 4: each 2 × 2 block of a slice in ordered-dither order, the next slice shifted), and keeps its
+    // reprojected value between; a cell with no previous value always takes one
+    int every = int(PallFroxel.w + 0.5);
+    if (every > 1 && before.w >= 0.0) {
+        int f = int(PallFrame.x);
+        bool turn = every == 2 ? ((cell.x + cell.y + k + f) & 1) == 0
+                : ((cell.x & 1) + 2 * ((cell.y + k) & 1)) == ((f * 3 + (f >> 2)) & 3);
+        if (!turn) {
+            fragColor = before;
+            return;
+        }
+    }
     pallLighting(dir);
     // mushrooms on this cell's ray (pallSource reads the carpet field's interval, gFoot*)
     vec2 mm = mushSetup(dir, 1e9);
@@ -2019,22 +2048,7 @@ void main() {
     // NaN still drops the cell
     if (all(equal(cur.rgb, cur.rgb))) cur.rgb = min(cur.rgb, vec3(5.0e4));
     if (!pallValid(vec4(cur.rgb, 0.0)) || !(cur.w >= 0.0 && cur.w < 6.0e4)) cur = vec4(0.0);
-    vec4 res = cur;
-    if (PallFroxelFrame.w > 0.5) {
-        // where this point was in the previous frame's volume: its eye-relative position there, screen place and view depth
-        vec4 clip = PrevViewProj * vec4(p + PallReproject.xyz, 1.0);
-        if (clip.w > 1e-3) {
-            vec2 was = (clip.xy / clip.w * 0.5 + 0.5) * PallFroxelFrame.xy / PallFroxel.x - 0.5;
-            float first = froxelBoundary(PallFroxel, 1.0);
-            // slice centers at integers: slice 0 holds everything nearer than its far boundary
-            float s = clip.w < first ? 0.0 : log(clip.w / PallFroxel.y) / froxelGrowth(PallFroxel) - 0.5;
-            if (all(greaterThanEqual(was, vec2(-0.5))) && all(lessThanEqual(was, vec2(tile) - 0.5)) && s <= float(PALL_FROXEL_SLICES) - 0.5) {
-                vec4 before = froxelLerp(Sampler0, was, s);
-                if (pallValid(vec4(before.rgb, 0.0)) && before.w >= 0.0 && before.w < 6.0e4) res = mix(before, cur, PallFroxelFrame.z);
-            }
-        }
-    }
-    fragColor = res;
+    fragColor = before.w >= 0.0 ? mix(before, cur, PallFroxelFrame.z) : cur;
 }
 #else
 // Pall seen up to the far boundary of each near-volume cell (pall.glsl: froxelNear), front to back along the cell's center

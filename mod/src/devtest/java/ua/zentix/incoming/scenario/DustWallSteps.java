@@ -36,6 +36,9 @@ final class DustWallSteps {
             }
             case "freezeat" -> ua.zentix.incoming.client.fx.layer.DustWallDiag.freezeAt = Float.parseFloat(v);
             case "div" -> ua.zentix.incoming.client.fx.layer.DustWallDiag.div = Integer.parseInt(v);
+            case "split" -> ua.zentix.incoming.client.fx.layer.DustWallDiag.split = !v.equals("0");
+            case "composite" -> ua.zentix.incoming.client.fx.layer.DustWallDiag.composite = Integer.parseInt(v);
+            case "frontdust" -> ua.zentix.incoming.client.fx.layer.DustWallDiag.frontDust = !v.equals("0");
             case "reprojection" -> ua.zentix.incoming.client.fx.layer.DustWallDiag.reprojection = !v.equals("0");
             case "ground" -> {
                 String base = Minecraft.getInstance().gameDirectory.toPath().resolve("screenshots").resolve(v).toString();

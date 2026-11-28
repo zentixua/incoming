@@ -35,7 +35,7 @@ uniform float DwDiv;
 // frame counter (wraps), and the march's step cap
 uniform vec2 DwFrame;
 // diagnostics (DustWallDiag.probe): k + 1 — the outputs hold the k-th occupied sample's terms (dustwall.glsl gDwProbe*),
-// 0 — the picture
+// 0 — the picture, −1 the ray ends; below −5 (DustWallDiag.split false) the picture with the split at a clear gap alone
 uniform float DwProbe;
 // interleaved rays (DustWallPass): x 1 when on; y this frame's parity; z the full march width.
 // Each frame marches half of the march pixels, a checkerboard alternating by frame (this target holds them packed two to
@@ -103,6 +103,7 @@ void main() {
         tEnd = floorT;
     }
     gDwProbeK = DwProbe - 1.0;
+    gDwKnotsOn = DwProbe > -5.0;
     fragColor = dwMarch(dir, min(tEnd, 30000.0), jitter, foot, int(DwFrame.y));
     float cover = 1.0 - fragColor.a;
     float axisShare = max(dot(dir, PallForward), 1e-3);
@@ -116,7 +117,7 @@ void main() {
     // diagnostics (DustWallDiag.probe −2, the ray ends; RGBA16F, so every value stays under 6·10⁴): (ray end, scene view-axis
     // distance, the relief's end, 6·10⁴ where none; the eye above source 0's floor); (the end's height and the floor under it,
     // both from source 0's ground zero, transmittance, samples); (the end from the eye, x and z; source 0's map half side, cell)
-    if (DwProbe < -0.5) {
+    if (DwProbe < -0.5 && DwProbe > -5.0) {
         dwLoad(0);
         vec3 e = DwEye.xyz + dir * min(tEnd, 30000.0);
         fragColor = vec4(min(tEnd, 30000.0), min(axis, 6e4), min(floorT, 6e4), DwEye.y - dwFloor(DwEye.xz));
