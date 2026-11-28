@@ -126,7 +126,8 @@ rule of one full run per round applies to every look round.
   chunks.
 - His positions and teleports over time, game mode, distance to the event point.
 - jar sha256 on the server and on his side, pack version.
-- Clocks: MC log and laptop in UTC+2, file mtimes in UTC.
+- Clocks: the client log, the laptop and the Crafty server logs run on Warsaw time (UTC+1 in winter, UTC+2 in
+  summer); file mtimes on netcup are UTC.
 - Then a bot repeat on test server 25571 following his scenario (same coordinates, moments, mode) with the whole
   server checklist at once.
 
