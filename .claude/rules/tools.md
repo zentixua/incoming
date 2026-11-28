@@ -158,11 +158,13 @@ Prism: `~/.var/app/org.prismlauncher.PrismLauncher/data/PrismLauncher/` (`tools/
                                            a run's validity: check.py on the log (code 1); test: test_check.py (CI `Шлагбаум`)
     stand/                               ← scene bench (README.md there): a mod wrapper without dependency on Incoming (its own project
                                            MDG) plays scenes.json in a flat world: real strikes of 1, 16, 40, 100 Shaheds,
-                                           accumulation, launches nearby; CPU and GPU frame time by stage, server tick,
-                                           frames; run.sh <name> <jar> [--against <jar>] — runs by pack (Sodium,
+                                           accumulation, launches nearby, a 300 kt nuke and two seen from inside the dust;
+                                           CPU and GPU frame time by stage, hitches, server tick, frames; run.sh <name> <jar> [--against <jar>] — runs by pack (Sodium,
                                            Iris; without a pack, Complementary, Photon by the build's sha512); with --against, a pair
                                            A1, B, A2 in one session; stand.py pr <PR> [--post] — PR against main: the pair's verdict,
-                                           the `Стенд сцен` status and a comment; report.py — tables, frame sheets; gate
+                                           the `Стенд сцен` status and a comment; stand.py release ci:<SHA> --post — the
+                                           performance target (target.json, target.py) on a release candidate, status
+                                           `Цель производительности`, which the release preflight requires; report.py — tables, frame sheets; gate
                                            gate.py, test test_gate.py (CI)
     pr_ci.sh <PR>                        ← wait for a PR's `Итог` check in one command (in the background); a task that hangs as “running” is judged by its
                                            completedAt: 0 is green, 1 is failed (the tasks and the log tail), 3 is a conflict with the base
@@ -249,7 +251,8 @@ Prism: `~/.var/app/org.prismlauncher.PrismLauncher/data/PrismLauncher/` (`tools/
   (`tools/ci_reuse.py`), and the job “Сборка из проверенного прогона” takes the jar from there. If `main` moved, the full
   check runs.
 - Release (a public step: AGENTS.md): bump `mod_version`, write `docs/releases/<version>.md` (in English;
-  no HTML comments, one line per paragraph, the compatibility line first), merge into `main` and run `build`
+  no HTML comments, one line per paragraph, the compatibility line first), run `tools/stand/stand.py release ci:<SHA>
+  --post` on that commit's CI jar (its branch up to date with `main`; the preflight refuses a jar without a passed performance target), merge into `main` and run `build`
   manually on `main` with `release=true`: after all checks, the workflow releases `v<version>` with the jar (friends take it
   from there), and `publish` then uploads the same jar to Modrinth and CurseForge by itself (step `release`; a manual
   `publish release` re-sends a version and skips stores that already have the jar). If `main` has moved on from the commit checked in the game, a branch `claude/release-…` from that commit with only

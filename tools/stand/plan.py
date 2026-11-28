@@ -15,6 +15,9 @@ out of frame), windows from command time, without waiting for salvo completion (
 so their impacts do not enter other windows). Harness only executes numbers, so test the plan without
 the game (test_gate.py).
 
+Nuclear scene (`bursts`): camera 2.8 km from the first ground burst, bursts by host command at fixed times, windows
+from the first burst (`nuke_steps`); they come after every other scene.
+
 Minecraft axes: +X east, +Z south. Camera `toward`: unit (dx, dz) from the site; launch bearing from south
 toward east (0 from south, 90 from east).
 """
@@ -114,6 +117,41 @@ No wait for salvo completion: impacts far away after the windows."""
     return out
 
 
+def nuke_steps(scenes, s, tp):
+    """Nuclear scene: camera 2.8 km from the first burst (inside its dust wall from about +100 s), ground bursts by
+`incoming nuke now at` (a host command: detonation without flight, the same moment in every run) at `t_s` from the first,
+windows timed from the first burst (`nuke_view.windows`), a frame at each window end. No completion wait: the scene
+waits for nothing the server finishes (ruins take minutes), so nuclear scenes come after every other scene."""
+    nv = scenes["nuke_view"]
+    if s["bursts"][0]["at"] != [0, 0] or s["bursts"][0]["t_s"] != 0:
+        raise ValueError(f"scene {s['id']}: the first burst is at the site at 0 s (the camera and windows are placed from it)")
+    if any(not isinstance(b["kt"], int) for b in s["bursts"]):
+        raise ValueError(f"scene {s['id']}: kt is a whole number (the command's argument)")
+    site = _site(scenes, s["site"])
+    g = scenes["ground"]
+    eye, look = camera(scenes, nv["camera"], site, 0)
+    out = [tp(eye, look)]
+    # One timeline from the first burst: a window step blocks until its end and its frame, so a burst falls between windows
+    events = sorted([(b["t_s"], 0, b) for b in s["bursts"]] + [(w["at_s"], 1, w) for w in nv["windows"]], key=lambda e: e[:2])
+    t = 0.0
+    for at, kind, e in events:
+        if at < t - 1e-9:
+            what = f"burst at {at:g} s" if kind == 0 else f"window {e['name']} at {at:g} s"
+            raise ValueError(f"scene {s['id']}: {what} falls inside an earlier window (busy until {t:g} s)")
+        if at > t:
+            out.append({"do": "wait", "s": round(at - t, 3)})
+            t = at
+        if kind == 0:
+            x, z = site[0] + e["at"][0], site[1] + e["at"][1]
+            out.append({"do": "cmd", "cmd": f"incoming nuke now at {x:g} {g:g} {z:g} {e['kt']} {e.get('burst', 'ground')}"})
+            continue
+        out.append({"do": "window", "name": f"{s['id']}/{e['name']}", "s": e["s"]})
+        out.append({"do": "shot", "name": f"{s['id']}_{at + e['s']:g}s"})
+        out.append({"do": "wait", "s": scenes["after_shot_s"]})
+        t = at + e["s"] + scenes["after_shot_s"]
+    return out
+
+
 def launch_ids(scenes):
     """Nearby launch scenes: do not wait for their salvos to finish."""
     return {s["id"] for s in scenes["scenes"] if "launch" in s}
@@ -175,6 +213,9 @@ def build(scenes, only=None):
         if "launch" in s:
             steps += launch_steps(scenes, s, tp)
             continue
+        if "bursts" in s:
+            steps += nuke_steps(scenes, s, tp)
+            continue
         if s.get("impact_window"):
             eye, look = camera(scenes, s["camera"], site, spread)
             steps.append(tp(eye, look))
@@ -231,6 +272,8 @@ def windows(scenes, only=None):
             continue
         if "launch" in s:
             out += [f"{s['id']}/{w['name']}" for w in scenes["launch_view"]["windows"]]
+        elif "bursts" in s:
+            out += [f"{s['id']}/{w['name']}" for w in scenes["nuke_view"]["windows"]]
         elif s.get("impact_window"):
             out.append(s["id"])
         else:

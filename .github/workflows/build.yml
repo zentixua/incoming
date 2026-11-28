@@ -55,6 +55,9 @@ jobs:
     permissions:
       contents: read
       actions: read
+      # Release preflight reads the performance-target status and the PR behind a squash merge (tools/release_checks.py)
+      statuses: read
+      pull-requests: read
     outputs:
       reuse: ${{ steps.reuse.outputs.run }}
       store: ${{ steps.diff.outputs.store }}

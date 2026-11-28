@@ -13,10 +13,17 @@ Frame metrics (ms):
   buffer swap, preemption by other jobs and driver sleep), the gated metric;
 - `cpu`: same interval in wall-clock time (includes driver and preemption waits), report only;
 - `gpu`: first to last GPU timestamp of the frame (glQueryCounter); stages are intervals between timestamps.
+Hitches and per-effect numbers (performance target, target.py):
+- `slow`: frames whose interval exceeds SLOW_MS (100 ms), with the worst one; `low1_fps`: 1 % low, 1000 / p99 interval;
+- `incoming_gpu`: mean GPU time of the Incoming effects layer (stage `after_level+`, every frame);
+- `pall`: the nuclear dust and smoke volume's GPU time (PallPass#describe once a second: mean of the last second's
+  frames), mean and max over the window's samples, and `off`: seconds without a drawn volume (never 0 ms); None
+  without any sample.
 """
 import csv
 import json
 import math
+import re
 from pathlib import Path
 
 import plan
@@ -169,7 +176,39 @@ def summarize(frames, events, t0, t1):
         if e["type"] == "probe" and t0 <= e["t_ms"] < t1:
             probes[e["name"].split("#")[0].rsplit(".", 1)[-1] + "." + e["name"].split("#")[1]] = e["value"]
     w["probes"] = probes
+    iv = [f["interval"] for f in fr if f["interval"] is not None]
+    slow = [v for v in iv if v > SLOW_MS]
+    w["slow"] = {"count": len(slow), "worst_ms": max(iv) if iv else None, "ms": round(sum(slow), 1)}
+    p99 = percentile(iv, 99)
+    w["low1_fps"] = 1000 / p99 if p99 else None
+    layer = w["stages"].get(INCOMING_STAGE)
+    w["incoming_gpu"] = layer["mean"] if layer else None
+    w["pall"] = pall(events, t0, t1)
     return w
+
+
+PALL_GPU = re.compile(r"\bgpu ([0-9.]+) ms")
+
+
+def pall(events, t0, t1):
+    """Pall GPU time in a window from PallPass#describe lines: {"mean", "max", "n", "off"} or None (no line at all, or
+an older version without the probe). A second without a drawn volume ("off", "failed", "off by the GPU watchdog":
+the fireball, cloud and dust are not on screen) costs no GPU and is counted in `off`, never as a fast second; "gpu n/a"
+(no timer) gives no number."""
+    vals, off = [], []
+    for e in events:
+        if e["type"] != "probe" or not t0 <= e["t_ms"] < t1 or not e["name"].endswith(PALL_PROBE):
+            continue
+        v = str(e["value"])
+        m = PALL_GPU.search(v)
+        if m:
+            vals.append(float(m.group(1)))
+        elif v in ("off", "failed", "off by the GPU watchdog"):
+            off.append(v)
+    if not vals and not off:
+        return None
+    return {"mean": sum(vals) / len(vals) if vals else None, "max": max(vals) if vals else None, "n": len(vals),
+            "off": len(off), "off_why": sorted(set(off))}
 
 
 def buckets(frames, t0, t1, size_s):
@@ -409,6 +448,11 @@ look gate already compares a same-session pair; lines explain a noisy pair or a 
 
 FIRST = "first"
 GATED = "100/"
+# A hitch: a frame the player sees as a stop (performance target: none after warm-up)
+SLOW_MS = 100.0
+# GPU stage of the Incoming effects layer (FrameClock: interval up to the timestamp after AFTER_LEVEL handlers)
+INCOMING_STAGE = "after_level+"
+PALL_PROBE = "PallPass#describe"
 # Foreign load in a window (report and pre-client quiet wait): limits. Idle laptop background is 0,2–0,4
 # cores (Claude app, browser); one heavy job uses 1,5 (another session sandbox client) to 7 cores (build,
 # review with tests), measured 25.10. GPU (1 s pmon cycles): host desktop (kwin_wayland, plasmashell, locked

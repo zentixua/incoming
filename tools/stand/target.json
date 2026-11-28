@@ -1,0 +1,34 @@
+{
+  "version": "3.14.1",
+  "about": "Performance target of a release (README.md, \"Performance target\"; judged by target.py). Rows: a pack (hardware tier), its windows (scenes.json) and the limits each must hold: fps_p50 (median), fps_low1 (1 % low), slow (frames over 100 ms), incoming_ms (Incoming effects layer GPU, mean), pall_ms (nuclear dust volume GPU, mean), pall_peak_ms (its worst second). Every number's reason is in why.",
+  "tiers": {
+    "photon": "Artem's machine: RTX 4060 laptop, 2560x1600, Photon, nuclear dust MEDIUM (the default)",
+    "none": "a graphics card about half an RTX 4060 at 1920x1080 without a shader pack, stood in by the laptop at 2560x1600 (1.98 times the pixels) without one; nuclear dust MEDIUM"
+  },
+  "rows": [
+    {"scene": "100-strikes", "pack": "photon", "windows": ["100/outside", "100/edge", "100/inside"],
+     "fps_p50": 60, "fps_low1": 40, "slow": 0, "incoming_ms": 6,
+     "why": "28.11 survey, 3.14.0 on the bench (survey-conventional-bench): 70-81 fps, frame p95 15.0-17.4 ms, Incoming layer 3.2-4.6 ms. Holds today's level with the laptop's 6-29 % clock spread as margin; 6 ms caps smoke, heat and bloom together."},
+    {"scene": "100-impact", "pack": "photon", "windows": ["100-hit"],
+     "fps_p50": 28, "fps_low1": 20, "slow": 0,
+     "why": "The moment 100 Shaheds land (fireballs, flash, wave, debris): 3.14.0 33 fps, frame p95 47.4 ms (survey). Holds today's level with the clock spread as margin; no per-effect budget yet (the survey has no pass split for this window)."},
+    {"scene": "100-strikes", "pack": "none", "windows": ["100/outside", "100/edge", "100/inside"],
+     "fps_p50": 100, "fps_low1": 60, "slow": 0, "incoming_ms": 6,
+     "why": "Survey without a shader pack: 145-153 fps, frame p95 8.7-9.3 ms, Incoming layer 2.7-4.4 ms; the floor keeps a half-4060 card at 1920x1080 above 60 fps in 1 % of frames."},
+    {"scene": "100-impact", "pack": "none", "windows": ["100-hit"],
+     "fps_p50": 36, "fps_low1": 26, "slow": 0,
+     "why": "Survey without a shader pack: 44 fps, frame p95 34.5 ms; today's level with the clock spread as margin."},
+    {"scene": "nuke-dust", "pack": "photon", "windows": ["nuke/dust", "nuke2/dust"],
+     "fps_p50": 26, "fps_low1": 19, "slow": 0, "incoming_ms": 18, "pall_ms": 15, "pall_peak_ms": 20,
+     "why": "Derived, not chosen: frame = the rest of the frame + the Incoming budget. 28.11 repro at Artem's spot, 2.8 km inside the dust (repro-report Q1, Q4): the frame without Incoming (Photon and the world after the nuke) is 15.8 ms at +190..+240 s (42.6 - 26.8) and 19.0 ms with the pall off at +640..+700 s (29.4 - 6.1 - 4.3); the worse one counts. Pall at its own MEDIUM budget 15 ms (measured 21-29) and the other passes at 3 ms (measured 2.2-2.9): 19.0 + 18 = 37 ms, 27 fps; the median floor 26 fps (38.5 ms) leaves 1.5 ms. 1 % low: 37 ms times the measured p99 spread (x1.39 of the median) = 51 ms, 19 fps. Peak: budget plus one ladder rung (each rung 0.5-0.85 of the next). The flat bench world draws less than Zearth, so the bench meets these with room; the budgets are what binds."},
+    {"scene": "nuke-show", "pack": "photon", "windows": ["nuke/show", "nuke/entry", "nuke2/show", "nuke2/entry"],
+     "fps_low1": 19, "slow": 0, "incoming_ms": 18, "pall_ms": 15, "pall_peak_ms": 20,
+     "why": "The flash and the wave's passage (2-60 s), the dust wall reaching the camera and, in nuke2, the second burst's flash and wave (60.5-119.5 s): the same budgets; the repro's 300-690 ms frames at the wave's passage are client-tick work, and a hitch is a stop the player sees."},
+    {"scene": "nuke-dust", "pack": "none", "windows": ["nuke/dust", "nuke2/dust"],
+     "fps_p50": 34, "fps_low1": 25, "slow": 0, "incoming_ms": 18, "pall_ms": 15, "pall_peak_ms": 20,
+     "why": "Derived as for Photon. Repro without the shader pack at the same spot (+500..+560 s): frame 26.9 ms, pall 16.8, other Incoming 2.9, so the rest is 7.2 ms; taken as 10 ms, the Photon case's later-minute rise (15.8 to 19.0 ms) scaled to it. 10 + 18 = 28 ms, 35.7 fps; median floor 34 fps (29.4 ms). 1 % low 28 x 1.39 = 39 ms, 25 fps."},
+    {"scene": "nuke-show", "pack": "none", "windows": ["nuke/show", "nuke/entry", "nuke2/show", "nuke2/entry"],
+     "fps_low1": 25, "slow": 0, "incoming_ms": 18, "pall_ms": 15, "pall_peak_ms": 20,
+     "why": "As nuke-dust without the shader pack; no hitch at the wave's passage."}
+  ]
+}

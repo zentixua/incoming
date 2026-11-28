@@ -116,6 +116,51 @@ does not run the paired scene acceptance gate or certify visible terrain publica
    hangs); frame at each end (`<id>_15s`, `<id>_40s`). No completion wait, so these scenes are last and
    later cameras face south away from earlier impacts. Not gated; capture subsets
    (`--scenes 100,grad,missile,shahed`).
+6. Nuclear: `nuke` (one 300 kt ground burst at `N`, 20 km north of `F`) and `nuke2` (two, the second 60.5 s later
+   2.1 km from the first, at `N2`), by `incoming nuke now at` (a host command: detonation without flight, so the
+   same moment in every run). Camera 2.8 km west of the first burst, 35 m above the ground, facing its cloud: Artem's
+   spot of the 28.11 Zearth nuke, inside the dust wall from about +100 s. Windows from the first burst (`nuke_view`):
+   `show` 2–60 s (flash, ball, the wave's passage), `entry` 60.5–119.5 s (the dust wall reaching the camera; in
+   `nuke2` the second burst from its detonation, 2 km from the camera), `dust` +2…+6 min (the dust around the
+   camera), a frame at each end; only that frame and half a second after it go unmeasured, and the first burst's
+   first 2 s (the scene's start after the camera move), while `nuke2`'s second detonation is judged inside `entry`. A second in which the
+   nuclear volume is not drawn (off, failed, turned off by the GPU watchdog) fails the target. Nothing waits for the
+   server (ruins take minutes), so these scenes come after all others. Each adds about 6 minutes per pack: a
+   full-scene run no longer fits the 30 GPU minutes above, so pick scenes. World rule `nuclear.max_yield = 1000`
+   (`server_config`). Judged by the performance target, not the pair gate.
+
+## Performance target (`target.json`, `target.py`, test `test_gate.py`)
+The pair gate below compares a candidate with `main`; a version as slow as the last one passes it. The performance
+target judges the candidate's own numbers, so a release like 3.14.0 (13–25 fps for minutes after a nuke) cannot
+ship. `target.json` is the one home of the numbers, each row with its reason (`why`); its `version` is the release
+that set them. Each row names a pack (hardware tier), windows and limits:
+
+- frame rate: median (`fps_p50`) and 1 % low (`fps_low1`: 1000 / p99 frame interval);
+- hitches: frames over 100 ms (`slow`), zero in every scene after warm-up. Warm-up is the first strike of a session
+  (shader compilation: scene `first`, its own pair gate) and the settle after each camera move; the bench measures no
+  window there;
+- per-effect GPU: the Incoming effects layer (`incoming_ms`, stage `after_level+`: every handler of the AFTER_LEVEL
+  stage, where Incoming draws its effects and nuclear volume; Incoming's few draws at other stages are not in it) and the nuclear dust
+  volume (`pall_ms` mean, `pall_peak_ms` worst second, from `PallPass#describe`).
+
+Tiers: `photon` is Artem's machine (RTX 4060 laptop, 2560×1600, Photon, nuclear dust MEDIUM); `none` stands in for a
+graphics card about half an RTX 4060 at 1920×1080 without a shader pack: the same laptop without one at 2560×1600,
+1.98 times the pixels, since the frame's GPU work after a strike is per pixel (full-screen passes and rays). It does not
+stand in for a slower CPU. The flat bench world draws less than a real map, so its frame rate is the floor of what the
+same build gives there; the per-effect budgets and the hitch rule carry over unchanged.
+
+```sh
+python3 tools/stand/stand.py release ci:<SHA> --post   # the release commit's CI jar, target packs and scenes
+```
+`release` captures the target's packs and scenes once (no pair: the limits are absolute), captures a failed pack once
+more (GPU clocks vary 6–29 % between sessions; a true miss outlasts it) and judges the last capture →
+`out/<name>/target-verdict.json`, `target.md`. `--post` sets the commit status `Цель производительности`; the release
+preflight (`tools/release_checks.py`, job `Что изменилось` of a release run) looks for it on the released commit, the
+commits below it with the same `mod/` tree, and the commits of the pull request that brought each (a squash merge is
+a new commit), and refuses a release whose `mod/` tree has no successful one, or whose newest one failed. A PR's CI
+jar is built from its merge with `main`: measure a branch that is up to date with `main`, or its head's tree differs
+from the merged one and the release is refused. `--rejudge` judges captured runs again after a parser or target
+change. About 25 GPU minutes per pack, once per release candidate.
 
 ## Run
 ```sh

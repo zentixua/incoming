@@ -8,6 +8,7 @@ import json
 import os
 from pathlib import Path
 import re
+import shutil
 import subprocess
 import tempfile
 import textwrap
@@ -386,6 +387,112 @@ class ModrinthTests(unittest.TestCase):
         self.assertEqual(0, result.returncode, result.stdout + result.stderr)
         self.assertIn("id=test-id", output)
         self.assertIn("upload=true", output)
+
+
+
+
+class PerformanceTarget(unittest.TestCase):
+    """The release preflight requires the scene bench's performance-target status on the jar's mod/ tree."""
+
+    def repo(self):
+        d = Path(tempfile.mkdtemp())
+        self.addCleanup(shutil.rmtree, d, ignore_errors=True)
+        run = lambda *a: subprocess.run(["git", "-C", str(d), *a], check=True, capture_output=True, text=True).stdout.strip()
+        run("init", "-q", "-b", "main")
+        run("config", "user.email", "t@example.invalid")
+        run("config", "user.name", "t")
+        (d / "mod").mkdir()
+        (d / "mod/gradle.properties").write_text("mod_version=1.0.0\n")
+        run("add", "-A")
+        run("commit", "-qm", "measured")
+        measured = run("rev-parse", "HEAD")
+        (d / "docs").mkdir()
+        (d / "docs/notes.md").write_text("notes\n")
+        run("add", "-A")
+        run("commit", "-qm", "notes only")
+        return d, run, measured
+
+    def test_measured_commit_below_a_notes_only_head_counts(self):
+        d, run, measured = self.repo()
+        got = release_checks.performance_target(d, "o/r", prs=lambda sha, repo: [], status=lambda sha, repo: "success" if sha == measured else None)
+        self.assertEqual(got, measured)
+
+    def test_missing_status_blocks_the_release(self):
+        d, _, _ = self.repo()
+        with self.assertRaisesRegex(ValueError, "No performance target result"):
+            release_checks.performance_target(d, "o/r", prs=lambda sha, repo: [], status=lambda sha, repo: None)
+
+    def test_a_failed_target_blocks_the_release(self):
+        d, _, measured = self.repo()
+        with self.assertRaisesRegex(ValueError, "failure"):
+            release_checks.performance_target(d, "o/r", prs=lambda sha, repo: [], status=lambda sha, repo: "failure" if sha == measured else None)
+
+    def test_a_measured_older_jar_does_not_count(self):
+        d, run, measured = self.repo()
+        (d / "mod/gradle.properties").write_text("mod_version=1.0.1\n")
+        run("commit", "-qam", "version bump after the measurement")
+        with self.assertRaisesRegex(ValueError, "No performance target result"):
+            release_checks.performance_target(d, "o/r", prs=lambda sha, repo: [], status=lambda sha, repo: "success" if sha == measured else None)
+
+    def test_a_squash_merged_measured_pr_head_counts(self):
+        # The measured PR head H is not an ancestor of the squash commit S on main; S's PR lists H, same mod/ tree
+        d, run, _ = self.repo()
+        tree = run("rev-parse", "HEAD:mod")
+        (d / "mod/gradle.properties").write_text("mod_version=1.0.1\n")
+        run("commit", "-qam", "squash of the release PR")
+        squash, new_tree = run("rev-parse", "HEAD"), run("rev-parse", "HEAD:mod")
+        self.assertNotEqual(tree, new_tree)
+        got = release_checks.performance_target(
+            d, "o/r", status=lambda sha, repo: "success" if sha == "pr-head" else None,
+            prs=lambda sha, repo: ["pr-head", "pr-old"] if sha == squash else [],
+            tree_of=lambda sha, repo: new_tree if sha == "pr-head" else tree)
+        self.assertEqual(got, "pr-head")
+
+    def test_a_pr_commit_with_another_mod_tree_does_not_count(self):
+        d, run, _ = self.repo()
+        head = run("rev-parse", "HEAD")
+        with self.assertRaisesRegex(ValueError, "No performance target result"):
+            release_checks.performance_target(d, "o/r", status=lambda sha, repo: "success" if sha == "pr-old" else None,
+                                              prs=lambda sha, repo: ["pr-old"] if sha == head else [],
+                                              tree_of=lambda sha, repo: "other")
+
+    def test_only_the_released_history_is_deepened(self):
+        # actions/checkout layout (fetch-depth 2): deepening must not bring every branch of origin with its history
+        root = Path(tempfile.mkdtemp())
+        self.addCleanup(shutil.rmtree, root, ignore_errors=True)
+        git = lambda d, *a: subprocess.run(["git", "-C", str(d), "-c", "user.name=t", "-c", "user.email=t@e", *a],
+                                           check=True, capture_output=True, text=True).stdout.strip()
+        o, c = root / "o", root / "c"
+        o.mkdir()
+        git(o, "init", "-q", "-b", "main")
+        (o / "mod").mkdir()
+        (o / "mod/f").write_text("jar")
+        git(o, "add", "-A")
+        git(o, "commit", "-qm", "measured")
+        for i in range(40):
+            (o / f"notes{i}").write_text(str(i))
+            git(o, "add", "-A")
+            git(o, "commit", "-qm", f"notes {i}")
+        git(o, "checkout", "-qb", "old-branch", "HEAD~35")
+        (o / "g").write_text("x")
+        git(o, "add", "-A")
+        git(o, "commit", "-qm", "unrelated")
+        git(o, "checkout", "-q", "main")
+        sha = git(o, "rev-parse", "main")
+        c.mkdir()
+        git(c, "init", "-q")
+        git(c, "remote", "add", "origin", f"file://{o}")
+        git(c, "fetch", "-q", "--no-tags", "--depth=2", "origin", f"+{sha}:refs/remotes/origin/main")
+        git(c, "checkout", "-q", sha)
+        with self.assertRaisesRegex(ValueError, "No performance target result"):
+            release_checks.performance_target(c, "o/r", status=lambda s, r: None, prs=lambda s, r: [])
+        self.assertNotEqual(subprocess.run(["git", "-C", str(c), "rev-parse", "--verify", "-q", "refs/remotes/origin/old-branch"],
+                                           capture_output=True).returncode, 0)
+        self.assertGreaterEqual(int(git(c, "rev-list", "--count", "HEAD")), release_checks.TARGET_DEPTH)
+
+    def test_the_bench_posts_the_status_the_preflight_reads(self):
+        stand = (Path(__file__).parent / "stand/stand.py").read_text(encoding="utf-8")
+        self.assertIn(f'TARGET_STATUS = "{release_checks.TARGET_STATUS}"', stand)
 
 
 if __name__ == "__main__":
