@@ -461,13 +461,13 @@ public final class Fragments {
         /**
          * Vanilla's {@code Particle.move}, except that a step in open air with no craft near skips the block sweep, which
          * would return the step unchanged ({@link OpenBox}); the rest of the bookkeeping is vanilla's. Vanilla's own
-         * stop flag is private, so the same condition is kept here ({@link #stopped}).
+         * stop flag is private, so the same condition is kept here ({@link #stopped}); a stopped piece goes on through
+         * vanilla's call (and Sable's wrapper around it), as it always did.
          */
         @Override
         public void move(double dx, double dy, double dz) {
-            if (stopped) return;
             AABB box = getBoundingBox();
-            if (!hasPhysics || dx == 0 && dy == 0 && dz == 0 || dx * dx + dy * dy + dz * dz >= MAX_COLLISION_SPEED_SQR
+            if (stopped || !hasPhysics || dx == 0 && dy == 0 && dz == 0 || dx * dx + dy * dy + dz * dz >= MAX_COLLISION_SPEED_SQR
                     || craftNear(level, x, y, z)
                     || !OpenBox.clear(level, box.minX, box.minY, box.minZ, box.maxX, box.maxY, box.maxZ, dx, dy, dz)) {
                 double y0 = y;

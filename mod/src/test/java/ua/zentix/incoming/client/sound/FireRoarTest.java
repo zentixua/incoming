@@ -90,7 +90,7 @@ class FireRoarTest {
 
     /**
      * Quarter shares without trigonometry are cos² and sin² of the azimuth from the quarter's axis, as by
-     * {@code Math.atan2}: every direction, the axes, their signed zeros and a fire straight above the ear.
+     * {@code Math.atan2}: every direction, the axes and a fire straight above the ear (a signed-zero dx with dz = 0 is a fire at the ear's own column, whose quarter either law picks arbitrarily).
      */
     @Test
     void quarterSharesAreTheAzimuthLaw() {
