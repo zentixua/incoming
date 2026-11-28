@@ -289,7 +289,8 @@ class NuclearVolumeBudgetTest {
                     draws.clear();
                     PallPass.beginFrame(PallPass.Quality.LOW);
                     draw(new PallPass.Frame());
-                    assertEquals(all.subList(3, 9), draws);
+                    // a drawn frame sums the near volume in two draws (its blocks, then the cells)
+                    assertEquals(List.of("froxel", "froxelSum", "froxelSum", "march", "resolve", "mix", "composite"), draws);
                     gl11.verify(GL11::glFinish, times(3));
                 } finally {
                     feed.swap();
@@ -318,7 +319,7 @@ class NuclearVolumeBudgetTest {
                 assertEquals(GpuWatch.State.WATCHING, PallPass.watch().state());
                 draw(burst);
                 gl20.verify(() -> GL20.glUniform4fv(eq(bodyLocation), any(FloatBuffer.class)));
-                assertEquals(List.of("wall.march", "wall.pack", "wall.resolve", "wall.limit", "mushTaus", "froxel", "froxelSum", "singleMarch",
+                assertEquals(List.of("wall.march", "wall.pack", "wall.resolve", "wall.limit", "mushTaus", "froxel", "froxelSum", "froxelSum", "singleMarch",
                         "resolve", "layer", "composite"), draws);
                 state.verify(GlStateManager::_genTexture, never());
                 state.verify(() -> GlStateManager._texImage2D(anyInt(), anyInt(), anyInt(), anyInt(), anyInt(), anyInt(),
@@ -337,10 +338,10 @@ class NuclearVolumeBudgetTest {
                 verify(divisor).set(6f);
                 verify(previousDiv).set(4f);
                 verify(reproject).set(0f, 0f, 0f, 1f);
-                verify(frame).set(anyFloat(), eq(96f));
+                verify(frame).set(anyFloat(), eq(80f));
                 replace(PallPass.class, null, "SUBMIT", new long[4]);
                 PallPass.beginFrame(burst.quality);
-                verify(detail).sample(eq(1205d), eq(0d), eq(400d), eq(800d), anyInt(), anyLong());
+                verify(detail).sample(eq(1205d), eq(0d), eq(400d), eq(800d), anyDouble(), anyDouble(), anyInt(), anyLong());
                 assertEquals(1205, PallPass.watch().cause(), 0);
                 assertEquals(GpuWatch.State.OFF, PallPass.watch().state());
             } finally {
@@ -394,6 +395,6 @@ class NuclearVolumeBudgetTest {
         }
         detail.floor();
         assertEquals(6, PallPass.LADDER[detail.level].wallDiv());
-        assertEquals(96, PallPass.LADDER[detail.level].wallSteps());
+        assertEquals(80, PallPass.LADDER[detail.level].wallSteps());
     }
 }

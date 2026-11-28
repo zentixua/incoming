@@ -108,9 +108,16 @@ paths:
   world distance. Behind it the dust hides the pall, so the composite's light and alpha stay within that share. The pall's
   GPU parts are summed in the order their stamps were issued (`PallPass.stamp`).
 - The march writes three outputs: light/opacity, occupied view depths with the opacity-weighted distance, and two intervals
-  (`wallSplit`: A to the first clear gap of more than max(48, 0.1 t) blocks, B the rest; A exit × cover, B entry × cover,
-  A opacity, A share × cover). Readers take the transmittance in front of their own depth by interval (`wall_layer.glsl`:
-  `wallPrefixT`, `wallPrefixShare`, `wallTo`, `wallCut`; Java copy `DustIntervals`, `DustIntervalsTest`).
+  (`wallSplit`: A to the first clear gap of more than max(48, 0.1 t) blocks, B the rest; without such a gap A and B meet at
+  the bend of the ray's optical depth, `dwKnot`: of the depths where it first reaches 0.03 · 2^j, the one farthest from the
+  chord between the first and last occupied depth, kept within 0.02 of it; A exit × cover, B entry × cover, A opacity, A
+  share × cover). Readers take the transmittance in front of their own depth by interval (`wall_layer.glsl`:
+  `wallPrefixT`, `wallPrefixShare`, `wallTo`, `wallCut`; Java copy `DustIntervals`, `DustIntervalsTest`). A ray inside thin
+  haze in front of a dense wall has no clear gap; read as one homogeneous slab it put the wall's opacity in front of every
+  reader in the haze (a smoke quad 700 blocks out: 0.36 of transmission against 0.88 on its neighbour whose ray left the haze's
+  top first), and the boundary between such rays drew jagged grey spires along the haze's top that flipped with the sample
+  jitter (Artem's Zearth scene; `tools/dust_wall_split_probe.py` holds both rays within 0.1, `DustWallDiag.split` false is
+  the gap-only control).
 - The pall composite reconstructs the foreground to the first occupied depth; inside the interval each visible smoke or
   mushroom sample obscures the share of wall opacity behind it; a pane truncates both the wall and the integration
   interval. Once only the haze level is left, a pixel whose haze starts at the eye (first occupied depth under 8 blocks)
@@ -139,8 +146,9 @@ paths:
   `GL_PROGRAM_BINARY_LENGTH`: one call site 318 kB, a second one 725 kB, per-frame switches around it 1.33 MB, where the march
   doubled; 725 → 318 kB moved it 0–10 %). `dwAccumulate` has one call site; `dwSourceDensity` calls `dwDensity` once and
   switches the noise by a global (`gDwMean`). Check the linked size after an edit that adds a call of the density, bound or light.
-- The pall's composites with the dust atlas readers (`fx_pall_composite`, `wall_layer.glsl`) run at full resolution, outside the
-  ladder: 4.9–7.6 ms at 2560×1600 (HIGH and MEDIUM, take 33's scene) against 1.3–3.7 ms on main. Of the dust read above the
+- The pall's composites with the dust atlas readers (`fx_pall_composite`, `wall_layer.glsl`) run at full resolution: 4.9–7.6 ms at
+  2560×1600 (take 33's scene); the dust read is 4–5 ms of 6–8 (Artem's Zearth scene). From rung 5 the composite cuts the
+  filtered taps once at the pixel's depth (`gWallCutOnce`, `Step.cutOnce`; equal on uniform taps, `wall_layer_identity.py`). Of the dust read above the
   layer (2.0–3.6 ms): the second, layer-frame composite 0.7–0.9, the medium in front of the wall 0.1–1.2, the depth class
   0.1–0.2, the rest the per-tap clipping; the gather takes the four nearest march pixels (a 3 × 3 tent cost 1.7–2.5 ms more).
 - The march's integration features (terrain atlas, outdoor-air window, interval bookkeeping, per-source loop, material

@@ -129,6 +129,42 @@ def main():
                         cases += 1
                     h.g.glDeleteTextures([tex, scene])
     print(f"wallLayer: {cases} cases, {total} values match ({signed_zeros} signed-zero differences)")
+    cut_once(current)
+
+
+def cut_once(current):
+    """The composite's coarse rungs cut the filtered layer once (gWallCutOnce): where the taps of the pixel's class carry the
+    same dust it equals the four cuts; on the random fixtures above its transmission at the pixel's depth differs by the
+    printed amount (taps of one class with different spans)."""
+    once = h.fragment_program(SOURCE.replace("void main() {", "void main() {\n    gWallCutOnce = true;"))
+    rng = np.random.default_rng(733)
+    worst_uniform = 0.0
+    diffs = []
+    for div in (2, 4, 6):
+        width, height = 48, 32
+        h.target(width, height, [h.rgba])
+        for density in ("mixed", "uniform"):
+            atlas, depth = fixture(rng, width, height, div, 1, "mixed")
+            if density == "uniform":
+                third = atlas.shape[1] // 3
+                for k in range(3):
+                    atlas[:, k * third:(k + 1) * third] = atlas[atlas.shape[0] // 2, k * third + third // 2]
+                depth[:] = rng.uniform(5, 900, depth.shape)
+            tex = h.texture(*h.rgba, atlas.shape[1], atlas.shape[0], atlas)
+            scene = h.texture(*h.scene_format, width, height, np.stack((depth, depth), -1))
+            args = (width, height, tex, scene, div, (0.25, 0.25), 0)
+            four, one = draw(current, *args), draw(once, *args)
+            ok = np.isfinite(four).all(-1) & np.isfinite(one).all(-1)
+            d = np.abs(four[..., 3] - one[..., 3])[ok]
+            if density == "uniform":
+                worst_uniform = max(worst_uniform, float(d.max()))
+            else:
+                diffs.append(d)
+            h.g.glDeleteTextures([tex, scene])
+    d = np.concatenate(diffs)
+    print(f"cut once: uniform taps max |dT| {worst_uniform:.2e}; random taps |dT| median {np.median(d):.3f}, p90 {np.percentile(d, 90):.3f}")
+    if worst_uniform > 1e-4:
+        raise AssertionError(f"cut once differs from the four cuts on uniform taps: {worst_uniform}")
 
 
 if __name__ == "__main__":

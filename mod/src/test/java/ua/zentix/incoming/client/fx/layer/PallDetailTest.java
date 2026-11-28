@@ -9,8 +9,8 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 /** Pall details by time on the GPU: steps, budget, descent immediately, ascent with a reserve and not higher than the settings. */
 class PallDetailTest {
     private static final long MS = 1_000_000L;
-    /** Lowest rung: the LOW setting. */
-    private static final int LOW = PallPass.LADDER.length - 1;
+    /** Lowest rung: the LOW setting's picture with fewer steps per ray. */
+    private static final int FLOOR = PallPass.LADDER.length - 1;
     /** The MEDIUM setting's budget, ms. */
     private static final double B = PallPass.Quality.MEDIUM.budget;
     /** The HIGH setting's budget, ms. */
@@ -30,14 +30,21 @@ class PallDetailTest {
     }
 
     /**
-     * Rungs from HIGH down, each at most half the price of the previous one; MEDIUM and LOW are among them, LOW is the floor
-     * (fewer rays per frame drew a lattice); LOW costs what the former LOW (quarter frame × 20 steps) did.
+     * Rungs from HIGH down, each at most half the price of the previous one; MEDIUM and LOW are among them; below LOW only the
+     * steps per ray thin (fewer rays per frame drew a lattice, a coarser frame stairs); LOW costs what the former LOW (quarter
+     * frame × 20 steps) did. The near volume interleaves with the rays and never thins its cells back.
      */
     @Test
     void ladderRunsFromHighToLow() {
         assertEquals(0, PallPass.Quality.HIGH.step());
         int medium = PallPass.Quality.MEDIUM.step(), low = PallPass.Quality.LOW.step();
-        assertTrue(medium > 0 && medium < low && low == LOW);
+        assertTrue(medium > 0 && medium < low && low < FLOOR);
+        assertEquals(1, PallPass.LADDER[medium].volume(), "MEDIUM's own picture keeps every near-volume cell every frame");
+        for (int i = low + 1; i <= FLOOR; i++) {
+            PallPass.Step s = PallPass.LADDER[i], l = PallPass.LADDER[low];
+            assertTrue(s.steps() >= 12 && s.steps() < l.steps() && s.interleave() == l.interleave() && s.volume() == l.volume()
+                    && s.factor() == l.factor(), "below LOW only the steps thin: " + s.describe());
+        }
         double old = 20 / 16.0, cost = PallPass.LADDER[low].cost();
         assertTrue(cost >= 0.9 * old && cost <= 1.15 * old, "LOW: " + cost);
         assertEquals(-1, PallPass.Quality.OFF.step());
@@ -46,7 +53,8 @@ class PallDetailTest {
         for (int i = 1; i < PallPass.LADDER.length; i++) {
             double ratio = PallPass.LADDER[i].cost() / PallPass.LADDER[i - 1].cost();
             assertTrue(ratio >= 0.5 && ratio < 0.9, "step " + i + ": " + ratio);
-            assertTrue(PallPass.LADDER[i].steps() >= 20 && PallPass.LADDER[i].interleave() <= 2, "below the floor");
+            assertTrue(PallPass.LADDER[i].steps() >= (i <= low ? 20 : 12) && PallPass.LADDER[i].interleave() <= 2, "below the floor");
+            assertTrue(PallPass.LADDER[i].volume() >= PallPass.LADDER[i - 1].volume(), "near volume thins with the rung");
         }
     }
 
@@ -109,19 +117,19 @@ class PallDetailTest {
         }
     }
 
-    /** Longer than the budget - immediately down a notch, whatever fits; very long (software OpenGL) - up to LOW, but not lower. */
+    /** Longer than the budget - immediately down a notch, whatever fits; very long (software OpenGL) - to the floor, not lower. */
     @Test
-    void overBudgetStepsDownButNotBelowLow() {
+    void overBudgetStepsDownButNotBelowTheFloor() {
         PallPass.Detail d = new PallPass.Detail();
         long[] clock = {0};
         d.setting(PallPass.Quality.MEDIUM);
         frames(d, 1.75 * B, 40, clock);
         assertTrue(d.level > PallPass.Quality.MEDIUM.step(), "1.75 budgets - lower");
-        assertTrue(d.level < LOW, "1.75 budgets - not immediately down to the floor");
+        assertTrue(d.level < FLOOR, "1.75 budgets - not immediately down to the floor");
         frames(d, 150, 200, clock);
-        assertEquals(LOW, d.level);
+        assertEquals(FLOOR, d.level);
         frames(d, 150, 200, clock);
-        assertEquals(LOW, d.level);
+        assertEquals(FLOOR, d.level);
     }
 
     /** In the budget - the level is maintained; stock - up, but not immediately after descent, step by step and not higher than the setting. */
@@ -260,7 +268,7 @@ class PallDetailTest {
         frames(d, 1.4 * H, 0.6 * H, 40, clock);
         int down = d.level;
         assertTrue(down > 0, "costly view - lower");
-        assertTrue(down < LOW, "rays alone fit a rung above the floor");
+        assertTrue(down < FLOOR, "rays alone fit a rung above the floor");
         // the view is back to the usual: rays a third of the time at the lower rung, the rest fixed
         frames(d, 0.75 * H, 0.25 * H, 6000, clock);
         assertEquals(0, d.level, "the setting's rung again");
@@ -276,15 +284,91 @@ class PallDetailTest {
         d.setting(PallPass.Quality.HIGH);
         assertEquals(0, d.level);
         d.floor();
-        assertEquals(LOW, d.level);
+        assertEquals(FLOOR, d.level);
         long[] clock = {0};
         frames(d, 1, 400, clock);
-        assertEquals(LOW, d.level, "fast frames do not raise a floored rung");
+        assertEquals(FLOOR, d.level, "fast frames do not raise a floored rung");
         d.pin(true);
-        assertEquals(LOW, d.level, "pinning does not lift the floor");
+        assertEquals(FLOOR, d.level, "pinning does not lift the floor");
         d.pin(false);
         d.setting(PallPass.Quality.MEDIUM);
         d.setting(PallPass.Quality.HIGH);
-        assertEquals(LOW, d.level, "a new setting does not lift the floor");
+        assertEquals(FLOOR, d.level, "a new setting does not lift the floor");
+    }
+
+    /**
+     * Artem's Zearth scene (28.11, MEDIUM, 2560×1600, Photon, eye in the haze): at the floor of the old ladder the volume cost
+     * 21–29 ms against 15, of which the rays 8, the near volume 5.5. The near volume follows the rung, the floor thins the steps:
+     * the estimates see both, so the ladder steps to a rung that fits instead of to the floor, and the floor itself fits.
+     */
+    @Test
+    void nearVolumeAndStepsLetTheFloorFit() {
+        // the parts at the old floor (rung 8: 22 steps, every near cell, four dust cuts): rays 8, near volume 5, composites 6.5,
+        // the rest 2.8 (Zearth +150…+380 s)
+        PallPass.Step old = new PallPass.Step(2, 22, 2, 6, 96, 1, false), floor = PallPass.LADDER[FLOOR];
+        double rest = 2.8, rays = 8, near = 5, composite = 6.5;
+        double atFloor = rest + rays * floor.cost() / old.cost() + near * floor.volumeCost() / old.volumeCost()
+                + composite * floor.compositeCost() / old.compositeCost();
+        assertTrue(atFloor <= B, "the floor fits MEDIUM's budget at Artem's scene: " + atFloor);
+        // at MEDIUM's own rung the same scene: rays 28 (measured, rung 2) → the first fitting rung, not the floor
+        PallPass.Detail d = new PallPass.Detail();
+        d.setting(PallPass.Quality.MEDIUM);
+        long now = 0;
+        double r2 = 28;
+        for (int i = 0; i < 40; i++) d.sample(rest + r2 + near + composite, r2, 0, 0, near, composite, d.generation, now += 16 * MS);
+        int to = d.level;
+        assertTrue(to > PallPass.Quality.MEDIUM.step() && to <= FLOOR, "down: " + to);
+        PallPass.Step from = PallPass.LADDER[PallPass.Quality.MEDIUM.step()];
+        java.util.function.IntToDoubleFunction at = k -> rest + r2 * PallPass.LADDER[k].cost() / from.cost()
+                + near * PallPass.LADDER[k].volumeCost() / from.volumeCost() + composite * PallPass.LADDER[k].compositeCost() / from.compositeCost();
+        assertTrue(at.applyAsDouble(to) <= B || to == FLOOR, "the chosen rung fits: " + at.applyAsDouble(to));
+        assertTrue(at.applyAsDouble(to - 1) > B, "no finer rung fits: " + at.applyAsDouble(to - 1));
+    }
+
+    /** A near-volume cell that takes a point every n-th frame takes the share that keeps its e-fold time in frames. */
+    @Test
+    void interleavedNearVolumeKeepsItsTimeConstant() {
+        for (int n : new int[] {1, 2, 4}) {
+            double perFrame = 1 - Math.pow(1 - PallPass.volumeShare(n), 1.0 / n);
+            assertEquals(PallPass.VOLUME_CURRENT, perFrame, 1e-6, "n " + n);
+        }
+    }
+
+    /**
+     * A game-mode switch (Artem's Zearth and Newisle sessions, 28.11: MEDIUM to the floor within 2–5 s of switching to
+     * spectator) restarts the measurement: the renderer's rebuild frames of the next second are not the volume's cost.
+     */
+    @Test
+    void gameModeSwitchDoesNotMeasureTheRebuild() {
+        PallPass.Detail d = new PallPass.Detail();
+        long[] clock = {0};
+        d.setting(PallPass.Quality.MEDIUM);
+        frames(d, 0.8 * B, 200, clock);
+        int level = d.level;
+        d.viewChanged(clock[0]);
+        frames(d, 3 * B, 55, clock);
+        assertEquals(level, d.level, "the rebuild's frames drop no rung");
+        frames(d, 0.8 * B, 200, clock);
+        assertEquals(level, d.level);
+        d.viewChanged(clock[0]);
+        frames(d, 0.8 * B, 70, clock);
+        frames(d, 3 * B, 80, clock);
+        assertTrue(d.level > level, "a real load after the quiet second still drops the rung");
+    }
+
+    /** World exit: the next world starts at its setting's rung (Artem's Newisle, 28.11, started at Zearth's floor). */
+    @Test
+    void worldExitStartsTheLadderAfresh() throws ReflectiveOperationException {
+        java.lang.reflect.Field f = PallPass.class.getDeclaredField("DETAIL");
+        f.setAccessible(true);
+        PallPass.Detail d = (PallPass.Detail) f.get(null);
+        d.setting(PallPass.Quality.MEDIUM);
+        long[] clock = {0};
+        frames(d, 5 * B, 200, clock);
+        assertEquals(FLOOR, d.level);
+        PallPass.leaveWorld();
+        PallPass.Detail fresh = (PallPass.Detail) f.get(null);
+        fresh.setting(PallPass.Quality.MEDIUM);
+        assertEquals(PallPass.Quality.MEDIUM.step(), fresh.level, "the new world at the setting's rung");
     }
 }

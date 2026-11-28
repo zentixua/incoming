@@ -548,7 +548,7 @@ paths:
   smooth fields of position, baked once per frame into a 48³ grid per mushroom (`fx_mush_taus`, `Sampler10`,
   `mushTauGrid`; cells farther than 1.5 cell diagonals from matter by `mushGap` stay zero; within two cells of the
   eye “away from the eye” is traced along the ray itself), not five four-sample paths at
-  every step (laptop 07.11: −25–40 % of ray time, frames unchanged); without the grid (`PallTauReady` 0) steps compute
+  every step (−25–40 % of ray time); without the grid (`PallTauReady` 0) steps compute
   them (`mushTausAt`). Sunward billows are traced once per first-segment length along a ray (`gSunK`); a ray ends at
   `RAY_EXIT` 2 % left, the rest filled like the matter so far; per-frame compositing with blend `ONE, SRC_ALPHA` and a weight by the similarity of distance to
   the world (`fx_pall_composite`). The layer's squares then take their share of the pall in front of them (`fx.vsh`, six
@@ -787,32 +787,28 @@ paths:
   Detail also keeps a budget per setting (`PallPass.Quality.budget`: LOW 7, MEDIUM 15, HIGH 24 ms on the GPU,
   `PallPass.Detail`): if the half-second average is longer for two windows in a row (one window over 1.25 budgets is
   enough), it drops to a step of `PallPass.LADDER` estimated to fit; it goes up a step if the estimate for that step is at
-  most 0.9 of the budget for two windows in a row and 3 s after the last change. Estimates scale pall rays and wall march by their respective samples per frame, and wall pack and resolve by pixel count.
-  Composites and the other passes have fixed resolution (laptop 08.11: 5–9 ms of HIGH's 18). Scaling the whole time, plus a drop on a single window 0.04 ms over, kept
-  MEDIUM at the floor and HIGH two steps down for over a minute at the cost of their own step
-  (`PallDetailTest.oneWindowOverBudgetKeepsTheRung`, `fixedPassesDoNotKeepDetailDown`). It is never above the setting and
-  never below LOW (half frame, 22 steps, interleave 2): rungs with interleave 3–4 drew the lattice that burns in on a
-  still view. The budget calibration uses pall-only GPU times on the RTX 4060 Laptop at 2560×1600 in a 150 kt
-  firestorm (LOW ≤ 6.1, MEDIUM ≤ 12.5, HIGH ≤ 19.2 ms looking up). Measure combined load during the passage
-  with adaptive detail enabled. The INFO line records each rung transition and its window mean. The timing
-  summary includes separate wall march, pack and resolve intervals followed by the shared composites. On a divisor change the wall resolves
+  most 0.9 of the budget for two windows in a row and 3 s after the last change. Estimates scale rays and wall march by samples, wall pack/resolve by pixels, near volume by cells per frame. A game-mode switch skips 1 s of measurement (`Detail.viewChanged`); world exit resets the ladder (`PallPass.leaveWorld`).
+  Composites have fixed resolution. Scaling the whole time, or dropping on one window 0.04 ms over, kept MEDIUM at the
+  floor for minutes (`PallDetailTest.oneWindowOverBudgetKeepsTheRung`, `fixedPassesDoNotKeepDetailDown`). Never above the setting, never
+  below half frame or interleave 2 (3–4 drew a lattice burning in on a still view); near-volume cells update every 1/2/4
+  frames by rung (`Step.volume`, same time constant), rungs below LOW thin only ray steps (16, 12): rays alone left the floor
+  at 21–29 ms vs MEDIUM's 15 (Zearth, `PallDetailTest.nearVolumeAndStepsLetTheFloorFit`). Budgets: RTX 4060 Laptop, 2560×1600, 150 kt firestorm (LOW ≤ 6.1, MEDIUM ≤ 12.5, HIGH ≤ 19.2 ms
+  looking up); measure the passage with adaptive detail on. INFO logs rung changes. The timing
+  summary splits wall march, pack, resolve, then composites. On a divisor change the wall resolves
   against the last image on its original sample lattice, then reuses that storage for the next output.
   Near volume (froxels, the standard fog-the-camera-stands-in method: Wronski AC4 2014, Frostbite): the pall nearer than
   `VOLUME_FAR` 256 blocks along the view axis is a screen-aligned volume of 64 exponential slices, each slice a tile of a
-  2D RGBA16F atlas (GL 3.2, no 3D render targets); cells 16/12/8 full-frame pixels wide for LOW/MEDIUM/HIGH
-  (`Quality.tile`). `fx_pall_froxel` evaluates `pallSource` at a jittered point per cell and blends it into the previous
-  volume reprojected in world space with weight `VOLUME_CURRENT` 0.1; `fx_pall_froxel_sum` integrates front to back with
-  the rays' step law and air haze, storing linear light and the transmittance seen so far. The composite reads it at each
-  pixel's own depth (no screen-space history at silhouettes: the old interleaved near rays left trails and rims there)
+  2D RGBA16F atlas (GL 3.2: no 3D targets); cells 16/12/8 px wide for LOW/MEDIUM/HIGH (`Quality.tile`). `fx_pall_froxel` evaluates `pallSource` at a jittered point per cell and blends it into the previous
+  volume reprojected in world space (weight `VOLUME_CURRENT` 0.1); `fx_pall_froxel_sum` integrates front to back with
+  the rays' step law and air haze into linear light and transmittance, in two draws (8-slice blocks, then cells; one
+  loop over all slices in front cost 1.0–1.3 ms, `pall_froxel_sum_gl.py`). Coarse rungs update whole slices in turn
+  (`Step.volume`; a cell checkerboard saved nothing). The composite reads it at each pixel's own depth (no screen-space
+  history at silhouettes: old interleaved near rays left trails and rims)
   and joins it with the rays beyond in linear light (`froxelOver`); layer quads read `fx_pall_mix` (volume plus rays per
-  reduced pixel). Mushrooms (with the eye's optical depth through them, `mushEyeTau`), explosion smoke and fire whirls
-  (`whirlCell`) nearer than the boundary are injected into the cells; the rays take them only from the boundary, so
-  near matter is ordered against near haze. The Wilson cloud stays in the rays. The rays begin at the volume's far
-  boundary; the march, the composite (read-out and upsample correction) and `fx_pall_mix` take the same boundary
+  reduced pixel). Mushrooms (eye depth `mushEyeTau`), explosion smoke and fire whirls (`whirlCell`) nearer than the
+  boundary are injected into the cells; the rays take them from the boundary on, ordering near matter against near haze. The Wilson cloud stays in the rays, which begin at the volume's far boundary; the march, the composite (read-out and upsample correction) and `fx_pall_mix` take the same boundary
   (`ShaderSourceTest.nearVolumeEndsWhereTheRaysBegin`). Emission past half-float range is
-  clamped, not dropped (a hole). Same-frame checks (32-px checker tiles, history off): the volume over 0–256 equals the
-  per-pixel ray over that span (up view red 100.8 vs 101.2); sequential shots drift with fires and history, so A/B only
-  within one frame.
+  clamped, not dropped (a hole). Same-frame A/B only (32-px checker tiles, history off): volume over 0–256 = the per-pixel ray (red 100.8 vs 101.2).
   Time — `glQueryCounter(GL_TIMESTAMP)` marks before and after the passes, in a ring of 4 pairs, read when ready (without
   waiting). Not `GL_TIME_ELAPSED`: that query is single in OpenGL for everyone, and Minecraft holds it for the whole frame
   while F3's GPU load is on screen (`TimerQuery`) — a nested one would not start. Pairs taken before the pall had gone

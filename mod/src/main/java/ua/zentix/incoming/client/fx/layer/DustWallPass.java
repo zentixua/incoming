@@ -326,7 +326,7 @@ public final class DustWallPass {
             m.safeGetUniform("PallForward").set(FORWARD.x, FORWARD.y, FORWARD.z);
             m.safeGetUniform("DwDiv").set((float) div);
             m.safeGetUniform("DwInterleave").set(builtInterleave ? 1f : 0f, (float) (frame & 1), (float) width, 0f);
-            m.safeGetUniform("DwProbe").set((float) (DustWallDiag.probe + 1));
+            m.safeGetUniform("DwProbe").set(DustWallDiag.probe == -1 && !DustWallDiag.split ? -9f : (float) (DustWallDiag.probe + 1));
             m.safeGetUniform("DwFrame").set(DustWallDiag.freeze ? 0f : (float) (frame % 4096), (float) step.wallSteps());
             // every source's table, terrain and material tiles and frame inputs; the outdoor-air window: the dust lies on the
             // local ground, never indoors

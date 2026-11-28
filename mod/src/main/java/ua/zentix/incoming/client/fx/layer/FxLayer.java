@@ -560,6 +560,7 @@ public final class FxLayer {
 
     /** Leaving the world or changing dimension. */
     public static void reset() {
+        PallPass.leaveWorld();
         frameNanos = frameMax = cleanMax = cleanCpu = 0;
         frames = ticks = collected = lastCollected = lastQuads = 0;
         lastMean = lastMax = lastClean = lastCleanCpu = 0;

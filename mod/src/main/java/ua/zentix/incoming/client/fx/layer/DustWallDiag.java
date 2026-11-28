@@ -36,6 +36,10 @@ public final class DustWallDiag {
     public static volatile int sweepSamples = 48;
     /** Above 0: the client scenario turns {@link #freezeAge} on once the front is this many blocks from the camera. */
     public static volatile float freezeAt = -1;
+    /** False: the march splits its intervals at a clear gap alone, never at the profile's bend (dustwall.glsl dwKnot). */
+    public static volatile boolean split = true;
+    /** False: layer quads and source probes read no dust in front of them (pall_front.glsl dustWallThrough). */
+    public static volatile boolean frontDust = true;
     /** Not null: the next drawn frame writes the pass's targets to files with this path prefix, then clears it. */
     public static volatile String dump;
 
