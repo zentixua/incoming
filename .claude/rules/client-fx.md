@@ -102,9 +102,9 @@ paths:
   right; it runs while the line is read: F3, the line over the last 5 s, the scene bench, `always()` for scenarios and
   the sandbox). Without it there are no marks, nor `GpuTimer`. Marks sit at pass boundaries (`LayerTimes.Pass`:
   atlas, depth, water, pall with smoke, heat, probes, quads, glow): every frame, read 2–3 frames later. A mark between
-  adjacent passes “leaks” (the previous pass's tail lands in the next), so on request (F3 or
-  `-Dincoming.fx.drain=true`; scenarios and the bench run without it: the drain is a 20–28 ms hitch every 2 s) every 2 s
-  a drain frame runs: `glFinish` before each mark, the passes are exact, and the quads are split again by part
+  adjacent passes “leaks” (the previous pass's tail lands in the next), so only with `-Dincoming.fx.drain=true`
+  (never F3: F3 is a player's screen, and a drain frame stalls it 20–28 ms, ~150 ms at a 300 kt pall, every 2 s;
+  `LayerTimesTest.f3NeverDrains`; scenarios and the bench run without it) every 2 s a drain frame runs: `glFinish` before each mark, the passes are exact, and the quads are split again by part
   (`FxQuads.Part`: puffs, veil, ribbons, fire, glare, particles, debris trails, other), each part with its own sort
   segments in one `glMultiDrawElements`, with time and pixels (GL_SAMPLES_PASSED) measured separately. The frame is
   copied before the parts and restored after. A quad's part is set by its writer (`FxQuads.part`, `LayerPartsTest`). New
@@ -451,7 +451,11 @@ paths:
   tick without the new pieces of that tick changed the rule (review #425: a new piece 90 m away no longer evicted an
   accepted one 100 m away in the same tick). A new source asks for slots through `Fragments.share`: free ones, but no
   fewer than a quarter of the limit (`FrontLitter`: 8 × 900 scraps for 1200 slots meant almost all were evicted at
-  once). On touching the ground a piece stays (vanilla no longer moves a particle after a collision,
+  once). A piece in open air moves without vanilla's block sweep: `util/OpenBox.clear` (the swept box widened by
+  one block holds no collision shape; all-air sections answer at once) lets it step straight; near a block, near a
+  Sable craft (`SubLevels.mayHaveCraftNear`, cached per 16-block cell each tick) or above vanilla's 100-block step it
+  asks `Particle.move` (the sweep was 36 % of `Fragments` time at a 300 kt front; `FxParticle` takes the same shortcut;
+  `OpenBoxGameTests.openBoxAgreesWithTheSweep`). On touching the ground a piece stays (vanilla no longer moves a particle after a collision,
   `stoppedByCollision`), its tumbling stops, and after a second it crumbles. On the first tick of flight its box (by the
   largest body dimension) is pulled out of the blocks, or a long plank from a breach at floor level would sink into the
   floor. A piece is a body of its own material (`Fragments.Kind`: debris cube, plank, glass shard, leaf — size and drag
@@ -832,8 +836,9 @@ paths:
   front of the quads and probes (`pall_front.glsl`: `pallThrough`) and the pall's shadow on the world
   (`fx_pall_composite`, place — the air block in front of the surface) — × the share of outdoor air at the point
   (`pall.glsl`: `pallOpen`): Minecraft's sky light / 15 in the window of 96×64×96 blocks around the eye
-  (`fx/layer/OpenAir`, R8 3D on the block of texture 13, by sections modulo the size: new sections of the window and 4
-  per frame in a circle; where there is no chunk — 1; beyond the window — open above the coarse terrain map of the slot
+  (`fx/layer/OpenAir`, R8 3D on the block of texture 13, by sections modulo the size: at most `OpenAir.FILL` (12) section reads
+  per frame, missing ones nearest first, then 4 held ones in rotation; a section not read yet is open air (a fresh
+  216-section window read at once cost 349 ms on the first frame after a detonation; `OpenAirTest.freshWindowFillsNearestFirstWithinTheBudget`); where there is no chunk — 1; beyond the window — open above the coarse terrain map of the slot
   (the pall beyond the far mouth of an adit is visible from its depth); below it — the share of the block where the ray
   from the eye left the window: all places of the pall and its shadow lie on rays from the eye through air, so a long
   adit and a big cave beyond the window stay closed; in a dimension without sky there is no window; in shaders —

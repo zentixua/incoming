@@ -25,14 +25,15 @@ import java.util.Locale;
  * of {@link #RING} frames: read after 2–3 frames once ready, without waiting (like {@link GpuTimer}). A timestamp between
  * neighbouring passes “leaks”: the GPU records it before the tail of previous work finishes, charging that tail to the next
  * pass (measurement HB2, #442). Such frame averages serve monitoring; the sum is correct, shares approximate.</li>
- * <li>So while requested ({@link #drains}: F3 open or {@code incoming.fx.drain} property), once every
+ * <li>So when asked at launch ({@link #drains}: {@code -Dincoming.fx.drain=true}), once every
  * {@link #DRAIN_EVERY_NS} a drain frame runs: glFinish before every timestamp finishes all preceding work, and
  * its pass timings are exact. Quads are one sorted call with parts interleaved by depth: after the combined call, this frame
  * draws each part ({@link FxQuads.Part}) separately again, with a drain before and after (pixel
  * count via GL_SAMPLES_PASSED); the frame is copied first and restored afterwards: same image on screen.
- * A drain frame costs another quad draw, two frame copies and GPU stalls between passes — 20–28 ms CPU (look_gate
- * 25.10, every 2 s): a hitch counted in scene measurements themselves; scenarios and the bench that only read the line therefore
- * skip it, and it is excluded from pass averages.</li>
+ * A drain frame costs another quad draw, two frame copies and GPU stalls between passes — 20–28 ms CPU, up to 150 ms in a
+ * nuclear frame (a 300 kt passage with F3 open): a hitch every 2 s. So F3 never drains: a player who opens it sees the
+ * non-blocking pass averages, and only a person analysing parts launches with the property. Drain frames are excluded from
+ * pass averages.</li>
  * </ul>
  * Probe active only while read: F3 open, {@link #describe} line requested within {@link #READ_NS} (bench,
  * scenarios), or held on ({@link #always}). Otherwise no timestamps at all (including {@link GpuTimer}), no frame copy.
@@ -107,7 +108,7 @@ public final class LayerTimes {
         poll(now);
         if (ISSUED[ring]) return false;
         slot = ring;
-        boolean drain = drains(f3, DRAIN_ASKED, lastDrain, now) && CLOCK.free();
+        boolean drain = drains(DRAIN_ASKED, lastDrain, now) && CLOCK.free();
         DRAINED[slot] = drain;
         PART_SLOT[slot] = -1;
         if (drain) {
@@ -120,12 +121,12 @@ public final class LayerTimes {
     }
 
     /**
-     * Whether this is a drain frame: only when requested — F3 open (a person inspecting parts) or launch property
-     * ({@link #DRAIN_ASKED}) — and no more often than {@link #DRAIN_EVERY_NS}. Scenarios and bench also read the probe line (needing pass
-     * timestamps every frame), but a drain hitch in their frames would contaminate their own measurement.
+     * Whether this is a drain frame: only with the launch property ({@link #DRAIN_ASKED}) and no more often than
+     * {@link #DRAIN_EVERY_NS}. F3, scenarios and the bench read the probe through non-blocking timestamps only: a drain
+     * stalls the frame it runs in, and F3 is a player's screen, not a profiler.
      */
-    static boolean drains(boolean f3, boolean asked, long lastDrain, long now) {
-        return (f3 || asked) && (lastDrain == 0 || now - lastDrain >= DRAIN_EVERY_NS);
+    static boolean drains(boolean asked, long lastDrain, long now) {
+        return asked && (lastDrain == 0 || now - lastDrain >= DRAIN_EVERY_NS);
     }
 
     /** End pass p (on a drain frame — after all its work finishes). */
@@ -204,7 +205,7 @@ public final class LayerTimes {
         StringBuilder b = new StringBuilder(String.format(Locale.ROOT, "GPU by pass (ms, mean of %d frames; a pass's tail may spill into the next):",
                 lastFrames));
         passes(b, MEAN);
-        if (exactAt == 0) return b.append("; drained frame: none (F3 or -Dincoming.fx.drain=true)").toString();
+        if (exactAt == 0) return b.append("; drained frame: none (-Dincoming.fx.drain=true)").toString();
         b.append(String.format(Locale.ROOT, "; drained frame (glFinish at every mark, one in %d s, %.1f s ago):", DRAIN_EVERY_NS / 1_000_000_000L,
                 (System.nanoTime() - exactAt) / 1e9));
         passes(b, EXACT);

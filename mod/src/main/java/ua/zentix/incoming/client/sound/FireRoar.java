@@ -43,12 +43,36 @@ public final class FireRoar {
         double d = Math.max(NEAR, Math.sqrt(dx * dx + dy * dy + dz * dz));
         double p = Sources.FLAME_EFFICIENCY * watts / (d * d);
         int r = Math.min(RINGS - 1, (int) Math.floor(RINGS_PER_OCTAVE * Math.log(d) / Math.log(2)));
-        double az = Math.atan2(dz, dx), sector = 2 * Math.PI / QUADRANTS;
-        double u = (az < 0 ? az + 2 * Math.PI : az) / sector;
-        int q0 = (int) Math.floor(u) % QUADRANTS, q1 = (q0 + 1) % QUADRANTS;
-        double frac = u - Math.floor(u), c = Math.cos(frac * Math.PI / 2), s = Math.sin(frac * Math.PI / 2);
-        put(q0 * RINGS + r, p * c * c, d, dy);
-        put(q1 * RINGS + r, p * s * s, d, dy);
+        // quarter q0 holds the azimuth from its axis toward the next one's; shares cos² and sin² of the angle from q0's
+        // axis, i.e. the squared components along the two axes over the horizontal distance: no trigonometry, since a
+        // burning city adds tens of thousands of storm cells a tick (atan2 with cos and sin was 2 % of the render thread)
+        int q0;
+        double a, b;
+        if (dx > 0 && dz >= 0) {
+            q0 = 0;
+            a = dx;
+            b = dz;
+        } else if (dx <= 0 && dz > 0) {
+            q0 = 1;
+            a = dz;
+            b = -dx;
+        } else if (dx < 0) {
+            q0 = 2;
+            a = -dx;
+            b = -dz;
+        } else if (dz < 0) {
+            q0 = 3;
+            a = -dz;
+            b = dx;
+        } else {
+            // straight above or below the ear: Math.atan2(0, 0) = 0, the first quarter's axis
+            q0 = 0;
+            a = 1;
+            b = 0;
+        }
+        double flat = a * a + b * b, c2 = a * a / flat;
+        put(q0 * RINGS + r, p * c2, d, dy);
+        put((q0 + 1) % QUADRANTS * RINGS + r, p * (1 - c2), d, dy);
     }
 
     private void put(int k, double p, double d, double dy) {
@@ -91,6 +115,13 @@ public final class FireRoar {
             margin[q] = Propagation.margin(ring, weather);
             distance[q] = far / all;
         }
+    }
+
+    /** Summed P/d² of quarter {@code q} over its rings (tests). */
+    double power(int q) {
+        double sum = 0;
+        for (int r = 0; r < RINGS; r++) sum += power[q * RINGS + r];
+        return sum;
     }
 
     /** A-level at ear in quarter {@code q} after {@link #finish}, dBA. */
