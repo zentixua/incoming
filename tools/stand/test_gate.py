@@ -15,6 +15,7 @@ import gate
 import plan
 import results
 import stand
+import target
 
 
 def window(gpu50, thread95, fps=60.0, mspt=6.5):
@@ -1163,6 +1164,282 @@ class Plan(unittest.TestCase):
     def test_unknown_scene(self):
         with self.assertRaises(ValueError):
             plan.build(self.scenes, ["nope"])
+
+
+class Nuke(unittest.TestCase):
+    """Nuclear scenes: camera inside the dust 2.8 km from the first burst, bursts by host command, windows from the first burst."""
+
+    def setUp(self):
+        self.scenes = plan.load()
+
+    def test_camera_inside_the_dust_and_bursts_by_host_command(self):
+        steps = plan.build(self.scenes, ["nuke"])["steps"]
+        tp = steps[0]
+        self.assertEqual(tp["do"], "tp")
+        gz = self.scenes["sites"]["N"]
+        self.assertAlmostEqual(math.dist([tp["eye"][0], tp["eye"][2]], gz), 2800)
+        self.assertEqual(tp["eye"][1], self.scenes["ground"] + 35)
+        self.assertEqual([s["cmd"] for s in steps if s["do"] == "cmd"], [f"incoming nuke now at {gz[0]} 65 {gz[1]} 300 ground"])
+
+    def test_windows_are_timed_from_the_first_burst(self):
+        for sid in ("nuke", "nuke2"):
+            steps = plan.build(self.scenes, [sid])["steps"]
+            t, at, bursts = 0.0, {}, []
+            for s in steps[1:]:
+                if s["do"] == "cmd":
+                    bursts.append(t)
+                elif s["do"] == "wait":
+                    t += s["s"]
+                elif s["do"] == "window":
+                    at[s["name"]] = (t, t + s["s"])
+                    t += s["s"]
+            self.assertEqual(bursts[0], 0.0)
+            self.assertEqual(at[f"{sid}/show"], (2.0, 60.0))
+            self.assertEqual(at[f"{sid}/entry"], (60.5, 119.5))     # the wall reaching the camera; nuke2's second burst
+            self.assertEqual(at[f"{sid}/dust"], (120.0, 360.0))      # +2..+6 min inside the dust
+        self.assertEqual(bursts, [0.0, 60.5])                         # the second burst after the first window and its frame
+        # Every heavy moment is measured: the second burst opens `entry`, and only the frame at each end goes unmeasured
+        self.assertEqual(bursts[1], at["nuke2/entry"][0])
+        ws = sorted(at.values())
+        for (a0, a1), (b0, b1) in zip(ws, ws[1:]):
+            self.assertLessEqual(b0 - a1, self.scenes["after_shot_s"] + 1e-9)
+
+    def test_a_burst_inside_a_window_is_refused(self):
+        s = json.loads(json.dumps(self.scenes))
+        next(x for x in s["scenes"] if x["id"] == "nuke2")["bursts"][1]["t_s"] = 30
+        with self.assertRaisesRegex(ValueError, "inside an earlier window"):
+            plan.build(s, ["nuke2"])
+
+    def test_nuclear_scenes_come_last_and_are_planned_windows(self):
+        ids = [s["id"] for s in self.scenes["scenes"]]
+        self.assertEqual(ids[-2:], ["nuke", "nuke2"])
+        self.assertEqual(plan.windows(self.scenes, ["nuke", "nuke2"]), ["nuke/show", "nuke/entry", "nuke/dust", "nuke2/show", "nuke2/entry", "nuke2/dust"])
+        self.assertGreaterEqual(self.scenes["server_config"]["nuclear"]["max_yield"], 300)
+
+    def test_pall_probe_is_read(self):
+        self.assertIn("ua.zentix.incoming.client.fx.layer.PallPass#describe", self.scenes["probes"])
+
+
+class Hitches(unittest.TestCase):
+    """Window hitch and per-effect numbers (results.summarize)."""
+
+    def frames(self, intervals, layer=3.0):
+        out, t = [], 0.0
+        for i, iv in enumerate(intervals):
+            out.append({"frame": i, "t": t, "prev": None, "cpu": 1.0, "thread": 1.0, "gpu": 5.0, "shot": 0,
+                        "stages": {"after_level+": layer}, "interval": iv})
+            t += iv
+        return out, t
+
+    def test_slow_frames_and_1_percent_low(self):
+        fr, end = self.frames([20.0] * 297 + [150.0, 101.0, 100.0])
+        w = results.summarize(fr, [], 0, end)
+        self.assertEqual(w["slow"]["count"], 2)                       # exactly 100 ms is not a hitch
+        self.assertEqual(w["slow"]["worst_ms"], 150.0)
+        self.assertAlmostEqual(w["low1_fps"], 1000 / results.percentile([f["interval"] for f in fr], 99))
+        self.assertEqual(w["incoming_gpu"], 3.0)
+
+    def test_pall_from_its_probe_lines(self):
+        fr, end = self.frames([20.0] * 100)
+        name = "ua.zentix.incoming.client.fx.layer.PallPass#describe"
+        line = lambda ms: f"60 frames, 1280×800, detail 1/2 × 22 steps (step 8 of 8), gpu {ms} ms (longest {ms + 3}, budget 15.0; preparation 0.9)"
+        ev = [{"type": "probe", "t_ms": 100.0, "name": name, "value": line(14.0)},
+              {"type": "probe", "t_ms": 1100.0, "name": name, "value": line(18.0)},
+              {"type": "probe", "t_ms": 1500.0, "name": name, "value": "off"},
+              {"type": "probe", "t_ms": end + 10, "name": name, "value": line(90.0)}]
+        p = results.summarize(fr, ev, 0, end)["pall"]
+        self.assertEqual((p["n"], p["max"], p["off"]), (2, 18.0, 1))   # a second without the volume is counted, not 0 ms
+        self.assertAlmostEqual(p["mean"], 16.0)
+        self.assertIsNone(results.summarize(fr, ev[:0], 0, end)["pall"])  # an older version without the probe: no number
+
+    def test_hitches_are_noted_in_the_pair_gate_not_judged(self):
+        b = run()
+        b["packs"]["none"]["windows"]["100/edge"]["slow"] = {"count": 3, "worst_ms": 420.0}
+        v = gate.compare(b, pair())
+        self.assertTrue(v["pass"], v["fails"])
+        self.assertTrue(any("3 frames over 100 ms" in n for n in v["notes"]))
+
+
+def tw(fps50=30.0, low1=25.0, slow=0, incoming=16.0, pall=14.0, peak=17.0):
+    return {"interval": {"p50": 1000 / fps50}, "low1_fps": low1, "slow": {"count": slow, "worst_ms": 120.0 if slow else 40.0},
+            "incoming_gpu": incoming, "pall": {"mean": pall, "max": peak, "n": 240}}
+
+
+def target_run(**kw):
+    ws = {n: tw(**kw) for n in ("nuke/show", "nuke/entry", "nuke/dust", "nuke2/show", "nuke2/entry", "nuke2/dust")}
+    return {"packs": {p: {"windows": dict(ws), "checks": []} for p in ("photon", "none")}}
+
+
+class Target(unittest.TestCase):
+    """Performance target (target.py, target.json): the candidate's own numbers, no baseline."""
+
+    def setUp(self):
+        self.t = {"version": "t", "rows": [
+            {"scene": "nuke-dust", "pack": "photon", "windows": ["nuke/dust", "nuke2/dust"], "fps_p50": 28, "fps_low1": 20, "slow": 0,
+             "incoming_ms": 18, "pall_ms": 15, "pall_peak_ms": 20},
+            {"scene": "nuke-show", "pack": "none", "windows": ["nuke/show"], "slow": 0, "pall_ms": 15}]}
+
+    def test_holding_every_limit_passes(self):
+        v = target.judge(self.t, [target_run()])
+        self.assertTrue(v["pass"], v["fails"])
+        self.assertEqual(len(v["rows"]), 2 * 6 + 2)
+
+    def test_each_limit_fails_alone(self):
+        for kw, word in (({"fps50": 27.0}, "fps_p50"), ({"low1": 19.0}, "fps_low1"), ({"slow": 1}, "slow"),
+                         ({"incoming": 18.5}, "incoming_ms"), ({"pall": 21.0}, "pall_ms"), ({"peak": 25.0}, "pall_peak_ms")):
+            v = target.judge(self.t, [target_run(**kw)])
+            self.assertFalse(v["pass"], kw)
+            self.assertTrue(any(word in f for f in v["fails"]), (kw, v["fails"]))
+
+    def test_exactly_at_the_limit_passes(self):
+        self.assertTrue(target.judge(self.t, [target_run(fps50=28.0, low1=20.0, incoming=18.0, pall=15.0, peak=20.0)])["pass"])
+
+    def test_3_14_0_at_artems_spot_fails(self):
+        # 28.11 repro, Photon, +190..+240 s: 23.4 fps, p50 43.6 ms, p99.5 63 ms, Incoming 26.8 ms, pall 24.6 ms
+        v = target.judge(self.t, [target_run(fps50=1000 / 43.6, low1=1000 / 61, slow=1, incoming=26.8, pall=24.6, peak=28.9)])
+        bad = {r["metric"] for r in v["rows"] if r["fail"]}
+        self.assertTrue({"fps_p50", "fps_low1", "slow", "incoming_ms", "pall_ms", "pall_peak_ms"} <= bad)
+
+    def test_missing_window_number_pack_or_invalid_run_fails(self):
+        r = target_run()
+        del r["packs"]["photon"]["windows"]["nuke2/dust"]
+        self.assertTrue(any("nuke2/dust: no window" in f for f in target.judge(self.t, [r])["fails"]))
+        r = target_run()
+        r["packs"]["photon"]["windows"]["nuke/dust"]["pall"] = None      # a version without the pall probe
+        self.assertTrue(any("pall_ms: no number" in f for f in target.judge(self.t, [r])["fails"]))
+        r = target_run()
+        del r["packs"]["none"]
+        self.assertTrue(any("none: not captured" in f for f in target.judge(self.t, [r])["fails"]))
+        r = target_run()
+        r["packs"]["photon"]["checks"] = ["command failed: incoming nuke now at 0 65 -20000 300 ground"]
+        self.assertFalse(target.judge(self.t, [r])["pass"])
+
+    def test_a_second_capture_of_a_failed_pack_decides(self):
+        bad = target_run()
+        bad["packs"]["photon"] = target_run(pall=22.0)["packs"]["photon"]
+        good = {"packs": {"photon": target_run()["packs"]["photon"]}}
+        v = target.judge(self.t, [bad, good])
+        self.assertTrue(v["pass"], v["fails"])
+        self.assertEqual(v["packs"]["photon"]["tries"], 2)
+        self.assertEqual(v["packs"]["photon"]["earlier"][0]["state"], target.FAIL)
+        self.assertEqual(v["packs"]["none"]["tries"], 1)
+        self.assertFalse(target.judge(self.t, [good, bad])["pass"])        # the later capture decides, either way
+
+    def test_the_shipped_target_names_planned_windows_and_reasons(self):
+        t, scenes = target.load(), plan.load()
+        planned = set(plan.windows(scenes))
+        for row in t["rows"]:
+            self.assertIn(row["pack"], stand.PACKS)
+            self.assertIn(row["pack"], t["tiers"])
+            self.assertTrue(set(row["windows"]) <= planned, row["windows"])
+            self.assertTrue(row.get("why"), row["scene"])
+            self.assertEqual(row.get("slow"), 0, row["scene"])              # no hitch after warm-up, in every scene
+        self.assertTrue(set(target.scenes_of(t)) <= {s["id"] for s in scenes["scenes"]})
+        self.assertNotIn("first", target.scenes_of(t))                       # the first strike's shader compilation is warm-up
+
+
+class PallOff(unittest.TestCase):
+    """A window whose nuclear volume is not drawn (the GPU watchdog turned it off) fails, never counts as fast."""
+
+    def ev(self, t, v):
+        return {"type": "probe", "t_ms": t, "name": "ua.zentix.incoming.client.fx.layer.PallPass#describe", "value": v}
+
+    def test_watchdog_off_is_counted_not_zero(self):
+        p = results.pall([self.ev(0, "3 frames, x; gpu 12.00 ms (longest 13.00"), self.ev(1000, "off by the GPU watchdog"),
+                          self.ev(2000, "off by the GPU watchdog")], 0, 5000)
+        self.assertEqual((p["mean"], p["n"], p["off"]), (12.0, 1, 2))
+        p = results.pall([self.ev(0, "off by the GPU watchdog")], 0, 5000)
+        self.assertIsNone(p["mean"])
+
+    def test_target_fails_a_window_without_the_volume(self):
+        tg = {"version": "t", "rows": [{"scene": "s", "pack": "photon", "windows": ["nuke/dust"], "pall_ms": 15, "slow": 0}]}
+        r = target_run()
+        r["packs"]["photon"]["windows"]["nuke/dust"]["pall"] = {"mean": None, "max": None, "n": 0, "off": 240,
+                                                                "off_why": ["off by the GPU watchdog"]}
+        v = target.judge(tg, [r])
+        self.assertFalse(v["pass"])
+        self.assertTrue(any("not drawn in 240 s" in f for f in v["fails"]))
+
+
+class Release(unittest.TestCase):
+    def test_post_needs_a_commit(self):
+        with self.assertRaisesRegex(SystemExit, "ci:<SHA>"):
+            stand.cmd_release(Namespace(jar="v3.14.0", post=True, rejudge=False, name=None, label=None))
+
+    def test_failed_pack_is_captured_once_more_and_status_follows_the_last(self):
+        posted, calls = [], []
+        tg = {"version": "t", "rows": [{"scene": "s", "pack": "photon", "windows": ["nuke/dust"], "pall_ms": 15},
+                                       {"scene": "s", "pack": "none", "windows": ["nuke/dust"], "pall_ms": 15}]}
+        first = target_run()
+        first["packs"]["photon"] = target_run(pall=22.0)["packs"]["photon"]
+        second = {"packs": {"photon": target_run()["packs"]["photon"]}}
+        with tempfile.TemporaryDirectory() as d:
+            out = Path(d)
+
+            def fake_run(args):
+                calls.append(args)
+                name = args[1]
+                (out / name).mkdir(parents=True, exist_ok=True)
+                (out / name / "meta.json").write_text("{}")
+                return Namespace(returncode=0)
+
+            def fake_analyze(path, write=True):
+                r = second if Path(path).name.endswith("-2") else first
+                return dict(r, jar={"label": "x"})
+            with mock.patch.object(stand, "OUT", out), mock.patch.object(stand.subprocess, "run", fake_run), \
+                    mock.patch.object(stand, "analyze", fake_analyze), mock.patch.object(stand, "gh", lambda *a, **k: "f" * 40), \
+                    mock.patch.object(stand, "post_status", lambda *a: posted.append(a)), \
+                    mock.patch.object(target, "load", lambda: tg):
+                code = stand.cmd_release(Namespace(jar="ci:abc", post=True, rejudge=False, name="rel", label=None))
+            self.assertEqual(code, 0)
+            self.assertEqual(len(calls), 2)
+            # Only the packs that missed are captured again
+            self.assertEqual(calls[0][calls[0].index("--packs") + 1], "photon,none")
+            self.assertEqual(calls[1][calls[1].index("--packs") + 1], "photon")
+            self.assertEqual(posted[0][1], "pending")
+            self.assertEqual(posted[-1][1], "success")
+            self.assertEqual(posted[-1][-1], stand.TARGET_STATUS)
+            self.assertTrue((out / "rel" / "target-verdict.json").exists())
+            # Warm-up first: the session's first strike compiles shaders outside every judged window
+            self.assertEqual(calls[0][calls[0].index("--scenes") + 1].split(",")[0], "first")
+
+    def test_a_stale_second_capture_never_decides(self):
+        tg = {"version": "t", "rows": [{"scene": "s", "pack": "photon", "windows": ["nuke/dust"], "pall_ms": 15}]}
+        posted = []
+        with tempfile.TemporaryDirectory() as d:
+            out = Path(d)
+            (out / "rel-2").mkdir()
+            (out / "rel-2" / "meta.json").write_text("{}")        # left by an earlier run on the same commit
+            seen = []
+
+            def fake_run(args):
+                seen.append(args[1])
+                (out / args[1]).mkdir(parents=True, exist_ok=True)
+                (out / args[1] / "meta.json").write_text("{}")
+                return Namespace(returncode=0)
+
+            def fake_analyze(path, write=True):
+                bad = target_run(pall=22.0)
+                return dict(bad if Path(path).name == "rel" or len(seen) > 1 else target_run(), jar={"label": "x"})
+            with mock.patch.object(stand, "OUT", out), mock.patch.object(stand.subprocess, "run", fake_run), \
+                    mock.patch.object(stand, "analyze", fake_analyze), mock.patch.object(stand, "gh", lambda *a, **k: "f" * 40), \
+                    mock.patch.object(stand, "post_status", lambda *a: posted.append(a)), \
+                    mock.patch.object(target, "load", lambda: tg):
+                code = stand.cmd_release(Namespace(jar="ci:abc", post=True, rejudge=False, name="rel", label=None))
+            self.assertEqual(seen, ["rel", "rel-2"])                   # the miss is captured again, not decided by the old one
+            self.assertEqual(code, 1)
+            self.assertEqual(posted[-1][1], "failure")
+
+    def test_an_aborted_run_does_not_leave_the_status_pending(self):
+        tg = {"version": "t", "rows": [{"scene": "s", "pack": "photon", "windows": ["nuke/dust"], "pall_ms": 15}]}
+        posted = []
+        with tempfile.TemporaryDirectory() as d, mock.patch.object(stand, "OUT", Path(d)), \
+                mock.patch.object(stand.subprocess, "run", lambda args: Namespace(returncode=0)), \
+                mock.patch.object(stand, "gh", lambda *a, **k: "f" * 40), \
+                mock.patch.object(stand, "post_status", lambda *a: posted.append(a)), mock.patch.object(target, "load", lambda: tg):
+            with self.assertRaisesRegex(SystemExit, "nothing captured"):
+                stand.cmd_release(Namespace(jar="ci:abc", post=True, rejudge=False, name="rel", label=None))
+        self.assertEqual([p[1] for p in posted], ["pending", "error"])
 
 
 if __name__ == "__main__":

@@ -14,6 +14,8 @@ Pack failure (`compare_pack`):
 - first strike and accumulation, if captured: worst frame more than twice the baseline and above 100 ms;
   last-minute/first-minute growth exceeds baseline growth by TOL;
 - invalid pair run (results.checks) or different capture setup (OpenGL string, frame size).
+Hitches (frames over 100 ms, results.SLOW_MS) in gated windows are noted for the reviewer, not judged against the pair:
+one or two land at random in a 20 s window of either version; their absolute limit is the performance target (target.py).
 Decision (`decide`): a pack failing the first pair is captured as a second pair (`--tries`); the last decides.
 Visual quality is not judged numerically: scenes with noticeably different smoky-pixel share or frame
 brightness (`look_flags`) are flagged for the reviewer. Standard library only (CI: test_gate.py).
@@ -75,6 +77,11 @@ def compare_pack(pack, c, bases):
             if gated:
                 fails.append(f"{pack} {name}: no window for {'candidate' if cw is None else 'accepted'}")
             continue
+        slow = ((cw.get("slow") or {}).get("count"))
+        if gated and _num(slow) and slow > 0:
+            base_slow = [((w.get("slow") or {}).get("count")) for w in bws]
+            notes.append(f"{pack} {name}: {slow} frames over 100 ms (worst {cw['slow']['worst_ms']:.0f} ms), accepted "
+                         + " / ".join("?" if v is None else str(v) for v in base_slow))
         for m in REPORTED:
             judged = gated and m in METRICS
             cv, bv = metric(cw, m), base_of([metric(w, m) for w in bws])
