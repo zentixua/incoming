@@ -787,12 +787,15 @@ paths:
   Detail also keeps a budget per setting (`PallPass.Quality.budget`: LOW 7, MEDIUM 15, HIGH 24 ms on the GPU,
   `PallPass.Detail`): if the half-second average is longer for two windows in a row (one window over 1.25 budgets is
   enough), it drops to a step of `PallPass.LADDER` estimated to fit; it goes up a step if the estimate for that step is at
-  most 0.9 of the budget for two windows in a row and 3 s after the last change. Estimates scale pall rays and wall march by their respective samples per frame, and wall pack and resolve by pixel count.
+  most 0.9 of the budget for two windows in a row and 3 s after the last change. Estimates scale pall rays and wall march by their respective samples per frame, wall pack and resolve by pixel count, and the near volume's medium pass by its cells per frame (`Step.volumeCost`). A game-mode switch skips a second of measurement (`Detail.viewChanged`), and a world exit starts the ladder afresh (`PallPass.leaveWorld`).
   Composites and the other passes have fixed resolution (laptop 08.11: 5–9 ms of HIGH's 18). Scaling the whole time, plus a drop on a single window 0.04 ms over, kept
   MEDIUM at the floor and HIGH two steps down for over a minute at the cost of their own step
-  (`PallDetailTest.oneWindowOverBudgetKeepsTheRung`, `fixedPassesDoNotKeepDetailDown`). It is never above the setting and
-  never below LOW (half frame, 22 steps, interleave 2): rungs with interleave 3–4 drew the lattice that burns in on a
-  still view. The budget calibration uses pall-only GPU times on the RTX 4060 Laptop at 2560×1600 in a 150 kt
+  (`PallDetailTest.oneWindowOverBudgetKeepsTheRung`, `fixedPassesDoNotKeepDetailDown`). It is never above the setting; the
+  frame never drops below half and the rays never thin below interleave 2 (rungs with interleave 3–4 drew the lattice that
+  burns in on a still view). The near volume's cells take a new point every 1, 2 or 4 frames with the rung (`Step.volume`, at
+  the share that keeps the cell's time constant), and the two rungs below LOW thin only the steps per ray (16, 12): with
+  only the rays following the rung, the floor cost 21–29 ms against MEDIUM's 15 at Artem's Zearth scene
+  (`PallDetailTest.nearVolumeAndStepsLetTheFloorFit`). The budget calibration uses pall-only GPU times on the RTX 4060 Laptop at 2560×1600 in a 150 kt
   firestorm (LOW ≤ 6.1, MEDIUM ≤ 12.5, HIGH ≤ 19.2 ms looking up). Measure combined load during the passage
   with adaptive detail enabled. The INFO line records each rung transition and its window mean. The timing
   summary includes separate wall march, pack and resolve intervals followed by the shared composites. On a divisor change the wall resolves
