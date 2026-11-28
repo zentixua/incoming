@@ -72,6 +72,14 @@ paths:
   the seek position is missing until the next recorded list. Each cloud and its packet are framed
   (`StreamCodecs.framed`): the nested packets keep their trailing fields, an unknown kind is skipped.
 
+- Recording cost: Flashback records every packet the client receives (`Connection.genericsFtw`); Flashback NeoForge
+  Fixed copies each mod payload's bytes into one heap buffer that grows by copying in 4 MiB steps, and the save zips it
+  at level 1 on the render thread. Neither has a public way to keep a payload out (Flashback's "Ignored Custom
+  Payloads" applies at playback only; the fix mod's transient list is fixed in its code), so a bulk stream a replay
+  never uses still costs heap, allocation and save time in proportion: Voxy LOD chunks (not ingested in a replay;
+  the fix mod points Voxy at the recording client's live store) go trimmed and deflated (`voxy.md`). Measure a
+  recording's bytes per payload with `tools/replay_payloads.py`.
+
 ## Server → client packet format
 - Flashback stores each mod packet as bytes and reads it across versions with the current codec. One frame is exactly
   one packet (`ReplayReader` splits recordings by action length; connections use Netty frames; a mod packet extends to
