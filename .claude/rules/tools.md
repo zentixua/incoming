@@ -252,7 +252,7 @@ Prism: `~/.var/app/org.prismlauncher.PrismLauncher/data/PrismLauncher/` (`tools/
   check runs.
 - Release (a public step: AGENTS.md): bump `mod_version`, write `docs/releases/<version>.md` (in English;
   no HTML comments, one line per paragraph, the compatibility line first), run `tools/stand/stand.py release ci:<SHA>
-  --post` on that commit's CI jar (the preflight refuses a jar without a passed performance target), merge into `main` and run `build`
+  --post` on that commit's CI jar (its branch up to date with `main`; the preflight refuses a jar without a passed performance target), merge into `main` and run `build`
   manually on `main` with `release=true`: after all checks, the workflow releases `v<version>` with the jar (friends take it
   from there), and `publish` then uploads the same jar to Modrinth and CurseForge by itself (step `release`; a manual
   `publish release` re-sends a version and skips stores that already have the jar). If `main` has moved on from the commit checked in the game, a branch `claude/release-…` from that commit with only

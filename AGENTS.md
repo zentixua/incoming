@@ -48,7 +48,7 @@ instructions: work in a worktree from `origin/main`.
 - **Act as the engineer, finish without questions** (Artem, 04.11): Artem sets goals as a player; we decide how and
   take obvious engineering steps without waiting. Ask Artem only what team.md reserves for his word.
 - **Plans are targets, not decisions** (Artem, 03.11, 20.11): a clearly better way found mid-work, even a fundamental
-  rewrite, is taken without asking and recorded in the PR. Limits: the concept below, public
+  rewrite of an existing feature, is taken without asking and recorded in the PR. Limits: the concept below, public
   steps by Artem's word.
 - **Public steps** (GitHub release, version bump for a release, Modrinth, CurseForge, YouTube, replies to players)
   require Artem's explicit instruction. A release candidate reaches him only after we tested every changed look and
@@ -79,7 +79,7 @@ tools/stand/run.sh <name> ci:<branch> --packs none --scenes 100  # scene bench, 
 tools/deploy.sh                          # jar → dist/ for friends and mods/ without pack auto-update
 python3 tools/logscan.py [--since 18:30]   # after play: mod errors, strikes, detonations, Sable
 ```
-Scripts needing packages declare them in `# /// script`; run
+Scripts needing numpy/scipy/soundfile/Pillow declare them in `# /// script` (PEP 723); run
 `uv run tools/<script>.py`, install nothing into system Python. Without an instance (cloud/CI):
 `python3 tools/fetch_runtime_mods.py` → `./gradlew runGameTestServer -PmcModsDir=run/ci-mods`.
 CI checks each commit once, on `main` push and PR; branches without PRs get none: open a draft at once.
@@ -91,7 +91,7 @@ from the last shipped jar bumps it if not already bumped during that release: ol
 
 ## Architecture (`ua.zentix.incoming` packages)
 Area packages: `strike/` orders/launch, `entity/`/`guidance/` flight, `warhead/` explosion, `nuclear/`, `defense/` air
-defense, `launcher/`, `grid/` blackout, `sound/`, `client/`, `work/` tick budget. Shared rules:
+defense, `launcher/`, `grid/` blackout, `sound/`, `client/`, `work/` tick budget. Details in area rules. Shared rules:
 - **Weapon spec** `WeaponSpec` (`WeaponType.spec()`): weapon-specific numbers belong in the spec.
 - `net/ClientHooks`: client-implemented interface; server never loads client classes.
 - `compat/SubLevels`: all Sable interaction. Mixins in `mixin/<mod or area>/`.
@@ -136,8 +136,7 @@ defense, `launcher/`, `grid/` blackout, `sound/`, `client/`, `work/` tick budget
   never visibly hurts the picture; presets fit PCs, the highest looks best. Each effect holds a frame-cost
   limit at any strike count; redesign what needs hacks, drop costly unseen detail. Optimize what is visibly
   slow (tick, preparation, memory, saves, frame, network) by measurement unasked: real play, player's pack and
-  shaders, heaviest moment, hitches and 1 % lows. An update is not ready while such a cost remains; a release
-  holds the absolute performance target (`tools/stand/README.md`).
+  shaders, heaviest moment, hitches and 1 % lows. An update is not ready while such a cost remains.
 - **Flight/air defense use our own game model** (Artem, 21.10): plausible/serious, not 1:1 real flight specs, guidance,
   radar or damage models. Shared class laws (inertia/bank, altitude-speed trade, gravity/drag/wind for unpowered,
   `guidance/`); game numbers in `WeaponSpec.Handling`, `Ballistic`, marked “not physical”.

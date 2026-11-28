@@ -1195,8 +1195,14 @@ class Nuke(unittest.TestCase):
                     t += s["s"]
             self.assertEqual(bursts[0], 0.0)
             self.assertEqual(at[f"{sid}/show"], (2.0, 60.0))
+            self.assertEqual(at[f"{sid}/entry"], (60.5, 119.5))     # the wall reaching the camera; nuke2's second burst
             self.assertEqual(at[f"{sid}/dust"], (120.0, 360.0))      # +2..+6 min inside the dust
         self.assertEqual(bursts, [0.0, 60.5])                         # the second burst after the first window and its frame
+        # Every heavy moment is measured: the second burst opens `entry`, and only the frame at each end goes unmeasured
+        self.assertEqual(bursts[1], at["nuke2/entry"][0])
+        ws = sorted(at.values())
+        for (a0, a1), (b0, b1) in zip(ws, ws[1:]):
+            self.assertLessEqual(b0 - a1, self.scenes["after_shot_s"] + 1e-9)
 
     def test_a_burst_inside_a_window_is_refused(self):
         s = json.loads(json.dumps(self.scenes))
@@ -1207,7 +1213,7 @@ class Nuke(unittest.TestCase):
     def test_nuclear_scenes_come_last_and_are_planned_windows(self):
         ids = [s["id"] for s in self.scenes["scenes"]]
         self.assertEqual(ids[-2:], ["nuke", "nuke2"])
-        self.assertEqual(plan.windows(self.scenes, ["nuke", "nuke2"]), ["nuke/show", "nuke/dust", "nuke2/show", "nuke2/dust"])
+        self.assertEqual(plan.windows(self.scenes, ["nuke", "nuke2"]), ["nuke/show", "nuke/entry", "nuke/dust", "nuke2/show", "nuke2/entry", "nuke2/dust"])
         self.assertGreaterEqual(self.scenes["server_config"]["nuclear"]["max_yield"], 300)
 
     def test_pall_probe_is_read(self):
@@ -1242,8 +1248,8 @@ class Hitches(unittest.TestCase):
               {"type": "probe", "t_ms": 1500.0, "name": name, "value": "off"},
               {"type": "probe", "t_ms": end + 10, "name": name, "value": line(90.0)}]
         p = results.summarize(fr, ev, 0, end)["pall"]
-        self.assertEqual((p["n"], p["max"]), (3, 18.0))
-        self.assertAlmostEqual(p["mean"], 32.0 / 3)
+        self.assertEqual((p["n"], p["max"], p["off"]), (2, 18.0, 1))   # a second without the volume is counted, not 0 ms
+        self.assertAlmostEqual(p["mean"], 16.0)
         self.assertIsNone(results.summarize(fr, ev[:0], 0, end)["pall"])  # an older version without the probe: no number
 
     def test_hitches_are_noted_in_the_pair_gate_not_judged(self):
@@ -1260,7 +1266,7 @@ def tw(fps50=30.0, low1=25.0, slow=0, incoming=16.0, pall=14.0, peak=17.0):
 
 
 def target_run(**kw):
-    ws = {n: tw(**kw) for n in ("nuke/show", "nuke/dust", "nuke2/show", "nuke2/dust")}
+    ws = {n: tw(**kw) for n in ("nuke/show", "nuke/entry", "nuke/dust", "nuke2/show", "nuke2/entry", "nuke2/dust")}
     return {"packs": {p: {"windows": dict(ws), "checks": []} for p in ("photon", "none")}}
 
 
@@ -1332,6 +1338,29 @@ class Target(unittest.TestCase):
         self.assertNotIn("first", target.scenes_of(t))                       # the first strike's shader compilation is warm-up
 
 
+class PallOff(unittest.TestCase):
+    """A window whose nuclear volume is not drawn (the GPU watchdog turned it off) fails, never counts as fast."""
+
+    def ev(self, t, v):
+        return {"type": "probe", "t_ms": t, "name": "ua.zentix.incoming.client.fx.layer.PallPass#describe", "value": v}
+
+    def test_watchdog_off_is_counted_not_zero(self):
+        p = results.pall([self.ev(0, "3 frames, x; gpu 12.00 ms (longest 13.00"), self.ev(1000, "off by the GPU watchdog"),
+                          self.ev(2000, "off by the GPU watchdog")], 0, 5000)
+        self.assertEqual((p["mean"], p["n"], p["off"]), (12.0, 1, 2))
+        p = results.pall([self.ev(0, "off by the GPU watchdog")], 0, 5000)
+        self.assertIsNone(p["mean"])
+
+    def test_target_fails_a_window_without_the_volume(self):
+        tg = {"version": "t", "rows": [{"scene": "s", "pack": "photon", "windows": ["nuke/dust"], "pall_ms": 15, "slow": 0}]}
+        r = target_run()
+        r["packs"]["photon"]["windows"]["nuke/dust"]["pall"] = {"mean": None, "max": None, "n": 0, "off": 240,
+                                                                "off_why": ["off by the GPU watchdog"]}
+        v = target.judge(tg, [r])
+        self.assertFalse(v["pass"])
+        self.assertTrue(any("not drawn in 240 s" in f for f in v["fails"]))
+
+
 class Release(unittest.TestCase):
     def test_post_needs_a_commit(self):
         with self.assertRaisesRegex(SystemExit, "ci:<SHA>"):
@@ -1371,6 +1400,46 @@ class Release(unittest.TestCase):
             self.assertEqual(posted[-1][1], "success")
             self.assertEqual(posted[-1][-1], stand.TARGET_STATUS)
             self.assertTrue((out / "rel" / "target-verdict.json").exists())
+            # Warm-up first: the session's first strike compiles shaders outside every judged window
+            self.assertEqual(calls[0][calls[0].index("--scenes") + 1].split(",")[0], "first")
+
+    def test_a_stale_second_capture_never_decides(self):
+        tg = {"version": "t", "rows": [{"scene": "s", "pack": "photon", "windows": ["nuke/dust"], "pall_ms": 15}]}
+        posted = []
+        with tempfile.TemporaryDirectory() as d:
+            out = Path(d)
+            (out / "rel-2").mkdir()
+            (out / "rel-2" / "meta.json").write_text("{}")        # left by an earlier run on the same commit
+            seen = []
+
+            def fake_run(args):
+                seen.append(args[1])
+                (out / args[1]).mkdir(parents=True, exist_ok=True)
+                (out / args[1] / "meta.json").write_text("{}")
+                return Namespace(returncode=0)
+
+            def fake_analyze(path, write=True):
+                bad = target_run(pall=22.0)
+                return dict(bad if Path(path).name == "rel" or len(seen) > 1 else target_run(), jar={"label": "x"})
+            with mock.patch.object(stand, "OUT", out), mock.patch.object(stand.subprocess, "run", fake_run), \
+                    mock.patch.object(stand, "analyze", fake_analyze), mock.patch.object(stand, "gh", lambda *a, **k: "f" * 40), \
+                    mock.patch.object(stand, "post_status", lambda *a: posted.append(a)), \
+                    mock.patch.object(target, "load", lambda: tg):
+                code = stand.cmd_release(Namespace(jar="ci:abc", post=True, rejudge=False, name="rel", label=None))
+            self.assertEqual(seen, ["rel", "rel-2"])                   # the miss is captured again, not decided by the old one
+            self.assertEqual(code, 1)
+            self.assertEqual(posted[-1][1], "failure")
+
+    def test_an_aborted_run_does_not_leave_the_status_pending(self):
+        tg = {"version": "t", "rows": [{"scene": "s", "pack": "photon", "windows": ["nuke/dust"], "pall_ms": 15}]}
+        posted = []
+        with tempfile.TemporaryDirectory() as d, mock.patch.object(stand, "OUT", Path(d)), \
+                mock.patch.object(stand.subprocess, "run", lambda args: Namespace(returncode=0)), \
+                mock.patch.object(stand, "gh", lambda *a, **k: "f" * 40), \
+                mock.patch.object(stand, "post_status", lambda *a: posted.append(a)), mock.patch.object(target, "load", lambda: tg):
+            with self.assertRaisesRegex(SystemExit, "nothing captured"):
+                stand.cmd_release(Namespace(jar="ci:abc", post=True, rejudge=False, name="rel", label=None))
+        self.assertEqual([p[1] for p in posted], ["pending", "error"])
 
 
 if __name__ == "__main__":

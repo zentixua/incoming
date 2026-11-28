@@ -190,9 +190,11 @@ PALL_GPU = re.compile(r"\bgpu ([0-9.]+) ms")
 
 
 def pall(events, t0, t1):
-    """Pall GPU time in a window from PallPass#describe lines: {"mean", "max", "n"} or None (no line parsed: an
-older version without the probe, "gpu n/a", or no line at all)."""
-    vals = []
+    """Pall GPU time in a window from PallPass#describe lines: {"mean", "max", "n", "off"} or None (no line at all, or
+an older version without the probe). A second without a drawn volume ("off", "failed", "off by the GPU watchdog":
+the fireball, cloud and dust are not on screen) costs no GPU and is counted in `off`, never as a fast second; "gpu n/a"
+(no timer) gives no number."""
+    vals, off = [], []
     for e in events:
         if e["type"] != "probe" or not t0 <= e["t_ms"] < t1 or not e["name"].endswith(PALL_PROBE):
             continue
@@ -200,9 +202,12 @@ older version without the probe, "gpu n/a", or no line at all)."""
         m = PALL_GPU.search(v)
         if m:
             vals.append(float(m.group(1)))
-        elif v in ("off", "off by the GPU watchdog"):
-            vals.append(0.0)
-    return {"mean": sum(vals) / len(vals), "max": max(vals), "n": len(vals)} if vals else None
+        elif v in ("off", "failed", "off by the GPU watchdog"):
+            off.append(v)
+    if not vals and not off:
+        return None
+    return {"mean": sum(vals) / len(vals) if vals else None, "max": max(vals) if vals else None, "n": len(vals),
+            "off": len(off), "off_why": sorted(set(off))}
 
 
 def buckets(frames, t0, t1, size_s):

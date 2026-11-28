@@ -9,7 +9,8 @@ limit given:
 - `fps_low1`: 1 % low (1000 / p99 frame interval, results.py) at least fps_low1;
 - `slow`: at most this many frames over results.SLOW_MS (100 ms);
 - `incoming_ms`: mean GPU time of the Incoming effects layer at most this;
-- `pall_ms`: mean GPU time of the nuclear dust and smoke volume at most this; `pall_peak_ms`: its worst second.
+- `pall_ms`: mean GPU time of the nuclear dust and smoke volume at most this; `pall_peak_ms`: its worst second; a second
+  in which the volume is not drawn (off, failed, turned off by the GPU watchdog) fails the window.
 A missing window, number or pack fails. A pack failing the first run is captured again (stand.py release), and the
 last run decides, as in the look gate: GPU clocks of the laptop vary 6–29 % between sessions (README.md, "Look gate"),
 which a true miss outlasts. Standard library only (CI: test_gate.py).
@@ -74,6 +75,13 @@ def check_window(row, name, w):
               f"{n} (worst {s['worst_ms']:.0f} ms)" if _num(n) and _num(s.get("worst_ms")) else None)
     if "incoming_ms" in row:
         judge("incoming_ms", w.get("incoming_gpu"), row["incoming_ms"], True, "ms GPU")
+    if "pall_ms" in row or "pall_peak_ms" in row:
+        off = (w.get("pall") or {}).get("off") or 0
+        if off:
+            fails.append(f"{where} nuclear volume not drawn in {off} s ({', '.join(w['pall'].get('off_why') or [])}): "
+                         "no dust on screen is not a fast frame")
+            rows.append({"pack": row["pack"], "window": name, "metric": "pall_off_s", "got": off, "limit": 0, "fail": True,
+                         "scene": row["scene"]})
     if "pall_ms" in row:
         judge("pall_ms", (w.get("pall") or {}).get("mean"), row["pall_ms"], True, "ms GPU")
     if "pall_peak_ms" in row:

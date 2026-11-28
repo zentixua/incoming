@@ -584,10 +584,23 @@ more (the second capture decides), target-verdict.json and a table; --post sets 
     if a.jar.startswith("ci:"):
         sha_ = gh("api", f"repos/{REPO}/commits/{a.jar[3:]}", "--jq", ".sha").strip() if a.post else a.jar[3:]
     name = a.name or f"release-{(sha_ or Path(a.jar).stem)[:12]}"
-    packs, scenes = target.packs_of(tg), target.scenes_of(tg)
-    if not a.rejudge:
+    # Warm-up first: the session's first strike compiles shaders (scene `first`); the target measures no window there
+    packs, scenes = target.packs_of(tg), ["first"] + [s for s in target.scenes_of(tg) if s != "first"]
+    if a.post:
+        post_status(sha_, "pending", f"Performance target {tg['version']} running", None, TARGET_STATUS)
+    try:
+        return release_judge(a, tg, sha_, name, packs, scenes)
+    except BaseException as e:
+        # Never leave the status pending: the preflight would report a run in progress
         if a.post:
-            post_status(sha_, "pending", f"Performance target {tg['version']} running", None, TARGET_STATUS)
+            post_status(sha_, "error", f"Performance target not judged: {e}"[:140], None, TARGET_STATUS)
+        raise
+
+
+def release_judge(a, tg, sha_, name, packs, scenes):
+    if not a.rejudge:
+        # A second capture left by an earlier run of the same name would decide instead of this one
+        shutil.rmtree(OUT / f"{name}-2", ignore_errors=True)
         code = subprocess.run([str(HERE / "run.sh"), name, a.jar, "--packs", ",".join(packs), "--scenes", ",".join(scenes),
                                "--size", DEFAULT_SIZE, "--label", a.label or a.jar]).returncode
         if code not in (0, 1):
@@ -598,7 +611,6 @@ more (the second capture decides), target-verdict.json and a table; --post sets 
         again = [p for p, pv in v["packs"].items() if pv["state"] == target.FAIL]
         if again:
             log(f"{name}: {', '.join(again)} missed the target, captured once more")
-            shutil.rmtree(OUT / f"{name}-2", ignore_errors=True)
             code = subprocess.run([str(HERE / "run.sh"), f"{name}-2", a.jar, "--packs", ",".join(again), "--scenes", ",".join(scenes),
                                    "--size", DEFAULT_SIZE, "--label", a.label or a.jar]).returncode
             if code not in (0, 1):

@@ -21,13 +21,13 @@
     {"scene": "nuke-dust", "pack": "photon", "windows": ["nuke/dust", "nuke2/dust"],
      "fps_p50": 26, "fps_low1": 19, "slow": 0, "incoming_ms": 18, "pall_ms": 15, "pall_peak_ms": 20,
      "why": "Derived, not chosen: frame = the rest of the frame + the Incoming budget. 28.11 repro at Artem's spot, 2.8 km inside the dust (repro-report Q1, Q4): the frame without Incoming (Photon and the world after the nuke) is 15.8 ms at +190..+240 s (42.6 - 26.8) and 19.0 ms with the pall off at +640..+700 s (29.4 - 6.1 - 4.3); the worse one counts. Pall at its own MEDIUM budget 15 ms (measured 21-29) and the other passes at 3 ms (measured 2.2-2.9): 19.0 + 18 = 37 ms, 27 fps; the median floor 26 fps (38.5 ms) leaves 1.5 ms. 1 % low: 37 ms times the measured p99 spread (x1.39 of the median) = 51 ms, 19 fps. Peak: budget plus one ladder rung (each rung 0.5-0.85 of the next). The flat bench world draws less than Zearth, so the bench meets these with room; the budgets are what binds."},
-    {"scene": "nuke-show", "pack": "photon", "windows": ["nuke/show", "nuke2/show"],
+    {"scene": "nuke-show", "pack": "photon", "windows": ["nuke/show", "nuke/entry", "nuke2/show", "nuke2/entry"],
      "fps_low1": 19, "slow": 0, "incoming_ms": 18, "pall_ms": 15, "pall_peak_ms": 20,
-     "why": "The flash and the wave's passage (2-60 s): the same budgets; the repro's 300-690 ms frames at the wave's passage are client-tick work, and a hitch is a stop the player sees."},
+     "why": "The flash and the wave's passage (2-60 s), the dust wall reaching the camera and, in nuke2, the second burst's flash and wave (60.5-119.5 s): the same budgets; the repro's 300-690 ms frames at the wave's passage are client-tick work, and a hitch is a stop the player sees."},
     {"scene": "nuke-dust", "pack": "none", "windows": ["nuke/dust", "nuke2/dust"],
      "fps_p50": 34, "fps_low1": 25, "slow": 0, "incoming_ms": 18, "pall_ms": 15, "pall_peak_ms": 20,
      "why": "Derived as for Photon. Repro without the shader pack at the same spot (+500..+560 s): frame 26.9 ms, pall 16.8, other Incoming 2.9, so the rest is 7.2 ms; taken as 10 ms, the Photon case's later-minute rise (15.8 to 19.0 ms) scaled to it. 10 + 18 = 28 ms, 35.7 fps; median floor 34 fps (29.4 ms). 1 % low 28 x 1.39 = 39 ms, 25 fps."},
-    {"scene": "nuke-show", "pack": "none", "windows": ["nuke/show", "nuke2/show"],
+    {"scene": "nuke-show", "pack": "none", "windows": ["nuke/show", "nuke/entry", "nuke2/show", "nuke2/entry"],
      "fps_low1": 25, "slow": 0, "incoming_ms": 18, "pall_ms": 15, "pall_peak_ms": 20,
      "why": "As nuke-dust without the shader pack; no hitch at the wave's passage."}
   ]

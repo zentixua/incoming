@@ -94,17 +94,52 @@ def target_status(sha, repo):
     return out or None
 
 
-def performance_target(root=ROOT, repo=None, status=target_status):
-    """The jar being released held the performance target: a commit at or below HEAD whose mod/ tree (the jar's
-sources, version included) equals HEAD's carries a successful "Цель производительности" status. A later failure on
-the same commit wins (the newest status counts); a measured older tree does not count."""
+def pr_commits(sha, repo):
+    """Commits of the pull requests that brought a commit into its branch, newest first: a squash merge is a new commit
+whose measured PR head is not its ancestor."""
+    out = []
+    for n in subprocess.check_output(["gh", "api", f"repos/{repo}/commits/{sha}/pulls", "--jq", ".[].number"],
+                                     text=True).split():
+        shas = subprocess.check_output(["gh", "api", "--paginate", f"repos/{repo}/pulls/{n}/commits", "--jq", ".[].sha"],
+                                       text=True).split()
+        out += reversed(shas)
+    return out
+
+
+def mod_tree(sha, repo):
+    """mod/ tree of a commit on GitHub (a PR commit is not in the shallow checkout)."""
+    root = subprocess.check_output(["gh", "api", f"repos/{repo}/commits/{sha}", "--jq", ".commit.tree.sha"], text=True).strip()
+    return subprocess.check_output(["gh", "api", f"repos/{repo}/git/trees/{root}", "--jq",
+                                    '.tree[] | select(.path == "mod") | .sha'], text=True).strip() or None
+
+
+def performance_target(root=ROOT, repo=None, status=target_status, prs=pr_commits, tree_of=mod_tree):
+    """The jar being released held the performance target: a commit whose mod/ tree (the jar's sources, version
+included) equals HEAD's carries a successful "Цель производительности" status. Candidates, newest first: HEAD's
+first-parent commits while their mod/ tree is HEAD's (a notes-only commit on top of the measured one), each followed
+by the commits of the pull request that brought it (a squash merge: the measured PR head is not an ancestor). The
+newest result decides: a failure on a newer candidate wins; a measured older tree does not count."""
     repo = repo or os.environ.get("GITHUB_REPOSITORY", "zentixua/incoming")
-    subprocess.run(["git", "-C", str(root), "fetch", "--no-tags", f"--deepen={TARGET_DEPTH}", "origin"],
+    head = git("rev-parse", "HEAD", root=root)
+    # Deepen only the released commit's history: a bare remote fetch would bring every branch of origin
+    subprocess.run(["git", "-C", str(root), "fetch", "--no-tags", f"--deepen={TARGET_DEPTH}", "origin", head],
                    check=False, capture_output=True)
     tree = git("rev-parse", "HEAD:mod", root=root)
-    for sha in git("rev-list", "--first-parent", f"--max-count={TARGET_DEPTH}", "HEAD", root=root).split():
-        if git("rev-parse", f"{sha}:mod", root=root) != tree:
-            break
+    seen = set()
+
+    def candidates():
+        for sha in git("rev-list", "--first-parent", f"--max-count={TARGET_DEPTH}", "HEAD", root=root).split():
+            if git("rev-parse", f"{sha}:mod", root=root) != tree:
+                return
+            yield sha
+            for c in prs(sha, repo):
+                if c not in seen and tree_of(c, repo) == tree:
+                    yield c
+
+    for sha in candidates():
+        if sha in seen:
+            continue
+        seen.add(sha)
         state = status(sha, repo)
         if state == "success":
             return sha

@@ -123,6 +123,10 @@ def nuke_steps(scenes, s, tp):
 windows timed from the first burst (`nuke_view.windows`), a frame at each window end. No completion wait: the scene
 waits for nothing the server finishes (ruins take minutes), so nuclear scenes come after every other scene."""
     nv = scenes["nuke_view"]
+    if s["bursts"][0]["at"] != [0, 0] or s["bursts"][0]["t_s"] != 0:
+        raise ValueError(f"scene {s['id']}: the first burst is at the site at 0 s (the camera and windows are placed from it)")
+    if any(not isinstance(b["kt"], int) for b in s["bursts"]):
+        raise ValueError(f"scene {s['id']}: kt is a whole number (the command's argument)")
     site = _site(scenes, s["site"])
     g = scenes["ground"]
     eye, look = camera(scenes, nv["camera"], site, 0)
